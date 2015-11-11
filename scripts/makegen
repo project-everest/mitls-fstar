@@ -1,0 +1,54 @@
+#! /usr/bin/env python
+
+# --------------------------------------------------------------------
+import sys, os, xml.etree.ElementTree as etree
+
+# --------------------------------------------------------------------
+MSBUILD = 'http://schemas.microsoft.com/developer/msbuild/2003'
+
+def _main():
+    from optparse import OptionParser
+
+    parser = OptionParser(usage = '%prog <options> [fsproj]')
+    parser.add_option("-o", None,
+                      dest    = "output",
+                      help    = "output makefile to FILE",
+                      metavar = "FILE")
+    parser.add_option("-r", None,
+                      dest   = "raw",
+                      action = 'store_true',
+                      help   = "RAW output")
+
+    (options, args) = parser.parse_args()
+
+    if len(args) != 1:
+        parser.print_usage(sys.stderr); exit(1)
+
+    with open(args[0], 'r') as stream:
+        doc = etree.parse(stream)
+
+    files = doc.findall('.//{0}ItemGroup/*'.format('{%s}' % (MSBUILD,)))
+    files = [x.get('Include') for x in files if x.get('Include') is not None]
+
+    srcfiles = [x for x in files if os.path.splitext(x)[1] in ('.fsi', '.fs')]
+    f7files  = [x for x in files if os.path.splitext(x)[1] in ('.fs7',)]
+
+    output = sys.stdout
+    try:
+        if options.output is not None:
+            output = open(options.output, 'w')
+
+        if options.raw:
+            print >>output, ' '.join(srcfiles + f7files)
+        else:
+            print >>output, 'src  += %s' % (' '.join(srcfiles),)
+            print >>output, 'src7 += %s' % (' '.join(f7files),)
+            print >>output, 'deps += '
+    finally:
+        if output is not sys.stdout:
+            output.close()
+        del output
+
+# --------------------------------------------------------------------
+if __name__ == '__main__':
+    _main()

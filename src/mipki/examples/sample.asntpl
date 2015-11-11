@@ -1,0 +1,30 @@
+seq {
+ seq {
+  # Version
+  [0] optional (0L) version : int [0L, 2L];
+
+  [1] optional (2L) junk : int;
+
+  # Serial Number
+  serial : int;
+
+  # Signature Algorithm
+  seq {
+   sigalgid : oid;
+   defined by<sigalgid> {
+    O1.2.3.4:
+     null
+
+    default:
+     null
+   };
+  };
+
+  [3] optional defined by<version> {
+   2L:
+    seq {
+     type: oid;
+    }
+  };
+ };
+}

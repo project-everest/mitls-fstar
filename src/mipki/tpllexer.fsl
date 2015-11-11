@@ -1,0 +1,86 @@
+﻿{ 
+module Lexer
+
+open SBA
+open Asn1
+open TplAst
+open Parser
+open Microsoft.FSharp.Text.Lexing
+
+let newline (lexbuf: LexBuffer<_>) =
+  lexbuf.EndPos <- lexbuf.EndPos.NextLine
+
+let lstr = LexBuffer<char>.LexemeString
+
+}
+
+let digit = ['0'-'9']
+let oid = (digit+ '.')+ digit+
+let hex = digit | ['a'-'f'] | ['A'-'F']
+let whitespace = [' ' '\t' ]
+let newline = ('\n' | '\r' '\n')
+let letter = ( ['a'-'z'] | ['A'-'Z'] )
+let ascii = [ '\x00'-'!' '#'-'\xFF']
+let printable = letter | digit | [' ' '\'' '(' ')' '+' ',' '-' '.' '/' ':' '=' '?']
+let teletex = ['\x20'-'!' '#'-'\x7E']
+let utf8 = [^ '"']
+let bit = ['0' '1']
+let identifier = letter (letter | digit)*
+
+rule token = parse
+| whitespace		{ token lexbuf }
+| '#'[^'\r' '\n']*	{ token lexbuf }
+| newline			{ newline lexbuf; token lexbuf }
+| "{"				{ COPEN }
+| "}"				{ CCLOSE }
+| "["				{ BOPEN }
+| "]"				{ BCLOSE }
+| "("				{ POPEN }
+| ")"				{ PCLOSE }
+| "<"				{ LT }
+| ">"				{ GT }
+| ":"				{ COLON }
+| ";"				{ SEMI }
+| ","				{ COMMA }
+| "::="				{ ASSIGN }
+| "$"				{ DOLLAR }
+| "="				{ EQ }
+| "*"				{ STAR }
+| "defined by"		{T_DEFBY}
+| "seq of"			{T_SEQOF}
+| "set of"			{T_SETOF}
+| "seq"				{T_SEQ}
+| "set"				{T_SET}
+| "choice"			{T_CHOICE}
+| "tag"				{T_TAG}
+| "default"			{T_DEFAULT}
+| "optional"		{T_OPTION}
+| "bitstring"		{T_BITSTRING}
+| "octet string"	{T_OCTSTRING}
+| "utf8"			{T_UTF8}
+| "printable"		{T_PRINTABLE}
+| "ascii"			{T_IA5}
+| "teletex"			{T_TELETEX}
+| "universal"		{T_UNIVERSAL}
+| "bmp"				{T_BMP}
+| "bool"			{T_BOOL}
+| "int"				{T_INT}
+| "oid"				{T_OID}
+| "utc date"		{T_UTCDATE}
+| "gen date"		{T_GENDATE}
+| "as"				{T_AS}
+| "true"			{K_LITERAL(C_BOOL, bTrue)}
+| "false"			{K_LITERAL(C_BOOL, bFalse)}
+| "null"			{K_LITERAL(C_NULL, bEmpty)}
+| identifier		{let s = lstr lexbuf in K_STRING(s)}
+| digit+			{let s = lstr lexbuf in K_INT(int s)}
+| 'O' oid			{let s = lstr lexbuf in K_LITERAL(C_OID, oid2b (s.Substring 1))}
+| '0' 'b' bit+		{let s = lstr lexbuf in K_LITERAL(C_STR(S_BIT), bitstr2b (s.Substring 2))}
+| '0' 'x' hex+		{let s = lstr lexbuf in K_LITERAL(C_STR(S_OCTET), hex2b (s.Substring 2))}
+| '"' ascii* '"'	{let s = lstr lexbuf in K_LITERAL(C_STR(S_IA5), str2b (s.Substring(1,s.Length-2)))}
+| 'u' '"' utf8* '"'	{let s = lstr lexbuf in K_LITERAL(C_STR(S_UTF8), str2b (s.Substring(2,s.Length-3)))}
+| 'p' '"' printable* '"'	{let s = lstr lexbuf in K_LITERAL(C_STR(S_PRINT), str2b (s.Substring(2,s.Length-3)))}
+| 't' '"' teletex* '"'	{let s = lstr lexbuf in K_LITERAL(C_STR(S_TELETEX), str2b (s.Substring(2,s.Length-3)))}
+| '-'? digit+ 'L'	{let s = lstr lexbuf in K_LITERAL(C_INT, int2b (s.Substring(0, s.Length-1)))}
+| eof				{ EOF }
+

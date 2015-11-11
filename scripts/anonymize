@@ -1,0 +1,255 @@
+#! /usr/bin/env python2
+
+import sys, os, re, codecs, StringIO as sio
+
+# --------------------------------------------------------------------
+def _noexn(f):
+    try: f()
+    except: pass
+
+# --------------------------------------------------------------------
+class Object(object):
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+# --------------------------------------------------------------------
+MODE_FULL    = 0x00
+MODE_RELEASE = 0x01
+
+AKWS = ['AP', 'CF', 'KB', 'MK', 'PYS', 'SZ']
+
+# --------------------------------------------------------------------
+def parser(mode):
+    import pyparsing as p
+
+    def internal_comment(comment):
+        if mode.mode == MODE_FULL:
+            return comment.strip()[0:1] != '@'
+        if mode.mode == MODE_RELEASE:
+            m = re.search(r'^\s*(\w+?):*\b', comment)
+            return \
+                m is not None and \
+                    (m.group(1) in ['FIXME', 'TODO'] \
+                         or m.group(1) in mode.data)
+        return False
+
+    ml_comments = p.Regex(r'\(\*(?:[^*]*\*+)+?\)')
+    ss_comments = p.Regex(r'//.*')
+    ml_strings  = p.Regex(r'"(?:[^"\n\r\\]|(?:"")|(?:\\x[0-9a-fA-F]+)|(?:\\.))*"')
+
+    def ml_comments_action(_s, _loc, tk):
+        return [] if internal_comment(tk[0][2:-2]) else tk
+    ml_comments.setParseAction(ml_comments_action)
+
+    def ss_comments_action(_s, _loc, tk):
+        return [] if internal_comment(tk[0][2:]) else tk
+    ss_comments.setParseAction(ss_comments_action)
+
+    return ml_comments | ss_comments | ml_strings
+
+# --------------------------------------------------------------------
+def filter_hashes(input, symbols):
+    hif    = re.compile(r'^\s*#\s*if\s+(\w+)\b')
+    helse  = re.compile(r'^\s*#\s*else\b')
+    hend   = re.compile(r'^\s*#\s*endif\b')
+    hashes = []
+    output = []
+
+    class Mode(object):
+        MODE_OF_KIND = dict(I = None, U = False, D = True)
+
+        def ofname(name):
+            dfl  = 'I' if re.search('^__.+__$', name) else 'U'
+            kind = symbols.get(name, dfl)
+            return Mode.MODE_OF_KIND[kind]
+        ofname = staticmethod(ofname)
+
+        def flip(mode):
+            return None if mode is None else (not mode)
+        flip = staticmethod(flip)
+
+        def inprint(mode):
+            return mode in (None, True)
+        inprint = staticmethod(inprint)
+
+    for line in input:
+        m = None
+        for i, r in enumerate([hif, helse, hend]):
+            m = re.search(r, line)
+            if m is not None: break
+
+        if m is not None:
+            if i == 0:
+                hashes.append(Object(
+                        name = m.group(1),
+                        keep = Mode.ofname(m.group(1))))
+                if hashes[-1].keep is None:
+                    output.append(line)
+
+            elif i == 1:
+                if hashes:
+                    hashes[-1].keep = Mode.flip(hashes[-1].keep)
+                if hashes[-1].keep is None:
+                    output.append(line)
+
+            elif i == 2:
+                if hashes:
+                    if hashes[-1].keep is None:
+                        output.append(line)
+                    hashes.pop()
+
+        else:
+            if all([Mode.inprint(x.keep) for x in hashes]):
+                output.append(line)
+
+    return output
+
+# --------------------------------------------------------------------
+def _options(args):
+    from optparse import OptionParser
+
+    modes  = 'full|release[:kw1,...,kwn]'
+    parser = OptionParser(usage = '%prog <options> [filenames...]')
+
+    def osymbol(option, opt, value, parser, kind):
+         parser.values \
+             .ensure_value(option.dest, dict()) \
+             [value] = kind
+
+    parser.add_option("-B", None,
+                      action  = "store_false",
+                      dest    = "backup",
+                      help    = "do NOT create a backup file",
+                      default = True)
+    parser.add_option("-c", None,
+                      dest    = "header",
+                      help    = "add header from HEADER",
+                      metavar = "HEADER")
+    parser.add_option("-m", None,
+                      dest    = "mode",
+                      help    = "set anonymisation mode [%s]" % (modes,),
+                      default = 'full',
+                      metavar = "MODE")
+    defhelp = dict(
+        D = 'define',
+        U = 'undefine',
+        I = 'include (keep)'
+    )
+    for x in ("D", "U", "I"):
+        parser.add_option("-%s" % (x,), None,
+                          dest          = "symbols",
+                          help          = "%s symbol SYMBOL (implies -P)" % (defhelp[x],),
+                          action        = "callback",
+                          callback      = osymbol,
+                          callback_args = (x,),
+                          type          = str,
+                          metavar       = "SYMBOL")
+    parser.add_option("-P", None,
+                      action  = 'store_true',
+                      dest    = "preprocess",
+                      help    = "preprocess file for #symbols",
+                      default = False)
+    parser.add_option("-r", None,
+                      dest    = "rename",
+                      help    = "rename output file using given pattern",
+                      metavar = "PATTERN",
+                      default = None)
+    parser.add_option("-o", None,
+                      dest    = "output",
+                      help    = "output directory",
+                      metavar = "OUTPUT",
+                      default = None)
+
+    (options, args) = parser.parse_args()
+
+    if options.mode == 'full':
+        options.mode = Object(mode = MODE_FULL, data = None)
+    elif options.mode.startswith('release'):
+        if ':' in options.mode:
+            kws = ''.join(options.mode.split(':', 1)[1:]).split(',')
+            kws = [x.strip() for x in kws]
+            kws = [x for x in kws if x]
+        else:
+            kws = AKWS[:]
+        options.mode = Object(mode = MODE_RELEASE, data = set(kws))
+    else:
+        parser.error('invalid mode: %s' % (options.mode,))
+
+    if options.symbols is not None:
+        options.preprocess = True
+    else:
+        options.symbols = dict()
+
+    return (options, args)
+
+# --------------------------------------------------------------------
+def _read_file(filename):
+    contents = open(filename, 'rb').read()
+
+    if contents.startswith(codecs.BOM_UTF8):
+        return unicode(contents[len(codecs.BOM_UTF8):], 'utf-8')
+    return unicode(contents, 'utf-8')
+
+# --------------------------------------------------------------------
+CRLN = '\r\n'
+
+def _process_file(filename, options):
+    output = parser(options.mode).transformString(_read_file(filename))
+    output = [x.rstrip() for x in output.splitlines()]
+
+    if options.preprocess:
+        output = filter_hashes(output, options.symbols.copy())
+
+    output = CRLN.join(output) + CRLN
+    output = re.sub('(?:\r\n){3,}', 2 * CRLN, output)
+    output = re.sub('(?:\r\n)+$', CRLN, output)
+    output = re.sub('^(?:\r\n)*', '', output)
+
+    if options.header:
+        output = CRLN.join(options.header.splitlines()) + 2 * CRLN + output
+
+    dirname , basename = os.path.split(filename)
+    basename, ext      = os.path.splitext(basename)
+
+    if options.rename is None:
+        outname = basename
+    else:
+        outname = options.rename.replace('%', basename)
+    outname = outname + ext
+
+    if options.output is None:
+        outname = os.path.join(dirname, outname)
+    else:
+        outname = os.path.join(options.output, outname)
+
+    if options.backup:
+        if os.path.exists(outname + '~'):
+            os.unlink(outname + '~')
+        if os.path.exists(outname):
+            os.rename(outname, outname + '~')
+    else:
+        _noexn(lambda : os.unlink(outname))
+
+    try:
+        with codecs.open(outname, 'w', 'utf-8') as ostream:
+            ostream.write(output)
+    except:
+        _noexn(lambda : os.unlink(outname))
+        raise
+
+# --------------------------------------------------------------------
+def _main():
+    options, filenames = _options(sys.argv[:1])
+
+    if options.header:
+        options.header = open(options.header, 'r').read().splitlines()
+        options.header = [' * ' + x for x in options.header]
+        options.header = ['(*'] + options.header + [' *)']
+        options.header = CRLN.join(options.header)
+
+    for filename in filenames:
+        _process_file(filename, options)
+
+# --------------------------------------------------------------------
+if __name__ == '__main__':
+    _main()

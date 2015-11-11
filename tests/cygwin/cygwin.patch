@@ -1,0 +1,66 @@
+Index: cygwin/environ.cc
+===================================================================
+RCS file: /cvs/src/src/winsup/cygwin/environ.cc,v
+retrieving revision 1.209
+diff -u -p -r1.209 environ.cc
+--- cygwin/environ.cc	24 Nov 2013 12:13:33 -0000	1.209
++++ cygwin/environ.cc	24 Dec 2013 15:54:09 -0000
+@@ -130,6 +130,7 @@ static struct parse_thing
+   {"export", {&export_settings}, setbool, NULL, {{false}, {true}}},
+   {"glob", {func: glob_init}, isfunc, NULL, {{0}, {s: "normal"}}},
+   {"pipe_byte", {&pipe_byte}, setbool, NULL, {{false}, {true}}},
++  {"pipe_nooverlap", {&pipe_nooverlap}, setbool, NULL, {{false}, {true}}},
+   {"proc_retry", {func: set_proc_retry}, isfunc, NULL, {{0}, {5}}},
+   {"reset_com", {&reset_com}, setbool, NULL, {{false}, {true}}},
+   {"wincmdln", {&wincmdln}, setbool, NULL, {{false}, {true}}},
+Index: cygwin/globals.cc
+===================================================================
+RCS file: /cvs/src/src/winsup/cygwin/globals.cc,v
+retrieving revision 1.55
+diff -u -p -r1.55 globals.cc
+--- cygwin/globals.cc	9 Dec 2013 20:32:24 -0000	1.55
++++ cygwin/globals.cc	24 Dec 2013 15:54:09 -0000
+@@ -72,6 +72,7 @@ bool detect_bloda;
+ bool dos_file_warning = true;
+ bool ignore_case_with_glob;
+ bool pipe_byte;
++bool pipe_nooverlap;
+ bool reset_com;
+ bool wincmdln;
+ winsym_t allow_winsymlinks = WSYM_sysfile;
+Index: cygwin/pipe.cc
+===================================================================
+RCS file: /cvs/src/src/winsup/cygwin/pipe.cc,v
+retrieving revision 1.148
+diff -u -p -r1.148 pipe.cc
+--- cygwin/pipe.cc	1 May 2013 01:20:37 -0000	1.148
++++ cygwin/pipe.cc	24 Dec 2013 15:54:09 -0000
+@@ -342,7 +342,8 @@ fhandler_pipe::create (fhandler_pipe *fh
+   SECURITY_ATTRIBUTES *sa = sec_none_cloexec (mode);
+   int res = -1;
+ 
+-  int ret = create (sa, &r, &w, psize, NULL, FILE_FLAG_OVERLAPPED);
++  int ret = create (sa, &r, &w, psize, NULL,
++		   pipe_nooverlap ? 0 : FILE_FLAG_OVERLAPPED);
+   if (ret)
+     __seterrno_from_win_error (ret);
+   else if ((fhs[0] = (fhandler_pipe *) build_fh_dev (*piper_dev)) == NULL)
+Index: doc/cygwinenv.xml
+===================================================================
+RCS file: /cvs/src/src/winsup/doc/cygwinenv.xml,v
+retrieving revision 1.4
+diff -u -p -r1.4 cygwinenv.xml
+--- doc/cygwinenv.xml	26 Jul 2013 17:27:59 -0000	1.4
++++ doc/cygwinenv.xml	24 Dec 2013 15:54:09 -0000
+@@ -68,6 +68,11 @@ message mode.</para>
+ </listitem>
+ 
+ <listitem>
++<para><envar>(no)pipe_nooverlap</envar> - causes Cygwin to open pipes in non-overlapped mode by default, rather
++than overlapped mode.  Useful for when running a Win32 program that doesn't expect an overlapped pipe.</para>
++</listitem>
++
++<listitem>
+ <para><envar>proc_retry:n</envar> - causes <function>fork()</function> and
+ <function>exec*()</function> to retry n times when a child process fails
+ due to certain windows-specific errors.  These errors usually occur when

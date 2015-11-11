@@ -1,0 +1,32 @@
+Regression tests for miTLS
+
+**** Running ****
+
+Typically, invoking 'make' will do.
+
+This will create temporary certificates and install them into the Windows
+certificate store (or the Mono emulation), if they don't already exist.
+Then, the test suite will be ran.
+
+The test suite is a python script that requires the pythonw executable,
+version 2.7 (it won't work with python 3).
+On Unix distributions, installing the python package is usually all you
+need to do.
+On Mac OS X, python should be already installed. Alternative versions can
+be obtained via brew.
+On Windows, you need the cygwin environment to run 'make'; however, you
+need the native Windows python distribution; python as provided by
+cygwin won't do. So, install python on Windows, then make sure the
+C:/Python27/pythonw.exe executable is in your cygwin path (e.g. by
+adding C:/Python27 to your Windows Path environment variable).
+
+After some time, the temporary certificates expire, at which points all
+tests start failing. Run 'make clean' to remove all the temporary
+certificates.
+
+**** Configuring testing scenarios ****
+
+The test suite reads its configuration from the test-suite.ini file.
+You can change its content to alter the test suite. (Yes, we should
+give more instructions on the contents of this file.)
+

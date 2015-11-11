@@ -1,0 +1,116 @@
+#! /usr/bin/env python
+
+# --------------------------------------------------------------------
+import sys, os, time, socket, datetime, subprocess as sp
+import lxml, lxml.builder
+
+E = lxml.builder.ElementMaker()
+
+# --------------------------------------------------------------------
+class Object(object):
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+# --------------------------------------------------------------------
+def _options():
+    from optparse import OptionParser
+
+    parser = OptionParser(usage = 'Usage: %prog [options] modules...')
+
+    parser.add_option(
+        '', '--xunit',
+        action  = 'store',
+        default = None,
+        metavar = 'FILE',
+        help    = 'dump result to FILE using xUnit format')
+
+    (options, args) = parser.parse_args()
+
+    if len(args) == 0:
+        parser.error('must give at least one module to check')
+
+    return (options, args)
+
+# --------------------------------------------------------------------
+def _check_module(module):
+    aout = Object(success = None,
+                  time    = None,
+                  output  = None,
+                  module  = module)
+
+    with open(os.devnull, "w") as devnull:
+        status = 0
+        try:
+            timestamp = time.time()
+            command = ['make', '%s.tc7' % (module,)]
+            process = sp.Popen(command,
+                               stdout = devnull,
+                               stderr = sp.PIPE)
+            output = process.communicate()[1]
+            status = process.returncode
+            timestamp = time.time() - timestamp
+        except OSError:
+            return aout
+
+        aout.success = (status == 0)
+        aout.time    = timestamp
+        aout.output  = output
+        return aout
+
+# --------------------------------------------------------------------
+def _xunit_document(result, config):
+    ok = [x for x in result if     x.success]
+    ko = [x for x in result if not x.success]
+
+    totaltime = sum([x.time for x in result])
+
+    tt = E.testsuite (name      = "fs7-check",
+                      hostname  = config.hostname,
+                      timestamp = config.timestamp.isoformat(),
+                      tests     = str(len(result)),
+                      errors    = "0",
+                      failures  = str(len(ko)),
+                      time      = "%.3f" % totaltime)
+
+    for rr in result:
+        rnode = E.testcase(
+            name      = rr.module,
+            classname = "fs7",
+            time      = "%.3f" % (rr.time,))
+
+        if not rr.success:
+            rnode.append(E.failure( \
+                    message = unicode(rr.output, 'utf-8', 'replace'),
+                    type    = 'should-typecheck'))
+        tt.append(rnode)
+
+    tt.append(E("system-out"))
+    tt.append(E("system-err"))
+
+    return E.testsuites(tt)
+
+
+# --------------------------------------------------------------------
+def _main():
+    options, modules = _options()
+
+    config   = Object(hostname  = socket.gethostname(),
+                      timestamp = datetime.datetime.utcnow())
+    result   = [_check_module(x) for x in modules]
+    document = _xunit_document(result, config)
+
+
+    xunit = lxml.etree.tostring(document,
+                                pretty_print    = True   ,
+                                xml_declaration = True   ,
+                                encoding        = 'utf-8')
+
+    if options.xunit is None:
+        sys.stderr.write(xunit)
+    else:
+        with open(options.xunit, 'wb') as output:
+            output.write(xunit)
+
+# --------------------------------------------------------------------
+if __name__ == '__main__':
+    _main()

@@ -1,0 +1,20 @@
+seq {
+ seq {
+  # Version
+  [0] 2L;
+
+  # Serial Number
+  1234567890L;
+
+  # Signature Algorithm
+  seq {
+   O1.2.3.4;
+   null;
+  };
+
+  # Extensions
+  [3] seq {
+   O1.2.200.5;
+  };
+ };
+}

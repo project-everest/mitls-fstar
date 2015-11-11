@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{6d4e3f46-dbf9-473b-93ba-58614114aa57}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>CoreCrypto</RootNamespace>
+    <AssemblyName>CoreCrypto</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <Name>CoreCrypto</Name>
+    <TargetFSharpCoreVersion>4.3.0.0</TargetFSharpCoreVersion>
+    <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <Tailcalls>false</Tailcalls>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <DocumentationFile>bin\Debug\CoreCrypto.XML</DocumentationFile>
+    <NoWarn>62</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <Tailcalls>true</Tailcalls>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <DocumentationFile>bin\Release\CoreCrypto.XML</DocumentationFile>
+    <NoWarn>62</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>..\..\..\3rdparty\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CryptoProvider.fs" />
+    <Compile Include="BCCryptoProvider.fs" />
+    <Compile Include="CSPCryptoProvider.fs" />
+    <Compile Include="OSSLCryptoProvider.fs" />
+    <Compile Include="CoreRandom.fsi" />
+    <Compile Include="CoreRandom.fs" />
+    <Compile Include="CoreKeys.fsi" />
+    <Compile Include="CoreKeys.fs" />
+    <Compile Include="CoreHash.fsi" />
+    <Compile Include="CoreHash.fs" />
+    <Compile Include="CoreCiphers.fsi" />
+    <Compile Include="CoreCiphers.fs" />
+    <Compile Include="CoreACiphers.fsi" />
+    <Compile Include="CoreACiphers.fs" />
+    <Compile Include="CoreHMac.fsi" />
+    <Compile Include="CoreHMac.fs" />
+    <Compile Include="DHDB.fsi" />
+    <Compile Include="DHDB.fs" />
+    <Compile Include="CoreECDH.fsi" />
+    <Compile Include="CoreECDH.fs" />
+    <Compile Include="CoreDH.fsi" />
+    <Compile Include="CoreDH.fs" />
+    <Compile Include="CoreSig.fsi" />
+    <Compile Include="CoreSig.fs" />
+    <Compile Include="DER.fsi" />
+    <Compile Include="DER.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DB\DB.fsproj">
+      <Name>DB</Name>
+      <Project>{cad78b05-0adc-433b-954b-1f31fc6477f6}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\OpenSSL\OpenSSL.csproj">
+      <Name>OpenSSL</Name>
+      <Project>{db787d27-c33e-4d14-bf2c-b92cbdbf0c54}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Platform\Platform.fsproj">
+      <Name>Platform</Name>
+      <Project>{408e6f53-363a-4c58-9808-84a0b526324b}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <Choose>
+    <When Condition="'$(VisualStudioVersion)' == '11.0'">
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </Otherwise>
+  </Choose>
+  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
+  <Target Name="AfterClean">
+    <CreateItem Include="$(OutDir)\*.dll;$(OutDir)\*.exe;$(OutDir)\*.mdb;$(OutDir)\*.pdb">
+      <Output ItemName="ToDel" TaskParameter="Include" />
+    </CreateItem>
+    <Delete Files="$(OutDir)\$(Name).XML" />
+    <Delete Files="@(ToDel)" />
+  </Target>
+</Project>

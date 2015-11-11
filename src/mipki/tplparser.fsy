@@ -1,0 +1,176 @@
+﻿%{
+
+open SBA
+open Asn1
+open TplAst
+
+%}
+
+%start start start_asn
+
+%token <string> K_STRING
+%token <int> K_INT
+%token <asntype * bytes> K_LITERAL
+
+%token T_SEQ
+%token T_SET
+%token T_SEQOF
+%token T_SETOF
+%token T_CHOICE
+%token T_DEFBY
+%token T_TAG
+%token T_OPTION
+%token T_DEFAULT
+%token T_OCTSTRING
+%token T_BITSTRING
+%token T_IA5
+%token T_PRINTABLE
+%token T_UTF8
+%token T_TELETEX
+%token T_UNIVERSAL
+%token T_BMP
+%token T_NULL
+%token T_INT
+%token T_BOOL
+%token T_UTCDATE
+%token T_GENDATE
+%token T_OID
+%token T_AS
+
+%token COPEN
+%token CCLOSE
+%token POPEN
+%token PCLOSE
+%token BOPEN
+%token BCLOSE
+%token COMMA
+%token COLON
+%token ASSIGN
+%token EQ
+%token DOLLAR
+%token STAR
+%token LT
+%token GT
+%token SEMI
+%token EOF
+
+%type < asntpl > start
+%type < asn1 > start_asn
+
+%%
+
+start: tpldefs EOF {$1}
+start_asn: asn1 EOF {$1}
+
+tpldefs:
+| tplvar tpldefs {$2}
+| tpl {$1}
+
+tplvar:
+| {}
+| K_STRING ASSIGN tpl SEMI {savetpl $1 $3}
+
+asn1:
+| T_SEQ COPEN asn1_list CCLOSE {A_SEQ(false, $3)}
+| T_SET COPEN asn1_list CCLOSE {A_SEQ(true, $3)}
+| BOPEN K_INT BCLOSE asn1 {A_TAG($2, $4)}
+| T_OCTSTRING COLON asn1 {A_ENC(false, $3)}
+| T_BITSTRING COLON asn1 {A_ENC(true, $3)}
+| literal_tagged {A_CST($1)}
+
+asn1_list:
+| asn1 SEMI asn1_list {$1 :: $3}
+| {[]}
+
+tpl:
+| T_SEQ COPEN tpl_list CCLOSE {TPL_SEQ(false, $3)}
+| T_SET COPEN tpl_list CCLOSE {TPL_SEQ(true, $3)}
+| T_SEQOF LT K_STRING GT bounds COLON tpl {TPL_SEQOF($3, false, $5, $7)}
+| T_SETOF LT K_STRING GT bounds COLON tpl {TPL_SEQOF($3, true, $5, $7)}
+| T_CHOICE COPEN noopt_list CCLOSE {TPL_CHOICE($3)}
+| T_DEFBY LT K_STRING GT COPEN defbys CCLOSE {TPL_DEFINEDBY($3, $6)}
+| T_OCTSTRING COLON tpl {TPL_ENCAPSULATED(false, $3)}
+| T_BITSTRING COLON tpl {TPL_ENCAPSULATED(true, $3)}
+| literal {TPL_CONSTANT($1)}
+| K_STRING COLON vkind valueset {TPL_VARIABLE($1, $3, $4)}
+| DOLLAR K_STRING optsubs {(tplsub ($3) (lookup $2))}
+
+valueset:
+| {[]}
+| BOPEN vlist BCLOSE {$2}
+
+vlist:
+| literal COMMA vlist {$1 :: $3}
+| literal {[$1]}
+
+bounds:
+| {(0, 0)}
+| POPEN K_INT PCLOSE {($2, 0)}
+| POPEN K_INT COMMA K_INT PCLOSE {($2, $4)}
+
+defval:
+| {None}
+| POPEN asn1 PCLOSE {Some($2)}
+
+impl:
+| {false}
+| STAR {true}
+
+tagging:
+| BOPEN K_INT BCLOSE impl {Some($2,$4)}
+| {None}
+
+optsubs:
+| LT tplsubst GT {$2}
+| {[]}
+
+tplsubst:
+| K_STRING EQ K_STRING COMMA tplsubst {($1, $3)::$5}
+| K_STRING EQ K_STRING {[($1, $3)]}
+
+optval:
+| T_OPTION defval {O_OPTIONAL($2)}
+| {O_REQUIRED}
+
+noopt_list:
+| tagging tpl SEMI noopt_list {($1, $2) :: $4}
+| {[]}
+
+tpl_list:
+| tagging optval tpl SEMI tpl_list {($1, $2, $3) :: $5}
+| {[]}
+
+tag:
+| T_PRINTABLE {S_PRINT}
+| T_BITSTRING {S_BIT}
+| T_OCTSTRING {S_OCTET}
+| T_IA5 {S_IA5}
+| T_UTF8 {S_UTF8}
+| T_TELETEX {S_TELETEX}
+| T_UNIVERSAL {S_UNIV}
+| T_BMP {S_BMP}
+
+vkind:
+| T_BOOL {C_BOOL}
+| T_INT {C_INT}
+| T_OID {C_OID}
+| T_UTCDATE {C_TIME(T_UTC)}
+| T_GENDATE {C_TIME(T_GEN)}
+| tag {C_STR($1)}
+
+vkind_tag:
+| vkind {$1}
+| BOPEN K_INT BCLOSE {C_CUSTOM($2)}
+
+literal_tagged:
+| K_LITERAL T_AS vkind_tag {($3, snd ($1))}
+| K_LITERAL {$1}
+
+literal:
+| K_LITERAL T_AS vkind {($3, snd ($1))}
+| K_LITERAL {$1}
+
+defbys:
+| K_LITERAL COLON tpl defbys {($1,$3) :: $4}
+| K_LITERAL COLON tpl {[($1,$3)]}
+| T_DEFAULT COLON tpl {[((C_NULL, bTrue),$3)]}

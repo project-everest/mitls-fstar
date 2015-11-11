@@ -1,0 +1,48 @@
+
+type elt =
+Platform.Bytes.bytes
+
+type preds =
+| Elt of (Platform.Bytes.bytes * Platform.Bytes.bytes * elt)
+
+type predPP =
+| PP of (Platform.Bytes.bytes * Platform.Bytes.bytes)
+
+let goodPP_log = let (r:CoreCrypto.dh_params list) = []
+in ref r
+ 
+let goodPP = (fun dhp -> (Support.List.mem dhp (! (goodPP_log))))
+
+let pp = (fun dhp -> (let _23_6 = (Support.ST.op_Colon_Equals goodPP_log ((dhp)::(! (goodPP_log))))
+in dhp))
+
+let genElement = (fun dhp -> (let e = (CoreCrypto.dh_gen_key dhp)
+in e.CoreCrypto.dh_public))
+
+let checkParams = (fun dhdb minSize p g -> (match ((DHDB.dh_check_params dhdb DHDB.defaultDHPrimeConfidence minSize p g)) with
+| None -> begin
+Platform.Error.Error ((TLSError.AD_insufficient_security, "dh_check_params"))
+end
+| Some (res) -> begin
+(let _23_19 = res
+in (match (_23_19) with
+| (dhdb, dhpar) -> begin
+(Platform.Error.correct (dhdb, dhpar))
+end))
+end))
+
+let checkElement = (fun dhp b -> if (DHDB.dh_check_element dhp b) then begin
+Some (b)
+end else begin
+None
+end)
+
+let defaultDHparams = (fun file dhdb minSize -> (let _23_27 = (DHDB.load_default_params file dhdb minSize)
+in (match (_23_27) with
+| (dhdb, dhp) -> begin
+(dhdb, dhp)
+end)))
+
+
+
+

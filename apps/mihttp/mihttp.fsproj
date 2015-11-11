@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{F5B505A7-EA88-45CC-A001-46D67077F382}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>mihttp</RootNamespace>
+    <AssemblyName>mihttp</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
+    <Name>mihttp</Name>
+    <TargetFSharpCoreVersion>4.3.0.0</TargetFSharpCoreVersion>
+    <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <Tailcalls>false</Tailcalls>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <PlatformTarget>x86</PlatformTarget>
+    <DocumentationFile>bin\Debug\mihttp.XML</DocumentationFile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <Tailcalls>true</Tailcalls>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <PlatformTarget>x86</PlatformTarget>
+    <DocumentationFile>bin\Release\mihttp.XML</DocumentationFile>
+  </PropertyGroup>
+  <Choose>
+    <When Condition="'$(VisualStudioVersion)' == '11.0'">
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </Otherwise>
+  </Choose>
+  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
+  <PropertyGroup>
+  </PropertyGroup>
+  <Target Name="AfterBuild" Condition="'$(OS)' == 'Windows_NT'">
+    <Copy SourceFiles="$(ProjectDir)\..\..\libs\fs\DB\lib\$(PlatformName)\SQLite.Interop.dll" DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="$(ProjectDir)\..\..\3rdparty\libeay32-$(PlatformName).dll" DestinationFiles="$(OutDir)/libeay32.dll" />
+  </Target>
+  <Target Name="AfterClean">
+    <CreateItem Include="$(OutDir)\*.dll;$(OutDir)\*.exe;$(OutDir)\*.mdb;$(OutDir)\*.pdb">
+      <Output ItemName="ToDel" TaskParameter="Include" />
+    </CreateItem>
+    <Delete Files="$(OutDir)\$(Name).XML" />
+    <Delete Files="@(ToDel)" />
+  </Target>
+  <ItemGroup>
+    <Compile Include="MiHTTPUtils.fsi" />
+    <Compile Include="MiHTTPUtils.fs" />
+    <Compile Include="MiHTTPCookie.fsi" />
+    <Compile Include="MiHTTPCookie.fs" />
+    <Compile Include="MiHTTPWorker.fsi" />
+    <Compile Include="MiHTTPWorker.fs" />
+    <Compile Include="MiHTTPData.fsi" />
+    <Compile Include="MiHTTPData.fs" />
+    <Compile Include="MiHTTPChannel.fsi" />
+    <Compile Include="MiHTTPChannel.fs" />
+    <Compile Include="MiHTTPInstanceDB.fsi" />
+    <Compile Include="MiHTTPInstanceDB.fs" />
+    <Compile Include="MiHTTP.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="FSharp.Core">
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\libs\fs\DB\DB.fsproj">
+      <Name>DB</Name>
+      <Project>{CAD78B05-0ADC-433B-954B-1F31FC6477F6}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\libs\fs\Platform\Platform.fsproj">
+      <Name>Platform</Name>
+      <Project>{408E6F53-363A-4C58-9808-84A0B526324B}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\tls-fs\tls.fsproj">
+      <Name>tls</Name>
+      <Project>{7283C0EF-3C40-495D-9969-79CB71B3AACC}</Project>
+    </ProjectReference>
+  </ItemGroup>
+</Project>
