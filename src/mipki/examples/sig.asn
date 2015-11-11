@@ -1,0 +1,9 @@
+seq {
+ seq {
+  O2.16.840.1.101.3.4.2.1;
+  seq {
+   "Hello Firefox, this is a nice library you have here but please be careful with X.509 signature encoding - the optional parameters can be a real problem. What if this message was valid by luck?";
+  };
+ };
+ 0x51C220666205376F21C589D3ED6603C7B98394F55C2B44B22597A2138BBE4244;
+}

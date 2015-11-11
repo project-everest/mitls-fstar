@@ -1,0 +1,65 @@
+(* Injectivity proof of the F* state machine *)
+
+This proves the injectivity of the TLS handshake transcripts in F*.
+At the end of the TLS handshake both parties exchange the "log" of the
+messages they received to make sure they share the same negotiated
+values.  This log is simply the concatenation of the bytes of the
+received Handshake messages. We prove that if the two parties share
+the same log, they must also share the same internal state values. In
+effect, we show that the individual message formats and their
+concatenation is injective for these values.
+
+In the original miTLS development, this standalone logical proof was
+done in Coq and hence was disconnected from the rest of the
+development. We redid the proof in F*, and as verification of miTLS in
+F* progresses, this proof will be integrated into the miTLS codebase.
+
+(* How to verify the F* proof of injectivity *)
+
+Make sure that the FSTAR_HOME variable is set to your F* root
+directory, then execute `make` in the directory containing this README
+file.
+
+NB: verifying the proof requires a lot of memory (up to 16Go), so F*
+should be built for an x64 platform.
+
+(* Structure of the code *)
+
+The code contains .fst and .fsti files. The .fsti files are interfaces
+which always correspond to a .fst file which has been proven before.
+They allow to run the proof faster, module by module. The concrete
+proof is in the .fst files.
+
+predicates.fst :
+    This file contains all the useful types, predicates and parsing
+    functions for the later proof. The first part up to L357 describes
+    and proves the parsing functions for TLS messages.  The second
+    part up to L535 describes the state machine data type
+    (state_monitor) and predicates on the messages (about their types,
+    length etc.). The third part up to L679 describes how the log is
+    built from a list of messages, and that if those messages are
+    formatted properly there is a bijectivity relation between the log
+    and the message list. The last part of the file, after L682,
+    describes different TLS state machine's states which are used in
+    the rest of the proof.
+
+<message_type>_lemma.fst :
+    Each of these files corresponds to a state after receiving a
+    particular message type. They prove that the state machine is
+    appropriately updated with regards to the predicates in the last
+    part of the file "predicates.fst".
+    
+    The proof shows that if two instances of the state machine have
+    the same internal state values, then the updated state machines
+    will also have the same state values, and that the reciprocal is
+    true. Indeed, from a particular state machine's appropriate state,
+    there is a unique previous state which leads to it.
+
+helper_lemma.fst :
+    Helper lemmas, to infer which state the state machine is in from
+    its internal values.
+
+injectivity_lemma.fst:
+    The actual proof of injectivity. It shows that if two state
+    machines are in an acceptable state, and their logs are identical,
+    then they share the same state values.

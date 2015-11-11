@@ -1,0 +1,281 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{7283c0ef-3c40-495d-9969-79cb71b3aacc}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>tls</RootNamespace>
+    <AssemblyName>tls</AssemblyName>
+    <Name>tls</Name>
+    <UsePartialTypes>False</UsePartialTypes>
+    <BuildOrder>
+      <BuildOrder>
+        <String>Bytes.fsi</String>
+        <String>Bytes.fs</String>
+        <String>Nonce.fsi</String>
+        <String>Nonce.fs</String>
+        <String>Tcp.fsi</String>
+        <String>Tcp.fs</String>
+        <String>TLSConstants.fsi</String>
+        <String>TLSConstants.fs</String>
+        <String>RSAKeys.fsi</String>
+        <String>RSAKeys.fs</String>
+        <String>HASH.fsi</String>
+        <String>HASH.fs</String>
+        <String>HMAC.fsi</String>
+        <String>HMAC.fs</String>
+        <String>TLSPRF.fsi</String>
+        <String>TLSPRF.fs</String>
+        <String>Sig.fsi</String>
+        <String>Sig.fs</String>
+        <String>Cert.fsi</String>
+        <String>Cert.fs</String>
+        <String>TLSInfo.fsi</String>
+        <String>TLSInfo.fs</String>
+        <String>DataStream.fsi</String>
+        <String>DataStream.fs</String>
+        <String>IdealDataStream.fsi</String>
+        <String>IdealDataStream.fs</String>
+        <String>RPCDataStream.fsi</String>
+        <String>RPCDataStream.fs</String>
+        <String>Fragment.fsi</String>
+        <String>Fragment.fs</String>
+        <String>MAC.fsi</String>
+        <String>MAC.fs</String>
+        <String>Encode.fsi</String>
+        <String>Encode.fs</String>
+        <String>ENC.fsi</String>
+        <String>ENC.fs</String>
+        <String>AEADPlain.fsi</String>
+        <String>AEADPlain.fs</String>
+        <String>AEAD.fsi</String>
+        <String>AEAD.fs</String>
+        <String>StatefulPlain.fsi</String>
+        <String>StatefulPlain.fs</String>
+        <String>StatefulAEAD.fsi</String>
+        <String>StatefulAEAD.fs</String>
+        <String>TLSFragment.fsi</String>
+        <String>TLSFragment.fs</String>
+        <String>Record.fsi</String>
+        <String>Record.fs</String>
+        <String>Alert.fsi</String>
+        <String>Alert.fs</String>
+        <String>DHGroup.fsi</String>
+        <String>DHGroup.fs</String>
+        <String>PRF.fsi</String>
+        <String>PRF.fs</String>
+        <String>CRE.fsi</String>
+        <String>CRE.fs</String>
+        <String>DH.fsi</String>
+        <String>DH.fs</String>
+        <String>RSAEnc.fsi</String>
+        <String>RSAEnc.fs</String>
+        <String>SessionDB.fsi</String>
+        <String>SessionDB.fs</String>
+        <String>Handshake.fsi</String>
+        <String>Handshake.fs</String>
+        <String>AppData.fsi</String>
+        <String>AppData.fs</String>
+        <String>Dispatch.fsi</String>
+        <String>Dispatch.fs</String>
+        <String>TLS.fsi</String>
+        <String>TLS.fs</String>
+        <String>RPC.fsi</String>
+        <String>RPC.fs</String>
+        <String>UTLS.fsi</String>
+        <String>UTLS.fs</String>
+      </BuildOrder>
+    </BuildOrder>
+    <TargetFSharpCoreVersion>4.3.0.0</TargetFSharpCoreVersion>
+    <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>False</Optimize>
+    <Tailcalls>False</Tailcalls>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;TLSExt_extendedPadding; TLSExt_sessionHash</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <DocumentationFile>
+    </DocumentationFile>
+    <OtherFlags>
+    </OtherFlags>
+    <NoWarn>62</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>True</Optimize>
+    <Tailcalls>True</Tailcalls>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE;TLSExt_extendedPadding; TLSExt_sessionHash</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <DocumentationFile>bin\Release\tls.XML</DocumentationFile>
+    <NoWarn>62</NoWarn>
+    <DebugSymbols>False</DebugSymbols>
+    <OtherFlags>
+    </OtherFlags>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Ideal|AnyCPU' ">
+    <DebugSymbols>False</DebugSymbols>
+    <Optimize>False</Optimize>
+    <OutputPath>bin\Ideal</OutputPath>
+    <Tailcalls>False</Tailcalls>
+    <DebugType>none</DebugType>
+    <DocumentationFile />
+    <DefineConstants>ideal; verify</DefineConstants>
+    <OtherFlags>
+    </OtherFlags>
+    <NoWarn>62</NoWarn>
+  </PropertyGroup>
+  <Choose>
+    <When Condition="'$(VisualStudioVersion)' == '11.0'">
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
+      </PropertyGroup>
+    </Otherwise>
+  </Choose>
+  <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
+  <ItemGroup>
+    <Compile Include="pi.fs" />
+    <Compile Include="TLSError.fsi" />
+    <Compile Include="TLSError.fs" />
+    <Compile Include="Nonce.fsi" />
+    <Compile Include="Nonce.fs" />
+    <Compile Include="TLSConstants.fsi" />
+    <Compile Include="TLSConstants.fs" />
+    <Compile Include="RSAKey.fsi" />
+    <Compile Include="RSAKey.fs" />
+    <Compile Include="DHGroup.fsi" />
+    <Compile Include="DHGroup.fs" />
+    <Compile Include="ECGroup.fsi" />
+    <Compile Include="ECGroup.fs" />
+    <Compile Include="CommonDH.fs" />
+    <Compile Include="PMS.fsi" />
+    <Compile Include="PMS.fs" />
+    <Compile Include="HASH.fsi" />
+    <Compile Include="HASH.fs" />
+    <Compile Include="HMAC.fsi" />
+    <Compile Include="HMAC.fs" />
+    <Compile Include="Sig.fsi" />
+    <Compile Include="Sig.fs" />
+    <Compile Include="UntrustedCert.fsi" />
+    <Compile Include="UntrustedCert.fs" />
+    <Compile Include="Cert.fsi" />
+    <Compile Include="Cert.fs" />
+    <Compile Include="TLSInfo.fsi" />
+    <Compile Include="TLSInfo.fs" />
+    <Compile Include="TLSExtensions.fsi" />
+    <Compile Include="TLSExtensions.fs" />
+    <Compile Include="TLSPRF.fsi" />
+    <Compile Include="TLSPRF.fs" />
+    <Compile Include="Range.fsi" />
+    <Compile Include="Range.fs" />
+    <Compile Include="DataStream.fsi" />
+    <Compile Include="DataStream.fs" />
+    <Compile Include="AppFragment.fsi" />
+    <Compile Include="AppFragment.fs" />
+    <Compile Include="HSFragment.fsi" />
+    <Compile Include="HSFragment.fs" />
+    <Compile Include="TLSFragment.fsi" />
+    <Compile Include="TLSFragment.fs" />
+    <Compile Include="StatefulPlain.fsi" />
+    <Compile Include="StatefulPlain.fs" />
+    <Compile Include="LHAEPlain.fsi" />
+    <Compile Include="LHAEPlain.fs" />
+    <Compile Include="MAC_SHA256.fsi" />
+    <Compile Include="MAC_SHA256.fs" />
+    <Compile Include="MAC_SHA1.fsi" />
+    <Compile Include="MAC_SHA1.fs" />
+    <Compile Include="MAC.fsi" />
+    <Compile Include="MAC.fs" />
+    <Compile Include="Encode.fsi" />
+    <Compile Include="Encode.fs" />
+    <Compile Include="ENC.fsi" />
+    <Compile Include="ENC.fs" />
+    <Compile Include="AEAD_GCM.fsi" />
+    <Compile Include="AEAD_GCM.fs" />
+    <Compile Include="LHAE.fsi" />
+    <Compile Include="LHAE.fs" />
+    <Compile Include="StatefulLHAE.fsi" />
+    <Compile Include="StatefulLHAE.fs" />
+    <Compile Include="Record.fsi" />
+    <Compile Include="Record.fs" />
+    <Compile Include="Alert.fsi" />
+    <Compile Include="Alert.fs" />
+    <Compile Include="PRF.fsi" />
+    <Compile Include="PRF.fs" />
+    <Compile Include="DH.fsi" />
+    <Compile Include="DH.fs" />
+    <Compile Include="KEF.fsi" />
+    <Compile Include="KEF.fs" />
+    <Compile Include="RSA.fsi" />
+    <Compile Include="RSA.fs" />
+    <Compile Include="SessionDB.fsi" />
+    <Compile Include="SessionDB.fs" />
+    <Compile Include="HandshakeMessages.fs" />
+    <Compile Include="Handshake.fsi" />
+    <Compile Include="Handshake.fs" />
+    <Compile Include="AppData.fsi" />
+    <Compile Include="AppData.fs" />
+    <Compile Include="Dispatch.fsi" />
+    <Compile Include="Dispatch.fs" />
+    <Compile Include="TLS.fsi" />
+    <Compile Include="TLS.fs" />
+    <Compile Include="RPC.fsi" />
+    <Compile Include="RPC.fs" />
+    <Compile Include="UTLS.fsi" />
+    <Compile Include="UTLS.fs" />
+    <None Include="App.config" />
+    <None Include="genrules" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>..\..\3rdparty\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\libs\fs\CoreCrypto\CoreCrypto.fsproj">
+      <Name>CoreCrypto</Name>
+      <Project>{6d4e3f46-dbf9-473b-93ba-58614114aa57}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\libs\fs\DB\DB.fsproj">
+      <Name>DB</Name>
+      <Project>{cad78b05-0adc-433b-954b-1f31fc6477f6}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\libs\fs\DHDBManager\DHDBManager.fsproj">
+      <Name>DHDBManager</Name>
+      <Project>{2da9ce8a-c82f-4cf2-8329-79b8a3f19f1f}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\libs\fs\Platform\Platform.fsproj">
+      <Name>Platform</Name>
+      <Project>{408e6f53-363a-4c58-9808-84a0b526324b}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <Target Name="AfterClean">
+    <CreateItem Include="$(OutDir)\*.dll;$(OutDir)\*.exe;$(OutDir)\*.mdb;$(OutDir)\*.pdb">
+      <Output ItemName="ToDel" TaskParameter="Include" />
+    </CreateItem>
+    <Delete Files="$(OutDir)\$(Name).XML" />
+    <Delete Files="@(ToDel)" />
+  </Target>
+</Project>

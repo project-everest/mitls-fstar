@@ -1,0 +1,212 @@
+#! /usr/bin/env python
+
+# --------------------------------------------------------------------
+import sys, os, re, codecs, itertools as it, subprocess as sp
+import glob, fnmatch, xml.etree.ElementTree as etree
+import errno, shutil
+
+MSBUILD = 'http://schemas.microsoft.com/developer/msbuild/2003'
+
+# --------------------------------------------------------------------
+MYROOT  = os.path.dirname(__file__)
+INSTALL = os.path.join(MYROOT, 'install-sh')
+
+# --------------------------------------------------------------------
+class Object(object):
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+# --------------------------------------------------------------------
+def _read_file(filename):
+    contents = open(filename, 'rb').read()
+
+    if contents.startswith(codecs.BOM_UTF8):
+        return unicode(contents[len(codecs.BOM_UTF8):], 'utf-8')
+    return unicode(contents, 'utf-8')
+
+# --------------------------------------------------------------------
+def _error(message):
+    print >>sys.stderr, "%s: %s" % (sys.argv[0], message)
+    exit(1)
+
+# --------------------------------------------------------------------
+def install_dir(distdir, x):
+    fulldir = os.path.join(distdir, x)
+
+    print >>sys.stderr, "[D] [%s]" % (x,)
+
+    try:
+        os.makedirs(fulldir)
+    except OSError, e:
+        if e.errno != errno.EEXIST:
+            raise
+
+    os.chmod(fulldir, 0755)
+
+# --------------------------------------------------------------------
+def install_files(distdir, dir, files):
+    print >>sys.stderr, \
+        "[F] [%s] <- %s" % \
+        (dir, " ".join([x[0] for x in files]))
+
+    for (f, (c, b)) in files:
+        fp = os.path.join(dir, f)
+
+        if c is None:
+            shutil.copyfile(fp, os.path.join(distdir, fp))
+        else:
+            print >>sys.stderr, "*** specializing contents of %s" % (fp,)
+            with open(os.path.join(distdir, fp), 'wb') as output:
+                output.write(c)
+
+        os.chmod(os.path.join(distdir, fp), 0755 if b else 0644)
+
+# --------------------------------------------------------------------
+def _find(dirname, glob):
+    for dirpath, dirnames, filenames in os.walk(dirname):
+        for filename in fnmatch.filter(filenames, glob):
+            yield os.path.join(dirpath, filename)
+
+# --------------------------------------------------------------------
+def _proj(filename):
+    with open(filename, 'r') as stream:
+        doc = etree.parse(stream)
+
+    files = doc.findall('.//{0}ItemGroup/*'.format('{%s}' % (MSBUILD,)))
+    files = [x.get('Include') for x in files if x.get('Include') is not None]
+    files = [os.path.join(*x.split('\\')) for x in files]
+    files = [os.path.join(os.path.dirname(filename), x) for x in files]
+    files = [x for x in files if os.path.isfile(x)]
+
+    return [filename] + files
+
+# --------------------------------------------------------------------
+RE_PROJECT = ur"""
+\s*Project                              # literal
+\(\"\{(?P<type>[0-9a-fA-F\-]*)\}\"\)    # <type>
+\s*=\s*                                 # literal
+\"(?P<name>\w*)\"                       # <name>
+\s*,\s*                                 # literal
+\"(?P<path>[\w:\\/\.]*)\"               # <path>
+\s*,\s*                                 # literal
+\"\{(?P<id>[0-9a-fA-F\-]*)\}\"          # <id>
+(?:.*)$
+"""
+
+RE_END_PROJECT = r'EndProject\b'
+
+def _vs(filename, projects):
+    soldir  = os.path.dirname(filename)
+    project = set(projects)
+    doc     = [x.rstrip() for x in _read_file(filename).splitlines()]
+    status  = Object(inproject = False)
+    vsprj   = dict()
+    uids    = set()
+    output  = []
+
+    for line in doc:
+        if status.inproject:
+            if status.inproject.accpt:
+                output.append(line)
+            if re.search('^EndProject(?:\b|$)', line):
+                status.inproject = False
+            continue
+
+        m = re.search(RE_PROJECT, line, re.VERBOSE)
+
+        if m is not None:
+            if status.inproject:
+                raise RuntimeError('VS: nested projects')
+
+            status.inproject = Object(
+                type  = m.group('type'),
+                name  = m.group('name'),
+                path  = os.path.join(soldir,os.path.join(*m.group('path').split('\\'))),
+                id    = m.group('id'),
+                accpt = m.group('name') in projects,
+            )
+
+            if status.inproject.accpt:
+                output.append(line)
+                vsprj[m.group('name')] = status.inproject
+                uids.add(m.group('id').lower())
+            continue
+
+        m = re.search('^\s*\{([0-9a-fA-F\-]*)\}\.', line)
+
+        if m is not None:
+            if m.group(1).lower() in uids:
+                output.append(line)
+        else:
+            output.append(line)
+
+    yield Object(path     = filename,
+                 contents = ('\r\n'.join(output)).encode('utf-8'))
+
+    for project in vsprj.itervalues():
+        for x in _proj(project.path):
+            yield x
+
+# --------------------------------------------------------------------
+def _expand(x):
+    vsm   = re.search(r'^vs:(.*?):(.*)$', x)
+    projm = re.search(r'^proj:(.*)', x)
+    findm = re.search(r'^find:(.*?):(.*$)$', x)
+    if vsm is not None:
+        return list(_vs(vsm.group(1), vsm.group(2).split(',')))
+    if projm is not None:
+        return list(_proj(projm.group(1)))
+    if findm is not None:
+        return list(_find(findm.group(1), findm.group(2)))
+    if not hasattr(glob, 'has_magic') or glob.has_magic(x):
+        return glob.glob(x)
+    return [x]
+
+# --------------------------------------------------------------------
+def _main():
+    if len(sys.argv)-1 != 2:
+        print >>sys.stderr, "Usage: %s [dist-dir] [MANIFEST]" % (sys.argv[0])
+        exit (1)
+
+    distdir  = sys.argv[1]
+    manifest = sys.argv[2]
+
+    def _to_xpath(x):
+        if isinstance(x, basestring):
+            x = Object(path = x, contents = None)
+        x.path = os.path.normpath(x.path)
+        return x
+
+    manifest = open(manifest, 'r').readlines()
+    manifest = [re.sub('#.*$', '', x).strip() for x in manifest]
+    manifest = [x for x in manifest if x]
+    manifest = list(it.chain(*[_expand(x) for x in manifest]))
+    manifest = [_to_xpath(x) for x in manifest]
+    noaccess = [x.path for x in manifest if not os.access(x.path, os.F_OK)]
+
+    if noaccess:
+        msg = 'cannot access the following MANIFEST files: %s'
+        _error(msg % ', '.join(noaccess))
+
+    bygroup = dict()
+
+    for x in manifest:
+        if os.path.isdir(x.path):
+            bygroup.setdefault(x.path, dict())
+        else:
+            (xdir, xbase) = os.path.split(x.path)
+            xexec = os.access(x.path, os.X_OK)
+            xdict = bygroup.setdefault(xdir, dict())
+            if xdict.get(xbase, None) is not None:
+                if xdict[xbase][0] is not None:
+                    if x.contents is not None:
+                        _error('two specialized contents for a single file')
+            xdict[xbase] = (x.contents, xexec)
+
+    for x, v in bygroup.iteritems():
+        install_dir(distdir, x)
+        install_files(distdir, x, v.items())
+
+# --------------------------------------------------------------------
+if __name__ == '__main__':
+    _main()

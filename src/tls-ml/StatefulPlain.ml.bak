@@ -1,0 +1,16 @@
+type pre_fragment 
+
+let ghost_repr a = ()
+
+type adata =
+Platform.Bytes.lbytes
+
+type fragment =
+pre_fragment
+
+let plain a =
+  failwith "Not implemented [StatefulPlain.plain]"
+
+let repr a = failwith "Not implemented [StatefulPlain.repr]"
+
+
