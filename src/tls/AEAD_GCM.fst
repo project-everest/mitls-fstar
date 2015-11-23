@@ -188,7 +188,7 @@ val encrypt:
        (ensures  (fun h0 c h1 ->
                            modifies (Set.singleton e.region) h0 h1
                          /\ modifies_rref e.region !{as_ref e.counter, as_ref e.log} h0 h1
-                         /\ contains_ref e.log h1
+                         /\ contains_ref e.log h1 
                          /\ contains_ref e.counter h1
                          /\ length c = Range.targetLength i r
                          (* /\ sel h1 e.counter = sel h0 e.counter + 1 *)
@@ -199,7 +199,7 @@ val encrypt:
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
 let encrypt i e ad rg p =
-  recall e.counter; recall e.log;
+  recall e.log;
   let tlen = targetLength i rg in
   let text = 
     if safeId i then createBytes (fst rg) 0uy
@@ -207,7 +207,9 @@ let encrypt i e ad rg p =
   targetLength_converges i rg;
   let c = enc i e ad (cipherRangeClass i tlen) text in
   e.log := snoc !e.log (Entry c ad p);
+  recall e.counter; 
   c
+
 
 // raw decryption (returning concrete bytes)
 private val dec: 
