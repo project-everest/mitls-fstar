@@ -114,9 +114,9 @@ let test_st_inv c j =
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs)){epochs_footprint es /\ es = HyperHeap.sel h c.hs.log})
 let epochs c h = HyperHeap.sel h c.hs.log
 
-#reset-options
-#set-options "--logQueries"
-let test c h = assert (epochs c h = HyperHeap.sel #(seq (epochh c.hs.log)
+(* #reset-options *)
+(* #set-options "--logQueries" *)
+(* let test c h = assert (epochs c h = HyperHeap.sel #(seq (epochh c.hs.log)) *)
   
 
 let epoch_i c h i = Seq.index (epochs c h) i
@@ -148,23 +148,23 @@ let frame_epochs c j h0 h1 k =
   assert (epochs c h0 = HyperHeap.sel h0 c.hs.log);
   admit()
   
-  let hs_r = HS.region c.hs in
-  let es : seq (epoch hs_r) = epochs c h0 in
-  let wr_j = writer_epoch (Seq.index es j) in
-  assert (epochs_footprint es);
-  assert (extends (writer_region wr_j) hs_r);
-  assert (hs_r <> writer_region wr_j);
-  assert (Heap.equal (Map.sel h0 hs_r) (Map.sel h1 hs_r));
-  let log : rref hs_r (es:seq (epoch hs_r){epochs_footprint es}) = c.hs.log in
-  assert (HyperHeap.sel h0 log = Heap.sel (Map.sel h0 hs_r) (as_ref log));
-  assert (HyperHeap.sel h1 log = HyperHeap.sel h0 log);
-  let es' = HyperHeap.sel h0 (c_log c) in
-  assert (epochs c h0 = epochs c h1);
-  if j=k
-  then (StatefulLHAE.frame_decrypt (reader_epoch (Seq.index es j)) h0 h1; 
-        assert (epochs c h0 = epochs c h1);
-        admit())
-  else admit()
+  (* let hs_r = HS.region c.hs in *)
+  (* let es : seq (epoch hs_r) = epochs c h0 in *)
+  (* let wr_j = writer_epoch (Seq.index es j) in *)
+  (* assert (epochs_footprint es); *)
+  (* assert (extends (writer_region wr_j) hs_r); *)
+  (* assert (hs_r <> writer_region wr_j); *)
+  (* assert (Heap.equal (Map.sel h0 hs_r) (Map.sel h1 hs_r)); *)
+  (* let log : rref hs_r (es:seq (epoch hs_r){epochs_footprint es}) = c.hs.log in *)
+  (* assert (HyperHeap.sel h0 log = Heap.sel (Map.sel h0 hs_r) (as_ref log)); *)
+  (* assert (HyperHeap.sel h1 log = HyperHeap.sel h0 log); *)
+  (* let es' = HyperHeap.sel h0 (c_log c) in *)
+  (* assert (epochs c h0 = epochs c h1); *)
+  (* if j=k *)
+  (* then (StatefulLHAE.frame_decrypt (reader_epoch (Seq.index es j)) h0 h1;  *)
+  (*       assert (epochs c h0 = epochs c h1); *)
+  (*       admit()) *)
+  (* else admit() *)
     
   
 
