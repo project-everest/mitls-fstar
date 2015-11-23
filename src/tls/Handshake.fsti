@@ -35,13 +35,22 @@ val hs_id: handshake -> Tot id
 
 type handshake_state // internal 
 
+open FStar.Set  
+
+opaque type disjoint_regions (s1:set rid) (s2:set rid) = 
+       forall x y. {:pattern (Set.mem x s1); (Set.mem y s2)} disjoint x y
+
+opaque type epoch_region_inv (#i:_) (r:reader i) (w:writer i) =
+  disjoint_regions (regions_of r) (regions_of w)
+  
 type epoch (parent:rid) =
   | Epoch: h: handshake ->
-           r: StatefulLHAE.reader (hs_id h) ->
-           w: StatefulLHAE.writer (hs_id h) 
-           { extends (StatefulLHAE.reader_region r) parent /\ 
-             extends (StatefulLHAE.writer_region w) parent /\ 
-             (StatefulLHAE.reader_region r <> StatefulLHAE.writer_region w) } ->  epoch parent
+           r: reader (hs_id h) ->
+           w: writer (hs_id h) 
+           { extends (region r) parent /\ 
+             extends (region w) parent /\ 
+             epoch_region_inv r w }
+       ->  epoch parent
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
@@ -51,40 +60,49 @@ type epoch (parent:rid) =
 //val regions_epoch: #region:rid -> epoch #region -> Tot (rid * rid)
 //let regions_epoch region (Epoch h r w) = StatefulLHAE.reader_region r, StatefulLHAE.writer_region w
 
-val regions_epoch: #region:rid -> e:epoch region -> Tot (rw:(rid * rid) 
-  { rw = (StatefulLHAE.reader_region (Epoch.r e), 
-          StatefulLHAE.writer_region (Epoch.w e))})
+(* let op_HatAtPlus (r:rid) (rs:FStar.Set.set rid) = Set.union (Set.singleton r) rs *)
+(* let op_HatAtHat (r:rid) (s:rid) = Set.union (Set.singleton r) (Set.singleton s) *)
+
+
+let regions (#p:rid) (e:epoch p) = 
+  union (singleton (region e.r))
+            (union (singleton (peer_region e.r))
+                       (union (singleton (region e.w))
+                                  (singleton (peer_region e.w))))
+
 
 //15-09-23 any abstract way to deal with pairwise disjointness? 
 //15-09-23 test how we apply this assumption.
-type epochs_footprint (#region:rid) (es: seq (epoch region)) =
+opaque type epochs_footprint (#region:rid) (es: seq (epoch region)) =
   forall (i:nat { i < Seq.length es }).
-  forall (j:nat { j < Seq.length es /\ i <> j}).
-    Let(regions_epoch (Seq.index es i))(fun x -> 
-    Let(regions_epoch (Seq.index es j))(fun y -> 
-      fst x <> fst y /\
-      fst x <> snd y /\
-      snd x <> fst y /\
-      snd x <> snd y ))
+  forall (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
+    let ei = Seq.index es i in
+    let ej = Seq.index es j in
+      disjoint_regions (regions ei) (regions ej)
+
+type epochs (r:rid) = es: seq (epoch r) { epochs_footprint es }
 
 type hs =
   | HS: #region: rid ->
         r:role ->
-        resume: (option (sid:sessionID { r = Client })) ->
+        resume: option (sid:sessionID { r = Client }) ->
         cfg:config ->
         id: random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-        log: rref region (es: seq (epoch region) { epochs_footprint es }) ->  // append-only 15-09-23 use monotonic? helpful for proofs? 
+        log: rref region (epochs region) ->  // append-only 15-09-23 use monotonic? helpful for proofs? 
         state: rref region handshake_state  ->  // opaque, subject to invariant
         hs
 
+type forall_epochs (hs:hs) h (p:(epoch (hs.region) -> Type)) = 
+  (let es = sel h hs.log in 
+   forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
+     
 //vs modifies clauses?
-type unmodified_epochs s h0 h1 = 
-  forall (e:epoch (HS.region s)). 
-  ( SeqProperties.mem e (sel h0 (HS.log s)) ==> 
-    Let(regions_epoch e)(fun rw -> 
-      Map.sel h0 (fst rw) == Map.sel h1 (fst rw) /\
-      Map.sel h0 (snd rw) == Map.sel h1 (snd rw)))
+opaque type unmodified_epochs s h0 h1 = 
+  forall_epochs s h0 (fun e -> 
+    let rs = regions e in 
+    (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r))
 
+//epochs in h1 extends epoochs in h0 by one 
 let fresh_epoch h0 s h1 =
   let es0 = sel h0 s.log in
   let es1 = sel h1 s.log in 
@@ -92,10 +110,11 @@ let fresh_epoch h0 s h1 =
   es0 = Seq.slice es1 0 (Seq.length es1 - 1)
 
 // 15-09-10 explicit val needed to express the trivial precondition
-val latest: h:HyperHeap.t -> s:hs { Seq.length (sel h (HS.log s)) > 0 } -> GTot (epoch (HS.region s))
-//let latest h s = // accessing the latest epoch
-//  let es = sel h (HS.log s) in
-//  Seq.index es (Seq.length es - 1)
+// 15-11-23: NS, not necessarily
+(* val latest: h:HyperHeap.t -> s:hs { Seq.length (sel h s.log) > 0 } -> GTot (epoch s.region) *)
+let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoch
+ let es = sel h (HS.log s) in
+ Seq.index es (Seq.length es - 1)
 
 // separation policy: the handshake mutates its private state, only depend on it, and only extends the log with fresh epochs.
 
@@ -114,17 +133,13 @@ assume type Completed: #region:rid -> epoch region -> Type
 // technicality: module dependencies?
 // we used to pre-declare all identifiers in TLSInfo
 // we used owe could also record (fatal) errors as log terminators
-
-// move to library?? 
-//val snoc : #a:Type -> seq a -> a -> Tot (seq a)
-let snoc s x = Seq.append s (Seq.create 1 x)
-
+ 
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
-
+ 
 type hs_invT (s:hs) (epochs:seq (epoch (HS.region s))) : handshake_state -> Type
-
-type hs_inv (s:hs) (h: HyperHeap.t) = hs_invT s (sel h (HS.log s)) (sel h (HS.state s))
+ 
+type hs_inv (s:hs) (h: HyperHeap.t) = hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
 
 
 (* ----------------- Control Interface ---------------------*)

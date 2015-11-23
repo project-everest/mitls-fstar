@@ -33,7 +33,7 @@ type entry (i:id) = (* records that c is an encryption of p with ad *)
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
 type is_seqn (n:nat) = repr_bytes n <= 8
-type seqn = n:nat { repr_bytes n <= 8 } (* NB: REMOVING THIS LINE TRIGGERS A FATAL ERROR WHEN CHECKING writer_seqn *)
+type seqn_t = n:nat { repr_bytes n <= 8 } (* NB: REMOVING THIS LINE TRIGGERS A FATAL ERROR WHEN CHECKING writer_seqn *)
 
 (* typing the log that specifies StatefulLHAE *)
 type st_log_t (r:rid) (i:id) = rref r (s:seq (entry i))
@@ -47,7 +47,7 @@ type state (i:gid) (rw:rw) =
        #region:rid
     -> #peer_region:rid{HyperHeap.disjoint region peer_region}
     -> log:  st_log_t (if rw=Reader then peer_region else region) i (* shared ghost spec *)
-    -> seqn: rref region seqn                                       (* concrete, local sequence number *)
+    -> seqn: rref region seqn_t                                       (* concrete, local sequence number *)
     -> key:  AEAD_GCM.state i rw{extends key.region region /\ extends key.peer_region peer_region} (* gcm in a distinct sub-region *)
     -> state i rw
 

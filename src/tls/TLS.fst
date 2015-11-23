@@ -69,22 +69,21 @@ let test_2 (p:nat -> Type) (s:seq nat { Seq_forall p s }) (j:nat { j < Seq.lengt
 -> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (Seq_forall p
 s /\ p x) ==> Seq_forall p (snoc s x)}) *)
 
-let id_epoch #region (e: epoch region) = 
-  match e with (Epoch h _ _) -> hs_id h
-
 (* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
 let epoch_id (#region:rid) (o: option (epoch region)) =
   match o with 
-  | Some(Epoch h _ _) -> hs_id h
-  | None              -> noId
+  | Some e -> hs_id e.h
+  | None   -> noId
 
-val reader_epoch: #region:rid -> e:epoch region -> Tot (reader (id_epoch e))
+val reader_epoch: #region:rid -> e:epoch region -> Tot (reader (hs_id e.h))
 let reader_epoch region (Epoch h r w) = r
 
-val writer_epoch: #region:rid -> e:epoch region -> Tot (writer (id_epoch e))
+val writer_epoch: #region:rid -> e:epoch region -> Tot (writer (hs_id e.h))
 let writer_epoch region (Epoch h r w) = w
 
-type epoch_inv (#region:rid) (h:HyperHeap.t) (e: epoch region) = st_dec_inv (reader_epoch e) h /\ st_enc_inv (writer_epoch e) h
+type epoch_inv (#region:rid) (h:HyperHeap.t) (e: epoch region) = 
+  st_dec_inv (reader_epoch e) h 
+  /\ st_enc_inv (writer_epoch e) h
 
 type epochs_inv c h = 
   Seq_forall (epoch_inv h) (sel h c.hs.log)
@@ -105,19 +104,17 @@ val test_st_inv: c:connection -> j:nat -> ST (e:epoch (HS.region (C.hs c)))
     st_dec_inv (reader_epoch e) h1 /\ st_enc_inv (writer_epoch e) h1))
 
 let test_st_inv c j = 
-  let epochs = !(HS.log (C.hs c)) in
+  let epochs = !c.hs.log in
   Seq.index epochs j
 
 // we should have st_env_inv & st_dec_inv for all epochs, all the time. 
 // + the property that at most the current epochs' logs are extended.
- 
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs)){epochs_footprint es /\ es = HyperHeap.sel h c.hs.log})
 let epochs c h = HyperHeap.sel h c.hs.log
 
 (* #reset-options *)
 (* #set-options "--logQueries" *)
 (* let test c h = assert (epochs c h = HyperHeap.sel #(seq (epochh c.hs.log)) *)
-  
 
 let epoch_i c h i = Seq.index (epochs c h) i
 
@@ -125,7 +122,30 @@ let epoch_i c h i = Seq.index (epochs c h) i
 
 opaque type trigger2 (x:nat) (y:nat) = True
 
-val frame_epochs: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
+(* 
+   Aiming to prove that sending a message preserves the 
+   invariant for all the epochs in a connection.
+
+   A connection c encapsulates the state machine of a connection. 
+   It contains within an hs, the handshake state machine. 
+
+   The hs.log field is a ref to a seq of epochs all residing in
+   regions with the same parent region. 
+
+   Each epoch is an (h, r, w) triple, 
+     where the r:StatefulLHAE.reader 
+               w:StatefulLHAE.writer 
+     are each one end of a key pair (their peers are in a some other connection).
+     
+     The h field is the state of the handshake state machine and is
+     irrelevant for this framing lemma.
+
+   In the lemma below, we modify the writer of epoch j
+   and aim to show that the invariant of some arbitrary k is preserved.
+   
+   Later, we generalize over k, using the ghost_lemma combinator to introduce the quantifier.
+*) 
+val frame_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit 
   (requires
     epochs_inv c h0 /\
     (let es = epochs c h0 in
@@ -134,89 +154,44 @@ val frame_epochs: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> 
       /\ k < Seq.length es
       /\ j < Seq.length es 
       /\ (let wr_j = writer_epoch (Seq.index es j) in
-         modifies (Set.singleton (writer_region wr_j)) h0 h1 
-         /\ st_enc_inv wr_j h1
-         /\ (forall i j . {:pattern (trigger2 i j)} (i <> j) ==> 
-             HyperHeap.disjoint
-              (writer_region (writer_epoch (Seq.index es i)))
-              (writer_region (writer_epoch (Seq.index es j)))))))
+           modifies (Set.singleton (region wr_j)) h0 h1 
+         /\ st_enc_inv wr_j h1)))
   (ensures (fun _ -> 
-                (k < Seq.length (epochs c h1)
-                 /\ epochs c h0 = epochs c h1
-                 /\ epoch_inv h1 (epoch_i c h1 k))))
-let frame_epochs c j h0 h1 k = 
-  assert (epochs c h0 = HyperHeap.sel h0 c.hs.log);
-  admit()
-  
-  (* let hs_r = HS.region c.hs in *)
-  (* let es : seq (epoch hs_r) = epochs c h0 in *)
-  (* let wr_j = writer_epoch (Seq.index es j) in *)
-  (* assert (epochs_footprint es); *)
-  (* assert (extends (writer_region wr_j) hs_r); *)
-  (* assert (hs_r <> writer_region wr_j); *)
-  (* assert (Heap.equal (Map.sel h0 hs_r) (Map.sel h1 hs_r)); *)
-  (* let log : rref hs_r (es:seq (epoch hs_r){epochs_footprint es}) = c.hs.log in *)
-  (* assert (HyperHeap.sel h0 log = Heap.sel (Map.sel h0 hs_r) (as_ref log)); *)
-  (* assert (HyperHeap.sel h1 log = HyperHeap.sel h0 log); *)
-  (* let es' = HyperHeap.sel h0 (c_log c) in *)
-  (* assert (epochs c h0 = epochs c h1); *)
-  (* if j=k *)
-  (* then (StatefulLHAE.frame_decrypt (reader_epoch (Seq.index es j)) h0 h1;  *)
-  (*       assert (epochs c h0 = epochs c h1); *)
-  (*       admit()) *)
-  (* else admit() *)
-    
-  
-
-
-// // how to split on i, the forall argument?
-// let frame_epochs c j h0 h1 =
-//   fun i ->   if i = j then () else cut(trigger2 i j)
-
-(* another attempt:
-val frame_epochs: c:_ ->  j:nat -> h0:_ -> h1:_ 
-  { epochs_inv c h0 /\ 
-    (Let (epochs c h0) (fun es  ->
-      j < Seq.length es ==>
-      modifies (Set.singleton (writer_region (writer_epoch (Seq.index es j)))) h0 h1 /\
-      (forall i j . {:pattern (trigger2 i j)} (i <> j ==> HyperHeap.disjoint 
-              (writer_region (writer_epoch (Seq.index es i))) 
-              (writer_region (writer_epoch (Seq.index es j))))))) } -> 
-  epochs_inv c h1
-
-let frame_epochs c j h0 h1 = 
-  fun c i -> if i = j then () else cut(trigger2 i j
-*)
-
-(* val frame_epochs: c:_ ->  j:nat -> h0:_ -> h1:_ -> Lemma  *)
-(*   (requires *)
-(*     epochs_inv c h0 /\  *)
-(*     (Let (epochs c h0) (fun es  -> *)
-(*       j < Seq.length es ==> *)
-(*       modifies (Set.singleton (writer_region (writer_epoch (Seq.index es j)))) h0 h1 /\ *)
-(*       (forall i j . {:pattern (trigger2 i j)} (i <> j ==> HyperHeap.disjoint  *)
-(*               (writer_region (writer_epoch (Seq.index es i)))  *)
-(*               (writer_region (writer_epoch (Seq.index es j)))))))) *)
-(*   (ensures epochs_inv c h1) *)
-
-(* // how to split on i, the forall argument? *)
-(* let frame_epochs c j h0 h1 = *)
-(*   fun i ->   if i = j then () else cut(trigger2 i j) *)
-
-(* another attempt:
-val frame_epochs: c:_ ->  j:nat -> h0:_ -> h1:_ 
-  { epochs_inv c h0 /\ 
-    (Let (epochs c h0) (fun es  ->
-      j < Seq.length es ==>
-      modifies (Set.singleton (writer_region (writer_epoch (Seq.index es j)))) h0 h1 /\
-      (forall i j . {:pattern (trigger2 i j)} (i <> j ==> HyperHeap.disjoint 
-              (writer_region (writer_epoch (Seq.index es i))) 
-              (writer_region (writer_epoch (Seq.index es j))))))) } -> 
-  epochs_inv c h1
-
-let frame_epochs c j h0 h1 = 
-  fun c i -> if i = j then () else cut(trigger2 i j
-*)
+                epochs c h0 = epochs c h1
+              /\ k < Seq.length (epochs c h1)
+              /\ epoch_inv h1 (epoch_i c h1 k)))
+let frame_epoch_k c j h0 h1 k =
+  let es = epochs c h0 in
+  let hs_r = HS.region c.hs in
+  let e_j = Seq.index es j in
+  let e_k = Seq.index es k in
+  let wr_j = writer_epoch e_j in
+  if k<>j
+  then (assert (disjoint_regions (regions e_j) (regions e_k));
+//        assume (forall r. Set.mem r (regions e_k) ==> Map.contains h0 r);
+        assume (equal_on (regions e_k) h0 h1); //TODO!
+        frame_st_enc_inv (writer_epoch e_k) h0 h1;
+        frame_decrypt (reader_epoch e_k) h0 h1;
+        ())
+  else (let r_k = reader_epoch e_k in
+        assert (epoch_region_inv r_k wr_j);
+        assert (disjoint_regions (regions_of (reader_epoch e_k)) (regions_of wr_j));
+        assume (equal_on (regions_of r_k) h0 h1); //TODO!
+        frame_decrypt (reader_epoch e_k) h0 h1)
+ 
+val frame_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+  (requires
+    epochs_inv c h0 /\
+    (let es = epochs c h0 in
+     let hs_r = HS.region c.hs in 
+      Map.contains h0 hs_r
+      /\ j < Seq.length es 
+      /\ (let wr_j = writer_epoch (Seq.index es j) in
+           modifies (Set.singleton (region wr_j)) h0 h1 
+         /\ st_enc_inv wr_j h1)))
+  (ensures (epochs c h0 = epochs c h1
+            /\ epochs_inv c h1))
+let frame_epoch c j h0 h1 = ghost_lemma (frame_epoch_k c j h0 h1)            
 
 (*** control API ***)
 
@@ -237,6 +212,8 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
     sel h1 (c_log c) = Seq.createEmpty /\
     sel h1 c.reading  = Init /\
     sel h1 c.writing  = Init))
+
+(*** VERIFIES UP TO HERE ***)
 
 let create m0 tcp r cfg resume =
     let m = new_region m0 in
@@ -546,9 +523,9 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
       (is_None o ==> h0 == h1) /\
       (is_Some o ==>
        Let(epoch_wo o)(fun (wr:writer (epoch_id o)) -> 
-        HyperHeap.modifies (Set.singleton (writer_region wr)) h0 h1
-      /\ Heap.modifies (refs_in_e wr) (Map.sel h0 (writer_region wr)) (Map.sel h1 (writer_region wr))
-      /\ sel h1 (writer_seqn wr) = sel h0 (writer_seqn wr) + 1
+        HyperHeap.modifies (Set.singleton (region wr)) h0 h1
+      /\ Heap.modifies (refs_in_w wr) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
+      /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
       /\ st_enc_inv #i wr h0
       /\ st_enc_inv #i wr h1
 //      /\ Seq.length (sel h1 (writer_log wr)) = Seq.length (sel h0 (writer_log wr)) + 1 
@@ -561,7 +538,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
       // modifies at most the writer of (epoch_w c), adding f to its log
       ))))))
 
-(*** VERIFIES UP TO HERE ***)
+(** used to VERIFY UP TO HERE ***)
 
 let send_payload c i f =
     let o = epoch_w c in
@@ -598,8 +575,8 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
       (is_None o ==> HyperHeap.modifies Set.empty h0 h1) /\
       (is_Some o ==>
        Let(epoch_wo o)(fun wr ->
-        HyperHeap.modifies (Set.singleton (writer_region wr)) h0 h1
-      /\ Heap.modifies (refs_in_e wr) (Map.sel h0 (writer_region wr)) (Map.sel h1 (writer_region wr))
+        HyperHeap.modifies (Set.singleton (region wr)) h0 h1
+      /\ Heap.modifies (refs_in_w wr) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
 //      /\ sel h1 (writer_seqn wr) = sel h0 (writer_seqn wr) + 1
 //      /\ sel h1 (writer_log wr)  = snoc (sel h0 (writer_log wr)) (Entry cipher ad f))
       /\ True
