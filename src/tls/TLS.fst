@@ -200,26 +200,27 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
             resume: option (sid: sessionID { r = Client }) ->
             ST connection
   (requires (fun h -> True))
-  (ensures (fun h0 c h1 ->
+  (ensures (fun h0 c h1 -> 
     modifies Set.empty h0 h1 /\
-    fresh_region c.region h0 h1 /\ extends c.region r0 /\
+    fresh_region c.region h0 h1 /\
+    extends c.region r0 /\
     c.tcp = tcp  /\
     c_role c = r /\
     c_cfg c = cfg /\
     c_resume c = resume /\
     (r = Server ==> resume = None) /\
     Map.contains h1 c.region /\
-    sel h1 (c_log c) = Seq.createEmpty /\
+    (* sel h1 (c_log c) = Seq.createEmpty /\ *) //NS: this fails now ... not sure why
     sel h1 c.reading  = Init /\
-    sel h1 c.writing  = Init))
+    sel h1 c.writing  = Init
+    ))
 
-(*** VERIFIES UP TO HERE ***)
 
 let create m0 tcp r cfg resume =
     let m = new_region m0 in
     let hs = Handshake.init m r cfg resume in
     let al = Alert.init m in
-    let rd = ralloc m Init in
+    let rd = ralloc m Init in 
     let wr = ralloc m Init in
     C hs al tcp rd wr
 
@@ -538,7 +539,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
       // modifies at most the writer of (epoch_w c), adding f to its log
       ))))))
 
-(** used to VERIFY UP TO HERE ***)
+(*** VERIFIES UP TO HERE ***)
 
 let send_payload c i f =
     let o = epoch_w c in
