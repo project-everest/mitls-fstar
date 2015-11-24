@@ -150,7 +150,16 @@ opaque type trigger2 (x:nat) (y:nat) = True
 val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:t -> h1:t{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 h0 h1)
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 
-val frame_writer_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit 
+//Move this to the library 
+val ghost_lemma2: #a:Type -> #b:Type -> #p:(a -> b -> Type) -> #q:(a -> b -> unit -> Type) 
+		       -> =f:(x:a -> y:b -> Ghost unit (p x y) (q x y)) 
+		       -> Lemma (forall (x:a) (y:b). p x y ==> q x y ())
+let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -> Type)) f = 
+  let f : x:a -> Lemma (forall (y:b). (p x y ==> q x y ())) = 
+    fun x -> ghost_lemma (f x) in
+  qintro f
+  
+val frame_writer_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit 
   (requires
     epochs_inv c h0 /\
     (let es = epochs c h0 in
@@ -165,7 +174,7 @@ val frame_writer_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHe
                 epochs c h0 = epochs c h1
               /\ k < Seq.length (epochs c h1)
               /\ epoch_inv h1 (epoch_i c h1 k)))
-let frame_writer_epoch_k c j h0 h1 k =
+let frame_writer_epoch_k c h0 h1 j k =
   let es = epochs c h0 in
   let hs_r = HS.region c.hs in
   let e_j = Seq.index es j in
@@ -178,22 +187,24 @@ let frame_writer_epoch_k c j h0 h1 k =
   else (let r_k = reader_epoch e_k in
         equal_on_disjoint (regions_of wr_j) (regions_of r_k) (region wr_j) h0 h1;
         frame_st_dec_inv r_k h0 h1)
- 
-val frame_writer_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+
+opaque type witness (#a:Type) (x:a) = True
+val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires
     epochs_inv c h0 /\
-    (let es = epochs c h0 in
-     let hs_r = HS.region c.hs in 
-      Map.contains h0 hs_r
-      /\ j < Seq.length es 
-      /\ (let wr_j = writer_epoch (Seq.index es j) in
+    (exists (j:nat). {:pattern (witness j)}
+      (let es = epochs c h0 in
+       let hs_r = HS.region c.hs in 
+       Map.contains h0 hs_r
+       /\ j < Seq.length es 
+       /\ (let wr_j = writer_epoch (Seq.index es j) in
            modifies (Set.singleton (region wr_j)) h0 h1 
-         /\ st_enc_inv wr_j h1)))
+          /\ st_enc_inv wr_j h1))))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
-let frame_writer_epoch c j h0 h1 = ghost_lemma (frame_writer_epoch_k c j h0 h1)            
-
-val frame_reader_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit 
+let frame_writer_epoch c h0 h1 = ghost_lemma2 (frame_writer_epoch_k c h0 h1)            
+ 
+val frame_reader_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit 
   (requires
     epochs_inv c h0 /\
     (let es = epochs c h0 in
@@ -208,7 +219,7 @@ val frame_reader_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHe
                 epochs c h0 = epochs c h1
               /\ k < Seq.length (epochs c h1)
               /\ epoch_inv h1 (epoch_i c h1 k)))
-let frame_reader_epoch_k c j h0 h1 k =
+let frame_reader_epoch_k c h0 h1 j k =
   let es = epochs c h0 in
   let hs_r = HS.region c.hs in
   let e_j = Seq.index es j in
@@ -222,21 +233,20 @@ let frame_reader_epoch_k c j h0 h1 k =
         equal_on_disjoint (regions_of rd_j) (regions_of w_k) (region rd_j) h0 h1;
         frame_st_enc_inv w_k h0 h1)
 
-val frame_reader_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires
     epochs_inv c h0 /\
-    (let es = epochs c h0 in
-     let hs_r = HS.region c.hs in 
+    (exists (j:nat).{:pattern (witness j)}
+     (let es = epochs c h0 in
+      let hs_r = HS.region c.hs in 
       Map.contains h0 hs_r
       /\ j < Seq.length es 
       /\ (let rd_j = reader_epoch (Seq.index es j) in
            modifies (Set.singleton (region rd_j)) h0 h1 
-         /\ st_dec_inv rd_j h1)))
+         /\ st_dec_inv rd_j h1))))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
-let frame_reader_epoch c j h0 h1 = ghost_lemma (frame_reader_epoch_k c j h0 h1)            
-
- 
+let frame_reader_epoch c h0 h1 = ghost_lemma2 (frame_reader_epoch_k c h0 h1)            
 
 (*** control API ***)
 
@@ -294,59 +304,41 @@ let request c ops     = Handshake.request     (C.hs c) ops
 // relying on a function from dispatch state to completion status
 // using polymorphism to retain the caller's epoch refinement
 //val epochT: #e:Type -> p: (e -> Type) -> xs: seq e { Seq_forall p xs } -> dispatch -> Tot (option (x:e { p x }))
-val epochT: #e:Type -> xs: seq e -> dispatch -> Tot (option e)
+val epochT: #e:Type -> xs: seq e -> dispatch -> Tot (option (e * nat))
 let epochT epochs other =
   let j : n:int { n < Seq.length epochs } =
     if other = Finishing || other = Finished
     then Seq.length epochs - 2
     else Seq.length epochs - 1 in
-  if j < 0 then None else Some(Seq.index epochs j)
+  if j < 0 then None else Some(Seq.index epochs j, j)
 
 (** writing epochs **)
 
 val epoch_wo: #region:rid -> o: option (epoch region){ is_Some o } -> Tot (writer (epoch_id o))
-let epoch_wo _ o =
-  match o with 
-  | Some(Epoch _ _ w) -> w
-
+let epoch_wo _ o = writer_epoch (Some.v o)
+ 
 // val epoch_w_h: c:connection -> h:HyperHeap.t -> GTot (option (e: epoch (HS.region (C.hs c)) { st_dec_inv (reader_epoch e) h } ))
 let epoch_w_h c (h:t { st_inv c h }) =
-  let log = sel h (c_log c) in
-  let other = sel h (C.reading c) in
-  let o = epochT log other in 
-  o
-//  match o with 
-//  | Some e -> assert(st_dec_inv (reader_epoch e) h /\ st_enc_inv (writer_epoch e) h); o
-//  | None -> o
+  let log = sel h c.hs.log in 
+  let other = sel h c.reading in 
+  match epochT log other with 
+  | None -> None
+  | Some (e, _) -> Some e
 
-val epoch_w: c:connection -> ST (option (epoch (HS.region (C.hs c))))
+val epoch_w: c:connection -> ST (option (epoch (HS.region c.hs)))// * nat))
   (requires (st_inv c))
   (ensures (fun h0 o h1 ->
     h0 == h1 /\ 
     st_inv c h0 /\ 
     st_inv c h1 /\
     o = epoch_w_h c h0 /\
-    (is_Some o ==> Let(epoch_wo o)(fun wr -> st_enc_inv wr h0)) /\
-    True
-))
-
+    (is_Some o ==> st_enc_inv (writer_epoch (Some.v o)) h0)))
 let epoch_w c =
-  let log = !(c_log c) in
-  let other = !(C.reading c) in
-//inlined:  epochT log other
-  let j : n:int { n < Seq.length log } =
-    if other = Finishing || other = Finished
-    then Seq.length log - 2
-    else Seq.length log - 1 in
-  if j < 0 
-  then None 
-  else 
-    let h = ST.get() in 
-    cut(st_inv c h);
-    cut(epochs_inv c h);
-    let e = Seq.index log j in 
-    cut(st_dec_inv (reader_epoch e) h /\ st_enc_inv (writer_epoch e) h); 
-    Some e
+  let log = !c.hs.log in
+  let other = !c.reading in 
+  match epochT log other with 
+  | None -> None
+  | Some (e, _) -> Some e
 
 (** reading epochs **)
 
@@ -358,11 +350,9 @@ let epoch_ro _ o =
 let epoch_r_h c h = 
   let log = sel h (c_log c) in 
   let other = sel h (C.writing c) in
-  let j : n:int { n < Seq.length log } =
-    if other = Finishing || other = Finished
-    then Seq.length log - 2
-    else Seq.length log - 1 in
-  if j < 0 then None else Some(Seq.index log j)
+  match epochT log other with 
+  | None -> None
+  | Some (e, _) -> Some e
 
 val epoch_r: c:connection -> ST _
   (requires (fun h -> True))
@@ -370,9 +360,11 @@ val epoch_r: c:connection -> ST _
     h0 = h1 /\
     o = epoch_r_h c h1 ))
 let epoch_r c =
-  let log = !(c_log c) in
-  let other = !(C.writing c) in
-  epochT log other
+  let log = !c.hs.log in 
+  let other = !c.writing in 
+  match epochT log other with 
+  | None -> None
+  | Some (e, _) -> Some e
 
 //-------------------------------- writing --------------------------------------------
 
@@ -452,7 +444,7 @@ let rec unexpected s = unexpected s
 val pickSendPV: c:connection -> ST ProtocolVersion
   (requires (st_inv c))
   (ensures (fun h0 pv h1 -> h0 = h1))
-
+ 
 let pickSendPV c =
     let wr = !(C.writing c) in
     match wr with
@@ -551,26 +543,20 @@ let x = 0
 val ct_rg_test : i:id -> f:Content.fragment i -> Tot (ContentType * range)
 let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
  
-
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulPlain.cipher i)
   (requires (fun h -> 
     st_inv c h /\ 
     (let o = epoch_w_h c h in 
       i == epoch_id o /\
-      (is_Some o ==> (let wr: writer (epoch_id o) = epoch_wo o in is_seqn (sel h (seqn wr) + 1) )
-  ))))
-// /\
-//      (is_Some o ==>
-//        Let(epoch_wo o)(fun wr -> st_enc_inv wr h)))))
-  //st_inv h1 c /\
+      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 payload h1 -> 
     st_inv c h0 /\ (
     let ctrg: ContentType * frange i = Content.ct_rg i f in 
     let o:option (epoch (HS.region (C.hs c))) = epoch_w_h c h0 in
     //let j = Seq.length (sel h0 (c.hs.log)) - 1 in
     //let u = frame_writer_epoch c j h0 h1 in
-    st_inv c h1 (* /\
-    o == epoch_w_h c h1 /\
+    st_inv c h1 
+    (* o == epoch_w_h c h1 /\
     i == epoch_id o /\
     (is_None o ==> h0 == h1) /\
     (is_Some o ==>
@@ -590,41 +576,27 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
       // modifies at most the writer of (epoch_w c), adding f to its log
       )) *) 
 )))
-
-
-(*** VERIFIES UP TO HERE ***)
-
 let send_payload c i f =
     let o = epoch_w c in
     match o with
       | None -> Content.repr i f
       | Some(Epoch h _ w) ->
-          let h0 = ST.get() in
-          cut(st_enc_inv #i w h0);
-          let ct, rg = Content.ct_rg i f in
-          let ad = StatefulPlain.makeAD i ct in
-          recall (c_log c);
-        recall (C.reading c);
-//        let log0 = !(writer_log w) in
+        let h0 = ST.get() in
+ 	// assert (epochs_inv c h0);
+	recall c.hs.log;
+	// assert (Map.contains h0 (HS.region c.hs));
+        let ct, rg = Content.ct_rg i f in
+        let ad = StatefulPlain.makeAD i ct in
         let r = encrypt #i #ad #rg w f in
-        let h1 = ST.get() in
-        assert(hs_inv c.hs h1);
-        assert(
-          let j = Seq.length (sel h0 (c.hs.log)) - 1 in
-          let u = frame_writer_epoch c j h0 h1 in
-          epochs_inv c h1); //15-11-24 fails here.
-        admit();
-//        let log1 = !(writer_log w) in
-//        cut(b2t(Seq.length log1 = Seq.length log0 + 1));
-//        cut(b2t(log1 = snoc log0 (Entry r ad f)));
-//        cut(exists (e:entry i).log1 = snoc log0 e);
-//        cut(b2t(Seq.length log1 > 0));
-//        let e : entry i = Seq.index log1 (Seq.length log1 - 1) in
-//        cut(f == fragment_entry e);
+	let h1 = ST.get() in 
+	// assert (modifies (singleton (region w)) h0 h1);
+ 	// assert (st_enc_inv w h1);
+	cut (witness (snd (Some.v (epochT (sel h0 c.hs.log) (sel h0 c.reading)))));
+	frame_writer_epoch c h0 h1;
         r
-// recalling the domain of the function meant to be stable
-// seems sufficient to trigger the extends/modifies argument.
 
+
+(*** VERIFIES UP TO HERE ***)
 
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
