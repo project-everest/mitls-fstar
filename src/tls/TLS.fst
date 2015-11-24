@@ -6,7 +6,8 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
-
+open FStar.Set
+ 
 open Platform.Bytes
 open Platform.Error
 open Platform.Tcp
@@ -17,9 +18,9 @@ open TLSInfo
 
 open Range
 open StatefulLHAE // via its interface
-open Handshake // via its interface
+open Handshake    // via its interface
 
-// using Handshake, Alert, Range, DataStream, TLSFragment, Record
+// using also Alert, Range, DataStream, TLSFragment, Record
 
 // internal state machine (one for reading, one for writing; a bit much)
 // TODO make it private?
@@ -28,7 +29,7 @@ open Handshake // via its interface
 // TODO recheck large logical invariants GState in Dispatch.fs7
 
 // private //TODO: restore this qualifier; NS:commenting for now
-  type dispatch =
+type dispatch =
   | Init
   | FirstHandshake of ProtocolVersion (* bound by ServerHello *)
   | Finishing
@@ -112,9 +113,9 @@ let test_st_inv c j =
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs)){epochs_footprint es /\ es = HyperHeap.sel h c.hs.log})
 let epochs c h = HyperHeap.sel h c.hs.log
 
-(* #reset-options *)
-(* #set-options "--logQueries" *)
-(* let test c h = assert (epochs c h = HyperHeap.sel #(seq (epochh c.hs.log)) *)
+// #reset-options
+// #set-options "--logQueries"
+// let test c h = assert (epochs c h = HyperHeap.sel #(seq (epochh c.hs.log)))
 
 let epoch_i c h i = Seq.index (epochs c h) i
 
@@ -145,7 +146,6 @@ opaque type trigger2 (x:nat) (y:nat) = True
    
    Later, we generalize over k, using the ghost_lemma combinator to introduce the quantifier.
 *) 
-open FStar.Set
 
 val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:t -> h1:t{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 h0 h1)
 let equal_on_disjoint s1 s2 r h0 h1 = ()
@@ -517,7 +517,7 @@ val fragment_entry: #i:id -> e: entry i -> Tot (Content.fragment i)
 let fragment_entry i (Entry c ad f) = f
 
 (*
-val fragment_entry: #i:id -> log: seq (entry i) { Seq.length log > 0 } -> Tot (rg:DataStream.frange & Content.fragment i)
+val fragment_entry: #i:id -> log: seq (entry i) { Seq.length log > 0 } -> Tot (rg:frange i & Content.fragment i)
 let fragment_log i log = 
   match Seq.index log (Seq.length log - 1) with 
   | Entry c ad f -> 
@@ -550,24 +550,30 @@ let x = 0
 *)         
 val ct_rg_test : i:id -> f:Content.fragment i -> Tot (ContentType * range)
 let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
+ 
 
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulPlain.cipher i)
   (requires (fun h -> 
     st_inv c h /\ 
-     Let(epoch_w_h c h) (fun o -> i == epoch_id o)))
+    (let o = epoch_w_h c h in 
+      i == epoch_id o /\
+      (is_Some o ==> (let wr: writer (epoch_id o) = epoch_wo o in is_seqn (sel h (seqn wr) + 1) )
+  ))))
 // /\
 //      (is_Some o ==>
 //        Let(epoch_wo o)(fun wr -> st_enc_inv wr h)))))
   //st_inv h1 c /\
   (ensures (fun h0 payload h1 -> 
-    st_inv c h0 /\
-    Let(Content.ct_rg i f)(fun (ctrg:(ContentType * DataStream.frange)) -> 
-    Let(epoch_w_h c h0) (fun (o:option (epoch (HS.region (C.hs c)))) ->
-      st_inv c h1 /\
-      o == epoch_w_h c h1 /\
-      i == epoch_id o /\
-      (is_None o ==> h0 == h1) /\
-      (is_Some o ==>
+    st_inv c h0 /\ (
+    let ctrg: ContentType * frange i = Content.ct_rg i f in 
+    let o:option (epoch (HS.region (C.hs c))) = epoch_w_h c h0 in
+    //let j = Seq.length (sel h0 (c.hs.log)) - 1 in
+    //let u = frame_writer_epoch c j h0 h1 in
+    st_inv c h1 (* /\
+    o == epoch_w_h c h1 /\
+    i == epoch_id o /\
+    (is_None o ==> h0 == h1) /\
+    (is_Some o ==>
        Let(epoch_wo o)(fun (wr:writer (epoch_id o)) -> 
         HyperHeap.modifies (Set.singleton (region wr)) h0 h1
       /\ Heap.modifies (refs_in_w wr) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
@@ -582,7 +588,9 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
       (* /\ sel h1 (writer_log wr) = snoc (sel h0 (writer_log wr)) (Entry payload (StatefulPlain.makeAD i (fst ctrg)) f) *)
       (* /\ True *)
       // modifies at most the writer of (epoch_w c), adding f to its log
-      ))))))
+      )) *) 
+)))
+
 
 (*** VERIFIES UP TO HERE ***)
 
@@ -599,6 +607,13 @@ let send_payload c i f =
         recall (C.reading c);
 //        let log0 = !(writer_log w) in
         let r = encrypt #i #ad #rg w f in
+        let h1 = ST.get() in
+        assert(hs_inv c.hs h1);
+        assert(
+          let j = Seq.length (sel h0 (c.hs.log)) - 1 in
+          let u = frame_writer_epoch c j h0 h1 in
+          epochs_inv c h1); //15-11-24 fails here.
+        admit();
 //        let log1 = !(writer_log w) in
 //        cut(b2t(Seq.length log1 = Seq.length log0 + 1));
 //        cut(b2t(log1 = snoc log0 (Entry r ad f)));
@@ -674,7 +689,7 @@ assume val admit_st_inv: c: connection -> ST unit
 *)
 
 
-val writeOne: c:connection -> i:id -> appdata: option (rg:DataStream.frange & DataStream.fragment i rg) -> ST ioresult_w
+val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
     st_inv h c /\ i == epoch_id (epoch_w_h c h) /\
     Let(epoch_w_h c h) (fun o ->
@@ -859,7 +874,7 @@ let rec writeAllFinishing c i =
 //* returns only to write: Written, MustRead
 //* what about WriteHSComplete ?
 
-val writeAllTop: c:connection -> i:id -> appdata: option (rg:DataStream.frange & DataStream.fragment i rg) -> ST ioresult_w
+val writeAllTop: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h -> st_inv h c /\ i == epoch_id (epoch_w_h c h)))
   (ensures (fun h0 r h1 ->
     st_inv h1 c /\
@@ -896,7 +911,7 @@ let reader h c = sel h (C.reading c), c_read h c
 
 // We don't get MustRead with writing Open as precondition,
 // assuming that read's DontWrite reliably signals it.
-val write: c:connection -> i: id -> rg:DataStream.frange -> data:DataStream.fragment i rg -> ST ioresult_o
+val write: c:connection -> i: id -> rg:frange i -> data:DataStream.fragment i rg -> ST ioresult_o
   (requires (fun h ->
     st_inv h c /\
     sel h (C.writing c) = Open

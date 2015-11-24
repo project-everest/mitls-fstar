@@ -9,6 +9,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
+open FStar.Set  
 
 open Platform.Error
 open Platform.Bytes
@@ -19,26 +20,23 @@ open TLSConstants
 open Range
 open StatefulLHAE
 
+
+// to library?
+opaque type disjoint_regions (s1:set rid) (s2:set rid) = 
+       forall x y. {:pattern (Set.mem x s1); (Set.mem y s2)} (Set.mem x s1 /\ Set.mem y s2) ==> disjoint x y
+
+
+// represents the outcome of a successful handshake. 
+type handshake = 
+  | Fresh of SessionInfo
+  | Resumed of abbrInfo * SessionInfo //changed: was hs * seq epoch (creating cycle)
 // We use SessionInfo as unique session indexes.
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
 
-type error = alertDescription * string
-
-type handshake = 
-  | Fresh of SessionInfo
-  | Resumed of abbrInfo * SessionInfo //changed: was hs * seq epoch (creating cycle)
-
 // extracts a transport key identifier from a handshake record
 val hs_id: handshake -> Tot id
-
-type handshake_state // internal 
-
-open FStar.Set  
-
-opaque type disjoint_regions (s1:set rid) (s2:set rid) = 
-       forall x y. {:pattern (Set.mem x s1); (Set.mem y s2)} (Set.mem x s1 /\ Set.mem y s2) ==> disjoint x y
 
 opaque type epoch_region_inv (#i:_) (r:reader i) (w:writer i) =
   disjoint_regions (regions_of r) (regions_of w)
@@ -82,6 +80,8 @@ opaque type epochs_footprint (#region:rid) (es: seq (epoch region)) =
 
 type epochs (r:rid) = es: seq (epoch r) { epochs_footprint es }
 
+type handshake_state // internal, including e.g. half-baked epochs (TBD)
+
 type hs =
   | HS: #region: rid ->
         r:role ->
@@ -102,21 +102,19 @@ opaque type unmodified_epochs s h0 h1 =
     let rs = regions e in 
     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r))
 
-//epochs in h1 extends epoochs in h0 by one 
+//epochs in h1 extends epochs in h0 by one 
 let fresh_epoch h0 s h1 =
   let es0 = sel h0 s.log in
   let es1 = sel h1 s.log in 
   Seq.length es1 > 0 &&
   es0 = Seq.slice es1 0 (Seq.length es1 - 1)
 
-// 15-09-10 explicit val needed to express the trivial precondition
-// 15-11-23: NS, not necessarily
-(* val latest: h:HyperHeap.t -> s:hs { Seq.length (sel h s.log) > 0 } -> GTot (epoch s.region) *)
 let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoch
  let es = sel h (HS.log s) in
  Seq.index es (Seq.length es - 1)
 
-// separation policy: the handshake mutates its private state, only depend on it, and only extends the log with fresh epochs.
+// separation policy: the handshake mutates its private state, 
+// only depends on it, and only extends the log with fresh epochs.
 
 assume type Completed: #region:rid -> epoch region -> Type
 
@@ -184,15 +182,15 @@ val invalidateSession: s:hs -> ST unit
   (requires (hs_inv s))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
 
-(* --------------------Network Interface -------------------*)
 
+(* --------------------Network Interface -------------------*)
 
 type outgoing = // by default the state changes but not the epochs
   | OutIdle
-  | OutSome:     rg:Range.range { Wider DataStream.fragment_range rg } -> rbytes rg -> outgoing
+  | OutSome:     rg:Range.range { Wider fragment_range rg } -> rbytes rg -> outgoing
   | OutCCS                // log += Epoch if first
-  | OutFinished: rg:Range.range { Wider DataStream.fragment_range rg } -> rbytes rg -> outgoing
-  | OutComplete: rg:Range.range { Wider DataStream.fragment_range rg } -> rbytes rg -> outgoing // log += Complete
+  | OutFinished: rg:Range.range { Wider fragment_range rg } -> rbytes rg -> outgoing
+  | OutComplete: rg:Range.range { Wider fragment_range rg } -> rbytes rg -> outgoing // log += Complete
 let non_empty h s = Seq.length (sel h s.log) > 0
 val next_fragment: s:hs -> ST outgoing
   (requires (hs_inv s))
@@ -202,7 +200,8 @@ val next_fragment: s:hs -> ST outgoing
     // preserves its invariant, modifies only its own region, and...
        (result = OutCCS       ==> fresh_epoch h0 s h1) /\
        (result <> OutCCS       ==> modifies_internal h0 s h1) /\
-       (is_OutComplete result ==> (non_empty h1 s /\ Completed (latest h1 s)))))
+       (is_OutComplete result ==> (non_empty h1 s /\ (Seq.length (sel h1 s.log) > 0) /\ Completed (latest h1 s)))))
+                                                  (* why do I need this? same below *)
 
 type incoming = // the fragment is accepted, and...
   | InAck
@@ -211,12 +210,12 @@ type incoming = // the fragment is accepted, and...
   | InFinished
   | InComplete        // log += Complete
   | InError of error  // log += Error
-val recv_fragment: s:hs -> rg:Range.range { Wider DataStream.fragment_range rg } -> rbytes rg -> ST incoming
+val recv_fragment: s:hs -> rg:Range.range { Wider fragment_range rg } -> rbytes rg -> ST incoming
   (requires (hs_inv s)) //removed:  (fun h -> Seq.length (sel h (HS.log s)) > 0))
   (ensures (fun h0 result h1 ->
     hs_inv s h1 /\
     modifies_internal h0 s h1
-    /\ (result = InComplete ==> non_empty h1 s /\ Completed (latest h1 s))))
+    /\ (result = InComplete ==> non_empty h1 s /\ (Seq.length (sel h1 s.log) > 0) /\ Completed (latest h1 s))))
 
 val authorize: s:hs -> Cert.chain -> ST incoming
   (requires (hs_inv s))
@@ -227,7 +226,7 @@ val authorize: s:hs -> Cert.chain -> ST incoming
 type incomingCCS =
   | InCCSAck            // log += Epoch if first
   | InCCSError of error // log += Error
-val recv_ccs: s:hs -> rg:Range.range { Wider DataStream.fragment_range rg } -> rbytes rg -> ST incomingCCS
+val recv_ccs: s:hs -> rg:Range.range { Wider fragment_range rg } -> rbytes rg -> ST incomingCCS
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
     // preserves its invariant, modifies only its own region, and...

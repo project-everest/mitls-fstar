@@ -26,9 +26,9 @@ let init r0 =
 
 type nextReply =
     | EmptyALFrag
-    | ALFrag:          rg:range { Wider DataStream.fragment_range rg } -> rbytes rg -> nextReply
-    | LastALFrag:      rg:range { Wider DataStream.fragment_range rg } -> rbytes rg -> alertDescription -> nextReply
-    | LastALCloseFrag: rg:range { Wider DataStream.fragment_range rg } -> rbytes rg -> nextReply
+    | ALFrag:          rg:range { Wider fragment_range rg } -> rbytes rg -> nextReply
+    | LastALFrag:      rg:range { Wider fragment_range rg } -> rbytes rg -> alertDescription -> nextReply
+    | LastALCloseFrag: rg:range { Wider fragment_range rg } -> rbytes rg -> nextReply
 
 type recvReply =
     | ALAck

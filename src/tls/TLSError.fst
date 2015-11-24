@@ -63,7 +63,9 @@ let isFatal ad =
     | AD_unsupported_extension -> true
     | _ -> false
 
-type Result 'a = Platform.Error.optResult (alertDescription * string) 'a
+type error = alertDescription * string
+
+type Result 'a = Platform.Error.optResult error 'a
 
 val resT: r:Result 'a { Platform.Error.is_Correct r } -> Tot 'a
 let resT (Platform.Error.Correct v) = v

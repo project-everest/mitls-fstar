@@ -14,10 +14,10 @@ open Range
 open DataStream
 
 type fragment (i:id) =
-    | CT_Data      : rg: frange -> f: DataStream.fragment i rg -> fragment i // abstract
-    | CT_Handshake : rg: frange -> f: rbytes rg -> fragment i // concrete
+    | CT_Data      : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract
+    | CT_Handshake : rg: frange i -> f: rbytes rg -> fragment i // concrete
     | CT_CCS       : fragment i
-    | CT_Alert     : rg: frange -> f: rbytes rg -> fragment i // we could insist we get exactly 2 bytes
+    | CT_Alert     : rg: frange i -> f: rbytes rg -> fragment i // we could insist we get exactly 2 bytes
 
 type alert_buffer = b:bytes { length b < 2 } // relocate?
 
@@ -38,7 +38,7 @@ let rec project i fs =
       let fs, f = split #(fragment i) fs in
       let ds, als = project i fs in
       (match f with
-      | CT_Data (rg: frange) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d), als
+      | CT_Data (rg: frange i) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d), als
 (* TODO
       | CT_Alert rg als' -> // alert parsing may fail, or return several deltas
           (match Alert.parse (als @| als') with
@@ -67,7 +67,7 @@ let repr i f =
   | CT_CCS            -> empty_bytes
   | CT_Alert rg f     -> f
 
-let ct_rg (i:id) (f:fragment i) : _ * DataStream.frange =
+let ct_rg (i:id) (f:fragment i) : _ * frange i =
   match f with
   | CT_Data rg d      -> Application_data, rg
   | CT_Handshake rg f -> TLSConstants.Handshake, rg
@@ -76,7 +76,7 @@ let ct_rg (i:id) (f:fragment i) : _ * DataStream.frange =
 
 // "plain interface" for conditional security (TODO restore details)
 
-val mk_fragment: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange ->
+val mk_fragment: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange i ->
   b:rbytes rg { ct = Change_cipher_spec ==> rg == zero }->
   Tot (p:fragment i {b = ghost_repr p})
 let mk_fragment i ct rg b =
@@ -86,7 +86,7 @@ let mk_fragment i ct rg b =
     | Change_cipher_spec -> cut(Eq b empty_bytes);CT_CCS  //* rediscuss
     | TLSConstants.Alert -> CT_Alert     rg b
 
-val mk_ct_rg: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange ->
+val mk_ct_rg: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange i ->
   b:rbytes rg { ct = Change_cipher_spec ==> rg = zero } ->
   Lemma ((ct,rg) = ct_rg i (mk_fragment i ct rg b))
 let mk_ct_rg i ct rg b = ()

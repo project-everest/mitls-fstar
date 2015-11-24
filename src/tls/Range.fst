@@ -289,5 +289,9 @@ let rangeClass (i:id) (r:range) =
             Error.unexpected "[rangeClass] given an invalid range."
 
 
+// in encryptor logs, we do not precisely keep track of written ranges
 let fragment_range: range = (0,max_TLSPlaintext_fragment_length)
-type frange = rg:range { Wider fragment_range rg }
+
+// for writers, we keep track of actual ranges
+// and require point ranges when padding is not available.
+type frange (i:id) = rg:range { Wider fragment_range rg /\ (is_AEAD i.aeAlg ==> fst rg = snd rg) }

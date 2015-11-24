@@ -57,10 +57,10 @@ val repr: i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p:plain i ad rg -> Tot
 let repr i ad rg f = Content.repr i f
 
 logic type wf_ad_rg i ad rg = 
-  Wider DataStream.fragment_range rg  /\ 
+  Wider fragment_range rg  /\ 
   (parseAD i ad = Change_cipher_spec ==> rg = zero)
 
-val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:DataStream.frange { wf_ad_rg i ad rg } ->
+val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->
   b:rbytes rg  ->
   Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
 let mk_plain i ad rg b =

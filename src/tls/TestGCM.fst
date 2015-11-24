@@ -67,7 +67,7 @@ let ad = makeAD i Application_data
 val clen: n:nat { valid_clen i n  }
 let clen = 34
 
-val rg: DataStream.frange
+val rg: frange i
 let rg = Range.cipherRangeClass i clen // point (clen - 8 - 16) = (10,10)
 
 val text: rbytes rg
