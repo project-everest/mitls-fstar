@@ -141,7 +141,7 @@ val encrypt: #i:gid -> #ad:adata i
 opaque type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
   exists (w:writer i).{:pattern (matching r w)} st_inv r w h
 
-val frame_decrypt: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
+val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
   Lemma (requires (st_dec_inv rd h0 /\ 
                    equal_on (regions_of rd) h0 h1))
         (ensures st_dec_inv rd h1)

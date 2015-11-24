@@ -191,11 +191,11 @@ let encrypt i ad rg (State #ii #r #region #peer_region log seqn key) f =
 type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
   exists (w:writer i).{:pattern (matching r w)} st_inv r w h
 
-val frame_decrypt: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
+val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
   Lemma (requires (st_dec_inv rd h0 /\ 
                    equal_on (Set.union (Set.singleton rd.region) (Set.singleton rd.peer_region)) h0 h1))
         (ensures st_dec_inv rd h1)
-let frame_decrypt i rd h0 h1 = ()
+let frame_st_dec_inv i rd h0 h1 = ()
 
 (* TODO: Replace Let in prims.fst with this definition? *)
 type Let (#a:Type) (=x:a) (body:(y:a{y=x}) -> Type) = body x

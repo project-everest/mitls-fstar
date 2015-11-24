@@ -147,11 +147,8 @@ opaque type trigger2 (x:nat) (y:nat) = True
 *) 
 open FStar.Set
 
-assume val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:t -> h1:t{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 h0 h1)
-// let equal_on_disjoint s1 s2 r h0 h1 = cut (modifies s1 h0 h1)
-
-val disjoint_regions_sym: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> Lemma (disjoint_regions s2 s1)
-let disjoint_regions_sym s1 s2 = ()
+val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:t -> h1:t{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 h0 h1)
+let equal_on_disjoint s1 s2 r h0 h1 = ()
 
 val frame_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit 
   (requires
@@ -177,13 +174,10 @@ let frame_epoch_k c j h0 h1 k =
   if k<>j
   then (equal_on_disjoint (regions e_j) (regions e_k) (region wr_j) h0 h1;
         frame_st_enc_inv (writer_epoch e_k) h0 h1;
-        frame_decrypt (reader_epoch e_k) h0 h1;
-        ())
+        frame_st_dec_inv (reader_epoch e_k) h0 h1)
   else (let r_k = reader_epoch e_k in
-        // assert (epoch_region_inv r_k wr_j);
-        disjoint_regions_sym (regions_of (reader_epoch e_k)) (regions_of wr_j);
-	equal_on_disjoint (regions_of wr_j) (regions_of (reader_epoch e_k)) (region wr_j) h0 h1;
-        frame_decrypt (reader_epoch e_k) h0 h1)
+        equal_on_disjoint (regions_of wr_j) (regions_of (reader_epoch e_k)) (region wr_j) h0 h1;
+        frame_st_dec_inv (reader_epoch e_k) h0 h1)
  
 val frame_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires
