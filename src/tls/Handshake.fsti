@@ -38,7 +38,7 @@ type handshake_state // internal
 open FStar.Set  
 
 opaque type disjoint_regions (s1:set rid) (s2:set rid) = 
-       forall x y. {:pattern (Set.mem x s1); (Set.mem y s2)} disjoint x y
+       forall x y. {:pattern (Set.mem x s1); (Set.mem y s2)} (Set.mem x s1 /\ Set.mem y s2) ==> disjoint x y
 
 opaque type epoch_region_inv (#i:_) (r:reader i) (w:writer i) =
   disjoint_regions (regions_of r) (regions_of w)
