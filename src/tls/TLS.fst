@@ -150,7 +150,7 @@ open FStar.Set
 val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:t -> h1:t{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 h0 h1)
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 
-val frame_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit 
+val frame_writer_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit 
   (requires
     epochs_inv c h0 /\
     (let es = epochs c h0 in
@@ -165,7 +165,7 @@ val frame_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t ->
                 epochs c h0 = epochs c h1
               /\ k < Seq.length (epochs c h1)
               /\ epoch_inv h1 (epoch_i c h1 k)))
-let frame_epoch_k c j h0 h1 k =
+let frame_writer_epoch_k c j h0 h1 k =
   let es = epochs c h0 in
   let hs_r = HS.region c.hs in
   let e_j = Seq.index es j in
@@ -176,10 +176,10 @@ let frame_epoch_k c j h0 h1 k =
         frame_st_enc_inv (writer_epoch e_k) h0 h1;
         frame_st_dec_inv (reader_epoch e_k) h0 h1)
   else (let r_k = reader_epoch e_k in
-        equal_on_disjoint (regions_of wr_j) (regions_of (reader_epoch e_k)) (region wr_j) h0 h1;
-        frame_st_dec_inv (reader_epoch e_k) h0 h1)
+        equal_on_disjoint (regions_of wr_j) (regions_of r_k) (region wr_j) h0 h1;
+        frame_st_dec_inv r_k h0 h1)
  
-val frame_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+val frame_writer_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires
     epochs_inv c h0 /\
     (let es = epochs c h0 in
@@ -191,7 +191,52 @@ val frame_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> L
          /\ st_enc_inv wr_j h1)))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
-let frame_epoch c j h0 h1 = ghost_lemma (frame_epoch_k c j h0 h1)            
+let frame_writer_epoch c j h0 h1 = ghost_lemma (frame_writer_epoch_k c j h0 h1)            
+
+val frame_reader_epoch_k: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit 
+  (requires
+    epochs_inv c h0 /\
+    (let es = epochs c h0 in
+     let hs_r = HS.region c.hs in 
+      Map.contains h0 hs_r
+      /\ k < Seq.length es
+      /\ j < Seq.length es 
+      /\ (let rd_j = reader_epoch (Seq.index es j) in
+           modifies (Set.singleton (region rd_j)) h0 h1 
+         /\ st_dec_inv rd_j h1)))
+  (ensures (fun _ -> 
+                epochs c h0 = epochs c h1
+              /\ k < Seq.length (epochs c h1)
+              /\ epoch_inv h1 (epoch_i c h1 k)))
+let frame_reader_epoch_k c j h0 h1 k =
+  let es = epochs c h0 in
+  let hs_r = HS.region c.hs in
+  let e_j = Seq.index es j in
+  let e_k = Seq.index es k in
+  let rd_j = reader_epoch e_j in
+  if k<>j
+  then (equal_on_disjoint (regions e_j) (regions e_k) (region rd_j) h0 h1;
+        frame_st_enc_inv (writer_epoch e_k) h0 h1;
+        frame_st_dec_inv (reader_epoch e_k) h0 h1)
+  else (let w_k = writer_epoch e_k in
+        equal_on_disjoint (regions_of rd_j) (regions_of w_k) (region rd_j) h0 h1;
+        frame_st_enc_inv w_k h0 h1)
+
+val frame_reader_epoch: c:connection ->  j:nat -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+  (requires
+    epochs_inv c h0 /\
+    (let es = epochs c h0 in
+     let hs_r = HS.region c.hs in 
+      Map.contains h0 hs_r
+      /\ j < Seq.length es 
+      /\ (let rd_j = reader_epoch (Seq.index es j) in
+           modifies (Set.singleton (region rd_j)) h0 h1 
+         /\ st_dec_inv rd_j h1)))
+  (ensures (epochs c h0 = epochs c h1
+            /\ epochs_inv c h1))
+let frame_reader_epoch c j h0 h1 = ghost_lemma (frame_reader_epoch_k c j h0 h1)            
+
+ 
 
 (*** control API ***)
 
