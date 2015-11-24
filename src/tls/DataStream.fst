@@ -21,12 +21,6 @@ open Range
 
 //---------------------------------------------------------------------
 
-// in the log, we do not precisely keep track of written ranges
-let fragment_range: range = (0,max_TLSPlaintext_fragment_length)
-
-// for writers, we keep track of actual ranges
-type frange = rg:range { Wider fragment_range rg }
-
 // The implementation of this type is application-specific
 // but it must provide a few functions to TLS, declared below.
 // on safe connections, TLS ensures privacy by type abstraction
@@ -39,10 +33,10 @@ let ghost_repr i f = f
 
 type fragment (i:id) (rg:range) = f:pre_fragment i { Within (length (ghost_repr f)) rg}
 
-val repr: #i:id { ~(safeId i)}-> rg:frange -> fragment i rg -> Tot (b: rbytes rg {b = ghost_repr #i b})
+val repr: #i:id { ~(safeId i)}-> rg:frange i -> fragment i rg -> Tot (b: rbytes rg {b = ghost_repr #i b})
 let repr i rg f = f
 
-val mk_fragment: i:id{ ~(authId i)} -> rg:frange -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
+val mk_fragment: i:id{ ~(authId i)} -> rg:frange i -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
 let mk_fragment i rg b = b
 
 (* revisit:
