@@ -535,8 +535,6 @@ let append_lemma i log0 log1 e =
   match e with Entry c ad f -> ()
 *)
 
-let x = 0
-
 (* Note: We do not have polarities for subtyping. 
          So, a (ContentType * frange) </: (ContentType * range)
 *)         
@@ -555,27 +553,27 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
     let o:option (epoch (HS.region (C.hs c))) = epoch_w_h c h0 in
     //let j = Seq.length (sel h0 (c.hs.log)) - 1 in
     //let u = frame_writer_epoch c j h0 h1 in
-    st_inv c h1 
-    (* o == epoch_w_h c h1 /\
+    st_inv c h1 /\
+    o == epoch_w_h c h1 /\ 
     i == epoch_id o /\
     (is_None o ==> h0 == h1) /\
     (is_Some o ==>
-       Let(epoch_wo o)(fun (wr:writer (epoch_id o)) -> 
+      ( let wr:writer (epoch_id o) =  epoch_wo o in
         HyperHeap.modifies (Set.singleton (region wr)) h0 h1
       /\ Heap.modifies (refs_in_w wr) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
       /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
       /\ st_enc_inv #i wr h0
       /\ st_enc_inv #i wr h1
-//      /\ Seq.length (sel h1 (writer_log wr)) = Seq.length (sel h0 (writer_log wr)) + 1 
-//( = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e))
-      (* /\ (is_MACOnly i.aeAlg ==> is_SSL_3p0 i.pv)  // 15-09-12 Get rid of crazy pre on cipherRangeClass??  *)
-      (* /\ Wider (Range.cipherRangeClass i (length payload)) (snd ctrg) *)
-      (* /\ (exists (e:entry i). (sel h1 (writer_log wr) = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e)) *)
-      (* /\ sel h1 (writer_log wr) = snoc (sel h0 (writer_log wr)) (Entry payload (StatefulPlain.makeAD i (fst ctrg)) f) *)
-      (* /\ True *)
+      /\ Seq.length (sel h1 (log wr)) = Seq.length (sel h0 (log wr)) + 1 
+      //( = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e))
+      // /\ (is_MACOnly i.aeAlg ==> is_SSL_3p0 i.pv)  // 15-09-12 Get rid of crazy pre on cipherRangeClass??  
+      // /\ Wider (Range.cipherRangeClass i (length payload)) (snd ctrg) 
+      // /\ (exists (e:entry i). (sel h1 (writer_log wr) = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e)) 
+      // /\ sel h1 (log wr) = snoc (sel h0 (log wr)) (Entry payload (StatefulPlain.makeAD i (fst ctrg)) f) 
       // modifies at most the writer of (epoch_w c), adding f to its log
-      )) *) 
+      )) 
 )))
+
 let send_payload c i f =
     let o = epoch_w c in
     match o with
@@ -583,6 +581,7 @@ let send_payload c i f =
       | Some(Epoch h _ w) ->
         let h0 = ST.get() in
  	// assert (epochs_inv c h0);
+        recall c.reading; 
 	recall c.hs.log;
 	// assert (Map.contains h0 (HS.region c.hs));
         let ct, rg = Content.ct_rg i f in
@@ -596,25 +595,28 @@ let send_payload c i f =
         r
 
 
-(*** VERIFIES UP TO HERE ***)
-
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
-  (requires (fun h -> st_inv h c /\ i == epoch_id (epoch_w_h c h)))
-  (ensures (fun h0 _ h1 -> //st_inv h1 c /\
-    Let(epoch_w_h c h0) (fun o ->
-      st_inv h0 c /\
-      o == epoch_w_h c h1 /\
-      (is_None o ==> HyperHeap.modifies Set.empty h0 h1) /\
-      (is_Some o ==>
-       Let(epoch_wo o)(fun wr ->
-        HyperHeap.modifies (Set.singleton (region wr)) h0 h1
-      /\ Heap.modifies (refs_in_w wr) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
+  (requires (fun h -> 
+    st_inv c h /\ 
+    (let o = epoch_w_h c h in 
+    i == epoch_id o /\
+    (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
+  (ensures (fun h0 _ h1 -> 
+    st_inv c h0 
+  /\ st_inv c h1 
+  /\ ( let o = epoch_w_h c h0 in
+      o == epoch_w_h c h1 
+    /\ (is_None o ==> HyperHeap.modifies Set.empty h0 h1) 
+   // (is_Some o ==>
+//       Let(epoch_wo o)(fun wr ->
+//        HyperHeap.modifies (Set.singleton (region wr)) h0 h1
+//      /\ Heap.modifies (refs_in_w wr) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
 //      /\ sel h1 (writer_seqn wr) = sel h0 (writer_seqn wr) + 1
 //      /\ sel h1 (writer_log wr)  = snoc (sel h0 (writer_log wr)) (Entry cipher ad f))
-      /\ True
     // modifies at most the writer of (epoch_w c), adding f to its log
-    )))))
+//    ))
+)))
 
 // 15-09-09 Do we need an extra argument for every stateful index?
 let send c i f =
@@ -631,8 +633,11 @@ let send c i f =
   recall (C.reading c);
   (match epoch_w c with
   | None -> ()
-  | Some(Epoch h _ w) -> recall (writer_log w); recall (writer_seqn w));
+  | Some(Epoch h _ w) -> recall (log w); recall (seqn w));
 
+(*** VERIFIES UP TO HERE ***)
+
+  //15-11-25 we need a trivial framing lemma to carry st_inv c h1 across this call
   let r = Platform.Tcp.send (C.tcp c) record in
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
