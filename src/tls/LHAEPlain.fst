@@ -61,7 +61,7 @@ val repr: i:id{ ~(safeId i)} -> ad:adata i -> r:range -> p:plain i ad r -> Tot (
 let repr i ad rg p = StatefulPlain.repr i (parseAD ad) rg p
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> 
-  rg:range { StatefulPlain.wf_ad_rg i (parseAD ad) rg } ->
+  rg:(frange i){ StatefulPlain.wf_ad_rg i (parseAD ad) rg } ->
   b:rbytes rg ->
     Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
 let mk_plain i ad rg b = StatefulPlain.mk_plain i (parseAD ad) rg b
