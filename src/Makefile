@@ -8,7 +8,9 @@ clean:
 	rm -rf tls-ml/*.ml tls/*.p.* tls-ml/*.cm* tls-ml/*.o tls-ml/*~ tls-ml/support.ml tls-lax/*.p.*
 
 # ------------------ dependencies on Fstar & its libraries --------------------
+ifndef FSTAR_HOME
 FSTAR_HOME=../../FStar
+endif
 STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
 STDLIB=ext.fst classical.fst set.fsi heap.fst map.fsi listTot.fst hyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi \
