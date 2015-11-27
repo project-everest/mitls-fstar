@@ -44,9 +44,8 @@ type reader i = state i Reader
 type writer i = state i Writer
 val region        : #i:id -> #rw:rw -> state i rw -> Tot rid
 val peer_region   : #i:id -> #rw:rw -> state i rw -> Tot rid
-val log_region    : #i:id -> #rw:rw -> state i rw -> Tot rid
-//let log_region    = fun (#i:id) (#rw:rw) (s:state i rw) -> if rw=Reader then peer_region s else region s
-val log           : #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (if rw=Reader then peer_region s else region s) i)
+let log_region    = fun (#i:id) (#rw:rw) (s:state i rw) -> if rw=Reader then peer_region s else region s
+val log           : #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (log_region s) i)
 val seqn          : #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
 
 opaque type matching (#i:gid) (r:reader i) (w:writer i)
@@ -73,13 +72,12 @@ val unfold_st_inv: #i:id -> r:reader i -> w:writer i -> h:HyperHeap.t ->
        wctr = Seq.length log
        /\ rctr <= wctr )))
 
-val regions_of    : #i:id -> #rw:rw -> s:state i rw -> Tot (Set.set rid)
-//let regions_of (#i:id) (#rw:rw) (s:state i rw) = 
-//    Set.union (Set.singleton (region s))
-//              (Set.singleton (peer_region s))
+let regions_of (#i:id) (#rw:rw) (s:state i rw) = 
+    Set.union (Set.singleton (region s))
+              (Set.singleton (peer_region s))
 
-//let refs_in_w (#i:gid) (e:writer i) =
-//  !{ as_ref (log e), as_ref (seqn e) }
+let refs_in_w (#i:gid) (e:writer i) =
+  !{ as_ref (log e), as_ref (seqn e) }
 
 val frame_st_inv: #i:id -> r:reader i -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_inv r w h0
@@ -135,7 +133,7 @@ val encrypt: #i:gid -> #ad:adata i
   (ensures  (fun h0 (c:cipher i) h1 ->
                   st_enc_inv wr h1
                 /\ modifies (Set.singleton (region wr)) h0 h1
-                /\ modifies_rref (region wr) (!{ as_ref (log wr), as_ref (seqn wr) }) h0 h1
+                /\ modifies_rref (region wr) (refs_in_w wr) h0 h1
                 /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
                 /\ Wider (Range.cipherRangeClass i (length c)) rg
                 /\ sel h1 (log wr) = snoc (sel h0 (log wr)) (Entry c ad f)))
