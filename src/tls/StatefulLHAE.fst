@@ -40,13 +40,16 @@ type st_log_t (r:rid) (i:id) = rref r (s:seq (entry i))
 
 (* typing the private log that specifies LHAE's implementation of StLHAE *)
 type gcm_log_t (r:rid) (i:gid) = rref r (s:seq (AEAD_GCM.entry i))
+
+let region_ite (rw:rw) (r1:rid) (r2:rid) =
+  match rw with Reader -> r1 | Writer -> r2
  
 (* CF we might merge those types into State id role *)
 type state (i:gid) (rw:rw) = 
   | State :
        #region:rid
     -> #peer_region:rid{HyperHeap.disjoint region peer_region}
-    -> log:  st_log_t (if rw=Reader then peer_region else region) i (* shared ghost spec *)
+    -> log:  st_log_t (region_ite rw peer_region region) i (* shared ghost spec *)
     -> seqn: rref region seqn_t                                       (* concrete, local sequence number *)
     -> key:  AEAD_GCM.state i rw{extends key.region region /\ extends key.peer_region peer_region} (* gcm in a distinct sub-region *)
     -> state i rw
@@ -151,8 +154,7 @@ let coerce r0 p0 role i kv iv =
   let r = new_region r0 in
   let p = new_region p0 in
   let key = AEAD_GCM.coerce r p i role kv iv in
-  let log_region = if role=Reader then p else r in
-  let log = ralloc log_region Seq.createEmpty in
+  let log = ralloc (region_ite role p r) Seq.createEmpty in
   State #i #role #r #p log (ralloc r 0) key
 
 opaque type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
@@ -165,8 +167,8 @@ val frame_st_enc_inv: #i:id -> w:writer i ->  h0:_ -> h1:_ ->
         (ensures st_enc_inv w h1)
 let frame_st_enc_inv i w h0 h1 = ()
 
-let refs_in_e (#i:gid) (e:writer i) =
-  !{ as_ref e.log, as_ref e.seqn }
+//let refs_in_e (#i:gid) (e:writer i) =
+//  !{ as_ref e.log, as_ref e.seqn }
 
 val encrypt: #i:gid -> #ad:adata i
   -> #rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length}
@@ -175,7 +177,7 @@ val encrypt: #i:gid -> #ad:adata i
   (ensures  (fun h0 (c:cipher i) h1 ->
                   st_enc_inv wr h1
                 /\ modifies (Set.singleton wr.region) h0 h1
-                /\ modifies_rref wr.region (refs_in_e wr) h0 h1
+                /\ modifies_rref wr.region (!{ as_ref wr.log, as_ref wr.seqn }) h0 h1
                 /\ sel h1 wr.seqn = sel h0 wr.seqn + 1
                 /\ Wider (Range.cipherRangeClass i (length c)) rg
                 /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))

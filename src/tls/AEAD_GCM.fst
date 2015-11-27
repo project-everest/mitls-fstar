@@ -52,12 +52,15 @@ type dplain (i:gid) (ad:adata i) (c:cipher i) =
 type entry (i:gid) = // records that c is an encryption of p with ad
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
+let region_ite (rw:rw) (r1:rid) (r2:rid) =
+  match rw with Reader -> r1 | Writer -> r2
+
 type state (i:gid) (rw:rw) =
   | State: #region:rid 
            -> #peer_region:rid{HyperHeap.disjoint region peer_region}
            -> key:key i
            -> iv: iv i
-           -> log: rref (if rw=Reader then peer_region else region) (seq (entry i))       // ghost subject to cryptographic assumption
+           -> log: rref (region_ite rw peer_region region) (seq (entry i))       // ghost subject to cryptographic assumption
            -> counter: rref region (counter (alg i)) // types are sufficient to anti-alias log and counter
            -> state i rw
 // Some invariants:
