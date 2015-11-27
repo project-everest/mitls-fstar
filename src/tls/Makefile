@@ -133,7 +133,7 @@ top: $(LIBFILES) $(TLSVER)
 
 # --trace_error
 mitls-ml: $(LIBFILES) $(TLSVER)
-	$(FSTAR) --lax --debug Extreme $(ADMITTED) $^ --codegen OCaml
+	$(FSTAR) --lax --debug Extreme $(ADMITTED) $^ --codegen OCaml --use_native_int --trace_error
 	mv *.ml ../tls-ml
 
 wc:
