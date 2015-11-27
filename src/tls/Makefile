@@ -8,7 +8,9 @@ clean:
 	rm -rf *.ml *.p.* *.cm* *.o *~
 
 # ------------------ dependencies on Fstar & its libraries --------------------
+ifndef FSTAR_HOME
 FSTAR_HOME=../../../FStar
+endif
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
 STDLIB_ADMITS=Char HyperHeap Set Map Seq
 
