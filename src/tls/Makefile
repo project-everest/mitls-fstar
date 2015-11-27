@@ -31,7 +31,7 @@ CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 # MK: doesn't seem to be used, so I removed it after discussing with Santiago
 DHDB= #$(DHDBDIR)DHDBManager.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 25
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 60
 
 LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 
