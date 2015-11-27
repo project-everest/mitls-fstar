@@ -295,3 +295,7 @@ let fragment_range: range = (0,max_TLSPlaintext_fragment_length)
 // for writers, we keep track of actual ranges
 // and require point ranges when padding is not available.
 type frange (i:id) = rg:range { Wider fragment_range rg /\ (is_AEAD i.aeAlg ==> fst rg = snd rg) }
+
+// we don't need the index for point ranges (e.g. non-appdata traffic)
+type frange_any = rg:range { Wider fragment_range rg /\ fst rg = snd rg } 
+

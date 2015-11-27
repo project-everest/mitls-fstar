@@ -187,10 +187,10 @@ val invalidateSession: s:hs -> ST unit
 
 type outgoing = // by default the state changes but not the epochs
   | OutIdle
-  | OutSome:     rg:Range.range { Wider fragment_range rg } -> rbytes rg -> outgoing
+  | OutSome:     rg:frange_any -> rbytes rg -> outgoing
   | OutCCS                // log += Epoch if first
-  | OutFinished: rg:Range.range { Wider fragment_range rg } -> rbytes rg -> outgoing
-  | OutComplete: rg:Range.range { Wider fragment_range rg } -> rbytes rg -> outgoing // log += Complete
+  | OutFinished: rg:frange_any -> rbytes rg -> outgoing
+  | OutComplete: rg:frange_any -> rbytes rg -> outgoing // log += Complete
 let non_empty h s = Seq.length (sel h s.log) > 0
 val next_fragment: s:hs -> ST outgoing
   (requires (hs_inv s))
