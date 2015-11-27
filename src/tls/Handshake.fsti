@@ -61,12 +61,12 @@ type epoch (parent:rid) =
 (* let op_HatAtPlus (r:rid) (rs:FStar.Set.set rid) = Set.union (Set.singleton r) rs *)
 (* let op_HatAtHat (r:rid) (s:rid) = Set.union (Set.singleton r) (Set.singleton s) *)
 
-
-let regions (#p:rid) (e:epoch p) = 
-  union (singleton (region e.r))
-            (union (singleton (peer_region e.r))
-                       (union (singleton (region e.w))
-                                  (singleton (peer_region e.w))))
+val regions : #p:rid -> (e:epoch p) -> Tot (Set.set rid)
+//let regions (#p:rid) (e:epoch p) = 
+//  union (singleton (region e.r))
+//            (union (singleton (peer_region e.r))
+//                       (union (singleton (region e.w))
+//                                  (singleton (peer_region e.w))))
 
 
 //15-09-23 any abstract way to deal with pairwise disjointness? 
@@ -135,7 +135,7 @@ assume type Completed: #region:rid -> epoch region -> Type
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
  
-type hs_invT (s:hs) (epochs:seq (epoch (HS.region s))) : handshake_state -> Type
+type hs_invT : (s:hs) -> (epochs:seq (epoch (HS.region s))) -> handshake_state -> Type
  
 type hs_inv (s:hs) (h: HyperHeap.t) = hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
 

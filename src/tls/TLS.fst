@@ -560,7 +560,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
     (is_Some o ==>
       ( let wr:writer (epoch_id o) =  epoch_wo o in
         HyperHeap.modifies (Set.singleton (region wr)) h0 h1
-      /\ Heap.modifies (refs_in_w wr) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
+      /\ Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
       /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
       /\ st_enc_inv #i wr h0
       /\ st_enc_inv #i wr h1
