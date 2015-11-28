@@ -489,7 +489,7 @@ let pickSendPV c =
     | Closed -> unexpected "[pickSendPV] invoked on a Closed connection"
 
 
-//15-11-27 illustrating the overhead for "unrelated" updates; still missing modifies clauses 
+//15-11-27 illustrating overhead for "unrelated" updates; still missing modifies clauses 
 val closeConnection: c: connection -> ST unit 
   (requires (fun h0 -> st_inv c h0))
   (ensures (fun h0 _ h1 -> st_inv c h1))
@@ -516,7 +516,9 @@ val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:st
 
 let abortWithAlert c ad reason =
     let closingPV = pickSendPV c in
+    let h0 = ST.get() in
     invalidateSession c.hs;
+    frame_admit c h0 (ST.get());
     let h0 = ST.get() in
     Alert.send_alert c.alert ad;
     c.reading := Closed;
@@ -1021,8 +1023,9 @@ val write: c:connection -> i: id -> rg:frange i -> data:DataStream.fragment i rg
 
 // FIXME: Put the following definitions close to range and delta, and use them
 
+
 type query = Cert.chain
-type msg_i (i:id) = (range * DataStream.delta)
+type msg_i (i:id) = (range * DataStream.delta i)
 
 (* merged with ioresult_i
 type readOutcome (e:epoch) =
@@ -1039,8 +1042,8 @@ type readOutcome (e:epoch) =
 
 
 
-type ioresult_i (e:epoch) =
-    | Read of DataStream.delta e
+type ioresult_i (i:id) =
+    | Read of DataStream.delta i
         // this delta has been added to the input stream; we may have read
         // - an application-data fragment or a warning (leaving the connection live)
         // - a closure or a fatal alert (tearing down the connection)
@@ -1049,7 +1052,7 @@ type ioresult_i (e:epoch) =
         // the application may reuse the underlying TCP stream
         // only after normal closure (a = AD_close_notify)
 
-    | ReadError of option alertDescription * string
+    | ReadError: o:option alertDescription -> txt:string -> ioresult_i i
         // We encountered an error while reading, so the connection dies.
         // we return the fatal alert we may have sent, if any,
         // or None in case of an internal error.
@@ -1074,27 +1077,25 @@ type ioresult_i (e:epoch) =
 
 
 // frequent error handler
-let alertFlush conn x y =
-  abortWithAlert conn x y;
-  let written = writeAllClosing conn in
+let alertFlush c i x y : ioresult_i i =
+  abortWithAlert c x y;
+  let written = writeAllClosing c i in
   match written with
-  | SentClose      -> Read Close // do we need this case?
+  | SentClose      -> Read DataStream.Close // do we need this case?
   | WriteError x y -> ReadError x y
 
 //* private val getHeader: c:Connection -> ST (Result ((ct:ContentType * len:nat){len > 0 /\ len <= max_TLSCipher_fragment_length}))
 //*   (requires (fun h -> True))
 //*   (ensures (fun h0 r h1 -> h0 = h1))
 //* we should require the c.read is not Closing \/ Closed
-let getHeader (Conn(id,c)) =
-    match Platform.Tcp.read c.ns 5 with // read & parse the header
+let getHeader c =
+    match Platform.Tcp.recv c.tcp 5 with // read & parse the header
     | Error x -> Error(AD_internal_error,x)
     | Correct header ->
       match Record.parseHeader header with
       | Error x -> Error x
-      | Correct(res) ->
-        let (ct,pv,len) = res in
-        let c_read = c.read in
-        match c_read.disp with
+      | Correct (ct,pv,len) ->
+        match !c.reading with
         | Init                 -> correct(ct,len)
         | FirstHandshake expPV ->
             if pv = expPV then correct(ct,len)
@@ -1102,16 +1103,26 @@ let getHeader (Conn(id,c)) =
         | Finishing
         | Finished
         | Open ->
-            let si = epochSI id.id_in in
-            if pv = si.protocol_version then correct(ct,len)
+            let pvr = 
+              match epoch_r c with 
+              | Some e -> epoch_pv e 
+              | None -> unexpected "todo"  in
+            if pv = pvr then correct(ct,len)
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Protocol version check failed")
         | _ -> unexpected "[recv] invoked on a closed connection"
+
+
+
+
+
+//15-11-28 the rest of this file still need porting.
+//15-11-28 e.g. we may need (i:id) either as argument or in dependent-tuple results
 
 //* private val getFragment: c:connection -> ct:ct -> len:nat -> ST (rg * msg)
 //* "stateful, but only affecting the StAE instance"
 //* can we even deduce the range from len?
-let getFragment (Conn(id,c)) ct len =
-    match Platform.Tcp.read c.ns len with
+let getFragment c ct len =
+    match Platform.Tcp.recv c.tcp len with
     | Error x -> Error(AD_internal_error,x)
     | Correct payload ->
         let c_read = c.read in
@@ -1122,10 +1133,8 @@ let getFragment (Conn(id,c)) ct len =
 //private val readOne: Connection -> ST ioresult_i //$ which epoch index to use??
 //  (ensures ioresult is not CompletedFirst | CompletedSecond | DontWrite)
 
-let readOne cn =
-    let Conn(id,c) = cn in
-    let reading = c.read.disp in
-    match reading with
+let readOne c =
+    match !c.reading with
         | Closed -> //* statically exclude it?
             alertFlush cn AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Trying to read from a closed connection")
         | _ ->
