@@ -1076,10 +1076,15 @@ type ioresult_i (i:id) =
     | ReadFinished
 
 
+//15-11-28 the rest of this file still need porting.
+//15-11-28 e.g. we may need (i:id) either as argument or in dependent-tuple results
+
+assume val rd_i: c: connection -> Tot id 
+
 // frequent error handler
-let alertFlush c i x y : ioresult_i i =
+let alertFlush c x y : ioresult_i (rd_i c) =
   abortWithAlert c x y;
-  let written = writeAllClosing c i in
+  let written = writeAllClosing c (rd_i c) in
   match written with
   | SentClose      -> Read DataStream.Close // do we need this case?
   | WriteError x y -> ReadError x y
@@ -1115,139 +1120,138 @@ let getHeader c =
 
 
 
-//15-11-28 the rest of this file still need porting.
-//15-11-28 e.g. we may need (i:id) either as argument or in dependent-tuple results
-
 //* private val getFragment: c:connection -> ct:ct -> len:nat -> ST (rg * msg)
 //* "stateful, but only affecting the StAE instance"
 //* can we even deduce the range from len?
-let getFragment c ct len =
+let getFragment c ct len : TLSError.Result (Content.fragment (rd_i c)) =
     match Platform.Tcp.recv c.tcp len with
     | Error x -> Error(AD_internal_error,x)
-    | Correct payload ->
-        let c_read = c.read in
-        let c_read_conn = c_read.conn in
-        Record.recordPacketIn id.id_in c_read_conn ct payload
+    | Correct payload -> unexpected "todo"
+//        let c_read = c.read in
+//        let c_read_conn = c_read.conn in
+//        Record.recordPacketIn id.id_in c_read_conn ct payload
+
+//TODO: getFragment ensures ct = fst (ct_rg fragment), removing cases below.
+
 
 (* we receive, decrypt, verify a record (ct,f); what to do with it? *)
 //private val readOne: Connection -> ST ioresult_i //$ which epoch index to use??
 //  (ensures ioresult is not CompletedFirst | CompletedSecond | DontWrite)
 
 let readOne c =
-    match !c.reading with
+    let reading = !c.reading in 
+    match reading with
         | Closed -> //* statically exclude it?
-            alertFlush cn AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Trying to read from a closed connection")
+            alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Trying to read from a closed connection")
         | _ ->
-            match getHeader cn with
-            | Error (x,y)      -> alertFlush cn x y
+            match getHeader c with
+            | Error (x,y)      -> alertFlush c x y
             | Correct (ct,len) ->
-                let history = Record.history id.id_in Reader c_read.conn in
-                match (ct,c_read.disp) with // process received content type depending on the current read state
+                //old: let history = Record.history id.id_in Reader c_read.conn in
+                match (ct,reading) with // process received content type depending on the current read state
                 | (Alert, Init)
                 | (Alert, FirstHandshake _)
                 | (Alert, Open) ->
-                    ( match getFragment cn ct len with
-                      | Error (x,y)  -> alertFlush cn x y
-                      | Correct fragment ->
-                            let rg, frag = fragment in
-                            let f = TLSFragment.recordPlainToAlertPlain id.id_in history rg frag in
-                            match Alert.recv_fragment id c.alert rg f with
-                              | Error (x,y) -> alertFlush cn x y
-                              | Correct Alert.Ack -> ReadAgain
-                              | Correct Alert.CloseNotify ->
+                    ( match getFragment c ct len with
+                      | Error (x,y)  -> alertFlush c x y
+                      | Correct (Content.CT_Alert rg f) ->
+                            //let f = TLSFragment.recordPlainToAlertPlain id.id_in history rg fragment in
+                            match Alert.recv_fragment c.alert rg f with
+                              | Error (x,y) -> alertFlush c x y
+                              | Correct Alert.ALAck -> ReadAgain
+                              | Correct Alert.ALClose_notify ->
                                      (* An outgoing close notify has already been buffered, if necessary *)
                                      (* Only close the reading side of the connection *)
-                                   c.read := {c_read with disp = Closed};
-                                   Read Close
-                              | Correct (Alert.Description ad) ->
-                                   if isFatal ad then closeConnection cn; // closing both directions
-                                   // otherwise we carry on; the user will know what to do
+                                   c.reading := Closed;
+                                   Read DataStream.Close
+                              | Correct (Alert.ALWarning ad) -> 
+                                   Read (Alert ad) // we carry on; the user will know what to do
+                              | Correct (Alert.ALFatal ad) ->
+                                   closeConnection c // closing both directions
                                    Read (Alert ad) )
 
                 | (Handshake, Init)
                 | (Handshake, FirstHandshake _)
                 | (Handshake, Finishing)
                 | (Handshake, Open) ->
-                    ( match getFragment cn ct len with
-                        | Error (x,y) -> alertFlush cn x y
-                        | Correct (c_recv, rg, frag) ->
-                          let c_read = {c_read with conn = c_recv} in
-                          let c = {c0 with read = c_read} in
-                          let f = TLSFragment.recordPlainToHSPlain id.id_in history rg frag in
-                          let res = Handshake.recv_fragment id c.handshake rg f in
+                    ( match getFragment c ct len with
+                        | Error (x,y) -> alertFlush c x y
+                        | Correct (Content.CT_Handshake rg f) ->
+                          //let f = TLSFragment.recordPlainToHSPlain id.id_in history rg frag in
+                          let res = Handshake.recv_fragment c.hs rg f in
                           match res with
-                          | Handshake.InError x y -> alertFlush cn x y
+                          | Handshake.InError x y -> alertFlush c x y
                           | Handshake.InAck       -> ReadAgain
                           | Handshake.InVersionAgreed pv ->
-                              (match c_read.disp with
+                              (match reading with
                               | Init ->
                                   (* Then, also c_write must be in Init state. It means this is the very first, unprotected,
                                       handshake of the connection, and we just negotiated the version.
                                       Set the negotiated version in the current sinfo (read and write side),
                                       and move to the FirstHandshake state, so that
                                       protocol version will be properly checked *)
-                                  c.read  := {c_read  with disp = FirstHandshake pv };
-                                  c.write := {c.write with disp = FirstHandshake pv };
+                                  c.reading := FirstHandshake pv;
+                                  c.writing := FirstHandshake pv;
                                   ReadAgain
                               | _ -> ReadAgain (* We are re-negotiating, using the current version number;
                                                   so no need to change --- but we should still check pv is unchanged. *)
                           | Handshake.InQuery query advice -> CertQuery query advice
                           | Handshake.InFinished ->
-                                ( match c_read.disp with (* Ensure we are in Finishing state *)
+                                ( match reading  with (* Ensure we are in Finishing state *)
                                     | Finishing ->
-                                        c.read := {c_read with disp = Finished};
+                                        c.reading := Finished;
                                         ReadFinished
-                                    | _ -> alertFlush cn AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Finishing handshake in the wrong state"))
+                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Finishing handshake in the wrong state"))
                           | Handshake.InComplete ->
-                                ( match (c.read.disp, c.write.disp) with (* Ensure we are in the correct state *)
-                                    | Finishing, Finished -> (* Sanity check: in and out session infos should be the same *)
-                                        if epochSI(id.id_in) = epochSI(id.id_out) then
-                                          match moveToOpenState cn with
-                                          | Correct(c) -> CompletedFirstDone
-                                          | Error(x,y) -> alertFlush cn x y
-                                        else closeConnection cn; ReadError None (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")
-                                    | _ -> alertFlush cn AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Invalid connection state"))))
+                                ( match reading, !c.writing with (* Ensure we are in the correct state *)
+                                    | Finishing, Finished -> (* sanity check: in and out epochs should be the same *)
+                                        if epoch_r c = epoch_w c then
+                                          match moveToOpenState c with
+                                          | Correct _ -> CompletedFirst //?Done
+                                          | Error(x,y) -> alertFlush c x y
+                                        else closeConnection c; ReadError None (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")
+                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Invalid connection state"))))
 
                 | (Change_cipher_spec, FirstHandshake _)
                 | (Change_cipher_spec, Open) ->
-                      ( match getFragment cn ct len with
-                        | Error (x,y) -> alertFlush cn x y
-                        | Correct recf ->
-                            let rg, frag = recf in
-                            let f = TLSFragment.recordPlainToCCSPlain id.id_in history rg frag in
-                            match Handshake.recv_ccs id c.handshake rg f with
-                              | InCCSError (x,y) -> alertFlush cn x y
-                              | InCCSAck (nextID,nextR) ->
+                      ( match getFragment c ct len with
+                        | Error (x,y) -> alertFlush c x y
+                        | Correct Content.CT_CCS ->
+                            //old: let f = TLSFragment.recordPlainToCCSPlain id.id_in history rg frag in
+                            match Handshake.recv_ccs c.hs with
+                              | InCCSError (x,y) -> alertFlush c x y
+                              | InCCSAck (*nextID,nextR*) ->
                                   (* We know statically that Handshake and Application data buffers are empty.
                                    * We check Alert. We are going to reset the Alert buffer anyway, so we
                                    * never concatenate buffers of different epochs. But it is nicer to abort the
                                    * session if some buffers are not in the expected state. *)
-                                  if Alert.is_incoming_empty id c.alert then
-                                      let nextRCS = Record.initConnState nextID.id_in Reader nextR in
-                                      let new_ad = AppData.reset_incoming id c.appdata nextID in
-                                      let new_al = Alert.reset_incoming id c.alert nextID in
-                                      c.read := {c_read with disp = Finishing; conn = nextRCS};
-                                      c.appdata := new_ad;
-                                      c.alert := new_al;
-                                      c.id := nextID; //* adjust
-                                      ReadAgainFinishing
-                                   else
-                                      alertFLush (Conn(id,c)) AD_handshake_failure (perror __SOURCE_FILE__ __LINE__ "Changing epoch with non-empty buffers"))
+                                  if Alert.is_incoming_empty c.alert then
+                                      //let nextRCS = Record.initConnState nextID.id_in Reader nextR in
+                                      //let new_ad = AppData.reset_incoming id c.appdata nextID in
+                                      //c.read := {c_read with conn = nextRCS};
+                                      //c.appdata := new_ad;
+                                      //c.alert := new_al;
+                                      //c.id := nextID; //* adjust
+                                      //let new_al = Alert.reset_incoming id c.alert nextID in
+                                      (c.reading := Finishing; 
+                                      ReadAgainFinishing)
+                                  else
+                                      alertFlush c AD_handshake_failure (perror __SOURCE_FILE__ __LINE__ "Changing epoch with non-empty buffers"))
 
                 | Application_data, Open ->
-                    ( match getFragment cn ct len with
-                        | Error (x,y) -> alertFlush cn x y
-                        | Correct (rg,frag) ->
-                            let f = TLSFragment.recordPlainToAppPlain id.id_in history rg frag in
-                            let d = AppData.recv_fragment id c.appdata rg f in
-                            Read (Data rg d) )
+                    ( match getFragment c ct len with
+                        | Error (x,y) -> alertFlush c x y
+                        | Correct (Content.CT_Data rg d) ->
+                            //let f = TLSFragment.recordPlainToAppPlain id.id_in history rg frag in
+                            //let d = AppData.recv_fragment id c.appdata rg f in
+                            Read (DataStream.Data rg d) )
 
                 | _, Init
                 | _, FirstHandshake(_)
                 | _, Finishing
                 | _, Finished
                 | _, Closed
-                | _, Closing(_,_) ->  alertFlush cn AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
+                | _, Closing(_,_) ->  alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 
 //* ?
 //* private val sameID: c0:Connection -> c1:Connection ->
@@ -1299,10 +1303,11 @@ let sameIDRAF (c0:Connection) (c1:Connection) res (c2:Connection) =
     | RWarning(x) -> RWarning(x)
 *)
 
-let rec readAllFinishing cn =
-    let outcome = readOne cn in
+
+let rec readAllFinishing c =
+    let outcome = readOne c in
     match outcome with
-    | ReadAgain      -> readAllFinishing cn //? cut: let ro = sameIDRAF c newConn ro c0 in
+    | ReadAgain      -> readAllFinishing c //? cut: let ro = sameIDRAF c newConn ro c0 in
     | CompletedFirst -> CompletedFirst
     | Read (Alert ad) when isFatal ad -> outcome
     | ReadError _    -> unexpected "[readAllFinishing] Read error can never be returned by read one"
