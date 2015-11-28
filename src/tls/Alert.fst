@@ -116,7 +116,7 @@ let parseAlert b =
 
 // ---------------- outgoing alerts -------------------
 
-let send_alert (ci:ConnectionInfo) s (ad:alertDescription{isFatal ad}) =
+let send_alert (* ci:ConnectionInfo *) s (ad:alertDescription{isFatal ad}) =
     (* FIXED? We should only send fatal alerts. Right now we'll interpret any sent alert
        as fatal, and so will close the connection afterwards. *)
     (* Note: we only support sending one (fatal) alert in the whole protocol execution
@@ -164,10 +164,10 @@ let next_fragment i s =
 
 // ---------------- incoming alerts -------------------
 
-let handle_alert ci s ad =
+let handle_alert s ad =
     match ad with
     | AD_close_notify -> (* we possibly send a close_notify back *)
-        send_alert ci s AD_close_notify;
+        send_alert s AD_close_notify;
         ALClose_notify
     | _ ->
         if isFatal ad then ALFatal ad else ALWarning ad
@@ -183,13 +183,13 @@ let recv_fragment (ci:ConnectionInfo) s (r:range) (b1:bytes) =
         if length b0 = 1 then State.incoming s := empty_bytes;
         (match parseAlert (b0 @| b1) with
         | Error z    -> Error z
-        | Correct ad -> correct (handle_alert ci s ad) )
+        | Correct ad -> correct (handle_alert s ad) )
 
     | 0, 1 -> State.incoming s := b1; Correct ALAck (* Buffer this partial alert *)
     | _, 0 -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Empty alert fragments are invalid")
     | _, _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "No more data expected after an alert")
 
-let is_incoming_empty (c:ConnectionInfo) s = length !(State.incoming s) = 0
+let is_incoming_empty (c:ConnectionInfo) s = length !s.incoming  = 0
 
-let reset_incoming s = State.incoming s := empty_bytes
-let reset_outgoing s = State.outgoing s := empty_bytes
+let reset_incoming s = s.incoming := empty_bytes
+let reset_outgoing s = s.outgoing := empty_bytes

@@ -499,10 +499,9 @@ let closeConnection c =
     invalidateSession (C.hs c);
     let h1 = ST.get() in 
     recall (HS.log c.hs); recall (HS.state c.hs); // needed to preserve hs_inv within inv
-    C.reading c := Closed;
-    C.writing c := Closed;
+    c.reading := Closed;
+    c.writing := Closed;
     frame_admit c h0 (ST.get()) 
-
 
 // on some errors, we locally give up the connection
 let unrecoverable c reason =
@@ -510,16 +509,22 @@ let unrecoverable c reason =
     WriteError None reason
 
 // send a final alert then tear down the connection
+
+val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:string -> ST unit
+  (requires (fun h0 -> st_inv c h0))
+  (ensures (fun h0 _ h1 -> st_inv c h1))
+
 let abortWithAlert c ad reason =
     let closingPV = pickSendPV c in
-    invalidateSession (C.hs c);
-    (* TODO Alert.send_alert (C.alert c) ad ; *)
-    C.reading c := Closed;
-    C.writing c := Closing(closingPV,reason)
+    invalidateSession c.hs;
+    let h0 = ST.get() in
+    Alert.send_alert c.alert ad;
+    c.reading := Closed;
+    c.writing := Closing(closingPV,reason);
+    frame_admit c h0 (ST.get())
 
 // on some errors, we attempt to send an alert before tearing down the connection
 let closable c reason =
-    admit();
     abortWithAlert c AD_internal_error reason;
     WriteAgainClosing
 
@@ -579,10 +584,13 @@ let append_lemma i log0 log1 e =
 
 (* Note: We do not have polarities for subtyping. 
          So, a (ContentType * frange) </: (ContentType * range)
-*)         
+
 val ct_rg_test : i:id -> f:Content.fragment i -> Tot (ContentType * range)
 let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
+*)         
  
+// sends one fragment in the current epoch;
+// except for the null epoch, the fragment is appended to the epoch's writer log.
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulPlain.cipher i)
   (requires (fun h -> 
     st_inv c h /\ 
@@ -590,31 +598,35 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
       i == epoch_id o /\
       (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 payload h1 -> 
-    st_inv c h0 /\ (
-    let ctrg: ContentType * frange i = Content.ct_rg i f in 
-    let o:option (epoch (HS.region (C.hs c))) = epoch_w_h c h0 in
-    //let j = Seq.length (sel h0 (c.hs.log)) - 1 in
-    //let u = frame_writer_epoch c j h0 h1 in
-    st_inv c h1 /\
+    st_inv c h0 /\ 
+    st_inv c h1 /\ (
+    let o:option (epoch (HS.region c.hs )) = epoch_w_h c h0 in
     o == epoch_w_h c h1 /\ 
     i == epoch_id o /\
     (is_None o ==> h0 == h1) /\
     (is_Some o ==>
       ( let wr:writer (epoch_id o) =  epoch_wo o in
+        let ctrg: ContentType * frange i = Content.ct_rg i f in 
         HyperHeap.modifies (Set.singleton (region wr)) h0 h1
       /\ Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
       /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
-      /\ st_enc_inv #i wr h0
-      /\ st_enc_inv #i wr h1
+//      /\ st_enc_inv #i wr h0
+//      /\ st_enc_inv #i wr h1
       /\ Seq.length (sel h1 (log wr)) = Seq.length (sel h0 (log wr)) + 1 
+      /\ ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
+          sel h1 (log wr) = snoc (sel h0 (log wr)) e 
+        /\ fragment_entry e = f )
+//        /\ StatefulLHAE.Entry.p e = f //15-11-28 not sure what's wrong with this syntax
+//        /\ StatefulLHAE.Entry.ad e = StatefulPlain.makeAD i (fst ctrg) //15-11-28 irrelevant?
+
       //( = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e))
       // /\ (is_MACOnly i.aeAlg ==> is_SSL_3p0 i.pv)  // 15-09-12 Get rid of crazy pre on cipherRangeClass??  
       // /\ Wider (Range.cipherRangeClass i (length payload)) (snd ctrg) 
       // /\ (exists (e:entry i). (sel h1 (writer_log wr) = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e)) 
-      // /\ sel h1 (log wr) = snoc (sel h0 (log wr)) (Entry payload (StatefulPlain.makeAD i (fst ctrg)) f) 
       // modifies at most the writer of (epoch_w c), adding f to its log
       )) 
-)))
+    ))
+  )
 
 let send_payload c i f =
     let o = epoch_w c in
@@ -642,21 +654,24 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
   (requires (fun h -> 
     st_inv c h /\ 
     (let o = epoch_w_h c h in 
-    i == epoch_id o /\
-    (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
+      i == epoch_id o /\
+      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 _ h1 -> 
     st_inv c h0 
   /\ st_inv c h1 
   /\ ( let o = epoch_w_h c h0 in
-      o == epoch_w_h c h1 
+      o == epoch_w_h c h1 // we still use the same epoch & index
+    /\ i == epoch_id o 
     /\ (is_None o ==> h0 == h1) 
     /\ (is_Some o ==>
         ( let wr:writer (epoch_id o) = epoch_wo o in 
           HyperHeap.modifies (Set.singleton (region wr)) h0 h1
         /\ Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) 
         /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
-    // /\ sel h1 (log wr)  = snoc (sel h0 (log wr)) (Entry cipher ad f))
-    // modifies at most the writer of (epoch_w c), adding f to its log
+        /\ (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr)))
+        /\ ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
+            sel h1 (log wr) = snoc (sel h0 (log wr)) e 
+          /\ fragment_entry e = f )
     ))
 )))
 
@@ -715,13 +730,30 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
       i == epoch_id o /\
       (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 r h1 ->
-    st_inv c h1 /\
+    st_inv c h1 
+  /\
 //    modifies (Set.singleton (C.region c)) h0 h1 /\
     // TODO: conditionally prove that i == epoch_id (epoch_w_h c h), at least when appdata is set.
     // TODO: account for (the TLS view of) the encryptor log
-    True
-  ))
 
+    ( (r = WriteAgain) 
+    \/ (r = Written /\ sel h1 c.writing = Open /\ is_Some appdata /\ i == epoch_id (epoch_w_h c h1)) 
+    \/ (r = WriteDone)// /\ is_None appdata /\ h0 = h1) //15-11-28 both fail, why?
+    \/ (r = WriteAgainClosing) 
+    \/ (r = WriteHSComplete /\ sel h1 c.reading = Open   /\ sel h1 c.writing = Open) 
+    \/ (r = SentClose                                   /\ sel h1 c.writing = Closed)
+    \/ (is_WriteError r) //15-11-28 causing out of memory?:  /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
+  )
+))
+
+// outcomes? 
+// | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
+// | Written    -> sent application fragment (when is_Some appdata)
+// | WriteDone  -> sent nothing              (when appdata = None)
+// | WriteError None      _ -> closed the connection on unrecoverable error (same log, unclear app-level signal)
+// | WriteError (Some ad) _ -> closed the connection (log extended with fatal alert)
+// | WriteAgainClosing      -> will attempt to send an alert before closing
+// | SentClose              -> similar 
 
 let writeOne c i appdata =
   let writing = !c.writing in
@@ -838,9 +870,6 @@ let writeOne c i appdata =
           )
 
 
-(*** VERIFIES UP TO HERE ***)
-
-
 (* yuck.
 type BufInvariant h c =
 	CnBuf_o c = None \/
@@ -948,6 +977,9 @@ let rec writeAllTop c i appdata =
     else                    unexpected "[writeAllTop] seqn overflow"
 
 let write c i rg data = writeAllTop c i (Some (| rg, data |))
+
+(*** VERIFIES UP TO HERE ***)
+
 
 (*
 // prior spec-level abbreviations?
