@@ -226,7 +226,7 @@ val authorize: s:hs -> Cert.chain -> ST incoming
 type incomingCCS =
   | InCCSAck            // log += Epoch if first
   | InCCSError of error // log += Error
-val recv_ccs: s:hs -> rg:Range.range { Wider fragment_range rg } -> rbytes rg -> ST incomingCCS
+val recv_ccs: s:hs -> ST incomingCCS
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
     // preserves its invariant, modifies only its own region, and...
