@@ -19,34 +19,39 @@ type fragment (i:id) =
     | CT_CCS       : fragment i
     | CT_Alert     : rg: frange i -> f: rbytes rg -> fragment i // we could insist we get exactly 2 bytes
 
-type alert_buffer = b:bytes { length b < 2 } // relocate?
+let ct_alert (i:id) (ad:alertDescription) : fragment i = CT_Alert (2,2) (Alert.alertBytes ad)
 
+// consider replacing (rg,f) with just bytes for HS and Alert
+// consider being more concrete, e.g. CT_Alert: alertDescription -> fragment i
+
+// move to Seq?
 val split: #a: Type -> s:seq a {Seq.length s > 0}-> Tot(seq a * a)
 let split s =
   let last = Seq.length s - 1 in
   Seq.slice s 0 last, Seq.index s last
 
-val snoc : #a:Type -> seq a -> a -> Tot (seq a)
-let snoc s x = Seq.append s (Seq.create 1 x)
+//val snoc : #a:Type -> seq a -> a -> Tot (seq a)
+//let snoc s x = Seq.append s (Seq.create 1 x)
 
-// ghost projection from low-level fragments to high-level deltas
-val project: i:id -> fs:seq (fragment i) -> Tot(seq (DataStream.delta i) * alert_buffer)
+// pending alert fragment (at most one byte); forbidden in TLS 1.3; deprecate in TLS 1.2 too?
+
+// ghost projection from low-level multiplexed fragments to application-level deltas
+val project: i:id -> fs:seq (fragment i) -> Tot(seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
 let rec project i fs =
-  if Seq.length fs = 0 then Seq.createEmpty, empty_bytes
+  if Seq.length fs = 0 then Seq.createEmpty
   else
       let fs, f = split #(fragment i) fs in
-      let ds, als = project i fs in
+      let ds = project i fs in
       (match f with
-      | CT_Data (rg: frange i) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d), als
-(* TODO
-      | CT_Alert rg als' -> // alert parsing may fail, or return several deltas
-          (match Alert.parse (als @| als') with
-          | Some (alerts, als) -> Seq.append fs (Seq.map DataStream.Alert alerts), als
-          | None               -> fs, als ) //approx; at least we authenticate honest alerts
-*)
-      | _                      -> ds, als )// other fragments are internal to TLS
-
+      | CT_Data (rg: frange i) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d)
+      | CT_Alert rg alf -> // alert parsing may fail, or return several deltas
+          if length alf = 2 then 
+          (match Alert.parse alf with
+          | Correct ad -> snoc ds (DataStream.Alert ad)
+          | Error _    -> ds) // ill-formed alert contents are ignored
+          else ds            // ill-formed alert packets are ignored
+      | _              -> ds) // other fragments are internal to TLS
 
 // try out a few lemmas
 // we may also need a projection that takes a low-level pos and yields a high-level pos

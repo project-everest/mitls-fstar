@@ -12,29 +12,6 @@ open TLSConstants
 open TLSInfo
 open Range
 
-//* moving to stateful private state
-private type state = | State:
-  #region: rid ->
-  incoming: rref region (b:bytes { length b < 2 }) -> (* incomplete incoming alert *)
-  outgoing: rref region (b:bytes { length b = 0 || length b = 2 }) -> (* empty if nothing to be sent *)
-  state
-// FIXME: Port to deltas and streams!
-
-let init r0 =
-  let r = new_region r0 in
-  State (ralloc r empty_bytes) (ralloc r empty_bytes)
-
-type nextReply =
-    | EmptyALFrag
-    | ALFrag:          rg:frange_any -> rbytes rg -> nextReply
-    | LastALFrag:      rg:frange_any -> rbytes rg -> alertDescription -> nextReply
-    | LastALCloseFrag: rg:frange_any -> rbytes rg -> nextReply
-
-type recvReply =
-    | ALAck
-    | ALFatal of alertDescription
-    | ALWarning of alertDescription
-    | ALClose_notify
 
 (* Conversions *)
 
@@ -74,9 +51,9 @@ let alertBytes ad =
     | AD_unrecognized_name ->                  abyte2 (2uy, 112uy)
     | AD_unsupported_extension ->              abyte2 (2uy, 110uy)
 
-val parseAlert: b:lbytes 2 -> Tot 
+val parse: b:lbytes 2 -> Tot 
   (r: Result alertDescription { forall ad. (r = Correct ad ==> b = alertBytes ad) })
-let parseAlert b =
+let parse b =
     let b1,b2 = cbyte2 b in
     Seq.lemma_eq_intro b (abyte2 (b1,b2));
     match cbyte2 b with
@@ -114,82 +91,60 @@ let parseAlert b =
     | _            -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 
+(*** alert protocol ***)
+
+// TLS 1.2 and earlier miTLS supported alert fragmentation;
+// TLS 1.3 and miTLS* forbid it (a slight deviation from TLS 1.2): 
+// each alert fragment carries exactly a 2-byte alert.
+
+// outgoing buffer: either empty or a complete alert
+
+type fragment = f:lbytes 2 { exists ad. f = alertBytes ad }
+
+type buffer = option fragment
+
+//* moving to stateful private state
+private type state = | State:
+  #region: rid ->
+  outgoing: rref region buffer -> (* empty if nothing to be sent *)
+  state
+
+let init r0 =
+  let r = new_region r0 in
+  State (ralloc r None)
+
 // ---------------- outgoing alerts -------------------
 
-let send_alert (* ci:ConnectionInfo *) s (ad:alertDescription{isFatal ad}) =
+let send (State b) (ad:alertDescription{isFatal ad}) =
+    if !b = None 
+    then b := Some (alertBytes ad)
+ 
+    (* alert generation is underspecified, so we just ignore subsequent requests *)
     (* FIXED? We should only send fatal alerts. Right now we'll interpret any sent alert
        as fatal, and so will close the connection afterwards. *)
     (* Note: we only support sending one (fatal) alert in the whole protocol execution
        (because we'll tell dispatch an alert has been sent when the buffer gets empty)
        So we only add an alert on an empty buffer (we don't enqueue more alerts) *)
-    if length !(State.outgoing s) = 0
-    then State.outgoing s := alertBytes ad
-    (* We currently ignore subsequent requests *)
 
-// We implement locally fragmentation, not hiding any length
-let makeFragment i b =
-    //let ki = mk_id e in
-    if length b < fragmentLength then
-      let r0 = (length b, length b) in
-      //let f = HSFragment.fragmentPlain ki r0 b in
-      ((r0,b),empty_bytes)
-    else
-      let (b0,rem) = Platform.Bytes.split b fragmentLength in
-      let r0 : range = (length b0, length b0) in
-      //let f = HSFragment.fragmentPlain ki r0 b0 in
-      ((r0,b),rem)
-
-assume val next_fragment: i:id -> s:state -> ST nextReply
+val next_fragment: s:state -> ST (option alertDescription)
   (requires (fun _ -> True))
-  (ensures (fun h0 r h1 -> 
-    modifies (Set.singleton(State.region s)) h0 h1))
+  (ensures (fun h0 r h1 -> modifies (Set.singleton(State.region s)) h0 h1))
 
-(* TODO
-let next_fragment i s =
-    let f = !(State.outgoing s) in
-    if length f = 0 then EmptyALFrag
-    else
-        let ((r0,df),f') = makeFragment i f in
-        State.outgoing s := f';
-        if length f' = 0 then
-            // FIXME: This hack is not even working, because if we do one-byte fragmentation parseAlert fails!
-            (match parseAlert f with
-            | Error z    -> unexpected ("[next_fragment] This invocation of parseAlertDescription should never fail")
-            | Correct ad ->
-                match ad with
-                | AD_close_notify -> LastALCloseFrag r0 df
-                | _               -> LastALFrag r0 df ad)
-        else ALFrag r0 df
-*)
+let next_fragment (State b) =  
+  match !b with 
+  | None -> None 
+  | Some f -> b:= None; 
+             (match parse f with Correct ad -> Some ad | Error _ -> None)
 
 // ---------------- incoming alerts -------------------
 
-let handle_alert s ad =
-    match ad with
-    | AD_close_notify -> (* we possibly send a close_notify back *)
-        send_alert s AD_close_notify;
-        ALClose_notify
-    | _ ->
-        if isFatal ad then ALFatal ad else ALWarning ad
+let recv_fragment s (r:range) (f:bytes) : Result (ad: alertDescription { f = alertBytes ad }) =
+    if length f = 2 then 
+    match parse f with 
+    | Correct ad -> 
+        if ad = AD_close_notify then send s ad; (* we possibly send a close_notify back *)
+        Correct ad
+    | Error z -> Error z
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "expected exactly 2 bytes of alert")
 
-let recv_fragment (ci:ConnectionInfo) s (r:range) (b1:bytes) =
-    // FIXME: we should accept further alert data after a warning! (parsing sequences of messages in Handshake style)
-    // but this requires changing the response protocol to dispatch
-    let ki = mk_id ci.id_in in
-    let b0 = !(State.incoming s) in
-    //let b1 = HSFragment.fragmentRepr ki r f in
-    match length b0, length b1 with
-    | 0, 2 | 1, 1 -> (* process this alert *)
-        if length b0 = 1 then State.incoming s := empty_bytes;
-        (match parseAlert (b0 @| b1) with
-        | Error z    -> Error z
-        | Correct ad -> correct (handle_alert s ad) )
-
-    | 0, 1 -> State.incoming s := b1; Correct ALAck (* Buffer this partial alert *)
-    | _, 0 -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Empty alert fragments are invalid")
-    | _, _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "No more data expected after an alert")
-
-let is_incoming_empty (c:ConnectionInfo) s = length !s.incoming  = 0
-
-let reset_incoming s = s.incoming := empty_bytes
-let reset_outgoing s = s.outgoing := empty_bytes
+let reset s = s.outgoing := None   // we silently discard any unsent alert. 
