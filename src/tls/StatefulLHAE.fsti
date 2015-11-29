@@ -18,7 +18,7 @@ open StatefulPlain
 
 type id = AEAD_GCM.gid //TODO: TEMPORARY, until we add back LHAE 
 
-let snoc = Content.snoc //why can't it go in the library!?
+// let snoc = Content.snoc //why can't it go in the library!?
 //type cipher = StatefulPlain.cipher
 //TODO: this is a workaround for #383 in F* (eta expansion needed for type abbreviations)
 type cipher (i:id) = StatefulPlain.cipher i
