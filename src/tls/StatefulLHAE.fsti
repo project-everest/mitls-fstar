@@ -54,7 +54,9 @@ val unfold_matching: #i:id -> r:reader i -> w:writer i ->
   Lemma ( matching r w ==> (
             region r = peer_region w
           /\ region w = peer_region r
-          /\ disjoint (region r) (region w)
+          /\ region r <> root
+          /\ region w <> root
+          /\ disjoint (parent (region r)) (parent (region w))
           /\ log r = log w))
 
 type both (i:gid) = rw:(reader i * writer i){matching (fst rw) (snd rw)}
