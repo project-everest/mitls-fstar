@@ -1156,12 +1156,12 @@ let readOne c =
                 | (Handshake, FirstHandshake _)
                 | (Handshake, Finishing)
                 | (Handshake, Open) ->
-                    ( match getFragment c ct len with
+                  begin match getFragment c ct len with
                         | Error (x,y) -> alertFlush c x y
                         | Correct (Content.CT_Handshake rg f) ->
                           //let f = TLSFragment.recordPlainToHSPlain id.id_in history rg frag in
                           let res = Handshake.recv_fragment c.hs rg f in
-                          match res with
+                          begin match res with
                           | Handshake.InError (x,y) -> alertFlush c x y
                           | Handshake.InAck         -> ReadAgain
                           | Handshake.InVersionAgreed pv ->
@@ -1185,17 +1185,21 @@ let readOne c =
                                         ReadFinished
                                     | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Finishing handshake in the wrong state"))
                           | Handshake.InComplete ->
-                                ( match reading, !c.writing with (* Ensure we are in the correct state *)
+                                begin match reading, !c.writing with (* Ensure we are in the correct state *)
                                     | Finishing, Finished -> (* sanity check: in and out epochs should be the same *)
-                                      ( if epoch_r c = epoch_w c then
-                                        ( match moveToOpenState c with
-                                          | Correct _  -> CompletedFirst //? Done
-                                          | Error(x,y) -> alertFlush c x y )
-                                        else 
-                                        ( closeConnection c; 
-                                          ReadError None (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")))
-                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Invalid connection state"))
-                    )
+				       let res = 
+					 if epoch_r c = epoch_w c 
+					 then (moveToOpenState c; CompletedFirst)
+					   // (match moveToOpenState c with  //NS: Used to be dymamically checked
+                                           //     | Correct _  -> CompletedFirst 
+                                           //     | Error(x,y) -> alertFlush c x y)
+                                         else (closeConnection c; 
+                                               ReadError None (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")) in
+					res
+                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")
+				end
+			   end
+		 end
                 | (Change_cipher_spec, FirstHandshake _)
                 | (Change_cipher_spec, Open) ->
                       ( match getFragment c ct len with
@@ -1224,6 +1228,7 @@ let readOne c =
                 | _, Closed
                 | _, Closing(_,_) ->  alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 )
+
 
 let x = 1 
 //* ?
