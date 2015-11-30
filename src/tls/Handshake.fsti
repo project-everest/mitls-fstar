@@ -21,11 +21,6 @@ open Range
 open StatefulLHAE
 
 
-// to library?
-opaque type disjoint_regions (s1:set rid) (s2:set rid) = 
-       forall x y. {:pattern (Set.mem x s1); (Set.mem y s2)} (Set.mem x s1 /\ Set.mem y s2) ==> disjoint x y
-
-
 // represents the outcome of a successful handshake. 
 type handshake = 
   | Fresh of SessionInfo
