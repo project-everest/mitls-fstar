@@ -745,7 +745,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
     \/ (r = WriteAgainClosing) 
     \/ (r = WriteHSComplete /\ sel h1 c.reading = Open   /\ sel h1 c.writing = Open) 
     \/ (r = SentClose                                   /\ sel h1 c.writing = Closed)
-    \/ (is_WriteError r) //15-11-28 causing out of memory?:  /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
+    \/ (is_WriteError r) //  /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
   )
 ))
 
@@ -862,7 +862,6 @@ let writeOne c i appdata =
                   | _ -> WriteDone) // We are finishing a handshake. Tell we're done; the next read will complete it.
           )
 
-
 (* yuck.
 type BufInvariant h c =
 	CnBuf_o c = None \/
@@ -878,7 +877,6 @@ private val writeAllClosing: c:Connection -> ST writeOutcome
       (is_WriteError wo /\ is_SentFatal wo \/
 	    (wo = SentClose /\ (Auth(ConnectionEpochIn(c)) => EvClose(CnInfo(c).id_in,Bytes_i(c)))))))
 *)
-
 
 val no_seqn_overflow: c: connection -> ST bool 
   (requires (fun h -> st_inv c h))
@@ -1007,11 +1005,9 @@ val write: c:connection -> i: id -> rg:frange i -> data:DataStream.fragment i rg
   ))
 *)
 
-
 (*** incoming (with implicit writing) ***)
 
 // FIXME: Put the following definitions close to range and delta, and use them
-
 
 type query = Cert.chain
 type msg_i (i:id) = (range * DataStream.delta i)
@@ -1028,7 +1024,6 @@ type readOutcome (e:epoch) =
     | RWarning of alertDescription (* The alert we received *)
     // internal states only
     | ReadAgain | ReadAgainFinishing | ReadFinished *)
-
 
 
 type ioresult_i (i:id) =
@@ -1132,7 +1127,7 @@ let readOne c =
     match reading with
         | Closed -> //* statically exclude it?
             alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Trying to read from a closed connection")
-        | _ ->
+        | _ -> (
             match getHeader c with
             | Error (x,y)      -> alertFlush c x y
             | Correct (ct,len) ->
@@ -1170,18 +1165,18 @@ let readOne c =
                           | Handshake.InError (x,y) -> alertFlush c x y
                           | Handshake.InAck         -> ReadAgain
                           | Handshake.InVersionAgreed pv ->
-                              (match reading with
-                              | Init ->
-                                  (* Then, also c_write must be in Init state. It means this is the very first, unprotected,
-                                      handshake of the connection, and we just negotiated the version.
-                                      Set the negotiated version in the current sinfo (read and write side),
-                                      and move to the FirstHandshake state, so that
-                                      protocol version will be properly checked *)
-                                  c.reading := FirstHandshake pv;
-                                  c.writing := FirstHandshake pv;
-                                  ReadAgain
-                              | _ -> ReadAgain) (* We are re-negotiating, using the current version number;
-                                                  so no need to change --- but we should still check pv is unchanged. *)
+                                ( match reading with
+                                    | Init ->
+                                      (* Then, also c_write must be in Init state. It means this is the very first, unprotected,
+                                          handshake of the connection, and we just negotiated the version.
+                                          Set the negotiated version in the current sinfo (read and write side),
+                                          and move to the FirstHandshake state, so that
+                                          protocol version will be properly checked *)
+                                        c.reading := FirstHandshake pv;
+                                        c.writing := FirstHandshake pv;
+                                        ReadAgain
+                                    | _ -> ReadAgain) (* We are re-negotiating, using the current version number;
+                                                        so no need to change --- but we should still check pv is unchanged. *)
                           | Handshake.InQuery(query,advice) -> CertQuery(query,advice)
                           | Handshake.InFinished ->
                                 ( match reading  with (* Ensure we are in Finishing state *)
@@ -1192,26 +1187,27 @@ let readOne c =
                           | Handshake.InComplete ->
                                 ( match reading, !c.writing with (* Ensure we are in the correct state *)
                                     | Finishing, Finished -> (* sanity check: in and out epochs should be the same *)
-                                        (if epoch_r c = epoch_w c then
-                                          (match moveToOpenState c with
-                                          | Correct _ -> CompletedFirst //?Done
-                                          | Error(x,y) -> alertFlush c x y)
-                                        else (closeConnection c; 
-                                        ReadError None (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")))
-                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")))
-
+                                      ( if epoch_r c = epoch_w c then
+                                        ( match moveToOpenState c with
+                                          | Correct _  -> CompletedFirst //? Done
+                                          | Error(x,y) -> alertFlush c x y )
+                                        else 
+                                        ( closeConnection c; 
+                                          ReadError None (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")))
+                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Invalid connection state"))
+                    )
                 | (Change_cipher_spec, FirstHandshake _)
                 | (Change_cipher_spec, Open) ->
                       ( match getFragment c ct len with
                         | Error (x,y) -> alertFlush c x y
                         | Correct Content.CT_CCS ->
                             //old: let f = TLSFragment.recordPlainToCCSPlain id.id_in history rg frag in
-                            match Handshake.recv_ccs c.hs with
+                            ( match Handshake.recv_ccs c.hs with
                               | InCCSError (x,y) -> alertFlush c x y
                               | InCCSAck (*nextID,nextR*) ->
                                   (* We know statically that Handshake and Application data buffers are empty. *)
                                   c.reading := Finishing; 
-                                  ReadAgainFinishing )
+                                  ReadAgainFinishing ))
 
                 | Application_data, Open ->
                     ( match getFragment c ct len with
@@ -1227,7 +1223,9 @@ let readOne c =
                 | _, Finished
                 | _, Closed
                 | _, Closing(_,_) ->  alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
+)
 
+let x = 1 
 //* ?
 //* private val sameID: c0:Connection -> c1:Connection ->
 //* 	o0: readOutcome c0 {IOResult_i(c0,c1,o0)} ->
