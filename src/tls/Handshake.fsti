@@ -78,7 +78,7 @@ opaque type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region pe
 // let test (p:rid) (q:rid) (e:epoch p q) h0 (h1:t{equal_on (union (singleton p) (singleton q)) h0 h1}) = 
 //   assert (equal_on (regions e) h0 h1)
 
-type epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
+opaque type epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
 
 type handshake_state // internal, including e.g. half-baked epochs (TBD)
 
@@ -138,7 +138,10 @@ assume type Completed: #region:rid -> #peer:rid -> epoch region peer -> Type
  
 type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
  
-type hs_inv (s:hs) (h: HyperHeap.t) = hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
+type hs_inv (s:hs) (h: HyperHeap.t) = 
+  hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
+  /\ Map.contains h s.region
+  /\ Map.contains h s.peer
 
 
 (* ----------------- Control Interface ---------------------*)

@@ -86,9 +86,11 @@ let writer_epoch #region #peer (Epoch h r w) = w
 type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) = 
   st_dec_inv (reader_epoch e) h 
   /\ st_enc_inv (writer_epoch e) h
-
+  
 type epochs_inv c h = 
   Seq_forall (epoch_inv h) (sel h c.hs.log)
+  /\ Map.contains h (HS.region c.hs)
+  /\ Map.contains h (HS.peer c.hs)
 
 //type epochs_inv2 c h = 
 //  Seq_forall (fun e -> epoch_inv e h)
@@ -116,21 +118,13 @@ val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.h
 //val epochs : c:connection -> h:HyperHeap.t -> GTot (Handshake.epochs (HS.region c.hs) (HS.peer c.hs))
 let epochs c h = sel h (HS.log c.hs)
 
-    
-// #reset-options
-// #set-options "--logQueries"
 
-// let test c h = 
-//   let r = HS.region c.hs in 
-//   let p = HS.peer c.hs in 
-//   assert (sel h (HS.log c.hs) =  Heap.sel #(Handshake.epochs r p)
-//  					  (Map.sel h (HS.region c.hs)) 
-//  					  (as_ref #(Handshake.epochs r p) (HS.log c.hs)))
-
-
-// #reset-options
-// #set-options "--logQueries"
-// let test c h = assert (epochs c h = HyperHeap.sel #(seq (epochh c.hs.log)))
+val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
+  (requires (Map.contains h0 (HS.region c.hs)
+             /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
+      				 (Set.singleton (HS.peer c.hs))) h0 h1))
+  (ensures (epochs c h0 = epochs c h1))
+let frame_epochs c h0 h1 = ()
 
 let epoch_i c h i = Seq.index (epochs c h) i
 
@@ -260,12 +254,6 @@ val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
 let frame_reader_epoch c h0 h1 = ghost_lemma2 (frame_reader_epoch_k c h0 h1)            
-
-val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires (equal_on (Set.union (Set.singleton (HS.region c.hs))
-      				 (Set.singleton (HS.peer c.hs))) h0 h1))
-  (ensures (epochs c h0 = epochs c h1))
-let frame_epochs c h0 h1 = admit() //NS: stupid encoding issue causes assertion this to fail; working on a fix; assuming it meanwhile
 
 val frame_unrelated_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
   (requires (epochs_inv c h0 
