@@ -18,7 +18,7 @@ STDLIB=ext.fst classical.fst set.fsi heap.fst map.fsi listTot.fst hyperHeap.fsi 
 stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi \
 seqproperties.fst #int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS))
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
 
 PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
 
