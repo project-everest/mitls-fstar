@@ -42,8 +42,8 @@ type gcm_log_t (r:rid) (i:gid) = rref r (s:seq (AEAD_GCM.entry i))
 type state (i:gid) (rw:rw) 
 type reader i = state i Reader
 type writer i = state i Writer
-val region        : #i:id -> #rw:rw -> state i rw -> Tot rid
-val peer_region   : #i:id -> #rw:rw -> state i rw -> Tot rid
+val region        : #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+val peer_region   : #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
 let log_region    = fun (#i:id) (#rw:rw) (s:state i rw) -> if rw=Reader then peer_region s else region s
 val log           : #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (log_region s) i)
 val seqn          : #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
