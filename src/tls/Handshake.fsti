@@ -33,17 +33,20 @@ type handshake =
 // extracts a transport key identifier from a handshake record
 val hs_id: handshake -> Tot id
 
-opaque type epoch_region_inv (#i:_) (r:reader i) (w:writer i) =
-  disjoint_regions (regions_of r) (regions_of w)
-  
-type epoch (parent:rid) =
+opaque type epoch_region_inv (#i:_) (rgn:rid) (peer:rid) (r:reader i) (w:writer i) =
+  parent (region r) = rgn /\ 
+  parent (region w) = rgn /\ 
+  parent (peer_region r) = peer /\
+  parent (peer_region w) = peer /\
+  disjoint rgn peer /\
+  disjoint (region r) (region w) /\
+  disjoint (peer_region r) (peer_region w)
+ 
+type epoch (rgn:rid) (peer:rid) =
   | Epoch: h: handshake ->
            r: reader (hs_id h) ->
-           w: writer (hs_id h) 
-           { extends (region r) parent /\ 
-             extends (region w) parent /\ 
-             epoch_region_inv r w }
-       ->  epoch parent
+           w: writer (hs_id h) {epoch_region_inv rgn peer r w }
+           -> epoch rgn peer
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
@@ -55,9 +58,8 @@ type epoch (parent:rid) =
 
 (* let op_HatAtPlus (r:rid) (rs:FStar.Set.set rid) = Set.union (Set.singleton r) rs *)
 (* let op_HatAtHat (r:rid) (s:rid) = Set.union (Set.singleton r) (Set.singleton s) *)
-
-
-let regions (#p:rid) (e:epoch p) = 
+ 
+let regions (#p:rid) (#q:rid) (e:epoch p q) = 
   union (singleton (region e.r))
             (union (singleton (peer_region e.r))
                        (union (singleton (region e.w))
@@ -66,28 +68,32 @@ let regions (#p:rid) (e:epoch p) =
 
 //15-09-23 any abstract way to deal with pairwise disjointness? 
 //15-09-23 test how we apply this assumption.
-opaque type epochs_footprint (#region:rid) (es: seq (epoch region)) =
+opaque type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)) =
   forall (i:nat { i < Seq.length es }).
   forall (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
     let ej = Seq.index es j in
-      disjoint_regions (regions ei) (regions ej)
+    disjoint_regions (regions ei) (regions ej)
+ 
+// let test (p:rid) (q:rid) (e:epoch p q) h0 (h1:t{equal_on (union (singleton p) (singleton q)) h0 h1}) = 
+//   assert (equal_on (regions e) h0 h1)
 
-type epochs (r:rid) = es: seq (epoch r) { epochs_footprint es }
+type epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
 
 type handshake_state // internal, including e.g. half-baked epochs (TBD)
 
 type hs =
   | HS: #region: rid ->
+        #peer: rid ->
         r:role ->
         resume: option (sid:sessionID { r = Client }) ->
         cfg:config ->
         id: random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-        log: rref region (epochs region) ->  // append-only 15-09-23 use monotonic? helpful for proofs? 
+        log: rref region (epochs region peer) ->  // append-only 15-09-23 use monotonic? helpful for proofs? 
         state: rref region handshake_state  ->  // opaque, subject to invariant
         hs
 
-type forall_epochs (hs:hs) h (p:(epoch (hs.region) -> Type)) = 
+type forall_epochs (hs:hs) h (p:(epoch (hs.region) (hs.peer) -> Type)) = 
   (let es = sel h hs.log in 
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
      
@@ -111,7 +117,7 @@ let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoc
 // separation policy: the handshake mutates its private state, 
 // only depends on it, and only extends the log with fresh epochs.
 
-assume type Completed: #region:rid -> epoch region -> Type
+assume type Completed: #region:rid -> #peer:rid -> epoch region peer -> Type
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -130,7 +136,7 @@ assume type Completed: #region:rid -> epoch region -> Type
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
  
-type hs_invT (s:hs) (epochs:seq (epoch (HS.region s))) : handshake_state -> Type
+type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
  
 type hs_inv (s:hs) (h: HyperHeap.t) = hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
 
@@ -141,12 +147,13 @@ type hs_inv (s:hs) (h: HyperHeap.t) = hs_invT s (sel h (HS.log s)) (sel h (HS.st
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
 
 // Create instance for a fresh connection, with optional resumption for clients
-val init: r0:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r = Client })  ->
+val init: r0:rid -> peer:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r = Client })  ->
   ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
-    fresh_subregion r0 (HS.region s) h0 h1 /\
+    fresh_subregion r0   (HS.region s) h0 h1 /\
+    fresh_subregion peer (HS.peer s)   h0 h1 /\ //NS: perhaps unreasonable; how to sync with peer's allocation?
     hs_inv s h1 /\
     HS.r s = r /\
     HS.resume s = resume /\

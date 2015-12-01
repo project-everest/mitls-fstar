@@ -37,10 +37,11 @@ type dispatch =
   | Open
   | Closing of ProtocolVersion * string (* write-only, while sending a fatal alert *)
   | Closed
-
+ 
 type connection = | C:
   #region: rid ->
-  hs:      hs { extends (HS.region hs) region } (* providing role, config, and uid *) ->
+  peer:   rid{disjoint region peer} ->
+  hs:      hs { extends (HS.region hs) region /\ extends (HS.peer hs) peer } (* providing role, config, and uid *) ->
   alert:   Alert.state  { extends (Alert.State.region alert) region /\ HS.region hs <> Alert.State.region alert } (* review *) ->
   tcp:     networkStream ->
   reading: rref region dispatch ->
@@ -71,18 +72,18 @@ let test_2 (p:nat -> Type) (s:seq nat { Seq_forall p s }) (j:nat { j < Seq.lengt
 s /\ p x) ==> Seq_forall p (snoc s x)}) *)
 
 (* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
-let epoch_id (#region:rid) (o: option (epoch region)) =
+let epoch_id (#region:rid) (#peer:rid) (o: option (epoch region peer)) =
   match o with 
   | Some e -> hs_id e.h
   | None   -> noId
 
-val reader_epoch: #region:rid -> e:epoch region -> Tot (reader (hs_id e.h))
-let reader_epoch region (Epoch h r w) = r
+val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (reader (hs_id e.h))
+let reader_epoch #region #peer (Epoch h r w) = r
 
-val writer_epoch: #region:rid -> e:epoch region -> Tot (writer (hs_id e.h))
-let writer_epoch region (Epoch h r w) = w
+val writer_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (writer (hs_id e.h))
+let writer_epoch #region #peer (Epoch h r w) = w
 
-type epoch_inv (#region:rid) (h:HyperHeap.t) (e: epoch region) = 
+type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) = 
   st_dec_inv (reader_epoch e) h 
   /\ st_enc_inv (writer_epoch e) h
 
@@ -97,8 +98,8 @@ type st_inv c h =
   hs_inv (C.hs c) h /\
   epochs_inv c h 
 
-val test_st_inv: c:connection -> j:nat -> ST (e:epoch (HS.region (C.hs c)))
-  (requires (fun h -> st_inv c h /\ j < Seq.length (sel h (HS.log (C.hs c)))))
+val test_st_inv: c:connection -> j:nat -> ST (epoch (HS.region c.hs) (HS.peer c.hs))
+  (requires (fun h -> st_inv c h /\ j < Seq.length (sel h (HS.log c.hs))))
   (ensures (fun h0 e h1 -> 
     h0 == h1 /\ 
     epochs_inv c h1 /\
@@ -110,8 +111,22 @@ let test_st_inv c j =
 
 // we should have st_env_inv & st_dec_inv for all epochs, all the time. 
 // + the property that at most the current epochs' logs are extended.
-val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs)){epochs_footprint es /\ es = HyperHeap.sel h c.hs.log})
-let epochs c h = HyperHeap.sel h c.hs.log
+val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.peer c.hs)){epochs_footprint es /\ es = HyperHeap.sel h c.hs.log})
+
+//val epochs : c:connection -> h:HyperHeap.t -> GTot (Handshake.epochs (HS.region c.hs) (HS.peer c.hs))
+let epochs c h = sel h (HS.log c.hs)
+
+    
+// #reset-options
+// #set-options "--logQueries"
+
+// let test c h = 
+//   let r = HS.region c.hs in 
+//   let p = HS.peer c.hs in 
+//   assert (sel h (HS.log c.hs) =  Heap.sel #(Handshake.epochs r p)
+//  					  (Map.sel h (HS.region c.hs)) 
+//  					  (as_ref #(Handshake.epochs r p) (HS.log c.hs)))
+
 
 // #reset-options
 // #set-options "--logQueries"
@@ -120,8 +135,6 @@ let epochs c h = HyperHeap.sel h c.hs.log
 let epoch_i c h i = Seq.index (epochs c h) i
 
 (** should go to Handshake *)
-
-opaque type trigger2 (x:nat) (y:nat) = True
 
 (* 
    Aiming to prove that sending a message preserves the 
@@ -204,33 +217,6 @@ val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
             /\ epochs_inv c h1))
 let frame_writer_epoch c h0 h1 = ghost_lemma2 (frame_writer_epoch_k c h0 h1)            
 
-(*
-(* a trivial variant as nothing gets modified; still no trivial proof... *) 
-assume val frame_unmodified: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
-  (requires
-    epochs_inv c h0 /\
-    modifies (Set.singleton (Alert.State.region c.alert)) h0 h1)
-  (ensures (
-    epochs c h0 = epochs c h1 /\ 
-    epochs_inv c h1))
-
-(* and another... *)
-assume val frame_modified_one: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires
-    epochs_inv c h0 /\
-    modifies_one c.region h0 h1)
-  (ensures (
-    epochs c h0 = epochs c h1 /\ 
-    epochs_inv c h1))
-// let frame_modified_one c h0 h1 = ()
-*)
-assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
-  (requires
-    epochs_inv c h0)
-  (ensures (
-    epochs c h0 = epochs c h1 /\ 
-    epochs_inv c h1))
-
 val frame_reader_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit 
   (requires
     epochs_inv c h0 /\
@@ -275,10 +261,69 @@ val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
             /\ epochs_inv c h1))
 let frame_reader_epoch c h0 h1 = ghost_lemma2 (frame_reader_epoch_k c h0 h1)            
 
+val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
+  (requires (equal_on (Set.union (Set.singleton (HS.region c.hs))
+      				 (Set.singleton (HS.peer c.hs))) h0 h1))
+  (ensures (epochs c h0 = epochs c h1))
+let frame_epochs c h0 h1 = admit() //NS: stupid encoding issue causes assertion this to fail; working on a fix; assuming it meanwhile
+
+val frame_unrelated_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
+  (requires (epochs_inv c h0 
+	    /\ k < Seq.length (epochs c h0)
+	    /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
+				  (Set.singleton (HS.peer c.hs))) h0 h1))
+  (ensures (fun _ -> 
+	      epochs c h0 = epochs c h1 
+	    /\ k < Seq.length (epochs c h1)
+	    /\ epoch_inv h1 (epoch_i c h1 k)))
+let frame_unrelated_k c h0 h1 k =
+  frame_epochs c h0 h1;
+  let ek = Seq.index (epochs c h0) k in 
+  frame_st_dec_inv (reader_epoch ek) h0 h1;
+  frame_st_enc_inv (writer_epoch ek) h0 h1
+
+val frame_unrelated: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
+  (requires (epochs_inv c h0 
+	    /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
+				  (Set.singleton (HS.peer c.hs))) h0 h1))
+  (ensures (epochs c h0 = epochs c h1 
+	    /\ epochs_inv c h1))
+let frame_unrelated c h0 h1 = 
+  ghost_lemma (frame_unrelated_k c h0 h1);
+  frame_epochs c h0 h1
+
+(*
+(* a trivial variant as nothing gets modified; still no trivial proof... *) 
+assume val frame_unmodified: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+  (requires
+    epochs_inv c h0 /\
+    modifies (Set.singleton (Alert.State.region c.alert)) h0 h1)
+  (ensures (
+    epochs c h0 = epochs c h1 /\ 
+    epochs_inv c h1))
+
+(* and another... *)
+assume val frame_modified_one: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
+  (requires
+    epochs_inv c h0 /\
+    modifies_one c.region h0 h1)
+  (ensures (
+    epochs c h0 = epochs c h1 /\ 
+    epochs_inv c h1))
+// let frame_modified_one c h0 h1 = ()
+*)
+assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+  (requires
+    epochs_inv c h0)
+  (ensures (
+    epochs c h0 = epochs c h1 /\ 
+    epochs_inv c h1))
+
+
 (*** control API ***)
 
 // was connect, resume, accept_connected, ...
-val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
+val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
             resume: option (sid: sessionID { r = Client }) ->
             ST connection
   (requires (fun h -> True))
@@ -298,22 +343,28 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
     ))
 
 
-let create m0 tcp r cfg resume =
+let create m0 peer0 tcp r cfg resume =
+    ST.recall_region m0;
+    ST.recall_region peer0;
+    let st0 = ST.get() in
     let m = new_region m0 in
-    let hs = Handshake.init m r cfg resume in
+    let peer = new_region peer0 in 
+    let st1 = ST.get() in
+    lemma_extends_fresh_disjoint m peer m0 peer0 st0 st1;
+    let hs = Handshake.init m peer r cfg resume in
     let al = Alert.init m in
     let rd = ralloc m Init in 
     let wr = ralloc m Init in
-    C hs al tcp rd wr
+    C peer hs al tcp rd wr
 
 // painful to specify?
-let connect m0 tcp r cfg        = create m0 tcp Client cfg None
-let resume m0 tcp r cfg sid     = create m0 tcp Client cfg (Some sid)
-let accept_connected m0 tcp cfg = create m0 tcp Server cfg None
+let connect m0 peer0 tcp r cfg        = create m0 peer0 tcp Client cfg None
+let resume  m0 peer0 tcp r cfg sid    = create m0 peer0 tcp Client cfg (Some sid)
+let accept_connected m0 peer0 tcp cfg = create m0 peer0 tcp Server cfg None
 
-let accept m0 listener cfg =
+let accept m0 peer0 listener cfg =
     let tcp = Platform.Tcp.accept listener in
-    accept_connected m0 tcp cfg
+    accept_connected m0 peer0 tcp cfg
 
 let rehandshake c ops = Handshake.rehandshake (C.hs c) ops
 let rekey c ops       = Handshake.rekey       (C.hs c) ops
@@ -341,8 +392,8 @@ let epochT epochs other =
 
 (** writing epochs **)
 
-val epoch_wo: #region:rid -> o: option (epoch region){ is_Some o } -> Tot (writer (epoch_id o))
-let epoch_wo _ o = writer_epoch (Some.v o)
+val epoch_wo: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
+let epoch_wo _ _ o = writer_epoch (Some.v o)
  
 // val epoch_w_h: c:connection -> h:HyperHeap.t -> GTot (option (e: epoch (HS.region (C.hs c)) { st_dec_inv (reader_epoch e) h } ))
 let epoch_w_h c (h:t { st_inv c h }) =
@@ -352,7 +403,7 @@ let epoch_w_h c (h:t { st_inv c h }) =
   | None -> None
   | Some (e, _) -> Some e
 
-val epoch_w: c:connection -> ST (option (epoch (HS.region c.hs)))// * nat))
+val epoch_w: c:connection -> ST (option (epoch (HS.region c.hs) (HS.peer c.hs)))// * nat))
   (requires (st_inv c))
   (ensures (fun h0 o h1 ->
     h0 == h1 /\ 
@@ -369,8 +420,8 @@ let epoch_w c =
 
 (** reading epochs **)
 
-val epoch_ro: #region:rid -> o: option (epoch region){ is_Some o } -> Tot (reader (epoch_id o))
-let epoch_ro _ o =
+val epoch_ro: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (reader (epoch_id o))
+let epoch_ro _ _ o =
   match o with 
   | Some(Epoch _ r _) -> r
 
@@ -460,7 +511,7 @@ let moveToOpenState c =
     frame_admit c h0 (ST.get())
 
 
-assume val epoch_pv: #region:rid -> epoch region -> Tot ProtocolVersion
+assume val epoch_pv: #region:rid -> #peer:rid -> epoch region peer -> Tot ProtocolVersion
 
 
 // too convenient
@@ -603,7 +654,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
   (ensures (fun h0 payload h1 -> 
     st_inv c h0 /\ 
     st_inv c h1 /\ (
-    let o:option (epoch (HS.region c.hs )) = epoch_w_h c h0 in
+    let o:option (epoch (HS.region c.hs) (HS.peer c.hs)) = epoch_w_h c h0 in
     o == epoch_w_h c h1 /\ 
     i == epoch_id o /\
     (is_None o ==> h0 == h1) /\
@@ -698,7 +749,7 @@ let send c i f =
   //15-11-27 st_inv c h1 across this call; what's a better style?
   let h0 = ST.get() in 
   let r = Platform.Tcp.send (C.tcp c) record in
-  frame_admit c h0 (ST.get());
+  frame_unrelated c h0 (ST.get());//  frame_admit c h0 (ST.get());
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
