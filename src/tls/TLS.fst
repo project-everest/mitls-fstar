@@ -1255,10 +1255,11 @@ let readOne c =
                 | Application_data, Open ->
                     ( match getFragment c ct len with
                         | Error (x,y) -> alertFlush c x y
-                        | Correct (Content.CT_Data rg d) ->
+                        | Correct (Content.CT_Data #i rg d) ->
                             //let f = TLSFragment.recordPlainToAppPlain id.id_in history rg frag in
                             //let d = AppData.recv_fragment id c.appdata rg f in
-                            Read (DataStream.Data rg d) )
+                            let d : DataStream.fragment i fragment_range = d in
+                            Read (DataStream.Data d) )
 
                 | _, Init
                 | _, FirstHandshake(_)
@@ -1268,8 +1269,6 @@ let readOne c =
                 | _, Closing(_,_) ->  alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 )
 
-
-let x = 1 
 //* ?
 //* private val sameID: c0:Connection -> c1:Connection ->
 //* 	o0: readOutcome c0 {IOResult_i(c0,c1,o0)} ->
@@ -1324,32 +1323,36 @@ let sameIDRAF (c0:Connection) (c1:Connection) res (c2:Connection) =
 let rec readAllFinishing c =
     let outcome = readOne c in
     match outcome with
-    | ReadAgain      -> readAllFinishing c //? cut: let ro = sameIDRAF c newConn ro c0 in
+    | ReadAgain      -> readAllFinishing c 
     | CompletedFirst -> CompletedFirst
-    | Read (Alert ad) when isFatal ad -> outcome
-    | ReadError _    -> unexpected "[readAllFinishing] Read error can never be returned by read one"
+    | Read (DataStream.Alert ad) -> 
+       ( if isFatal ad 
+         then outcome  (* silently dropping the error? recheck *) 
+         else ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened."))
+    | ReadError _ _  -> unexpected "[readAllFinishing] should not return ReadError"
     | ReadFinished   ->
-        ( let written = writeAllTop c None in
+        ( let i = epoch_id (epoch_w c) in
+          let written = writeAllTop c i None in
           match written with
           | WriteHSComplete
-          | WriteError _ _ -> WriteOutcome outcome
-          | SentFatal(x,y) -> unexpected "[readAllFinishing] There should be no way of sending a fatal alert after we validated the peer Finished message"
+          | WriteError _ _ -> outcome (* hiding the error? double-check *)
           | SentClose      -> unexpected "[readAllFinishing] There should be no way of sending a closure alert after we validated the peer Finished message"
           | _              -> unexpected "[readAllFinishing] writeAllTop should never return such write outcome")
-    | ReadAgainFinishing | RAppDataDone(_) | CertQuery(_,_) -> unexpected "[readAllFinishing] readOne returned wrong result"
-    | WriteOutcome(SentFatal(x,y)) -> WriteOutcome(SentFatal(x,y))
-    | WriteOutcome(WError(x))      -> WriteOutcome(WError(x))
+//    | ReadAgainFinishing | Read _  | CertQuery _ -> unexpected "[readAllFinishing] readOne returned wrong result" 
+
+//    | WriteOutcome(SentFatal(x,y)) -> WriteOutcome(SentFatal(x,y))
+//    | WriteOutcome(WError(x))      -> WriteOutcome(WError(x))
         (* This and the following two corner cases are underspecified in RFC 5246, and we handle them by tearing down the connection.
            These are inconsistent states of the protocol that should be explicitly forbidden by the RFC.
            In this case, sending our CCS already implicitly closed the previous sending epoch, and the new epoch is not open
            yet, so there's nothing to close. *)
 
-    | Read Close
+    | Read DataStream.Close ->
         (* This is the dual of the case above: we received the CCS, which implicitly closed the receiving epoch,
            and the new epoch is not open yet, so we can neither receive authenticated data, nor close this epoch.  *)
-    | Read (Alert ad) when not (isFatal ad) ->
-        (* As above, the receiving epoch is closed, so we cannot receive authenticated data. *)
          ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened.")
+
+
 
 let rec read cn =
     match writeAllTop cn None with
