@@ -308,6 +308,9 @@ let abortWithAlert c ad reason =
     frame_admit c h0 (ST.get()) //NS: again, not an instance of frame_unrelated, because of invalidateSession
 
 // on some errors, we attempt to send an alert before tearing down the connection
+val closable: c:connection -> reason:string -> ST ioresult_w
+  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.writing <> Closed))
+  (ensures (fun h0 r h1 -> st_inv c h1 /\ is_Closing (sel h1 c.writing) /\ r = WriteAgainClosing))
 let closable c reason =
     abortWithAlert c AD_internal_error reason;
     WriteAgainClosing
@@ -512,11 +515,11 @@ assume val admit_st_inv: c: connection -> ST unit
 // auxiliary functions for projections; floating.
 let appfragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o })  =
   match o with
-  | Some(| rg, f |) -> Content.CT_Data rg f 
+  | Some (| rg, f |) -> Content.CT_Data rg f 
 
 let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o })  =
   match o with
-  | Some(| rg, f |) -> DataStream.Data f 
+  | Some (| rg, f |) -> DataStream.Data f 
 
 // we should rely on nice libraries... for now inlined from Content.fst
 //val fragments_log: #i:id -> es: seq (entry i) -> Tot (seq Content.fragment i)
@@ -562,8 +565,8 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
        i == epoch_id o /\ 
        is_Some o)
       ) 
-    \/ (r = WriteAgainClosing  // after calling closable
-//       sel h1 c.writing <> Closed /\
+    \/ (r = WriteAgainClosing /\ // after calling closable
+       is_Closing (sel h1 c.writing) 
 //       (let o = epoch_w_h c h1 in
 //       i == epoch_id o /\ 
 //       is_Some o)
@@ -589,7 +592,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
     \/ (r = WriteDone /\ is_None appdata) // /\ h0 = h1) //15-11-28 both fail, why?
     \/ (r = WriteHSComplete /\ sel h1 c.reading = Open   /\ sel h1 c.writing = Open) 
     \/ (r = SentClose                                   /\ sel h1 c.writing = Closed)
-    \/ (is_WriteError r /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
+    \/ (is_WriteError r) // /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
   )
 ))
 
