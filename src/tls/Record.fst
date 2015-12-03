@@ -15,29 +15,31 @@ open Range
 
 // ------------------------outer packet format -------------------------------
 
-type header = b:lbytes 5
+// the "outer" header has the same format for all versions of TLS
+// but TLS 1.3 fakes its content type and protocol version.
 
+type header = b:lbytes 5 // for all TLS versions
+
+let fake = ctBytes Application_data @| versionBytes TLS_1p0 
+ 
 let makePacket ct ver (data: b:bytes { repr_bytes (length b) <= 2}) =
-    let bct  = ctBytes ct in
-    let bver = versionBytes ver in
-    let bl   = bytes_of_int 2 (length data) in
-    let hdr: header = bct @| bver @| bl in
-    hdr @| data
+      (if ver = TLS_1p3 then fake else (ctBytes ct @| versionBytes ver))
+   @| bytes_of_int 2 (length data) 
+   @| data 
 
 let parseHeader (hdr:header) =
     let (ct1,b4) = split hdr 1 in
     let (pv2,len2) = split b4 2 in
     match parseCT ct1 with
-    | Error(z) -> Error(z)
-    | Correct(ct) ->
-    match TLSConstants.parseVersion pv2 with
-    | Error(z) -> Error(z)
-    | Correct(pv) ->
-    let len = int_of_bytes len2 in
-    if len <= 0 || len > max_TLSCipher_fragment_length then
-        Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong frgament length")
-    else
-        correct(ct,pv,len)
+    | Error z -> Error z
+    | Correct ct ->
+      match TLSConstants.parseVersion pv2 with
+      | Error z -> Error z
+      | Correct pv ->
+          let len = int_of_bytes len2 in
+          if len <= 0 || len > max_TLSCipher_fragment_length 
+          then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
+          else correct(ct,pv,len)
 
 (* TODO, possibly a parameter from dispatch *)
 assume val is_Null: id -> Tot bool
