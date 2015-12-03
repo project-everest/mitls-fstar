@@ -2,7 +2,7 @@ module DataStream
 
 (* Application-level bytes streams exchanged over TLS;            *)
 (* depending on the safety of their indexes,                      *)
-(* these streams are treated abstractly by our TLS implementation *)
+(* these streams are treated abstractly by miTLS                  *)
 
 //* now generalized to include signals; rename to Stream?
 
@@ -19,11 +19,11 @@ open TLSConstants
 open TLSInfo
 open Range
 
-//---------------------------------------------------------------------
+//--------- application data fragments ------------------------------
 
 // The implementation of this type is application-specific
 // but it must provide a few functions to TLS, declared below.
-// on safe connections, TLS ensures privacy by type abstraction
+// On safe connections, TLS ensures privacy by type abstraction
 // we care about the range mostly on the sender side.
 
 // this style enables structural subtyping on range indexes
@@ -33,10 +33,10 @@ let ghost_repr i f = f
 
 type fragment (i:id) (rg:range) = f:pre_fragment i { Within (length (ghost_repr f)) rg}
 
-val repr: #i:id { ~(safeId i)}-> rg:frange i -> fragment i rg -> Tot (b: rbytes rg {b = ghost_repr #i b})
-let repr i rg f = f
+val repr:       #i:id { ~(safeId i)} -> rg:frange i -> p:fragment i rg -> Tot (b:rbytes rg {b = ghost_repr #i p})
+val mk_fragment: i:id { ~(authId i)} -> rg:frange i -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
 
-val mk_fragment: i:id{ ~(authId i)} -> rg:frange i -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
+let repr i rg f = f
 let mk_fragment i rg b = b
 
 (* revisit:
@@ -56,8 +56,8 @@ let deltaPlain i rg f = f
 let deltaRepr  i rg f = f
 *)
 
-//---------------------------------------------------------------------
 
+//----------application events (data + control) -------------------
 
 type delta (i:id) =
   | Data of fragment i fragment_range
@@ -81,9 +81,10 @@ let rec wellformed ki s =
 
 type stream (i:id) = s: list (delta i) { wellformed i s }
 
-// the writer state is the current stream contents
-// the reader state is an index in the stream
-// (do we need to record liveness too)
+// on authentic encrypted streams, 
+// the (ghost, viewed) writer state is the current stream contents;
+// the (ghost, viewed) reader state is an index in the stream.
+
 
 // --- experimental
 //* not much point sharing the two? is it re-implementing AppData?
@@ -102,8 +103,6 @@ let gen r0 (i:id) =
   let enc = State #i #r log ctr in
   let dec = State #i #r log ctr in
   enc, dec
-
-
 
 // -------------------------------------------------------------
 

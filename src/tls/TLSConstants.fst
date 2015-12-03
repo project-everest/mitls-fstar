@@ -15,10 +15,11 @@ open FStar.SeqProperties
 
 (* Type representations for TLS negotiated values *)
 type ProtocolVersion =
-    | SSL_3p0
+    | SSL_3p0 // supported, with no security guarantees
     | TLS_1p0
     | TLS_1p1
     | TLS_1p2
+    | TLS_1p3
 
 (* Key exchange algorithms *)
 type kexAlg =
@@ -80,9 +81,9 @@ type sigHashAlg = sigAlg * hashAlg
 val sigAlgBytes: sigAlg -> Tot (lbytes 1)
 let sigAlgBytes sa =
     match sa with
-    | CoreCrypto.RSASIG   -> abyte 1uy
-    | CoreCrypto.DSA   -> abyte 2uy
-    | CoreCrypto.ECDSA -> abyte 3uy
+    | CoreCrypto.RSASIG -> abyte 1uy
+    | CoreCrypto.DSA    -> abyte 2uy
+    | CoreCrypto.ECDSA  -> abyte 3uy
 
 type pinverse_t (#a:Type) (#b:Type) (=f:(a -> Tot b)) = 
     (y:b -> Tot (Result a))
@@ -233,6 +234,7 @@ let versionBytes pv =
     | TLS_1p0 -> abyte2 ( 3uy, 1uy)
     | TLS_1p1 -> abyte2 ( 3uy, 2uy )
     | TLS_1p2 -> abyte2 ( 3uy, 3uy )
+    | TLS_1p3 -> abyte2 ( 3uy, 4uy )
 
 val parseVersion: pinverse_t versionBytes
 let parseVersion v =
@@ -241,6 +243,7 @@ let parseVersion v =
     | ( 3uy, 1uy ) -> Correct(TLS_1p0)
     | ( 3uy, 2uy ) -> Correct(TLS_1p1)
     | ( 3uy, 3uy ) -> Correct(TLS_1p2)
+    | ( 3uy, 4uy ) -> Correct(TLS_1p3)
     | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_version: x:_ -> Lemma
@@ -257,28 +260,15 @@ let pinverse_version x = ()
 
 let minPV (a:ProtocolVersion) (b:ProtocolVersion) =
   match (a,b) with
-  | SSL_3p0, _
-  | _, SSL_3p0 -> SSL_3p0
-
-  | TLS_1p0, _
-  | _, TLS_1p0 -> TLS_1p0
-
-  | TLS_1p1, _
-  | _, TLS_1p1 -> TLS_1p1
-
-  | _, _       -> TLS_1p2
+  | SSL_3p0, _  | _, SSL_3p0 -> SSL_3p0
+  | TLS_1p0, _  | _, TLS_1p0 -> TLS_1p0
+  | TLS_1p1, _  | _, TLS_1p1 -> TLS_1p1
+  | TLS_1p2, _  | _, TLS_1p2 -> TLS_1p2
+  | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
 
 let somePV (a:ProtocolVersion) = Some a
+let geqPV a b = (b = minPV a b)
 
-let geqPV (a:ProtocolVersion) (b:ProtocolVersion) =
-    match (a,b) with
-    | _,SSL_3p0 -> true
-    | SSL_3p0,_ -> false
-    | _,TLS_1p0 -> true
-    | TLS_1p0,_ -> false
-    | _,TLS_1p1 -> true
-    | TLS_1p1,_ -> false
-    | _,_       -> true
 
 let nullCipherSuite = NullCipherSuite
 
@@ -580,9 +570,9 @@ let prfMacAlg_of_ciphersuite_aux = function
     | _                                -> None
 
 let pvcs (pv:ProtocolVersion) (cs:cipherSuite) =
-  if pv=TLS_1p2
-  then is_Some (prfMacAlg_of_ciphersuite_aux cs)
-  else true
+  match pv with
+  | TLS_1p2 | TLS_1p3 -> is_Some (prfMacAlg_of_ciphersuite_aux cs)
+  | _                 -> true
 
 logic type require_some : #a:Type -> #b:Type -> =f:(a -> Tot (option b)) -> Type =
    fun (a:Type) (b:Type) (f: (a -> Tot (option b))) -> (x:a{is_Some (f x)} -> Tot b)
@@ -607,7 +597,8 @@ val sessionHashAlg: pv:ProtocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hash
 let sessionHashAlg pv cs =
     match pv with
     | SSL_3p0 | TLS_1p0 | TLS_1p1 -> MD5SHA1
-    | TLS_1p2 -> Hash (verifyDataHashAlg_of_ciphersuite cs)
+    | TLS_1p2 | TLS_1p3           -> Hash (verifyDataHashAlg_of_ciphersuite cs)
+// TODO recheck this is the right hash for HKDF
 
 val get_aeAlg: cs:cipherSuite{ is_CipherSuite cs } -> Tot aeAlg
 let get_aeAlg cs =

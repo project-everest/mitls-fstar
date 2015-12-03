@@ -12,16 +12,18 @@ open Content
 
 let ad_Length i = match pv_of_id i with
     | SSL_3p0 -> 1
+    | TLS_1p3 -> 0 // implicitly authenticated
     | _       -> 3 // ContentType[1] + Version[2]
 
 val makeAD: i:id -> ct:ContentType -> Tot (lbytes (ad_Length i))
 let makeAD i ct =
     let pv   = pv_of_id i in
-    let bct  = ctBytes ct in
-    let bver = versionBytes pv in
-    if pv = SSL_3p0
-    then bct
-    else bct @| bver
+    if pv = TLS_1p3 then empty_bytes
+    else 
+      let bct  = ctBytes ct in
+      if pv = SSL_3p0
+      then bct
+      else bct @| versionBytes pv
 
 // StatefulLHAE should be parametric in this type (or its refinement), but that'd be heavy
 // here, the refinement ensures we never fail parsing indexes to retrieve ct
@@ -31,6 +33,9 @@ type adata (i:id) = b:bytes { exists ct. b = makeAD i ct }
 val parseAD: i:id -> ad:adata i -> Tot ContentType
 let parseAD i ad =
     let pv = pv_of_id i in
+//    if pv = TLS_1p3 then 
+//      Application_data // fake
+//    else 
     if pv = SSL_3p0 then
       match parseCT ad with
       | Correct ct -> ct
@@ -67,10 +72,11 @@ let mk_plain i ad rg b =
   //mk_ct_rg i (parseAD i ad) rg b;
   Content.mk_fragment i (parseAD i ad) rg b
 
+
 // ---------------------------------------------------------
 
 
-// type cipherbytes = b:bytes { length b <= max_TLSCipher_fragment_length}
+// type cipherbytes = b:bytes { length b <= max_TLSCipher_fragment_length }
 
 type cipher (i:id) = b:bytes {valid_clen i (length b)}
 

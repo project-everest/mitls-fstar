@@ -1,5 +1,7 @@
 module Content // was TLSFragment
 
+(* Multiplexing protocol payloads into record-layer plaintext fragments. *)
+
 open FStar
 open FStar.Seq
 open FStar.SeqProperties
@@ -14,15 +16,19 @@ open Range
 open DataStream
 
 type fragment (i:id) =
-    | CT_Data      : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract
+    | CT_Alert     : rg: frange i -> f: rbytes rg -> fragment i // could insist we get exactly 2n bytes
     | CT_Handshake : rg: frange i -> f: rbytes rg -> fragment i // concrete
-    | CT_CCS       : fragment i
-    | CT_Alert     : rg: frange i -> f: rbytes rg -> fragment i // we could insist we get exactly 2 bytes
+    | CT_CCS       : fragment i // empty; never encrypted or decrypted
+    | CT_Data      : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract
+// for TLS 1.3
+//  | CT_EncryptedHandshake : rg: frange i -> f: Handshake.fragment i rg -> fragment i // abstract
+//  | CT_EarlyData : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract
 
 let ct_alert (i:id) (ad:alertDescription) : fragment i = CT_Alert (2,2) (Alert.alertBytes ad)
 
 // consider replacing (rg,f) with just bytes for HS and Alert
 // consider being more concrete, e.g. CT_Alert: alertDescription -> fragment i
+
 
 // move to Seq?
 val split: #a: Type -> s:seq a {Seq.length s > 0}-> Tot(seq a * a)
@@ -30,12 +36,13 @@ let split s =
   let last = Seq.length s - 1 in
   Seq.slice s 0 last, Seq.index s last
 
-//val snoc : #a:Type -> seq a -> a -> Tot (seq a)
-//let snoc s x = Seq.append s (Seq.create 1 x)
+// Alert fragmentation is forbidden in TLS 1.3; as a slight deviation
+// from the standard, we also forbit it in earlier version. 
+// Anyway, this is internal to the Alert protocol.
 
-// pending alert fragment (at most one byte); forbidden in TLS 1.3; deprecate in TLS 1.2 too?
-
-// ghost projection from low-level multiplexed fragments to application-level deltas
+// Ghost projection from low-level multiplexed fragments to application-level deltas
+// Some fragments won't parse; they are ignored in the projection. 
+// We may prove that they are never written on authentic streams.
 val project: i:id -> fs:seq (fragment i) -> Tot(seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
 let rec project i fs =

@@ -474,7 +474,7 @@ type id = {
   // indexes and algorithms of the session used in the key derivation
   msId   : msId;            // the index of the master secret used for key derivation
   kdfAlg : KdfAlg;          // the KDF algorithm used for key derivation
-  pv     : ProtocolVersion; // should be part of aeAlg
+  pv     : p:ProtocolVersion { p <> TLS_1p3 } ; // should be part of aeAlg
   aeAlg  : aeAlg;           // the authenticated-encryption algorithms
   // epoch-specific parameters
   csrConn: CsRands;         // the client-server random of the connection

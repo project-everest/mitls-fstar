@@ -21,9 +21,8 @@ open StatefulLHAE // via its interface
 open Handshake    // via its interface
 open Connection
 
+// using also Alert, DataStream, Content, Record
 
-
-// using also Alert, Range, DataStream, TLSFragment, Record
 (*
 (* a trivial variant as nothing gets modified; still no trivial proof... *) 
 assume val frame_unmodified: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
