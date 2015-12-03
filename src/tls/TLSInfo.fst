@@ -249,7 +249,7 @@ type sessionID = b:bytes { length b <= 32 }
 type SessionInfo = {
     init_crand: crand;
     init_srand: srand;
-    protocol_version: ProtocolVersion;
+    protocol_version: p:ProtocolVersion { p <> TLS_1p3 };
     cipher_suite: cipherSuite;
     compression: Compression;
     extensions: negotiatedExtensions;

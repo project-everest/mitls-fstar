@@ -874,22 +874,14 @@ let getHeader c =
     | Correct header ->
       match Record.parseHeader header with
       | Error x -> Error x
-      | Correct (ct,pv,len) ->
+      | Correct (ct,pv,len) -> 
+        // in the spirit of TLS 1.3, we mostly ignore the outer protocol version (see appendix C)
+        // Notably, our server does *not* use it as the client's minimum supported version.
         match !c.reading with
-        | Init                 -> correct(ct,len)
-        | FirstHandshake expPV ->
-            if pv = expPV then correct(ct,len)
+        | FirstHandshake expPV -> 
+            if expPV = TLS_1p3 || pv = expPV then correct(ct,len)
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Protocol version check failed")
-        | Finishing
-        | Finished
-        | Open ->
-            let pvr = 
-              match epoch_r c with 
-              | Some e -> epoch_pv e 
-              | None -> unexpected "todo"  in
-            if pv = pvr then correct(ct,len)
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Protocol version check failed")
-        | _ -> unexpected "[recv] invoked on a closed connection"
+        | _ -> correct(ct,len)
 
 
 //* private val getFragment: c:connection -> ct:ct -> len:nat -> ST (rg * msg)
