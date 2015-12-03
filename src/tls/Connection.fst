@@ -29,9 +29,10 @@ open Handshake    // via its interface
 // TODO recheck large logical invariants GState in Dispatch.fs7
 
 // private //TODO: restore this qualifier; NS:commenting for now
+// dispatch records the *record* protocol version (TLS 1.0 when using TLS 1.3)
 type dispatch =
   | Init
-  | FirstHandshake of ProtocolVersion (* bound by ServerHello *)
+  | FirstHandshake of ProtocolVersion (* bound by ServerHello's inner pv *)
   | Finishing
   | Finished
   | Open
