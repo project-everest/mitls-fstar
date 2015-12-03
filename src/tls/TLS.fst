@@ -44,8 +44,7 @@ assume val frame_modified_one: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t 
 // let frame_modified_one c h0 h1 = ()
 *)
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
-  (requires
-    epochs_inv c h0)
+  (requires (epochs_inv c h0))
   (ensures (
     epochs c h0 = epochs c h1 /\ 
     epochs_inv c h1))
@@ -256,20 +255,19 @@ let rec unexpected s = unexpected s
 // we need st_inv h c /\ wr > FirstHandshake ==> is_Some epoch_w
 
 val pickSendPV: c:connection -> ST ProtocolVersion
-  (requires (st_inv c))
+  (requires (fun h -> st_inv c h /\ sel h c.writing <> Closed))
   (ensures (fun h0 pv h1 -> h0 = h1))
  
 let pickSendPV c =
-    let wr = !(C.writing c) in
-    match wr with
+    match !c.writing with
     | Init -> getMinVersion (C.hs c)
     | FirstHandshake(pv) | Closing(pv,_) -> pv
     | Finishing | Finished | Open ->
         (match epoch_w c with
-        | Some e -> epoch_pv e
-        | None -> unexpected "todo"
-        ) // (hs_id (Epoch.h e)).protocol_version)
-    | Closed -> unexpected "[pickSendPV] invoked on a Closed connection"
+        | Some e -> (match epoch_pv e with 
+                   | TLS_1p3 -> TLS_1p0 
+                   | pv      -> pv)
+        | None -> unexpected "[pickSendPV] excluded in those states")
 
 
 //15-11-27 illustrating overhead for "unrelated" updates; still missing modifies clauses 
@@ -295,8 +293,8 @@ let unrecoverable c reason =
 // send a final alert then tear down the connection
 
 val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:string -> ST unit
-  (requires (fun h0 -> st_inv c h0))
-  (ensures (fun h0 _ h1 -> st_inv c h1))
+  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.writing <> Closed))
+  (ensures (fun h0 _ h1 -> st_inv c h1 /\ is_Closing (sel h1 c.writing) ))
 
 let abortWithAlert c ad reason =
     let closingPV = pickSendPV c in
@@ -439,6 +437,7 @@ let send_payload c i f =
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
   (requires (fun h -> 
     st_inv c h /\ 
+    sel h c.writing <> Closed /\
     (let o = epoch_w_h c h in 
       i == epoch_id o /\
       (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
@@ -463,13 +462,12 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
 
 // 15-09-09 Do we need an extra argument for every stateful index?
 let send c i f =
+  let pv = pickSendPV c in
   let ct, rg = Content.ct_rg i f in
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
   //admitP(b2t(repr_bytes (length payload) <= 2)); (*TODO*)
-  let record =
-    let pv = pickSendPV c in
-    Record.makePacket ct pv payload in
+  let record = Record.makePacket ct pv payload in
 
   // we need all that to cross an ST function with HyperHeap.modifies Set.empty!
   recall (c_log c); recall (C.reading c);
@@ -509,10 +507,46 @@ assume val admit_st_inv: c: connection -> ST unit
 //* | WriteHSComplete
 //* the state changes accordingly.
 // 
+
+
+// auxiliary functions for projections; floating.
+let appfragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o })  =
+  match o with
+  | Some(| rg, f |) -> Content.CT_Data rg f 
+
+let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o })  =
+  match o with
+  | Some(| rg, f |) -> DataStream.Data f 
+
+// we should rely on nice libraries... for now inlined from Content.fst
+//val fragments_log: #i:id -> es: seq (entry i) -> Tot (seq Content.fragment i)
+//let fragments_log i es = Seq.map fragment_entry es
+
+val project: i:id -> fs:seq (entry i) -> Tot(seq (DataStream.delta i))
+  (decreases %[Seq.length fs]) // not-quite-stuctural termination
+let rec project i fs =
+  if Seq.length fs = 0 then Seq.createEmpty
+  else
+      let fs, f = Content.split #(entry i) fs in
+      let ds = project i fs in
+      (match fragment_entry f with
+      | Content.CT_Data (rg: frange i) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d)
+      | Content.CT_Alert rg alf -> // alert parsing may fail, or return several deltas
+          if length alf = 2 then 
+          (match Alert.parse alf with
+          | Correct ad -> snoc ds (DataStream.Alert ad)
+          | Error _    -> ds) // ill-formed alert contents are ignored
+          else ds            // ill-formed alert packets are ignored
+      | _              -> ds) // other fragments are internal to TLS
+
+
 val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
     st_inv c h /\ 
     (let o = epoch_w_h c h in
+     let st = sel h c.writing in 
+      st <> Closed /\
+      (is_Some appdata ==> st = Open) /\
       i == epoch_id o /\
       (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 r h1 ->
@@ -522,13 +556,40 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
     // TODO: conditionally prove that i == epoch_id (epoch_w_h c h), at least when appdata is set.
     // TODO: account for (the TLS view of) the encryptor log
 
-    ( (r = WriteAgain) 
-    \/ (r = Written /\ sel h1 c.writing = Open /\ is_Some appdata /\ i == epoch_id (epoch_w_h c h1)) 
-    \/ (r = WriteDone)// /\ is_None appdata /\ h0 = h1) //15-11-28 both fail, why?
-    \/ (r = WriteAgainClosing) 
+    ( (r = WriteAgain /\ 
+       sel h1 c.writing <> Closed /\
+       (let o = epoch_w_h c h1 in
+       i == epoch_id o /\ 
+       is_Some o)
+      ) 
+    \/ (r = WriteAgainClosing  // after calling closable
+//       sel h1 c.writing <> Closed /\
+//       (let o = epoch_w_h c h1 in
+//       i == epoch_id o /\ 
+//       is_Some o)
+      ) 
+    \/ (r = Written /\ 
+       is_Some appdata /\ 
+       sel h1 c.writing = Open /\ 
+       ( let o = epoch_w_h c h1 in
+         i == epoch_id o /\ 
+         is_Some o /\
+         ( let wr: writer (epoch_id o) = epoch_wo o in
+//           HyperHeap.modifies (Set.singleton (region wr)) h0 h1 /\
+//           Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
+           sel h1 (seqn wr) = sel h0 (seqn wr) + 1 /\
+           (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr))) /\
+           ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
+             sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
+             fragment_entry e = appfragment i appdata 
+           // 15-12-03 can't get this one; timeout? explicit map_snoc lemma?
+           // /\ project i (sel h1 (log wr)) = snoc (project i (sel h0 (log wr))) (datafragment i appdata)
+))
+       ))
+    \/ (r = WriteDone /\ is_None appdata) // /\ h0 = h1) //15-11-28 both fail, why?
     \/ (r = WriteHSComplete /\ sel h1 c.reading = Open   /\ sel h1 c.writing = Open) 
     \/ (r = SentClose                                   /\ sel h1 c.writing = Closed)
-    \/ (is_WriteError r) //  /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
+    \/ (is_WriteError r /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
   )
 ))
 
@@ -541,14 +602,16 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 // | WriteAgainClosing      -> will attempt to send an alert before closing
 // | SentClose              -> similar 
 
+
 let writeOne c i appdata =
   let writing = !c.writing in
-  match writing with
-  | Closed -> WriteError None (perror __SOURCE_FILE__ __LINE__ "Trying to write on a closed connection")
-  | _      -> 
-      recall (c_log c); recall (C.reading c); // needed to get stability for i across ST calls
-      let o = epoch_w c in
-      (match o with
+//  match writing with
+//  | Closed -> WriteError None (perror __SOURCE_FILE__ __LINE__ "Trying to write on a closed connection")
+//  | _      -> 
+
+  recall (c_log c); recall (C.reading c); // needed to get stability for i across ST calls
+  let o = epoch_w c in
+    ( match o with
       | None -> ()
       | Some(Epoch h _ w) -> recall (log w); recall (seqn w));
   
@@ -653,6 +716,7 @@ let writeOne c i appdata =
                   | _ -> WriteDone) // We are finishing a handshake. Tell we're done; the next read will complete it.
           )
 
+
 (* yuck.
 type BufInvariant h c =
 	CnBuf_o c = None \/
@@ -693,7 +757,11 @@ let no_seqn_overflow c =
 //* unless we have a strong pre, this relies on dynamic checks
 
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
-  (requires (fun h -> st_inv c h /\ i == epoch_id (epoch_w_h c h)))
+  (requires (fun h -> 
+    st_inv c h /\ 
+    i == epoch_id (epoch_w_h c h) /\
+    sel h c.writing <> Closed  
+  ))
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\
     //modifies (Set.singleton (C.region c)) h0 h1 /\
@@ -703,7 +771,7 @@ val writeAllClosing: c:connection -> i:id -> ST ioresult_w
 let rec writeAllClosing c i =
     if no_seqn_overflow c then 
     match writeOne c i None with
-    | WriteAgain          -> writeAllClosing c (admit(); epoch_id (epoch_w c)) // can't use i? // TODO
+    | WriteAgain          -> writeAllClosing c i
     | WriteError x y      -> WriteError x y
     | SentClose           -> SentClose
     | _                   -> unexpected "[writeAllClosing] writeOne returned wrong result"
@@ -712,7 +780,11 @@ let rec writeAllClosing c i =
 //* (ensures r = ... WriteError | SentClose | MustRead | WriteHSComplete
 
 val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
-  (requires (fun h -> st_inv c h /\ i == epoch_id (epoch_w_h c h)))
+  (requires (fun h -> 
+    st_inv c h /\ 
+    i == epoch_id (epoch_w_h c h) /\
+    sel h c.writing <> Closed
+  ))
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\
     //modifies (Set.singleton c.region) h0 h1 /\
@@ -721,14 +793,15 @@ val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
 let rec writeAllFinishing c i =
     if no_seqn_overflow c then 
     match writeOne c i None with
-    | WriteAgain          -> writeAllFinishing c (admit(); epoch_id (epoch_w c)) // TODO
-    | WriteAgainClosing   -> writeAllClosing c (admit(); epoch_id (epoch_w c))  // TODO
+    | WriteAgain          -> writeAllFinishing c i
+    | WriteAgainClosing   -> writeAllClosing c i
     | WriteError x y      -> WriteError x y
     | SentClose           -> SentClose
     | MustRead            -> MustRead
     | Written             -> Written
     | _                   -> unexpected "[writeAllFinishing] writeOne returned wrong result"
     else                    unexpected "[writeAllFinishing] seqn overflow"
+
 
 //* called both by read (ghost = None) and write (ghost = data being sent)
 //* returns to both: WriteError
@@ -874,15 +947,11 @@ let getHeader c =
     | Correct header ->
       match Record.parseHeader header with
       | Error x -> Error x
-      | Correct (ct,pv,len) -> 
-        // in the spirit of TLS 1.3, we mostly ignore the outer protocol version (see appendix C)
-        // Notably, our server does *not* use it as the client's minimum supported version.
-        match !c.reading with
-        | FirstHandshake expPV -> 
-            if expPV = TLS_1p3 || pv = expPV then correct(ct,len)
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Protocol version check failed")
-        | _ -> correct(ct,len)
-
+      | Correct (ct,pv,len) -> correct(ct,len)
+        // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
+        // our server never treats the ClientHello's record pv as its minimum supported pv;
+        // our client never checks the consistency of the server's record pv.
+        // (see earlier versions for the checks we used to perform)
 
 //* private val getFragment: c:connection -> ct:ct -> len:nat -> ST (rg * msg)
 //* "stateful, but only affecting the StAE instance"

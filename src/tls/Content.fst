@@ -1,6 +1,8 @@
 module Content // was TLSFragment
 
-(* Multiplexing protocol payloads into record-layer plaintext fragments. *)
+// Multiplexing protocol payloads into record-layer plaintext
+// fragments, and defining their projection to application-level
+// streams.
 
 open FStar
 open FStar.Seq
@@ -31,7 +33,7 @@ let ct_alert (i:id) (ad:alertDescription) : fragment i = CT_Alert (2,2) (Alert.a
 
 
 // move to Seq?
-val split: #a: Type -> s:seq a {Seq.length s > 0}-> Tot(seq a * a)
+val split: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
 let split s =
   let last = Seq.length s - 1 in
   Seq.slice s 0 last, Seq.index s last
@@ -62,6 +64,14 @@ let rec project i fs =
 
 // try out a few lemmas
 // we may also need a projection that takes a low-level pos and yields a high-level pos
+
+val project_ignores_Handshake: i:id -> s: seq (fragment i) {Seq.length s > 0 /\ is_CT_Handshake (Seq.index s (Seq.length s - 1))} -> 
+  Lemma(project i s = project i (Seq.slice s 0 (Seq.length s - 1)))
+
+let project_ignores_Handshake i s = ()
+
+
+// --------------- conditional access to fragment representation ---------------------
 
 val ghost_repr: #i:id -> fragment i -> GTot bytes
 let ghost_repr i f =
