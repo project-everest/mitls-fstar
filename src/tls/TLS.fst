@@ -567,7 +567,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
       ) 
     \/ (r = WriteAgainClosing /\ // after calling closable
        is_Closing (sel h1 c.writing) 
-//       (let o = epoch_w_h c h1 in
+///\      (let o = epoch_w_h c h1 in
 //       i == epoch_id o /\ 
 //       is_Some o)
       ) 
@@ -589,7 +589,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
            // /\ project i (sel h1 (log wr)) = snoc (project i (sel h0 (log wr))) (datafragment i appdata)
 ))
        ))
-    \/ (r = WriteDone /\ is_None appdata) // /\ h0 = h1) //15-11-28 both fail, why?
+    \/ (r = WriteDone /\ is_None appdata) // /\ h0 = h1) 
     \/ (r = WriteHSComplete /\ sel h1 c.reading = Open   /\ sel h1 c.writing = Open) 
     \/ (r = SentClose                                   /\ sel h1 c.writing = Closed)
     \/ (is_WriteError r) // /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
@@ -797,7 +797,7 @@ let rec writeAllFinishing c i =
     if no_seqn_overflow c then 
     match writeOne c i None with
     | WriteAgain          -> writeAllFinishing c i
-    | WriteAgainClosing   -> writeAllClosing c i
+    | WriteAgainClosing   -> admit(); writeAllClosing c i
     | WriteError x y      -> WriteError x y
     | SentClose           -> SentClose
     | MustRead            -> MustRead
@@ -813,7 +813,14 @@ let rec writeAllFinishing c i =
 //* what about WriteHSComplete ?
 
 val writeAllTop: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
-  (requires (fun h -> st_inv c h /\ i == epoch_id (epoch_w_h c h)))
+  (requires (fun h -> 
+    st_inv c h /\ 
+    (let o = epoch_w_h c h in
+     let st = sel h c.writing in 
+      st <> Closed /\
+      (is_Some appdata ==> st = Open) /\
+      i == epoch_id o /\
+      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\
     //modifies (Set.singleton (C.region c)) h0 h1 /\
