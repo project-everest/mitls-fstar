@@ -40,7 +40,7 @@ LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 # Not sure which interfaces we should put in there.
 
 # these files are the stable inputs for verification
-TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst Handshake.fsti Record.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst Handshake.fsti Record.fst Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
 #Removed temporarily: StatefulPlain.fsti
 #Removed temporarily: TLS.fst
 
@@ -69,6 +69,7 @@ Record.fst\
 PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti HandshakeMessages.p.fst Handshake.p.fst\
 \
 Handshake.fsti\
+Connection.fst\
 TLS.fst
 
 # truncates $(TLSVER) just before $(basename $@).fst
