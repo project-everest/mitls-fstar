@@ -245,7 +245,7 @@ let moveToOpenState c =
 assume val epoch_pv: #region:rid -> #peer:rid -> epoch region peer -> Tot ProtocolVersion
 
 
-// too convenient
+// too convenient; should move to a library and be 
 val unexpected: #a:Type -> v:string -> ST a
   (requires (fun h -> True))
   (ensures (fun _ _ _ -> False ))
@@ -274,7 +274,7 @@ let pickSendPV c =
 //15-11-27 illustrating overhead for "unrelated" updates; still missing modifies clauses 
 val closeConnection: c: connection -> ST unit 
   (requires (fun h0 -> st_inv c h0))
-  (ensures (fun h0 _ h1 -> st_inv c h1))
+  (ensures (fun h0 _ h1 -> st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1))
 
 let closeConnection c =
     let h0 = ST.get() in
@@ -296,7 +296,9 @@ let unrecoverable c reason =
 
 val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:string -> ST unit
   (requires (fun h0 -> st_inv c h0 /\ sel h0 c.writing <> Closed))
-  (ensures (fun h0 _ h1 -> st_inv c h1 /\ is_Closing (sel h1 c.writing) ))
+  (ensures (fun h0 _ h1 -> 
+    st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1 /\ 
+    is_Closing (sel h1 c.writing) ))
 
 let abortWithAlert c ad reason =
     let closingPV = pickSendPV c in
@@ -312,7 +314,9 @@ let abortWithAlert c ad reason =
 // on some errors, we attempt to send an alert before tearing down the connection
 val closable: c:connection -> reason:string -> ST ioresult_w
   (requires (fun h0 -> st_inv c h0 /\ sel h0 c.writing <> Closed))
-  (ensures (fun h0 r h1 -> st_inv c h1 /\ is_Closing (sel h1 c.writing) /\ r = WriteAgainClosing))
+  (ensures (fun h0 r h1 -> 
+    st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1 /\
+    is_Closing (sel h1 c.writing) /\ r = WriteAgainClosing))
 let closable c reason =
     abortWithAlert c AD_internal_error reason;
     WriteAgainClosing
@@ -577,9 +581,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
       i == epoch_id o /\
       (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 r h1 ->
-    st_inv c h1 
-  /\
-//    modifies (Set.singleton (C.region c)) h0 h1 /\
+    st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1 /\
     // TODO: conditionally prove that i == epoch_id (epoch_w_h c h), at least when appdata is set.
     // TODO: account for (the TLS view of) the encryptor log
 
@@ -638,10 +640,10 @@ let writeOne c i appdata =
   recall (c_log c);  //NS: Should not be necessary; it's part of hs_inv now
   recall (C.reading c); // needed to get stability for i across ST calls
   let o = epoch_w c in
-    ( match o with
-      | None -> ()
-      | Some(Epoch h _ w) -> recall (log w); recall (seqn w));
-  
+  ( match o with
+    | None -> ()
+    | Some(Epoch h _ w) -> 
+      recall (log w); recall (seqn w));
       let h0 = ST.get() in
       let alert_response = Alert.next_fragment c.alert in 
       let h1 = ST.get() in 
@@ -748,27 +750,10 @@ let writeOne c i appdata =
           )
 
 
-(* yuck.
-type BufInvariant h c =
-	CnBuf_o c = None \/
-	(?r,f,s,d.
-      MsgOBytes(c,(r,d)) = AppFragment.Payload(Id(ConnectionEpochOut(c)),r,f) /\
-			CnBuf_o(c) = Some((r,f,s)) /\
-			s = AppFragment.Extend(ConnectionEpochOut(c),CnStream_o(c),r,f))
-
-private val writeAllClosing: c:Connection -> ST writeOutcome
-  (requires (fun h -> BufInvariant h c))
-  (ensures (fun h0 wo h1 ->
-      c' is nextCn c /\ CnBuf_o c' = CnBuf_o c /\
-      (is_WriteError wo /\ is_SentFatal wo \/
-	    (wo = SentClose /\ (Auth(ConnectionEpochIn(c)) => EvClose(CnInfo(c).id_in,Bytes_i(c)))))))
-*)
-
 val no_seqn_overflow: c: connection -> ST bool 
   (requires (fun h -> st_inv c h))
   (ensures (fun h0 b h1 -> 
-    h0 == h1 /\
-    st_inv c h1 /\
+    st_inv c h1 /\ h0 == h1 /\
     (let o = epoch_w_h c h1 in
     (b /\ is_Some o ==> is_seqn (sel h1 (seqn (writer_epoch (Some.v o))) + 1)))))
 
@@ -784,9 +769,6 @@ let no_seqn_overflow c =
       else false
 
 
-//* (ensures r = WriteError | SentClose)
-//* unless we have a strong pre, this relies on dynamic checks
-
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h -> 
     st_inv c h /\ 
@@ -794,11 +776,9 @@ val writeAllClosing: c:connection -> i:id -> ST ioresult_w
     sel h c.writing <> Closed  
   ))
   (ensures (fun h0 r h1 ->
-    st_inv c h1 /\
-    //modifies (Set.singleton (C.region c)) h0 h1 /\
+    st_inv c h1 /\  modifies (Set.singleton (C.region c)) h0 h1 /\
     (is_WriteError r \/ is_SentClose r)
   ))
-
 let rec writeAllClosing c i =
     if no_seqn_overflow c then 
     match writeOne c i None with
@@ -808,7 +788,6 @@ let rec writeAllClosing c i =
     | _                   -> unexpected "[writeAllClosing] writeOne returned wrong result"
     else                    unexpected "[writeAllClosing] seqn overflow"
 
-//* (ensures r = ... WriteError | SentClose | MustRead | WriteHSComplete
 
 val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h -> 
@@ -817,8 +796,7 @@ val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
     sel h c.writing <> Closed
   ))
   (ensures (fun h0 r h1 ->
-    st_inv c h1 /\
-    //modifies (Set.singleton c.region) h0 h1 /\
+    st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 /\
     (is_WriteError r \/ is_SentClose r \/ is_MustRead r \/ is_Written r)
   ))
 let rec writeAllFinishing c i =
@@ -850,11 +828,9 @@ val writeAllTop: c:connection -> i:id -> appdata: option (rg:frange i & DataStre
       i == epoch_id o /\
       (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 r h1 ->
-    st_inv c h1 /\
-    //modifies (Set.singleton (C.region c)) h0 h1 /\
-    True)
-  )
+    st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 
 
+  ))
 let rec writeAllTop c i appdata =
     if no_seqn_overflow c then 
     match writeOne c i appdata with
@@ -1010,10 +986,7 @@ let getFragment c ct len : TLSError.Result (Content.fragment (rd_i c)) =
 //private val readOne: Connection -> ST ioresult_i //$ which epoch index to use??
 //  (ensures ioresult is not CompletedFirst | CompletedSecond | DontWrite)
 
-
-(*** VERIFIES UP TO HERE ***)
-
-let readOne c =
+let readOne c : ioresult_i (rd_i c) =
     let reading = !c.reading in 
     match reading with
         | Closed -> //* statically exclude it?
@@ -1172,11 +1145,14 @@ let sameIDRAF (c0:Connection) (c1:Connection) res (c2:Connection) =
 *)
 
 
+(*** VERIFIES UP TO HERE ***)
+
 let rec readAllFinishing c =
+    admit(); // FIXME!
     let outcome = readOne c in
     match outcome with
-    | ReadAgain      -> readAllFinishing c 
-    | CompletedFirst -> CompletedFirst
+    | ReadAgain      ~> readAllFinishing c 
+    | CompletedFirst -> CompletedFirst #(rd_i c)
     | Read (DataStream.Alert ad) -> 
        ( if isFatal ad 
          then outcome  (* silently dropping the error? recheck *) 
@@ -1205,12 +1181,11 @@ let rec readAllFinishing c =
          ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened.")
 
 
-
-let rec read cn =
-    match writeAllTop cn None with
-    | SentClose       -> Read Close
+let rec read c =
+    match writeAllTop c (rd_i c) (*FIXME*) None with
+    | SentClose       -> Read DataStream.Close
     | WriteError x y  -> ReadError x y
-    | WriteFinished   -> DontWrite
+//    | WriteFinished   -> DontWrite
     | WriteDone       -> // There was nothing to write
       ( let res = readOne c in
         match res with
@@ -1218,18 +1193,17 @@ let rec read cn =
         | ReadAgainFinishing -> readAllFinishing c //*? removed: sameID2 c newConn res c0 in
         | Read delta         -> Read delta
         | ReadError x y      -> ReadError x y
-        | CertQuery q adv    -> CertQuery q adv
-        | Read Close         -> //*$ review this postprocessing
-          ( let (Conn(id,conn)) = cn in
-            match conn.write.disp with
-            | Closed -> Read Close // we already sent a close_notify, tell the user it's over
+        | CertQuery(q,adv)   -> CertQuery(q,adv)
+        | Read DataStream.Close         -> //*$ review this postprocessing
+            match !c.writing  with
+            | Closed -> Read DataStream.Close // we already sent a close_notify, tell the user it's over
             | _ ->
-                let written = writeAllClosing c in
+                let written = writeAllClosing c (rd_i c) (*FIXME*) in
                 match written with
-                | SentClose      -> Read Close // clean shutdown
+                | SentClose      -> Read DataStream.Close // clean shutdown
                 | WriteError x y -> ReadError x y
                 | _              -> ReadError None (perror __SOURCE_FILE__ __LINE__ "") // internal error
-                ))
+                ) 
         //_ CompletedFirst | CompletedSecond | DontWrite -> unexpected "[read] readOne should never return such write outcome"
 
 // -----------------------------------------------------------------------------
