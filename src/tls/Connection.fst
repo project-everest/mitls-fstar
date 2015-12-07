@@ -90,9 +90,8 @@ type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) 
   
 type epochs_inv c h = 
   Seq_forall (epoch_inv h) (sel h c.hs.log)
-  /\ Map.contains h (HS.region c.hs)
-  /\ Map.contains h (HS.peer c.hs)
-
+  /\ Handshake.hs_footprint_inv c.hs h
+  
 type st_inv c h = 
   hs_inv (C.hs c) h /\
   epochs_inv c h 
@@ -162,7 +161,7 @@ let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -
   let f : x:a -> Lemma (forall (y:b). (p x y ==> q x y ())) = 
     fun x -> ghost_lemma (f x) in
   qintro f
-  
+
 val frame_writer_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit 
   (requires
     epochs_inv c h0 /\
@@ -252,6 +251,7 @@ val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
             /\ epochs_inv c h1))
 let frame_reader_epoch c h0 h1 = ghost_lemma2 (frame_reader_epoch_k c h0 h1)            
 
+
 val frame_unrelated_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
   (requires (epochs_inv c h0 
 	    /\ k < Seq.length (epochs c h0)
@@ -276,3 +276,28 @@ val frame_unrelated: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
 let frame_unrelated c h0 h1 = 
   ghost_lemma (frame_unrelated_k c h0 h1);
   frame_epochs c h0 h1
+
+val frame_modifies_internal_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
+  (requires (epochs_inv c h0 
+	    /\ k < Seq.length (epochs c h0)
+	    /\ modifies_internal h0 c.hs h1))
+  (ensures (fun _ -> 
+	      epochs c h0 = epochs c h1 
+	    /\ k < Seq.length (epochs c h1)
+	    /\ epoch_inv h1 (epoch_i c h1 k)))
+let frame_modifies_internal_k c h0 h1 k =
+    //frame_epochs c h0 h1;
+  let ek = Seq.index (epochs c h0) k in 
+  frame_st_dec_inv (reader_epoch ek) h0 h1;
+  frame_st_enc_inv (writer_epoch ek) h0 h1
+
+val frame_internal: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
+  (requires (epochs_inv c h0 
+	    /\ modifies_internal h0 c.hs h1))
+  (ensures (epochs c h0 = epochs c h1 
+	    /\ epochs_inv c h1))
+let frame_internal c h0 h1 = 
+  ghost_lemma (frame_modifies_internal_k c h0 h1)
+  
+
+

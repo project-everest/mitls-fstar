@@ -281,9 +281,10 @@ let closeConnection c =
     recall (HS.state c.hs); // needed to preserve hs_inv within inv
     invalidateSession c.hs; //changes (HS.region c.hs)
     let h1 = ST.get() in 
+    frame_internal c h0 h1;
     c.reading := Closed;
     c.writing := Closed;
-    frame_admit c h0 (ST.get()) //NS: TODO: not quite an application of frame_unrelated; since invalidate
+    frame_unrelated c h1 (ST.get()) 
 
 // on some errors, we locally give up the connection
 let unrecoverable c reason =
@@ -300,12 +301,12 @@ let abortWithAlert c ad reason =
     let closingPV = pickSendPV c in
     let h0 = ST.get() in
     invalidateSession c.hs;    
-    frame_admit c h0 (ST.get());
-    let h0 = ST.get() in
+    let h1 = ST.get() in
+    frame_internal c h0 h1;
     Alert.send c.alert ad;
     c.reading := Closed;
     c.writing := Closing(closingPV,reason);
-    frame_admit c h0 (ST.get()) //NS: again, not an instance of frame_unrelated, because of invalidateSession
+    frame_unrelated c h1 (ST.get()) //NS: again, not an instance of frame_unrelated, because of invalidateSession
 
 // on some errors, we attempt to send an alert before tearing down the connection
 val closable: c:connection -> reason:string -> ST ioresult_w
@@ -612,7 +613,8 @@ let writeOne c i appdata =
 //  | Closed -> WriteError None (perror __SOURCE_FILE__ __LINE__ "Trying to write on a closed connection")
 //  | _      -> 
 
-  recall (c_log c); recall (C.reading c); // needed to get stability for i across ST calls
+  recall (c_log c);  //NS: Should not be necessary; it's part of hs_inv now
+  recall (C.reading c); // needed to get stability for i across ST calls
   let o = epoch_w c in
     ( match o with
       | None -> ()
@@ -621,7 +623,7 @@ let writeOne c i appdata =
       let h0 = ST.get() in
       let alert_response = Alert.next_fragment c.alert in 
       let h1 = ST.get() in 
-      frame_admit c h0 h1; //NS: not an instance of frame_unrelated ... next_fragment changes c.hs.region
+      frame_unrelated c h0 h1; 
       match alert_response with // alerts have highest priority
       | Some AD_close_notify ->
           ( match writing  with
@@ -652,9 +654,9 @@ let writeOne c i appdata =
       | None ->
           ( let hs_response = Handshake.next_fragment c.hs in
             let h2 = ST.get() in 
-            frame_admit c h1 h2; //NS: not an instance of frame_unrelated ... next_fragment changes c.hs.region
             match hs_response with // next we check if there are outgoing Handshake messages
             | Handshake.OutCCS -> (* send a (complete) CCS fragment *)
+                frame_admit c h1 h2; //NS: not an instance of frame_internal, since it may change the epochs log if the result is OutCCS
                 ( match writing with
 (* 
                   | FirstHandshake(_) | Open ->
@@ -676,6 +678,7 @@ let writeOne c i appdata =
 *)
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending CCS in wrong state"))
             | Handshake.OutSome rg f -> (* send some handshake fragment *)
+                frame_internal c h1 h2; 
                 ( match writing with
                   | Init | FirstHandshake(_) | Finishing | Open ->
                       ( match send c #i (Content.CT_Handshake rg f) with
@@ -684,6 +687,7 @@ let writeOne c i appdata =
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
 
             | Handshake.OutFinished rg last_fragment -> (* check we are finishing & send last fragment *)
+                frame_internal c h1 h2; 
                 ( match writing with
                   | Finishing ->
                       ( match send c #i (Content.CT_Handshake rg last_fragment) with
@@ -697,6 +701,7 @@ let writeOne c i appdata =
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
 
             | Handshake.OutComplete rg last_fragment ->
+                frame_admit c h1 h2; //NS: may change the epochs log if the result is OutComplete
                 ( match writing, !c.reading with
                   | Finishing, Finished -> (* Send the last fragment *)
                       ( match send c #i (Content.CT_Handshake rg last_fragment) with
@@ -706,8 +711,9 @@ let writeOne c i appdata =
                             //else unrecoverable c (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")
                         | Error (x,y) -> unrecoverable c y)
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
-
+  
             | Handshake.OutIdle -> // finally attempt to send some application data if we're in Open state
+                 frame_internal c h1 h2; 
                 ( match writing with
                   | Open ->
                     ( match appdata with
