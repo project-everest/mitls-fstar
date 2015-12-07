@@ -137,12 +137,15 @@ assume type Completed: #region:rid -> #peer:rid -> epoch region peer -> Type
 // no need for an epoch states invariant here: the HS never modifies them
  
 type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
- 
-type hs_inv (s:hs) (h: HyperHeap.t) = 
-  hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
-  /\ Map.contains h s.region
+
+opaque type hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
+  HyperHeap.contains_ref s.log h
+  /\ HyperHeap.contains_ref s.state h
   /\ Map.contains h s.peer
 
+type hs_inv (s:hs) (h: HyperHeap.t) = 
+  hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
+  /\ hs_footprint_inv s h
 
 (* ----------------- Control Interface ---------------------*)
 
