@@ -526,24 +526,42 @@ let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is
 //val fragments_log: #i:id -> es: seq (entry i) -> Tot (seq Content.fragment i)
 //let fragments_log i es = Seq.map fragment_entry es
 
-val project: i:id -> fs:seq (entry i) -> Tot(seq (DataStream.delta i))
+val project_one: #i:id -> entry i -> Tot (option (DataStream.delta i))
+let project_one #i en = match fragment_entry en with
+   | Content.CT_Data (rg: frange i) d -> 
+     cut(Wider fragment_range rg); 
+     Some (DataStream.Data d)
+     
+   | Content.CT_Alert rg alf -> // alert parsing may fail, or return several deltas
+     if length alf = 2 
+     then match Alert.parse alf with
+          | Correct ad -> Some (DataStream.Alert ad)
+          | Error _    -> None // ill-formed alert contents are ignored
+     else None                 // ill-formed alert packets are ignored
+
+   | _  -> None // other fragments are internal to TLS
+
+let maybe_snoc a b = match b with 
+  | None -> a
+  | Some x -> SeqProperties.snoc a x
+
+val project: #i:id -> fs:seq (entry i) -> Tot(seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
 let rec project i fs =
-  if Seq.length fs = 0 then Seq.createEmpty
-  else
-      let fs, f = Content.split #(entry i) fs in
-      let ds = project i fs in
-      (match fragment_entry f with
-      | Content.CT_Data (rg: frange i) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d)
-      | Content.CT_Alert rg alf -> // alert parsing may fail, or return several deltas
-          if length alf = 2 then 
-          (match Alert.parse alf with
-          | Correct ad -> snoc ds (DataStream.Alert ad)
-          | Error _    -> ds) // ill-formed alert contents are ignored
-          else ds            // ill-formed alert packets are ignored
-      | _              -> ds) // other fragments are internal to TLS
-
-
+  if Seq.length fs = 0 
+  then Seq.createEmpty
+  else let fs, f = Content.split #(entry i) fs in
+       maybe_snoc (project fs) (project_one f)
+       
+  
+val project_snoc: #i:id -> s:seq (entry i) -> e:entry i -> Lemma
+  (requires True)
+  (ensures (project (snoc s e) = maybe_snoc (project s) (project_one e)))
+  [SMTPat (project (snoc s e))]
+let project_snoc #i s e = 
+  let hd, tl = Content.split (snoc s e) in
+  cut (Seq.Eq hd s)
+  
 val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
     st_inv c h /\ 
@@ -586,8 +604,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
            ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
              sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
              fragment_entry e = appfragment i appdata 
-           // 15-12-03 can't get this one; timeout? explicit map_snoc lemma?
-           // /\ project i (sel h1 (log wr)) = snoc (project i (sel h0 (log wr))) (datafragment i appdata)
+           /\ project (sel h1 (log wr)) = snoc (project (sel h0 (log wr))) (datafragment i appdata)
 ))
        ))
     \/ (r = WriteDone /\ is_None appdata) // /\ h0 = h1) 
