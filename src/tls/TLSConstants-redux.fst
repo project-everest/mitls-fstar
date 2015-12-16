@@ -1,3 +1,8 @@
+(*--build-config
+  options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Handshake --lax;
+  other-files:ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi seqproperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst;
+  --*)
+
 (* This file implements type representations and parsing functions
    for the different values negotiated during the TLS
    handshake. For instance protocol version, key exchange mechanism,
@@ -19,6 +24,7 @@ type ProtocolVersion =
     | TLS_1p0
     | TLS_1p1
     | TLS_1p2
+    | TLS_1p3
 
 (* Key exchange algorithms *)
 type kexAlg =
@@ -96,9 +102,11 @@ let parseSigAlg b =
     | 1uy -> Correct CoreCrypto.RSASIG
     | 2uy -> Correct CoreCrypto.DSA
     | 3uy -> Correct CoreCrypto.ECDSA
+    | 4uy -> Correct CoreCrypto.RSAPSS
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-type hashAlg' = h:hashAlg{h <> NULL && h <> MD5SHA1 && h <> Hash SHA512}
+// JK : adding Hash SHA512 because it is part of the RFC
+type hashAlg' = h:hashAlg{h <> NULL && h <> MD5SHA1}
 
 val hashAlgBytes : hashAlg' -> Tot (lbytes 1)
 let hashAlgBytes ha =
@@ -107,6 +115,7 @@ let hashAlgBytes ha =
     | Hash SHA1     -> abyte 2uy
     | Hash SHA256  -> abyte 4uy
     | Hash SHA384  -> abyte 5uy
+    | Hash SHA512  -> abyte 6uy
 
 val parseHashAlg: pinverse Seq.Eq hashAlgBytes
 let parseHashAlg b =
@@ -115,6 +124,7 @@ let parseHashAlg b =
     | (2uy) -> Correct (Hash SHA1)
     | (4uy) -> Correct (Hash SHA256)
     | (5uy) -> Correct (Hash SHA384)
+    | (6uy) -> Correct (Hash SHA512)
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 let encKeySize = function
@@ -947,3 +957,328 @@ let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
     List.mem (SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)) css
 
 (*let test_me () = assert False*)
+
+
+(* TLS 1.3 constants *)
+type namedGroup =
+  | SECP256r1
+  | SECP384r1
+  | SECP521r1
+  | FFDHE2048
+  | FFDHE3072
+  | FFDHE4096
+  | FFDHE6144
+  | FFDHE8192
+  | FFDHE_PRIVATE_USE of byte // fist byte is fixed 
+  | ECDHE_PRIVATE_USE of byte // fist byte is fixed
+
+val namedGroupBytes: namedGroup -> Tot (lbytes 2)
+let namedGroupBytes ng =
+  match ng with
+  | SECP256r1                     -> abyte2 (0x00uy, 0x17uy)
+  | SECP384r1                     -> abyte2 (0x00uy, 0x18uy)
+  | SECP521r1                     -> abyte2 (0x00uy, 0x19uy)
+  | FFDHE2048                     -> abyte2 (0x01uy, 0x00uy)
+  | FFDHE3072                     -> abyte2 (0x01uy, 0x01uy)
+  | FFDHE4096                     -> abyte2 (0x01uy, 0x02uy)
+  | FFDHE6144                     -> abyte2 (0x01uy, 0x03uy)
+  | FFDHE8192                     -> abyte2 (0x01uy, 0x04uy)
+  | FFDHE_PRIVATE_USE(b)          -> abyte2 (0x01uy, b) 
+  | ECDHE_PRIVATE_USE(b)          -> abyte2 (0xFEuy, b)
+
+val parseNamedGroup: pinverse Seq.Eq namedGroupBytes
+let parseNamedGroup b =
+  match cbyte2 b with
+  | (0x00uy, 0x17uy) -> Correct (SECP256r1)
+  | (0x00uy, 0x18uy) -> Correct (SECP384r1)
+  | (0x00uy, 0x19uy) -> Correct (SECP521r1)
+  | (0x01uy, 0x00uy) -> Correct (FFDHE2048)
+  | (0x01uy, 0x01uy) -> Correct (FFDHE3072)
+  | (0x01uy, 0x02uy) -> Correct (FFDHE4096)
+  | (0x01uy, 0x03uy) -> Correct (FFDHE6144)
+  | (0x01uy, 0x04uy) -> Correct (FFDHE8192)
+  | (0x01uy, v)      -> if v = 0xFCuy || v = 0xFDuy || v = 0xFEuy || v = 0xFFuy 
+			then Correct (FFDHE_PRIVATE_USE v)
+			else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | (0xFEuy, v)      -> Correct (ECDHE_PRIVATE_USE v)
+  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
+val namedGroupsBytes: list namedGroup -> Tot bytes
+let namedGroupsBytes groups =
+  vlbytes 2 (List.fold_leftT (fun l s -> l @| namedGroupBytes s) empty_bytes groups)
+
+val parseNamedGroups: pinverse Seq.Eq namedGroupsBytes
+let parseNamedGroups b =
+  let rec (aux:bytes -> list namedGroup -> Tot (Result (list namedGroup))) = fun b groups ->
+    if length b > 0 then
+      if length b >= 4 then
+	let (ng, bytes) = split b 4 in
+	match parseNamedGroup ng with
+	| Correct(ng) -> aux bytes (ng::groups)
+	| Error(z) -> Error(z)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else Correct(groups) in      
+  match vlsplit 2 b with
+  | Correct(b, tail) -> 
+    if equalBytes tail empty_bytes then
+      let (len, data) = split b 2 in
+      aux b []
+    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | Error(z) -> Error(z)
+
+type configuration_id = b:bytes{not (equalBytes b empty_bytes) /\ length b < 65536}
+
+val configurationIdBytes: configuration_id -> Tot bytes
+let configurationIdBytes cid = vlbytes 2 cid
+
+val parseConfigurationId: pinverse Seq.Eq configurationIdBytes
+let parseConfigurationId b =
+  match vlsplit 2 b with
+  | Correct(cid, tail) ->
+      if equalBytes tail empty_bytes then 
+      let (len, cid) = split cid 2 in
+      Correct (cid)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | Error(z) -> Error(z)
+
+type uint32 = b:lbytes 4
+
+val uint32Bytes: uint32 -> Tot (lbytes 4)
+let uint32Bytes u = u
+
+val parseUint32: pinverse Seq.Eq uint32Bytes
+let parseUint32 b =
+  if length b = 4 then Correct(b)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
+type earlyDataType =
+  | ClientAuthentication
+  | EarlyData
+  | ClientAuthenticationAndData
+
+val earlyDataTypeBytes : earlyDataType -> Tot (lbytes 1)
+let earlyDataTypeBytes edt =
+  match edt with
+  | ClientAuthentication          -> abyte 1uy
+  | EarlyData                     -> abyte 2uy
+  | ClientAuthenticationAndData   -> abyte 3uy
+
+val parseEarlyDataType: pinverse Seq.Eq earlyDataTypeBytes
+let parseEarlyDataType b =
+    match cbyte b with
+    | (1uy) -> Correct (ClientAuthentication)
+    | (2uy) -> Correct (EarlyData)
+    | (3uy) -> Correct (ClientAuthenticationAndData)
+    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
+// Place holder
+type configurationExtension =
+  | UnknownConfigurationExtension of bytes
+
+val configurationExtensionBytes: configurationExtension -> Tot bytes
+let configurationExtensionBytes ce = 
+  match ce with 
+  | UnknownConfigurationExtension(b) -> b
+
+val parseConfigurationExtension: pinverse Seq.Eq configurationExtensionBytes
+let parseConfigurationExtension b = 
+  Correct (UnknownConfigurationExtension(b))
+
+val configurationExtensionsBytes: list configurationExtension -> Tot bytes
+let configurationExtensionsBytes ce = 
+  List.fold_leftT (fun bytes x -> bytes @| configurationExtensionBytes x) empty_bytes ce
+
+val parseConfigurationExtensions: pinverse Seq.Eq configurationExtensionsBytes
+let parseConfigurationExtensions b = 
+  let rec (aux:bytes -> list configurationExtension -> Tot (Result (list configurationExtension))) =
+    fun b exts ->
+    if length b > 0 then
+      match vlsplit 2 b with
+      | Correct(ext, bytes) ->
+	(let e = parseConfigurationExtension ext in
+	match e with
+	| Correct(ext') -> aux bytes (ext'::exts)
+	| Error(z) -> Error(z))
+      | Error(z) -> Error(z)
+    else Correct(exts) in
+  aux b []
+
+val sigHashAlgBytes: sigHashAlg -> Tot (lbytes 2)
+let sigHashAlgBytes sha =
+  let sig = sigAlgBytes (fst sha) in
+  let hash = hashAlgBytes (snd sha) in
+  sig @| hash
+
+val parseSigHashAlg: pinverse Seq.Eq sigHashAlgBytes
+let parseSigHashAlg b =
+  if length b = 2 then
+    let (sig, hash) = split b 2 in
+    match parseSigAlg sig with
+    | Correct(sig) -> 
+	match parseHashAlg hash with
+	| Correct(hash) -> Correct(sig, hash)
+	| Error(z) -> Error(z)
+    | Error(z) -> Error(z)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
+val sigHashAlgsBytes: list sigHashAlg -> Tot bytes
+let sigHashAlgsBytes algs = 
+  List.fold_leftT (fun l x -> l @| sigHashAlgBytes x) empty_bytes algs
+
+val parseSigHashAlgs: pinverse Seq.Eq sigHashAlgsBytes
+let parseSigHashAlgs b =
+  let rec (aux:bytes -> list sigHashAlg -> Tot (Result (list sigHashAlg))) = fun b algs ->
+    if length b > 0 then
+      if length b >= 2 then
+      let (alg, bytes) = split b 2 in
+      match parseSigHashAlg alg with
+      | Correct(sha) -> aux bytes (sha::algs)
+      | Error(z) -> Error(z)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else Correct(algs) in
+  aux b []
+
+// TODO : replace "bytes" by either DH or ECDH parameters
+type keyShareEntry = namedGroup * bytes
+
+val keyShareEntryBytes: keyShareEntry -> Tot bytes
+let keyShareEntryBytes kse =
+  let (ng, bytes) = kse in
+  let ng_bytes = namedGroupBytes ng in
+  ng_bytes @| bytes
+
+val parseKeyShareEntry: pinverse Seq.Eq keyShareEntryBytes
+let parseKeyShareEntry b =
+  if length b >= 2 then
+    let ng, key_exchange = split b 2 in
+    match parseNamedGroup ng with
+    | Correct(ng) -> 
+	match vlsplit 2 key_exchange with
+	| Correct(ke, tail) -> 
+	    if equalBytes tail empty_bytes then Correct (ng, ke)
+	    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	| Error(z) -> Error(z)
+    | Error(z) -> Error(z)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
+val keyShareEntriesBytes: list keyShareEntry -> Tot bytes
+let keyShareEntriesBytes kses =
+  List.fold_leftT (fun l s -> l @| keyShareEntryBytes s) empty_bytes kses
+
+val parseKeyShareEntries: pinverse Seq.Eq keyShareEntriesBytes
+let parseKeyShareEntries b =
+  let rec (aux:bytes -> list keyShareEntry -> Tot (Result (list keyShareEntry))) = fun b entries ->
+    if length b > 0 then
+      if length b >= 2 then
+	let (ng, data) = split b 2 in
+	match vlsplit 2 data with
+	| Correct(kex, bytes) -> 
+	    (match parseKeyShareEntry (ng @| kex) with
+	    | Correct(entry) -> aux bytes (entry::entries)
+	    | Error(z) -> Error(z))
+	| Error(z) -> Error(z)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else Correct(entries) in
+  aux b []
+
+type clientKeyShare = l:list keyShareEntry{List.length l >= 4 /\ List.length l < 65536}
+type serverKeyShare = keyShareEntry
+
+type keyShare = 
+  | ClientKeyShare of clientKeyShare
+  | ServerKeyShare of serverKeyShare
+
+val clientKeyShareBytes: clientKeyShare -> Tot bytes
+let clientKeyShareBytes cks = 
+  keyShareEntriesBytes cks
+
+val parseClientKeyShare: pinverse Seq.Eq clientKeyShareBytes
+let parseClientKeyShare b = parseKeyShareEntries b
+
+val serverKeyShareBytes: serverKeyShare -> Tot bytes
+let serverKeyShareBytes sks =
+  keyShareEntryBytes sks
+
+val parseServerKeyShare: pinverse Seq.Eq serverKeyShareBytes
+let parseServerKeyShare b = parseKeyShareEntry b
+
+val keyShareBytes: keyShare -> Tot bytes
+let keyShareBytes ks = 
+  match ks with
+  | ClientKeyShare cks -> clientKeyShareBytes cks
+  | ServerKeyShare sks -> serverKeyShareBytes sks
+
+val parseKeyShare: pinverse Seq.Eq keyShareBytes
+let parseKeyShare b =
+  match parseKeyShareEntries b with
+  | Correct(kse) -> 
+      (match kse with
+      | e::[] -> Correct(ServerKeyShare e)
+      | _ -> if List.length kse >= 4 && List.length kse < 65536 then Correct(ClientKeyShare (kse))
+	     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
+  | Error(z) -> Error(z)
+
+type pskIdentity = b:bytes{length b < 65536}
+
+val pskIdentityBytes: pskIdentity -> Tot bytes
+let pskIdentityBytes pski = pski
+
+val parsePskIdentity: pinverse Seq.Eq pskIdentityBytes
+let parsePskIdentity b =
+  match vlsplit 2 b with
+  | Correct(pski, tail) ->
+      if equalBytes tail empty_bytes then Correct(b)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | Error(z) -> Error(z)
+
+val pskIdentitiesBytes: list pskIdentity -> Tot bytes
+let pskIdentitiesBytes l =
+  List.fold_leftT (fun l s -> l @| pskIdentityBytes s) empty_bytes l
+
+val parsePskIdentities: pinverse Seq.Eq pskIdentitiesBytes
+let parsePskIdentities b =
+  let rec (aux: bytes -> list pskIdentity -> Tot (Result (list pskIdentity))) = fun b ids ->
+    if length b > 0 then
+      match vlsplit 2 b with
+      | Correct(id, bytes) -> 
+	  match parsePskIdentity id with
+	  | Correct(id) -> aux bytes (id::ids)
+	  | Error(z) -> Error(z)
+      | Error(z) -> Error(z)
+    else Correct(ids) in
+  aux b []
+
+type clientPreSharedKey = l:list pskIdentity{List.length l >= 2 /\ List.length l < 65536 }
+type serverPreSharedKey = pskIdentity
+type preSharedKey = 
+  | ClientPreSharedKey of clientPreSharedKey
+  | ServerPreSharedKey of serverPreSharedKey
+
+val clientPreSharedKeyBytes: clientPreSharedKey -> Tot bytes
+let clientPreSharedKeyBytes cpsk = pskIdentitiesBytes cpsk
+
+val parseClientPreSharedKey: pinverse Seq.Eq clientPreSharedKeyBytes
+let parseClientPreSharedKey b = parsePskIdentities b
+
+val serverPreSharedKeyBytes: serverPreSharedKey -> Tot bytes
+let serverPreSharedKeyBytes cpsk = pskIdentityBytes cpsk
+
+val parseServerPreSharedKey: pinverse Seq.Eq serverPreSharedKeyBytes
+let parseServerPreSharedKey b = parsePskIdentity b
+
+val preSharedKeyBytes: preSharedKey -> Tot bytes
+let preSharedKeyBytes psk =
+  match psk with
+  | ClientPreSharedKey cpsk -> clientPreSharedKeyBytes cpsk
+  | ServerPreSharedKey spsk -> serverPreSharedKeyBytes spsk
+
+val parsePreSharedKey: pinverse Seq.Eq preSharedKeyBytes
+let parsePreSharedKey b =
+  match parsePskIdentities b with
+  | Correct(ids) ->
+      (match ids with 
+      | [] -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      | e::[] -> Correct (ServerPreSharedKey e)
+      | _ -> if List.length ids < 65536 then Correct (ClientPreSharedKey ids)
+             else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+  | Error(z) -> Error(z)
