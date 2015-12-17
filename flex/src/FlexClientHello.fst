@@ -1,21 +1,23 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexClientHello
+module FlexTLS.Message.ClientHello
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open TLSInfo
-open TLSConstants
-open TLSExtensions
-open HandshakeMessages
+open MiTLS.TLSInfo
+open MiTLS.TLSConstants
+open MiTLS.TLSExtensions
+open MiTLS.HandshakeMessages
 
-open FlexTypes
-open FlexConstants
-open FlexState
-open FlexHandshake
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.State
+open FlexTLS.Handshake
+
+
 
 /// <summary>
 /// Extract the ciphersuites from a FClientHello message record
