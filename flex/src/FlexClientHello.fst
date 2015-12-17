@@ -3,6 +3,7 @@
 module FlexTLS.Message.ClientHello
 
 
+open Platform
 open Platform.Log
 open Platform.Bytes
 open Platform.Error
