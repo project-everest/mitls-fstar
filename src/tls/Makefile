@@ -133,7 +133,7 @@ api-ver: $(LIBFILES) $(TLSVER) TLS.fsti
 test-gcm: $(LIBFILES)
 	$(FSTAR) --lax $(ADMITTED) --codegen OCaml --admit_fsi FStar.IO \
 	--include $(PDIR) --include $(CDIR) \
-	$^ io.fsti $(call prefix_ver,AEAD_GCM,fst) StatefulLHAE.fst TestGCM.fst	
+	$^ FStar.IO.fsti $(call prefix_ver,AEAD_GCM,fst) StatefulLHAE.fst TestGCM.fst	
 
 top: $(LIBFILES) $(TLSVER)
 	$(FSTAR) $(ADMITTED) $(VERFLAGS) $^ StatefulLHAE.fsti Record.fst Handshake.fsti --admit_fsi StatefulLHAE --admit_fsi Handshake --verify_module TLS

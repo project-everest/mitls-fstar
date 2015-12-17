@@ -4,7 +4,7 @@
               PLATFORM=../../../libs/fst/Platform
               CORECRYPTO=../../../libs/fs/CoreCrypto;
     other-files:$LIB/string.fst $LIB/classical.fst $LIB/list.fst $LIB/ext.fst
-                $LIB/set.fsi $LIB/heap.fst $LIB/st.fst $LIB/mref.fst
+                $LIB/FStar.Set.fsi $LIB/FStar.Heap.fst $LIB/FStar.ST.fst $LIB/mref.fst
                 $LIB/seq.fsi $LIB/seqproperties.fst $PLATFORM/Bytes.fst
                 $CORECRYPTO/CoreKeys.fsi $CORECRYPTO/CoreSig.fsi hash.fst
 --*)
