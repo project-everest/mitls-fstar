@@ -78,7 +78,7 @@ type kex =
   /// <summary> Key Exchange Type is Diffie-Hellman and the constructor holds all DH parameters </summary>
   | DH of kexDH
   /// <summary> Key Exchange Type is Diffie-Hellman with negotiated group and the constructor holds all DH parameters </summary>
-  | DH13 of kexFFDH
+  | FFDH of kexFFDH
   /// <summary> Key Exchange Type is Elliptic Curve Diffie-Hellman with negotiated curve and the constructor holds all ECDH parameters </summary>
   | ECDH of kexECDH
 
