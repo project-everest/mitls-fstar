@@ -44,6 +44,13 @@ TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.
 #Removed temporarily: StatefulPlain.fsti
 #Removed temporarily: TLS.fst
 
+TLSREDUX=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
+	DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst \
+	UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst \
+	DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst \
+	AEAD_GCM.fst StatefulLHAE.fst PRF-redux.p.fst  \
+	HandshakeMessages_Redux.fst Handshake_Redux.fst
+
 # these files are verified here
 VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM StatefulLHAE DataStream Alert Content StatefulPlain
 
@@ -140,8 +147,8 @@ mitls-ml: $(LIBFILES) $(TLSVER)
 wc:
 	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(TLS)
 
-redux: $(LIBFILES) TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst PRF-redux.p.fst  HandshakeMessages_Redux.fst Handshake_Redux.fst
-	$(FSTAR) $(ADMITTED) $(VERFLAGS) $(filter-out TLS.fst,$^) --lax
+redux: $(LIBFILES) $(TLSREDUX)
+	$(FSTAR) --lax  $(ADMITTED) $^
 
 # ------------------ preprocessing :( -----------------------
 
