@@ -1,18 +1,19 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexHandshake
+module FlexTLS.Handshake
 
 
-open NLog
+open Platform
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open TLSConstants
+open MiTLS.TLSConstants
 
-open FlexTypes
-open FlexConstants
-open FlexState
-open FlexRecord
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.State
+open FlexTLS.Record
 
 /// <summary>
 /// Module receiving, sending and forwarding TLS handshake messages.
