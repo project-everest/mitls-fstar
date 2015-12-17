@@ -21,7 +21,7 @@ open FlexTLS.Record
 /// <param name="st"> State of the current Handshake </param>
 /// <returns> Updated state * CCS record * CCS byte </returns>
 let receive (st:state) : state * FChangeCipherSpecs * bytes =
-  LogManager.GetLogger("file").Info("# CCS : FlexCCS.receive");
+  Log.logInfo("# CCS : FlexCCS.receive");
   let ct,pv,len,_ = FlexRecord.parseFragmentHeader st in
   match ct with
   | Change_cipher_spec -> 
@@ -42,7 +42,7 @@ let receive (st:state) : state * FChangeCipherSpecs * bytes =
 /// <param name="stout"> State of the current Handshake on the outgoing side </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded CCS byte </returns>
 let forward (stin:state, stout:state) : state * state * bytes =
-  LogManager.GetLogger("file").Info("# CCS : FlexCCS.forward");
+  Log.logInfo("# CCS : FlexCCS.forward");
   let stin,ccs,msgb  = FlexCCS.receive(stin) in
   let stout,_ = FlexCCS.send(stout) in
   Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(msgb)));
@@ -55,7 +55,7 @@ let forward (stin:state, stout:state) : state * state * bytes =
 /// <param name="fccs"> Optional CCS message record </param>
 /// <returns> Updated state * CCS message record </returns>
 let send (st:state, ?fccs:FChangeCipherSpecs) : state * FChangeCipherSpecs =
-  LogManager.GetLogger("file").Info("# CCS : FlexCCS.send");
+  Log.logInfo("# CCS : FlexCCS.send");
   let fccs = defaultArg fccs FlexConstants.nullFChangeCipherSpecs in
   let record_write,_,_ = FlexRecord.send( st.ns, st.write.epoch, st.write.record,
                                           Change_cipher_spec, fccs.payload,
