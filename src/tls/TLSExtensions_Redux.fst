@@ -62,11 +62,11 @@ and earlyDataIndication =
 // JK : can I merge client extensions and server extensions ?
 and extension = 
   // TLS 1.3 extension types
-  | E_earlyData of earlyDataIndication // JK : TODO : put appropriate type
-  | E_preSharedKey of preSharedKey // JK : TODO : put appropriate type
-  | E_keyShare of keyShare // JK : TODO : put appropriate type
+  | E_earlyData of earlyDataIndication 
+  | E_preSharedKey of preSharedKey 
+  | E_keyShare of keyShare 
   // Common extension types
-  | E_signatureAlgorithms of (list sigHashAlg) // JK : TODO : put appropriate type, did it previously appear ?
+  | E_signatureAlgorithms of (list sigHashAlg) 
   // Previous extension types
   | E_renegotiation_info of renegotiationInfo
   | E_server_name of list serverName

@@ -149,6 +149,11 @@ let aeadIVSize = function
   | AES_128_GCM -> 4
   | AES_256_GCM -> 4
 
+// FIXME : remove, duplicate for now for typechecking between redux/main branches
+let aeadIVSize = function
+  | AES_128_GCM -> 4
+  | AES_256_GCM -> 4
+
 let aeadRecordIVSize = function
   | AES_128_GCM -> 8
   | AES_256_GCM -> 8

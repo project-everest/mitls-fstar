@@ -22,7 +22,7 @@ val ghost_repr: #i:id -> #ad:adata i -> #rg:range -> plain i ad rg -> GTot (rbyt
 val repr:  i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p: plain i ad rg -> Tot (b:rbytes rg { b = ghost_repr p })
 
 type wf_ad_rg (i:id) (ad:adata i) (rg:range) = 
-  Wider DataStream.fragment_range rg  /\ 
+  Wider Range.fragment_range rg  /\ 
   (parseAD i ad = Change_cipher_spec ==> rg = zero)
 
 
