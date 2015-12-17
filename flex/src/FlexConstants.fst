@@ -166,7 +166,7 @@ let nullFClientHello : FClientHello = {
 /// will perform some basic negotiation and send a valid ServerHello with
 /// fresh server randomness.
 /// </remarks>
-type nullFServerHello : FServerHello = {
+let nullFServerHello : FServerHello = {
   pv   = None;
   rand = empty_bytes;
   sid  = None;
