@@ -94,26 +94,6 @@ type priKey =
   | PK_Enc of CoreACiphers.sk
 
 /// <summary>
-/// Handshake Message record type for Client Key Share
-/// </summary>
-type FClientKeyShare = {
-  /// <summary> List of Key Exchange offers </summary>
-  offers:list<HandshakeMessages.tls13kex>;
-  /// <summary> Message bytes </summary>
-  payload:bytes;
-}
-
-/// <summary>
-/// Handshake Message record type for Server Key Share
-/// </summary>
-type FServerKeyShare = {
-  /// <summary> Key Exchange chosen </summary>
-  kex:HandshakeMessages.tls13kex;
-  /// <summary> Message bytes </summary>
-  payload:bytes;
-}
-
-/// <summary>
 /// Session Secrets record,
 /// This structure contains all secret information of a Handshake
 /// </summary>
