@@ -1,25 +1,20 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexCertificateRequest
+module FlexTLS.Message.CertificateRequest
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open TLSInfo
-open TLSConstants
-open HandshakeMessages
+open MiTLS.TLSInfo
+open MiTLS.TLSConstants
+open MiTLS.HandshakeMessages
 
-open FlexTypes
-open FlexConstants
-open FlexHandshake
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.Handshake
 
-/// <summary>
-/// Module receiving, sending and forwarding TLS Certificate Request messages.
-/// </summary>
-type FlexCertificateRequest =
-    class
 
     /// <summary>
     /// Receive a CertificateRequest message from the network stream
