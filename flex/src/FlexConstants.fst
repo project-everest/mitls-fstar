@@ -184,6 +184,19 @@ let nullFServerHello : FServerHello = {
   payload = empty_bytes;
 }
 
+/// <summary>
+/// Handshake Message record type for ServerConfiguration
+/// </summary>
+type FServerConfiguration = {
+  id = 0;
+  expirationDate = 25;
+  group = dhGroup;
+  key = empty_bytes;
+  earlyDataType = 1;
+  ext = None;
+  payload = empty_bytes;
+}
+
 /// <summary> Empty Certificate message </summary>
 let nullFCertificate : FCertificate = {
   chain = [];
