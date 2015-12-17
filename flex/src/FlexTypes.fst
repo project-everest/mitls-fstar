@@ -162,7 +162,7 @@ type nextSecurityContext = {
   /// <summary> Secrets to be used by the next epoch </summary>
   secrets: secrets;
   /// <summary> Offers of DH groups and public keys from the client (useful for negotiated DH groups, and hence for TLS 1.3) </summary>
-  offers: list<kex>;
+  offers: list kex;
 }
 
 /// <summary>
@@ -182,13 +182,13 @@ type FClientHello = {
   /// <summary> Client random bytes </summary>
   rand: bytes;
   /// <summary> Session identifier. A non-empty byte array indicates that the client wants resumption </summary>
-  sid: option<bytes>;
+  sid: option bytes;
   /// <summary> List of ciphersuite names supported by the client </summary>
-  ciphersuites: option<list<cipherSuiteName>>;
+  ciphersuites: option (list cipherSuiteName);
   /// <summary> List of compression mechanisms supported by the client </summary>
-  comps: option<list<Compression>>;
+  comps: option (list Compression);
   /// <summary> List of extensions proposed by the client; None: user asks for default; Some<list>: user gives value. A returned client hello always has Some<list>. </summary>
-  ext: option<list<clientExtension>>;
+  ext: option (list clientExtension);
   /// <summary> Message Bytes </summary>
   payload: bytes;
 }
@@ -204,11 +204,11 @@ type FServerHello = {
   /// <summary> Session identifier. A non-empty byte array indicates that the server accepted resumption </summary>
   sid: option<bytes>;
   /// <summary> Ciphersuite selected by the server </summary>
-  ciphersuite: option<cipherSuiteName>;
+  ciphersuite: option cipherSuiteName;
   /// <summary> Compression selected by the server </summary>
   comp: Compression;
   /// <summary> List of extensions agreed by the server </summary>
-  ext: option<list<serverExtension>>;
+  ext: option (list serverExtension);
   /// <summary> Message bytes </summary>
   payload: bytes;
 }
@@ -262,11 +262,11 @@ type FServerKeyExchange = {
 /// </summary>
 type FCertificateRequest = {
   /// <summary> List of certificate types </summary>
-  certTypes: list<certType>;
+  certTypes: list certType;
   /// <summary> List of Signature algorithms </summary>
-  sigAlgs: list<Sig.alg>;
+  sigAlgs: list Sig.alg;
   /// <summary> List of user provided cert names </summary>
-  names: list<string>;
+  names: list string;
   /// <summary> Message bytes </summary>
   payload: bytes;
 }
