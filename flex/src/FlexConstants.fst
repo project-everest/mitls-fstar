@@ -16,7 +16,7 @@ open FlexTLS.Types
 
 
 
-/// <summary> Diffie Hellman default negotiated group (TLS 1.3) </summary>
+/// <summary> Default Finite Field Diffie Hellman group (TLS 1.3) </summary>
 let defaultFFDHgroup = TLSInfo.defaultConfig.negotiableDHGroups.Head
 
 /// <summary> Elliptic Curve Diffie Hellman default curve and associated compression </summary>
@@ -125,6 +125,14 @@ let nullKexDH = {
   gy = empty_bytes;
 }
 
+/// <summary> Default FFDH key exchange parameters, with default DH group and empty FFDH shares </summary>
+let nullKexFFDH = {
+  group = FlexTLS.Constants.defaultFFDHgroup;
+  x  = empty_bytes;
+  gx = empty_bytes;
+  gy = empty_bytes;
+}
+
 /// <summary> Default ECDH key exchange parameters, with default ECDH group and empty DH shares </summary>
 let nullKexECDH = {
   curve = FlexTLS.Constants.defaultECDHcurve;
@@ -198,10 +206,18 @@ let nullFCertificateVerify : FCertificateVerify = {
 }
 
 /// <summary> Empty ServerKeyExchange message, for DH key exchange </summary>
-let nullFServerKeyExchangeDHx : FServerKeyExchange = {
+let nullFServerKeyExchangeDH : FServerKeyExchange = {
   sigAlg = FlexTLS.Constants.sigAlgs_RSA.Head;
   signature = empty_bytes;
   kex     = DH(FlexTLS.Constants.nullKexDH);
+  payload = empty_bytes;
+}
+
+/// <summary> Empty ServerKeyExchange message, for FFDH key exchange </summary>
+let nullFServerKeyExchangeDH : FServerKeyExchange = {
+  sigAlg = FlexTLS.Constants.sigAlgs_RSA.Head;
+  signature = empty_bytes;
+  kex     = FFDH(FlexTLS.Constants.nullKexFFDH);
   payload = empty_bytes;
 }
 
