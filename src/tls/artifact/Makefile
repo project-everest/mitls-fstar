@@ -18,7 +18,7 @@ clean:
 
 STDLIB_ADMITS=Char
 
-STDLIB=ext.fst classical.fst set.fsi set.fst heap.fst map.fst listTot.fst hyperHeap.fst \
+STDLIB=ext.fst classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst map.fst listTot.fst hyperHeap.fst \
 stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi seq.fst\
 seqproperties.fst
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB)
