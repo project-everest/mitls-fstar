@@ -23,7 +23,7 @@ open FlexTLS.Record
 /// <param name="st"> State of the current Handshake </param>
 /// <returns> Updated state * parsed alert description * alert bytes </returns>
 let receive (st:state) : state * alertDescription * bytes =
-  LogManager.GetLogger("file").Info("# ALERT : FlexAlert.receive");
+  Log.logInfo("# ALERT : FlexAlert.receive");
   let buf = st.read.alert_buffer in
   if length buf < 2 then
     let ct,pv,len,_ = FlexRecord.parseFragmentHeader st in
@@ -49,8 +49,8 @@ let receive (st:state) : state * alertDescription * bytes =
     | Error(ad,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
     | Correct(ad) ->
       let st = FlexState.updateIncomingAlertBuffer st rem in
-      LogManager.GetLogger("file").Info(sprintf "--- Description : %A" ad);
-      LogManager.GetLogger("file").Debug(sprintf "--- Payload : %s" (Bytes.hexString(alb)));
+      Log.logInfo(sprintf "--- Description : %A" ad);
+      Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(alb)));
       (st,ad,alb)
 
 /// <summary>
@@ -61,11 +61,11 @@ let receive (st:state) : state * alertDescription * bytes =
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded alert bytes </returns>
 let forward (stin:state, stout:state, ?fp:fragmentationPolicy) : state * state * bytes =
-  LogManager.GetLogger("file").Info("# ALERT : FlexAlert.forward");
+  Log.logInfo("# ALERT : FlexAlert.forward");
   let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let stin,ad,alb = FlexAlert.receive(stin) in
   let stout   = FlexAlert.send(stout,alb,fp) in
-  LogManager.GetLogger("file").Debug(sprintf "--- Payload : %s" (Bytes.hexString(alb)));
+  Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(alb)));
   stin,stout,alb
 
 /// <summary>
@@ -87,7 +87,7 @@ let send (st:state, ad:alertDescription, ?fp:fragmentationPolicy) : state =
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
 let send (st:state, payload:bytes, ?fp:fragmentationPolicy) : state =
-  LogManager.GetLogger("file").Info("# ALERT : FlexAlert.send");
+  Log.logInfo("# ALERT : FlexAlert.send");
   let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let buf = st.write.alert_buffer @| payload in
   let st = FlexState.updateOutgoingAlertBuffer st buf in
@@ -95,8 +95,8 @@ let send (st:state, payload:bytes, ?fp:fragmentationPolicy) : state =
     if length payload = 2 then
     match Alert.parseAlert payload with
     | Error(ad,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
-    | Correct(ad) -> LogManager.GetLogger("file").Info(sprintf "--- Description : %A" ad);
+    | Correct(ad) -> Log.logInfo(sprintf "--- Description : %A" ad);
     else ()
   in
-  LogManager.GetLogger("file").Debug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+  Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
   FlexRecord.send(st,Alert,fp)
