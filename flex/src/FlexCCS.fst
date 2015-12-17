@@ -2,7 +2,7 @@
 
 module FlexTLS.Message.CCS
 
-
+open Platform
 open Platform.Log
 open Platform.Bytes
 open Platform.Error
