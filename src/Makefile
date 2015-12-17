@@ -12,7 +12,7 @@ ifndef FSTAR_HOME
 FSTAR_HOME=../../FStar
 endif
 STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
-STDLIB=ext.fst classical.fst set.fsi heap.fst map.fsi listTot.fst hyperHeap.fsi \
+STDLIB=ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi \
 seqproperties.fst #int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
@@ -45,24 +45,11 @@ TLSLAX= $(addprefix tls-lax/,TLSError.fst Nonce.p.fst TLSConstants.fst \
 	Alert.p.fst PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti \
 	HandshakeMessages.p.fst Handshake.p.fst AppData.p.fst Dispatch.p.fst TLS.fst)
 
-# these files are hybrid, to be discarded at some point
-TLSREDUX=$(addprefix tls/, TLSError.fst Nonce.p.fst TLSConstants-redux.p.fst \
-	RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst \
-	HMAC.fst) \
-	tls-lax/Sig.p.fst \
-	$(addprefix tls/, UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions.p.fst TLSPRF.fst \
-	Range.p.fst DataStream.fst Content.fst StatefulPlain.fst \
-	LHAEPlain.fst MAC_SHA256.p.fst MAC_SHA1.p.fst \
-	MAC.p.fst Encode.p.fst ENC.p.fst) 
-##	tls/AEAD_GCM.fst tls-lax/LHAE.p.fst tls-lax/StatefulLHAE.fst tls-lax/Record.fst tls-lax/Alert.fst \
-##	tls/PRF-redux.p.fst tls/KEF.p.fst tls/DH.p.fst tls/RSA.p.fst tls/SessionDB.p.fsti
-##	tls/HandshakeMessages_Redux.p.fst tls/Handshake_Redux.p.fst
-
 mitls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax --debug yes $(ADMITTED) $^
 
-mitls-redux: $(LIBFILES) $(TLSREDUX)
-	$(FSTAR) --lax $(ADMITTED) $^
+mitls-redux:
+	make -C tls redux
 
 ifeq ($(OS),Windows_NT)
     CPP=cpp #-ffreestanding
