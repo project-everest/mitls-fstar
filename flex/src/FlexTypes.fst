@@ -77,7 +77,7 @@ type kex =
   | RSA of bytes
   /// <summary> Key Exchange Type is Diffie-Hellman and the constructor holds all DH parameters </summary>
   | DH of kexDH
-  /// <summary> Key Exchange Type is Diffie-Hellman with negotiated group and the constructor holds all DH parameters </summary>
+  /// <summary> Key Exchange Type is Finite Field Diffie-Hellman with negotiated group and the constructor holds all DH parameters </summary>
   | FFDH of kexFFDH
   /// <summary> Key Exchange Type is Elliptic Curve Diffie-Hellman with negotiated curve and the constructor holds all ECDH parameters </summary>
   | ECDH of kexECDH
