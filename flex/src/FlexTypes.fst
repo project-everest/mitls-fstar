@@ -3,10 +3,11 @@
 module FlexTLS.FlexTypes
 
 
-open Bytes
-open TLSInfo
-open TLSConstants
-open TLSExtensions
+open Platform.Bytes
+open MiTLS.TLSInfo
+open MiTLS.TLSConstants
+open MiTLS.TLSExtensions
+
 
 /// <summary>
 /// Fragmentation policy union type,
