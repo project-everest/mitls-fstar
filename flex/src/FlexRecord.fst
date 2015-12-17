@@ -3,17 +3,19 @@
 module FlexTLS.FlexRecord
 
 
-open NLog
+open Platform.Log
+open Platform.Tcp
+open Platform.Bytes
+open Platform.Error
 
-open Tcp
-open Bytes
-open Error
-open TLSInfo
-open TLSConstants
+open MiTLS.TLSInfo
+open MiTLS.TLSConstants
 
-open FlexTypes
-open FlexConstants
-open FlexState
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.State
+
+
 
 /// <summary>
 /// Get fragment size depending on the fragmentation policy
