@@ -75,7 +75,7 @@ let prepareClientHello cfg ri sido : CH * log =
   let sid = (match sido with None -> empty_bytes | Some x -> x) in
   let cvd = (match ri with None -> empty_bytes | Some (x,y) -> x) in
   let ci = initConnection Client crand in
-  let ext = prepareClientExtensions cfg ci cvd in
+  let ext = prepareExtensions cfg ci cvd in
   let ch = 
   {ch_protocol_version = cfg.maxVer;
    ch_client_random = crand;
@@ -89,10 +89,12 @@ let prepareClientHello cfg ri sido : CH * log =
 assume val negotiateVersion: cfg:config -> c:ProtocolVersion -> Tot (Result ProtocolVersion)
 assume val negotiateCipherSuite: cfg:config -> pv:ProtocolVersion -> c:known_cipher_suites -> Tot (Result known_cipher_suite)
 assume val negotiateCompression: cfg:config -> pv:ProtocolVersion -> c:list Compression -> Tot (Result Compression)
-assume val negotiateExtensions: cfg:config -> pv:ProtocolVersion -> option ri -> res:bool -> c:list clientExtension -> Tot (Result (l:list serverExtension{List.length l < 256} * negotiatedExtensions))
+assume val negotiateExtensions: cfg:config -> pv:ProtocolVersion -> option ri -> res:bool -> c:list extension -> Tot (Result (l:list extension{List.length l < 256} * negotiatedExtensions))
 
 assume val getCachedSession: cfg:config -> ch:CH -> option Session
 
+
+// FIXME: TLS1.3
 val prepareServerHello: config -> option ri -> CH -> log -> Result (bytes * nego * option ake * log)
 let prepareServerHello cfg ri ch i_log =
   let srand = Nonce.mkHelloRandom() in
@@ -104,10 +106,10 @@ let prepareServerHello cfg ri ch i_log =
      let shB = 
          serverHelloBytes (
           {sh_protocol_version = sentry.session_nego.n_protocol_version;
-           sh_sessionID = sentry.session_nego.n_sessionID;
+           sh_sessionID = Some (sentry.session_nego.n_sessionID);
            sh_server_random = srand;
            sh_cipher_suite = sentry.session_nego.n_cipher_suite;
-           sh_compression = sentry.session_nego.n_compression;
+           sh_compression = Some (sentry.session_nego.n_compression);
            sh_extensions = sext}) in
      let o_log = i_log @| shB in
      let o_nego = {sentry.session_nego with n_extensions = next} in
@@ -125,14 +127,15 @@ let prepareServerHello cfg ri ch i_log =
   match negotiateExtensions cfg pv ri false ch.ch_extensions with
   | Error(z) -> Error(z)
   | Correct(sext,next) ->
-  let sid = Nonce.random 32 in
+//  let sid = Nonce.random 32 in
+  let sid = magic() in
   let shB = 
     serverHelloBytes (
     {sh_protocol_version = pv;
-     sh_sessionID = sid;
+     sh_sessionID = Some sid;
      sh_server_random = srand;
      sh_cipher_suite = cs;
-     sh_compression = cm;
+     sh_compression = Some cm;
      sh_extensions = sext}) in
   let nego = 
     {n_client_random = ch.ch_client_random;
@@ -148,15 +151,16 @@ let prepareServerHello cfg ri ch i_log =
 assume val acceptableVersion: config -> CH -> ProtocolVersion -> Tot bool
 assume val acceptableCipherSuite: config -> CH -> ProtocolVersion -> known_cipher_suite -> Tot bool
 assume val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
-assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> ProtocolVersion -> list serverExtension -> Tot (Result negotiatedExtensions)
+assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> ProtocolVersion -> list extension -> Tot (Result negotiatedExtensions)
 
+// FIXME : TLS1.3
 val processServerHello: config -> option ri -> CH -> SH -> bool -> Result (nego * option ake)
 let processServerHello cfg ri ch sh res =
     if not (acceptableVersion cfg ch sh.sh_protocol_version) 
     then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
     else if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite)
     then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-    else if not (acceptableCompression cfg ch sh.sh_protocol_version sh.sh_compression)
+    else if not (acceptableCompression cfg ch sh.sh_protocol_version (Some.v sh.sh_compression))
     then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Compression negotiation") 
     else match (acceptableExtensions cfg ri res ch sh.sh_protocol_version sh.sh_extensions) with 
          | Error(z) -> Error(z)
@@ -167,7 +171,7 @@ let processServerHello cfg ri ch sh res =
               | Some sentry ->
                 if (sh.sh_protocol_version <> sentry.session_nego.n_protocol_version ||
                     sh.sh_cipher_suite <> sentry.session_nego.n_cipher_suite ||
-                    sh.sh_compression <> sentry.session_nego.n_compression) 
+                    Some.v sh.sh_compression <> sentry.session_nego.n_compression) 
                 then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
                 else 
                   let o_nego = {sentry.session_nego with n_extensions = next} in
@@ -176,10 +180,10 @@ let processServerHello cfg ri ch sh res =
              let o_nego = 
                  {n_client_random = ch.ch_client_random;
                   n_server_random = sh.sh_server_random;
-                  n_sessionID = sh.sh_sessionID;
+                  n_sessionID = Some.v sh.sh_sessionID;
                   n_protocol_version = sh.sh_protocol_version;
                   n_cipher_suite = sh.sh_cipher_suite;
-                  n_compression = sh.sh_compression;
+                  n_compression = Some.v sh.sh_compression;
                   n_extensions = next} in 
                   Correct(o_nego,None)
 
@@ -199,9 +203,9 @@ let prepareServerAke cfg nego nlog =
          let creqB = 
              if cfg.request_client_certificate then
              certificateRequestBytes (
-               {scr_cert_types = [];
-                scr_sig_hash_algs = Some [];
-                scr_distinguished_names = []})
+               {cr_cert_types = [];
+                cr_sig_hash_algs = Some [];
+                cr_distinguished_names = []})
              else empty_bytes in
          let msg = cB @| creqB @| serverHelloDoneBytes in
          Correct (msg,
@@ -256,6 +260,4 @@ assume val server_get_message: cfg:config -> st:clientState cfg ->
 assume val server_put_message: cfg:config -> st:clientState cfg ->
                  buf: hs_msg_bufs ->
                  Result(bytes * clientState cfg * hs_msg_bufs)
-
-
 

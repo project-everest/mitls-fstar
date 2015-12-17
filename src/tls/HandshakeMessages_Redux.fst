@@ -1,4 +1,10 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿(*--build-config
+  options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Handshake --lax;
+  other-files:ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi seqproperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst PRF-redux.p.fst;
+  --*)
+  
+
+(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
 #light "off"
 
@@ -30,12 +36,15 @@ type PreHandshakeType =
     | HT_hello_request
     | HT_client_hello
     | HT_server_hello
+    | HT_session_ticket
+    | HT_encrypted_extensions
     | HT_certificate
     | HT_server_key_exchange
     | HT_certificate_request
     | HT_server_hello_done
     | HT_certificate_verify
     | HT_client_key_exchange
+    | HT_server_configuration
     | HT_finished
 
 type HandshakeType = PreHandshakeType
@@ -46,12 +55,16 @@ let htBytes t =
     | HT_hello_request       -> abyte   0uy
     | HT_client_hello        -> abyte   1uy
     | HT_server_hello        -> abyte   2uy
+    | HT_session_ticket      -> abyte   4uy
+//  | HT_hello_retry_request -> abyte   6uy
+    | HT_encrypted_extensions -> abyte  8uy
     | HT_certificate         -> abyte  11uy
     | HT_server_key_exchange -> abyte  12uy
     | HT_certificate_request -> abyte  13uy
     | HT_server_hello_done   -> abyte  14uy
     | HT_certificate_verify  -> abyte  15uy
     | HT_client_key_exchange -> abyte  16uy
+    | HT_server_configuration -> abyte 17uy
     | HT_finished            -> abyte  20uy
 
 val parseHt : pinverse Seq.Eq htBytes
@@ -60,12 +73,15 @@ let parseHt b =
     |   0uy  -> Correct (HT_hello_request      )
     |   1uy  -> Correct (HT_client_hello       )
     |   2uy  -> Correct (HT_server_hello       )
+    |   4uy  -> Correct (HT_session_ticket     )
+    |   8uy  -> Correct (HT_encrypted_extensions)
     |  11uy  -> Correct (HT_certificate        )
     |  12uy  -> Correct (HT_server_key_exchange)
     |  13uy  -> Correct (HT_certificate_request)
     |  14uy  -> Correct (HT_server_hello_done  )
     |  15uy  -> Correct (HT_certificate_verify )
     |  16uy  -> Correct (HT_client_key_exchange)
+    |  18uy  -> Correct (HT_server_configuration)
     |  20uy  -> Correct (HT_finished           )
     | _   -> let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_decode_error, reason)
 
@@ -77,26 +93,43 @@ type CH = {
   ch_sessionID:sessionID;
   ch_cipher_suites:(k:known_cipher_suites{List.length k < 256});
   ch_compressions:(cl:list Compression{List.length cl <= 1});
-  ch_extensions:(ce:list clientExtension{List.length ce < 256});
+  ch_extensions:(ce:list extension{List.length ce < 256});
 }
 
 type SH = {
   sh_protocol_version:ProtocolVersion;
   sh_server_random:TLSInfo.random;
-  sh_sessionID:sessionID;
+  sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
   sh_cipher_suite:known_cipher_suite;
-  sh_compression:Compression;
-  sh_extensions:(se:list serverExtension{List.length se < 256});
+  sh_compression:option Compression; // JK : made optional because not present in TLS 1.3
+  sh_extensions:(se:list extension{List.length se < 256});
+}
+
+(* Hello retry request *)
+type HRR = {
+  hrr_protocol_version:ProtocolVersion;
+  hrr_cipher_suite:(k:known_cipher_suites{List.length k < 256});
+  hrr_named_group: CommonDH.parameters; // JK : is it the expected type here ?
+  hrr_extensions:(he:list extension{List.length he < 256});
+}
+
+type STICKET = {
+  sticket_ticket_lifetime_hint:(b:bytes{length b = 4});
+  sticket_ticket:bytes;
+}
+
+type EE = {
+  ee_extensions:(ee:list extension{List.length ee < 256});
 }
 
 type CRT = {
   crt_chain: Cert.chain
 }
 
-type SCR = {
-  scr_cert_types: (cl:list certType{List.length cl < 256});
-  scr_sig_hash_algs: option (shs:list Sig.alg{List.length shs < 256});
-  scr_distinguished_names: (dl:list dn{List.length dl < 128});
+type CR = {
+  cr_cert_types: (cl:list certType{List.length cl < 256});
+  cr_sig_hash_algs: option (shs:list Sig.alg{List.length shs < 256});
+  cr_distinguished_names: (dl:list dn{List.length dl < 128});
 }
 
 
@@ -125,8 +158,17 @@ type CKE = {
   cke_kex_c: KEX_C
 }
 
-type CCV = {
-  ccv_sig: (l:bytes{length l < 65536});
+type CV = {
+  cv_sig: (l:bytes{length l < 65536});
+}
+
+type SC = {
+  sc_configuration_id:configurationId;
+  sc_expiration_date:uint32;
+  sc_named_group:namedGroup;
+  sc_server_key:KEX_C; // JK : use another type ?
+  sc_early_data_type:earlyDataType;
+  sc_configuration_extensions:(l:list configurationExtension{List.length l < 65536});
 }
 
 type FIN = {
@@ -136,13 +178,15 @@ type FIN = {
 type hs_msg =
   | ClientHello of CH
   | ServerHello of SH
-  | ServerCertificate of CRT
+  | SessionTicket of STICKET
+  | EncryptedExtionsions of EE
   | ServerKeyExchange of SKE
-  | ServerCertificateRequest of SCR
+  | CertificateRequest of CR
   | ServerHelloDone
-  | ClientCertificate of CRT
+  | Certificate of CRT
   | ClientKeyExchange of CKE
-  | ClientCertificateVerify of CCV
+  | CertificateVerify of CV
+  | ServerConfiguration of SC
   | ClientFinished of FIN
   | ServerFinished of FIN
 
@@ -183,7 +227,7 @@ let clientHelloBytes ch =
   let csB = vlbytes 2 csb in
   let cmb = compressionMethodsBytes ch.ch_compressions in
   let cmB = vlbytes 1 cmb in
-  let extB = clientExtensionsBytes ch.ch_extensions in
+  let extB = extensionsBytes ch.ch_extensions in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
   messageBytes HT_client_hello data
 
@@ -219,7 +263,7 @@ let parseClientHello data =
                         | Correct (res) ->
                         let (cmBytes,extensions) = res in
                         let cm = parseCompressions cmBytes in
-                       (match parseClientExtensions extensions clientCipherSuites with
+                       (match parseExtensionsWithCS extensions clientCipherSuites with
                         | Error(z) -> Error(z) 
                         | Correct (exts) -> 
                         if List.length exts < 256 &&
@@ -238,14 +282,19 @@ let parseClientHello data =
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-
 val serverHelloBytes: SH -> Tot bytes
 let serverHelloBytes sh = 
     let verB = versionBytes sh.sh_protocol_version in
-    let sidB = vlbytes 1 sh.sh_sessionID in
+    let sidB = 
+      match sh.sh_sessionID with
+      | Some sid -> vlbytes 1 sid 
+      | _ -> empty_bytes in
     let csB = cipherSuiteBytes sh.sh_cipher_suite in
-    let cmB = compressionBytes sh.sh_compression in
-    let extB = serverExtensionsBytes sh.sh_extensions in
+    let cmB = 
+      match sh.sh_compression with
+      | Some compression -> compressionBytes compression
+      | _ -> empty_bytes in
+    let extB = extensionsBytes sh.sh_extensions in
     let data = verB @| sh.sh_server_random @| sidB @| csB @| cmB @| extB in
     messageBytes HT_server_hello data
 
@@ -257,6 +306,24 @@ let parseServerHello data =
         match parseVersion serverVerBytes with
         | Error z -> Error z
         | Correct(serverVer) ->
+	  match serverVer with
+	  | TLS_1p3 -> 
+	    if length data >= 1 then 
+	      let (csBytes, data) = split data 2 in
+	      match parseCipherSuite csBytes with
+	      | Error(z) -> Error(z)
+	      | Correct(cs) -> 
+		(match parseExtensionsWithCS data [] with
+		| Error(z) -> Error(z)
+                | Correct(exts) ->
+                    correct({sh_protocol_version = serverVer;       
+                      sh_server_random = serverRandomBytes;
+                      sh_sessionID = None;
+                      sh_cipher_suite = cs;
+                      sh_compression = None;
+                      sh_extensions = exts}))
+	     else  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	  | _ ->
             if length data >= 1 then
                 match vlsplit 1 data with
                 | Error z -> Error z
@@ -271,14 +338,14 @@ let parseServerHello data =
                                 (match parseCompression cmBytes with
                                 | Error(z) -> Error(z)
                                 | Correct(cm) ->
-                                (match parseServerExtensions data with
+                                (match parseExtensionsWithCS data [] with
                                 | Error(z) -> Error(z)
                                 | Correct(exts) ->
                                 correct({sh_protocol_version = serverVer;       
                                          sh_server_random = serverRandomBytes;
-                                         sh_sessionID = sid;
+                                         sh_sessionID = Some sid;
                                          sh_cipher_suite = cs;
-                                         sh_compression = cm;
+                                         sh_compression = Some cm;
                                          sh_extensions = exts})))
                         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
                     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -305,17 +372,20 @@ let parseCertificate data =
     if length data >= 3 then
         match vlparse 3 data with
         | Error z -> let (x,y) = z in Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ y)
-        | Correct (certList) -> {crt_chain = Cert.parseCertificateList certList}
+	| Correct (certList) -> 
+	    let chain_res = Cert.parseCertificateList certList in
+	    let chain = resT chain_res in // JK : need of pattern matching here ?
+	    Correct ({crt_chain = chain})
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-val certificateRequestBytes: SCR -> Tot bytes
-let certificateRequestBytes scr = 
-    let ctb = certificateTypeListBytes scr.scr_cert_types in  
+val certificateRequestBytes: CR -> Tot bytes
+let certificateRequestBytes cr = 
+    let ctb = certificateTypeListBytes cr.cr_cert_types in  
     let ctB = vlbytes 1 ctb in
-    let saB = match scr.scr_sig_hash_algs with
+    let saB = match cr.cr_sig_hash_algs with
               | None -> empty_bytes
-              | Some sal -> sigHashAlgListBytes sal in
-    let dnb = distinguishedNameListBytes scr.scr_distinguished_names in
+              | Some sal -> sigHashAlgsBytes sal in
+    let dnb = distinguishedNameListBytes cr.cr_distinguished_names in
     let dnB = vlbytes 2 dnb in
     let data = ctB
             @| saB
@@ -323,7 +393,7 @@ let certificateRequestBytes scr =
     messageBytes HT_certificate_request data
 
 val parseCertificateRequest: pv:ProtocolVersion -> data:bytes{repr_bytes(length data) <= 3} -> 
-                             Result SCR
+                             Result CR
 let parseCertificateRequest version data =
     if length data >= 1 then
         match vlsplit 1 data with
@@ -338,16 +408,16 @@ let parseCertificateRequest version data =
             | Error(z) -> Error(z)
             | Correct  (x,y) ->
             if length y > 0 then 
-               match parseSigHashAlgList x with
+               match parseSigHashAlgs x with
                | Error(z) -> Error(z)
                | Correct (sigAlgs) -> 
                match parseDistinguishedNameList y [] with
                | Error(z) -> Error(z)
                | Correct (distNamesList) ->
                  correct (
-                 {scr_cert_types = certTypeList;
-                  scr_sig_hash_algs = Some sigAlgs;
-                  scr_distinguished_names = distNamesList})
+                 {cr_cert_types = certTypeList;
+                  cr_sig_hash_algs = Some sigAlgs;
+                  cr_distinguished_names = distNamesList})
             else      
                Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
             | _ ->
@@ -355,19 +425,19 @@ let parseCertificateRequest version data =
                | Error(z) -> Error(z)
                | Correct (distNamesList) ->
                  correct (
-                 {scr_cert_types = certTypeList;
-                  scr_sig_hash_algs = None;
-                  scr_distinguished_names = distNamesList})
+                 {cr_cert_types = certTypeList;
+                  cr_sig_hash_algs = None;
+                  cr_distinguished_names = distNamesList})
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 let mk_certificateRequestBytes sign cs version =
     certificateRequestBytes (
-    {scr_cert_types = defaultCertTypes sign cs;
-     scr_sig_hash_algs = (match version with 
+    {cr_cert_types = defaultCertTypes sign cs;
+     cr_sig_hash_algs = (match version with 
                          | TLS_1p2 -> Some (default_sigHashAlg version cs) 
                          | _ -> None);
-     scr_distinguished_names = []})                    
+     cr_distinguished_names = []})                    
 
 
 (** A.4.3 Client Authentication and Key Exchange Messages *)
@@ -473,19 +543,23 @@ let parseServerKeyExchange kex payload : Result SKE =
                 | Correct(rawpoint, payload) ->
                     match ECGroup.parse_point ecp rawpoint with
                     | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Invalid EC point received")
-                    | Some p -> correct (None, CommonDH.DHP_EC(ecp), {CommonDH.dhe_nil with CommonDH.dhe_ec = Some p;}, payload)
+                    | Some p -> Correct (
+			{ ske_kex_s = KEX_S_ECDHE (
+			    {ec_priv = None;
+			    ec_params = ecp;
+			    ec_point = p;});
+			  ske_sig =  payload})
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-
 (* Certificate Verify *)
-val certificateVerifyBytes: CCV -> Tot bytes
-let certificateVerifyBytes ccv = 
-    messageBytes HT_certificate_verify ccv.ccv_sig
+val certificateVerifyBytes: CV -> Tot bytes
+let certificateVerifyBytes cv = 
+    messageBytes HT_certificate_verify cv.cv_sig
 
 val parseCertificateVerify: data:bytes{repr_bytes(length data) <= 3} ->
-    Result (c:CCV{Seq.Eq (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
+    Result (c:CV{Seq.Eq (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
 let parseCertificateVerify data = 
-    correct ({ccv_sig = data})
+    correct ({cv_sig = data})
 
 val finishedBytes: FIN -> Tot bytes
 let finishedBytes fin = 
@@ -496,3 +570,83 @@ val parseFinished: data:bytes{repr_bytes(length data)<=3} ->
 let parseFinished data = 
     Correct ({fin_vd = data})
 
+(* Session ticket *)
+val sessionTicketBytes: STICKET -> Tot bytes
+let sessionTicketBytes sticket =
+    let payload = sticket.sticket_ticket_lifetime_hint @| sticket.sticket_ticket in
+    messageBytes HT_session_ticket payload
+
+val parseSessionTicket: b:bytes{repr_bytes(length b) <= 3} -> 
+    Result (s:STICKET{Seq.Eq (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
+let parseSessionTicket payload : Result STICKET = 
+  if length payload >= 4 && length payload < 65542 then
+    let (lifetime_hint, ticket) = split payload 4 in
+    Correct({sticket_ticket_lifetime_hint = lifetime_hint; sticket_ticket = ticket})
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate size in received session ticket")
+
+(* Encrypted_extensions *)
+val encryptedExtensionsBytes: EE -> Tot bytes
+let encryptedExtensionsBytes ee =
+    let payload = extensionsBytes ee.ee_extensions in
+    messageBytes HT_encrypted_extensions payload
+
+val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
+    Result (s:EE{Seq.Eq (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})
+let parseEncryptedExtensions payload : Result EE = 
+  match parseExtensionsWithCS payload [] with
+  | Error(z) -> Error(z)
+  | Correct(exts) -> Correct({ee_extensions = exts;})
+
+(* Server configuration *)
+val serverConfigurationBytes: SC -> Tot bytes
+let serverConfigurationBytes sc =
+  let cid = sc.sc_configuration_id in
+  let date = sc.sc_expiration_date in
+  let ng = namedGroupBytes sc.sc_named_group in
+  let sk = 
+    match sc.sc_server_key with
+    | KEX_C_DHE b -> b
+    | KEX_C_ECDHE b -> b in
+  let edt = earlyDataTypeBytes sc.sc_early_data_type in 
+  let exts = configurationExtensionsBytes sc.sc_configuration_extensions in
+  let payload = cid @| date @| ng @| sk @| edt @| exts in
+  messageBytes HT_server_configuration payload
+
+val parseServerConfiguration: b:bytes{repr_bytes(length b) <= 3} -> 
+    Result (s:SC{Seq.Eq (serverConfigurationBytes s) (messageBytes HT_server_configuration b)})
+let parseServerConfiguration payload : Result SC = 
+  match vlsplit 2 payload with
+  | Correct(config_id, data) -> (
+      if length data >= 6 then
+	let (date, ng, data) = split2 data 4 2 in
+	match parseNamedGroup ng with
+	| Correct(ng) -> 
+	  match vlsplit 2 data with
+	  | Correct(sk, data) ->
+	      let sk = match ng with
+		      | SEC _ | ECDHE_PRIVATE_USE _ -> KEX_C_ECDHE sk
+		      | FFDHE _ | FFDHE_PRIVATE_USE _ -> KEX_C_DHE sk in	      
+	      if length data >= 2 then
+		let (edt, exts) = split data 2 in
+		match parseEarlyDataType edt with
+		| Correct(edt) ->
+		  match vlsplit 2 exts with
+		  | Correct(exts, tail) -> 
+		      if equalBytes tail empty_bytes then
+		        match parseConfigurationExtensions exts with
+			| Correct(exts) ->
+			    Correct({ sc_configuration_id = config_id;
+				      sc_expiration_date = date;
+				      sc_named_group = ng;
+				      sc_server_key = sk;
+				      sc_early_data_type = edt;
+				      sc_configuration_extensions = exts;})
+		        | Error(z) -> Error(z)
+		      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+		  | Error(z) -> Error(z)
+		| Error(z) -> Error(z)
+	      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	  | Error(z) -> Error(z)
+	| Error(z) -> Error(z)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
+ | Error(z) -> Error(z)

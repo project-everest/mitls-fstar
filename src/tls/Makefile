@@ -14,7 +14,7 @@ endif
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
 STDLIB_ADMITS=Char HyperHeap Set Map Seq
 
-STDLIB=ext.fst classical.fst set.fsi heap.fst map.fsi listTot.fst hyperHeap.fsi \
+STDLIB=ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi \
 seqproperties.fst #int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
@@ -140,12 +140,15 @@ mitls-ml: $(LIBFILES) $(TLSVER)
 wc:
 	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(TLS)
 
+redux: $(LIBFILES) TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst PRF-redux.p.fst  HandshakeMessages_Redux.fst Handshake_Redux.fst
+	$(FSTAR) $(ADMITTED) $(VERFLAGS) $(filter-out TLS.fst,$^) --lax
+
 # ------------------ preprocessing :( -----------------------
 
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= TLSExtensions PMS DHGroup Encode Range Sig
+TLS_PP_FILES= TLSExtensions PMS DHGroup Encode Range Sig PRF-redux TLSExtensions_Redux
 # DHGroup.p.fst PMS.p.fst \
 	TLSExtensions.p.fst TLSPRF.p.fst \
 	HSFragment.p.fst TLSFragment.p.fst StatefulPlain.p.fst \
