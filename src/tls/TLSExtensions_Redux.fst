@@ -16,12 +16,46 @@ open TLSConstants
 open TLSInfo
 open CoreCrypto
 
+type renegotiationInfo =
+  | FirstConnection
+  | ClientRenegotiationInfo of (cVerifyData)
+  | ServerRenegotiationInfo of (cVerifyData * sVerifyData)
+
+val renegotiationInfoBytes: renegotiationInfo -> Tot bytes
+let renegotiationInfoBytes ri = 
+  match ri with
+  | FirstConnection -> vlbytes 1 empty_bytes
+  | ClientRenegotiationInfo(cvd) -> vlbytes 1 cvd
+  | ServerRenegotiationInfo(cvd, svd) -> vlbytes 1 (cvd @| svd)
+
+val parseRenegotiationInfo: pinverse Seq.Eq renegotiationInfoBytes
+let parseRenegotiationInfo b =
+  if length b >= 1 then
+    match vlsplit 1 b with
+    | Correct(b, tail) ->
+	if length tail = 0 then
+	  let (len, payload) = split b 1 in
+	  match cbyte len with
+	  | 0uy -> Correct (FirstConnection)
+	  | 12uy | 36uy -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
+	  | 24uy -> // TLS 1.2 case
+	    let cvd, svd = split payload 12 in
+	    Correct (ServerRenegotiationInfo (cvd, svd))
+	  | 72uy -> // SSLv3
+	    let cvd, svd = split payload 36 in
+	    Correct (ServerRenegotiationInfo (cvd, svd))
+	  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | Error(z) -> Error(z)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
 type preEarlyDataIndication =
-  { ped_configuration_id: configuration_id;
+  { ped_configuration_id: configurationId;
     ped_cipher_suite:cipherSuite;
     ped_extensions:list extension;
-    ped_content:bytes;
-    ped_early_data_type:earlyDataType; }
+    ped_context:bytes;
+    //ped_early_data_type:earlyDataType; 
+    }
 and earlyDataIndication = 
   | ClientEarlyDataIndication of preEarlyDataIndication 
   | ServerEarlyDataIndication
@@ -34,7 +68,7 @@ and extension =
   // Common extension types
   | E_signatureAlgorithms of (list sigHashAlg) // JK : TODO : put appropriate type, did it previously appear ?
   // Previous extension types
-  | E_renegotiation_info of (cVerifyData * option sVerifyData) // JK : option is some if server side
+  | E_renegotiation_info of renegotiationInfo
   | E_server_name of list serverName
   | E_extended_ms 
   | E_extended_padding 
@@ -54,6 +88,8 @@ let sameExt a b =
   | E_extended_padding, E_extended_padding -> true 
   | E_ec_point_format _, E_ec_point_format _ -> true
   | E_supported_groups _, E_supported_groups _ -> true
+  // For unknown extensions return true if the header is the same to mimic the general behaviour
+  | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
 
 val extensionHeaderBytes: extension -> Tot bytes
@@ -153,9 +189,9 @@ let parse_curve_list b =
     | ExOK([]) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Empty supported curve list")
     | ExOK(l) -> correct (l))
 
-val parse_ecpf_list: bytes -> (Result (list ECGroup.point_format))
+val parse_ecpf_list: bytes -> Tot (Result (list ECGroup.point_format))
 let parse_ecpf_list b =
-    let rec aux b =
+    let rec (aux:bytes -> Tot (CanFail (ECGroup.point_format))) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else let (u,v) = split b 1 in
             (match aux v with
@@ -183,99 +219,7 @@ let compile_ecpf_list l =
     let bl:bytes = vlbytes 1 al in
     bl
 
-
-val earlyDataIndicationBytes: earlyDataIndication -> Tot bytes
-val extensionPayloadBytes: extension -> Tot bytes
-val extensionBytes: extension -> Tot bytes
-val extensionsBytes: cl:list extension -> Tot (b:bytes{length b < ((List.length cl) * 65539)})
-let rec earlyDataIndicationBytes edi =
-  match edi with
-  | ServerEarlyDataIndication -> empty_bytes
-  | ClientEarlyDataIndication edi ->
-      let cid_bytes = configurationIdBytes edi.ped_configuration_id in
-      let cs_bytes = cipherSuiteBytes edi.ped_cipher_suite in
-      let ext_bytes = extensionsBytes edi.ped_extensions in
-      let content_bytes = vlbytes 1 edi.ped_content in
-      let edt_bytes = earlyDataTypeBytes edi.ped_early_data_type in
-      cid_bytes @| cs_bytes @| ext_bytes @| content_bytes @| edt_bytes
-and extensionPayloadBytes ext =
-  match ext with
-  | E_earlyData edt           -> earlyDataIndicationBytes edt
-  | E_preSharedKey psk        -> preSharedKeyBytes psk
-  | E_keyShare ks             -> keyShareBytes ks
-  | E_signatureAlgorithms sha -> sigHashAlgsBytes sha
-  | E_renegotiation_info(cvd, svd) -> 
-    (match svd with | None -> vlbytes 1 cvd | Some svd' -> let p = cvd @| svd' in vlbytes 1 p)
-  | E_server_name(l) -> compile_sni_list l
-  | E_extended_ms -> empty_bytes
-  | E_extended_padding -> empty_bytes
-  | E_supported_groups(l) -> namedGroupsBytes l
-  | E_ec_point_format(l) -> compile_ecpf_list l
-  | E_unknown_extension(h,b) -> b
-and extensionBytes ext =
-    let head = extensionHeaderBytes ext in
-    let payload = extensionPayloadBytes ext in
-    let payload = vlbytes 2 payload in
-    head @| payload
-and extensionsBytes exts =
-  List.fold_leftT (fun l s -> l @| extensionBytes s) empty_bytes exts
-
-(*
-let parseExtension head payload role =
-    match cbyte2 head with
-    | (0uy, 0uy) -> // Server name indication
-        (match vlparse 2 payload with
-        | Error (x,y) -> Some(Error(x,y))
-        | Correct(sni) ->
-            (match parse_sni_list sni with
-            | Error (x,y) -> Some(Error(x,y))
-            | Correct(l) -> Some(correct (E_server_name(l)))))
-    | (0xFFuy, 0x01uy) -> // renegotiation info
-        (match vlparse 1 payload with
-        | Error (x,y) -> Some(Error(x,y))
-        | Correct(vd) ->
-	  (match role with 
-	   | Client ->
-            (let res = E_renegotiation_info (vd,None) in
-            let res = correct res in
-            Some(res))
-	   | Server -> 
-	    (let vdL = length vd in
-	    let (cvd, svd) = split vd (vdL/2) in
-	    let res = E_renegotiation_info(cvd,Some svd) in
-	    let res = correct res in
-	    Some res)))
-    | (0x00uy, 0x0Auy) -> // Supported EC curves
-        (match vlparse 2 payload with
-        | Error (x,y) -> Some(Error(x,y))
-        | Correct(ecl) ->
-            (match parse_curve_list ecl with
-            | Error (x,y) -> Some(Error(x,y))
-            | Correct(l) -> Some(correct (E_supported_groups(l)))))
-    | (0x00uy, 0x0Buy) -> // Supported EC point formats
-        (match vlparse 1 payload with
-        | Error (x,y) -> Some(Error(x,y))
-        | Correct(ecpf) ->
-            (match parse_ecpf_list ecpf with
-            | Error (x,y) -> Some(Error(x,y))
-            | Correct(l) -> Some(correct (E_ec_point_format(l)))))
-#if TLSExt_sessionHash
-    | (0x00uy, 0x17uy) -> // extended_ms
-        if equalBytes payload empty_bytes then
-            Some(correct (E_extended_ms))
-        else
-            Some(Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Invalid data for extended master secret extension"))
-#endif
-#if TLSExt_extendedPadding
-    | (0xBBuy, 0x8Fuy) -> // extended_padding
-        if equalBytes payload empty_bytes then
-            Some(correct (E_extended_padding))
-        else
-            Some(Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Invalid data for extended padding extension"))
-#endif
-    // JK : used to be skipped, now stored as "unknown extension"
-    | (_,_) -> Some (correct (E_unknown_extension (head @| payload)))
-
+val addOnce: extension -> list extension -> Tot (Result (list extension))
 let addOnce ext extList =
     if List.existsb (sameExt ext) extList then
         Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
@@ -283,55 +227,163 @@ let addOnce ext extList =
         let res = ext::extList in
         correct(res)
 
-let rec parseExtensionList ext extList role =
-    match length ext with
-    | 0 -> correct (extList)
-    | x when (x < 4) ->
-        (* This is a parsing error, or a malformed extension *)
-        Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | _ ->
-        let (extTypeBytes,rem) = Platform.Bytes.split ext 2 in
-        match vlsplit 2 rem with
-            | Error(x,y) -> Error (x,y) (* Parsing error *)
-            | Correct (res) ->
-                let (payload,rem) = res in
-                match parseExtension extTypeBytes payload role with
-                | None ->
-		    // JK : this case does not happen anymore
-                    (* Unknown extension, skip it *)
-                    parseExtensionList rem extList role		    
-                | Some(res) ->
-                    match res with
-                    | Error(x,y) -> Error(x,y)
-                    | Correct(ce) ->
-                        match addOnce ce extList with
-                        | Error(x,y) -> Error(x,y)
-                        | Correct(extList) -> parseExtensionList rem extList role
-
+val parseSCSVs: known_cipher_suites -> list extension -> Tot (Result (list extension))
 let rec parseSCSVs ch_ciphers extL =
     if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV ch_ciphers then
-        addOnce (E_renegotiation_info(empty_bytes, None)) extL
+        addOnce (E_renegotiation_info(FirstConnection)) extL
     else
         correct(extL)
 
-val parseExtensions: data:bytes -> known_cipher_suites -> role -> Result (list extension)
-let parseExtensions data ch_ciphers role =
-    match length data with
-    | 0 -> parseSCSVs ch_ciphers []
-    | 1 -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | _ ->
-        match vlparse 2 data with
-        | Error(x,y)    -> Error(x,y)
-        | Correct(exts) ->
-            match parseExtensionList exts [] role with
-            | Error(x,y) -> Error(x,y)
-            | Correct(extL) -> parseSCSVs ch_ciphers extL
+val earlyDataIndicationBytes: earlyDataIndication -> Tot bytes
+val extensionPayloadBytes: extension -> Tot bytes
+val extensionBytes: extension -> Tot bytes
+val extensionsBytes: cl:list extension -> Tot bytes
+let rec earlyDataIndicationBytes edi =
+  match edi with
+  | ServerEarlyDataIndication -> empty_bytes
+  | ClientEarlyDataIndication edi ->
+      let cid_bytes = configurationIdBytes edi.ped_configuration_id in
+      let cs_bytes = cipherSuiteBytes edi.ped_cipher_suite in
+      let ext_bytes = extensionsBytes edi.ped_extensions in
+      let context_bytes = vlbytes 1 edi.ped_context in
+//      let edt_bytes = earlyDataTypeBytes edi.ped_early_data_type in
+      cid_bytes @| cs_bytes @| ext_bytes @| context_bytes //@| edt_bytes
+and extensionPayloadBytes ext =
+  match ext with
+  | E_earlyData edt           -> earlyDataIndicationBytes edt
+  | E_preSharedKey psk        -> preSharedKeyBytes psk
+  | E_keyShare ks             -> keyShareBytes ks
+  | E_signatureAlgorithms sha -> sigHashAlgsBytes sha
+  | E_renegotiation_info(ri)  -> renegotiationInfoBytes ri
+  | E_server_name(l)          -> compile_sni_list l
+  | E_extended_ms             -> empty_bytes
+  | E_extended_padding        -> empty_bytes
+  | E_supported_groups(l)     -> namedGroupsBytes l
+  | E_ec_point_format(l)      -> compile_ecpf_list l
+  | E_unknown_extension(h,b)  -> b
+and extensionBytes ext =
+    let head = extensionHeaderBytes ext in
+    let payload = extensionPayloadBytes ext in
+    let payload = vlbytes 2 payload in
+    head @| payload
+and extensionsBytes exts =
+  vlbytes 2 (List.fold_leftT (fun l s -> l @| extensionBytes s) empty_bytes exts)
 
+val parseEarlyDataIndication: pinverse Seq.Eq earlyDataIndicationBytes
+val parseExtension: pinverse Seq.Eq extensionBytes
+val parseExtensions: pinverse Seq.Eq extensionsBytes
+let rec parseExtension b =
+  if length b >= 2 then
+    let (head, payload) = split b 2 in
+    match vlsplit 2 payload with
+    | Correct (data, tail) ->
+	if length tail = 0 then
+	  let (len, data) = split data 2 in
+	  match cbyte2 head with
+	  | (0x00uy, 0x0Duy) -> // sigalgs
+	    (match parseSigHashAlgs data with
+	    | Correct(algs) -> Correct (E_signatureAlgorithms algs)
+	    | Error(z) -> Error(z))
+	  | (0x00uy, 0x00uy) -> // sni
+	    (match parse_sni_list data with
+	    | Correct(snis) -> Correct (E_server_name snis)
+	    | Error(z) -> Error(z))
+	  | (0xFFuy, 0x01uy) -> // renego
+	    (match parseRenegotiationInfo data with
+	    | Correct(ri) -> Correct (E_renegotiation_info(ri))
+	    | Error(z) -> Error(z))
+	  | (0x00uy, 0x0Auy) -> // supported groups
+	    (match parseNamedGroups data with
+	    | Correct(groups) -> Correct (E_supported_groups(groups))
+	    | Error(z) -> Error(z))
+	  | (0x00uy, 0x0Buy) -> // ec point format
+	    (match parse_ecpf_list data with
+	    | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
+	    | Error(z) -> Error(z))
+	  | (0x00uy, 0x17uy) -> // extended ms
+	    if length data = 1 && cbyte data = 0uy then Correct (E_extended_ms)
+	    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	  | (0xBBuy, 0x8Fuy) -> // extended padding
+	    if length data = 1 && cbyte data = 0uy then Correct (E_extended_padding)
+	    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	  | (0x11uy, 0x11uy) -> // head TBD, early data
+	    (match parseEarlyDataIndication data with
+	    | Correct (edi) -> Correct (E_earlyData(edi))
+	    | Error(z) -> Error(z))
+	  | (0x22uy, 0x22uy) -> // head TBD, pre shared key
+	    (match parsePreSharedKey data with
+	    | Correct(psk) -> Correct (E_preSharedKey(psk))
+	    | Error(z) -> Error(z))
+	  | (0x33uy, 0x33uy) -> // head TBD, key share
+	    (match parseKeyShare data with	    
+	    | Correct (ks) -> Correct (E_keyShare(ks))
+	    | Error(z) -> Error(z))
+	  | _ -> // Unknown extension
+	    Correct(E_unknown_extension(head,data))
+        else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | Error(z) -> Error(z)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+and parseEarlyDataIndication b = 
+  if length b > 0 then
+    match vlsplit 2 b with
+    | Correct(config_id, data) ->
+      match parseConfigurationId config_id with
+      | Correct(cid) -> 
+	if length data >= 2 then
+	  let (cs, data) = split data 2 in
+	  match parseCipherSuite cs with
+	  | Correct(cs) -> 
+	    match vlsplit 2 data with
+	    | Correct(exts, data) -> 
+	      match parseExtensions exts with
+	      | Correct(exts) -> 
+		match vlsplit 1 data with
+		| Correct(context, tail) ->
+		  if length tail = 0 then
+		    let (len, ctx) = split context 1 in
+		    Correct (ClientEarlyDataIndication ({ ped_configuration_id = cid;
+							  ped_cipher_suite = cs;
+							  ped_extensions = exts;
+							  ped_context = ctx; }))
+		  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+		| Error(z) -> Error(z)
+	      | Error(z) -> Error(z)
+	    | Error(z) -> Error(z)
+	  | Error(z) -> Error(z)
+	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      | Error(z) -> Error(z)
+    | Error(z) -> Error(z)
+  else Correct (ServerEarlyDataIndication)
+and parseExtensions b =
+  let rec (aux:bytes -> list extension -> Tot (Result (list extension))) = fun b exts ->
+    if length b > 0 then
+      match vlsplit 2 b with
+      | Correct(ext, bytes) ->
+	(match parseExtension ext with
+	| Correct(ext) -> 
+	  (match addOnce ext exts with // fails if the extension already is in the list
+	  | Correct(exts) -> aux bytes exts
+	  | Error(z) -> Error(z))
+	| Error(z) -> Error(z))
+      | Error(z) -> Error(z)
+    else Correct(exts) in
+  match vlsplit 2 b with
+  | Correct(b, tail) ->
+    if length tail = 0 then aux b []
+    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | Error(z) -> Error(z)
+
+val parseExtensionsWithCS: data:bytes -> known_cipher_suites -> Result (list extension)
+let parseExtensionsWithCS data ch_ciphers =
+  match parseExtensions data with
+  | Correct(exts) -> parseSCSVs ch_ciphers exts
+  | Error(z) -> Error(z)
+  
 // JK : Only client side ? 
 val prepareExtensions: config -> ConnectionInfo -> cVerifyData -> l:list extension{List.length l < 256}
 let prepareExtensions (cfg:config) (conn:ConnectionInfo) renegoCVD =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
-    let res = [E_renegotiation_info(renegoCVD, None)] in
+    let res = [E_renegotiation_info(ClientRenegotiationInfo renegoCVD)] in
 #if TLSExt_sessionHash
     let res = E_extended_ms :: res in
 #endif
@@ -341,20 +393,23 @@ let prepareExtensions (cfg:config) (conn:ConnectionInfo) renegoCVD =
     let res =
         let curves = List.map (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
         if curves <> [] && List.existsb (fun x -> isECDHECipherSuite x) cfg.ciphersuites then
-            E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: E_supported_groups(curves) :: res
+	  let curves = List.map (fun x -> SEC x) cfg.ecdhGroups in
+          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: E_supported_groups(curves) :: res
         else res in
     res
 
+// TODO : check function
+val serverToNegotiatedExtension: list extension -> bool -> cipherSuite -> Result negotiatedExtensions -> extension -> Tot (Result (negotiatedExtensions))
 let serverToNegotiatedExtension cExtL (resuming:bool) cs res sExt : Result (negotiatedExtensions)=
     match res with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
         if List.existsb (sameExt sExt) cExtL then
             match sExt with
-            | E_renegotiation_info (cvd,svd) -> 
-	      (match svd with
-	      | Some svd' -> correct ({l with ne_renegotiation_info=Some(cvd,svd')})
-	      | None -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent renegotiation info without server verified data"))
+            | E_renegotiation_info (ri) -> 
+	      (match ri with
+	      | ServerRenegotiationInfo(cvd,svd) -> correct ({l with ne_renegotiation_info=Some(cvd,svd)})
+	      | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent renegotiation info without server verified data"))
             | E_server_name _ ->
                 if List.existsb (fun x->match x with E_server_name _ -> true | _ -> false) cExtL then correct(l)
                 else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
@@ -379,23 +434,25 @@ let serverToNegotiatedExtension cExtL (resuming:bool) cs res sExt : Result (nego
         else
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided an extension not given by the client")
 
+val negotiateClientExtensions: list extension -> list extension -> bool -> cipherSuite -> Tot (Result (negotiatedExtensions))
 let negotiateClientExtensions (cExtL:list extension) (sExtL:list extension) (resuming:bool) cs =
     let nes = ne_default in
-    match List.fold_left (serverToNegotiatedExtension cExtL resuming cs) (correct nes) sExtL with
+    match List.fold_leftT (serverToNegotiatedExtension cExtL resuming cs) (correct nes) sExtL with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
         // Client-side specific extension negotiation
         // Nothing for now
         correct(l)
 
+val clientToServerExtension: config -> cipherSuite -> (cVerifyData * sVerifyData) -> bool -> extension -> Tot (option extension)
 let clientToServerExtension (cfg:config) (cs:cipherSuite) ((renegoCVD:cVerifyData),(renegoSVD:sVerifyData)) (resuming:bool) (cExt:extension) : (option (extension)) =
     match cExt with
-    | E_earlyData b -> None    // JK : how to handle these here ?
-    | E_preSharedKey b -> None // JK : how to handle these here ?
-    | E_keyShare b -> None     // JK : how to handle these here ?
-    | E_renegotiation_info (_) -> Some (E_renegotiation_info (renegoCVD,renegoSVD))
+    | E_earlyData b -> None    // JK : TODO
+    | E_preSharedKey b -> None // JK : TODO
+    | E_keyShare b -> None     // JK : TODO
+    | E_renegotiation_info (_) -> Some (E_renegotiation_info (ServerRenegotiationInfo(renegoCVD,renegoSVD)))
     | E_server_name l ->
-        (match List.tryFind (fun x->match x with SNI_DNS _ -> true | _ -> false) l with
+        (match List.tryFindT (fun x->match x with SNI_DNS _ -> true | _ -> false) l with
         | Some _ -> Some(E_server_name l)
         | _ -> None)
     | E_ec_point_format(l) ->
@@ -411,17 +468,17 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ((renegoCVD:cVerifyDat
                 None
             else
                 Some(E_extended_padding)
-    | E_unknown_extension b -> None
-    
+    | E_unknown_extension b -> None    
 
+val clientToNegotiatedExtension: config -> cipherSuite -> (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
 let clientToNegotiatedExtension (cfg:config) cs ((cvd:cVerifyData),(svd:sVerifyData)) (resuming:bool)  neg cExt =
     match cExt with
     | E_renegotiation_info (_) -> {neg with ne_renegotiation_info=Some(cvd,svd)}
     | E_supported_groups l ->
         if resuming then neg
         else
-            let rec okcurves = function
-            | ECGroup.EC_CORE(x) :: r ->
+            let rec (okcurves:list namedGroup -> Tot (list ec_curve)) = function
+            | SEC(x) :: r ->
                 let rl = okcurves r in
                 if List.existsb (fun x -> x = x) cfg.ecdhGroups then x::rl else rl
             | x :: r -> okcurves r
@@ -430,7 +487,7 @@ let clientToNegotiatedExtension (cfg:config) cs ((cvd:cVerifyData),(svd:sVerifyD
     | E_ec_point_format l ->
         if resuming then neg
         else
-            let nl = List.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
+            let nl = List.filterT (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
             {neg with ne_supported_point_formats = Some nl}
     | E_server_name l ->
         {neg with ne_server_names = Some l}
@@ -449,78 +506,47 @@ let clientToNegotiatedExtension (cfg:config) cs ((cvd:cVerifyData),(svd:sVerifyD
                 {neg with ne_extended_padding = true}
     | _ -> neg // JK : handle remaining cases
 
+val negotiateServerExtensions: list extension -> config -> cipherSuite -> (cVerifyData*sVerifyData) -> bool -> Tot (list extension * negotiatedExtensions)
 let negotiateServerExtensions cExtL cfg cs (cvd,svd) resuming  :  (list extension * negotiatedExtensions) =
-    let server = List.choose (clientToServerExtension cfg cs (cvd,svd) resuming) cExtL in
+    let server = List.chooseT (clientToServerExtension cfg cs (cvd,svd) resuming) cExtL in
     let negi = ne_default in
-    let nego = List.fold_left (clientToNegotiatedExtension cfg cs (cvd,Some.v svd) resuming) negi cExtL in
+    let nego = List.fold_leftT (clientToNegotiatedExtension cfg cs (cvd,svd) resuming) negi cExtL in
     (server,nego)
 
+val isClientRenegotiationInfo: extension -> Tot (option cVerifyData)
 let isClientRenegotiationInfo e =
     match e with
-    | E_renegotiation_info(cvd, None) -> Some(cvd)
+    | E_renegotiation_info(ClientRenegotiationInfo(cvd)) -> Some(cvd)
     | _ -> None
 
+val checkClientRenegotiationInfoExtension: config -> list extension -> cVerifyData -> Tot bool
 let checkClientRenegotiationInfoExtension config (cExtL: list extension) cVerifyData =
-    match List.tryPick isClientRenegotiationInfo cExtL with
+    match List.tryPickT isClientRenegotiationInfo cExtL with
     | None -> not (config.safe_renegotiation)
     | Some(payload) -> equalBytes payload cVerifyData
 
+val isServerRenegotiationInfo: extension -> Tot (option (cVerifyData * sVerifyData))
 let isServerRenegotiationInfo e =
     match e with
-    | E_renegotiation_info (cvd,Some svd) -> Some((cvd,svd))
+    | E_renegotiation_info (ServerRenegotiationInfo(cvd,svd)) -> Some((cvd,svd))
     | _ -> None
 
+val checkServerRenegotiationInfoExtension: config -> list extension -> cVerifyData -> sVerifyData -> Tot bool
 let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerifyData sVerifyData =
-    match List.tryPick isServerRenegotiationInfo sExtL with
+    match List.tryPickT isServerRenegotiationInfo sExtL with
     | None -> not (config.safe_renegotiation)
     | Some(x) ->
         let (cvd,svd) = x in
         equalBytes (cvd @| svd) (cVerifyData @| sVerifyData)
 
+val hasExtendedMS: negotiatedExtensions -> Tot bool
 let hasExtendedMS extL = extL.ne_extended_ms = true
 
+val hasExtendedPadding: id -> Tot bool
 let hasExtendedPadding id = id.ext.ne_extended_padding = true
 
-(* sigHashAlg parsing functions *)
-let sigHashAlgBytes alg =
-    // pre: we're in TLS 1.2
-    let (sign,hash) = alg in
-    let signB = sigAlgBytes sign in
-    let hashB = hashAlgBytes hash in
-    hashB @| signB
-
-let parseSigHashAlg b =
-    let (hashB,signB) = Platform.Bytes.split b 1 in
-    match parseSigAlg signB with
-    | Error(x,y) -> Error(x,y)
-    | Correct(sign) ->
-        match parseHashAlg hashB with
-        | Error(x,y) -> Error(x,y)
-        | Correct(hash) -> correct(sign,hash)
-
-assume val sigHashAlgListBytes: sal:list Sig.alg -> Tot (lbytes (2* List.length sal))
-(*
-let rec sigHashAlgListBytes algL =
-    match algL with
-    | [] -> empty_bytes
-    | h::t ->
-        let oneItem = sigHashAlgBytes h in
-        oneItem @| sigHashAlgListBytes t
-*)
-let rec parseSigHashAlgList b : (Result (list Sig.alg))=
-    if length b = 0 then correct([])
-    else if length b = 1 then Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    else
-        let (thisB,remB) = Platform.Bytes.split b 2 in
-        match parseSigHashAlgList remB with
-        | Error(x,y) -> Error(x,y)
-        | Correct(rem) ->
-            match parseSigHashAlg thisB with
-            | Error(x,y) -> // skip this one
-                correct(rem)
-            | Correct(this) ->
-                correct(this :: rem)
-
+// JK : cannot add total effect here because of the exception thrown
+val default_sigHashAlg_fromSig: ProtocolVersion -> sigAlg -> (list sigHashAlg)
 let default_sigHashAlg_fromSig pv sigAlg=
     match sigAlg with
     | RSASIG ->
@@ -539,28 +565,34 @@ val default_sigHashAlg: ProtocolVersion -> cipherSuite -> l:list Sig.alg{List.le
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
 
+val sigHashAlg_contains: list Sig.alg -> Sig.alg -> Tot bool
 let sigHashAlg_contains (algList:list Sig.alg) (alg:Sig.alg) =
     List.existsb (fun a -> a = alg) algList
 
+val sigHashAlg_bySigList: list Sig.alg -> list sigAlg -> Tot (list Sig.alg)
 let sigHashAlg_bySigList (algList:list Sig.alg) (sigAlgList:list sigAlg):list Sig.alg =
-    List.choose (fun alg -> let (sigA,_) = alg in if (List.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
+    List.chooseT (fun alg -> let (sigA,_) = alg in if (List.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
 
+val cert_type_to_SigHashAlg: certType -> ProtocolVersion -> list sigHashAlg
 let cert_type_to_SigHashAlg ct pv =
     match ct with
     | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> default_sigHashAlg_fromSig pv DSA
     | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> default_sigHashAlg_fromSig pv RSASIG
 
+val cert_type_list_to_SigHashAlg: list certType -> ProtocolVersion -> list sigHashAlg
 let rec cert_type_list_to_SigHashAlg ctl pv =
     // FIXME: Generates a list with duplicates!
     match ctl with
     | [] -> []
     | h::t -> (cert_type_to_SigHashAlg h pv) @ (cert_type_list_to_SigHashAlg t pv)
 
+val cert_type_to_SigAlg: certType -> Tot sigAlg
 let cert_type_to_SigAlg ct =
     match ct with
     | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> DSA
     | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> RSASIG
 
+val cert_type_list_to_SigAlg: list certType -> list sigAlg
 let rec cert_type_list_to_SigAlg ctl =
     // FIXME: Generates a list with duplicates!
     match ctl with
