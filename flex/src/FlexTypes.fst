@@ -214,6 +214,26 @@ type FServerHello = {
 }
 
 /// <summary>
+/// Handshake Message record type for ServerConfiguration
+/// </summary>
+type FServerConfiguration = {
+  /// <summary> The configuration identifier to be used in 0-RTT mode </summary>
+  id: configurationId;
+  /// <summary> The last time when this configuration is expected to be valid </summary>
+  expirationDate: int;
+  /// <summary> The group for the long-term DH key </summary>
+  group: dhGroup;
+  /// <summary> The long-term DH key associated to the configuration </summary>
+  key: bytes;
+  /// <summary> The type of 0-RTT handshake that this configuration is to be used for </summary>
+  earlyDataType: earlyDataType;
+  /// <summary> List of extensions associated to the serverConfiguration message </summary>
+  ext: option (list serverConfigurationExtention);
+  /// <summary> Message bytes</summary>
+  payload: bytes;
+}
+
+/// <summary>
 /// Handshake Message record type for Certificate
 /// </summary>
 type FCertificate = {
