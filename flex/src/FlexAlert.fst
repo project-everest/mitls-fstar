@@ -1,26 +1,21 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexAlert
+module FlexTLS.Alert
 
 
-open NLog
+open Platform.Log
 
-open Bytes
-open Alert
-open Error
-open TLSError
-open TLSConstants
+open MiTLS.Bytes
+open MiTLS.Alert
+open MiTLS.Error
+open MiTLS.TLSError
+open MiTLS.TLSConstants
 
-open FlexTypes
-open FlexConstants
-open FlexState
-open FlexRecord
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.State
+open FlexTLS.Record
 
-/// <summary>
-/// Module receiving, sending and forwarding Alert messages.
-/// </summary>
-type FlexAlert =
-    class
 
     /// <summary>
     /// Receive an Alert message from the network stream
