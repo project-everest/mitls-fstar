@@ -39,9 +39,9 @@ let getCiphersuites (ch:FClientHello) =
 /// <param name="ch"> FClientHello message record </param>
 /// <returns> Protocol version </returns>
 let getPV (ch:FClientHello) =
-    match ch.pv with
-    | None -> TLSInfo.defaultConfig.maxVer
-    | Some(pv) -> pv
+  match ch.pv with
+  | None -> TLSInfo.defaultConfig.maxVer
+  | Some(pv) -> pv
 
 /// <summary>
 /// Extract the compression list from a FClientHello message record
