@@ -36,11 +36,11 @@ type kexDH = {
 }
 
 /// <summary>
-/// DH key exchange parameters record, for negotiated DH parameters
+/// FFDH key exchange parameters record, for negotiated DH parameters
 /// Contains both public and secret values associated of Diffie Hellman parameters
 /// </summary>
-type kexDHTLS13 = {
-    /// <summary> Negotiated DH group </summary>
+type kexFFDH = {
+    /// <summary> Negotiated Finite Field DH group </summary>
     group: dhGroup;
     /// <summary> Local secret value of the DH exchange </summary>
     x:  bytes;
