@@ -1,15 +1,18 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexConstants
+module FlexTLS.Constants
 
 
+open Platform
 open Platform.Bytes
+
+open MiTLS
 open MiTLS.Error
 open MiTLS.TLSInfo
 open MiTLS.TLSConstants
 open MiTLS.CoreKeys
 
-open FlexTLS.FlexTypes
+open FlexTLS.Types
 
 
 
@@ -86,14 +89,14 @@ let names_of_cipherSuites css =
   match css with
   | [] -> correct []
   | h::t -> if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV [h] then
-            match FlexConstants.names_of_cipherSuites t with
+            match FlexTLS.Constants.names_of_cipherSuites t with
             | Error(x,y) -> Error(x,y)
             | Correct(rem) -> correct(rem)
           else
             match name_of_cipherSuite h with
             | Error(x,y) -> Error(x,y)
             | Correct(n) -> 
-              match FlexConstants.names_of_cipherSuites t with
+              match FlexTLS.Constants.names_of_cipherSuites t with
               | Error(x,y) -> Error(x,y)
               | Correct(rem) -> correct (n::rem)
 
@@ -108,15 +111,15 @@ let dhdb = DHDB.create "dhparams-db.bin"
 
 /// <summary> Default DH params </summary>
 let defaultDHParams =
-  let _,dhparams = CoreDH.load_default_params "default-dh.pem" FlexConstants.dhdb DHDBManager.defaultDHPrimeConfidence FlexConstants.minDHSize in
+  let _,dhparams = CoreDH.load_default_params "default-dh.pem" FlexTLS.Constants.dhdb DHDBManager.defaultDHPrimeConfidence FlexTLS.Constants.minDHSize in
   dhparams
 
 /// <summary> Default ECDH params </summary>
-let defaultECDHParams = CommonDH.DHP_EC(ECGroup.getParams FlexConstants.defaultECDHcurve)
+let defaultECDHParams = CommonDH.DHP_EC(ECGroup.getParams FlexTLS.Constants.defaultECDHcurve)
 
 /// <summary> Default DH key exchange parameters, with default DH group and empty DH shares </summary>
 let nullKexDH = {
-  pg = (FlexConstants.defaultDHParams.dhp,FlexConstants.defaultDHParams.dhg);
+  pg = (FlexTLS.Constants.defaultDHParams.dhp,FlexTLS.Constants.defaultDHParams.dhg);
   x  = empty_bytes;
   gx = empty_bytes;
   gy = empty_bytes;
@@ -124,8 +127,8 @@ let nullKexDH = {
 
 /// <summary> Default ECDH key exchange parameters, with default ECDH group and empty DH shares </summary>
 let nullKexECDH = {
-  curve = FlexConstants.defaultECDHcurve;
-  comp = FlexConstants.defaultECDHcurveCompression;
+  curve = FlexTLS.Constants.defaultECDHcurve;
+  comp = FlexTLS.Constants.defaultECDHcurveCompression;
   x = empty_bytes;
   ecp_x = empty_bytes,empty_bytes;
   ecp_y = empty_bytes,empty_bytes;
@@ -149,7 +152,7 @@ let nullFClientHello : FClientHello = {
   pv   = Some(defaultConfig.maxVer);
   rand = empty_bytes;
   sid  = None;
-  ciphersuites =  (match FlexConstants.names_of_cipherSuites defaultConfig.ciphersuites with
+  ciphersuites =  (match FlexTLS.Constants.names_of_cipherSuites defaultConfig.ciphersuites with
                    | Error(_,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
                    | Correct(s) -> Some(s));
   comps = Some(defaultConfig.compressions);
@@ -189,16 +192,16 @@ let nullFCertificateRequest : FCertificateRequest = {
 
 /// <summary> Empty CertificateVerify message </summary>
 let nullFCertificateVerify : FCertificateVerify = {
-  sigAlg    = FlexConstants.sigAlgs_RSA.Head;
+  sigAlg    = FlexTLS.Constants.sigAlgs_RSA.Head;
   signature = empty_bytes;
   payload   = empty_bytes;
 }
 
 /// <summary> Empty ServerKeyExchange message, for DH key exchange </summary>
 let nullFServerKeyExchangeDHx : FServerKeyExchange = {
-  sigAlg = FlexConstants.sigAlgs_RSA.Head;
+  sigAlg = FlexTLS.Constants.sigAlgs_RSA.Head;
   signature = empty_bytes;
-  kex     = DH(FlexConstants.nullKexDH);
+  kex     = DH(FlexTLS.Constants.nullKexDH);
   payload = empty_bytes;
 }
 
@@ -215,7 +218,7 @@ let nullFClientKeyExchangeRSA : FClientKeyExchange = {
 
 /// <summary> Empty ClientKeyExchange message, for DH key exchange </summary>
 let nullFClientKeyExchangeDH : FClientKeyExchange = {
-  kex     = DH(FlexConstants.nullKexDH);
+  kex     = DH(FlexTLS.Constants.nullKexDH);
   payload = empty_bytes;
 }
 
@@ -254,7 +257,7 @@ let nullSessionInfo = {
   protocol_version = TLS_1p2;
   cipher_suite = nullCipherSuite;
   compression  = NullCompression;
-  extensions   = FlexConstants.nullNegotiatedExtensions;
+  extensions   = FlexTLS.Constants.nullNegotiatedExtensions;
   init_crand   = empty_bytes;
   init_srand   = empty_bytes;
   session_hash = empty_bytes;
@@ -272,9 +275,9 @@ let nullSecrets = {
 
 /// <summary> Null next Security Context </summary>
 let nullNextSecurityContext = {
-  si     = FlexConstants.nullSessionInfo;
+  si     = FlexTLS.Constants.nullSessionInfo;
   crand  = empty_bytes;
   srand  = empty_bytes;
-  secrets = FlexConstants.nullSecrets;
+  secrets = FlexTLS.Constants.nullSecrets;
   offers = [];
 }
