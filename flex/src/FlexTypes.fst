@@ -296,9 +296,9 @@ type FCertificateVerify = {
 /// </summary>
 type FClientKeyExchange = {
   /// <summary> Key Exchange mechanism information </summary>
-  kex:kex;
+  kex: kex;
   /// <summary> Message bytes </summary>
-  payload:bytes;
+  payload: bytes;
 }
 
 /// <summary>
