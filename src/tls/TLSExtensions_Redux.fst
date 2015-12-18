@@ -267,7 +267,7 @@ and extensionBytes ext =
     let payload = vlbytes 2 payload in
     head @| payload
 and extensionsBytes exts =
-  vlbytes 2 (List.fold_leftT (fun l s -> l @| extensionBytes s) empty_bytes exts)
+  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts)
 
 val parseEarlyDataIndication: pinverse Seq.Eq earlyDataIndicationBytes
 val parseExtension: pinverse Seq.Eq extensionBytes
@@ -437,7 +437,7 @@ let serverToNegotiatedExtension cExtL (resuming:bool) cs res sExt : Result (nego
 val negotiateClientExtensions: list extension -> list extension -> bool -> cipherSuite -> Tot (Result (negotiatedExtensions))
 let negotiateClientExtensions (cExtL:list extension) (sExtL:list extension) (resuming:bool) cs =
     let nes = ne_default in
-    match List.fold_leftT (serverToNegotiatedExtension cExtL resuming cs) (correct nes) sExtL with
+    match List.Tot.fold_left (serverToNegotiatedExtension cExtL resuming cs) (correct nes) sExtL with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
         // Client-side specific extension negotiation
@@ -452,7 +452,7 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ((renegoCVD:cVerifyDat
     | E_keyShare b -> None     // JK : TODO
     | E_renegotiation_info (_) -> Some (E_renegotiation_info (ServerRenegotiationInfo(renegoCVD,renegoSVD)))
     | E_server_name l ->
-        (match List.tryFindT (fun x->match x with SNI_DNS _ -> true | _ -> false) l with
+        (match List.Tot.tryFind (fun x->match x with SNI_DNS _ -> true | _ -> false) l with
         | Some _ -> Some(E_server_name l)
         | _ -> None)
     | E_ec_point_format(l) ->
@@ -487,7 +487,7 @@ let clientToNegotiatedExtension (cfg:config) cs ((cvd:cVerifyData),(svd:sVerifyD
     | E_ec_point_format l ->
         if resuming then neg
         else
-            let nl = List.filterT (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
+            let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
             {neg with ne_supported_point_formats = Some nl}
     | E_server_name l ->
         {neg with ne_server_names = Some l}
@@ -508,9 +508,9 @@ let clientToNegotiatedExtension (cfg:config) cs ((cvd:cVerifyData),(svd:sVerifyD
 
 val negotiateServerExtensions: list extension -> config -> cipherSuite -> (cVerifyData*sVerifyData) -> bool -> Tot (list extension * negotiatedExtensions)
 let negotiateServerExtensions cExtL cfg cs (cvd,svd) resuming  :  (list extension * negotiatedExtensions) =
-    let server = List.chooseT (clientToServerExtension cfg cs (cvd,svd) resuming) cExtL in
+    let server = List.Tot.choose (clientToServerExtension cfg cs (cvd,svd) resuming) cExtL in
     let negi = ne_default in
-    let nego = List.fold_leftT (clientToNegotiatedExtension cfg cs (cvd,svd) resuming) negi cExtL in
+    let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs (cvd,svd) resuming) negi cExtL in
     (server,nego)
 
 val isClientRenegotiationInfo: extension -> Tot (option cVerifyData)
@@ -521,7 +521,7 @@ let isClientRenegotiationInfo e =
 
 val checkClientRenegotiationInfoExtension: config -> list extension -> cVerifyData -> Tot bool
 let checkClientRenegotiationInfoExtension config (cExtL: list extension) cVerifyData =
-    match List.tryPickT isClientRenegotiationInfo cExtL with
+    match List.Tot.tryPick isClientRenegotiationInfo cExtL with
     | None -> not (config.safe_renegotiation)
     | Some(payload) -> equalBytes payload cVerifyData
 
@@ -533,7 +533,7 @@ let isServerRenegotiationInfo e =
 
 val checkServerRenegotiationInfoExtension: config -> list extension -> cVerifyData -> sVerifyData -> Tot bool
 let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerifyData sVerifyData =
-    match List.tryPickT isServerRenegotiationInfo sExtL with
+    match List.Tot.tryPick isServerRenegotiationInfo sExtL with
     | None -> not (config.safe_renegotiation)
     | Some(x) ->
         let (cvd,svd) = x in
@@ -571,7 +571,7 @@ let sigHashAlg_contains (algList:list Sig.alg) (alg:Sig.alg) =
 
 val sigHashAlg_bySigList: list Sig.alg -> list sigAlg -> Tot (list Sig.alg)
 let sigHashAlg_bySigList (algList:list Sig.alg) (sigAlgList:list sigAlg):list Sig.alg =
-    List.chooseT (fun alg -> let (sigA,_) = alg in if (List.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
+    List.Tot.choose (fun alg -> let (sigA,_) = alg in if (List.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
 
 val cert_type_to_SigHashAlg: certType -> ProtocolVersion -> list sigHashAlg
 let cert_type_to_SigHashAlg ct pv =

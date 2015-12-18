@@ -35,7 +35,9 @@ let is_chain_for_key_encryption c = failwith "Not implemented"
 
 val get_hint : chain -> option hint
 val validate_cert_chain : list Sig.alg  -> chain -> bool
+val parseCertificateList: bytes -> Result chain
+val certificateListBytes: chain -> Tot (b:bytes{length b < (3 * 65536)})
 let get_hint c = failwith "Not implemented"
 let validate_cert_chain l c = failwith "Not implemented"
 let parseCertificateList b = failwith "Not implemented"
-let certificateListBytes c = failwith "Not implemented"
+let certificateListBytes c = magic()

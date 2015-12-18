@@ -12,11 +12,11 @@ ifndef FSTAR_HOME
 FSTAR_HOME=../../../FStar
 endif
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
-STDLIB_ADMITS=Char HyperHeap Set Map Seq
+STDLIB_ADMITS=Char HyperHeap Set Map
 
 STDLIB=ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi \
-seqproperties.fst #int64.fst 
+seq.fst seqproperties.fst #int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
 
@@ -35,6 +35,11 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeo
 
 LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 
+OCAML=ocamlfind ocamlopt -package batteries -package stdint -linkpkg -g -thread
+DEBUG=ocamlfind ocamlc -package batteries -package stdint -linkpkg -g -thread
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db)
+OCAMLLIB=$(FSTAR_HOME)/contrib/Platform/ml/platform.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.ml
+
 # ------------------------- miTLS* -------------------------------------------
 # We try to limit the use of preprocessing, as it is messy.
 # Not sure which interfaces we should put in there.
@@ -50,6 +55,11 @@ TLSREDUX=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
 	DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst \
 	AEAD_GCM.fst StatefulLHAE.fst PRF-redux.p.fst  \
 	HandshakeMessages_Redux.fst Handshake_Redux.fst
+
+TLSPARSE=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
+	DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst \
+	UntrustedCert.fst Cert.fst TLSInfo.fst TLSExtensions_Redux.p.fst \
+	HandshakeMessages_Redux.fst
 
 # these files are verified here
 VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM StatefulLHAE DataStream Alert Content StatefulPlain
@@ -149,6 +159,20 @@ wc:
 
 redux: $(LIBFILES) $(TLSREDUX)
 	$(FSTAR) --lax  $(ADMITTED) $^
+
+TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml TLSConstants.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/DHDB.ml Nonce.ml RSAKey.ml ECGroup.ml DHGroup.ml CommonDH.ml PMS.ml HASH.ml Sig.ml UntrustedCert.ml Cert.ml TLSInfo.ml TLSExtensions.ml HandshakeMessages.ml
+TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
+
+redux-gen: $(LIBFILES) $(TLSPARSE)
+	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
+	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
+	make -C $(FSTAR_HOME)/lib/ml hyperheap
+	make -C $(FSTAR_HOME)/contrib/Platform/ml
+	rm -f $(FSTAR_HOME)/lib/ml/prims.cmi
+	$(OCAML) $(FSTAR_HOME)/lib/ml/native_int/prims.ml
+	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
+	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db
+	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSPARSE_ML) 
 
 # ------------------ preprocessing :( -----------------------
 

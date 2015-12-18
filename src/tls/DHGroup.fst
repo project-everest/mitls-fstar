@@ -14,7 +14,20 @@ type preds = | Elt of bytes * bytes * elt
 type predPP = | PP of bytes * bytes
 
 #if 1
-let goodPP_log = ST.alloc Nil
+val goodPP_log: FStar.ST.ref (list CoreCrypto.dh_params)
+(* Code should be let goodPP_log = ST.alloc Nil but it misses some type annotations to 
+   compile the OCaml code 
+   TODO : FIXME
+   *)
+let goodPP_log = 
+  let dummy = {
+     dh_p = empty_bytes;
+     dh_g = empty_bytes;
+     dh_q = None;
+     safe_prime = false;
+  } in
+  let nil = Nil in
+  let dummy = dummy::nil in ST.alloc (List.Tot.tl dummy) 
 
 let goodPP (dhp:dh_params) = List.mem dhp !goodPP_log
 
