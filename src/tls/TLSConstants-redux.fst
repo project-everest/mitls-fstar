@@ -12,11 +12,11 @@ module TLSConstants
 (* SMT solver parameters *)
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
+open FStar.SeqProperties
 open Platform.Bytes
 open Platform.Error
 open TLSError
 open CoreCrypto
-open FStar.SeqProperties
 
 (* Type representations for TLS negotiated values *)
 type ProtocolVersion =
@@ -1012,7 +1012,7 @@ let parseNamedGroup b =
 
 val namedGroupsBytes: list namedGroup -> Tot bytes
 let namedGroupsBytes groups =
-  vlbytes 2 (List.fold_leftT (fun l s -> l @| namedGroupBytes s) empty_bytes groups)
+  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| namedGroupBytes s) empty_bytes groups)
 
 val parseNamedGroups: pinverse Seq.Eq namedGroupsBytes
 let parseNamedGroups b =
@@ -1103,7 +1103,7 @@ let parseConfigurationExtension b =
 
 val configurationExtensionsBytes: list configurationExtension -> Tot bytes
 let configurationExtensionsBytes ce = 
-  vlbytes 2 (List.fold_leftT (fun bytes x -> bytes @| configurationExtensionBytes x) empty_bytes ce)
+  vlbytes 2 (List.Tot.fold_left (fun bytes x -> bytes @| configurationExtensionBytes x) empty_bytes ce)
 
 val parseConfigurationExtensions: pinverse Seq.Eq configurationExtensionsBytes
 let parseConfigurationExtensions b = 
@@ -1126,25 +1126,25 @@ let parseConfigurationExtensions b =
 
 val sigHashAlgBytes: sigHashAlg -> Tot (lbytes 2)
 let sigHashAlgBytes sha =
-  let sig = sigAlgBytes (fst sha) in
+  let sign = sigAlgBytes (fst sha) in
   let hash = hashAlgBytes (snd sha) in
-  sig @| hash
+  sign @| hash
 
 val parseSigHashAlg: pinverse Seq.Eq sigHashAlgBytes
 let parseSigHashAlg b =
   if length b = 2 then
-    let (sig, hash) = split b 2 in
-    match parseSigAlg sig with
-    | Correct(sig) -> 
+    let (sign, hash) = split b 2 in
+    match parseSigAlg sign with
+    | Correct(sign) -> 
 	match parseHashAlg hash with
-	| Correct(hash) -> Correct(sig, hash)
+	| Correct(hash) -> Correct(sign, hash)
 	| Error(z) -> Error(z)
     | Error(z) -> Error(z)
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val sigHashAlgsBytes: list sigHashAlg -> Tot bytes
 let sigHashAlgsBytes algs = 
-  vlbytes 2 (List.fold_leftT (fun l x -> l @| sigHashAlgBytes x) empty_bytes algs)
+  vlbytes 2 (List.Tot.fold_left (fun l x -> l @| sigHashAlgBytes x) empty_bytes algs)
 
 val parseSigHashAlgs: pinverse Seq.Eq sigHashAlgsBytes
 let parseSigHashAlgs b =
@@ -1188,7 +1188,7 @@ let parseKeyShareEntry b =
 
 val keyShareEntriesBytes: list keyShareEntry -> Tot bytes
 let keyShareEntriesBytes kses =
-  vlbytes 2 (List.fold_leftT (fun l s -> l @| keyShareEntryBytes s) empty_bytes kses)
+  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| keyShareEntryBytes s) empty_bytes kses)
 
 val parseKeyShareEntries: pinverse Seq.Eq keyShareEntriesBytes
 let parseKeyShareEntries b =
@@ -1265,7 +1265,7 @@ let parsePskIdentity b =
 
 val pskIdentitiesBytes: list pskIdentity -> Tot bytes
 let pskIdentitiesBytes l =
-  vlbytes 2 (List.fold_leftT (fun l s -> l @| pskIdentityBytes s) empty_bytes l)
+  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| pskIdentityBytes s) empty_bytes l)
 
 val parsePskIdentities: pinverse Seq.Eq pskIdentitiesBytes
 let parsePskIdentities b =
