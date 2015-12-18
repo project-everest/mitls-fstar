@@ -1,4 +1,9 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿(*--build-config
+  options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Handshake --lax;
+  other-files:ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi seqproperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst PRF-redux.p.fst HandshakeMessages_Redux.fst;
+  --*)
+
+(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
 #light "off"
 
@@ -86,13 +91,65 @@ let prepareClientHello cfg ri sido : CH * log =
   (ch,clientHelloBytes ch)
 
 (* Should we gather all negotiation into one giant negotiation function? *)
-assume val negotiateVersion: cfg:config -> c:ProtocolVersion -> Tot (Result ProtocolVersion)
-assume val negotiateCipherSuite: cfg:config -> pv:ProtocolVersion -> c:known_cipher_suites -> Tot (Result known_cipher_suite)
-assume val negotiateCompression: cfg:config -> pv:ProtocolVersion -> c:list Compression -> Tot (Result Compression)
-assume val negotiateExtensions: cfg:config -> pv:ProtocolVersion -> option ri -> res:bool -> c:list extension -> Tot (Result (l:list extension{List.length l < 256} * negotiatedExtensions))
+val negotiateVersion: cfg:config -> c:ProtocolVersion -> Tot (Result ProtocolVersion)
+let negotiateVersion cfg c =
+  let (gte_pv:ProtocolVersion -> ProtocolVersion -> Tot bool) = fun pv1 pv2 ->
+    match pv1 with
+    | SSL_3p0 -> (match pv2 with | SSL_3p0 -> true | _ -> false)
+    | TLS_1p0 -> (match pv2 with | SSL_3p0 | TLS_1p0 -> true | _ -> false)
+    | TLS_1p1 -> (match pv2 with | SSL_3p0 | TLS_1p0 | TLS_1p1 -> true | _ -> false)
+    | TLS_1p2 -> (match pv2 with | TLS_1p3 -> false | _ -> true)
+    | TLS_1p3 -> true in
+  if gte_pv c cfg.minVer && gte_pv cfg.maxVer c then Correct(c)
+  else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
 
-assume val getCachedSession: cfg:config -> ch:CH -> option Session
+val negotiate:#a:Type -> list a -> list a -> Tot (option a)
+let negotiate l1 l2 =
+  List.tryFindT (fun s -> List.existsb (fun c -> c = s) l1) l2
 
+val negotiateCipherSuite: cfg:config -> pv:ProtocolVersion -> c:known_cipher_suites -> Tot (Result known_cipher_suite)
+let negotiateCipherSuite cfg pv c =
+  let cs = 
+    match pv with
+    | SSL_3p0 -> None
+    // TODO
+    | TLS_1p3 -> None
+    | _ -> negotiate c cfg.ciphersuites in
+  match cs with
+  | Some(cs) -> Correct(cs)
+  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
+
+val negotiateCompression: cfg:config -> pv:ProtocolVersion -> c:list Compression -> Tot (Result Compression)
+let negotiateCompression cfg pv c =
+  let cs = 
+    match pv with
+    | SSL_3p0 -> None
+    // TODO
+    | TLS_1p3 -> None
+    | _ -> negotiate c cfg.compressions in
+  match cs with
+  | Some(cs) -> Correct(cs)
+  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
+
+// Why is ri an option ?
+val negotiateExtensions: cfg:config -> pv:ProtocolVersion -> cipherSuite -> option ri -> res:bool -> c:list extension -> Tot (Result (l:list extension{List.length l < 256} * negotiatedExtensions))
+let negotiateExtensions cfg pv cs ri res c =
+  match ri with
+  | Some(ri) ->
+      let exts =
+	match pv with
+	| SSL_3p0 -> None
+	// TODO
+	| TLS_1p3 -> None
+	| _ -> Some (negotiateServerExtensions c cfg cs ri res) in
+      match exts with
+      | Some (exts) -> Correct (exts)
+      | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Extensions negotiation failed")
+  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Extensions negotiation failed")
+
+// TODO : IMPLEMENT
+val getCachedSession: cfg:config -> ch:CH -> option Session
+let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
 val prepareServerHello: config -> option ri -> CH -> log -> Result (bytes * nego * option ake * log)
@@ -100,7 +157,7 @@ let prepareServerHello cfg ri ch i_log =
   let srand = Nonce.mkHelloRandom() in
   match getCachedSession cfg ch with
   | Some sentry -> 
-  (match negotiateExtensions cfg sentry.session_nego.n_protocol_version ri true ch.ch_extensions with
+  (match negotiateExtensions cfg sentry.session_nego.n_protocol_version sentry.session_nego.n_cipher_suite ri true ch.ch_extensions with
    | Error(z) -> Error(z)
    | Correct(sext,next) ->
      let shB = 
@@ -124,7 +181,7 @@ let prepareServerHello cfg ri ch i_log =
   match negotiateCompression cfg pv ch.ch_compressions with
   | Error(z) -> Error(z)
   | Correct(cm) ->
-  match negotiateExtensions cfg pv ri false ch.ch_extensions with
+  match negotiateExtensions cfg pv cs ri false ch.ch_extensions with
   | Error(z) -> Error(z)
   | Correct(sext,next) ->
 //  let sid = Nonce.random 32 in
@@ -148,10 +205,37 @@ let prepareServerHello cfg ri ch i_log =
   let o_log = i_log @| shB in
   Correct (shB,nego,None,o_log))
 
-assume val acceptableVersion: config -> CH -> ProtocolVersion -> Tot bool
-assume val acceptableCipherSuite: config -> CH -> ProtocolVersion -> known_cipher_suite -> Tot bool
-assume val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
-assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> ProtocolVersion -> list extension -> Tot (Result negotiatedExtensions)
+// TODO : check for correct behaviour
+val acceptableVersion: config -> CH -> ProtocolVersion -> Tot bool
+let acceptableVersion cfg ch pv =
+  match negotiateVersion cfg ch.ch_protocol_version with
+  | Correct(pv') -> 
+    let (gte_pv:ProtocolVersion -> ProtocolVersion -> Tot bool) = fun pv1 pv2 ->
+      match pv1 with
+      | SSL_3p0 -> (match pv2 with | SSL_3p0 -> true | _ -> false)
+      | TLS_1p0 -> (match pv2 with | SSL_3p0 | TLS_1p0 -> true | _ -> false)
+      | TLS_1p1 -> (match pv2 with | SSL_3p0 | TLS_1p0 | TLS_1p1 -> true | _ -> false)
+      | TLS_1p2 -> (match pv2 with | TLS_1p3 -> false | _ -> true)
+      | TLS_1p3 -> true in
+    if gte_pv pv' pv && gte_pv pv cfg.minVer then true
+    else false
+  | Error(_) -> false
+
+// TODO : check for correct behaviour
+val acceptableCipherSuite: config -> CH -> ProtocolVersion -> known_cipher_suite -> Tot bool
+let acceptableCipherSuite cfg ch pv cs =
+  match pv with
+  // TODO
+  | SSL_3p0
+  | TLS_1p3 -> false
+  | _ -> if List.existsb (fun x -> x = cs) ch.ch_cipher_suites 
+	    && List.existsb (fun x -> x = cs) cfg.ciphersuites then true else false
+
+// TODO : check for correct behaviour
+val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
+let acceptableCompression cfg ch pv cmp = true
+
+assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> ProtocolVersion -> cipherSuite -> list extension -> Tot (Result negotiatedExtensions)      
 
 // FIXME : TLS1.3
 val processServerHello: config -> option ri -> CH -> SH -> bool -> Result (nego * option ake)
@@ -162,7 +246,7 @@ let processServerHello cfg ri ch sh res =
     then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
     else if not (acceptableCompression cfg ch sh.sh_protocol_version (Some.v sh.sh_compression))
     then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Compression negotiation") 
-    else match (acceptableExtensions cfg ri res ch sh.sh_protocol_version sh.sh_extensions) with 
+    else match (acceptableExtensions cfg ri res ch sh.sh_protocol_version sh.sh_cipher_suite sh.sh_extensions) with 
          | Error(z) -> Error(z)
          | Correct (next) -> 
            if res then
