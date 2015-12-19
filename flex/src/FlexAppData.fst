@@ -21,7 +21,6 @@ open FlexTLS.State
 /// </summary>
 /// <param name="st"> State of the current connection </param>
 /// <returns> Updated state * Application data bytes received </returns>
-
 let receive (st:state) : state * bytes =
   Log.logInfo("# APPLICATION DATA : FlexAppData.receive");
   let ct,pv,len,_ = FlexRecord.parseFragmentHeader st in
