@@ -1,23 +1,24 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexServerKeyExchange
+module FlexTLS.Message.ServerKeyExchange
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open TLSInfo
-open TLSConstants
-open TLSExtensions
-open HandshakeMessages
+open MiTLS.TLSInfo
+open MiTLS.TLSConstants
+open MiTLS.TLSExtensions
+open MiTLS.HandshakeMessages
+open MiTLS.CommonDH
 
-open CommonDH
+open FlexTLS.Types
+open FlexTLS.Secrets
+open FlexTLS.Constants
+open FlexTLS.Handshake
 
-open FlexTypes
-open FlexSecrets
-open FlexConstants
-open FlexHandshake
+
 
 /// <summary>
 /// Fill kexDH structure by eventually finishing computation of all Diffie Hellman parameters.
