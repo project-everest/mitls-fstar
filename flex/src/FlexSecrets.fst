@@ -1,18 +1,20 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexSecrets
+module FlexTLS.Secrets
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open TLSInfo
-open TLSConstants
+open MiTLS.TLSInfo
+open MiTLS.TLSConstants
 
 open FlexTypes
 open FlexConstants
 open FlexState
+
+
 
 /// <summary>
 /// Coerce a DH parameter from bytes to DH.secret abstract type
