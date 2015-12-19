@@ -1,17 +1,18 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexServerHelloDone
+module FlexTLS.Message.ServerHelloDone
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open HandshakeMessages
+open MiTLS.HandshakeMessages
 
-open FlexTypes
-open FlexConstants
-open FlexHandshake
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.Handshake
+
 
 /// <summary>
 /// Module receiving, sending and forwarding TLS Server Hello Done messages.
