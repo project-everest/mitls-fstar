@@ -1,20 +1,17 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexState
+module FlexTLS.State
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
 
-open Bytes
-open TLSInfo
+open MiTLS.TLSInfo
 
-open FlexTypes
+open FlexTLS.Types
 
-/// <summary>
-/// Module handling the application state.
-/// </summary>
-type FlexState =
-    class
+
+
 
     /// <summary>
     /// Return the next epoch to be used from the current one and the next security context
