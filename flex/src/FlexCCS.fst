@@ -2,6 +2,7 @@
 
 module FlexTLS.Message.CCS
 
+
 open Platform
 open Platform.Log
 open Platform.Bytes
@@ -13,6 +14,7 @@ open FlexTLS.Types
 open FlexTLS.Constants
 open FlexTLS.State
 open FlexTLS.Record
+
 
 
 /// <summary>
