@@ -1,25 +1,23 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexClientKeyShare
+module FlexTLS.Extension.ClientKeyShare
 
-open NLog
 
-open Bytes
-open Error
-open TLSConstants
-open TLSInfo
-open HandshakeMessages
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open FlexTypes
-open FlexConstants
-open FlexHandshake
-open FlexSecrets
+open MiTLS.TLSConstants
+open MiTLS.TLSInfo
+open MiTLS.HandshakeMessages
 
-/// <summary>
-/// Module receiving, sending and forwarding TLS Client Key Share messages.
-/// </summary>
-type FlexClientKeyShare =
-    class
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.Handshake
+open FlexTLS.Secrets
+
+
+
 
     /// <summary>
     /// EXPERIMENTAL TLS 1.3 Receive DHE FClientKeyShare from the network stream
