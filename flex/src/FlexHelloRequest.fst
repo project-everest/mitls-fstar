@@ -3,15 +3,15 @@
 module FlexTLS.FlexHelloRequest
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open HandshakeMessages
+open MiTLS.HandshakeMessages
 
-open FlexTypes
-open FlexConstants
-open FlexHandshake
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.Handshake
 
 /// <summary>
 /// Module receiving, sending and forwarding TLS Hello Request messages.
