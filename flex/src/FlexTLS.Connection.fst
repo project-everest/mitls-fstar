@@ -126,7 +126,7 @@ let clientOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:Protocol
 /// <param name="server_cn"> Optional common name of the server </param>
 /// <param name="server_port"> Optional port number on which to connect to the server </param>
 /// <param name="server_pv"> Optional protocol version required to generate randomness </param>
-let MitmOpenTcpConnections (listen_address:string, server_address:string, ?listen_cn:string, ?listen_port:int, ?listen_pv:ProtocolVersion, ?server_cn:string, ?server_port:int, ?server_pv:ProtocolVersion) :  state * config * state * config =
+let mitmOpenTcpConnections (listen_address:string, server_address:string, ?listen_cn:string, ?listen_port:int, ?listen_pv:ProtocolVersion, ?server_cn:string, ?server_port:int, ?server_pv:ProtocolVersion) :  state * config * state * config =
   let listen_pv = defaultArg listen_pv defaultConfig.maxVer in
   let listen_port = defaultArg listen_port FlexTLS.Constants.defaultTCPPort in
   let listen_cn = defaultArg listen_cn listen_address in
