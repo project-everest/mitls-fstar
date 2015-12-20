@@ -1,19 +1,21 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexCertificateVerify
+module FlexTLS.Message.CertificateVerify
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platfrom.Error
 
-open Bytes
-open Error
-open TLSInfo
-open TLSConstants
-open HandshakeMessages
+open MiTLS.TLSInfo
+open MiTLS.TLSConstants
+open MiTLS.HandshakeMessages
 
-open FlexTypes
-open FlexConstants
-open FlexHandshake
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.Handshake
+
+
 
 /// <summary>
 /// Module receiving, sending and forwarding TLS Certificate Verify messages.
