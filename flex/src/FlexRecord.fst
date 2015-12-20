@@ -1,6 +1,6 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexRecord
+module FlexTLS.Record
 
 
 open Platform.Log

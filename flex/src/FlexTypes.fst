@@ -1,9 +1,9 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexTypes
-
+module FlexTLS.Types
 
 open Platform.Bytes
+
 open MiTLS.TLSInfo
 open MiTLS.TLSConstants
 open MiTLS.TLSExtensions

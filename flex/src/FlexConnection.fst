@@ -15,7 +15,6 @@ open FlexTLS.Constants
 
 
 
-
 /// <summary>
 /// Initiate a connection either as a Client or a Server and create a global state
 /// </summary>

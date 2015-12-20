@@ -19,7 +19,6 @@ open FlexTLS.Secrets
 
 
 
-
 /// <summary>
 /// Receive a Finished message from the network stream and check the verify_data on demand
 /// </summary>
