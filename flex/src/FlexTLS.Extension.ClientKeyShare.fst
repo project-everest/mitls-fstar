@@ -25,7 +25,7 @@ open FlexTLS.Secrets
 /// <returns> Updated state * FClientKeyShare message record </returns>
 let receive (st:state,nsc:nextSecurityContext) : state * nextSecurityContext * FClientKeyShare =
   Log.logInfo("# CLIENT KEY SHARE : FlexClientKeyShare.receive");
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  let st,hstype,payload,to_log = FlexTLS.Handshake.receive(st) in
   match hstype with
   | HT_client_key_exchange  ->
     (match HandshakeMessages.parseTLS13CKEOffers payload with
@@ -55,8 +55,8 @@ let receive (st:state,nsc:nextSecurityContext) : state * nextSecurityContext * F
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Updated next security context * FClientKeyShare message record </returns>
 let send (st:state, ?nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyShare =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
+  let nsc = defaultArg nsc FlexTLS.Constants.nullNextSecurityContext in
 
   let kex13ify (e:kex) : tls13kex =
     match e with
@@ -99,7 +99,7 @@ let send (st:state, ?nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state *
 /// <returns> Updated state * Key Exchange offer list * FClientKeyShare message record </returns>
 let send (st:state, kex13l:list<tls13kex>, ?fp:fragmentationPolicy) : state * list<kex> * FClientKeyShare =
   Log.logInfo("# CLIENT KEY SHARE : FClientKeyShare.send");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
 
   let sampleDH kex =
     match kex with
@@ -114,7 +114,7 @@ let send (st:state, kex13l:list<tls13kex>, ?fp:fragmentationPolicy) : state * li
   let _,pubkex = List.unzip kex13l in
 
   let payload = HandshakeMessages.tls13CKEOffersBytes pubkex in
-  let st = FlexHandshake.send(st,payload,fp) in
+  let st = FlexTLS.Handshake.send(st,payload,fp) in
 
   let fcks = { offers = pubkex ; payload = payload } in
   let kexify e =

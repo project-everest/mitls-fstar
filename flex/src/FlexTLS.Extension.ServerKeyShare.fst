@@ -32,7 +32,7 @@ let receive (st:state, nsc:nextSecurityContext) : state * nextSecurityContext * 
     | DH13(dh13) -> dh13
     | _ -> failwith (perror __SOURCE_FILE__ __LINE__  "key exchange parameters has to be DH13")
   in
-  let st,fsks = FlexServerKeyShare.receive(st,nsckex13.group) in
+  let st,fsks = FlexTLS.Message.ServerKeyShare.receive(st,nsckex13.group) in
   let gy =
     match fsks.kex with
     | DHE(_,gy) -> gy
@@ -40,7 +40,7 @@ let receive (st:state, nsc:nextSecurityContext) : state * nextSecurityContext * 
   let kex13 = { nsckex13 with gy = gy } in
   let epk = {nsc.secrets with kex = DH13(kex13) } in
   let nsc = {nsc with secrets = epk} in
-  let nsc = FlexSecrets.fillSecrets(st,Client,nsc) in
+  let nsc = FlexTLS.Secrets.fillSecrets(st,Client,nsc) in
   st,nsc,fsks
 
 /// <summary>
@@ -52,7 +52,7 @@ let receive (st:state, nsc:nextSecurityContext) : state * nextSecurityContext * 
 
 let receive (st:state, group:dhGroup) : state * FServerKeyShare =
   Log.logInfo("# SERVER KEY SHARE : FlexServerKeyShare.receive");
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  let st,hstype,payload,to_log = FlexTLS.Handshake.receive(st) in
   match hstype with
   | HT_server_key_exchange  ->
     (match HandshakeMessages.parseTLS13SKEDHE group payload with
@@ -78,7 +78,7 @@ let receive (st:state, group:dhGroup) : state * FServerKeyShare =
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerKeyExchangeTLS13 message record </returns>
 let send (st:state, nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * nextSecurityContext * FServerKeyShare =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let kex =
     match nsc.secrets.kex with
     | DH13(kex) when not (kex.gx = empty_bytes) ->
@@ -112,10 +112,10 @@ let send (st:state, nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * 
       DHE(offer.group,offer.gx)
     | _ -> failwith (perror __SOURCE_FILE__ __LINE__ "Unimplemented or unsupported key exchange")
   in
-  let st,fsks = FlexServerKeyShare.send(st,kex13,fp) in
+  let st,fsks = FlexTLS.Message.ServerKeyShare.send(st,kex13,fp) in
   let epk = {nsc.secrets with kex = kex } in
   let nsc = {nsc with secrets = epk} in
-  let nsc = FlexSecrets.fillSecrets (st,Server,nsc) in
+  let nsc = FlexTLS.Secrets.fillSecrets (st,Server,nsc) in
   st,nsc,fsks
 
 /// <summary>
@@ -127,11 +127,11 @@ let send (st:state, nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * 
 /// <returns> Updated state * FServerKeyExchangeTLS13 message record </returns>
 let send (st:state, kex:tls13kex, ?fp:fragmentationPolicy) : state * FServerKeyShare =
   Log.logInfo("# SERVER KEY SHARE : FlexServerKeyShare.send");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
 
   let payload = HandshakeMessages.tls13SKEBytes kex in
 
-  let st = FlexHandshake.send(st,payload,fp) in
+  let st = FlexTLS.Handshake.send(st,payload,fp) in
   let fsks : FServerKeyShare = { kex = kex ; payload = payload } in
 
   let group,gx =
