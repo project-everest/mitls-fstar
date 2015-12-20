@@ -1,22 +1,23 @@
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-module FlexTLS.FlexClientKeyExchange
+module FlexTLS.Message.ClientKeyExchange
 
 
-open NLog
+open Platform.Log
+open Platform.Bytes
+open Platform.Error
 
-open Bytes
-open Error
-open TLSConstants
-open TLSInfo
-open HandshakeMessages
+open MiTLS.TLSConstants
+open MiTLS.TLSInfo
+open MiTLS.HandshakeMessages
+open MiTLS.CommonDH
 
-open CommonDH
+open FlexTLS.Types
+open FlexTLS.Constants
+open FlexTLS.Handshake
+open FlexTLS.Secrets
 
-open FlexTypes
-open FlexConstants
-open FlexHandshake
-open FlexSecrets
+
 
 /// <summary>
 /// Retrieve certificate and private key associated to a certificate list
