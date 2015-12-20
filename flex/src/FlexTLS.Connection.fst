@@ -30,7 +30,7 @@ let init (role:Role, ns:NetworkStream, ?pv:ProtocolVersion) : state =
   let record_s_out = Record.nullConnState ci.id_out Writer in
   { read  = { record          = record_s_in;
               epoch           = ci.id_in;
-              secrets         = FlexConstants.nullSecrets;
+              secrets         = FlexTLS.Constants.nullSecrets;
               epoch_init_pv   = defaultConfig.maxVer;
               verify_data     = empty_bytes;
               hs_buffer       = empty_bytes;
@@ -39,7 +39,7 @@ let init (role:Role, ns:NetworkStream, ?pv:ProtocolVersion) : state =
               
     write = { record          = record_s_out;
               epoch           = ci.id_out;
-              secrets         = FlexConstants.nullSecrets;
+              secrets         = FlexTLS.Constants.nullSecrets;
               epoch_init_pv   = defaultConfig.maxVer;
               verify_data     = empty_bytes;
               hs_buffer       = empty_bytes;
@@ -60,16 +60,16 @@ let init (role:Role, ns:NetworkStream, ?pv:ProtocolVersion) : state =
 /// <returns> Updated state * Updated config </returns>
 let serverOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:ProtocolVersion, ?timeout:int) : state * config =
   let pv = defaultArg pv defaultConfig.maxVer in
-  let port = defaultArg port FlexConstants.defaultTCPPort in
+  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
   let cn = defaultArg cn address in
 
   LogManager.GetLogger("file").Info("TCP : Listening on {0}:{1}", address, port);
   let l    = Tcp.listen address port in
   match timeout with
   | None ->
-    FlexConnection.serverOpenTcpConnection(l,cn,pv)
+    FlexTLS.Connection.serverOpenTcpConnection(l,cn,pv)
   | Some(timeout) ->
-    FlexConnection.serverOpenTcpConnection(l,cn,pv,timeout)
+    FlexTLS.Connection.serverOpenTcpConnection(l,cn,pv,timeout)
 
 /// <summary>
 /// Server role, accepts a tcp connection from a client
@@ -88,7 +88,7 @@ let serverOpenTcpConnection (l:TcpListener, cn:string, ?pv:ProtocolVersion, ?tim
     | Some(t) -> Tcp.acceptTimeout t l
   in
   LogManager.GetLogger("file").Debug("--- Client accepted");
-  let st = FlexConnection.init (Server,ns,pv) in
+  let st = FlexTLS.Connection.init (Server,ns,pv) in
   (st,cfg)
 
 /// <summary>
@@ -101,7 +101,7 @@ let serverOpenTcpConnection (l:TcpListener, cn:string, ?pv:ProtocolVersion, ?tim
 /// <returns> Updated state * Updated config </returns>
 let clientOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:ProtocolVersion, ?timeout:int) :  state * config =
   let pv = defaultArg pv defaultConfig.maxVer in
-  let port = defaultArg port FlexConstants.defaultTCPPort in
+  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
   let cn = defaultArg cn address in
   let cfg = { defaultConfig with server_name = cn } in
 
@@ -111,7 +111,7 @@ let clientOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:Protocol
     | None -> Tcp.connect address port
     | Some(t) -> Tcp.connectTimeout t address port
   in
-  let st = FlexConnection.init (Client, ns) in
+  let st = FlexTLS.Connection.init (Client, ns) in
   LogManager.GetLogger("file").Debug("--- Done");
   (st,cfg)
 
@@ -128,10 +128,10 @@ let clientOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:Protocol
 /// <param name="server_pv"> Optional protocol version required to generate randomness </param>
 let MitmOpenTcpConnections (listen_address:string, server_address:string, ?listen_cn:string, ?listen_port:int, ?listen_pv:ProtocolVersion, ?server_cn:string, ?server_port:int, ?server_pv:ProtocolVersion) :  state * config * state * config =
   let listen_pv = defaultArg listen_pv defaultConfig.maxVer in
-  let listen_port = defaultArg listen_port FlexConstants.defaultTCPPort in
+  let listen_port = defaultArg listen_port FlexTLS.Constants.defaultTCPPort in
   let listen_cn = defaultArg listen_cn listen_address in
   let server_pv = defaultArg server_pv defaultConfig.maxVer in
-  let server_port = defaultArg server_port FlexConstants.defaultTCPPort in
+  let server_port = defaultArg server_port FlexTLS.Constants.defaultTCPPort in
   let server_cn = defaultArg server_cn server_address in
   let scfg = {
     defaultConfig with
@@ -144,11 +144,11 @@ let MitmOpenTcpConnections (listen_address:string, server_address:string, ?liste
   Log.logInfo("TCP : Listening on {0}:{2} as {1}", listen_address, listen_cn, listen_port);
   let l    = Tcp.listen listen_address listen_port in
   let sns   = Tcp.accept l in
-  let sst = FlexConnection.init (Server,sns,listen_pv) in
+  let sst = FlexTLS.Connection.init (Server,sns,listen_pv) in
   Log.logDebug("--- Client accepted");
   Log.logInfo("TCP : Connecting to {0}:{1}",server_address,server_port);
   let cns = Tcp.connect server_address server_port in
-  let cst = FlexConnection.init (Client, cns) in
+  let cst = FlexTLS.Connection.init (Client, cns) in
   Log.logDebug("--- Done");
   (sst,scfg,cst,ccfg)
 
@@ -165,7 +165,7 @@ let asyncForward(src:System.IO.Stream,dst:System.IO.Stream) : Async<unit> =
       let b = Array.sub b 0 n in
       Log.logDebug("--- Passing-through. Payload: {0}", Bytes.hexString (abytes b));
       dst.Write(b,0,n);
-    return! FlexConnection.asyncForward(src,dst)
+    return! FlexTLS.Connection.asyncForward(src,dst)
   }
 
 /// <summary>
@@ -176,7 +176,7 @@ let asyncForward(src:System.IO.Stream,dst:System.IO.Stream) : Async<unit> =
 let passthrough(a:NetworkStream, b:NetworkStream): unit =
   let a = Tcp.getStream a in
   let b = Tcp.getStream b in
-  let d1 = FlexConnection.asyncForward(a,b) in
-  let d2 = FlexConnection.asyncForward(b,a) in
+  let d1 = FlexTLS.Connection.asyncForward(a,b) in
+  let d2 = FlexTLS.Connection.asyncForward(b,a) in
   let p = Async.Parallel([d1;d2]) in
   ignore (Async.RunSynchronously(p))
