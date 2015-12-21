@@ -5,7 +5,7 @@ all: mitls-ver mitls-ml
 # TODO compilation to ML & testing
 
 clean:
-	rm -rf *.ml *.p.* *.cm* *.o *~
+	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 
 # ------------------ dependencies on Fstar & its libraries --------------------
 ifndef FSTAR_HOME
@@ -37,7 +37,7 @@ LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 
 OCAML=ocamlfind ocamlopt -package batteries -package stdint -linkpkg -g -thread
 DEBUG=ocamlfind ocamlc -package batteries -package stdint -linkpkg -g -thread
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db)
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db ~/dev/mitls/mitls-fstar/src/tls)
 OCAMLLIB=$(FSTAR_HOME)/contrib/Platform/ml/platform.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.ml
 
 # ------------------------- miTLS* -------------------------------------------
@@ -161,6 +161,7 @@ redux: $(LIBFILES) $(TLSREDUX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
 TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml TLSConstants.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/DHDB.ml Nonce.ml RSAKey.ml ECGroup.ml DHGroup.ml CommonDH.ml PMS.ml HASH.ml Sig.ml UntrustedCert.ml Cert.ml TLSInfo.ml TLSExtensions.ml HandshakeMessages.ml
+LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx $(FSTAR_HOME)/lib/ml/native_int/prims.cmx $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx $(FSTAR_HOME)/contrib/CoreCrypto/ml/corecrypto.cmxa $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx $(FSTAR_HOME)/lib/ml/FStar_All.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
 
 redux-gen: $(LIBFILES) $(TLSPARSE)
@@ -171,8 +172,11 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 	rm -f $(FSTAR_HOME)/lib/ml/prims.cmi
 	$(OCAML) $(FSTAR_HOME)/lib/ml/native_int/prims.ml
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
-	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db
-	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSPARSE_ML) 
+	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db DB.cmx
+	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSPARSE_ML)
+	cp ./test/parsing_test.ml .
+	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSPARSE_ML:.ml=.cmx) parsing_test.ml -o test.out
+	./test.out
 
 # ------------------ preprocessing :( -----------------------
 
