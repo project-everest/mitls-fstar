@@ -1,6 +1,6 @@
 ﻿(*--build-config
-  options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi AEAD_GCM --admit_fsi StatefulLHAE --lax;
-  other-files:ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi seqproperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fsti StatefulLHAE.fsti PRF-redux.p.fst;
+  options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --lax;
+  other-files:ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi seqproperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst PRF-redux.p.fst;
   --*)
     
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
@@ -25,9 +25,9 @@ assume val vlsplit: lSize:nat{lSize <= 4}
                       repr_bytes (length (fst b)) <= lSize
                   /\  Seq.Eq vlb (vlbytes lSize (fst b) @| (snd b))}))
 
-assume val split: b:bytes -> n:nat{length b >= n} -> x:(bytes*bytes){Seq.Eq b ((fst x) @| (snd x)) /\ length (fst x) = n}
+assume val split: b:bytes -> n:nat{length b >= n} -> Tot (x:(bytes*bytes){Seq.Eq b ((fst x) @| (snd x)) /\ length (fst x) = n})
 
-assume val split2: b:bytes -> n1:nat -> n2:nat{length b >= n1 + n2} -> x:(lbytes n1 * lbytes n2 * bytes){forall x1. forall x2. forall x3. x = (x1,x2,x3) ==> Seq.Eq b (x1 @| x2 @| x3)}
+assume val split2: b:bytes -> n1:nat -> n2:nat{length b >= n1 + n2} -> Tot (x:(lbytes n1 * lbytes n2 * bytes){forall x1. forall x2. forall x3. x = (x1,x2,x3) ==> Seq.Eq b (x1 @| x2 @| x3)})
 
 (*** Following RFC5246 A.4 *)
 
@@ -107,8 +107,8 @@ type SH = {
 (* Hello retry request *)
 type HRR = {
   hrr_protocol_version:ProtocolVersion;
-  hrr_cipher_suite:(k:known_cipher_suites{List.length k < 256});
-  hrr_named_group: CommonDH.parameters; // JK : is it the expected type here ?
+  hrr_cipher_suite:known_cipher_suite;
+  hrr_named_group: namedGroup; // JK : is it the expected type here ?
   hrr_extensions:(he:list extension{List.length he < 256});
 }
 
@@ -583,6 +583,40 @@ let parseSessionTicket payload : Result STICKET =
     let (lifetime_hint, ticket) = split payload 4 in
     Correct({sticket_ticket_lifetime_hint = lifetime_hint; sticket_ticket = ticket})
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate size in received session ticket")
+
+(* Hello retry request *)
+val helloRetryRequestBytes: HRR -> Tot bytes
+let helloRetryRequestBytes hrr =
+  let pv = versionBytes hrr.hrr_protocol_version in
+  let cs_bytes = cipherSuiteBytes hrr.hrr_cipher_suite in
+  let ng = namedGroupBytes hrr.hrr_named_group in
+  let exts = extensionsBytes hrr.hrr_extensions in
+  pv @| cs_bytes @| ng @| exts
+
+val parseHelloRetryRequest: pinverse Seq.Eq helloRetryRequestBytes
+let parseHelloRetryRequest b = 
+  if length b >= 4 then 
+    let pv, cs, data = split2 b 2 2 in
+    (match TLSConstants.parseVersion pv with
+    | Correct(pv) -> 
+      (match parseCipherSuite cs with
+      | Correct(cs) -> 
+	if length data >= 2 then
+	  let ng, data = split data 2 in
+	  (match parseNamedGroup ng with
+	  | Correct(ng) ->
+	    (match parseExtensions data with
+	    | Correct(exts) -> 
+	      Correct ({ hrr_protocol_version = pv;
+			hrr_cipher_suite = cs;
+			hrr_named_group = ng;
+			hrr_extensions = exts })
+	    | Error(z) -> Error(z))
+	  | Error(z) -> Error(z))
+	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
+      | Error(z) -> Error(z))  
+    | Error(z) -> Error(z))
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
 
 (* Encrypted_extensions *)
 val encryptedExtensionsBytes: EE -> Tot bytes
