@@ -17,7 +17,7 @@ open FlexTLS.Types
 
 
 /// <summary> Default Finite Field Diffie Hellman group (TLS 1.3) </summary>
-let defaultFFDHgroup = TLSInfo.defaultConfig.negotiableDHGroups.Head
+let defaultFFDHgroup = List.head TLSInfo.defaultConfig.negotiableDHGroups
 
 /// <summary> Elliptic Curve Diffie Hellman default curve and associated compression </summary>
 let defaultECDHcurve = ECC_P256
@@ -179,7 +179,7 @@ let nullFServerHello : FServerHello = {
   rand = empty_bytes;
   sid  = None;
   ciphersuite = None;
-  comp = defaultConfig.compressions.Head;
+  comp = List.head defaultConfig.compressions;
   ext  = None;
   payload = empty_bytes;
 }
@@ -213,14 +213,14 @@ let nullFCertificateRequest : FCertificateRequest = {
 
 /// <summary> Empty CertificateVerify message </summary>
 let nullFCertificateVerify : FCertificateVerify = {
-  sigAlg    = FlexTLS.Constants.sigAlgs_RSA.Head;
+  sigAlg    = List.head FlexTLS.Constants.sigAlgs_RSA;
   signature = empty_bytes;
   payload   = empty_bytes;
 }
 
 /// <summary> Empty ServerKeyExchange message, for DH key exchange </summary>
 let nullFServerKeyExchangeDH : FServerKeyExchange = {
-  sigAlg = FlexTLS.Constants.sigAlgs_RSA.Head;
+  sigAlg = List.head FlexTLS.Constants.sigAlgs_RSA;
   signature = empty_bytes;
   kex     = DH(FlexTLS.Constants.nullKexDH);
   payload = empty_bytes;
@@ -228,7 +228,7 @@ let nullFServerKeyExchangeDH : FServerKeyExchange = {
 
 /// <summary> Empty ServerKeyExchange message, for FFDH key exchange </summary>
 let nullFServerKeyExchangeDH : FServerKeyExchange = {
-  sigAlg = FlexTLS.Constants.sigAlgs_RSA.Head;
+  sigAlg = List.head FlexTLS.Constants.sigAlgs_RSA;
   signature = empty_bytes;
   kex     = FFDH(FlexTLS.Constants.nullKexFFDH);
   payload = empty_bytes;
