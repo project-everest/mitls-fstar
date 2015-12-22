@@ -19,6 +19,7 @@ open TLSInfo
 open Range
 
 (* External functions, locally annotated for speed *)
+(*
 assume val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
   -> Tot (Result (b:(bytes * bytes){
@@ -28,6 +29,7 @@ assume val vlsplit: lSize:nat{lSize <= 4}
 assume val split: b:bytes -> n:nat{length b >= n} -> Tot (x:(bytes*bytes){Seq.Eq b ((fst x) @| (snd x)) /\ length (fst x) = n})
 
 assume val split2: b:bytes -> n1:nat -> n2:nat{length b >= n1 + n2} -> Tot (x:(lbytes n1 * lbytes n2 * bytes){forall x1. forall x2. forall x3. x = (x1,x2,x3) ==> Seq.Eq b (x1 @| x2 @| x3)})
+*)
 
 (*** Following RFC5246 A.4 *)
 
@@ -36,6 +38,7 @@ type PreHandshakeType =
     | HT_client_hello
     | HT_server_hello
     | HT_session_ticket
+    | HT_hello_retry_request
     | HT_encrypted_extensions
     | HT_certificate
     | HT_server_key_exchange
@@ -55,7 +58,7 @@ let htBytes t =
     | HT_client_hello        -> abyte   1uy
     | HT_server_hello        -> abyte   2uy
     | HT_session_ticket      -> abyte   4uy
-//  | HT_hello_retry_request -> abyte   6uy
+    | HT_hello_retry_request -> abyte   6uy
     | HT_encrypted_extensions -> abyte  8uy
     | HT_certificate         -> abyte  11uy
     | HT_server_key_exchange -> abyte  12uy
