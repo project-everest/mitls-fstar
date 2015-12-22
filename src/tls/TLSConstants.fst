@@ -84,6 +84,7 @@ let sigAlgBytes sa =
     | CoreCrypto.RSASIG -> abyte 1uy
     | CoreCrypto.DSA    -> abyte 2uy
     | CoreCrypto.ECDSA  -> abyte 3uy
+    | CoreCrypto.RSAPSS -> abyte 4uy
 
 type pinverse_t (#a:Type) (#b:Type) (=f:(a -> Tot b)) = 
     (y:b -> Tot (Result a))
@@ -95,6 +96,7 @@ let parseSigAlg b =
     | 1uy -> Correct CoreCrypto.RSASIG
     | 2uy -> Correct CoreCrypto.DSA
     | 3uy -> Correct CoreCrypto.ECDSA
+    | 4uy -> Correct CoreCrypto.RSAPSS
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 type lemma_inverse_g_f (#a:Type) (#b:Type) (=f:(a -> Tot b)) (=g:(b -> Tot (Result a))) (x:a) = 
