@@ -243,47 +243,60 @@ val parseClientHello : data:bytes{repr_bytes(length data) <= 3} ->
 let parseClientHello data =
     let ld = length data in
     if ld >= 34 then
-        let (clVerBytes,cr,data) = split2 data 2 32 in
-       (match parseVersion clVerBytes with
-        | Error z -> Error z
-        | Correct(cv) ->
-        if length data >= 1 then
+      let (clVerBytes,cr,data) = split2 data 2 32 in
+      (match parseVersion clVerBytes with
+       | Error z -> Error z
+       | Correct(cv) ->
+         if length data >= 1 then
            (match vlsplit 1 data with
-            | Error z -> Error z
+            | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse session id")
             | Correct (sid,data) ->
-            if length sid <= 32 then
-                if length data >= 2 then
+              if length sid <= 32 then
+                (if length data >= 2 then
                    (match vlsplit 2 data with
-                    | Error z -> Error z
+                    | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse cipher suite bytes")
                     | Correct (res) ->
-                    let (clCiphsuitesBytes,data) = res in
-                   (match parseCipherSuites clCiphsuitesBytes with
-                    | Error(z) -> Error(z)
-                    | Correct (clientCipherSuites) ->
-                    if length data >= 1 then
-                       (match vlsplit 1 data with
-                        | Error(z) -> Error(z)
-                        | Correct (res) ->
-                        let (cmBytes,extensions) = res in
-                        let cm = parseCompressions cmBytes in
-                       (match parseExtensionsWithCS extensions clientCipherSuites with
-                        | Error(z) -> Error(z) 
-                        | Correct (exts) -> 
-                        if List.length exts < 256 &&
-                           List.length cm <= 1 &&
-                           List.length clientCipherSuites < 256 then
-                        Correct ({ch_protocol_version = cv;
-                                  ch_client_random = cr;        
-                                  ch_sessionID = sid;
-                                  ch_cipher_suites = clientCipherSuites;
-                                  ch_compressions = cm;
-                                  ch_extensions = exts})
-                        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
-                    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
-                else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+                      let (clCiphsuitesBytes,data) = res in
+                      (match parseCipherSuites clCiphsuitesBytes with
+			| Error(z) -> Error(z)
+			| Correct (clientCipherSuites) ->
+			  if length data >= 1 then
+			    (match vlsplit 1 data with
+                            | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
+                            | Correct (res) ->
+                              let (cmBytes,extensions) = res in
+                              let cm = parseCompressions cmBytes in
+			      if length extensions > 0 then
+				(match parseExtensionsWithCS extensions clientCipherSuites with
+				| Error(z) -> Error(z) 
+				| Correct (exts) -> 
+			          (if List.length exts < 256 &&
+				    List.length cm <= 1 &&
+				    List.length clientCipherSuites < 256 then
+				    Correct ({ch_protocol_version = cv;
+                                      ch_client_random = cr;        
+                                      ch_sessionID = sid;
+                                      ch_cipher_suites = clientCipherSuites;
+                                      ch_compressions = cm;
+                                      ch_extensions = exts})
+				   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
+			      else if List.length cm <= 1 && List.length clientCipherSuites < 256 then
+				  Correct ({ch_protocol_version = cv;
+					 ch_client_random = cr;        
+					 ch_sessionID = sid;
+					 ch_cipher_suites = clientCipherSuites;
+					 ch_compressions = cm;
+					 ch_extensions = []})
+			      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+			   )
+                         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+			)
+			)
+		else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+              else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
 
 val serverHelloBytes: SH -> Tot bytes
 let serverHelloBytes sh = 

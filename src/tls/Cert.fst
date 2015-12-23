@@ -39,5 +39,6 @@ val parseCertificateList: bytes -> Result chain
 val certificateListBytes: chain -> Tot (b:bytes{length b < (3 * 65536)})
 let get_hint c = failwith "Not implemented"
 let validate_cert_chain l c = failwith "Not implemented"
-let parseCertificateList b = failwith "Not implemented"
+// Dummy implementation while certificate parsing is not implemented
+let parseCertificateList b = Correct ([b])
 let certificateListBytes c = magic()

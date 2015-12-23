@@ -103,7 +103,7 @@ let parseSigAlg b =
     | 2uy -> Correct CoreCrypto.DSA
     | 3uy -> Correct CoreCrypto.ECDSA
     | 4uy -> Correct CoreCrypto.RSAPSS
-    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (Some.v (iutf8_opt b)))
 
 // JK : adding Hash SHA512 because it is part of the RFC
 type hashAlg' = h:hashAlg{h <> NULL && h <> MD5SHA1}
@@ -125,7 +125,7 @@ let parseHashAlg b =
     | (4uy) -> Correct (Hash SHA256)
     | (5uy) -> Correct (Hash SHA384)
     | (6uy) -> Correct (Hash SHA512)
-    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Unknown hash algorithm")
 
 let encKeySize = function
   | Stream RC4_128      -> 16
@@ -197,7 +197,7 @@ val parseCompression: b:bytes{Seq.length b > 0} -> Result Compression
 let parseCompression b =
     match cbyte b with
     | 0uy -> Correct NullCompression
-    | _   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Compression byte was not null")
 
 // We ignore compression methods we don't understand. This is a departure
 // from usual parsing, where we fail on unknown values, but that's how TLS
@@ -244,7 +244,9 @@ let parseVersion v =
     | ( 3uy, 1uy ) -> Correct(TLS_1p0)
     | ( 3uy, 2uy ) -> Correct(TLS_1p1)
     | ( 3uy, 3uy ) -> Correct(TLS_1p2)
-    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> 
+      let version_bytes = match iutf8_opt v with | Some x -> x | None -> "unknown" in
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Parsed an unknown version: " ^ version_bytes))
 
 let minPV (a:ProtocolVersion) (b:ProtocolVersion) =
   match (a,b) with
@@ -447,7 +449,10 @@ let parseCipherSuiteAux b =
 
     | ( 0x00uy, 0xFFuy ) -> Correct(SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV))
 
-    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> 
+      let cs_bytes = match iutf8_opt b with | Some x -> x | None -> "unknown" in
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Parsed unknown cipher suite bytes :" 
+       ^ cs_bytes))
 
 #set-options "--max_ifuel 60 --initial_ifuel 1 --max_fuel 60 --initial_fuel 1"
 
@@ -474,7 +479,7 @@ let rec parseCipherSuites b : Result known_cipher_suites =
              | Correct(cs) -> Correct(cs::css))
          | Error(z) -> Error(z)
      else if length b = 0 then Correct []
-     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Odd cs bytes number")
 
 val cipherSuitesBytes: css:known_cipher_suites -> Tot (lbytes (2 * List.length css))
 let rec cipherSuitesBytes css =
@@ -818,7 +823,7 @@ let parseCT b =
     | 21uy -> Correct Alert
     | 22uy -> Correct Handshake
     | 23uy -> Correct Application_data
-    | _        -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _        -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Unknown content type")
 
 let ctToString = function
     | Change_cipher_spec -> "CCS"
@@ -850,11 +855,14 @@ val vlsplit: lSize:nat{lSize <= 4}
                       repr_bytes (length (fst b)) <= lSize
                   /\  Seq.Eq vlb (vlbytes lSize (fst b) @| (snd b))}))
 let vlsplit lSize vlb =
-  let (vl,b) = split vlb lSize in
+  if length vlb < lSize then
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "vlsplit : not vl bytes")
+  else 
+  (let (vl,b) = split vlb lSize in
   let l = int_of_bytes vl in
   if l <= length b
   then Correct(split b l)
-  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "vlsplit error"))
 
 val vlparse: lSize:nat{lSize <= 4} -> vlb:bytes{lSize <= length vlb}
              -> Tot (Result (b:bytes{repr_bytes (length b) <= lSize /\ Seq.Eq vlb (vlbytes lSize b)}))
@@ -863,7 +871,7 @@ let vlparse lSize vlb =
     let l = int_of_bytes vl in
     if l = length b
     then Correct b
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "vlparse error")
 
 val lemma_vlbytes_len : i:nat -> b:bytes{repr_bytes (length b) <= i}
                         -> Lemma (ensures (length (vlbytes i b) = i + length b))
@@ -949,7 +957,7 @@ let rec parseDistinguishedNameList data res =
             Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         else
             match vlsplit 2 data with
-            | Error(z) -> Error(z)
+            | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse distinguied name list")
             | Correct (nameBytes,data) ->
                begin match iutf8_opt nameBytes with
                      | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -973,6 +981,7 @@ type ffdhe =
 (* TLS 1.3 constants *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
+  | EC_UNSUPPORTED of byte
   | FFDHE of ffdhe
   | FFDHE_PRIVATE_USE of byte // fist byte is fixed 
   | ECDHE_PRIVATE_USE of byte // fist byte is fixed
@@ -985,6 +994,7 @@ let namedGroupBytes ng =
     | ECC_P256                      -> abyte2 (0x00uy, 0x17uy)
     | ECC_P384                      -> abyte2 (0x00uy, 0x18uy)
     | ECC_P521                      -> abyte2 (0x00uy, 0x19uy))
+  | EC_UNSUPPORTED(b)               -> abyte2 (0x00uy, b)
   | FFDHE(dhe) ->
     (match dhe with
     | FFDHE2048                     -> abyte2 (0x01uy, 0x00uy)
@@ -999,6 +1009,9 @@ let parseNamedGroup b =
   | (0x00uy, 0x17uy) -> Correct (SEC(ECC_P256))
   | (0x00uy, 0x18uy) -> Correct (SEC(ECC_P384))
   | (0x00uy, 0x19uy) -> Correct (SEC(ECC_P521))
+  | (0x00uy, x) -> let v = int_of_bytes (abyte x) in
+		   (*if v > 0 && v < 17 then *) Correct(EC_UNSUPPORTED (x))
+//		   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong ec named group")
   | (0x01uy, 0x00uy) -> Correct (FFDHE(FFDHE2048))
   | (0x01uy, 0x01uy) -> Correct (FFDHE(FFDHE3072))
   | (0x01uy, 0x02uy) -> Correct (FFDHE(FFDHE4096))
@@ -1006,9 +1019,9 @@ let parseNamedGroup b =
   | (0x01uy, 0x04uy) -> Correct (FFDHE(FFDHE8192))
   | (0x01uy, v)      -> if v = 0xFCuy || v = 0xFDuy || v = 0xFEuy || v = 0xFFuy 
 			then Correct (FFDHE_PRIVATE_USE v)
-			else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+			else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong ffdhe private use group")
   | (0xFEuy, v)      -> Correct (ECDHE_PRIVATE_USE v)
-  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong named group")
 
 val namedGroupsBytes: list namedGroup -> Tot bytes
 let namedGroupsBytes groups =
@@ -1018,20 +1031,16 @@ val parseNamedGroups: pinverse Seq.Eq namedGroupsBytes
 let parseNamedGroups b =
   let rec (aux:bytes -> list namedGroup -> Tot (Result (list namedGroup))) = fun b groups ->
     if length b > 0 then
-      if length b >= 4 then
-	let (ng, bytes) = split b 4 in
+      if length b >= 2 then
+	let (ng, bytes) = split b 2 in
 	match parseNamedGroup ng with
 	| Correct(ng) -> aux bytes (ng::groups)
 	| Error(z) -> Error(z)
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     else Correct(groups) in      
-  match vlsplit 2 b with
-  | Correct(b, tail) -> 
-    if equalBytes tail empty_bytes then
-      let (len, data) = split b 2 in
-      aux b []
-    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+  match vlparse 2 b with
+  | Correct(b) -> aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
 
 (* TODO : precise configurationId type *)
 type configurationId = b:bytes{not (equalBytes b empty_bytes) /\ length b < 65536}
@@ -1040,14 +1049,7 @@ val configurationIdBytes: configurationId -> Tot bytes
 let configurationIdBytes cid = vlbytes 2 cid
 
 val parseConfigurationId: pinverse Seq.Eq configurationIdBytes
-let parseConfigurationId b =
-  match vlsplit 2 b with
-  | Correct(cid, tail) ->
-      if equalBytes tail empty_bytes then 
-      let (len, cid) = split cid 2 in
-      Correct (cid)
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+let parseConfigurationId b = vlparse 2 b
 
 type uint32 = b:lbytes 4
 
@@ -1077,7 +1079,7 @@ let parseEarlyDataType b =
     | (1uy) -> Correct (ClientAuthentication)
     | (2uy) -> Correct (EarlyData)
     | (3uy) -> Correct (ClientAuthenticationAndData)
-    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data type")
 
 // TODO : replace with more precise types when available
 type configurationExtension =
@@ -1092,14 +1094,10 @@ val parseConfigurationExtension: pinverse Seq.Eq configurationExtensionBytes
 let parseConfigurationExtension b = 
   if length b >= 2 then
     let (typ, payload) = split b 2 in
-    match vlsplit 2 payload with
-    | Correct (payload, tail) ->
-	if length tail = 0 then
-	  let (len, payload) = split payload 2 in
-	  Correct (UnknownConfigurationExtension(typ, payload))
-	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    match vlparse 2 payload with
+    | Correct (payload) -> Correct (UnknownConfigurationExtension(typ, payload))
     | Error(z) -> Error(z)
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse a configuration extension")
 
 val configurationExtensionsBytes: list configurationExtension -> Tot bytes
 let configurationExtensionsBytes ce = 
@@ -1110,19 +1108,20 @@ let parseConfigurationExtensions b =
   let rec (aux:bytes -> list configurationExtension -> Tot (Result (list configurationExtension))) =
     fun b exts ->
     if length b > 0 then
-      match vlsplit 2 b with
-      | Correct(ext, bytes) ->
-	(let e = parseConfigurationExtension ext in
-	match e with
-	| Correct(ext') -> aux bytes (ext'::exts)
-	| Error(z) -> Error(z))
-      | Error(z) -> Error(z)
+      if length b >= 4 then
+	let typ, len, data = split2 b 2 2 in
+	let len = int_of_bytes len in
+	if length b >= 4 + len then
+	  let ext, bytes = split b len in
+	  match parseConfigurationExtension ext with
+	  | Correct(ext') -> aux bytes (ext'::exts)
+	  | Error(z) -> Error(z)
+	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
     else Correct(exts) in
-  match vlsplit 2 b with
-  | Correct (b, tail) -> 
-      if length tail = 0 then aux b []
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+  match vlparse 2 b with
+  | Correct (b) ->  aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
 
 val sigHashAlgBytes: sigHashAlg -> Tot (lbytes 2)
 let sigHashAlgBytes sha =
@@ -1133,14 +1132,14 @@ let sigHashAlgBytes sha =
 val parseSigHashAlg: pinverse Seq.Eq sigHashAlgBytes
 let parseSigHashAlg b =
   if length b = 2 then
-    let (sign, hash) = split b 2 in
+    let (hash, sign) = split b 1 in
     match parseSigAlg sign with
     | Correct(sign) -> 
-	match parseHashAlg hash with
+	(match parseHashAlg hash with
 	| Correct(hash) -> Correct(sign, hash)
-	| Error(z) -> Error(z)
+	| Error(z) -> Error(z))
     | Error(z) -> Error(z)
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Remaining unparsed bytes after signature hash algorithm")
 
 val sigHashAlgsBytes: list sigHashAlg -> Tot bytes
 let sigHashAlgsBytes algs = 
@@ -1155,13 +1154,11 @@ let parseSigHashAlgs b =
       match parseSigHashAlg alg with
       | Correct(sha) -> aux bytes (sha::algs)
       | Error(z) -> Error(z)
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
     else Correct(algs) in
-  match vlsplit 2 b with
-  | Correct (b, tail) ->
-      if length tail = 0 then aux b []
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+  match vlparse 2 b with
+  | Correct (b) -> aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
 // TODO : replace "bytes" by either DH or ECDH parameters
 type keyShareEntry = namedGroup * bytes
@@ -1170,7 +1167,7 @@ val keyShareEntryBytes: keyShareEntry -> Tot bytes
 let keyShareEntryBytes kse =
   let (ng, bytes) = kse in
   let ng_bytes = namedGroupBytes ng in
-  ng_bytes @| bytes
+  ng_bytes @| vlbytes 2 bytes
 
 val parseKeyShareEntry: pinverse Seq.Eq keyShareEntryBytes
 let parseKeyShareEntry b =
@@ -1178,13 +1175,11 @@ let parseKeyShareEntry b =
     let ng, key_exchange = split b 2 in
     match parseNamedGroup ng with
     | Correct(ng) -> 
-	match vlsplit 2 key_exchange with
-	| Correct(ke, tail) -> 
-	    if equalBytes tail empty_bytes then Correct (ng, ke)
-	    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-	| Error(z) -> Error(z)
+	(match vlparse 2 key_exchange with
+	| Correct(ke) -> Correct (ng, ke)
+	| Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry"))
     | Error(z) -> Error(z)
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entry")
 
 val keyShareEntriesBytes: list keyShareEntry -> Tot bytes
 let keyShareEntriesBytes kses =
@@ -1198,17 +1193,15 @@ let parseKeyShareEntries b =
 	let (ng, data) = split b 2 in
 	match vlsplit 2 data with
 	| Correct(kex, bytes) -> 
-	    (match parseKeyShareEntry (ng @| kex) with
+	    (match parseKeyShareEntry (ng @| vlbytes 2 kex) with
 	    | Correct(entry) -> aux bytes (entry::entries)
 	    | Error(z) -> Error(z))
-	| Error(z) -> Error(z)
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	| Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
     else Correct(entries) in
-  match vlsplit 2 b with
-  | Correct (b, tail) -> 
-      if length tail = 0 then aux b []
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+  match vlparse 2 b with
+  | Correct (b) ->  aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
   
 type clientKeyShare = l:list keyShareEntry{List.length l >= 4 /\ List.length l < 65536}
 type serverKeyShare = keyShareEntry
@@ -1237,14 +1230,15 @@ let keyShareBytes ks =
   | ClientKeyShare cks -> clientKeyShareBytes cks
   | ServerKeyShare sks -> serverKeyShareBytes sks
 
+(* TODO: FIXME *)
 val parseKeyShare: pinverse Seq.Eq keyShareBytes
 let parseKeyShare b =
   match parseKeyShareEntries b with
   | Correct(kse) -> 
       (match kse with
       | e::[] -> Correct(ServerKeyShare e)
-      | _ -> if List.length kse >= 4 && List.length kse < 65536 then Correct(ClientKeyShare (kse))
-	     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
+      | _ -> if List.length kse >= 2 && List.length kse < 65536 then Correct(ClientKeyShare (kse))
+	     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong key share length") )
   | Error(z) -> Error(z)
 
 // TODO : give more precise type
@@ -1254,14 +1248,7 @@ val pskIdentityBytes: pskIdentity -> Tot bytes
 let pskIdentityBytes pski = vlbytes 2 (pski)
 
 val parsePskIdentity: pinverse Seq.Eq pskIdentityBytes
-let parsePskIdentity b =
-  match vlsplit 2 b with
-  | Correct(pski, tail) ->
-      if length tail = 0 then 
-	let (len, pski) = split pski 2 in
-	Correct(pski)
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+let parsePskIdentity b = vlparse 2 b
 
 val pskIdentitiesBytes: list pskIdentity -> Tot bytes
 let pskIdentitiesBytes l =
@@ -1271,18 +1258,20 @@ val parsePskIdentities: pinverse Seq.Eq pskIdentitiesBytes
 let parsePskIdentities b =
   let rec (aux: bytes -> list pskIdentity -> Tot (Result (list pskIdentity))) = fun b ids ->
     if length b > 0 then
-      match vlsplit 2 b with
-      | Correct(id, bytes) -> 
-	  match parsePskIdentity id with
+      if length b >= 2 then
+	let len, data = split b 2 in
+	let len = int_of_bytes len in
+	if length b >= len then
+	  let pski, bytes = split b len in
+	  match parsePskIdentity pski with
 	  | Correct(id) -> aux bytes (id::ids)
 	  | Error(z) -> Error(z)
-      | Error(z) -> Error(z)
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identity length")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected psk identity to be at least 2 bytes long")
     else Correct(ids) in
-  match vlsplit 2 b with
-  | Correct (b,tail) ->
-      if length tail = 0 then aux b []
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+  match vlparse 2 b with
+  | Correct (b) -> aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identities")
 
 type clientPreSharedKey = l:list pskIdentity{List.length l >= 2 /\ List.length l < 65536 }
 type serverPreSharedKey = pskIdentity
@@ -1310,15 +1299,15 @@ let preSharedKeyBytes psk =
 
 val parsePreSharedKey: pinverse Seq.Eq preSharedKeyBytes
 let parsePreSharedKey b =
-  match vlsplit 2 b with
-  | Correct(hd, tail) ->
-      if length tail = 0 then // server case, no variable length psk_identity list, only vl psk id
-	match parseServerPreSharedKey hd with
+  match vlparse 2 b with
+  | Correct(b') ->
+      (match vlparse 2 b with
+      | Correct(b'') -> // Client case
+	(match parseClientPreSharedKey b with
+	| Correct(psks) -> Correct(ClientPreSharedKey psks)
+	| Error(z) -> Error(z))
+      | Error(_) -> // Server case
+	(match parseServerPreSharedKey b with
 	| Correct(psk) -> Correct (ServerPreSharedKey psk)
-	| Error(z) -> Error(z)
-      else 
-	let (len, cpsks) = split b 2 in
-	match parseClientPreSharedKey cpsks with
-	| Correct(psks) -> Correct (ClientPreSharedKey psks)
-	| Error(z) -> Error(z)
-  | Error(z) -> Error(z)
+	| Error(z) -> Error(z)))
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse pre shared key")
