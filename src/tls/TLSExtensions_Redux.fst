@@ -31,23 +31,21 @@ let renegotiationInfoBytes ri =
 val parseRenegotiationInfo: pinverse Seq.Eq renegotiationInfoBytes
 let parseRenegotiationInfo b =
   if length b >= 1 then
-    match vlsplit 1 b with
-    | Correct(b, tail) ->
-	if length tail = 0 then
-	  let (len, payload) = split b 1 in
-	  match cbyte len with
-	  | 0uy -> Correct (FirstConnection)
-	  | 12uy | 36uy -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
-	  | 24uy -> // TLS 1.2 case
+    match vlparse 1 b with
+    | Correct(_) ->
+	let (len, payload) = split b 1 in
+	(match cbyte len with
+	| 0uy -> Correct (FirstConnection)
+	| 12uy | 36uy -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
+	| 24uy -> // TLS 1.2 case
 	    let cvd, svd = split payload 12 in
 	    Correct (ServerRenegotiationInfo (cvd, svd))
-	  | 72uy -> // SSLv3
+	| 72uy -> // SSLv3
 	    let cvd, svd = split payload 36 in
 	    Correct (ServerRenegotiationInfo (cvd, svd))
-	  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | Error(z) -> Error(z)
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
+    | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
 
 type preEarlyDataIndication =
   { ped_configuration_id: configurationId;
@@ -126,7 +124,7 @@ let parse_sni_list b  =
         else
             let (ty,v) = split b 1 in
             (match vlsplit 2 v with
-            | Error(x,y) -> ExFail(x,y)
+            | Error(x,y) -> ExFail(x,"Failed to parse sni length")
             | Correct(cur, next) ->
                 (match aux next with
                 | ExFail(x,y) -> ExFail(x,y)
@@ -273,61 +271,58 @@ val parseEarlyDataIndication: pinverse Seq.Eq earlyDataIndicationBytes
 val parseExtension: pinverse Seq.Eq extensionBytes
 val parseExtensions: pinverse Seq.Eq extensionsBytes
 let rec parseExtension b =
-  if length b >= 2 then
+  if length b >= 4 then
     let (head, payload) = split b 2 in
-    match vlsplit 2 payload with
-    | Correct (data, tail) ->
-	if length tail = 0 then
-	  let (len, data) = split data 2 in
-	  match cbyte2 head with
-	  | (0x00uy, 0x0Duy) -> // sigalgs
-	    (match parseSigHashAlgs data with
-	    | Correct(algs) -> Correct (E_signatureAlgorithms algs)
-	    | Error(z) -> Error(z))
-	  | (0x00uy, 0x00uy) -> // sni
-	    (match parse_sni_list data with
-	    | Correct(snis) -> Correct (E_server_name snis)
-	    | Error(z) -> Error(z))
-	  | (0xFFuy, 0x01uy) -> // renego
-	    (match parseRenegotiationInfo data with
-	    | Correct(ri) -> Correct (E_renegotiation_info(ri))
-	    | Error(z) -> Error(z))
-	  | (0x00uy, 0x0Auy) -> // supported groups
-	    (match parseNamedGroups data with
-	    | Correct(groups) -> Correct (E_supported_groups(groups))
-	    | Error(z) -> Error(z))
-	  | (0x00uy, 0x0Buy) -> // ec point format
-	    (match parse_ecpf_list data with
-	    | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
-	    | Error(z) -> Error(z))
-	  | (0x00uy, 0x17uy) -> // extended ms
-	    if length data = 1 && cbyte data = 0uy then Correct (E_extended_ms)
-	    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-	  | (0xBBuy, 0x8Fuy) -> // extended padding
-	    if length data = 1 && cbyte data = 0uy then Correct (E_extended_padding)
-	    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-	  | (0x11uy, 0x11uy) -> // head TBD, early data
-	    (match parseEarlyDataIndication data with
-	    | Correct (edi) -> Correct (E_earlyData(edi))
-	    | Error(z) -> Error(z))
-	  | (0x22uy, 0x22uy) -> // head TBD, pre shared key
-	    (match parsePreSharedKey data with
-	    | Correct(psk) -> Correct (E_preSharedKey(psk))
-	    | Error(z) -> Error(z))
-	  | (0x33uy, 0x33uy) -> // head TBD, key share
-	    (match parseKeyShare data with	    
-	    | Correct (ks) -> Correct (E_keyShare(ks))
-	    | Error(z) -> Error(z))
-	  | _ -> // Unknown extension
-	    Correct(E_unknown_extension(head,data))
-        else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | Error(z) -> Error(z)
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    match vlparse 2 payload with
+    | Correct (data) ->
+	(match cbyte2 head with
+	| (0x00uy, 0x0Duy) -> // sigalgs
+	  (match parseSigHashAlgs (vlbytes 2 data) with
+	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
+	  | Error(z) -> Error(z))
+	| (0x00uy, 0x00uy) -> // sni
+	  (match parse_sni_list data with
+	  | Correct(snis) -> Correct (E_server_name snis)
+	  | Error(z) -> Error(z))
+	| (0xFFuy, 0x01uy) -> // renego
+	  (match parseRenegotiationInfo data with
+	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
+	  | Error(z) -> Error(z))
+	| (0x00uy, 0x0Auy) -> // supported groups
+	  (match parseNamedGroups (vlbytes 2 data) with
+	  | Correct(groups) -> Correct (E_supported_groups(groups))
+	  | Error(z) -> Error(z))
+	| (0x00uy, 0x0Buy) -> // ec point format
+	  (match parse_ecpf_list data with
+	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
+	  | Error(z) -> Error(z))
+	| (0x00uy, 0x17uy) -> // extended ms
+	  if length data = 0 then Correct (E_extended_ms)
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended MS extension")
+	| (0xBBuy, 0x8Fuy) -> // extended padding
+	  if length data = 0 then Correct (E_extended_padding)
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended padding extension")
+	| (0x11uy, 0x11uy) -> // head TBD, early data
+	  (match parseEarlyDataIndication data with
+	  | Correct (edi) -> Correct (E_earlyData(edi))
+	  | Error(z) -> Error(z))
+	| (0x22uy, 0x22uy) -> // head TBD, pre shared key
+	  (match parsePreSharedKey data with
+	  | Correct(psk) -> Correct (E_preSharedKey(psk))
+	  | Error(z) -> Error(z))
+	| (0x33uy, 0x33uy) -> // head TBD, key share
+	  (match parseKeyShare data with	    
+	  | Correct (ks) -> Correct (E_keyShare(ks))
+	  | Error(z) -> Error(z))
+	| _ -> // Unknown extension
+	  Correct(E_unknown_extension(head,data)))
+    | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Extension bytes are too short to store even the extension type")
 and parseEarlyDataIndication b = 
   if length b > 0 then
     match vlsplit 2 b with
     | Correct(config_id, data) ->
-      match parseConfigurationId config_id with
+      match parseConfigurationId (vlbytes 2 config_id) with
       | Correct(cid) -> 
 	if length data >= 2 then
 	  let (cs, data) = split data 2 in
@@ -335,43 +330,39 @@ and parseEarlyDataIndication b =
 	  | Correct(cs) -> 
 	    match vlsplit 2 data with
 	    | Correct(exts, data) -> 
-	      match parseExtensions exts with
+	      match parseExtensions (vlbytes 2 exts) with
 	      | Correct(exts) -> 
-		match vlsplit 1 data with
-		| Correct(context, tail) ->
-		  if length tail = 0 then
-		    let (len, ctx) = split context 1 in
+		match vlparse 1 data with
+		| Correct(ctx) ->
 		    Correct (ClientEarlyDataIndication ({ ped_configuration_id = cid;
 							  ped_cipher_suite = cs;
 							  ped_extensions = exts;
 							  ped_context = ctx; }))
-		  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 		| Error(z) -> Error(z)
 	      | Error(z) -> Error(z)
 	    | Error(z) -> Error(z)
 	  | Error(z) -> Error(z)
-	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Not enough bytes to parse cipher suite in early data indication")
       | Error(z) -> Error(z)
-    | Error(z) -> Error(z)
+    | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data indication length")
   else Correct (ServerEarlyDataIndication)
 and parseExtensions b =
   let rec (aux:bytes -> list extension -> Tot (Result (list extension))) = fun b exts ->
-    if length b > 0 then
+    if length b >= 4 then
+      let ht, b = split b 2 in
       match vlsplit 2 b with
       | Correct(ext, bytes) ->
-	(match parseExtension ext with
+	(match parseExtension (ht @| vlbytes 2 ext) with
 	| Correct(ext) -> 
 	  (match addOnce ext exts with // fails if the extension already is in the list
 	  | Correct(exts) -> aux bytes exts
 	  | Error(z) -> Error(z))
 	| Error(z) -> Error(z))
-      | Error(z) -> Error(z)
+      | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 2")
     else Correct(exts) in
-  match vlsplit 2 b with
-  | Correct(b, tail) ->
-    if length tail = 0 then aux b []
-    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  | Error(z) -> Error(z)
+  match vlparse 2 b with
+  | Correct(b) -> aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
 
 val parseExtensionsWithCS: data:bytes -> known_cipher_suites -> Result (list extension)
 let parseExtensionsWithCS data ch_ciphers =
