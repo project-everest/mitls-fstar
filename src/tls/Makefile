@@ -38,7 +38,6 @@ LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 OCAML=ocamlfind ocamlopt -package batteries -package stdint -linkpkg -g -thread
 DEBUG=ocamlfind ocamlc -package batteries -package stdint -linkpkg -g -thread
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db ~/dev/mitls/mitls-fstar/src/tls)
-OCAMLLIB=$(FSTAR_HOME)/contrib/Platform/ml/platform.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.ml
 
 # ------------------------- miTLS* -------------------------------------------
 # We try to limit the use of preprocessing, as it is messy.
