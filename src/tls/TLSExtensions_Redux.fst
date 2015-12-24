@@ -277,7 +277,7 @@ let rec parseExtension b =
     | Correct (data) ->
 	(match cbyte2 head with
 	| (0x00uy, 0x0Duy) -> // sigalgs
-	  (match parseSigHashAlgs (vlbytes 2 data) with
+	  (match parseSigHashAlgs (data) with
 	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
 	  | Error(z) -> Error(z))
 	| (0x00uy, 0x00uy) -> // sni
@@ -289,7 +289,7 @@ let rec parseExtension b =
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
 	  | Error(z) -> Error(z))
 	| (0x00uy, 0x0Auy) -> // supported groups
-	  (match parseNamedGroups (vlbytes 2 data) with
+	  (match parseNamedGroups (data) with
 	  | Correct(groups) -> Correct (E_supported_groups(groups))
 	  | Error(z) -> Error(z))
 	| (0x00uy, 0x0Buy) -> // ec point format

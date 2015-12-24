@@ -103,7 +103,7 @@ let parseSigAlg b =
     | 2uy -> Correct CoreCrypto.DSA
     | 3uy -> Correct CoreCrypto.ECDSA
     | 4uy -> Correct CoreCrypto.RSAPSS
-    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (Some.v (iutf8_opt b)))
+    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (strcat "Unknown signature algorithm :" (print_bytes b)))
 
 // JK : adding Hash SHA512 because it is part of the RFC
 type hashAlg' = h:hashAlg{h <> NULL && h <> MD5SHA1}
@@ -112,7 +112,8 @@ val hashAlgBytes : hashAlg' -> Tot (lbytes 1)
 let hashAlgBytes ha =
     match ha with
     | Hash MD5     -> abyte 1uy
-    | Hash SHA1     -> abyte 2uy
+    | Hash SHA1    -> abyte 2uy
+    | Hash SHA224  -> abyte 3uy
     | Hash SHA256  -> abyte 4uy
     | Hash SHA384  -> abyte 5uy
     | Hash SHA512  -> abyte 6uy
@@ -122,10 +123,11 @@ let parseHashAlg b =
     match cbyte b with
     | (1uy) -> Correct (Hash MD5)
     | (2uy) -> Correct (Hash SHA1)
+    | (3uy) -> Correct (Hash SHA224)
     | (4uy) -> Correct (Hash SHA256)
     | (5uy) -> Correct (Hash SHA384)
     | (6uy) -> Correct (Hash SHA512)
-    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Unknown hash algorithm")
+    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (strcat "Unknown hash algorithm :" (print_bytes b)))
 
 let encKeySize = function
   | Stream RC4_128      -> 16
@@ -166,6 +168,7 @@ val hashSize: h:hashAlg{h<>NULL} -> Tot nat
 let hashSize = function
   | Hash MD5     -> 16
   | Hash SHA1     -> 20
+  | Hash SHA224  -> 28
   | Hash SHA256  -> 32
   | Hash SHA384  -> 48
   | Hash SHA512  -> 64
@@ -1127,7 +1130,7 @@ val sigHashAlgBytes: sigHashAlg -> Tot (lbytes 2)
 let sigHashAlgBytes sha =
   let sign = sigAlgBytes (fst sha) in
   let hash = hashAlgBytes (snd sha) in
-  sign @| hash
+  hash @| sign
 
 val parseSigHashAlg: pinverse Seq.Eq sigHashAlgBytes
 let parseSigHashAlg b =
