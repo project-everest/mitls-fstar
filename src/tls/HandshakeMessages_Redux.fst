@@ -424,9 +424,12 @@ let parseCertificateRequest version data =
             | Error(z) -> Error(z)
             | Correct  (x,y) ->
             if length y > 0 then 
-               match parseSigHashAlgs x with
+               match parseSigHashAlgs (vlbytes 2 x) with
                | Error(z) -> Error(z)
                | Correct (sigAlgs) -> 
+	       match vlparse 2 y with
+	       | Error(z) -> Error(z)
+	       | Correct(y) ->
                match parseDistinguishedNameList y [] with
                | Error(z) -> Error(z)
                | Correct (distNamesList) ->

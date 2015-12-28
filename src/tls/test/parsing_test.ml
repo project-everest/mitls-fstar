@@ -7,16 +7,19 @@ open TLSConstants
 
 (* State variables *)
 let pv = ref TLS_1p2
-let kex = ref Kex_DHE
+let kex = ref Kex_ECDHE
        
 (* Traces list *)
-let traces = [
-    "google-trace.bin";
-    "akamai-trace.bin";
-    "tls-unique-trace-1.bin";
+let ecdhe_traces = [
+    "openssl-google.bin";
+    "openssl-akamai.bin";
+    "tls-unique-trace-2.bin";
+  ]
+
+let dhe_traces = [
+    (*    "tls-unique-trace-1.bin"; *)
     "client-auth-trace-1.bin";
     "client-auth-trace-2.bin";
-    "tls-unique-trace-1.bin";
   ]
 
 let print_error error =
@@ -66,74 +69,74 @@ let parse_handshake_message bytes =
       | '\x01' ->
 	 print_string "Parsing client hello...\n";
 	 (match parseClientHello msg with
-	 | Correct(ch) -> print_string "ClientHello OK\n"
+	 | Correct(ch) -> print_string "...OK\n"
 	 | Error(z) ->
-	    print_string "Failed to parse client hello:\n";
+	    print_string "...FAILED:\n";
 	    print_string (print_error z ^ "\n"))
       | '\x02' -> 
 	 print_string "Parsing server hello message...\n";
 	 (match parseServerHello msg with
-	 | Correct(ch) -> print_string "ServerHello OK\n"
-	 | Error(z) -> print_string "Failed to parse server hello :\n";
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED:\n";
 	               print_string (snd z))
       | '\x04' -> 
 	 print_string "Parsing session ticket message...\n";
 	 (match parseSessionTicket msg with
-	 | Correct(ch) -> print_string "SessionTicket OK\n"
+	 | Correct(ch) -> print_string "...OK\n"
 	 | Error(z) ->
-	    print_string "Failed to parse session ticket:\n";
+	    print_string "...FAILED:\n";
 	    print_string (snd z))
       | '\x06' -> 
 	 print_string "Parsing hello retry request message...\n";
 	 (match parseHelloRetryRequest msg with
-	 | Correct(ch) -> print_string "HelloRetryRequest OK\n"
-	 | Error(z) -> print_string "Failed to parse hello retry request\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x08' -> 
 	 print_string "Parsing encrypted extensions message...\n";
 	 (match parseEncryptedExtensions msg with
-	 | Correct(ch) -> print_string "EncryptedExtensions OK\n"
-	 | Error(z) -> print_string "Failed to parse encrypted extensions\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x0b' -> 
 	 print_string "Parsing certificate message...\n";
 	 (match parseCertificate msg with
-	 | Correct(ch) -> print_string "Certificate OK\n"
-	 | Error(z) -> print_string "Failed to parse certificate\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x0c' -> 
 	 print_string "Parsing server key exchange message...\n";
 	 (match parseServerKeyExchange !kex msg with 
-	 | Correct(ch) -> print_string "ServerKeyExchange OK\n"
-	 | Error(z) -> print_string "Failed to parse server key exchange\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x0d' -> 
 	 print_string "Parsing certificate request message...\n";
 	 (match parseCertificateRequest !pv msg with
-	 | Correct(ch) -> print_string "CertificateRequest OK\n"
-	 | Error(z) -> print_string "Failed to parse certificate request\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x0e' ->
 	 print_string "Parsing server hello done message...\n";
-	 if length msg = 0 then print_string "ServerHelloDone OK\n"
-	 else print_string "Failed to parse server hello done\n"
+	 if length msg = 0 then print_string "...OK\n"
+	 else print_string "...FAILED\n"
       | '\x0f' -> 
 	 print_string "Parsing certificate verify message...\n";
 	 (match parseCertificateVerify msg with
-	 | Correct(ch) -> print_string "CertificateVerify OK\n"
-	 | Error(z) -> print_string "Failed to parse certificate verify\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x10' -> 
 	 print_string "Parsing client key exchange message...\n";
 	 (match parseClientKeyExchange !pv !kex msg with
-	 | Correct(ch) -> print_string "ClientKeyExchange OK\n"
-	 | Error(z) -> print_string "Failed to parse client key exchange\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x11' -> 
 	 print_string "Parsing server configuration message...\n";
 	 (match parseServerConfiguration msg with
-	 | Correct(ch) -> print_string "ServerConfiguration OK\n"
-	 | Error(z) -> print_string "Failed to parse server configuration\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x14' -> 
 	 print_string "Parsing finished message...\n";
 	 (match parseFinished msg with
-	 | Correct(ch) -> print_string "FinishedMessage OK\n"
-	 | Error(z) -> print_string "Failed to parse finished message\n")
+	 | Correct(ch) -> print_string "...OK\n"
+	 | Error(z) -> print_string "...FAILED\n")
       | '\x18' -> print_string "Error: ignored key update message\n"
-      | _ -> print_string "Error: parsed an unknown handshake type\n"
+      | _ -> print_string ("Error: parsed an unknown handshake type: " ^ (Platform.Bytes.print_bytes bytes) ^ "\n")
   else print_string "Error: HS message too small to retrieve handshake type + length from it\n"
 
 let rec parse_handshake bytes =
@@ -144,7 +147,8 @@ let rec parse_handshake bytes =
     parse_handshake_message msg;
     parse_handshake bytes
   else if length bytes = 0 then print_string "Parsed all messages\n"
-  else print_string "Error: parsing failed due to length not being appropriate"
+  else print_string ("Error: parsing failed due to length not being appropriate:\n"
+		       ^ (Platform.Bytes.print_bytes bytes))
 		    
 let parse_alert_message bytes =
   ()
@@ -173,16 +177,21 @@ let rec parse_message bytes =
   else print_string "Error : Found some standalone bytes"
 
 let parse_trace_file file =
-  let bytes = Bytes.create 1000000 in
-  let flag = input file bytes 0 65536 in
+  let fbytes = Bytes.create 1000000 in
+  let flag = input file fbytes 0 65536 in
   if flag = 0 then print_string "Reached EOF\n"
   else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
-  let bytes = Bytes.sub bytes 0 flag in
-  let bytes = { bl = [bytes]; max = Bytes.length bytes; index = 0; length = Bytes.length bytes; } in
-  parse_handshake bytes;  
+  let bytes = Bytes.sub fbytes 0 flag in
+  let hs = { bl = [bytes]; max = flag; index = 0; length = flag; } in
+  parse_handshake hs;  
   print_string "\n********************************************\n"
 		    
 let _ =
-  let handshakes = List.map (fun x -> open_in_bin ("./traces/" ^ x)) traces in 
-  List.iter parse_trace_file handshakes
+  let ecdhe_handshakes = List.map (fun x -> open_in_bin ("./traces/" ^ x)) ecdhe_traces in
+  let dhe_handshakes = List.map (fun x -> open_in_bin ("./traces/" ^ x)) dhe_traces in
+  kex := Kex_ECDHE;
+  List.iter parse_trace_file ecdhe_handshakes;
+  kex := Kex_DHE;
+  List.iter parse_trace_file dhe_handshakes
+  
   
