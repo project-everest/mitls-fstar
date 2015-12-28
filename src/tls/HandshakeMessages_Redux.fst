@@ -47,6 +47,7 @@ type PreHandshakeType =
     | HT_certificate_verify
     | HT_client_key_exchange
     | HT_server_configuration
+    | HT_next_protocol
     | HT_finished
 
 type HandshakeType = PreHandshakeType
@@ -67,6 +68,7 @@ let htBytes t =
     | HT_certificate_verify  -> abyte  15uy
     | HT_client_key_exchange -> abyte  16uy
     | HT_server_configuration -> abyte 17uy
+    | HT_next_protocol       -> abyte  67uy
     | HT_finished            -> abyte  20uy
 
 val parseHt : pinverse Seq.Eq htBytes
@@ -85,6 +87,7 @@ let parseHt b =
     |  16uy  -> Correct (HT_client_key_exchange)
     |  18uy  -> Correct (HT_server_configuration)
     |  20uy  -> Correct (HT_finished           )
+    |  67uy  -> Correct (HT_next_protocol      )
     | _   -> let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_decode_error, reason)
 
 /// Messages
@@ -177,6 +180,15 @@ type FIN = {
   fin_vd: (l:bytes{length l < 65536});
 }
 
+// Next protocol message, see https://tools.ietf.org/id/draft-agl-tls-nextprotoneg-03.html
+// TODO: replace shallow implemntation by more precise one
+type NP = {
+  np_selected_protocol: bytes;
+  np_padding: bytes;
+  }
+
+// TODO: unify, either keep separate finished messages for client and servers or 
+// merge them into single "finished" as it is the case for certificates
 type hs_msg =
   | ClientHello of CH
   | ServerHello of SH
@@ -191,6 +203,7 @@ type hs_msg =
   | ServerConfiguration of SC
   | ClientFinished of FIN
   | ServerFinished of FIN
+  | NextProtocol of NP
 
 /// Handshake message format
 
@@ -703,3 +716,23 @@ let parseServerConfiguration payload : Result SC =
 	| Error(z) -> Error(z)
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
  | Error(z) -> Error(z)
+
+(* Next protocol message *)
+val nextProtocolBytes: NP -> Tot bytes
+let nextProtocolBytes np =
+  let selected_protocol = vlbytes 1 np.np_selected_protocol in
+  let padding = vlbytes 1 np.np_padding in
+  messageBytes HT_next_protocol (selected_protocol @| padding)
+
+val parseNextProtocol: b:bytes -> 
+    Result (s:NP{Seq.Eq (nextProtocolBytes s) (messageBytes HT_next_protocol b)})
+let parseNextProtocol payload : Result NP = 
+  match vlsplit 1 payload with
+  | Error(z) -> Error(z)
+  | Correct(selected_protocol, data) ->
+  match vlparse 1 data with
+  | Error(z) -> Error(z)
+  | Correct(padding) -> 
+      Correct( { np_selected_protocol = selected_protocol;
+		 np_padding = padding;})
+		 

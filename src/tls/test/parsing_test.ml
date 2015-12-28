@@ -13,11 +13,11 @@ let kex = ref Kex_ECDHE
 let ecdhe_traces = [
     "openssl-google.bin";
     "openssl-akamai.bin";
-    "tls-unique-trace-2.bin";
+    "tls-unique-trace-4.bin";
   ]
 
 let dhe_traces = [
-    (*    "tls-unique-trace-1.bin"; *)
+    "tls-unique-trace-3.bin";
     "client-auth-trace-1.bin";
     "client-auth-trace-2.bin";
   ]
@@ -136,6 +136,11 @@ let parse_handshake_message bytes =
 	 | Correct(ch) -> print_string "...OK\n"
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x18' -> print_string "Error: ignored key update message\n"
+      | '\x43' ->
+	 print_string "Parsing next protocol message...\n";
+         (match parseNextProtocol msg with
+	  | Correct(_) -> print_string "...OK\n"
+	  | Error(_) -> print_string "...FAILED\n")
       | _ -> print_string ("Error: parsed an unknown handshake type: " ^ (Platform.Bytes.print_bytes bytes) ^ "\n")
   else print_string "Error: HS message too small to retrieve handshake type + length from it\n"
 
