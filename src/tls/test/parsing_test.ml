@@ -69,47 +69,95 @@ let parse_handshake_message bytes =
       | '\x01' ->
 	 print_string "Parsing client hello...\n";
 	 (match parseClientHello msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	  | Correct(ch) ->
+	     print_string "...OK\n";
+	     let _,ch_bytes = split (clientHelloBytes(ch)) 4 in	     
+	     if equalBytes ch_bytes msg then (print_string "Serializing client hello...\n...OK\n") else
+	       (print_string "Serializing client hello...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes ch_bytes ^ "\n"))
 	 | Error(z) ->
 	    print_string "...FAILED:\n";
 	    print_string (print_error z ^ "\n"))
       | '\x02' -> 
 	 print_string "Parsing server hello message...\n";
 	 (match parseServerHello msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(sh) -> print_string "...OK\n";
+	     let _,sh_bytes = split (serverHelloBytes(sh)) 4 in
+	     if equalBytes sh_bytes msg then ((print_string "Serializing server hello...\n...OK\n")) else
+	       (print_string "Serializing server hello...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes sh_bytes ^ "\n"))
+
 	 | Error(z) -> print_string "...FAILED:\n";
 	               print_string (snd z))
       | '\x04' -> 
 	 print_string "Parsing session ticket message...\n";
 	 (match parseSessionTicket msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(st) -> print_string "...OK\n";
+	     let _,st_bytes = split (sessionTicketBytes(st)) 4 in
+	     if equalBytes st_bytes msg then (print_string "Serializing session ticket...\n...OK\n") else
+	       (print_string "Serializing session ticket...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes st_bytes ^ "\n"))
+
 	 | Error(z) ->
 	    print_string "...FAILED:\n";
 	    print_string (snd z))
       | '\x06' -> 
 	 print_string "Parsing hello retry request message...\n";
 	 (match parseHelloRetryRequest msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(ch) -> print_string "...OK\n";
+	     let _,hrr_bytes = split (helloRetryRequestBytes(ch)) 4 in
+	     if equalBytes hrr_bytes msg then ((print_string "Serializing hello retry request...\n...OK\n")) else
+	       (print_string "Serializing hello retry request...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes hrr_bytes ^ "\n"))
+
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x08' -> 
 	 print_string "Parsing encrypted extensions message...\n";
 	 (match parseEncryptedExtensions msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(ch) -> print_string "...OK\n";
+	     let _,ee_bytes = split (encryptedExtensionsBytes(ch)) 4 in
+	     if equalBytes ee_bytes msg then ((print_string "Serializing encrypted extensions...\n...OK\n")) else
+	       (print_string "Serializing encrypted extensions...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes ee_bytes ^ "\n"))
+
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0b' -> 
 	 print_string "Parsing certificate message...\n";
 	 (match parseCertificate msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	  | Correct(ch) -> print_string "...OK\n";
+			   print_string "WARNING: ignoring test on serialization because certificate serialization is not implemented in CoreCrypto\n"
+	  (* ;
+	     let cert_bytes = certificateBytes(ch) in
+	     if equalBytes cert_bytes msg then () else print_string "Serialization failed though...\n" *)
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0c' -> 
 	 print_string "Parsing server key exchange message...\n";
 	 (match parseServerKeyExchange !kex msg with 
-	 | Correct(ch) -> print_string "...OK\n"
+	  | Correct(ch) -> print_string "...OK\n";
+			   print_string "WARNING: ignoring test on serialization because EC point serialization is not implemnted in CoreCrypto\n"
+(*
+			  let _,ske_bytes = split (serverKeyExchangeBytes(ch)) 4 in
+	     if equalBytes ske_bytes msg then ((print_string "Serializing server key exchange...\n...OK\n")) else
+	       (print_string "Serializing server key exchange...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes ske_bytes ^ "\n"))
+ *)
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0d' -> 
 	 print_string "Parsing certificate request message...\n";
 	 (match parseCertificateRequest !pv msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(ch) -> print_string "...OK\n";
+	     let _,cr_bytes = split (certificateRequestBytes (ch)) 4 in
+	     if equalBytes cr_bytes msg then ((print_string "Serializing certificate request...\n...OK\n")) else
+	       (print_string "Serializing certificate request...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cr_bytes ^ "\n"))
+
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0e' ->
 	 print_string "Parsing server hello done message...\n";
@@ -118,28 +166,58 @@ let parse_handshake_message bytes =
       | '\x0f' -> 
 	 print_string "Parsing certificate verify message...\n";
 	 (match parseCertificateVerify msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(ch) -> print_string "...OK\n";
+	     let _,cv_bytes = split (certificateVerifyBytes(ch)) 4 in
+	     if equalBytes cv_bytes msg then ((print_string "Serializing certificate verify...\n...OK\n")) else
+	       (print_string "Serializing certificate verify...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cv_bytes ^ "\n"))
+
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x10' -> 
 	 print_string "Parsing client key exchange message...\n";
 	 (match parseClientKeyExchange !pv !kex msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(ch) -> print_string "...OK\n";
+	     let _,cke_bytes = split (clientKeyExchangeBytes (!pv) (ch)) 4 in
+	     if equalBytes cke_bytes msg then (print_string "Serializing client key exchange...\n...OK\n") else
+	       (print_string "Serializing client key exchange...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cke_bytes ^ "\n"))
+
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x11' -> 
 	 print_string "Parsing server configuration message...\n";
 	 (match parseServerConfiguration msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(ch) -> print_string "...OK\n";
+	     let _,sc_bytes = split (serverConfigurationBytes(ch)) 4 in
+	     if equalBytes sc_bytes msg then ((print_string "Serializing server configuration...\n...OK\n")) else
+	       (print_string "Serializing server configuration...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes sc_bytes ^ "\n"))
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x14' -> 
 	 print_string "Parsing finished message...\n";
 	 (match parseFinished msg with
-	 | Correct(ch) -> print_string "...OK\n"
+	 | Correct(ch) -> print_string "...OK\n";
+	     let _,fin_bytes =  split (finishedBytes(ch)) 4 in
+	     if equalBytes fin_bytes msg then ((print_string "Serializing finished...\n...OK\n")) else
+	       (print_string "Serializing finished...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes fin_bytes ^ "\n"))
+
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x18' -> print_string "Error: ignored key update message\n"
       | '\x43' ->
 	 print_string "Parsing next protocol message...\n";
          (match parseNextProtocol msg with
-	  | Correct(_) -> print_string "...OK\n"
+	  | Correct(np) -> print_string "...OK\n";
+	     let _,np_bytes = split (nextProtocolBytes(np)) 4 in
+	     if equalBytes np_bytes msg then ((print_string "Serializing next protocol...\n...OK\n")) else
+	       (print_string "Serializing next protocol...\nWARNING: not an inverse of parsing. ";
+		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes np_bytes ^ "\n"))
+
+	       
 	  | Error(_) -> print_string "...FAILED\n")
       | _ -> print_string ("Error: parsed an unknown handshake type: " ^ (Platform.Bytes.print_bytes bytes) ^ "\n")
   else print_string "Error: HS message too small to retrieve handshake type + length from it\n"

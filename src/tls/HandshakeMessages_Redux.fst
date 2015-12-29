@@ -247,7 +247,13 @@ let clientHelloBytes ch =
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
   messageBytes HT_client_hello data
 
-
+(* 
+   This function adds an "first connection" renegotiation info extension to the client hello 
+   when parsing it.
+   The cipher suite parsing ignores some of them.
+   For those two reasons, the serialization function is not an inverse of the parsing function 
+   as it is now 
+*)
 val parseClientHello : data:bytes{repr_bytes(length data) <= 3} -> 
                        r:Result (x:CH{exists (x':CH). Seq.Eq (clientHelloBytes x') (messageBytes HT_client_hello data)
                                                      /\ x.ch_protocol_version = x'.ch_protocol_version 

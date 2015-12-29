@@ -265,7 +265,7 @@ and extensionBytes ext =
     let payload = vlbytes 2 payload in
     head @| payload
 and extensionsBytes exts =
-  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts)
+  vlbytes 2 (List.Tot.fold_left (fun l s -> extensionBytes s @| l) empty_bytes exts)
 
 val parseEarlyDataIndication: pinverse Seq.Eq earlyDataIndicationBytes
 val parseExtension: pinverse Seq.Eq extensionBytes
@@ -293,7 +293,10 @@ let rec parseExtension b =
 	  | Correct(groups) -> Correct (E_supported_groups(groups))
 	  | Error(z) -> Error(z))
 	| (0x00uy, 0x0Buy) -> // ec point format
-	  (match parse_ecpf_list data with
+	  (match vlparse 1 data with
+	  | Error(z) -> Error(z)
+	  | Correct(data) ->
+	  match parse_ecpf_list data with
 	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
 	  | Error(z) -> Error(z))
 	| (0x00uy, 0x17uy) -> // extended ms
