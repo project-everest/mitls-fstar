@@ -124,6 +124,7 @@ let hashAlgBytes ha =
     match ha with
     | Hash MD5     -> abyte 1uy
     | Hash SHA1     -> abyte 2uy
+    | Hash SHA224  -> abyte 3uy
     | Hash SHA256  -> abyte 4uy
     | Hash SHA384  -> abyte 5uy
 
@@ -132,6 +133,7 @@ let parseHashAlg b =
     match cbyte b with
     | (1uy) -> Correct (Hash MD5)
     | (2uy) -> Correct (Hash SHA1)
+    | (3uy) -> Correct (Hash SHA224)
     | (4uy) -> Correct (Hash SHA256)
     | (5uy) -> Correct (Hash SHA384)
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
