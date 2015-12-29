@@ -361,7 +361,6 @@ let cipherSuiteBytesOpt cs =
     | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0xA7uy )
 
     | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00uy, 0xFFuy )
-
     | _ -> None
 
 let knownCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
@@ -949,7 +948,7 @@ let rec distinguishedNameListBytes names =
     | h::t ->
         lemma_repr_bytes_values (length (utf8 h));
         let name = vlbytes 2 (utf8 h) in
-        name @| distinguishedNameListBytes t
+        distinguishedNameListBytes t @| name
 
 val parseDistinguishedNameList: data:bytes -> res:list string -> Tot (Result (list string)) (decreases (length data))
 let rec parseDistinguishedNameList data res =
@@ -1028,7 +1027,7 @@ let parseNamedGroup b =
 
 val namedGroupsBytes: list namedGroup -> Tot bytes
 let namedGroupsBytes groups =
-  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| namedGroupBytes s) empty_bytes groups)
+  vlbytes 2 (List.Tot.fold_left (fun l s -> namedGroupBytes s @| l) empty_bytes groups)
 
 val parseNamedGroups: pinverse Seq.Eq namedGroupsBytes
 let parseNamedGroups b =
@@ -1146,7 +1145,7 @@ let parseSigHashAlg b =
 
 val sigHashAlgsBytes: list sigHashAlg -> Tot bytes
 let sigHashAlgsBytes algs = 
-  vlbytes 2 (List.Tot.fold_left (fun l x -> l @| sigHashAlgBytes x) empty_bytes algs)
+  vlbytes 2 (List.Tot.fold_left (fun l x -> sigHashAlgBytes x @| l) empty_bytes algs)
 
 val parseSigHashAlgs: pinverse Seq.Eq sigHashAlgsBytes
 let parseSigHashAlgs b =
