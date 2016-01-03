@@ -1,10 +1,3 @@
-(*--build-config
-    options:--lax --prims ../tls-ml/prims.fst --verify_module Encode --debug yes --admit_fsi Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi CoreCrypto.ECDH --admit_fsi CoreCrypto.DHDB;
-    other-files:../tls-ml/FStar.String.fst ../tls-ml/FStar.List.fst ../../../FStar/lib/FStar.FunctionalExtensionality.fst ../../../FStar/lib/FStar.Classical.fst ../../../FStar/lib/FStar.Set.fsi ../../../FStar/lib/FStar.Set.fst ../../../FStar/lib/FStar.Heap.fst ../../../FStar/lib/FStar.ST.fst ../../../FStar/lib/seq.fsi ../../../FStar/lib/FStar.SeqProperties.fst ../../libs/fst/Platform/Bytes.fst ../../libs/fst/Platform/Date.fst ../../libs/fst/Platform/Error.fst ../../libs/fst/Platform/Tcp.fst ../../libs/fst/CoreCrypto/Keys.fst ../../libs/fst/CoreCrypto/ACiphers.fst ../../libs/fst/CoreCrypto/HMac.fst ../../libs/fst/CoreCrypto/Random.fst ../../libs/fst/CoreCrypto/Ciphers.fst ../../libs/fst/CoreCrypto/Hash.fst ../../libs/fst/CoreCrypto/Sig.fst ../../libs/fst/CoreCrypto/DHDB.fst ../../libs/fst/CoreCrypto/DH.fst ../../libs/fst/CoreCrypto/ECDH.fsi ../../libs/fst/CoreCrypto/DER.fst ../../libs/fst/DHDBManager/DHDBManager.fst ../tls/TLSError.p.fst ../tls/Nonce.p.fst ../tls/TLSConstants.p.fst ../tls/RSAKey.p.fst ../tls/DHGroup.p.fst ../tls/ECGroup.p.fst ../tls/CommonDH.p.fst ../tls/PMS.p.fst ../tls/HASH.p.fst ../tls/HMAC.p.fst ../tls/SigLax.p.fst ../tls/UntrustedCert.p.fsti ../tls/Cert.p.fst ../tls/TLSInfo.p.fst ../tls/TLSExtensions.p.fst ../tls/TLSPRF.p.fst ../tls/RangeLax.p.fst ../tls/DataStream.p.fst ../tls/AppFragment.p.fst ../tls/HSFragment.p.fst ../tls/TLSFragment.p.fst ../tls/StatefulPlain.p.fst ../tls/LHAEPlain.p.fst ../tls/MAC_SHA256.p.fst ../tls/MAC_SHA1.p.fst ../tls/MAC.p.fst
- --*)
-(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
-
-// 2015-05-26 completely rewritten; pls someone review it!
 module Encode
 
 (* The "plain" file for CPA encryption (module ENC) *)
@@ -20,14 +13,21 @@ open TLSConstants
 open TLSInfo
 open Range
 
+type id = i:id { is_MtE i.aeAlg } 
+
+// tmp
+type tagt (i:id) = bytes 
+
 (* Interface towards ENC (conditionally abstract) *)
 
 // the result of decrypting & decoding, with an abstract type for secrecy
-private type plain (i:id) (ad: LHAEPlain.adata i) (rg:range) =
-    { plain: LHAEPlain.plain i ad rg;
-      tag  : MAC.tag;
-      ok   : b:bool { encAlg_of_id i = (Stream CoreCrypto.RC4_128, Fresh) ==> b = true }
-      (* true iff decoding succeeded; always true with RC4. *) }
+private type plain (i:id) (ad: LHAEPlain.adata i) (rg:range) = | Plain:
+  f: LHAEPlain.plain i ad rg ->
+  tag: tagt i ->
+
+  // did decoding succeeded? stateful? always true with RC4.
+  ok : bool { encAlg_of_id i = (Stream CoreCrypto.RC4_128, Fresh) ==> ok = true } -> 
+  plain i ad rg 
 
 val plainLength: i:id -> clen: nat { clen >= ivSize i } -> Tot nat
 let plainLength i clen = clen - ivSize i
@@ -35,34 +35,33 @@ let plainLength i clen = clen - ivSize i
 
 (* Interface towards LHAE *)
 
-private val zeros: r:range -> rbytes r
+//private val zeros: r:range -> rbytes r
 let zeros (rg:range) = createBytes (snd rg) 0uy
 
-val payload: i:id -> r:range -> ad:LHAEPlain.adata i->
+val payload: i:id -> r:frange i -> ad:LHAEPlain.adata i->
   LHAEPlain.plain i ad r -> Tot (rbytes r) //$ we had?: { SafeId e }
 
 // the MACed bytes, i.e. ad @| 2-byte length of payload @| payload
 //CF should ask some injectivity
 
-let payload (e:id) (rg:range) ad f =
+let payload (i:id) (rg:frange i) ad f =
   // After applying CPA encryption for ENC,
   // we access the fragment bytes only at unsafe indexes, and otherwise use some zeros
-  #if ideal
-  if safeId e then zeros rg
-  else
-  #endif
-    LHAEPlain.repr e ad rg f
+  if safeId i then zeros rg
+  else LHAEPlain.repr i ad rg f
 
 val macPlain_bytes:
-  i:id -> r:range -> LHAEPlain.adata i -> rbytes r -> Tot bytes
+  i:id -> r:frange i -> LHAEPlain.adata i -> rbytes r -> Tot bytes
 
-let macPlain_bytes (i:id) (rg:range) ad b = ad @| vlbytes 2 b
+let macPlain_bytes i rg ad b = 
+  lemma_repr_bytes_values (length b); 
+  ad @| vlbytes 2 b
 
-val macPlain: i:id -> r:range ->
+val macPlain: i:id -> r:frange i ->
   =ad:LHAEPlain.adata i ->
   =f:LHAEPlain.plain i ad r ->
-  Tot (b:bytes{ safeId i })
-let macPlain (i:id) (rg:range) ad f =
+  Tot (tagt i) // ?(b:bytes{ safeId i })
+let macPlain i rg ad f =
   macPlain_bytes i rg ad (payload i rg ad f)
 
 (*

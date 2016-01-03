@@ -45,7 +45,7 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 # Not sure which interfaces we should put in there.
 
 # these files are the stable inputs for verification
-TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst Handshake.fsti Record.fst Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst MAC.fst Encode.fst Handshake.fsti Record.fst Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
 #Removed temporarily: StatefulPlain.fsti
 #Removed temporarily: TLS.fst
 
@@ -62,7 +62,7 @@ TLSPARSE=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
 	HandshakeMessages_Redux.fst
 
 # these files are verified here
-VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM StatefulLHAE DataStream Alert Content StatefulPlain
+VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain StatefulPlain
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
@@ -98,6 +98,7 @@ endef
 define prefix_ver
 	$(shell str="$(TLSVER)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
 endef
+# the space in calls to prefix_ver and prefix_cfg matters!
 
 # verifying one file within $(TLSVER)
 %.fst-ver:
@@ -105,28 +106,28 @@ endef
 --verify_module $(subst .p,,$(basename $@))
 
 %.fsti-ver:
-	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver,$(basename $@),fsti) \
+	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fst-in:
-	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg,$(basename $@),fst) \
+	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fsti-in:
-	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg,$(basename $@),fsti) \
+	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
 
 # prints build-config block for interactive verification
 %.fst-cfg:
 	@echo '(*--build-config'
 	@echo '    options:--trace_error '$(VERFLAGS) $(ADMITTED)' --verify_module '$(subst .p,,$(basename $@))';'
-	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg,$(basename $@),fst)
+	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg, $(basename $@),fst)
 	@echo '--*)'
 
 %.fsti-cfg:
 	@echo '(*--build-config'
 	@echo '    options:--trace_error '$(VERFLAGS) $(ADMITTED)' --verify_module '$(subst .p,,$(basename $@))';'
-	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg,$(basename $@),fsti)
+	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg, $(basename $@),fsti)
 	@echo '--*)'
 
 
@@ -144,6 +145,9 @@ test-gcm: $(LIBFILES)
 	$(FSTAR) --lax $(ADMITTED) --codegen OCaml --admit_fsi FStar.IO \
 	--include $(PDIR) --include $(CDIR) \
 	$^ FStar.IO.fsti $(call prefix_ver,AEAD_GCM,fst) StatefulLHAE.fst TestGCM.fst	
+
+test-hmac:$(LIBFILES) TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst MAC_SHA256.fst MAC_SHA1.fst MAC.fst TestMAC.fst
+	$(FSTAR) $(ADMITTED) $(VERLAGS) $^
 
 top: $(LIBFILES) $(TLSVER)
 	$(FSTAR) $(ADMITTED) $(VERFLAGS) $^ StatefulLHAE.fsti Record.fst Handshake.fsti --admit_fsi StatefulLHAE --admit_fsi Handshake --verify_module TLS
@@ -188,7 +192,7 @@ TLS_PP_FILES= TLSExtensions PMS DHGroup Encode Range Sig PRF-redux TLSExtensions
 # DHGroup.p.fst PMS.p.fst \
 	TLSExtensions.p.fst TLSPRF.p.fst \
 	HSFragment.p.fst TLSFragment.p.fst StatefulPlain.p.fst \
-	LHAEPlain.p.fst MAC_SHA256.p.fst MAC_SHA1.p.fst MAC.p.fst Encode.p.fst \
+	LHAEPlain.p.fst MAC_SHA256.p.fst MAC_SHA1.p.fst MAC.p.fst \
 	ENC.p.fst AEAD_GCM.p.fst LHAE.p.fst \
 	PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti \
 	HandshakeMessages.p.fst Handshake.p.fst

@@ -10,17 +10,26 @@ open TLSInfo
 open Range
 open Content
 
+// Defines additional data and an abstract "plain i ad rg" plaintext
+// typed interface from the more concrete & TLS-specific type
+// "Content.fragment i". (Type abstraction helps with modularity, but
+// not with privacy in this case.)
+
+// This module is used only up to TLS 1.2
+
+type id = i:id { pv_of_id i <> TLS_1p3 }  
+
+
+(*** additional data:  ad := ct @| pv ***)
+
 let ad_Length i = match pv_of_id i with
     | SSL_3p0 -> 1
-    | TLS_1p3 -> 0 // implicitly authenticated
     | _       -> 3 // ContentType[1] + Version[2]
 
 val makeAD: i:id -> ct:ContentType -> Tot (lbytes (ad_Length i))
 let makeAD i ct =
     let pv   = pv_of_id i in
-    if pv = TLS_1p3 then empty_bytes
-    else 
-      let bct  = ctBytes ct in
+    let bct  = ctBytes ct in
       if pv = SSL_3p0
       then bct
       else bct @| versionBytes pv
@@ -50,8 +59,11 @@ val lemma_makeAD_parseAD: i:id -> ct:ContentType -> Lemma
   [SMTPat (makeAD i ct)]
 let lemma_makeAD_parseAD i ct = () //cut (Seq.Eq ad (parseAD i (makeAD i n ad)))
 
+
+(*** plaintext fragments ***)
+
 // naming: we switch from fragment to plain as we are no longer TLS-specific
-type plain (i:id) (ad:adata i) (rg:range) = f:fragment i
+private type plain (i:id) (ad:adata i) (rg:range) = f:fragment i
 //  { (parseAD i ad, rg) = Content.ct_rg i f }
   { fst (ct_rg i f) = parseAD i ad /\ Wider rg (snd (ct_rg i f)) }
 
@@ -68,44 +80,10 @@ logic type wf_ad_rg i ad rg =
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->
   b:rbytes rg  ->
   Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
-let mk_plain i ad rg b =
-  //mk_ct_rg i (parseAD i ad) rg b;
-  Content.mk_fragment i (parseAD i ad) rg b
 
+let mk_plain i ad rg b = Content.mk_fragment i (parseAD i ad) rg b
 
-// ---------------------------------------------------------
-
-
-// type cipherbytes = b:bytes { length b <= max_TLSCipher_fragment_length }
+// should go to StatefulLHAE 
 
 type cipher (i:id) = b:bytes {valid_clen i (length b)}
 
-(*
-let reprFragment (i:id) (ad:adata) (r:range) (f:plain) =
-    let ct = parseAD i ad in
-    let x = f.contents in
-    Content.reprFragment i ct r x
-
-let makeExtPad (i:id) (ad:adata) (r:range) f =
-    let ct = parseAD i ad in
-    let p = f.contents in
-    let p = Content.makeExtPad i ct r p in
-    {contents = p}
-
-let parseExtPad (i:id) (ad:adata) (r:range) f =
-    let ct = parseAD i ad in
-    let p = f.contents in
-    match Content.parseExtPad i ct r p with
-    | Error(x) -> Error(x)
-    | Correct(p) -> correct ({contents = p})
-
-#if ideal
-let widen i ad r f =
-    let ct = parseAD i ad in
-    let f1 = Content.widen i ct r f.contents in
-    {contents = f1}
-#endif
-
-let recordPlainToStAEPlain (e:epoch) (ct:ContentType) (ad:adata) (h:Content.history) (sh:history) (rg:range) f = {contents = f}
-let stAEPlainToRecordPlain (e:epoch) (ct:ContentType) (ad:adata) (h:Content.history) (sh:history) (rg:range) f = f.contents
-*)
