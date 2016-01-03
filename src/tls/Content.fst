@@ -39,7 +39,7 @@ let split s =
   Seq.slice s 0 last, Seq.index s last
 
 // Alert fragmentation is forbidden in TLS 1.3; as a slight deviation
-// from the standard, we also forbit it in earlier version. 
+// from the standard, we also forbid it in earlier version. 
 // Anyway, this is internal to the Alert protocol.
 
 // Ghost projection from low-level multiplexed fragments to application-level deltas
@@ -96,6 +96,14 @@ let ct_rg (i:id) (f:fragment i) : _ * frange i =
   | CT_CCS            -> Change_cipher_spec, zero
   | CT_Alert rg f     -> TLSConstants.Alert, rg
 
+let rg (i:id) (f:fragment i) : frange i =
+  match f with
+  | CT_Data rg d      -> rg
+  | CT_Handshake rg f -> rg
+  | CT_CCS            -> zero
+  | CT_Alert rg f     -> rg
+
+
 // "plain interface" for conditional security (TODO restore details)
 
 val mk_fragment: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange i ->
@@ -108,10 +116,14 @@ let mk_fragment i ct rg b =
     | Change_cipher_spec -> cut(Eq b empty_bytes);CT_CCS  //* rediscuss
     | TLSConstants.Alert -> CT_Alert     rg b
 
-val mk_ct_rg: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange i ->
+val mk_ct_rg: 
+  i:id{ ~(authId i)} -> 
+  ct:ContentType -> 
+  rg:frange i ->
   b:rbytes rg { ct = Change_cipher_spec ==> rg = zero } ->
   Lemma ((ct,rg) = ct_rg i (mk_fragment i ct rg b))
 let mk_ct_rg i ct rg b = ()
+
 
 (*
 val reprFragment: i:id { not (SafeId i) } -> ct:contentType -> rg:range -> fragment i ct rg

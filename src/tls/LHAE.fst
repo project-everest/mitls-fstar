@@ -2,7 +2,7 @@
 
 module LHAE
 
-(* Implements Length-Hiding Authenticated Encryption
+(* Implements (somewhat) length-hiding authenticated encryption
    for all "aeAlg" constructions: MtE, MacOnly, GCM;
    used by StatefulLHAE, parameterized by LHAEPlain. *)
 
@@ -18,15 +18,17 @@ open Range
 
 type cipher = b:bytes { length b <= max_TLSCipher_fragment_length }
 
-(***** keying *****)
+
+(*** keying ***)
 
 type LHAEKey (i:id) (rw:rw) =
-    | MtEK of MAC.key i * ENC.state i rw
+    | MtEK     of MAC.key i * ENC.state i rw
     | MACOnlyK of MAC.key i
-    | GCM of AEAD_GCM.state i rw
+    | GCM      of AEAD_GCM.state i rw
 
 type encryptor (i:id) = LHAEKey i Writer
 type decryptor (i:id) = LHAEKey i Reader
+
 
 (* 15-04-11 recheck usage of these functions *)
 
@@ -38,6 +40,7 @@ let keySize = function
   | MACOnly(mac)  -> macKeySize mac
   | MtE(enc,mac)  -> macKeySize mac + encKeySize enc + keyDerivationIVSize(MtE(enc,mac))
   | AEAD(enc,prf) -> AEADKeySize(enc) + AEADIVSize(enc)
+
 
 type keyrepr i = lbytes (keySize i.aeAlg)
 
@@ -91,7 +94,8 @@ let leak e rw k =
 let mteKey (e:id) (rw:rw) ka ke = MtEK(ka,ke)
 let gcmKey (e:id) (rw:rw) st = GCM(st)
 
-(***** authenticated encryption *****)
+
+(*** Authenticated Encryption ***)
 
 // We have two variants for encryption and decryption:
 // the first (primed) is concrete; the second is idealized at safe indexes,
@@ -119,66 +123,37 @@ private val cmem: i:id -> ad:(;i)LHAEPlain.adata -> c:cipher ->
  *)
 
 private val encrypt':
-  i:id -> encryptor i -> ad:LHAEPlain.adata i -> rg:range -> p:LHAEPlain.plain i ad rg ->
-  (encryptor i * c:cipher)
+  i:id -> encryptor i -> ad:LHAEPlain.adata i -> rg:frange i -> p:LHAEPlain.plain i ad rg ->
+  c:cipher
     { Seq.length c = TargetLength i rg  /\
       (safeId i ==> Encrypted i ad c) }
 
 val encrypt :
-  i:id -> encryptor i -> ad:LHAEPlain.adata i -> rg:range -> p:LHAEPlain.plain i ad rg ->
-  (encryptor i * c:cipher)
-    { Seq.Length c = TargetLength i rg /\
+  i:id -> encryptor i -> ad:LHAEPlain.adata i -> rg:frange i -> p:LHAEPlain.plain i ad rg ->
+  c:cipher)
+    { Seq.Length c = TargetLength i rg /\ 
       (SafeId(i) => Encrypted i ad c) }
 
 let encrypt' (e:id) key data rg plain =
-    let authEnc = e.aeAlg in
-    match (authEnc,key) with
-    | (MtE encAlg _, MtEK (ka,ke)) ->
-        (match encAlg with
-        | Stream_RC4_128 -> // stream cipher
-            let plain   = Encode.mac e ka data rg plain in
-            let (l,h) = rg in
-            if
-#if TLSExt_extendedPadding
-                (not (TLSExtensions.hasExtendedPadding e)) &&
-#endif
-                l <> h then
-                unexpected "[encrypt'] given an invalid input range"
-            else
-                let (ke,res) = ENC.enc e ke data rg plain in
-                (MtEK(ka,ke),res)
-        | CBC_Stale(_) | CBC_Fresh(_) -> // block cipher
-            let plain  = Encode.mac e ka data rg plain in
-            let (ke,res) = ENC.enc e ke data rg plain in
-            (MtEK(ka,ke),res))
-    | (MACOnly _, MACOnlyK (ka)) ->
+  match e.aeAlg, key with
+    | MtE _, MtEK (ka,ke) ->
         let plain = Encode.mac e ka data rg plain in
-        let (l,h) = rg in
-        if l <> h then
-            unexpected "[encrypt'] given an invalid input range"
-        else
-            let r = Encode.repr e data rg plain in
-            (key,r)
-    | (AEAD encAlg _, GCM(gcmState)) ->
-        let (l,h) = rg in
-        if
-#if TLSExt_extendedPadding
-            (not (TLSExtensions.hasExtendedPadding e)) &&
-#endif
-            l <> h then
-            unexpected "[encrypt'] given an invalid input range"
-        else
-            let (newState,res) = AEAD_GCM.enc e gcmState data rg plain in
-            (GCM(newState),res)
-    | (_,_) -> unexpected "[encrypt'] incompatible ciphersuite-key given."
+        ENC.enc e ke data rg plain
+    | MACOnly _, MACOnlyK ka ->
+        let plain = Encode.mac e ka data rg plain in
+        Encode.repr e data rg plain
+    | AEAD encAlg _, GCM gcmState ->
+        AEAD_GCM.enc e gcmState data rg plain in
 
 
+// partial correctness: decryption is an inverse at least for the encryptions in the log.
 private val decrypt':
   i:id -> k:decryptor i -> ad:LHAEPlain.adata i ->
   c:cipher{ safeId i ==> Encrypted i ad c } ->
-  ( ((;i) decryptor * rg:range * p:LHAEPlain.plain i ad rg)
-      {rg = cipherRangeClass i (length c)}
-  ) Result
+  ST (result (rg:range {rg = cipherRangeClass i (length c)} * LHAEPlain.plain i ad rg))
+  (requires (fun h0 -> authId i => "some (Entry c ad rg p) is in the log"))
+  (ensures (fun h0 r h1 -> "on the decryptor state is changed and the result is read off the log")
+    
 (* TODO MK seems outdated: partial functional correctness when decrypting what we encrypted
   {
    !pl,p,tag,rg.
@@ -200,10 +175,8 @@ val decrypt:
         (forall p. ENC.Encrypted i ad c p <==> exists k r. res = Correct (k,r,p)))}
 
 let decrypt' e key data cipher =
-    let cl = length cipher in
-    // by typing, we know that cl <= max_TLSCipher_fragment_length
-    let authEnc = e.aeAlg in
-    match (authEnc,key) with
+    let cl = length cipher in  // by typing, we know that cl <= max_TLSCipher_fragment_length
+    match e.aeAlg,key with
     | (MtE encAlg macAlg, MtEK (ka,ke)) ->
         let macSize = macSize macAlg in
         (match encAlg with
@@ -211,22 +184,22 @@ let decrypt' e key data cipher =
             if cl < macSize then
                 (*@ It is safe to return early, because we are branching
                     on public data known to the attacker *)
-                let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_bad_record_mac, reason)
+                Error(AD_bad_record_mac, perror __SOURCE_FILE__ __LINE__ "")
             else
                 let rg = cipherRangeClass e cl in
-                let (ke,plain) = ENC.dec e ke data cipher in
+                let plain = ENC.dec e ke data cipher in
                 let nk = mteKey e Reader ka ke in
                 (match Encode.verify e ka data rg plain with
                 | Error z -> Error z
-                | Correct(aeplain) -> correct(nk,rg,aeplain))
-        | CBC_Stale(alg) | CBC_Fresh(alg) -> // block cipher
+                | Correct aeplain -> correct(rg,aeplain))
+        | CBC_Stale alg | CBC_Fresh alg -> // block cipher
             let ivL = ivSize e in
             let blockSize = blockSize alg in
             let fp = fixedPadSize e in
             if (cl - ivL < macSize + fp) || (cl % blockSize <> 0) then
                 (*@ It is safe to return early, because we are branching
                     on public data known to the attacker *)
-                let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_bad_record_mac, reason)
+                Error(AD_bad_record_mac, perror __SOURCE_FILE__ __LINE__ "")
             else
                 let rg = cipherRangeClass e cl in
                 let (ke,plain) = ENC.dec e ke data cipher in
@@ -234,36 +207,95 @@ let decrypt' e key data cipher =
                 (match Encode.verify e ka data rg plain with
                 | Error z -> Error z
                 | Correct(aeplain) -> correct (nk,rg,aeplain)))
-    | (MACOnly macAlg, MACOnlyK (ka)) ->
+    | (MACOnly macAlg, MACOnlyK ka) ->
         let macSize = macSize macAlg in
         if cl < macSize then
-            let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_bad_record_mac, reason)
+            Error(AD_bad_record_mac, perror __SOURCE_FILE__ __LINE__ "")
         else
             let rg = cipherRangeClass e cl in
             let (plain,tag) = Encode.decodeNoPad_bytes e data rg cl cipher in
             (match Encode.verify_MACOnly e ka data rg cl plain tag with
-            | Error(z) -> Error(z)
-            | Correct(x) -> let rg,aeplain = x in correct (key,rg,aeplain))
-    | (AEAD encAlg _ , GCM(gcmState)) ->
+            | Error z -> Error z
+            | Correct (rg,aeplain) -> Correct (rg,aeplain))
+    | (AEAD encAlg _ , GCM gcmState) ->
         let minLen = aeadRecordIVSize encAlg + aeadTagSize encAlg in
         if cl < minLen then
-            let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_bad_record_mac, reason)
+            Error(AD_bad_record_mac, perror __SOURCE_FILE__ __LINE__ "")
         else
             let rg = cipherRangeClass e cl in
             (match AEAD_GCM.dec e gcmState data rg cipher with
             | Error z -> Error z
-            | Correct (res) ->
-                let (newState,plain) = res in
-                let nk = gcmKey e Reader newState in
-                correct (nk,rg,plain))
-    | (_,_) -> unexpected "[decrypt'] incompatible ciphersuite-key given."
+            | Correct plain -> Correct (| rg,plain |)
+//  | (_,_) -> unexpected "[decrypt'] incompatible ciphersuite-key given."
 
 #if ideal
 
 type preds = | ENCrypted of id * LHAEPlain.adata * range * LHAEPlain.plain * cipher
 
-type entry = id * LHAEPlain.adata * range * LHAEPlain.plain * ENC.cipher
-let log = ref ([]: list<entry>) // for defining the ideal functionality for INT-CTXT
+type entry (i:id) = | Entry:
+  c: ENC.cipher i ->
+  ad: LHAEPlain.adata i -> 
+  // todo: use dplain style
+  rg: range -> 
+  plain: LHAEPlain.plain i ad rg -> entry i
+
+let log i = ref ([]: seq (entry i) // for defining the ideal functionality for INT-CTXT
+
+let encrypt (e:id) key ad rg plain =
+  let c = encrypt' e key ad rg plain in
+  if authId e then
+    log := snoc log (Entry c ad rg plain)
+  else ();
+  c
+
+val matches: #i:id -> c:cipher i -> adata i -> entry i -> Tot bool
+let matches i c ad (Entry c' ad' _) = c = c' && ad = ad'
+
+// decryption, idealized as a lookup of (c,ad) in the log for safe instances
+val decrypt: 
+  i:gid -> d:decryptor i -> ad:adata i -> c:cipher i 
+  -> ST (option (dplain i ad c))
+  (requires (fun h0 -> True))
+  (ensures  (fun h0 res h1 ->
+               modifies Set.empty h0 h1
+             /\ (authId i ==>
+                 Let (sel h0 d.log) // no let, as we still need a type annotation
+                   (fun (log:seq (entry i)) ->
+                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
+                                            found j /\ ~(matches c ad (Seq.index log j))))
+                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
+                                           found j
+                                           /\ matches c ad (Seq.index log j)
+                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
+let decrypt i d ad c =
+  let error = Error(AD_bad_record_mac,"") in // fixed
+  recall d.log;
+  let log = !d.log in
+  if authId i then 
+    match seq_find (matches c ad) log with
+    | Some e -> Some (Entry.p e)
+    | None ->  error
+  else dec i d ad c
+
+(* OR: *)
+
+let decrypt (i:id) (k: reader i) ad (cipher: bytes) =
+  if authId i then
+    match cmem e ad cipher !log with
+    | Some (rg,p) -> 
+        if safeId i then 
+          let p' = LHAEPlain.widen e ad rg p in
+          let rg' = cipherRangeClass e (length cipher) in
+          Correct (rg',p')
+        else
+          decrypt' e key ad cipher
+    | None   -> Error err
+  else
+    decrypt' e key ad cipher
+
+
+
+(* to be deleted: 
 
 let rec cmem (e:id) (ad:LHAEPlain.adata) (c:ENC.cipher) (xs: list entry) =
 #if verify
@@ -278,30 +310,23 @@ let rec cmem (e:id) (ad:LHAEPlain.adata) (c:ENC.cipher) (xs: list entry) =
 
 let encrypt (e:id) key ad rg plain =
   let (key,cipher) = encrypt' e key ad rg plain in
-#if ideal_F
-  if safeId  e then
-    log := (e,ad,rg,plain,cipher)::!log
-  else ()
-#endif
-#if ideal
-  (* CF we do not log in all cases, as we do not have ENCrypted for MAC-only suites *)
+  (* we do not log in all cases, as we do not have ENCrypted for MAC-only suites *)
   if safeId  e then
     log := (e,ad,rg,plain,cipher)::!log
   else ();
-#endif
   (key,cipher)
 
 let decrypt (e:id) (key: LHAEKey) ad (cipher: bytes) =
   let err = (AD_bad_record_mac,"") in
 #if ideal_F
-  if safeId  e then
+  if safeId e then
     match cmem e ad cipher !log with
     | Some _ -> decrypt' e key ad cipher
     | None   -> Error err
   else
 #endif
 #if ideal
-  if safeId  e then
+  if safeId e then
     match cmem e ad cipher !log with
     | Some x ->
        let (r,p) = x in
@@ -313,3 +338,4 @@ let decrypt (e:id) (key: LHAEKey) ad (cipher: bytes) =
   else
 #endif
       decrypt' e key ad cipher
+*)

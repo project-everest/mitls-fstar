@@ -1,96 +1,116 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿module MAC
 
-#light "off"
-
-module MAC
+open FStar.Heap
+open FStar.HyperHeap
+open FStar.Seq
+open FStar.SeqProperties // for e.g. found
 
 open Platform.Bytes
-open TLSConstants
-
-open TLSInfo
 open Platform.Error
-open TLSError
 open CoreCrypto 
 
+open TLSConstants
+open TLSInfo
+open TLSError
+
+// idealizing HMAC
+// for concreteness; the rest of the module is parametric in a 
+
+type id = i:id { is_MACOnly i.aeAlg \/ is_MtE i.aeAlg }
+
+let alg (i:id) = macAlg_of_id i
+
 type text = bytes
-type tag = bytes
-type keyrepr = bytes
-type key =
-  | Key_SHA256 of MAC_SHA256.key
-  | Key_SHA1   of MAC_SHA1.key
-  | KeyNoAuth  of keyrepr
+type tag (i:id) = bytes
+type keyrepr (i:id) = bytes
 
-// We comment out an ideal variant that directly specifies that MAC
-// is ideal at Auth indexes; we do not need that assumption anymore,
-// as we now typecheck this module against plain INT-CMA MAC interfaces:
-// idealization now occurs within each of their implementations.
-//
-// We are still keeping the code, as we may at some point want to
-// typecheck both the current idealized MAC module and the previous
-// ideal MAC module.
-//
-// #if ideal
-// type entry = id * text * tag
-// let log:ref<list<entry>> =ref []
-// let rec tmem (e:id) (t:text) (xs: list<entry>) =
-//  match xs with
-//      [] -> false
-//    | (e',t',tag)::res when e = e' && t = t' -> true
-//    | (e',t',tag)::res -> tmem e t res
-// #endif
 
-let mac (ki:id) key data =
-    let a = macAlg_of_id ki in
-    // // Commented out old ideal specification:
-    // #if ideal
-    // let tag =
-    // #endif
-      match key with
-        | Key_SHA256(k) -> MAC_SHA256.mac ki k data
-        | Key_SHA1(k)   -> MAC_SHA1.mac ki k data
-        | KeyNoAuth(k)  -> HMAC.tls_mac a k data
+type fresh_subregion rg parent h0 h1 = fresh_region rg h0 h1 /\ extends rg parent
 
-    // #if ideal
-    // // We log every authenticated texts, with their index and resulting tag
-    // log := (ki, data, tag)::!log;
-    // tag
-    // #endif
+// We keep the tag in case we later want to enforce tag authentication
+private type entry (i:id) (good: bytes -> Type) = 
+  | Entry: t:tag i -> p:bytes { authId i ==> good p } -> entry i good
 
-let verify ki key data tag =
-    let a = macAlg_of_id ki in
-    match key with
-    | Key_SHA256(k) -> MAC_SHA256.verify ki k data tag
-    | Key_SHA1(k)   -> MAC_SHA1.verify ki k data tag
-    | KeyNoAuth(k)  -> HMAC.tls_macVerify a k data tag
-    // #if ideal
-    // // At safe indexes, we use the log to detect and correct verification errors
-    // && if authId ki
-    //   then
-    //       tmem ki data !log
-    //   else
-    //       true
-    // #endif
+// readers and writers share the same private state: a log of MACed messages
+// TODO make it abstract
+type key (i:id) (good: bytes -> Type) = 
+  | Key: #region : rid -> // intuitively, the writer's region
+         kv      : keyrepr i ->
+         log     : rref region (seq (entry i good)) -> key i good
 
-let gen ki =
-    let a = macAlg_of_id ki in
-    #if ideal
-    // ideally, we separately keep track of "Auth" keys,
-    // with an additional indirection to HMAC
-    let authId = authId ki in
-    if authId then
-      match a with
-      | HMAC(SHA256) -> Key_SHA256(MAC_SHA256.GEN ki) //inlining to help the typechecker
-      | HMAC(SHA)   -> Key_SHA1(MAC_SHA1.GEN ki)
-    //  | a when a = MAC_SHA256.a -> Key_SHA256(MAC_SHA256.GEN ki)
-    //  | a when a = MAC_SHA1.a   -> Key_SHA1(MAC_SHA1.GEN ki)
-      | a                       -> unreachable "only strong algorithms provide safety"
-    else
-    #endif
-    KeyNoAuth(CoreCrypto.random (macKeySize a))
+val region: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot rid
+val keyval: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot (keyrepr i)
+        
+let region #i 'a (k:key i 'a) = k.region
+let keyval #i 'a (k:key i 'a) = k.kv 
 
-let coerce (ki:id) k = KeyNoAuth(k)
-let leak (ki:id) k =
-    match k with
-    | Key_SHA256(k) -> unreachable "since we have not Auth"
-    | Key_SHA1(k)   -> unreachable "since we have not Auth"
-    | KeyNoAuth(k)  -> k
+val gen: i:id -> good: (bytes -> Type) -> parent: rid -> ST(key i good)
+  (requires (fun _ -> True))
+  (ensures (fun h0 k h1 ->  
+    modifies Set.empty h0 h1 /\
+    fresh_subregion (region #i #good k) parent h0 h1 )) 
+
+val coerce: i:id -> good: (bytes -> Type) -> parent: rid -> kv:keyrepr i -> ST(key i good)
+  (requires (fun _ -> ~(authId i)))
+  (ensures (fun h0 k h1 ->  
+    modifies Set.empty h0 h1 /\
+    fresh_subregion (region #i #good k) parent h0 h1 )) 
+
+val leak: #i:id -> #good: (bytes -> Type) -> k:key i good {~(authId i)} -> Tot (kv:keyrepr i { kv = keyval k })
+
+// todo: mark it as private
+let gen0 i 'good parent kv = 
+  let region = new_region parent in 
+  let log = ralloc region Seq.createEmpty in 
+  Key #i #'good #region kv log
+
+let gen    i 'good parent    = gen0 i 'good parent (CoreCrypto.random (macKeySize (alg i)))
+let coerce i 'good parent kv = gen0 i 'good parent kv
+let leak   i 'good k = k.kv
+
+val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==> good p } -> ST(tag i) 
+  (requires (fun _ -> True))
+  (ensures (fun h0 t h1 -> 
+    modifies (Set.singleton (region k)) h0 h1 
+  //  /\ 
+  //  sel h1 k.log = snoc (sel h0 k.log) (Entry t p)
+  ))
+
+
+// We log every authenticated texts, with their index and resulting tag
+let mac i 'good k p =
+    let p : p:bytes { authId i ==> 'good p } = p in 
+    admit();
+    let t = HMAC.tls_mac (alg i) k.kv p in
+    let e : entry i 'good = Entry t p in 
+    k.log := snoc !k.log e; 
+    t
+
+private val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool 
+let matches i p (Entry #i _ p') = p = p'
+
+val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
+  (requires (fun _ -> True)) 
+  (ensures (fun h0 b h1 -> h0 = h1 /\ (b /\ authId i ==> good p)))
+
+// We use the log to correct any verification errors
+let verify i k p t =
+    HMAC.tls_macVerify a k.kv p t 
+    && 
+    ( not(authId i) || is_Some (seq_find (matches p) !k.log))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

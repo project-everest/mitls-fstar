@@ -6,7 +6,7 @@ open CoreCrypto
 
 type key = bytes
 type data = bytes
-type mac = bytes
+type mac (a:macAlg) = lbytes (macSize a)
 
 (* SSL/TLS constants *)
 
@@ -17,60 +17,41 @@ let ssl_pad2_sha1 = createBytes 40 0x5cuy
 
 (* SSL3 keyed hash *)
 
-val sslKeyedHashPads: hashAlg -> bytes * bytes
-let sslKeyedHashPads alg = 
-  match alg with
+type sslHashAlg = h:hashAlg { h = Hash MD5 \/ h = Hash SHA1 }
+val sslKeyedHashPads: sslHashAlg -> Tot(bytes * bytes)
+let sslKeyedHashPads = function
     | Hash MD5 -> (ssl_pad1_md5, ssl_pad2_md5)
     | Hash SHA1 -> (ssl_pad1_sha1, ssl_pad2_sha1)
-    | _   -> Platform.Error.unexpected "[sslKeyedHashPads] invoked on unsupported algorithm"
 
-val sslKeyedHash: hashAlg -> key -> data -> mac
-let sslKeyedHash alg key data =
-    let (pad1, pad2) = sslKeyedHashPads alg in
-    let dataStep1 = key @| pad1 @| data in
-    match alg with
-    | NULL -> Platform.Error.unexpected "[sslKeyedHash] invoked on NULL algorithm"
-    | _ ->
-      let step1 = HASH.hash alg dataStep1 in
-      let dataStep2 = key @| pad2 @| step1 in
-      HASH.hash alg dataStep2
+let sslKeyedHash (a:sslHashAlg) k p =
+    let (pad1, pad2) = sslKeyedHashPads a in
+    let h = HASH.hash a (k @| pad1 @| p) in
+    let h = HASH.hash a (k @| pad2 @| h) in
+    h
 
-val sslKeyedHashVerify: hashAlg -> key -> data -> mac -> bool
-let sslKeyedHashVerify alg key data expected =
-    let result = sslKeyedHash alg key data in
-    equalBytes result expected
+let sslKeyedHashVerify (a:sslHashAlg) k p t : bool =
+    let result = sslKeyedHash a k p in
+    equalBytes result t
 
 (* Parametric keyed hash *)
 
-let hmac alg key data =
-    match alg with
-    | Hash h  -> (CoreCrypto.hmac h key data)
-    | NULL    -> Platform.Error.unexpected "[HMAC] Invalid hash (NULL) for HMAC"
-    | MD5SHA1 -> Platform.Error.unexpected "[HMAC] Invalid hash (MD5SHA1) for HMAC"
+let hmac (a:hashAlg {is_Hash a}) k p =
+    match a with Hash h  -> CoreCrypto.hmac h k p
 
-val hmacVerify: hashAlg -> key -> data -> mac -> bool 
-let hmacVerify alg key data expected =
-    let result = hmac alg key data in
-    equalBytes result expected
+// why do I need this declaration??
+val hmacVerify: a:hashAlg {is_Hash a} -> key -> data -> bytes -> Tot bool
+let hmacVerify (a:hashAlg {is_Hash a}) k p t : bool =
+    let result = hmac a k p in
+    equalBytes result t
 
 (* Top level MAC function *)
 
-let tls_mac a k d =
+let tls_mac a k d : mac a =
     match a with
-    | HMAC(alg) -> 
-        let h = hmac (Hash alg) k d in 
-        let l = length h in
-        let exp = macSize a in
-          if l = exp then h 
-          else Platform.Error.unexpected "CoreCrypto.HMac returned a MAC of unexpected size"
-    | SSLKHASH(alg) -> 
-        let h = sslKeyedHash (Hash alg) k d in
-        let l = length h in
-        let exp = macSize a in
-          if l = exp then h 
-          else Platform.Error.unexpected "sslKeyedHash returned a MAC of unexpected size"
+    | HMAC     alg -> hmac (Hash alg) k d  
+    | SSLKHASH alg -> sslKeyedHash (Hash alg) k d 
 
 let tls_macVerify a k d t =
     match a with
-    | HMAC(alg) -> hmacVerify (Hash alg) k d t
-    | SSLKHASH(alg) -> sslKeyedHashVerify (Hash alg) k d t
+    | HMAC     alg -> hmacVerify (Hash alg) k d t
+    | SSLKHASH alg -> sslKeyedHashVerify (Hash alg) k d t

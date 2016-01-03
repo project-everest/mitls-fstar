@@ -1,26 +1,33 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿module ENC
 
-module ENC
-#set-options "--admit_smt_queries false"
+(* Bulk encryption for TLS record's "MAC-encode-then encrypt", agile,
+   possibly with internal state, and assumed conditionally CPA with
+   "Encode" for plaintexts *)
 
-(* Bulk encryption for TLS record, agile & assumed conditionally CPA 
-   with "Encode" for plaintexts *) 
 (* This module is idealized *)
 
 (* Instead, we could write a well-typed ideal functionality and reduce
    it to its non-agile underlying algorithms, e.g. AES-CBC *)
 
-(* TODO complete migration to F*, following AEAD_GCM *)
-         
+open FStar.Heap
+open FStar.HyperHeap
 open FStar.Seq
+open FStar.SeqProperties
+
 open Platform.Bytes
 open Platform.Error
+
 open TLSError
 open TLSConstants
 open TLSInfo
 open Range
 
-(* We do not open Encode so that we can syntactically check its usage restrictions *) 
+type id = i:id { is_MtE i.aeAlg } 
+
+let alg (i:id) = MtE._0 i.aeAlg
+
+(* Also using Encode; we do not open it so that we can syntactically
+   check its usage restrictions *)
 
 type cipher = b:bytes { length b <= max_TLSCipher_fragment_length }
 

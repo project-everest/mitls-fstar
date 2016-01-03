@@ -47,13 +47,19 @@ type hashAlg =
     | Hash of hash_alg (* Defined in the CoreCrypto library *)
 
 type macAlg =
-    | HMAC of hash_alg
+    | HMAC     of hash_alg
     | SSLKHASH of hash_alg
 
 type aeAlg =
     | MACOnly of hash_alg
     | MtE   : encAlg -> hash_alg -> aeAlg
     | AEAD  : aeadAlg -> hash_alg -> aeAlg
+
+// does this algorithm provide padding support with TLS 1.2? 
+let lhae = function
+  | MtE (Block _) _                         -> true
+  | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> false 
+   
 
 // MtE: ``The AE algorithms are CPA and INT-CTXT''
 // MtE: ``The MAC algorithm of id is INT-CMA.''
@@ -821,6 +827,8 @@ type ContentType =
     | Alert
     | Handshake
     | Application_data
+
+type ContentType13 = ct: ContentType { ct <> Change_cipher_spec }
 
 val ctBytes: ContentType -> Tot (lbytes 1)
 let ctBytes ct =
