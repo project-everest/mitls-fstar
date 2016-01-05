@@ -168,7 +168,7 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
 	make -C $(FSTAR_HOME)/lib/ml hyperheap
 	make -C $(FSTAR_HOME)/contrib/Platform/ml
-	make -C $(FSTAR_HOME)/contrib/Platform/ml/db
+	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db
 	rm -f $(FSTAR_HOME)/lib/ml/prims.cmi
 	$(OCAML) $(FSTAR_HOME)/lib/ml/native_int/prims.ml
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
@@ -200,6 +200,7 @@ ifeq ($(OS),Windows_NT)
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
+	PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
         CPP=cpp -ffreestanding
     else
         CPP=cpp-5 # GCC cpp rather than LLVM
