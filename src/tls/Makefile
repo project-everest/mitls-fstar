@@ -168,6 +168,7 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
 	make -C $(FSTAR_HOME)/lib/ml hyperheap
 	make -C $(FSTAR_HOME)/contrib/Platform/ml
+	make -C $(FSTAR_HOME)/contrib/Platform/ml/db
 	rm -f $(FSTAR_HOME)/lib/ml/prims.cmi
 	$(OCAML) $(FSTAR_HOME)/lib/ml/native_int/prims.ml
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
