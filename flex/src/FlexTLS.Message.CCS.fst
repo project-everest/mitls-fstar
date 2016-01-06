@@ -56,7 +56,7 @@ let forward (stin:state, stout:state) : state * state * bytes =
 /// <param name="st"> State of the current Handshake on the incoming side </param>
 /// <param name="fccs"> Optional CCS message record </param>
 /// <returns> Updated state * CCS message record </returns>
-let send (st:state, ?fccs:FChangeCipherSpecs) : state * FChangeCipherSpecs =
+let send (st:state, (*?*)fccs:FChangeCipherSpecs) : state * FChangeCipherSpecs =
   Log.logInfo("# CCS : FlexCCS.send");
   let fccs = defaultArg fccs FlexTLS.Message.Constants.nullFChangeCipherSpecs in
   let record_write,_,_ = FlexTLS.Record.send( st.ns, st.write.epoch, st.write.record,

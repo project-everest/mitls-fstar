@@ -60,9 +60,9 @@ let installSessionHash si log =
 /// <param name="checkPV"> Optional check of the protocol version at decryption time </param>
 /// <param name="sk"> Optional secret key to be used for decrypting in place of the current one </param>
 /// <returns> Updated state * Updated next security context * FClientKeyExchange message record </returns>
-let receiveRSA (st:state, nsc:nextSecurityContext, fch:FClientHello, ?checkPV:bool, ?sk:RSAKey.sk) : state * nextSecurityContext * FClientKeyExchange =
-  let checkPV = defaultArg checkPV true in
-  let sk = defaultKey sk nsc.si.serverID in
+let receiveRSA (st:state, nsc:nextSecurityContext, fch:FClientHello, (*?*)checkPV:bool, (*?*)sk:RSAKey.sk) : state * nextSecurityContext * FClientKeyExchange =
+  //  let checkPV = defaultArg checkPV true in
+  //  let sk = defaultKey sk nsc.si.serverID in
   FlexClientKeyExchange.receiveRSA(st,nsc,FlexClientHello.getPV fch,checkPV,sk)
 
 /// <summary>
@@ -74,9 +74,9 @@ let receiveRSA (st:state, nsc:nextSecurityContext, fch:FClientHello, ?checkPV:bo
 /// <param name="checkPV"> Optional check of the protocol version at decryption time </param>
 /// <param name="sk"> Optional secret key to be used for decrypting in place of the current one </param>
 /// <returns> Updated state * Updated next security context * FClientKeyExchange message record </returns>
-let receiveRSA (st:state, nsc:nextSecurityContext, pv:ProtocolVersion, ?checkPV:bool, ?sk:RSAKey.sk) : state * nextSecurityContext * FClientKeyExchange =
-  let checkPV = defaultArg checkPV true in
-  let sk = defaultKey sk nsc.si.serverID in
+let receiveRSA (st:state, nsc:nextSecurityContext, pv:ProtocolVersion, (*?*)checkPV:bool, (*?*)sk:RSAKey.sk) : state * nextSecurityContext * FClientKeyExchange =
+  //  let checkPV = defaultArg checkPV true in
+  //  let sk = defaultKey sk nsc.si.serverID in
   let st,fcke = FlexClientKeyExchange.receiveRSA(st,nsc.si.serverID,pv,checkPV,sk) in
   let si = installSessionHash nsc.si st.hs_log in
   let epk = {nsc.secrets with kex = fcke.kex} in
@@ -93,10 +93,10 @@ let receiveRSA (st:state, nsc:nextSecurityContext, pv:ProtocolVersion, ?checkPV:
 /// <param name="checkPV"> Optional check of the protocol version at decryption time </param>
 /// <param name="sk"> Optional secret key to be used for decrypting in place of the current one </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
-let receiveRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, ?checkPV:bool, ?sk:RSAKey.sk): state * FClientKeyExchange =
+let receiveRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, (*?*)checkPV:bool, (*?*)sk:RSAKey.sk): state * FClientKeyExchange =
   Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveRSA");
-  let checkPV = defaultArg checkPV true in
-  let sk = defaultKey sk certl in
+  //  let checkPV = defaultArg checkPV true in
+  //  let sk = defaultKey sk certl in
   let pk =
     match Cert.get_public_encryption_key certl.Head with
     | Error(_,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
@@ -159,7 +159,7 @@ let prepareRSA (st:state, nsc:nextSecurityContext, pv:ProtocolVersion): bytes * 
 /// <param name="pv"> Protocol version required in the Client Hello of the current Handshake </param>
 /// <param name="pms"> Optional Pre Master Secret to be prepared instead of the real one // BB : ?? </param>
 /// <returns> FClientKeyExchange bytes * Updated state * FClientKeyExchange message record </returns>
-let prepareRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, ?pms:bytes) : bytes * state * FClientKeyExchange =
+let prepareRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, (*?*)pms:bytes) : bytes * state * FClientKeyExchange =
   if certl.IsEmpty then
     failwith (perror __SOURCE_FILE__ __LINE__  "Server certificate should always be present with a RSA signing cipher suite.")
   else
@@ -192,8 +192,8 @@ let prepareRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, ?pms:bytes)
 /// <param name="fch"> Client hello containing the desired protocol version </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
-let sendRSA (st:state, nsc:nextSecurityContext, fch:FClientHello, ?fp:fragmentationPolicy): state * nextSecurityContext * FClientKeyExchange =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let sendRSA (st:state, nsc:nextSecurityContext, fch:FClientHello, (*?*)fp:fragmentationPolicy): state * nextSecurityContext * FClientKeyExchange =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   FlexClientKeyExchange.sendRSA(st,nsc,FlexClientHello.getPV fch,fp)
 
 /// <summary>
@@ -205,7 +205,7 @@ let sendRSA (st:state, nsc:nextSecurityContext, fch:FClientHello, ?fp:fragmentat
 /// <param name="pv"> Protocol version required in the Client Hello of the current Handshake </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
-let sendRSA (st:state, nsc:nextSecurityContext, pv:ProtocolVersion, ?fp:fragmentationPolicy): state * nextSecurityContext * FClientKeyExchange =
+let sendRSA (st:state, nsc:nextSecurityContext, pv:ProtocolVersion, (*?*)fp:fragmentationPolicy): state * nextSecurityContext * FClientKeyExchange =
   let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let st,fcke =
     match nsc.secrets.kex with
@@ -231,9 +231,9 @@ let sendRSA (st:state, nsc:nextSecurityContext, pv:ProtocolVersion, ?fp:fragment
 /// <param name="pms"> Optional Pre Master Secret to be sent instead of the real one </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
-let sendRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, ?pms:bytes, ?fp:fragmentationPolicy) : state * FClientKeyExchange =
+let sendRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, (*?*)pms:bytes, (*?*)fp:fragmentationPolicy) : state * FClientKeyExchange =
   Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendRSA");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   if certl.IsEmpty then
     failwith (perror __SOURCE_FILE__ __LINE__  "Server certificate should always be present with a RSA signing cipher suite.")
   else
@@ -259,7 +259,7 @@ let sendRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, ?pms:bytes, ?f
       Log.logDebug(sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
       st,fcke
 
-(*----------------------------------------------------------------------------------------------------------------------------------------------*)
+(*** Ephemeral Diffie-Hellman ***)
 
 /// <summary>
 /// Receive DHE ClientKeyExchange from the network stream
@@ -269,8 +269,8 @@ let sendRSA (st:state, certl:list<Cert.cert>, pv:ProtocolVersion, ?pms:bytes, ?f
 /// <param name="nsc"> Next security context being negotiated and containing the key exchange mechanism retrieved from a previous server key exchange</param>
 /// <returns> Updated state * Next security context * FClientKeyExchange message record </returns>
 
-let receiveDHE (st:state, fske:FServerKeyExchange, ?nsc:nextSecurityContext) : state * nextSecurityContext * FClientKeyExchange =
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+let receiveDHE (st:state, fske:FServerKeyExchange, (*?*)nsc:nextSecurityContext) : state * nextSecurityContext * FClientKeyExchange =
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
   FlexClientKeyExchange.receiveDHE(st,nsc)
@@ -344,9 +344,9 @@ let prepareDHE (kexdh:kexDH) : FClientKeyExchange * kexDH =
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Next security context * FClientKeyExchange message record </returns>
 
-let sendDHE (st:state, fske:FServerKeyExchange, ?nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+let sendDHE (st:state, fske:FServerKeyExchange, (*?*)nsc:nextSecurityContext, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
   FlexClientKeyExchange.sendDHE(st,nsc,fp)
@@ -358,8 +358,8 @@ let sendDHE (st:state, fske:FServerKeyExchange, ?nsc:nextSecurityContext, ?fp:fr
 /// <param name="nsc"> Next security context being negotiated and containing the key exchange mechanism retrieved from a previous server key exchange</param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Next security context * FClientKeyExchange message record </returns>
-let sendDHE (st:state, nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let sendDHE (st:state, nsc:nextSecurityContext, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let kexdh =
     match nsc.secrets.kex with
     | DH(kexdh) -> kexdh
@@ -379,10 +379,9 @@ let sendDHE (st:state, nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state
 /// <param name="kexdh"> Key Exchange record containing necessary Diffie-Hellman parameters </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
-let sendDHE (st:state, kexdh:kexDH, ?fp:fragmentationPolicy) : state * FClientKeyExchange =
+let sendDHE (st:state, kexdh:kexDH, (*?*)fp:fragmentationPolicy) : state * FClientKeyExchange =
   Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendDHE");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fcke,dh = FlexClientKeyExchange.prepareDHE(kexdh) in
   let st = FlexHandshake.send(st,fcke.payload,fp) in
 
@@ -390,8 +389,8 @@ let sendDHE (st:state, kexdh:kexDH, ?fp:fragmentationPolicy) : state * FClientKe
   Log.logDebug(sprintf "--- Public Exponent : %s" (Bytes.hexString(dh.gx)));
   st,fcke
 
-(*----------------------------------------------------------------------------------------------------------------------------------------------*)
-// ECDHE
+
+(*** Elliptic Curve Diffie-Hellman ***)
 
 /// <summary>
 /// Receive ECDHE ClientKeyExchange from the network stream
@@ -401,8 +400,8 @@ let sendDHE (st:state, kexdh:kexDH, ?fp:fragmentationPolicy) : state * FClientKe
 /// <param name="nsc"> Next security context being negotiated and containing the key exchange mechanism retreived from a previous server key exchange</param>
 /// <returns> Updated state * Next security context * FClientKeyExchange message record </returns>
 
-let receiveECDHE (st:state, fske:FServerKeyExchange, ?nsc:nextSecurityContext) : state * nextSecurityContext * FClientKeyExchange =
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+let receiveECDHE (st:state, fske:FServerKeyExchange, (*?*)nsc:nextSecurityContext) : state * nextSecurityContext * FClientKeyExchange =
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
   FlexClientKeyExchange.receiveECDHE(st,nsc)
@@ -482,8 +481,8 @@ let prepareECDHE (kexecdh:kexECDH) : FClientKeyExchange * kexECDH =
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Next security context * FClientKeyExchange message record </returns>
 
-let sendECDHE (st:state, fske:FServerKeyExchange, ?nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let sendECDHE (st:state, fske:FServerKeyExchange, (*?*)nsc:nextSecurityContext, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
@@ -496,8 +495,8 @@ let sendECDHE (st:state, fske:FServerKeyExchange, ?nsc:nextSecurityContext, ?fp:
 /// <param name="nsc"> Next security context being negotiated and containing the key exchange mechanism retreived from a previous server key exchange</param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Next security context * FClientKeyExchange message record </returns>
-let sendECDHE (st:state, nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let sendECDHE (st:state, nsc:nextSecurityContext, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FClientKeyExchange =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let kexecdh =
     match nsc.secrets.kex with
     | ECDH(kexecdh) -> kexecdh
@@ -517,7 +516,7 @@ let sendECDHE (st:state, nsc:nextSecurityContext, ?fp:fragmentationPolicy) : sta
 /// <param name="kexecdh"> Key Exchange record containing necessary Elliptic Curve Diffie-Hellman parameters </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
-let sendECDHE (st:state, kexecdh:kexECDH, ?fp:fragmentationPolicy) : state * FClientKeyExchange =
+let sendECDHE (st:state, kexecdh:kexECDH, (*?*)fp:fragmentationPolicy) : state * FClientKeyExchange =
   Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendECDHE");
   let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
 

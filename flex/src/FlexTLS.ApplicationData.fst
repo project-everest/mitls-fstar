@@ -38,8 +38,8 @@ let receive (st:state) : state * bytes =
 /// <param name="stout"> State of the current connection on the outgoing side </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded application data bytes </returns>
-let forward (stin:state, stout:state, ?fp:fragmentationPolicy) : state * state * bytes =
-  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
+let forward (stin:state, stout:state, (*?*)fp:fragmentationPolicy) : state * state * bytes =
+  //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let stin,appb = FlexTLS.ApplicationData.receive(stin) in
   let stout = FlexTLS.ApplicationData.send(stout,appb,fp) in
   stin,stout,appb
@@ -76,8 +76,8 @@ let send_http_banner(st:state) : state =
 /// <param name="data"> Application data as encoded string </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send(st:state, data:string, ?encoding:System.Text.Encoding, ?fp:fragmentationPolicy) : state =
-  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
+let send(st:state, data:string, (*?*)encoding:System.Text.Encoding, (*?*)fp:fragmentationPolicy) : state =
+  //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let encoding = defaultArg encoding System.Text.Encoding.ASCII in
   let payload = abytes(encoding.GetBytes(data)) in
   FlexTLS.ApplicationData.send(st,payload,fp)
@@ -89,9 +89,9 @@ let send(st:state, data:string, ?encoding:System.Text.Encoding, ?fp:fragmentatio
 /// <param name="data"> Application data as raw bytes </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send(st:state, data:bytes, ?fp:fragmentationPolicy) : state =
+let send(st:state, data:bytes, (*?*)fp:fragmentationPolicy) : state =
   Log.logInfo("# APPLICATION DATA : FlexTLS.ApplicationData.send");
-  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
+  //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let buf = st.write.appdata_buffer @| data in
   let st = FlexTLS.State.updateOutgoingAppDataBuffer st buf in
   FlexTLS.Record.send(st,Application_data,fp)

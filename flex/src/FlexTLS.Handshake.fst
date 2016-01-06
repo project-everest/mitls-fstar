@@ -81,9 +81,9 @@ let forward (stin:state, stout:state) : state * state * bytes =
 /// <param name="payload"> Optional Data bytes to send as en handshake message. None will send the handshake buffer </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send (st:state, ?payload:bytes, ?fp:fragmentationPolicy) : state =
-  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
-  let payload = defaultArg payload empty_bytes in
+let send (st:state, (*?*)payload:bytes, (*?*)fp:fragmentationPolicy) : state =
+  //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
+  //  let payload = defaultArg payload empty_bytes in
   let buf = st.write.hs_buffer @| payload in
   let st = FlexTLS.State.updateOutgoingHSBuffer st buf in
   Log.logDebug(sprintf "--- Payload : %A" (Bytes.hexString(payload)));

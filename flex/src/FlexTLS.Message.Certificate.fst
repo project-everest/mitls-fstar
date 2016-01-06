@@ -22,9 +22,9 @@ open FlexTLS.Handshake
 /// <param name="role"> Behaviour is either Client or Server </param>
 /// <param name="nsc"> Optional Next security context object updated with new data </param>
 /// <returns> Updated state * next security context * FCertificate message </returns>
-let receive (st:state, role:Role, ?nsc:nextSecurityContext) : state * nextSecurityContext * FCertificate =
+let receive (st:state, role:Role, (*?*)nsc:nextSecurityContext) : state * nextSecurityContext * FCertificate =
   Log.logInfo("# CERTIFICATE : FlexCertificate.receive");
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let si = nsc.si in
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
   match hstype with
@@ -64,8 +64,8 @@ let prepare (chain:Cert.chain) : FCertificate =
 /// <param name="nsc"> Optional Next security context object updated with new data </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * next security context * FCertificate message </returns>
-let send(st:state, role:Role, nsc:nextSecurityContext, cfg:config, ?fp:fragmentationPolicy) : state * nextSecurityContext * FCertificate =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let send(st:state, role:Role, nsc:nextSecurityContext, cfg:config, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FCertificate =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let cn =
   match role with
   | Client -> cfg.client_name
@@ -107,9 +107,9 @@ let send(st:state, role:Role, nsc:nextSecurityContext, cfg:config, ?fp:fragmenta
 /// <param name="nsc"> Optional Next security context object updated with new data </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * next security context * FCertificate message </returns>
-let send (st:state, role:Role, chain:Cert.chain, ?nsc:nextSecurityContext, ?fp:fragmentationPolicy) : state * nextSecurityContext * FCertificate =
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let send (st:state, role:Role, chain:Cert.chain, (*?*)nsc:nextSecurityContext, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FCertificate =
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fcrt = {FlexConstants.nullFCertificate with chain = chain} in
   FlexCertificate.send(st,role,fcrt=fcrt,nsc=nsc,fp=fp)
 
@@ -122,13 +122,11 @@ let send (st:state, role:Role, chain:Cert.chain, ?nsc:nextSecurityContext, ?fp:f
 /// <param name="fcrt"> Optional Certificate message </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * next security context * FCertificate message </returns>
-let send (st:state, role:Role, ?nsc:nextSecurityContext, ?fcrt:FCertificate, ?fp:fragmentationPolicy) : state * nextSecurityContext * FCertificate =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let fcert = defaultArg fcrt FlexConstants.nullFCertificate in
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
-
+let send (st:state, role:Role, (*?*)nsc:nextSecurityContext, (*?*)fcrt:FCertificate, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FCertificate =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let fcert = defaultArg fcrt FlexConstants.nullFCertificate in
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let st,fcert = FlexCertificate.send(st,fcert.chain,fp) in
-
   let si = nsc.si in
   let si =
     match role with
@@ -148,10 +146,9 @@ let send (st:state, role:Role, ?nsc:nextSecurityContext, ?fcrt:FCertificate, ?fp
 /// <param name="cert"> Certificate chain </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FCertificate message </returns>
-let send (st:state, chain:Cert.chain, ?fp:fragmentationPolicy) : state * FCertificate =
+let send (st:state, chain:Cert.chain, (*?*)fp:fragmentationPolicy) : state * FCertificate =
   Log.logInfo("# CERTIFICATE : FlexCertificate.send");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fcert = FlexCertificate.prepare(chain) in
   let st = FlexHandshake.send(st,fcert.payload,fp) in
   st,fcert
