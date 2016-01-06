@@ -26,7 +26,7 @@ open FlexTLS.Secrets
 /// <param name="nsc"> NextSecurityContext embedding required parameters </param>
 /// <param name="role"> Optional role used to compute an eventual verify data </param>
 /// <returns> Updated state * FFinished message record </returns>
-let receive (st:state, nsc:nextSecurityContext, ?role:Role) : state * FFinished =
+let receive (st:state, nsc:nextSecurityContext, (*?*)role:Role) : state * FFinished =
   match role with
   | Some(role) ->
     FlexFinished.receive (st,nsc.si.protocol_version,nsc.si.cipher_suite,verify_data=(FlexSecrets.makeVerifyData nsc.si nsc.secrets.ms role st.hs_log))
@@ -41,9 +41,8 @@ let receive (st:state, nsc:nextSecurityContext, ?role:Role) : state * FFinished 
 /// <param name="cs"> Ciphersuite </param>
 /// <param name="verify_data"> Optional verify_data to compare to received payload </param>
 /// <returns> Updated state * FFinished message record </returns>
-let receive (st:state, pv:ProtocolVersion, cs:cipherSuite, ?verify_data:bytes) : state * FFinished =
+let receive (st:state, pv:ProtocolVersion, cs:cipherSuite, (*?*)verify_data:bytes) : state * FFinished =
   Log.logInfo("# FINISHED : FlexFinished.receive");
-
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
   match hstype with
   | HT_finished  ->
@@ -94,8 +93,8 @@ let prepare (verify_data:bytes) : bytes * FFinished =
 /// <param name="ff"> Optional finished message record including the payload to be used </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FFinished message record </returns>
-let send (st:state, ff:FFinished, ?fp:fragmentationPolicy) : state * FFinished =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let send (st:state, ff:FFinished, (*?*)fp:fragmentationPolicy) : state * FFinished =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   FlexFinished.send(st,ff.verify_data,fp=fp)
 
 /// <summary>
@@ -105,8 +104,8 @@ let send (st:state, ff:FFinished, ?fp:fragmentationPolicy) : state * FFinished =
 /// <param name="role"> Role necessary to compute the verify data </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FFinished message record </returns>
-let send (st:state, nsc:nextSecurityContext, role:Role, ?fp:fragmentationPolicy) : state * FFinished =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let send (st:state, nsc:nextSecurityContext, role:Role, (*?*)fp:fragmentationPolicy) : state * FFinished =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let verify_data =FlexSecrets.makeVerifyData nsc.si nsc.secrets.ms role st.hs_log in
   FlexFinished.send (st,verify_data,fp)
 
@@ -117,14 +116,11 @@ let send (st:state, nsc:nextSecurityContext, role:Role, ?fp:fragmentationPolicy)
 /// <param name="verify_data"> Verify_data that will be used </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FFinished message record </returns>
-let send (st:state, verify_data:bytes, ?fp:fragmentationPolicy) : state * FFinished =
+let send (st:state, verify_data:bytes, (*?*)fp:fragmentationPolicy) : state * FFinished =
   Log.logInfo("# FINISHED : FlexFinished.send");
-
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let payload,ff = FlexFinished.prepare verify_data in
   Log.logDebug(sprintf "--- Verify data : %A" (Bytes.hexString(ff.verify_data)));
-  
   let st = FlexState.updateOutgoingVerifyData st verify_data in
   let st = FlexHandshake.send(st,payload,fp) in
   st,ff

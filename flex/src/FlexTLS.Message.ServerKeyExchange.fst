@@ -60,8 +60,8 @@ let fillecdh kexecdh =
 ///    If provided, received DH parameters will be checked for validity and their size;
 ///    if not provided, no check at all will be performed on the received parameters </param>
 /// <returns> Updated state * Updated next security context * FServerKeyExchange message record </returns>
-let receiveDHE (st:state, nsc:nextSecurityContext, ?check_sig:bool, ?minDHsize:nat*nat): state * nextSecurityContext * FServerKeyExchange =
-  let check_sig = defaultArg check_sig false in
+let receiveDHE (st:state, nsc:nextSecurityContext, (*?*)check_sig:bool, (*?*)minDHsize:nat*nat): state * nextSecurityContext * FServerKeyExchange =
+  //  let check_sig = defaultArg check_sig false in
   let st,fske =
     match minDHsize with
     | None -> FlexServerKeyExchange.receiveDHE(st,nsc.si.protocol_version,nsc.si.cipher_suite)
@@ -99,10 +99,10 @@ let receiveDHE (st:state, nsc:nextSecurityContext, ?check_sig:bool, ?minDHsize:n
 ///    If provided, received DH parameters will be checked for validity and their size;
 ///    if not provided, no check at all will be performed on the received parameters </param>
 /// <returns> Updated state * FServerKeyExchange message record </returns>
-let receiveDHE (st:state, pv:ProtocolVersion, cs:cipherSuite, ?minDHsize:nat*nat) : state * FServerKeyExchange =
+let receiveDHE (st:state, pv:ProtocolVersion, cs:cipherSuite, (*?*)minDHsize:nat*nat) : state * FServerKeyExchange =
   Log.LogInfo("# SERVER KEY EXCHANGE : FlexServerKeyExchange.receiveDHE");
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
-  let mindh = defaultArg minDHsize FlexConstants.minDHSize in
+  //  let mindh = defaultArg minDHsize FlexConstants.minDHSize in
   match hstype with
   | HT_server_key_exchange  ->
     (match HandshakeMessages.parseServerKeyExchange_DHE FlexConstants.dhdb mindh pv cs payload with
@@ -168,8 +168,8 @@ let prepareDHE (kexdh:kexDH, crand:bytes, srand:bytes, pv:ProtocolVersion, sigAl
 /// <param name="sigAlgAndKey"> Optional pair of Signature Algorithm and Signing key to use by force </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerKeyExchange message record </returns>
-let sendDHE (st:state, nsc:nextSecurityContext, ?sigAlgAndKey:(Sig.alg * Sig.skey), ?fp:fragmentationPolicy) : state * nextSecurityContext * FServerKeyExchange =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let sendDHE (st:state, nsc:nextSecurityContext, (*?*)sigAlgAndKey:(Sig.alg * Sig.skey), (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FServerKeyExchange =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let sAlg,sKey =
     match sigAlgAndKey with
     | Some(sak) -> sak
@@ -204,20 +204,18 @@ let sendDHE (st:state, nsc:nextSecurityContext, ?sigAlgAndKey:(Sig.alg * Sig.ske
 /// <param name="sigKey"> Signature secret key associated to the algorithm </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerKeyExchange message record </returns>
-let sendDHE (st:state, kexdh:kexDH, crand:bytes, srand:bytes, pv:ProtocolVersion, sigAlg:Sig.alg, sigKey:Sig.skey, ?fp:fragmentationPolicy) : state * FServerKeyExchange =
+let sendDHE (st:state, kexdh:kexDH, crand:bytes, srand:bytes, pv:ProtocolVersion, sigAlg:Sig.alg, sigKey:Sig.skey, (*?*)fp:fragmentationPolicy) : state * FServerKeyExchange =
   Log.LogInfo("# SERVER KEY EXCHANGE : FlexServerKeyExchange.sendDHE");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fske,dh = FlexServerKeyExchange.prepareDHE(kexdh,crand,srand,pv,sigAlg,sigKey) in
   let st = FlexHandshake.send(st,fske.payload,fp) in
-
   let p,g = dh.pg in
   Log.logDebug(sprintf "--- Public Prime : %s" (Bytes.hexString(p)));
   Log.logDebug(sprintf "--- Public Generator : %s" (Bytes.hexString(g)));
   Log.logDebug(sprintf "--- Public Exponent : %s" (Bytes.hexString(dh.gx)));
   st,fske
 
-(*----------------------------------------------------------------------------------------------------------------------------------------------*)
+(*** Elliptic Curve Diffie-Hellman ***)
 
 /// <summary>
 /// Receive ECDHE ServerKeyExchange from the network stream
@@ -228,8 +226,8 @@ let sendDHE (st:state, kexdh:kexDH, crand:bytes, srand:bytes, pv:ProtocolVersion
 /// <param name="minECDHsize"> Optional Minimal sizes for Elliptic curve size parameters.
 ///     Currently, the check is not implemented
 /// <returns> Updated state * Updated next security context * FServerKeyExchange message record </returns>
-let receiveECDHE (st:state, nsc:nextSecurityContext, ?check_sig:bool, ?minECDHsize:nat*nat): state * nextSecurityContext * FServerKeyExchange =
-  let check_sig = defaultArg check_sig false in
+let receiveECDHE (st:state, nsc:nextSecurityContext, ?check_sig:bool, (*?*)minECDHsize:nat*nat): state * nextSecurityContext * FServerKeyExchange =
+  //  let check_sig = defaultArg check_sig false in
   let st,fske =
    (* Check on the Curve size is not available at the moment *)
    (* match minECDHsize with
@@ -268,11 +266,10 @@ let receiveECDHE (st:state, nsc:nextSecurityContext, ?check_sig:bool, ?minECDHsi
 /// <param name="minECDHsize"> Optional Minimal sizes for Elliptic curve size parameters.
 ///     Currently, the check is not implemented
 /// <returns> Updated state * FServerKeyExchange message record </returns>
-let receiveECDHE (st:state, pv:ProtocolVersion, cs:cipherSuite, ?minECDHSize:nat) : state * FServerKeyExchange =
-  Log.LogInfo("# SERVER KEY EXCHANGE : FlexServerKeyExchange.receiveECDHE");
+let receiveECDHE (st:state, pv:ProtocolVersion, cs:cipherSuite, (*?*)minECDHSize:nat) : state * FServerKeyExchange =
+  Log.logInfo("# SERVER KEY EXCHANGE : FlexServerKeyExchange.receiveECDHE");
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
-
-  let minECDHSize = defaultArg minECDHSize FlexConstants.minECDHSize in
+  //  let minECDHSize = defaultArg minECDHSize FlexConstants.minECDHSize in
   match hstype with
   | HT_server_key_exchange  ->
     (match HandshakeMessages.parseServerKeyExchange_DHE FlexConstants.dhdb (minECDHSize,minECDHSize) pv cs payload with
@@ -293,8 +290,7 @@ let receiveECDHE (st:state, pv:ProtocolVersion, cs:cipherSuite, ?minECDHSize:nat
       Log.logDebug(sprintf "--- Signature algorithm : %A" (alg));
       Log.logDebug(sprintf "--- Signature : %s" (Bytes.hexString(signature)));
       Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
-      // Unlike in DHE, this check on the size is not done in miTLS so we can do it here =)
-      
+      // Unlike in DHE, this check on the size is not done in miTLS so we can do it here =)  
       let kexecdh = {curve = curve; comp = comp; x = empty_bytes; ecp_x = (empty_bytes,empty_bytes); ecp_y = (ecp_yX,ecp_yY)} in
       let fske : FServerKeyExchange = { kex = ECDH(kexecdh); payload = to_log; sigAlg = alg; signature = signature } in
       st,fske
@@ -315,12 +311,10 @@ let receiveECDHE (st:state, pv:ProtocolVersion, cs:cipherSuite, ?minECDHSize:nat
 let prepareECDHE (kexecdh:kexECDH, crand:bytes, srand:bytes, pv:ProtocolVersion, sigAlg:Sig.alg, sigKey:Sig.skey) : FServerKeyExchange * kexECDH =
 
   let kexecdh = fillecdh kexecdh in
-
   let ecx,ecy = kexecdh.ecp_x in
-  let ecdheB = CommonDH.serializeKX (DHP_EC (ECGroup.getParams kexecdh.curve)) {dhe_nil with dhe_ec = Some {ecx = ecx; ecy = ecy}} in
+  let ecdheB = CommonDH.serializeKX (DHP_EC (ECGroup.getParams kexecdh.curve)) {dhe_nil with dhe_ec = Some {ecx = ecx; ecy = ecy}} i
   let msgb = crand @| srand @| ecdheB in
   let sign = Sig.sign sigAlg sigKey msgb in
-
   let payload = HandshakeMessages.serverKeyExchangeBytes_DHE ecdheB sigAlg sign pv in
   let fske = { sigAlg = sigAlg; signature = sign; kex = ECDH(kexecdh) ; payload = payload } in
   // We redundantly return kexecdh for a better log
@@ -334,8 +328,8 @@ let prepareECDHE (kexecdh:kexECDH, crand:bytes, srand:bytes, pv:ProtocolVersion,
 /// <param name="sigAlgAndKey"> Optional pair of Signature Algorithm and Signing key to use by force </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerKeyExchange message record </returns>
-let sendECDHE (st:state, nsc:nextSecurityContext, ?sigAlgAndKey:(Sig.alg * Sig.skey), ?fp:fragmentationPolicy) : state * nextSecurityContext * FServerKeyExchange =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+let sendECDHE (st:state, nsc:nextSecurityContext, (*?*)sigAlgAndKey:(Sig.alg * Sig.skey), (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FServerKeyExchange =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let sAlg,sKey =
     match sigAlgAndKey with
     | Some(sak) -> sak
@@ -370,13 +364,11 @@ let sendECDHE (st:state, nsc:nextSecurityContext, ?sigAlgAndKey:(Sig.alg * Sig.s
 /// <param name="sigKey"> Signature secret key associated to the algorithm </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerKeyExchange message record </returns>
-let sendECDHE (st:state, kexecdh:kexECDH, crand:bytes, srand:bytes, pv:ProtocolVersion, sigAlg:Sig.alg, sigKey:Sig.skey, ?fp:fragmentationPolicy) : state * FServerKeyExchange =
+let sendECDHE (st:state, kexecdh:kexECDH, crand:bytes, srand:bytes, pv:ProtocolVersion, sigAlg:Sig.alg, sigKey:Sig.skey, (*?*)fp:fragmentationPolicy) : state * FServerKeyExchange =
   Log.LogInfo("# SERVER KEY EXCHANGE : FlexServerKeyExchange.sendECDHE");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fske,kexecdh = FlexServerKeyExchange.prepareECDHE(kexecdh,crand,srand,pv,sigAlg,sigKey) in
   let st = FlexHandshake.send(st,fske.payload,fp) in
-
   let ecp_xX,ecp_xY = kexecdh.ecp_x in
   Log.logDebug(sprintf "--- Curve : %A" kexecdh.curve);
   Log.logDebug(sprintf "--- Compression : %A" kexecdh.comp);

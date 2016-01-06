@@ -51,9 +51,9 @@ let prepare () : FHelloRequest =
 /// <param name="st"> State of the current Handshake </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state * next security context * FHelloRequest message record </returns>
-let send (st:state, ?fp:fragmentationPolicy) : state * FHelloRequest =
+let send (st:state, (*?*)fp:fragmentationPolicy) : state * FHelloRequest =
   Log.logInfo("# HELLO REQUEST : FlexHelloRequest.send");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let old_log = st.hs_log in
 
   let fhr = FlexHelloRequest.prepare() in

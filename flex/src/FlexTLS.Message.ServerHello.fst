@@ -83,10 +83,10 @@ let fillStateEpochInitPvIFIsEpochInit (st:state) (fsh:FServerHello) : state =
 /// <param name="fch"> FClientHello containing the client extensions </param>
 /// <param name="nsc"> Optional Next security context being negotiated </param>
 /// <returns> Updated state * Updated next security context * FServerHello message record </returns>
-let receive (st:state, fch:FClientHello, ?nsc:nextSecurityContext, ?checkVD:bool, ?isResuming:bool) : state * nextSecurityContext * FServerHello =
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
-  let checkVD = defaultArg checkVD true in
-  let isResuming = defaultArg isResuming false in
+let receive (st:state, fch:FClientHello, (*?*)nsc:nextSecurityContext, (*?*)checkVD:bool, (*?*)isResuming:bool) : state * nextSecurityContext * FServerHello =
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+  //  let checkVD = defaultArg checkVD true in
+  //  let isResuming = defaultArg isResuming false in
   let st,fsh,negExts = FlexServerHello.receive(st,(FlexClientHello.getExt fch), checkVD = checkVD, isResuming = isResuming) in
   let si  = { nsc.si with
               init_srand = fsh.rand;
@@ -125,10 +125,10 @@ let receive (st:state, fch:FClientHello, ?nsc:nextSecurityContext, ?checkVD:bool
 /// </summary>
 /// <param name="st"> State of the current Handshake </param>
 /// <returns> Updated state * Updated next security context * FServerHello message record * Negotiated extensions </returns>
-let receive (st:state, cextL:list<clientExtension>, ?checkVD:bool, ?isResuming:bool) : state * FServerHello * negotiatedExtensions =
+let receive (st:state, cextL:list<clientExtension>, (*?*)checkVD:bool, (*?*)isResuming:bool) : state * FServerHello * negotiatedExtensions =
   Log.logInfo("# SERVER HELLO : FlexServerHello.receive");
-  let checkVD = defaultArg checkVD true in
-  let isResuming = defaultArg isResuming false in
+  //  let checkVD = defaultArg checkVD true in
+  //  let isResuming = defaultArg isResuming false in
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
   match hstype with
   | HT_server_hello  ->
@@ -212,12 +212,11 @@ let prepare (si:SessionInfo, sExtL:list<serverExtension>) : FServerHello =
 /// <param name="cfg"> Optional Server configuration if differs from default </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Updated next security context * FServerHello message record </returns>
-let send (st:state, fch:FClientHello, ?nsc:nextSecurityContext, ?fsh:FServerHello, ?cfg:config, ?fp:fragmentationPolicy) : state * nextSecurityContext * FServerHello =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
-  let fsh = defaultArg fsh FlexConstants.nullFServerHello in
-  let cfg = defaultArg cfg defaultConfig in
-
+let send (st:state, fch:FClientHello, (*?*)nsc:nextSecurityContext, (*?*)fsh:FServerHello, (*?*)cfg:config, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FServerHello =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
+  //  let fsh = defaultArg fsh FlexConstants.nullFServerHello in
+  //  let cfg = defaultArg cfg defaultConfig in
   let st,si,fsh = FlexServerHello.send(st,nsc.si,(getPV fsh),(FlexClientHello.getCiphersuites fch),(FlexClientHello.getCompressions fch),(FlexClientHello.getExt fch),fsh,cfg,fp=fp) in
   let nsc = { nsc with
               si = si;
@@ -235,21 +234,20 @@ let send (st:state, fch:FClientHello, ?nsc:nextSecurityContext, ?fsh:FServerHell
 /// <param name="cfg"> Optional Configuration of the server </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Updated negotiated session information * FServerHello message record </returns>
-let send (st:state, si:SessionInfo, cpv: ProtocolVersion, csuites:list<cipherSuiteName>, ccomps:list<Compression>, cextL:list<clientExtension>, ?fsh:FServerHello, ?cfg:config, ?fp:fragmentationPolicy) : state * SessionInfo * FServerHello =
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let cfg = defaultArg cfg defaultConfig in
-  let fsh = defaultArg fsh FlexConstants.nullFServerHello in
+let send (st:state, si:SessionInfo, cpv: ProtocolVersion, csuites:list<cipherSuiteName>, ccomps:list<Compression>, cextL:list<clientExtension>, (*?*)fsh:FServerHello, (*?*)cfg:config, (*?*)fp:fragmentationPolicy) : state * SessionInfo * FServerHello =
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let cfg = defaultArg cfg defaultConfig in
+  //  let fsh = defaultArg fsh FlexConstants.nullFServerHello in
   let srand =
     if fsh.rand = empty_bytes then
       (Nonce.mkHelloRandom si.protocol_version)
     else
       fsh.rand
   in
-
   // Check if the user gave us a session to resume, otherwise try to negotiate something sensible
   let si,sExtL =
     if si.sessionID = empty_bytes then
-      
+ 
       // Protocol version
       let pv =
         match fsh.pv with
@@ -259,7 +257,7 @@ let send (st:state, si:SessionInfo, cpv: ProtocolVersion, csuites:list<cipherSui
       if (geqPV pv cfg.minVer) = false then
         failwith (perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
       else
-      
+ 
         // SessionID
         let sid =
           match fsh.sid with
@@ -304,9 +302,8 @@ let send (st:state, si:SessionInfo, cpv: ProtocolVersion, csuites:list<cipherSui
         si,sExtL
     else
       let (sExtL, nExtL) = negotiateServerExtensions cextL cfg si.cipher_suite (st.read.verify_data,st.write.verify_data) true in
-      si,sExtL
+        si,sExtL
       in
-        
       let st,fsh = FlexServerHello.send(st,si,sExtL,fp) in
       st,si,fsh
 
@@ -317,13 +314,12 @@ let send (st:state, si:SessionInfo, cpv: ProtocolVersion, csuites:list<cipherSui
 /// <param name="si"> Session Info of the currently negotiated next security context </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerHello message record </returns>
-let send (st:state, si:SessionInfo, sExtL:list<serverExtension>, ?fp:fragmentationPolicy) : state * FServerHello =
+let send (st:state, si:SessionInfo, sExtL:list<serverExtension>, (*?*)fp:fragmentationPolicy) : state * FServerHello =
   Log.logInfo("# SERVER HELLO : FlexServerHello.send");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   
   let fsh = FlexServerHello.prepare(si,sExtL) in
   let st = FlexHandshake.send(st,fsh.payload,fp) in
-
   let ext = serverExtensionsBytes sExtL in
   Log.lofDebug(sprintf "--- Protocol Version : %A" (getPV fsh));
   Log.lofDebug(sprintf "--- Sid : %s" (Bytes.hexString(getSID fsh)));
