@@ -8,9 +8,9 @@ clean:
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 
 # ------------------ dependencies on Fstar & its libraries --------------------
-ifndef FSTAR_HOME
+# When using NuBuild, FStar must be located within the source tree. Now that soft links are 
+# available on all platforms, I don't see a reason not to assume a fixed location.
 FSTAR_HOME=../../.fstar
-endif
 add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
 
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
@@ -47,12 +47,9 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 NUBUILD_HOME=../../.nubuild
 NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
 ifdef USE_NUBUILD
-NUBUILD_OR_FSTAR=$(NUBUILD) --quiet FStarVerify $(FSTARFLAGS)
-# When using NuBuild, FStar must be located within the source tree. Now that soft links are available on all 
-# platforms, I don't see a reason not to assume a fixed location.
-FSTAR_HOME=../../.fstar
+FSTAR_OR_NUBUILD=$(NUBUILD) --quiet FStarVerify $(FSTARFLAGS)
 else
-NUBUILD_OR_FSTAR=$(FSTAR)
+FSTAR_OR_NUBUILD=$(FSTAR)
 endif
 
 # ------------------------- miTLS* -------------------------------------------
@@ -148,7 +145,7 @@ endef
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 mitls-ver: $(LIBFILES) $(TLSVER)
-	$(NUBUILD_OR_FSTAR) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^) 
+	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^) 
 
 # going beyond TLSVER, not necessarily working
 
