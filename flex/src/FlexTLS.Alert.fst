@@ -61,7 +61,7 @@ let receive (st:state) : state * alertDescription * bytes =
 /// <param name="stout"> State of the current Handshake on the outgoing side </param>
 /// <param name="?fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded alert bytes </returns>
-let forward (stin:state, stout:state, (*?*)fp:fragmentationPolicy) : state * state * bytes =
+let forward (stin:state) (stout:state) (*?*)(fp:fragmentationPolicy) : state * state * bytes =
   Log.logInfo("# ALERT : FlexTLS.Alert.forward");
   // let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let stin,ad,alb = FlexTLS.Alert.receive(stin) in
@@ -76,7 +76,7 @@ let forward (stin:state, stout:state, (*?*)fp:fragmentationPolicy) : state * sta
 /// <param name="ad"> Alert description union type already parsed </param>
 /// <param name="?fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send (st:state, ad:alertDescription, (*?*)fp:fragmentationPolicy) : state =
+let send (st:state) (ad:alertDescription) (*?*)(fp:fragmentationPolicy) : state =
   // let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   FlexTLS.Alert.send(st, alertBytes ad, fp)
 
@@ -87,7 +87,7 @@ let send (st:state, ad:alertDescription, (*?*)fp:fragmentationPolicy) : state =
 /// <param name="payload"> Alert bytes </param>
 /// <param name="?fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send (st:state, payload:bytes, (*?*)fp:fragmentationPolicy) : state =
+let send (st:state) (payload:bytes) (*?*)(fp:fragmentationPolicy) : state =
   Log.logInfo("# ALERT : FlexTLS.Alert.send");
   // let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let buf = st.write.alert_buffer @| payload in

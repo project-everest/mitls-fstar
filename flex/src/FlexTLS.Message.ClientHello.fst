@@ -94,7 +94,7 @@ let fillStateEpochInitPvIFIsEpochInit (st:state) (fch:FClientHello) : state =
 /// <param name="st"> State of the current Handshake </param>
 /// <param name="checkVD"> Flag to enable or ignore the check on the verify data if the renegotiation indication is in the client extension list </param>
 /// <returns> Updated state * Next security context in negotiation * FClientHello message record </returns>
-let receive (st:state, (*?*)checkVD:bool) : state * nextSecurityContext * FClientHello =
+let receive (st:state) (*?*)(checkVD:bool) : state * nextSecurityContext * FClientHello =
   Log.logInfo("# CLIENT HELLO : FlexClientHello.receive");
   //  let checkVD = defaultArg checkVD true in
   let st = FlexState.resetHandshakeLog st in
@@ -158,7 +158,7 @@ let receive (st:state, (*?*)checkVD:bool) : state * nextSecurityContext * FClien
 /// <param name="csid"> Client desired sid </param>
 /// <param name="cExtL"> Client list of extension </param>
 /// <returns> FClientHello message record </returns>
-let prepare (pv:ProtocolVersion, csnames:list<cipherSuiteName>, comps:list<Compression>, crand:bytes, csid:bytes, cExtL:list<clientExtension>) : FClientHello =
+let prepare (pv:ProtocolVersion) (csnames:list<cipherSuiteName>) (comps:list<Compression>) (crand:bytes) (csid:bytes) (cExtL:list<clientExtension>) : FClientHello =
   let exts = clientExtensionsBytes cExtL in
   let css = TLSConstants.cipherSuites_of_nameList csnames in
   let payload = HandshakeMessages.clientHelloBytes2 pv css comps crand csid exts in
@@ -172,7 +172,7 @@ let prepare (pv:ProtocolVersion, csnames:list<cipherSuiteName>, comps:list<Compr
 /// <param name="cfg"> Desired config </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Next security context in negotiation * FClientHello message record </returns>
-let send (st:state, (*?*)fch:FClientHello, (*?*)cfg:config, (*?*)fp:fragmentationPolicy) : state * nextSecurityContext * FClientHello =
+let send (st:state) (*?*)(fch:FClientHello) (*?*)(cfg:config) (*?*)(fp:fragmentationPolicy) : state * nextSecurityContext * FClientHello =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   //  let fch = defaultArg fch FlexConstants.nullFClientHello in
   //  let cfg = defaultArg cfg defaultConfig in
@@ -216,7 +216,7 @@ let send (st:state, (*?*)fch:FClientHello, (*?*)cfg:config, (*?*)fp:fragmentatio
 /// <param name="cfg"> Desired config </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Next security context in negotiation * FClientHello message record </returns>
-let send (st:state, pv:ProtocolVersion, css:list<cipherSuiteName>, comps:list<Compression>, crand:bytes, csid:bytes, cExtL:list<clientExtension>, (*?*)fp:fragmentationPolicy) : state * FClientHello =
+let send (st:state) (pv:ProtocolVersion) (css:list<cipherSuiteName>) (comps:list<Compression>) (crand:bytes) (csid:bytes) (cExtL:list<clientExtension>) (*?*)(fp:fragmentationPolicy) : state * FClientHello =
   Log.logInfo("# CLIENT HELLO : FlexClientHello.send");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let st = FlexState.resetHandshakeLog st in

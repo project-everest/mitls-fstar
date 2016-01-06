@@ -38,7 +38,7 @@ let receive (st:state) : state * bytes =
 /// <param name="stout"> State of the current connection on the outgoing side </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded application data bytes </returns>
-let forward (stin:state, stout:state, (*?*)fp:fragmentationPolicy) : state * state * bytes =
+let forward (stin:state) (stout:state) (*?*)(fp:fragmentationPolicy) : state * state * bytes =
   //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let stin,appb = FlexTLS.ApplicationData.receive(stin) in
   let stout = FlexTLS.ApplicationData.send(stout,appb,fp) in
@@ -50,7 +50,7 @@ let forward (stin:state, stout:state, (*?*)fp:fragmentationPolicy) : state * sta
 /// <param name="st"> State of the current connection </param>
 /// <param name="data"> String to send as HTTP </param>
 /// <returns> Updated state <returns>
-let send_http(st:state, data:string) : state =
+let send_http (st:state) (data:string) : state =
   FlexTLS.ApplicationData.send(st, sprintf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s" (Core.String.length data) data)
 
 /// <summary>
@@ -58,7 +58,7 @@ let send_http(st:state, data:string) : state =
 /// </summary>
 /// <param name="st"> State of the current connection </param>
 /// <returns> Updated state <returns>
-let send_http_get(st:state) : state =
+let send_http_get (st:state) : state =
   FlexTLS.ApplicationData.send_http(st,"GET /")
 
 /// <summary>
@@ -66,7 +66,7 @@ let send_http_get(st:state) : state =
 /// </summary>
 /// <param name="st"> State of the current connection </param>
 /// <returns> Updated state <returns>
-let send_http_banner(st:state) : state =
+let send_http_banner (st:state) : state =
   FlexTLS.ApplicationData.send_http(st,"You just received Application data from FlexTLS!\r\n")
 
 /// <summary>
@@ -76,7 +76,7 @@ let send_http_banner(st:state) : state =
 /// <param name="data"> Application data as encoded string </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send(st:state, data:string, (*?*)encoding:System.Text.Encoding, (*?*)fp:fragmentationPolicy) : state =
+let send (st:state) (data:string) (*?*)(encoding:System.Text.Encoding) (*?*)(fp:fragmentationPolicy) : state =
   //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let encoding = defaultArg encoding System.Text.Encoding.ASCII in
   let payload = abytes(encoding.GetBytes(data)) in
@@ -89,7 +89,7 @@ let send(st:state, data:string, (*?*)encoding:System.Text.Encoding, (*?*)fp:frag
 /// <param name="data"> Application data as raw bytes </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send(st:state, data:bytes, (*?*)fp:fragmentationPolicy) : state =
+let send (st:state) (data:bytes) (*?*)(fp:fragmentationPolicy) : state =
   Log.logInfo("# APPLICATION DATA : FlexTLS.ApplicationData.send");
   //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let buf = st.write.appdata_buffer @| data in

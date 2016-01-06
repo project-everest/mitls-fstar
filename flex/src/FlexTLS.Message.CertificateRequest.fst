@@ -24,7 +24,7 @@ open FlexTLS.Handshake
 /// <param name="st"> State of the current Handshake </param>
 /// <param name="nsc"> Optional Next security context object updated with new data </param>
 /// <returns> Updated state * next security context * FCertificateRequest message record </returns>
-let receive (st:state, (*?*)nsc:nextSecurityContext) : state * nextSecurityContext * FCertificateRequest =
+let receive (st:state) (*?*)(nsc:nextSecurityContext) : state * nextSecurityContext * FCertificateRequest =
   Log.logInfo("# CERTIFICATE REQUEST : FlexCertificateRequest.receive");
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let si = nsc.si in
@@ -53,7 +53,7 @@ let receive (st:state, (*?*)nsc:nextSecurityContext) : state * nextSecurityConte
 /// <param name="cs"> Ciphersuite used to generate the request </param>
 /// <param name="pv"> Protocol version used to generate the request </param>
 /// <returns> FCertificateRequest message record</returns>
-let prepare (cs:cipherSuite, pv:ProtocolVersion): FCertificateRequest =
+let prepare (cs:cipherSuite) (pv:ProtocolVersion) : FCertificateRequest =
   let payload = HandshakeMessages.certificateRequestBytes true cs pv in
   // We return dummy values in the FCertificateRequest sigAlgs so it can be used later by FCertificateVerify functions
   let fcreq = { FlexConstants.nullFCertificateRequest with sigAlgs = FlexConstants.sigAlgs_ALL ; payload = payload } in
@@ -66,7 +66,7 @@ let prepare (cs:cipherSuite, pv:ProtocolVersion): FCertificateRequest =
 /// <param name="nsc"> Optional next security context to be updated </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FCertificateRequest message record </returns>
-let send (st:state, (*?*)nsc:nextSecurityContext, (*?*)fp:fragmentationPolicy): state * FCertificateRequest = 
+let send (st:state) (*?*)(nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy): state * FCertificateRequest = 
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   FlexCertificateRequest.send(st,nsc.si.cipher_suite,nsc.si.protocol_version,fp)
@@ -79,7 +79,7 @@ let send (st:state, (*?*)nsc:nextSecurityContext, (*?*)fp:fragmentationPolicy): 
 /// <param name="pv"> Protocol version used to generate the request </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FCertificateRequest message record </returns>
-let send (st:state, cs:cipherSuite, pv:ProtocolVersion, (*?*)fp:fragmentationPolicy): state * FCertificateRequest =
+let send (st:state) (cs:cipherSuite) (pv:ProtocolVersion) (*?*)(fp:fragmentationPolicy) : state * FCertificateRequest =
   Log.logInfo("# CERTIFICATE REQUEST : FlexCertificateRequest.send");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fcreq = FlexCertificateRequest.prepare(cs,pv) in
