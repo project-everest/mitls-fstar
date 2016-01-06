@@ -9,8 +9,10 @@ clean:
 
 # ------------------ dependencies on Fstar & its libraries --------------------
 ifndef FSTAR_HOME
-FSTAR_HOME=../../../FStar
+FSTAR_HOME=../../.fstar
 endif
+add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
+
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
 STDLIB_ADMITS=Char HyperHeap Set Map
 
@@ -18,7 +20,9 @@ STDLIB=ext.fst classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi listTot.fst hy
 stHyperHeap.fst allHyperHeap.fst char.fsi string.fst list.fst listproperties.fst seq.fsi \
 seq.fst seqproperties.fst #int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
+
+FSTARFLAGS=$(call add_stdlib_prefix,$(STDLIB)) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 
 PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
 
@@ -38,6 +42,18 @@ LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 OCAML=ocamlfind ocamlopt -package batteries -package stdint -linkpkg -g -thread
 DEBUG=ocamlfind ocamlc -package batteries -package stdint -linkpkg -g -thread
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db ~/dev/mitls/mitls-fstar/src/tls)
+
+# ----------------------- NuBuild integration ------------------------
+NUBUILD_HOME=../../.nubuild
+NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
+ifdef USE_NUBUILD
+NUBUILD_OR_FSTAR=$(NUBUILD) --quiet FStarVerify $(FSTARFLAGS)
+# When using NuBuild, FStar must be located within the source tree. Now that soft links are available on all 
+# platforms, I don't see a reason not to assume a fixed location.
+FSTAR_HOME=../../.fstar
+else
+NUBUILD_OR_FSTAR=$(FSTAR)
+endif
 
 # ------------------------- miTLS* -------------------------------------------
 # We try to limit the use of preprocessing, as it is messy.
@@ -132,7 +148,7 @@ endef
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 mitls-ver: $(LIBFILES) $(TLSVER)
-	$(FSTAR) $(ADMITTED) $(VERFLAGS) $(filter-out TLS.fst,$^) $(addprefix --verify_module ,$(VERIFY))
+	$(NUBUILD_OR_FSTAR) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^) 
 
 # going beyond TLSVER, not necessarily working
 
