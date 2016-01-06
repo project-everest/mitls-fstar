@@ -49,10 +49,9 @@ let prepare () : FServerHelloDone =
 /// <param name="st"> State of the current Handshake </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerHelloDone message record </returns>
-let send (st:state, ?fp:fragmentationPolicy) : state * FServerHelloDone =
+let send (st:state, (*?*)fp:fragmentationPolicy) : state * FServerHelloDone =
   Log.logInfo("# SERVER HELLO DONE : FlexServerHelloDone.send");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fshd = FlexServerHelloDone.prepare() in
   let st = FlexHandshake.send(st,fshd.payload,fp) in
   st,fshd
