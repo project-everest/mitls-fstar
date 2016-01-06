@@ -55,6 +55,7 @@ assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
 // was connect, resume, accept_connected, ...
 val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
             resume: option (sid: sessionID { r = Client }) ->
+//            resume: option sessionId{resume<>None ==> r=Client} ->
             ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 -> 
@@ -66,7 +67,7 @@ val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
     c_cfg c = cfg /\
     c_resume c = resume /\
     (r = Server ==> resume = None) /\
-    Map.contains h1 c.region /\
+    Map.contains h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
     (* sel h1 (c_log c) = Seq.createEmpty /\ *) //NS: this fails now ... not sure why
     sel h1 c.reading  = Init /\
     sel h1 c.writing  = Init
@@ -379,6 +380,8 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
  
 // sends one fragment in the current epoch;
 // except for the null epoch, the fragment is appended to the epoch's writer log.
+
+//Question: What happened to authId at this level?
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulPlain.cipher i)
   (requires (fun h -> 
     st_inv c h /\ 
@@ -561,7 +564,9 @@ val project_snoc: #i:id -> s:seq (entry i) -> e:entry i -> Lemma
 let project_snoc #i s e = 
   let hd, tl = Content.split (snoc s e) in
   cut (Seq.Eq hd s)
-  
+
+//Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
+//            How do we conclude that after these two calls all the appData was written?
 val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
     st_inv c h /\ 
@@ -864,6 +869,7 @@ let rec writeAllTop c i appdata =
     | _                   -> unexpected "[writeAllTop] writeOne returned wrong result"
     else                    unexpected "[writeAllTop] seqn overflow"
 
+//Question: NS, BP, JL: Is it possible for write to return WriteAgain or a partially written data?
 let write c i rg data = writeAllTop c i (Some (| rg, data |))
 
 (*
