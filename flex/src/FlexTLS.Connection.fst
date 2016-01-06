@@ -22,8 +22,8 @@ open FlexTLS.Constants
 /// <param name="ns"> Network stream </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Global state of the handshake </returns>
-let init (role:Role, ns:NetworkStream, ?pv:ProtocolVersion) : state =
-  let pv = defaultArg pv defaultConfig.maxVer in
+let init (role:Role, ns:NetworkStream, (*?*)pv:ProtocolVersion) : state =
+  //  let pv = defaultArg pv defaultConfig.maxVer in
   let rand = Nonce.mkHelloRandom pv in
   let ci = TLSInfo.initConnection role rand in
   let record_s_in  = Record.nullConnState ci.id_in Reader in
@@ -58,11 +58,10 @@ let init (role:Role, ns:NetworkStream, ?pv:ProtocolVersion) : state =
 /// <param name="port"> Optional port number </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Updated state * Updated config </returns>
-let serverOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:ProtocolVersion, ?timeout:int) : state * config =
-  let pv = defaultArg pv defaultConfig.maxVer in
-  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
-  let cn = defaultArg cn address in
-
+let serverOpenTcpConnection (address:string, (*?*)cn:string, (*?*)port:int, (*?*)pv:ProtocolVersion, (*?*)timeout:int) : state * config =
+  //  let pv = defaultArg pv defaultConfig.maxVer in
+  //  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
+  //  let cn = defaultArg cn address in
   LogManager.GetLogger("file").Info("TCP : Listening on {0}:{1}", address, port);
   let l    = Tcp.listen address port in
   match timeout with
@@ -78,8 +77,8 @@ let serverOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:Protocol
 /// <param name="cn"> Common name </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Updated state * Updated config </returns>
-let serverOpenTcpConnection (l:TcpListener, cn:string, ?pv:ProtocolVersion, ?timeout:int) : state * config =
-  let pv = defaultArg pv defaultConfig.maxVer in
+let serverOpenTcpConnection (l:TcpListener, cn:string, (*?*)pv:ProtocolVersion, (*?*)timeout:int) : state * config =
+  //  let pv = defaultArg pv defaultConfig.maxVer in
   let cfg = { defaultConfig with server_name = cn } in
   LogManager.GetLogger("file").Info("TCP : Accepting as {0}", cn);
   let ns   =
@@ -99,12 +98,11 @@ let serverOpenTcpConnection (l:TcpListener, cn:string, ?pv:ProtocolVersion, ?tim
 /// <param name="port"> Optional port number </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Updated state * Updated config </returns>
-let clientOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:ProtocolVersion, ?timeout:int) :  state * config =
-  let pv = defaultArg pv defaultConfig.maxVer in
-  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
-  let cn = defaultArg cn address in
+let clientOpenTcpConnection (address:string, (*?*)cn:string, (*?*)port:int, (*?*)pv:ProtocolVersion, (*?*)timeout:int) :  state * config =
+  //  let pv = defaultArg pv defaultConfig.maxVer in
+  //  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
+  //  let cn = defaultArg cn address in
   let cfg = { defaultConfig with server_name = cn } in
-
   Log.logInfo("TCP : Connecting to {0}:{1}",address,port);
   let ns =
     match timeout with
@@ -114,7 +112,7 @@ let clientOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:Protocol
   let st = FlexTLS.Connection.init (Client, ns) in
   LogManager.GetLogger("file").Debug("--- Done");
   (st,cfg)
-
+  
 /// <summary>
 /// Open two TCP connection to do MITM : Listen for a client and Connect to a server
 /// </summary>
@@ -126,13 +124,13 @@ let clientOpenTcpConnection (address:string, ?cn:string, ?port:int, ?pv:Protocol
 /// <param name="server_cn"> Optional common name of the server </param>
 /// <param name="server_port"> Optional port number on which to connect to the server </param>
 /// <param name="server_pv"> Optional protocol version required to generate randomness </param>
-let mitmOpenTcpConnections (listen_address:string, server_address:string, ?listen_cn:string, ?listen_port:int, ?listen_pv:ProtocolVersion, ?server_cn:string, ?server_port:int, ?server_pv:ProtocolVersion) :  state * config * state * config =
-  let listen_pv = defaultArg listen_pv defaultConfig.maxVer in
-  let listen_port = defaultArg listen_port FlexTLS.Constants.defaultTCPPort in
-  let listen_cn = defaultArg listen_cn listen_address in
-  let server_pv = defaultArg server_pv defaultConfig.maxVer in
-  let server_port = defaultArg server_port FlexTLS.Constants.defaultTCPPort in
-  let server_cn = defaultArg server_cn server_address in
+let mitmOpenTcpConnections (listen_address:string, server_address:string, (*?*)listen_cn:string, (*?*)listen_port:int, (*?*)listen_pv:ProtocolVersion, (*?*)server_cn:string, (*?*)server_port:int, (*?*)server_pv:ProtocolVersion) :  state * config * state * config =
+  //  let listen_pv = defaultArg listen_pv defaultConfig.maxVer in
+  //  let listen_port = defaultArg listen_port FlexTLS.Constants.defaultTCPPort in
+  //  let listen_cn = defaultArg listen_cn listen_address in
+  //  let server_pv = defaultArg server_pv defaultConfig.maxVer in
+  //  let server_port = defaultArg server_port FlexTLS.Constants.defaultTCPPort in
+  //  let server_cn = defaultArg server_cn server_address in
   let scfg = {
     defaultConfig with
     server_name = listen_cn
@@ -142,8 +140,8 @@ let mitmOpenTcpConnections (listen_address:string, server_address:string, ?liste
     server_name = server_cn
   } in
   Log.logInfo("TCP : Listening on {0}:{2} as {1}", listen_address, listen_cn, listen_port);
-  let l    = Tcp.listen listen_address listen_port in
-  let sns   = Tcp.accept l in
+  let l   = Tcp.listen listen_address listen_port in
+  let sns = Tcp.accept l in
   let sst = FlexTLS.Connection.init (Server,sns,listen_pv) in
   Log.logDebug("--- Client accepted");
   Log.logInfo("TCP : Connecting to {0}:{1}",server_address,server_port);
@@ -157,7 +155,7 @@ let mitmOpenTcpConnections (listen_address:string, server_address:string, ?liste
 /// </summary>
 /// <param name="src"> Source network stream </param>
 /// <param name="dst"> Destination network stream </param>
-let asyncForward(src:System.IO.Stream,dst:System.IO.Stream) : Async<unit> =
+let asyncForward(src:System.IO.Stream, dst:System.IO.Stream) : Async<unit> =
   async {
     let  b = Array.zeroCreate 2048 in
     let! n = src.AsyncRead(b) in

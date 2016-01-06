@@ -24,8 +24,8 @@ open FlexTLS.Handshake
 /// <param name="nsc"> Next security context to be updated </param>
 /// <param name="fcreq"> FCertificateRequest previously used in the handshake that contains allowed signature and hash algorithms </param>
 /// <returns> Updated state * Certificate Verify message </returns>
-let receive (st:state, nsc:nextSecurityContext, fcreq:FCertificateRequest, ?check_log:bool) : state * FCertificateVerify =
-  let checkLog = defaultArg check_log true in
+let receive (st:state, nsc:nextSecurityContext, fcreq:FCertificateRequest, (*?*)check_log:bool) : state * FCertificateVerify =
+  //  let checkLog = defaultArg check_log true in
   FlexCertificateVerify.receive(st,nsc,fcreq.sigAlgs,checkLog)
 
 /// <summary>
@@ -35,8 +35,8 @@ let receive (st:state, nsc:nextSecurityContext, fcreq:FCertificateRequest, ?chec
 /// <param name="nsc"> Next security context to be updated </param>
 /// <param name="algs"> Signature and hash algorithms allowed and usually provided by a Certificate Request </param>
 /// <returns> Updated state * Certificate Verify message </returns>
-let receive (st:state, nsc:nextSecurityContext, algs:list<Sig.alg>, ?check_log:bool) : state * FCertificateVerify =
-  let checkLog = defaultArg check_log true in
+let receive (st:state, nsc:nextSecurityContext, algs:list<Sig.alg>, (*?*)check_log:bool) : state * FCertificateVerify =
+  //  let checkLog = defaultArg check_log true in
   FlexCertificateVerify.receive(st,nsc.si,algs,check_log=checkLog,ms=nsc.secrets.ms)
 
 /// <summary>
@@ -47,11 +47,10 @@ let receive (st:state, nsc:nextSecurityContext, algs:list<Sig.alg>, ?check_log:b
 /// <param name="algs"> Signature and hash algorithms allowed and usually provided by a Certificate Request </param>
 /// <param name="ms"> Optional master secret that has to be provided to check the log if protocol version is SSL3 </param>
 /// <returns> Updated state * Certificate Verify message </returns>
-let receive (st:state, si:SessionInfo, algs:list<Sig.alg>, ?check_log:bool, ?ms:bytes) : state * FCertificateVerify =
+let receive (st:state, si:SessionInfo, algs:list<Sig.alg>, (*?*)check_log:bool, (*?*)ms:bytes) : state * FCertificateVerify =
   Log.logInfo("# CERTIFICATE VERIFY : FlexCertificateVerify.receive");
-  let ms = defaultArg ms empty_bytes in
+  //  let ms = defaultArg ms empty_bytes in
   let checkLog = if (defaultArg check_log true) then Some(st.hs_log) else None in
-
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
   match hstype with
   | HT_certificate_verify ->
@@ -159,11 +158,10 @@ let send (st:state, si:SessionInfo, alg:Sig.alg, skey:Sig.skey, ?ms:bytes, ?fp:f
 /// <param name="ms"> Optional master secret that has to be provided to compute the log if protocol version is SSL3 </param>
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Certificate Verify message </returns>
-let send (st:state, cs:cipherSuite, pv:ProtocolVersion, alg:Sig.alg, skey:Sig.skey, ?ms:bytes, ?fp:fragmentationPolicy) : state * FCertificateVerify =
+let send (st:state, cs:cipherSuite, pv:ProtocolVersion, alg:Sig.alg, skey:Sig.skey, (*?*)ms:bytes, (*?*)fp:fragmentationPolicy) : state * FCertificateVerify =
   Log.logInfo("# CERTIFICATE VERIFY : FlexCertificateVerify.send");
-  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let ms = defaultArg ms empty_bytes in
-
+  //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
+  //  let ms = defaultArg ms empty_bytes in
   let fcver = FlexCertificateVerify.prepare(st.hs_log,cs,pv,alg,skey,ms) in
   let st = FlexHandshake.send (st,fcver.payload,fp) in
   st,fcver
