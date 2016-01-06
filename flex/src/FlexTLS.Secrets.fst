@@ -108,7 +108,7 @@ let makeVerifyData (si:SessionInfo) (ms:bytes) (role:Role) (log:bytes) : bytes =
 /// <param name="role"> Behavior as client or Server </param>
 /// <param name="nsc"> Next security context being negotiated </param>
 /// <returns> Updated next security context </returns>
-let fillSecrets (st:state, role:Role, nsc:nextSecurityContext) : nextSecurityContext =
+let fillSecrets (st:state) (role:Role) (nsc:nextSecurityContext) : nextSecurityContext =
   Log.logDebug("@ Fill Secrets");
   let er = FlexState.guessNextEpoch st.read.epoch  nsc in
   let ew = FlexState.guessNextEpoch st.write.epoch nsc in

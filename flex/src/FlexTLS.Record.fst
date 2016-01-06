@@ -71,7 +71,7 @@ let parseFragmentHeader (st:state) : ContentType * ProtocolVersion * nat * bytes
 /// <param name="ct"> Content type of the fragment </param>
 /// <param name="len"> Length of the fragment </param>
 /// <returns> Updated state (reading side) * decrypted plaintext </returns>
-let getFragmentContent (st:state, ct:ContentType, len:int) : state * bytes =
+let getFragmentContent (st:state) (ct:ContentType) (len:int) : state * bytes =
   match Tcp.read st.ns len with
   | Error x -> failwith (perror __SOURCE_FILE__ __LINE__ x)
   | Correct payload ->
@@ -104,7 +104,7 @@ let receive (st:state) : state * ContentType * ProtocolVersion * int * bytes * b
 /// <param name="ct"> Content type of the fragment </param>
 /// <param name="payload"> Data to encrypt </param>
 /// <returns> Updated incoming record state * ciphertext </returns>
-let encrypt (e:epoch, pv:ProtocolVersion, k:Record.ConnectionState, ct:ContentType, payload:bytes) : Record.ConnectionState * bytes =
+let encrypt (e:epoch) (pv:ProtocolVersion) (k:Record.ConnectionState) (ct:ContentType) (payload:bytes) : Record.ConnectionState * bytes =
 // pv is the protocol version set in the record header.
 // For encrypting epochs, it'd better match the protocol version contained in the epoch, since the latter is used for the additional data
   let len = length payload in
@@ -121,7 +121,7 @@ let encrypt (e:epoch, pv:ProtocolVersion, k:Record.ConnectionState, ct:ContentTy
 /// <param name="stout"> State of the current Handshake on the outgoing side </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded record bytes </returns>
-let forward (stin:state, stout:state, (*?*)fp:fragmentationPolicy) : state * state * bytes =
+let forward (stin:state) (stout:state) (*?*)(fp:fragmentationPolicy) : state * state * bytes =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let ct,pv,len,header = FlexRecord.parseFragmentHeader(stin) in
   let stin,payload = FlexRecord.getFragmentContent(stin,ct,len) in
@@ -137,7 +137,7 @@ let forward (stin:state, stout:state, (*?*)fp:fragmentationPolicy) : state * sta
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated outgoing record state </returns>
 /// <remarks> We leave the remainder in the buffer </remarks>
-let send (st:state, ct:ContentType, (*?*)fp:fragmentationPolicy) : state =
+let send (st:state) (ct:ContentType) (*?*)(fp:fragmentationPolicy) : state =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let payload = pickCTBuffer st.write ct in
   let k,b,rem = FlexRecord.send(st.ns,st.write.epoch,st.write.record,ct,payload,st.write.epoch_init_pv,fp) in
@@ -157,7 +157,7 @@ let send (st:state, ct:ContentType, (*?*)fp:fragmentationPolicy) : state =
 /// <param name="epoch_init_pv"> Optional Protocol version set for the Initial epoch </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated outgoing record state * remainder of the plain data </returns>
-let send (ns:NetworkStream, e:epoch, k:Record.ConnectionState, ct:ContentType, payload:bytes, (*?*)epoch_init_pv:ProtocolVersion, (*?*)fp:fragmentationPolicy) : Record.ConnectionState * bytes * bytes =
+let send (ns:NetworkStream) (e:epoch) (k:Record.ConnectionState) (ct:ContentType) (payload:bytes) (*?*)(epoch_init_pv:ProtocolVersion) (*?*)(fp:fragmentationPolicy) : Record.ConnectionState * bytes * bytes =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let pv =
   if TLSInfo.isInitEpoch e then
@@ -189,7 +189,7 @@ let send (ns:NetworkStream, e:epoch, k:Record.ConnectionState, ct:ContentType, p
 /// <param name="payload"> Data to encrypt </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Remaining bytes </returns>
-let send_raw (ns:NetworkStream, ct:ContentType, pv:ProtocolVersion, payload:bytes, (*?*)fp:fragmentationPolicy) : bytes =
+let send_raw (ns:NetworkStream) (ct:ContentType) (pv:ProtocolVersion) (payload:bytes) (*?*)(fp:fragmentationPolicy) : bytes =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let b,rem = splitPayloadFP payload fp in
   let fragb = Record.makePacket ct pv b in
