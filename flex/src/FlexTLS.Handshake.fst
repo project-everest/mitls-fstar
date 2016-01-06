@@ -69,7 +69,7 @@ let receive (st:state) : state * HandshakeMessages.PreHandshakeType * bytes * by
 /// <param name="stout"> State of the current Handshake on the outgoing side </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded handshake message bytes </returns>
-let forward (stin:state, stout:state) : state * state * bytes =
+let forward (stin:state) (stout:state) : state * state * bytes =
   let stin,_,_,msg = FlexTLS.Handshake.receive(stin) in
   let stout = FlexTLS.Handshake.send(stout,msg) in
   stin,stout,msg
@@ -81,7 +81,7 @@ let forward (stin:state, stout:state) : state * state * bytes =
 /// <param name="payload"> Optional Data bytes to send as en handshake message. None will send the handshake buffer </param>
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
-let send (st:state, (*?*)payload:bytes, (*?*)fp:fragmentationPolicy) : state =
+let send (st:state) (*?*)(payload:bytes) (*?*)(fp:fragmentationPolicy) : state =
   //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   //  let payload = defaultArg payload empty_bytes in
   let buf = st.write.hs_buffer @| payload in

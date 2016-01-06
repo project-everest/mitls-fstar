@@ -22,7 +22,7 @@ open FlexTLS.Constants
 /// <param name="ns"> Network stream </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Global state of the handshake </returns>
-let init (role:Role, ns:NetworkStream, (*?*)pv:ProtocolVersion) : state =
+let init (role:Role) (ns:NetworkStream) (*?*)(pv:ProtocolVersion) : state =
   //  let pv = defaultArg pv defaultConfig.maxVer in
   let rand = Nonce.mkHelloRandom pv in
   let ci = TLSInfo.initConnection role rand in
@@ -58,7 +58,7 @@ let init (role:Role, ns:NetworkStream, (*?*)pv:ProtocolVersion) : state =
 /// <param name="port"> Optional port number </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Updated state * Updated config </returns>
-let serverOpenTcpConnection (address:string, (*?*)cn:string, (*?*)port:int, (*?*)pv:ProtocolVersion, (*?*)timeout:int) : state * config =
+let serverOpenTcpConnection (address:string) (*?*)(cn:string) (*?*)(port:int) (*?*)(pv:ProtocolVersion) (*?*)(timeout:int) : state * config =
   //  let pv = defaultArg pv defaultConfig.maxVer in
   //  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
   //  let cn = defaultArg cn address in
@@ -77,7 +77,7 @@ let serverOpenTcpConnection (address:string, (*?*)cn:string, (*?*)port:int, (*?*
 /// <param name="cn"> Common name </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Updated state * Updated config </returns>
-let serverOpenTcpConnection (l:TcpListener, cn:string, (*?*)pv:ProtocolVersion, (*?*)timeout:int) : state * config =
+let serverOpenTcpConnection (l:TcpListener) (cn:string) (*?*)(pv:ProtocolVersion) (*?*)(timeout:int) : state * config =
   //  let pv = defaultArg pv defaultConfig.maxVer in
   let cfg = { defaultConfig with server_name = cn } in
   LogManager.GetLogger("file").Info("TCP : Accepting as {0}", cn);
@@ -98,7 +98,7 @@ let serverOpenTcpConnection (l:TcpListener, cn:string, (*?*)pv:ProtocolVersion, 
 /// <param name="port"> Optional port number </param>
 /// <param name="pv"> Optional protocol version required to generate randomness </param>
 /// <returns> Updated state * Updated config </returns>
-let clientOpenTcpConnection (address:string, (*?*)cn:string, (*?*)port:int, (*?*)pv:ProtocolVersion, (*?*)timeout:int) :  state * config =
+let clientOpenTcpConnection (address:string) (*?*)(cn:string) (*?*)(port:int) (*?*)(pv:ProtocolVersion) (*?*)(timeout:int) :  state * config =
   //  let pv = defaultArg pv defaultConfig.maxVer in
   //  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
   //  let cn = defaultArg cn address in
@@ -124,7 +124,7 @@ let clientOpenTcpConnection (address:string, (*?*)cn:string, (*?*)port:int, (*?*
 /// <param name="server_cn"> Optional common name of the server </param>
 /// <param name="server_port"> Optional port number on which to connect to the server </param>
 /// <param name="server_pv"> Optional protocol version required to generate randomness </param>
-let mitmOpenTcpConnections (listen_address:string, server_address:string, (*?*)listen_cn:string, (*?*)listen_port:int, (*?*)listen_pv:ProtocolVersion, (*?*)server_cn:string, (*?*)server_port:int, (*?*)server_pv:ProtocolVersion) :  state * config * state * config =
+let mitmOpenTcpConnections (listen_address:string) (server_address:string) (*?*)(listen_cn:string) (*?*)(listen_port:int) (*?*)(listen_pv:ProtocolVersion) (*?*)(server_cn:string) (*?*)(server_port:int) (*?*)(server_pv:ProtocolVersion) :  state * config * state * config =
   //  let listen_pv = defaultArg listen_pv defaultConfig.maxVer in
   //  let listen_port = defaultArg listen_port FlexTLS.Constants.defaultTCPPort in
   //  let listen_cn = defaultArg listen_cn listen_address in
@@ -155,7 +155,7 @@ let mitmOpenTcpConnections (listen_address:string, server_address:string, (*?*)l
 /// </summary>
 /// <param name="src"> Source network stream </param>
 /// <param name="dst"> Destination network stream </param>
-let asyncForward(src:System.IO.Stream, dst:System.IO.Stream) : Async<unit> =
+let asyncForward (src:System.IO.Stream) (dst:System.IO.Stream) : Async<unit> =
   async {
     let  b = Array.zeroCreate 2048 in
     let! n = src.AsyncRead(b) in
@@ -171,7 +171,7 @@ let asyncForward(src:System.IO.Stream, dst:System.IO.Stream) : Async<unit> =
 /// </summary>
 /// <param name="a"> Network stream A </param>
 /// <param name="b"> Network stream B </param>
-let passthrough(a:NetworkStream, b:NetworkStream): unit =
+let passthrough (a:NetworkStream) (b:NetworkStream) : unit =
   let a = Tcp.getStream a in
   let b = Tcp.getStream b in
   let d1 = FlexTLS.Connection.asyncForward(a,b) in
