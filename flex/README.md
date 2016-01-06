@@ -1,9 +1,17 @@
 # FlexTLS
 
-## TODO
+## Work in progress
 
-- Update to use TLS 1.3
-- Remove the SmackTLS part in favor of the JS version
+   - Integrate TLS 1.3
 
-- I want to be able to prove the security of individual FlexTLS scenarios
+   - Include new algorithms
 
+   - Remove the SmackTLS part in favor of the JS version
+
+## Open problems
+   
+   - Can we integrate our private F* crypto library ?
+   
+   - Can we prove the security of individual FlexTLS scenarios ?
+
+   - Can we generate single scenario implementations ?
