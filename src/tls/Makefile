@@ -113,7 +113,7 @@ endef
 
 # verifying one file within $(TLSVER)
 %.fst-ver:
-	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver, $(basename $@),fst) \
+	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver,$(basename $@),fst) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fsti-ver:
@@ -144,8 +144,7 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-mitls-ver: $(LIBFILES) $(TLSVER)
-	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^) 
+mitls-ver: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
 
 # going beyond TLSVER, not necessarily working
 
