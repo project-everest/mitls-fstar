@@ -1,8 +1,9 @@
 # These are all the known working targets in this file,
 # check for regressions & comment about them!
-all: mitls-ver mitls-ml
+all: mitls-ver 
 # TODO extend scope of verification
 # TODO compilation to ML & testing
+# MK removed mitls-ml as strider was failing on it for ages
 
 clean:
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
