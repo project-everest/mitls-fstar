@@ -113,8 +113,7 @@ endef
 
 # verifying one file within $(TLSVER)
 %.fst-ver:
-	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver,$(basename $@),fst) \
---verify_module $(subst .p,,$(basename $@))
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) $(LIBFILES) $(ADMITTED) --verify_module $(subst .p,,$(basename $@)) $(call prefix_ver,$(basename $@),fst)
 
 %.fsti-ver:
 	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver,$(basename $@),fsti) \
