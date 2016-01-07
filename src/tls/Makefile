@@ -176,7 +176,7 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSPARSE_ML)
 	cp ./test/parsing_test.ml .
 	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSPARSE_ML:.ml=.cmx) parsing_test.ml -o test.out
-	./test.out
+	$(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------
 
@@ -196,11 +196,11 @@ TLS_PP_FILES= TLSExtensions PMS DHGroup Encode Range Sig PRF-redux TLSExtensions
 pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
 
 ifeq ($(OS),Windows_NT)
+    EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
     CPP=cpp #-ffreestanding
 else
     UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
-	PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
         CPP=cpp -ffreestanding
     else
         CPP=cpp-5 # GCC cpp rather than LLVM
