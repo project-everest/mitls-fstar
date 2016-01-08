@@ -45,16 +45,11 @@ TLSLAX= $(addprefix tls-lax/,TLSError.fst Nonce.p.fst TLSConstants.fst \
 	Alert.p.fst PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti \
 	HandshakeMessages.p.fst Handshake.p.fst AppData.p.fst Dispatch.p.fst TLS.fst)
 
-FLEXTLSLAX= $(addprefix ../flex/src/FlexTLS., Constants.fst Alert.fst)
-
 mitls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax --debug yes $(ADMITTED) $^
 
 mitls-redux:
 	make -C tls redux
-
-flextls-lax: $(LIBFILES) $(TLSLAX) $(FLEXTLSLAX)
-	$(FSTAR) --lax --debug yes $(ADMITTED) $^
 
 ifeq ($(OS),Windows_NT)
     CPP=cpp #-ffreestanding
