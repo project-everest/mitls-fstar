@@ -3,7 +3,7 @@
 
     variables: CONTRIB=../../../FStar/contrib;
     
-    other-files: ext.fst classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst 
+    other-files: FStar.FunctionalExtensionality.fst classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst 
       map.fst listTot.fst hyperHeap.fst stHyperHeap.fst allHyperHeap.fst
       string.fst list.fst seq.fsi seqproperties.fst FStar.IO.fsti
       $CONTRIB/Platform/fst/Bytes.fst $CONTRIB/Platform/fst/Date.fst 
@@ -20,7 +20,7 @@ module TestGCM
 (*
 Code generation:
 
-../../../FStar/bin/fstar.exe ext.fst classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst map.fst listTot.fst hyperHeap.fst stHyperHeap.fst allHyperHeap.fst string.fst list.fst seq.fst seqproperties.fst FStar.IO.fsti --admit_fsi Fstar.Set --admit_fsi FStar.IO --admit_fsi CoreCrypto --include ../../../FStar/contrib/Platform/fst/ --include ../../../FStar/contrib/CoreCrypto/fst Bytes.fst Date.fst Error.fst Tcp.fst CoreCrypto.fst DHDB.fst TLSError.fst Nonce.fst TLSConstants.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fst Cert.fst TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst TestGCM.fst --codegen OCaml --codegen-lib CoreCrypto --codegen-lib Platform --lax --trace_error --use_native_int
+../../../FStar/bin/fstar.exe FStar.FunctionalExtensionality.fst classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst map.fst listTot.fst hyperHeap.fst stHyperHeap.fst allHyperHeap.fst string.fst list.fst seq.fst seqproperties.fst FStar.IO.fsti --admit_fsi Fstar.Set --admit_fsi FStar.IO --admit_fsi CoreCrypto --include ../../../FStar/contrib/Platform/fst/ --include ../../../FStar/contrib/CoreCrypto/fst Bytes.fst Date.fst Error.fst Tcp.fst CoreCrypto.fst DHDB.fst TLSError.fst Nonce.fst TLSConstants.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fst Cert.fst TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst TestGCM.fst --codegen OCaml --codegen-lib CoreCrypto --codegen-lib Platform --lax --trace_error --use_native_int
 
 Workarounds:
 
