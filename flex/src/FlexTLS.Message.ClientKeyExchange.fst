@@ -3,7 +3,7 @@
 module FlexTLS.Message.ClientKeyExchange
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Error
 
@@ -18,6 +18,9 @@ open FlexTLS.Handshake
 open FlexTLS.Secrets
 
 
+
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Retrieve certificate and private key associated to a certificate list
@@ -94,7 +97,7 @@ let receiveRSA (st:state) (nsc:nextSecurityContext) (pv:ProtocolVersion) (*?*)(c
 /// <param name="sk"> Optional secret key to be used for decrypting in place of the current one </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let receiveRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(checkPV:bool) (*?*)(sk:RSAKey.sk): state * FClientKeyExchange =
-  Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveRSA");
+  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveRSA");
   //  let checkPV = defaultArg checkPV true in
   //  let sk = defaultKey sk certl in
   let pk =
@@ -113,8 +116,8 @@ let receiveRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(che
       let pmsb = PMS.leakRSA pk si.protocol_version pmsa in
       let kex = RSA(pmsb) in
       let fcke : FClientKeyExchange = {kex = kex; payload = to_log } in
-      Log.logDebug(sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
-      Log.logDebug(sprintf "--- Payload : %A" (Bytes.hexString(payload)));
+      Log.write log Debug "" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
+      Log.write log Debug "" (sprintf "--- Payload : %A" (Bytes.hexString(payload)));
       st,fcke
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -232,7 +235,7 @@ let sendRSA (st:state) (nsc:nextSecurityContext) (pv:ProtocolVersion) (*?*)(fp:f
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let sendRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(pms:bytes) (*?*)(fp:fragmentationPolicy) : state * FClientKeyExchange =
-  Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendRSA");
+  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendRSA");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   if certl.IsEmpty then
     failwith (perror __SOURCE_FILE__ __LINE__  "Server certificate should always be present with a RSA signing cipher suite.")
@@ -256,7 +259,7 @@ let sendRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(pms:by
       let st = FlexHandshake.send(st,payload,fp) in
       let kex = RSA(pmsb) in
       let fcke : FClientKeyExchange = {kex = kex; payload = payload } in
-      Log.logDebug(sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
+      Log.write log Debug "" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
       st,fcke
 
 (*** Ephemeral Diffie-Hellman ***)
@@ -301,7 +304,7 @@ let receiveDHE (st:state) (nsc:nextSecurityContext) : state * nextSecurityContex
 /// <param name="kexdh"> Key Exchange record containing Diffie-Hellman parameters </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let receiveDHE (st:state) (kexdh:kexDH) : state * FClientKeyExchange =
-  Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveDHE");
+  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveDHE");
   let (p,g),gx = kexdh.pg,kexdh.gx in
   let dhp = DHP_P {FlexConstants.defaultDHParams with dhp = p; dhg = g} in
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
@@ -313,8 +316,8 @@ let receiveDHE (st:state) (kexdh:kexDH) : state * FClientKeyExchange =
       let gy = match gy with {dhe_p = Some x; dhe_ec = None} -> x | _ -> failwith "(impossible)" in
       let kexdh = { kexdh with gy = gy } in
       let fcke = { kex = DH(kexdh); payload = to_log } in
-      Log.logDebug(sprintf "--- Public Exponent : %s" (Bytes.hexString(gy)));
-      Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      Log.write log Debug "" (sprintf "--- Public Exponent : %s" (Bytes.hexString(gy)));
+      Log.write log Debug "" (sprintf "--- Payload : %s" (Bytes.hexString(payload)));
       st,fcke
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -380,12 +383,12 @@ let sendDHE (st:state) (nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy) :
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let sendDHE (st:state) (kexdh:kexDH) (*?*)(fp:fragmentationPolicy) : state * FClientKeyExchange =
-  Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendDHE");
+  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendDHE");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fcke,dh = FlexClientKeyExchange.prepareDHE(kexdh) in
   let st = FlexHandshake.send(st,fcke.payload,fp) in
-  Log.logDebug(sprintf "--- SECRET Value : %s" (Bytes.hexString(dh.x)));
-  Log.logDebug(sprintf "--- Public Exponent : %s" (Bytes.hexString(dh.gx)));
+  Log.write log Debug "" (sprintf "--- SECRET Value : %s" (Bytes.hexString(dh.x)));
+  Log.write log Debug "" (sprintf "--- Public Exponent : %s" (Bytes.hexString(dh.gx)));
   st,fcke
 
 
@@ -430,7 +433,7 @@ let receiveECDHE (st:state) (nsc:nextSecurityContext) : state * nextSecurityCont
 /// <param name="kexecdh"> Key Exchange record containing EC Diffie-Hellman parameters </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let receiveECDHE (st:state) (kexecdh:kexECDH) : state * FClientKeyExchange =
-  Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveECDHE");
+  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveECDHE");
   let parameters = CommonDH.DHP_EC(ECGroup.getParams kexecdh.curve) in
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
   match hstype with
@@ -441,8 +444,8 @@ let receiveECDHE (st:state) (kexecdh:kexECDH) : state * FClientKeyExchange =
       let ecp_y = match ecp_y with {dhe_ec = Some x; dhe_p = None} -> x | _ -> failwith "(impossible)" in
       let kexecdh = { kexecdh with ecp_y = (ecp_y.ecx, ecp_y.ecy) } in
       let fcke = { kex = ECDH(kexecdh); payload = to_log } in
-      Log.logDebug(sprintf "--- Public ECPoint : %s ; %s" (Bytes.hexString(ecp_y.ecx)) (Bytes.hexString(ecp_y.ecy)));
-      Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      Log.write log Debug "" (sprintf "--- Public ECPoint : %s ; %s" (Bytes.hexString(ecp_y.ecx)) (Bytes.hexString(ecp_y.ecy)));
+      Log.write log Debug "" (sprintf "--- Payload : %s" (Bytes.hexString(payload)));
       st,fcke
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -513,13 +516,13 @@ let sendECDHE (st:state) (nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy)
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let sendECDHE (st:state) (kexecdh:kexECDH) (*?*)(fp:fragmentationPolicy) : state * FClientKeyExchange =
-  Log.logInfo("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendECDHE");
+  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendECDHE");
   let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
 
   let fcke,ecdh = FlexClientKeyExchange.prepareECDHE(kexecdh) in
   let st = FlexHandshake.send(st,fcke.payload,fp) in
 
   let ecx, ecy = ecdh.ecp_x in
-  Log.logDebug(sprintf "--- SECRET Value : %s" (Bytes.hexString(ecdh.x)));
-  Log.logDebug(sprintf "--- Public Point : %s ; %s" (Bytes.hexString(ecx)) (Bytes.hexString(ecy)));
+  Log.write log Debug "" (sprintf "--- SECRET Value : %s" (Bytes.hexString(ecdh.x)));
+  Log.write log Debug "" (sprintf "--- Public Point : %s ; %s" (Bytes.hexString(ecx)) (Bytes.hexString(ecy)));
   st,fcke

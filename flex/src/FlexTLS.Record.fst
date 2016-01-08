@@ -3,7 +3,7 @@
 module FlexTLS.Record
 
 
-open Platform.Log
+open Log
 open Platform.Tcp
 open Platform.Bytes
 open Platform.Error
@@ -16,6 +16,9 @@ open FlexTLS.Constants
 open FlexTLS.State
 
 
+
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Get fragment size depending on the fragmentation policy
@@ -169,7 +172,7 @@ let send (ns:NetworkStream) (e:epoch) (k:Record.ConnectionState) (ct:ContentType
     si.protocol_version
   in
   let msgb,rem = splitPayloadFP payload fp in
-  Log.logTrace(sprintf "+++ Record : %s" (Bytes.hexString(msgb)));
+  Log.write log Trace "" (sprintf "+++ Record : %s" (Bytes.hexString(msgb)));
   let k,b = FlexRecord.encrypt (e,pv,k,ct,msgb) in
   match Tcp.write ns b with
   | Error x -> failwith x
@@ -193,7 +196,7 @@ let send_raw (ns:NetworkStream) (ct:ContentType) (pv:ProtocolVersion) (payload:b
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let b,rem = splitPayloadFP payload fp in
   let fragb = Record.makePacket ct pv b in
-  Log.logTrace(sprintf "+++ Record : %s" (Bytes.hexString(fragb)));
+  Log.write log Trace "" (sprintf "+++ Record : %s" (Bytes.hexString(fragb)));
   match Tcp.write ns fragb with
   | Error x -> failwith x
   | Correct() ->

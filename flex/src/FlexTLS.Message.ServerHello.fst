@@ -3,7 +3,7 @@
 module FlexTLS.Message.ServerHello
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Error
 
@@ -18,6 +18,9 @@ open FlexState
 open FlexHandshake
 
 
+
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Extract the ciphersuite from a FServerHello message record
@@ -126,7 +129,7 @@ let receive (st:state) (fch:FClientHello) (*?*)(nsc:nextSecurityContext) (*?*)(c
 /// <param name="st"> State of the current Handshake </param>
 /// <returns> Updated state * Updated next security context * FServerHello message record * Negotiated extensions </returns>
 let receive (st:state) (cextL:list<clientExtension>) (*?*)(checkVD:bool) (*?*)(isResuming:bool) : state * FServerHello * negotiatedExtensions =
-  Log.logInfo("# SERVER HELLO : FlexServerHello.receive");
+  Log.write log Info "TLS Message" ("# SERVER HELLO : FlexServerHello.receive");
   //  let checkVD = defaultArg checkVD true in
   //  let isResuming = defaultArg isResuming false in
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
@@ -163,13 +166,13 @@ let receive (st:state) (cextL:list<clientExtension>) (*?*)(checkVD:bool) (*?*)(i
                 }
       in
       let st = fillStateEpochInitPvIFIsEpochInit st fsh in
-      Log.lofDebug(sprintf "--- Protocol Version : %A" (getPV fsh));
-      Log.lofDebug(sprintf "--- Sid : %s" (Bytes.hexString(getSID fsh)));
-      Log.lofDebug(sprintf "--- Server Random : %s" (Bytes.hexString(fsh.rand)));
-      Log.logInfo(sprintf "--- Ciphersuite : %A" (getCiphersuite fsh));
-      Log.lofDebug(sprintf "--- Compression : %A" fsh.comp);
-      Log.lofDebug(sprintf "--- Extensions : %A" (getExt fsh));
-      Log.lofDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      Log.write log Debug "" (sprintf "--- Protocol Version : %A" (getPV fsh));
+      Log.write log Debug "" (sprintf "--- Sid : %s" (Bytes.hexString(getSID fsh)));
+      Log.write log Debug "" (sprintf "--- Server Random : %s" (Bytes.hexString(fsh.rand)));
+      Log.write log Info "" (sprintf "--- Ciphersuite : %A" (getCiphersuite fsh));
+      Log.write log Debug "" (sprintf "--- Compression : %A" fsh.comp);
+      Log.write log Debug "" (sprintf "--- Extensions : %A" (getExt fsh));
+      Log.write log Debug "" (sprintf "--- Payload : %s" (Bytes.hexString(payload)));
       st,fsh,negExts
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -315,15 +318,15 @@ let send (st:state) (si:SessionInfo) (cpv: ProtocolVersion) (csuites:list<cipher
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FServerHello message record </returns>
 let send (st:state) (si:SessionInfo) (sExtL:list<serverExtension>) (*?*)(fp:fragmentationPolicy) : state * FServerHello =
-  Log.logInfo("# SERVER HELLO : FlexServerHello.send");
+  Log.write log Info "TLS Message" ("# SERVER HELLO : FlexServerHello.send");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fsh = FlexServerHello.prepare(si,sExtL) in
   let st = FlexHandshake.send(st,fsh.payload,fp) in
   let ext = serverExtensionsBytes sExtL in
-  Log.lofDebug(sprintf "--- Protocol Version : %A" (getPV fsh));
-  Log.lofDebug(sprintf "--- Sid : %s" (Bytes.hexString(getSID fsh)));
-  Log.lofDebug(sprintf "--- Server Random : %s" (Bytes.hexString(fsh.rand)));
-  Log.logInfo(sprintf  "--- Ciphersuite : %A" (getCiphersuite fsh));
-  Log.lofDebug(sprintf "--- Compression : %A" fsh.comp);
-  Log.lofDebug(sprintf "--- Extensions : %A" (getExt fsh));
+  Log.write log Debug "" (sprintf "--- Protocol Version : %A" (getPV fsh));
+  Log.write log Debug "" (sprintf "--- Sid : %s" (Bytes.hexString(getSID fsh)));
+  Log.write log Debug "" (sprintf "--- Server Random : %s" (Bytes.hexString(fsh.rand)));
+  Log.write log Info "" (sprintf  "--- Ciphersuite : %A" (getCiphersuite fsh));
+  Log.write log Debug "" (sprintf "--- Compression : %A" fsh.comp);
+  Log.write log Debug "" (sprintf "--- Extensions : %A" (getExt fsh));
   st,fsh

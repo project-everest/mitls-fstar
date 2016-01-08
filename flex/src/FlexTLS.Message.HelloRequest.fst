@@ -3,7 +3,7 @@
 module FlexTLS.HelloRequest
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Error
 
@@ -15,13 +15,16 @@ open FlexTLS.Handshake
 
 
 
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
+
 /// <summary>
 /// Receive a HelloRequest message from the network stream
 /// </summary>
 /// <param name="st"> State of the current Handshake </param>
 /// <returns> Updated state * FHelloRequest message record </returns>
 let receive (st:state) : state * FHelloRequest =
-  Log.logInfo("# HELLO REQUEST : FlexHelloRequest.receive");
+  Log.write log Info "TLS Message" ("# HELLO REQUEST : FlexHelloRequest.receive");
   let old_log = st.hs_log in
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
   let st = {st with hs_log = old_log} in // don't log HelloRequests.
@@ -52,7 +55,7 @@ let prepare () : FHelloRequest =
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state * next security context * FHelloRequest message record </returns>
 let send (st:state) (*?*)(fp:fragmentationPolicy) : state * FHelloRequest =
-  Log.logInfo("# HELLO REQUEST : FlexHelloRequest.send");
+  Log.write log Info "TLS Message" ("# HELLO REQUEST : FlexHelloRequest.send");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let old_log = st.hs_log in
 
