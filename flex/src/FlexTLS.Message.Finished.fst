@@ -32,9 +32,9 @@ let log = Log.retrieve "FlexTLS.Log.General"
 let receive (st:state) (nsc:nextSecurityContext) (*?*)(role:Role) : state * FFinished =
   match role with
   | Some(role) ->
-    FlexFinished.receive (st,nsc.si.protocol_version,nsc.si.cipher_suite,verify_data=(FlexSecrets.makeVerifyData nsc.si nsc.secrets.ms role st.hs_log))
+    FlexFinished.receive st nsc.si.protocol_version nsc.si.cipher_suite (*verify_data=*)(FlexSecrets.makeVerifyData nsc.si nsc.secrets.ms role st.hs_log))
   | None ->
-    FlexFinished.receive (st,nsc.si.protocol_version,nsc.si.cipher_suite)
+    FlexFinished.receive st nsc.si.protocol_version nsc.si.cipher_suite
 
 /// <summary>
 /// Receive a Finished message from the network stream and check the verify_data on demand
@@ -45,8 +45,8 @@ let receive (st:state) (nsc:nextSecurityContext) (*?*)(role:Role) : state * FFin
 /// <param name="verify_data"> Optional verify_data to compare to received payload </param>
 /// <returns> Updated state * FFinished message record </returns>
 let receive (st:state) (pv:ProtocolVersion) (cs:cipherSuite) (*?*)(verify_data:bytes) : state * FFinished =
-  Log.write log Info "TLS Message" ("# FINISHED : FlexFinished.receive");
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  Log.write log Info "TLS Message" "# FINISHED : FlexFinished.receive";
+  let st,hstype,payload,to_log = FlexHandshake.receive st in
   match hstype with
   | HT_finished  ->
     // check that the received payload has a correct length
@@ -61,10 +61,10 @@ let receive (st:state) (pv:ProtocolVersion) (cs:cipherSuite) (*?*)(verify_data:b
       // check the verify_data if the user provided one
       (match verify_data with
       | None ->
-        Log.logDebug(sprintf "--- Verify data not checked")
+        Log.write log Debug "Warning" (sprintf "--- Verify data not checked")
       | Some(verify_data) ->
-        Log.logDebug(sprintf "--- Expected data : %A" (Bytes.hexString(verify_data)));
-        Log.logDebug(sprintf "--- Verify data: %A" (Bytes.hexString(payload)));
+        Log.write log Debug "Field" (sprintf "--- Expected data : %A" (Bytes.hexString verify_data));
+        Log.write log Debug "Field" (sprintf "--- Verify data: %A" (Bytes.hexString payload));
         if not (verify_data = payload) then failwith "Verify data do not match"
       );
       // no verify_data provided OR expected verify_data matches payload
@@ -72,7 +72,7 @@ let receive (st:state) (pv:ProtocolVersion) (cs:cipherSuite) (*?*)(verify_data:b
       let ff = { verify_data = payload;
                  payload = to_log;
                } in
-      Log.logDebug(sprintf "--- Payload : %A" (Bytes.hexString(ff.payload)));
+      Log.write log Debug "Payload" (sprintf "%A" (Bytes.hexString ff.payload));
       st,ff
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
 
@@ -98,7 +98,7 @@ let prepare (verify_data:bytes) : bytes * FFinished =
 /// <returns> Updated state * FFinished message record </returns>
 let send (st:state) (ff:FFinished) (*?*)(fp:fragmentationPolicy) : state * FFinished =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  FlexFinished.send(st,ff.verify_data,fp=fp)
+  FlexFinished.send st ff.verify_data fp
 
 /// <summary>
 /// Send a Finished message from the verify_data and send it to the network stream
@@ -109,8 +109,8 @@ let send (st:state) (ff:FFinished) (*?*)(fp:fragmentationPolicy) : state * FFini
 /// <returns> Updated state * FFinished message record </returns>
 let send (st:state) (nsc:nextSecurityContext) (role:Role) (*?*)(fp:fragmentationPolicy) : state * FFinished =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let verify_data =FlexSecrets.makeVerifyData nsc.si nsc.secrets.ms role st.hs_log in
-  FlexFinished.send (st,verify_data,fp)
+  let verify_data = FlexSecrets.makeVerifyData nsc.si nsc.secrets.ms role st.hs_log in
+  FlexFinished.send st verify_data fp
 
 /// <summary>
 /// Send a Finished message from the network stream and check the verify_data on demand
@@ -120,10 +120,10 @@ let send (st:state) (nsc:nextSecurityContext) (role:Role) (*?*)(fp:fragmentation
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FFinished message record </returns>
 let send (st:state) (verify_data:bytes) (*?*)(fp:fragmentationPolicy) : state * FFinished =
-  Log.write log Info "TLS Message" ("# FINISHED : FlexFinished.send");
+  Log.write log Info "TLS Message" "# FINISHED : FlexFinished.send";
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let payload,ff = FlexFinished.prepare verify_data in
-  Log.logDebug(sprintf "--- Verify data : %A" (Bytes.hexString(ff.verify_data)));
+  Log.write log Debug "" (sprintf "--- Verify data : %A" (Bytes.hexString ff.verify_data));
   let st = FlexState.updateOutgoingVerifyData st verify_data in
-  let st = FlexHandshake.send(st,payload,fp) in
+  let st = FlexHandshake.send st payload fp in
   st,ff
