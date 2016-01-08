@@ -58,7 +58,7 @@ let updateHandshakeLog (st:state) (log:bytes) :state =
 /// <returns> The state with the updated log </returns>
 let updateLog (st:state) (ct:TLSConstants.ContentType) (log:bytes) : state =
   match ct with
-  | TLSConstants.Handshake ->
+  | TLSConstants.Handshake -> 
     FlexState.updateHandshakeLog st log
   | TLSConstants.Application_data
   | TLSConstants.Alert
@@ -152,7 +152,7 @@ let updateIncomingBuffer (st:state) (ct:TLSConstants.ContentType) (buf:bytes) : 
 /// <param name="nsc"> Next security context being negotiated </param>
 /// <returns> Updated state </returns>
 let installReadKeys (st:state) (nsc:nextSecurityContext): state =
-  Log.write log Debug "" "@ Install Read Keys";
+  Log.write log Debug "Action" "@ Install Read Keys";
   let nextEpoch = FlexState.guessNextEpoch st.read.epoch nsc in
   let rk,_ = nsc.secrets.epoch_keys in
   let ark = StatefulLHAE.COERCE (mk_id nextEpoch) TLSInfo.Reader rk in
@@ -218,7 +218,7 @@ let updateOutgoingBuffer (st:state) (ct:TLSConstants.ContentType) (buf:bytes) =
 /// <param name="nsc"> Next security context being negotiated </param>
 /// <returns> Updated state </returns>
 let installWriteKeys (st:state) (nsc:nextSecurityContext) : state =
-  Log.write log Debug "" ("@ Install Write Keys");
+  Log.write log Debug "Action" ("@ Install Write Keys");
   let nextEpoch = FlexState.guessNextEpoch st.write.epoch nsc in
   let _,wk = nsc.secrets.epoch_keys in
   let awk = StatefulLHAE.COERCE (mk_id nextEpoch) TLSInfo.Writer wk in
@@ -233,12 +233,24 @@ let installWriteKeys (st:state) (nsc:nextSecurityContext) : state =
 /// </summary>
 /// <param name="st"> State of the current Handshake </param>
 let printBuffersStates (st:state) : unit =
-  Log.write log Debug "" ("@ Buffers status (if not empty)");
-  if not (st.read.hs_buffer = empty_bytes)   then Log.write log Debug "" (sprintf "--- Handshake input buffer is not empty : %s" (Bytes.hexString(st.read.hs_buffer))) else
-  if not (st.read.alert_buffer = empty_bytes) then Log.write log Debug "" (sprintf "--- Alert input buffer is not empty : %s" (Bytes.hexString(st.read.alert_buffer))) else
-  if not (st.read.appdata_buffer = empty_bytes) then Log.write log Debug "" (sprintf "--- App Data input buffer is not empty : %s" (Bytes.hexString(st.read.appdata_buffer))) else
-  if not (st.write.hs_buffer = empty_bytes)   then Log.write log Debug "" (sprintf "--- Handshake output buffer is not empty : %s" (Bytes.hexString(st.write.hs_buffer))) else
-  if not (st.write.alert_buffer = empty_bytes) then Log.write log Debug "" (sprintf "--- Alert output buffer is not empty : %s" (Bytes.hexString(st.write.alert_buffer))) else
-  if not (st.write.appdata_buffer = empty_bytes) then Log.write log Debug "" (sprintf "--- App Data output buffer is not empty : %s" (Bytes.hexString(st.write.appdata_buffer))) else
+  Log.write log Debug "Action" ("@ Buffers status (if not empty)");
+  if not (st.read.hs_buffer = empty_bytes) then 
+    Log.write log Debug "Warning" (sprintf "--- Handshake input buffer is not empty : %s" (Bytes.hexString st.read.hs_buffer))
+  else
+  if not (st.read.alert_buffer = empty_bytes) then 
+    Log.write log Debug "Warning" (sprintf "--- Alert input buffer is not empty : %s" (Bytes.hexString st.read.alert_buffer)) 
+  else
+  if not (st.read.appdata_buffer = empty_bytes) then 
+    Log.write log Debug "Warning" (sprintf "--- App Data input buffer is not empty : %s" (Bytes.hexString st.read.appdata_buffer)) 
+  else
+  if not (st.write.hs_buffer = empty_bytes) then 
+    Log.write log Debug "Warning" (sprintf "--- Handshake output buffer is not empty : %s" (Bytes.hexString st.write.hs_buffer)) 
+  else
+  if not (st.write.alert_buffer = empty_bytes) then 
+    Log.write log Debug "Warning" (sprintf "--- Alert output buffer is not empty : %s" (Bytes.hexString st.write.alert_buffer)) 
+  else
+  if not (st.write.appdata_buffer = empty_bytes) then
+    Log.write log Debug "Warning" (sprintf "--- App Data output buffer is not empty : %s" (Bytes.hexString st.write.appdata_buffer))
+  else
   ()
 
