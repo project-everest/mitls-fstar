@@ -3,9 +3,9 @@
     variables:LIB=../../../../FStar/lib
               PLATFORM=../../../libs/fst/Platform
               CORECRYPTO=../../../libs/fs/CoreCrypto;
-    other-files:$LIB/string.fst $LIB/classical.fst $LIB/list.fst $LIB/FStar.FunctionalExtensionality.fst
-                $LIB/FStar.Set.fsi $LIB/FStar.Heap.fst $LIB/FStar.ST.fst $LIB/mref.fst
-                $LIB/seq.fsi $LIB/seqproperties.fst $PLATFORM/Bytes.fst
+    other-files:$LIB/FStar.String.fst $LIB/FStar.Classical.fst $LIB/FStar.List.fst $LIB/FStar.FunctionalExtensionality.fst
+                $LIB/FStar.Set.fsi $LIB/FStar.Heap.fst $LIB/FStar.ST.fst $LIB/FStar.MRef.fst
+                $LIB/seq.fsi $LIB/FStar.SeqProperties.fst $PLATFORM/Bytes.fst
                 $CORECRYPTO/CoreKeys.fsi $CORECRYPTO/CoreSig.fsi hash.fst
 --*)
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)

@@ -43,7 +43,7 @@ TLSML= TLSError.cmx Nonce.cmx TLSConstants.cmx RSAKey.cmx DHGroup.cmx ECGroup.cm
 
 # FIXME TODO
 FStar_Seq.ml:
-	$(FSTAR_HOME)/bin/fstar $(FSTAR_HOME)/lib/seq.fst --codegen OCaml --use_native_int
+	$(FSTAR_HOME)/bin/fstar $(FSTAR_HOME)/lib/FStar.Seq.fst --codegen OCaml --use_native_int
 
 mllibs:
 	make -C $(PDIR_ML) clean all
