@@ -3,7 +3,7 @@
 module FlexTLS.Alert
 
 
-open Platform.Log
+open Log
 
 open MiTLS.Bytes
 open MiTLS.Alert
@@ -17,6 +17,8 @@ open FlexTLS.State
 open FlexTLS.Record
 
 
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Receive an Alert message from the network stream
@@ -24,7 +26,7 @@ open FlexTLS.Record
 /// <param name="st"> State of the current Handshake </param>
 /// <returns> Updated state * parsed alert description * alert bytes </returns>
 let receive (st:state) : state * alertDescription * bytes =
-  Log.logInfo("# ALERT : FlexTLS.Alert.receive");
+  Log.write log Info "Message" "# ALERT : FlexTLS.Alert.receive";
   let buf = st.read.alert_buffer in
   if length buf < 2 then
     let ct,pv,len,_ = FlexTLS.Record.parseFragmentHeader st in
@@ -50,8 +52,8 @@ let receive (st:state) : state * alertDescription * bytes =
     | Error(ad,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
     | Correct(ad) ->
       let st = FlexTLS.State.updateIncomingAlertBuffer st rem in
-      Log.logInfo(sprintf "--- Description : %A" ad);
-      Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(alb)));
+      Log.write log Info "Description" (sprintf "%A" ad);
+      Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString(alb)));
       (st,ad,alb)
 
 /// <summary>
@@ -62,11 +64,11 @@ let receive (st:state) : state * alertDescription * bytes =
 /// <param name="?fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded alert bytes </returns>
 let forward (stin:state) (stout:state) (*?*)(fp:fragmentationPolicy) : state * state * bytes =
-  Log.logInfo("# ALERT : FlexTLS.Alert.forward");
+  Log.write log Info "Message" "# ALERT : FlexTLS.Alert.forward";
   // let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let stin,ad,alb = FlexTLS.Alert.receive(stin) in
   let stout   = FlexTLS.Alert.send(stout,alb,fp) in
-  Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(alb)));
+  Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString(alb)));
   stin,stout,alb
 
 /// <summary>
@@ -88,7 +90,7 @@ let send (st:state) (ad:alertDescription) (*?*)(fp:fragmentationPolicy) : state 
 /// <param name="?fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
 let send (st:state) (payload:bytes) (*?*)(fp:fragmentationPolicy) : state =
-  Log.logInfo("# ALERT : FlexTLS.Alert.send");
+  Log.write log Info "Message" "# ALERT : FlexTLS.Alert.send";
   // let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let buf = st.write.alert_buffer @| payload in
   let st = FlexTLS.State.updateOutgoingAlertBuffer st buf in
@@ -99,5 +101,5 @@ let send (st:state) (payload:bytes) (*?*)(fp:fragmentationPolicy) : state =
       | Correct(ad) -> Log.logInfo(sprintf "--- Description : %A" ad)
     else ()
   in
-  Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+  Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString(payload)));
   FlexTLS.Record.send(st,Alert,fp)

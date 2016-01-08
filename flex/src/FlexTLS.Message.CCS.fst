@@ -3,8 +3,8 @@
 module FlexTLS.Message.CCS
 
 
+open Log
 open Platform
-open Platform.Log
 open Platform.Bytes
 open Platform.Error
 
@@ -16,6 +16,8 @@ open FlexTLS.State
 open FlexTLS.Record
 
 
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Receive CCS message from network stream
@@ -23,13 +25,13 @@ open FlexTLS.Record
 /// <param name="st"> State of the current Handshake </param>
 /// <returns> Updated state * CCS record * CCS byte </returns>
 let receive (st:state) : state * FChangeCipherSpecs * bytes =
-  Log.logInfo("# CCS : FlexCCS.receive");
+  Log.write log Info "TLS Message" ("# CCS : FlexCCS.receive");
   let ct,pv,len,_ = FlexRecord.parseFragmentHeader st in
   match ct with
   | Change_cipher_spec -> 
     let st,payload = FlexTLS.Record.getFragmentContent(st,Change_cipher_spec,len) in
     if payload = HandshakeMessages.CCSBytes then
-      (Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      (Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString(payload)));
       st,{payload = payload },payload)
     else
       failwith (perror __SOURCE_FILE__ __LINE__ "Unexpected CCS content")
@@ -44,10 +46,10 @@ let receive (st:state) : state * FChangeCipherSpecs * bytes =
 /// <param name="stout"> State of the current Handshake on the outgoing side </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded CCS byte </returns>
 let forward (stin:state) (stout:state) : state * state * bytes =
-  Log.logInfo("# CCS : FlexTLS.Message.CCS.forward");
+  Log.write log Info "" ("# CCS : FlexTLS.Message.CCS.forward");
   let stin,ccs,msgb  = FlexTLS.Message.CCS.receive(stin) in
   let stout,_ = FlexTLS.Message.CCS.send(stout) in
-  Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(msgb)));
+  Log.write log Debug "Payload" (sprintf "--- Payload : %s" (Bytes.hexString(msgb)));
   stin,stout,msgb
 
 /// <summary>
@@ -57,11 +59,11 @@ let forward (stin:state) (stout:state) : state * state * bytes =
 /// <param name="fccs"> Optional CCS message record </param>
 /// <returns> Updated state * CCS message record </returns>
 let send (st:state) (*?*)(fccs:FChangeCipherSpecs) : state * FChangeCipherSpecs =
-  Log.logInfo("# CCS : FlexCCS.send");
-  let fccs = defaultArg fccs FlexTLS.Message.Constants.nullFChangeCipherSpecs in
+  Log.write log Info "TLS Message" ("# CCS : FlexCCS.send");
+  //  let fccs = defaultArg fccs FlexTLS.Message.Constants.nullFChangeCipherSpecs in
   let record_write,_,_ = FlexTLS.Record.send( st.ns, st.write.epoch, st.write.record,
                                           Change_cipher_spec, fccs.payload,
                                           st.write.epoch_init_pv) in
   let st = FlexTLS.State.updateOutgoingRecord st record_write in
-  Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(fccs.payload)));
+  Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString(fccs.payload)));
   st,fccs
