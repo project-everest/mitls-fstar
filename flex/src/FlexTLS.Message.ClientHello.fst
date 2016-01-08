@@ -96,10 +96,10 @@ let fillStateEpochInitPvIFIsEpochInit (st:state) (fch:FClientHello) : state =
 /// <param name="checkVD"> Flag to enable or ignore the check on the verify data if the renegotiation indication is in the client extension list </param>
 /// <returns> Updated state * Next security context in negotiation * FClientHello message record </returns>
 let receive (st:state) (*?*)(checkVD:bool) : state * nextSecurityContext * FClientHello =
-  Log.write log Info "" ("# CLIENT HELLO : FlexClientHello.receive");
+  Log.write log Info "" "# CLIENT HELLO : FlexClientHello.receive";
   //  let checkVD = defaultArg checkVD true in
   let st = FlexState.resetHandshakeLog st in
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  let st,hstype,payload,to_log = FlexHandshake.receive st in
   match hstype with
   | HT_client_hello  -> (
     match parseClientHello payload with
@@ -141,13 +141,13 @@ let receive (st:state) (*?*)(checkVD:bool) : state * nextSecurityContext * FClie
                 }
       in
       let st = fillStateEpochInitPvIFIsEpochInit st fch in
-      Log.write log Debug "" (sprintf "--- Protocol Version : %A" (getPV fch));
-      Log.write log Debug "" (sprintf "--- Sid : %s" (Bytes.hexString(getSID fch)));
-      Log.write log Debug "" (sprintf "--- Client Random : %s" (Bytes.hexString(fch.rand)));
-      Log.write log Debug "" (sprintf "--- Ciphersuites : %A" (getCiphersuites fch));
-      Log.write log Debug "" (sprintf "--- Compressions : %A" (getCompressions fch));
-      Log.write log Debug "" (sprintf "--- Extensions : %A" (getExt fch));
-      Log.write log Debug "" (sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      Log.write log Debug "Field" (sprintf "--- Protocol Version : %A" (getPV fch));
+      Log.write log Debug "Field" (sprintf "--- Sid : %s" (Bytes.hexString(getSID fch)));
+      Log.write log Debug "Field" (sprintf "--- Client Random : %s" (Bytes.hexString(fch.rand)));
+      Log.write log Debug "Field" (sprintf "--- Ciphersuites : %A" (getCiphersuites fch));
+      Log.write log Debug "Field" (sprintf "--- Compressions : %A" (getCompressions fch));
+      Log.write log Debug "Field" (sprintf "--- Extensions : %A" (getExt fch));
+      Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString payload));
       (st,nsc,fch))
     | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
 
@@ -192,7 +192,7 @@ let send (st:state) (*?*)(fch:FClientHello) (*?*)(cfg:config) (*?*)(fp:fragmenta
       in
       TLSExtensions.prepareClientExtensions cfg shadow_ci st.write.verify_data
   in
-  let st,fch = FlexClientHello.send(st,(getPV fch),(getCiphersuites fch),(getCompressions fch),crand,(getSID fch),extl,fp) in
+  let st,fch = FlexClientHello.send st (getPV fch) (getCiphersuites fch) (getCompressions fch) crand (getSID fch) extl fp in
   let ext_offers =
     match TLSExtensions.getOfferedDHGroups (getExt fch) with
     | None -> []
@@ -218,15 +218,15 @@ let send (st:state) (*?*)(fch:FClientHello) (*?*)(cfg:config) (*?*)(fp:fragmenta
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Next security context in negotiation * FClientHello message record </returns>
 let send (st:state) (pv:ProtocolVersion) (css:list<cipherSuiteName>) (comps:list<Compression>) (crand:bytes) (csid:bytes) (cExtL:list<clientExtension>) (*?*)(fp:fragmentationPolicy) : state * FClientHello =
-  Log.write log Info "TLS Message" ("# CLIENT HELLO : FlexClientHello.send");
+  Log.write log Info "TLS Message" "# CLIENT HELLO : FlexClientHello.send";
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let st = FlexState.resetHandshakeLog st in
-  let fch = FlexClientHello.prepare(pv,css,comps,crand,csid,cExtL) in
-  let st = FlexHandshake.send(st,fch.payload,fp) in
-  Log.write log Debug "" (sprintf "--- Protocol Version : %A" (getPV fch));
-  Log.write log Debug "" (sprintf "--- Sid : %s" (Bytes.hexString(getSID fch)));
-  Log.write log Debug "" (sprintf "--- Client Random : %s" (Bytes.hexString(fch.rand)));
-  Log.write log Debug "" (sprintf "--- Ciphersuites : %A" (getCiphersuites fch));
-  Log.write log Debug "" (sprintf "--- Compressions : %A" (getCompressions fch));
-  Log.write log Debug "" (sprintf "--- Extensions : %A" (getExt fch));
+  let fch = FlexClientHello.prepare pv css comps crand csid cExtL in
+  let st = FlexHandshake.send st fch.payload fp in
+  Log.write log Debug "Field" (sprintf "--- Protocol Version : %A" (getPV fch));
+  Log.write log Debug "Field" (sprintf "--- Sid : %s" (Bytes.hexString (getSID fch)));
+  Log.write log Debug "Field" (sprintf "--- Client Random : %s" (Bytes.hexString fch.rand));
+  Log.write log Debug "Field" (sprintf "--- Ciphersuites : %A" (getCiphersuites fch));
+  Log.write log Debug "Field" (sprintf "--- Compressions : %A" (getCompressions fch));
+  Log.write log Debug "Field" (sprintf "--- Extensions : %A" (getExt fch));
   st,fch

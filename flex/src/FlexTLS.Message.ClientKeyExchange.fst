@@ -66,7 +66,7 @@ let installSessionHash si log =
 let receiveRSA (st:state) (nsc:nextSecurityContext) (fch:FClientHello) (*?*)(checkPV:bool) (*?*)(sk:RSAKey.sk) : state * nextSecurityContext * FClientKeyExchange =
   //  let checkPV = defaultArg checkPV true in
   let sk = defaultKey sk nsc.si.serverID in
-  FlexClientKeyExchange.receiveRSA(st,nsc,FlexClientHello.getPV fch,checkPV,sk)
+  FlexClientKeyExchange.receiveRSA st nsc FlexClientHello.getPV fch checkPV sk
 
 /// <summary>
 /// Receive RSA ClientKeyExchange from the network stream
@@ -80,11 +80,11 @@ let receiveRSA (st:state) (nsc:nextSecurityContext) (fch:FClientHello) (*?*)(che
 let receiveRSA (st:state) (nsc:nextSecurityContext) (pv:ProtocolVersion) (*?*)(checkPV:bool) (*?*)(sk:RSAKey.sk) : state * nextSecurityContext * FClientKeyExchange =
   //  let checkPV = defaultArg checkPV true in
   //  let sk = defaultKey sk nsc.si.serverID in
-  let st,fcke = FlexClientKeyExchange.receiveRSA(st,nsc.si.serverID,pv,checkPV,sk) in
+  let st,fcke = FlexClientKeyExchange.receiveRSA st nsc.si.serverID pv checkPV sk in
   let si = installSessionHash nsc.si st.hs_log in
   let epk = {nsc.secrets with kex = fcke.kex} in
   let nsc = {nsc with secrets = epk; si = si} in
-  let nsc = FlexSecrets.fillSecrets(st,Server,nsc) in
+  let nsc = FlexSecrets.fillSecrets st Server nsc in
   st,nsc,fcke
 
 /// <summary>
@@ -97,7 +97,7 @@ let receiveRSA (st:state) (nsc:nextSecurityContext) (pv:ProtocolVersion) (*?*)(c
 /// <param name="sk"> Optional secret key to be used for decrypting in place of the current one </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let receiveRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(checkPV:bool) (*?*)(sk:RSAKey.sk): state * FClientKeyExchange =
-  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveRSA");
+  Log.write log Info "TLS Message" "# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveRSA";
   //  let checkPV = defaultArg checkPV true in
   //  let sk = defaultKey sk certl in
   let pk =
@@ -106,7 +106,7 @@ let receiveRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(che
     | Correct(pk) -> pk
   in
   let si = {FlexConstants.nullSessionInfo with serverID = certl; protocol_version = pv} in
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  let st,hstype,payload,to_log = FlexHandshake.receive st in
   match hstype with
   | HT_client_key_exchange  ->
     (match parseClientKeyExchange_RSA si payload with
@@ -115,9 +115,9 @@ let receiveRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(che
       let pmsa = RSA.decrypt sk si si.protocol_version checkPV encPMS in
       let pmsb = PMS.leakRSA pk si.protocol_version pmsa in
       let kex = RSA(pmsb) in
-      let fcke : FClientKeyExchange = {kex = kex; payload = to_log } in
-      Log.write log Debug "" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
-      Log.write log Debug "" (sprintf "--- Payload : %A" (Bytes.hexString(payload)));
+      let fcke : FClientKeyExchange = {kex = kex; payload = to_log} in
+      Log.write log Debug "Field" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString pmsb));
+      Log.write log Debug "Payload" (sprintf "%A" (Bytes.hexString payload));
       st,fcke
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -130,7 +130,7 @@ let receiveRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(che
 /// <param name="fch"> Client hello containing the desired protocol version </param>
 /// <returns> FClientKeyExchange bytes * Updated state * FClientKeyExchange message record </returns>
 let prepareRSA (st:state) (nsc:nextSecurityContext) (fch:FClientHello) : bytes * state * nextSecurityContext * FClientKeyExchange =
-  FlexClientKeyExchange.prepareRSA(st,nsc,FlexClientHello.getPV fch)
+  FlexClientKeyExchange.prepareRSA st nsc (FlexClientHello.getPV fch)
 
 /// <summary>
 /// Prepare RSA ClientKeyExchange but will not send it to the network stream
@@ -144,14 +144,14 @@ let prepareRSA (st:state) (nsc:nextSecurityContext) (pv:ProtocolVersion) : bytes
     match nsc.secrets.kex with
     | RSA(pms) ->
       if pms = empty_bytes then
-        FlexClientKeyExchange.prepareRSA(st,nsc.si.serverID,pv)
+        FlexClientKeyExchange.prepareRSA st nsc.si.serverID pv
       else
-        FlexClientKeyExchange.prepareRSA(st,nsc.si.serverID,pv,pms)
+        FlexClientKeyExchange.prepareRSA st nsc.si.serverID pv pms
     | _ -> failwith (perror __SOURCE_FILE__ __LINE__ "RSA kex expected")
   in
   let epk = {nsc.secrets with kex = fcke.kex} in
   let nsc = {nsc with secrets = epk} in
-  let nsc = FlexSecrets.fillSecrets(st,Client,nsc) in
+  let nsc = FlexSecrets.fillSecrets st Client nsc in
   payload,st,nsc,fcke
 
 /// <summary>
@@ -197,7 +197,7 @@ let prepareRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(pms
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let sendRSA (st:state) (nsc:nextSecurityContext) (fch:FClientHello) (*?*)(fp:fragmentationPolicy): state * nextSecurityContext * FClientKeyExchange =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  FlexClientKeyExchange.sendRSA(st,nsc,FlexClientHello.getPV fch,fp)
+  FlexClientKeyExchange.sendRSA st nsc (FlexClientHello.getPV fch) fp
 
 /// <summary>
 /// Overload : Send RSA ClientKeyExchange to the network stream,
@@ -214,15 +214,15 @@ let sendRSA (st:state) (nsc:nextSecurityContext) (pv:ProtocolVersion) (*?*)(fp:f
     match nsc.secrets.kex with
     | RSA(pms) ->
       if pms = empty_bytes then
-        FlexClientKeyExchange.sendRSA(st,nsc.si.serverID,pv,fp=fp)
+        FlexClientKeyExchange.sendRSA st nsc.si.serverID pv fp
       else
-        FlexClientKeyExchange.sendRSA(st,nsc.si.serverID,pv,pms,fp)
+        FlexClientKeyExchange.sendRSA st nsc.si.serverID pv pms fp
     | _ -> failwith (perror __SOURCE_FILE__ __LINE__ "RSA kex expected")
   in
   let si = installSessionHash nsc.si st.hs_log in
   let epk = {nsc.secrets with kex = fcke.kex} in
   let nsc = {nsc with secrets = epk; si = si} in
-  let nsc = FlexSecrets.fillSecrets(st,Client,nsc) in
+  let nsc = FlexSecrets.fillSecrets st Client nsc in
   st,nsc,fcke
 
 /// <summary>
@@ -235,7 +235,7 @@ let sendRSA (st:state) (nsc:nextSecurityContext) (pv:ProtocolVersion) (*?*)(fp:f
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let sendRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(pms:bytes) (*?*)(fp:fragmentationPolicy) : state * FClientKeyExchange =
-  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendRSA");
+  Log.write log Info "TLS Message" "# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendRSA";
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   if certl.IsEmpty then
     failwith (perror __SOURCE_FILE__ __LINE__  "Server certificate should always be present with a RSA signing cipher suite.")
@@ -256,10 +256,10 @@ let sendRSA (st:state) (certl:list<Cert.cert>) (pv:ProtocolVersion) (*?*)(pms:by
       in
       let encpms = RSA.encrypt pk pv pms in
       let payload = clientKeyExchangeBytes_RSA si encpms in
-      let st = FlexHandshake.send(st,payload,fp) in
+      let st = FlexHandshake.send st payload fp in
       let kex = RSA(pmsb) in
       let fcke : FClientKeyExchange = {kex = kex; payload = payload } in
-      Log.write log Debug "" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
+      Log.write log Debug "Secret" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pmsb)));
       st,fcke
 
 (*** Ephemeral Diffie-Hellman ***)
@@ -276,7 +276,7 @@ let receiveDHE (st:state) (fske:FServerKeyExchange) (*?*)(nsc:nextSecurityContex
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
-  FlexClientKeyExchange.receiveDHE(st,nsc)
+  FlexClientKeyExchange.receiveDHE st nsc
 
 /// <summary>
 /// Receive DHE ClientKeyExchange from the network stream
@@ -290,11 +290,11 @@ let receiveDHE (st:state) (nsc:nextSecurityContext) : state * nextSecurityContex
     | DH(kexdh) -> kexdh
     | _         -> failwith (perror __SOURCE_FILE__ __LINE__  "key exchange mechanism should be DHE")
   in
-  let st,fcke = FlexClientKeyExchange.receiveDHE(st,kexdh) in
+  let st,fcke = FlexClientKeyExchange.receiveDHE st kexdh in
   let si = installSessionHash nsc.si st.hs_log in
   let epk = {nsc.secrets with kex = fcke.kex} in
   let nsc = {nsc with secrets = epk; si = si} in
-  let nsc = FlexSecrets.fillSecrets(st,Server,nsc) in
+  let nsc = FlexSecrets.fillSecrets st Server nsc in
   st,nsc,fcke
 
 /// <summary>
@@ -304,10 +304,10 @@ let receiveDHE (st:state) (nsc:nextSecurityContext) : state * nextSecurityContex
 /// <param name="kexdh"> Key Exchange record containing Diffie-Hellman parameters </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let receiveDHE (st:state) (kexdh:kexDH) : state * FClientKeyExchange =
-  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveDHE");
+  Log.write log Info "TLS Message" "# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveDHE";
   let (p,g),gx = kexdh.pg,kexdh.gx in
   let dhp = DHP_P {FlexConstants.defaultDHParams with dhp = p; dhg = g} in
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  let st,hstype,payload,to_log = FlexHandshake.receive st in
   match hstype with
   | HT_client_key_exchange  ->
     (match HandshakeMessages.parseClientKEXExplicit_DH dhp payload with
@@ -316,8 +316,8 @@ let receiveDHE (st:state) (kexdh:kexDH) : state * FClientKeyExchange =
       let gy = match gy with {dhe_p = Some x; dhe_ec = None} -> x | _ -> failwith "(impossible)" in
       let kexdh = { kexdh with gy = gy } in
       let fcke = { kex = DH(kexdh); payload = to_log } in
-      Log.write log Debug "" (sprintf "--- Public Exponent : %s" (Bytes.hexString(gy)));
-      Log.write log Debug "" (sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      Log.write log Debug "Field" (sprintf "--- Public Exponent : %s" (Bytes.hexString gy));
+      Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString payload));
       st,fcke
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -327,6 +327,7 @@ let receiveDHE (st:state) (kexdh:kexDH) : state * FClientKeyExchange =
 /// </summary>
 /// <param name="kexdh"> Key Exchange record containing necessary Diffie-Hellman parameters </param>
 /// <returns> FClientKeyExchange message bytes * FClientKeyExchange record * </returns>
+// BB FIXME : This is calling the .NET Framework
 let prepareDHE (kexdh:kexDH) : FClientKeyExchange * kexDH =
   let p,g = kexdh.pg in
   // We override the public and secret exponent if one of the two is empty
@@ -352,7 +353,7 @@ let sendDHE (st:state) (fske:FServerKeyExchange) (*?*)(nsc:nextSecurityContext) 
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
-  FlexClientKeyExchange.sendDHE(st,nsc,fp)
+  FlexClientKeyExchange.sendDHE st nsc fp
 
 /// <summary>
 /// Overload : Send DHE ClientKeyExchange to the network stream
@@ -368,11 +369,11 @@ let sendDHE (st:state) (nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy) :
     | DH(kexdh) -> kexdh
     | _         -> failwith (perror __SOURCE_FILE__ __LINE__  "key exchange mechanism should be DHE")
   in
-  let st,fcke = FlexClientKeyExchange.sendDHE(st,kexdh,fp) in
+  let st,fcke = FlexClientKeyExchange.sendDHE st kexdh fp in
   let si = installSessionHash nsc.si st.hs_log in
   let epk = { nsc.secrets with kex = fcke.kex } in
   let nsc = { nsc with secrets = epk; si = si } in
-  let nsc = FlexSecrets.fillSecrets(st,Client,nsc) in
+  let nsc = FlexSecrets.fillSecrets st Client nsc in
   st,nsc,fcke
 
 /// <summary>
@@ -385,10 +386,10 @@ let sendDHE (st:state) (nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy) :
 let sendDHE (st:state) (kexdh:kexDH) (*?*)(fp:fragmentationPolicy) : state * FClientKeyExchange =
   Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendDHE");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let fcke,dh = FlexClientKeyExchange.prepareDHE(kexdh) in
-  let st = FlexHandshake.send(st,fcke.payload,fp) in
-  Log.write log Debug "" (sprintf "--- SECRET Value : %s" (Bytes.hexString(dh.x)));
-  Log.write log Debug "" (sprintf "--- Public Exponent : %s" (Bytes.hexString(dh.gx)));
+  let fcke,dh = FlexClientKeyExchange.prepareDHE kexdh in
+  let st = FlexHandshake.send st fcke.payload fp in
+  Log.write log Debug "Secret" (sprintf "--- SECRET Value : %s" (Bytes.hexString(dh.x)));
+  Log.write log Debug "Field" (sprintf "--- Public Exponent : %s" (Bytes.hexString(dh.gx)));
   st,fcke
 
 
@@ -405,7 +406,7 @@ let receiveECDHE (st:state) (fske:FServerKeyExchange) (*?*)(nsc:nextSecurityCont
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
-  FlexClientKeyExchange.receiveECDHE(st,nsc)
+  FlexClientKeyExchange.receiveECDHE st nsc
 
 /// <summary>
 /// Receive ECDHE ClientKeyExchange from the network stream
@@ -419,11 +420,11 @@ let receiveECDHE (st:state) (nsc:nextSecurityContext) : state * nextSecurityCont
     | ECDH(kexecdh) -> kexecdh
     | _         -> failwith (perror __SOURCE_FILE__ __LINE__  "key exchange mechanism should be ECDHE")
   in
-  let st,fcke = FlexClientKeyExchange.receiveECDHE(st,kexecdh) in
+  let st,fcke = FlexClientKeyExchange.receiveECDHE st kexecdh in
   let si = installSessionHash nsc.si st.hs_log in
   let epk = {nsc.secrets with kex = fcke.kex} in
   let nsc = {nsc with secrets = epk; si = si} in
-  let nsc = FlexSecrets.fillSecrets(st,Server,nsc) in
+  let nsc = FlexSecrets.fillSecrets st Server nsc in
   st,nsc,fcke
 
 /// <summary>
@@ -433,9 +434,9 @@ let receiveECDHE (st:state) (nsc:nextSecurityContext) : state * nextSecurityCont
 /// <param name="kexecdh"> Key Exchange record containing EC Diffie-Hellman parameters </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let receiveECDHE (st:state) (kexecdh:kexECDH) : state * FClientKeyExchange =
-  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveECDHE");
+  Log.write log Info "TLS Message" "# CLIENT KEY EXCHANGE : FlexClientKeyExchange.receiveECDHE";
   let parameters = CommonDH.DHP_EC(ECGroup.getParams kexecdh.curve) in
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  let st,hstype,payload,to_log = FlexHandshake.receive st in
   match hstype with
   | HT_client_key_exchange  ->
     (match HandshakeMessages.parseClientKEXExplicit_DH parameters payload with
@@ -444,8 +445,8 @@ let receiveECDHE (st:state) (kexecdh:kexECDH) : state * FClientKeyExchange =
       let ecp_y = match ecp_y with {dhe_ec = Some x; dhe_p = None} -> x | _ -> failwith "(impossible)" in
       let kexecdh = { kexecdh with ecp_y = (ecp_y.ecx, ecp_y.ecy) } in
       let fcke = { kex = ECDH(kexecdh); payload = to_log } in
-      Log.write log Debug "" (sprintf "--- Public ECPoint : %s ; %s" (Bytes.hexString(ecp_y.ecx)) (Bytes.hexString(ecp_y.ecy)));
-      Log.write log Debug "" (sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      Log.write log Debug "Field" (sprintf "--- Public ECPoint : %s ; %s" (Bytes.hexString ecp_y.ecx) (Bytes.hexString ecp_y.ecy));
+      Log.write log Debug "Payload" (sprintf "--- Payload : %s" (Bytes.hexString payload));
       st,fcke
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -485,7 +486,7 @@ let sendECDHE (st:state) (fske:FServerKeyExchange) (*?*)(nsc:nextSecurityContext
   let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let epk = {nsc.secrets with kex = fske.kex} in
   let nsc = {nsc with secrets = epk} in
-  FlexClientKeyExchange.sendECDHE(st,nsc,fp)
+  FlexClientKeyExchange.sendECDHE st nsc fp
 
 /// <summary>
 /// Overload : Send ECDHE ClientKeyExchange to the network stream
@@ -501,11 +502,11 @@ let sendECDHE (st:state) (nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy)
     | ECDH(kexecdh) -> kexecdh
     | _         -> failwith (perror __SOURCE_FILE__ __LINE__  "key exchange mechanism should be ECDHE")
   in
-  let st,fcke = FlexClientKeyExchange.sendECDHE(st,kexecdh,fp) in
+  let st,fcke = FlexClientKeyExchange.sendECDHE st kexecdh fp in
   //let si = installSessionHash nsc.si st.hs_log in
   let epk = { nsc.secrets with kex = fcke.kex } in
   let nsc = { nsc with secrets = epk; si = nsc.si } in
-  let nsc = FlexSecrets.fillSecrets(st,Client,nsc) in
+  let nsc = FlexSecrets.fillSecrets st Client nsc in
   st,nsc,fcke
 
 /// <summary>
@@ -516,13 +517,13 @@ let sendECDHE (st:state) (nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy)
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FClientKeyExchange message record </returns>
 let sendECDHE (st:state) (kexecdh:kexECDH) (*?*)(fp:fragmentationPolicy) : state * FClientKeyExchange =
-  Log.write log Info "TLS Message" ("# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendECDHE");
+  Log.write log Info "TLS Message" "# CLIENT KEY EXCHANGE : FlexClientKeyExchange.sendECDHE";
   let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
 
-  let fcke,ecdh = FlexClientKeyExchange.prepareECDHE(kexecdh) in
-  let st = FlexHandshake.send(st,fcke.payload,fp) in
+  let fcke,ecdh = FlexClientKeyExchange.prepareECDHE kexecdh in
+  let st = FlexHandshake.send st fcke.payload fp in
 
   let ecx, ecy = ecdh.ecp_x in
-  Log.write log Debug "" (sprintf "--- SECRET Value : %s" (Bytes.hexString(ecdh.x)));
-  Log.write log Debug "" (sprintf "--- Public Point : %s ; %s" (Bytes.hexString(ecx)) (Bytes.hexString(ecy)));
+  Log.write log Debug "Secret" (sprintf "--- SECRET Value : %s" (Bytes.hexString ecdh.x));
+  Log.write log Debug "Field" (sprintf "--- Public Point : %s ; %s" (Bytes.hexString ecx) (Bytes.hexString ecy));
   st,fcke
