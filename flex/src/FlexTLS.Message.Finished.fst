@@ -3,7 +3,7 @@
 module FlexTLS.Message.Finished
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Error
 
@@ -18,6 +18,9 @@ open FlexTLS.Handshake
 open FlexTLS.Secrets
 
 
+
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Receive a Finished message from the network stream and check the verify_data on demand
@@ -42,7 +45,7 @@ let receive (st:state) (nsc:nextSecurityContext) (*?*)(role:Role) : state * FFin
 /// <param name="verify_data"> Optional verify_data to compare to received payload </param>
 /// <returns> Updated state * FFinished message record </returns>
 let receive (st:state) (pv:ProtocolVersion) (cs:cipherSuite) (*?*)(verify_data:bytes) : state * FFinished =
-  Log.logInfo("# FINISHED : FlexFinished.receive");
+  Log.write log Info "TLS Message" ("# FINISHED : FlexFinished.receive");
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
   match hstype with
   | HT_finished  ->
@@ -117,7 +120,7 @@ let send (st:state) (nsc:nextSecurityContext) (role:Role) (*?*)(fp:fragmentation
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FFinished message record </returns>
 let send (st:state) (verify_data:bytes) (*?*)(fp:fragmentationPolicy) : state * FFinished =
-  Log.logInfo("# FINISHED : FlexFinished.send");
+  Log.write log Info "TLS Message" ("# FINISHED : FlexFinished.send");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let payload,ff = FlexFinished.prepare verify_data in
   Log.logDebug(sprintf "--- Verify data : %A" (Bytes.hexString(ff.verify_data)));

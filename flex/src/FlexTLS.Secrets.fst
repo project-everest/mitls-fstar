@@ -3,7 +3,7 @@
 module FlexTLS.Secrets
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Error
 
@@ -15,6 +15,9 @@ open FlexConstants
 open FlexState
 
 
+
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Coerce a DH parameter from bytes to DH.secret abstract type
@@ -109,7 +112,7 @@ let makeVerifyData (si:SessionInfo) (ms:bytes) (role:Role) (log:bytes) : bytes =
 /// <param name="nsc"> Next security context being negotiated </param>
 /// <returns> Updated next security context </returns>
 let fillSecrets (st:state) (role:Role) (nsc:nextSecurityContext) : nextSecurityContext =
-  Log.logDebug("@ Fill Secrets");
+  Log.write log Debug "" "@ Fill Secrets";
   let er = FlexState.guessNextEpoch st.read.epoch  nsc in
   let ew = FlexState.guessNextEpoch st.write.epoch nsc in
 
@@ -124,8 +127,8 @@ let fillSecrets (st:state) (role:Role) (nsc:nextSecurityContext) : nextSecurityC
   let secrets = if nsc.secrets.epoch_keys = (empty_bytes,empty_bytes) then FlexSecrets.ms_to_keys er ew role ms else nsc.secrets.epoch_keys in
   let rkeys,wkeys = secrets in
   let epk_secrets = {nsc.secrets with pms = pms; ms = ms; epoch_keys = secrets} in
-  Log.logDebug(sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pms)));
-  Log.logDebug(sprintf "--- Master Secret : %A" (Bytes.hexString(ms)));
-  Log.logDebug(sprintf "--- Reading Keys : %A" (Bytes.hexString(rkeys)));
-  Log.logDebug(sprintf "--- Writing Keys : %A" (Bytes.hexString(wkeys)));
+  Log.write log Debug "" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pms)));
+  Log.write log Debug "" (sprintf "--- Master Secret : %A" (Bytes.hexString(ms)));
+  Log.write log Debug "" (sprintf "--- Reading Keys : %A" (Bytes.hexString(rkeys)));
+  Log.write log Debug "" (sprintf "--- Writing Keys : %A" (Bytes.hexString(wkeys)));
   { nsc with secrets = epk_secrets }
