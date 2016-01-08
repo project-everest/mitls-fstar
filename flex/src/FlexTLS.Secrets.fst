@@ -127,8 +127,8 @@ let fillSecrets (st:state) (role:Role) (nsc:nextSecurityContext) : nextSecurityC
   let secrets = if nsc.secrets.epoch_keys = (empty_bytes,empty_bytes) then FlexSecrets.ms_to_keys er ew role ms else nsc.secrets.epoch_keys in
   let rkeys,wkeys = secrets in
   let epk_secrets = {nsc.secrets with pms = pms; ms = ms; epoch_keys = secrets} in
-  Log.write log Debug "" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pms)));
-  Log.write log Debug "" (sprintf "--- Master Secret : %A" (Bytes.hexString(ms)));
-  Log.write log Debug "" (sprintf "--- Reading Keys : %A" (Bytes.hexString(rkeys)));
-  Log.write log Debug "" (sprintf "--- Writing Keys : %A" (Bytes.hexString(wkeys)));
+  Log.write log Debug "Secret" (sprintf "--- Pre Master Secret : %A" (Bytes.hexString(pms)));
+  Log.write log Debug "Secret" (sprintf "--- Master Secret : %A" (Bytes.hexString(ms)));
+  Log.write log Debug "Secret" (sprintf "--- Reading Keys : %A" (Bytes.hexString(rkeys)));
+  Log.write log Debug "Secret" (sprintf "--- Writing Keys : %A" (Bytes.hexString(wkeys)));
   { nsc with secrets = epk_secrets }

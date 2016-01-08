@@ -35,6 +35,7 @@ let fs_of_fp (fp:fragmentationPolicy) : int =
 /// <param name="bytes"> Data bytes to be split </param>
 /// <param name="fp"> Fragmentation policy </param>
 /// <returns> Fragment of the chosen size * remaining unsplit data bytes </returns>
+// BB FIXME This function uses the .NET Framework
 let splitPayloadFP (b:bytes) (fp:fragmentationPolicy) : bytes * bytes =
   let len = System.Math.Min((length b),(fs_of_fp fp)) in
   Bytes.split b len
@@ -85,7 +86,7 @@ let getFragmentContent (st:state) (ct:ContentType) (len:int) : state * bytes =
       let id = TLSInfo.mk_id st.read.epoch in
       let fragb = TLSFragment.reprFragment id ct rg frag in
       let st = FlexState.updateLog st ct fragb in
-      Log.logTrace(sprintf "+++ Record : %s" (Bytes.hexString(fragb)));
+      Log.logTrace(sprintf "+++ Record : %s" (Bytes.hexString fragb));
       (st,fragb)
 
 /// <summary>
@@ -95,7 +96,7 @@ let getFragmentContent (st:state) (ct:ContentType) (len:int) : state * bytes =
 /// <returns> State * ContentType * ProtocolVersion * Lenght of the record payload * Fragment header bytes * Fragment payload bytes </returns>
 let receive (st:state) : state * ContentType * ProtocolVersion * int * bytes * bytes =
   let ct,pv,len,header = FlexRecord.parseFragmentHeader st in
-  let st,payload = FlexRecord.getFragmentContent (st,ct,len) in
+  let st,payload = FlexRecord.getFragmentContent st ct len in
   st,ct,pv,len,header,payload
 
 /// <summary>
@@ -126,10 +127,10 @@ let encrypt (e:epoch) (pv:ProtocolVersion) (k:Record.ConnectionState) (ct:Conten
 /// <returns> Updated incoming state * Updated outgoing state * forwarded record bytes </returns>
 let forward (stin:state) (stout:state) (*?*)(fp:fragmentationPolicy) : state * state * bytes =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let ct,pv,len,header = FlexRecord.parseFragmentHeader(stin) in
-  let stin,payload = FlexRecord.getFragmentContent(stin,ct,len) in
+  let ct,pv,len,header = FlexRecord.parseFragmentHeader stin in
+  let stin,payload = FlexRecord.getFragmentContent stin ct len in
   let stout = FlexState.updateOutgoingBuffer stout ct payload in
-  let stout = FlexRecord.send(stout,ct,fp) in
+  let stout = FlexRecord.send stout ct fp in
   stin,stout,payload
 
 /// <summary>
@@ -143,7 +144,7 @@ let forward (stin:state) (stout:state) (*?*)(fp:fragmentationPolicy) : state * s
 let send (st:state) (ct:ContentType) (*?*)(fp:fragmentationPolicy) : state =
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let payload = pickCTBuffer st.write ct in
-  let k,b,rem = FlexRecord.send(st.ns,st.write.epoch,st.write.record,ct,payload,st.write.epoch_init_pv,fp) in
+  let k,b,rem = FlexRecord.send st.ns st.write.epoch st.write.record ct payload st.write.epoch_init_pv fp in
   let st = FlexState.updateLog st ct b in
   let st = FlexState.updateOutgoingBuffer st ct rem in
   let st = FlexState.updateOutgoingRecord st k in
@@ -172,15 +173,15 @@ let send (ns:NetworkStream) (e:epoch) (k:Record.ConnectionState) (ct:ContentType
     si.protocol_version
   in
   let msgb,rem = splitPayloadFP payload fp in
-  Log.write log Trace "" (sprintf "+++ Record : %s" (Bytes.hexString(msgb)));
-  let k,b = FlexRecord.encrypt (e,pv,k,ct,msgb) in
+  Log.write log Trace "Record Payload" (sprintf "+++ Record : %s" (Bytes.hexString msgb));
+  let k,b = FlexRecord.encrypt e pv k ct msgb in
   match Tcp.write ns b with
   | Error x -> failwith x
   | Correct() ->
     match fp with
     | All(fs) ->
       if rem = empty_bytes then (k,msgb,rem) else
-        let k,b,rem = FlexRecord.send(ns,e,k,ct,rem,pv,fp) in (k,msgb@|b,rem)
+        let k,b,rem = FlexRecord.send ns e k ct rem pv fp in k,(msgb @| b),rem
     | One(fs) -> (k,msgb,rem)
 
 /// <summary>
@@ -196,11 +197,11 @@ let send_raw (ns:NetworkStream) (ct:ContentType) (pv:ProtocolVersion) (payload:b
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let b,rem = splitPayloadFP payload fp in
   let fragb = Record.makePacket ct pv b in
-  Log.write log Trace "" (sprintf "+++ Record : %s" (Bytes.hexString(fragb)));
+  Log.write log Trace "Record Payload" (sprintf "+++ Record : %s" (Bytes.hexString fragb));
   match Tcp.write ns fragb with
   | Error x -> failwith x
   | Correct() ->
     match fp with
     | All(fs) ->
-      if rem = empty_bytes then empty_bytes else FlexRecord.send_raw(ns,ct,pv,rem,fp)
+      if rem = empty_bytes then empty_bytes else FlexRecord.send_raw ns ct pv rem fp
     | One(fs) -> rem
