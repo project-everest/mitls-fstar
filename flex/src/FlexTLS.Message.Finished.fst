@@ -1,4 +1,4 @@
-(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+(* Copyright (C) 2012--2016 Microsoft Research and INRIA *)
 
 module FlexTLS.Message.Finished
 
