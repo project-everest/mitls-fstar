@@ -67,10 +67,8 @@ let serverOpenTcpConnection (address:string) (*?*)(cn:string) (*?*)(port:int) (*
   Log.write log Info "TCP Event" (sprintf "Listening on %s:%d", address, port);
   let l    = Tcp.listen address port in
   match timeout with
-  | None ->
-    FlexTLS.Connection.serverOpenTcpConnection(l,cn,pv)
-  | Some(timeout) ->
-    FlexTLS.Connection.serverOpenTcpConnection(l,cn,pv,timeout)
+  | None          -> FlexTLS.Connection.serverOpenTcpConnection l cn pv
+  | Some(timeout) -> FlexTLS.Connection.serverOpenTcpConnection l cn pv timeout
 
 /// <summary>
 /// Server role, accepts a tcp connection from a client
@@ -89,7 +87,7 @@ let serverOpenTcpConnection (l:TcpListener) (cn:string) (*?*)(pv:ProtocolVersion
     | Some(t) -> Tcp.acceptTimeout t l
   in
   Log.write log Debug "TCP Event" ("Client accepted TCP connection");
-  let st = FlexTLS.Connection.init (Server,ns,pv) in
+  let st = FlexTLS.Connection.init Server ns pv in
   (st,cfg)
 
 /// <summary>
@@ -111,7 +109,7 @@ let clientOpenTcpConnection (address:string) (*?*)(cn:string) (*?*)(port:int) (*
     | None -> Tcp.connect address port
     | Some(t) -> Tcp.connectTimeout t address port
   in
-  let st = FlexTLS.Connection.init (Client, ns) in
+  let st = FlexTLS.Connection.init Client ns in
   Log.write log Debug "TCP Event" "Done";
   (st,cfg)
   
@@ -144,12 +142,12 @@ let mitmOpenTcpConnections (listen_address:string) (server_address:string) (*?*)
   Log.write log Info "TCP Event" (sprintf "Listening on %s:%s as %d", listen_address, listen_cn, listen_port);
   let l   = Tcp.listen listen_address listen_port in
   let sns = Tcp.accept l in
-  let sst = FlexTLS.Connection.init (Server,sns,listen_pv) in
+  let sst = FlexTLS.Connection.init  Server sns listen_pv in
   Log.write log Debug "TCP Event" "Client accepted TCP connection";
-  Log.write log Info "TCP Event" (sprintf "Connecting to %s:%d",server_address,server_port);
+  Log.write log Info "TCP Event" (sprintf "Connecting to %s:%d", server_address, server_port);
   let cns = Tcp.connect server_address server_port in
-  let cst = FlexTLS.Connection.init (Client, cns) in
-  Log.write log Debug "TCP Event" ("Done");
+  let cst = FlexTLS.Connection.init Client cns in
+  Log.write log Debug "TCP Event" "Done";
   (sst,scfg,cst,ccfg)
 
 /// <summary>
@@ -157,6 +155,7 @@ let mitmOpenTcpConnections (listen_address:string) (server_address:string) (*?*)
 /// </summary>
 /// <param name="src"> Source network stream </param>
 /// <param name="dst"> Destination network stream </param>
+// BB FIXME : This is calling the .NET Framework
 let asyncForward (src:System.IO.Stream) (dst:System.IO.Stream) : Async<unit> =
   async {
     let  b = Array.zeroCreate 2048 in
@@ -173,6 +172,7 @@ let asyncForward (src:System.IO.Stream) (dst:System.IO.Stream) : Async<unit> =
 /// </summary>
 /// <param name="a"> Network stream A </param>
 /// <param name="b"> Network stream B </param>
+// BB FIXME : This is calling the .NET Framework
 let passthrough (a:NetworkStream) (b:NetworkStream) : unit =
   let a = Tcp.getStream a in
   let b = Tcp.getStream b in

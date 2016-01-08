@@ -27,16 +27,16 @@ let log = Log.retrieve "FlexTLS.Log.General"
 /// <returns> PreHandshakeType * payload * full message * remainder of the buffer </returns>
 let parseHSMessage (buf:bytes) =
   if length buf >= 4 then
-    let (hstypeb,rem) = Bytes.split buf 1 in
+    let hstypeb,rem = Bytes.split buf 1 in
     match HandshakeMessages.parseHt hstypeb with
     | Error (_,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
     | Correct(hst) ->
-      let (lenb,rem) = Bytes.split rem 3 in
+      let lenb,rem = Bytes.split rem 3 in
       let len = int_of_bytes lenb in
       if length rem < len then
         Error("Given buffer too small")
       else
-        let (payload,rem) = Bytes.split rem len in
+        let payload,rem = Bytes.split rem len in
         let to_log = hstypeb @| lenb @| payload in
         Correct (hst,payload,to_log,rem)
   else
@@ -54,13 +54,13 @@ let receive (st:state) : state * HandshakeMessages.PreHandshakeType * bytes * by
     (let ct,pv,len,_ = FlexTLS.Record.parseFragmentHeader st in
     match ct with
     | Handshake ->
-      let st,b = FlexTLS.Record.getFragmentContent (st, ct, len) in
+      let st,b = FlexTLS.Record.getFragmentContent st ct len in
       let buf = buf @| b in
       let st = FlexTLS.State.updateIncomingHSBuffer st buf in
       FlexTLS.Handshake.receive st
     | _ ->
-      let _,b = FlexTLS.Record.getFragmentContent (st, ct, len) in
-      failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected content type : %A\n Payload (%d Bytes) : %s" ct len (Bytes.hexString()))))
+      let _,b = FlexTLS.Record.getFragmentContent st ct len in
+      failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected content type : %A\n Payload (%d Bytes) : %s" ct len (Bytes.hexString ""))))
   | Correct(hst,payload,to_log,rem) ->
     let st = FlexTLS.State.updateIncomingHSBuffer st rem in
     (st,hst,payload,to_log)
@@ -73,8 +73,8 @@ let receive (st:state) : state * HandshakeMessages.PreHandshakeType * bytes * by
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated incoming state * Updated outgoing state * forwarded handshake message bytes </returns>
 let forward (stin:state) (stout:state) : state * state * bytes =
-  let stin,_,_,msg = FlexTLS.Handshake.receive(stin) in
-  let stout = FlexTLS.Handshake.send(stout,msg) in
+  let stin,_,_,msg = FlexTLS.Handshake.receive stin in
+  let stout = FlexTLS.Handshake.send stout msg in
   stin,stout,msg
 
 /// <summary>
@@ -90,4 +90,4 @@ let send (st:state) (*?*)(payload:bytes) (*?*)(fp:fragmentationPolicy) : state =
   let buf = st.write.hs_buffer @| payload in
   let st = FlexTLS.State.updateOutgoingHSBuffer st buf in
   Log.write log Debug "Payload" (sprintf "%A" (Bytes.hexString(payload)));
-  FlexTLS.Record.send(st,Handshake,fp)
+  FlexTLS.Record.send st Handshake fp
