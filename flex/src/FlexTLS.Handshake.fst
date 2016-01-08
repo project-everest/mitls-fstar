@@ -3,8 +3,8 @@
 module FlexTLS.Handshake
 
 
+open Log
 open Platform
-open Platform.Log
 open Platform.Bytes
 open Platform.Error
 
@@ -16,6 +16,9 @@ open FlexTLS.State
 open FlexTLS.Record
 
 
+
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Parse a Handshake message from a buffer and leave the remaining data in the buffer
@@ -86,5 +89,5 @@ let send (st:state) (*?*)(payload:bytes) (*?*)(fp:fragmentationPolicy) : state =
   //  let payload = defaultArg payload empty_bytes in
   let buf = st.write.hs_buffer @| payload in
   let st = FlexTLS.State.updateOutgoingHSBuffer st buf in
-  Log.logDebug(sprintf "--- Payload : %A" (Bytes.hexString(payload)));
+  Log.write log Debug "Payload" (sprintf "%A" (Bytes.hexString(payload)));
   FlexTLS.Record.send(st,Handshake,fp)

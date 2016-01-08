@@ -3,7 +3,7 @@
 module FlexTLS.Message.CertificateVerify
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platfrom.Error
 
@@ -16,6 +16,8 @@ open FlexTLS.Constants
 open FlexTLS.Handshake
 
 
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Overload : Receive a CertificateVerify message from the network stream and check the log on demand
@@ -48,7 +50,7 @@ let receive (st:state) (nsc:nextSecurityContext) (algs:list<Sig.alg>) (*?*)(chec
 /// <param name="ms"> Optional master secret that has to be provided to check the log if protocol version is SSL3 </param>
 /// <returns> Updated state * Certificate Verify message </returns>
 let receive (st:state) (si:SessionInfo) (algs:list<Sig.alg>) (*?*)(check_log:bool) (*?*)(ms:bytes) : state * FCertificateVerify =
-  Log.logInfo("# CERTIFICATE VERIFY : FlexCertificateVerify.receive");
+  Log.write log Info "TLS Message" "# CERTIFICATE VERIFY : FlexCertificateVerify.receive";
   //  let ms = defaultArg ms empty_bytes in
   let checkLog = if (defaultArg check_log true) then Some(st.hs_log) else None in
   let st,hstype,payload,to_log = FlexHandshake.receive(st) in
@@ -103,9 +105,9 @@ let receive (st:state) (si:SessionInfo) (algs:list<Sig.alg>) (*?*)(check_log:boo
                                        payload = to_log;
                                      }
     in
-    Log.logInfo(sprintf "--- Algorithm : %A" fcver.sigAlg);
-    Log.logInfo(sprintf "--- Signature : %s" (Bytes.hexString(fcver.signature)));
-    LogManager.GetLogger("file").Debug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+    Log.write log Info "Algorithm "(sprintf "%A" fcver.sigAlg);
+    Log.write log Info "Signature" (sprintf "%s" (Bytes.hexString(fcver.signature)));
+    Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString(payload)));
     st,fcver
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
 
@@ -128,8 +130,8 @@ let prepare (log:bytes) (cs:cipherSuite) (pv:ProtocolVersion) (alg:Sig.alg) (ske
   let ams = (PRF.coerce (mk_msid si) ms) in
   let payload,tag = HandshakeMessages.makeCertificateVerifyBytes si ams alg skey log in
   let fcver = { sigAlg = alg; signature = tag; payload = payload } in
-  Log.logInfo(sprintf "--- Algorithm: %A" fcver.sigAlg);
-  Log.logInfo(sprintf "--- Signature: %s" (Bytes.hexString fcver.signature));
+  Log.write log Info "Algorithm" (sprintf "%A" fcver.sigAlg);
+  Log.write log Info "Signature" (sprintf "%s" (Bytes.hexString fcver.signature));
   fcver
 
 /// <summary>
@@ -159,7 +161,7 @@ let send (st:state) (si:SessionInfo) (alg:Sig.alg) (skey:Sig.skey) (*?*)(ms:byte
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * Certificate Verify message </returns>
 let send (st:state) (cs:cipherSuite) (pv:ProtocolVersion) (alg:Sig.alg) (skey:Sig.skey) (*?*)(ms:bytes) (*?*)(fp:fragmentationPolicy) : state * FCertificateVerify =
-  Log.logInfo("# CERTIFICATE VERIFY : FlexCertificateVerify.send");
+  Log.write log Info "TLS Message" ("# CERTIFICATE VERIFY : FlexCertificateVerify.send");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   //  let ms = defaultArg ms empty_bytes in
   let fcver = FlexCertificateVerify.prepare(st.hs_log,cs,pv,alg,skey,ms) in

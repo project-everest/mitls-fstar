@@ -3,7 +3,7 @@
 module FlexTLS.Connection
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Tcp
 
@@ -14,6 +14,8 @@ open FlexTLS.Types
 open FlexTLS.Constants
 
 
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Initiate a connection either as a Client or a Server and create a global state
@@ -62,7 +64,7 @@ let serverOpenTcpConnection (address:string) (*?*)(cn:string) (*?*)(port:int) (*
   //  let pv = defaultArg pv defaultConfig.maxVer in
   //  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
   //  let cn = defaultArg cn address in
-  LogManager.GetLogger("file").Info("TCP : Listening on {0}:{1}", address, port);
+  Log.write log Info "TCP Event" (sprintf "Listening on %s:%d", address, port);
   let l    = Tcp.listen address port in
   match timeout with
   | None ->
@@ -80,13 +82,13 @@ let serverOpenTcpConnection (address:string) (*?*)(cn:string) (*?*)(port:int) (*
 let serverOpenTcpConnection (l:TcpListener) (cn:string) (*?*)(pv:ProtocolVersion) (*?*)(timeout:int) : state * config =
   //  let pv = defaultArg pv defaultConfig.maxVer in
   let cfg = { defaultConfig with server_name = cn } in
-  LogManager.GetLogger("file").Info("TCP : Accepting as {0}", cn);
+  Log.write log Info "TCP Event" (sprintf "Accepting as %s", cn);
   let ns   =
     match timeout with
     | None -> Tcp.accept l
     | Some(t) -> Tcp.acceptTimeout t l
   in
-  LogManager.GetLogger("file").Debug("--- Client accepted");
+  Log.write log Debug "TCP Event" ("Client accepted TCP connection");
   let st = FlexTLS.Connection.init (Server,ns,pv) in
   (st,cfg)
 
@@ -103,14 +105,14 @@ let clientOpenTcpConnection (address:string) (*?*)(cn:string) (*?*)(port:int) (*
   //  let port = defaultArg port FlexTLS.Constants.defaultTCPPort in
   //  let cn = defaultArg cn address in
   let cfg = { defaultConfig with server_name = cn } in
-  Log.logInfo("TCP : Connecting to {0}:{1}",address,port);
+  Log.write log Info "TCP Event" (sprintf "Connecting to %s:%d" address port);
   let ns =
     match timeout with
     | None -> Tcp.connect address port
     | Some(t) -> Tcp.connectTimeout t address port
   in
   let st = FlexTLS.Connection.init (Client, ns) in
-  LogManager.GetLogger("file").Debug("--- Done");
+  Log.write log Debug "TCP Event" "Done";
   (st,cfg)
   
 /// <summary>
@@ -139,15 +141,15 @@ let mitmOpenTcpConnections (listen_address:string) (server_address:string) (*?*)
     defaultConfig with
     server_name = server_cn
   } in
-  Log.logInfo("TCP : Listening on {0}:{2} as {1}", listen_address, listen_cn, listen_port);
+  Log.write log Info "TCP Event" (sprintf "Listening on %s:%s as %d", listen_address, listen_cn, listen_port);
   let l   = Tcp.listen listen_address listen_port in
   let sns = Tcp.accept l in
   let sst = FlexTLS.Connection.init (Server,sns,listen_pv) in
-  Log.logDebug("--- Client accepted");
-  Log.logInfo("TCP : Connecting to {0}:{1}",server_address,server_port);
+  Log.write log Debug "TCP Event" "Client accepted TCP connection";
+  Log.write log Info "TCP Event" (sprintf "Connecting to %s:%d",server_address,server_port);
   let cns = Tcp.connect server_address server_port in
   let cst = FlexTLS.Connection.init (Client, cns) in
-  Log.logDebug("--- Done");
+  Log.write log Debug "TCP Event" ("Done");
   (sst,scfg,cst,ccfg)
 
 /// <summary>
@@ -161,7 +163,7 @@ let asyncForward (src:System.IO.Stream) (dst:System.IO.Stream) : Async<unit> =
     let! n = src.AsyncRead(b) in
     if n > 0 then
       let b = Array.sub b 0 n in
-      Log.logDebug("--- Passing-through. Payload: {0}", Bytes.hexString (abytes b));
+      Log.write log Debug "IO Event" ("Passing-through. Payload: %s", Bytes.hexString (abytes b));
       dst.Write(b,0,n);
     return! FlexTLS.Connection.asyncForward(src,dst)
   }

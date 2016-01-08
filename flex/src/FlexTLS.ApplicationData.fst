@@ -3,7 +3,7 @@
 module FlexTLS.ApplicationData
 
 
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Error
 
@@ -15,6 +15,8 @@ open FlexTLS.Record
 open FlexTLS.State
 
 
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
 
 /// <summary>
 /// Receive application data from network stream
@@ -22,7 +24,7 @@ open FlexTLS.State
 /// <param name="st"> State of the current connection </param>
 /// <returns> Updated state * Application data bytes received </returns>
 let receive (st:state) : state * bytes =
-  Log.logInfo("# APPLICATION DATA : FlexTLS.ApplicationData.receive");
+  Log.write log Info "TLS Message" ("# APPLICATION DATA : FlexTLS.ApplicationData.receive");
   let ct,pv,len,_ = FlexTLS.Record.parseFragmentHeader st in
   match ct with
   | Application_data ->
@@ -90,7 +92,7 @@ let send (st:state) (data:string) (*?*)(encoding:System.Text.Encoding) (*?*)(fp:
 /// <param name="fp"> Optional fragmentation policy applied to the message </param>
 /// <returns> Updated state </returns>
 let send (st:state) (data:bytes) (*?*)(fp:fragmentationPolicy) : state =
-  Log.logInfo("# APPLICATION DATA : FlexTLS.ApplicationData.send");
+  Log.write log Info "TLS Message" ("# APPLICATION DATA : FlexTLS.ApplicationData.send");
   //  let fp = defaultArg fp FlexTLS.Constants.defaultFragmentationPolicy in
   let buf = st.write.appdata_buffer @| data in
   let st = FlexTLS.State.updateOutgoingAppDataBuffer st buf in

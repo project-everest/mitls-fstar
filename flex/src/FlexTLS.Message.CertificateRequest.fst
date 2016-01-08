@@ -3,8 +3,7 @@
 module FlexTLS.Message.CertificateRequest
 
 
-open Platform
-open Platform.Log
+open Log
 open Platform.Bytes
 open Platform.Error
 
@@ -18,6 +17,9 @@ open FlexTLS.Handshake
 
 
 
+/// Access the log
+let log = Log.retrieve "FlexTLS.Log.General"
+
 /// <summary>
 /// Receive a CertificateRequest message from the network stream
 /// </summary>
@@ -25,7 +27,7 @@ open FlexTLS.Handshake
 /// <param name="nsc"> Optional Next security context object updated with new data </param>
 /// <returns> Updated state * next security context * FCertificateRequest message record </returns>
 let receive (st:state) (*?*)(nsc:nextSecurityContext) : state * nextSecurityContext * FCertificateRequest =
-  Log.logInfo("# CERTIFICATE REQUEST : FlexCertificateRequest.receive");
+  Log.write log Info "TLS Message" ("# CERTIFICATE REQUEST : FlexCertificateRequest.receive");
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let si = nsc.si in
   let pv = si.protocol_version in
@@ -43,7 +45,7 @@ let receive (st:state) (*?*)(nsc:nextSecurityContext) : state * nextSecurityCont
       in
       let si  = { si with client_auth = true} in
       let nsc = { nsc with si = si } in
-      Log.logDebug(sprintf "--- Payload : %s" (Bytes.hexString(payload)));
+      Log.write log Debug "Payload" (sprintf "%s" (Bytes.hexString(payload)));
       (st,nsc,certReq))
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
 
@@ -80,7 +82,7 @@ let send (st:state) (*?*)(nsc:nextSecurityContext) (*?*)(fp:fragmentationPolicy)
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FCertificateRequest message record </returns>
 let send (st:state) (cs:cipherSuite) (pv:ProtocolVersion) (*?*)(fp:fragmentationPolicy) : state * FCertificateRequest =
-  Log.logInfo("# CERTIFICATE REQUEST : FlexCertificateRequest.send");
+  Log.write log Info "TLS Message" ("# CERTIFICATE REQUEST : FlexCertificateRequest.send");
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fcreq = FlexCertificateRequest.prepare(cs,pv) in
   let st = FlexHandshake.send (st,fcreq.payload,fp) in
