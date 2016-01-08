@@ -25,10 +25,10 @@ let log = Log.retrieve "FlexTLS.Log.General"
 /// <param name="nsc"> Optional Next security context object updated with new data </param>
 /// <returns> Updated state * next security context * FCertificate message </returns>
 let receive (st:state) (role:Role) (*?*)(nsc:nextSecurityContext) : state * nextSecurityContext * FCertificate =
-  Log.write log Info "TLS Message" ("# CERTIFICATE : FlexCertificate.receive");
+  Log.write log Info "TLS Message" "# CERTIFICATE : FlexCertificate.receive";
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   let si = nsc.si in
-  let st,hstype,payload,to_log = FlexHandshake.receive(st) in
+  let st,hstype,payload,to_log = FlexHandshake.receive st in
   match hstype with
   | HT_certificate  ->
     (match parseClientOrServerCertificate payload with
@@ -43,7 +43,7 @@ let receive (st:state) (role:Role) (*?*)(nsc:nextSecurityContext) : state * next
           { si with serverID = chain; }
       in
       let nsc = { nsc with si = si } in
-      Log.write log Debug "Payload" (sprintf "%A" (Bytes.hexString(payload)));
+      Log.write log Debug "Payload" (sprintf "%A" (Bytes.hexString payload));
       (st,nsc,cert)
     )
   | _ -> failwith (perror __SOURCE_FILE__ __LINE__ (sprintf "Unexpected handshake type: %A" hstype))
@@ -95,7 +95,7 @@ let send(st:state) (role:Role) (nsc:nextSecurityContext) (cfg:config) (*?*)(fp:f
           )
         | _ -> failwith (perror __SOURCE_FILE__ __LINE__ "All possible cases are expected to be covered")
       in
-      let st,nsc,fcrt = FlexCertificate.send(st,role,chain,nsc=nsc,fp=fp) in
+      let st,nsc,fcrt = FlexCertificate.send st role chain nsc fp in
       let keys = {nsc.secrets with pri_key = prikey} in
       let nsc = {nsc with secrets = keys} in
       st,nsc,fcrt
@@ -113,7 +113,7 @@ let send (st:state) (role:Role) (chain:Cert.chain) (*?*)(nsc:nextSecurityContext
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   let fcrt = {FlexConstants.nullFCertificate with chain = chain} in
-  FlexCertificate.send(st,role,fcrt=fcrt,nsc=nsc,fp=fp)
+  FlexCertificate.send st role fcrt nsc fp
 
 /// <summary>
 /// Send a Certificate message to the network stream using User provided chain of certificates
@@ -128,7 +128,7 @@ let send (st:state) (role:Role) (*?*)(nsc:nextSecurityContext) (*?*)(fcrt:FCerti
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
   //  let fcert = defaultArg fcrt FlexConstants.nullFCertificate in
   //  let nsc = defaultArg nsc FlexConstants.nullNextSecurityContext in
-  let st,fcert = FlexCertificate.send(st,fcert.chain,fp) in
+  let st,fcert = FlexCertificate.send st fcert.chain fp in
   let si = nsc.si in
   let si =
     match role with
@@ -149,8 +149,8 @@ let send (st:state) (role:Role) (*?*)(nsc:nextSecurityContext) (*?*)(fcrt:FCerti
 /// <param name="fp"> Optional fragmentation policy at the record level </param>
 /// <returns> Updated state * FCertificate message </returns>
 let send (st:state) (chain:Cert.chain) (*?*)(fp:fragmentationPolicy) : state * FCertificate =
-  Log.write log Info "TLS Message" ("# CERTIFICATE : FlexCertificate.send");
+  Log.write log Info "TLS Message" "# CERTIFICATE : FlexCertificate.send";
   //  let fp = defaultArg fp FlexConstants.defaultFragmentationPolicy in
-  let fcert = FlexCertificate.prepare(chain) in
-  let st = FlexHandshake.send(st,fcert.payload,fp) in
+  let fcert = FlexCertificate.prepare chain in
+  let st = FlexHandshake.send st fcert.payload fp in
   st,fcert
