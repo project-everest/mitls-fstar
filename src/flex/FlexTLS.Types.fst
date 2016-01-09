@@ -161,7 +161,7 @@ type nextSecurityContext = {
   srand: bytes;
   /// <summary> Secrets to be used by the next epoch </summary>
   secrets: secrets;
-  /// <summary> Offers of DH groups and public keys from the client (useful for negotiated DH groups, and hence for TLS 1.3) </summary>
+  /// <summary> Offers of DH groups and public keys from the client </summary>
   offers: list kex;
 }
 
@@ -178,7 +178,7 @@ type FHelloRequest = {
 /// </summary>
 type FClientHello = {
   /// <summary> Protocol version </summary>
-  pv: option<ProtocolVersion>;
+  pv: option ProtocolVersion;
   /// <summary> Client random bytes </summary>
   rand: bytes;
   /// <summary> Session identifier. A non-empty byte array indicates that the client wants resumption </summary>
@@ -198,7 +198,7 @@ type FClientHello = {
 /// </summary>
 type FServerHello = {
   /// <summary> Protocol version </summary>
-  pv: option<ProtocolVersion>;
+  pv: option ProtocolVersion;
   /// <summary> Server random bytes </summary>
   rand: bytes;
   /// <summary> Session identifier. A non-empty byte array indicates that the server accepted resumption </summary>
@@ -212,6 +212,23 @@ type FServerHello = {
   /// <summary> Message bytes </summary>
   payload: bytes;
 }
+
+/// <summary>
+/// Handshake Message record type for Hello Retry Request
+/// </summary>
+type FHelloRetryRequest = {
+  /// <summary> Protocol version </summary>
+  pv: option ProtocolVersion;
+  /// <summary> Ciphersuite selected by the server </summary>
+  ciphersuite: option cipherSuiteName;
+ /// <summary> Offer of DH group and public keys from the server </summary> 
+  offer: option dhGroup;
+  /// <summary> List of extensions </summary>
+  ext: option (list serverExtension);
+  /// <summary> Message bytes </summmary>
+  payload: bytes;
+}
+
 
 /// <summary>
 /// Handshake Message record type for ServerConfiguration
