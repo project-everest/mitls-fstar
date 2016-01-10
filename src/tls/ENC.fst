@@ -23,64 +23,69 @@ open TLSInfo
 open Range
 
 type id = i:id { is_MtE i.aeAlg } 
-
 let alg (i:id) = MtE._0 i.aeAlg
+
+type idB = i:id { is_Block (alg i) }
 
 (* Also using Encode; we do not open it so that we can syntactically
    check its usage restrictions *)
 
 type cipher = b:bytes { length b <= max_TLSCipher_fragment_length }
 
+let blockSize (i:idB) = CoreCrypto.blockSize (Block._0 (alg i))
+type block (i:idB) = lbytes (blockSize i)
+type iv = block
+
 (* Early TLS chains IVs, but this is not secure against adaptive CPA *)
-let lastblock alg cipher =
-    let ivl = blockSize alg in
-    let (_,b) = split cipher (length cipher - ivl) in b
+let lastblock a (c:cipher {length c >= CoreCrypto.blockSize a}) : lbytes (CoreCrypto.blockSize a) =
+    let ivl = CoreCrypto.blockSize a in
+    let (_,b) = split c (length c - ivl) in b
 
-private type key (i:id) = bytes 
-
+private type key (i:id) = bytes
 // for the reduction to non-agile algorithms, we would use
 // private type (i:id) key' = 
 //   | GoodKey_A of ideal_A.key 
 //   | GoodKey_B of ideal_B.key
 //   | BadKey_A 
-                     
-type iv = bytes //CF could specify its size: one block
-private type iv3 (i:id) = 
-  | SomeIV of iv // SSL_3p0 and TLS_1p0
-  | NoIV         // TLS_1p1 and TLS_1p2
 
-private type blockState (i:id) =
-    {key: key i; iv: iv3 i}
-private type streamState (i:id) = 
-    {skey: key i; // ghost: Only stored so that we can leak it
-     sstate: CoreCrypto.cipher_stream}
+let explicitIV (i:id) = 
+  match alg i, pv_of_id i with 
+  | Block _, TLS_1p1 | Block _, TLS_1p2 -> true 
+  | _                                   -> false 
 
-private val someIV: i:id -> iv -> Tot (iv3 i)      
-let someIV (i:id) (iv:iv) = SomeIV(iv)
+private type localState (region:rid) : i:id -> Type = 
+  | StreamState:   i:id{ is_Stream (alg i) }                         -> s: CoreCrypto.cipher_stream -> localState region i
+  | OldBlockState: i:id{ is_Block (alg i) /\ ~(explicitIV i) } -> iv i -> localState region i
+  | NewBlockState: i:id{ is_Block (alg i) /\ explicitIV i  }          -> localState region i
 
-private val noIV: i:id -> Tot (iv3 i)                                  
-let noIV (i:id) = NoIV
+// plain here is indexed by length, not range
+type dplain (i:id) (c:cipher i) = Encode.plain i (if explicitIV i then length c - blockSize i else length c)
 
-private val updateIV: i:id -> blockState i -> iv3 i -> Tot (blockState i)
-let updateIV (i:id) (s:blockState i) (iv:iv3 i) = {s with iv = iv}
+type entry (i:id) = | Entry:
+  c: cipher i -> p: dplain i c -> entry i
+
+private type state (i:id) (rw:rw) = | StateB:
+  #region: rid ->
+  #peer_region: rid { HyperHeap.disjoint region peer_region } -> 
+  k: key i -> // only ghost for stream ciphers
+  s: rref rid (localState rid i) -> 
+  log: rref (if rw = reader then peer_region else region) (seq (entry i)) -> 
+  state i rw
                                         
-type state (i:id) (r:rw) =
-    | BlockCipher of blockState i
-    | StreamCipher of streamState i
-
 (* does this guarantee type isolation? *)
 type encryptor (i:id) = state i Writer
 type decryptor (i:id) = state i Reader
+
+(* CF 14-07-17: reuse?
 
 // internal function declarations 
 //TODO state should also have a role, but GENOne returns the state for both roles.
 //private val GENOne: i:id -> 'a //(;i) state
 
-(* CF 14-07-17: reuse?
 let GENOne ki : state =
-    #if verify
+    //#if verify
     failwith "trusted for correctness"
-    #else
+    //#else
     let alg = encAlg_of_id ki in
     match alg with
     | Stream CoreCrypto.RC4_128 ->
@@ -95,7 +100,7 @@ let GENOne ki : state =
         let key = {k = CoreCrypto.random (encKeySize alg)}
         let iv = NoIV
         BlockCipher ({key = key; iv = iv})
-    #endif
+    //#endif
 *)
 
 // We do not use the state, but an abstract ID over it, so that we can link
@@ -124,7 +129,7 @@ let gen (ki:id) : encryptor ki * decryptor ki =
         streamCipher ki Reader ({skey = k; sstate = CoreCrypto.stream_encryptor CoreCrypto.RC4_128 k})
     | Block cbc, Stale ->
         let k = CoreCrypto.random (encKeySize (Block cbc)) in
-        let ivRandom = CoreCrypto.random (blockSize cbc) in
+        let ivRandom = CoreCrypto.random (CoreCrypto.blockSize cbc) in
         let iv = someIV ki ivRandom in
         blockCipher ki Writer ({key = k; iv = iv}),
         blockCipher ki Reader ({key = k; iv = iv})

@@ -34,10 +34,6 @@ let ivSize i =
 (* Mandatory fixed padding for a cipher *)
 val fixedPadSize: id -> Tot nat
 let fixedPadSize i =
-#if TLSExt_extendedPadding
-    if TLSExtensions.hasExtendedPadding id then 2
-    else
-#endif
         let authEnc = i.aeAlg in
         match authEnc with
         | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
@@ -48,10 +44,6 @@ let fixedPadSize i =
 // use at most 255 bytes of padding, plus 1 byte to encode the length
 val maxPadSize: id -> Tot nat
 let maxPadSize i =
-#if TLSExt_extendedPadding
-    if TLSExtensions.hasExtendedPadding id then fragmentLength
-    else
-#endif
         let authEnc = i.aeAlg in
         match authEnc with
         | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
@@ -71,34 +63,7 @@ let minimalPadding i len =
         let bs = blockSize alg in
         let lp = len % bs in
         let p = bs - lp in
-#if TLSExt_extendedPadding
-        let fp = fixedPadSize e in
-        let p = if p < fp then p + bs else p in
-#endif
         p
-
-#if TLSExt_extendedPadding
-let alignedRange i (r:range) =
-    let l,h = r in
-    let authEnc = i.aeAlg in
-    match authEnc with
-    | MACOnly _ | AEAD _ _ | MtE (Stream _) _ ->
-        let mp = minimalPadding e h in
-        (l,h+mp)
-    | MtE (Block _) _ ->
-        let macLen = macSize (macAlg_of_id i) in
-        let prePad = h + macLen in
-        let mp = minimalPadding i prePad in
-        (l,h+mp))
-
-let extendedPad (id:id) (r:range) (plen:nat) =
-    let rg = alignedRange id r in
-    let fp = fixedPadSize id in
-    let _,h = r in
-    let padlen = h - plen - fp in
-    let pad = createBytes padlen 0 in
-    TLSConstants.vlbytes fp pad
-#endif
 
 (* Sanity check *)
 val minimalPadding_at_least_fixedPadSize: i:id -> len:nat ->
@@ -116,25 +81,34 @@ type valid_clen (i:id) (clen:nat) =
         0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i
       /\ clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length)
 
+
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
 val cipherRangeClass: i:id -> clen:nat -> Pure range
   (requires valid_clen i clen)
   (ensures fun (r:range) ->
-       (is_AEAD i.aeAlg ==>
-         Let (clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i) (fun min ->
-         Let (clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i)   (fun max ->
+       (is_AEAD i.aeAlg ==> (
+         let a = aeAlg i in 
+         let min = clen - aeadRecordIVSize a - aeadTagSize a - fixedPadSize i in
+         let max = clen - aeadRecordIVSize a - aeadTagSize a - maxPadSize i in
          0 <= max 
          /\ (  (0 < min /\ r == MkTuple2 #nat #nat min max) 
-            \/ (min <= 0 /\ r == MkTuple2 #nat #nat 0 max)))))
-     /\ (~(is_AEAD i.aeAlg) ==>
-         Let (clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i) (fun max ->
-         Let (clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i)   (fun min ->
+            \/ (min <= 0 /\ r == MkTuple2 #nat #nat 0 max))))
+     /\ (~(is_AEAD i.aeAlg) ==> (
+         let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in 
+         let min = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
            0 <= max 
-         /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat min max)
+         /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat min max )
           \/ (0 < min /\ max >= max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat min max_TLSPlaintext_fragment_length)
           \/ (min <= 0 /\ max < max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat 0 max)
-          \/ (min <= 0 /\ max >= max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat 0 max_TLSPlaintext_fragment_length))))) )
+          \/ (min <= 0 /\ max >= max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat 0 max_TLSPlaintext_fragment_length))
+// needed in Encode: 
+//         /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+))
+     /\ snd r <= max_TLSPlaintext_fragment_length
+)
+
+
 let cipherRangeClass i clen =
     let authEnc = i.aeAlg in
     match authEnc with
@@ -163,6 +137,7 @@ let cipherRangeClass i clen =
             (0,max)
         else
             (min,max)
+
 
 (* Sanity check *)
 val cipherRangeClass_width: i:id ->
