@@ -45,13 +45,13 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 # Not sure which interfaces we should put in there.
 
 # these files are the stable inputs for verification
-TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst MAC.fst Encode.fst Handshake.fsti Record.fst Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst MAC.fst ENC.fst LHAE.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Encode.fst Handshake.fsti Record.fst Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
 #Removed temporarily: StatefulPlain.fsti
 #Removed temporarily: TLS.fst
 
 TLSREDUX=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
 	DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst \
-	UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst \
+	UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.fst \
 	DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst \
 	AEAD_GCM.fst StatefulLHAE.fst PRF-redux.p.fst  \
 	HandshakeMessages_Redux.fst Handshake_Redux.fst
@@ -62,7 +62,7 @@ TLSPARSE=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
 	HandshakeMessages_Redux.fst
 
 # these files are verified here
-VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain StatefulPlain
+VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM LHAE StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain StatefulPlain
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
@@ -188,7 +188,7 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= TLSExtensions PMS DHGroup Encode Range Sig PRF-redux TLSExtensions_Redux
+TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF-redux TLSExtensions_Redux
 # DHGroup.p.fst PMS.p.fst \
 	TLSExtensions.p.fst TLSPRF.p.fst \
 	HSFragment.p.fst TLSFragment.p.fst StatefulPlain.p.fst \

@@ -14,14 +14,14 @@ open TLSInfo
 open TLSError
 
 // idealizing HMAC
-// for concreteness; the rest of the module is parametric in a 
+// for concreteness; the rest of the module is parametric in a:alg
 
 type id = i:id { is_MACOnly i.aeAlg \/ is_MtE i.aeAlg }
 
 let alg (i:id) = macAlg_of_id i
 
 type text = bytes
-type tag (i:id) = bytes
+type tag (i:id) = lbytes (macSize (alg i))
 type keyrepr (i:id) = bytes
 
 
@@ -95,14 +95,9 @@ val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i
 
 // We use the log to correct any verification errors
 let verify i k p t =
-    HMAC.tls_macVerify a k.kv p t 
+    HMAC.tls_macVerify (alg i) k.kv p t 
     && 
     ( not(authId i) || is_Some (seq_find (matches p) !k.log))
-
-
-
-
-
 
 
 
