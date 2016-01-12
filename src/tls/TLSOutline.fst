@@ -20,51 +20,78 @@ open TLSError
 open TLSInfo
 
 // using DataStream
+val tls_region    : r:rid{parent r = root}
+val epochs_region : r:rid{parent r = root /\ r <> tls_region}
 
-type epoch // abstract; how to express sharing? using a global table of epochs?
+//epochs are partnered statically (ie, their partner is known at the time of creation)
+abstract type epoch  = ... // abstract; how to express sharing? using a global table of epochs?
 
-val epochId: epoch -> Tot id  // globally unique; should reveal some handshake info too
-val writtenT: e:epoch -> HyperHeap.t -> Tot (seq (DataStream.delta (epochId e)))
+abstract val epochId: epoch -> Tot id  // globally unique; should reveal some handshake info too
+let epochId e = e.id
+
+//both of these next two are monotonic
+val writtenT: e:epoch -> HyperHeap.t -> Tot (seq (DataStream.delta (epochId e))) //TODO: it is well-formed (note reconcile list vs seq)
 val readseqT: e:epoch -> HyperHeap.t -> Tot nat 
 
-type connection 
+//connections may be partnered dynamically (ie, they are partnered by the assignment of partnered epochs to connections)
+abstract type connection = ...
 type inv: connection -> HyperHeap.t ->  Type // the private connection invariant
 
 val c_region: connection -> regionId // the only region modified by the connection.
 val c_role: connection -> role
+
+
+val connection_log : m_rref (seq connection) (fun s0 s1 -> s1 >= s0)
+
+type conn = c:connection{Witnessed (fun h -> c \in (sel h connection_log)}
+
+//connection_log_inv h = 
+//    let cs = sel h connection_log in
+//    partnering_inv cs /\ (TBD)
+//    forall c1<>c2 \in cs. disjoint (c_region c1) (c_region c2)
+//                      /\  disjoint_regions (epoch_regions c1 h) (epoch_regions c2 h)
+val connection_log_inv : HyperHeap.t -> Type
+
+
+//init requires an assume to handle top-level effects
+assume val init : unit -> ST unit
+    (ensures (fun h0 _ h1 -> connection_log_inv h1
+                         /\ fresh_region tls_region h0 h1))
+    
+  
 
 // all the calls below are ghost & read-only; they depend only on c's region, 
 // and their result are determined by the sequence of calls (arguments, results, and postconditions)
 // consider using a log of epoch views instead of epochs
 // fix r/w dual indexing!
 
-val readableT: connection -> HyperHeap.t -> bool // indicates whether read is callable (for any purpose)
-val writableT: connection -> HyperHeap.t -> bool // read-only; indicates whether write is callable (for sending appdata/closing
-val epochsT: connection -> Tot (seq epoch) // *projected* and *truncated* so that the last entry is always the current epoch.
+val readableT: connection -> HyperHeap.t -> Tot bool // indicates whether read is callable (for any purpose)
+val writableT: connection -> HyperHeap.t -> Tot bool // indicates whether write is callable (for sending appdata/closing)
+val epochsT:   connection -> HyperHeap.t -> Tot (seq epoch) // *projected* and *truncated* so that the last entry is always the current epoch.
 
 
-lemma state_inv: forall c h0 h1, 
-  HyperHeap.restrict c.region h0 = HyperHeap.restrict c.region h1 ==>
-  readableT c h0 = readableT c h1 /\
-  writableT c h0 = writableT c h1 /\
-  epochsT c h0   = epochsT c h1 /\ 
-  Seq.forall 
-    (fun e -> writtenT e h0 = writtenT e h1 /\ 
-           readseqT e h0 = readseqT e h1)
+(* lemma state_inv: forall c h0 h1,  *)
+(*   HyperHeap.restrict c.region h0 = HyperHeap.restrict c.region h1 ==> *)
+(*   readableT c h0 = readableT c h1 /\ *)
+(*   writableT c h0 = writableT c h1 /\ *)
+(*   epochsT c h0   = epochsT c h1 /\  *)
+(*   Seq.Forall (epochsT c h0) *)
+(*     (fun e -> writtenT e h0 = writtenT e h1 /\  *)
+(*             readseqT e h0 = readseqT e h1) *)
 
 // by design, the current values of writerId c and readerId c
 // are determined by the call sequence --- no need to call them.
 
 // *all* stateful connection calls are specializations of:
 
-val sample: c:connection -> ... -> ST r
-  (requires (fun h0 -> 
-    inv c h0 /\ ...))
+val sample: c:conn -> ... -> ST r
+  (requires (fun h0 -> connection_log_inv h0))
   (ensures (fun h0 r h1 -> 
-    inv c h1 /\  (* even after errors, closure,...*)
-    modifies (Set.singleton (C.region c)) h0 h1 /\
-    "current, readable, writeable, and the log after projection are all determined by the results & posts of prior calls" /\ 
-    "current and the log contents after projection are monotonic" /\
+    connection_log_inv h1
+    /\ regions_of c h0 <= regions_of c h1
+    /\ modifies (regions_of c h1) h0 h1 
+    /\ "current epoch, readable, writeable, and the log after projection are all determined by the results & posts of prior calls" 
+    /\ "current and the log contents after projection are monotonic" /\
     "epochId is the id of an epoch in the log" /\ 
     "the DataStream projection of all fragment logs for all epochs after epochId are empty" /\ 
     "the DataStream projection of all fragment logs for all epochs are monotonic" /\ 
@@ -131,7 +158,7 @@ type ioresult_w =
     | WriteError of al:alertDescription -> s:string -> ioresult_w // The connection is down, possibly after sending an alert
 
 type modifies_c c h0 h1 = 
-  modifies (c_region c) h0 h1 /\
+  modifies (regions_of c h1) h0 h1 /\
   let epochs0 = epochsT c h0 in 
   let epochs1 = epochsT c h1 in 
   Seq.prefix epochs0 epochs1 /\
@@ -151,13 +178,13 @@ type sT = State:
     written: Seq DataStream.fragment (currentId epochs) -> sT
 *)
 
-val write: c:connection -> i:id -> rg:frange i -> data: DataStream.fragment i rg -> ST ioresult_w
+val write: c:conn -> i:id -> rg:frange i -> data: DataStream.fragment i rg -> ST ioresult_w
   (requires (fun h0 -> 
-    inv c h0 /\ 
+    connection_log_inv h0 /\
     writableT c h0 /\  // implying epochsT c h0 is not empty
     i = currentId (epochsT c h0)))
   (ensures (fun h0 r h1 -> 
-    inv c h1 /\ 
+    connection_log_inv h1 /\
     modifies_c c h0 h1 /\ // should also guarantee that we modify at most the current epoch and append to the log
     epochsT c h1   = epochsT c h0 /\ 
     let current = Seq.last (epochsT c h0) in 
@@ -300,26 +327,3 @@ let server_0RTT tcp config_0RTT =
 
 
 
-
-
-
-TRONPLAN
-
-[Antoine] 1.5 pages on gentle intro.
-
-- Problem 1: the need to verify implementations, not just code.
-- Problem 2: the need to support all TLSs. 
-
-[Cedric] 1 page + pictures 
-  `classic' miTLS Theorem, informally: what we had, and how we need to extend it to cover all versions. Explain it hides intermediate states. 
-  picture with code, ideal API view, and wire messages. 
-
-[Karthik] 1 page; HS state machine  maybe as a refinement. 
-
-[Markulf/Santiago] Downgrade protection: what the problem is, and what we know between TLS 1.2 and 1.3 (informal theorem)
-
-[Nikhil] 1 page : Authenticated encryption (AEAD_GCM), getting a syntactic idea of F* by example (informal theorem)
-
-[Markulf] modular structure and proof idea.
-
-- what we learnt so far. Ambiguities in the spec. 
