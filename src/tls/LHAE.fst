@@ -36,8 +36,8 @@ type decryptor (i:id) = LHAEKey i Reader
 (* 15-04-11 recheck usage of these functions *)
 
 let keyDerivationIVSize = function
-  | MtE(CBC_Stale(enc),mac)) -> blockSize enc
-  | _                        -> 0
+  | MtE(CBC_Stale(Enc),mac) -> blockSize enc
+  | _                       -> 0
 
 let keySize = function
   | MACOnly(mac)  -> macKeySize mac

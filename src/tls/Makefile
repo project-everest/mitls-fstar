@@ -45,7 +45,11 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 # Not sure which interfaces we should put in there.
 
 # these files are the stable inputs for verification
-TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst MAC.fst ENC.fst LHAE.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Encode.fst Handshake.fsti Record.fst Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst \
+       MAC.fst ENC.p.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Encode.fst Handshake.fsti Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+	#LHAE.fst --these do not even parse
+	#Record.fst --this does not lax type-check
+
 #Removed temporarily: StatefulPlain.fsti
 #Removed temporarily: TLS.fst
 
@@ -188,7 +192,7 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF-redux TLSExtensions_Redux
+TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF-redux TLSExtensions_Redux ENC
 # DHGroup.p.fst PMS.p.fst \
 	TLSExtensions.p.fst TLSPRF.p.fst \
 	HSFragment.p.fst TLSFragment.p.fst StatefulPlain.p.fst \
