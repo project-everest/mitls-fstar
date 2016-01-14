@@ -53,13 +53,13 @@ type iv = block
 let lblock (bl:nat) (c:bytes { length c >= bl }) : lbytes bl = 
   snd (split c (length c - bl))
 
-//16-01-13 
-//let lastblock (i:idB) = 
-//  let bl = CoreCrypto.blockSize (Block._0 (alg i)) in 
-//  fun (c:cipher i { length c >= lblock bl c (CoreCrypto.blockSize (Block._0 (alg i)))})
+//16-01-13 this can't work as bl appears in the inferred result type 
+let lastblock (i:idB) = 
+  (fun (bl:nat) (c:cipher i { length c >= bl}) -> lblock bl c) 
+  (CoreCrypto.blockSize (Block._0 (alg i)))
 
-let lastblock (i:idB) (c:cipher i { length c >= CoreCrypto.blockSize (Block._0 (alg i))}) : block i =
-  lblock (CoreCrypto.blockSize (Block._0 (alg i))) c 
+//let lastblock (i:idB) (c:cipher i { length c >= CoreCrypto.blockSize (Block._0 (alg i))}) : block i =
+//  lblock (CoreCrypto.blockSize (Block._0 (alg i))) c 
 
 private type key (i:id) = bytes
 // for the reduction to non-agile algorithms, we would use
@@ -132,7 +132,7 @@ let gen reader_parent writer_parent i =
   let reader_r = new_region reader_parent in
   let writer_r = new_region writer_parent in
   assert(HyperHeap.disjoint reader_r writer_r);
-  let log = ralloc writer_r Seq.createEmpty in
+  let log = ralloc writer_r Seq.createEmpty in 
   let alg = encAlg_of_id i in
   let kv, wstate, rstate = 
   match alg with
@@ -145,16 +145,20 @@ let gen reader_parent writer_parent i =
   | Block cbc, Stale ->
         let kv = CoreCrypto.random (encKeySize (Block cbc)) in
         let iv = CoreCrypto.random (CoreCrypto.blockSize cbc) in
+        kv, 
         OldBlockState #writer_r i iv, 
         OldBlockState #reader_r i iv
 
   | Block cbc, Fresh ->
         let kv = CoreCrypto.random (encKeySize (Block cbc)) in
+        kv, 
         NewBlockState #writer_r i, 
         NewBlockState #reader_r i  
   in
-  StateB #i #Writer #writer_r #reader_r kv (ralloc writer_r wstate),
-  StateB #i #Reader #reader_r #writer_r kv (ralloc reader_r rstate)
+  let enc: encryptor i = StateB #i #Writer #writer_r #reader_r kv (ralloc writer_r wstate) log in
+  let dec: decryptor i = StateB #i #Reader #reader_r #writer_r kv (ralloc reader_r rstate) log in 
+  enc, dec
+
 
 (*
 val leak: i:id{not(safeId i)} -> rw:rw -> state i rw -> (*key:*) bytes * (*iv:*) bytes
@@ -187,46 +191,65 @@ let leak (ki:id) (rw:rw) s =
   i:id -> ad:LHAEPlain.adata i -> 
   c:cipher -> Encode.plain i ad (cipherRangeClass i (length c))-> Type*)
 
-private val cbcenc: CoreCrypto.block_cipher -> bytes -> bytes -> bytes -> bytes 
-let cbcenc alg k iv d = CoreCrypto.block_encrypt alg k iv d
+let cbcenc = CoreCrypto.block_encrypt
 
 (* Parametric enc/dec functions *)
 
-let enc_int (i:id) (s:encryptor i) tlen d = // multiplexing concrete encryptions
+val enc_int: i:id -> e: encryptor i -> tlen:nat -> bytes -> CoreCrypto.EXT bytes // (cipher i)
+let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
+    let StateB k s _ = e in  
+    // let alg,ivm = encAlg_of_id i in
+    match !s with
+    | StreamState _ ss -> CoreCrypto.stream_process ss d 
 
-    let alg,ivm = encAlg_of_id i in
-    match s with
-    //#begin-ivStaleEnc
-    | BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https://github.com/FStarLang/FStar/issues/397
-        (match s.iv with
-        | NoIV -> unexpected "[enc] Wrong combination of cipher algorithm and state"
-        | SomeIV(iv) ->
-            let cipher = cbcenc alg s.key iv d in
+(*
+        if length cipher <> tlen || tlen > max_TLSCipher_fragment_length then
+                // unexpected, because it is enforced statically by the
+                // CompatibleLength predicate
+                unexpected "[enc] Length of encrypted data do not match expected length"
+        else
+        cipher *)
+
+    | OldBlockState _ iv -> 
+         let a = (Block._0 (alg i)) in 
+         let cipher = cbcenc a k iv d in
+         s := OldBlockState i (lastblock i cipher);
+         cipher
+
+(* 
             let cl = length cipher in
             if cl <> tlen || tlen > max_TLSCipher_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
             else
-                let lb = lastblock alg cipher in
-                let iv = someIV ki lb in
-                let s = updateIV ki s iv in
-                (BlockCipher(s), cipher)) )
-    //#end-ivStaleEnc
-    | BlockCipher(s) -> (match alg,ivm with Block alg, Fresh ->
-        (match s.iv with
-        | SomeIV(b) -> unexpected "[enc] Wrong combination of cipher algorithm and state"
-        | NoIV   ->
-            let ivl = blockSize alg in
-            let iv = CoreCrypto.random ivl in
-            let cipher = cbcenc alg s.key iv d in
+*) 
+
+    | NewBlockState _ -> 
+         let a = (Block._0 (alg i)) in 
+         let iv = CoreCrypto.random (blockSize i) in
+         cbcenc a k iv d 
+
+(*
             let res = iv @| cipher in
             if length res <> tlen || tlen > max_TLSCipher_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
             else
-                (BlockCipher(s), res)) )
+                (BlockCipher(s), res)
+*)
+
+(*
+BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https://github.com/FStarLang/FStar/issues/397
+        (match s.iv with
+        | NoIV -> unexpected "[enc] Wrong combination of cipher algorithm and state"
+        | SomeIV(iv) ->
+    //#end-ivStaleEnc
+    | BlockCipher(s) -> (match alg,ivm with Block alg, Fresh ->
+        (match s.iv with
+        | SomeIV(b) -> unexpected "[enc] Wrong combination of cipher algorithm and state"
+        | NoIV   ->
     | StreamCipher(s) -> (match alg,ivm with Stream _, _ ->
         let cipher = (CoreCrypto.stream_process s.sstate (d)) in
         if length cipher <> tlen || tlen > max_TLSCipher_fragment_length then
@@ -236,6 +259,7 @@ let enc_int (i:id) (s:encryptor i) tlen d = // multiplexing concrete encryptions
         else
             (StreamCipher(s),cipher) )
     | _ -> ( match alg,ivm with _ , _ -> unexpected "[enc] Wrong combination of cipher algorithm and state" )
+*) 
 
 //TODO: define monotonic property of being in the encryption log. 
 // opaque logic type Encrypted (i:id) (ad:LHAEPlain.adata i) (c:cipher) (p:dplain i ad c) (h:heap) =
