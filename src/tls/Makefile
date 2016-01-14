@@ -45,10 +45,9 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 # Not sure which interfaces we should put in there.
 
 # these files are the stable inputs for verification
-TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst \
-       MAC.fst ENC.p.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Encode.fst Handshake.fsti Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
-	#LHAE.fst --these do not even parse
-	#Record.fst --this does not lax type-check
+TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst MAC.fst Encode.fst ENC.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Handshake.fsti Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+#LHAE.fst --these do not even parse
+#Record.fst --this does not lax type-check
 
 #Removed temporarily: StatefulPlain.fsti
 #Removed temporarily: TLS.fst
@@ -80,8 +79,8 @@ HSFragment.fst\
 MAC_SHA256.p.fst\
 MAC_SHA1.p.fst\
 MAC.p.fst\
-Encode.p.fst\
-ENC.p.fst\
+Encode.fst\
+ENC.fst\
 AEAD_GCM.fst\
 LHAE.p.fst\
 StatefulLHAE.fst\
@@ -197,7 +196,7 @@ TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF-redux TLSExtensions_Redux ENC
 	TLSExtensions.p.fst TLSPRF.p.fst \
 	HSFragment.p.fst TLSFragment.p.fst StatefulPlain.p.fst \
 	LHAEPlain.p.fst MAC_SHA256.p.fst MAC_SHA1.p.fst MAC.p.fst \
-	ENC.p.fst AEAD_GCM.p.fst LHAE.p.fst \
+	ENC.fst AEAD_GCM.p.fst LHAE.p.fst \
 	PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti \
 	HandshakeMessages.p.fst Handshake.p.fst
 
