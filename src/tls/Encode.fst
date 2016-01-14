@@ -18,7 +18,7 @@ open TLSConstants
 open TLSInfo
 open Range
 
-// for now, we EXCLUDE MACOnly
+// for now, we *exclude* MACOnly
 
 type id = i:id { is_MtE i.aeAlg /\ pv_of_id i <> TLS_1p3 } 
 
@@ -28,7 +28,6 @@ type tagt (i:id) = MAC.tag i
 (* Interface towards ENC (conditionally abstract) *)
 
 // the result of decrypting & decoding, with an abstract type for secrecy
-// should we index just by plaintext lengths, rather than ad & range?
 private type plain (i:id) (ad: LHAEPlain.adata i) (rg:range) = | Plain:
   f: LHAEPlain.plain i ad rg ->
   tag: tagt i ->
@@ -36,6 +35,9 @@ private type plain (i:id) (ad: LHAEPlain.adata i) (rg:range) = | Plain:
   // did decoding succeed? stateful? always true with RC4.
   ok : bool { is_MACOnly i.aeAlg \/ (encAlg_of_id i = (Stream CoreCrypto.RC4_128, Fresh) ==> ok = true) } -> 
   plain i ad rg 
+
+// should we index just by plaintext lengths, rather than ad & range?
+type dplain (i:id) (l:nat {valid_clen i l}) = (| ad:LHAEPlain.adata i &  plain i ad (cipherRangeClass i l) |)
 
 val plainLength: i:id -> clen: nat { clen >= ivSize i } -> Tot nat
 let plainLength i clen = clen - ivSize i
