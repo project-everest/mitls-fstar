@@ -25,6 +25,7 @@ type log = bytes
 //type log = list (m:bytes{exists ht d. m = messageBytes ht d})
 
 type nego = {
+     n_resume: bool;
      n_client_random: TLSInfo.random;
      n_server_random: TLSInfo.random;
      n_sessionID: sessionID;
@@ -39,7 +40,7 @@ type ID = {
      id_sigalg: option Sig.alg;
 }
 
-type ake_s = {
+type ake_s= {
      ake_s_id: ID;
      ake_s_kex_priv: option KEX_S_PRIV;
 }
@@ -57,22 +58,73 @@ type Session = {
      session_ake: ake;
 }     
 
+type eph = 
+  (list CoreCrypto.dh_key * list CoreCrypto.ec_key)
+
 type clientState (c:config) = 
      | C_Idle of option ri
-     | C_NegoSent of option ri * CH * log
-     | C_NegoDone of nego * option ake * log
-     | C_AkeDone of nego * ake * log  //Ephemeral state; immediately transits to FinishedSent
-     | C_FinishedSent of nego * ake * cVerifyData * log
-     | C_Complete of nego * ake * ri  //Transits to C_Idle (Some ri) for new epoch 
+     | C_HelloSent of option ri * eph * CH * log
+     | C_HelloReceived of nego * option ake * log //Transits to FinishedSent or ClientIdle
+     | C_FinishedSent of nego * ake * cVerifyData * log //Transits to C_Idle (Some ri) for new epoch 
+
+
+assume val client_init: c:config -> s:clientState c{is_C_Idle s}
+assume val getClientHello: c:config -> s:clientState c{is_C_Idle s} -> 
+                           (s':clientState c{is_C_HelloSent s'} * CH)
+assume val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} -> 
+                           s':clientState c{is_C_HelloReceived s'}
+assume val processServerHelloDone: c:config -> s:clientState c{is_C_HelloReceived s} -> 
+                           CRT -> option SKE -> option SCR -> 
+                           (s':clientState c{is_C_FinishedSent s'} * option CRT * CKE * option CV * FIN)
+
+assume val processServerFinished: c:config -> s:clientState c{is_C_FinishedSent s} -> 
+                           option STICKET -> FIN -> 
+                           s':clientState c{is_C_Idle s'} 
+
 
 type serverState (c:config) = 
      | S_Idle of option ri
-     | S_NegoDone of nego * option ake * log //Ephemeral state; immediately transits to AkeSent or FinishedSent
-     | S_AkeSent  of nego * ake_s * log
-     | S_AkeDone of nego * ake * log
-     | S_FinishedSent of nego * ake * sVerifyData * log // Only used during resumption
-     | S_Complete of nego * ake * ri //Transits to C_Idle (Some ri) for new epoch 
+     | S_HelloSent of nego * option ake * log 
+     | S_HelloDone of nego * ake_s * log 
+     | S_CCSReceived of nego * ake * log
+     | S_ResumeFinishedSent of nego * ake * log 
+     | S_FinishedSent of nego * ake * log 
+     | S_ZeroRTTReceived of nego * ake * log
 
+assume val server_init: c:config -> s:serverState c{is_S_Idle s}
+assume val processClientHello: c:config -> s:serverState c{is_S_Idle s} -> CH ->
+                               (s':serverState c{is_S_HelloSent s'} * SH)
+
+(* TLS 1.2 regular handshake *)
+assume val getServerHelloDone12: c:config -> s:serverState c{is_S_HelloSent s} -> 
+                         (s':serverState c{is_S_HelloDone s'} * CRT * option SKE * option SCR)
+assume val processClientCCS12: c:config -> s:serverState c{is_S_HelloDone s} -> 
+                             option CRT -> CKE -> option CV -> FIN ->
+                             s':serverState c{is_S_CCSReceived s'}
+assume val processClientFinished12: c:config -> s:serverState c{is_S_CCSReceived s} -> 
+                             FIN -> 
+                             (s':serverState c{is_S_FinishedSent s'} * option STICKET * FIN)
+
+(* TLS 1.2 abbreviated handshake *)
+assume val getServerFinishedResume12: c:config -> s:serverState c{is_S_HelloSent s} -> 
+                         (s':serverState c{is_S_ResumeFinishedSent s'} *  option STICKET * FIN)
+assume val processClientFinishedResume12: c:config -> s:serverState c{is_S_ResumeFinishedSent s} -> 
+                         s':serverState c{is_S_Idle s'}
+  
+(* TLS 1.3 0RTT-1RTT handshake *)
+assume val getServerFinished13: c:config -> s:serverState c{is_S_HelloSent s} -> 
+                         (s':serverState c{is_S_FinishedSent s'} * option SCR * option SC * SC * CV * FIN)
+
+assume val process0RTTClientFinished13: c:config -> s:serverState c{is_S_FinishedSent s} -> 
+                         option CRT -> option CV -> FIN ->
+                         s':serverState c{is_S_ZeroRTTReceived s'}
+
+assume val skip0RTTClientFinished13: c:config -> s:serverState c{is_S_FinishedSent s} -> 
+                         s':serverState c{is_S_ZeroRTTReceived s'}
+
+assume val process1RTTClientFinished13: c:config -> s:serverState c{is_S_ZeroRTTReceived s} -> 
+                         option CRT -> option CV -> FIN ->
+                         s':serverState c{is_S_Idle s'}
 
 val prepareClientHello: config -> option ri -> option sessionID -> (CH * log)
 let prepareClientHello cfg ri sido : CH * log =
