@@ -1,4 +1,4 @@
-module TLS
+module TLSOutline
 
 // Draft TLS API using hyperheaps in F*
 // incorporating definitions and comments from TLS.fs7 and TLS.fsi
@@ -19,66 +19,122 @@ open Platform.Tcp
 open TLSError
 open TLSInfo
 
+type hh = HyperHeap.t
+
 // using DataStream 
-assume val tls_region    : r:rid{parent r = root}
+assume val tls_region    : r:rid{r<>root /\ parent r = root}
+assume val epochs_region : r:rid{r<>root /\ parent r = root /\ r <> tls_region}
+type e_rid = r:rid{r<>root /\ parent r = epochs_region}
 
-val epochs_region : r:rid{parent r = root /\ r <> tls_region}
+// epochs are partnered statically (ie, their partner is known at the time of creation)
+assume type epoch
+assume val epoch_region:      epoch -> Tot rid
+assume val epoch_peer_region: epoch -> Tot rid
+assume val epochId:  e:epoch -> Tot id  // globally unique; should reveal some handshake info too
+assume val writtenT: e:epoch -> hh -> Tot (Seq.seq (DataStream.delta (epochId e))) //TODO: it is well-formed (note reconcile list vs seq)
+assume val readseqT: epoch -> hh -> Tot nat
 
-(* //epochs are partnered statically (ie, their partner is known at the time of creation) *)
-(* abstract type epoch  = ... // abstract; how to express sharing? using a global table of epochs? *)
+//Do we need such a function? Perhaps a stateful one to record paired epochs
+// assume val partner: epoch -> HyperHeap.t -> Tot epoch
 
-(* abstract val epochId: epoch -> Tot id  // globally unique; should reveal some handshake info too *)
-(* let epochId e = e.id *)
+// connections may be partnered dynamically (ie, they are partnered by the assignment of partnered epochs to connections)
+assume type connection
+assume type cid
+assume type c_inv  :  connection -> hh -> Type          //the private connection invariant
+assume val c_id:      connection -> Tot cid            //a unique identifier for the connection, typically derived from a nonce
+assume val c_region:  connection -> Tot rid            //the region in which the connection is allocated
+assume val c_role:    connection -> Tot role                  //Server or Client
+assume val c_regionsT:connection -> hh -> Tot (Set.set rid)    //the dynamic set of regions of connection and the connection's current epochs
+assume val readableT: connection -> hh -> Tot bool // indicates whether read is callable (for any purpose)
+assume val writableT: connection -> hh -> Tot bool // indicates whether write is callable (for sending appdata/closing)
+assume val epochsT:   connection -> hh -> Tot (Seq.seq epoch)  //the current sequence of epochs associated to a connection
 
-(* //both of these next two are monotonic *)
-(* val writtenT: e:epoch -> HyperHeap.t -> Tot (seq (DataStream.delta (epochId e))) //TODO: it is well-formed (note reconcile list vs seq) *)
-(* val readseqT: e:epoch -> HyperHeap.t -> Tot nat  *)
+open FStar.Monotonic.RRef
+open FStar.Ghost
 
-(* //connections may be partnered dynamically (ie, they are partnered by the assignment of partnered epochs to connections) *)
-(* abstract type connection = ... *)
-(* type inv: connection -> HyperHeap.t ->  Type // the private connection invariant *)
+//an abstract update condition on the connection log
+type c_log_extension (#a:Type) (s0:erased (Seq.seq a)) (s1:erased (Seq.seq a)) : Type
+(* Internally, we want this to include, at least:
+   1. seq extension: exists sfx. Seq.append (reveal s0) sfx = reveal s1
+   2. stable assignment of epochs to connections
+   3. ... ?
+*)
 
-(* val c_region: connection -> regionId // the only region modified by the connection. *)
-(* val c_role: connection -> role *)
+//a log of all (erased) connections created so far, monotonically growing
+assume val connection_log : m_rref tls_region (erased (Seq.seq connection)) c_log_extension
+assume type c_log_inv : hh -> Type
+let is_conn (c:connection) (h:hh) = SeqProperties.mem c (reveal (sel h connection_log))
+//A conn is a connection known to be in the connection log
+type conn = c:connection{witnessed (fun h -> b2t (is_conn c h))}
 
+(*** SEPARATION INVARIANTS ***)
+assume val epoch_region_peer: e:epoch -> Lemma
+  (ensures (epoch_region e <> root
+	    /\ epoch_peer_region e <> root
+	    /\ parent (epoch_region e) = epochs_region
+	    /\ parent (epoch_peer_region e) = epochs_region
+	    /\ disjoint (epoch_region e) (epoch_peer_region e)))
 
-(* val connection_log : m_rref (seq connection) (fun s0 s1 -> s1 >= s0) *)
+assume val c_regions_includes_c_region: c:connection -> h:hh -> Lemma
+  (Set.mem (c_region c) (c_regionsT c h))
 
-(* type conn = c:connection{Witnessed (fun h -> c \in (sel h connection_log)} *)
+assume val c_log_inv_separation: c1:connection -> c2:connection{c_id c1 <> c_id c2} -> h:hh -> Lemma
+  (requires (c_log_inv h /\ is_conn c1 h /\ is_conn c2 h))
+  (ensures (disjoint_regions (c_regionsT c1 h) (c_regionsT c2 h)))
 
-(* //connection_log_inv h =  *)
-(* //    let cs = sel h connection_log in *)
-(* //    partnering_inv cs /\ (TBD) *)
-(* //    forall c1<>c2 \in cs. disjoint (c_region c1) (c_region c2) *)
-(* //                      /\  disjoint_regions (epoch_regions c1 h) (epoch_regions c2 h) *)
-(* val connection_log_inv : HyperHeap.t -> Type *)
+(*** PARTNERING INVARIANTS ***)
+(* epoch partnering is a static property *)
+assume type partnered_epochs: epoch -> epoch -> Type
+assume val epoch_of: connection -> hh -> Tot epoch                   //the current epoch of a connection
+assume val epoch_assigned_to: epoch -> hh -> Tot (option connection) //the stable assignment of an epoch to a connection
+assume val current_epoch: c:conn -> ST (option epoch)
+  (requires c_log_inv)
+  (ensures (fun h0 e h1 -> 
+    h0=h1 /\
+    (is_Some e ==> (let epoch = Some.v e in
+		   epoch = epoch_of c h0
+		   /\ witnessed (fun h -> epoch_assigned_to epoch h == Some c)))))
 
-
-(* //init requires an assume to handle top-level effects *)
-(* assume val init : unit -> ST unit *)
-(*     (ensures (fun h0 _ h1 -> connection_log_inv h1 *)
-(*                          /\ fresh_region tls_region h0 h1)) *)
-    
+(* connection partnering is state dependent ... *)
+assume type partnered_conn : connection -> connection -> hh -> Type
+(* ... and is defined by the current assignment of epochs to connections *)
+assume val lemma_conn_partnering: c1:connection -> c2:connection -> h:hh -> Lemma 
+  (requires (c_log_inv h /\ is_conn c1 h /\ is_conn c2 h))
+  (ensures (partnered_conn c1 c2 h <==> partnered_epochs (epoch_of c1 h) (epoch_of c2 h)))
   
+(*** FRAMING INVARIANTS ***)
+assume val frame_c_inv: c:connection -> h0:hh -> h1:hh -> Lemma 
+  (requires (HyperHeap.equal_on (c_regionsT c h0) h0 h1
+	     /\ c_log_inv h0
+	     /\ c_inv c h0))
+  (ensures (c_log_inv h0
+	    /\ c_inv c h1
+ 	    /\ readableT c h0 = readableT c h1
+	    /\ writableT c h0 = writableT c h1 
+	    /\ epochsT c h0   = epochsT c h1 
+	    /\ Connection.Seq_forall 
+			 (fun e -> writtenT e h0 = writtenT e h1 /\
+			        readseqT e h0 = readseqT e h1)
+		         (epochsT c h0)))
+
+(*** SECURITY INVARIANT ***)
+assume val partnered_conn_inv: c1:connection -> c2:connection -> h:hh -> Lemma
+  (requires (partnered_conn c1 c2 h))
+  (ensures (readseqT (epoch_of c1 h) h <= Seq.length (writtenT (epoch_of c2 h) h)    //the current reader is behind the writer
+	   /\ readseqT (epoch_of c2 h) h <= Seq.length (writtenT (epoch_of c1 h) h)   //on both sides
+	   /\ (forall e1 e2. e1 <> epoch_of c1 h                         //and for any old partnered epochs (can we get this?)
+		       /\ epoch_assigned_to e1 h = Some c1
+		       /\ e2 <> epoch_of c2 h 
+		       /\ epoch_assigned_to e2 h = Some c2
+		       /\ partnered_epochs e1 e2
+		       ==> (readseqT e1 h = Seq.length (writtenT e2 h)           //everything that was sent was read
+  		         /\ readseqT e2 h = Seq.length (writtenT e1 h)))))       //on both sides
+
 
 (* // all the calls below are ghost & read-only; they depend only on c's region,  *)
 (* // and their result are determined by the sequence of calls (arguments, results, and postconditions) *)
 (* // consider using a log of epoch views instead of epochs *)
 (* // fix r/w dual indexing! *)
-
-(* val readableT: connection -> HyperHeap.t -> Tot bool // indicates whether read is callable (for any purpose) *)
-(* val writableT: connection -> HyperHeap.t -> Tot bool // indicates whether write is callable (for sending appdata/closing) *)
-(* val epochsT:   connection -> HyperHeap.t -> Tot (seq epoch) // *projected* and *truncated* so that the last entry is always the current epoch. *)
-
-
-(* (\* lemma state_inv: forall c h0 h1,  *\) *)
-(* (\*   HyperHeap.restrict c.region h0 = HyperHeap.restrict c.region h1 ==> *\) *)
-(* (\*   readableT c h0 = readableT c h1 /\ *\) *)
-(* (\*   writableT c h0 = writableT c h1 /\ *\) *)
-(* (\*   epochsT c h0   = epochsT c h1 /\  *\) *)
-(* (\*   Seq.Forall (epochsT c h0) *\) *)
-(* (\*     (fun e -> writtenT e h0 = writtenT e h1 /\  *\) *)
-(* (\*             readseqT e h0 = readseqT e h1) *\) *)
 
 (* // by design, the current values of writerId c and readerId c *)
 (* // are determined by the call sequence --- no need to call them. *)
@@ -328,3 +384,12 @@ val epochs_region : r:rid{parent r = root /\ r <> tls_region}
 
 
 
+
+
+(* init requires an assume to handle top-level effects *)
+assume val init : unit -> ST unit
+    (requires (fun h -> True))
+    (ensures (fun h0 _ h1 -> c_log_inv h1
+                        /\ fresh_region tls_region h0 h1
+			/\ fresh_region epochs_region h0 h1))
+    
