@@ -15,8 +15,8 @@ endif
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
 STDLIB_ADMITS=Char HyperHeap Set Map
 
-STDLIB=FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
-stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi \
+STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
+stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi \
 FStar.Seq.fst FStar.SeqProperties.fst #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
@@ -45,7 +45,8 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 # Not sure which interfaces we should put in there.
 
 # these files are the stable inputs for verification
-TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst MAC.fst Encode.fst ENC.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Handshake.fsti Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst MAC.fst Encode.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Handshake.fsti Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
+#ENC.fst 
 #LHAE.fst --these do not even parse
 #Record.fst --this does not lax type-check
 
