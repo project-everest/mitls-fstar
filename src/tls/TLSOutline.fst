@@ -18,90 +18,101 @@ open Platform.Tcp
 
 open TLSError
 open TLSInfo
+open FStar.Monotonic.RRef
+open FStar.Ghost
 
 type hh = HyperHeap.t
 
 // using DataStream 
-assume val tls_region    : r:rid{r<>root /\ parent r = root}
-assume val epochs_region : r:rid{r<>root /\ parent r = root /\ r <> tls_region}
-type e_rid = r:rid{r<>root /\ parent r = epochs_region}
+type rid = r:rid{r<>root}
+assume val tls_region    : r:rid{parent r = root}
+assume val epochs_region : r:rid{parent r = root /\ r <> tls_region}
 
 // epochs are partnered statically (ie, their partner is known at the time of creation)
 assume type epoch
 assume val epoch_region:      epoch -> Tot rid
 assume val epoch_peer_region: epoch -> Tot rid
-assume val epochId:  e:epoch -> Tot id  // globally unique; should reveal some handshake info too
+assume val epochId:  e:epoch -> Tot id  // globally unique; internally it is (hs_id h) for the handshake h
 assume val writtenT: e:epoch -> hh -> Tot (Seq.seq (DataStream.delta (epochId e))) //TODO: it is well-formed (note reconcile list vs seq)
 assume val readseqT: epoch -> hh -> Tot nat
+assume type is_initial_epoch : epoch -> Type //TODO: maybe this can be removed or defined as the epoch in its initial state
+//TODO: an API for the duality on ids
 
 //Do we need such a function? Perhaps a stateful one to record paired epochs
 // assume val partner: epoch -> HyperHeap.t -> Tot epoch
 
 // connections may be partnered dynamically (ie, they are partnered by the assignment of partnered epochs to connections)
 assume type connection
-assume type cid
-assume type c_inv  :  connection -> hh -> Type          //the private connection invariant
-assume val c_id:      connection -> Tot cid            //a unique identifier for the connection, typically derived from a nonce
-assume val c_region:  connection -> Tot rid            //the region in which the connection is allocated
+//field accessors of connections
+assume val c_id:      connection -> Tot random         //a unique identifier for the connection, i.e., its local nonce
 assume val c_role:    connection -> Tot role                  //Server or Client
-assume val c_regionsT:connection -> hh -> Tot (Set.set rid)    //the dynamic set of regions of connection and the connection's current epochs
+assume val c_tcp:     connection -> Tot networkStream
+assume val c_resume:  connection -> Tot (option sessionID)
+assume val c_config:  connection -> Tot config
+//properties of connections for specification purposes only
+assume type c_inv  :  connection -> hh -> Type          //the private connection invariant
+assume val c_region:  connection -> Tot rid            //the region in which the connection is allocated
+assume val c_regionsT:connection -> hh -> Tot (Set.set HyperHeap.rid) //the dynamic set of regions of connection and the connection's current epochs
+//TODO: define c_regionsT c h as the c_region c and all the regions of the (epochsT c) (not including the peer regions)
+
 assume val readableT: connection -> hh -> Tot bool // indicates whether read is callable (for any purpose)
 assume val writableT: connection -> hh -> Tot bool // indicates whether write is callable (for sending appdata/closing)
 assume val epochsT:   connection -> hh -> Tot (Seq.seq epoch)  //the current sequence of epochs associated to a connection
 
-open FStar.Monotonic.RRef
-open FStar.Ghost
+//TODO: move this to FStar.Seq
+type seq_prefix (#a:Type) (s1:Seq.seq a) (s2:Seq.seq a) =  
+  exists sfx. Seq.append s1 sfx = s2
 
 //an abstract update condition on the connection log
 type c_log_extension (#a:Type) (s0:erased (Seq.seq a)) (s1:erased (Seq.seq a)) : Type
 (* Internally, we want this to include, at least:
-   1. seq extension: exists sfx. Seq.append (reveal s0) sfx = reveal s1
-   2. stable assignment of epochs to connections
+   1. seq_prefix (reveal s0) (reveal s1)
+   2. stable assignment of epochs to connections (although this could be pushed inside mrefs of each connection)
    3. ... ?
 *)
 
 //a log of all (erased) connections created so far, monotonically growing
+//NB: the erasure may not be sustainable for use in ideal mode
+//    e.g., when generating new connections we will want to inspect the connection_log 
 assume val connection_log : m_rref tls_region (erased (Seq.seq connection)) c_log_extension
 assume type c_log_inv : hh -> Type
-let is_conn (c:connection) (h:hh) = SeqProperties.mem c (reveal (sel h connection_log))
+type is_conn (c:connection) (h:hh) = b2t (SeqProperties.mem c (reveal (sel h connection_log)))
 //A conn is a connection known to be in the connection log
-type conn = c:connection{witnessed (fun h -> b2t (is_conn c h))}
+type conn = c:connection{witnessed (is_conn c)}
 
 (*** SEPARATION INVARIANTS ***)
 assume val epoch_region_peer: e:epoch -> Lemma
-  (ensures (epoch_region e <> root
-	    /\ epoch_peer_region e <> root
-	    /\ parent (epoch_region e) = epochs_region
+  (ensures (parent (epoch_region e) = epochs_region
 	    /\ parent (epoch_peer_region e) = epochs_region
 	    /\ disjoint (epoch_region e) (epoch_peer_region e)))
 
-assume val c_regions_includes_c_region: c:connection -> h:hh -> Lemma
-  (Set.mem (c_region c) (c_regionsT c h))
-
 assume val c_log_inv_separation: c1:connection -> c2:connection{c_id c1 <> c_id c2} -> h:hh -> Lemma
   (requires (c_log_inv h /\ is_conn c1 h /\ is_conn c2 h))
-  (ensures (disjoint_regions (c_regionsT c1 h) (c_regionsT c2 h)))
+  (ensures (disjoint_regions (c_regionsT c1 h) (c_regionsT c2 h))) //NB: this only works because c_regionsT does not collect the peer_regions
 
 (*** PARTNERING INVARIANTS ***)
 (* epoch partnering is a static property *)
 assume type partnered_epochs: epoch -> epoch -> Type
-assume val epoch_of: connection -> hh -> Tot epoch                   //the current epoch of a connection
+assume val epoch_ofT: connection -> hh -> Tot (option epoch)         //the current epoch of a connection
+let epoch_ofT' (c:connection) (h:hh{is_Some (epoch_ofT c h)}) = Some.v (epoch_ofT c h)
 assume val epoch_assigned_to: epoch -> hh -> Tot (option connection) //the stable assignment of an epoch to a connection
-assume val current_epoch: c:conn -> ST (option epoch)
+type was_assigned_to (e:epoch) (c:connection) (h:hh) = (epoch_assigned_to e h == Some c)
+assume val epoch_of: c:conn -> ST (option epoch)
   (requires c_log_inv)
   (ensures (fun h0 e h1 -> 
     h0=h1 /\
-    (is_Some e ==> (let epoch = Some.v e in
-		   epoch = epoch_of c h0
-		   /\ witnessed (fun h -> epoch_assigned_to epoch h == Some c)))))
+    epoch_ofT c h1 = e /\
+    (is_Some e ==> witnessed (was_assigned_to (Some.v e) c))))
 
-(* connection partnering is state dependent ... *)
-assume type partnered_conn : connection -> connection -> hh -> Type
-(* ... and is defined by the current assignment of epochs to connections *)
-assume val lemma_conn_partnering: c1:connection -> c2:connection -> h:hh -> Lemma 
-  (requires (c_log_inv h /\ is_conn c1 h /\ is_conn c2 h))
-  (ensures (partnered_conn c1 c2 h <==> partnered_epochs (epoch_of c1 h) (epoch_of c2 h)))
-  
+(* connection partnering is state dependent ... it is not necessarily stable
+     But, we should be able to prove that it is symmetric *)
+type partnered_conn (c1:connection) (c2:connection) (h:hh) = 
+  is_Some (epoch_ofT c1 h) /\
+  is_Some (epoch_ofT c2 h) /\
+  partnered_epochs (epoch_ofT' c1 h) (epoch_ofT' c2 h)
+
+(* relating index of the peer to the epoch's peer *)
+
 (*** FRAMING INVARIANTS ***)
 assume val frame_c_inv: c:connection -> h0:hh -> h1:hh -> Lemma 
   (requires (HyperHeap.equal_on (c_regionsT c h0) h0 h1
@@ -118,18 +129,144 @@ assume val frame_c_inv: c:connection -> h0:hh -> h1:hh -> Lemma
 		         (epochsT c h0)))
 
 (*** SECURITY INVARIANT ***)
+//Question: is is possible for c1 and c2 to be partnered now but for c1 to have been partnered with some other c2' previously? *)
 assume val partnered_conn_inv: c1:connection -> c2:connection -> h:hh -> Lemma
   (requires (partnered_conn c1 c2 h))
-  (ensures (readseqT (epoch_of c1 h) h <= Seq.length (writtenT (epoch_of c2 h) h)    //the current reader is behind the writer
-	   /\ readseqT (epoch_of c2 h) h <= Seq.length (writtenT (epoch_of c1 h) h)   //on both sides
-	   /\ (forall e1 e2. e1 <> epoch_of c1 h                         //and for any old partnered epochs (can we get this?)
-		       /\ epoch_assigned_to e1 h = Some c1
-		       /\ e2 <> epoch_of c2 h 
-		       /\ epoch_assigned_to e2 h = Some c2
+  (ensures (partnered_conn c1 c2 h
+	   /\ readseqT (epoch_ofT' c1 h) h <= Seq.length (writtenT (epoch_ofT' c2 h) h)    //the current reader is behind the writer
+	   /\ readseqT (epoch_ofT' c2 h) h <= Seq.length (writtenT (epoch_ofT' c1 h) h)   //on both sides
+	   /\ (forall e1 e2. e1 <> epoch_ofT' c1 h                         //and for any old partnered epochs (can we get this?)
+		       /\ was_assigned_to e1 c1 h
+		       /\ e2 <> epoch_ofT' c2 h 
+		       /\ was_assigned_to e2 c2 h
 		       /\ partnered_epochs e1 e2
 		       ==> (readseqT e1 h = Seq.length (writtenT e2 h)           //everything that was sent was read
   		         /\ readseqT e2 h = Seq.length (writtenT e1 h)))))       //on both sides
 
+
+(*** CONTROL API ***)
+type initial (r:role) (ns:_) (cfg:_) (resume:_) (cn: connection) (h:hh) = 
+    extends (c_region cn) tls_region /\ // we allocate a fresh, opaque region for the connection
+    c_role cn   = r /\
+    c_tcp cn    = ns /\
+    c_resume cn = resume /\
+    c_config cn = cfg /\
+    witnessed (is_conn cn) /\
+    is_Some (epoch_ofT cn h) /\
+    is_initial_epoch (epoch_ofT' cn h)
+
+(* lemma about the initial epoch *)
+val initial_epoch_empty : h:hh -> e:epoch{is_initial_epoch e} -> Lemma 
+  (requires (c_log_inv h))
+  (ensures (Seq.length (writtenT e h) = 0
+	   /\ readseqT e h = 0))
+
+//* should we still return ConnectionInfo ?
+//* merging connect and resume with an optional sessionID
+val connect: ns:networkStream -> c:config -> resume: option sessionID -> ST conn
+  (requires c_log_inv)
+  (ensures (fun h0 cn h1 ->
+    c_log_inv h1 /\
+    modifies Set.empty h0 h1 /\
+    initial Client ns c resume cn h1))
+  //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
+
+//* do we need both?
+val accept: tcpListener -> c:config -> ST conn
+  (requires c_log_inv)
+  (ensures (fun h0 cn h1 ->
+    c_log_inv h1 /\
+    modifies Set.empty h0 h1 /\
+    (exists ns. initial Server ns c None cn h1)))
+
+val accept_connected: ns:networkStream -> c:config -> ST conn
+  (requires c_log_inv)
+  (ensures (fun h0 cn h1 ->
+    c_log_inv h1 /\
+    modifies Set.empty h0 h1 /\
+    initial Server ns c None cn h1))
+
+// the client can ask for rekeying --- no immediate effect
+val rekey: cn:conn { c_role cn = Client } -> ST unit
+  (requires c_log_inv)
+  (ensures (fun h0 b h1 -> 
+     c_log_inv h1 /\
+     modifies Set.empty h0 h1)) // no visible change in cn
+
+val rehandshake: cn:conn { c_role cn = Client } -> c:config -> ST unit
+  (requires c_log_inv)
+  (ensures (fun h0 b h1 -> 
+    c_log_inv h1 /\
+    modifies Set.empty h0 h1)) // no visible change in cn
+
+val request: cn:conn { c_role cn = Server } -> c:config -> ST unit
+  (requires c_log_inv)
+  (ensures (fun h0 b h1 -> 
+    c_log_inv h1 /\
+    modifies Set.empty h0 h1)) // no visible change in cn
+
+
+(*** WRITING ***)
+(* // assuming writer_log is the high-level projection of the log  *)
+
+type ioresult_w =
+    | Written   // Application data was written, and the connection remains writable in the same epoch
+    | WriteError: al:alertDescription -> s:string -> ioresult_w // The connection is down, possibly after sending an alert
+
+type modifies_c c h0 h1 =
+  modifies (c_regionsT c h1) h0 h1 /\
+  (let epochs0 = epochsT c h0 in
+   let epochs1 = epochsT c h1 in
+   seq_prefix epochs0 epochs1 /\
+   (forall (i: nat { i < Seq.length epochs0 - 1 }).
+    writtenT (Seq.index epochs0 i) h0 = writtenT (Seq.index epochs1 i) h1 /\
+    readseqT (Seq.index epochs0 i) h0 = readseqT (Seq.index epochs1 i) h1))
+
+assume val transitive_modifies_c : c:connection -> h0:hh -> h1:hh -> h2:hh -> Lemma
+  (requires (modifies_c c h0 h1 /\
+	     modifies_c c h1 h2))
+  (ensures (modifies_c c h0 h2))
+
+
+(* let currentId epochs = epochId (Seq.last epochs) *)
+
+(* (\* we could use a record to avoid multiple sels  *)
+(* type sT = State: *)
+(*     epochs: Seq epoch ->  *)
+(*     readable: bool ->  *)
+(*     writable: bool -> *)
+(*     readseq: nat  *)
+(*     written: Seq DataStream.fragment (currentId epochs) -> sT *)
+(* *\) *)
+
+// val write: c:conn -> i:id -> rg:frange i -> data: DataStream.fragment i rg -> ST ioresult_w
+//   (requires (fun h0 ->
+//     c_log_inv h0 /\
+//     writableT c h0 /\  // implying epochsT c h0 is not empty
+//     i = epochId (epoch_of c h0)))
+//   (ensures (fun h0 r h1 ->
+//     c_log_inv h1 /\
+//     modifies_c c h0 h1 /\ // guarantees that we modify at most the last epoch
+//     epochsT c h1   = epochsT c h0 /\
+//     let current = epoch_of c h0 in 
+//     let log0 = writtenT current h0 in
+//     let log1 = writtenT current h1 in
+//     (r = Written ==> (
+//       log1 = snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId?
+//       readableT c h1 = readableT c h0 /\ 
+//       readseqT c h1 = readseqT c h0 /\
+//       writableT c h1 = writableT c h0  ))
+//     /\
+//     (is_WriteError r ==> (
+//       log1 = match r.al with | None -> log0
+//                              | Some -> snoc log0 (DataStream.Alert (WriteError.al.value r)) /\
+//       ~(readableT c h1) /\ readseqT c h1 = readseqT c h0 /\
+//       writableT c h1 = None
+//     ))
+//   ))
+
+(* // hopefully mustRead is gone.  *)
+(* //  | MustRead  // Nothing written, as the connection is busy completing a handshake *)
 
 (* // all the calls below are ghost & read-only; they depend only on c's region,  *)
 (* // and their result are determined by the sequence of calls (arguments, results, and postconditions) *)
@@ -156,112 +293,7 @@ assume val partnered_conn_inv: c1:connection -> c2:connection -> h:hh -> Lemma
 (* //TODO: unclear how to fold in 0RTT *)
 
 
-(* //------------------------- control API ---------------------------- *)
 
-(* let initial:  -> cn: connection -> h:heap -> Tot bool = *)
-(*     extends (c_region cn) root /\ // we allocate a fresh, opaque region for the connection *)
-(*     c_role cn   = role /\ *)
-(*     c_tcp cn    = ns /\ *)
-(*     c_resume cn = resume /\ *)
-(*     c_config cn = c /\ *)
-(*     sel h (c_epoch cn) = Init // assuming Init epoch implicitly have no data sent/received *)
-
-(* //* should we still return ConnectionInfo ? *)
-(* //* merging connect and resume with an optional sessionID *)
-(* val connect: ns:Tcp.networkStream -> c:config -> resume: option sessionID -> ST connection *)
-(*   (requires (fun h0 -> True)) *)
-(*   (ensures (fun h0 cn h1 -> *)
-(*     modifies Set.empty h0 h1 /\ *)
-(*     initial Client ns c resume cn h1 *)
-(*     //TODO: even if the server declines, we authenticate the client's intent to resume from this sid. *)
-(*   )) *)
-
-(* //* do we need both? *)
-(* val accept: Tcp.TcpListener -> c:config -> ST connection *)
-(*   (requires (fun h0 -> True)) *)
-(*   (ensures (fun h0 cn h1 -> *)
-(*     modifies Set.empty h0 h1 /\ *)
-(*     exists ns. initial Server ns c None cn h1 *)
-(*   )) *)
-(* val accept_connected: ns:Tcp.NetworkStream -> c:config -> ST connection *)
-(*   (requires (fun h0 -> True)) *)
-(*   (ensures (fun h0 cn h1 -> *)
-(*     modifies Set.empty h0 h1 /\ *)
-(*     initial Server ns c None cn h1 *)
-(*   )) *)
-
-(* // the client can ask for rekeying --- no immediate effect *)
-(* val rekey: cn:connection { c_role cn = Client } -> ST unit *)
-(*   (requires (fun h0 -> True)) *)
-(*   (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn *)
-(*   )) *)
-
-(* val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit *)
-(*   (requires (fun h0 -> True)) *)
-(*   (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn *)
-(*   )) *)
-
-(* val request: cn:connection { c_role cn = Server } -> c:config -> ST unit *)
-(*   (requires (fun h0 -> True)) *)
-(*   (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn *)
-(*   )) *)
-
-(* //--------------------------writing----------------------------- *)
-
-(* // assuming writer_log is the high-level projection of the log  *)
-
-(* type ioresult_w =  *)
-(*     | Written   // Application data was written, and the connection remains writable in the same epoch *)
-(*     | WriteError of al:alertDescription -> s:string -> ioresult_w // The connection is down, possibly after sending an alert *)
-
-(* type modifies_c c h0 h1 =  *)
-(*   modifies (regions_of c h1) h0 h1 /\ *)
-(*   let epochs0 = epochsT c h0 in  *)
-(*   let epochs1 = epochsT c h1 in  *)
-(*   Seq.prefix epochs0 epochs1 /\ *)
-(*   forall e: nat { e < Seq.length epochs - 1 }.  *)
-(*     writtenT (Seq.index epochs0 i) = writtenT (Seq.index epochs1 i) /\ *)
-(*     readseqT (Seq.index epochs0 i) = readseqT (Seq.index epochs1 i)  *)
-(* // this predicate is meant to be transitive *)
-
-(* let currentId epochs = epochId (Seq.last epochs) *)
-
-(* (\* we could use a record to avoid multiple sels  *)
-(* type sT = State: *)
-(*     epochs: Seq epoch ->  *)
-(*     readable: bool ->  *)
-(*     writable: bool -> *)
-(*     readseq: nat  *)
-(*     written: Seq DataStream.fragment (currentId epochs) -> sT *)
-(* *\) *)
-
-(* val write: c:conn -> i:id -> rg:frange i -> data: DataStream.fragment i rg -> ST ioresult_w *)
-(*   (requires (fun h0 ->  *)
-(*     connection_log_inv h0 /\ *)
-(*     writableT c h0 /\  // implying epochsT c h0 is not empty *)
-(*     i = currentId (epochsT c h0))) *)
-(*   (ensures (fun h0 r h1 ->  *)
-(*     connection_log_inv h1 /\ *)
-(*     modifies_c c h0 h1 /\ // should also guarantee that we modify at most the current epoch and append to the log *)
-(*     epochsT c h1   = epochsT c h0 /\  *)
-(*     let current = Seq.last (epochsT c h0) in  *)
-(*     let log0 = writtenT current h0 in  *)
-(*     let log1 = writtenT current h1 in  *)
-(*     (r = Written ==> ( *)
-(*       log1 = snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId? *)
-(*       readableT c h1 = readableT c h0 /\ readseqT c h1 = readseqT c h0 /\ *)
-(*       writableT c h1 = writableT c h0  )) *)
-(*     /\  *)
-(*     (is_WriteError r ==> ( *)
-(*       log1 = match r.al with | None -> log0 *)
-(*                              | Some -> snoc log0 (DataStream.Alert (WriteError.al.value r)) /\ *)
-(*       ~(readableT c h1) /\ readseqT c h1 = readseqT c h0 /\  *)
-(*       writableT c h1 = None *)
-(*     )) *)
-(*   )) *)
-
-(* // hopefully mustRead is gone.  *)
-(* //  | MustRead  // Nothing written, as the connection is busy completing a handshake *)
 
 (* //------------------------- reading ---------------------------- *)
 

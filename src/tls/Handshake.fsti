@@ -44,8 +44,8 @@ opaque type epoch_region_inv (#i:_) (rgn:rid) (peer:rid) (r:reader i) (w:writer 
  
 type epoch (rgn:rid) (peer:rid) =
   | Epoch: h: handshake ->
-           r: reader (hs_id h) ->
-           w: writer (hs_id h) {epoch_region_inv rgn peer r w }
+           r: reader (hs_id h) -> //TODO: should be reader (peer (hs_id h))
+           w: writer (hs_id h) {epoch_region_inv rgn peer r w } 
            -> epoch rgn peer
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
