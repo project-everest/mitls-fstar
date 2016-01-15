@@ -80,6 +80,14 @@ type is_conn (c:connection) (h:hh) = b2t (SeqProperties.mem c (reveal (sel h con
 //A conn is a connection known to be in the connection log
 type conn = c:connection{witnessed (is_conn c)}
 
+
+(* init requires an assume to handle top-level effects *)
+assume val init : unit -> ST unit
+    (requires (fun h -> True))
+    (ensures (fun h0 _ h1 -> c_log_inv h1
+                        /\ fresh_region tls_region h0 h1
+			/\ fresh_region epochs_region h0 h1))
+
 (*** SEPARATION INVARIANTS ***)
 assume val epoch_region_peer: e:epoch -> Lemma
   (ensures (parent (epoch_region e) = epochs_region
@@ -209,16 +217,30 @@ val request: cn:conn { c_role cn = Server } -> c:config -> ST unit
 (*** WRITING ***)
 (* // assuming writer_log is the high-level projection of the log  *)
 
+ 
 type ioresult_w =
-    | Written   // Application data was written, and the connection remains writable in the same epoch
-    | WriteError: al:alertDescription -> s:string -> ioresult_w // The connection is down, possibly after sending an alert
+    // public results
+    | Written             // Application data was written, and the connection remains writable
+    | WriteError: al:option alertDescription -> txt: string -> ioresult_w // The connection is down, possibly after sending an alert
+//  | WritePartial of unsent_data // worth restoring?
+    // transient, internal results
+    | MustRead            // Nothing written, and the connection is busy completing a handshake
+    | WriteDone           // No more data to send in the current state
+    | WriteHSComplete     // The handshake is complete [while reading]
+    | SentClose           // [while reading]
+    | WriteAgain          // there is more to send
+    | WriteAgainFinishing // the outgoing epoch changed & more to send to finish the handshake
+    | WriteAgainClosing   // we are tearing down the connection & must still send an alert
+
+type ioresult_o = r:ioresult_w { is_Written r \/ is_WriteError r }
+
 
 type modifies_c c h0 h1 =
-  modifies (c_regionsT c h1) h0 h1 /\
-  (let epochs0 = epochsT c h0 in
+  modifies (c_regionsT c h1) h0 h1 /\   //may modify all the (non-peer) regions of the connections
+  (let epochs0 = epochsT c h0 in 
    let epochs1 = epochsT c h1 in
-   seq_prefix epochs0 epochs1 /\
-   (forall (i: nat { i < Seq.length epochs0 - 1 }).
+   seq_prefix epochs0 epochs1 /\        //but the epochs only grew
+   (forall (i: nat { i < Seq.length epochs0 - 1 }). //and for all but the last epoch, nothing changed
     writtenT (Seq.index epochs0 i) h0 = writtenT (Seq.index epochs1 i) h1 /\
     readseqT (Seq.index epochs0 i) h0 = readseqT (Seq.index epochs1 i) h1))
 
@@ -227,43 +249,88 @@ assume val transitive_modifies_c : c:connection -> h0:hh -> h1:hh -> h2:hh -> Le
 	     modifies_c c h1 h2))
   (ensures (modifies_c c h0 h2))
 
+assume val write: c:conn -> i:id -> rg:Range.frange i -> data: DataStream.fragment i rg -> ST ioresult_o
+  (requires (fun h0 ->
+    c_log_inv h0 /\
+    writableT c h0 /\            //TODO: make it so that writableT ==> implying epochsT c h0 is not empty
+    is_Some (epoch_ofT c h0) /\  
+    i = epochId (epoch_ofT' c h0)))
+  (ensures (fun h0 r h1 ->
+    c_log_inv h1 /\
+    modifies_c c h0 h1 /\            //modified at most the last epoch
+    epochsT c h1 = epochsT c h0 /\ //we didn't move to a new epoch
+    is_Some (epoch_ofT c h0) /\ 
+    i = epochId (epoch_ofT' c h0) /\
+   ((fun (current:epoch{current=epoch_ofT' c h0}) -> (* TODO: fix ugly encoded let *)
+     (fun (log0:Seq.seq (DataStream.delta i))
+        (log1:Seq.seq (DataStream.delta i)) -> 
+	(r = Written ==> (
+	  log1 = SeqProperties.snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId?
+	  readableT c h1 = readableT c h0 /\ 
+	  readseqT current h1 = readseqT current h0   /\
+	  writableT c h1 = writableT c h0  ))
+        /\
+	(is_WriteError r ==> (
+  	  (log1 = (match WriteError.al r with 
+		       | None -> log0
+	               | Some v -> SeqProperties.snoc log0 (DataStream.Alert v))) /\
+	  ~(readableT c h1) 
+	  /\ readseqT current h1 = readseqT current h0 /\
+	  ~(writableT c h1)
+	  )))
+     (writtenT current h0)
+     (writtenT current h1))
+     (epoch_ofT' c h0))))
 
-(* let currentId epochs = epochId (Seq.last epochs) *)
+(*** READING ***)
+type ioresult_r (i:id) =
+    | Read of DataStream.delta i
+        // this delta has been added to the input stream; we may have read
+        // - an application-data fragment or a warning (leaving the connection live)
+        // - a closure or a fatal alert (tearing down the connection)
+        // If the alert is a warning, the connection remains live.
+        // If the alert is final, the connection has been closed by our peer;
+        // the application may reuse the underlying TCP stream
+        // only after normal closure (a = AD_close_notify)
 
-(* (\* we could use a record to avoid multiple sels  *)
-(* type sT = State: *)
-(*     epochs: Seq epoch ->  *)
-(*     readable: bool ->  *)
-(*     writable: bool -> *)
-(*     readseq: nat  *)
-(*     written: Seq DataStream.fragment (currentId epochs) -> sT *)
-(* *\) *)
+    | ReadError: o:option alertDescription -> txt:string -> ioresult_r i
+        // We encountered an error while reading, so the connection dies.
+        // we return the fatal alert we may have sent, if any,
+        // or None in case of an internal error.
+        // The connection is gone; its state is undefined.
 
-// val write: c:conn -> i:id -> rg:frange i -> data: DataStream.fragment i rg -> ST ioresult_w
-//   (requires (fun h0 ->
-//     c_log_inv h0 /\
-//     writableT c h0 /\  // implying epochsT c h0 is not empty
-//     i = epochId (epoch_of c h0)))
-//   (ensures (fun h0 r h1 ->
-//     c_log_inv h1 /\
-//     modifies_c c h0 h1 /\ // guarantees that we modify at most the last epoch
-//     epochsT c h1   = epochsT c h0 /\
-//     let current = epoch_of c h0 in 
-//     let log0 = writtenT current h0 in
-//     let log1 = writtenT current h1 in
-//     (r = Written ==> (
-//       log1 = snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId?
-//       readableT c h1 = readableT c h0 /\ 
-//       readseqT c h1 = readseqT c h0 /\
-//       writableT c h1 = writableT c h0  ))
-//     /\
-//     (is_WriteError r ==> (
-//       log1 = match r.al with | None -> log0
-//                              | Some -> snoc log0 (DataStream.Alert (WriteError.al.value r)) /\
-//       ~(readableT c h1) /\ readseqT c h1 = readseqT c h0 /\
-//       writableT c h1 = None
-//     ))
-//   ))
+    | CertQuery : q:Cert.chain -> b:bool -> ioresult_r i
+        // We received the peer certificates for the next epoch, to be authorized before proceeding.
+        // the bool is what the Windows certificate store said about this certificate.
+    | CompletedFirst
+        // Handshake is completed, and we have already sent our finished message,
+        // so only the incoming epoch changes
+    | CompletedSecond
+        // Handshake is completed, and we have already sent our finished message,
+        // so only the incoming epoch changes
+    | DontWrite
+        // Nothing read yet, but we can't write anymore.
+
+    // internal states only
+    | ReadAgain
+    | ReadAgainFinishing
+    | ReadFinished
+
+type ioresult_i (i:id) = i:ioresult_r i{is_Read i \/ is_ReadError i \/ is_CertQuery i \/ is_CompletedFirst i \/ is_CompletedSecond i \/ is_DontWrite i}
+assume val dual : id -> Tot id //TODO: move this to TLSInfo?
+
+assume val read: c:conn -> i:id -> ST (ioresult_i i)              // unclear whether we should pass i in.
+  (requires (fun h0 -> 
+    c_log_inv h0 /\
+    readableT c h0 /\                   //TODO: this should imply the next line
+    is_Some (epoch_ofT c h0) /\  
+    i = dual (epochId (epoch_ofT' c h0))))
+  (ensures (fun h0 r h1 ->
+    c_log_inv h1 /\
+    modifies_c c h0 h1 
+    // (r = Read d ==> ... /\ ) /\ TODO: complete this
+     ))
+
 
 (* // hopefully mustRead is gone.  *)
 (* //  | MustRead  // Nothing written, as the connection is busy completing a handshake *)
@@ -277,6 +344,10 @@ assume val transitive_modifies_c : c:connection -> h0:hh -> h1:hh -> h2:hh -> Le
 (* // are determined by the call sequence --- no need to call them. *)
 
 (* // *all* stateful connection calls are specializations of: *)
+
+
+(* // NB the log can silently extend to new epochs (with empty log projections) *)
+(* // NB we never expose reader/writer at different epochs.  *)
 
 (* val sample: c:conn -> ... -> ST r *)
 (*   (requires (fun h0 -> connection_log_inv h0)) *)
@@ -295,46 +366,6 @@ assume val transitive_modifies_c : c:connection -> h0:hh -> h1:hh -> h2:hh -> Le
 
 
 
-(* //------------------------- reading ---------------------------- *)
-
-
-(* type ioresult_r (i:id) = // the caller's read id *)
-(*     | Read of DataStream.delta e *)
-(*         // this delta has been added to the input stream; we may have read *)
-(*         // - an application-data fragment or a warning (leaving the connection live) *)
-(*         // - a closure or a fatal alert (tearing down the connection) *)
-(*         // If the alert is a warning, the connection remains live. *)
-(*         // If the alert is final, the connection has been closed by our peer; *)
-(*         // the application may reuse the underlying TCP stream *)
-(*         // only after normal closure (a = AD_close_notify) *)
-
-(*     | ReadError of option alertDescription * string *)
-(*         // We encountered an error while reading, so the connection dies. *)
-(*         // we return the fatal alert we may have sent, if any, *)
-(*         // or None in case of an internal error. *)
-(*         // The connection is gone; its state is undefined. *)
-
-(*     | CertQuery of query * bool *)
-(*         // We received the peer certificates for the next epoch, to be authorized before proceeding. *)
-(*         // the bool is what the Windows certificate store said about this certificate. *)
-
-(*     | Complete  *)
-(*         // Now readable and writable in a fresh epoch at the end of the log *)
-
-(*     | DontWrite *)
-(*         // Nothing read yet, and now unwriteable until completion of ongoing handshake *)
-
-(* // NB the log can silently extend to new epochs (with empty log projections) *)
-(* // NB we never expose reader/writer at different epochs.  *)
-
-
-(* val read: c:connection -> i:id -> ST(ioresult_r)              // unclear whether we should pass i in. *)
-(*   (requires (fun h0 -> inv c h0 /\ readerIdT c h0 = Some i /\  *)
-(*   (ensures (fun h0 r h1 ->  *)
-(*     inv c h1 /\  *)
-(*     modifies (c_region c) h0 h1 /\    *)
-(*     (r = Read d ==> ... /\ ) /\ *)
-(*      )) *)
 
 
 (* // ------------------- typical call sequence ------------------------- *)
@@ -414,14 +445,4 @@ assume val transitive_modifies_c : c:connection -> h0:hh -> h1:hh -> h2:hh -> Le
 (*   | _ -> failwith "dunno"  *)
 
 
-
-
-
-
-(* init requires an assume to handle top-level effects *)
-assume val init : unit -> ST unit
-    (requires (fun h -> True))
-    (ensures (fun h0 _ h1 -> c_log_inv h1
-                        /\ fresh_region tls_region h0 h1
-			/\ fresh_region epochs_region h0 h1))
     
