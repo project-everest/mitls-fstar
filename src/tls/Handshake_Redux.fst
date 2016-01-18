@@ -71,8 +71,7 @@ type clientState (c:config) =
 assume val client_init: c:config -> s:clientState c{is_C_Idle s}
 assume val getClientHello: c:config -> s:clientState c{is_C_Idle s} -> 
                            (s':clientState c{is_C_HelloSent s'} * CH)
-assume val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} -> 
-                           s':clientState c{is_C_HelloReceived s'}
+
 assume val processServerHelloDone: c:config -> s:clientState c{is_C_HelloReceived s} -> 
                            CRT -> option SKE -> option CR ->
                            (s':clientState c{is_C_FinishedSent s'} * option CRT * CKE * option CV * FIN)
@@ -253,7 +252,9 @@ let prepareServerHello cfg ri ch i_log =
      n_protocol_version = pv;
      n_cipher_suite = cs;
      n_compression = cm;
-     n_extensions = next} in
+     n_extensions = next;
+     (* [getCachedSession] returned [None], so no session resumption *)
+     n_resume = false} in
   let o_log = i_log @| shB in
   Correct (shB,nego,None,o_log))
 
@@ -289,6 +290,11 @@ let acceptableCompression cfg ch pv cmp = true
 
 assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> ProtocolVersion -> cipherSuite -> list extension -> Tot (Result negotiatedExtensions)      
 
+(* JP: this was the previous [val]; it doesn't look right because it doesn't
+ take the [SH] message to be processed... probably worth removing? *)
+val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} ->
+                           s':clientState c{is_C_HelloReceived s'}
+
 // FIXME : TLS1.3
 val processServerHello: config -> option ri -> CH -> SH -> bool -> Result (nego * option ake)
 let processServerHello cfg ri ch sh res =
@@ -320,7 +326,8 @@ let processServerHello cfg ri ch sh res =
                   n_protocol_version = sh.sh_protocol_version;
                   n_cipher_suite = sh.sh_cipher_suite;
                   n_compression = Some.v sh.sh_compression;
-                  n_extensions = next} in 
+                  n_extensions = next;
+                  n_resume = false } in
                   Correct(o_nego,None)
 
 
