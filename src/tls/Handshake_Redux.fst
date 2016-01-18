@@ -74,7 +74,7 @@ assume val getClientHello: c:config -> s:clientState c{is_C_Idle s} ->
 assume val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} -> 
                            s':clientState c{is_C_HelloReceived s'}
 assume val processServerHelloDone: c:config -> s:clientState c{is_C_HelloReceived s} -> 
-                           CRT -> option SKE -> option SCR -> 
+                           CRT -> option SKE -> option CR ->
                            (s':clientState c{is_C_FinishedSent s'} * option CRT * CKE * option CV * FIN)
 
 assume val processServerFinished: c:config -> s:clientState c{is_C_FinishedSent s} -> 
@@ -97,7 +97,7 @@ assume val processClientHello: c:config -> s:serverState c{is_S_Idle s} -> CH ->
 
 (* TLS 1.2 regular handshake *)
 assume val getServerHelloDone12: c:config -> s:serverState c{is_S_HelloSent s} -> 
-                         (s':serverState c{is_S_HelloDone s'} * CRT * option SKE * option SCR)
+                         (s':serverState c{is_S_HelloDone s'} * CRT * option SKE * option CR)
 assume val processClientCCS12: c:config -> s:serverState c{is_S_HelloDone s} -> 
                              option CRT -> CKE -> option CV -> FIN ->
                              s':serverState c{is_S_CCSReceived s'}
@@ -113,7 +113,7 @@ assume val processClientFinishedResume12: c:config -> s:serverState c{is_S_Resum
   
 (* TLS 1.3 0RTT-1RTT handshake *)
 assume val getServerFinished13: c:config -> s:serverState c{is_S_HelloSent s} -> 
-                         (s':serverState c{is_S_FinishedSent s'} * option SCR * option SC * SC * CV * FIN)
+                         (s':serverState c{is_S_FinishedSent s'} * option CR * option SC * SC * CV * FIN)
 
 assume val process0RTTClientFinished13: c:config -> s:serverState c{is_S_FinishedSent s} -> 
                          option CRT -> option CV -> FIN ->

@@ -60,6 +60,10 @@ type aeAlg =
     | MtE   : encAlg -> hash_alg -> aeAlg
     | AEAD  : aeadAlg -> hash_alg -> aeAlg
 
+let lhae = function
+    | MtE (Block _) _ -> true
+    | _ -> false
+
 // MtE: ``The AE algorithms are CPA and INT-CTXT''
 // MtE: ``The MAC algorithm of id is INT-CMA.''
 
