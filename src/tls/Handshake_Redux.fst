@@ -62,10 +62,10 @@ type eph =
   (list CoreCrypto.dh_key * list CoreCrypto.ec_key)
 
 type clientState (c:config) = 
-     | C_Idle of option ri
-     | C_HelloSent of option ri * eph * CH * log
-     | C_HelloReceived of nego * option ake * log //Transits to FinishedSent or ClientIdle
-     | C_FinishedSent of nego * ake * cVerifyData * log //Transits to C_Idle (Some ri) for new epoch 
+  | C_Idle of option ri
+  | C_HelloSent of option ri * eph * CH * log
+  | C_HelloReceived of nego * option ake * log //Transits to FinishedSent or ClientIdle
+  | C_FinishedSent of nego * ake * cVerifyData * log //Transits to C_Idle (Some ri) for new epoch 
 
 
 assume val client_init: c:config -> s:clientState c{is_C_Idle s}
@@ -141,17 +141,21 @@ let prepareClientHello cfg ri sido : CH * log =
    ch_extensions = ext;} in
   (ch,clientHelloBytes ch)
 
-(* Should we gather all negotiation into one giant negotiation function? *)
+(* Is [pv1 >= pv2]? *)
+val gte_pv: ProtocolVersion -> ProtocolVersion -> Tot bool
+let gte_pv pv1 pv2 =
+  match pv1 with
+  | SSL_3p0 -> (match pv2 with | SSL_3p0 -> true | _ -> false)
+  | TLS_1p0 -> (match pv2 with | SSL_3p0 | TLS_1p0 -> true | _ -> false)
+  | TLS_1p1 -> (match pv2 with | SSL_3p0 | TLS_1p0 | TLS_1p1 -> true | _ -> false)
+  | TLS_1p2 -> (match pv2 with | TLS_1p3 -> false | _ -> true)
+  | TLS_1p3 -> true
+
+(* Returns [c] if [c] is within the range of acceptable versions for [cfg],
+ * [Error] otherwise. *)
 val negotiateVersion: cfg:config -> c:ProtocolVersion -> Tot (Result ProtocolVersion)
 let negotiateVersion cfg c =
-  let (gte_pv:ProtocolVersion -> ProtocolVersion -> Tot bool) = fun pv1 pv2 ->
-    match pv1 with
-    | SSL_3p0 -> (match pv2 with | SSL_3p0 -> true | _ -> false)
-    | TLS_1p0 -> (match pv2 with | SSL_3p0 | TLS_1p0 -> true | _ -> false)
-    | TLS_1p1 -> (match pv2 with | SSL_3p0 | TLS_1p0 | TLS_1p1 -> true | _ -> false)
-    | TLS_1p2 -> (match pv2 with | TLS_1p3 -> false | _ -> true)
-    | TLS_1p3 -> true in
-  if gte_pv c cfg.minVer && gte_pv cfg.maxVer c then Correct(c)
+  if gte_pv c cfg.minVer && gte_pv cfg.maxVer c then Correct c
   else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
 
 val negotiate:#a:Type -> list a -> list a -> Tot (option a)
@@ -208,71 +212,75 @@ let prepareServerHello cfg ri ch i_log =
   let srand = Nonce.mkHelloRandom() in
   match getCachedSession cfg ch with
   | Some sentry -> 
-  (match negotiateExtensions cfg sentry.session_nego.n_protocol_version sentry.session_nego.n_cipher_suite ri true ch.ch_extensions with
-   | Error(z) -> Error(z)
-   | Correct(sext,next) ->
-     let shB = 
-         serverHelloBytes (
-          {sh_protocol_version = sentry.session_nego.n_protocol_version;
-           sh_sessionID = Some (sentry.session_nego.n_sessionID);
-           sh_server_random = srand;
-           sh_cipher_suite = sentry.session_nego.n_cipher_suite;
-           sh_compression = Some (sentry.session_nego.n_compression);
-           sh_extensions = sext}) in
-     let o_log = i_log @| shB in
-     let o_nego = {sentry.session_nego with n_extensions = next} in
-     Correct (shB,o_nego,Some sentry.session_ake,o_log))
+    (match negotiateExtensions cfg sentry.session_nego.n_protocol_version sentry.session_nego.n_cipher_suite ri true ch.ch_extensions with
+     | Error(z) -> Error(z)
+     | Correct(sext,next) ->
+       let shB = 
+           serverHelloBytes (
+            {sh_protocol_version = sentry.session_nego.n_protocol_version;
+             sh_sessionID = Some (sentry.session_nego.n_sessionID);
+             sh_server_random = srand;
+             sh_cipher_suite = sentry.session_nego.n_cipher_suite;
+             sh_compression = Some (sentry.session_nego.n_compression);
+             sh_extensions = sext}) in
+       let o_log = i_log @| shB in
+       let o_nego = {sentry.session_nego with n_extensions = next} in
+       Correct (shB,o_nego,Some sentry.session_ake,o_log))
   | None ->
-  (match negotiateVersion cfg ch.ch_protocol_version with
-  | Error(z) -> Error(z)
-  | Correct(pv) ->
-  match negotiateCipherSuite cfg pv ch.ch_cipher_suites with
-  | Error(z) -> Error(z)
-  | Correct(cs) ->
-  match negotiateCompression cfg pv ch.ch_compressions with
-  | Error(z) -> Error(z)
-  | Correct(cm) ->
-  match negotiateExtensions cfg pv cs ri false ch.ch_extensions with
-  | Error(z) -> Error(z)
-  | Correct(sext,next) ->
-//  let sid = Nonce.random 32 in
-  let sid = magic() in
-  let shB = 
-    serverHelloBytes (
-    {sh_protocol_version = pv;
-     sh_sessionID = Some sid;
-     sh_server_random = srand;
-     sh_cipher_suite = cs;
-     sh_compression = Some cm;
-     sh_extensions = sext}) in
-  let nego = 
-    {n_client_random = ch.ch_client_random;
-     n_server_random = srand;
-     n_sessionID = sid;
-     n_protocol_version = pv;
-     n_cipher_suite = cs;
-     n_compression = cm;
-     n_extensions = next;
-     (* [getCachedSession] returned [None], so no session resumption *)
-     n_resume = false} in
-  let o_log = i_log @| shB in
-  Correct (shB,nego,None,o_log))
+    (match negotiateVersion cfg ch.ch_protocol_version with
+    | Error(z) -> Error(z)
+    | Correct(pv) ->
+    match negotiateCipherSuite cfg pv ch.ch_cipher_suites with
+    | Error(z) -> Error(z)
+    | Correct(cs) ->
+    match negotiateCompression cfg pv ch.ch_compressions with
+    | Error(z) -> Error(z)
+    | Correct(cm) ->
+    match negotiateExtensions cfg pv cs ri false ch.ch_extensions with
+    | Error(z) -> Error(z)
+    | Correct(sext,next) ->
+  //  let sid = Nonce.random 32 in
+    let sid = magic() in
+    let shB = 
+      serverHelloBytes (
+      {sh_protocol_version = pv;
+       sh_sessionID = Some sid;
+       sh_server_random = srand;
+       sh_cipher_suite = cs;
+       sh_compression = Some cm;
+       sh_extensions = sext}) in
+    let nego = 
+      {n_client_random = ch.ch_client_random;
+       n_server_random = srand;
+       n_sessionID = sid;
+       n_protocol_version = pv;
+       n_cipher_suite = cs;
+       n_compression = cm;
+       n_extensions = next;
+       (* [getCachedSession] returned [None], so no session resumption *)
+       n_resume = false} in
+    let o_log = i_log @| shB in
+    Correct (shB,nego,None,o_log))
 
-// TODO : check for correct behaviour
-val acceptableVersion: config -> CH -> ProtocolVersion -> Tot bool
-let acceptableVersion cfg ch pv =
+(* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
+val isSentinelRandomValue: ProtocolVersion -> ProtocolVersion -> TLSInfo.random -> Tot bool
+let isSentinelRandomValue c_pv s_pv s_random =
+  gte_pv c_pv TLS_1p3 && gte_pv TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
+  gte_pv c_pv TLS_1p2 && gte_pv TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
+
+(* If [true], then:
+  - both the client and server versions are within the ranges specified by [cfg]
+  - the server is not newer than the client
+  - there is no undesired downgrade (as indicated by the special random values).
+*)
+val acceptableVersion: config -> CH -> ProtocolVersion -> TLSInfo.random -> Tot bool
+let acceptableVersion cfg ch s_pv s_random =
   match negotiateVersion cfg ch.ch_protocol_version with
-  | Correct(pv') -> 
-    let (gte_pv:ProtocolVersion -> ProtocolVersion -> Tot bool) = fun pv1 pv2 ->
-      match pv1 with
-      | SSL_3p0 -> (match pv2 with | SSL_3p0 -> true | _ -> false)
-      | TLS_1p0 -> (match pv2 with | SSL_3p0 | TLS_1p0 -> true | _ -> false)
-      | TLS_1p1 -> (match pv2 with | SSL_3p0 | TLS_1p0 | TLS_1p1 -> true | _ -> false)
-      | TLS_1p2 -> (match pv2 with | TLS_1p3 -> false | _ -> true)
-      | TLS_1p3 -> true in
-    if gte_pv pv' pv && gte_pv pv cfg.minVer then true
-    else false
-  | Error(_) -> false
+  | Correct c_pv -> 
+    gte_pv c_pv s_pv && gte_pv s_pv cfg.minVer &&
+    not (isSentinelRandomValue c_pv s_pv s_random)
+  | Error _ ->
+    false
 
 // TODO : check for correct behaviour
 val acceptableCipherSuite: config -> CH -> ProtocolVersion -> known_cipher_suite -> Tot bool
@@ -281,54 +289,54 @@ let acceptableCipherSuite cfg ch pv cs =
   // TODO
   | SSL_3p0
   | TLS_1p3 -> false
-  | _ -> if List.existsb (fun x -> x = cs) ch.ch_cipher_suites 
-	    && List.existsb (fun x -> x = cs) cfg.ciphersuites then true else false
+  | _ -> List.existsb (fun x -> x = cs) ch.ch_cipher_suites 
+	    && List.existsb (fun x -> x = cs) cfg.ciphersuites
 
 // TODO : check for correct behaviour
 val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
 let acceptableCompression cfg ch pv cmp = true
 
+
 assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> ProtocolVersion -> cipherSuite -> list extension -> Tot (Result negotiatedExtensions)      
 
-(* JP: this was the previous [val]; it doesn't look right because it doesn't
- take the [SH] message to be processed... probably worth removing? *)
-val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} ->
-                           s':clientState c{is_C_HelloReceived s'}
-
-// FIXME : TLS1.3
-val processServerHello: config -> option ri -> CH -> SH -> bool -> Result (nego * option ake)
-let processServerHello cfg ri ch sh res =
-    if not (acceptableVersion cfg ch sh.sh_protocol_version) 
-    then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
-    else if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite)
-    then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-    else if not (acceptableCompression cfg ch sh.sh_protocol_version (Some.v sh.sh_compression))
-    then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Compression negotiation") 
-    else match (acceptableExtensions cfg ri res ch sh.sh_protocol_version sh.sh_cipher_suite sh.sh_extensions) with 
-         | Error(z) -> Error(z)
-         | Correct (next) -> 
-           if res then
-              match getCachedSession cfg ch with
-              | None -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption disallowed")
-              | Some sentry ->
-                if (sh.sh_protocol_version <> sentry.session_nego.n_protocol_version ||
-                    sh.sh_cipher_suite <> sentry.session_nego.n_cipher_suite ||
-                    Some.v sh.sh_compression <> sentry.session_nego.n_compression) 
-                then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
-                else 
-                  let o_nego = {sentry.session_nego with n_extensions = next} in
-                  Correct(o_nego, Some sentry.session_ake)
-           else          
-             let o_nego = 
-                 {n_client_random = ch.ch_client_random;
-                  n_server_random = sh.sh_server_random;
-                  n_sessionID = Some.v sh.sh_sessionID;
-                  n_protocol_version = sh.sh_protocol_version;
-                  n_cipher_suite = sh.sh_cipher_suite;
-                  n_compression = Some.v sh.sh_compression;
-                  n_extensions = next;
-                  n_resume = false } in
-                  Correct(o_nego,None)
+val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} -> SH ->
+                           Result (s':clientState c{is_C_HelloReceived s'})
+let processServerHello cfg (C_HelloSent (ri, eph, ch, log)) sh =
+  let res = ch_is_resumption ch in
+  // FIXME 1.3
+  if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
+    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
+  else if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite) then
+    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+  else if not (acceptableCompression cfg ch sh.sh_protocol_version (Some.v sh.sh_compression)) then
+    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Compression negotiation") 
+  else match acceptableExtensions cfg ri res ch sh.sh_protocol_version sh.sh_cipher_suite sh.sh_extensions with 
+    | Error z -> Error z
+    | Correct next -> 
+      let log = log @| serverHelloBytes sh in
+      if res then
+        match getCachedSession cfg ch with
+        | None -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption disallowed")
+        | Some sentry ->
+          if sh.sh_protocol_version <> sentry.session_nego.n_protocol_version ||
+            sh.sh_cipher_suite <> sentry.session_nego.n_cipher_suite ||
+            Some.v sh.sh_compression <> sentry.session_nego.n_compression
+          then
+            Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
+          else 
+            let o_nego = {sentry.session_nego with n_extensions = next} in
+            Correct (C_HelloReceived (o_nego, Some sentry.session_ake, log))
+      else          
+        let o_nego = 
+          {n_client_random = ch.ch_client_random;
+           n_server_random = sh.sh_server_random;
+           n_sessionID = Some.v sh.sh_sessionID;
+           n_protocol_version = sh.sh_protocol_version;
+           n_cipher_suite = sh.sh_cipher_suite;
+           n_compression = Some.v sh.sh_compression;
+           n_extensions = next;
+           n_resume = false } in
+        Correct (C_HelloReceived (o_nego, None, log))
 
 
 assume val processServerAke: config -> nego -> log -> list (HandshakeType * bytes) -> Result (bytes * ake)
