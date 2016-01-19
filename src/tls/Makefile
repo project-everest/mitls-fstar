@@ -149,7 +149,11 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-mitls-ver: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
+mitls-ver: $(LIBFILES) $(TLSVER)
+	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^)
+
+# same as mitls-ver, but verifies one module at a time.
+mitls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
 
 # going beyond TLSVER, not necessarily working
 
