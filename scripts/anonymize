@@ -16,7 +16,7 @@ class Object(object):
 MODE_FULL    = 0x00
 MODE_RELEASE = 0x01
 
-AKWS = ['AP', 'CF', 'KB', 'MK', 'PYS', 'SZ']
+AKWS = ['AP', 'CF', 'KB', 'MK', 'PYS', 'SZ', 'BB']
 
 # --------------------------------------------------------------------
 def parser(mode):
