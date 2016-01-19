@@ -101,6 +101,9 @@ type CH = {
   ch_extensions:(ce:list extension{List.length ce < 256});
 }
 
+let ch_is_resumption { ch_sessionID = sid } =
+  length sid > 0
+
 type SH = {
   sh_protocol_version:ProtocolVersion;
   sh_server_random:TLSInfo.random;
