@@ -17,9 +17,9 @@ open Range
 open LHAEPlain
 
 
-(* Kept local as adding it to SeqProperties has a negative impact on verification performance *)
-val snoc : #a:Type -> seq a -> a -> Tot (seq a)
-let snoc s x = Seq.append s (Seq.create 1 x)
+//(* Kept local as adding it to SeqProperties has a negative impact on verification performance *)
+//val snoc : #a:Type -> seq a -> a -> Tot (seq a)
+//let snoc s x = Seq.append s (Seq.create 1 x)
 
 type gid = i:id{ is_AEAD i.aeAlg }
 

@@ -1,79 +1,108 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿module ENC
 
-module ENC
-#set-options "--admit_smt_queries false"
+(* Bulk encryption for TLS record's "MAC-encode-then encrypt", agile,
+   possibly with internal state, and assumed conditionally CPA with
+   "Encode" for plaintexts *)
 
-(* Bulk encryption for TLS record, agile & assumed conditionally CPA 
-   with "Encode" for plaintexts *) 
 (* This module is idealized *)
 
 (* Instead, we could write a well-typed ideal functionality and reduce
    it to its non-agile underlying algorithms, e.g. AES-CBC *)
 
-(* TODO complete migration to F*, following AEAD_GCM *)
-         
+open FStar.Heap
+open FStar.HyperHeap
 open FStar.Seq
+open FStar.SeqProperties
+
 open Platform.Bytes
 open Platform.Error
+
 open TLSError
 open TLSConstants
 open TLSInfo
 open Range
 
-(* We do not open Encode so that we can syntactically check its usage restrictions *) 
+(* Also using Encode; we do not open it so that we can syntactically
+   check its usage restrictions *)
 
-type cipher = b:bytes { length b <= max_TLSCipher_fragment_length }
+
+type id = i:id { is_MtE i.aeAlg } 
+let alg (i:id) = MtE._0 i.aeAlg
+
+type idB = i:id { is_Block (alg i) }
+
+type cipher (i:id) = 
+  b:bytes { let l = length b in
+            l >= 0 /\ //16-01-13 why explicit?
+            l <= max_TLSCipher_fragment_length /\ 
+            valid_clen i l }
+
+let explicitIV (i:id) = 
+  match alg i, pv_of_id i with 
+  | Block _, TLS_1p1 | Block _, TLS_1p2 -> true 
+  | _                                   -> false 
+
+//let clen (i:id) (plen:nat) = if explicitIV i then plen + blockSize i else plen
+
+
+let blockSize (i:idB) = CoreCrypto.blockSize (Block._0 (alg i))
+type block (i:idB) = lbytes (blockSize i)
+type iv = block
 
 (* Early TLS chains IVs, but this is not secure against adaptive CPA *)
-let lastblock alg cipher =
-    let ivl = blockSize alg in
-    let (_,b) = split cipher (length cipher - ivl) in b
+let lblock (bl:nat) (c:bytes { length c >= bl }) : lbytes bl = 
+  snd (split c (length c - bl))
 
-private type key (i:id) = bytes 
+//16-01-13 this can't work as bl appears in the inferred result type 
+let lastblock (i:idB) = 
+  (fun (bl:nat) (c:cipher i { length c >= bl}) -> lblock bl c) 
+  (CoreCrypto.blockSize (Block._0 (alg i)))
 
+//let lastblock (i:idB) (c:cipher i { length c >= CoreCrypto.blockSize (Block._0 (alg i))}) : block i =
+//  lblock (CoreCrypto.blockSize (Block._0 (alg i))) c 
+
+private type key (i:id) = bytes
 // for the reduction to non-agile algorithms, we would use
 // private type (i:id) key' = 
 //   | GoodKey_A of ideal_A.key 
 //   | GoodKey_B of ideal_B.key
 //   | BadKey_A 
-                     
-type iv = bytes //CF could specify its size: one block
-private type iv3 (i:id) = 
-  | SomeIV of iv // SSL_3p0 and TLS_1p0
-  | NoIV         // TLS_1p1 and TLS_1p2
 
-private type blockState (i:id) =
-    {key: key i; iv: iv3 i}
-private type streamState (i:id) = 
-    {skey: key i; // ghost: Only stored so that we can leak it
-     sstate: CoreCrypto.cipher_stream}
 
-private val someIV: i:id -> iv -> Tot (iv3 i)      
-let someIV (i:id) (iv:iv) = SomeIV(iv)
+private type localState (region:rid): i:id -> Type = 
+  | StreamState:   i:id{ is_Stream (alg i) }                         -> s: CoreCrypto.cipher_stream -> localState region i
+  | OldBlockState: i:id{ is_Block (alg i) /\ ~(explicitIV i) } -> iv i -> localState region i
+  | NewBlockState: i:id{ is_Block (alg i) /\ explicitIV i  }          -> localState region i
 
-private val noIV: i:id -> Tot (iv3 i)                                  
-let noIV (i:id) = NoIV
+// type dplain (i:id) (ad: LHAEPlain.adata i) (c:cipher i) = 
+//   Encode.plain i ad (cipherRangeClass i (length c))
 
-private val updateIV: i:id -> blockState i -> iv3 i -> Tot (blockState i)
-let updateIV (i:id) (s:blockState i) (iv:iv3 i) = {s with iv = iv}
+
+type entry (i:id) = | Entry:
+  c: cipher i -> p: Encode.dplain i (length c) -> entry i
+
+private type state (i:id) (rw:rw) = | StateB:
+  #region: rid ->
+  #peer_region: rid { HyperHeap.disjoint region peer_region } -> 
+  k: key i -> // only ghost for stream ciphers
+  s: rref region (localState region i) -> 
+  log: rref (if rw = Reader then peer_region else region) (seq (entry i)) -> 
+  state i rw
                                         
-type state (i:id) (r:rw) =
-    | BlockCipher of blockState i
-    | StreamCipher of streamState i
-
 (* does this guarantee type isolation? *)
 type encryptor (i:id) = state i Writer
 type decryptor (i:id) = state i Reader
+
+(* CF 14-07-17: reuse?
 
 // internal function declarations 
 //TODO state should also have a role, but GENOne returns the state for both roles.
 //private val GENOne: i:id -> 'a //(;i) state
 
-(* CF 14-07-17: reuse?
 let GENOne ki : state =
-    #if verify
+    //#if verify
     failwith "trusted for correctness"
-    #else
+    //#else
     let alg = encAlg_of_id ki in
     match alg with
     | Stream CoreCrypto.RC4_128 ->
@@ -88,44 +117,52 @@ let GENOne ki : state =
         let key = {k = CoreCrypto.random (encKeySize alg)}
         let iv = NoIV
         BlockCipher ({key = key; iv = iv})
-    #endif
+    //#endif
 *)
 
-// We do not use the state, but an abstract ID over it, so that we can link
-// encryptor and decryptor states 
-assume val stateID: i:id -> rw:rw -> Tot int
 
-val streamCipher: i:id -> r:rw -> streamState i -> state i r 
-val blockCipher: i:id -> r:rw -> blockState i -> state i r
-                                       
-let streamCipher (i:id) (r:rw) (s:streamState i)  = StreamCipher(s)
-let blockCipher (i:id) (r:rw) (s:blockState i) = BlockCipher(s)
+val gen: 
+  reader_parent:rid -> 
+  writer_parent:rid -> 
+  i:id -> ST (encryptor i * decryptor i) 
+  (requires (fun h0 -> HyperHeap.disjoint reader_parent writer_parent))
+  (ensures (fun h0 (rw: encryptor i * decryptor i) h1 -> True))
+                       
+let gen reader_parent writer_parent i =
+  let reader_r = new_region reader_parent in
+  let writer_r = new_region writer_parent in
+  assert(HyperHeap.disjoint reader_r writer_r);
+  let log = ralloc writer_r Seq.createEmpty in 
+  let alg = encAlg_of_id i in
+  let kv, wstate, rstate = 
+  match alg with
+  | Stream CoreCrypto.RC4_128, _ ->
+        let kv = CoreCrypto.random (encKeySize (Stream CoreCrypto.RC4_128)) in
+        kv, 
+        StreamState #writer_r i (CoreCrypto.stream_encryptor CoreCrypto.RC4_128 kv),
+        StreamState #reader_r i (CoreCrypto.stream_encryptor CoreCrypto.RC4_128 kv)
 
-val gen:  i:id ->
-          e: encryptor i { stateID i Writer = 0 } * 
-          d: decryptor i { stateID i Reader = 0 } 
+  | Block cbc, Stale ->
+        let kv = CoreCrypto.random (encKeySize (Block cbc)) in
+        let iv = CoreCrypto.random (CoreCrypto.blockSize cbc) in
+        kv, 
+        OldBlockState #writer_r i iv, 
+        OldBlockState #reader_r i iv
 
+  | Block cbc, Fresh ->
+        let kv = CoreCrypto.random (encKeySize (Block cbc)) in
+        kv, 
+        NewBlockState #writer_r i, 
+        NewBlockState #reader_r i  
+  in
+  let enc: encryptor i = StateB #i #Writer #writer_r #reader_r kv (ralloc writer_r wstate) log in
+  let dec: decryptor i = StateB #i #Reader #reader_r #writer_r kv (ralloc reader_r rstate) log in 
+  enc, dec
+
+
+(*
 val leak: i:id{not(safeId i)} -> rw:rw -> state i rw -> (*key:*) bytes * (*iv:*) bytes
 val coerce: i:id{not(safeId i)} -> rw:rw -> (*key:*) bytes -> (*iv:*) bytes -> state i rw
-                       
-let gen (ki:id) : encryptor ki * decryptor ki = 
-    let alg = encAlg_of_id ki in
-    match alg with
-    | Stream CoreCrypto.RC4_128, _ ->
-        let k = CoreCrypto.random (encKeySize (Stream CoreCrypto.RC4_128)) in
-        streamCipher ki Writer ({skey = k; sstate = CoreCrypto.stream_encryptor CoreCrypto.RC4_128 k}),
-        streamCipher ki Reader ({skey = k; sstate = CoreCrypto.stream_encryptor CoreCrypto.RC4_128 k})
-    | Block cbc, Stale ->
-        let k = CoreCrypto.random (encKeySize (Block cbc)) in
-        let ivRandom = CoreCrypto.random (blockSize cbc) in
-        let iv = someIV ki ivRandom in
-        blockCipher ki Writer ({key = k; iv = iv}),
-        blockCipher ki Reader ({key = k; iv = iv})
-    | Block cbc, Fresh ->
-        let k = CoreCrypto.random (encKeySize (Block cbc)) in
-        let iv = noIV ki in
-        blockCipher ki Writer ({key = k; iv = iv}) ,
-        blockCipher ki Reader ({key = k; iv = iv}) 
     
 let coerce (ki:id) (rw:rw) k iv =
     let alg = encAlg_of_id ki in
@@ -146,6 +183,7 @@ let leak (ki:id) (rw:rw) s =
             | SomeIV(ivec) -> (bs.key,ivec))
     | StreamCipher (ss) ->
        (ss.skey,empty_bytes)
+*)
 
 (* an abstract event recording all encryption results. *)
 
@@ -153,44 +191,65 @@ let leak (ki:id) (rw:rw) s =
   i:id -> ad:LHAEPlain.adata i -> 
   c:cipher -> Encode.plain i ad (cipherRangeClass i (length c))-> Type*)
 
-private val cbcenc: CoreCrypto.block_cipher -> bytes -> bytes -> bytes -> bytes 
-let cbcenc alg k iv d = CoreCrypto.block_encrypt alg k iv d
+let cbcenc = CoreCrypto.block_encrypt
 
 (* Parametric enc/dec functions *)
-let enc_int (ki:id) (s:encryptor ki) tlen d =
-    let alg,ivm = encAlg_of_id ki in
-    match s with
-    //#begin-ivStaleEnc
-    | BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https://github.com/FStarLang/FStar/issues/397
-        (match s.iv with
-        | NoIV -> unexpected "[enc] Wrong combination of cipher algorithm and state"
-        | SomeIV(iv) ->
-            let cipher = cbcenc alg s.key iv d in
+
+val enc_int: i:id -> e: encryptor i -> tlen:nat -> bytes -> CoreCrypto.EXT bytes // (cipher i)
+let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
+    let StateB k s _ = e in  
+    // let alg,ivm = encAlg_of_id i in
+    match !s with
+    | StreamState _ ss -> CoreCrypto.stream_process ss d 
+
+(*
+        if length cipher <> tlen || tlen > max_TLSCipher_fragment_length then
+                // unexpected, because it is enforced statically by the
+                // CompatibleLength predicate
+                unexpected "[enc] Length of encrypted data do not match expected length"
+        else
+        cipher *)
+
+    | OldBlockState _ iv -> 
+         let a = (Block._0 (alg i)) in 
+         let cipher = cbcenc a k iv d in
+         s := OldBlockState i (lastblock i cipher);
+         cipher
+
+(* 
             let cl = length cipher in
             if cl <> tlen || tlen > max_TLSCipher_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
             else
-                let lb = lastblock alg cipher in
-                let iv = someIV ki lb in
-                let s = updateIV ki s iv in
-                (BlockCipher(s), cipher)) )
-    //#end-ivStaleEnc
-    | BlockCipher(s) -> (match alg,ivm with Block alg, Fresh ->
-        (match s.iv with
-        | SomeIV(b) -> unexpected "[enc] Wrong combination of cipher algorithm and state"
-        | NoIV   ->
-            let ivl = blockSize alg in
-            let iv = CoreCrypto.random ivl in
-            let cipher = cbcenc alg s.key iv d in
+*) 
+
+    | NewBlockState _ -> 
+         let a = (Block._0 (alg i)) in 
+         let iv = CoreCrypto.random (blockSize i) in
+         cbcenc a k iv d 
+
+(*
             let res = iv @| cipher in
             if length res <> tlen || tlen > max_TLSCipher_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
             else
-                (BlockCipher(s), res)) )
+                (BlockCipher(s), res)
+*)
+
+(*
+BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https://github.com/FStarLang/FStar/issues/397
+        (match s.iv with
+        | NoIV -> unexpected "[enc] Wrong combination of cipher algorithm and state"
+        | SomeIV(iv) ->
+    //#end-ivStaleEnc
+    | BlockCipher(s) -> (match alg,ivm with Block alg, Fresh ->
+        (match s.iv with
+        | SomeIV(b) -> unexpected "[enc] Wrong combination of cipher algorithm and state"
+        | NoIV   ->
     | StreamCipher(s) -> (match alg,ivm with Stream _, _ ->
         let cipher = (CoreCrypto.stream_process s.sstate (d)) in
         if length cipher <> tlen || tlen > max_TLSCipher_fragment_length then
@@ -200,38 +259,22 @@ let enc_int (ki:id) (s:encryptor ki) tlen d =
         else
             (StreamCipher(s),cipher) )
     | _ -> ( match alg,ivm with _ , _ -> unexpected "[enc] Wrong combination of cipher algorithm and state" )
+*) 
 
-#if ideal
-type dplain (i:id) (ad:LHAEPlain.adata i) (c:cipher) =
-    LHAEPlain.plain i ad (Range.cipherRangeClass i (length c))
-                                                     
-type entry =
-  | Entry : i:id -> ad:LHAEPlain.adata i -> c:cipher -> p:dplain i ad c -> entry
-                    
-opaque logic type Encrypted (i:id) (ad:LHAEPlain.adata i) (c:cipher) (p:dplain i ad c) (h:heap) =
-    b2t (List.mem (Entry i ad c p) (Heap.sel h log))
+//TODO: define monotonic property of being in the encryption log. 
+// opaque logic type Encrypted (i:id) (ad:LHAEPlain.adata i) (c:cipher) (p:dplain i ad c) (h:heap) =
+//   b2t (List.mem (Entry i ad c p) (Heap.sel h log))
 
-let log: ref (list entry) = ref []
-#endif
-
-let enc (ki:id) s ad rg data : _ * _ =
-    let tlen = targetLength ki rg in
-  #if ideal
-    let d =
-      if safeId ki then //MK Should we use Encode.payload here? CF 14-07-17 ??
-        createBytes tlen 0
-      else
-        Encode.repr ki ad rg data  //MK we may have only plaintext integrity in this case
+let enc (i:id) s ad rg data : _ * _ =
+    let tlen = targetLength i rg in
+    let encrypted =
+      if safeId ki then createBytes tlen 0 
+      else Encode.repr i ad rg data
     in
-    if authId ki then
-      let (s,c) = enc_int ki s tlen d in
-      (*assume (Encrypted(ki,ad,c,data));*)
-      log := addtolog (ki, ad, rg, c, data) log;
-      (s,c)
-    else
-  #endif
-      let d = Encode.repr ki ad rg data in
-      enc_int ki s tlen d
+    // we grow the log in all cases // if authId i then
+    let cipher = enc_int ki s tlen encrypted in
+    log := snoc !log (Entry cipher ad data);
+    cipher
 
 
 private val cbcdec: CoreCrypto.block_cipher -> bytes -> bytes -> bytes -> bytes

@@ -1,0 +1,6 @@
+*.cm*
+*.ml
+!test/parsing_test.ml
+*.o
+camlprog.exe
+test.out

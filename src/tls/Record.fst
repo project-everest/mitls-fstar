@@ -54,7 +54,7 @@ let recordPacketOut i (wr:StatefulLHAE.writer i) pv f =
       then Content.repr i f
       else
         let ad = StatefulPlain.makeAD i ct in
-        StatefulLHAE.encrypt #i #ad #rg wr f in
+        StatefulLHAE.encrypt #i #ad #rg wr f in //NS: Cannot infer a type for f; expect plain i ad rg, but rg and ad are not in scope for f
     makePacket ct pv payload
 
 (* TODO
