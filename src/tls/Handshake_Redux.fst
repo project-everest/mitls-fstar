@@ -269,7 +269,7 @@ let isSentinelRandomValue c_pv s_pv s_random =
   gte_pv c_pv TLS_1p2 && gte_pv TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
 
 (* If [true], then:
-  - both the client and server versions are within the ranges specified by [cfg]
+  - both the client and server versions are within the range specified by [cfg]
   - the server is not newer than the client
   - there is no undesired downgrade (as indicated by the special random values).
 *)
@@ -282,15 +282,19 @@ let acceptableVersion cfg ch s_pv s_random =
   | Error _ ->
     false
 
-// TODO : check for correct behaviour
+(* If [true], then:
+  - [s_cs] is has been offered previously;
+  - [s_cs] is consistent with the [config];
+  - TODO: [s_cs] is supported by the protocol version (e.g. no GCM with
+    TLS<1.2).
+*)
 val acceptableCipherSuite: config -> CH -> ProtocolVersion -> known_cipher_suite -> Tot bool
-let acceptableCipherSuite cfg ch pv cs =
-  match pv with
-  // TODO
-  | SSL_3p0
-  | TLS_1p3 -> false
-  | _ -> List.existsb (fun x -> x = cs) ch.ch_cipher_suites 
-	    && List.existsb (fun x -> x = cs) cfg.ciphersuites
+let acceptableCipherSuite cfg ch s_pv s_cs =
+  // JP: I would think the first line implies the second one?
+  List.existsb (fun x -> x = s_cs) ch.ch_cipher_suites &&
+  List.existsb (fun x -> x = s_cs) cfg.ciphersuites &&
+  not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
+  
 
 // TODO : check for correct behaviour
 val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
