@@ -40,11 +40,6 @@ type ID = {
      id_sigalg: option Sig.alg;
 }
 
-type ake_s= {
-     ake_s_id: ID;
-     ake_s_kex_priv: option KEX_S_PRIV;
-}
-
 type ake = {
      ake_server_id: option ID;
      ake_client_id: option ID;
@@ -58,14 +53,14 @@ type Session = {
      session_ake: ake;
 }     
 
-type eph = 
-  (list CoreCrypto.dh_key * list CoreCrypto.ec_key)
+type eph_s = option KEX_PRIV
+type eph_c = list KEX_PRIV
 
 type clientState (c:config) = 
   | C_Idle of option ri
-  | C_HelloSent of option ri * eph * CH * log
-  | C_HelloReceived of nego * option ake * log //Transits to FinishedSent or ClientIdle
-  | C_FinishedSent of nego * ake * cVerifyData * log //Transits to C_Idle (Some ri) for new epoch 
+  | C_HelloSent of option ri * eph_c * CH 
+  | C_HelloReceived of nego * option ake 
+  | C_FinishedSent of Session * cVerifyData 
 
 
 assume val client_init: c:config -> s:clientState c{is_C_Idle s}
@@ -83,12 +78,12 @@ assume val processServerFinished: c:config -> s:clientState c{is_C_FinishedSent 
 
 type serverState (c:config) = 
      | S_Idle of option ri
-     | S_HelloSent of nego * option ake * log 
-     | S_HelloDone of nego * ake_s * log 
-     | S_CCSReceived of nego * ake * log
-     | S_ResumeFinishedSent of nego * ake * log 
-     | S_FinishedSent of nego * ake * log 
-     | S_ZeroRTTReceived of nego * ake * log
+     | S_HelloSent of nego * option ake
+     | S_HelloDone of nego * ID * eph_s
+     | S_CCSReceived of Session
+     | S_ResumeFinishedSent of Session
+     | S_FinishedSent of Session
+     | S_ZeroRTTReceived of Session
 
 assume val server_init: c:config -> s:serverState c{is_S_Idle s}
 assume val processClientHello: c:config -> s:serverState c{is_S_Idle s} -> CH ->
@@ -305,7 +300,7 @@ assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> Protoc
 
 val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} -> SH ->
                            Result (s':clientState c{is_C_HelloReceived s'})
-let processServerHello cfg (C_HelloSent (ri, eph, ch, log)) sh =
+let processServerHello cfg (C_HelloSent (ri, eph, ch)) sh =
   let res = ch_is_resumption ch in
   // FIXME 1.3
   if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
@@ -317,7 +312,6 @@ let processServerHello cfg (C_HelloSent (ri, eph, ch, log)) sh =
   else match acceptableExtensions cfg ri res ch sh.sh_protocol_version sh.sh_cipher_suite sh.sh_extensions with 
     | Error z -> Error z
     | Correct next -> 
-      let log = log @| serverHelloBytes sh in
       if res then
         match getCachedSession cfg ch with
         | None -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption disallowed")
@@ -329,7 +323,7 @@ let processServerHello cfg (C_HelloSent (ri, eph, ch, log)) sh =
             Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
           else 
             let o_nego = {sentry.session_nego with n_extensions = next} in
-            Correct (C_HelloReceived (o_nego, Some sentry.session_ake, log))
+            Correct (C_HelloReceived (o_nego, Some sentry.session_ake))
       else          
         let o_nego = 
           {n_client_random = ch.ch_client_random;
@@ -340,13 +334,10 @@ let processServerHello cfg (C_HelloSent (ri, eph, ch, log)) sh =
            n_compression = Some.v sh.sh_compression;
            n_extensions = next;
            n_resume = false } in
-        Correct (C_HelloReceived (o_nego, None, log))
+        Correct (C_HelloReceived (o_nego, None))
 
 
-assume val processServerAke: config -> nego -> log -> list (HandshakeType * bytes) -> Result (bytes * ake)
-assume val processClientAke: config -> nego -> ake_s -> log -> list (HandshakeType * bytes) -> Result (ake)
-
-val prepareServerAke: config -> nego -> log -> Result (bytes * ake_s)
+val prepareServerAke: config -> nego -> log -> Result (bytes * ID * eph_s)
 let prepareServerAke cfg nego nlog = 
     match nego.n_cipher_suite with
     | CipherSuite Kex_RSA None _ ->
@@ -364,8 +355,8 @@ let prepareServerAke cfg nego nlog =
              else empty_bytes in
          let msg = cB @| creqB @| serverHelloDoneBytes in
          Correct (msg,
-                  {ake_s_id = ({id_cert = c; id_sigalg = None});
-                   ake_s_kex_priv = Some (KEX_S_PRIV_RSA sk)}))
+                  ({id_cert = c; id_sigalg = None}),
+                  Some (KEX_PRIV_RSA sk)))
          
     | _ -> failwith "unimplemented"  
 
