@@ -201,7 +201,7 @@ val encrypt:
 let encrypt i e ad rg p =
   recall e.log;
   let tlen = targetLength i rg in
-  let text = 
+  let text =
     if safeId i then createBytes (fst rg) 0uy
     else repr i ad rg p in
   targetLength_converges i rg;
