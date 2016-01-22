@@ -53,8 +53,8 @@ type Session = {
      session_ake: ake;
 }     
 
-type eph_s = option KEX_PRIV
-type eph_c = list KEX_PRIV
+type eph_s = option KEX_S_PRIV
+type eph_c = list KEX_S_PRIV
 
 type clientState (c:config) = 
   | C_Idle of option ri
@@ -356,7 +356,7 @@ let prepareServerAke cfg nego nlog =
          let msg = cB @| creqB @| serverHelloDoneBytes in
          Correct (msg,
                   ({id_cert = c; id_sigalg = None}),
-                  Some (KEX_PRIV_RSA sk)))
+                  Some (KEX_S_PRIV_RSA sk)))
          
     | _ -> failwith "unimplemented"  
 
