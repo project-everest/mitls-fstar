@@ -46,24 +46,24 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 
 # these files are the stable inputs for verification
 TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst MAC.fst Encode.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Handshake.fsti Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
-#ENC.fst 
+#ENC.fst
 #LHAE.fst --these do not even parse
 #Record.fst --this does not lax type-check
 
 #Removed temporarily: StatefulPlain.fsti
 #Removed temporarily: TLS.fst
 
+# Files that lax type-check (used in make redux)
 TLSREDUX=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
 	DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst \
 	UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.fst \
 	DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst \
 	AEAD_GCM.fst StatefulLHAE.fst PRF-redux.p.fst  \
-	HandshakeMessages_Redux.fst Handshake_Redux.fst
+	HandshakeMessages_Redux.fst Handshake_Redux.fst Record.fst
 
-TLSPARSE=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
-	DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst \
-	UntrustedCert.fst Cert.fst TLSInfo.fst TLSExtensions_Redux.p.fst \
-	HandshakeMessages_Redux.fst
+# The files used for code generation (using .fsti's in code generation seems to
+# be unsupported).
+TLSREDUXGEN=$(patsubst %.fsti,%.fst,$(TLSREDUX))
 
 # these files are verified here
 VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM LHAE StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain StatefulPlain
@@ -168,11 +168,20 @@ wc:
 redux: $(LIBFILES) $(TLSREDUX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
-TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml TLSConstants.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/DHDB.ml Nonce.ml RSAKey.ml ECGroup.ml DHGroup.ml CommonDH.ml PMS.ml HASH.ml Sig.ml UntrustedCert.ml Cert.ml TLSInfo.ml TLSExtensions.ml HandshakeMessages.ml
-LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx $(FSTAR_HOME)/lib/ml/native_int/prims.cmx $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx $(FSTAR_HOME)/contrib/CoreCrypto/ml/corecrypto.cmxa $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx $(FSTAR_HOME)/lib/ml/FStar_All.cmx
+TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
+  TLSConstants.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/DHDB.ml Nonce.ml RSAKey.ml \
+  ECGroup.ml DHGroup.ml CommonDH.ml PMS.ml HASH.ml Sig.ml UntrustedCert.ml Cert.ml \
+  TLSInfo.ml TLSExtensions.ml HandshakeMessages.ml
+LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
+  $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
+  $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx \
+  $(FSTAR_HOME)/contrib/CoreCrypto/ml/corecrypto.cmxa \
+  $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx \
+  $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
+  $(FSTAR_HOME)/lib/ml/FStar_All.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
 
-redux-gen: $(LIBFILES) $(TLSPARSE)
+redux-gen: $(LIBFILES) $(TLSREDUXGEN)
 	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
 	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
 	make -C $(FSTAR_HOME)/lib/ml hyperheap
@@ -183,8 +192,7 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db DB.cmx
 	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSPARSE_ML)
-	cp ./test/parsing_test.ml .
-	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSPARSE_ML:.ml=.cmx) parsing_test.ml -o test.out
+	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSPARSE_ML:.ml=.cmx) test/parsing_test.ml -o test.out
 	$(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------

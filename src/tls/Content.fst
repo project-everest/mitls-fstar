@@ -89,11 +89,11 @@ let repr i f =
   | CT_CCS            -> empty_bytes
   | CT_Alert rg f     -> f
 
-let ct_rg (i:id) (f:fragment i) : _ * frange i =
+let ct_rg (i:id) (f:fragment i) : TLSConstants.ContentType * frange i =
   match f with
-  | CT_Data rg d      -> Application_data, rg
+  | CT_Data rg d      -> TLSConstants.Application_data, rg
   | CT_Handshake rg f -> TLSConstants.Handshake, rg
-  | CT_CCS            -> Change_cipher_spec, zero
+  | CT_CCS            -> TLSConstants.Change_cipher_spec, zero
   | CT_Alert rg f     -> TLSConstants.Alert, rg
 
 let rg (i:id) (f:fragment i) : frange i =

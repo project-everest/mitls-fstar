@@ -62,10 +62,19 @@ let lemma_makeAD_parseAD i ct = () //cut (Seq.Eq ad (parseAD i (makeAD i n ad)))
 
 (*** plaintext fragments ***)
 
+type is_plain (i: id) (ad: adata i) (rg: range) (f: fragment i) =
+  fst (ct_rg i f) = parseAD i ad /\ Wider rg (snd (ct_rg i f))
+
 // naming: we switch from fragment to plain as we are no longer TLS-specific
-private type plain (i:id) (ad:adata i) (rg:range) = f:fragment i
+private type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
 //  { (parseAD i ad, rg) = Content.ct_rg i f }
-  { fst (ct_rg i f) = parseAD i ad /\ Wider rg (snd (ct_rg i f)) }
+
+// Useful if the parameters [id], [ad] and [rg] have been constructed _after_
+// the fragment [f]; allows solving some scoping errors.
+val assert_is_plain: i:id -> ad:adata i -> rg:range -> f:fragment i ->
+  Pure (plain i ad rg) (requires (is_plain i ad rg f)) (ensures (fun _ -> true))
+let assert_is_plain i ad rg f =
+  f
 
 val ghost_repr: #i:id -> #ad:adata i -> #rg:range -> plain i ad rg -> GTot (rbytes rg)
 let ghost_repr i ad rg pf = Content.ghost_repr #i pf

@@ -291,9 +291,11 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
   not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
   
 
-// TODO : check for correct behaviour
+(* Our server implementation doesn't support compression, meaning [cmp] is
+ always [NullCompression], so it's always a valid compression. *)
 val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
-let acceptableCompression cfg ch pv cmp = true
+let acceptableCompression cfg ch pv cmp =
+  true
 
 
 assume val acceptableExtensions: config -> option ri -> res:bool -> CH -> ProtocolVersion -> cipherSuite -> list extension -> Tot (Result negotiatedExtensions)      
