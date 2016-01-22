@@ -1,0 +1,85 @@
+TLS 1.2 GCM
+-----------
+
+Keys: {
+ pv: '0303',
+ alg: 'AES_128_GCM_SHA256',
+ writeKey: '152300c2dc44c8f695d4fb1471791659',
+ writeIv: 'b56bf932',
+ writeSn: 1,
+}
+Plain: {
+ type: '17',
+ version: '0303',
+ fragment: '474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a'
+}
+Cipher: {
+ type: '17',
+ version: '0303',
+ fragment: '0000000000000000ed3ca96c8bd2fbb376c2dc417f3ec249e8ab550dab1c421293f0e642a0c152b43a546a8b49b6128ee6e23454b7e580423ba985'
+}
+
+TLS 1.2 CBC
+-----------
+Keys: {
+  pv: '0303',
+  alg: 'AES_128_CBC_SHA_Fresh',
+  writeMacKey: '431ad4d620ea0c63bf9afc8124afcae6729593f1',
+  writeKey: 'e77f6871e1697b2286416f973aee9ff6',
+  writeIv: '00000000000000000000000000000000',
+  writeSn: 1
+}
+Plain: {
+  type: '17',
+  version: '0303',
+  fragment: '474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a'
+}
+Cipher: {
+  type: '17',
+  version: '0303',
+  fragment: '0000000000000000000000000000000028cf3b38da8358b78aae63e5fcc334c1eac5278a283fa709cb274df85a2a7fa21b767111bc7f73f37cb2697dbb41f903dd2a3e4470767f3cc5e2db1a2e781213'
+}
+    
+TLS 1.1 CBC
+-----------
+Keys: {
+  pv: '0302',
+  alg: 'AES_128_CBC_SHA_Fresh',
+  writeMacKey: '9b70f20ee0ce0fbfdaebe49eafb9d1849ea6ead9',
+  writeKey: 'b8cee0068720d6b1e8cfcde72a9d05ef',
+  writeIv: '00000000000000000000000000000000',
+  writeSn: 1
+}
+Plain: {
+  type: '17',
+  version: '0302',
+  fragment: '474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a'
+}
+Cipher: {
+  type: '17',
+  version: '0302',
+  fragment: '00000000000000000000000000000000a9170f7000d17ab112d2731f1004e9d48d02c0166c9b379773823897bcd07acca3383647e946049567ed9aa6246b6349ae8b6a19f025e13162e666f2558989b3'
+}
+
+TLS 1.0 CBC
+-----------
+Keys: {
+  pv: '0301',
+  alg: 'AES_128_CBC_SHA_Stale',
+  writeMacKey: '8cf78fdbc3ec9fb5f23c75087bef200c7cf51156',
+  writeKey: 'cb132549f225655b31a4de916d40cbc4',
+  writeIv: 'f186c32f54a980456928835f5eaea80a',
+  writeSn: 1
+}
+Plain: {
+  type: '17',
+  version: '0301',
+  fragment: '474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a'
+}
+Cipher: {
+  type: '17',
+  version: '0301',
+  fragment: '7a97798f705b65d11ea705ea6b84569ddcb9568b1f6f3dfebdbed3b1a1c8de89db79ec81feab25f3921000f682f31d47ddea4c30ce646d26f6e2b99c0ca37497'
+}
+    
+      
