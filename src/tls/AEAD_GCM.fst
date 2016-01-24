@@ -211,7 +211,7 @@ let encrypt i e ad rg p =
   c
 
 
-// raw decryption (returning concrete bytes)
+// raw decryption 
 private val dec: 
   i:gid{~(authId i)} -> d:decryptor i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))

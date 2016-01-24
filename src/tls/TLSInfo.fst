@@ -281,6 +281,7 @@ let kefAlg si =
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extract_label
   | TLS_1p2           -> PRF_TLS_1p2 extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
+  | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
 val kefAlgExtended: si:SessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot KefAlg
 let kefAlgExtended si =
@@ -288,6 +289,7 @@ let kefAlgExtended si =
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extended_extract_label
   | TLS_1p2           -> PRF_TLS_1p2 extended_extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
+  | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
 val kdfAlg: si:SessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot KdfAlg
 let kdfAlg si =
@@ -295,6 +297,7 @@ let kdfAlg si =
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 kdf_label
   | TLS_1p2           -> PRF_TLS_1p2 kdf_label (prfMacAlg_of_ciphersuite si.cipher_suite)
+  | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
 let vdAlg si = si.protocol_version, si.cipher_suite
 
@@ -474,11 +477,11 @@ type id = {
   // indexes and algorithms of the session used in the key derivation
   msId   : msId;            // the index of the master secret used for key derivation
   kdfAlg : KdfAlg;          // the KDF algorithm used for key derivation
-  pv     : p:ProtocolVersion { p <> TLS_1p3 } ; // should be part of aeAlg
+  pv     : ProtocolVersion; // should be part of aeAlg
   aeAlg  : aeAlg;           // the authenticated-encryption algorithms
   // epoch-specific parameters
   csrConn: CsRands;         // the client-server random of the connection
-  ext: negotiatedExtensions; // the extensions negotiated for the current session
+  ext: negotiatedExtensions;// the extensions negotiated for the current session
   writer : role             // the role of the writer
   }
 

@@ -7,11 +7,11 @@ module TLSConstants
 (* SMT solver parameters *)
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
+open FStar.SeqProperties
 open Platform.Bytes
 open Platform.Error
 open TLSError
 open CoreCrypto
-open FStar.SeqProperties
 
 (* Type representations for TLS negotiated values *)
 type ProtocolVersion =
@@ -44,7 +44,7 @@ type encAlg =
 type hashAlg =
     | NULL
     | MD5SHA1
-    | Hash of hash_alg (* Defined in the CoreCrypto library *)
+    | Hash of hash_alg (* Defined in CoreCrypto library *)
 
 type macAlg =
     | HMAC     of hash_alg
@@ -123,16 +123,17 @@ val pinverse_sigAlg: x:_ -> Lemma
   [SMTPat (sigAlgBytes (Correct._0 (parseSigAlg x)))]
 let pinverse_sigAlg x = ()
 
-type hashAlg' = h:hashAlg{h <> NULL && h <> MD5SHA1 && h <> Hash SHA512}
+type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 } 
  
 val hashAlgBytes : hashAlg' -> Tot (lbytes 1)
 let hashAlgBytes ha =
     match ha with
     | Hash MD5     -> abyte 1uy
-    | Hash SHA1     -> abyte 2uy
+    | Hash SHA1    -> abyte 2uy
     | Hash SHA224  -> abyte 3uy
     | Hash SHA256  -> abyte 4uy
     | Hash SHA384  -> abyte 5uy
+    | Hash SHA512  -> abyte 6uy
 
 val parseHashAlg: pinverse_t hashAlgBytes
 let parseHashAlg b =
@@ -142,6 +143,7 @@ let parseHashAlg b =
     | (3uy) -> Correct (Hash SHA224)
     | (4uy) -> Correct (Hash SHA256)
     | (5uy) -> Correct (Hash SHA384)
+    | (6uy) -> Correct (Hash SHA512)
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_hashAlg: x:_ -> Lemma
@@ -215,7 +217,7 @@ let rec parseCompressions b =
     let l = length b in
     if l > 0
     then
-        let (cmB,b) = Platform.Bytes.split b 1 in
+        let (cmB,b) = split b 1 in
         match parseCompression cmB with
         | Error(z) -> // We skip this one
             parseCompressions b
@@ -365,7 +367,6 @@ let cipherSuiteBytesOpt cs =
     | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0xA7uy )
 
     | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00uy, 0xFFuy )
-
     | _ -> None
 
 let knownCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
@@ -491,7 +492,7 @@ let pinverse_cipherSuite x = ()
 opaque val parseCipherSuites: b:bytes -> Tot (Result known_cipher_suites) (decreases (length b))
 let rec parseCipherSuites b : Result known_cipher_suites =
      if length b > 1 then
-       let (b0,b1) = Platform.Bytes.split b 2 in
+       let (b0,b1) = split b 2 in
        match parseCipherSuites b1 with
          | Correct(css) ->
            (match parseCipherSuite b0 with
@@ -563,6 +564,7 @@ type prePrfAlg =
   | PRF_SSL3_concat         // MD5 @| SHA1    for VerifyData tags
   | PRF_TLS_1p01 of prflabel                       // MD5 xor SHA1
   | PRF_TLS_1p2 : prflabel -> macAlg -> prePrfAlg  // typically SHA256 but may depend on CS
+  | PRF_TLS_1p3 // TBC
 
 type KefAlg = prePrfAlg
 type KdfAlg = prePrfAlg
@@ -624,7 +626,7 @@ let encAlg_of_aeAlg  pv ae =
     | TLS_1p0, MtE (Block e) m -> (Block e),Stale
     | _, MtE e m -> e,Fresh
 
-val macAlg_of_aeAlg: (pv:ProtocolVersion) -> (a:aeAlg { ~(is_AEAD a) }) -> Tot macAlg
+val macAlg_of_aeAlg: (pv:ProtocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(is_AEAD a) }) -> Tot macAlg
 let macAlg_of_aeAlg pv ae =
     match pv,ae with
 //  | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
@@ -821,7 +823,9 @@ let rec names_of_cipherSuites css =
                 end
        end
 
-(* TLS messages types *)
+
+(*** TLS content types (internal) ***)
+
 type ContentType =
     | Change_cipher_spec
     | Alert
@@ -845,7 +849,7 @@ let parseCT b =
     | 21uy -> Correct Alert
     | 22uy -> Correct Handshake
     | 23uy -> Correct Application_data
-    | _        -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_ct: x:_ -> Lemma
   (requires (True)) 
@@ -864,6 +868,7 @@ let ctToString = function
     | Alert              -> "Alert"
     | Handshake          -> "Handshake"
     | Application_data   -> "Data"
+
 
 val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot bytes
 let bytes_of_seq sn = bytes_of_int 8 sn
