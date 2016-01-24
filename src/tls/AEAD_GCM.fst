@@ -21,7 +21,7 @@ open LHAEPlain
 //val snoc : #a:Type -> seq a -> a -> Tot (seq a)
 //let snoc s x = Seq.append s (Seq.create 1 x)
 
-type gid = i:id{ is_AEAD i.aeAlg }
+type gid = i:id{ pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg }
 
 let alg (i:gid) = AEAD._0 i.aeAlg
 
@@ -233,7 +233,7 @@ let dec i (d:decryptor i) (ad:adata i) c =
     let clen = length c in
     let r = cipherRangeClass i clen in
     cipherRangeClass_width i clen;
-    if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Change_cipher_spec && 0 < snd r then
+    if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && 0 < snd r then
       None
     else
       let plain = mk_plain i ad r text in

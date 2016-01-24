@@ -505,14 +505,15 @@ let siId si r =
      InitEpoch (i.writer)
  (*##endif*)
 
+let pv_of_id (i:id) = i.pv //TODO MK fix
+
 //$ also replacing MacAlg, EncAlg, PvOfId
-val macAlg_of_id: i:id { ~(is_AEAD i.aeAlg) } -> Tot macAlg
+val macAlg_of_id: i:id { pv_of_id i <> TLS_1p3 /\ ~(is_AEAD i.aeAlg) } -> Tot macAlg
 let macAlg_of_id i = macAlg_of_aeAlg i.pv i.aeAlg
 
 val encAlg_of_id: i:id { is_MtE i.aeAlg } -> Tot (encAlg * ivMode)
 let encAlg_of_id i = encAlg_of_aeAlg i.pv i.aeAlg
 
-let pv_of_id (i:id) = i.pv //TODO MK fix
 let kdfAlg_of_id (i:id) = i.kdfAlg
 
 // Pretty printing

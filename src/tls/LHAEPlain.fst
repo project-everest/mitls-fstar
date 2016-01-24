@@ -16,6 +16,8 @@ open Range
 // We define payloads and additional data from those of StatefulPlain,
 // adding an 8-byte sequence number to its additional data.
 
+type id = i:id { pv_of_id i <> TLS_1p3 }
+
 type seqn = n:nat{repr_bytes n <= 8}
 let ad_Length i = 8 + StatefulPlain.ad_Length i
 
