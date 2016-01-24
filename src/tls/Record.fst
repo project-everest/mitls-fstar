@@ -10,6 +10,7 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open Range
+open Content
 
 // Consider merging this module with Content?
 
@@ -27,8 +28,8 @@ let makePacket ct ver (data: b:bytes { repr_bytes (length b) <= 2}) =
    @| bytes_of_int 2 (length data) 
    @| data 
 
-let parseHeader (hdr:header) =
-    let (ct1,b4) = split hdr 1 in
+let parseHeader (h5:header) =
+    let (ct1,b4)   = split h5 1 in
     let (pv2,len2) = split b4 2 in
     match parseCT ct1 with
     | Error z -> Error z

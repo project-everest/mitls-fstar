@@ -125,6 +125,23 @@ val leak: i:id{~(safeId i)} -> role:rw -> state i role -> ST (key i * iv i)
 let leak i role s = State.key s, State.iv s
 
 
+// The per-record nonce for the AEAD construction is formed as follows:
+//
+// 1. The 64-bit record sequence number is padded to the left with zeroes to iv_length.
+//
+// 2. The padded sequence number is XORed with the static client_write_iv or server_write_iv, 
+//    depending on the role.
+//
+// The XORing is a fixed, ad hoc, random permutation; not sure what is gained;
+// we can reason about sequence-number collisions before applying it.
+let aeIV i (n:seqn i) (staticIV: iv i) : iv i = 
+  let l = CoreCrypto.aeadRealIVSize (alg i) in
+  let extended: iv i = createBytes (l - 8) 0uy @| bytes_of_seq n (* 64 bits *) in
+  xor l extended staticIV
+
+// not relying on additional data
+let noAD = empty_bytes 
+
 // Raw encryption (on concrete bytes), returns (cipher @| tag)
 // Keeps seqn and nonce implicit; requires the counter not to overflow
 val enc:
@@ -138,12 +155,8 @@ val enc:
 
 let enc i e l p =
   recall e.counter;
-  let salt = e.iv in 
-  let nonce_explicit = bytes_of_seq !e.counter in
-  assert (length nonce_explicit == aeadRecordIVSize (alg i));
-  let iv = salt @| nonce_explicit in
-  let ad = empty_bytes in 
-  let c = CoreCrypto.aead_encrypt (alg i) e.key iv ad p in
+  let iv = aeIV i !e.counter e.iv in
+  let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD p in
   let n = !e.counter in
   if n + 1 < max_uint64 then 
     begin
@@ -156,7 +169,6 @@ let enc i e l p =
       lemma_repr_bytes_values 0;
       e.counter := 0
     end;
-   //Range.targetLength_at_most_max_TLSCipher_fragment_length i r;
    c
 
 
@@ -193,11 +205,8 @@ private val dec:
   (ensures  (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
 let dec i d l c =
-  let salt = d.iv in
-  let nonce_explicit = bytes_of_seq !d.counter in
-  let iv = salt @| nonce_explicit in
-  let ad = empty_bytes in 
-  match CoreCrypto.aead_decrypt (alg i) d.key iv ad c with 
+  let iv = aeIV i !d.counter d.iv  in
+  match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with 
   | Some p -> Some p 
   | None   -> None
 
@@ -241,23 +250,10 @@ let decrypt i d l c =
 (* TODO 
 
 - Check that decrypt indeed must use authId and not safeId (like in the F7 code)
-
-- Decryption doesn't modify the counter (at least in the F7 code), does it? 
-  Old specs here suggested so.
-
 - How to handle counter overflows?
-
 - Injective allocation table from i to refs
 
-- Extended padding
-
-- TLS 1.3 simplifies AEAD as follows:
-  - the additional data won't include the plaintext length (ad' = ad);
-  - there is no "semi-explicit" nonce anymore: we use ctr instead of e.iv @| ctr
-    and do not communicate ctr.
 *)
-
-
 
 (* another version; we'll probably also need an explicit invariant
 val encrypt: #i:sid -> wr:writer i -> p:plain i -> ST (cipher i (plength p))

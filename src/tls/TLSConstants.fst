@@ -823,52 +823,7 @@ let rec names_of_cipherSuites css =
                 end
        end
 
-
-(*** TLS content types (internal) ***)
-
-type ContentType =
-    | Change_cipher_spec
-    | Alert
-    | Handshake
-    | Application_data
-
-type ContentType13 = ct: ContentType { ct <> Change_cipher_spec }
-
-val ctBytes: ContentType -> Tot (lbytes 1)
-let ctBytes ct =
-    match ct with
-    | Change_cipher_spec -> abyte 20uy
-    | Alert              -> abyte 21uy
-    | Handshake          -> abyte 22uy
-    | Application_data   -> abyte 23uy
-
-val parseCT: pinverse_t ctBytes
-let parseCT b =
-    match cbyte b with
-    | 20uy -> Correct Change_cipher_spec
-    | 21uy -> Correct Alert
-    | 22uy -> Correct Handshake
-    | 23uy -> Correct Application_data
-    | _    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-val inverse_ct: x:_ -> Lemma
-  (requires (True)) 
-  (ensures lemma_inverse_g_f ctBytes parseCT x)
-  [SMTPat (parseCT (ctBytes x))]
-let inverse_ct x = ()
-
-val pinverse_ct: x:_ -> Lemma
-  (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.Eq ctBytes parseCT x))
-  [SMTPat (ctBytes (Correct._0 (parseCT x)))]
-let pinverse_ct x = ()
-
-let ctToString = function
-    | Change_cipher_spec -> "CCS"
-    | Alert              -> "Alert"
-    | Handshake          -> "Handshake"
-    | Application_data   -> "Data"
-
+// migrated ContentType to Content.fst (this is internal to TLS)
 
 val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot bytes
 let bytes_of_seq sn = bytes_of_int 8 sn
