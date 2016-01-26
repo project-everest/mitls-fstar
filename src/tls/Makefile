@@ -92,7 +92,6 @@ Handshake.fst
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
-Connection.fst \
 TLS.fst 
 
 TLSLAX=$(subst $(NOTEXTRACTABLE),$(TLSNOTVER),$(TLSVER))
