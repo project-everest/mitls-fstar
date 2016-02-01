@@ -202,7 +202,7 @@ TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
 LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
   $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx \
-  $(FSTAR_HOME)/contrib/CoreCrypto/ml/corecrypto.cmxa \
+  $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
   $(FSTAR_HOME)/lib/ml/FStar_All.cmx
