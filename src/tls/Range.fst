@@ -9,6 +9,8 @@ open TLSConstants
 open TLSInfo
 open CoreCrypto
 
+type id2 = i:id { i.pv <> TLS_1p3 } // gradually adding TLS 1.3... 
+
 (* ranges *)
 type range = r:(nat * nat) { fst r <= snd r }
 type Within (n:nat) (r:range) = fst r <= n /\ n <= snd r
@@ -42,7 +44,7 @@ let fixedPadSize i =
 (* Maximal padding length for a cipher *)
 // Note that the 1-byte padding length is included here, i.e. block ciphers can
 // use at most 255 bytes of padding, plus 1 byte to encode the length
-val maxPadSize: id -> Tot nat
+val maxPadSize: id2 -> Tot nat
 let maxPadSize i =
         let authEnc = i.aeAlg in
         match authEnc with
@@ -70,10 +72,10 @@ val minimalPadding_at_least_fixedPadSize: i:id -> len:nat ->
     Lemma (fixedPadSize i <= minimalPadding i len)
 let minimalPadding_at_least_fixedPadSize _ _ = ()
 
-val minMaxPad: id -> Tot range
+val minMaxPad: id2 -> Tot range
 let minMaxPad i = (fixedPadSize i, maxPadSize i)
 
-type valid_clen (i:id) (clen:nat) =
+type valid_clen (i:id2) (clen:nat) =
      (is_AEAD i.aeAlg ==>
         0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i
       /\ clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length)
@@ -84,7 +86,7 @@ type valid_clen (i:id) (clen:nat) =
 
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
-val cipherRangeClass: i:id -> clen:nat -> Pure range
+val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (requires valid_clen i clen)
   (ensures fun (r:range) ->
        (is_AEAD i.aeAlg ==> (
@@ -140,7 +142,7 @@ let cipherRangeClass i clen =
 
 
 (* Sanity check *)
-val cipherRangeClass_width: i:id ->
+val cipherRangeClass_width: i:id2 ->
     clen:nat{valid_clen i clen} ->
     Lemma (snd (cipherRangeClass i clen) - fst (cipherRangeClass i clen) <= maxPadSize i - fixedPadSize i)
 let cipherRangeClass_width i clen = ()
@@ -148,7 +150,7 @@ let cipherRangeClass_width i clen = ()
 (* targetLength: given a plaintext range, what would be the length of the ciphertext? *)
 // TLS 1.2 RFC: For CBC, the encrypted data length is one more than the sum of
 // block_length, TLSPlaintext.length, mac_length, and padding_length
-val targetLength : i:id -> r:range -> Pure nat
+val targetLength : i:id2 -> r:range -> Pure nat
   (requires
     snd r <= max_TLSPlaintext_fragment_length
     /\ (~(is_AEAD i.aeAlg) ==>
@@ -187,7 +189,7 @@ Because how minimalPadding is defined, we don't require the lower bound
 This always holds when l <= h
 *)
 (* Sanity check *)
-val targetLength_spec_nonAEAD: i:id{~(is_AEAD i.aeAlg)}
+val targetLength_spec_nonAEAD: i:id2{~(is_AEAD i.aeAlg)}
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length
       /\ (~(is_AEAD i.aeAlg) ==>
@@ -202,7 +204,7 @@ val targetLength_spec_nonAEAD: i:id{~(is_AEAD i.aeAlg)}
 let targetLength_spec_nonAEAD i r x = ()
 
 (* Sanity check *)
-val targetLength_spec_AEAD: i:id{is_AEAD i.aeAlg}
+val targetLength_spec_AEAD: i:id2{is_AEAD i.aeAlg}
   -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
   -> x:nat{Within x r} ->
   Lemma (Let (targetLength i r) (fun clen ->
@@ -213,7 +215,7 @@ val targetLength_spec_AEAD: i:id{is_AEAD i.aeAlg}
 let targetLength_spec_AEAD i r x = ()
 
 (* Sanity check *)
-val targetLength_at_most_max_TLSCipher_fragment_length: i:id 
+val targetLength_at_most_max_TLSCipher_fragment_length: i:id2 
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length
       /\ (~(is_AEAD i.aeAlg) ==>
@@ -222,7 +224,7 @@ val targetLength_at_most_max_TLSCipher_fragment_length: i:id
   -> Lemma (targetLength i r <= max_TLSCipher_fragment_length)
 let targetLength_at_most_max_TLSCipher_fragment_length i r = ()
 
-val targetLength_converges: i:id
+val targetLength_converges: i:id2
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length
       /\ (~(is_AEAD i.aeAlg) ==>
@@ -231,13 +233,13 @@ val targetLength_converges: i:id
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
 let targetLength_converges i r = ()
 
-val rangeClass: i:id -> r:range -> r':range
+val rangeClass: i:id2 -> r:range -> r':range
   { snd r <= max_TLSPlaintext_fragment_length
     /\ ((~(is_AEAD i.aeAlg) 
        /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
     \/ (is_AEAD i.aeAlg /\ fst r = snd r))
     /\ r' = cipherRangeClass i (targetLength i r) }
-let rangeClass (i:id) (r:range) =
+let rangeClass i (r:range) =
     if is_MACOnly i.aeAlg && not(is_SSL_3p0 i.pv) then
         Error.unexpected "[rangeClass] given an invalid algorithm identifier"
     else
@@ -269,7 +271,7 @@ let fragment_range: range = (0,max_TLSPlaintext_fragment_length)
 
 // for writers, we keep track of actual ranges
 // and we require point ranges when padding is not available.
-type frange (i:id) = rg:range { Wider fragment_range rg /\ (lhae i.aeAlg || fst rg = snd rg) }
+type frange (i:id) = rg:range { Wider fragment_range rg /\ (lhae i.aeAlg || pv_of_id i = TLS_1p3 || fst rg = snd rg) }
 
 // we don't need the index for point ranges (e.g. non-appdata traffic)
 type frange_any = rg:range { Wider fragment_range rg /\ fst rg = snd rg } 

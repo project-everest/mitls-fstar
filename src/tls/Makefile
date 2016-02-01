@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # check for regressions & comment about them!
-all: mitls-ver 
+all: mitls-ver mitls-lax mitls-gen
 # TODO extend scope of verification
 # TODO compilation to ML & testing
 # MK removed mitls-ml as strider was failing on it for ages
@@ -57,29 +57,65 @@ endif
 # We try to limit the use of preprocessing, as it is messy.
 # Not sure which interfaces we should put in there.
 
-# these files are the stable inputs for verification
-TLSVER=TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst MAC.fst Encode.fst StatefulLHAE.fsti StatefulLHAE.fst MAC_SHA256.fst MAC_SHA1.fst Handshake.fsti Connection.fst # TLS.fst #the preceding space is significant (see prefix_cfg)
-#ENC.fst 
-#LHAE.fst --these do not even parse
-#Record.fst --this does not lax type-check
+# these files are the stable inputs for verification -- this is the dependency
+# order for interactive verification
+TLSVER=TLSError.fst \
+TLSConstants.fst \
+Nonce.fst \
+RSAKey.fst \
+DHGroup.p.fst \
+ECGroup.fst \
+CommonDH.fst \
+PMS.p.fst \
+HASH.fst \
+HMAC.fst \
+Sig.p.fst \
+UntrustedCert.fsti \
+Cert.fsti \
+TLSInfo.fst \
+Range.fst \
+DataStream.fst \
+Alert.fst \
+Content.fst \
+StreamPlain.fst \
+StreamAE.fst \
+StatefulPlain.fst \
+LHAEPlain.fst \
+AEAD_GCM.fst \
+MAC.fst \
+Encode.fst \
+StatefulLHAE.fsti \
+StatefulLHAE.fst \
+MAC_SHA256.fst \
+MAC_SHA1.fst \
+Record.fst \
+Handshake.fsti \
+Connection.fst \
+TLS.fst 
+#the preceding space is significant (see prefix_cfg)
+#ENC.fst \
+#LHAE.fst \--these do not even parse
 
-#Removed temporarily: StatefulPlain.fsti
-#Removed temporarily: TLS.fst
+TLSNOTVER=\
+TLSPRF.fst \
+PRF.p.fst \
+TLSExtensions.p.fst \
+HandshakeMessages.fst \
+Handshake.fst
 
-TLSREDUX=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
-	DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst \
-	UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.fst \
-	DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst \
-	AEAD_GCM.fst StatefulLHAE.fst PRF-redux.p.fst  \
-	HandshakeMessages_Redux.fst Handshake_Redux.fst
+NOTEXTRACTABLE=\
+Handshake.fsti \
+Connection.fst \
+TLS.fst 
 
-TLSPARSE=TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst \
-	DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst \
-	UntrustedCert.fst Cert.fst TLSInfo.fst TLSExtensions_Redux.p.fst \
-	HandshakeMessages_Redux.fst
+TLSLAX=$(subst $(NOTEXTRACTABLE),$(TLSNOTVER),$(TLSVER))
+TLSGEN=$(patsubst %.fsti,%.fst,$(TLSLAX))
 
-# these files are verified here
-VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM LHAE StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain StatefulPlain
+# these files are verified here for regression testing -- any time one more file
+# verifies, it should be added here
+VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM LHAE \
+StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain \
+StreamAE StatefulPlain 
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
@@ -92,19 +128,10 @@ TLSExtensions.p.fst TLSPRF.fst\
 HSFragment.fst\
 MAC_SHA256.p.fst\
 MAC_SHA1.p.fst\
-MAC.p.fst\
-Encode.fst\
 ENC.fst\
-AEAD_GCM.fst\
-LHAE.p.fst\
-StatefulLHAE.fst\
-Record.fst\
-\
+LHAE.fst\
 PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti HandshakeMessages.p.fst Handshake.p.fst\
-\
-Handshake.fsti\
-Connection.fst\
-TLS.fst
+
 
 # truncates $(TLSVER) just before $(basename $@).fst
 define prefix_cfg
@@ -180,14 +207,23 @@ mitls-ml: $(LIBFILES) $(TLSVER)
 wc:
 	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(TLS)
 
-redux: $(LIBFILES) $(TLSREDUX)
+mitls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
-TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml TLSConstants.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/DHDB.ml Nonce.ml RSAKey.ml ECGroup.ml DHGroup.ml CommonDH.ml PMS.ml HASH.ml Sig.ml UntrustedCert.ml Cert.ml TLSInfo.ml TLSExtensions.ml HandshakeMessages.ml
-LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx $(FSTAR_HOME)/lib/ml/native_int/prims.cmx $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx $(FSTAR_HOME)/contrib/CoreCrypto/ml/corecrypto.cmxa $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx $(FSTAR_HOME)/lib/ml/FStar_All.cmx
+TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
+  TLSConstants.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/DHDB.ml Nonce.ml RSAKey.ml \
+  ECGroup.ml DHGroup.ml CommonDH.ml PMS.ml HASH.ml Sig.ml UntrustedCert.ml Cert.ml \
+  TLSInfo.ml TLSExtensions.ml HandshakeMessages.ml
+LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
+  $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
+  $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx \
+  $(FSTAR_HOME)/contrib/CoreCrypto/ml/corecrypto.cmxa \
+  $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx \
+  $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
+  $(FSTAR_HOME)/lib/ml/FStar_All.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
 
-redux-gen: $(LIBFILES) $(TLSPARSE)
+mitls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
 	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
 	make -C $(FSTAR_HOME)/lib/ml hyperheap
@@ -198,8 +234,7 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db DB.cmx
 	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSPARSE_ML)
-	cp ./test/parsing_test.ml .
-	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSPARSE_ML:.ml=.cmx) parsing_test.ml -o test.out
+	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSPARSE_ML:.ml=.cmx) test/parsing_test.ml -o test.out
 	$(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------
@@ -207,12 +242,11 @@ redux-gen: $(LIBFILES) $(TLSPARSE)
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF-redux TLSExtensions_Redux ENC
+TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF TLSExtensions ENC
 # DHGroup.p.fst PMS.p.fst \
 	TLSExtensions.p.fst TLSPRF.p.fst \
-	HSFragment.p.fst TLSFragment.p.fst StatefulPlain.p.fst \
-	LHAEPlain.p.fst MAC_SHA256.p.fst MAC_SHA1.p.fst MAC.p.fst \
-	ENC.fst AEAD_GCM.p.fst LHAE.p.fst \
+	HSFragment.p.fst TLSFragment.p.fst \
+	AEAD_GCM.p.fst \
 	PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti \
 	HandshakeMessages.p.fst Handshake.p.fst
 

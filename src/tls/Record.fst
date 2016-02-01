@@ -10,6 +10,7 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open Range
+open Content
 
 // Consider merging this module with Content?
 
@@ -27,9 +28,9 @@ let makePacket ct ver (data: b:bytes { repr_bytes (length b) <= 2}) =
    @| bytes_of_int 2 (length data) 
    @| data 
 
-let parseHeader (hdr:header) =
-    let (ct1,b4) = split hdr 1 in
-    let (pv2,len2) = split b4 2 in
+let parseHeader (h5:header) =
+    let (ct1,b4)   = Platform.Bytes.split h5 1 in
+    let (pv2,len2) = Platform.Bytes.split b4 2 in
     match parseCT ct1 with
     | Error z -> Error z
     | Correct ct ->
@@ -47,14 +48,16 @@ assume val is_Null: id -> Tot bool
 // hopefully we only care about the writer, not the cn state
 // the postcondition is of the form
 //   authId i ==> f is added to the writer log
-let recordPacketOut i (wr:StatefulLHAE.writer i) pv f =
+let recordPacketOut (i: AEAD_GCM.gid) (wr:StatefulLHAE.writer i) (pv: ProtocolVersion) f =
     let ct, rg = Content.ct_rg i f in
     let payload =
       if is_Null i
       then Content.repr i f
       else
         let ad = StatefulPlain.makeAD i ct in
-        StatefulLHAE.encrypt #i #ad #rg wr f in //NS: Cannot infer a type for f; expect plain i ad rg, but rg and ad are not in scope for f
+        let f = StatefulPlain.assert_is_plain i ad rg f in
+        StatefulLHAE.encrypt #i #ad #rg wr f
+    in
     makePacket ct pv payload
 
 (* TODO
