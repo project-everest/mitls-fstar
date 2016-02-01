@@ -16,7 +16,7 @@ open TLSError
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
 
-type id = i:id { is_MACOnly i.aeAlg \/ is_MtE i.aeAlg }
+type id = i:id { i.pv <> TLS_1p3 /\ (is_MACOnly i.aeAlg \/ is_MtE i.aeAlg) }
 
 let alg (i:id) = macAlg_of_id i
 

@@ -7,11 +7,11 @@ module TLSConstants
 (* SMT solver parameters *)
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
+open FStar.SeqProperties
 open Platform.Bytes
 open Platform.Error
 open TLSError
 open CoreCrypto
-open FStar.SeqProperties
 
 (* Type representations for TLS negotiated values *)
 type ProtocolVersion =
@@ -44,7 +44,7 @@ type encAlg =
 type hashAlg =
     | NULL
     | MD5SHA1
-    | Hash of hash_alg (* Defined in the CoreCrypto library *)
+    | Hash of hash_alg (* Defined in CoreCrypto library *)
 
 type macAlg =
     | HMAC     of hash_alg
@@ -83,6 +83,7 @@ type sigAlg = CoreCrypto.sig_alg
 
 type sigHashAlg = sigAlg * hashAlg
 
+
 (* Serializing function for signature algorithms *)
 val sigAlgBytes: sigAlg -> Tot (lbytes 1)
 let sigAlgBytes sa =
@@ -92,9 +93,16 @@ let sigAlgBytes sa =
     | CoreCrypto.ECDSA  -> abyte 3uy
     | CoreCrypto.RSAPSS -> abyte 4uy
 
-type pinverse_t (#a:Type) (#b:Type) (=f:(a -> Tot b)) = 
+(* This is the old version of the inverse predicate. According to CF,
+   verification was harder with this style, so we moved to the new style with
+   pinverse_t + lemmas. The type abbrevations lemma_inverse_* minimize the
+   syntactic overhead. *)
+(* logic type pinverse (#a:Type) (#b:Type) (r:(b -> b -> Type)) (=f:(a -> Tot b)) =
+    (y:b -> Tot (xopt:Result a{(forall (x:a). r (f x) y <==> (xopt = Correct x))})) *)
+
+type pinverse_t (#a:Type) (#b:Type) (=f:(a -> Tot b)) =
     (y:b -> Tot (Result a))
- 
+
 (* Parsing function associated to sigAlgBytes *)
 val parseSigAlg: pinverse_t sigAlgBytes
 let parseSigAlg b =
@@ -110,7 +118,7 @@ type lemma_inverse_g_f (#a:Type) (#b:Type) (=f:(a -> Tot b)) (=g:(b -> Tot (Resu
 
 type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) (=f:(a -> Tot b)) (=g:(b -> Tot (Result a))) (y:b) =
   is_Correct (g y) ==> r (f (Correct._0 (g y))) y
- 
+
 val inverse_sigAlg: x:_ -> Lemma
   (requires (True)) 
   (ensures lemma_inverse_g_f sigAlgBytes parseSigAlg x)
@@ -123,25 +131,28 @@ val pinverse_sigAlg: x:_ -> Lemma
   [SMTPat (sigAlgBytes (Correct._0 (parseSigAlg x)))]
 let pinverse_sigAlg x = ()
 
-type hashAlg' = h:hashAlg{h <> NULL && h <> MD5SHA1 && h <> Hash SHA512}
- 
+
+type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
+
 val hashAlgBytes : hashAlg' -> Tot (lbytes 1)
-let hashAlgBytes ha =
-    match ha with
+ let hashAlgBytes ha =
+   match ha with
     | Hash MD5     -> abyte 1uy
-    | Hash SHA1     -> abyte 2uy
+    | Hash SHA1    -> abyte 2uy
     | Hash SHA224  -> abyte 3uy
     | Hash SHA256  -> abyte 4uy
     | Hash SHA384  -> abyte 5uy
+    | Hash SHA512  -> abyte 6uy
 
 val parseHashAlg: pinverse_t hashAlgBytes
 let parseHashAlg b =
     match cbyte b with
-    | (1uy) -> Correct (Hash MD5)
-    | (2uy) -> Correct (Hash SHA1)
-    | (3uy) -> Correct (Hash SHA224)
-    | (4uy) -> Correct (Hash SHA256)
-    | (5uy) -> Correct (Hash SHA384)
+    | 1uy -> Correct (Hash MD5)
+    | 2uy -> Correct (Hash SHA1)
+    | 3uy -> Correct (Hash SHA224)
+    | 4uy -> Correct (Hash SHA256)
+    | 5uy -> Correct (Hash SHA384)
+    | 6uy -> Correct (Hash SHA512)
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_hashAlg: x:_ -> Lemma
@@ -215,7 +226,7 @@ let rec parseCompressions b =
     let l = length b in
     if l > 0
     then
-        let (cmB,b) = Platform.Bytes.split b 1 in
+        let (cmB,b) = split b 1 in
         match parseCompression cmB with
         | Error(z) -> // We skip this one
             parseCompressions b
@@ -254,7 +265,7 @@ let parseVersion v =
     | ( 3uy, 2uy ) -> Correct(TLS_1p1)
     | ( 3uy, 3uy ) -> Correct(TLS_1p2)
     | ( 3uy, 4uy ) -> Correct(TLS_1p3)
-    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed an unknown version")
 
 val inverse_version: x:_ -> Lemma
   (requires (True)) 
@@ -365,7 +376,6 @@ let cipherSuiteBytesOpt cs =
     | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0xA7uy )
 
     | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00uy, 0xFFuy )
-
     | _ -> None
 
 let knownCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
@@ -456,7 +466,7 @@ let parseCipherSuiteAux b =
 
     | ( 0x00uy, 0xFFuy ) -> Correct(SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV))
 
-    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed unknown cipher")
 
 val parseCipherSuite : pinverse_t cipherSuiteBytes
 let parseCipherSuite b =
@@ -491,7 +501,7 @@ let pinverse_cipherSuite x = ()
 opaque val parseCipherSuites: b:bytes -> Tot (Result known_cipher_suites) (decreases (length b))
 let rec parseCipherSuites b : Result known_cipher_suites =
      if length b > 1 then
-       let (b0,b1) = Platform.Bytes.split b 2 in
+       let (b0,b1) = split b 2 in
        match parseCipherSuites b1 with
          | Correct(css) ->
            (match parseCipherSuite b0 with
@@ -499,7 +509,7 @@ let rec parseCipherSuites b : Result known_cipher_suites =
              | Correct(cs) -> Correct(cs::css))
          | Error(z) -> Error(z)
      else if length b = 0 then Correct []
-     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Odd cs bytes number")
 
 val cipherSuitesBytes: css:known_cipher_suites -> Tot (lbytes (2 * List.length css))
 let rec cipherSuitesBytes css =
@@ -563,6 +573,7 @@ type prePrfAlg =
   | PRF_SSL3_concat         // MD5 @| SHA1    for VerifyData tags
   | PRF_TLS_1p01 of prflabel                       // MD5 xor SHA1
   | PRF_TLS_1p2 : prflabel -> macAlg -> prePrfAlg  // typically SHA256 but may depend on CS
+  | PRF_TLS_1p3 // TBC
 
 type KefAlg = prePrfAlg
 type KdfAlg = prePrfAlg
@@ -624,7 +635,7 @@ let encAlg_of_aeAlg  pv ae =
     | TLS_1p0, MtE (Block e) m -> (Block e),Stale
     | _, MtE e m -> e,Fresh
 
-val macAlg_of_aeAlg: (pv:ProtocolVersion) -> (a:aeAlg { ~(is_AEAD a) }) -> Tot macAlg
+val macAlg_of_aeAlg: (pv:ProtocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(is_AEAD a) }) -> Tot macAlg
 let macAlg_of_aeAlg pv ae =
     match pv,ae with
 //  | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
@@ -821,49 +832,7 @@ let rec names_of_cipherSuites css =
                 end
        end
 
-(* TLS messages types *)
-type ContentType =
-    | Change_cipher_spec
-    | Alert
-    | Handshake
-    | Application_data
-
-type ContentType13 = ct: ContentType { ct <> Change_cipher_spec }
-
-val ctBytes: ContentType -> Tot (lbytes 1)
-let ctBytes ct =
-    match ct with
-    | Change_cipher_spec -> abyte 20uy
-    | Alert              -> abyte 21uy
-    | Handshake          -> abyte 22uy
-    | Application_data   -> abyte 23uy
-
-val parseCT: pinverse_t ctBytes
-let parseCT b =
-    match cbyte b with
-    | 20uy -> Correct Change_cipher_spec
-    | 21uy -> Correct Alert
-    | 22uy -> Correct Handshake
-    | 23uy -> Correct Application_data
-    | _        -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-val inverse_ct: x:_ -> Lemma
-  (requires (True)) 
-  (ensures lemma_inverse_g_f ctBytes parseCT x)
-  [SMTPat (parseCT (ctBytes x))]
-let inverse_ct x = ()
-
-val pinverse_ct: x:_ -> Lemma
-  (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.Eq ctBytes parseCT x))
-  [SMTPat (ctBytes (Correct._0 (parseCT x)))]
-let pinverse_ct x = ()
-
-let ctToString = function
-    | Change_cipher_spec -> "CCS"
-    | Alert              -> "Alert"
-    | Handshake          -> "Handshake"
-    | Application_data   -> "Data"
+// migrated ContentType to Content.fst (this is internal to TLS)
 
 val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot bytes
 let bytes_of_seq sn = bytes_of_int 8 sn
@@ -895,13 +864,15 @@ let vlsplit lSize vlb =
   then Correct(Platform.Bytes.split b l)
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-val vlparse: lSize:nat{lSize <= 4} -> vlb:bytes{lSize <= length vlb}
+val vlparse: lSize:nat{lSize <= 4} -> vlb:bytes //{lSize <= length vlb}
              -> Tot (Result (b:bytes{repr_bytes (length b) <= lSize /\ Seq.Eq vlb (vlbytes lSize b)}))
 let vlparse lSize vlb =
-    let (vl,b) = Platform.Bytes.split vlb lSize in
-    let l = int_of_bytes vl in
-    if l = length b
-    then Correct b
+    if lSize <= length vlb then
+      let (vl,b) = Platform.Bytes.split vlb lSize in
+      let l = int_of_bytes vl in
+      if l = length b
+      then Correct b
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val lemma_vlbytes_len : i:nat -> b:bytes{repr_bytes (length b) <= i}
@@ -1012,4 +983,382 @@ let rec parseDistinguishedNameList data res =
 let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
     List.mem (SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)) css
 
-// let test_me () = assert False
+
+(* TODO: move all the definitions below to a separate file / figure out whether
+ they belong here? *)
+(* TODO: all occurrences of [pinverse] from there on have been replaced by calls
+ to [pinverse_t]; we should write corresponding inversion lemmas. *)
+
+type ffdhe =
+  | FFDHE2048
+  | FFDHE3072
+  | FFDHE4096
+  | FFDHE6144
+  | FFDHE8192
+
+(* TLS 1.3 constants *)
+type namedGroup =
+  | SEC of CoreCrypto.ec_curve
+  | EC_UNSUPPORTED of byte
+  | FFDHE of ffdhe
+  | FFDHE_PRIVATE_USE of byte // fist byte is fixed 
+  | ECDHE_PRIVATE_USE of byte // fist byte is fixed
+
+val namedGroupBytes: namedGroup -> Tot (lbytes 2)
+let namedGroupBytes ng =
+  match ng with
+  | SEC ec ->
+    (match ec with
+    | ECC_P256                      -> abyte2 (0x00uy, 0x17uy)
+    | ECC_P384                      -> abyte2 (0x00uy, 0x18uy)
+    | ECC_P521                      -> abyte2 (0x00uy, 0x19uy))
+  | EC_UNSUPPORTED(b)               -> abyte2 (0x00uy, b)
+  | FFDHE dhe ->
+    (match dhe with
+    | FFDHE2048                     -> abyte2 (0x01uy, 0x00uy)
+    | FFDHE3072                     -> abyte2 (0x01uy, 0x01uy)
+    | FFDHE4096                     -> abyte2 (0x01uy, 0x02uy)
+    | FFDHE6144                     -> abyte2 (0x01uy, 0x03uy) // recheck!
+    | FFDHE8192                     -> abyte2 (0x01uy, 0x04uy) // recheck!
+  )
+  | FFDHE_PRIVATE_USE(b)            -> abyte2 (0x01uy, b) 
+  | ECDHE_PRIVATE_USE(b)            -> abyte2 (0xFEuy, b)
+
+val parseNamedGroup: pinverse_t namedGroupBytes
+let parseNamedGroup b =
+  match cbyte2 b with
+  | (0x00uy, 0x17uy) -> Correct (SEC(ECC_P256))
+  | (0x00uy, 0x18uy) -> Correct (SEC(ECC_P384))
+  | (0x00uy, 0x19uy) -> Correct (SEC(ECC_P521))
+  | (0x00uy, x) -> let v = int_of_bytes (abyte x) in
+		   (*if v > 0 && v < 17 then *) Correct(EC_UNSUPPORTED (x))
+//		   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong ec named group")
+  | (0x01uy, 0x00uy) -> Correct (FFDHE(FFDHE2048))
+  | (0x01uy, 0x01uy) -> Correct (FFDHE(FFDHE3072))
+  | (0x01uy, 0x02uy) -> Correct (FFDHE(FFDHE4096))
+  | (0x01uy, 0x03uy) -> Correct (FFDHE(FFDHE6144))
+  | (0x01uy, 0x04uy) -> Correct (FFDHE(FFDHE8192))
+  | (0x01uy, v)      -> if v = 0xFCuy || v = 0xFDuy || v = 0xFEuy || v = 0xFFuy 
+			then Correct (FFDHE_PRIVATE_USE v)
+			else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong ffdhe private use group")
+  | (0xFEuy, v)      -> Correct (ECDHE_PRIVATE_USE v)
+  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong named group")
+
+(*
+private val namedGroupsBytes0: groups:list namedGroup -> Tot (b:bytes { length b = 2*(List.length groups)})
+let rec namedGroupsBytes0 groups =
+  match groups with
+  | [] -> empty_bytes 
+  | g::gs -> namedGroupBytes g @| namedGroupsBytes0 gs 
+
+let namedGroupsBytes groups = vlbytes 2 (namedGroupsBytes0 groups)
+*)
+
+val namedGroupsBytes: groups:list namedGroup -> Tot (b:bytes { length b = 2 + 2*(List.length groups)})
+
+let namedGroupsBytes groups =
+  let b = (List.Tot.fold_left (fun l s -> namedGroupBytes s @| l) empty_bytes groups) in
+  admit(); //TODO
+  vlbytes 2 b
+
+//val parseNamedGroups: pinverse_t namedGroupsBytes
+let parseNamedGroups b =
+  let rec (aux: b:bytes -> list namedGroup -> Tot (Result (list namedGroup)) (decreases (length b))) = fun b groups ->
+    if length b > 0 then
+      if length b >= 2 then
+	let (ng, bytes) = split b 2 in
+	match parseNamedGroup ng with
+	| Correct(ng) -> aux bytes (ng::groups)
+	| Error(z) -> Error(z)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else Correct(groups) in      
+  match vlparse 2 b with
+  | Correct(b) -> aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
+
+
+(* TODO : precise configurationId type *)
+type configurationId = b:bytes{not (equalBytes b empty_bytes) /\ length b < 65536}
+
+val configurationIdBytes: configurationId -> Tot bytes
+let configurationIdBytes cid = 
+  lemma_repr_bytes_values (length cid);
+  vlbytes 2 cid
+
+//val parseConfigurationId: pinverse_t configurationIdBytes
+let parseConfigurationId b = 
+  vlparse 2 b
+
+type uint32 = b:lbytes 4
+
+val uint32Bytes: uint32 -> Tot (lbytes 4)
+let uint32Bytes u = u
+
+val parseUint32: pinverse_t uint32Bytes
+let parseUint32 b =
+  if length b = 4 then Correct(b)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
+type earlyDataType =
+  | ClientAuthentication
+  | EarlyData
+  | ClientAuthenticationAndData
+
+val earlyDataTypeBytes : earlyDataType -> Tot (lbytes 1)
+let earlyDataTypeBytes edt =
+  match edt with
+  | ClientAuthentication          -> abyte 1uy
+  | EarlyData                     -> abyte 2uy
+  | ClientAuthenticationAndData   -> abyte 3uy
+
+val parseEarlyDataType: pinverse_t earlyDataTypeBytes
+let parseEarlyDataType b =
+    match cbyte b with
+    | (1uy) -> Correct (ClientAuthentication)
+    | (2uy) -> Correct (EarlyData)
+    | (3uy) -> Correct (ClientAuthenticationAndData)
+    | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data type")
+
+// TODO : replace with more precise types when available
+type configurationExtension =
+  | UnknownConfigurationExtension: 
+      typ:lbytes 2 -> payload: bytes { repr_bytes (length payload) <= 2 } -> configurationExtension
+
+val configurationExtensionBytes: ce:configurationExtension { is_UnknownConfigurationExtension ce }  -> Tot bytes
+let configurationExtensionBytes ce = 
+  match ce with 
+  | UnknownConfigurationExtension typ payload -> typ @| vlbytes 2 payload
+
+val parseConfigurationExtension: pinverse_t configurationExtensionBytes
+let parseConfigurationExtension b = 
+  if length b >= 4 then
+  ( let (typ, payload) = split b 2 in
+    match vlparse 2 payload with
+    | Correct (payload) -> Correct (UnknownConfigurationExtension typ payload)
+    | Error(z) -> Error(z))
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse a configuration extension")
+
+val configurationExtensionsBytes: list configurationExtension -> Tot bytes
+let configurationExtensionsBytes ce = 
+  let b = (List.Tot.fold_left (fun bytes x -> bytes @| configurationExtensionBytes x) empty_bytes ce) in 
+  admit(); //TODO
+  vlbytes 2 b
+
+
+val parseConfigurationExtensions: pinverse_t configurationExtensionsBytes
+let parseConfigurationExtensions b = 
+  let rec (aux: b:bytes -> list configurationExtension -> Tot (Result (list configurationExtension)) (decreases (length b))) =
+    fun b exts ->
+    if length b > 0 then
+      if length b >= 4 then
+	let typ, len, data = split2 b 2 2 in
+	let len = int_of_bytes len in
+	if length b >= 4 + len then
+	  let ext, bytes = split b len in
+	  match parseConfigurationExtension ext with
+	  | Correct(ext') -> aux bytes (ext'::exts)
+	  | Error(z) -> Error(z)
+	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
+    else Correct(exts) in
+  if length b >= 2 then
+  match vlparse 2 b with
+  | Correct (b) ->  aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
+  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension") 
+
+
+val sigHashAlgBytes: sigHashAlg -> Tot (lbytes 2)
+let sigHashAlgBytes sha =
+  let sign = sigAlgBytes (fst sha) in
+  admit(); // FIXME
+  let hash = hashAlgBytes (snd sha) in
+  hash @| sign
+
+val parseSigHashAlg: pinverse_t sigHashAlgBytes
+let parseSigHashAlg b =
+  if length b = 2 then
+    let (hash, sign) = split b 1 in
+    match parseSigAlg sign with
+    | Correct(sign) -> 
+	(match parseHashAlg hash with
+	| Correct(hash) -> Correct(sign, hash)
+	| Error(z) -> Error(z))
+    | Error(z) -> Error(z)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Remaining unparsed bytes after signature hash algorithm")
+
+val sigHashAlgsBytes: list sigHashAlg -> Tot bytes
+let sigHashAlgsBytes algs = 
+  admit(); // TODO
+  vlbytes 2 (List.Tot.fold_left (fun l x -> sigHashAlgBytes x @| l) empty_bytes algs)
+
+val parseSigHashAlgs: pinverse_t sigHashAlgsBytes
+let parseSigHashAlgs b =
+  let rec (aux: b:bytes -> list sigHashAlg -> Tot (Result (list sigHashAlg)) (decreases (length b))) = fun b algs ->
+    if length b > 0 then
+      if length b >= 2 then
+      let (alg, bytes) = split b 2 in
+      match parseSigHashAlg alg with
+      | Correct(sha) -> aux bytes (sha::algs)
+      | Error(z) -> Error(z)
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
+    else Correct(algs) in
+  match vlparse 2 b with
+  | Correct (b) -> aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
+
+// TODO : replace "bytes" by either DH or ECDH parameters
+type keyShareEntry = namedGroup * b:bytes { repr_bytes (length b) <= 2 }
+
+val keyShareEntryBytes: keyShareEntry -> Tot bytes
+let keyShareEntryBytes (ng, bytes) =
+  let ng_bytes = namedGroupBytes ng in
+  ng_bytes @| vlbytes 2 bytes
+
+val parseKeyShareEntry: pinverse_t keyShareEntryBytes
+let parseKeyShareEntry b =
+  if length b >= 2 then
+    let ng, key_exchange = split b 2 in
+    match parseNamedGroup ng with
+    | Correct(ng) -> 
+	(match vlparse 2 key_exchange with
+	| Correct(ke) -> Correct (ng, ke)
+	| Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry"))
+    | Error(z) -> Error(z)
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entry")
+
+val keyShareEntriesBytes: list keyShareEntry -> Tot bytes
+let keyShareEntriesBytes kses =
+  admit(); //TODO
+  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| keyShareEntryBytes s) empty_bytes kses)
+
+val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
+let parseKeyShareEntries b =
+  let rec (aux: b:bytes -> list keyShareEntry -> Tot (Result (list keyShareEntry)) (decreases(length b))) = fun b entries ->
+    if length b > 0 then
+      if length b >= 4 then
+	let (ng, data) = split b 2 in
+	match vlsplit 2 data with
+	| Correct(kex, bytes) -> 
+	    (match parseKeyShareEntry (ng @| vlbytes 2 kex) with
+	    | Correct(entry) -> aux bytes (entry::entries)
+	    | Error(z) -> Error(z))
+	| Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
+    else Correct(entries) in
+  match vlparse 2 b with
+  | Correct (b) ->  aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
+  
+type clientKeyShare = l:list keyShareEntry{List.length l >= 4 /\ List.length l < 65536}
+type serverKeyShare = keyShareEntry
+
+type keyShare = 
+  | ClientKeyShare of clientKeyShare
+  | ServerKeyShare of serverKeyShare
+
+val clientKeyShareBytes: clientKeyShare -> Tot bytes
+let clientKeyShareBytes cks = 
+  keyShareEntriesBytes cks
+
+//val parseClientKeyShare: pinverse_t clientKeyShareBytes
+let parseClientKeyShare b = parseKeyShareEntries b
+
+val serverKeyShareBytes: serverKeyShare -> Tot bytes
+let serverKeyShareBytes sks = keyShareEntryBytes sks
+
+val parseServerKeyShare: pinverse_t serverKeyShareBytes
+let parseServerKeyShare b = parseKeyShareEntry b
+
+val keyShareBytes: keyShare -> Tot bytes
+let keyShareBytes = function
+  | ClientKeyShare cks -> clientKeyShareBytes cks
+  | ServerKeyShare sks -> serverKeyShareBytes sks
+
+(* TODO: FIXME *)
+val parseKeyShare: pinverse_t keyShareBytes
+let parseKeyShare b =
+  admit(); //FIXME
+  match parseKeyShareEntries b with
+  | Correct(kse) -> 
+      (match kse with
+      | e::[] -> Correct(ServerKeyShare e)
+      | _ -> if List.length kse >= 2 && List.length kse < 65536 then Correct(ClientKeyShare (kse))
+	     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong key share length") )
+  | Error(z) -> Error(z)
+
+// TODO : give more precise type
+type pskIdentity = b:bytes{length b < 65536}
+
+val pskIdentityBytes: pskIdentity -> Tot bytes
+let pskIdentityBytes pski = 
+  lemma_repr_bytes_values (length pski); 
+  vlbytes 2 (pski)
+
+//val parsePskIdentity: pinverse_t pskIdentityBytes
+let parsePskIdentity b = vlparse 2 b
+
+val pskIdentitiesBytes: list pskIdentity -> Tot bytes
+let pskIdentitiesBytes l =
+  admit(); // TODO
+  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| pskIdentityBytes s) empty_bytes l)
+
+val parsePskIdentities: pinverse_t pskIdentitiesBytes
+let parsePskIdentities b =
+  let rec (aux: b:bytes -> list pskIdentity -> Tot (Result (list pskIdentity)) (decreases (length b))) = fun b ids ->
+    if length b > 0 then
+      if length b >= 2 then
+	let len, data = split b 2 in
+	let len = int_of_bytes len in
+	if length b >= len then
+	  let pski, bytes = split b len in
+	  match parsePskIdentity pski with
+	  | Correct(id) -> 
+              admit(); // TODO
+              aux bytes (id::ids)
+	  | Error(z) -> Error(z)
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identity length")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected psk identity to be at least 2 bytes long")
+    else Correct(ids) in
+  match vlparse 2 b with
+  | Correct (b) -> aux b []
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identities")
+
+type clientPreSharedKey = l:list pskIdentity{List.length l >= 2 /\ List.length l < 65536 }
+type serverPreSharedKey = pskIdentity
+type preSharedKey = 
+  | ClientPreSharedKey of clientPreSharedKey
+  | ServerPreSharedKey of serverPreSharedKey
+
+val clientPreSharedKeyBytes: clientPreSharedKey -> Tot bytes
+let clientPreSharedKeyBytes cpsk = pskIdentitiesBytes cpsk
+
+//val parseClientPreSharedKey: pinverse_t clientPreSharedKeyBytes
+let parseClientPreSharedKey b = parsePskIdentities b
+
+val serverPreSharedKeyBytes: serverPreSharedKey -> Tot bytes
+let serverPreSharedKeyBytes cpsk = pskIdentityBytes cpsk
+
+//val parseServerPreSharedKey: pinverse_t serverPreSharedKeyBytes
+let parseServerPreSharedKey b = parsePskIdentity b
+
+val preSharedKeyBytes: preSharedKey -> Tot bytes
+let preSharedKeyBytes = function
+  | ClientPreSharedKey cpsk -> clientPreSharedKeyBytes cpsk
+  | ServerPreSharedKey spsk -> serverPreSharedKeyBytes spsk
+
+val parsePreSharedKey: pinverse_t preSharedKeyBytes
+let parsePreSharedKey b =
+  match vlparse 2 b with
+  | Correct(b') ->
+      (match vlparse 2 b with
+      | Correct(b'') -> // Client case
+	(match parseClientPreSharedKey b with
+	| Correct(psks) -> admit(); //TODO
+                          Correct(ClientPreSharedKey psks)
+	| Error(z) -> Error(z))
+      | Error(_) -> // Server case
+	(match parseServerPreSharedKey b with
+	| Correct(psk) -> Correct (ServerPreSharedKey psk)
+	| Error(z) -> Error(z)))
+  | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse pre shared key")

@@ -90,7 +90,7 @@ let tls_prf secret label seed len =
   let newseed = label @| seed in
   let hmd5  = p_hash (HMAC(MD5)) secret1 newseed len in
   let hsha1 = p_hash (HMAC(SHA1)) secret2 newseed len in
-  xor hmd5 hsha1 len
+  xor len hmd5 hsha1 
 
 let tls_finished_label : role -> bytes =
   let tls_client_label = utf8 "client finished" in

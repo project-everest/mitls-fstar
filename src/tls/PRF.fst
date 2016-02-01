@@ -44,7 +44,7 @@ let keyExtensionLength i =
         | AEAD cAlg _  ->
             let aksize = aeadKeySize cAlg in
             let ivsize = aeadSaltSize cAlg in
-              2 * (aksize + ivsize)
+            2 * (aksize + ivsize)
 #endif
 
 // This code is complex because we need to reshuffle the raw key materials  
@@ -99,12 +99,12 @@ let deriveRawKeys (i:id) (ms:ms)  =
 #endif
 
 
-type derived = StatefulLHAE.reader * StatefulLHAE.writer 
+type derived (i1:id) (i2:id) = StatefulLHAE.reader i1 * StatefulLHAE.writer i2 
 
 type state =
   | Init
   | Committed of ProtocolVersion * aeAlg * negotiatedExtensions
-  | Derived of id * id * derived
+  | Derived: a:id -> b:id -> derived a b -> state
 //  | Done 
 //  | Wasted
 
@@ -151,19 +151,23 @@ let keyCommit (csr:CsRands) (pv:ProtocolVersion) (a:aeAlg) (ext:negotiatedExtens
   #endif
 
 let wrap (rdId:id) (wrId:id) r w = (r,w)
-let wrap2 (a:id) (b:id) rw csr = Derived(a,b,rw)
+let wrap2 (a:id) (b:id) rw csr = Derived a b rw
 
 let deriveKeys rdId wrId (ms:masterSecret) role  =
     let (ck,sk) = deriveRawKeys rdId ms in
     match role with 
-    | Client -> 
-         wrap rdId wrId 
-            (StatefulLHAE.coerce rdId Reader sk)
-            (StatefulLHAE.coerce wrId Writer ck)
-    | Server -> 
-         wrap rdId wrId
-            (StatefulLHAE.coerce rdId Reader ck)
-            (StatefulLHAE.coerce wrId Writer sk)
+    | Client ->
+        (* TODO: fixme *)
+        wrap rdId wrId (magic()) (magic())
+(*      wrap rdId wrId 
+          (StatefulLHAE.coerce rdId wrId Reader rdId sk)
+          (StatefulLHAE.coerce wrId rdId Writer wrId ck) *)
+    | Server ->
+        (* TODO: fixme *)
+        wrap rdId wrId (magic()) (magic())
+(*      wrap rdId wrId
+          (StatefulLHAE.coerce rdId Reader ck)
+          (StatefulLHAE.coerce wrId Writer sk) *)
 
   
 //CF We could merge the two keyGen.
@@ -275,8 +279,10 @@ let makeVerifyData si (ms:masterSecret) role data =
   #endif
     tag
 
-let checkVerifyData si ms role data tag =
-  let computed = verifyData si ms role data in
+let checkVerifyData si ms role data (tag:bytes) =
+  admit()
+  (*
+  let (computed:bytes) = verifyData si ms role data in
   equalBytes tag computed
   //#begin-ideal2
   #if ideal
@@ -285,7 +291,7 @@ let checkVerifyData si ms role data tag =
   && ( safeVD si  = false || mem (mk_msid si) role data !log ) //MK: rename predicate and function
   //#end-ideal2
   #endif
-
+*)
 
 (** ad hoc SSL3-only **)
 
