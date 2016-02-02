@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # check for regressions & comment about them!
-all: mitls-ver mitls-lax mitls-gen
+all: tls-ver tls-lax tls-gen
 # TODO extend scope of verification
 # TODO compilation to ML & testing
 # MK removed mitls-ml as strider was failing on it for ages
@@ -88,10 +88,11 @@ TLSPRF.fst \
 PRF.p.fst \
 TLSExtensions.p.fst \
 HandshakeMessages.fst \
-Handshake.fst
+Handshake.fst 
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
+Connection.fst \
 TLS.fst 
 
 TLSLAX=$(subst $(NOTEXTRACTABLE),$(TLSNOTVER),$(TLSVER))
@@ -163,7 +164,7 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-mitls-ver: $(LIBFILES) $(TLSVER)
+tls-ver: $(LIBFILES) $(TLSVER)
 	$(FSTAR) $(ADMITTED) $(VERFLAGS) $(filter-out TLS.fst,$^) $(addprefix --verify_module ,$(VERIFY))
 
 # going beyond TLSVER, not necessarily working
@@ -184,14 +185,14 @@ top: $(LIBFILES) $(TLSVER)
 
 
 # --trace_error
-mitls-ml: $(LIBFILES) $(TLSVER)
+tls-ml: $(LIBFILES) $(TLSVER)
 	$(FSTAR) --lax --debug Extreme $(ADMITTED) $^ --codegen OCaml --use_native_int --trace_error
 	mv *.ml ../tls-ml
 
 wc:
 	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(TLS)
 
-mitls-lax: $(LIBFILES) $(TLSLAX)
+tls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
 TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
@@ -207,7 +208,7 @@ LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
   $(FSTAR_HOME)/lib/ml/FStar_All.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
 
-mitls-gen: $(LIBFILES) $(TLSGEN)
+tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
 	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
 	make -C $(FSTAR_HOME)/lib/ml hyperheap
