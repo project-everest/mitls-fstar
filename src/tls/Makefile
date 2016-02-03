@@ -167,23 +167,6 @@ endef
 tls-ver: $(LIBFILES) $(TLSVER)
 	$(FSTAR) $(ADMITTED) $(VERFLAGS) $(filter-out TLS.fst,$^) $(addprefix --verify_module ,$(VERIFY))
 
-# going beyond TLSVER, not necessarily working
-
-api-ver: $(LIBFILES) $(TLSVER) TLS.fsti
-	$(FSTAR) $(ADMITTED) $(VERFLAGS) $^
-
-test-gcm: $(LIBFILES)
-	$(FSTAR) --lax $(ADMITTED) --codegen OCaml --admit_fsi FStar.IO \
-	--include $(PDIR) --include $(CDIR) \
-	$^ FStar.IO.fsti $(call prefix_ver,AEAD_GCM,fst) StatefulLHAE.fst TestGCM.fst	
-
-test-hmac:$(LIBFILES) TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst MAC_SHA256.fst MAC_SHA1.fst MAC.fst TestMAC.fst
-	$(FSTAR) $(ADMITTED) $(VERLAGS) $^
-
-top: $(LIBFILES) $(TLSVER)
-	$(FSTAR) $(ADMITTED) $(VERFLAGS) $^ StatefulLHAE.fsti Record.fst Handshake.fsti --admit_fsi StatefulLHAE --admit_fsi Handshake --verify_module TLS
-
-
 # --trace_error
 tls-ml: $(LIBFILES) $(TLSVER)
 	$(FSTAR) --lax --debug Extreme $(ADMITTED) $^ --codegen OCaml --use_native_int --trace_error
