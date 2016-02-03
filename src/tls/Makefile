@@ -15,6 +15,7 @@ endif
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
 STDLIB_ADMITS=Char HyperHeap Set Map
 
+OTHERFLAGS=--explicit_deps
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi \
 FStar.Seq.fst FStar.SeqProperties.fst #FStar.Int64.fst 
@@ -141,11 +142,11 @@ endef
 --verify_module $(subst .p,,$(basename $@))
 
 %.fst-in:
-	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
+	@echo $(OTHERFLAGS) $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fsti-in:
-	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
+	@echo $(OTHERFLAGS) $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
 
 # prints build-config block for interactive verification
