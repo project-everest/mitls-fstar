@@ -21,7 +21,7 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGE
 PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
 PDIR_ML=$(FSTAR_HOME)/contrib/Platform/ml/
 
-PLATFORM=$(addprefix $(PDIR),Bytes.fst Date.fst Error.fst Tcp.fst)
+PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
 CDIR_ML=$(FSTAR_HOME)/contrib/CoreCrypto/ml/
