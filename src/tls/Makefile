@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # check for regressions & comment about them!
-all: mitls-ver mitls-lax mitls-gen
+all: tls-ver tls-lax tls-gen
 # TODO extend scope of verification
 # TODO compilation to ML & testing
 # MK removed mitls-ml as strider was failing on it for ages
@@ -17,6 +17,7 @@ add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
 STDLIB_ADMITS=Char HyperHeap Set Map
 
+OTHERFLAGS=--explicit_deps
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi \
 FStar.Seq.fst FStar.SeqProperties.fst #FStar.Int64.fst 
@@ -101,7 +102,7 @@ TLSPRF.fst \
 PRF.p.fst \
 TLSExtensions.p.fst \
 HandshakeMessages.fst \
-Handshake.fst
+Handshake.fst 
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
@@ -153,11 +154,11 @@ endef
 --verify_module $(subst .p,,$(basename $@))
 
 %.fst-in:
-	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
+	@echo $(OTHERFLAGS) $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fsti-in:
-	@echo $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
+	@echo $(OTHERFLAGS) $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
 
 # prints build-config block for interactive verification
@@ -176,38 +177,21 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-mitls-ver: $(LIBFILES) $(TLSVER)
+tls-ver: $(LIBFILES) $(TLSVER)
 	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^)
 
-# same as mitls-ver, but verifies one module at a time.
-mitls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
-
-# going beyond TLSVER, not necessarily working
-
-api-ver: $(LIBFILES) $(TLSVER) TLS.fsti
-	$(FSTAR) $(ADMITTED) $(VERFLAGS) $^
-
-test-gcm: $(LIBFILES)
-	$(FSTAR) --lax $(ADMITTED) --codegen OCaml --admit_fsi FStar.IO \
-	--include $(PDIR) --include $(CDIR) \
-	$^ FStar.IO.fsti $(call prefix_ver,AEAD_GCM,fst) StatefulLHAE.fst TestGCM.fst	
-
-test-hmac:$(LIBFILES) TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst MAC_SHA256.fst MAC_SHA1.fst MAC.fst TestMAC.fst
-	$(FSTAR) $(ADMITTED) $(VERLAGS) $^
-
-top: $(LIBFILES) $(TLSVER)
-	$(FSTAR) $(ADMITTED) $(VERFLAGS) $^ StatefulLHAE.fsti Record.fst Handshake.fsti --admit_fsi StatefulLHAE --admit_fsi Handshake --verify_module TLS
-
+# same as tls-ver, but verifies one module at a time.
+tls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
 
 # --trace_error
-mitls-ml: $(LIBFILES) $(TLSVER)
+tls-ml: $(LIBFILES) $(TLSVER)
 	$(FSTAR) --lax --debug Extreme $(ADMITTED) $^ --codegen OCaml --use_native_int --trace_error
 	mv *.ml ../tls-ml
 
 wc:
 	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(TLS)
 
-mitls-lax: $(LIBFILES) $(TLSLAX)
+tls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
 TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
@@ -217,13 +201,13 @@ TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
 LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
   $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx \
-  $(FSTAR_HOME)/contrib/CoreCrypto/ml/corecrypto.cmxa \
+  $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
   $(FSTAR_HOME)/lib/ml/FStar_All.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
 
-mitls-gen: $(LIBFILES) $(TLSGEN)
+tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
 	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
 	make -C $(FSTAR_HOME)/lib/ml hyperheap
