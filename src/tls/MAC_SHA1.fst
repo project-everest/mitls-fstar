@@ -25,9 +25,7 @@ type tag (i:id) = bytes
 type keyrepr (i:id) = bytes
 type key (i:id) = keyrepr i
 
-(* ZOMG TODO horrible workaround an extraction bug this type is NOT MEANT AT ALL
- to be nat. FIXME FIXME FIXME *)
-type good (i:id) (b:bytes) = nat // TBD in Encode?
+assume type good (i:id) (b:bytes) // TBD in Encode?
 
 
 // we keep the tag in case we want to enforce tag authentication
