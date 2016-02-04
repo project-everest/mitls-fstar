@@ -19,7 +19,7 @@ STDLIB_ADMITS=Char HyperHeap Set Map
 
 OTHERFLAGS=--explicit_deps
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
-stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi \
+stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
@@ -28,7 +28,7 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 
 PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
 
-PLATFORM=$(addprefix $(PDIR),Bytes.fst Date.fst Error.fst Tcp.fst)
+PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
 

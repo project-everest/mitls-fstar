@@ -24,7 +24,7 @@ seqproperties.fst
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB)
 
 PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
-PLATFORM=$(addprefix $(PDIR),Bytes.fst Date.fst Error.fst Tcp.fst)
+PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
