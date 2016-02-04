@@ -32,11 +32,11 @@ open Handshake    // via its interface
 // dispatch records the *record* protocol version (TLS 1.0 when using TLS 1.3)
 type dispatch =
   | Init
-  | FirstHandshake of ProtocolVersion (* bound by ServerHello's inner pv *)
+//  | FirstHandshake of ProtocolVersion (* bound by ServerHello's inner pv *)
   | Finishing
   | Finished
   | Open
-  | Closing of ProtocolVersion * string (* write-only, while sending a fatal alert *)
+  | Closing of (* ProtocolVersion * *) string (* write-only, while sending a fatal alert *)
   | Closed
  
 type connection = | C:

@@ -213,7 +213,7 @@ val next_fragment: s:hs -> ST outgoing
 
 type incoming = // the fragment is accepted, and...
   | InAck
-  | InVersionAgreed of ProtocolVersion
+//| InVersionAgreed of ProtocolVersion
   | InQuery of Cert.chain * bool
   | InFinished
   | InComplete        // log += Complete
@@ -229,7 +229,8 @@ val authorize: s:hs -> Cert.chain -> ST incoming
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
     // preserves its invariant, modifies only its own region, and...
-    modifies_internal h0 s h1 ))
+    modifies_internal h0 s h1 /\
+    (is_InAck result \/ is_InError result)))
 
 type incomingCCS =
   | InCCSAck            // log += Epoch if first
@@ -241,6 +242,23 @@ val recv_ccs: s:hs -> ST incomingCCS
     hs_inv s h1 /\
     fresh_epoch h0 s h1 ))
 
-val getMinVersion: hs -> Tot ProtocolVersion
+// returns the protocol version negotiated so far
+// (used for formatting outgoing packets, but not trusted)
+val version: s:hs -> ST ProtocolVersion
+  (requires (hs_inv s))
+  (ensures (fun h0 pv h1 -> h0 = h1))
+
+(* used to be part of TLS.pickSendPV, with 3 cases: 
+
+   (1) getMinVersion hs; then 
+   (2) fixed by ServerHello; then
+   (3) read from the current writing epoch
+
+   val epoch_pv: #region:rid -> #peer:rid -> epoch region peer -> Tot ProtocolVersion
+
+   Instead, we could add an invariant: for all epochs e in hs.log, we have epoch_pv e = version hs.
+*)
+
+
 
 // val negotiate: list<'a> -> list<'a> -> option<'a> when 'a:equality

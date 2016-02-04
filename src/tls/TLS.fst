@@ -242,9 +242,6 @@ let moveToOpenState c =
     frame_unrelated c h0 (ST.get())
 
 
-assume val epoch_pv: #region:rid -> #peer:rid -> epoch region peer -> Tot ProtocolVersion
-
-
 // too convenient; should move to a library and be 
 val unexpected: #a:Type -> v:string -> ST a
   (requires (fun h -> True))
@@ -255,21 +252,10 @@ let rec unexpected s = unexpected s
 (* Dispatch dealing with network sockets *)
 // we need st_inv h c /\ wr > FirstHandshake ==> is_Some epoch_w
 
-val pickSendPV: c:connection -> ST ProtocolVersion
-  (requires (fun h -> st_inv c h /\ sel h c.writing <> Closed))
-  (ensures (fun h0 pv h1 -> h0 = h1))
- 
-let pickSendPV c =
-    match !c.writing with
-    | Init -> getMinVersion (C.hs c)
-    | FirstHandshake(pv) | Closing(pv,_) -> pv
-    | Finishing | Finished | Open ->
-        (match epoch_w c with
-        | Some e -> (match epoch_pv e with 
-                   | TLS_1p3 -> TLS_1p0 
-                   | pv      -> pv)
-        | None -> unexpected "[pickSendPV] excluded in those states")
-
+let outerPV c =
+  match Handshake.version c.hs with
+  | TLS_1p3 -> TLS_1p0 
+  | pv      -> pv)
 
 //15-11-27 illustrating overhead for "unrelated" updates; still missing modifies clauses 
 val closeConnection: c: connection -> ST unit 
