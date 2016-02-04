@@ -13,12 +13,12 @@ ifndef FSTAR_HOME
 FSTAR_HOME=../../../FStar
 endif
 #STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
-STDLIB_ADMITS=Char HyperHeap Set Map
+STDLIB_ADMITS=Char HyperHeap Set Map IO
 
 OTHERFLAGS=--explicit_deps
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst \
-FStar.Seq.fst FStar.SeqProperties.fst #FStar.Int64.fst 
+FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
 
@@ -89,7 +89,8 @@ TLSPRF.fst \
 PRF.p.fst \
 TLSExtensions.p.fst \
 HandshakeMessages.fst \
-Handshake.fst 
+Handshake.fst # \
+# TestRecord.fst
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
