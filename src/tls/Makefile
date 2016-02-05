@@ -189,8 +189,11 @@ LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
   $(FSTAR_HOME)/lib/ml/FStar_All.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
 
-TLSML=$(TLSGEN:.p.fst=.ml)
+TLSML := $(TLSGEN:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
+TLSML := \
+  FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
+  $(TLSML)
 
 tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
