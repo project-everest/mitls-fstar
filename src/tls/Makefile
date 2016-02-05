@@ -89,8 +89,8 @@ TLSPRF.fst \
 PRF.p.fst \
 TLSExtensions.p.fst \
 HandshakeMessages.fst \
-Handshake.fst # \
-# TestRecord.fst
+Handshake.fst \
+TestRecord.fst
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
@@ -180,10 +180,6 @@ wc:
 tls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
-TLSPARSE_ML=FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
-  TLSConstants.ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/DHDB.ml Nonce.ml RSAKey.ml \
-  ECGroup.ml DHGroup.ml CommonDH.ml PMS.ml HASH.ml Sig.ml UntrustedCert.ml Cert.ml \
-  TLSInfo.ml TLSExtensions.ml HandshakeMessages.ml
 LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
   $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx \
@@ -192,6 +188,9 @@ LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
   $(FSTAR_HOME)/lib/ml/FStar_All.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
+
+TLSML=$(TLSGEN:.p.fst=.ml)
+TLSML := $(TLSML:.fst=.ml)
 
 tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
@@ -203,8 +202,9 @@ tls-gen: $(LIBFILES) $(TLSGEN)
 	$(OCAML) $(FSTAR_HOME)/lib/ml/native_int/prims.ml
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
 	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db DB.cmx
-	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSPARSE_ML)
-	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSPARSE_ML:.ml=.cmx) test/parsing_test.ml -o test.out
+	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
+	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSML:.ml=.cmx) test/parsing_test.ml -o test.out
+	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSML:.ml=.cmx) TestRecord.ml -o testrecord.out
 	$(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------

@@ -42,9 +42,12 @@ let main =
       let iv: AEAD_GCM.iv id = x"b56bf932" |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv log counter
+      // FIXME extraction bug: unless I specify the four implicit arguments, F*
+      // crashes
+      AEAD_GCM.State #id #Writer #r #r key iv log counter
     in
-    State log seqn key
+    // FIXME extraction bug: same remark
+    State #id #Writer #r #r log seqn key
   in
 
   let text = x"474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a" in
