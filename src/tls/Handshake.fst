@@ -123,8 +123,8 @@ assume val process1RTTClientFinished13: c:config -> s:serverState c{is_S_ZeroRTT
 val prepareClientHello: config -> option ri -> option sessionID -> (CH * log)
 let prepareClientHello cfg ri sido : CH * log =
   let crand = Nonce.mkHelloRandom() in
-  let sid = (match sido with None -> empty_bytes | Some x -> x) in
-  let cvd = (match ri with None -> empty_bytes | Some (x,y) -> x) in
+  let sid = (match sido with | None -> empty_bytes | Some x -> x) in
+  let cvd = (match ri with | None -> empty_bytes | Some (x,y) -> x) in
   let ci = initConnection Client crand in
   let ext = prepareExtensions cfg ci cvd in
   let ch = 

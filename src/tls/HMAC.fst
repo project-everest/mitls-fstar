@@ -36,7 +36,7 @@ let sslKeyedHashVerify (a:sslHashAlg) k p t : bool =
 (* Parametric keyed hash *)
 
 let hmac (a:hashAlg {is_Hash a}) k p =
-    match a with Hash h  -> CoreCrypto.hmac h k p
+  match a with |Hash h  -> CoreCrypto.hmac h k p
 
 // why do I need this declaration??
 val hmacVerify: a:hashAlg {is_Hash a} -> key -> data -> bytes -> Tot bool
