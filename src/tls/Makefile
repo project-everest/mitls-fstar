@@ -192,7 +192,7 @@ TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) Se
 TLSML := $(TLSGEN:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
 TLSML := \
-  FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml TLSError.ml \
+  FStar_List_Tot.ml FStar_Seq.ml FStar_Heap.ml FStar_SeqProperties.ml TLSError.ml \
   $(TLSML)
 
 tls-gen: $(LIBFILES) $(TLSGEN)
