@@ -435,6 +435,7 @@ let epochCRand = function
   | FullEpoch si pe      -> si.init_crand
   | AbbrEpoch ai pe1 pe2 -> ai.abbr_crand
 
+val epochCSRands: preEpoch -> Tot bytes
 let epochCSRands e = epochCRand e @| epochSRand e
 
 type preConnectionInfo = {

@@ -21,7 +21,8 @@ type id = i:id { pv_of_id i <> TLS_1p3 }
 type seqn = n:nat{repr_bytes n <= 8}
 let ad_Length i = 8 + StatefulPlain.ad_Length i
 
-let parseAD (b:bytes {length b >= 8}) = snd(split b 8)
+val parseAD: b:bytes { length b >= 8 } -> Tot bytes
+let parseAD b = snd(split b 8)
 
 type adata (i:id) = b:lbytes (ad_Length i)
   { exists (ad:StatefulPlain.adata i). ad = parseAD b}
