@@ -196,7 +196,7 @@ TLSML := \
   $(TLSML)
 
 tls-gen: $(LIBFILES) $(TLSGEN)
-	$(FSTAR) --lax --codegen OCaml  $(TLSPARSE_ADMIT) $^
+	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSPARSE_ADMIT) $^
 	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
 	make -C $(FSTAR_HOME)/lib/ml hyperheap
 	make -C $(FSTAR_HOME)/contrib/Platform/ml
