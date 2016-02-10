@@ -147,5 +147,4 @@ let recv_fragment s (r:range) (f:bytes) : Result (ad: alertDescription { f = ale
     | Error z -> Error z
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "expected exactly 2 bytes of alert")
 
-// FIXME extraction bug: the line below does not extract properly
 let reset s = s.outgoing := None   // we silently discard any unsent alert. 

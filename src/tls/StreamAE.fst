@@ -154,7 +154,6 @@ val enc:
     ))
 
 let enc i e l p =
-  (* FIXME extraction bug related to the use of e.counter in this function *)
   recall e.counter;
   let iv = aeIV i !e.counter e.iv in
   let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD p in
