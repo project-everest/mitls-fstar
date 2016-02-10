@@ -42,12 +42,9 @@ let main =
       let iv: AEAD_GCM.iv id = x"b56bf932" |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      // FIXME extraction bug: unless I specify the four implicit arguments, F*
-      // crashes
-      AEAD_GCM.State #id #Writer #r #r key iv log counter
+      AEAD_GCM.State r key iv log counter
     in
-    // FIXME extraction bug: same remark
-    State #id #Writer #r #r log seqn key
+    State r log seqn key
   in
 
   let text = x"474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a" in
@@ -58,7 +55,8 @@ let main =
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
   // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
-  let f: LHAEPlain.plain id ad rg = Content.CT_Data rg f |> unsafe_coerce in
+  //NS: Not sure about the unsafe_coerce: but, it's presence clearly means that #id cannot be inferred
+  let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in 
 
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
   // FIXME: without the three additional #-arguments below, extraction crashes

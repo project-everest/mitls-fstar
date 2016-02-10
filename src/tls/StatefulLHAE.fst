@@ -43,8 +43,8 @@ type gcm_log_t (r:rid) (i:gid) = rref r (s:seq (AEAD_GCM.entry i))
 (* CF we might merge those types into State id role *)
 type state (i:gid) (rw:rw) = 
   | State :
-       #region:rid{region<>root}
-    -> #peer_region:rid{peer_region <> root 
+      #region:rid{region<>root}
+    -> peer_region:rid{peer_region <> root 
                         /\ HyperHeap.disjoint region peer_region}
     -> log:  st_log_t (if rw=Reader then peer_region else region) i (* shared ghost spec *)
     -> seqn: rref region seqn_t                                       (* concrete, local sequence number *)
@@ -124,8 +124,8 @@ let gen reader_parent writer_parent i =
   lemma_extends_fresh_disjoint reader_region writer_region reader_parent writer_parent m0 m1;
   let r,w = AEAD_GCM.gen reader_region writer_region i in
   let log = ralloc writer_region Seq.createEmpty in
-  let r (* : reader i *) = State #i #Reader #reader_region #writer_region log (ralloc reader_region 0) r in
-  let w (* : writer i *) = State #i #Writer #writer_region #reader_region log (ralloc writer_region 0) w in
+  let r (* : reader i *) = State #i #Reader #reader_region writer_region log (ralloc reader_region 0) r in
+  let w (* : writer i *) = State #i #Writer #writer_region reader_region log (ralloc writer_region 0) w in
   r, w
 
 val leak_reader: i:gid{~(safeId i)} -> reader i -> ST bytes
@@ -158,7 +158,7 @@ let coerce r0 p0 role i kv iv =
   let key = AEAD_GCM.coerce r p i role kv iv in
   let log_region = if role=Reader then p else r in
   let log = ralloc log_region Seq.createEmpty in
-  State #i #role #r #p log (ralloc r 0) key
+  State #i #role #r p log (ralloc r 0) key
 
 opaque type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
   exists (r:reader i).{:pattern (matching r w)} st_inv r w h
@@ -184,7 +184,7 @@ val encrypt: #i:gid -> #ad:adata i
                 /\ sel h1 wr.seqn = sel h0 wr.seqn + 1
                 /\ Wider (Range.cipherRangeClass i (length c)) rg
                 /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))
-let encrypt i ad rg (State log seqn key) f =
+let encrypt i ad rg (State _ log seqn key) f =
   let n = !seqn in
   let l= !log in
   let ad' = LHAEPlain.makeAD i n ad in
@@ -232,7 +232,7 @@ val decrypt: #i:gid -> #ad:adata i -> rd:reader i
              ))
     ))
 
-let decrypt i ad (State log seqn key) c = 
+let decrypt i ad (State _ log seqn key) c = 
   recall log; recall seqn; recall (AEAD_GCM.State.log key);
   let h0 = get () in   
   let n = !seqn in
