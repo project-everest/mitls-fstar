@@ -87,7 +87,7 @@ let mac i 'good k p =
     t
 
 private val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool 
-let matches i p (Entry #i _ p') = p = p'
+let matches i p (Entry _ p') = p = p'
 
 val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True)) 
