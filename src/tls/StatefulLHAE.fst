@@ -184,7 +184,7 @@ val encrypt: #i:gid -> #ad:adata i
                 /\ sel h1 wr.seqn = sel h0 wr.seqn + 1
                 /\ Wider (Range.cipherRangeClass i (length c)) rg
                 /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))
-let encrypt i ad rg (State #ii #r #region #peer_region log seqn key) f =
+let encrypt i ad rg (State log seqn key) f =
   let n = !seqn in
   let l= !log in
   let ad' = LHAEPlain.makeAD i n ad in
