@@ -96,6 +96,7 @@ type state (i:id) =
            ctr: rref region nat ->
            state i
 
+val gen: r0:rid -> i:id -> (state i * state i)
 let gen r0 (i:id) =
   let r = new_region r0 in
   let log = if authId i then Some (ralloc r []) else None in

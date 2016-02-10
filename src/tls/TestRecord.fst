@@ -61,7 +61,8 @@ let main =
   let f: LHAEPlain.plain id ad rg = Content.CT_Data rg f |> unsafe_coerce in
 
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
-  let c = encrypt w f in
+  // FIXME: without the three additional #-arguments below, extraction crashes
+  let c = encrypt #id #ad #rg w f in
 
   IO.print_string (Platform.Bytes.hex_of_bytes c);
   IO.print_newline ()

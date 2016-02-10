@@ -51,7 +51,7 @@ type macAlg =
     | SSLKHASH of hash_alg
 
 type aeAlg =
-    | MACOnly of hash_alg
+    | MACOnly : hash_alg -> aeAlg
     | MtE   : encAlg -> hash_alg -> aeAlg
     | AEAD  : aeadAlg -> hash_alg -> aeAlg
 
