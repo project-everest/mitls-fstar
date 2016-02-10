@@ -16,7 +16,7 @@ val oid_DSASignatureKey : string
 
 val oid_of_keyalg: sigAlg -> string
 
-type X509Certificate2
+assume type X509Certificate2
 type hint = string
 type cert = bytes
 type chain = list cert
