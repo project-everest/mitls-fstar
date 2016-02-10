@@ -10,13 +10,15 @@ open TLSConstants
 
 
 (* Parametric hash algorithm (implements interface) *)
-let hash' alg data =
+// FIXME: had to add a type annotation to make this go through
+let hash' alg data: bytes =
     match alg with
     | NULL    -> data
     | MD5SHA1 -> (CoreCrypto.hash MD5 data) @| (CoreCrypto.hash SHA1 data)
     | Hash h  -> (CoreCrypto.hash h  data)
 
-let hash alg data =
+// FIXME: same here
+let hash alg data: bytes =
   let h = hash' alg data in
   let l = length h in
   let exp = hashSize alg in
