@@ -8,7 +8,7 @@ open TLSConstants
 (* State variables *)
 let pv = ref TLS_1p2
 let kex = ref Kex_ECDHE
-       
+
 (* Traces list *)
 let ecdhe_traces = [
     "openssl-google.bin";
@@ -57,7 +57,7 @@ let print_error error =
   | AD_no_renegotiation -> "No renegotiation error:"
   | AD_unrecognized_name -> "Unrecognized name error:" in
   (error_type ^ "\n" ^ snd error)
-	       
+
 let parse_handshake_message bytes =
   if length bytes >= 4 then
     let ht, len, msg = split2 bytes 1 3 in
@@ -71,7 +71,7 @@ let parse_handshake_message bytes =
 	 (match parseClientHello msg with
 	  | Correct(ch) ->
 	     print_string "...OK\n";
-	     let _,ch_bytes = split (clientHelloBytes(ch)) 4 in	     
+	     let _,ch_bytes = split (clientHelloBytes(ch)) 4 in
 	     if equalBytes ch_bytes msg then (print_string "Serializing client hello...\n...OK\n") else
 	       (print_string "Serializing client hello...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -79,7 +79,7 @@ let parse_handshake_message bytes =
 	 | Error(z) ->
 	    print_string "...FAILED:\n";
 	    print_string (print_error z ^ "\n"))
-      | '\x02' -> 
+      | '\x02' ->
 	 print_string "Parsing server hello message...\n";
 	 (match parseServerHello msg with
 	 | Correct(sh) -> print_string "...OK\n";
@@ -91,7 +91,7 @@ let parse_handshake_message bytes =
 
 	 | Error(z) -> print_string "...FAILED:\n";
 	               print_string (snd z))
-      | '\x04' -> 
+      | '\x04' ->
 	 print_string "Parsing session ticket message...\n";
 	 (match parseSessionTicket msg with
 	 | Correct(st) -> print_string "...OK\n";
@@ -104,7 +104,7 @@ let parse_handshake_message bytes =
 	 | Error(z) ->
 	    print_string "...FAILED:\n";
 	    print_string (snd z))
-      | '\x06' -> 
+      | '\x06' ->
 	 print_string "Parsing hello retry request message...\n";
 	 (match parseHelloRetryRequest msg with
 	 | Correct(ch) -> print_string "...OK\n";
@@ -115,7 +115,7 @@ let parse_handshake_message bytes =
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes hrr_bytes ^ "\n"))
 
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x08' -> 
+      | '\x08' ->
 	 print_string "Parsing encrypted extensions message...\n";
 	 (match parseEncryptedExtensions msg with
 	 | Correct(ch) -> print_string "...OK\n";
@@ -126,7 +126,7 @@ let parse_handshake_message bytes =
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes ee_bytes ^ "\n"))
 
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x0b' -> 
+      | '\x0b' ->
 	 print_string "Parsing certificate message...\n";
 	 (match parseCertificate msg with
 	  | Correct(ch) -> print_string "...OK\n";
@@ -135,9 +135,9 @@ let parse_handshake_message bytes =
 	     let cert_bytes = certificateBytes(ch) in
 	     if equalBytes cert_bytes msg then () else print_string "Serialization failed though...\n" *)
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x0c' -> 
+      | '\x0c' ->
 	 print_string "Parsing server key exchange message...\n";
-	 (match parseServerKeyExchange !kex msg with 
+	 (match parseServerKeyExchange !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
 			   print_string "WARNING: ignoring test on serialization because EC point serialization is not implemnted in CoreCrypto\n"
 (*
@@ -148,7 +148,7 @@ let parse_handshake_message bytes =
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes ske_bytes ^ "\n"))
  *)
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x0d' -> 
+      | '\x0d' ->
 	 print_string "Parsing certificate request message...\n";
 	 (match parseCertificateRequest !pv msg with
 	 | Correct(ch) -> print_string "...OK\n";
@@ -163,7 +163,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing server hello done message...\n";
 	 if length msg = 0 then print_string "...OK\n"
 	 else print_string "...FAILED\n"
-      | '\x0f' -> 
+      | '\x0f' ->
 	 print_string "Parsing certificate verify message...\n";
 	 (match parseCertificateVerify msg with
 	 | Correct(ch) -> print_string "...OK\n";
@@ -174,7 +174,7 @@ let parse_handshake_message bytes =
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cv_bytes ^ "\n"))
 
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x10' -> 
+      | '\x10' ->
 	 print_string "Parsing client key exchange message...\n";
 	 (match parseClientKeyExchange !pv !kex msg with
 	 | Correct(ch) -> print_string "...OK\n";
@@ -185,7 +185,7 @@ let parse_handshake_message bytes =
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cke_bytes ^ "\n"))
 
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x11' -> 
+      | '\x11' ->
 	 print_string "Parsing server configuration message...\n";
 	 (match parseServerConfiguration msg with
 	 | Correct(ch) -> print_string "...OK\n";
@@ -195,7 +195,7 @@ let parse_handshake_message bytes =
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes sc_bytes ^ "\n"))
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x14' -> 
+      | '\x14' ->
 	 print_string "Parsing finished message...\n";
 	 (match parseFinished msg with
 	 | Correct(ch) -> print_string "...OK\n";
@@ -217,7 +217,7 @@ let parse_handshake_message bytes =
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes np_bytes ^ "\n"))
 
-	       
+
 	  | Error(_) -> print_string "...FAILED\n")
       | _ -> print_string ("Error: parsed an unknown handshake type: " ^ (Platform.Bytes.print_bytes bytes) ^ "\n")
   else print_string "Error: HS message too small to retrieve handshake type + length from it\n"
@@ -232,7 +232,7 @@ let rec parse_handshake bytes =
   else if length bytes = 0 then print_string "Parsed all messages\n"
   else print_string ("Error: parsing failed due to length not being appropriate:\n"
 		       ^ (Platform.Bytes.print_bytes bytes))
-		    
+
 let parse_alert_message bytes =
   ()
 
@@ -241,7 +241,7 @@ let parse_application_data_message bytes =
 
 let parse_ccs_message bytes =
   ()
-    
+
 let rec parse_message bytes =
   if length bytes >= 2 then
     let (pv, ct, bytes) = split2 bytes 2 1 in
@@ -266,15 +266,15 @@ let parse_trace_file file =
   else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
   let bytes = Bytes.sub fbytes 0 flag in
   let hs = { bl = [bytes]; max = flag; index = 0; length = flag; } in
-  parse_handshake hs;  
+  parse_handshake hs;
   print_string "\n********************************************\n"
-		    
-let _ =
+
+let main () =
   let ecdhe_handshakes = List.map (fun x -> open_in_bin ("./traces/" ^ x)) ecdhe_traces in
   let dhe_handshakes = List.map (fun x -> open_in_bin ("./traces/" ^ x)) dhe_traces in
   kex := Kex_ECDHE;
   List.iter parse_trace_file ecdhe_handshakes;
   kex := Kex_DHE;
   List.iter parse_trace_file dhe_handshakes
-  
-  
+
+

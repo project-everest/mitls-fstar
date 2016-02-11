@@ -183,20 +183,29 @@ wc:
 tls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
-# CoreCrypto has DB, DHDB, Platform and CoreCrypto all together
+# These are the .cmx files for all ML-implemented F* modules.
+# CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
 LIB_ML= \
   $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
   $(FSTAR_HOME)/lib/ml/FStar_All.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_List.cmx
+  $(FSTAR_HOME)/lib/ml/FStar_List.cmx \
+  $(FSTAR_HOME)/lib/ml/FStar_String.cmx \
+  $(FSTAR_HOME)/lib/ml/FStar_Char.cmx \
+  $(FSTAR_HOME)/lib/ml/FStar_Set.cmx \
+  $(FSTAR_HOME)/lib/ml/FStar_IO.cmx
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto)
 
+# These are the ML files for all F*-extracted modules. There are our files (from
+# TLSGEN) and the library files from F* that have been extracted too.
 TLSML := $(TLSGEN:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
+# This one appears twice (fst + fsti). FIXME when fsti's are gone.
+TLSML := $(subst StatefulLHAE.ml StatefulLHAE.ml,StatefulLHAE.ml,$(TLSML))
 TLSML := \
-  FStar_List_Tot.ml FStar_Seq.ml FStar_Heap.ml FStar_SeqProperties.ml TLSError.ml \
+  FStar_List_Tot.ml FStar_Seq.ml FStar_Heap.ml FStar_SeqProperties.ml \
   $(TLSML)
 
 tls-gen: $(LIBFILES) $(TLSGEN)
@@ -207,9 +216,10 @@ tls-gen: $(LIBFILES) $(TLSGEN)
 	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
 	# All our .cmx files
 	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
-	# Then our two test executables
-	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSML:.ml=.cmx) test/parsing_test.ml -o test.out
-	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSML:.ml=.cmx) TestRecord.ml -o testrecord.out
+	# Then our test executable
+	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML:.ml=.cmx) $(TLSML:.ml=.cmx) \
+	  -I test/ test/parsing_test.ml test/test_main.ml -o test.out
+	# TODO: build a .cmxa for miTLS here...
 	$(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------

@@ -12,7 +12,7 @@ open StatefulLHAE
 let x = Platform.Bytes.bytes_of_hex
 let r = HyperHeap.root
 
-let main =
+let main () =
   // AEAD_GCM.gid -> LHAEPlain.id -> TLSInfo.id
   let id = {
     msId = noMsId;
@@ -64,5 +64,3 @@ let main =
 
   IO.print_string (Platform.Bytes.hex_of_bytes c);
   IO.print_newline ()
-  
-
