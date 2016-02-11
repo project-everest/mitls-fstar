@@ -27,7 +27,7 @@ let log = Log.retrieve "FlexTLS.Log.General"
 /// </summary>
 /// <param name="fp"> Fragmentation policy </param>
 /// <returns> size of the fragment to be applied </returns>
-private val fs_of_fp : (fp:fragmentationPolicy) -> int 
+private val fs_of_fp : (fp:fragmentationPolicy) -> int
 let fs_of_fp fp =
   match fp with
   | All n | One n -> n
