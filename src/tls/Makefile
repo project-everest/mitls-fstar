@@ -15,8 +15,9 @@ clean:
 ifndef FSTAR_HOME
 FSTAR_HOME=../../../FStar
 endif
-#STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
-STDLIB_ADMITS=Char HyperHeap Set Map IO
+# The files which are implemented in [lib/ml] and are contains in
+# stdlib-hyperheap.cmxa
+STDLIB_ADMITS=Char Heap HyperHeap Set Map IO
 
 OTHERFLAGS=--explicit_deps
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fsi \
@@ -40,9 +41,11 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeo
 
 LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 
-OCAML=ocamlfind ocamlopt -package batteries -package stdint -linkpkg -g -thread
-DEBUG=ocamlfind ocamlc -package batteries -package stdint -linkpkg -g -thread
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db ~/dev/mitls/mitls-fstar/src/tls)
+OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
+OCAML=ocamlfind ocamlopt
+DEBUG=ocamlfind ocamlc
+OCAMLMKLIB=ocamlfind ocamlmklib
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db)
 
 # ------------------------- miTLS* -------------------------------------------
 # We try to limit the use of preprocessing, as it is messy.
@@ -185,27 +188,22 @@ tls-lax: $(LIBFILES) $(TLSLAX)
 
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
+# fstarlib-hyperheap has the entire F* standard library.
 LIB_ML= \
-  $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx \
-  $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_All.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_List.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_String.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_Char.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_Set.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_IO.cmx
+  $(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa
+
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto)
 
-# These are the ML files for all F*-extracted modules. There are our files (from
-# TLSGEN) and the library files from F* that have been extracted too.
+# All our extracted modules.
 TLSML := $(TLSGEN:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
 # This one appears twice (fst + fsti). FIXME when fsti's are gone.
 TLSML := $(subst StatefulLHAE.ml StatefulLHAE.ml,StatefulLHAE.ml,$(TLSML))
+# F* does not provide an implementation for these in fstarlib.cmxa, so add them
+# to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Seq.ml FStar_Heap.ml FStar_SeqProperties.ml \
+  FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml \
   $(TLSML)
 
 tls-gen: $(LIBFILES) $(TLSGEN)
@@ -215,11 +213,13 @@ tls-gen: $(LIBFILES) $(TLSGEN)
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
 	# All our .cmx files
-	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
+	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
+	# A .cmxa with all the .cmx above
+	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
 	# Then our test executable
-	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML:.ml=.cmx) $(TLSML:.ml=.cmx) \
-	  -I test/ test/parsing_test.ml test/test_main.ml -o test.out
-	# TODO: build a .cmxa for miTLS here...
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+          -I test/ test/parsing_test.ml test/test_main.ml -o test.out
+	# Run the tests
 	$(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------
