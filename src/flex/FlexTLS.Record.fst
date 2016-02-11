@@ -56,7 +56,7 @@ let pickCTBuffer ch ct =
   | Handshake         -> ch.hs_buffer
   | Alert             -> ch.alert_buffer
   | Application_data  -> ch.appdata_buffer
-  | _ -> failwith "Unsupported content type"
+  | _ -> raise (Err "Unsupported content type")
 
 /// <summary>
 /// PRIVATE : Read a record fragment header to get ContentType, ProtocolVersion and Length of the fragment
@@ -66,10 +66,10 @@ let pickCTBuffer ch ct =
 private val parseFragmentHeader : (st:state) -> ContentType * ProtocolVersion * nat * bytes
 let parseFragmentHeader st =
   match Tcp.read st.ns 5 with
-  | Error x -> failwith (perror __SOURCE_FILE__ __LINE__ x)
+  | Error x ->  raise (Err "Impossible to read 5 bytes from the network stream")
   | Correct header ->
     match Record.parseHeader header with
-    | Error (ad,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
+    | Error (ad,x) -> raise (Err "Impossible to parse a valid TLS header")
     | Correct(ct,pv,len) -> ct,pv,len,header
 
 /// <summary>
@@ -82,10 +82,10 @@ let parseFragmentHeader st =
 private val getFragmentContent : (st:state) -> (ct:ContentType) -> (len:int) -> state * bytes =
 let getFragmentContent st ct len =
   match Tcp.read st.ns len with
-  | Error x -> failwith (perror __SOURCE_FILE__ __LINE__ x)
+  | Error x -> raise (Err "Impossible to read 5 bytes from the network stream")
   | Correct payload ->
     match Record.recordPacketIn st.read.epoch st.read.record ct payload with
-    | Error (ad,x) -> failwith (perror __SOURCE_FILE__ __LINE__ x)
+    | Error (ad,x) -> raise (Err "Impossible to parse a valid TLS fragment")
     | Correct (rec_in,rg,frag)  ->
       let st = State.updateIncomingRecord st rec_in in
       let id = TLSInfo.mk_id st.read.epoch in
@@ -176,7 +176,7 @@ let rec send_2 ns e k ct payload epoch_init_pv fp =
   let pv =
   if TLSInfo.isInitEpoch e then
     match epoch_init_pv with
-    | None -> failwith (perror __SOURCE_FILE__ __LINE__ "A protocol version value must be provided for the initial epoch")
+    | None -> raise (Err "A protocol version value must be provided for the initial epoch")
     | Some(pv) -> pv
   else
     let si = TLSInfo.epochSI e in
@@ -186,7 +186,7 @@ let rec send_2 ns e k ct payload epoch_init_pv fp =
   Log.write log Trace "Record Payload" (sprintf "+++ Record : %s" (Bytes.hexString msgb));
   let k,b = encrypt e pv k ct msgb in
   match Tcp.write ns b with
-  | Error x -> failwith x
+  | Error x -> raise (Err Util.print1 "%s" x)
   | Correct() ->
     match fp with
     | All(fs) ->
@@ -210,7 +210,7 @@ let rec send_raw ns ct pv payload fp =
   let fragb = Record.makePacket ct pv b in
   Log.write log Trace "Record Payload" (sprintf "+++ Record : %s" (Bytes.hexString fragb));
   match Tcp.write ns fragb with
-  | Error x -> failwith x
+  | Error x -> raise (Err Util.print1 "%s" x)
   | Correct() ->
     match fp with
     | All(fs) ->
