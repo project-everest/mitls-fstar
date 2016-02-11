@@ -63,7 +63,12 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   Tot(Result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
  
 let rec scan i bs j =
-  let len = length bs in 
+  (* TODO: extraction bug *)
+  (* File "StreamPlain.ml", line 30, characters 25-27: *)
+  (* Error: This expression has type Platform.Bytes.bytes *)
+  (*        but an expression was expected of type 'a FStar_Seq.seq *)
+  Error (AD_decode_error, "this function currently disabled because of an extraction error")
+  (* let len = length bs in 
   if j = 0 then Error (AD_decode_error, "") else
   match Seq.index bs j with 
   | 0uy  -> scan i bs (j-1)
@@ -83,7 +88,7 @@ let rec scan i bs j =
            assert(forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0uy);
            lemma_eq_intro bs (pad payload Application_data len);
            Correct (CT_Data rg d)
-  | _    -> Error (AD_decode_error, "")
+  | _    -> Error (AD_decode_error, "") *)
 
 (*
 val pinverse_scan: i:id {~ (authId i)} -> len:nat -> f:plain i len ->

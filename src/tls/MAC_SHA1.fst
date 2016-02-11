@@ -61,7 +61,7 @@ let mac i wr p =
     t
 
 val matches: i:id -> p:text -> entry i -> Tot bool 
-let matches i p (Entry #i _ p') = p = p'
+let matches i p (Entry _ p') = p = p'
 
 val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
   (requires (fun h0 -> True))

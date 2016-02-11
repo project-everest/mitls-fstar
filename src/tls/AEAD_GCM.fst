@@ -54,7 +54,7 @@ type entry (i:gid) = // records that c is an encryption of p with ad
 
 type state (i:gid) (rw:rw) =
   | State: #region:rid 
-           -> #peer_region:rid{HyperHeap.disjoint region peer_region}
+           -> peer_region:rid{HyperHeap.disjoint region peer_region}
            -> key:key i
            -> iv: iv i
            -> log: rref (if rw=Reader then peer_region else region) (seq (entry i))       // ghost subject to cryptographic assumption
@@ -106,8 +106,8 @@ let gen reader_parent writer_parent i =
   let ectr = ralloc writer_r 0 in
   let dctr = ralloc reader_r 0 in
   let log  = ralloc writer_r Seq.createEmpty in
-  let writer  = State #i #Writer #writer_r #reader_r kv iv log ectr in
-  let reader  = State #i #Reader #reader_r #writer_r kv iv log dctr in
+  let writer  = State #i #Writer #writer_r reader_r kv iv log ectr in
+  let reader  = State #i #Reader #reader_r writer_r kv iv log dctr in
   reader, writer
 
 // Coerce an instance with index i in a fresh sub-region of r0
@@ -126,9 +126,9 @@ let coerce r0 p0 i role kv iv =
   let ctr : rref r _ = ralloc r 0 in
   if role=Reader
   then let log : rref p _ = ralloc p Seq.createEmpty in
-       State #i #role #r #p kv iv log ctr
+       State #i #role #r p kv iv log ctr
   else let log : rref r _ = ralloc r Seq.createEmpty in 
-       State #i #role #r #p kv iv log ctr //NS: worryingly, succeeds with implicit arguments even without the role=Writer
+       State #i #role #r p kv iv log ctr //NS: worryingly, succeeds with implicit arguments even without the role=Writer
 
 val leak: i:gid{~(safeId i)} -> role:rw -> state i role -> ST bytes
   (requires (fun h0 -> True))

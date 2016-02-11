@@ -123,7 +123,8 @@ let ctToString = function
 val ghost_repr: #i:id -> fragment i -> GTot bytes
 let ghost_repr i f =
   match f with
-  | CT_Data rg d      -> DataStream.ghost_repr d
+  // FIXME: without the #i, extraction crashes
+  | CT_Data rg d      -> DataStream.ghost_repr #i d
   | CT_Handshake rg f -> f
   | CT_CCS            -> empty_bytes
   | CT_Alert rg f     -> f
@@ -131,7 +132,8 @@ let ghost_repr i f =
 val repr: i:id{ ~(safeId i)} -> p:fragment i -> Tot (b:bytes {b = ghost_repr #i p})
 let repr i f =
   match f with
-  | CT_Data rg d      -> DataStream.repr rg d
+  // FIXME: same thing
+  | CT_Data rg d      -> DataStream.repr #i rg d
   | CT_Handshake rg f -> f
   | CT_CCS            -> empty_bytes
   | CT_Alert rg f     -> f

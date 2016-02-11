@@ -21,7 +21,7 @@ let oid_DSASignatureKey = ""
 val oid_of_keyalg: sigAlg -> string
 let oid_of_keyalg salg = ""
 
-type X509Certificate2
+assume type X509Certificate2
 type hint = string
 type cert = b:bytes{length b < 65536}
 type chain = l:list cert{List.length l < 4}

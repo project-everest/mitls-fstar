@@ -134,7 +134,7 @@ let next_fragment (State b) =
   match !b with 
   | None -> None 
   | Some f -> b:= None; 
-             (match parse f with Correct ad -> Some ad | Error _ -> None)
+             (match parse f with | Correct ad -> Some ad | Error _ -> None)
 
 // ---------------- incoming alerts -------------------
 

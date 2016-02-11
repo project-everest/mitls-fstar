@@ -12,7 +12,7 @@ open StatefulLHAE
 let x = Platform.Bytes.bytes_of_hex
 let r = HyperHeap.root
 
-let main =
+let main () =
   // AEAD_GCM.gid -> LHAEPlain.id -> TLSInfo.id
   let id = {
     msId = noMsId;
@@ -42,9 +42,9 @@ let main =
       let iv: AEAD_GCM.iv id = x"b56bf932" |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv log counter
+      AEAD_GCM.State r key iv log counter
     in
-    State log seqn key
+    State r log seqn key
   in
 
   let text = x"474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a" in
@@ -55,12 +55,12 @@ let main =
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
   // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
-  let f: LHAEPlain.plain id ad rg = Content.CT_Data rg f |> unsafe_coerce in
+  //NS: Not sure about the unsafe_coerce: but, it's presence clearly means that #id cannot be inferred
+  let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in 
 
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
-  let c = encrypt w f in
+  // FIXME: without the three additional #-arguments below, extraction crashes
+  let c = encrypt #id #ad #rg w f in
 
   IO.print_string (Platform.Bytes.hex_of_bytes c);
   IO.print_newline ()
-  
-

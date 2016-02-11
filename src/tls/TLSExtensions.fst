@@ -407,7 +407,7 @@ let serverToNegotiatedExtension cExtL (resuming:bool) cs res sExt : Result (nego
 	      | ServerRenegotiationInfo(cvd,svd) -> correct ({l with ne_renegotiation_info=Some(cvd,svd)})
 	      | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent renegotiation info without server verified data"))
             | E_server_name _ ->
-                if List.existsb (fun x->match x with E_server_name _ -> true | _ -> false) cExtL then correct(l)
+                if List.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
                 else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
             | E_ec_point_format(spf) ->
                 if resuming then
@@ -448,7 +448,7 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ((renegoCVD:cVerifyDat
     | E_keyShare b -> None     // JK : TODO
     | E_renegotiation_info (_) -> Some (E_renegotiation_info (ServerRenegotiationInfo(renegoCVD,renegoSVD)))
     | E_server_name l ->
-        (match List.Tot.tryFind (fun x->match x with SNI_DNS _ -> true | _ -> false) l with
+        (match List.Tot.tryFind (fun x->match x with | SNI_DNS _ -> true | _ -> false) l with
         | Some _ -> Some(E_server_name l)
         | _ -> None)
     | E_ec_point_format(l) ->

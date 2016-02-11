@@ -184,10 +184,10 @@ let gen (a:alg) : pkey * skey =
     (pkey,skey)
 
 let leak_rsa_key (a:alg) (s:skey) : rsa_key = 
-    match s with SK_RSA(k,h) -> k
+    match s with | SK_RSA(k,h) -> k
 
 let leak_dsa_key (a:alg) (s:skey) : dsa_key = 
-    match s with SK_DSA(k,h) -> k
+    match s with | SK_DSA(k,h) -> k
     
 let coerce_rsa_key (a:alg) (p:pkey) (csk:rsa_key) : skey =
     let (_,ahash)=a in
