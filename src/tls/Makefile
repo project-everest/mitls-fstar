@@ -6,6 +6,9 @@ all: tls-ver tls-lax tls-gen
 # MK removed mitls-ml as strider was failing on it for ages
 
 clean:
+	$(MAKE) -C $(FSTAR_HOME)/lib/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/contrib/Platform/ml clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 
 # ------------------ dependencies on Fstar & its libraries --------------------
@@ -180,14 +183,15 @@ wc:
 tls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
-LIB_ML=$(FSTAR_HOME)/lib/ml/FStar_List.cmx \
+# CoreCrypto has DB, DHDB, Platform and CoreCrypto all together
+LIB_ML= \
   $(FSTAR_HOME)/lib/ml/native_int/prims.cmx \
-  $(FSTAR_HOME)/contrib/CoreCrypto/ml/db/DB.cmx \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_ST.cmx \
   $(FSTAR_HOME)/lib/ml/hyperheap/FStar_HyperHeap.cmx \
-  $(FSTAR_HOME)/lib/ml/FStar_All.cmx
-TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Handshake)
+  $(FSTAR_HOME)/lib/ml/FStar_All.cmx \
+  $(FSTAR_HOME)/lib/ml/FStar_List.cmx
+TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto)
 
 TLSML := $(TLSGEN:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
@@ -197,15 +201,13 @@ TLSML := \
 
 tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSPARSE_ADMIT) $^
-	rm -f $(FSTAR_HOME)/lib/ml/FStar_ST.cmi
-	make -C $(FSTAR_HOME)/lib/ml hyperheap
-	make -C $(FSTAR_HOME)/contrib/Platform/ml
-	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db
-	rm -f $(FSTAR_HOME)/lib/ml/prims.cmi
-	$(OCAML) $(FSTAR_HOME)/lib/ml/native_int/prims.ml
-	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
-	make -C $(FSTAR_HOME)/contrib/CoreCrypto/ml/db DB.cmx
+	# Builds everything against native_int/prims; including native_int/prims.cmx
+	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS=native_int/prims.ml INCLUDES="-I native_int/"
+	# Recursively builds everything in platform, etc.
+	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
+	# All our .cmx files
 	$(OCAML) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
+	# Then our two test executables
 	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSML:.ml=.cmx) test/parsing_test.ml -o test.out
 	$(OCAML) -package fileutils,sqlite3 $(OCAML_INCLUDE_PATHS) $(LIB_ML) $(TLSML:.ml=.cmx) TestRecord.ml -o testrecord.out
 	$(EXTRA_PATH) ./test.out
