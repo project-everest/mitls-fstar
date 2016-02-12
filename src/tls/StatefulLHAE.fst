@@ -41,7 +41,7 @@ type st_log_t (r:rid) (i:id) = rref r (s:seq (entry i))
 type gcm_log_t (r:rid) (i:gid) = rref r (s:seq (AEAD_GCM.entry i))
  
 (* CF we might merge those types into State id role *)
-type state (i:gid) (rw:rw) = 
+abstract type state (i:gid) (rw:rw) = 
   | State :
       #region:rid{region<>root}
     -> peer_region:rid{peer_region <> root 
@@ -54,16 +54,31 @@ type state (i:gid) (rw:rw) =
 type reader i = state i Reader
 type writer i = state i Writer
 
-opaque type matching (#i:gid) (r:reader i) (w:writer i) =
+assume val region        : #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+assume val peer_region   : #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+let log_region    = fun (#i:id) (#rw:rw) (s:state i rw) -> if rw=Reader then peer_region s else region s
+assume val log           : #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (log_region s) i)
+assume val seqn          : #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
+
+abstract opaque type matching (#i:gid) (r:reader i) (w:writer i) =
   r.region = w.peer_region
   /\ w.region = r.peer_region
   /\ r.log == w.log
   /\ AEAD_GCM.State.log r.key == AEAD_GCM.State.log w.key //gcmlogs are equal; package this along with pairing of regions one-level lower into another invariant
 
+assume val unfold_matching: #i:id -> r:reader i -> w:writer i ->
+  Lemma ( matching r w ==> (
+            region r = peer_region w
+          /\ region w = peer_region r
+          /\ region r <> root
+          /\ region w <> root
+          /\ disjoint (parent (region r)) (parent (region w))
+          /\ log r = log w))
+
 (* CF could we instead compute the derived state? let st i d e h = ... *)
 type both (i:gid) = rw:(reader i * writer i){matching (fst rw) (snd rw)}
 
-opaque type st_inv (#i:gid) (r:reader i) (w:writer i) (h:HyperHeap.t) =
+abstract opaque type st_inv (#i:gid) (r:reader i) (w:writer i) (h:HyperHeap.t) =
     matching r w
   /\ contains_ref w.log h
   /\ contains_ref w.seqn h
@@ -85,6 +100,17 @@ opaque type st_inv (#i:gid) (r:reader i) (w:writer i) (h:HyperHeap.t) =
 				(LHAEPlain.makeAD i j st_en.ad)
                                 st_en.p)))
 
+assume val unfold_st_inv: #i:id -> r:reader i -> w:writer i -> h:HyperHeap.t ->
+  Lemma ( st_inv r w h ==> (
+       matching r w
+    /\ Map.contains h (region r)  
+    /\ Map.contains h (region w)
+    /\ (let log = sel h (log w) in
+       let rctr = sel h (seqn r) in 
+       let wctr = sel h (seqn w) in 
+       wctr = Seq.length log
+       /\ rctr <= wctr )))
+
 val test_gcm_log_inv: h:HyperHeap.t -> i:gid -> r:reader i -> w:writer i{st_inv r w h} -> n:nat -> j:nat -> c:cipher i -> ad:adata i ->
   Lemma (requires (let gcm_log = sel h (AEAD_GCM.State.log w.key) in
 		   j < Seq.length gcm_log
@@ -93,14 +119,21 @@ val test_gcm_log_inv: h:HyperHeap.t -> i:gid -> r:reader i -> w:writer i{st_inv 
         (ensures (j = n))
 let test_gcm_log_inv h i r w n j c ad = cut(found j)
 
-val frame_st_inv: #i:id -> r:reader i -> w:writer i ->  h0:_ -> h1:_ ->
+let regions_of (#i:id) (#rw:rw) (s:state i rw) = 
+    Set.union (Set.singleton (region s))
+              (Set.singleton (peer_region s))
+
+let refs_in_w (#i:gid) (e:writer i) =
+  !{ as_ref (log e), as_ref (seqn e) }
+
+abstract val frame_st_inv: #i:id -> r:reader i -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_inv r w h0
                   /\ equal_on (Set.union (Set.singleton w.region)
                                         (Set.singleton w.peer_region)) h0 h1)
         (ensures st_inv r w h1)
 let frame_st_inv i r w h0 h1 = ()
 
-val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
+abstract val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
   (requires (fun h -> True))
   (ensures  (fun h0 (rw:both i) h1 ->
       modifies Set.empty h0 h1
@@ -128,19 +161,19 @@ let gen reader_parent writer_parent i =
   let w (* : writer i *) = State #i #Writer #writer_region reader_region log (ralloc writer_region 0) w in
   r, w
 
-val leak_reader: i:gid{~(safeId i)} -> reader i -> ST bytes
+abstract val leak_reader: i:gid{~(safeId i)} -> reader i -> ST bytes
   (requires (fun h -> True))
   (ensures  (fun h0 s h1 -> modifies Set.empty h0 h1 ))
 
 let leak_reader i rd = AEAD_GCM.leak i Reader rd.key
 
-val leak_writer: i:gid{~(safeId i)} -> writer i -> ST bytes
+abstract val leak_writer: i:gid{~(safeId i)} -> writer i -> ST bytes
   (requires (fun h -> True))
   (ensures  (fun h0 s h1 -> modifies Set.empty h0 h1 ))
 
 let leak_writer i wr = AEAD_GCM.leak i Writer wr.key
 
-val coerce: r0:rid -> p0:rid {disjoint r0 p0} -> role:rw -> i:gid{~(safeId i)} -> kv:key i -> iv:iv i
+abstract val coerce: r0:rid -> p0:rid {disjoint r0 p0} -> role:rw -> i:gid{~(safeId i)} -> kv:key i -> iv:iv i
   -> ST (state i role)
         (requires (fun h -> True))
         (ensures  (fun h0 s h1 ->
@@ -163,7 +196,7 @@ let coerce r0 p0 role i kv iv =
 opaque type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
   exists (r:reader i).{:pattern (matching r w)} st_inv r w h
 
-val frame_st_enc_inv: #i:id -> w:writer i ->  h0:_ -> h1:_ ->
+abstract val frame_st_enc_inv: #i:id -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_enc_inv w h0
                   /\ equal_on (Set.union (Set.singleton w.region)
                                         (Set.singleton w.peer_region)) h0 h1)
@@ -173,7 +206,7 @@ let frame_st_enc_inv i w h0 h1 = ()
 let refs_in_e (#i:gid) (e:writer i) =
   !{ as_ref e.log, as_ref e.seqn }
 
-val encrypt: #i:gid -> #ad:adata i
+abstract val encrypt: #i:gid -> #ad:adata i
   -> #rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length}
   -> wr:writer i -> f:plain i ad rg -> ST (cipher i)
   (requires (fun h -> st_enc_inv wr h /\ is_seqn (sel h wr.seqn + 1)))
@@ -196,7 +229,7 @@ let encrypt i ad rg (State _ log seqn key) f =
 type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
   exists (w:writer i).{:pattern (matching r w)} st_inv r w h
 
-val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
+abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
   Lemma (requires (st_dec_inv rd h0 /\ 
                    equal_on (Set.union (Set.singleton rd.region) (Set.singleton rd.peer_region)) h0 h1))
         (ensures st_dec_inv rd h1)
@@ -205,7 +238,7 @@ let frame_st_dec_inv i rd h0 h1 = ()
 (* TODO: Replace Let in prims.fst with this definition? *)
 type Let (#a:Type) (=x:a) (body:(y:a{y=x}) -> Type) = body x
 
-val decrypt: #i:gid -> #ad:adata i -> rd:reader i 
+abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i 
   -> c:cipher i{length c > CoreCrypto.aeadTagSize (alg i)} 
   -> ST (option (dplain i ad c))
   (requires (fun h ->

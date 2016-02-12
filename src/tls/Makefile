@@ -17,21 +17,21 @@ clean:
 FSTAR_HOME=../../.fstar
 add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
 
-# The files which are implemented in [lib/ml] and are contained in
+# The .fst files found in [lib/ml] that are realized in
 # stdlib-hyperheap.cmxa
-STDLIB_ADMITS=Char Heap HyperHeap Set Map IO
+STDLIB_ADMITS=All List Heap Set ST HyperHeap IO
 
 OTHERFLAGS=--explicit_deps
-STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fsi \
-stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst \
+STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fsti \
+stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
 FSTARFLAGS=$(call add_stdlib_prefix,$(STDLIB)) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 
+PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
 PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
-
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
@@ -75,8 +75,8 @@ PMS.p.fst \
 HASH.fst \
 HMAC.fst \
 Sig.p.fst \
-UntrustedCert.fsti \
-Cert.fsti \
+UntrustedCert.fst \
+Cert.fst \
 TLSInfo.fst \
 Range.fst \
 DataStream.fst \
@@ -89,7 +89,6 @@ LHAEPlain.fst \
 AEAD_GCM.fst \
 MAC.fst \
 Encode.fst \
-StatefulLHAE.fsti \
 StatefulLHAE.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
@@ -115,7 +114,7 @@ Connection.fst \
 TLS.fst 
 
 TLSLAX=$(subst $(NOTEXTRACTABLE),$(TLSNOTVER),$(TLSVER))
-TLSGEN=$(patsubst %.fsti,%.fst,$(TLSLAX))
+TLSGEN=$(TLSLAX)
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
@@ -125,7 +124,7 @@ StreamAE StatefulPlain
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
-ADMITTED=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB UntrustedCert DHDB CoreCrypto Cert Handshake)
+ADMITTED=$(addprefix --no_extract,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Cert Handshake)
 
 # The whole TLS source tree, in dependency order --- where we are going, but not used yet.
 TLS= $(TLSVER) \
@@ -206,9 +205,8 @@ LIB_ML= \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa
 
-# We have to know which files are just interfaces for modules that are realized
-# in OCaml. FIXME when fsti's encode that fact without an extra flag.
-TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto)
+# .fst files realized elsewhere.
+TLSGEN_ADMIT=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
 
 # All our extracted modules.
 TLSML := $(TLSGEN:.p.fst=.ml)
@@ -227,7 +225,7 @@ TLSML := \
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
-	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSPARSE_ADMIT) $^
+	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS=native_int/prims.ml INCLUDES="-I native_int/"
 	# Recursively builds everything in platform, etc.
