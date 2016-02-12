@@ -570,7 +570,8 @@ type Match (i:id) =
 
 //$ recode?
 // This index is safe for MS-based key derivation
-assume val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ Match i) })
+val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ Match i) })
+let safeKDF _ = true
 
 // Needed for typechecking of PRF
 // ask !i1,i2. i2 = Swap(i1) /\ not(SafeKDF(i1)) => not(SafeKDF(i2))

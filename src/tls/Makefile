@@ -17,7 +17,7 @@ clean:
 FSTAR_HOME=../../.fstar
 add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
 
-# The files which are implemented in [lib/ml] and are contains in
+# The files which are implemented in [lib/ml] and are contained in
 # stdlib-hyperheap.cmxa
 STDLIB_ADMITS=Char Heap HyperHeap Set Map IO
 
@@ -38,12 +38,10 @@ CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-# MK: doesn't seem to be used, so I removed it after discussing with Santiago
-DHDB= #$(DHDBDIR)DHDBManager.fst
-
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 60
 
-LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
+# The .fst interfaces for the platform and crypto libraries.
+LIBFILES = $(PLATFORM) $(CRYPTO)
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
@@ -208,6 +206,8 @@ LIB_ML= \
   $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa
 
+# We have to know which files are just interfaces for modules that are realized
+# in OCaml. FIXME when fsti's encode that fact without an extra flag.
 TLSPARSE_ADMIT=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto)
 
 # All our extracted modules.
@@ -221,6 +221,11 @@ TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml \
   $(TLSML)
 
+# Note to self: there is little point in breaking down this rule into more
+# atomic ones. One may hope that we can only rebuild the .ml files that have
+# changed; however, extraction is a global operation that touches every .ml
+# file; as make is only aware of mtimes (and not hashsums), we would rebuild
+# every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSPARSE_ADMIT) $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx

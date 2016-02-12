@@ -68,7 +68,8 @@ assume val strongAuthAlg: ProtocolVersion -> aeAlg -> Tot bool
 //  | MtE _ m | MACOnly m   -> int_cma (macAlg_of_id i)
 //  | AEAD e m -> strongAEADalg
 
-assume val strongAEAlg: ProtocolVersion -> aeAlg -> Tot bool
+val strongAEAlg: ProtocolVersion -> aeAlg -> Tot bool
+let strongAEAlg _ _ = false
 // let strongAEAlg pv ae = match ae with
 //    | AEAD e m -> true
 //    | MtE _ -> false
