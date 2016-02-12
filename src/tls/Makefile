@@ -124,7 +124,7 @@ StreamAE StatefulPlain
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
-ADMITTED=$(addprefix --no_extract,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Cert Handshake)
+ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Cert Handshake)
 
 # The whole TLS source tree, in dependency order --- where we are going, but not used yet.
 TLS= $(TLSVER) \
