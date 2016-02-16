@@ -209,15 +209,15 @@ type cipherSuite =
 
 type cipherSuites = list cipherSuite
 
-type PreCompression =
+type Compression =
     | NullCompression
-type Compression = PreCompression
+    | UnknownCompression of byte
 
-val parseCompression: b:bytes{Seq.length b > 0} -> Result Compression
+val parseCompression: b:bytes{Seq.length b > 0} -> Tot Compression
 let parseCompression b =
     match cbyte b with
-    | 0uy -> Correct NullCompression
-    | _   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | 0uy -> NullCompression
+    | b   -> UnknownCompression b
 
 // We ignore compression methods we don't understand. This is a departure
 // from usual parsing, where we fail on unknown values, but that's how TLS
@@ -228,16 +228,15 @@ let rec parseCompressions b =
     if l > 0
     then
         let (cmB,b) = split b 1 in
-        match parseCompression cmB with
-        | Error(z) -> // We skip this one
-            parseCompressions b
-        | Correct(cm) -> cm :: parseCompressions b
+        let cm = parseCompression cmB in
+        cm :: parseCompressions b
     else []
 
 val compressionBytes: Compression -> Tot (lbytes 1)
 let compressionBytes (comp:Compression) =
     match comp with
     | NullCompression -> abyte 0uy
+    | UnknownCompression b -> abyte b
 
 #set-options "--max_ifuel 4 --initial_ifuel 2 --max_fuel 2 --initial_fuel 2"
 
@@ -497,8 +496,7 @@ let pinverse_cipherSuite x = ()
 
 
 (* Called by the server handshake; *)
-(* ciphersuites that we do not understand are parsed, *)
-(* but not added to the list, and thus will be ignored by the server *)
+(* ciphersuites that we do not understand are parsed, but ignored *)
 opaque val parseCipherSuites: b:bytes -> Tot (Result known_cipher_suites) (decreases (length b))
 let rec parseCipherSuites b : Result known_cipher_suites =
      if length b > 1 then
@@ -506,10 +504,10 @@ let rec parseCipherSuites b : Result known_cipher_suites =
        match parseCipherSuites b1 with
          | Correct(css) ->
            (match parseCipherSuite b0 with
-             | Error(z) ->    Correct css      (* ignore this cs *)
+             | Error(z) ->    Correct (css)      (* ignore this cs *)
              | Correct(cs) -> Correct(cs::css))
          | Error(z) -> Error(z)
-     else if length b = 0 then Correct []
+     else if length b = 0 then Correct ([])
      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Odd cs bytes number")
 
 val cipherSuitesBytes: css:known_cipher_suites -> Tot (lbytes (2 * List.length css))

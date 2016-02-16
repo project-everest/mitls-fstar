@@ -156,10 +156,15 @@ type serverName =
 | SNI_DNS of bytes
 | SNI_UNKNOWN of int * bytes
 
+type ri_status =
+| RI_Unsupported
+| RI_Valid
+| RI_Invalid
+
 type negotiatedExtensions = {
     ne_extended_ms: bool;
-    ne_extended_padding:bool;
-    ne_renegotiation_info: option (cVerifyData * sVerifyData);
+    ne_extended_padding: bool;
+    ne_secure_renegotiation: ri_status;
 
     //$ Cedric: these extensions were missing in F7.
     ne_supported_curves: option (list ECGroup.ec_curve);
@@ -171,7 +176,7 @@ let ne_default =
 {
     ne_extended_ms = false;
     ne_extended_padding = false;
-    ne_renegotiation_info = None;
+    ne_secure_renegotiation = RI_Unsupported;
     ne_supported_curves = None;
     ne_supported_point_formats = None;
     ne_server_names = None;

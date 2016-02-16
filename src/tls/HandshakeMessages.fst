@@ -98,8 +98,9 @@ type CH = {
   ch_client_random:TLSInfo.random;
   ch_sessionID:sessionID;
   ch_cipher_suites:(k:known_cipher_suites{List.length k < 256});
+  ch_raw_cipher_suites: option bytes;
   ch_compressions:(cl:list Compression{List.length cl <= 1});
-  ch_extensions:(ce:list extension{List.length ce < 256});
+  ch_extensions:option (ce:list extension{List.length ce < 256});
 }
 
 let ch_is_resumption { ch_sessionID = sid } =
@@ -111,7 +112,7 @@ type SH = {
   sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
   sh_cipher_suite:known_cipher_suite;
   sh_compression:option Compression; // JK : made optional because not present in TLS 1.3
-  sh_extensions:(se:list extension{List.length se < 256});
+  sh_extensions:option (se:list extension{List.length se < 256});
 }
 
 (* Hello retry request *)
@@ -243,11 +244,17 @@ val clientHelloBytes : CH -> Tot bytes
 let clientHelloBytes ch =
   let verB      = versionBytes ch.ch_protocol_version in
   let sidB = vlbytes 1 ch.ch_sessionID in
-  let csb = cipherSuitesBytes ch.ch_cipher_suites in
+  let csb =
+     match ch.ch_raw_cipher_suites with
+     | None -> cipherSuitesBytes ch.ch_cipher_suites
+     | Some csb -> csb in
   let csB = vlbytes 2 csb in
   let cmb = compressionMethodsBytes ch.ch_compressions in
   let cmB = vlbytes 1 cmb in
-  let extB = extensionsBytes ch.ch_extensions in
+  let extB =
+     match ch.ch_extensions with
+     | Some ext -> extensionsBytes ext
+     | None -> empty_bytes in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
   messageBytes HT_client_hello data
 
@@ -282,7 +289,7 @@ let parseClientHello data =
                       let (clCiphsuitesBytes,data) = res in
                       (match parseCipherSuites clCiphsuitesBytes with
 			| Error(z) -> Error(z)
-			| Correct (clientCipherSuites) ->
+			| Correct clientCipherSuites ->
 			  if length data >= 1 then
 			    (match vlsplit 1 data with
                             | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
@@ -290,26 +297,28 @@ let parseClientHello data =
                               let (cmBytes,extensions) = res in
                               let cm = parseCompressions cmBytes in
 			      if length extensions > 0 then
-				(match parseExtensionsWithCS extensions clientCipherSuites with
+				(match parseExtensions extensions with
 				| Error(z) -> Error(z) 
 				| Correct (exts) -> 
 			          (if List.length exts < 256 &&
-				    List.length cm <= 1 &&
+				    List.length cm <= 256 &&
 				    List.length clientCipherSuites < 256 then
 				    Correct ({ch_protocol_version = cv;
                                       ch_client_random = cr;        
                                       ch_sessionID = sid;
                                       ch_cipher_suites = clientCipherSuites;
+                                      ch_raw_cipher_suites = Some clCiphsuitesBytes;
                                       ch_compressions = cm;
-                                      ch_extensions = exts})
+                                      ch_extensions = Some exts})
 				   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
-			      else if List.length cm <= 1 && List.length clientCipherSuites < 256 then
+			      else if List.length cm < 256 && List.length clientCipherSuites < 256 then
 				  Correct ({ch_protocol_version = cv;
 					 ch_client_random = cr;        
 					 ch_sessionID = sid;
 					 ch_cipher_suites = clientCipherSuites;
+                                         ch_raw_cipher_suites = Some clCiphsuitesBytes;
 					 ch_compressions = cm;
-					 ch_extensions = []})
+					 ch_extensions = None})
 			      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 			   )
                          else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -333,7 +342,10 @@ let serverHelloBytes sh =
       match sh.sh_compression with
       | Some compression -> compressionBytes compression
       | _ -> empty_bytes in
-    let extB = extensionsBytes sh.sh_extensions in
+    let extB = 
+      match sh.sh_extensions with
+      | Some ext -> extensionsBytes ext
+      | None -> empty_bytes in
     let data = verB @| sh.sh_server_random @| sidB @| csB @| cmB @| extB in
     messageBytes HT_server_hello data
 
@@ -352,7 +364,7 @@ let parseServerHello data =
 	      match parseCipherSuite csBytes with
 	      | Error(z) -> Error(z)
 	      | Correct(cs) -> 
-		(match parseExtensionsWithCS data [] with
+		(match parseExtensions data with
 		| Error(z) -> Error(z)
                 | Correct(exts) ->
                     correct({sh_protocol_version = serverVer;       
@@ -360,7 +372,7 @@ let parseServerHello data =
                       sh_sessionID = None;
                       sh_cipher_suite = cs;
                       sh_compression = None;
-                      sh_extensions = exts}))
+                      sh_extensions = Some exts}))
 	     else  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 	  | _ ->
             if length data >= 1 then
@@ -374,10 +386,11 @@ let parseServerHello data =
                             match parseCipherSuite csBytes with
                             | Error(z) -> Error(z)
                             | Correct(cs) ->
-                                (match parseCompression cmBytes with
-                                | Error(z) -> Error(z)
-                                | Correct(cm) ->
-                                (match parseExtensionsWithCS data [] with
+                                let cm = parseCompression cmBytes in
+                                (match cm with
+                                | UnknownCompression _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
+                                | NullCompression ->
+                                (match parseOptExtensions data with
                                 | Error(z) -> Error(z)
                                 | Correct(exts) ->
                                 correct({sh_protocol_version = serverVer;       
@@ -670,7 +683,7 @@ let encryptedExtensionsBytes ee =
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
     Result (s:EE{Seq.Eq (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})
 let parseEncryptedExtensions payload : Result EE = 
-  match parseExtensionsWithCS payload [] with
+  match parseExtensions payload with
   | Error(z) -> Error(z)
   | Correct(exts) -> Correct({ee_extensions = exts;})
 

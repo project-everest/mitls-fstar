@@ -226,13 +226,6 @@ let addOnce ext extList =
         let res = ext::extList in
         correct(res)
 
-val parseSCSVs: known_cipher_suites -> list extension -> Tot (Result (list extension))
-let rec parseSCSVs ch_ciphers extL =
-    if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV ch_ciphers then
-        addOnce (E_renegotiation_info(FirstConnection)) extL
-    else
-        correct(extL)
-
 val earlyDataIndicationBytes: earlyDataIndication -> Tot bytes
 val extensionPayloadBytes: extension -> Tot bytes
 val extensionBytes: extension -> Tot bytes
@@ -272,6 +265,7 @@ and extensionsBytes exts =
 val parseEarlyDataIndication: pinverse_t earlyDataIndicationBytes
 val parseExtension: pinverse_t extensionBytes
 val parseExtensions: pinverse_t extensionsBytes
+
 let rec parseExtension b =
   if length b >= 4 then
     let (head, payload) = split b 2 in
@@ -323,6 +317,7 @@ let rec parseExtension b =
 	  Correct(E_unknown_extension(head,data)))
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Extension bytes are too short to store even the extension type")
+
 and parseEarlyDataIndication b = 
   if length b > 0 then
     match vlsplit 2 b with
@@ -351,6 +346,7 @@ and parseEarlyDataIndication b =
       | Error(z) -> Error(z)
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data indication length")
   else Correct (ServerEarlyDataIndication)
+
 and parseExtensions b =
   let rec (aux:bytes -> list extension -> Tot (Result (list extension))) = fun b exts ->
     if length b >= 4 then
@@ -369,17 +365,22 @@ and parseExtensions b =
   | Correct(b) -> aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
 
-val parseExtensionsWithCS: data:bytes -> known_cipher_suites -> Result (list extension)
-let parseExtensionsWithCS data ch_ciphers =
-  match parseExtensions data with
-  | Correct(exts) -> parseSCSVs ch_ciphers exts
+val parseOptExtensions: data:bytes -> Result (option (list extension))
+let parseOptExtensions data =
+  if length data = 0 then Correct(None)
+  else match parseExtensions data with
+  | Correct(exts) -> Correct(Some exts)
   | Error(z) -> Error(z)
   
 // JK : Only client side ? 
-val prepareExtensions: config -> ConnectionInfo -> cVerifyData -> l:list extension{List.length l < 256}
-let prepareExtensions (cfg:config) (conn:ConnectionInfo) renegoCVD =
+val prepareExtensions: config -> ConnectionInfo -> option (cVerifyData * sVerifyData) -> l:list extension{List.length l < 256}
+let prepareExtensions (cfg:config) (conn:ConnectionInfo) ri =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
-    let res = [E_renegotiation_info(ClientRenegotiationInfo renegoCVD)] in
+    let cri =
+       match ri with
+       | None -> FirstConnection
+       | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
+    let res = [E_renegotiation_info(cri)] in
 #if TLSExt_sessionHash
     let res = E_extended_ms :: res in
 #endif
@@ -394,18 +395,26 @@ let prepareExtensions (cfg:config) (conn:ConnectionInfo) renegoCVD =
         else res in
     res
 
-// TODO : check function
-val serverToNegotiatedExtension: list extension -> bool -> cipherSuite -> Result negotiatedExtensions -> extension -> Tot (Result (negotiatedExtensions))
-let serverToNegotiatedExtension cExtL (resuming:bool) cs res sExt : Result (negotiatedExtensions)=
+
+// TODO
+// ADL the negotiation of renegotiation indication is incorrect
+// ADL needs to be consistent with clientToNegotiatedExtension
+val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Result negotiatedExtensions -> extension -> Tot (Result (negotiatedExtensions))
+let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : Result (negotiatedExtensions)=
     match res with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
         if List.existsb (sameExt sExt) cExtL then
             match sExt with
-            | E_renegotiation_info (ri) -> 
-	      (match ri with
-	      | ServerRenegotiationInfo(cvd,svd) -> correct ({l with ne_renegotiation_info=Some(cvd,svd)})
-	      | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent renegotiation info without server verified data"))
+            | E_renegotiation_info (sri) ->
+              (match sri, ri with
+              | FirstConnection, None -> correct ({l with ne_secure_renegotiation = RI_Valid})
+              | ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
+                 if equalBytes cvdc cvds && equalBytes svdc svds then
+                    correct ({l with ne_secure_renegotiation = RI_Valid})
+                 else
+                    Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
+              | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
             | E_server_name _ ->
                 if List.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
                 else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
@@ -428,25 +437,36 @@ let serverToNegotiatedExtension cExtL (resuming:bool) cs res sExt : Result (nego
                     else
                         correct({l with ne_extended_padding = true})
         else
-            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided an extension not given by the client")
+            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
 
-val negotiateClientExtensions: list extension -> list extension -> bool -> cipherSuite -> Tot (Result (negotiatedExtensions))
-let negotiateClientExtensions (cExtL:list extension) (sExtL:list extension) (resuming:bool) cs =
-    let nes = ne_default in
-    match List.Tot.fold_left (serverToNegotiatedExtension cExtL resuming cs) (correct nes) sExtL with
-    | Error(x,y) -> Error(x,y)
-    | Correct(l) ->
-        // Client-side specific extension negotiation
-        // Nothing for now
-        correct(l)
+val negotiateClientExtensions: ProtocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (Result (negotiatedExtensions))
+let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
+  match pv with
+  | SSL_3p0 ->
+     (match sExtL with
+     | None -> Correct (ne_default)
+     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello"))
+  | _ ->
+     (match cExtL, sExtL with
+     | Some cExtL, Some sExtL ->
+        let nes = ne_default in
+        (match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
+        | Error(x,y) -> Error(x,y)
+        | ok -> ok)
+     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message"))
 
-val clientToServerExtension: config -> cipherSuite -> (cVerifyData * sVerifyData) -> bool -> extension -> Tot (option extension)
-let clientToServerExtension (cfg:config) (cs:cipherSuite) ((renegoCVD:cVerifyData),(renegoSVD:sVerifyData)) (resuming:bool) (cExt:extension) : (option (extension)) =
+val clientToServerExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> extension -> Tot (option extension)
+let clientToServerExtension (cfg:config) (cs:cipherSuite) ri (resuming:bool) (cExt:extension) : (option (extension)) =
     match cExt with
     | E_earlyData b -> None    // JK : TODO
     | E_preSharedKey b -> None // JK : TODO
     | E_keyShare b -> None     // JK : TODO
-    | E_renegotiation_info (_) -> Some (E_renegotiation_info (ServerRenegotiationInfo(renegoCVD,renegoSVD)))
+    | E_renegotiation_info (_) ->
+        let ric =
+           match ri with
+           | Some t -> ServerRenegotiationInfo t
+           | None -> FirstConnection in
+        Some (E_renegotiation_info ric)
     | E_server_name l ->
         (match List.Tot.tryFind (fun x->match x with | SNI_DNS _ -> true | _ -> false) l with
         | Some _ -> Some(E_server_name l)
@@ -466,10 +486,17 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ((renegoCVD:cVerifyDat
                 Some(E_extended_padding)
     | E_unknown_extension b -> None    
 
-val clientToNegotiatedExtension: config -> cipherSuite -> (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
-let clientToNegotiatedExtension (cfg:config) cs ((cvd:cVerifyData),(svd:sVerifyData)) (resuming:bool)  neg cExt =
+val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
+let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
     match cExt with
-    | E_renegotiation_info (_) -> {neg with ne_renegotiation_info=Some(cvd,svd)}
+    | E_renegotiation_info (cri) ->
+        let rs = 
+           match cri, ri with
+           | FirstConnection, None -> RI_Valid
+           | ClientRenegotiationInfo(cvdc), Some (cvds, svds) ->
+               if equalBytes cvdc cvds then RI_Valid else RI_Invalid
+           | _ -> RI_Invalid in 
+        {neg with ne_secure_renegotiation = rs}
     | E_supported_groups l ->
         if resuming then neg
         else
@@ -502,12 +529,23 @@ let clientToNegotiatedExtension (cfg:config) cs ((cvd:cVerifyData),(svd:sVerifyD
                 {neg with ne_extended_padding = true}
     | _ -> neg // JK : handle remaining cases
 
-val negotiateServerExtensions: list extension -> config -> cipherSuite -> (cVerifyData*sVerifyData) -> bool -> Tot (list extension * negotiatedExtensions)
-let negotiateServerExtensions cExtL cfg cs (cvd,svd) resuming  :  (list extension * negotiatedExtensions) =
-    let server = List.Tot.choose (clientToServerExtension cfg cs (cvd,svd) resuming) cExtL in
-    let negi = ne_default in
-    let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs (cvd,svd) resuming) negi cExtL in
-    (server,nego)
+val negotiateServerExtensions: ProtocolVersion -> option (list extension) -> known_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> bool -> Tot (Result (option (list extension) * negotiatedExtensions))
+let negotiateServerExtensions pv cExtL csl cfg cs ri resuming =
+   match cExtL with
+   | Some cExtL ->
+      let server = List.Tot.choose (clientToServerExtension cfg cs ri resuming) cExtL in
+      let negi = ne_default in
+      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
+      Correct (Some server, nego)
+   | None -> 
+       (match pv with
+       | SSL_3p0 ->
+          let cre =
+              if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV csl then
+                 Some [E_renegotiation_info (FirstConnection)], {ne_default with ne_secure_renegotiation = RI_Valid}
+              else None, ne_default in
+          Correct cre
+       | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))
 
 val isClientRenegotiationInfo: extension -> Tot (option cVerifyData)
 let isClientRenegotiationInfo e =

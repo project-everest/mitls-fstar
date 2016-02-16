@@ -3,5 +3,7 @@
 !test/*.ml
 *.o
 *.a
+*~
+.*
 camlprog.exe
 test.out

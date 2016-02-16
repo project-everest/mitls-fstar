@@ -26,7 +26,7 @@ let fake_encode (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) 
     ext = {
       ne_extended_ms = false;
       ne_extended_padding = false;
-      ne_renegotiation_info = None;
+      ne_secure_renegotiation = RI_Unsupported;
       ne_supported_curves = None;
       ne_supported_point_formats = None;
       ne_server_names = None
