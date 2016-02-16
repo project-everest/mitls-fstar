@@ -296,34 +296,25 @@ let parseClientHello data =
                             | Correct (res) ->
                               let (cmBytes,extensions) = res in
                               let cm = parseCompressions cmBytes in
-			      if length extensions > 0 then
-				(match parseExtensions extensions with
+			      (match parseOptExtensions extensions with
 				| Error(z) -> Error(z) 
-				| Correct (exts) -> 
-			          (if List.length exts < 256 &&
-				    List.length cm <= 256 &&
-				    List.length clientCipherSuites < 256 then
+				| Correct (exts) ->
+                                  let eok = (match exts with
+                                    | None -> true
+                                    | Some l -> List.length l < 256) in
+			          if eok && List.length cm <= 256 && List.length clientCipherSuites < 256 then
 				    Correct ({ch_protocol_version = cv;
                                       ch_client_random = cr;        
                                       ch_sessionID = sid;
                                       ch_cipher_suites = clientCipherSuites;
                                       ch_raw_cipher_suites = Some clCiphsuitesBytes;
                                       ch_compressions = cm;
-                                      ch_extensions = Some exts})
-				   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
-			      else if List.length cm < 256 && List.length clientCipherSuites < 256 then
-				  Correct ({ch_protocol_version = cv;
-					 ch_client_random = cr;        
-					 ch_sessionID = sid;
-					 ch_cipher_suites = clientCipherSuites;
-                                         ch_raw_cipher_suites = Some clCiphsuitesBytes;
-					 ch_compressions = cm;
-					 ch_extensions = None})
-			      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+                                      ch_extensions = exts})
+				   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 			   )
                          else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-			)
-			)
+		      )
+		   )
 		else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
               else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
          else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
@@ -364,7 +355,7 @@ let parseServerHello data =
 	      match parseCipherSuite csBytes with
 	      | Error(z) -> Error(z)
 	      | Correct(cs) -> 
-		(match parseExtensions data with
+		(match parseOptExtensions data with
 		| Error(z) -> Error(z)
                 | Correct(exts) ->
                     correct({sh_protocol_version = serverVer;       
@@ -372,7 +363,7 @@ let parseServerHello data =
                       sh_sessionID = None;
                       sh_cipher_suite = cs;
                       sh_compression = None;
-                      sh_extensions = Some exts}))
+                      sh_extensions = exts}))
 	     else  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 	  | _ ->
             if length data >= 1 then
