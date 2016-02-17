@@ -59,7 +59,7 @@ let fake_encode (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) 
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
   // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
   //NS: Not sure about the unsafe_coerce: but, it's presence clearly means that #id cannot be inferred
-  let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in 
+  let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in
 
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
   // FIXME: without the three additional #-arguments below, extraction crashes
