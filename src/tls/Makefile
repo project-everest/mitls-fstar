@@ -106,7 +106,7 @@ PRF.p.fst \
 TLSExtensions.p.fst \
 HandshakeMessages.fst \
 Handshake.fst \
-TestRecord.fst
+test/TestRecord.fst
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
@@ -211,13 +211,13 @@ TLSGEN_ADMIT=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) $(P
 # All our extracted modules.
 TLSML := $(TLSGEN:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
-# This one appears twice (fst + fsti). FIXME when fsti's are gone.
-TLSML := $(subst StatefulLHAE.ml StatefulLHAE.ml,StatefulLHAE.ml,$(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml \
   $(TLSML)
+# Last step: F* currently extracts everything in the current directory
+TLSML := $(notdir $(TLSML))
 
 # Note to self: there is little point in breaking down this rule into more
 # atomic ones. One may hope that we can only rebuild the .ml files that have
