@@ -193,6 +193,71 @@ val invalidateSession: s:hs -> ST unit
 
 (* --------------------Network Interface -------------------*)
 
+(* covering both TLS 1.2 and 1.3:
+
+type sendMsg (i:id) = // writer-indexed
+  | OutHS: 
+       rg:frange_any -> 
+       fragment i rg rbytes rg -> // first write this Handshake fragment, then
+       next:bool     ->           // signal increment of the writer index
+       finished:bool ->           // enable false-start sending (after sending this 1st Finished)
+       complete:bool ->           // signal completion (after sending this 2nd Finished)
+       outbox
+  | OutCCS  // before TLS 1.3; same semantics as above with explicit CCS (true, false, false) 
+  | OutIdle // nothing to do
+
+(* e.g. in TLS 1.3 1RTT server sends OutHS (Finished ...) next
+                   0RTT server sends OutHS (Finished ...) next finished  (if 0.5RTT is enabled)
+                   then client sends OutHS (Finished ...) next complete
+
+        in TLS 1.2 full server sends OutHS (Finished ...) finished
+                   then client sends OutHS (Finished ...) complete
+                   sending CCS implicitly says next  *)
+
+type recvMsg =
+  | InAck: 
+       next:bool ->      // signal increment of the reader index (before receiving the next packet)
+       finished:bool ->  // enable false-start receiving (in TLS 1.2, as we accepted the 1st Finished)
+       complete:bool ->  // signal completion (as we accepted the 2nd Finished)
+       inbox
+  | InQuery of Cert.chain * bool  // asks for authorization (all flags cleared; will have cases)
+  | InError of error
+
+(* e.g. in TLS 1.3 1RTT client accepts Finished: InAck next
+                   0RTT client accepts Finished: InAck next finished  (if 0.5RTT is enabled)
+                   then server accepts Finished: InAck next complete
+
+        in TLS 1.2 full server accepts Finished: InAck finished
+                   then client accepts Finished: InAck complete
+                   accepting CCS returns:        InAck next  *)
+
+Not sure how to handle 0RTT switches.
+"end_of_early_data" in not HS. 
+On the receiving server side, 
+- After processing ClientHello, HS signals switch to 0RTT-HS (or jump to 1RTT_HS) receive keys.
+- After processing Finished0, HS signals switch to 0RTT-AD
+- After receiving EED, the record calls HS, which signals switch to 1RTT-HS [too early?]
+- After receiving Finished, HS signals switch to 1RTT-AD.
+
+[a proper use of index 0]
+
+If we introduce dummy reverse streams (specified to remain empty), we still have to interpret 
+the first client receive++ as +=3.
+What would trigger it? a locally-explicit CCS after accepting the ServerHello. 
+
+
+Otherwise the "next" mechanism seems fine; we just bump a ghost index
+from 2 to 4 by the time we reach AD.
+
+Also 1.3 trouble for sending HS-encrypted data immediately *after* next: 
+we can increment after sending ClientHello, but we don't have the epoch yet!
+
+Ad hoc cases? or just an extra case? 
+In fact, ~ keeping a local, explicit CCS signal.
+
+
+*)
+
 type outgoing = // by default the state changes but not the epochs
   | OutIdle
   | OutSome:     rg:frange_any -> rbytes rg -> outgoing
