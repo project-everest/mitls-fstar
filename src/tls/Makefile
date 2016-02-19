@@ -90,6 +90,7 @@ AEAD_GCM.fst \
 MAC.fst \
 Encode.fst \
 StatefulLHAE.fst \
+ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
 Record.fst \
@@ -97,7 +98,6 @@ Handshake.fsti \
 Connection.fst \
 TLS.fst 
 #the preceding space is significant (see prefix_cfg)
-#ENC.fst \
 #LHAE.fst \--these do not even parse
 
 TLSNOTVER=\
@@ -227,7 +227,7 @@ TLSML := $(notdir $(TLSML))
 tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
-	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS=native_int/prims.ml INCLUDES="-I native_int/"
+	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
 	# All our .cmx files

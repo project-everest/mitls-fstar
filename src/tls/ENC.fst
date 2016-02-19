@@ -20,6 +20,7 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open TLSInfo
+open LHAEPlain
 open Range
 
 (* Also using Encode; we do not open it so that we can syntactically
@@ -68,8 +69,9 @@ private type key (i:id) = bytes
 //   | GoodKey_B of ideal_B.key
 //   | BadKey_A 
 
-
-private type localState (region:rid): i:id -> Type = 
+// JP: disabled for testing purposes
+// private
+type localState (region:rid): i:id -> Type = 
   | StreamState:   i:id{ is_Stream (alg i) }                         -> s: CoreCrypto.cipher_stream -> localState region i
   | OldBlockState: i:id{ is_Block (alg i) /\ ~(explicitIV i) } -> iv i -> localState region i
   | NewBlockState: i:id{ is_Block (alg i) /\ explicitIV i  }          -> localState region i
@@ -81,7 +83,9 @@ private type localState (region:rid): i:id -> Type =
 type entry (i:id) = | Entry:
   c: cipher i -> p: Encode.dplain i (length c) -> entry i
 
-private type state (i:id) (rw:rw) = | StateB:
+// JP: disabled for testing purposes
+// private
+type state (i:id) (rw:rw) = | StateB:
   #region: rid ->
   #peer_region: rid { HyperHeap.disjoint region peer_region } -> 
   k: key i -> // only ghost for stream ciphers
@@ -265,18 +269,25 @@ BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https
 // opaque logic type Encrypted (i:id) (ad:LHAEPlain.adata i) (c:cipher) (p:dplain i ad c) (h:heap) =
 //   b2t (List.mem (Entry i ad c p) (Heap.sel h log))
 
-let enc (i:id) s ad rg data : _ * _ =
+val enc: i:id ->
+         s: encryptor i ->
+         ad: LHAEPlain.adata i ->
+         rg: range ->
+         data: LHAEPlain.plain i ad rg ->
+         mackey: MAC.keyrepr i ->
+         bytes
+let enc (i:id) s ad rg data mackey =
     let tlen = targetLength i rg in
     let encrypted =
-      if safeId ki then createBytes tlen 0 
-      else Encode.repr i ad rg data
+      if safeId i then createBytes tlen 0uy
+      else Encode.encode i ad rg data mackey
     in
     // we grow the log in all cases // if authId i then
-    let cipher = enc_int ki s tlen encrypted in
-    log := snoc !log (Entry cipher ad data);
+    let cipher: bytes = enc_int i s tlen encrypted in
+    // log := snoc !log (Entry cipher ad data);
     cipher
 
-
+(*
 private val cbcdec: CoreCrypto.block_cipher -> bytes -> bytes -> bytes -> bytes
 let cbcdec alg k iv e = CoreCrypto.block_decrypt alg k iv e
 
@@ -296,7 +307,7 @@ let dec_int (ki:id) (s:decryptor ki) cipher =
     let alg,ivm = encAlg_of_id ki in 
     match s with
     //#begin-ivStaleDec
-    | BlockCipher(s) -> ( match alg,ivm with Block alg, Stale -> //workaround for https://github.com/FStarLang/FStar/issues/397
+    | BlockCipher(s) -> ( match alg,ivm with | Block alg, Stale -> //workaround for https://github.com/FStarLang/FStar/issues/397
         (match s.iv with
         | NoIV -> unexpected "[dec_int] Wrong combination of cipher algorithm and state"
         | SomeIV(iv) ->
@@ -311,7 +322,7 @@ let dec_int (ki:id) (s:decryptor ki) cipher =
             let s = updateIV ki s siv in
             (BlockCipher(s), data)) )
     //#end-ivStaleDec
-    | BlockCipher(s) -> ( match alg,ivm with Block alg, Fresh ->
+    | BlockCipher(s) -> ( match alg,ivm with | Block alg, Fresh ->
         (match s.iv with
         | SomeIV(_) -> unexpected "[dec_int] Wrong combination of cipher algorithm and state"
         | NoIV ->
@@ -324,7 +335,7 @@ let dec_int (ki:id) (s:decryptor ki) cipher =
                 unexpected "[dec_int] Core crypto returned wrong plaintext length"
             else
             (BlockCipher(s), data)) )
-    | StreamCipher(s) -> (match alg,ivm with Stream _,  _ ->
+    | StreamCipher(s) -> (match alg,ivm with | Stream _,  _ ->
         let data = (CoreCrypto.stream_process s.sstate (cipher)) in
         let dlen = length data in
         let clen = length cipher in
@@ -332,7 +343,7 @@ let dec_int (ki:id) (s:decryptor ki) cipher =
             unexpected "[dec_int] Core crypto returned wrong plaintext length"
         else
         (StreamCipher(s),data) )
-    | _ -> (match alg,ivm with _,_ -> unexpected "[dec_int] Wrong combination of cipher algorithm and state" )
+    | _ -> (match alg,ivm with | _,_ -> unexpected "[dec_int] Wrong combination of cipher algorithm and state" )
 
 val dec: i:id -> s: decryptor i-> ad: LHAEPlain.adata i -> c:cipher
   { 
@@ -358,7 +369,7 @@ let dec ki s ad cipher =
       let tlen = length cipher in
       let p' = Encode.mk_plain ki ad tlen p in
       (s,p')
-
+*)
 
 (* TODO: the SPRP game in F#, without indexing so far.
    the adversary gets 
