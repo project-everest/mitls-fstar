@@ -48,7 +48,7 @@ let explicitIV (i:id) =
 
 let blockSize (i:idB) = CoreCrypto.blockSize (Block._0 (alg i))
 type block (i:idB) = lbytes (blockSize i)
-type iv = block
+type iv (i:idB) = block i
 
 (* Early TLS chains IVs, but this is not secure against adaptive CPA *)
 let lblock (bl:nat) (c:bytes { length c >= bl }) : lbytes bl = 
