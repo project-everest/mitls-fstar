@@ -1,6 +1,7 @@
 # These are all the known working targets in this file,
 # check for regressions & comment about them!
 all: tls-ver tls-lax tls-gen
+
 # TODO extend scope of verification
 # TODO compilation to ML & testing
 # MK removed mitls-ml as strider was failing on it for ages
@@ -14,7 +15,13 @@ clean:
 # ------------------ dependencies on Fstar & its libraries --------------------
 # When using NuBuild, FStar must be located within the source tree. Now that soft links are 
 # available on all platforms, I don't see a reason not to assume a fixed location.
-FSTAR_HOME=../../.fstar
+FSTAR_HOME?=../../.fstar
+# JP: this location can easily be overridden by doing:
+#   FSTAR_HOME=../../../fstar make tls-gen
+# BUT NOT AS FOLLOWS
+#   make FSTAR_HOME=../../../fstar tls-gen
+# the latter form won't work because FSTAR_HOME will incorrectly override values
+# in recursive invocations of $(MAKE)...
 add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
 
 # The .fst files found in [lib/ml] that are realized in
