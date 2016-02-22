@@ -1,6 +1,9 @@
 mitls-fstar (port of miTLS to F* 0.9)
 =====================================
 
+[![Build status](https://travis-ci.org/mitls/mitls-fstar.svg)](https://travis-ci.org/mitls/mitls-fstar)
+
+
   * [Directory structure](#directory-structure)
   	* [Legacy, imported from mitls-f7](#legacy-imported-from-mitls-f7)
   * [Configuring Emacs and Atom F* modes](#configuring-emacs-and-atom-f-modes)
