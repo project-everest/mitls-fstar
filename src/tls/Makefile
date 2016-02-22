@@ -192,7 +192,7 @@ tls-ver: $(LIBFILES) $(TLSVER)
 	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^)
 
 # same as tls-ver, but verifies one module at a time.
-tls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
+tls-ver1: $(addsuffix .fst-ver,$(basename $(TLSVER)))
 
 # --trace_error
 tls-ml: $(LIBFILES) $(TLSVER)
