@@ -51,10 +51,40 @@ let dualRole = function
 // Application configuration
 // TODO Consider repackaging separate client and server options
 
-type helloReqPolicy =
-    | HRPIgnore
-    | HRPFull
-    | HRPResume
+(* discussion about IDs and configurations (Cedric, Antoine, Santiago)
+
+Server Certificates? 
+
+- the client initial parameters...
+
+- the server gets a CertSignQuery, picks its certificate chain from
+  the ClientHello/ServerHello contents [new in miTLS 1.0]
+
+- the client decides whether that's acceptable. 
+
+Certificate Request? 
+
+- in its ServerHello flight (or later) the server optionally requests a
+  Cert/CertVerify (optionally with a list of CAs). This depends on
+  what has been negotiated so far, including prior identities for
+  both, and possibly on application data (e.g. ACL-based) [new in miTLS 1.0]
+
+- the client optionally complies (for one of those CAs).
+  [We always pass explicit requests to the client, as a CertSignQuery read result.]
+  [We could have sign; read for solemnity; or read for simplicity.]
+
+- the server decides whether that's acceptable.
+  [We always pass inspection requests, as a CertVerifyQuery read result]
+  [We have authorize; read for solemnity; could have read for simplicity.]
+
+(forgetting about 0RTT for now)
+
+type ServerCertificateRequest // something that determines this Handshake message
+
+request_client_certificate: single_assign ServerCertificateRequest // uses this one, or asks the server; by default Some None.
+
+*) 
+
 
 type config = {
     (* Supported versions, ciphersuites, and compressions *)
@@ -66,16 +96,16 @@ type config = {
     (* Handshake specific options *)
 
     (* Client side *)
-    honourHelloReq: helloReqPolicy;
-    allowAnonCipherSuite: bool;
-    safe_resumption: bool;
+    honourHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
+    allowAnonCipherSuite: bool; // a safeguard against proposing ciphersuites (not so useful?)
+    safe_resumption: bool;      // demands this extension when resuming
 
     (* Server side *)
-    request_client_certificate: bool;
+    request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
     check_client_version_in_pms_for_old_tls: bool;
 
     (* Common *)
-    safe_renegotiation: bool;
+    safe_renegotiation: bool;   // demands this extension when renegotiating
     server_name: UntrustedCert.hint;
     client_name: UntrustedCert.hint;
 
@@ -110,7 +140,7 @@ let defaultConfig =
     ciphersuites = csn;
     compressions = [ NullCompression ];
 
-    honourHelloReq = HRPResume;
+    honourHelloReq = true;
     allowAnonCipherSuite = false;
     request_client_certificate = false;
     check_client_version_in_pms_for_old_tls = true;

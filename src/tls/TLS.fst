@@ -250,12 +250,12 @@ val unexpected: #a:Type -> v:string -> ST a
 let rec unexpected s = unexpected s
 
 (* Dispatch dealing with network sockets *)
-// we need st_inv h c /\ wr > FirstHandshake ==> is_Some epoch_w
+// we need st_inv h c /\ wr > Init ==> is_Some epoch_w
 
 let outerPV c =
   match Handshake.version c.hs with
   | TLS_1p3 -> TLS_1p0 
-  | pv      -> pv)
+  | pv      -> pv
 
 //15-11-27 illustrating overhead for "unrelated" updates; still missing modifies clauses 
 val closeConnection: c: connection -> ST unit 
@@ -287,14 +287,13 @@ val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:st
     is_Closing (sel h1 c.writing) ))
 
 let abortWithAlert c ad reason =
-    let closingPV = pickSendPV c in
     let h0 = ST.get() in
     invalidateSession c.hs;    
     let h1 = ST.get() in
     frame_internal c h0 h1;
     Alert.send c.alert ad;
     c.reading := Closed;
-    c.writing := Closing(closingPV,reason);
+    c.writing := Closing reason;
     frame_unrelated c h1 (ST.get()) //NS: again, not an instance of frame_unrelated, because of invalidateSession
 
 // on some errors, we attempt to send an alert before tearing down the connection
@@ -637,7 +636,7 @@ let writeOne c i appdata =
       match alert_response with // alerts have highest priority
       | Some AD_close_notify ->
           ( match writing  with
-            | Init | FirstHandshake _ | Open ->
+            | Init | Open ->
             (* Not Closing: this is a graceful closure, should not happen in case of fatal alerts *)
             (* We're sending a close_notify alert. Send it, then only close our sending side.
                If we already received the other close notify, then reading is already closed,
@@ -652,7 +651,7 @@ let writeOne c i appdata =
             | _ -> unrecoverable c (perror __SOURCE_FILE__ __LINE__ "Sending alert message in wrong state"))
       | Some ad ->
           ( match writing with
-            | Init | FirstHandshake _ | Open | Closing _ ->
+            | Init | Open | Closing _ ->
               (* We're sending a fatal alert. Send it, then close both sending and receiving sides *)
               ( match send c #i (Content.ct_alert i ad) with
                 | Correct() ->
@@ -669,7 +668,7 @@ let writeOne c i appdata =
                 frame_admit c h1 h2; //NS: not an instance of frame_internal, since it may change the epochs log if the result is OutCCS
                 ( match writing with
 (* 
-                  | FirstHandshake(_) | Open ->
+                  | Init | Open ->
                       ( let i = epoch_id (epoch_w c) in // change epoch!
                         match send c #i (Content.CT_CCS #i) with //15-11-27 wrong epoch?
                         | Correct _ ->
@@ -690,7 +689,7 @@ let writeOne c i appdata =
             | Handshake.OutSome rg f -> (* send some handshake fragment *)
                 frame_internal c h1 h2; 
                 ( match writing with
-                  | Init | FirstHandshake(_) | Finishing | Open ->
+                  | Init | Finishing | Open ->
                       ( match send c #i (Content.CT_Handshake rg f) with
                         | Correct()   -> WriteAgain
                         | Error (x,y) -> unrecoverable c y)
@@ -975,7 +974,7 @@ let getFragment c ct len : TLSError.Result (Content.fragment (rd_i c)) =
 let readOne c : ioresult_i (rd_i c) =
     let reading = !c.reading in 
     match reading with
-        | Closed -> //* statically exclude it?
+        | Closed -> // statically exclude it?
             alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Trying to read from a closed connection")
         | _ -> (
             match getHeader c with
@@ -984,7 +983,6 @@ let readOne c : ioresult_i (rd_i c) =
                 //old: let history = Record.history id.id_in Reader c_read.conn in
                 match (ct,reading) with // process received content type depending on the current read state
                 | (Alert, Init)
-                | (Alert, FirstHandshake _)
                 | (Alert, Open) ->
                     ( match getFragment c ct len with
                       | Error (x,y)  -> alertFlush c x y
@@ -1003,7 +1001,6 @@ let readOne c : ioresult_i (rd_i c) =
                                    Read (DataStream.Alert ad))
 
                 | (Handshake, Init)
-                | (Handshake, FirstHandshake _)
                 | (Handshake, Finishing)
                 | (Handshake, Open) ->
                   begin match getFragment c ct len with
@@ -1022,8 +1019,8 @@ let readOne c : ioresult_i (rd_i c) =
                                           Set the negotiated version in the current sinfo (read and write side),
                                           and move to the FirstHandshake state, so that
                                           protocol version will be properly checked *)
-                                        c.reading := FirstHandshake pv;
-                                        c.writing := FirstHandshake pv;
+                                        //c.reading := FirstHandshake pv;
+                                        //c.writing := FirstHandshake pv;
                                         ReadAgain
                                     | _ -> ReadAgain) (* We are re-negotiating, using the current version number;
                                                         so no need to change --- but we should still check pv is unchanged. *)
@@ -1079,6 +1076,57 @@ let readOne c : ioresult_i (rd_i c) =
                 | _, Closed
                 | _, Closing(_,_) ->  alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 )
+
+
+// revised state machine (TBC)
+let readOne c : ioresult_i (rd_i c) =
+  match getHeader c with 
+  | Error (x,y)       -> alertFlush c x y 
+  | Correct (ct,len)  -> 
+  match getFragment c ct len with 
+  | Error (x,y)       -> alertFlush c x y
+  | Correct fragment  ->
+  match fragment with
+    | Content.CT_Alert rg f -> 
+      match Alert.recv_fragment c.alert rg f with 
+      | Error (x,y)   -> alertFlush c x y   
+      | Correct AD_close_notify ->          // an outgoing close_notify has already been buffered, if necessary
+              if !c.state = Half Reader 
+              then c.state := Closed 
+              else c.state := Half Writer; // we close the reading side
+              Read DataStream.Close
+      | Correct alert -> 
+              if isFatal alert then closeConnection c; // else we carry on; the user will know what to do
+              Read (DataStream.Alert alert)
+
+      // recheck we tolerate alerts in all states; used to be just Init|Open, otherwise:
+      // alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
+
+    | Content.CT_Handshake rg f ->
+      match Handshake.recv_fragment c.hs rg f with 
+      | Handshake.InError (x,y) -> alertFlush c x y
+      | Handshake.InAck         -> ReadAgain
+      | Handshake.InQuery (q,a) -> CertQuery (q,a)
+      | Handshake.InFinished    -> ReadAgain // should we care? probably before e.g. accepting falseStart traffic
+      | Handshake.InComplete    -> 
+          match !c.state with
+          | BC -> // additional sanity check: in and out epochs should be the same
+                 if epoch_r c = epoch_w c 
+	         then (c.state := AD; CompletedFirst)
+                 else (closeConnection c; ReadError None "Invalid connection state") in
+
+      // recheck correctness for all states; used to be just Init|Finishing|Open
+
+    | Content.CT_CCS -> 
+      match Handshake.recv_ccs c.hs with
+      | InCCSError (x,y)        -> alertFlush c x y
+      | InCCSAck                -> // We know statically that Handshake and Application data buffers are empty.
+                                  ReadAgainFinishing 
+
+    | Content.CT_Data #i rg d   -> 
+      match !c.state with 
+      | AD | Half Reader        -> let d : DataStream.fragment i fragment_range = d in Read (DataStream.Data d) 
+      | _                       -> alertFlush c AD_unexpected_message "Application Data received in wrong state")
 
 //* ?
 //* private val sameID: c0:Connection -> c1:Connection ->

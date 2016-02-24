@@ -38,7 +38,18 @@ type dispatch =
   | Open
   | Closing of (* ProtocolVersion * *) string (* write-only, while sending a fatal alert *)
   | Closed
- 
+
+// revised from 2x dispatch 
+type tlsState = 
+//| Early       // TLS 1.3 0RTT in 
+//| KeyUpdate   // TLS 1.3 after sending first KeyUpdate
+//| Regeno      // TLS old after sending CCS
+//| FalseStart  // TLS old client, between finished.
+  | BC
+  | AD
+  | Half of rw  // the other direction is closed
+  | Closed 
+
 type connection = | C:
   #region: rid ->
   peer:   rid{disjoint region peer} ->
