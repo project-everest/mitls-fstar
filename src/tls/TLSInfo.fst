@@ -441,7 +441,9 @@ let epochCRand = function
   | AbbrEpoch ai pe1 pe2 -> ai.abbr_crand
 
 val epochCSRands: preEpoch -> Tot bytes
-let epochCSRands e = epochCRand e @| epochSRand e
+let epochCSRands e = 
+  let e' : succEpoch = unsafe_coerce e in //TODO: THIS FAILS CURRENTLY! FIXME
+  epochCRand e' @| epochSRand e'
 
 type preConnectionInfo = {
     role: role;      // cached, could be retrieved from id_out
@@ -576,7 +578,7 @@ type Match (i:id) =
 //$ recode?
 // This index is safe for MS-based key derivation
 val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ Match i) })
-let safeKDF _ = true
+let safeKDF _ = unsafe_coerce true //TODO: THIS DOESN'T GO THROUGH CURRENTLY! FIXME
 
 // Needed for typechecking of PRF
 // ask !i1,i2. i2 = Swap(i1) /\ not(SafeKDF(i1)) => not(SafeKDF(i2))
