@@ -1,7 +1,5 @@
 module TLS
 
-// 2015-08-25 largely rewritten to implement both stateful dispatch and TLS
-
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
@@ -151,7 +149,7 @@ let epoch_w c =
 
 (** reading epochs **)
 
-val epoch_ro: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (reader (epoch_id o))
+val epoch_ro: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (reader (peerId (epoch_id o)))
 let epoch_ro _ _ o =
   match o with 
   | Some(Epoch _ r _) -> r
