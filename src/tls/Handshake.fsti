@@ -104,8 +104,9 @@ val i: s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
 
-let reader s = i s Reader
-let writer s = i s Reader
+// name-clashing
+// let reader s = i s Reader
+// let writer s = i s Reader
 
 
 type forall_epochs (hs:hs) h (p:(epoch (hs.region) (hs.peer) -> Type)) = 

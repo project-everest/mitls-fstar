@@ -48,7 +48,7 @@ type tlsState =
   | BC
   | AD
   | Half of rw  // the other direction is closed
-  | Closed 
+  | Close 
 
 type connection = | C:
   #region: rid ->
@@ -86,22 +86,22 @@ s /\ p x) ==> Seq_forall p (snoc s x)}) *)
 (* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
 let epoch_id (#region:rid) (#peer:rid) (o: option (epoch region peer)) =
   match o with 
-  | Some e -> hs_id e.h
+  | Some e -> hsId e.h
   | None   -> noId
 
-val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (reader (hs_id e.h))
+val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (reader (peerId(hsId e.h)))
 let reader_epoch #region #peer (Epoch h r w) = r
 
-val writer_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (writer (hs_id e.h))
+val writer_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (writer (hsId e.h))
 let writer_epoch #region #peer (Epoch h r w) = w
 
 type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) = 
-  st_dec_inv (reader_epoch e) h 
-  /\ st_enc_inv (writer_epoch e) h
+  st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h /\ 
+  st_enc_inv #(hsId e.h) (writer_epoch e) h
   
 type epochs_inv c h = 
-  Seq_forall (epoch_inv h) (sel h c.hs.log)
-  /\ Handshake.hs_footprint_inv c.hs h
+  Seq_forall (epoch_inv h) (sel h c.hs.log) /\ 
+  Handshake.hs_footprint_inv c.hs h
   
 type st_inv c h = 
   hs_inv (C.hs c) h /\
@@ -112,7 +112,8 @@ val test_st_inv: c:connection -> j:nat -> ST (epoch (HS.region c.hs) (HS.peer c.
   (ensures (fun h0 e h1 -> 
     h0 == h1 /\ 
     epochs_inv c h1 /\
-    st_dec_inv (reader_epoch e) h1 /\ st_enc_inv (writer_epoch e) h1))
+    st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h1 /\ 
+    st_enc_inv #(hsId e.h) (writer_epoch e) h1))
 
 let test_st_inv c j = 
   let epochs = !c.hs.log in

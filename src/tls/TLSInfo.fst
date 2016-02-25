@@ -524,7 +524,8 @@ type id = {
   }
 
 let swap (i:id) = { i with writer = dualRole i.writer }
-let peerId = swap // better name? 
+let peerId (i:id) = { i with writer = dualRole i.writer }
+//let peerId = swap // better name? 
 
 val siId: si:SessionInfo{ is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))
 			  /\ ((si.protocol_version = TLS_1p2) && (pvcs si.protocol_version si.cipher_suite))} -> role -> Tot id
