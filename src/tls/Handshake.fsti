@@ -1,9 +1,9 @@
 module Handshake
 
-// Outlining the new stateful Handshake interface
-// So far, this reflects the HS visible transitions & local state machine
-// ---not yet agreement with peer connections---but this exposes enough details
-// to specify it (as the existence of a peer Connection such that ...)
+// current limitations: 
+// - no abstract type for encrypted handshake traffic
+// - no support for 0RTT and false-start
+// - partnering between handshakes is static (needs fixing)
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -20,8 +20,8 @@ open TLSConstants
 open Range
 open StatefulLHAE
 
-
-// represents the outcome of a successful handshake. 
+// represents the outcome of a successful handshake, 
+// providing context for the derived epoch
 type handshake = 
   | Fresh of SessionInfo
   | Resumed of abbrInfo * SessionInfo //changed: was hs * seq epoch (creating cycle)
@@ -31,9 +31,12 @@ type handshake =
 // We should probably do the same in the session store.
 
 // extracts a transport key identifier from a handshake record
-val hs_id: handshake -> Tot id
+val hsId: handshake -> Tot id
 
-opaque type epoch_region_inv (#i:_) (rgn:rid) (peer:rid) (r:reader i) (w:writer i) =
+// relocate?
+type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
+
+opaque type epoch_region_inv (#i:id) (rgn:rid) (peer:rid) (r:reader (peerId i)) (w:writer i) =
   parent (region r) = rgn /\ 
   parent (region w) = rgn /\ 
   parent (peer_region r) = peer /\
@@ -44,30 +47,18 @@ opaque type epoch_region_inv (#i:_) (rgn:rid) (peer:rid) (r:reader i) (w:writer 
  
 type epoch (rgn:rid) (peer:rid) =
   | Epoch: h: handshake ->
-           r: reader (hs_id h) -> //TODO: should be reader (peer (hs_id h))
-           w: writer (hs_id h) {epoch_region_inv rgn peer r w } 
-           -> epoch rgn peer
+           r: reader (peerId (hsId h)) ->
+           w: writer (hsId h) {epoch_region_inv rgn peer r w} -> epoch rgn peer
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
-//15-09-10 why do I need an explicit val here? this is forbidden in .fsti...
-// for now rewriting as a spec.
-//val regions_epoch: #region:rid -> epoch #region -> Tot (rid * rid)
-//let regions_epoch region (Epoch h r w) = StatefulLHAE.reader_region r, StatefulLHAE.writer_region w
+let set4 a b c d =   
+  union  (singleton a) (union (singleton b) (union (singleton c) (singleton d)))
 
-(* let op_HatAtPlus (r:rid) (rs:FStar.Set.set rid) = Set.union (Set.singleton r) rs *)
-(* let op_HatAtHat (r:rid) (s:rid) = Set.union (Set.singleton r) (Set.singleton s) *)
- 
 let regions (#p:rid) (#q:rid) (e:epoch p q) = 
-  union (singleton (region e.r))
-            (union (singleton (peer_region e.r))
-                       (union (singleton (region e.w))
-                                  (singleton (peer_region e.w))))
+  set4 (region e.r) (peer_region e.r) (region e.w) (peer_region e.w)
 
-
-//15-09-23 any abstract way to deal with pairwise disjointness? 
-//15-09-23 test how we apply this assumption.
 opaque type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)) =
   forall (i:nat { i < Seq.length es }).
   forall (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
@@ -75,12 +66,11 @@ opaque type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region pe
     let ej = Seq.index es j in
     disjoint_regions (regions ei) (regions ej)
  
-// let test (p:rid) (q:rid) (e:epoch p q) h0 (h1:t{equal_on (union (singleton p) (singleton q)) h0 h1}) = 
-//   assert (equal_on (regions e) h0 h1)
-
 opaque type epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
 
-type handshake_state // internal, including e.g. half-baked epochs (TBD)
+// internal stuff: state machine, reader/writer counters, etc.
+// (will take other HS fields as parameters)
+abstract type handshake_state 
 
 type hs =
   | HS: #region: rid ->
@@ -89,9 +79,34 @@ type hs =
         resume: option (sid:sessionID { r = Client }) ->
         cfg:config ->
         id: random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-        log: rref region (epochs region peer) ->  // append-only 15-09-23 use monotonic? helpful for proofs? 
+        log: rref region (epochs region peer) ->  // append-only; use monotonic? 
         state: rref region handshake_state  ->  // opaque, subject to invariant
         hs
+
+(* the handshake internally maintains epoch 
+   indexes for the current reader and writer *)
+
+let non_empty h s = Seq.length (sel h s.log) > 0
+
+type logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
+
+// returns the current index in the log for reading or writing, or -1 if there is none.
+// this function increases with h (how to specify it once for all?)
+val iT: s:hs -> rw:rw -> h:HyperHeap.t -> Tot (logIndex (sel h s.log))
+
+// returns the epoch for reading or writing
+let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (sel h s.log) (iT s rw h)
+
+let readerT s h = eT s Reader h 
+let writerT s h = eT s Writer h
+
+val i: s:hs -> rw:rw -> ST int 
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
+
+let reader s = i s Reader
+let writer s = i s Reader
+
 
 type forall_epochs (hs:hs) h (p:(epoch (hs.region) (hs.peer) -> Type)) = 
   (let es = sel h hs.log in 
@@ -117,6 +132,8 @@ let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoc
 // separation policy: the handshake mutates its private state, 
 // only depends on it, and only extends the log with fresh epochs.
 
+
+// placeholder, to be implemented as a stateful property.
 assume type Completed: #region:rid -> #peer:rid -> epoch region peer -> Type
 
 // consider adding an optional (resume: option sid) on the client side
@@ -139,18 +156,34 @@ assume type Completed: #region:rid -> #peer:rid -> epoch region peer -> Type
 type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
 
 opaque type hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
-  HyperHeap.contains_ref s.log h
-  /\ HyperHeap.contains_ref s.state h
-  /\ Map.contains h s.peer
+  HyperHeap.contains_ref s.log h   /\ 
+  HyperHeap.contains_ref s.state h /\ 
+  Map.contains h s.peer
 
 type hs_inv (s:hs) (h: HyperHeap.t) = 
   hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
   /\ hs_footprint_inv s h
 
-(* ----------------- Control Interface ---------------------*)
 
-// relocate?
-type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
+// returns the protocol version negotiated so far
+// (used for formatting outgoing packets, but not trusted)
+val version: s:hs -> ST ProtocolVersion
+  (requires (hs_inv s))
+  (ensures (fun h0 pv h1 -> h0 = h1))
+
+(* used to be part of TLS.pickSendPV, with 3 cases: 
+
+   (1) getMinVersion hs; then 
+   (2) fixed by ServerHello; then
+   (3) read from the current writing epoch
+
+   val epoch_pv: #region:rid -> #peer:rid -> epoch region peer -> Tot ProtocolVersion
+
+   Instead, we could add an invariant: for all epochs e in hs.log, we have epoch_pv e = version hs.
+*)
+
+
+(*** Control Interface ***)
 
 // Create instance for a fresh connection, with optional resumption for clients
 val init: r0:rid -> peer:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r = Client })  ->
@@ -191,9 +224,79 @@ val invalidateSession: s:hs -> ST unit
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
 
 
-(* --------------------Network Interface -------------------*)
+(*** Outgoing ***)
 
-(* covering both TLS 1.2 and 1.3:
+type outgoing = // by default the state changes but not the epochs
+  | OutIdle
+  | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
+  | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
+//| OutFinished: rg:frange_any -> rbytes rg -> outgoing   // signal false start (if enabled)
+  | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
+val next_fragment: s:hs -> ST outgoing
+  (requires (hs_inv s))
+  (ensures (fun h0 result h1 ->
+    let w0 = iT s Writer h0 in 
+    let w1 = iT s Writer h1 in 
+    let r0 = iT s Reader h0 in 
+    let r1 = iT s Reader h1 in 
+    hs_inv s h1 /\
+    HyperHeap.modifies_one s.region h0 h1 /\
+    r1 = r0 /\
+    w1 = (if result = OutCCS then w0 + 1 else w0) /\
+    (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ Completed (eT s Writer h1)))))
+                                              (*why do i need this?*)
+
+
+(*** Incoming ***)
+
+type incoming = // the fragment is accepted, and...
+  | InAck
+  | InQuery: Cert.chain -> bool -> incoming
+  | InCCS             // signal new epoch (only in TLS 1.3)
+//| InFinished        // signal false state before TLS 1.3 (if enabled)
+  | InComplete        // signal completion of current epoch
+  | InError of error  // how underspecified should it be?
+val recv_fragment: s:hs -> rg:Range.range { Wider fragment_range rg } -> rbytes rg -> ST incoming
+  (requires (hs_inv s)) 
+  (ensures (fun h0 result h1 ->
+    let w0 = iT s Writer h0 in 
+    let w1 = iT s Writer h1 in 
+    let r0 = iT s Reader h0 in 
+    let r1 = iT s Reader h1 in 
+    hs_inv s h1 /\
+    HyperHeap.modifies_one s.region h0 h1 /\
+    w1 = w0 /\ 
+    r1 = (if result = InCCS then r0 + 1 else r0) /\
+    (result = InComplete ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ Completed (eT s Reader h1))))
+
+val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3 
+  (requires (hs_inv s)) // could require pv <= 1p2
+  (ensures (fun h0 result h1 ->
+    let w0 = iT s Writer h0 in 
+    let w1 = iT s Writer h1 in 
+    let r0 = iT s Reader h0 in 
+    let r1 = iT s Reader h1 in 
+    (is_InError result \/ is_InCCS result) /\
+    hs_inv s h1 /\
+    HyperHeap.modifies_one s.region h0 h1 /\
+    w1 = w0 /\ 
+    r1 = (if result = InCCS then r0 + 1 else r0)))
+
+val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
+  (requires (hs_inv s))
+  (ensures (fun h0 result h1 ->
+    let w0 = iT s Writer h0 in 
+    let w1 = iT s Writer h1 in 
+    let r0 = iT s Reader h0 in 
+    let r1 = iT s Reader h1 in 
+    (is_InAck result \/ is_InError result) /\ 
+    hs_inv s h1 /\
+    HyperHeap.modifies_one s.region h0 h1 /\
+    w1 = w0 /\ 
+    r1 = r0 ))
+
+
+(* working notes towards covering both TLS 1.2 and 1.3, with 0RTT and falsestart
 
 type sendMsg (i:id) = // writer-indexed
   | OutHS: 
@@ -232,7 +335,7 @@ type recvMsg =
                    accepting CCS returns:        InAck next  *)
 
 Not sure how to handle 0RTT switches.
-"end_of_early_data" in not HS. 
+"end_of_early_data" is not HS. 
 On the receiving server side, 
 - After processing ClientHello, HS signals switch to 0RTT-HS (or jump to 1RTT_HS) receive keys.
 - After processing Finished0, HS signals switch to 0RTT-AD
@@ -253,77 +356,4 @@ Also 1.3 trouble for sending HS-encrypted data immediately *after* next:
 we can increment after sending ClientHello, but we don't have the epoch yet!
 
 Ad hoc cases? or just an extra case? 
-In fact, ~ keeping a local, explicit CCS signal.
-
-
-*)
-
-type outgoing = // by default the state changes but not the epochs
-  | OutIdle
-  | OutSome:     rg:frange_any -> rbytes rg -> outgoing
-  | OutCCS                // log += Epoch if first
-  | OutFinished: rg:frange_any -> rbytes rg -> outgoing
-  | OutComplete: rg:frange_any -> rbytes rg -> outgoing // log += Complete
-let non_empty h s = Seq.length (sel h s.log) > 0
-val next_fragment: s:hs -> ST outgoing
-  (requires (hs_inv s))
-  (ensures (fun h0 result h1 ->
-    hs_inv s h1 /\
-    HyperHeap.modifies_one s.region h0 h1 /\
-    // preserves its invariant, modifies only its own region, and...
-       (result = OutCCS       ==> fresh_epoch h0 s h1) /\
-       (result <> OutCCS       ==> modifies_internal h0 s h1) /\
-       (is_OutComplete result ==> (non_empty h1 s /\ (Seq.length (sel h1 s.log) > 0) /\ Completed (latest h1 s)))))
-                                                  (* why do I need this? same below *)
-
-type incoming = // the fragment is accepted, and...
-  | InAck
-//| InVersionAgreed of ProtocolVersion
-  | InQuery of Cert.chain * bool
-  | InFinished
-  | InComplete        // log += Complete
-  | InError of error  // log += Error
-val recv_fragment: s:hs -> rg:Range.range { Wider fragment_range rg } -> rbytes rg -> ST incoming
-  (requires (hs_inv s)) //removed:  (fun h -> Seq.length (sel h (HS.log s)) > 0))
-  (ensures (fun h0 result h1 ->
-    hs_inv s h1 /\
-    modifies_internal h0 s h1
-    /\ (result = InComplete ==> non_empty h1 s /\ (Seq.length (sel h1 s.log) > 0) /\ Completed (latest h1 s))))
-
-val authorize: s:hs -> Cert.chain -> ST incoming
-  (requires (hs_inv s))
-  (ensures (fun h0 result h1 ->
-    // preserves its invariant, modifies only its own region, and...
-    modifies_internal h0 s h1 /\
-    (is_InAck result \/ is_InError result)))
-
-type incomingCCS =
-  | InCCSAck            // log += Epoch if first
-  | InCCSError of error // log += Error
-val recv_ccs: s:hs -> ST incomingCCS
-  (requires (hs_inv s))
-  (ensures (fun h0 result h1 ->
-    // preserves its invariant, modifies only its own region, and...
-    hs_inv s h1 /\
-    fresh_epoch h0 s h1 ))
-
-// returns the protocol version negotiated so far
-// (used for formatting outgoing packets, but not trusted)
-val version: s:hs -> ST ProtocolVersion
-  (requires (hs_inv s))
-  (ensures (fun h0 pv h1 -> h0 = h1))
-
-(* used to be part of TLS.pickSendPV, with 3 cases: 
-
-   (1) getMinVersion hs; then 
-   (2) fixed by ServerHello; then
-   (3) read from the current writing epoch
-
-   val epoch_pv: #region:rid -> #peer:rid -> epoch region peer -> Tot ProtocolVersion
-
-   Instead, we could add an invariant: for all epochs e in hs.log, we have epoch_pv e = version hs.
-*)
-
-
-
-// val negotiate: list<'a> -> list<'a> -> option<'a> when 'a:equality
+In fact, ~ keeping a local, explicit CCS signal. *)
