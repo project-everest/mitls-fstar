@@ -116,8 +116,13 @@ val test_st_inv: c:connection -> j:nat -> ST (epoch (HS.region c.hs) (HS.peer c.
     st_enc_inv #(hsId e.h) (writer_epoch e) h1))
 
 let test_st_inv c j = 
+  let h = ST.get() in
   let epochs = !c.hs.log in
-  Seq.index epochs j
+  let e = Seq.index epochs j in 
+  admitP(st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h); 
+  assert(st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h); 
+  admit();
+  e
 
 // we should have st_env_inv & st_dec_inv for all epochs, all the time. 
 // + the property that at most the current epochs' logs are extended.
