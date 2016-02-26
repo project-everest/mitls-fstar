@@ -71,7 +71,7 @@ let c_log c    = c.hs.log
 
 // we'll rely on the invariant to show we picked the correct index
 
-opaque type Seq_forall (#a:Type) (p: a -> Type) (s:seq a) =
+type Seq_forall (#a:Type) (p: a -> Type) (s:seq a) =
   forall (j: nat { j < Seq.length s }).{:pattern (Seq.index s j)} p (Seq.index s j)
 
 let test_1 (p:nat -> Type) (s:seq nat { Seq_forall p s }) = assert(p 12 ==> Seq_forall p (snoc s 12))
@@ -100,7 +100,7 @@ type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) 
   st_enc_inv #(hsId e.h) (writer_epoch e) h
   
 type epochs_inv c h = 
-  Seq_forall (epoch_inv h) (sel h c.hs.log) /\ 
+  Seq_forall (epoch_inv #(HS.region c.hs) #(HS.peer c.hs) h) (sel h c.hs.log) /\ 
   Handshake.hs_footprint_inv c.hs h
   
 type st_inv c h = 
@@ -111,18 +111,13 @@ val test_st_inv: c:connection -> j:nat -> ST (epoch (HS.region c.hs) (HS.peer c.
   (requires (fun h -> st_inv c h /\ j < Seq.length (sel h (HS.log c.hs))))
   (ensures (fun h0 e h1 -> 
     h0 == h1 /\ 
-    epochs_inv c h1 /\
     st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h1 /\ 
     st_enc_inv #(hsId e.h) (writer_epoch e) h1))
 
 let test_st_inv c j = 
   let h = ST.get() in
   let epochs = !c.hs.log in
-  let e = Seq.index epochs j in 
-  admitP(st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h); 
-  assert(st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h); 
-  admit();
-  e
+  Seq.index epochs j
 
 // we should have st_env_inv & st_dec_inv for all epochs, all the time. 
 // + the property that at most the current epochs' logs are extended.
@@ -193,7 +188,8 @@ val frame_writer_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:
   (ensures (fun _ -> 
                 epochs c h0 = epochs c h1
               /\ k < Seq.length (epochs c h1)
-              /\ epoch_inv h1 (epoch_i c h1 k)))
+              /\ epoch_inv h1 (epoch_i c h1 k)
+))
 let frame_writer_epoch_k c h0 h1 j k =
   let es = epochs c h0 in
   let hs_r = HS.region c.hs in
@@ -202,11 +198,14 @@ let frame_writer_epoch_k c h0 h1 j k =
   let wr_j = writer_epoch e_j in
   if k<>j
   then (equal_on_disjoint (regions e_j) (regions e_k) (region wr_j) h0 h1;
-        frame_st_enc_inv (writer_epoch e_k) h0 h1;
-        frame_st_dec_inv (reader_epoch e_k) h0 h1)
+        //assert(st_enc_inv #(hsId e_k.h) (writer_epoch e_k) h1);
+        //assert(st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h1);
+        frame_st_enc_inv #(hsId e_k.h) (writer_epoch e_k) h0 h1;
+        frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1)
   else (let r_k = reader_epoch e_k in
-        equal_on_disjoint (regions_of wr_j) (regions_of r_k) (region wr_j) h0 h1;
-        frame_st_dec_inv r_k h0 h1)
+        equal_on_disjoint (regions_of wr_j) (regions_of (reader_epoch e_k)) (region wr_j) h0 h1;
+        //assert(st_dec_inv (reader_epoch e_k) h1);
+        frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1)
 
 opaque type witness (#a:Type) (x:a) = True
 val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 

@@ -226,7 +226,7 @@ let encrypt i ad rg (State _ log seqn key) f =
   seqn := n + 1;
   c
 
-type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
+opaque type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
   exists (w:writer i).{:pattern (matching r w)} st_inv r w h
 
 abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
