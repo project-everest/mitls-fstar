@@ -22,13 +22,12 @@ open Handshake    // via its interface
 
 // using also Alert, Range, DataStream, TLSFragment, Record
 
+
 // internal state machine (one for reading, one for writing; a bit much)
-// TODO make it private?
-// TODO write invariant, to cut out cases in code
+// TODO make it private? write invariant, to cut out cases in code
 // e.g. , reading, and writing transitions are tighly related
 // TODO recheck large logical invariants GState in Dispatch.fs7
 
-// private //TODO: restore this qualifier; NS:commenting for now
 // dispatch records the *record* protocol version (TLS 1.0 when using TLS 1.3)
 type dispatch =
   | Init
@@ -45,9 +44,9 @@ type tlsState =
 //| KeyUpdate   // TLS 1.3 after sending first KeyUpdate
 //| Regeno      // TLS old after sending CCS
 //| FalseStart  // TLS old client, between finished.
-  | BC
-  | AD
-  | Half of rw  // the other direction is closed
+  | BC          // Before Completion of handshake 
+  | AD          // Application Data (duplex), once the connection is established
+  | Half of rw  // the other direction is closed (reachable from BC?)
   | Close 
 
 type connection = | C:
@@ -56,8 +55,7 @@ type connection = | C:
   hs:      hs { extends (HS.region hs) region /\ extends (HS.peer hs) peer } (* providing role, config, and uid *) ->
   alert:   Alert.state  { extends (Alert.State.region alert) region /\ HS.region hs <> Alert.State.region alert } (* review *) ->
   tcp:     networkStream ->
-  reading: rref region dispatch ->
-  writing: rref region dispatch ->
+  state: rref region tlsState -> 
   connection
 
 let c_role c   = c.hs.r
@@ -67,7 +65,7 @@ let c_resume c = c.hs.resume
 let c_log c    = c.hs.log
 
 
-(*** top-level invariant (TBC) ***) 
+(*** top-level invariant ***) 
 
 // we'll rely on the invariant to show we picked the correct index
 
@@ -78,16 +76,9 @@ let test_1 (p:nat -> Type) (s:seq nat { Seq_forall p s }) = assert(p 12 ==> Seq_
 let test_2 (p:nat -> Type) (s:seq nat { Seq_forall p s }) (j:nat { j < Seq.length s }) =  let x = Seq.index s j in assert(p x)
 //let test_3 (p:nat -> Type) (s:seq nat { Seq_forall p s }) x = assert(SeqProperties.mem x s ==> p x)
 
-
 (* usage? how to prove this lemma?  val exercise_seq_forall: #a:Type
 -> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (Seq_forall p
 s /\ p x) ==> Seq_forall p (snoc s x)}) *)
-
-(* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
-let epoch_id (#region:rid) (#peer:rid) (o: option (epoch region peer)) =
-  match o with 
-  | Some e -> hsId e.h
-  | None   -> noId
 
 val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (reader (peerId(hsId e.h)))
 let reader_epoch #region #peer (Epoch h r w) = r
@@ -198,13 +189,10 @@ let frame_writer_epoch_k c h0 h1 j k =
   let wr_j = writer_epoch e_j in
   if k<>j
   then (equal_on_disjoint (regions e_j) (regions e_k) (region wr_j) h0 h1;
-        //assert(st_enc_inv #(hsId e_k.h) (writer_epoch e_k) h1);
-        //assert(st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h1);
         frame_st_enc_inv #(hsId e_k.h) (writer_epoch e_k) h0 h1;
         frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1)
   else (let r_k = reader_epoch e_k in
         equal_on_disjoint (regions_of wr_j) (regions_of (reader_epoch e_k)) (region wr_j) h0 h1;
-        //assert(st_dec_inv (reader_epoch e_k) h1);
         frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1)
 
 opaque type witness (#a:Type) (x:a) = True

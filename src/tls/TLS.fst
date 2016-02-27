@@ -21,26 +21,7 @@ open Connection
 
 // using also Alert, DataStream, Content, Record
 
-(*
-(* a trivial variant as nothing gets modified; still no trivial proof... *) 
-assume val frame_unmodified: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
-  (requires
-    epochs_inv c h0 /\
-    modifies (Set.singleton (Alert.State.region c.alert)) h0 h1)
-  (ensures (
-    epochs c h0 = epochs c h1 /\ 
-    epochs_inv c h1))
-
-(* and another... *)
-assume val frame_modified_one: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires
-    epochs_inv c h0 /\
-    modifies_one c.region h0 h1)
-  (ensures (
-    epochs c h0 = epochs c h1 /\ 
-    epochs_inv c h1))
-// let frame_modified_one c h0 h1 = ()
-*)
+// scaffolding
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires (epochs_inv c h0))
   (ensures (
@@ -67,10 +48,8 @@ val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
     (r = Server ==> resume = None) /\
     Map.contains h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
     (* sel h1 (c_log c) = Seq.createEmpty /\ *) //NS: this fails now ... not sure why
-    sel h1 c.reading  = Init /\
-    sel h1 c.writing  = Init
+    sel h1 c.state = BC
     ))
-
 
 let create m0 peer0 tcp r cfg resume =
     ST.recall_region m0;
@@ -82,9 +61,8 @@ let create m0 peer0 tcp r cfg resume =
     lemma_extends_fresh_disjoint m peer m0 peer0 st0 st1;
     let hs = Handshake.init m peer r cfg resume in
     let al = Alert.init m in
-    let rd = ralloc m Init in 
-    let wr = ralloc m Init in
-    C peer hs al tcp rd wr
+    let state = ralloc m BC in 
+    C peer hs al tcp state
 
 // painful to specify?
 let connect m0 peer0 tcp r cfg        = create m0 peer0 tcp Client cfg None
@@ -118,6 +96,12 @@ let epochT epochs other =
     then Seq.length epochs - 2
     else Seq.length epochs - 1 in
   if j < 0 then None else Some(Seq.index epochs j, j)
+
+(* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
+let epoch_id (#region:rid) (#peer:rid) (o: option (epoch region peer)) =
+  match o with 
+  | Some e -> hsId e.h
+  | None   -> noId
 
 (** writing epochs **)
 
