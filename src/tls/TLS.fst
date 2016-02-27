@@ -21,12 +21,23 @@ open Connection
 
 // using also Alert, DataStream, Content, Record
 
+
 // scaffolding
+
+//type id = AEAD_GCM.gid 
+
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires (epochs_inv c h0))
   (ensures (
     epochs c h0 = epochs c h1 /\ 
     epochs_inv c h1))
+
+// too convenient; should move to a library  
+val unexpected: #a:Type -> v:string -> ST a
+  (requires (fun h -> True))
+  (ensures (fun _ _ _ -> False ))
+ 
+let rec unexpected s = unexpected s
 
 
 (*** control API ***)
@@ -34,7 +45,6 @@ assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
 // was connect, resume, accept_connected, ...
 val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
             resume: option (sid: sessionID { r = Client }) ->
-//            resume: option sessionId{resume<>None ==> r=Client} ->
             ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 -> 
@@ -103,33 +113,32 @@ let epoch_id (#region:rid) (#peer:rid) (o: option (epoch region peer)) =
   | Some e -> hsId e.h
   | None   -> noId
 
-(** writing epochs **)
 
-val epoch_wo: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
-let epoch_wo _ _ o = writer_epoch (Some.v o)
- 
-// val epoch_w_h: c:connection -> h:HyperHeap.t -> GTot (option (e: epoch (HS.region (C.hs c)) { st_dec_inv (reader_epoch e) h } ))
-let epoch_w_h c (h:t { st_inv c h }) =
-  let log = sel h c.hs.log in 
-  let other = sel h c.reading in 
-  match epochT log other with 
-  | None -> None
-  | Some (e, _) -> Some e
 
-val epoch_w: c:connection -> ST (option (epoch (HS.region c.hs) (HS.peer c.hs)))// * nat))
+val epchT: #e:Type -> es:seq e -> logIndex es -> Tot (option e)
+let epchT es n = 
+  if n >= 0 then Some (Seq.index es n) else None
+
+let currentEpochT c rw (h:t { st_inv c h }) =
+  let ie = iT c.hs rw h in 
+  if ie >= 0 then Some (Seq.index (sel h c.hs.log) ie) else None  
+
+val currentEpoch: c:connection -> rw:rw -> ST (option (epoch (HS.region c.hs) (HS.peer c.hs)))
   (requires (st_inv c))
   (ensures (fun h0 o h1 ->
     h0 == h1 /\ 
     st_inv c h0 /\ 
     st_inv c h1 /\
-    o = epoch_w_h c h0 /\
-    (is_Some o ==> st_enc_inv (writer_epoch (Some.v o)) h0)))
-let epoch_w c =
-  let log = !c.hs.log in
-  let other = !c.reading in 
-  match epochT log other with 
-  | None -> None
-  | Some (e, _) -> Some e
+    o = currentEpochT c rw h0 /\
+    (is_Some o /\ rw = Writer ==> st_enc_inv (writer_epoch (Some.v o)) h0)))
+let currentEpoch c rw =
+  let es = !c.hs.log in 
+  epchT es (i c.hs rw) 
+
+(** writing epochs **)
+
+val epoch_wo: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
+let epoch_wo _ _ o = writer_epoch (Some.v o)
 
 (** reading epochs **)
 
@@ -138,6 +147,7 @@ let epoch_ro _ _ o =
   match o with 
   | Some(Epoch _ r _) -> r
 
+(*
 let epoch_r_h c h = 
   let log = sel h (c_log c) in 
   let other = sel h (C.writing c) in
@@ -156,7 +166,7 @@ let epoch_r c =
   match epochT log other with 
   | None -> None
   | Some (e, _) -> Some e
-
+*)
 
 (*** outgoing ***)
 
@@ -204,32 +214,20 @@ type writeOutcome =
     | WriteAgainClosing (* An alert must be sent before the connection is torn down *)
 *)
 
-//* used to be dynamically checked; trying static. Use assert instead?
-//* was it strict on both sides?
 val moveToOpenState: c:connection -> ST unit
   (requires (fun h ->
-     st_inv c h /\
-     (let s = sel h c.reading in s == Finishing \/ s == Finished) /\
-     (let s = sel h c.writing in s == Finishing \/ s == Finished)))
+     st_inv c h /\ sel h c.state = BC))
   (ensures (fun h0 _ h1 ->
      st_inv c h1 /\
      modifies (Set.singleton (C.region c)) h0 h1 /\
-     sel h1 c.reading == Open /\
-     sel h1 c.writing == Open))
+     sel h1 c.state = AD))
 
 let moveToOpenState c =
     let h0 = ST.get() in
-    C.reading c := Open;
-    C.writing c := Open;
+    c.state := AD;
     frame_unrelated c h0 (ST.get())
 
 
-// too convenient; should move to a library and be 
-val unexpected: #a:Type -> v:string -> ST a
-  (requires (fun h -> True))
-  (ensures (fun _ _ _ -> False ))
- 
-let rec unexpected s = unexpected s
 
 (* Dispatch dealing with network sockets *)
 // we need st_inv h c /\ wr > Init ==> is_Some epoch_w
@@ -239,7 +237,7 @@ let outerPV c =
   | TLS_1p3 -> TLS_1p0 
   | pv      -> pv
 
-//15-11-27 illustrating overhead for "unrelated" updates; still missing modifies clauses 
+//15-11-27 illustrating overhead of "unrelated" updates; still missing modifies clauses 
 val closeConnection: c: connection -> ST unit 
   (requires (fun h0 -> st_inv c h0))
   (ensures (fun h0 _ h1 -> st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1))
@@ -251,8 +249,7 @@ let closeConnection c =
     invalidateSession c.hs; //changes (HS.region c.hs)
     let h1 = ST.get() in 
     frame_internal c h0 h1;
-    c.reading := Closed;
-    c.writing := Closed;
+    c.state := Close;
     frame_unrelated c h1 (ST.get()) 
 
 // on some errors, we locally give up the connection
@@ -263,10 +260,12 @@ let unrecoverable c reason =
 // send a final alert then tear down the connection
 
 val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:string -> ST unit
-  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.writing <> Closed))
+  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.state <> Close))
   (ensures (fun h0 _ h1 -> 
-    st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1 /\ 
-    is_Closing (sel h1 c.writing) ))
+    st_inv c h1 /\ 
+    modifies (Set.singleton (C.region c)) h0 h1 /\ 
+    sel h1 c.state = Half Writer
+  ))
 
 let abortWithAlert c ad reason =
     let h0 = ST.get() in
@@ -274,16 +273,15 @@ let abortWithAlert c ad reason =
     let h1 = ST.get() in
     frame_internal c h0 h1;
     Alert.send c.alert ad;
-    c.reading := Closed;
-    c.writing := Closing reason;
-    frame_unrelated c h1 (ST.get()) //NS: again, not an instance of frame_unrelated, because of invalidateSession
+    c.state := Half Writer; //$ do we need to store the reason?
+    frame_unrelated c h1 (ST.get())
 
 // on some errors, we attempt to send an alert before tearing down the connection
 val closable: c:connection -> reason:string -> ST ioresult_w
-  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.writing <> Closed))
+  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.state <> Close))
   (ensures (fun h0 r h1 -> 
     st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1 /\
-    is_Closing (sel h1 c.writing) /\ r = WriteAgainClosing))
+    sel h1 c.state = Half Writer /\ r = WriteAgainClosing))
 let closable c reason =
     abortWithAlert c AD_internal_error reason;
     WriteAgainClosing
@@ -352,61 +350,91 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 // sends one fragment in the current epoch;
 // except for the null epoch, the fragment is appended to the epoch's writer log.
 
+let foo = 1 
+
 //Question: What happened to authId at this level?
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulPlain.cipher i)
   (requires (fun h -> 
+    let es = sel h c.hs.log in 
+    let j = iT c.hs Writer h in 
+    j < Seq.length es /\
     st_inv c h /\ 
-    (let o = epoch_w_h c h in 
-      i == epoch_id o /\
-      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
+    (j < 0 ==> i == noId) /\
+    (j >= 0 ==> (
+       let e = Seq.index es j in 
+       i == hsId e.h /\ 
+       is_seqn (sel h (seqn (writer_epoch e)) + 1)))))
   (ensures (fun h0 payload h1 -> 
+    let es = sel h0 c.hs.log in 
+    let j = iT c.hs Writer h0 in 
+    j < Seq.length es /\
     st_inv c h0 /\ 
-    st_inv c h1 /\ (
-    let o:option (epoch (HS.region c.hs) (HS.peer c.hs)) = epoch_w_h c h0 in
-    o == epoch_w_h c h1 /\ 
-    i == epoch_id o /\
-    (is_None o ==> h0 == h1) /\
-    (is_Some o ==>
-      ( let wr:writer (epoch_id o) =  epoch_wo o in
-        let ctrg: Content.ContentType * frange i = Content.ct_rg i f in 
-        HyperHeap.modifies (Set.singleton (region wr)) h0 h1
-      /\ Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr))
-      /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
-//      /\ st_enc_inv #i wr h0
-//      /\ st_enc_inv #i wr h1
-      /\ Seq.length (sel h1 (log wr)) = Seq.length (sel h0 (log wr)) + 1 
-      /\ ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
+    st_inv c h1 /\ 
+    j == iT c.hs Writer h1 /\ 
+    (j < 0 ==> h0 == h1 /\ i == noId) /\
+    (j >= 0 ==> (
+       let e = Seq.index es j in 
+       i == hsId e.h /\ (
+       let wr : writer i = writer_epoch e in 
+       HyperHeap.modifies (Set.singleton (region wr)) h0 h1 /\
+       Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
+       sel h1 (seqn wr) = sel h0 (seqn wr) + 1 /\
+       st_enc_inv #i wr h0 /\
+       st_enc_inv #i wr h1 /\
+       Seq.length (sel h1 (log wr)) = Seq.length (sel h0 (log wr)) + 1 /\
+        ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
           sel h1 (log wr) = snoc (sel h0 (log wr)) e 
-        /\ fragment_entry e = f )
-//        /\ StatefulLHAE.Entry.p e = f //15-11-28 not sure what's wrong with this syntax
-//        /\ StatefulLHAE.Entry.ad e = StatefulPlain.makeAD i (fst ctrg) //15-11-28 irrelevant?
-
-      //( = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e))
-      // /\ (is_MACOnly i.aeAlg ==> is_SSL_3p0 i.pv)  // 15-09-12 Get rid of crazy pre on cipherRangeClass??  
-      // /\ Wider (Range.cipherRangeClass i (length payload)) (snd ctrg) 
-      // /\ (exists (e:entry i). (sel h1 (writer_log wr) = snoc (sel h0 (writer_log wr)) e /\ f = fragment_entry e)) 
-      // modifies at most the writer of (epoch_w c), adding f to its log
-      )) 
-    ))
-  )
+        /\ fragment_entry e = f ))))))
 
 let send_payload c i f =
-    let o = epoch_w c in
+    let j = Handshake.i c.hs Writer in 
+    if j = -1 
+    then Content.repr i f
+    else 
+      let es = !c.hs.log in 
+      match Seq.index es j with
+      | Epoch h _ wr ->
+        let h0 = ST.get() in
+        let n = !(seqn wr) in 
+        assert(is_seqn (n + 1));
+        assert(is_seqn (sel h0 (seqn wr) + 1));
+ 	// assert (epochs_inv c h0);
+        recall (seqn wr);
+        recall c.state; 
+	recall c.hs.log;
+	// assert (Map.contains h0 (HS.region c.hs));
+        let ct, rg = Content.ct_rg i f in
+        let ad = StatefulPlain.makeAD i ct in
+	cut (witness (iT c.hs Writer h0)); 
+        assert(st_enc_inv wr h0);
+        assert(is_seqn (sel h0 (seqn wr) + 1));
+        let r = encrypt #i #ad #rg wr f in
+        let h1 = ST.get() in
+	// assert (modifies (singleton (region w)) h0 h1);
+ 	// assert (st_enc_inv wr h1);
+	//cut (witness (snd (Some.v (epochT (sel h0 c.hs.log) (sel h0 c.state)))));
+	frame_writer_epoch c h0 h1;
+        admit();
+        r
+
+let send_payload c i f =
+    let o = currentEpoch c Writer in
     match o with
       | None -> Content.repr i f
       | Some(Epoch h _ w) ->
         let h0 = ST.get() in
  	// assert (epochs_inv c h0);
-        recall c.reading; 
+        recall c.state; 
 	recall c.hs.log;
 	// assert (Map.contains h0 (HS.region c.hs));
         let ct, rg = Content.ct_rg i f in
         let ad = StatefulPlain.makeAD i ct in
+	cut (witness (iT c.hs Writer h0)); 
         let r = encrypt #i #ad #rg w f in
 	let h1 = ST.get() in 
 	// assert (modifies (singleton (region w)) h0 h1);
  	// assert (st_enc_inv w h1);
-	cut (witness (snd (Some.v (epochT (sel h0 c.hs.log) (sel h0 c.reading)))));
+	//cut (witness (snd (Some.v (epochT (sel h0 c.hs.log) (sel h0 c.state)))));
 	frame_writer_epoch c h0 h1;
         r
 

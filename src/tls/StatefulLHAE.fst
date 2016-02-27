@@ -54,11 +54,19 @@ abstract type state (i:gid) (rw:rw) =
 type reader i = state i Reader
 type writer i = state i Writer
 
-assume val region        : #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
-assume val peer_region   : #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+val region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+let region #i #rw s = State.region s
+
+val peer_region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+let peer_region #i #wr s = s.peer_region
+
 let log_region    = fun (#i:id) (#rw:rw) (s:state i rw) -> if rw=Reader then peer_region s else region s
-assume val log           : #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (log_region s) i)
-assume val seqn          : #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
+
+val log: #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (log_region s) i)
+let log #i #rw s = s.log
+
+val seqn: #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
+let seqn #i #rw s = s.seqn
 
 abstract opaque type matching (#i:gid) (r:reader i) (w:writer i) =
   r.region = w.peer_region
@@ -209,7 +217,9 @@ let refs_in_e (#i:gid) (e:writer i) =
 abstract val encrypt: #i:gid -> #ad:adata i
   -> #rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length}
   -> wr:writer i -> f:plain i ad rg -> ST (cipher i)
-  (requires (fun h -> st_enc_inv wr h /\ is_seqn (sel h wr.seqn + 1)))
+  (requires (fun h -> 
+     st_enc_inv wr h /\ 
+     is_seqn (sel h wr.seqn + 1)))
   (ensures  (fun h0 (c:cipher i) h1 ->
                   st_enc_inv wr h1
                 /\ modifies (Set.singleton wr.region) h0 h1

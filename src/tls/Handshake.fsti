@@ -60,8 +60,8 @@ let regions (#p:rid) (#q:rid) (e:epoch p q) =
   set4 (region e.r) (peer_region e.r) (region e.w) (peer_region e.w)
 
 opaque type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)) =
-  forall (i:nat { i < Seq.length es }).
-  forall (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
+  forall (i:nat { i < Seq.length es })
+    (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
     let ej = Seq.index es j in
     disjoint_regions (regions ei) (regions ej)
@@ -86,13 +86,19 @@ type hs =
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
+type stateType (s:hs) = epochs s.region s.peer * handshake_state 
+
+let stateT (s:hs) (h:HyperHeap.t) : stateType s = (sel h s.log, sel h s.state)
+
 let non_empty h s = Seq.length (sel h s.log) > 0
 
 type logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
 
 // returns the current index in the log for reading or writing, or -1 if there is none.
-// this function increases with h (how to specify it once for all?)
-val iT: s:hs -> rw:rw -> h:HyperHeap.t -> Tot (logIndex (sel h s.log))
+// depends only on the internal state of the handshake
+val iT0: s:hs -> rw:rw -> st:stateType s -> Tot (logIndex (fst st))
+let iT s rw h = iT0 s rw (stateT s h) 
+
 
 // returns the epoch for reading or writing
 let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (sel h s.log) (iT s rw h)
@@ -100,6 +106,7 @@ let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (sel h s.log) (iT s r
 let readerT s h = eT s Reader h 
 let writerT s h = eT s Writer h
 
+// this function increases (how to specify it once for all?)
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
