@@ -350,8 +350,6 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 // sends one fragment in the current epoch;
 // except for the null epoch, the fragment is appended to the epoch's writer log.
 
-let foo = 1 
-
 //Question: What happened to authId at this level?
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulPlain.cipher i)
   (requires (fun h -> 
@@ -371,20 +369,20 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
     st_inv c h0 /\ 
     st_inv c h1 /\ 
     j == iT c.hs Writer h1 /\ 
-    (j < 0 ==> h0 == h1 /\ i == noId) /\
+    (j < 0 ==> i == noId /\ h0 == h1) /\
     (j >= 0 ==> (
        let e = Seq.index es j in 
        i == hsId e.h /\ (
-       let wr : writer i = writer_epoch e in 
+       let wr: writer i = writer_epoch e in 
        HyperHeap.modifies (Set.singleton (region wr)) h0 h1 /\
        Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
        sel h1 (seqn wr) = sel h0 (seqn wr) + 1 /\
        st_enc_inv #i wr h0 /\
        st_enc_inv #i wr h1 /\
        Seq.length (sel h1 (log wr)) = Seq.length (sel h0 (log wr)) + 1 /\
-        ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
-          sel h1 (log wr) = snoc (sel h0 (log wr)) e 
-        /\ fragment_entry e = f ))))))
+        ( let e: entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
+          sel h1 (log wr) = snoc (sel h0 (log wr)) e /\ 
+          fragment_entry e = f ))))))
 
 let send_payload c i f =
     let j = Handshake.i c.hs Writer in 
@@ -395,11 +393,7 @@ let send_payload c i f =
       match Seq.index es j with
       | Epoch h _ wr ->
         let h0 = ST.get() in
-        let n = !(seqn wr) in 
-        assert(is_seqn (n + 1));
-        assert(is_seqn (sel h0 (seqn wr) + 1));
  	// assert (epochs_inv c h0);
-        recall (seqn wr);
         recall c.state; 
 	recall c.hs.log;
 	// assert (Map.contains h0 (HS.region c.hs));
@@ -410,31 +404,6 @@ let send_payload c i f =
         assert(is_seqn (sel h0 (seqn wr) + 1));
         let r = encrypt #i #ad #rg wr f in
         let h1 = ST.get() in
-	// assert (modifies (singleton (region w)) h0 h1);
- 	// assert (st_enc_inv wr h1);
-	//cut (witness (snd (Some.v (epochT (sel h0 c.hs.log) (sel h0 c.state)))));
-	frame_writer_epoch c h0 h1;
-        admit();
-        r
-
-let send_payload c i f =
-    let o = currentEpoch c Writer in
-    match o with
-      | None -> Content.repr i f
-      | Some(Epoch h _ w) ->
-        let h0 = ST.get() in
- 	// assert (epochs_inv c h0);
-        recall c.state; 
-	recall c.hs.log;
-	// assert (Map.contains h0 (HS.region c.hs));
-        let ct, rg = Content.ct_rg i f in
-        let ad = StatefulPlain.makeAD i ct in
-	cut (witness (iT c.hs Writer h0)); 
-        let r = encrypt #i #ad #rg w f in
-	let h1 = ST.get() in 
-	// assert (modifies (singleton (region w)) h0 h1);
- 	// assert (st_enc_inv w h1);
-	//cut (witness (snd (Some.v (epochT (sel h0 c.hs.log) (sel h0 c.state)))));
 	frame_writer_epoch c h0 h1;
         r
 
@@ -442,44 +411,57 @@ let send_payload c i f =
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
   (requires (fun h -> 
+    let es = sel h c.hs.log in 
+    let j = iT c.hs Writer h in
+    let st = sel h c.state in
+    j < Seq.length es /\
     st_inv c h /\ 
-    sel h c.writing <> Closed /\
-    (let o = epoch_w_h c h in 
-      i == epoch_id o /\
-      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
+//    st <> Closed /\ 
+//    st <> (Half Reader) /\
+    (j < 0 ==> i == noId) /\
+    (j >= 0 ==> (
+       let e = Seq.index es j in 
+       i == hsId e.h /\ 
+       is_seqn (sel h (seqn (writer_epoch e)) + 1)))))
   (ensures (fun h0 _ h1 -> 
-    st_inv c h0 
-  /\ st_inv c h1 
-  /\ ( let o = epoch_w_h c h0 in
-      o == epoch_w_h c h1 // we still use the same epoch & index
-    /\ i == epoch_id o 
-    /\ (is_None o ==> h0 == h1) 
-    /\ (is_Some o ==>
-        ( let wr:writer (epoch_id o) = epoch_wo o in 
-          HyperHeap.modifies (Set.singleton (region wr)) h0 h1
-        /\ Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) 
-        /\ sel h1 (seqn wr) = sel h0 (seqn wr) + 1
-        /\ (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr)))
-        /\ ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
-            sel h1 (log wr) = snoc (sel h0 (log wr)) e 
-          /\ fragment_entry e = f )
-    ))
-)))
+    let es = sel h0 c.hs.log in 
+    let j = iT c.hs Writer h0  in
+    let st = sel h0 c.state in
+    j < Seq.length es /\
+    st_inv c h0 /\
+    st_inv c h1 /\
+    j == iT c.hs Writer h1 /\
+    (j < 0 ==> i == noId /\ h0 == h1) /\
+    (j >= 0 ==> (
+       let e = Seq.index es j in 
+       i == hsId e.h /\ (
+       let wr:writer i = writer_epoch e in 
+       HyperHeap.modifies (Set.singleton (region wr)) h0 h1 /\
+       Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
+       sel h1 (seqn wr) = sel h0 (seqn wr) + 1 /\
+       (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr))) /\
+       ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
+         sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
+         fragment_entry e = f )
+    )))))
 
 // 15-09-09 Do we need an extra argument for every stateful index?
 let send c i f =
-  let pv = pickSendPV c in
+  let pv = outerPV c in
   let ct, rg = Content.ct_rg i f in
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
-  //admitP(b2t(repr_bytes (length payload) <= 2)); (*TODO*)
   let record = Record.makePacket ct pv payload in
 
   // we need all that to cross an ST function with HyperHeap.modifies Set.empty!
-  recall (c_log c); recall (C.reading c);
-  (match epoch_w c with
-  | None -> ()
-  | Some(Epoch h _ w) -> recall (log w); recall (seqn w));
+  recall (c_log c); recall (c.state);
+  let j = Handshake.i c.hs Writer in 
+
+  // seems necessary, not sure how to make it less verbose
+  if j >= 0 then (
+    let es = !c.hs.log in 
+    match Seq.index es j with 
+    | Epoch h _ wr -> recall (log wr); recall (seqn wr));
 
   //15-11-27 we need a trivial framing lemma and scaffolding to carry
   //15-11-27 st_inv c h1 across this call; what's a better style?
@@ -489,7 +471,6 @@ let send c i f =
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
-
 
 (* not needed as long as st_inv is trivial
 assume val admit_st_inv: c: connection -> ST unit
@@ -515,8 +496,10 @@ assume val admit_st_inv: c: connection -> ST unit
 // 
 
 
+let foo = 1 
+
 // auxiliary functions for projections; floating.
-let appfragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o })  =
+let appfragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : Content.fragment i =
   match o with
   | Some (| rg, f |) -> Content.CT_Data rg f 
 
