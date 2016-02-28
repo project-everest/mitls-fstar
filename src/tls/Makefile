@@ -22,15 +22,15 @@ FSTAR_HOME?=../../.fstar
 #   make FSTAR_HOME=../../../fstar tls-gen
 # the latter form won't work because FSTAR_HOME will incorrectly override values
 # in recursive invocations of $(MAKE)...
-add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
+add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/ulib/,$(1))
 
 # The .fst files found in [lib/ml] that are realized in
 # stdlib-hyperheap.cmxa
 STDLIB_ADMITS=All List Heap Set ST HyperHeap IO
 
 OTHERFLAGS=--explicit_deps
-STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fsti \
-stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
+STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
+hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
@@ -185,6 +185,9 @@ endef
 	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg, $(basename $@),fsti)
 	@echo '--*)'
 
+
+stdlib-ver:
+	$(FSTAR) --trace_error | grep -vi positivity
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
