@@ -187,7 +187,7 @@ endef
 
 
 stdlib-ver:
-	$(FSTAR) --trace_error | grep -vi positivity
+	$(FSTAR) $(LIBFILES) | grep -vi positivity
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
