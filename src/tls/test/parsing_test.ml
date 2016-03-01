@@ -139,7 +139,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing server key exchange message...\n";
 	 (match parseServerKeyExchange !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
-			   print_string "WARNING: ignoring test on serialization because EC point serialization is not implemnted in CoreCrypto\n"
+			   print_string "WARNING: ignoring test on serialization because EC point serialization is not implemented in CoreCrypto\n"
 (*
 			  let _,ske_bytes = split (serverKeyExchangeBytes(ch)) 4 in
 	     if equalBytes ske_bytes msg then ((print_string "Serializing server key exchange...\n...OK\n")) else
