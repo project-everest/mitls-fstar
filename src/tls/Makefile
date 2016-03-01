@@ -187,7 +187,7 @@ endef
 
 
 stdlib-ver:
-	$(FSTAR) $(LIBFILES) | grep -vi positivity
+	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 TLSError.fst TLSConstants.fst --verify_module TLSConstants | grep -vi positivity
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
