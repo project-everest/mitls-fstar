@@ -15,8 +15,6 @@ lax:
 	@echo $(CYAN)"[Make] Lax-typechecking FlexTLS."$(NORMAL)
 	@$(FSTAR) \
 	$(addprefix --include ,$(FSTAR_INCLUDES)) \
-	$(addprefix --codegen-lib ,$(FSTAR_CODEGENLIB)) \
-	$(addprefix --no_extract ,$(FSTAR_NOEXTRACT)) \
 	--explicit_deps \
 	--lax \
 	$(FSTAR_LIB) $(FSTAR_CONTRIB) $(MITLS_R) $(FLEXTLS)
