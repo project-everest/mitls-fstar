@@ -4,9 +4,9 @@ module FlexTLS.Types
 
 open Platform.Bytes
 
-open MiTLS.TLSInfo
-open MiTLS.TLSConstants
-open MiTLS.TLSExtensions
+open TLSInfo
+open TLSConstants
+open TLSExtensions
 
 
 
