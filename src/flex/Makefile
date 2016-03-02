@@ -2,6 +2,9 @@
 # Makefile for FlexTLS*
 #
 
+FSTAR_HOME?=../../.fstar
+MITLS_HOME?=../../src
+
 .PHONY: all lax codegen build world test clean cleanworld
 
 
@@ -12,17 +15,25 @@ lax:
 	@echo $(CYAN)"[Make] Lax-typechecking FlexTLS."$(NORMAL)
 	@$(FSTAR) \
 	$(addprefix --include ,$(FSTAR_INCLUDES)) \
-	$(FSTAR_LIB) $(FSTAR_CONTRIB) \
 	$(addprefix --codegen-lib ,$(FSTAR_CODEGENLIB)) \
 	$(addprefix --no_extract ,$(FSTAR_NOEXTRACT)) \
 	--explicit_deps \
 	--lax \
-	$(addprefix $(MITLS_HOME)/tls/,$(MITLS)) \
-	$(FLEXTLS)
+	$(FSTAR_LIB) $(FSTAR_CONTRIB) $(MITLS_R) $(FLEXTLS)
 
 codegen:
 # FlexTLS
-	@echo $(CYAN)"[Make] Extracting FlexTLS."$(NORMAL)
+	@echo $(CYAN)"[Make] Lax-extracting FlexTLS."$(NORMAL)
+	@mkdir -p $(PATH_ML)
+	@$(FSTAR) \
+	--odir $(PATH_ML) \
+	$(addprefix --include ,$(FSTAR_INCLUDES)) \
+	$(addprefix --codegen-lib ,$(FSTAR_CODEGENLIB)) \
+	$(addprefix --no_extract ,$(FSTAR_NOEXTRACT) $(FSTAR_LIB:.fst=) $(FSTAR_CONTRIB:.fst=) $(MITLS:.fst=) $(MITLS:.p.fst=)) \
+	--explicit_deps \
+	--lax \
+	--codegen OCaml \
+	$(FSTAR_LIB) $(FSTAR_CONTRIB) $(MITLS_R) $(FLEXTLS)
 
 build:
 # FlexTLS
@@ -50,7 +61,7 @@ test:
 clean:
 # Clean FlexTLS
 	@echo $(CYAN)"[Make] Clean FlexTLS."$(NORMAL)
-	rm -rf ml/ build/
+	rm -rf ml/ build/ *.ml *.p.* *.cm* *.o *~ *.out
 	(cd test; rm -rf *.p.* *.cm* *.o *~ *.out)
 
 cleanworld:
@@ -64,19 +75,9 @@ cleanworld:
 	$(MAKE) clean
 
 
-
-FSTAR_HOME?=../../.fstar
-MITLS_HOME?=../../src
-
-
-FSTAR= $(FSTAR_HOME)/bin/fstar.exe
-FSTAR_OPTIONS= --universes
-
-OCAML= ocamlfind ocamlopt
-OCAML_OPTIONS= -package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
-
-OCAML_INCLUDE_PATHS= $(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db)
-
+# Paths
+PATH_ML= ./ml
+PATH_BUILD= ./build
 
 # FlexTLS
 FLEXTLS= FlexTLS.Types.fst
@@ -178,12 +179,24 @@ TLSExtensions.p.fst \
 HandshakeMessages.fst \
 Handshake.fst
 
+MITLS_R= $(addprefix $(MITLS_HOME)/tls/,$(MITLS))
+
 
 MODULES_CMX= \
 	$(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa \
 	$(MITLS_HOME)/tls/mitls.cmxa
 
+
+# F* and OCaml
+
+FSTAR= $(FSTAR_HOME)/bin/fstar.exe
+FSTAR_OPTIONS= #--universes
+
+OCAML= ocamlfind ocamlopt
+OCAML_OPTIONS= -package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
+
+OCAML_INCLUDE_PATHS= $(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db)
 
 
 MAKE= make
