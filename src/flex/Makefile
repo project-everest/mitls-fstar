@@ -2,7 +2,7 @@
 # Makefile for FlexTLS*
 #
 
-.PHONY: all lax codegen build clean
+.PHONY: all lax codegen build world test clean cleanworld
 
 
 all: build
@@ -14,6 +14,10 @@ codegen:
 	@echo $(CYAN)"[Make] Extracting FlexTLS."$(NORMAL)
 
 build:
+	@make lax
+	@make codegen
+
+world:
 	 # miTLS
 	@echo $(CYAN)"[Make] Verifying miTLS."$(NORMAL)
 	@make tls-ver -C ../tls
@@ -22,16 +26,18 @@ build:
 	@echo $(CYAN)"[Make] Extracting miTLS."$(NORMAL)
 	@make tls-gen -C ../tls
 	 # FlexTLS
-	@make lax
-	@make codegen
+	@make build
 
-tt:
+test:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(MODULES_CMX) -I test test/main.ml -o flextest.out
 
 clean:
-	$(MAKE) -C ../tls clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 	(cd test; rm -rf *.p.* *.cm* *.o *~ *.out)
+
+cleanworld: clean
+	$(MAKE) -C ../tls clean
+
 
 
 FSTAR_HOME?=../../.fstar
