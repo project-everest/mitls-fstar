@@ -6,6 +6,7 @@ open FStar.Seq
 open FStar.SeqProperties // for e.g. found
 open FStar.Set
  
+open Platform
 open Platform.Bytes
 open Platform.Error
 open Platform.Tcp
@@ -20,6 +21,41 @@ open Handshake    // via its interface
 open Connection
 
 // using also Alert, DataStream, Content, Record
+// using DataStream
+
+type dispatch
+
+// consider making this type private, with explicit accessors
+type connection = | C:
+  #rid:    rid ->
+  tcp:     Tcp.networkStream ->
+  hs:      Handshake.hs { Handshake.HS.region = rid } (* providing role, config, and uid *) ->
+  alert:   Alert.state ->
+  reading: rref rid dispatch ->
+  writing: rref rid dispatch ->
+  connection
+
+let c_rid  c = C.rid c
+let c_tcp  c = C.tcp c
+let c_role c = Handshake.HS.r (C.hs c)
+let c_id   c = Handshake.HS.id   (C.hs c)
+let c_cfg  c = Handshake.HS.cfg  (C.hs c)
+
+// val c_resume:    connection -> Tot (option sessionID)
+// TODO
+assume val c_epoch:  cn:connection -> Tot (rref (c_rid cn) epoch)
+
+//------------------------- control API ----------------------------
+
+//? how to define boolean functions abbreviating formulas in specs?
+
+let initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h:heap): Tot bool =
+    extends (c_rid cn) root && // we allocate a fresh, opaque region for the connection
+    c_role cn   = role &&
+    c_tcp cn    = ns &&
+    c_resume cn = resume &&
+    c_cfg cn = c &&
+    sel h (c_epoch cn) = Init // assuming Init epoch implicitly have no data sent/received
 
 
 // scaffolding
@@ -75,16 +111,51 @@ let create m0 peer0 tcp r cfg resume =
     C peer hs al tcp state
 
 // painful to specify?
+//* should we still return ConnectionInfo ?
+//* merging connect and resume with an optional sessionID
+val connect: ns:Tcp.networkStream -> c:config -> resume: option sessionID -> ST connection
+  (requires (fun h0 -> True))
+  (ensures (fun h0 cn h1 ->
+    modifies Set.empty h0 h1 /\
+    initial Client ns c resume cn h1
+    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
+  ))
 let connect m0 peer0 tcp r cfg        = create m0 peer0 tcp Client cfg None
 let resume  m0 peer0 tcp r cfg sid    = create m0 peer0 tcp Client cfg (Some sid)
+val accept_connected: ns:Tcp.networkStream -> c:config -> ST connection
+  (requires (fun h0 -> True))
+  (ensures (fun h0 cn h1 ->
+    modifies Set.empty h0 h1 /\
+    initial Server ns c None cn h1
+  ))
 let accept_connected m0 peer0 tcp cfg = create m0 peer0 tcp Server cfg None
 
+//* do we need both?
+val accept: Tcp.tcpListener -> c:config -> ST connection
+  (requires (fun h0 -> True))
+  (ensures (fun h0 cn h1 ->
+    modifies Set.empty h0 h1 /\
+    (exists ns. initial Server ns c None cn h1)
+  ))
 let accept m0 peer0 listener cfg =
     let tcp = Platform.Tcp.accept listener in
     accept_connected m0 peer0 tcp cfg
 
+val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
+  (requires (fun h0 -> True))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
+  ))
 let rehandshake c ops = Handshake.rehandshake (C.hs c) ops
+// the client can ask for rekeying --- no immediate effect
+val rekey: cn:connection { c_role cn = Client } -> ST unit
+  (requires (fun h0 -> True))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
+  ))
 let rekey c ops       = Handshake.rekey       (C.hs c) ops
+val request: cn:connection { c_role cn = Server } -> c:config -> ST unit
+  (requires (fun h0 -> True))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
+  ))
 let request c ops     = Handshake.request     (C.hs c) ops
 
 
@@ -916,6 +987,36 @@ type ioresult_i (i:id) =
     | ReadAgainFinishing
     | ReadFinished
 
+let live_i e r = // is the connection still live?
+  match r with
+  | Read d      -> not(DataStream.final e d)
+  | ReadError _ -> false
+  | _           -> true
+
+
+// let's specify reading d off the input DataStream (incrementing the reader pos)
+
+type delta h0 cn =
+  DataStream.delta (fst (sel_reader h cn))
+
+val sel_reader: h:heap -> cn:connection -> Tot (i:id * StatefulLHAE.reader i) // self-specified
+let sel_reader h cn =
+  let hs_log = sel h (Handshake.HS.log (Connection.hs cn)) in
+  match fst (List.hd hs_log) with
+  | Keys h r w -> (hs_id h, r)
+  // todo: add other cases depending on dispatch state
+
+val append_r: h0:heap -> heap -> cn:connection -> d: delta h0 cn -> Tot bool
+let append_r h0 h1 cn d  =
+  let id, reader = sel_reader h0 cn in // we statically know those are unchanged
+  let log0 = sel h0 (StatefulLHAE.StReader.log reader) in
+  let log1 = sel h1 (StatefulLHAE.StReader.log reader) in
+  let pos0 = sel h0 (StatefulLHAE.StReader.seqn reader) in
+  let pos1 = sel h1 (StatefulLHAE.StReader.seqn reader) in
+  log1 = log0 &&
+  pos1 = pos0 + 1 &&
+  List.nth log1 pos0 = d
+
 
 //15-11-28 the rest of this file still need porting.
 //15-11-28 e.g. we may need (i:id) either as argument or in dependent-tuple results
@@ -1102,22 +1203,22 @@ let readOne c : ioresult_i (rd_i c) =
       | Handshake.InQuery (q,a) -> CertQuery (q,a)
       | Handshake.InFinished    -> ReadAgain // should we care? probably before e.g. accepting falseStart traffic
       | Handshake.InComplete    -> 
-          match !c.state with
+          (match !c.state with
           | BC -> // additional sanity check: in and out epochs should be the same
                  if epoch_r c = epoch_w c 
 	         then (c.state := AD; CompletedFirst)
-                 else (closeConnection c; ReadError None "Invalid connection state") in
+                 else (closeConnection c; ReadError None "Invalid connection state"))
 
       // recheck correctness for all states; used to be just Init|Finishing|Open
 
     | Content.CT_CCS -> 
-      match Handshake.recv_ccs c.hs with
+      (match Handshake.recv_ccs c.hs with
       | InCCSError (x,y)        -> alertFlush c x y
       | InCCSAck                -> // We know statically that Handshake and Application data buffers are empty.
-                                  ReadAgainFinishing 
+                                  ReadAgainFinishing)
 
     | Content.CT_Data #i rg d   -> 
-      match !c.state with 
+      (match !c.state with 
       | AD | Half Reader        -> let d : DataStream.fragment i fragment_range = d in Read (DataStream.Data d) 
       | _                       -> alertFlush c AD_unexpected_message "Application Data received in wrong state")
 
@@ -1173,8 +1274,11 @@ let sameIDRAF (c0:Connection) (c1:Connection) res (c2:Connection) =
 
 
 (*** VERIFIES UP TO HERE ***)
+  (* JP: the definitions below were in the .fst but didn't match what was in the
+   .fsti -- the definitions above are from the .fsti, and the (commented-out)
+   definitions below are from the .fst *)
 
-let rec readAllFinishing c =
+(* let rec readAllFinishing c =
     admit(); // FIXME!
     let outcome = readOne c in
     match outcome with
@@ -1236,6 +1340,17 @@ let rec read c =
 // -----------------------------------------------------------------------------
 
 
+//* we used to specify the resulting connection in ioresult_i,
+//* now we do that in the read postcondition
+
+// responding to a certificate-validation query,
+// so that we have an explicit user decision to blame,
+// but in fact a follow-up read would do as well.
+// to be adapted once we have a proper PKI model
+val authorize : c:Connection -> q:query -> ST ioresult_i
+  (requires (fun h0 -> True))
+  (ensures (fun h0 result h1))
+
 let authorize c q =
     let res = Handshake.authorize (C.hs c) q in
     // AP: BEGIN: Inlined from handleHandshakeOutcome
@@ -1281,4 +1396,4 @@ let half_shutdown c =
 //let getEpochIn  (Conn(id,state)) = id.id_in
 //let getEpochOut (Conn(id,state)) = id.id_out
 //let getInStream  (Conn(id,state)) = AppData.inStream  id state.appdata
-//let getOutStream (Conn(id,state)) = AppData.outStream id state.appdata
+//let getOutStream (Conn(id,state)) = AppData.outStream id state.appdata *)
