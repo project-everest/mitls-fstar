@@ -384,7 +384,7 @@ let mk_plain i ad tlen b =
 *)
 
 val repr:
-  i:id{ ~ (safeId i) } ->
+  i:id{ ~ (authId i) } -> // was { ~ (safeId i) }
   ad: LHAEPlain.adata i ->
   rg:range { snd rg <= max_TLSPlaintext_fragment_length /\ 
              snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i)) } ->
