@@ -31,6 +31,7 @@ tt:
 clean:
 	$(MAKE) -C ../tls clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
+	(cd test; rm -rf *.p.* *.cm* *.o *~ *.out)
 
 
 FSTAR_HOME?=../../.fstar
