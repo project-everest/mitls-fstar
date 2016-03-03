@@ -3,7 +3,7 @@
 #
 
 FSTAR_HOME?=../../.fstar
-MITLS_HOME?=../../src
+MITLS_HOME?=../..
 
 .PHONY: all lax codegen build world test clean cleanworld
 
@@ -13,7 +13,7 @@ all: build
 lax:
 # FlexTLS
 	@echo $(CYAN)"[Make] Lax-typechecking FlexTLS."$(NORMAL)
-	@$(FSTAR) \
+	$(FSTAR) \
 	$(addprefix --include ,$(FSTAR_INCLUDES)) \
 	--explicit_deps \
 	--lax \
@@ -68,7 +68,7 @@ cleanworld:
 	$(MAKE) clean -C $(FSTAR_HOME)/src
 # Clean MiTLS
 	@echo $(CYAN)"[Make] Clean MiTLS."$(NORMAL)
-	$(MAKE) clean -C $(MITLS_HOME)/tls
+	$(MAKE) clean -C $(MITLS_HOME)/src/tls
 # Clean FlexTLS
 	$(MAKE) clean
 
@@ -78,7 +78,7 @@ PATH_ML= ./ml
 PATH_BUILD= ./build
 
 # FlexTLS
-FLEXTLS= FlexTLS.Types.fst
+FLEXTLS= FlexTLS.Types.fst FlexTLS.Constants.fst
 
 # F* includes
 FSTAR_INCLUDES= \
@@ -177,13 +177,7 @@ TLSExtensions.p.fst \
 HandshakeMessages.fst \
 Handshake.fst
 
-MITLS_R= $(addprefix $(MITLS_HOME)/tls/,$(MITLS))
-
-
-MODULES_CMX= \
-	$(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa \
-	$(MITLS_HOME)/tls/mitls.cmxa
+MITLS_R= $(addprefix $(MITLS_HOME)/src/tls/,$(MITLS))
 
 
 # F* and OCaml
