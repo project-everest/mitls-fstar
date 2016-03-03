@@ -325,7 +325,7 @@ let processServerHello cfg ri eph ch sh =
 	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
 
 
-(* Handshake API: Types, taken from FSTI *)
+(* Handshake API: TYPES, taken from FSTI *)
 
 type clientState = 
   | C_Idle: option ri -> clientState
@@ -371,6 +371,8 @@ type handshake_state (r:role) =
        hs_buffers: hs_msg_bufs;
        hs_state: role_state;
        hs_log: bytes;
+       hs_reader: int;
+       hs_writer: int;
      }
 
 val handshake_state_init: (ver:ProtocolVersion) -> (r:role) -> Tot (handshake_state r )
@@ -378,6 +380,8 @@ let handshake_state_init (ver:ProtocolVersion) (r:role) =
    {hs_nego = None;
     hs_ake = None;
     hs_log = empty_bytes;
+    hs_reader = -1;
+    hs_writer = -1;
     hs_buffers = hs_msg_bufs_init();
     hs_state =
         (match r with
@@ -429,7 +433,7 @@ type incoming = // the fragment is accepted, and...
   | InError of error  // how underspecified should it be?
 
 
-(* Handshake Internal API: Callbacks, hidden from API *)
+(* Handshake API: INTERNAL Callbacks, hidden from API *)
 
 val client_send_client_hello: hs -> ST unit
   (requires (fun h -> True))
@@ -617,7 +621,7 @@ assume val server_send_server_finished_res: hs -> ST unit
 
 
 
-(* Handshake Public API: Functions, taken from FSTI *)
+(* Handshake API: PUBLIC Functions, taken from FSTI *)
 
 val version: s:hs -> ST ProtocolVersion
   (requires (fun h -> True))
@@ -626,6 +630,15 @@ let version (HS r res cfg id l st) =
     match (!st).hs_nego with
     | Some n -> n.n_protocol_version
     | None -> cfg.minVer
+
+val iT:  s:hs -> rw:rw -> ST int
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let iT (HS r res cfg id l st) rw =
+  match rw with 
+  | Reader -> (!st).hs_reader
+  | Writer -> (!st).hs_writer
+
 
 val init: r0:rid -> peer:rid -> r: role -> 
        cfg:config -> resume: option (sid: sessionID { r = Client })  ->
