@@ -365,7 +365,7 @@ and parseExtensions b =
   | Correct(b) -> aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
 
-val parseOptExtensions: data:bytes -> Result (option (list extension))
+val parseOptExtensions: data:bytes -> Tot(Result (option (list extension)))
 let parseOptExtensions data =
   if length data = 0 then Correct(None)
   else match parseExtensions data with
@@ -373,7 +373,7 @@ let parseOptExtensions data =
   | Error(z) -> Error(z)
   
 // JK : Only client side ? 
-val prepareExtensions: config -> ConnectionInfo -> option (cVerifyData * sVerifyData) -> l:list extension{List.length l < 256}
+val prepareExtensions: config -> ConnectionInfo -> option (cVerifyData * sVerifyData) -> Tot (l:list extension{List.length l < 256})
 let prepareExtensions (cfg:config) (conn:ConnectionInfo) ri =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
@@ -388,9 +388,9 @@ let prepareExtensions (cfg:config) (conn:ConnectionInfo) ri =
     let res = E_extended_padding :: res in
 #endif
     let res =
-        let curves = List.map (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
+        let curves = List.mapT (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
         if curves <> [] && List.existsb (fun x -> isECDHECipherSuite x) cfg.ciphersuites then
-	  let curves = List.map (fun x -> SEC x) cfg.ecdhGroups in
+	  let curves = List.mapT (fun x -> SEC x) cfg.ecdhGroups in
           E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: E_supported_groups(curves) :: res
         else res in
     res

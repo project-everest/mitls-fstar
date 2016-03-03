@@ -15,22 +15,26 @@ open CoreCrypto
 
 (* SSL3 *)
 
+val ssl_prf_int: bytes -> string -> bytes -> Tot bytes
 let ssl_prf_int secret label seed =
   let allData = utf8 label @| secret @| seed in
   let step1 = hash SHA1 allData in
   let allData = secret @| step1 in
   hash MD5 allData
 
-let ssl_prf secret seed nb =
-  let gen_label (i:int) = String.make (i+1) (Char.char_of_int (Char.int_of_char 'A' + i)) in 
-  let rec apply_prf res n =
+val gen_label: int -> Tot string
+let gen_label (i:int) = String.make (i+1) (Char.char_of_int (Char.int_of_char 'A' + i)) 
+
+val apply_prf: bytes -> bytes -> int -> bytes -> int -> Tot bytes
+let rec apply_prf secret seed nb res n  =
     if n > nb then
       let r,_ = split res nb in r
     else
         let step1 = ssl_prf_int secret (gen_label (n/16)) seed in
-        apply_prf (res @| step1) (n+16)
-  in
-  apply_prf empty_bytes  0
+        apply_prf secret seed nb (res @| step1) (n+16) 
+
+val ssl_prf: bytes -> bytes -> int -> Tot bytes
+let ssl_prf secret seed nb = apply_prf secret seed nb empty_bytes  0 
 
 (*
 let ssl_sender_client = abytes [|0x43uy; 0x4Cuy; 0x4Euy; 0x54uy|]
@@ -67,6 +71,7 @@ let ssl_verifyCertificate hashAlg ms log  =
 
 (* TLS 1.0 and 1.1 *)
 
+val p_hash_int: macAlg -> bytes -> bytes -> int -> int -> bytes -> bytes -> Tot bytes
 let rec p_hash_int alg secret seed len it aPrev acc =
   let aCur = tls_mac alg secret aPrev in
   let pCur = tls_mac alg secret (aCur @| seed) in
@@ -78,11 +83,13 @@ let rec p_hash_int alg secret seed len it aPrev acc =
   else
     p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
 
+val p_hash: macAlg -> bytes -> bytes -> int -> Tot bytes
 let p_hash alg secret seed len =
   let hs = macSize alg in
   let it = (len/hs)+1 in
   p_hash_int alg secret seed len it seed empty_bytes
 
+val tls_prf: bytes -> bytes -> bytes -> int -> Tot bytes
 let tls_prf secret label seed len =
   let l_s = length secret in
   let l_s1 = (l_s+1)/2 in
@@ -92,6 +99,7 @@ let tls_prf secret label seed len =
   let hsha1 = p_hash (HMAC(SHA1)) secret2 newseed len in
   xor len hmd5 hsha1 
 
+val tls_finished_label: role -> Tot bytes
 let tls_finished_label : role -> bytes =
   let tls_client_label = utf8 "client finished" in
   let tls_server_label = utf8 "server finished" in
@@ -99,13 +107,14 @@ let tls_finished_label : role -> bytes =
   | Client -> tls_client_label
   | Server -> tls_server_label
 
+val tls_verifyData: bytes -> role -> bytes -> Tot bytes
 let tls_verifyData ms role data =
   let md5hash  = hash MD5 data in
   let sha1hash = hash SHA1 data in
   tls_prf ms (tls_finished_label role) (md5hash @| sha1hash) 12
 
 (* TLS 1.2 *)
-
+val tls12prf: cipherSuite -> bytes -> bytes -> bytes -> int -> Tot bytes
 let tls12prf cs ms label data len =
   let prfMacAlg = prfMacAlg_of_ciphersuite cs in
   p_hash prfMacAlg ms (label @| data) len
@@ -113,6 +122,7 @@ let tls12prf cs ms label data len =
 let tls12prf' macAlg ms label data len =
   p_hash macAlg ms (label @| data) len
 
+val tls12VerifyData: cipherSuite -> bytes -> role -> bytes -> Tot bytes
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
   let verifyDataLen = verifyDataLen_of_ciphersuite cs in
@@ -121,12 +131,14 @@ let tls12VerifyData cs ms role data =
 
 (* Internal agile implementation of PRF *)
 
+val verifyData: (ProtocolVersion * cipherSuite) -> bytes -> role -> bytes -> Tot bytes
 let verifyData (pv,cs) (secret:bytes) (role:role) (data:bytes) =
   match pv with
     | SSL_3p0           -> ssl_verifyData     secret role data
     | TLS_1p0 | TLS_1p1 -> tls_verifyData     secret role data
     | TLS_1p2           -> tls12VerifyData cs secret role data
 
+val prf: (ProtocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> Tot bytes
 let prf (pv,cs) secret (label:bytes) data len =
   match pv with
   | SSL_3p0           -> ssl_prf     secret       data len

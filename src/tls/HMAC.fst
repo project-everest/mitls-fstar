@@ -23,6 +23,7 @@ let sslKeyedHashPads = function
     | Hash MD5 -> (ssl_pad1_md5, ssl_pad2_md5)
     | Hash SHA1 -> (ssl_pad1_sha1, ssl_pad2_sha1)
 
+val sslKeyedHash: sslHashAlg -> bytes -> bytes -> Tot bytes
 let sslKeyedHash (a:sslHashAlg) k p =
     let (pad1, pad2) = sslKeyedHashPads a in
     let h = HASH.hash a (k @| pad1 @| p) in
@@ -35,6 +36,7 @@ let sslKeyedHashVerify (a:sslHashAlg) k p t : bool =
 
 (* Parametric keyed hash *)
 
+val hmac: hashAlg -> bytes -> bytes -> Tot bytes
 let hmac (a:hashAlg {is_Hash a}) k p =
   match a with |Hash h  -> CoreCrypto.hmac h k p
 
@@ -46,6 +48,7 @@ let hmacVerify (a:hashAlg {is_Hash a}) k p t : bool =
 
 (* Top level MAC function *)
 
+val tls_mac: macAlg -> bytes -> bytes -> Tot bytes
 let tls_mac a k d : mac a =
     match a with
     | HMAC     alg -> hmac (Hash alg) k d  

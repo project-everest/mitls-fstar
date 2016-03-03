@@ -222,7 +222,7 @@ let parseCompression b =
 // We ignore compression methods we don't understand. This is a departure
 // from usual parsing, where we fail on unknown values, but that's how TLS
 // handles compression method lists.
-val parseCompressions: bytes -> list Compression
+val parseCompressions: bytes -> Tot (list Compression)
 let rec parseCompressions b =
     let l = length b in
     if l > 0

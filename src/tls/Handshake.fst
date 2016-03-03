@@ -9,7 +9,13 @@
 
 (* Handshake protocol messages *)
 module Handshake
+
+open FStar.Heap
+open FStar.HyperHeap
 open FStar.Seq
+open FStar.SeqProperties // for e.g. found
+open FStar.Set  
+
 open Platform.Bytes
 open Platform.Error
 open TLSError
@@ -18,21 +24,74 @@ open TLSExtensions
 open TLSInfo
 open Range
 open HandshakeMessages
+open StatefulLHAE
+
+(* CRYPTO sub-module *)
+(* To be moved to other modules, linked with CoreCrypto, and idealized *)
+
+type ff_all_groups =
+  | FF_2048
+  | FF_4096
+  | FF_8192
+  | FF_arbitrary of CoreCrypto.dh_params
+  
+type dh_group = 
+  | FFDH of ff_all_groups
+  | ECDH of ECGroup.ec_all_curve
+
+type dh_key = 
+  | FFKey of CoreCrypto.dh_key
+  | ECKey of CoreCrypto.ec_key
+  
+assume val dh_keygen: dh_group -> Tot dh_key
+assume val dh_modexp: dh_group -> dh_key -> dh_key -> Tot dh_key
+
+val hkdf_extract: CoreCrypto.hash_alg -> bytes -> bytes -> Tot bytes
+let hkdf_extract ha salt secret = CoreCrypto.hmac ha salt secret
+
+val hkdf_expand_int: CoreCrypto.hash_alg -> int -> int -> int -> bytes -> bytes -> bytes -> Tot bytes
+let rec hkdf_expand_int ha count curr len secret prev info = 
+    if (curr < len) then
+      let count = count + 1 in
+      let prev = CoreCrypto.hmac ha secret (prev @| info @| (bytes_of_int count 1)) in 
+      let curr = curr + CoreCrypto.hashSize ha in
+      let next = hkdf_expand_int ha count curr len secret prev info in
+      prev @| next
+    else empty_bytes
+      
+val hkdf_expand_label: CoreCrypto.hash_alg -> bytes -> string -> bytes -> int -> Tot bytes
+let hkdf_expand_label ha secret label hv len = 
+  let info = (bytes_of_int len 2 ) @| 
+	     (vlbytes 1 (abytes ("TLS 1.3, "^label))) @|
+	     (vlbytes 1 hv) in
+  let prev = empty_bytes in
+  let res = hkdf_expand_int ha 0 0 len secret prev info in
+  let (sp1,sp2) = split res len in
+  sp1
+
+assume val cert_sign: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> Tot (Result bytes)
+assume val cert_verify: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> bytes -> Tot (Result unit)
+
+
+(* Negotiation: HELLO sub-module *)
 
 type ri = (cVerifyData * sVerifyData) 
 type log = bytes 
 //or how about: 
 //type log = list (m:bytes{exists ht d. m = messageBytes ht d})
-
 type nego = {
      n_resume: bool;
      n_client_random: TLSInfo.random;
      n_server_random: TLSInfo.random;
      n_sessionID: sessionID;
      n_protocol_version: ProtocolVersion;
-     n_cipher_suite: known_cipher_suite;
+     n_kexAlg: TLSConstants.kexAlg;
+     n_aeAlg: TLSConstants.aeAlg;
+     n_sigAlg: option TLSConstants.sigAlg;
+     n_cipher_suite: cipherSuite;
      n_compression: Compression;
      n_extensions: negotiatedExtensions;
+     n_scsv: list SCSVsuite;
 }                 
 
 type ID = {
@@ -43,9 +102,9 @@ type ID = {
 type ake = {
      ake_server_id: option ID;
      ake_client_id: option ID;
-     ake_pms: PMS.pms; 
+     ake_pms: bytes;
      ake_session_hash: bytes;
-     ake_ms: PRF.masterSecret;
+     ake_ms: bytes;
 }
 
 type Session = {
@@ -53,74 +112,16 @@ type Session = {
      session_ake: ake;
 }     
 
+
+
+
 type eph_s = option KEX_S_PRIV
 type eph_c = list KEX_S_PRIV
 
-type clientState (c:config) = 
-  | C_Idle of option ri
-  | C_HelloSent of option ri * eph_c * CH 
-  | C_HelloReceived of nego * option ake 
-  | C_FinishedSent of Session * cVerifyData 
 
-
-assume val client_init: c:config -> s:clientState c{is_C_Idle s}
-assume val getClientHello: c:config -> s:clientState c{is_C_Idle s} -> 
-                           (s':clientState c{is_C_HelloSent s'} * CH)
-
-assume val processServerHelloDone: c:config -> s:clientState c{is_C_HelloReceived s} -> 
-                           CRT -> option SKE -> option CR ->
-                           (s':clientState c{is_C_FinishedSent s'} * option CRT * CKE * option CV * FIN)
-
-assume val processServerFinished: c:config -> s:clientState c{is_C_FinishedSent s} -> 
-                           option STICKET -> FIN -> 
-                           s':clientState c{is_C_Idle s'} 
-
-
-type serverState (c:config) = 
-     | S_Idle of option ri
-     | S_HelloSent of nego * option ake
-     | S_HelloDone of nego * ID * eph_s
-     | S_CCSReceived of Session
-     | S_ResumeFinishedSent of Session
-     | S_FinishedSent of Session
-     | S_ZeroRTTReceived of Session
-
-assume val server_init: c:config -> s:serverState c{is_S_Idle s}
-assume val processClientHello: c:config -> s:serverState c{is_S_Idle s} -> CH ->
-                               (s':serverState c{is_S_HelloSent s'} * SH)
-
-(* TLS 1.2 regular handshake *)
-assume val getServerHelloDone12: c:config -> s:serverState c{is_S_HelloSent s} -> 
-                         (s':serverState c{is_S_HelloDone s'} * CRT * option SKE * option CR)
-assume val processClientCCS12: c:config -> s:serverState c{is_S_HelloDone s} -> 
-                             option CRT -> CKE -> option CV -> FIN ->
-                             s':serverState c{is_S_CCSReceived s'}
-assume val processClientFinished12: c:config -> s:serverState c{is_S_CCSReceived s} -> 
-                             FIN -> 
-                             (s':serverState c{is_S_FinishedSent s'} * option STICKET * FIN)
-
-(* TLS 1.2 abbreviated handshake *)
-assume val getServerFinishedResume12: c:config -> s:serverState c{is_S_HelloSent s} -> 
-                         (s':serverState c{is_S_ResumeFinishedSent s'} *  option STICKET * FIN)
-assume val processClientFinishedResume12: c:config -> s:serverState c{is_S_ResumeFinishedSent s} -> 
-                         s':serverState c{is_S_Idle s'}
-  
-(* TLS 1.3 0RTT-1RTT handshake *)
-assume val getServerFinished13: c:config -> s:serverState c{is_S_HelloSent s} -> 
-                         (s':serverState c{is_S_FinishedSent s'} * option CR * option SC * SC * CV * FIN)
-
-assume val process0RTTClientFinished13: c:config -> s:serverState c{is_S_FinishedSent s} -> 
-                         option CRT -> option CV -> FIN ->
-                         s':serverState c{is_S_ZeroRTTReceived s'}
-
-assume val skip0RTTClientFinished13: c:config -> s:serverState c{is_S_FinishedSent s} -> 
-                         s':serverState c{is_S_ZeroRTTReceived s'}
-
-assume val process1RTTClientFinished13: c:config -> s:serverState c{is_S_ZeroRTTReceived s} -> 
-                         option CRT -> option CV -> FIN ->
-                         s':serverState c{is_S_Idle s'}
-
-val prepareClientHello: config -> option ri -> option sessionID -> (CH * log)
+val prepareClientHello: config -> option ri -> option sessionID -> ST (CH * log)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
 let prepareClientHello cfg ri sido : CH * log =
   let crand = Nonce.mkHelloRandom() in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
@@ -134,7 +135,7 @@ let prepareClientHello cfg ri sido : CH * log =
    ch_raw_cipher_suites = None;
    ch_compressions = cfg.compressions;
    ch_extensions = Some ext;} in
-  (ch,clientHelloBytes ch)
+   (ch,clientHelloBytes ch)
 
 (* Is [pv1 >= pv2]? *)
 val gte_pv: ProtocolVersion -> ProtocolVersion -> Tot bool
@@ -157,10 +158,10 @@ val negotiate:#a:Type -> list a -> list a -> Tot (option a)
 let negotiate l1 l2 =
   List.tryFindT (fun s -> List.existsb (fun c -> c = s) l1) l2
 
-val negotiateCipherSuite: cfg:config -> pv:ProtocolVersion -> c:known_cipher_suites -> Tot (Result known_cipher_suite)
+val negotiateCipherSuite: cfg:config -> pv:ProtocolVersion -> c:known_cipher_suites -> Tot (Result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * known_cipher_suite))
 let negotiateCipherSuite cfg pv c =
   match negotiate c cfg.ciphersuites with
-  | Some(cs) -> Correct(cs)
+  | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
 val negotiateCompression: cfg:config -> pv:ProtocolVersion -> c:list Compression -> Tot (Result Compression)
@@ -170,7 +171,9 @@ let negotiateCompression cfg pv c =
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Compression negotiation failed")
 
 // TODO : IMPLEMENT
-val getCachedSession: cfg:config -> ch:CH -> option Session
+val getCachedSession: cfg:config -> ch:CH -> ST (option Session)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
 let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
@@ -199,7 +202,7 @@ let prepareServerHello cfg ri ch i_log =
     | Correct(pv) ->
     match negotiateCipherSuite cfg pv ch.ch_cipher_suites with
     | Error(z) -> Error(z)
-    | Correct(cs) ->
+    | Correct(kex,sa,ae,cs) ->
     match negotiateCompression cfg pv ch.ch_compressions with
     | Error(z) -> Error(z)
     | Correct(cm) ->
@@ -221,8 +224,12 @@ let prepareServerHello cfg ri ch i_log =
        n_server_random = srand;
        n_sessionID = sid;
        n_protocol_version = pv;
+       n_kexAlg = kex;
+       n_sigAlg = sa;
+       n_aeAlg  = ae;
        n_cipher_suite = cs;
        n_compression = cm;
+       n_scsv = [];
        n_extensions = next;
        (* [getCachedSession] returned [None], so no session resumption *)
        n_resume = false} in
@@ -269,9 +276,11 @@ val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot
 let acceptableCompression cfg ch pv cmp =
   true
 
-val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} -> SH ->
-                           Result (s':clientState c{is_C_HelloReceived s'})
-let processServerHello cfg (C_HelloSent (ri, eph, ch)) sh =
+val processServerHello: c:config -> option ri -> eph_c -> CH -> SH ->
+                           ST (Result (nego * option ake))
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let processServerHello cfg ri eph ch sh =
   let res = ch_is_resumption ch in
   // FIXME 1.3
   if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
@@ -295,87 +304,549 @@ let processServerHello cfg (C_HelloSent (ri, eph, ch)) sh =
             Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
           else 
             let o_nego = {sentry.session_nego with n_extensions = next} in
-            Correct (C_HelloReceived (o_nego, Some sentry.session_ake))
+            Correct (o_nego, (Some sentry.session_ake))
       else          
+        match sh.sh_cipher_suite with
+	| CipherSuite kex sa ae ->
         let o_nego = 
           {n_client_random = ch.ch_client_random;
            n_server_random = sh.sh_server_random;
            n_sessionID = Some.v sh.sh_sessionID;
            n_protocol_version = sh.sh_protocol_version;
+           n_kexAlg = kex;
+           n_aeAlg = ae;
+	   n_sigAlg = sa;
            n_cipher_suite = sh.sh_cipher_suite;
            n_compression = Some.v sh.sh_compression;
+	   n_scsv = [];
            n_extensions = next;
            n_resume = false } in
-        Correct (C_HelloReceived (o_nego, None))
+        Correct (o_nego, None)
+	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
 
 
-val prepareServerAke: config -> nego -> log -> Result (bytes * ID * eph_s)
-let prepareServerAke cfg nego nlog = 
-    match nego.n_cipher_suite with
-    | CipherSuite Kex_RSA None _ ->
-      let calgs = [] in
-      (match Cert.for_key_encryption calgs cfg.server_name with
-       | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Could not find in the store a certificate for RSA encryption")
-       | Some(c,sk) -> 
-         let cB = certificateBytes ({crt_chain = c}) in 
-         let creqB = 
-             if cfg.request_client_certificate then
-             certificateRequestBytes (
-               {cr_cert_types = [];
-                cr_sig_hash_algs = Some [];
-                cr_distinguished_names = []})
-             else empty_bytes in
-         let msg = cB @| creqB @| serverHelloDoneBytes in
-         Correct (msg,
-                  ({id_cert = c; id_sigalg = None}),
-                  Some (KEX_S_PRIV_RSA sk)))
-         
-    | _ -> failwith "unimplemented"  
+(* Handshake API: Types, taken from FSTI *)
 
-(*
-let process_ake_s cfg nego ml log =
-    match nego.n_cipher_suite,ml with
-    | CipherSuite RSA None _,
-      [ServerCertificate sc;
-       ServerCertificateRequest scr;
-       ServerHelloDone] ->
+type clientState = 
+  | C_Idle: option ri -> clientState
+  | C_HelloSent: option ri -> eph_c -> CH -> clientState
+  | C_HelloReceived: nego -> option ake  -> clientState
+  | C_OutCCS: Session -> cVerifyData -> clientState
+  | C_FinishedSent: Session -> cVerifyData -> clientState
+  | C_CCSReceived: Session -> cVerifyData -> clientState
+  | C_Error: error -> clientState
 
-    | CipherSuite RSA None _,
-      [ServerCertificate sc;
-       ServerHelloDone] ->
+type serverState = 
+     | S_Idle : option ri -> serverState
+     | S_HelloSent : nego -> option ake -> serverState
+     | S_HelloDone : nego -> ID -> eph_s -> serverState
+     | S_CCSReceived : Session -> serverState
+     | S_OutCCS: Session -> serverState
+     | S_FinishedSent : Session -> serverState
+     | S_ResumeFinishedSent : Session -> serverState
+     | S_ZeroRTTReceived : Session -> serverState
+     | S_Error: error -> serverState
 
-    | 
-
-*)
-
-assume val prepareClientFinishedFull: config -> nego -> ake -> log -> Result (bytes * cVerifyData * log)
-assume val processClientFinishedFull: config -> nego -> ake -> log -> list hs_msg -> Result (bytes * ri)
-assume val processServerFinishedFull: config -> nego -> ake -> cVerifyData -> log -> list hs_msg -> Result (ri)
-
-assume val prepareServerFinishedAbbr: config -> nego -> ake -> log -> Result (bytes * sVerifyData * log)
-assume val processServerFinishedAbbr: config -> nego -> ake -> log -> list hs_msg -> Result (bytes * ri)
-assume val processClientFinishedAbbr: config -> nego -> ake -> cVerifyData -> log -> list hs_msg -> Result (ri)
-
+  
 type hs_msg_bufs = {
-     hs_incoming_parsed : list hs_msg;
+     hs_incoming_parsed : list (hs_msg * bytes);
      hs_incoming: bytes;
      hs_outgoing: bytes;
 }
 
-assume val client_get_message: cfg:config -> st:clientState cfg ->
-                 buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+let hs_msg_bufs_init() = {
+     hs_incoming_parsed = [];
+     hs_incoming = empty_bytes;
+     hs_outgoing = empty_bytes;
+}
 
-assume val client_put_message: cfg:config -> st:clientState cfg ->
-                 buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+type role_state = 
+    | C of clientState
+    | S of serverState
+     
+type handshake_state (r:role) = 
+     {
+       hs_nego: option nego;
+       hs_ake: option ake;
+       hs_buffers: hs_msg_bufs;
+       hs_state: role_state;
+       hs_log: bytes;
+     }
+
+val handshake_state_init: (ver:ProtocolVersion) -> (r:role) -> Tot (handshake_state r )
+let handshake_state_init (ver:ProtocolVersion) (r:role) =
+   {hs_nego = None;
+    hs_ake = None;
+    hs_log = empty_bytes;
+    hs_buffers = hs_msg_bufs_init();
+    hs_state =
+        (match r with
+    	| Client -> C (C_Idle None)
+    	| Server -> S (S_Idle None)) }
+
+type handshake = 
+  | Fresh of SessionInfo
+  | Resumed of abbrInfo * SessionInfo 
+val hsId: handshake -> Tot id
+let hsId h = noId // Placeholder
+
+type epoch (rgn:rid) (peer:rid) =
+  | Epoch: h: handshake ->
+           r: reader (peerId (hsId h)) ->
+           w: writer (hsId h) -> epoch rgn peer
+
+(* This following function needs to call PRF.deriveKeys correctly to get StatefulLHAE keys *)
+assume val deriveEpoch: (r:rid) -> (p:rid) -> Session -> ST (epoch r p)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
+type epochs (r:rid) (p:rid) = es: seq (epoch r p)
+
+type hs =
+  | HS: #region: rid ->
+        #peer: rid ->
+        r:role ->
+        resume: option (sid:sessionID { r = Client }) ->
+        cfg:config ->
+        id: random -> 
+        log: rref region (epochs region peer) -> 
+        state: rref region (handshake_state r) -> 
+        hs
 
 
-assume val server_get_message: cfg:config -> st:clientState cfg ->
-                 buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+type outgoing = // by default the state changes but not the epochs
+  | OutIdle
+  | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
+  | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
+  | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
+  | OutError: error -> outgoing
+  
+type incoming = // the fragment is accepted, and...
+  | InAck
+  | InQuery: Cert.chain -> bool -> incoming
+  | InCCS             // signal new epoch (only in TLS 1.3)
+  | InComplete        // signal completion of current epoch
+  | InError of error  // how underspecified should it be?
 
-assume val server_put_message: cfg:config -> st:clientState cfg ->
-                 buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+
+(* Handshake Internal API: Callbacks, hidden from API *)
+
+val client_send_client_hello: hs -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let client_send_client_hello (HS #r0 #peer r res cfg id lgref hsref) = 
+  match (!hsref).hs_state with
+  | C(C_Idle ri) -> 
+    let (ch,l) = prepareClientHello cfg ri None in
+    hsref := {!hsref with 
+            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = l};
+	    hs_log = l;
+	    hs_state = C(C_HelloSent ri [] ch)}
+  
+	    
+val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let client_handle_server_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
+  match (!hsref).hs_state, msgs with
+  | C(C_HelloSent ri eph_c ch),[(ServerHello(sh),l)] ->
+   (match (processServerHello cfg ri eph_c ch sh) with
+    | Error z -> InError z
+    | Correct (n,a) -> 
+      hsref := {!hsref with
+	       hs_nego = Some n;
+	       hs_ake = a;
+	       hs_log = (!hsref).hs_log @| l;
+	       hs_state = C(C_HelloReceived n a)};
+      InAck)
+
+open CoreCrypto
+val dh_group_of_kex_s: KEX_S -> Tot dh_group
+let dh_group_of_kex_s kex = 
+  match kex with
+  | KEX_S_DHE k -> FFDH (FF_arbitrary (k.dh_params))
+  | KEX_S_ECDHE k -> ECDH (ECGroup.EC_CORE k.ec_params.curve)
+
+val dh_key_of_kex_s: KEX_S -> Tot dh_key
+let dh_key_of_kex_s kex = 
+  match kex with
+  | KEX_S_DHE k -> FFKey k
+  | KEX_S_ECDHE k -> ECKey k
+
+val kex_c_of_dh_key: dh_key -> Tot KEX_C
+let kex_c_of_dh_key kex = 
+  match kex with
+  | FFKey k -> KEX_C_DHE k.dh_public
+  | ECKey k -> KEX_C_ECDHE (ec_point_serialize k.ec_point)
+
+val dh_key_to_bytes: dh_key -> Tot bytes
+let dh_key_to_bytes dhk =
+  match dhk with
+  | FFKey k -> (vlbytes 2 k.dh_params.dh_p) @| (vlbytes 2 k.dh_params.dh_g) @| (vlbytes 2 k.dh_public)
+  | ECKey ecp -> abyte 3uy (* Named curve *)
+              @| ECGroup.curve_id ecp.ec_params
+              @| ECGroup.serialize_point ecp.ec_params ecp.ec_point 
+
+val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs opt_msgs =
+  match (!hsref).hs_state, msgs with
+  | C(C_HelloReceived n None), 
+    [(Certificate(c),l1);
+     (ServerKeyExchange(ske),l2);
+     (ServerHelloDone,l3)] when 
+     (n.n_protocol_version <> TLS_1p3 &&
+      (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
+     let dhg = dh_group_of_kex_s ske.ske_kex_s in
+     let dhk = dh_key_of_kex_s ske.ske_kex_s in
+     let by = dh_key_to_bytes dhk in
+     match (cert_verify c.crt_chain n.n_sigAlg [] by ske.ske_sig) with
+     | Error z -> InError z
+     | Correct () -> 
+       let sk = dh_keygen dhg in
+       let pms = (match dh_modexp dhg sk dhk with 
+		 | FFKey(dh) -> dh.dh_public 
+		 | ECKey(ecp) -> ecp.ec_point.ecx) in
+       let cke = {cke_kex_c = kex_c_of_dh_key sk} in
+       let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
+       let cc = {crt_chain = []} in
+       let ccb = certificateBytes cc in
+       let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
+       let csr = (n.n_client_random @| n.n_server_random) in
+       let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
+       let ake = {ake_server_id = None;
+	          ake_client_id = None;
+		  ake_pms = pms;
+		  ake_session_hash = empty_bytes;
+		  ake_ms = ms} in
+       let s = {session_nego = n; session_ake = ake} in
+       (match opt_msgs with 
+        | [] ->  
+	  let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in
+	  let vd = TLSPRF.verifyData pvcs ms Client log in 
+	  hsref := {!hsref with 
+            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
+	    hs_log = log;
+	    hs_state = C(C_OutCCS s vd)};
+	    InAck
+	| [(CertificateRequest(cr),l)] -> 
+	  let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in
+	  let vd = TLSPRF.verifyData pvcs ms Client log in 
+	  hsref := {!hsref with 
+            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
+	    hs_log = log;
+	    hs_state = C(C_OutCCS s vd)};
+	    InAck)
+  
+
+val client_send_client_finished: hs -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let client_send_client_finished (HS #r0 #peer r res cfg id lgref hsref) =
+  match (!hsref).hs_state with
+  | C(C_OutCCS s vd) ->
+     let fin = {fin_vd = vd} in
+     let finb = finishedBytes fin in
+     hsref := {!hsref with 
+            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = finb};
+	    hs_log = (!hsref).hs_log @| finb;
+	    hs_state = C(C_FinishedSent s vd)}
+  
+  
+val client_handle_server_ccs: hs -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let client_handle_server_ccs (HS #r0 #peer r res cfg id lgref hsref) msgs =
+  match (!hsref).hs_state, msgs with
+  | C(C_FinishedSent s vd),[(SessionTicket(stick),l)] ->
+      hsref := {!hsref with
+	       hs_log = (!hsref).hs_log @| l;
+	       hs_state = C(C_CCSReceived s vd)};
+      InAck
+
+val client_handle_server_finished: hs -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let client_handle_server_finished (HS #r0 #peer r res cfg id lgref hsref) msgs =
+  match (!hsref).hs_state, msgs with
+  | C(C_CCSReceived s vd), [(Finished(f),l)] ->
+    let n = s.session_nego in
+    let ake = s.session_ake in
+    let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
+    let svd = TLSPRF.verifyData pvcs ake.ake_ms Server (!hsref).hs_log in 
+    if (equalBytes svd f.fin_vd) then 
+       (hsref := {!hsref with
+		 hs_log = (!hsref).hs_log @| l;
+  		 hs_state = C(C_Idle (Some (vd,svd)))};
+        InAck)
+    else InError (AD_decode_error, "Finished MAC did not verify")
+    
+
+assume val client_handle_server_finished_13: hs -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
+
+assume val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+assume val server_send_server_hello_done: hs -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+assume val server_handle_client_ccs: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+assume val server_handle_client_finished: hs -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+assume val server_send_server_finished: hs -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
+
+assume val server_handle_client_finished_13: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+assume val server_send_server_finished_13: hs -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+assume val server_send_server_finished_res: hs -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
+
+
+(* Handshake Public API: Functions, taken from FSTI *)
+
+val version: s:hs -> ST ProtocolVersion
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let version (HS r res cfg id l st) =
+    match (!st).hs_nego with
+    | Some n -> n.n_protocol_version
+    | None -> cfg.minVer
+
+val init: r0:rid -> peer:rid -> r: role -> 
+       cfg:config -> resume: option (sid: sessionID { r = Client })  ->
+       ST hs
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let init r0 peer r cfg res = 
+    let id = Nonce.mkHelloRandom() in
+    let lg = createEmpty in
+    let lgref = ralloc r0 lg in
+    let hs = handshake_state_init cfg.maxVer r in
+    let hsref = ralloc r0 hs in
+    HS #r0 #peer r res cfg id lgref hsref
+
+
+val next_fragment: s:hs -> ST outgoing
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let rec next_fragment hs = 
+    let (HS #r0 #peer r res cfg id lgref hsref) = hs in
+    let pv,kex,res = 
+      (match (!hsref).hs_nego with 
+       | None -> None, None, None
+       | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
+    let b = (!hsref).hs_buffers.hs_outgoing in
+    let l = length b in
+    if (l > 0) then (
+       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_outgoing = empty_bytes}};
+       OutSome (l,l) b) 
+    else 
+      (match (!hsref).hs_state with 
+       | C (C_Error e) -> OutError e
+       | S (S_Error e) -> OutError e
+       | C (C_Idle ri) -> (client_send_client_hello hs; next_fragment hs)
+       | C (C_OutCCS s cv) -> (client_send_client_finished hs; OutCCS)
+       | S (S_HelloSent n a) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) -> server_send_server_hello_done hs; next_fragment hs
+       | S (S_HelloSent n a) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) -> server_send_server_finished_res hs; next_fragment hs
+       | S (S_HelloSent n a) when (is_Some pv && pv = Some TLS_1p3) -> server_send_server_finished_13 hs; next_fragment hs
+       | S (S_OutCCS s) -> server_send_server_finished hs; OutCCS)
+
+
+
+val parseHandshakeMessages : option ProtocolVersion -> option kexAlg -> buf:bytes -> Tot (Result (rem:bytes * list (hs_msg * bytes)))
+let rec parseHandshakeMessages pv kex buf =
+    match parseMessage buf with
+    | Error z -> Error z
+    | Correct(None) -> Correct (buf,[])
+    | Correct(Some (|rem,hstype,pl,to_log|)) ->   
+      (match parseHandshakeMessage pv kex hstype pl with
+       | Error z -> Error z 
+       | Correct hsm -> 
+             (match parseHandshakeMessages pv kex rem with
+       	     | Error z -> Error z
+       	     | Correct (r,hsl) -> Correct(r,(hsm,to_log)::hsl)))
+
+
+val recv_fragment: s:hs -> rg:Range.range -> rbytes rg -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let recv_fragment hs (rg:Range.range) (rb:rbytes rg) = 
+    let (HS #r0 #peer r res cfg id lgref hsref) = hs in
+    let b = (!hsref).hs_buffers.hs_incoming in
+    let b = b @| rb in
+    let pv,kex,res = 
+      (match (!hsref).hs_nego with 
+       | None -> None, None, None
+       | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
+    match parseHandshakeMessages pv kex b with
+    | Error z -> InError z
+    | Correct(r,hsl) -> 
+       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
+      (match (!hsref).hs_state,hsl with 
+       | C (C_Idle ri), _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
+       | C (C_HelloSent ri eph ch), (ServerHello(sh),l)::hsl 
+	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) -> 
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
+	   client_handle_server_hello hs [(ServerHello(sh),l)]
+       | C (C_HelloReceived n a), (Certificate(c),l)::
+			          (ServerKeyExchange(ske),l')::
+				  (ServerHelloDone,l'')::
+				  hsl 
+	 when (is_Some pv && pv <> Some TLS_1p3 && res = Some false &&
+	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
+			   client_handle_server_hello_done hs 
+			   [(Certificate(c),l) ;
+			   (ServerKeyExchange(ske),l') ;
+			   (ServerHelloDone,l'')]
+			   []
+       | C (C_HelloReceived n a), (Certificate(c),l)::
+			          (ServerKeyExchange(ske),l')::
+			          (CertificateRequest(cr),l'')::
+				  (ServerHelloDone,l''')::
+				  hsl 
+	 when (is_Some pv && pv <> Some TLS_1p3 && res = Some false &&
+	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
+			   client_handle_server_hello_done hs 
+			   [(Certificate(c),l) ;
+			   (ServerKeyExchange(ske),l') ;
+			   (ServerHelloDone,l''')] 
+			   [(CertificateRequest(cr),l'')]
+
+       
+       | C (C_CCSReceived s cv), (Finished(f),l)::hsl 
+       	 when (is_Some pv && pv <> Some TLS_1p3) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
+			   client_handle_server_finished hs 
+			   [(Finished(f),l)]
+
+       | C (C_HelloReceived n a), (EncryptedExtensions(ee),l1)::
+			          (Certificate(c),l2)::
+			          (CertificateVerify(cv),l3)::
+				  (Finished(f),l4)::
+				  [] 
+	 when (is_Some pv && pv = Some TLS_1p3 && 
+	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+			   client_handle_server_finished_13 hs 
+			   [(EncryptedExtensions(ee),l1);
+			   (Certificate(c),l2) ;
+			   (CertificateVerify(cv),l3) ;
+			   (Finished(f),l4)]
+       | C (C_HelloReceived n a), (EncryptedExtensions(ee),l1)::
+			          (CertificateRequest(cr),ll)::
+			          (Certificate(c),l2)::
+			          (CertificateVerify(cv),l3)::
+				  (Finished(f),l4)::
+				  [] 
+	 when (is_Some pv && pv = Some TLS_1p3 && 
+	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+			   client_handle_server_finished_13 hs 
+			   [(EncryptedExtensions(ee),l1);
+			   (CertificateRequest(cr),ll);
+			   (Certificate(c),l2) ;			   
+			   (CertificateVerify(cv),l3) ;
+			   (Finished(f),l4)]
+			   
+       
+       | S (S_Idle ri), (ClientHello(ch),l)::hsl -> 
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
+			   server_handle_client_hello hs
+			   [(ClientHello(ch),l)]
+       | S (S_CCSReceived s), (Finished(f),l)::hsl 
+         when (is_Some pv && pv <> Some TLS_1p3) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
+			   server_handle_client_finished hs
+			   [(Finished(f),l)]
+
+       | S (S_FinishedSent s), (ClientKeyExchange(cke),l)::
+			       (Finished(f),l')::[]  
+         when (is_Some pv && pv = Some TLS_1p3) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+	   server_handle_client_finished_13 hs [(ClientKeyExchange(cke),l);(Finished(f),l')] []
+
+       | S (S_FinishedSent s), (ClientKeyExchange(cke),l1)::
+			       (Certificate(c),l2)::
+			       (Finished(f),l3)::[]  
+         when (is_Some pv && pv = Some TLS_1p3 && c.crt_chain = []) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+	   server_handle_client_finished_13 hs [(ClientKeyExchange(cke),l1);(Finished(f),l3)] [(Certificate(c),l2)]
+
+       | S (S_FinishedSent s), (ClientKeyExchange(cke),l1)::
+			       (Certificate(c),l2)::
+			       (CertificateVerify(cv),l3)::
+			       (Finished(f),l4)::[]  
+         when (is_Some pv && pv = Some TLS_1p3) ->
+	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+	   server_handle_client_finished_13 hs [(ClientKeyExchange(cke),l1);(Finished(f),l4)] [(Certificate(c),l2);(CertificateVerify(cv),l3)]
+
+       | C (C_Error e),_ -> InError e
+       | S (S_Error e),_ -> InError e
+       | _ , _ -> InAck)
+	   
+
+val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3 
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let recv_ccs hs = 
+    let (HS #r0 #peer r res cfg id lgref hsref) = hs in
+    let pv,kex = 
+      (match (!hsref).hs_nego with 
+       | None -> None, None
+       | Some n -> Some n.n_protocol_version, Some n.n_kexAlg) in
+    (match ((!hsref).hs_state,(!hsref).hs_buffers.hs_incoming_parsed) with 
+    | C (C_FinishedSent s cv), 
+      (SessionTicket(st),l)::[] ->
+       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+       client_handle_server_ccs hs 
+        [(SessionTicket(st),l)]
+    | S (S_HelloDone n i eph), 
+      (ClientKeyExchange(cke),l)::[] 
+      when (is_Some pv && pv <> Some TLS_1p3 && 
+            (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+      hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+      server_handle_client_ccs hs
+      [(ClientKeyExchange(cke),l)] []
+    | S (S_HelloDone n i eph), 
+      (Certificate(c),l)::
+      (ClientKeyExchange(cke),l')::[] 
+      when (c.crt_chain = [] && is_Some pv && pv <> Some TLS_1p3 && 
+            (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+      hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+      server_handle_client_ccs hs
+      [(ClientKeyExchange(cke),l')] [(Certificate(c),l)]
+    | S (S_HelloDone n i eph), 
+      (Certificate(c),l)::
+      (ClientKeyExchange(cke),l')::
+      (CertificateVerify(cv),l'')::[]
+      when (is_Some pv && pv <> Some TLS_1p3 && 
+            (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+      hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+      server_handle_client_ccs hs
+      [(ClientKeyExchange(cke),l')] [(Certificate(c),l);(CertificateVerify(cv),l'')]
+    | C (C_Error e),_ -> InError e
+    | S (S_Error e),_ -> InError e
+    | _,_ -> InError(AD_unexpected_message, "ClientCCS received at wrong time"))
+
+
+assume val authorize: s:hs -> Cert.chain -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
 
