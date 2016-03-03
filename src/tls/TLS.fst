@@ -23,13 +23,14 @@ open Connection
 // using also Alert, DataStream, Content, Record
 // using DataStream
 
-type dispatch
+// JP: why?!!
+// type dispatch
 
 // consider making this type private, with explicit accessors
 type connection = | C:
   #rid:    rid ->
   tcp:     Tcp.networkStream ->
-  hs:      Handshake.hs { Handshake.HS.region = rid } (* providing role, config, and uid *) ->
+  hs:      Handshake.hs { Handshake.HS.region hs = rid } (* providing role, config, and uid *) ->
   alert:   Alert.state ->
   reading: rref rid dispatch ->
   writing: rref rid dispatch ->
@@ -40,27 +41,27 @@ let c_tcp  c = C.tcp c
 let c_role c = Handshake.HS.r (C.hs c)
 let c_id   c = Handshake.HS.id   (C.hs c)
 let c_cfg  c = Handshake.HS.cfg  (C.hs c)
-
-// val c_resume:    connection -> Tot (option sessionID)
-// TODO
-assume val c_epoch:  cn:connection -> Tot (rref (c_rid cn) epoch)
+let c_resume  c = Handshake.HS.resume  (C.hs c)
 
 //------------------------- control API ----------------------------
 
 //? how to define boolean functions abbreviating formulas in specs?
 
-let initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h:heap): Tot bool =
-    extends (c_rid cn) root && // we allocate a fresh, opaque region for the connection
-    c_role cn   = role &&
-    c_tcp cn    = ns &&
-    c_resume cn = resume &&
-    c_cfg cn = c &&
-    sel h (c_epoch cn) = Init // assuming Init epoch implicitly have no data sent/received
+type initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
+    extends (c_rid cn) root /\ // we allocate a fresh, opaque region for the connection
+    c_role cn   = role /\
+    c_tcp cn    = ns /\
+    c_resume cn = resume /\
+    c_cfg cn = c /\
+    HyperHeap.sel h (C.reading cn) = Init /\ // assuming Init epoch implicitly have no data sent/received
+    HyperHeap.sel h (C.writing cn) = Init
 
 
 // scaffolding
 
 //type id = AEAD_GCM.gid 
+
+let epochs c h = sel h (HS.log c.hs)
 
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires (epochs_inv c h0))
@@ -620,7 +621,7 @@ let project_snoc #i s e =
 
 //Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
 //            How do we conclude that after these two calls all the appData was written?
-val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
+(* val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
     st_inv c h /\ 
     (let o = epoch_w_h c h in
@@ -668,7 +669,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
     \/ (r = SentClose                                   /\ sel h1 c.writing = Closed)
     \/ (is_WriteError r) // /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
   )
-))
+)) *)
 
 // outcomes? 
 // | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
@@ -680,7 +681,29 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 // | SentClose              -> similar 
 
 
-let writeOne c i appdata =
+(* Several test functions to drive the Handshake manually until the big
+ [writeOne] function is complete. *)
+
+let test_send_alert (c: connection) (i: id) (ad: alertDescription) =
+  let writing = !c.writing in
+  match send c #i (Content.ct_alert i ad) with
+  | Correct() ->
+    let reason = match writing with | Closing(_,reason) -> reason | _ -> "" in
+    closeConnection c;
+    WriteError (Some ad) reason
+  | Error (x,y) -> unrecoverable c y
+
+let test_send_hs_fragment (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
+  match send c #i (Content.CT_Handshake rg f) with
+  | Correct()   -> WriteAgain
+  | Error (x,y) -> unrecoverable c y
+
+let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
+  match send c (Content.CT_Data rg f) with
+  | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
+  | Error (x,y) -> unrecoverable c y
+
+(*let writeOne c i appdata =
   let writing = !c.writing in
 //  match writing with
 //  | Closed -> WriteError None (perror __SOURCE_FILE__ __LINE__ "Trying to write on a closed connection")
@@ -688,7 +711,7 @@ let writeOne c i appdata =
 
   recall (c_log c);  //NS: Should not be necessary; it's part of hs_inv now
   recall (C.reading c); // needed to get stability for i across ST calls
-  let o = epoch_w c in
+  let o = epoch_wo c in
   ( match o with
     | None -> ()
     | Some(Epoch h _ w) -> 
@@ -797,7 +820,6 @@ let writeOne c i appdata =
                           | Error (x,y) -> unrecoverable c y))
                   | _ -> WriteDone) // We are finishing a handshake. Tell we're done; the next read will complete it.
           )
-
 
 val no_seqn_overflow: c: connection -> ST bool 
   (requires (fun h -> st_inv c h))
@@ -1278,7 +1300,7 @@ let sameIDRAF (c0:Connection) (c1:Connection) res (c2:Connection) =
    .fsti -- the definitions above are from the .fsti, and the (commented-out)
    definitions below are from the .fst *)
 
-(* let rec readAllFinishing c =
+let rec readAllFinishing c =
     admit(); // FIXME!
     let outcome = readOne c in
     match outcome with

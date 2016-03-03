@@ -5,13 +5,12 @@ open FStar
 open HyperHeap
 open STHyperHeap
 
+open Platform.Bytes
+
 open TLSConstants
 open TLSInfo
 open StatefulLHAE
 
-type bytes = Platform.Bytes.bytes
-let bytes_of_hex = Platform.Bytes.bytes_of_hex
-let hex_of_bytes = Platform.Bytes.hex_of_bytes
 
 let r = HyperHeap.root
 
@@ -54,7 +53,7 @@ let fake_aead (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
   // StatefulPlain.adata id -> bytes
   let ad: StatefulPlain.adata id = StatefulPlain.makeAD id Content.Application_data in
   // Range.frange -> Range.range
-  let rg: Range.frange id = 0, Platform.Bytes.length text in
+  let rg: Range.frange id = 0, length text in
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
   // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
@@ -65,7 +64,7 @@ let fake_aead (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
   // FIXME: without the three additional #-arguments below, extraction crashes
   StatefulLHAE.encrypt #id #ad #rg w f
 
-let fake_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
+let fake_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
   // TLSInfo.id
   let id = {
     msId = noMsId;
@@ -99,15 +98,18 @@ let fake_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (pl
   let text = bytes_of_hex plain in
   // StatefulPlain.adata id -> bytes
   let ad: StatefulPlain.adata id = StatefulPlain.makeAD id Content.Application_data in
+  // Prepends sequence number
+  let ad = LHAEPlain.makeAD id seqn ad in 
   // Range.frange -> Range.range
-  let rg: Range.frange id = 0, Platform.Bytes.length text in
+  let rg: Range.frange id = 0, length text in
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
   // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
   let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in
+  let macKey = MAC.coerce id (fun _ -> True) r (bytes_of_hex macKey) in
+  let data = Encode.mac id macKey ad rg f in
+  bytes_of_hex iv @| ENC.enc id w ad rg data
 
-  let macKey = bytes_of_hex macKey in
-  ENC.enc id w ad rg f macKey
 
 let test_count = ref 0
 
@@ -125,12 +127,12 @@ let test_aead (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
-let test_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) (macKey: string) =
-  let output = fake_cbc pv aeAlg key iv plain macKey in
+let test_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (cipher: string) (macKey: string) =
+  let output = fake_cbc pv aeAlg seqn key iv plain macKey in
   let output = hex_of_bytes output in
   if output <> cipher then begin
     IO.print_string ("Unexpected output: iv = " ^ iv ^ ", key = " ^ key ^
-        ", plain = " ^ plain ^ ", output = " ^ output ^ ", expected = " ^ cipher ^
+        ", plain = " ^ plain ^ ",\noutput   = " ^ output ^ ",\nexpected = " ^ cipher ^
         "\n");
     failwith "Error!"
   end else begin
@@ -145,12 +147,10 @@ let main () =
     "b56bf932"
     "474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a"
     "0000000000000000ed3ca96c8bd2fbb376c2dc417f3ec249e8ab550dab1c421293f0e642a0c152b43a546a8b49b6128ee6e23454b7e580423ba985";
-  if false then
-  test_cbc TLS_1p2 (MtE (Block CoreCrypto.AES_128_CBC) CoreCrypto.SHA1)
+  test_cbc TLS_1p2 (MtE (Block CoreCrypto.AES_128_CBC) CoreCrypto.SHA1) 1
     "e77f6871e1697b2286416f973aee9ff6"
     "00000000000000000000000000000000"
     "474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a"
     "0000000000000000000000000000000028cf3b38da8358b78aae63e5fcc334c1eac5278a283fa709cb274df85a2a7fa21b767111bc7f73f37cb2697dbb41f903dd2a3e4470767f3cc5e2db1a2e781213"
     "431ad4d620ea0c63bf9afc8124afcae6729593f1";
   ()
-

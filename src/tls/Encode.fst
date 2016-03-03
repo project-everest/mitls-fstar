@@ -122,7 +122,7 @@ let rec maconly_mem i ad cl pl text tag (xs:list<maconly_entry>) =
 //#endif
 *)
 
-val mac: i:id -> k:MAC.key i (fun _ -> True) -> ad:LHAEPlain.adata i -> rg:frange i -> p:LHAEPlain.plain i ad rg ->  (plain i ad rg)
+val mac: i:id -> k:MAC.key i (fun _ -> True) -> ad:LHAEPlain.adata i -> rg:frange i -> p:LHAEPlain.plain i ad rg -> plain i ad rg
 let mac i k ad rg plain =
     let p = LHAEPlain.makeExtPad i ad rg plain in
     let text = macPlain i rg ad p in
@@ -381,9 +381,10 @@ val mk_plain:
 let mk_plain i ad tlen b =
   admit();
   decode i ad tlen b
+*)
 
 val repr:
-  i:id{ ~ (safeId i) } ->
+  i:id{ ~ (authId i) } -> // was { ~ (safeId i) }
   ad: LHAEPlain.adata i ->
   rg:range { snd rg <= max_TLSPlaintext_fragment_length /\ 
              snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i)) } ->
@@ -394,5 +395,3 @@ val repr:
 
 let repr i ad rg pl =
   encode i ad rg pl.f pl.tag
-
-*)

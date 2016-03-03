@@ -269,21 +269,14 @@ BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https
 // opaque logic type Encrypted (i:id) (ad:LHAEPlain.adata i) (c:cipher) (p:dplain i ad c) (h:heap) =
 //   b2t (List.mem (Entry i ad c p) (Heap.sel h log))
 
-val enc: i:id ->
-         s: encryptor i ->
-         ad: LHAEPlain.adata i ->
-         rg: range ->
-         data: LHAEPlain.plain i ad rg ->
-         mackey: MAC.keyrepr i ->
-         bytes
-let enc (i:id) s ad rg data mackey =
+let enc i s ad rg data =
     let tlen = targetLength i rg in
-    let encrypted =
+    let to_encrypt =
       if safeId i then createBytes tlen 0uy
-      else Encode.encode i ad rg data mackey
+      else Encode.repr i ad rg data
     in
     // we grow the log in all cases // if authId i then
-    let cipher: bytes = enc_int i s tlen encrypted in
+    let cipher: bytes = enc_int i s tlen to_encrypt in
     // log := snoc !log (Entry cipher ad data);
     cipher
 

@@ -1,0 +1,45 @@
+#
+# TODO
+# (Please edit at will...)
+#
+
+
+
+
+# MiTLS
+
+-  Conflicting definitions
+
+   * ECGroups and CoreCrypto both define `type ec_curve`
+   
+   * For some reason, HandshakeMessages.fst duplicates the record types for messages
+     already present in FlexTLS.Types.fst.
+
+
+-  Missing definitions
+
+   * All FFDH related functions do not exist yet, this is mandatory for TLS 1.3
+     as by default arbitrary groups are forbidden.
+
+   * ECDSA is missing
+
+
+
+
+# FlexTLS
+
+-  FlexTLS.Types.fst : Missing definitions from MiTLS
+
+   * `assume new type ffdhGroup` // Declare in CoreCrypto.fst
+   * `assume new type ConnectionState` // Record.fst -> Rename `connectionState` ?
+   * `assume new type clientExtension` // TLSExtensions.fst ?
+   * `assume new type serverExtension` // TLSExtensions.fst ?
+   * `assume new type serverConfigurationExtension` // TLSExtensions.fst ?
+
+
+-  FlexTLS.Constants.fst : Missing definitions from MiTLS
+
+   * `let defaultConfig.ffdhGroups` // TLSInfo.fst
+   
+
+

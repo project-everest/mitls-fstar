@@ -180,6 +180,22 @@ type FHelloRequest = {
 }
 
 /// <summary>
+/// Handshake Message record type for Hello Retry Request
+/// </summary>
+type FHelloRetryRequest = {
+  /// <summary> Protocol version </summary>
+  pv: option ProtocolVersion;
+  /// <summary> Ciphersuite selected by the server </summary>
+  ciphersuite: option cipherSuiteName;
+ /// <summary> Offer of DH group and public keys from the server </summary>
+  offer: option ffdhGroup;
+  /// <summary> List of extensions </summary>
+  ext: option (list serverExtension);
+  /// <summary> Message bytes </summmary>
+  payload: bytes;
+}
+
+/// <summary>
 /// Handshake Message record type for Client Hello
 /// </summary>
 type FClientHello = {
@@ -220,23 +236,6 @@ type FServerHello = {
 }
 
 /// <summary>
-/// Handshake Message record type for Hello Retry Request
-/// </summary>
-type FHelloRetryRequest = {
-  /// <summary> Protocol version </summary>
-  pv: option ProtocolVersion;
-  /// <summary> Ciphersuite selected by the server </summary>
-  ciphersuite: option cipherSuiteName;
- /// <summary> Offer of DH group and public keys from the server </summary> 
-  offer: option ffdhGroup;
-  /// <summary> List of extensions </summary>
-  ext: option (list serverExtension);
-  /// <summary> Message bytes </summmary>
-  payload: bytes;
-}
-
-
-/// <summary>
 /// Handshake Message record type for ServerConfiguration
 /// </summary>
 type FServerConfiguration = {
@@ -267,20 +266,6 @@ type FCertificate = {
 }
 
 /// <summary>
-/// Handshake Message record type for Server Key Exchange
-/// </summary>
-type FServerKeyExchange = {
-  /// <summary> Signature algorithm </summary>
-  sigAlg: Sig.alg;
-  /// <summary> Signature </summary>
-  signature: bytes;
-  /// <summary> Key Exchange Information </summary>
-  kex: kex;
-  /// <summary> Message bytes </summary>
-  payload: bytes;
-}
-
-/// <summary>
 /// Handshake Message record type for Certificate Request
 /// </summary>
 type FCertificateRequest = {
@@ -295,14 +280,6 @@ type FCertificateRequest = {
 }
 
 /// <summary>
-/// Handshake Message record type for Server Hello Done
-/// </summary>
-type FServerHelloDone = {
-  /// <summary> Message Bytes</summary>
-  payload: bytes;
-}
-
-/// <summary>
 /// Handshake Message record type for Certificate Verify
 /// </summary>
 type FCertificateVerify = {
@@ -311,6 +288,28 @@ type FCertificateVerify = {
   /// <summary> Signature </summary>
   signature: bytes;
   /// <summary> Message bytes </summary>
+  payload: bytes;
+}
+
+/// <summary>
+/// Handshake Message record type for Server Key Exchange
+/// </summary>
+type FServerKeyExchange = {
+  /// <summary> Signature algorithm </summary>
+  sigAlg: Sig.alg;
+  /// <summary> Signature </summary>
+  signature: bytes;
+  /// <summary> Key Exchange Information </summary>
+  kex: kex;
+  /// <summary> Message bytes </summary>
+  payload: bytes;
+}
+
+/// <summary>
+/// Handshake Message record type for Server Hello Done
+/// </summary>
+type FServerHelloDone = {
+  /// <summary> Message Bytes</summary>
   payload: bytes;
 }
 
