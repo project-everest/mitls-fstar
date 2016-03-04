@@ -413,7 +413,6 @@ type abbrInfo =
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
 
-(* NS: TODO ... migrate these to curried style data constructors *)
 type preEpoch =
     | InitEpoch of role
     | FullEpoch : SessionInfo  -> preEpoch -> preEpoch
@@ -472,7 +471,7 @@ let epochCRand = function
   | AbbrEpoch ai pe1 pe2 -> ai.abbr_crand
 
 val epochCSRands: preEpoch -> Tot bytes
-let epochCSRands e = 
+let epochCSRands e =
   let e' : succEpoch = unsafe_coerce e in //TODO: THIS FAILS CURRENTLY! FIXME
   epochCRand e' @| epochSRand e'
 
@@ -503,7 +502,6 @@ let rec epochWriter (e:epoch) =
     | FullEpoch _ e   -> epochWriter e
     | AbbrEpoch _ _ e -> epochWriter e
 
-//NS:Verifies up to here
 let strongAuth e = strongAuthSI (epochSI e)
 let strongAE e = strongAESI (epochSI e)
 
@@ -526,7 +524,7 @@ type id = {
 
 let swap (i:id) = { i with writer = dualRole i.writer }
 let peerId (i:id) = { i with writer = dualRole i.writer }
-//let peerId = swap // better name? 
+//let peerId = swap // better name?
 
 val siId: si:SessionInfo{ is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))
 			  /\ ((si.protocol_version = TLS_1p2) && (pvcs si.protocol_version si.cipher_suite))} -> role -> Tot id
@@ -611,7 +609,8 @@ type Match (i:id) =
 //$ recode?
 // This index is safe for MS-based key derivation
 val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ Match i) })
-let safeKDF _ = unsafe_coerce true //TODO: THIS DOESN'T GO THROUGH CURRENTLY! FIXME
+//defining this as true makes the context inconsitent!
+let safeKDF _ = unsafe_coerce true //TODO: THIS IS A PLACEHOLDER
 
 // Needed for typechecking of PRF
 // ask !i1,i2. i2 = Swap(i1) /\ not(SafeKDF(i1)) => not(SafeKDF(i2))
@@ -630,14 +629,14 @@ let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 let authId (i:id) = safeKDF i && strongAuthId i
 let safeId (i:id) = safeKDF i && strongAEId i
 
-// ask !i.     SafeId(i) => AuthId(i)
-// ask !i,mac. i.aeAlg  = MACOnly(mac) => not SafeId(i)
-// ask !i:id. AuthId(i) => Match(i) // sanity check; just by definition
-// ask !i:id. AuthId(i) => SafeKDF(i)
-// ask !i:id. AuthId(i) => StrongAuthId(i)
-// ask !i:id. AuthId(i) => INT_CMA_M(MacAlg(i))
-// ask !si,r:Role. StrongAuthSI(si) => StrongAuthId(siId si r)
-// ask !i:id,e,m. StrongAuthId(i) => INT_CMA_M(MacAlg(i))
+(* // ask !i.     SafeId(i) => AuthId(i) *)
+(* // ask !i,mac. i.aeAlg  = MACOnly(mac) => not SafeId(i) *)
+(* // ask !i:id. AuthId(i) => Match(i) // sanity check; just by definition *)
+(* // ask !i:id. AuthId(i) => SafeKDF(i) *)
+(* // ask !i:id. AuthId(i) => StrongAuthId(i) *)
+(* // ask !i:id. AuthId(i) => INT_CMA_M(MacAlg(i)) *)
+(* // ask !si,r:Role. StrongAuthSI(si) => StrongAuthId(siId si r) *)
+(* // ask !i:id,e,m. StrongAuthId(i) => INT_CMA_M(MacAlg(i)) *)
 
 // -------------------------------------------------------------------------
 // Re-indexing from epochs to ids
@@ -723,7 +722,7 @@ assume val auth: e:epoch -> b:bool { b = true <==> Auth e }
   KB The following is only true with Reneg indication, but is difficult to remove.
   KB It is an artifact of the way we treat epochs that we cannot just authenticate the current epoch, we need to always authenticate the full chain
   KB Maybe a refactor for v2 would be to separate our the current epoch and an optional predecessor
-  KB Also this needs to account for SentCCSResume  
+  KB Also this needs to account for SentCCSResume
   
 private theorem !r,r',e,e'. SentCCS(r,EpochSI(e)) /\
 	                    SentCCS(r',EpochSI(e')) /\

@@ -202,10 +202,12 @@ Cert.fst \
 TLSInfo.fst \
 Range.fst \
 DataStream.fst \
-Alert.fst \
-Content.fst \
-StreamPlain.fst \
-StreamAE.fst
+Alert.fst
+
+# \
+# Content.fst \
+# StreamPlain.fst
+# StreamAE.fst
 
 UREMAINING= StatefulPlain.fst \
 LHAEPlain.fst \
@@ -221,7 +223,8 @@ Handshake.fsti \
 Connection.fst 
 
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StreamAE)
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range  Alert)
+#DataStream Content StreamPlain StreamAE)
 #PMS Sig Cert ... known to be unverifiable
 
 uver: $(UFILES) 
