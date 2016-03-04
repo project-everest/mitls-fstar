@@ -35,7 +35,7 @@ let ct_alert (i:id) (ad:alertDescription) : fragment i = CT_Alert (2,2) (Alert.a
 
 // move to Seq?
 val split: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
-let split s =
+let split #a s =
   let last = Seq.length s - 1 in
   Seq.slice s 0 last, Seq.index s last
 
@@ -121,7 +121,7 @@ let ctToString = function
 // --------------- conditional access to fragment representation ---------------------
 
 val ghost_repr: #i:id -> fragment i -> GTot bytes
-let ghost_repr i f =
+let ghost_repr #i f =
   match f with
   // FIXME: without the #i, extraction crashes
   | CT_Data rg d      -> DataStream.ghost_repr #i d
@@ -160,7 +160,7 @@ val mk_fragment: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange i ->
   Tot (p:fragment i {b = ghost_repr p})
 let mk_fragment i ct rg b =
     match ct with
-    | Application_data   -> CT_Data      rg (DataStream.mk_fragment i rg b)
+    | Application_data   -> CT_Data      rg (DataStream.mk_fragment #i rg b)
     | Handshake          -> CT_Handshake rg b
     | Change_cipher_spec -> cut(Eq b empty_bytes);CT_CCS  //* rediscuss
     | Alert -> CT_Alert     rg b

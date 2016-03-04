@@ -199,9 +199,15 @@ HMAC.fst \
 Sig.p.fst \
 UntrustedCert.fst \
 Cert.fst \
-TLSInfo.fst 
+TLSInfo.fst \
+Range.fst \
+DataStream.fst \
+Alert.fst \
+Content.fst \
+StreamPlain.fst
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo)
+
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain)
 #PMS Sig Cert ... known to be unverifiable
 
 uver: $(UFILES)

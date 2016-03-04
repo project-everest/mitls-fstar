@@ -34,7 +34,7 @@ let pad payload ct (len:plainLen { length payload < len }): plainRepr =
   payload @| ctBytes ct @| createBytes (len - length payload - 1) 0uy
 
 val ghost_repr: #i:id -> #len: plainLen -> f:plain i len -> GTot (bs:lbytes len)
-let ghost_repr i len f = 
+let ghost_repr #i #len f = 
   let ct,_ = ct_rg i f in 
   let payload = Content.ghost_repr #i f in 
   pad payload ct len
@@ -42,7 +42,7 @@ let ghost_repr i len f =
 val repr: i:id{ ~(safeId i)} -> len: plainLen -> p:plain i len -> Tot (b:lbytes len {b = ghost_repr #i #len p})
 let repr i len f = 
   let ct,_ = ct_rg i f in 
-  let payload = Content.repr #i f in 
+  let payload = Content.repr i f in 
   pad payload ct len
 
 // slight code duplication between monads; avoidable? 

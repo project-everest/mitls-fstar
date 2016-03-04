@@ -29,15 +29,15 @@ open Range
 // this style enables structural subtyping on range indexes
 private type pre_fragment (i:id) = bytes
 val ghost_repr: #i:id -> pre_fragment i -> GTot bytes
-let ghost_repr i f = f
+let ghost_repr #i f = f
 
 type fragment (i:id) (rg:range) = f:pre_fragment i { Within (length (ghost_repr f)) rg}
 
 val repr:       #i:id { ~(safeId i)} -> rg:frange i -> p:fragment i rg -> Tot (b:rbytes rg {b = ghost_repr #i p})
-val mk_fragment: i:id { ~(authId i)} -> rg:frange i -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
+let repr #i rg f = f
 
-let repr i rg f = f
-let mk_fragment i rg b = b
+val mk_fragment: #i:id { ~(authId i)} -> rg:frange i -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
+let mk_fragment #i rg b = b
 
 (* revisit:
 // these two functions are used only by the application (or ghostly)
@@ -71,7 +71,7 @@ let final i d =
   | Close   -> true
   | Alert a -> isFatal a
 
-let finalized i s = is_Some (List.find (final i) s)
+let finalized i s = is_Some (List.Tot.find (final i) s)
 
 val wellformed: i:id -> list (delta i) -> Tot bool
 let rec wellformed ki s =
