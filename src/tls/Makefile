@@ -186,8 +186,25 @@ endef
 	@echo '--*)'
 
 
+UFILES=TLSError.fst \
+TLSConstants.fst \
+Nonce.fst \
+RSAKey.fst
+
+# \
+# DHGroup.p.fst \
+# ECGroup.fst \
+# CommonDH.fst \
+# PMS.p.fst \
+# HASH.fst \
+# HMAC.fst \
+# Sig.p.fst \
+# UntrustedCert.fst \
+# Cert.fst
+
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey)
 uver:
-	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 TLSError.fst TLSConstants.fst --verify_module TLSConstants | grep -vi positivity
+	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
