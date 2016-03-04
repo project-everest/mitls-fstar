@@ -21,47 +21,16 @@ open Handshake    // via its interface
 open Connection
 
 // using also Alert, DataStream, Content, Record
-// using DataStream
 
-// JP: why?!!
+// JP: why?!!  CF: why what!?? 
 // type dispatch
-
-// consider making this type private, with explicit accessors
-type connection = | C:
-  #rid:    rid ->
-  tcp:     Tcp.networkStream ->
-  hs:      Handshake.hs { Handshake.HS.region hs = rid } (* providing role, config, and uid *) ->
-  alert:   Alert.state ->
-  reading: rref rid dispatch ->
-  writing: rref rid dispatch ->
-  connection
-
-let c_rid  c = C.rid c
-let c_tcp  c = C.tcp c
-let c_role c = Handshake.HS.r (C.hs c)
-let c_id   c = Handshake.HS.id   (C.hs c)
-let c_cfg  c = Handshake.HS.cfg  (C.hs c)
-let c_resume  c = Handshake.HS.resume  (C.hs c)
-
-//------------------------- control API ----------------------------
-
-//? how to define boolean functions abbreviating formulas in specs?
-
-type initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
-    extends (c_rid cn) root /\ // we allocate a fresh, opaque region for the connection
-    c_role cn   = role /\
-    c_tcp cn    = ns /\
-    c_resume cn = resume /\
-    c_cfg cn = c /\
-    HyperHeap.sel h (C.reading cn) = Init /\ // assuming Init epoch implicitly have no data sent/received
-    HyperHeap.sel h (C.writing cn) = Init
 
 
 // scaffolding
 
-//type id = AEAD_GCM.gid 
-
-let epochs c h = sel h (HS.log c.hs)
+// ugly, but needed as long as id is specialized in StatefulLHAE. 
+assume val noId: id 
+assume val cipher_noId: bytes -> Tot(cipher noId)
 
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
   (requires (epochs_inv c h0))
@@ -111,52 +80,62 @@ let create m0 peer0 tcp r cfg resume =
     let state = ralloc m BC in 
     C peer hs al tcp state
 
+//TODO upgrade commented-out types imported from TLS.fsti
+// type initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
+//     extends (c_rid cn) root /\ // we allocate a fresh, opaque region for the connection
+//     c_role cn   = role /\
+//     c_tcp cn    = ns /\
+//     c_resume cn = resume /\
+//     c_cfg cn = c /\
+//     HyperHeap.sel h (C.reading cn) = Init /\ // assuming Init epoch implicitly have no data sent/received
+//     HyperHeap.sel h (C.writing cn) = Init
+
 // painful to specify?
 //* should we still return ConnectionInfo ?
 //* merging connect and resume with an optional sessionID
-val connect: ns:Tcp.networkStream -> c:config -> resume: option sessionID -> ST connection
-  (requires (fun h0 -> True))
-  (ensures (fun h0 cn h1 ->
-    modifies Set.empty h0 h1 /\
-    initial Client ns c resume cn h1
-    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
-  ))
+//val connect: ns:Tcp.networkStream -> c:config -> resume: option sessionID -> ST connection
+//  (requires (fun h0 -> True))
+//  (ensures (fun h0 cn h1 ->
+//    modifies Set.empty h0 h1 /\
+//    initial Client ns c resume cn h1
+//    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
+//  ))
 let connect m0 peer0 tcp r cfg        = create m0 peer0 tcp Client cfg None
 let resume  m0 peer0 tcp r cfg sid    = create m0 peer0 tcp Client cfg (Some sid)
-val accept_connected: ns:Tcp.networkStream -> c:config -> ST connection
-  (requires (fun h0 -> True))
-  (ensures (fun h0 cn h1 ->
-    modifies Set.empty h0 h1 /\
-    initial Server ns c None cn h1
-  ))
+//val accept_connected: ns:Tcp.networkStream -> c:config -> ST connection
+//  (requires (fun h0 -> True))
+//  (ensures (fun h0 cn h1 ->
+//    modifies Set.empty h0 h1 /\
+//    initial Server ns c None cn h1
+//  ))
 let accept_connected m0 peer0 tcp cfg = create m0 peer0 tcp Server cfg None
 
-//* do we need both?
-val accept: Tcp.tcpListener -> c:config -> ST connection
-  (requires (fun h0 -> True))
-  (ensures (fun h0 cn h1 ->
-    modifies Set.empty h0 h1 /\
-    (exists ns. initial Server ns c None cn h1)
-  ))
+//* do we need accept and accept_connected?
+//val accept: Tcp.tcpListener -> c:config -> ST connection
+//  (requires (fun h0 -> True))
+//  (ensures (fun h0 cn h1 ->
+//    modifies Set.empty h0 h1 /\
+//    (exists ns. initial Server ns c None cn h1)
+//  ))
 let accept m0 peer0 listener cfg =
     let tcp = Platform.Tcp.accept listener in
     accept_connected m0 peer0 tcp cfg
 
-val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
-  (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
-  ))
+//val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
+//  (requires (fun h0 -> True))
+//  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
+//  ))
 let rehandshake c ops = Handshake.rehandshake (C.hs c) ops
 // the client can ask for rekeying --- no immediate effect
-val rekey: cn:connection { c_role cn = Client } -> ST unit
-  (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
-  ))
+//val rekey: cn:connection { c_role cn = Client } -> ST unit
+//  (requires (fun h0 -> True))
+//  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
+//  ))
 let rekey c ops       = Handshake.rekey       (C.hs c) ops
-val request: cn:connection { c_role cn = Server } -> c:config -> ST unit
-  (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
-  ))
+//val request: cn:connection { c_role cn = Server } -> c:config -> ST unit
+//  (requires (fun h0 -> True))
+//  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
+//  ))
 let request c ops     = Handshake.request     (C.hs c) ops
 
 
@@ -207,6 +186,30 @@ let currentEpoch c rw =
   let es = !c.hs.log in 
   epchT es (i c.hs rw) 
 
+(*
+let prj  (x: id { 'a }) : id = x
+
+val noId' : id //16-02-28 why can't I use TLSInfo.noId?
+*)
+
+let currentIdT (c:connection) rw h : id = 
+  let j = Handshake.iT c.hs rw h in 
+  let es =  sel h c.hs.log in
+  if j >= 0 
+  then let Epoch h _ _ = Seq.index es j in hsId h 
+  else noId 
+
+val currentId: c:connection -> rw:rw -> ST id 
+  (requires (st_inv c))
+  (ensures (fun h0 i h1 -> h0 == h1 /\ st_inv c h0 /\ i = currentIdT c rw h0))
+
+let currentId (c:connection) rw = 
+  let j = Handshake.i c.hs rw in 
+  let es = !c.hs.log in
+  if j >= 0 
+  then let Epoch h _ _ = Seq.index es j in hsId h 
+  else noId
+
 (** writing epochs **)
 
 val epoch_wo: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
@@ -251,13 +254,13 @@ type ioresult_w =
 //  | WritePartial of unsent_data // worth restoring?
 
     // transient, internal results
-    | MustRead            // Nothing written, and the connection is busy completing a handshake
+//  | MustRead            // Nothing written, and the connection is busy completing a handshake
     | WriteDone           // No more data to send in the current state
     | WriteHSComplete     // The handshake is complete [while reading]
     | SentClose           // [while reading]
-    | WriteAgain          // there is more to send
-    | WriteAgainFinishing // the outgoing epoch changed & more to send to finish the handshake
-    | WriteAgainClosing   // we are tearing down the connection & must still send an alert
+    | WriteAgain          // sent something; there may be more to send (loop)
+    | WriteAgainFinishing // outgoing epoch changed; there may be more to send to finish the handshake (loop)
+    | WriteAgainClosing   // we are tearing down the connection & must still send an alert (loop)
 
 type ioresult_o = r:ioresult_w { is_Written r \/ is_WriteError r }
 
@@ -459,7 +462,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
 let send_payload c i f =
     let j = Handshake.i c.hs Writer in 
     if j = -1 
-    then Content.repr i f
+    then cipher_noId (Content.repr i f)
     else 
       let es = !c.hs.log in 
       match Seq.index es j with
@@ -483,13 +486,13 @@ let send_payload c i f =
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
   (requires (fun h -> 
+    let st = sel h c.state in
     let es = sel h c.hs.log in 
     let j = iT c.hs Writer h in
-    let st = sel h c.state in
     j < Seq.length es /\
     st_inv c h /\ 
-//    st <> Closed /\ 
-//    st <> (Half Reader) /\
+    st <> Close /\ 
+    st <> Half Reader /\
     (j < 0 ==> i == noId) /\
     (j >= 0 ==> (
        let e = Seq.index es j in 
@@ -503,7 +506,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\
-    (j < 0 ==> i == noId /\ h0 == h1) /\
+    (j < 0 ==> i == noId /\ HyperHeap.modifies Set.empty h0 h1) /\
     (j >= 0 ==> (
        let e = Seq.index es j in 
        i == hsId e.h /\ (
@@ -514,8 +517,8 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
        (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr))) /\
        ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
          sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
-         fragment_entry e = f )
-    )))))
+         fragment_entry e = f ))))
+    ))
 
 // 15-09-09 Do we need an extra argument for every stateful index?
 let send c i f =
@@ -568,14 +571,12 @@ assume val admit_st_inv: c: connection -> ST unit
 // 
 
 
-let foo = 1 
-
 // auxiliary functions for projections; floating.
 let appfragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : Content.fragment i =
   match o with
   | Some (| rg, f |) -> Content.CT_Data rg f 
 
-let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o })  =
+let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : DataStream.delta i =
   match o with
   | Some (| rg, f |) -> DataStream.Data f 
 
@@ -619,22 +620,86 @@ let project_snoc #i s e =
   let hd, tl = Content.split (snoc s e) in
   cut (Seq.Eq hd s)
 
+
+val no_seqn_overflow: c: connection -> ST bool 
+  (requires (fun h -> st_inv c h))
+  (ensures (fun h0 b h1 -> 
+    let es = sel h1 c.hs.log in 
+    let j = iT c.hs Writer h1 in 
+    j < Seq.length es /\
+    h0 == h1 /\
+    (b /\ j >= 0) ==> (
+    let e = Seq.index es j in 
+    is_seqn (sel h1 (seqn (writer_epoch e)) + 1))))
+
+let no_seqn_overflow c = 
+  let es = !c.hs.log in 
+  let j = Handshake.i c.hs Writer in 
+  j < 0 || 
+  ( let Epoch h _ w = Seq.index es j in
+      let n = !(seqn w) + 1 in
+      if n >= 72057594037927936 && n < 18446744073709551616 
+      then (lemma_repr_bytes_values n; true)
+      else false ) 
+
+
+
+(* Several test functions to drive the Handshake manually until the big
+ [writeOne] function is complete. *)
+
+let test_send_alert (c: connection) (i: id) (ad: alertDescription) =
+  match send c #i (Content.ct_alert i ad) with
+  | Correct() -> closeConnection c; WriteError (Some ad) reason
+  | Error (x,y) -> unrecoverable c y
+
+let test_send_hs_fragment (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
+  match send c #i (Content.CT_Handshake rg f) with
+  | Correct()   -> WriteAgain
+  | Error (x,y) -> unrecoverable c y
+
+let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
+  match send c (Content.CT_Data rg f) with
+  | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
+  | Error (x,y) -> unrecoverable c y
+
+
 //Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
 //            How do we conclude that after these two calls all the appData was written?
-(* val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
+// CF: this is guarantees only when returning Written.
+val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
+    let st = sel h c.state in
+    let es = sel h c.hs.log in 
+    let j = iT c.hs Writer h in
+    j < Seq.length es /\
     st_inv c h /\ 
-    (let o = epoch_w_h c h in
-     let st = sel h c.writing in 
-      st <> Closed /\
-      (is_Some appdata ==> st = Open) /\
-      i == epoch_id o /\
-      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
+    st <> Close /\
+    st <> Half Reader /\
+    (j < 0 ==> i == noId) /\
+    (j >= 0 ==> (
+      let e = Seq.index es j in 
+      st = AD /\
+      i = hsId e.h /\
+      is_seqn (sel h (seqn (writer_epoch e)) + 1)))))
   (ensures (fun h0 r h1 ->
-    st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1 /\
+    let st = sel h0 c.state in
+    let es = sel h0 c.hs.log in 
+    let j = iT c.hs Writer h0  in
+    j < Seq.length es /\
+    st_inv c h0 /\
+    st_inv c h1 /\
+    j = iT c.hs Writer h1 /\
+    (j < 0 ==> i == noId /\ HyperHeap.modifies Set.empty h0 h1) /\
+    (j >= 0 ==> (
+       let e = Seq.index es j in 
+       i == hsId e.h /\ (
+       let wr:writer i = writer_epoch e in 
+       modifies (Set.singleton (C.region c)) h0 h1 
+)))))
+
+(* the rest of the spec below still uses the old state machine
     // TODO: conditionally prove that i == epoch_id (epoch_w_h c h), at least when appdata is set.
     // TODO: account for (the TLS view of) the encryptor log
-
     ( (r = WriteAgain /\ 
        sel h1 c.writing <> Closed /\
        (let o = epoch_w_h c h1 in
@@ -669,7 +734,7 @@ let project_snoc #i s e =
     \/ (r = SentClose                                   /\ sel h1 c.writing = Closed)
     \/ (is_WriteError r) // /\ sel h1 c.reading = Closed /\ sel h1 c.writing = Closed) 
   )
-)) *)
+*)
 
 // outcomes? 
 // | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
@@ -679,36 +744,11 @@ let project_snoc #i s e =
 // | WriteError (Some ad) _ -> closed the connection (log extended with fatal alert)
 // | WriteAgainClosing      -> will attempt to send an alert before closing
 // | SentClose              -> similar 
+// | WriteAgainFinishing    -> incremented the writer epoch.
 
-
-(* Several test functions to drive the Handshake manually until the big
- [writeOne] function is complete. *)
-
-let test_send_alert (c: connection) (i: id) (ad: alertDescription) =
+(* old implementation, with old state machine:
+let writeOne c i appdata =
   let writing = !c.writing in
-  match send c #i (Content.ct_alert i ad) with
-  | Correct() ->
-    let reason = match writing with | Closing(_,reason) -> reason | _ -> "" in
-    closeConnection c;
-    WriteError (Some ad) reason
-  | Error (x,y) -> unrecoverable c y
-
-let test_send_hs_fragment (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
-  match send c #i (Content.CT_Handshake rg f) with
-  | Correct()   -> WriteAgain
-  | Error (x,y) -> unrecoverable c y
-
-let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
-  match send c (Content.CT_Data rg f) with
-  | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
-  | Error (x,y) -> unrecoverable c y
-
-(*let writeOne c i appdata =
-  let writing = !c.writing in
-//  match writing with
-//  | Closed -> WriteError None (perror __SOURCE_FILE__ __LINE__ "Trying to write on a closed connection")
-//  | _      -> 
-
   recall (c_log c);  //NS: Should not be necessary; it's part of hs_inv now
   recall (C.reading c); // needed to get stability for i across ST calls
   let o = epoch_wo c in
@@ -781,8 +821,72 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
                         | Correct()   -> WriteAgain
                         | Error (x,y) -> unrecoverable c y)
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
+*)
 
-            | Handshake.OutFinished rg last_fragment -> (* check we are finishing & send last fragment *)
+let writeOne c i appdata =
+  recall (c_log c); //NS: Should not be necessary; it's part of hs_inv now
+  recall (c.state); // needed to get stability for i across ST calls
+  let h0 = ST.get() in
+  let st = !c.state in 
+
+  // does this help? 
+  let j = Handshake.i c.hs Writer in
+  if j >= 0 then (
+    let es = !c.hs.log in 
+    (match Seq.index es j with 
+    | Epoch h _ wr -> recall (log wr); recall (seqn wr)));
+
+  admit();
+
+        // alerts have highest priority; we send only close_notify and fatal alerts
+        let alert_response = Alert.next_fragment c.alert in 
+        let h1 = ST.get() in 
+        frame_unrelated c h0 h1; 
+        (match alert_response with 
+        | Some AD_close_notify -> ( // graceful closure
+            match send c #i (Content.ct_alert i AD_close_notify) with
+            | Correct()   -> 
+                let h2 = ST.get () in 
+                c.state := (if st = Half Writer then Close else Half Reader); 
+                frame_unrelated c h2 (ST.get()); 
+                SentClose 
+            | Error (x,y) -> unrecoverable c y )
+        | Some ad -> (
+            match send c #i (Content.ct_alert i ad) with
+            | Correct() ->
+                // let reason = match writing with | Closing(_,reason) -> reason | _ -> "" in
+                closeConnection c;
+                WriteError (Some ad) ""
+            | Error (x,y) -> unrecoverable c y )
+        | None -> 
+
+        // next we check if there is outgoing Handshake traffic
+        let hs_response = Handshake.next_fragment c.hs in
+        let h2 = ST.get() in 
+        (match hs_response with 
+        | Handshake.OutCCS -> ( 
+            // we know j has just been incremented.
+            // we send the CCS fragment on the prior epoch
+            frame_admit c h1 h2; //NS: not an instance of frame_internal, since it may change the epochs log if the result is OutCCS
+            match send c #i (Content.CT_CCS #i) with 
+            | Correct _ ->
+                c.state := BC; // use renego/key-update states instead? anyway AD writing is temporarily forbidden.
+                //Alert.reset_outgoing c.alert;
+                frame_admit c h0 (ST.get());
+                WriteAgainFinishing
+            | Error (x,y) -> unrecoverable c y)
+
+            //$ | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending CCS in wrong state"))
+   
+        | Handshake.OutSome rg f -> ( 
+            // we send some handshake fragment 
+            frame_internal c h1 h2; 
+            match send c #i (Content.CT_Handshake rg f) with
+            | Correct()   -> WriteAgain
+            | Error (x,y) -> unrecoverable c y)
+            //$ | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
+(*
+        | Handshake.OutFinished rg last_fragment -> (* check we are finishing & send last fragment *)
                 frame_internal c h1 h2; 
                 ( match writing with
                   | Finishing ->
@@ -795,50 +899,30 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
                                      (* also move to the Finished state *)
                         | Error (x,y) -> unrecoverable c y)
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
-
-            | Handshake.OutComplete rg last_fragment ->
-                frame_admit c h1 h2; //NS: may change the epochs log if the result is OutComplete
-                ( match writing, !c.reading with
-                  | Finishing, Finished -> (* Send the last fragment *)
-                      ( match send c #i (Content.CT_Handshake rg last_fragment) with
-                        | Correct() -> moveToOpenState c; WriteHSComplete (* Move to the new state *)
-                            // removed sanity check: in and out session infos should be the same
+*)
+        | Handshake.OutComplete rg f -> (
+            // we send the final handshake fragment and open AD   
+            frame_admit c h1 h2; //NS: may change the epochs log if the result is OutComplete
+            match st with 
+            | BC -> ( match send c #i (Content.CT_Handshake rg f) with
+                     | Correct() -> moveToOpenState c; WriteHSComplete  
+                            // removed sanity check: reader and writer indexes should be the same
                             //if !C_reading c) epochSI id.id_in = epochSI id.id_out then
                             //else unrecoverable c (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")
-                        | Error (x,y) -> unrecoverable c y)
-                  | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
+                     | Error (x,y) -> unrecoverable c y)
+            | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
   
-            | Handshake.OutIdle -> // finally attempt to send some application data if we're in Open state
-                 frame_internal c h1 h2; 
-                ( match writing with
-                  | Open ->
-                    ( match appdata with
-                      | None          -> WriteDone
-                      | Some (|rg,f|) ->
-                        ( match send c (Content.CT_Data rg f) with
-                          | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
-                          | Error (x,y) -> unrecoverable c y))
-                  | _ -> WriteDone) // We are finishing a handshake. Tell we're done; the next read will complete it.
-          )
-
-val no_seqn_overflow: c: connection -> ST bool 
-  (requires (fun h -> st_inv c h))
-  (ensures (fun h0 b h1 -> 
-    st_inv c h1 /\ h0 == h1 /\
-    (let o = epoch_w_h c h1 in
-    (b /\ is_Some o ==> is_seqn (sel h1 (seqn (writer_epoch (Some.v o))) + 1)))))
-
-let no_seqn_overflow c = 
-  recall (c_log c); recall (C.reading c); // needed to get stability for i across ST calls
-  let o = epoch_w c in
-  match o with
-  | None -> true
-  | Some(Epoch h _ w) -> 
-      let n = !(seqn w) + 1 in
-      if n >= 72057594037927936 && n < 18446744073709551616 
-      then (lemma_repr_bytes_values n; true)
-      else false
-
+        | Handshake.OutIdle -> (
+        
+        // finally attempt to send some application data 
+        frame_internal c h1 h2; 
+        (match st, appdata with
+        | AD, Some (|rg,f|) -> 
+               ( match send c (Content.CT_Data rg f) with
+                 | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
+                 | Error (x,y) -> unrecoverable c y)
+        | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
+))))
 
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h -> 
@@ -860,6 +944,9 @@ let rec writeAllClosing c i =
     else                    unexpected "[writeAllClosing] seqn overflow"
 
 
+// in TLS 1.2 we send the Finished messages immediately after CCS
+// in TLS 1.3 we send e.g. ServerHello in plaintext then encrypted HS
+
 val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h -> 
     st_inv c h /\ 
@@ -873,41 +960,47 @@ val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
 let rec writeAllFinishing c i =
     if no_seqn_overflow c then 
     match writeOne c i None with
+    // we disable ADwriting temporarily
     | WriteAgain          -> writeAllFinishing c i
+    | WriteDone           -> MustRead     
+
+    // all other cases disable writing permanently
     | WriteAgainClosing   -> admit(); writeAllClosing c i
     | WriteError x y      -> WriteError x y
-    | SentClose           -> SentClose
-    | MustRead            -> MustRead
-    | Written             -> Written
-    | _                   -> unexpected "[writeAllFinishing] writeOne returned wrong result"
+    | SentClose           -> SentClose // why would we do that? 
+
+//  | MustRead            // excluded since responded only here
+//  | Written             // excluded since we are not sending AD 
+//  | WriteAgainFinishing // excluded by the handshake logic (not easily proved)
+    | WriteHSComplete     // excluded since we need an incoming CCS (not easily proved)
+                          -> unexpected "[writeAllFinishing] writeOne returned wrong result"
     else                    unexpected "[writeAllFinishing] seqn overflow"
 
 
-//* called both by read (ghost = None) and write (ghost = data being sent)
-//* returns to both: WriteError
-//* returns only to read: SentClose, WriteDone
-//* returns only to write: Written, MustRead
-//* what about WriteHSComplete ?
+// called both by read (with no appData) and write (with some appData fragment)
+// returns to read  { WriteError, SentClose, WriteDone, WriteHSComplete }
+// returns to write { WriteError, Written } 
+// (TODO: write returns { WriteHSComplete, MustRead } in renegotiation)
 
 val writeAllTop: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h -> 
     st_inv c h /\ 
     (let o = epoch_w_h c h in
-     let st = sel h c.writing in 
-      st <> Closed /\
-      (is_Some appdata ==> st = Open) /\
+     let st = sel h c.state in 
+      st <> Close  /\
+      (is_Some appdata ==> st = AD) /\
       i == epoch_id o /\
       (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 
-
   ))
 let rec writeAllTop c i appdata =
     if no_seqn_overflow c then 
     match writeOne c i appdata with
 //TODO | WriteAgain          -> writeAllTop c i appdata 
     | WriteAgainClosing   -> writeAllClosing c (admit(); epoch_id (epoch_w c)) // TODO
-    | WriteAgainFinishing -> writeAllFinishing c (admit(); epoch_id (epoch_w c)) // TODO
+    | WriteAgainFinishing -> // next writer epoch!
+                            writeAllFinishing c (admit(); epoch_id (epoch_w c)) // TODO
     | WriteError x y      -> WriteError x y
     | SentClose           -> SentClose
     | WriteDone           -> WriteDone
@@ -917,6 +1010,7 @@ let rec writeAllTop c i appdata =
     else                    unexpected "[writeAllTop] seqn overflow"
 
 //Question: NS, BP, JL: Is it possible for write to return WriteAgain or a partially written data?
+// no: we always write the whole fragment or we get a fatal error.
 let write c i rg data = writeAllTop c i (Some (| rg, data |))
 
 (*
@@ -954,6 +1048,13 @@ val write: c:connection -> i: id -> rg:frange i -> data:DataStream.fragment i rg
       ))
   ))
 *)
+
+let full_shutdown c = 
+    Alert.send_alert id !c.alert AD_close_notify
+
+let half_shutdown c =
+    Alert.send_alert id !c.alert AD_close_notify;
+    writeAllClosing c
 
 (*** incoming (with implicit writing) ***)
 
@@ -1001,13 +1102,15 @@ type ioresult_i (i:id) =
     | CompletedSecond
         // Handshake is completed, and we have already sent our finished message,
         // so only the incoming epoch changes
-    | DontWrite
-        // Nothing read yet, but we can't write anymore.
 
     // internal states only
     | ReadAgain
     | ReadAgainFinishing
-    | ReadFinished
+
+//  | ReadFinished
+//  | DontWrite
+//      // Nothing read yet, but we can't write anymore.
+
 
 let live_i e r = // is the connection still live?
   match r with
@@ -1040,8 +1143,6 @@ let append_r h0 h1 cn d  =
   List.nth log1 pos0 = d
 
 
-//15-11-28 the rest of this file still need porting.
-//15-11-28 e.g. we may need (i:id) either as argument or in dependent-tuple results
 
 assume val rd_i: c: connection -> Tot id 
 
@@ -1088,114 +1189,6 @@ let getFragment c ct len : TLSError.Result (Content.fragment (rd_i c)) =
 //  (ensures ioresult is not CompletedFirst | CompletedSecond | DontWrite)
 
 let readOne c : ioresult_i (rd_i c) =
-    let reading = !c.reading in 
-    match reading with
-        | Closed -> // statically exclude it?
-            alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Trying to read from a closed connection")
-        | _ -> (
-            match getHeader c with
-            | Error (x,y)      -> alertFlush c x y
-            | Correct (ct,len) ->
-                //old: let history = Record.history id.id_in Reader c_read.conn in
-                match (ct,reading) with // process received content type depending on the current read state
-                | (Alert, Init)
-                | (Alert, Open) ->
-                    ( match getFragment c ct len with
-                      | Error (x,y)  -> alertFlush c x y
-                      | Correct (Content.CT_Alert rg f) ->
-                            //let f = TLSFragment.recordPlainToAlertPlain id.id_in history rg fragment in
-                            match Alert.recv_fragment c.alert rg f with
-                              | Error (x,y) -> alertFlush c x y
-                              | Correct AD_close_notify ->
-                                     (* An outgoing close notify has already been buffered, if necessary *)
-                                     (* Only close the reading side of the connection *)
-                                   c.reading := Closed;
-                                   Read DataStream.Close
-                              | Correct ad -> 
-                                   if isFatal ad  then closeConnection c;
-                                   // else we carry on; the user will know what to do
-                                   Read (DataStream.Alert ad))
-
-                | (Handshake, Init)
-                | (Handshake, Finishing)
-                | (Handshake, Open) ->
-                  begin match getFragment c ct len with
-                        | Error (x,y) -> alertFlush c x y
-                        | Correct (Content.CT_Handshake rg f) ->
-                          //let f = TLSFragment.recordPlainToHSPlain id.id_in history rg frag in
-                          let res = Handshake.recv_fragment c.hs rg f in
-                          begin match res with
-                          | Handshake.InError (x,y) -> alertFlush c x y
-                          | Handshake.InAck         -> ReadAgain
-                          | Handshake.InVersionAgreed pv ->
-                                ( match reading with
-                                    | Init ->
-                                      (* Then, also c_write must be in Init state. It means this is the very first, unprotected,
-                                          handshake of the connection, and we just negotiated the version.
-                                          Set the negotiated version in the current sinfo (read and write side),
-                                          and move to the FirstHandshake state, so that
-                                          protocol version will be properly checked *)
-                                        //c.reading := FirstHandshake pv;
-                                        //c.writing := FirstHandshake pv;
-                                        ReadAgain
-                                    | _ -> ReadAgain) (* We are re-negotiating, using the current version number;
-                                                        so no need to change --- but we should still check pv is unchanged. *)
-                          | Handshake.InQuery(query,advice) -> CertQuery(query,advice)
-                          | Handshake.InFinished ->
-                                ( match reading  with (* Ensure we are in Finishing state *)
-                                    | Finishing ->
-                                        c.reading := Finished;
-                                        ReadFinished
-                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Finishing handshake in the wrong state"))
-                          | Handshake.InComplete ->
-                                begin match reading, !c.writing with (* Ensure we are in the correct state *)
-                                    | Finishing, Finished -> (* sanity check: in and out epochs should be the same *)
-				       let res = 
-					 if epoch_r c = epoch_w c 
-					 then (moveToOpenState c; CompletedFirst)
-					   // (match moveToOpenState c with  //NS: Used to be dymamically checked
-                                           //     | Correct _  -> CompletedFirst 
-                                           //     | Error(x,y) -> alertFlush c x y)
-                                         else (closeConnection c; 
-                                               ReadError None (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")) in
-					res
-                                    | _ -> alertFlush c AD_internal_error (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")
-				end
-			   end
-		 end
-                | (Change_cipher_spec, FirstHandshake _)
-                | (Change_cipher_spec, Open) ->
-                      ( match getFragment c ct len with
-                        | Error (x,y) -> alertFlush c x y
-                        | Correct Content.CT_CCS ->
-                            //old: let f = TLSFragment.recordPlainToCCSPlain id.id_in history rg frag in
-                            ( match Handshake.recv_ccs c.hs with
-                              | InCCSError (x,y) -> alertFlush c x y
-                              | InCCSAck (*nextID,nextR*) ->
-                                  (* We know statically that Handshake and Application data buffers are empty. *)
-                                  c.reading := Finishing; 
-                                  ReadAgainFinishing ))
-
-                | Application_data, Open ->
-                    ( match getFragment c ct len with
-                        | Error (x,y) -> alertFlush c x y
-                        | Correct (Content.CT_Data #i rg d) ->
-                            //let f = TLSFragment.recordPlainToAppPlain id.id_in history rg frag in
-                            //let d = AppData.recv_fragment id c.appdata rg f in
-                            let d : DataStream.fragment i fragment_range = d in
-                            Read (DataStream.Data d) )
-
-                | _, Init
-                | _, FirstHandshake(_)
-                | _, Finishing
-                | _, Finished
-                | _, Closed
-                | _, Closing(_,_) ->  alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
-)
-
-
-// revised state machine (TBC)
-let readOne c : ioresult_i (rd_i c) =
   match getHeader c with 
   | Error (x,y)       -> alertFlush c x y 
   | Correct (ct,len)  -> 
@@ -1203,7 +1196,7 @@ let readOne c : ioresult_i (rd_i c) =
   | Error (x,y)       -> alertFlush c x y
   | Correct fragment  ->
   match fragment with
-    | Content.CT_Alert rg f -> 
+    | Content.CT_Alert rg f -> (
       match Alert.recv_fragment c.alert rg f with 
       | Error (x,y)   -> alertFlush c x y   
       | Correct AD_close_notify ->          // an outgoing close_notify has already been buffered, if necessary
@@ -1213,12 +1206,12 @@ let readOne c : ioresult_i (rd_i c) =
               Read DataStream.Close
       | Correct alert -> 
               if isFatal alert then closeConnection c; // else we carry on; the user will know what to do
-              Read (DataStream.Alert alert)
+              Read (DataStream.Alert alert))
 
       // recheck we tolerate alerts in all states; used to be just Init|Open, otherwise:
       // alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 
-    | Content.CT_Handshake rg f ->
+    | Content.CT_Handshake rg f -> (
       match Handshake.recv_fragment c.hs rg f with 
       | Handshake.InError (x,y) -> alertFlush c x y
       | Handshake.InAck         -> ReadAgain
@@ -1239,66 +1232,17 @@ let readOne c : ioresult_i (rd_i c) =
       | InCCSAck                -> // We know statically that Handshake and Application data buffers are empty.
                                   ReadAgainFinishing)
 
-    | Content.CT_Data #i rg d   -> 
-      (match !c.state with 
+    | Content.CT_Data #i rg d   -> (
+      match !c.state with 
       | AD | Half Reader        -> let d : DataStream.fragment i fragment_range = d in Read (DataStream.Data d) 
-      | _                       -> alertFlush c AD_unexpected_message "Application Data received in wrong state")
-
-//* ?
-//* private val sameID: c0:Connection -> c1:Connection ->
-//* 	o0: readOutcome c0 {IOResult_i(c0,c1,o0)} ->
-//* 	c2: nextCn c0 { CnStream_i(c0) = CnStream_i(c2) /\
-//*                   CnStream_o(c0) = CnStream_o(c2)} ->
-//* 	o1: readOutcome c2 {o0 = o1 /\ IOResult_i(c2,c1,o1)}
-(*
-let sameID (c0:Connection) (c1:Connection) res (c2:Connection) =
-    match res with
-    | WriteOutcome(x) -> WriteOutcome(x)
-    | RError(x) -> RError(x)
-    | ReadAgain -> ReadAgain
-    | ReadAgainFinishing -> ReadAgainFinishing
-    | RAppDataDone(x) -> RAppDataDone(x)
-    | CertQuery(x,y) -> CertQuery(x,y)
-    | ReadFinished -> ReadFinished
-    | RHSDone -> RHSDone
-    | RClose -> RClose
-    | RFatal(x) -> RFatal(x)
-    | RWarning(x) -> RWarning(x)
-
-let sameID2 (c0:Connection) (c1:Connection) res (c2:Connection) =
-    match res with
-    | WriteOutcome(x) -> WriteOutcome(x)
-    | RError(x) -> RError(x)
-    | ReadAgain -> ReadAgain
-    | ReadAgainFinishing -> ReadAgainFinishing
-    | RAppDataDone(x) -> RAppDataDone(x)
-    | CertQuery(x,y) -> CertQuery(x,y)
-    | ReadFinished -> ReadFinished
-    | RHSDone -> RHSDone
-    | RClose -> RClose
-    | RFatal(x) -> RFatal(x)
-    | RWarning(x) -> RWarning(x)
-
-let sameIDRAF (c0:Connection) (c1:Connection) res (c2:Connection) =
-    match res with
-    | WriteOutcome(x) -> WriteOutcome(x)
-    | RError(x) -> RError(x)
-    | ReadAgain -> ReadAgain
-    | ReadAgainFinishing -> ReadAgainFinishing
-    | RAppDataDone(x) -> RAppDataDone(x)
-    | CertQuery(x,y) -> CertQuery(x,y)
-    | ReadFinished -> ReadFinished
-    | RHSDone -> RHSDone
-    | RClose -> RClose
-    | RFatal(x) -> RFatal(x)
-    | RWarning(x) -> RWarning(x)
-*)
+      | _                       -> alertFlush c AD_unexpected_message "Application Data received in wrong state") 
 
 
 (*** VERIFIES UP TO HERE ***)
+
   (* JP: the definitions below were in the .fst but didn't match what was in the
    .fsti -- the definitions above are from the .fsti, and the (commented-out)
-   definitions below are from the .fst *)
+   definitions below are from the .fst.  *)
 
 let rec readAllFinishing c =
     admit(); // FIXME!
@@ -1333,22 +1277,36 @@ let rec readAllFinishing c =
            and the new epoch is not open yet, so we can neither receive authenticated data, nor close this epoch.  *)
          ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened.")
 
+//16-02-29 we should probably add a caller (i:id)
+val writerId: c:connection -> ST id
 
+// scheduling: we always write up before reading.
+// those writes are never AppData; they may be for other/changing epochs
 let rec read c =
-    match writeAllTop c (rd_i c) (*FIXME*) None with
-    | SentClose       -> Read DataStream.Close
-    | WriteError x y  -> ReadError x y
-//    | WriteFinished   -> DontWrite
-    | WriteDone       -> // There was nothing to write
-      ( let res = readOne c in
-        match res with
-        | ReadAgain          -> read c             //*? removed: sameID c newConn res c0 in
-        | ReadAgainFinishing -> readAllFinishing c //*? removed: sameID2 c newConn res c0 in
-        | Read delta         -> Read delta
-        | ReadError x y      -> ReadError x y
-        | CertQuery(q,adv)   -> CertQuery(q,adv)
-        | Read DataStream.Close         -> //*$ review this postprocessing
-            match !c.writing  with
+    let wId = writerId c in 
+    match writeAllTop c wId None with
+    | SentClose       -> Read DataStream.Close // TODO: add support for Half Reader?
+    | WriteError x y  -> ReadError x y         // TODO: review error result is unambiguous
+//  | WriteFinished   -> DontWrite
+    | WriteHSComplete -> CompletedFirst        // return at once, so that the app can authorize
+    | WriteDone       ->                       // nothing happened; now we can read
+
+    let res = readOne c in (
+    match res with
+    // TODO: specify which results imply that c.state & epochs are unchanged
+    | ReadAgain             -> read c
+    | ReadAgainFinishing    -> read c //was: readAllFinishing c
+    | ReadError x y         -> ReadError x y
+    | CertQuery(q,adv)      -> CertQuery(q,adv)
+    | Read delta            -> Read delta   
+    )
+
+(* readOne already updated the state, so no special case for Read DataStream.Close 
+    | Read DataStream.Close -> 
+            let st = !c.state in 
+            match st with
+            | Half Reader  -> 
+
             | Closed -> Read DataStream.Close // we already sent a close_notify, tell the user it's over
             | _ ->
                 let written = writeAllClosing c (rd_i c) (*FIXME*) in
@@ -1357,7 +1315,7 @@ let rec read c =
                 | WriteError x y -> ReadError x y
                 | _              -> ReadError None (perror __SOURCE_FILE__ __LINE__ "") // internal error
                 ) 
-        //_ CompletedFirst | CompletedSecond | DontWrite -> unexpected "[read] readOne should never return such write outcome"
+*)
 
 // -----------------------------------------------------------------------------
 
@@ -1369,9 +1327,9 @@ let rec read c =
 // so that we have an explicit user decision to blame,
 // but in fact a follow-up read would do as well.
 // to be adapted once we have a proper PKI model
-val authorize : c:Connection -> q:query -> ST ioresult_i
-  (requires (fun h0 -> True))
-  (ensures (fun h0 result h1))
+//val authorize : c:Connection -> q:query -> ST ioresult_i
+//  (requires (fun h0 -> True))
+//  (ensures (fun h0 result h1))
 
 let authorize c q =
     let res = Handshake.authorize (C.hs c) q in
@@ -1408,14 +1366,3 @@ let refuse c (q:query) =
     let reason = perror __SOURCE_FILE__ __LINE__ "Remote certificate could not be verified locally" in
     abortWithAlert c AD_unknown_ca reason;
     writeAllClosing c
-
-let full_shutdown c = Alert.send_alert id !c.alert AD_close_notify
-
-let half_shutdown c =
-    Alert.send_alert id !c.alert AD_close_notify;
-    writeAllClosing c
-
-//let getEpochIn  (Conn(id,state)) = id.id_in
-//let getEpochOut (Conn(id,state)) = id.id_out
-//let getInStream  (Conn(id,state)) = AppData.inStream  id state.appdata
-//let getOutStream (Conn(id,state)) = AppData.outStream id state.appdata *)
