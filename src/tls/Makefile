@@ -198,13 +198,14 @@ HASH.fst \
 HMAC.fst \
 Sig.p.fst \
 UntrustedCert.fst \
-Cert.fst
+Cert.fst \
+TLSInfo.fst 
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert)
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo)
 #PMS Sig Cert ... known to be unverifiable
 
 uver: $(UFILES)
-	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity
+	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks

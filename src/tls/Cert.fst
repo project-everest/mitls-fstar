@@ -47,6 +47,5 @@ abstract val parseCertificateList: bytes -> Result chain
 // Dummy implementation while certificate parsing is not implemented
 let parseCertificateList b = Correct ([b]) //TODO: known to be unverified
 
-let op_Star = op_Multiply
-abstract val certificateListBytes: chain -> Tot (b:bytes{length b < (3 * 65536)})
+abstract val certificateListBytes: chain -> Tot (b:bytes{length b < (op_Multiply 3 65536)})
 let certificateListBytes c = magic()

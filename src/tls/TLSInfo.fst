@@ -90,8 +90,8 @@ type config = {
     (* Supported versions, ciphersuites, and compressions *)
     minVer: ProtocolVersion;
     maxVer: ProtocolVersion;
-    ciphersuites: x:known_cipher_suites{List.length x < 256};
-    compressions: l:list Compression{ List.length l <= 1 };
+    ciphersuites: x:known_cipher_suites{List.Tot.length x < 256};
+    compressions: l:list Compression{ List.Tot.length l <= 1 };
 
     (* Handshake specific options *)
 
@@ -132,7 +132,7 @@ let defaultConfig =
                       TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
                       TLS_RSA_WITH_3DES_EDE_CBC_SHA;
                     ] in
-    cut (List.length l == 7);//this requires 8 unfoldings
+    cut (List.Tot.length l == 7);//this requires 8 unfoldings
     let csn = cipherSuites_of_nameList l in
     {
     minVer = SSL_3p0;
@@ -384,7 +384,8 @@ let strongPRF si = strongKDF(kdfAlg si) && strongVD(vdAlg si)
 // CF derived & to be used in the public API only
 let strongHS si =
   strongKEX (si.pmsId) &&
-  strongKEF (kefAlg si) &&
+  is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
+  strongKEF (kefAlg si) && //NS: ... to verify this
   strongPRF si &&
   strongSig si  //CF * hashAlg for certs?
 
