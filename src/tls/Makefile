@@ -186,7 +186,7 @@ endef
 	@echo '--*)'
 
 
-stdlib-ver:
+uver:
 	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 TLSError.fst TLSConstants.fst --verify_module TLSConstants | grep -vi positivity
 
 # verifying everything stable

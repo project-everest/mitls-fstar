@@ -26,7 +26,7 @@ install:
 
 script:
   - make -C .fstar/src/ocaml-output
-  - make -C src/tls stdlib-ver
+  - make -C src/tls uver
 
 notifications:
   slack: everestexpedition:NqWwcvMIxouVIbC5IhF0loqX
