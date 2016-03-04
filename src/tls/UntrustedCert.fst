@@ -28,7 +28,7 @@ let oid_of_keyalg salg = ""
 abstract new type X509Certificate2
 type hint = string
 type cert = b:bytes{length b < 65536}
-type chain = l:list cert{List.length l < 4}
+type chain = l:list cert{List.Tot.length l < 4}
 
 abstract val x509_is_for_signing: X509Certificate2 -> bool
 let x509_is_for_signing x = failwith "Not implemented"

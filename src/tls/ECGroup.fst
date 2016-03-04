@@ -100,6 +100,8 @@ let serialize_point (p:ec_params) (e:point) =
   let x = CoreCrypto.ec_point_serialize e in
   vlbytes 1 x
 *)
+let op_Star = op_Multiply
+
 let parse_point (p:ec_params) (b:bytes) : option point  =
     let clen = bytelen p in 
     if length b = 2*clen + 1 then

@@ -190,17 +190,19 @@ UFILES=TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
 RSAKey.fst \
-DHGroup.p.fst
-# ECGroup.fst \
-# CommonDH.fst \
-# PMS.p.fst \
-# HASH.fst \
-# HMAC.fst \
-# Sig.p.fst \
-# UntrustedCert.fst \
-# Cert.fst
+DHGroup.p.fst \
+ECGroup.fst \
+CommonDH.fst \
+PMS.p.fst \
+HASH.fst \
+HMAC.fst \
+Sig.p.fst \
+UntrustedCert.fst \
+Cert.fst
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup)
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert)
+#PMS Sig Cert ... known to be unverifiable
+
 uver: $(UFILES)
 	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity
 
