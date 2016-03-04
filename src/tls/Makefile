@@ -189,10 +189,8 @@ endef
 UFILES=TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
-RSAKey.fst
-
-# \
-# DHGroup.p.fst \
+RSAKey.fst \
+DHGroup.p.fst
 # ECGroup.fst \
 # CommonDH.fst \
 # PMS.p.fst \
@@ -202,8 +200,8 @@ RSAKey.fst
 # UntrustedCert.fst \
 # Cert.fst
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey)
-uver:
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup)
+uver: $(UFILES)
 	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity
 
 # verifying everything stable

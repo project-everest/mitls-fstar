@@ -29,7 +29,7 @@ let goodPP_log =
   let nil = Nil in
   let dummy = dummy::nil in ST.alloc (List.Tot.tl dummy) 
 
-let goodPP (dhp:dh_params) = List.mem dhp !goodPP_log
+let goodPP (dhp:dh_params) = List.Tot.mem dhp !goodPP_log
 
 let pp (dhp:CoreCrypto.dh_params) : CoreCrypto.dh_params =
     goodPP_log := (dhp ::!goodPP_log);
