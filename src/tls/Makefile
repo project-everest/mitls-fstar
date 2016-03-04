@@ -129,7 +129,7 @@ TLSGEN=$(TLSLAX)
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM LHAE \
+VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM \
 StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain \
 StreamAE StatefulPlain 
 

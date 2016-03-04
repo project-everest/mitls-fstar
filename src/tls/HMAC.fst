@@ -30,15 +30,16 @@ let sslKeyedHash (a:sslHashAlg) k p =
     let h = HASH.hash a (k @| pad2 @| h) in
     h
 
-let sslKeyedHashVerify (a:sslHashAlg) k p t : bool =
-    let result = sslKeyedHash a k p in
-    equalBytes result t
+val sslKeyedHashVerify: sslHashAlg -> bytes -> bytes -> bytes -> Tot bool
+let sslKeyedHashVerify a k p t =
+    let res = sslKeyedHash a k p in
+    equalBytes res t
 
 (* Parametric keyed hash *)
 
-val hmac: hashAlg -> bytes -> bytes -> Tot bytes
+val hmac: a:hashAlg{is_Hash a} -> bytes -> bytes -> Tot bytes
 let hmac (a:hashAlg {is_Hash a}) k p =
-  match a with |Hash h  -> CoreCrypto.hmac h k p
+  match a with | Hash h -> CoreCrypto.hmac h k p
 
 // why do I need this declaration??
 val hmacVerify: a:hashAlg {is_Hash a} -> key -> data -> bytes -> Tot bool
