@@ -142,7 +142,6 @@ type CR = {
   cr_distinguished_names: (dl:list dn{List.length dl < 128});
 }
 
-
 type KEX_S =
 | KEX_S_DHE of CoreCrypto.dh_key
 | KEX_S_ECDHE of CoreCrypto.ec_key
@@ -155,6 +154,7 @@ type KEX_S_PRIV =
 
 type SKE = {
   ske_kex_s: KEX_S;
+//  ske_sigval: option bytes;
   ske_sig : (b:bytes{length b < 65536})
 }
 
@@ -536,13 +536,14 @@ let parseClientKeyExchange pv kex data =
 (* ServerKeyExchange *)
 
 open CoreCrypto
+
 val serverKeyExchangeBytes: SKE -> Tot bytes
 let serverKeyExchangeBytes ske =
     let kexB = 
         match ske.ske_kex_s with
         | KEX_S_DHE dhp -> (vlbytes 2 dhp.dh_params.dh_p) @| (vlbytes 2 dhp.dh_params.dh_g) @| (vlbytes 2 dhp.dh_public)
         | KEX_S_ECDHE ecp -> 
-                 abyte 3uy (* Named curve *)
+                abyte 3uy (* Named curve *)
               @| ECGroup.curve_id ecp.ec_params
               @| ECGroup.serialize_point ecp.ec_params ecp.ec_point 
         | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
@@ -556,7 +557,7 @@ let parseServerKeyExchange kex payload : Result SKE =
     match kex with
     | Kex_DH -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     | Kex_RSA -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | Kex_DHE -> 
+    | Kex_DHE ->
         if length payload >= 2 then
             match vlsplit 2 payload with
             | Error(z) -> Error(z)

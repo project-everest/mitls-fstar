@@ -29,23 +29,6 @@ open StatefulLHAE
 (* CRYPTO sub-module *)
 (* To be moved to other modules, linked with CoreCrypto, and idealized *)
 
-type ff_all_groups =
-  | FF_2048
-  | FF_4096
-  | FF_8192
-  | FF_arbitrary of CoreCrypto.dh_params
-  
-type dh_group = 
-  | FFDH of ff_all_groups
-  | ECDH of ECGroup.ec_all_curve
-
-type dh_key = 
-  | FFKey of CoreCrypto.dh_key
-  | ECKey of CoreCrypto.ec_key
-  
-assume val dh_keygen: dh_group -> Tot dh_key
-assume val dh_modexp: dh_group -> dh_key -> dh_key -> Tot dh_key
-
 val hkdf_extract: CoreCrypto.hash_alg -> bytes -> bytes -> Tot bytes
 let hkdf_extract ha salt secret = CoreCrypto.hmac ha salt secret
 
@@ -72,7 +55,47 @@ let hkdf_expand_label ha secret label hv len =
 assume val cert_sign: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> Tot (Result bytes)
 assume val cert_verify: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> bytes -> Tot (Result unit)
 
+type ff_all_groups =
+  | FF_2048
+  | FF_4096
+  | FF_8192
+  | FF_arbitrary of CoreCrypto.dh_params
+  
+type dh_group = 
+  | FFDH of ff_all_groups
+  | ECDH of ECGroup.ec_all_curve
 
+type dh_key = 
+  | FFKey of CoreCrypto.dh_key
+  | ECKey of CoreCrypto.ec_key
+
+type dh_secret = bytes // -> abstract
+type ms = bytes // -> abstract
+
+assume val dh_keygen: g:dh_group -> Tot (x:dh_key)
+assume val dh_shared_secret1: y:dh_key -> gx:dh_key -> Tot (gxy:dh_secret)
+assume val dh_shared_secret2: gy:dh_key -> Tot (x:dh_key * gxy:dh_secret)
+
+(* TLS <= 1.2 *)
+assume val derive_keys: gxy:dh_secret -> cr:random -> sr:random -> log:bytes -> 
+	                rd:rid -> wr:rid -> i:id -> ST ((both i) * ms)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
+
+(* TLS 1.3 *)
+assume val derive_handshake_keys: gxy:dh_secret -> log: bytes ->
+				  rd:rid -> wr:rid -> i:id -> ST ((both i) * ms)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
+assume val derive_finished_keys: gxs:dh_secret -> gxy:dh_secret -> log: bytes -> Tot (ts:ms * cf:ms * sf:ms)
+
+assume val derive_traffic_keys: ts:ms -> log: bytes -> 
+				rd:rid -> wr:rid -> i:id -> ST (both i)     
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+			  
 (* Negotiation: HELLO sub-module *)
 
 type ri = (cVerifyData * sVerifyData) 
@@ -483,13 +506,20 @@ let kex_c_of_dh_key kex =
   | FFKey k -> KEX_C_DHE k.dh_public
   | ECKey k -> KEX_C_ECDHE (ec_point_serialize k.ec_point)
 
-val dh_key_to_bytes: dh_key -> Tot bytes
-let dh_key_to_bytes dhk =
-  match dhk with
-  | FFKey k -> (vlbytes 2 k.dh_params.dh_p) @| (vlbytes 2 k.dh_params.dh_g) @| (vlbytes 2 k.dh_public)
-  | ECKey ecp -> abyte 3uy (* Named curve *)
+type dh_format = 
+     |CKE   
+     |SKE 
+     |KeyShare
+     
+val dh_key_to_bytes: dh_format -> dh_key -> Tot bytes
+let dh_key_to_bytes dhf dhk =
+  match dhf,dhk with
+  | SKE, FFKey k -> (vlbytes 2 k.dh_params.dh_p) @| (vlbytes 2 k.dh_params.dh_g) @| (vlbytes 2 k.dh_public)
+  | CKE, FFKey k -> (vlbytes 2 k.dh_public)
+  | SKE, ECKey ecp -> abyte 3uy (* Named curve *)
               @| ECGroup.curve_id ecp.ec_params
               @| ECGroup.serialize_point ecp.ec_params ecp.ec_point 
+  | CKE, ECKey ecp -> ECGroup.serialize_point ecp.ec_params ecp.ec_point 
 
 val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
@@ -503,16 +533,13 @@ let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs
      (n.n_protocol_version <> TLS_1p3 &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
      let dhg = dh_group_of_kex_s ske.ske_kex_s in
-     let dhk = dh_key_of_kex_s ske.ske_kex_s in
-     let by = dh_key_to_bytes dhk in
-     match (cert_verify c.crt_chain n.n_sigAlg [] by ske.ske_sig) with
+     let gy = dh_key_of_kex_s ske.ske_kex_s in
+     let bgy = dh_key_to_bytes SKE gy in
+     match (cert_verify c.crt_chain n.n_sigAlg [] bgy ske.ske_sig) with
      | Error z -> InError z
      | Correct () -> 
-       let sk = dh_keygen dhg in
-       let pms = (match dh_modexp dhg sk dhk with 
-		 | FFKey(dh) -> dh.dh_public 
-		 | ECKey(ecp) -> ecp.ec_point.ecx) in
-       let cke = {cke_kex_c = kex_c_of_dh_key sk} in
+       let gx,pms = dh_shared_secret2 gy in
+       let cke = {cke_kex_c = kex_c_of_dh_key gx} in
        let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
        let cc = {crt_chain = []} in
        let ccb = certificateBytes cc in
