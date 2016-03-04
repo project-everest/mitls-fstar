@@ -204,14 +204,34 @@ Range.fst \
 DataStream.fst \
 Alert.fst \
 Content.fst \
-StreamPlain.fst
+StreamPlain.fst \
+StreamAE.fst
+
+UREMAINING= StatefulPlain.fst \
+LHAEPlain.fst \
+AEAD_GCM.fst \
+MAC.fst \
+Encode.fst \
+StatefulLHAE.fst \
+ENC.fst \
+MAC_SHA256.fst \
+MAC_SHA1.fst \
+Record.fst \
+Handshake.fsti \
+Connection.fst 
 
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain)
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StreamAE)
 #PMS Sig Cert ... known to be unverifiable
 
-uver: $(UFILES)
-	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level
+uver: $(UFILES) 
+	$(FSTAR) $(LIBFILES) $(OFLAGS) --__temp_no_proj StreamAE --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level
+
+uwc:
+	wc -l $(UFILES)
+
+not-uwc:
+	wc -l $(UREMAINING)
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
