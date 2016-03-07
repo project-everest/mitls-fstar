@@ -244,14 +244,13 @@ let compressionBytes (comp:compression) =
 
 #set-options "--max_ifuel 4 --initial_ifuel 2 --max_fuel 2 --initial_fuel 2"
 
-(* val compressionMethodsBytes : cms:list Compression -> Tot (lbytes (List.Tot.length cms)) *)
-(* let rec compressionMethodsBytes cms = *)
-(*    match cms with *)
-(*    | c::cs -> compressionBytes c @| compressionMethodsBytes cs *)
-(*    | []    -> empty_bytes *)
+val compressionMethodsBytes : cms:list compression -> Tot (lbytes (List.Tot.length cms))
+let rec compressionMethodsBytes cms =
+   match cms with
+   | c::cs -> compressionBytes c @| compressionMethodsBytes cs
+   | []    -> empty_bytes
 
-(* #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1" *)
-
+#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 val versionBytes : protocolVersion -> Tot (lbytes 2)
 let versionBytes pv =
     match pv with
@@ -919,13 +918,13 @@ val pinverse_certType: x:_ -> Lemma
 let pinverse_certType x = ()
 
 #set-options "--max_fuel 1 --initial_fuel 1"
-(* val certificateTypeListBytes: ctl:list certType -> Tot (lbytes (List.Tot.length ctl)) *)
-(* let rec certificateTypeListBytes ctl = *)
-(*     match ctl with *)
-(*     | [] -> empty_bytes *)
-(*     | h::t -> *)
-(*         let ct = certTypeBytes h in *)
-(*         ct @| certificateTypeListBytes t *)
+val certificateTypeListBytes: ctl:list certType -> Tot (lbytes (List.Tot.length ctl))
+let rec certificateTypeListBytes ctl =
+    match ctl with
+    | [] -> empty_bytes
+    | h::t ->
+        let ct = certTypeBytes h in
+        ct @| certificateTypeListBytes t
 
 val parseCertificateTypeList: data:bytes -> Tot (list certType) (decreases (length data))
 let rec parseCertificateTypeList data =
@@ -1048,18 +1047,17 @@ let parseNamedGroup b =
   | (0xFEuy, v)      -> Correct (ECDHE_PRIVATE_USE v)
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong named group")
 
-(*
-private val namedGroupsBytes0: groups:list namedGroup -> Tot (b:bytes { length b = 2*(List.Tot.length groups)})
-let rec namedGroupsBytes0 groups =
-  match groups with
-  | [] -> empty_bytes
-  | g::gs -> namedGroupBytes g @| namedGroupsBytes0 gs
 
-let namedGroupsBytes groups = vlbytes 2 (namedGroupsBytes0 groups)
-*)
+(* private val namedGroupsBytes0: groups:list namedGroup -> Tot (b:bytes { length b = 2*(List.Tot.length groups)}) *)
+(* let rec namedGroupsBytes0 groups = *)
+(*   match groups with *)
+(*   | [] -> empty_bytes *)
+(*   | g::gs -> namedGroupBytes g @| namedGroupsBytes0 gs *)
+
+(* let namedGroupsBytes groups = vlbytes 2 (namedGroupsBytes0 groups) *)
+
 
 val namedGroupsBytes: groups:list namedGroup -> Tot (b:bytes { length b = 2 + op_Multiply 2 (List.Tot.length groups)})
-
 let namedGroupsBytes groups =
   let b = (List.Tot.fold_left (fun l s -> namedGroupBytes s @| l) empty_bytes groups) in
   admit(); //TODO
