@@ -33,6 +33,7 @@ assume val dh_shared_secret2: gy:dh_key -> Tot (x:dh_key * gxy:dh_secret)
 (* TLS <= 1.2 *)
 assume val derive_keys: gxy:dh_secret -> cr:random -> sr:random -> log:bytes -> 
 	                rd:rid -> wr:rid -> i:id -> ST ((both i) * ms)
+                  //exposing ms here is problematic as it is not independent of the record keys.
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
@@ -77,9 +78,9 @@ val dh_init_13S: #region:rid g:dh_group -> ST (gs:dh_key) //s
 val dh_init_13C: #region:rid g:dh_group -> ST (gx:dh_key) //x
 
 assume val derive_12S_1: #region:rid -> gx:dh_key -> ... -> ST(gy:dh_key * (both i)) //handshake
-assume val derive_12S_2: #region:rid -> ... -> ST(ts:ms * cf:ms * sf:ms) //finished
+assume val derive_12S_2: #region:rid -> ... -> ST(cf:ms * sf:ms) //finished
 assume val derive_12S_3: #region:rid -> ... -> ST(both i) //traffic
 
 assume val derive_12C_1: #region:rid -> gy:dh_key -> ... -> ST(both i) //handshake
-assume val derive_12C_2: #region:rid -> gs:dh_key -> ... -> ST(ts:ms * cf:ms * sf:ms) //finished
+assume val derive_12C_2: #region:rid -> gs:dh_key -> ... -> ST(cf:ms * sf:ms) //finished
 assume val derive_12C_3: #region:rid -> ... -> ST(both i) //traffic
