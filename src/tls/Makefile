@@ -6,10 +6,12 @@ all: tls-ver tls-lax tls-gen
 # TODO compilation to ML & testing
 # MK removed mitls-ml as strider was failing on it for ages
 
+CONTRIB=ucontrib
+
 clean:
 	$(MAKE) -C $(FSTAR_HOME)/lib/ml clean
-	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml clean
-	$(MAKE) -C $(FSTAR_HOME)/contrib/Platform/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 
 # ------------------ dependencies on Fstar & its libraries --------------------
@@ -38,10 +40,10 @@ FSTARFLAGS=--universes $(call add_stdlib_prefix,$(STDLIB)) $(addprefix --codegen
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 
 PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
-PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
+PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
-CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
+CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
@@ -54,7 +56,7 @@ OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
 DEBUG=ocamlfind ocamlc
 OCAMLMKLIB=ocamlfind ocamlmklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db)
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
 
 # ----------------------- NuBuild integration ------------------------
 NUBUILD_HOME=../../.nubuild
@@ -259,7 +261,7 @@ tls-lax: $(LIBFILES) $(TLSLAX)
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
 # fstarlib-hyperheap has the entire F* standard library.
 LIB_ML= \
-  $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
+  $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa
 
 # .fst files realized elsewhere.
@@ -286,7 +288,7 @@ tls-gen: $(LIBFILES) $(TLSGEN)
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.
-	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
+	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
 	# All our .cmx files
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
 	# A .cmxa with all the .cmx above

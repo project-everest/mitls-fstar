@@ -187,7 +187,7 @@ val verify:
   ad: LHAEPlain.adata i ->
   rg: frange i ->
   p: plain i ad rg ->
-  Result (LHAEPlain.plain i ad rg)
+  result (LHAEPlain.plain i ad rg)
 
 let verify (i:id) k ad rg p =
     let text = macPlain i rg ad p.f in
@@ -331,7 +331,7 @@ let decode i ad tlen payload =
             if correctPadding then (
                 let (f, tag) = split ft lf in
                 lemma_split ft lf; 
-                assume(Within lf rg);
+                assume(within lf rg);
                 let p = LHAEPlain.mk_plain i ad rg f in  
                 assume (safeId i ==> authId i);
                 assume((pv <> SSL_3p0 /\
@@ -341,7 +341,7 @@ let decode i ad tlen payload =
                 Plain p tag true )
             else (
                 let lf = l - lt - lp in  // faking minimal padding (lx = 0)
-                assume(Within lf rg);
+                assume(within lf rg);
                 let (f, tag) = split ftx lf in
                 lemma_split ftx lf;
                 let p = LHAEPlain.mk_plain i ad rg f in

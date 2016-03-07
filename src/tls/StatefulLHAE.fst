@@ -225,7 +225,7 @@ abstract val encrypt: #i:gid -> #ad:adata i
                 /\ modifies (Set.singleton wr.region) h0 h1
                 /\ modifies_rref wr.region (refs_in_e wr) h0 h1
                 /\ sel h1 wr.seqn = sel h0 wr.seqn + 1
-                /\ Wider (Range.cipherRangeClass i (length c)) rg
+                /\ wider (Range.cipherRangeClass i (length c)) rg
                 /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))
 let encrypt i ad rg (State _ log seqn key) f =
   let n = !seqn in

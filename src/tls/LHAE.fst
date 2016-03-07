@@ -172,7 +172,7 @@ val decrypt:
   c:cipher -> res:
   ( ((;i) decryptor *  rg:range * (;i,ad,rg) LHAEPlain.plain)
      {rg = cipherRangeClass i (length c)}
-  ) Result
+  ) result
    {
      (safeId i ==>
         (forall p. ENC.Encrypted i ad c p <==> exists k r. res = Correct (k,r,p)))}

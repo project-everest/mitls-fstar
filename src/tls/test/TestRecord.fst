@@ -15,7 +15,7 @@ let hex_of_bytes = Platform.Bytes.hex_of_bytes
 
 let r = HyperHeap.root
 
-let fake_aead (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string): bytes =
+let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string): bytes =
   // AEAD_GCM.gid -> LHAEPlain.id -> TLSInfo.id
   let id = {
     msId = noMsId;
@@ -65,7 +65,7 @@ let fake_aead (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
   // FIXME: without the three additional #-arguments below, extraction crashes
   StatefulLHAE.encrypt #id #ad #rg w f
 
-let fake_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
+let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
   // TLSInfo.id
   let id = {
     msId = noMsId;
@@ -111,7 +111,7 @@ let fake_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (pl
 
 let test_count = ref 0
 
-let test_aead (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) =
+let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) =
   let output = fake_aead pv aeAlg key iv plain in
   let output = hex_of_bytes output in
   if output <> cipher then begin
@@ -125,7 +125,7 @@ let test_aead (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
-let test_cbc (pv: ProtocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) (macKey: string) =
+let test_cbc (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) (macKey: string) =
   let output = fake_cbc pv aeAlg key iv plain macKey in
   let output = hex_of_bytes output in
   if output <> cipher then begin

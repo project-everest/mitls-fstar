@@ -29,7 +29,7 @@ type nego = {
      n_client_random: TLSInfo.random;
      n_server_random: TLSInfo.random;
      n_sessionID: sessionID;
-     n_protocol_version: ProtocolVersion;
+     n_protocol_version: protocolVersion;
      n_cipher_suite: known_cipher_suite;
      n_compression: Compression;
      n_extensions: negotiatedExtensions;
@@ -137,7 +137,7 @@ let prepareClientHello cfg ri sido : CH * log =
   (ch,clientHelloBytes ch)
 
 (* Is [pv1 >= pv2]? *)
-val gte_pv: ProtocolVersion -> ProtocolVersion -> Tot bool
+val gte_pv: protocolVersion -> protocolVersion -> Tot bool
 let gte_pv pv1 pv2 =
   match pv1 with
   | SSL_3p0 -> (match pv2 with | SSL_3p0 -> true | _ -> false)
@@ -148,7 +148,7 @@ let gte_pv pv1 pv2 =
 
 (* Returns [c] if [c] is within the range of acceptable versions for [cfg],
  * [Error] otherwise. *)
-val negotiateVersion: cfg:config -> c:ProtocolVersion -> Tot (Result ProtocolVersion)
+val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
 let negotiateVersion cfg c =
   if gte_pv c cfg.minVer && gte_pv cfg.maxVer c then Correct c
   else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
@@ -157,13 +157,13 @@ val negotiate:#a:Type -> list a -> list a -> Tot (option a)
 let negotiate l1 l2 =
   List.tryFindT (fun s -> List.existsb (fun c -> c = s) l1) l2
 
-val negotiateCipherSuite: cfg:config -> pv:ProtocolVersion -> c:known_cipher_suites -> Tot (Result known_cipher_suite)
+val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> c:known_cipher_suites -> Tot (result known_cipher_suite)
 let negotiateCipherSuite cfg pv c =
   match negotiate c cfg.ciphersuites with
   | Some(cs) -> Correct(cs)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
-val negotiateCompression: cfg:config -> pv:ProtocolVersion -> c:list Compression -> Tot (Result Compression)
+val negotiateCompression: cfg:config -> pv:protocolVersion -> c:list Compression -> Tot (result Compression)
 let negotiateCompression cfg pv c =
   match negotiate c cfg.compressions with
   | Some(cs) -> Correct(cs)
@@ -174,7 +174,7 @@ val getCachedSession: cfg:config -> ch:CH -> option Session
 let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
-val prepareServerHello: config -> option ri -> CH -> log -> Result (bytes * nego * option ake * log)
+val prepareServerHello: config -> option ri -> CH -> log -> result (bytes * nego * option ake * log)
 let prepareServerHello cfg ri ch i_log =
   let srand = Nonce.mkHelloRandom() in
   match getCachedSession cfg ch with
@@ -230,7 +230,7 @@ let prepareServerHello cfg ri ch i_log =
     Correct (shB,nego,None,o_log))
 
 (* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
-val isSentinelRandomValue: ProtocolVersion -> ProtocolVersion -> TLSInfo.random -> Tot bool
+val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
   gte_pv c_pv TLS_1p3 && gte_pv TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
   gte_pv c_pv TLS_1p2 && gte_pv TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
@@ -240,7 +240,7 @@ let isSentinelRandomValue c_pv s_pv s_random =
   - the server is not newer than the client
   - there is no undesired downgrade (as indicated by the special random values).
 *)
-val acceptableVersion: config -> CH -> ProtocolVersion -> TLSInfo.random -> Tot bool
+val acceptableVersion: config -> CH -> protocolVersion -> TLSInfo.random -> Tot bool
 let acceptableVersion cfg ch s_pv s_random =
   match negotiateVersion cfg ch.ch_protocol_version with
   | Correct c_pv -> 
@@ -255,7 +255,7 @@ let acceptableVersion cfg ch s_pv s_random =
   - TODO: [s_cs] is supported by the protocol version (e.g. no GCM with
     TLS<1.2).
 *)
-val acceptableCipherSuite: config -> CH -> ProtocolVersion -> known_cipher_suite -> Tot bool
+val acceptableCipherSuite: config -> CH -> protocolVersion -> known_cipher_suite -> Tot bool
 let acceptableCipherSuite cfg ch s_pv s_cs =
   // JP: I would think the first line implies the second one?
   List.existsb (fun x -> x = s_cs) ch.ch_cipher_suites &&
@@ -265,12 +265,12 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
 
 (* Our server implementation doesn't support compression, meaning [cmp] is
  always [NullCompression], so it's always a valid compression. *)
-val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
+val acceptableCompression: config -> CH -> protocolVersion -> Compression -> Tot bool
 let acceptableCompression cfg ch pv cmp =
   true
 
 val processServerHello: c:config -> s:clientState c{is_C_HelloSent s} -> SH ->
-                           Result (s':clientState c{is_C_HelloReceived s'})
+                           result (s':clientState c{is_C_HelloReceived s'})
 let processServerHello cfg (C_HelloSent (ri, eph, ch)) sh =
   let res = ch_is_resumption ch in
   // FIXME 1.3
@@ -309,7 +309,7 @@ let processServerHello cfg (C_HelloSent (ri, eph, ch)) sh =
         Correct (C_HelloReceived (o_nego, None))
 
 
-val prepareServerAke: config -> nego -> log -> Result (bytes * ID * eph_s)
+val prepareServerAke: config -> nego -> log -> result (bytes * ID * eph_s)
 let prepareServerAke cfg nego nlog = 
     match nego.n_cipher_suite with
     | CipherSuite Kex_RSA None _ ->
@@ -348,13 +348,13 @@ let process_ake_s cfg nego ml log =
 
 *)
 
-assume val prepareClientFinishedFull: config -> nego -> ake -> log -> Result (bytes * cVerifyData * log)
-assume val processClientFinishedFull: config -> nego -> ake -> log -> list hs_msg -> Result (bytes * ri)
-assume val processServerFinishedFull: config -> nego -> ake -> cVerifyData -> log -> list hs_msg -> Result (ri)
+assume val prepareClientFinishedFull: config -> nego -> ake -> log -> result (bytes * cVerifyData * log)
+assume val processClientFinishedFull: config -> nego -> ake -> log -> list hs_msg -> result (bytes * ri)
+assume val processServerFinishedFull: config -> nego -> ake -> cVerifyData -> log -> list hs_msg -> result (ri)
 
-assume val prepareServerFinishedAbbr: config -> nego -> ake -> log -> Result (bytes * sVerifyData * log)
-assume val processServerFinishedAbbr: config -> nego -> ake -> log -> list hs_msg -> Result (bytes * ri)
-assume val processClientFinishedAbbr: config -> nego -> ake -> cVerifyData -> log -> list hs_msg -> Result (ri)
+assume val prepareServerFinishedAbbr: config -> nego -> ake -> log -> result (bytes * sVerifyData * log)
+assume val processServerFinishedAbbr: config -> nego -> ake -> log -> list hs_msg -> result (bytes * ri)
+assume val processClientFinishedAbbr: config -> nego -> ake -> cVerifyData -> log -> list hs_msg -> result (ri)
 
 type hs_msg_bufs = {
      hs_incoming_parsed : list hs_msg;
@@ -364,18 +364,18 @@ type hs_msg_bufs = {
 
 assume val client_get_message: cfg:config -> st:clientState cfg ->
                  buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+                 result(bytes * clientState cfg * hs_msg_bufs)
 
 assume val client_put_message: cfg:config -> st:clientState cfg ->
                  buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+                 result(bytes * clientState cfg * hs_msg_bufs)
 
 
 assume val server_get_message: cfg:config -> st:clientState cfg ->
                  buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+                 result(bytes * clientState cfg * hs_msg_bufs)
 
 assume val server_put_message: cfg:config -> st:clientState cfg ->
                  buf: hs_msg_bufs ->
-                 Result(bytes * clientState cfg * hs_msg_bufs)
+                 result(bytes * clientState cfg * hs_msg_bufs)
 

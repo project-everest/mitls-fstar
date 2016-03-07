@@ -41,7 +41,7 @@ let (* private *) extractMS si pmsBytes : PRF.masterSecret =
     PRF.coerce i res
 
 
-let (* private *) accessRSAPMS (pk:RSAKey.pk) (cv:ProtocolVersion) pms = 
+let (* private *) accessRSAPMS (pk:RSAKey.pk) (cv:protocolVersion) pms = 
   match pms with 
   #if ideal
   | IdealRSAPMS(s) -> s.seed

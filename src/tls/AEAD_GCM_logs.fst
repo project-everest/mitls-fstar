@@ -58,7 +58,7 @@ let gen i =
 
 assume val enc0:
   i:id -> e:encryptor i -> ad:LHAEPlain.adata i -> r:range ->
-  p:bytes{Within (length p) r} -> ST cipher
+  p:bytes{within (length p) r} -> ST cipher
   (requires (fun h -> Heap.contains h e.counter))
   (ensures (fun h0 c h1 -> length c = Range.targetLength i r
                         /\ Heap.contains h1 e.counter

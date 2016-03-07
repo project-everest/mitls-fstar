@@ -440,7 +440,7 @@ let send_payload c i f =
 
  
 // check vs record
-val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
+val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
   (requires (fun h -> 
     st_inv c h /\ 
     sel h c.writing <> Closed /\
@@ -531,7 +531,7 @@ let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is
 val project_one: #i:id -> entry i -> Tot (option (DataStream.delta i))
 let project_one #i en = match fragment_entry en with
    | Content.CT_Data (rg: frange i) d -> 
-     cut(Wider fragment_range rg); 
+     cut(wider fragment_range rg); 
      Some (DataStream.Data d)
      
    | Content.CT_Alert rg alf -> // alert parsing may fail, or return several deltas
@@ -947,7 +947,7 @@ let alertFlush c x y : ioresult_i (rd_i c) =
   | SentClose      -> Read DataStream.Close // do we need this case?
   | WriteError x y -> ReadError x y
 
-//* private val getHeader: c:Connection -> ST (Result ((ct:ContentType * len:nat){len > 0 /\ len <= max_TLSCipher_fragment_length}))
+//* private val getHeader: c:Connection -> ST (result ((ct:ContentType * len:nat){len > 0 /\ len <= max_TLSCipher_fragment_length}))
 //*   (requires (fun h -> True))
 //*   (ensures (fun h0 r h1 -> h0 = h1))
 //* we should require the c.read is not Closing \/ Closed
@@ -966,7 +966,7 @@ let getHeader c =
 //* private val getFragment: c:connection -> ct:ct -> len:nat -> ST (rg * msg)
 //* "stateful, but only affecting the StAE instance"
 //* can we even deduce the range from len?
-let getFragment c ct len : TLSError.Result (Content.fragment (rd_i c)) =
+let getFragment c ct len : TLSError.result (Content.fragment (rd_i c)) =
     match Platform.Tcp.recv c.tcp len with
     | Error x -> Error(AD_internal_error,x)
     | Correct payload -> unexpected "todo"
@@ -1140,10 +1140,10 @@ let readOne c : ioresult_i (rd_i c) =
 
 //* ?
 //* private val sameID: c0:Connection -> c1:Connection ->
-//* 	o0: readOutcome c0 {IOResult_i(c0,c1,o0)} ->
+//* 	o0: readOutcome c0 {IOresult_i(c0,c1,o0)} ->
 //* 	c2: nextCn c0 { CnStream_i(c0) = CnStream_i(c2) /\
 //*                   CnStream_o(c0) = CnStream_o(c2)} ->
-//* 	o1: readOutcome c2 {o0 = o1 /\ IOResult_i(c2,c1,o1)}
+//* 	o1: readOutcome c2 {o0 = o1 /\ IOresult_i(c2,c1,o1)}
 (*
 let sameID (c0:Connection) (c1:Connection) res (c2:Connection) =
     match res with

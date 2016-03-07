@@ -22,7 +22,7 @@ open Range
 (*
 assume val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
-  -> Tot (Result (b:(bytes * bytes){
+  -> Tot (result (b:(bytes * bytes){
                       repr_bytes (length (fst b)) <= lSize
                   /\  Seq.Eq vlb (vlbytes lSize (fst b) @| (snd b))}))
 
@@ -94,7 +94,7 @@ let parseHt b =
 /// Messages
 
 type CH = {
-  ch_protocol_version:ProtocolVersion;
+  ch_protocol_version:protocolVersion;
   ch_client_random:TLSInfo.random;
   ch_sessionID:sessionID;
   ch_cipher_suites:(k:known_cipher_suites{List.length k < 256});
@@ -107,7 +107,7 @@ let ch_is_resumption { ch_sessionID = sid } =
   length sid > 0
 
 type SH = {
-  sh_protocol_version:ProtocolVersion;
+  sh_protocol_version:protocolVersion;
   sh_server_random:TLSInfo.random;
   sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
   sh_cipher_suite:known_cipher_suite;
@@ -117,7 +117,7 @@ type SH = {
 
 (* Hello retry request *)
 type HRR = {
-  hrr_protocol_version:ProtocolVersion;
+  hrr_protocol_version:protocolVersion;
   hrr_cipher_suite:known_cipher_suite;
   hrr_named_group: namedGroup; // JK : is it the expected type here ?
   hrr_extensions:(he:list extension{List.length he < 256});
@@ -219,7 +219,7 @@ let messageBytes ht data =
     htb @| vldata
 
 
-val parseMessage : buf:bytes -> Result (option (rem:bytes & hstype:HandshakeType & payload:bytes & to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.Eq buf (to_log @| rem)) } )) 
+val parseMessage : buf:bytes -> result (option (rem:bytes & hstype:HandshakeType & payload:bytes & to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.Eq buf (to_log @| rem)) } )) 
 let parseMessage buf =
     (* Somewhat inefficient implementation:
        we repeatedly parse the first 4 bytes of the incoming buffer until we have a complete message;
@@ -266,7 +266,7 @@ let clientHelloBytes ch =
    as it is now 
 *)
 val parseClientHello : data:bytes{repr_bytes(length data) <= 3} -> 
-                       r:Result (x:CH{exists (x':CH). Seq.Eq (clientHelloBytes x') (messageBytes HT_client_hello data)
+                       r:result (x:CH{exists (x':CH). Seq.Eq (clientHelloBytes x') (messageBytes HT_client_hello data)
                                                      /\ x.ch_protocol_version = x'.ch_protocol_version 
                                                      /\ x.ch_client_random = x'.ch_client_random
                                                      /\ x.ch_sessionID = x'.ch_sessionID })
@@ -341,7 +341,7 @@ let serverHelloBytes sh =
     messageBytes HT_server_hello data
 
 val parseServerHello: data:bytes{repr_bytes(length data)<=3}  -> 
-                      r:Result (x:SH{Seq.Eq (serverHelloBytes x) (messageBytes HT_server_hello data)})
+                      r:result (x:SH{Seq.Eq (serverHelloBytes x) (messageBytes HT_server_hello data)})
 let parseServerHello data =
     if length data >= 34 then
         let (serverVerBytes,serverRandomBytes,data) = split2 data 2 32 in
@@ -410,7 +410,7 @@ val certificateBytes: CRT -> Tot bytes
 let certificateBytes crt = messageBytes HT_certificate (Cert.certificateListBytes crt.crt_chain)
 
 val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> 
-                      Result (r:CRT{Seq.Eq (certificateBytes r) (messageBytes HT_certificate data)})
+                      result (r:CRT{Seq.Eq (certificateBytes r) (messageBytes HT_certificate data)})
 let parseCertificate data = 
     if length data >= 3 then
         match vlparse 3 data with
@@ -435,8 +435,8 @@ let certificateRequestBytes cr =
             @| dnB in
     messageBytes HT_certificate_request data
 
-val parseCertificateRequest: pv:ProtocolVersion -> data:bytes{repr_bytes(length data) <= 3} -> 
-                             Result CR
+val parseCertificateRequest: pv:protocolVersion -> data:bytes{repr_bytes(length data) <= 3} -> 
+                             result CR
 let parseCertificateRequest version data =
     if length data >= 1 then
         match vlsplit 1 data with
@@ -488,7 +488,7 @@ let mk_certificateRequestBytes sign cs version =
 
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
-val clientKeyExchangeBytes: ProtocolVersion -> CKE -> Tot bytes
+val clientKeyExchangeBytes: protocolVersion -> CKE -> Tot bytes
 let clientKeyExchangeBytes pv cke = 
   let kexB =              
     match pv,cke.cke_kex_c with
@@ -499,8 +499,8 @@ let clientKeyExchangeBytes pv cke =
     | _,KEX_C_DH -> empty_bytes in
   messageBytes HT_client_key_exchange kexB
 
-val parseClientKeyExchange: p:ProtocolVersion -> kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    Result (cke:CKE{Seq.Eq (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)})
+val parseClientKeyExchange: p:protocolVersion -> kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
+    result (cke:CKE{Seq.Eq (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)})
 let parseClientKeyExchange pv kex data = 
   match pv,kex with
   | _,Kex_DH -> 
@@ -548,8 +548,8 @@ let serverKeyExchangeBytes ske =
     messageBytes HT_server_key_exchange payload
 
 val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    Result (s:SKE{Seq.Eq (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)})
-let parseServerKeyExchange kex payload : Result SKE = 
+    result (s:SKE{Seq.Eq (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)})
+let parseServerKeyExchange kex payload : result SKE = 
     match kex with
     | Kex_DH -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     | Kex_RSA -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -603,7 +603,7 @@ let certificateVerifyBytes cv =
     messageBytes HT_certificate_verify cv.cv_sig
 
 val parseCertificateVerify: data:bytes{repr_bytes(length data) <= 3} ->
-    Result (c:CV{Seq.Eq (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
+    result (c:CV{Seq.Eq (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
 let parseCertificateVerify data = 
     correct ({cv_sig = data})
 
@@ -612,7 +612,7 @@ let finishedBytes fin =
     messageBytes HT_finished fin.fin_vd
 
 val parseFinished: data:bytes{repr_bytes(length data)<=3} ->
-    Result(f:FIN{Seq.Eq (finishedBytes f) (messageBytes HT_finished data)})
+    result(f:FIN{Seq.Eq (finishedBytes f) (messageBytes HT_finished data)})
 let parseFinished data = 
     Correct ({fin_vd = data})
 
@@ -623,8 +623,8 @@ let sessionTicketBytes sticket =
     messageBytes HT_session_ticket payload
 
 val parseSessionTicket: b:bytes{repr_bytes(length b) <= 3} -> 
-    Result (s:STICKET{Seq.Eq (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
-let parseSessionTicket payload : Result STICKET = 
+    result (s:STICKET{Seq.Eq (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
+let parseSessionTicket payload : result STICKET = 
   if length payload >= 4 && length payload < 65542 then
     let (lifetime_hint, ticket) = split payload 4 in
     Correct({sticket_ticket_lifetime_hint = lifetime_hint; sticket_ticket = ticket})
@@ -672,8 +672,8 @@ let encryptedExtensionsBytes ee =
     messageBytes HT_encrypted_extensions payload
 
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
-    Result (s:EE{Seq.Eq (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})
-let parseEncryptedExtensions payload : Result EE = 
+    result (s:EE{Seq.Eq (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})
+let parseEncryptedExtensions payload : result EE = 
   match parseExtensions payload with
   | Error(z) -> Error(z)
   | Correct(exts) -> Correct({ee_extensions = exts;})
@@ -694,8 +694,8 @@ let serverConfigurationBytes sc =
   messageBytes HT_server_configuration payload
 
 val parseServerConfiguration: b:bytes{repr_bytes(length b) <= 3} -> 
-    Result (s:SC{Seq.Eq (serverConfigurationBytes s) (messageBytes HT_server_configuration b)})
-let parseServerConfiguration payload : Result SC = 
+    result (s:SC{Seq.Eq (serverConfigurationBytes s) (messageBytes HT_server_configuration b)})
+let parseServerConfiguration payload : result SC = 
   match vlsplit 2 payload with
   | Correct(config_id, data) -> (
       if length data >= 6 then
@@ -740,8 +740,8 @@ let nextProtocolBytes np =
   messageBytes HT_next_protocol (selected_protocol @| padding)
 
 val parseNextProtocol: b:bytes -> 
-    Result (s:NP{Seq.Eq (nextProtocolBytes s) (messageBytes HT_next_protocol b)})
-let parseNextProtocol payload : Result NP = 
+    result (s:NP{Seq.Eq (nextProtocolBytes s) (messageBytes HT_next_protocol b)})
+let parseNextProtocol payload : result NP = 
   match vlsplit 1 payload with
   | Error(z) -> Error(z)
   | Correct(selected_protocol, data) ->

@@ -54,7 +54,7 @@ let rec project i fs =
       let fs, f = split #(fragment i) fs in
       let ds = project i fs in
       (match f with
-      | CT_Data (rg: frange i) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d)
+      | CT_Data (rg: frange i) d -> cut(wider fragment_range rg); snoc ds (DataStream.Data d)
       | CT_Alert rg alf -> // alert parsing may fail, or return several deltas
           if length alf = 2 then 
           (match Alert.parse alf with

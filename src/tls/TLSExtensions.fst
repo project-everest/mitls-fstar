@@ -118,7 +118,7 @@ let compile_sni_list l =
     | SNI_UNKNOWN(t, x) :: r -> (bytes_of_int 1 t) @| bytes_of_int 2 (length x) @| x @| aux r
     in aux l
 
-val parse_sni_list: b:bytes -> Tot (Result (list serverName))
+val parse_sni_list: b:bytes -> Tot (result (list serverName))
 let parse_sni_list b  =
     let rec (aux:bytes -> Tot (CanFail (serverName))) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
@@ -163,7 +163,7 @@ let compile_curve_list l =
     let bl: bytes = vlbytes 2 al in
     bl
 
-val parse_curve_list: bytes -> Tot (Result (list ECGroup.ec_all_curve))
+val parse_curve_list: bytes -> Tot (result (list ECGroup.ec_all_curve))
 let parse_curve_list b =
     let rec (aux:bytes -> Tot (CanFail ECGroup.ec_all_curve)) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
@@ -188,7 +188,7 @@ let parse_curve_list b =
     | ExOK([]) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Empty supported curve list")
     | ExOK(l) -> correct (l))
 
-val parse_ecpf_list: bytes -> Tot (Result (list ECGroup.point_format))
+val parse_ecpf_list: bytes -> Tot (result (list ECGroup.point_format))
 let parse_ecpf_list b =
     let rec (aux:bytes -> Tot (CanFail (ECGroup.point_format))) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
@@ -218,7 +218,7 @@ let compile_ecpf_list l =
     let bl:bytes = vlbytes 1 al in
     bl
 
-val addOnce: extension -> list extension -> Tot (Result (list extension))
+val addOnce: extension -> list extension -> Tot (result (list extension))
 let addOnce ext extList =
     if List.existsb (sameExt ext) extList then
         Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
@@ -348,7 +348,7 @@ and parseEarlyDataIndication b =
   else Correct (ServerEarlyDataIndication)
 
 and parseExtensions b =
-  let rec (aux:bytes -> list extension -> Tot (Result (list extension))) = fun b exts ->
+  let rec (aux:bytes -> list extension -> Tot (result (list extension))) = fun b exts ->
     if length b >= 4 then
       let ht, b = split b 2 in
       match vlsplit 2 b with
@@ -365,7 +365,7 @@ and parseExtensions b =
   | Correct(b) -> aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
 
-val parseOptExtensions: data:bytes -> Result (option (list extension))
+val parseOptExtensions: data:bytes -> result (option (list extension))
 let parseOptExtensions data =
   if length data = 0 then Correct(None)
   else match parseExtensions data with
@@ -373,8 +373,8 @@ let parseOptExtensions data =
   | Error(z) -> Error(z)
   
 // JK : Only client side ? 
-val prepareExtensions: config -> ConnectionInfo -> option (cVerifyData * sVerifyData) -> l:list extension{List.length l < 256}
-let prepareExtensions (cfg:config) (conn:ConnectionInfo) ri =
+val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> l:list extension{List.length l < 256}
+let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
        match ri with
@@ -399,8 +399,8 @@ let prepareExtensions (cfg:config) (conn:ConnectionInfo) ri =
 // TODO
 // ADL the negotiation of renegotiation indication is incorrect
 // ADL needs to be consistent with clientToNegotiatedExtension
-val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Result negotiatedExtensions -> extension -> Tot (Result (negotiatedExtensions))
-let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : Result (negotiatedExtensions)=
+val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> result negotiatedExtensions -> extension -> Tot (result (negotiatedExtensions))
+let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : result (negotiatedExtensions)=
     match res with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
@@ -439,7 +439,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : Resul
         else
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
 
-val negotiateClientExtensions: ProtocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (Result (negotiatedExtensions))
+val negotiateClientExtensions: protocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   match pv with
   | SSL_3p0 ->
@@ -529,7 +529,7 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
                 {neg with ne_extended_padding = true}
     | _ -> neg // JK : handle remaining cases
 
-val negotiateServerExtensions: ProtocolVersion -> option (list extension) -> known_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> bool -> Tot (Result (option (list extension) * negotiatedExtensions))
+val negotiateServerExtensions: protocolVersion -> option (list extension) -> known_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> bool -> Tot (result (option (list extension) * negotiatedExtensions))
 let negotiateServerExtensions pv cExtL csl cfg cs ri resuming =
    match cExtL with
    | Some cExtL ->
@@ -580,7 +580,7 @@ val hasExtendedPadding: id -> Tot bool
 let hasExtendedPadding id = id.ext.ne_extended_padding = true
 
 // JK : cannot add total effect here because of the exception thrown
-val default_sigHashAlg_fromSig: ProtocolVersion -> sigAlg -> (list sigHashAlg)
+val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> (list sigHashAlg)
 let default_sigHashAlg_fromSig pv sigAlg=
     match sigAlg with
     | RSASIG ->
@@ -595,7 +595,7 @@ let default_sigHashAlg_fromSig pv sigAlg=
         //| SSL_3p0 -> [(DSA,NULL)]
     | _ -> unexpected "[default_sigHashAlg_fromSig] invoked on an invalid signature algorithm"
 
-val default_sigHashAlg: ProtocolVersion -> cipherSuite -> l:list Sig.alg{List.length l <= 1}
+val default_sigHashAlg: protocolVersion -> cipherSuite -> l:list Sig.alg{List.length l <= 1}
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
 
@@ -607,13 +607,13 @@ val sigHashAlg_bySigList: list Sig.alg -> list sigAlg -> Tot (list Sig.alg)
 let sigHashAlg_bySigList (algList:list Sig.alg) (sigAlgList:list sigAlg):list Sig.alg =
     List.Tot.choose (fun alg -> let (sigA,_) = alg in if (List.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
 
-val cert_type_to_SigHashAlg: certType -> ProtocolVersion -> list sigHashAlg
+val cert_type_to_SigHashAlg: certType -> protocolVersion -> list sigHashAlg
 let cert_type_to_SigHashAlg ct pv =
     match ct with
     | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> default_sigHashAlg_fromSig pv DSA
     | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> default_sigHashAlg_fromSig pv RSASIG
 
-val cert_type_list_to_SigHashAlg: list certType -> ProtocolVersion -> list sigHashAlg
+val cert_type_list_to_SigHashAlg: list certType -> protocolVersion -> list sigHashAlg
 let rec cert_type_list_to_SigHashAlg ctl pv =
     // FIXME: Generates a list with duplicates!
     match ctl with

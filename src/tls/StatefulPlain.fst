@@ -63,7 +63,7 @@ let lemma_makeAD_parseAD i ct = () //cut (Seq.Eq ad (parseAD i (makeAD i n ad)))
 (*** plaintext fragments ***)
 
 type is_plain (i: id) (ad: adata i) (rg: range) (f: fragment i) =
-  fst (ct_rg i f) = parseAD i ad /\ Wider rg (snd (ct_rg i f))
+  fst (ct_rg i f) = parseAD i ad /\ wider rg (snd (ct_rg i f))
 
 // naming: we switch from fragment to plain as we are no longer TLS-specific
 private type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
@@ -83,7 +83,7 @@ val repr: i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p:plain i ad rg -> Tot
 let repr i ad rg f = Content.repr i f
 
 logic type wf_ad_rg i ad rg = 
-  Wider fragment_range rg  /\ 
+  wider fragment_range rg  /\ 
   (parseAD i ad = Change_cipher_spec ==> rg = zero)
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->

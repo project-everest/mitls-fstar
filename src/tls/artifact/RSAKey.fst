@@ -12,7 +12,7 @@ type pred = | SK_PK of sk * pk
 
 //let honest_log = Platform.Error.if_ideal (fun _ -> ref [])
 let honest (pk:pk): bool = failwith "only used in ideal implementation, unverified"
-let strong (pv:TLSConstants.ProtocolVersion): bool = failwith "only used in ideal implementation, unverified"
+let strong (pv:TLSConstants.protocolVersion): bool = failwith "only used in ideal implementation, unverified"
 
 type modulus  = bytes
 type exponent = bytes

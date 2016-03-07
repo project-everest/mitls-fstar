@@ -80,7 +80,7 @@ let makeExtPad (i:id) (r:range) (f:fragment) =
 #endif
         f
 
-let parseExtPad (i:id) (r:range) (f:fragment) : Result (fragment) =
+let parseExtPad (i:id) (r:range) (f:fragment) : result (fragment) =
 #if TLSExt_extendedPadding
     if TLSExtensions.hasExtendedPadding i then
         let (e',s,d) = f.frag in

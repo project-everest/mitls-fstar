@@ -60,7 +60,7 @@ let rec scan bs j =
 val scan: i:id { ~ (authId i) } -> bs:plainRepr -> 
   j: nat { j < length bs /\ 
          (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0uy) } -> 
-  Tot(Result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
+  Tot(result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
  
 let rec scan i bs j =
   (* TODO: extraction bug *)

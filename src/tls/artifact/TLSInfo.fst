@@ -59,8 +59,8 @@ type helloReqPolicy =
 
 type config = {
     (* Supported versions, ciphersuites, and compressions *)
-    minVer: ProtocolVersion;
-    maxVer: ProtocolVersion;
+    minVer: protocolVersion;
+    maxVer: protocolVersion;
     ciphersuites: x:known_cipher_suites{List.length x < 256};
     compressions: l:list Compression{ List.length l <= 1 };
 
@@ -140,14 +140,14 @@ let defaultConfig =
 type random = lbytes 32
 type crand = random
 type srand = random
-type CsRands = bytes
+type csRands = bytes
 
 type cVerifyData = bytes (* ClientFinished payload *)
 type sVerifyData = bytes (* ServerFinished payload *)
 
 type sessionHash = bytes
 
-let noCsr:CsRands = Nonce.noCsr
+let noCsr:csRands = Nonce.noCsr
 
 // -------------------------------------------------------------------
 // We support these extensions, with session scopes
@@ -206,11 +206,11 @@ assume val strongKEX: pmsId -> Tot bool
 
 // ``kefAlg is a strong randomness extractor, despite all other kefAlgs'', guarding idealization in KEF
 
-assume val strongKEF: KefAlg -> Tot bool
+assume val strongKEF: kefAlg -> Tot bool
 
 // guarding idealizations for KDF and VerifyData (see PRF.fs)
-assume val strongKDF: KdfAlg -> Tot bool
-assume val strongVD: VdAlg -> Tot bool
+assume val strongKDF: kdfAlg -> Tot bool
+assume val strongVD: vdAlg -> Tot bool
 
 // -------------------------------------------------------------------
 // Session information (public immutable data)
@@ -219,10 +219,10 @@ type sessionID = b:bytes { length b <= 32 }
 // ``An arbitrary byte sequence chosen by the server
 // to identify an active or resumable session state.''
 
-type SessionInfo = {
+type sessionInfo = {
     init_crand: crand;
     init_srand: srand;
-    protocol_version: ProtocolVersion;
+    protocol_version: protocolVersion;
     cipher_suite: cipherSuite;
     compression: Compression;
     extensions: negotiatedExtensions;
@@ -242,26 +242,26 @@ type SessionInfo = {
 // for certificates, the empty list represents the absence of identity
 // (possibly refusing to present requested certs)
 
-val csrands: SessionInfo -> Tot CsRands
+val csrands: sessionInfo -> Tot csRands
 let csrands si = si.init_crand @| si.init_srand
 
-// Getting algorithms from SessionInfo
+// Getting algorithms from sessionInfo
 
-val kefAlg: si:SessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot KefAlg
+val kefAlg: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg
 let kefAlg si =
   match si.protocol_version with
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extract_label
   | TLS_1p2           -> PRF_TLS_1p2 extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
 
-val kefAlgExtended: si:SessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot KefAlg
+val kefAlgExtended: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg
 let kefAlgExtended si =
   match si.protocol_version with
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extended_extract_label
   | TLS_1p2           -> PRF_TLS_1p2 extended_extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
 
-val kdfAlg: si:SessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot KdfAlg
+val kdfAlg: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kdfAlg
 let kdfAlg si =
   match si.protocol_version with
   | SSL_3p0           -> PRF_SSL3_nested
@@ -270,14 +270,14 @@ let kdfAlg si =
 
 let vdAlg si = si.protocol_version, si.cipher_suite
 
-val siAuthEncAlg: si:SessionInfo { si.protocol_version = TLS_1p2 &&
+val siAuthEncAlg: si:sessionInfo { si.protocol_version = TLS_1p2 &&
                               pvcs si.protocol_version si.cipher_suite } -> Tot aeAlg
 let siAuthEncAlg si = get_aeAlg si.cipher_suite
 
 type msId = // We record the parameters used to derive the master secret;
-  | StandardMS : pmsId -> CsRands -> KefAlg -> msId
+  | StandardMS : pmsId -> csRands -> kefAlg -> msId
             // the pms index, the nonces, and the PMS-PRF algorithm
-  | ExtendedMS : pmsId -> sessionHash -> KefAlg -> msId
+  | ExtendedMS : pmsId -> sessionHash -> kefAlg -> msId
             // the pms index, the hash of the session log, and the PMS-PRF algorithm
             // using the sessionHash instead of randoms prevent MiTM forwarding honest randoms
 
@@ -289,9 +289,9 @@ let honestMS = function
 val noMsId: i:msId { not (honestMS i) }
 let noMsId = StandardMS noPmsId noCsr PRF_SSL3_nested
 
-// Getting master-secret indexes out of SessionInfo
+// Getting master-secret indexes out of sessionInfo
 
-val msid: si:SessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
+val msid: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
 let msid si =
   if si.extensions.ne_extended_ms
   then ExtendedMS si.pmsId si.session_hash (kefAlgExtended si)
@@ -313,7 +313,7 @@ let strongHS si =
   strongPRF si &&
   strongSig si
 
-// Safety of SessionInfo crypto processing
+// Safety of sessionInfo crypto processing
 
 // Safe handshake for PMS-based extraction
 let safeCRE si = honestMS (msid si)
@@ -324,7 +324,7 @@ let safeVD si = honestMS (msid si) && strongVD(vdAlg si)
 assume val int_cma: macAlg -> Tot bool
 let strongAuthSI si = true
 
-assume val strongAESI: SessionInfo -> Tot bool
+assume val strongAESI: sessionInfo -> Tot bool
 
 // -------------------------------------------------------------------
 // Epoch descriptors (public immutable data)
@@ -338,11 +338,11 @@ type abbrInfo =
 (* NS: TODO ... migrate these to curried style data constructors *)
 type preEpoch =
     | InitEpoch of role
-    | FullEpoch : SessionInfo  -> preEpoch -> preEpoch
+    | FullEpoch : sessionInfo  -> preEpoch -> preEpoch
     | AbbrEpoch : ai:abbrInfo -> resumed:preEpoch -> pred:preEpoch -> preEpoch
 
 (* previously the last two cases were
-    | SuccEpoch of crand * srand * si:SessionInfo * pred:preEpoch
+    | SuccEpoch of crand * srand * si:sessionInfo * pred:preEpoch
  *)
 
 (* we enforce a well-formed invariant to ensure the functions below
@@ -375,7 +375,7 @@ let rec peer = function
   | FullEpoch si p   -> FullEpoch si (peer p)
   | AbbrEpoch ai r p -> AbbrEpoch ai (peer r) (peer p)
 
-val epochSI: succEpoch -> Tot SessionInfo
+val epochSI: succEpoch -> Tot sessionInfo
 let epochSI = function
   | FullEpoch si pe -> si
   | AbbrEpoch ai (FullEpoch si pe1) pe2 -> si
@@ -395,12 +395,12 @@ let epochCRand = function
 
 let epochCSRands e = epochCRand e @| epochSRand e
 
-type preConnectionInfo = {
+type pre_connectionInfo = {
     role: role;      // cached, could be retrieved from id_out
     id_rand: random; // our random
     id_in: epoch;
     id_out: epoch}
-type ConnectionInfo = preConnectionInfo
+type connectionInfo = pre_connectionInfo
 
 //$ inline
 let connectionRole ci = ci.role
@@ -433,18 +433,18 @@ let strongAE e = strongAESI (epochSI e)
 type id = {
   // indexes and algorithms of the session used in the key derivation
   msId   : msId;            // the index of the master secret used for key derivation
-  kdfAlg : KdfAlg;          // the KDF algorithm used for key derivation
-  pv     : ProtocolVersion; // should be part of aeAlg
+  kdfAlg : kdfAlg;          // the KDF algorithm used for key derivation
+  pv     : protocolVersion; // should be part of aeAlg
   aeAlg  : aeAlg;           // the authenticated-encryption algorithms
   // epoch-specific parameters
-  csrConn: CsRands;         // the client-server random of the connection
+  csrConn: csRands;         // the client-server random of the connection
   ext: negotiatedExtensions; // the extensions negotiated for the current session
   writer : role             // the role of the writer
   }
 
 let swap (i:id) = { i with writer = dualRole i.writer }
 
-val siId: si:SessionInfo{ is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))
+val siId: si:sessionInfo{ is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))
 			  /\ ((si.protocol_version = TLS_1p2) && (pvcs si.protocol_version si.cipher_suite))} -> role -> Tot id
 let siId si r =
   { msId    = msid si;
@@ -469,7 +469,7 @@ let pv_of_id (i:id) = i.pv
 let kdfAlg_of_id (i:id) = i.kdfAlg
 
 // Pretty printing
-let sinfo_to_string (si:SessionInfo) = ""
+let sinfo_to_string (si:sessionInfo) = ""
 
 let max_TLSPlaintext_fragment_length = 16384 (*@ 2^14 *)
 let max_TLSCompressed_fragment_length = max_TLSPlaintext_fragment_length + 1024
@@ -482,18 +482,18 @@ let cipher_repr n = lemma_repr_bytes_values n
 // -----------------------------------------------------------------------
 // Safety of key derivation depends on matching algorithms (see PRF)
 
-assume logic type KeyCommit   : CsRands -> ProtocolVersion -> aeAlg -> negotiatedExtensions -> Type
-assume logic type KeyGenClient: CsRands -> ProtocolVersion -> aeAlg -> negotiatedExtensions -> Type
-assume logic type SentCCS     : role -> SessionInfo -> Type
-assume logic type SentCCSAbbr : role -> abbrInfo -> Type
+assume logic type keyCommit   : csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
+assume logic type keyGenClient: csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
+assume logic type sentCCS     : role -> sessionInfo -> Type
+assume logic type sentCCSAbbr : role -> abbrInfo -> Type
 
 // ``the honest participants of handshake with this csr use matching aeAlgs''
-type Match (i:id) =
-    KeyCommit i.csrConn i.pv i.aeAlg i.ext
-    /\ KeyGenClient i.csrConn i.pv i.aeAlg i.ext
+type matches_id (i:id) =
+    keyCommit i.csrConn i.pv i.aeAlg i.ext
+    /\ keyGenClient i.csrConn i.pv i.aeAlg i.ext
 
 // This index is safe for MS-based key derivation
-assume val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ Match i) })
+assume val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ matches_id i) })
 
 // -----------------------------------------------------------------------
 // The two main safety properties for the record layer
@@ -539,9 +539,9 @@ let mk_id e =
 // and performing both strong session key generation & finished message verification
 
 // Safe handshake for this sessioninfo
-type SafeHS_SI (si:SessionInfo) = ((is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))) /\ (((si.protocol_version) = TLS_1p2) && (pvcs (si.protocol_version) (si.cipher_suite)))) /\ (honestPMS si.pmsId && strongHS si) /\ (exists r. Match(siId si r))
+type SafeHS_SI (si:sessionInfo) = ((is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))) /\ (((si.protocol_version) = TLS_1p2) && (pvcs (si.protocol_version) (si.cipher_suite)))) /\ (honestPMS si.pmsId && strongHS si) /\ (exists r. matches_id(siId si r))
 
-// Safety for epochs relies only on SessionInfo.
+// Safety for epochs relies only on sessionInfo.
 // This would change if we introduced a finer model of compromise
 // e.g. if we allowed the attacker to compromise specific epochs
 
@@ -552,12 +552,12 @@ assume val safeHS: e:epoch -> b:bool { b = true <==> SafeHS e }
 
 // ``The handshake is complete''
 type Open (e:epoch) = ( exists (r:role).
-  (is_FullEpoch e /\ SentCCS r     (epochSI e) /\ SentCCS    (dualRole r) (epochSI e)) \/
-  (is_AbbrEpoch e /\ SentCCSAbbr r (epochAI e) /\ SentCCSAbbr(dualRole r) (epochAI e)))
+  (is_FullEpoch e /\ sentCCS r     (epochSI e) /\ sentCCS    (dualRole r) (epochSI e)) \/
+  (is_AbbrEpoch e /\ sentCCSAbbr r (epochAI e) /\ sentCCSAbbr(dualRole r) (epochAI e)))
 
 type OpenState (e:epoch) = ( exists (r:role).
-  (((is_FullEpoch e /\ is_Some (prfMacAlg_of_ciphersuite_aux (epochSI e).cipher_suite) /\  SentCCS r     (epochSI e) /\ safeVD (epochSI e)) ==> SentCCS    (dualRole r) (epochSI e))) \/
-  (((is_AbbrEpoch e /\ SentCCSAbbr r (epochAI e) /\ safeVD (epochSI e)) ==> SentCCSAbbr(dualRole r) (epochAI e))))
+  (((is_FullEpoch e /\ is_Some (prfMacAlg_of_ciphersuite_aux (epochSI e).cipher_suite) /\  sentCCS r     (epochSI e) /\ safeVD (epochSI e)) ==> sentCCS    (dualRole r) (epochSI e))) \/
+  (((is_AbbrEpoch e /\ sentCCSAbbr r (epochAI e) /\ safeVD (epochSI e)) ==> sentCCSAbbr(dualRole r) (epochAI e))))
 
 // The epoch parameters yield privacy & integrity
 type Safe (e:epoch) =  (not (is_InitEpoch e)) ==> is_CipherSuite ((epochSI e).cipher_suite) /\ safeId (mk_id e) /\ OpenState e

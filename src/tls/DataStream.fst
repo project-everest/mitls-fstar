@@ -31,7 +31,7 @@ private type pre_fragment (i:id) = bytes
 val ghost_repr: #i:id -> pre_fragment i -> GTot bytes
 let ghost_repr #i f = f
 
-type fragment (i:id) (rg:range) = f:pre_fragment i { Within (length (ghost_repr f)) rg}
+type fragment (i:id) (rg:range) = f:pre_fragment i { within (length (ghost_repr f)) rg}
 
 val repr:       #i:id { ~(safeId i)} -> rg:frange i -> p:fragment i rg -> Tot (b:rbytes rg {b = ghost_repr #i p})
 let repr #i rg f = f

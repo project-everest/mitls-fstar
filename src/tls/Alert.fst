@@ -52,7 +52,7 @@ let alertBytes ad =
     | AD_unsupported_extension ->              abyte2 (2uy, 110uy)
 
 val parse: b:lbytes 2 -> Tot 
-  (r: Result alertDescription { forall ad. (r = Correct ad ==> b = alertBytes ad) })
+  (r: result alertDescription { forall ad. (r = Correct ad ==> b = alertBytes ad) })
 let parse b =
     let b1,b2 = cbyte2 b in
     Seq.lemma_eq_intro b (abyte2 (b1,b2));
@@ -138,7 +138,7 @@ let next_fragment (State b) =
 
 // ---------------- incoming alerts -------------------
 
-let recv_fragment s (r:range) (f:bytes) : Result (ad: alertDescription { f = alertBytes ad }) =
+let recv_fragment s (r:range) (f:bytes) : result (ad: alertDescription { f = alertBytes ad }) =
     if length f = 2 then 
     match parse f with 
     | Correct ad -> 

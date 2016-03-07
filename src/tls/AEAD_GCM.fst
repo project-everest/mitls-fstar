@@ -144,7 +144,7 @@ type decryptor i = reader i
 val enc:
   i:gid -> e:encryptor i -> ad:adata i 
   -> r:range {fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
-  -> p:bytes{Within (length p) r} 
+  -> p:bytes{within (length p) r} 
   -> ST (cipher i)
     (requires (fun h -> True))
     (ensures  (fun h0 c h1 -> 
