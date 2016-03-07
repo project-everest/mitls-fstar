@@ -19,11 +19,14 @@ type dh_secret = bytes // -> abstract
 type ms = bytes // -> abstract
 
 assume val dh_keygen: g:dh_group -> Tot (x:dh_key)
+(*x contains public key share gx, 
+  in TLS 1.2 in fact used to generate y
+ *)
+
 assume val dh_shared_secret1: y:dh_key -> gx:dh_key -> Tot (gxy:dh_secret)
 
-(*x contains publish key share*)
 assume val dh_shared_secret2: gy:dh_key -> Tot (x:dh_key * gxy:dh_secret)
-
+(*x contains public key share gx*)
 
 
 
