@@ -67,8 +67,8 @@ type reader i = s:state i Reader
 val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer i)
   (requires (fun h0 -> HyperHeap.disjoint reader_parent writer_parent))
   (ensures  (fun h0 (rw:reader i * writer i) h1 ->
-           let r = fst rw in 
-           let w = snd rw in 
+           let r = fst rw in
+           let w = snd rw in
            (* let bang = fun x -> sel h1 x in  *)
            modifies Set.empty h0 h1
          /\ w.region = r.peer_region
@@ -222,14 +222,14 @@ val decrypt:
   (ensures  (fun h0 res h1 ->
                modifies Set.empty h0 h1
              /\ (authId i ==>
-                 Let (sel h0 d.log) // no let, as we still need a type annotation
-                   (fun (log:seq (entry i)) ->
-                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
-                                            found j /\ ~(matches l c (Seq.index log j))))
-                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
+                 (let log :seq (entry i) = sel h0 d.log in
+		   match res with
+		     | None -> forall (j:nat{j < Seq.length log}).{:pattern (found j)}
+                                            found j /\ ~(matches l c (Seq.index log j))
+                     | Some p -> exists (j:nat{j < Seq.length log}).{:pattern (found j)}
                                            found j
                                            /\ matches l c (Seq.index log j)
-                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
+                                           /\ Entry.p (Seq.index log j) == p))))
 
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances

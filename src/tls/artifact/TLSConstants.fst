@@ -763,13 +763,13 @@ let rec names_of_cipherSuites css =
        end
 
 (* TLS messages types *)
-type ContentType =
+type contentType =
     | Change_cipher_spec
     | Alert
     | Handshake
     | Application_data
 
-val ctBytes: ContentType -> Tot (lbytes 1)
+val ctBytes: contentType -> Tot (lbytes 1)
 let ctBytes ct =
     match ct with
     | Change_cipher_spec -> abyte 20uy

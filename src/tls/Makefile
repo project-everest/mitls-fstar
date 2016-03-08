@@ -206,9 +206,8 @@ Range.fst \
 DataStream.fst \
 Alert.fst
 
-# \
 # Content.fst \
-# StreamPlain.fst
+# StreamPlain.fst \
 # StreamAE.fst
 
 UREMAINING= StatefulPlain.fst \
@@ -225,12 +224,12 @@ Handshake.fsti \
 Connection.fst 
 
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range  Alert)
-#DataStream Content StreamPlain StreamAE)
+VERFLAGS=$(addprefix --verify_module , TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert)
+#Content StreamPlain StreamAE)
 #PMS Sig Cert ... known to be unverifiable
 
 uver: $(UFILES) 
-	$(FSTAR) $(LIBFILES) $(OFLAGS) --__temp_no_proj StreamAE --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level
+	$(FSTAR) $(LIBFILES) $(OFLAGS) --__temp_no_proj StreamAE --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
 
 uwc:
 	wc -l $(UFILES)

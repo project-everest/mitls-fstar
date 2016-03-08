@@ -74,15 +74,15 @@ let project_ignores_Handshake i s = ()
 
 // --------------- parsing and formatting content types ---------------------
 
-type ContentType =
+type contentType =
     | Change_cipher_spec
     | Alert
     | Handshake
     | Application_data
 
-type ContentType13 = ct: ContentType { ct <> Change_cipher_spec }
+type contentType13 = ct: contentType { ct <> Change_cipher_spec }
 
-val ctBytes: ContentType -> Tot (lbytes 1)
+val ctBytes: contentType -> Tot (lbytes 1)
 let ctBytes ct =
     match ct with
     | Change_cipher_spec -> abyte 20uy
@@ -107,7 +107,7 @@ let inverse_ct x = ()
 
 val pinverse_ct: x:_ -> Lemma
   (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.Eq ctBytes parseCT x))
+  (ensures (lemma_pinverse_f_g Seq.equal ctBytes parseCT x))
   [SMTPat (ctBytes (Correct._0 (parseCT x)))]
 let pinverse_ct x = ()
 
@@ -138,7 +138,7 @@ let repr i f =
   | CT_CCS            -> empty_bytes
   | CT_Alert rg f     -> f
 
-let ct_rg (i:id) (f:fragment i) : ContentType * frange i =
+let ct_rg (i:id) (f:fragment i) : contentType * frange i =
   match f with
   | CT_Data rg d      -> Application_data, rg
   | CT_Handshake rg f -> Handshake, rg
@@ -155,19 +155,19 @@ let rg (i:id) (f:fragment i) : frange i =
 
 // "plain interface" for conditional security (TODO restore details)
 
-val mk_fragment: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange i ->
+val mk_fragment: i:id{ ~(authId i)} -> ct:contentType -> rg:frange i ->
   b:rbytes rg { ct = Change_cipher_spec ==> rg == zero }->
   Tot (p:fragment i {b = ghost_repr p})
 let mk_fragment i ct rg b =
     match ct with
     | Application_data   -> CT_Data      rg (DataStream.mk_fragment #i rg b)
     | Handshake          -> CT_Handshake rg b
-    | Change_cipher_spec -> cut(Eq b empty_bytes);CT_CCS  //* rediscuss
+    | Change_cipher_spec -> cut(Seq.equal b empty_bytes);CT_CCS  //* rediscuss
     | Alert -> CT_Alert     rg b
 
 val mk_ct_rg: 
   i:id{ ~(authId i)} -> 
-  ct:ContentType -> 
+  ct:contentType -> 
   rg:frange i ->
   b:rbytes rg { ct = Change_cipher_spec ==> rg = zero } ->
   Lemma ((ct,rg) = ct_rg i (mk_fragment i ct rg b))

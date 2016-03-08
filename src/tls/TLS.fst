@@ -341,9 +341,9 @@ let append_lemma i log0 log1 e =
 *)
 
 (* Note: We do not have polarities for subtyping. 
-         So, a (ContentType * frange) </: (ContentType * range)
+         So, a (contentType * frange) </: (contentType * range)
 
-val ct_rg_test : i:id -> f:Content.fragment i -> Tot (ContentType * range)
+val ct_rg_test : i:id -> f:Content.fragment i -> Tot (contentType * range)
 let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 *)         
  
@@ -947,7 +947,7 @@ let alertFlush c x y : ioresult_i (rd_i c) =
   | SentClose      -> Read DataStream.Close // do we need this case?
   | WriteError x y -> ReadError x y
 
-//* private val getHeader: c:Connection -> ST (result ((ct:ContentType * len:nat){len > 0 /\ len <= max_TLSCipher_fragment_length}))
+//* private val getHeader: c:Connection -> ST (result ((ct:contentType * len:nat){len > 0 /\ len <= max_TLSCipher_fragment_length}))
 //*   (requires (fun h -> True))
 //*   (ensures (fun h0 r h1 -> h0 = h1))
 //* we should require the c.read is not Closing \/ Closed
