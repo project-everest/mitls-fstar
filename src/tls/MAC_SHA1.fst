@@ -70,7 +70,8 @@ val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
     (b ==> good i p)))
 
 let verify i rd p t =
-    HMAC.tls_macVerify a rd.key p t 
+    let x = HMAC.tls_macVerify a rd.key p t  in
+    let l = !rd.log in
     // We use the log to correct any verification errors
-    && 
-    is_Some (seq_find (matches i p) !rd.log)
+    x && 
+    is_Some (seq_find (matches i p) l)

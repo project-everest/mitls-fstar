@@ -210,20 +210,20 @@ StreamPlain.fst \
 StatefulPlain.fst \
 LHAEPlain.fst \
 MAC.fst \
-Encode.fst
-# StreamAE.fst
+Encode.fst \
+MAC_SHA256.fst \
+MAC_SHA1.fst
 
-UREMAINING= AEAD_GCM.fst \
+UREMAINING= StreamAE.fst \
+AEAD_GCM.fst \
 StatefulLHAE.fst \
 ENC.fst \
-MAC_SHA256.fst \
-MAC_SHA1.fst \
 Record.fst \
 Handshake.fsti \
 Connection.fst 
 
 
-VERFLAGS=$(addprefix --verify_module , TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC Encode)
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC Encode MAC_SHA256 MAC_SHA1)
 # StreamAE)
 #PMS Sig Cert ... known to be unverifiable
 
