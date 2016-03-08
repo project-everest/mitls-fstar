@@ -77,12 +77,12 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer
          /\ extends (r.region) reader_parent
          /\ fresh_region w.region h0 h1
          /\ fresh_region r.region h0 h1
-         (* /\ w.log = r.log //op_Equality #(rref w.region (seq (entry i))) w.log r.log  //the explicit annotation here *)
+         /\ op_Equality #(rref w.region (seq (entry i))) w.log r.log  //the explicit annotation here *)
          /\ contains_ref w.counter h1
          /\ contains_ref r.counter h1
          /\ contains_ref w.log h1
-         /\ sel h1 w.counter = 0
-         /\ sel h1 r.counter = 0
+         /\ 0 = sel h1 w.counter
+         /\ 0 = sel h1 r.counter
          /\ sel h1 w.log = createEmpty
          ))
 
@@ -189,8 +189,9 @@ val encrypt:
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
+#reset-options
 let encrypt i e l p =
-  recall e.log;
+  recall e.log;   recall e.counter;
   let text = if safeId i then createBytes l 0uy else repr i l p in
   let c = enc i e l text in
   e.log := snoc !e.log (Entry l c p);
@@ -248,41 +249,42 @@ let decrypt i d l c =
         | None  -> None)
     | None -> None
 
-(* (\* TODO  *)
 
-(* - Check that decrypt indeed must use authId and not safeId (like in the F7 code) *)
-(* - How to handle counter overflows? *)
-(* - Injective allocation table from i to refs *)
+(* TODO
 
-(* *\) *)
+- Check that decrypt indeed must use authId and not safeId (like in the F7 code)
+- How to handle counter overflows?
+- Injective allocation table from i to refs
 
-(* (\* another version; we'll probably also need an explicit invariant *)
-(* val encrypt: #i:sid -> wr:writer i -> p:plain i -> ST (cipher i (plength p)) *)
-(*   (requires (fun h ->  *)
-(*       st_enc_inv wr h /\  *)
-(*       is_seqn (sel h wr.seqn + 1))) *)
-(*   (ensures  (fun h0 c h1 -> *)
-(*       st_enc_inv wr h1 /\  *)
-(*       modifies (Set.singleton wr.region) h0 h1 /\ *)
-(*       modifies_rref wr.region (refs_in_e wr) h0 h1 /\ *)
-(*       sel h1 wr.seqn = sel h0 wr.seqn + 1 /\ *)
-(*       sel h1 wr.log = snoc (sel h0 wr.log) (Entry c p))) *)
+*)
 
-(* val decrypt: i:sid -> d:reader i -> c:bytes -> ST (option (dplain i c)) *)
-(*   (requires (fun h ->  *)
-(*       (authId ==> st_dec_inv rd h) /\  *)
-(*       is_seqn (sel h rd.seqn + 1))) *)
+(* another version; we'll probably also need an explicit invariant
+val encrypt: #i:sid -> wr:writer i -> p:plain i -> ST (cipher i (plength p))
+  (requires (fun h ->
+      st_enc_inv wr h /\
+      is_seqn (sel h wr.seqn + 1)))
+  (ensures  (fun h0 c h1 ->
+      st_enc_inv wr h1 /\
+      modifies (Set.singleton wr.region) h0 h1 /\
+      modifies_rref wr.region (refs_in_e wr) h0 h1 /\
+      sel h1 wr.seqn = sel h0 wr.seqn + 1 /\
+      sel h1 wr.log = snoc (sel h0 wr.log) (Entry c p)))
 
-(*   (ensures  (fun h0 res h1 -> *)
-(*                modifies Set.empty h0 h1 *)
-(*              /\ (authId i ==> *)
-(*                  Let (sel h0 d.log) // no let, as we still need a type annotation *)
-(*                    (fun (log:seq (entry i)) -> *)
-(*                        (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)} *)
-(*                                             found j /\ ~(matches c ad (Seq.index log j)))) *)
-(*                      /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)} *)
-(*                                            found j *)
-(*                                            /\ matches c ad (Seq.index log j) *)
-(*                                            /\ Entry.p (Seq.index log j) == Some.v res)))))) *)
-(* *\) *)
+val decrypt: i:sid -> d:reader i -> c:bytes -> ST (option (dplain i c))
+  (requires (fun h ->
+      (authId ==> st_dec_inv rd h) /\
+      is_seqn (sel h rd.seqn + 1)))
+
+  (ensures  (fun h0 res h1 ->
+               modifies Set.empty h0 h1
+             /\ (authId i ==>
+                 Let (sel h0 d.log) // no let, as we still need a type annotation
+                   (fun (log:seq (entry i)) ->
+                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
+                                            found j /\ ~(matches c ad (Seq.index log j))))
+                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
+                                           found j
+                                           /\ matches c ad (Seq.index log j)
+                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
+*)
 

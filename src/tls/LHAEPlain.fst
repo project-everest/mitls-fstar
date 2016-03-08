@@ -25,7 +25,7 @@ val parseAD: b:bytes { length b >= 8 } -> Tot bytes
 let parseAD b = snd(split b 8)
 
 type adata (i:id) = b:lbytes (ad_Length i)
-  { exists (ad:StatefulPlain.adata i). ad = parseAD b}
+  { exists (ad:StatefulPlain.adata i). ad == parseAD b}
 
 let makeAD i seqn (ad:StatefulPlain.adata i) : adata i =
   let b = bytes_of_seq seqn @| ad in

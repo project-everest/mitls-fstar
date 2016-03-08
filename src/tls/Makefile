@@ -207,6 +207,7 @@ DataStream.fst \
 Alert.fst \
 Content.fst \
 StreamPlain.fst \
+StreamAE.fst \
 StatefulPlain.fst \
 LHAEPlain.fst \
 MAC.fst \
@@ -214,8 +215,7 @@ Encode.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst
 
-UREMAINING= StreamAE.fst \
-AEAD_GCM.fst \
+UREMAINING= AEAD_GCM.fst \
 StatefulLHAE.fst \
 ENC.fst \
 Record.fst \
@@ -223,8 +223,8 @@ Handshake.fsti \
 Connection.fst 
 
 
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC Encode MAC_SHA256 MAC_SHA1)
-# StreamAE)
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC MAC_SHA256 MAC_SHA1 StreamAE)
+#Encode
 #PMS Sig Cert ... known to be unverifiable
 
 uver: $(UFILES) 

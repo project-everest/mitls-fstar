@@ -37,7 +37,7 @@ let makeAD i ct =
 // StatefulLHAE should be parametric in this type (or its refinement), but that'd be heavy
 // here, the refinement ensures we never fail parsing indexes to retrieve ct
 // that said, we should entirely avoid parsing it.
-type adata (i:id) = b:bytes { exists ct. b = makeAD i ct }
+type adata (i:id) = b:bytes { exists ct. b == makeAD i ct }
 
 val parseAD: i:id -> ad:adata i -> Tot contentType
 let parseAD i ad =

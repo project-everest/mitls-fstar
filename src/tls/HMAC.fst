@@ -51,7 +51,12 @@ let tls_mac a k d : mac a =
     | HMAC     alg -> hmac (Hash alg) k d  
     | SSLKHASH alg -> sslKeyedHash (Hash alg) k d 
 
+(* val tls_macVerify : a:macAlg{a=SSLKHASH MD5 \/ a=SSLKHASH SHA1 \/ is_HMAC a} *)
+(* 		-> k:_ *)
+(* 		-> d:_ *)
+(* 		-> t:_ *)
+(* 		-> St bool *)
 let tls_macVerify a k d t =
     match a with
     | HMAC     alg -> hmacVerify (Hash alg) k d t
-    | SSLKHASH alg -> sslKeyedHashVerify (Hash alg) k d t
+    | SSLKHASH alg -> admit(); sslKeyedHashVerify (Hash alg) k d t
