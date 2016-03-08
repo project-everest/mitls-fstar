@@ -92,8 +92,8 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (reader i * write
          /\ contains_ref w.counter h1
          /\ contains_ref r.counter h1
          /\ contains_ref w.log h1
-         /\ sel h1 w.counter = 0
-         /\ sel h1 r.counter = 0
+         /\ 0 = sel h1 w.counter
+         /\ 0 = sel h1 r.counter
          /\ sel h1 w.log = createEmpty
          ))
 
@@ -241,7 +241,7 @@ let dec i (d:decryptor i) (ad:adata i) c =
 
 
 val matches: #i:gid -> c:cipher i -> adata i -> entry i -> Tot bool
-let matches i c ad (Entry c' ad' _) = c = c' && ad = ad'
+let matches #i c ad (Entry c' ad' _) = c = c' && ad = ad'
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: 
@@ -251,16 +251,14 @@ val decrypt:
   (ensures  (fun h0 res h1 ->
                modifies Set.empty h0 h1
              /\ (authId i ==>
-                 Let (sel h0 d.log) // no let, as we still need a type annotation
-                   (fun (log:seq (entry i)) ->
-                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
-                                            found j /\ ~(matches c ad (Seq.index log j))))
-                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
+	         (let log : seq (entry i) = sel h0 d.log in
+                  match res with 
+		    | None -> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
+                                            found j /\ ~(matches c ad (Seq.index log j)))
+	            | Some v -> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
                                            found j
                                            /\ matches c ad (Seq.index log j)
-                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
-
-
+                                           /\ Entry.p (Seq.index log j) == v)))))
 let decrypt i d ad c =
   recall d.log;
   let log = !d.log in
