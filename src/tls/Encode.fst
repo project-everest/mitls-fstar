@@ -194,7 +194,8 @@ let verify (i:id) k ad rg p =
         (*@ We implement standard mitigation for padding oracles.
             Still, we note a small timing leak here:
             The time to verify the mac is linear in the plaintext length. *)
-    if MAC.verify k text p.tag && p.ok 
+    let v = MAC.verify k text p.tag in
+    if v && p.ok
     then Correct p.f 
     else Error(AD_bad_record_mac,"")
 
@@ -259,7 +260,7 @@ val decode:
           snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i))) } ->
       payload: lbytes (plainLength i tlen) ->
       p: plain i ad (cipherRangeClass i tlen) 
-      { pv_of_id i <> SSL_3p0 ==> (p.ok <==> (payload = encode i ad (cipherRangeClass i tlen) p.f p.tag ))}
+      { pv_of_id i <> SSL_3p0 ==> (b2t (p.ok) <==> (payload = encode i ad (cipherRangeClass i tlen) p.f p.tag ))}
 
 
 assume val lemma_pad: lx: nat { lx < 256 } -> 

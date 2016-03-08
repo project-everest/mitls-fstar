@@ -29,7 +29,7 @@ type adata (i:id) = b:lbytes (ad_Length i)
 
 let makeAD i seqn (ad:StatefulPlain.adata i) : adata i =
   let b = bytes_of_seq seqn @| ad in
-  cut(Seq.Eq ad (parseAD b));
+  cut(Seq.equal ad (parseAD b));
   b
 
 val seqN: i:id -> adata i -> Tot seqn
@@ -43,14 +43,14 @@ val lemma_makeAD_seqN: i:id -> n:seqn -> ad:StatefulPlain.adata i
                    [SMTPat (makeAD i n ad)]
 
 let lemma_makeAD_seqN i n ad =
-    cut (Seq.Eq (fst (SeqProperties.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
+    cut (Seq.equal (fst (SeqProperties.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
     int_of_bytes_of_int (Seq.length (bytes_of_seq n)) n
 
 val lemma_makeAD_parseAD: i:id -> n:seqn -> ad:StatefulPlain.adata i
           -> Lemma (requires (True))
                    (ensures (parseAD (makeAD i n ad) = ad))
                    [SMTPat (makeAD i n ad)]
-let lemma_makeAD_parseAD i n ad = cut (Seq.Eq ad (parseAD (makeAD i n ad)))
+let lemma_makeAD_parseAD i n ad = cut (Seq.equal ad (parseAD (makeAD i n ad)))
 
 // let test i (n:seqn) (m:seqn{m<>n}) (ad:adata i) =
 //   assert (makeAD i n ad <> makeAD i m ad)
@@ -58,7 +58,7 @@ let lemma_makeAD_parseAD i n ad = cut (Seq.Eq ad (parseAD (makeAD i n ad)))
 type plain (i:id) (ad:adata i) (r:range) = StatefulPlain.plain i (parseAD ad) r
 
 val ghost_repr: #i:id -> #ad:adata i -> #rg:range -> plain i ad rg -> GTot bytes
-let ghost_repr i ad rg pf = StatefulPlain.ghost_repr #i #(parseAD ad) #rg pf
+let ghost_repr #i #ad #rg pf = StatefulPlain.ghost_repr #i #(parseAD ad) #rg pf
 
 val repr: i:id{ ~(safeId i)} -> ad:adata i -> r:range -> p:plain i ad r -> Tot (b:rbytes r {b = ghost_repr #i #ad #r p})
 let repr i ad rg p = StatefulPlain.repr i (parseAD ad) rg p

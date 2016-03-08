@@ -66,7 +66,7 @@ type is_plain (i: id) (ad: adata i) (rg: range) (f: fragment i) =
   fst (ct_rg i f) = parseAD i ad /\ wider rg (snd (ct_rg i f))
 
 // naming: we switch from fragment to plain as we are no longer TLS-specific
-private type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
+abstract type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
 //  { (parseAD i ad, rg) = Content.ct_rg i f }
 
 // Useful if the parameters [id], [ad] and [rg] have been constructed _after_
@@ -77,7 +77,7 @@ let assert_is_plain i ad rg f =
   f
 
 val ghost_repr: #i:id -> #ad:adata i -> #rg:range -> plain i ad rg -> GTot (rbytes rg)
-let ghost_repr i ad rg pf = Content.ghost_repr #i pf
+let ghost_repr #i #ad #rg pf = Content.ghost_repr #i pf
 
 val repr: i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p:plain i ad rg -> Tot (b:rbytes rg {b = ghost_repr #i #ad #rg p})
 let repr i ad rg f = Content.repr i f
