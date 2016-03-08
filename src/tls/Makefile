@@ -111,6 +111,7 @@ TLSNOTVER=\
 TLSPRF.fst \
 PRF.p.fst \
 TLSExtensions.p.fst \
+HSCrypto.fst \
 HandshakeMessages.fst \
 Handshake.fst \
 test/TestRecord.fst

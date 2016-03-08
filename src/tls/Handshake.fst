@@ -1,6 +1,6 @@
 ﻿(*--build-config
   options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Handshake --lax;
-  other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.SeqProperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst PRF-redux.p.fst HandshakeMessages_Redux.fst;
+  other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.SeqProperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst PRF.p.fst HSCrypto.fst HandshakeMessages.fst;
   --*)
 
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
@@ -9,7 +9,6 @@
 
 (* Handshake protocol messages *)
 module Handshake
-
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
@@ -25,78 +24,7 @@ open TLSInfo
 open Range
 open HandshakeMessages
 open StatefulLHAE
-
-(* CRYPTO sub-module *)
-(* To be moved to other modules, linked with CoreCrypto, and idealized *)
-
-val hkdf_extract: CoreCrypto.hash_alg -> bytes -> bytes -> Tot bytes
-let hkdf_extract ha salt secret = CoreCrypto.hmac ha salt secret
-
-val hkdf_expand_int: CoreCrypto.hash_alg -> int -> int -> int -> bytes -> bytes -> bytes -> Tot bytes
-let rec hkdf_expand_int ha count curr len secret prev info = 
-    if (curr < len) then
-      let count = count + 1 in
-      let prev = CoreCrypto.hmac ha secret (prev @| info @| (bytes_of_int count 1)) in 
-      let curr = curr + CoreCrypto.hashSize ha in
-      let next = hkdf_expand_int ha count curr len secret prev info in
-      prev @| next
-    else empty_bytes
-      
-val hkdf_expand_label: CoreCrypto.hash_alg -> bytes -> string -> bytes -> int -> Tot bytes
-let hkdf_expand_label ha secret label hv len = 
-  let info = (bytes_of_int len 2 ) @| 
-	     (vlbytes 1 (abytes ("TLS 1.3, "^label))) @|
-	     (vlbytes 1 hv) in
-  let prev = empty_bytes in
-  let res = hkdf_expand_int ha 0 0 len secret prev info in
-  let (sp1,sp2) = split res len in
-  sp1
-
-assume val cert_sign: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> Tot (Result bytes)
-assume val cert_verify: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> bytes -> Tot (Result unit)
-
-type ff_all_groups =
-  | FF_2048
-  | FF_4096
-  | FF_8192
-  | FF_arbitrary of CoreCrypto.dh_params
-  
-type dh_group = 
-  | FFDH of ff_all_groups
-  | ECDH of ECGroup.ec_all_curve
-
-type dh_key = 
-  | FFKey of CoreCrypto.dh_key
-  | ECKey of CoreCrypto.ec_key
-
-type dh_secret = bytes // -> abstract
-type ms = bytes // -> abstract
-
-assume val dh_keygen: g:dh_group -> Tot (x:dh_key)
-assume val dh_shared_secret1: y:dh_key -> gx:dh_key -> Tot (gxy:dh_secret)
-
-(*x contains publish key share*)
-assume val dh_shared_secret2: gy:dh_key -> Tot (x:dh_key * gxy:dh_secret)
-
-(* TLS <= 1.2 *)
-assume val derive_keys: gxy:dh_secret -> cr:random -> sr:random -> log:bytes -> 
-	                rd:rid -> wr:rid -> i:id -> ST ((both i) * ms)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-
-
-(* TLS 1.3 *)
-assume val derive_handshake_keys: gxy:dh_secret -> log: bytes ->
-				  rd:rid -> wr:rid -> i:id -> ST ((both i) * ms)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-
-assume val derive_finished_keys: gxs:dh_secret -> gxy:dh_secret -> log: bytes -> Tot (ts:ms * cf:ms * sf:ms)
-
-assume val derive_traffic_keys: ts:ms -> log: bytes -> 
-				rd:rid -> wr:rid -> i:id -> ST (both i)     
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+open HSCrypto
 			  
 (* Negotiation: HELLO sub-module *)
 
@@ -202,7 +130,9 @@ val getCachedSession: cfg:config -> ch:CH -> ST (option Session)
 let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
-val prepareServerHello: config -> option ri -> CH -> log -> Result (bytes * nego * option ake * log)
+val prepareServerHello: config -> option ri -> CH -> log -> ST (Result (bytes * nego * option ake * log))
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ri ch i_log =
   let srand = Nonce.mkHelloRandom() in
   match getCachedSession cfg ch with
@@ -364,7 +294,7 @@ type clientState =
 type serverState = 
      | S_Idle : option ri -> serverState
      | S_HelloSent : nego -> option ake -> serverState
-     | S_HelloDone : nego -> ID -> eph_s -> serverState
+     | S_HelloDone : nego -> option ake -> eph_s -> serverState
      | S_CCSReceived : Session -> serverState
      | S_OutCCS: Session -> serverState
      | S_FinishedSent : Session -> serverState
@@ -489,39 +419,6 @@ let client_handle_server_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
 	       hs_state = C(C_HelloReceived n a)};
       InAck)
 
-open CoreCrypto
-val dh_group_of_kex_s: KEX_S -> Tot dh_group
-let dh_group_of_kex_s kex = 
-  match kex with
-  | KEX_S_DHE k -> FFDH (FF_arbitrary (k.dh_params))
-  | KEX_S_ECDHE k -> ECDH (ECGroup.EC_CORE k.ec_params.curve)
-
-val dh_key_of_kex_s: KEX_S -> Tot dh_key
-let dh_key_of_kex_s kex = 
-  match kex with
-  | KEX_S_DHE k -> FFKey k
-  | KEX_S_ECDHE k -> ECKey k
-
-val kex_c_of_dh_key: dh_key -> Tot KEX_C
-let kex_c_of_dh_key kex = 
-  match kex with
-  | FFKey k -> KEX_C_DHE k.dh_public
-  | ECKey k -> KEX_C_ECDHE (ec_point_serialize k.ec_point)
-
-type dh_format = 
-     |CKE   
-     |SKE 
-     |KeyShare
-     
-val dh_key_to_bytes: dh_format -> dh_key -> Tot bytes
-let dh_key_to_bytes dhf dhk =
-  match dhf,dhk with
-  | SKE, FFKey k -> (vlbytes 2 k.dh_params.dh_p) @| (vlbytes 2 k.dh_params.dh_g) @| (vlbytes 2 k.dh_public)
-  | CKE, FFKey k -> (vlbytes 2 k.dh_public)
-  | SKE, ECKey ecp -> abyte 3uy (* Named curve *)
-              @| ECGroup.curve_id ecp.ec_params
-              @| ECGroup.serialize_point ecp.ec_params ecp.ec_point 
-  | CKE, ECKey ecp -> ECGroup.serialize_point ecp.ec_params ecp.ec_point 
 
 val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
@@ -534,12 +431,10 @@ let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs
      (ServerHelloDone,l3)] when 
      (n.n_protocol_version <> TLS_1p3 &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
-     let dhg = dh_group_of_kex_s ske.ske_kex_s in
-     let gy = dh_key_of_kex_s ske.ske_kex_s in
-     let bgy = dh_key_to_bytes SKE gy in
-     match (cert_verify c.crt_chain n.n_sigAlg [] bgy ske.ske_sig) with
-     | Error z -> InError z
-     | Correct () -> 
+     let bgy = kex_s_to_bytes ske.ske_kex_s in
+     match (ske.ske_kex_s,cert_verify c.crt_chain n.n_sigAlg [] bgy ske.ske_sig) with
+     | _,Error z -> InError z
+     | KEX_S_DHE gy, Correct () -> 
        let gx,pms = dh_shared_secret2 gy in
        let cke = {cke_kex_c = kex_c_of_dh_key gx} in
        let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
@@ -621,12 +516,52 @@ assume val client_handle_server_finished_13: hs -> list (hs_msg * bytes) -> ST i
   (ensures (fun h0 i h1 -> True))
 
 
-assume val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
+val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-assume val server_send_server_hello_done: hs -> ST unit
+let server_handle_client_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
+  match (!hsref).hs_state, msgs with
+  | S(S_Idle ri),[(ClientHello(ch),l)] ->
+    (match (prepareServerHello cfg ri ch l) with
+     | Error z -> InError z
+     | Correct (shb,n,a,ol) ->
+       hsref := {!hsref with
+               hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
+	       hs_nego = Some n;
+	       hs_ake = a;
+	       hs_log = ol;
+	       hs_state = S(S_HelloSent n a)};
+       InAck)
+    
+
+val server_send_server_hello_done: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
+let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
+  match (!hsref).hs_state with
+  | S(S_HelloSent n a) 
+    when (n.n_protocol_version <> TLS_1p3 &&
+	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
+    let c = {crt_chain = get_signing_cert cfg.server_name n.n_sigAlg []} in
+    let cb = certificateBytes c in
+    let gy = dh_keygen (ECDH (ECGroup.EC_CORE CoreCrypto.ECC_P256)) in
+    let kex_s = KEX_S_DHE gy in
+    let sv = kex_s_to_bytes kex_s in
+    (match (cert_sign c.crt_chain n.n_sigAlg [] sv) with
+    | Correct sig -> 
+      (let ske = {ske_kex_s = kex_s; ske_sig = sig} in
+	let skeb = serverKeyExchangeBytes ske in
+	let shd = serverHelloDoneBytes in
+	let nl = cb @| skeb @| shd in
+	  hsref := {!hsref with
+		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
+		 hs_log = (!hsref).hs_log @| nl;
+		 hs_state = S(S_HelloDone n None None)})
+    | Error e -> 
+	  hsref := {!hsref with
+		 hs_state = S(S_Error e)})
+
+
 assume val server_handle_client_ccs: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))

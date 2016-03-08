@@ -1,6 +1,6 @@
 ﻿(*--build-config
   options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --lax;
-  other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.SeqProperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions_Redux.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst PRF-redux.p.fst;
+  other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.SeqProperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst PRF.p.fst HSCRypto.fst;
   --*)
     
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
@@ -17,6 +17,7 @@ open TLSConstants
 open TLSExtensions
 open TLSInfo
 open Range
+open HSCrypto
 
 (* External functions, locally annotated for speed *)
 (*
@@ -143,13 +144,11 @@ type CR = {
 }
 
 type KEX_S =
-| KEX_S_DHE of CoreCrypto.dh_key
-| KEX_S_ECDHE of CoreCrypto.ec_key
+| KEX_S_DHE of HSCrypto.dh_key
 | KEX_S_RSA of CoreCrypto.rsa_key
 
 type KEX_S_PRIV =
-| KEX_S_PRIV_DHE of CoreCrypto.dh_key
-| KEX_S_PRIV_ECDHE of CoreCrypto.ec_key
+| KEX_S_PRIV_DHE of HSCrypto.dh_key
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 
 type SKE = {
@@ -491,6 +490,13 @@ let mk_certificateRequestBytes sign cs version =
 
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
+open CoreCrypto
+val kex_c_of_dh_key: HSCrypto.dh_key -> Tot KEX_C
+let kex_c_of_dh_key kex = 
+  match kex with
+  | FFKey k -> KEX_C_DHE k.dh_public
+  | ECKey k -> KEX_C_ECDHE (ec_point_serialize k.ec_point)
+
 val clientKeyExchangeBytes: ProtocolVersion -> CKE -> Tot bytes
 let clientKeyExchangeBytes pv cke = 
   let kexB =              
@@ -537,17 +543,22 @@ let parseClientKeyExchange pv kex data =
 
 open CoreCrypto
 
-val serverKeyExchangeBytes: SKE -> Tot bytes
-let serverKeyExchangeBytes ske =
-    let kexB = 
-        match ske.ske_kex_s with
-        | KEX_S_DHE dhp -> (vlbytes 2 dhp.dh_params.dh_p) @| (vlbytes 2 dhp.dh_params.dh_g) @| (vlbytes 2 dhp.dh_public)
-        | KEX_S_ECDHE ecp -> 
-                abyte 3uy (* Named curve *)
+val kex_s_to_bytes: KEX_S -> Tot bytes 
+let kex_s_to_bytes kex = 
+  match kex with
+  | KEX_S_DHE (FFKey k) ->
+	      (vlbytes 2 k.dh_params.dh_p) @| 
+	      (vlbytes 2 k.dh_params.dh_g) @| 
+	      (vlbytes 2 k.dh_public)
+  | KEX_S_DHE (ECKey ecp) ->
+	      abyte 3uy (* Named curve *)
               @| ECGroup.curve_id ecp.ec_params
               @| ECGroup.serialize_point ecp.ec_params ecp.ec_point 
-        | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
-    in
+  | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
+		    
+val serverKeyExchangeBytes: SKE -> Tot bytes
+let serverKeyExchangeBytes ske =
+    let kexB = kex_s_to_bytes ske.ske_kex_s in
     let payload = kexB @| ske.ske_sig in
     messageBytes HT_server_key_exchange payload
 
@@ -574,10 +585,10 @@ let parseServerKeyExchange kex payload : Result SKE =
                     | Correct(res) ->
                     let (y,sign) = res in
                     Correct (
-                    {ske_kex_s = KEX_S_DHE (
+                    {ske_kex_s = KEX_S_DHE (FFKey (
                          {dh_params = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false};
                           dh_public = y;
-                          dh_private = None});
+                          dh_private = None}));
                      ske_sig = sign})
                 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -594,10 +605,10 @@ let parseServerKeyExchange kex payload : Result SKE =
                     match ECGroup.parse_point ecp rawpoint with
                     | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Invalid EC point received")
                     | Some p -> Correct (
-			{ ske_kex_s = KEX_S_ECDHE (
+			{ ske_kex_s = KEX_S_DHE (ECKey (
 			    {ec_priv = None;
 			    ec_params = ecp;
-			    ec_point = p;});
+			    ec_point = p;}));
 			  ske_sig =  payload})
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
