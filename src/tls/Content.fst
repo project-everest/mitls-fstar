@@ -48,20 +48,23 @@ let split #a s =
 // We may prove that they are never written on authentic streams.
 val project: i:id -> fs:seq (fragment i) -> Tot(seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
+#reset-options
 let rec project i fs =
   if Seq.length fs = 0 then Seq.createEmpty
   else
       let fs, f = split #(fragment i) fs in
       let ds = project i fs in
-      (match f with
-      | CT_Data (rg: frange i) d -> cut(wider fragment_range rg); snoc ds (DataStream.Data d)
+      match f with
+      | CT_Data rg d -> 
+	let d : pre_fragment i = d in //A widening coercion as a proof hint, unpacking (d:fragment i (frange i)) to a pre_fragment i
+	snoc ds (DataStream.Data d)   //so that it can be repackaged as a fragment i fragment_range
       | CT_Alert rg alf -> // alert parsing may fail, or return several deltas
           if length alf = 2 then 
           (match Alert.parse alf with
           | Correct ad -> snoc ds (DataStream.Alert ad)
           | Error _    -> ds) // ill-formed alert contents are ignored
           else ds            // ill-formed alert packets are ignored
-      | _              -> ds) // other fragments are internal to TLS
+      | _              -> ds  // other fragments are internal to TLS
 
 // try out a few lemmas
 // we may also need a projection that takes a low-level pos and yields a high-level pos
