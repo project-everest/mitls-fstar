@@ -68,13 +68,14 @@ let log #i #rw s = s.log
 val seqn: #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
 let seqn #i #rw s = s.seqn
 
-abstract opaque type matching (#i:gid) (r:reader i) (w:writer i) =
+abstract type matching (#i:gid) (r:reader i) (w:writer i) =
   r.region = w.peer_region
   /\ w.region = r.peer_region
   /\ r.log == w.log
+  /\ disjoint (parent r.region) (parent w.region)
   /\ AEAD_GCM.State.log r.key == AEAD_GCM.State.log w.key //gcmlogs are equal; package this along with pairing of regions one-level lower into another invariant
 
-assume val unfold_matching: #i:id -> r:reader i -> w:writer i ->
+val unfold_matching: #i:id -> r:reader i -> w:writer i ->
   Lemma ( matching r w ==> (
             region r = peer_region w
           /\ region w = peer_region r
@@ -82,42 +83,46 @@ assume val unfold_matching: #i:id -> r:reader i -> w:writer i ->
           /\ region w <> root
           /\ disjoint (parent (region r)) (parent (region w))
           /\ log r = log w))
+let unfold_matching #i r w = ()
 
 (* CF could we instead compute the derived state? let st i d e h = ... *)
 type both (i:gid) = rw:(reader i * writer i){matching (fst rw) (snd rw)}
 
 abstract let st_inv (#i:gid) (r:reader i) (w:writer i) (h:HyperHeap.t) =
     matching r w
+  /\ Map.contains h r.region
+  /\ Map.contains h w.region
   /\ contains_ref w.log h
   /\ contains_ref w.seqn h
   /\ contains_ref r.seqn h
   /\ contains_ref (AEAD_GCM.State.log w.key) h //should get this from an invariant packaged up one level lower
   /\ (let aead = sel h (AEAD_GCM.State.log w.key) in
-     let st = sel h w.log in 
-     let rseq = sel h r.seqn in 
-     let wseq = sel h w.seqn in 
-        Seq.length st = Seq.length aead
-      /\ wseq = Seq.length st
-      /\ rseq <= wseq 
+     let st = sel h w.log in
+     let rseq = sel h r.seqn in
+     let wseq = sel h w.seqn in
+        Seq.length aead = Seq.length st
+      /\ Seq.length st = wseq
+      /\ rseq <= wseq
       /\ (forall (j:nat{j < wseq}).{:pattern (found j)}
           let st_en = Seq.index st j in
           found j ==>
-            repr_bytes j <= 8 
-             /\ Seq.index aead j 
-              == AEAD_GCM.Entry st_en.c 
-				(LHAEPlain.makeAD i j st_en.ad)
+            repr_bytes j <= 8
+             /\ Seq.index aead j
+              == AEAD_GCM.Entry st_en.c
+      				(LHAEPlain.makeAD i j st_en.ad)
                                 st_en.p))
 
-assume val unfold_st_inv: #i:id -> r:reader i -> w:writer i -> h:HyperHeap.t ->
+abstract val unfold_st_inv: #i:id -> r:reader i -> w:writer i -> h:HyperHeap.t ->
   Lemma ( st_inv r w h ==> (
        matching r w
-    /\ Map.contains h (region r)  
+    /\ Map.contains h (region r)
     /\ Map.contains h (region w)
     /\ (let log = sel h (log w) in
-       let rctr = sel h (seqn r) in 
-       let wctr = sel h (seqn w) in 
-       wctr = Seq.length log
+       let rctr = sel h (seqn r) in
+       let wctr = sel h (seqn w) in
+       Seq.length log = wctr
        /\ rctr <= wctr )))
+let unfold_st_inv #i r w h = ()
 
 val test_gcm_log_inv: h:HyperHeap.t -> i:gid -> r:reader i -> w:writer i{st_inv r w h} -> n:nat -> j:nat -> c:cipher i -> ad:adata i ->
   Lemma (requires (let gcm_log = sel h (AEAD_GCM.State.log w.key) in
@@ -127,7 +132,7 @@ val test_gcm_log_inv: h:HyperHeap.t -> i:gid -> r:reader i -> w:writer i{st_inv 
         (ensures (j = n))
 let test_gcm_log_inv h i r w n j c ad = cut(found j)
 
-let regions_of (#i:id) (#rw:rw) (s:state i rw) = 
+let regions_of (#i:id) (#rw:rw) (s:state i rw) =
     Set.union (Set.singleton (region s))
               (Set.singleton (peer_region s))
 
@@ -142,7 +147,7 @@ abstract val frame_st_inv: #i:id -> r:reader i -> w:writer i ->  h0:_ -> h1:_ ->
 let frame_st_inv #i r w h0 h1 = ()
 
 abstract val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
-  (requires (fun h -> True))
+  (requires (fun h -> disjoint reader_parent writer_parent))
   (ensures  (fun h0 (rw:both i) h1 ->
       modifies Set.empty h0 h1
     /\ (let r = fst rw in
@@ -192,7 +197,7 @@ abstract val coerce: r0:rid -> p0:rid {disjoint r0 p0} -> role:rw -> i:gid{~(saf
           /\ fresh_region s.region h0 h1
           /\ fresh_region s.peer_region h0 h1
           /\ sel h1 s.log = Seq.createEmpty
-          /\ sel h1 s.seqn = 0))
+          /\ 0 = sel h1 s.seqn))
 let coerce r0 p0 role i kv iv =
   lemma_repr_bytes_values 0;
   let r = new_region r0 in
@@ -202,7 +207,7 @@ let coerce r0 p0 role i kv iv =
   let log = ralloc log_region Seq.createEmpty in
   State #i #role #r p log (ralloc r 0) key
 
-opaque type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
+type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
   exists (r:reader i).{:pattern (matching r w)} st_inv r w h
 
 abstract val frame_st_enc_inv: #i:id -> w:writer i ->  h0:_ -> h1:_ ->
@@ -215,86 +220,88 @@ let frame_st_enc_inv #i w h0 h1 = ()
 let refs_in_e (#i:gid) (e:writer i) =
   !{ as_ref e.log, as_ref e.seqn }
 
-(* abstract val encrypt: #i:gid -> #ad:adata i *)
-(*   -> #rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length} *)
-(*   -> wr:writer i -> f:plain i ad rg -> ST (cipher i) *)
-(*   (requires (fun h ->  *)
-(*      st_enc_inv wr h /\  *)
-(*      is_seqn (sel h wr.seqn + 1))) *)
-(*   (ensures  (fun h0 (c:cipher i) h1 -> *)
-(*                   st_enc_inv wr h1 *)
-(*                 /\ modifies (Set.singleton wr.region) h0 h1 *)
-(*                 /\ modifies_rref wr.region (refs_in_e wr) h0 h1 *)
-(*                 /\ sel h1 wr.seqn = sel h0 wr.seqn + 1 *)
-(*                 /\ wider (Range.cipherRangeClass i (length c)) rg *)
-(*                 /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f))) *)
-(* let encrypt #i #ad #rg (State _ log seqn key) f = *)
-(*   let n = !seqn in *)
-(*   let l= !log in *)
-(*   let ad' = LHAEPlain.makeAD i n ad in *)
-(*   let c = AEAD_GCM.encrypt i key ad' rg f in *)
-(*   log := snoc l (Entry c ad f); *)
-(*   seqn := n + 1; *)
-(*   c *)
+abstract val encrypt: #i:gid -> #ad:adata i
+  -> #rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length}
+  -> wr:writer i -> f:plain i ad rg -> ST (cipher i)
+  (requires (fun h ->
+     st_enc_inv wr h /\
+     is_seqn (sel h wr.seqn + 1)))
+  (ensures  (fun h0 (c:cipher i) h1 ->
+                  st_enc_inv wr h1
+                /\ modifies (Set.singleton wr.region) h0 h1
+                /\ modifies_rref wr.region (refs_in_e wr) h0 h1
+                /\ sel h0 wr.seqn + 1 = sel h1 wr.seqn
+                /\ wider (Range.cipherRangeClass i (length c)) rg
+                /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))
+let encrypt #i #ad #rg (State _ log seqn key) f =
+  let n = !seqn in
+  let l= !log in
+  let ad' = LHAEPlain.makeAD i n ad in
+  let c = AEAD_GCM.encrypt i key ad' rg f in
+  log := snoc l (Entry c ad f);
+  seqn := n + 1;
+  c
 
-(* opaque type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) = *)
-(*   exists (w:writer i).{:pattern (matching r w)} st_inv r w h *)
+type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
+  exists (w:writer i).{:pattern (matching r w)} st_inv r w h
 
-(* abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ -> *)
-(*   Lemma (requires (st_dec_inv rd h0 /\  *)
-(*                    equal_on (Set.union (Set.singleton rd.region) (Set.singleton rd.peer_region)) h0 h1)) *)
-(*         (ensures st_dec_inv rd h1) *)
-(* let frame_st_dec_inv #i rd h0 h1 = () *)
+abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
+  Lemma (requires (st_dec_inv rd h0 /\
+                   equal_on (Set.union (Set.singleton rd.region) (Set.singleton rd.peer_region)) h0 h1))
+        (ensures st_dec_inv rd h1)
+let frame_st_dec_inv #i rd h0 h1 = ()
 
-(* abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i  *)
-(*   -> c:cipher i{length c > CoreCrypto.aeadTagSize (alg i)}  *)
-(*   -> ST (option (dplain i ad c)) *)
-(*   (requires (fun h -> *)
-(*              (authId i ==> st_dec_inv rd h) *)
-(*            /\ is_seqn (sel h rd.seqn + 1))) *)
-(*   (ensures (fun h0 (res:option (dplain i ad c)) h1 -> *)
-(*                modifies (Set.singleton rd.region) h0 h1 *)
-(*              /\ modifies_rref rd.region !{as_ref rd.seqn} h0 h1 *)
-(*              /\ is_seqn (sel h0 rd.seqn + 1) *)
-(*              /\ contains_ref rd.log h0 *)
-(*              /\ (let log = sel h0 rd.log in *)
-(* 	        let rctr = sel h0 rd.seqn in *)
-(*                authId i *)
-(*                ==> st_dec_inv rd h0 *)
-(*                 /\ st_dec_inv rd h1 *)
-(*                 /\ (match res with  *)
-(* 		   | Some v ->  *)
-(*                        sel h1 rd.seqn = rctr + 1 *)
-(*                        /\ v == Entry.p (Seq.index log rctr) *)
-(* 		   | _ ->  *)
-(*                       Seq.length log = rctr                 // no more ciphers *)
-(*                     \/ c <> Entry.c (Seq.index log rctr)      // wrong cipher *)
-(*                     \/ ad =!= Entry.ad (Seq.index log rctr))))) // wrong ad *)
-(* let decrypt #i #ad (State _ log seqn key) c =  *)
+#reset-options
+assume abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
+  -> c:cipher i{length c > CoreCrypto.aeadTagSize (alg i)}
+  -> ST (option (dplain i ad c))
+  (requires (fun h ->
+             (authId i ==> st_dec_inv rd h)
+           /\ is_seqn (sel h rd.seqn + 1)))
+  (ensures (fun h0 (res:option (dplain i ad c)) h1 ->
+               modifies (Set.singleton rd.region) h0 h1
+             /\ modifies_rref rd.region !{as_ref rd.seqn} h0 h1
+             /\ is_seqn (sel h0 rd.seqn + 1)
+             /\ contains_ref rd.log h0
+             /\ (let lg = sel h0 rd.log in
+                let rctr = sel h0 rd.seqn in
+               authId i
+               ==> st_dec_inv rd h0
+                /\ st_dec_inv rd h1
+                /\ (match res with
+		   | Some v ->
+                       sel h1 rd.seqn = rctr + 1
+		       /\ (let entry = Seq.index lg rctr in
+			  v == Entry.p entry)
+		   | _ ->
+                      Seq.length lg = rctr                 // no more ciphers
+                    \/ c <> Entry.c (Seq.index lg rctr)      // wrong cipher
+                    \/ ad =!= Entry.ad (Seq.index lg rctr))))) // wrong ad
+(* let decrypt #i #ad (State _ log seqn key) c = *)
 (*   recall log; recall seqn; recall (AEAD_GCM.State.log key); *)
-(*   let h0 = get () in    *)
+(*   let h0 = get () in *)
 (*   let n = !seqn in *)
 (*   let ad' = LHAEPlain.makeAD i n ad in *)
 (*   match AEAD_GCM.decrypt i key ad' c with *)
 (*      | Some p -> *)
-(*        seqn := n + 1;  *)
+(*        seqn := n + 1; *)
 (*        Some p *)
-(*      | None   ->  *)
+(*      | None   -> *)
 (*        cut (found n); *)
 (*        None *)
 
-(* (\*** TODO ***\) *)
-(* (\*  *)
-(*    - stateful. *)
-(*    - calling gen/coerce adds i to the log of existing keys; *)
-(*    - gen can only be called when i is not yet in the log; *)
-(*    - we get this precondition from the freshness of the local nonce in i *)
+(*** TODO ***)
+(*
+   - stateful.
+   - calling gen/coerce adds i to the log of existing keys;
+   - gen can only be called when i is not yet in the log;
+   - we get this precondition from the freshness of the local nonce in i
 
-(*    - we use a shared, ghost log of encryptions (also subsuming the history) *)
-(*    - we encode fatal decryption errors by abstracting over the decryption counter *)
+   - we use a shared, ghost log of encryptions (also subsuming the history)
+   - we encode fatal decryption errors by abstracting over the decryption counter
 
-(*    - add back in, from decrypt refinement. Last lines *)
-(*       /\ sel h1 (StReader.seqn rd) = rctr))))))) //reveal nothing about the seqn if it fails; rendering this key useless *)
+   - add back in, from decrypt refinement. Last lines
+      /\ sel h1 (StReader.seqn rd) = rctr))))))) //reveal nothing about the seqn if it fails; rendering this key useless
 
-(*    - add overflow protection {is_seqn (length s)}) *)
-(* *\) *)
+   - add overflow protection {is_seqn (length s)})
+*)

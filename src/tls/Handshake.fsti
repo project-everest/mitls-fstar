@@ -23,8 +23,8 @@ open StatefulLHAE
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
 type handshake = 
-  | Fresh of SessionInfo
-  | Resumed of abbrInfo * SessionInfo //changed: was hs * seq epoch (creating cycle)
+  | Fresh of sessionInfo
+  | Resumed of abbrInfo * sessionInfo //changed: was hs * seq epoch (creating cycle)
 // We use SessionInfo as unique session indexes.
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
@@ -92,7 +92,7 @@ let stateT (s:hs) (h:HyperHeap.t) : stateType s = (sel h s.log, sel h s.state)
 
 let non_empty h s = Seq.length (sel h s.log) > 0
 
-type logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
+let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
 
 // returns the current index in the log for reading or writing, or -1 if there is none.
 // depends only on the internal state of the handshake
@@ -116,12 +116,12 @@ val i: s:hs -> rw:rw -> ST int
 // let writer s = i s Reader
 
 
-type forall_epochs (hs:hs) h (p:(epoch (hs.region) (hs.peer) -> Type)) = 
+let forall_epochs (hs:hs) h (p:(epoch (hs.region) (hs.peer) -> Type)) = 
   (let es = sel h hs.log in 
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
      
 //vs modifies clauses?
-opaque type unmodified_epochs s h0 h1 = 
+let unmodified_epochs s h0 h1 = 
   forall_epochs s h0 (fun e -> 
     let rs = regions e in 
     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r))
@@ -142,7 +142,7 @@ let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoc
 
 
 // placeholder, to be implemented as a stateful property.
-assume type Completed: #region:rid -> #peer:rid -> epoch region peer -> Type
+assume type completed: #region:rid -> #peer:rid -> epoch region peer -> Type
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -163,19 +163,19 @@ assume type Completed: #region:rid -> #peer:rid -> epoch region peer -> Type
  
 type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
 
-opaque type hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
+let hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
   HyperHeap.contains_ref s.log h   /\ 
   HyperHeap.contains_ref s.state h /\ 
   Map.contains h s.peer
 
-type hs_inv (s:hs) (h: HyperHeap.t) = 
+let hs_inv (s:hs) (h: HyperHeap.t) = 
   hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
   /\ hs_footprint_inv s h
 
 
 // returns the protocol version negotiated so far
 // (used for formatting outgoing packets, but not trusted)
-val version: s:hs -> ST ProtocolVersion
+val version: s:hs -> ST protocolVersion
   (requires (hs_inv s))
   (ensures (fun h0 pv h1 -> h0 = h1))
 
@@ -207,7 +207,7 @@ val init: r0:rid -> peer:rid -> r: role -> cfg:config -> resume: option (sid: se
     HS.cfg s = cfg /\
     sel h1 (HS.log s) = Seq.createEmpty ))
     
-type modifies_internal h0 s h1 =
+let modifies_internal h0 s h1 =
     hs_inv s h1 /\
     modifies_one s.region h0 h1 /\ 
     modifies_rref s.region !{as_ref s.state} h0 h1
@@ -251,7 +251,7 @@ val next_fragment: s:hs -> ST outgoing
     HyperHeap.modifies_one s.region h0 h1 /\
     r1 = r0 /\
     w1 = (if result = OutCCS then w0 + 1 else w0) /\
-    (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ Completed (eT s Writer h1)))))
+    (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))))
                                               (*why do i need this?*)
 
 
@@ -264,7 +264,7 @@ type incoming = // the fragment is accepted, and...
 //| InFinished        // signal false state before TLS 1.3 (if enabled)
   | InComplete        // signal completion of current epoch
   | InError of error  // how underspecified should it be?
-val recv_fragment: s:hs -> rg:Range.range { Wider fragment_range rg } -> rbytes rg -> ST incoming
+val recv_fragment: s:hs -> rg:Range.range { wider fragment_range rg } -> rbytes rg -> ST incoming
   (requires (hs_inv s)) 
   (ensures (fun h0 result h1 ->
     let w0 = iT s Writer h0 in 
@@ -275,7 +275,7 @@ val recv_fragment: s:hs -> rg:Range.range { Wider fragment_range rg } -> rbytes 
     HyperHeap.modifies_one s.region h0 h1 /\
     w1 = w0 /\ 
     r1 = (if result = InCCS then r0 + 1 else r0) /\
-    (result = InComplete ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ Completed (eT s Reader h1))))
+    (result = InComplete ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))))
 
 val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3 
   (requires (hs_inv s)) // could require pv <= 1p2

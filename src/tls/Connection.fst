@@ -69,16 +69,16 @@ let c_log c    = c.hs.log
 
 // we'll rely on the invariant to show we picked the correct index
 
-type Seq_forall (#a:Type) (p: a -> Type) (s:seq a) =
+inline let seq_forall (#a:Type) (p: a -> Type) (s:seq a) =
   forall (j: nat { j < Seq.length s }).{:pattern (Seq.index s j)} p (Seq.index s j)
 
-let test_1 (p:nat -> Type) (s:seq nat { Seq_forall p s }) = assert(p 12 ==> Seq_forall p (snoc s 12))
-let test_2 (p:nat -> Type) (s:seq nat { Seq_forall p s }) (j:nat { j < Seq.length s }) =  let x = Seq.index s j in assert(p x)
-//let test_3 (p:nat -> Type) (s:seq nat { Seq_forall p s }) x = assert(SeqProperties.mem x s ==> p x)
+let test_1 (p:nat -> Type) (s:seq nat { seq_forall p s }) = assert(p 12 ==> seq_forall p (snoc s 12))
+let test_2 (p:nat -> Type) (s:seq nat { seq_forall p s }) (j:nat { j < Seq.length s }) =  let x = Seq.index s j in assert(p x)
+//let test_3 (p:nat -> Type) (s:seq nat { seq_forall p s }) x = assert(SeqProperties.mem x s ==> p x)
 
 (* usage? how to prove this lemma?  val exercise_seq_forall: #a:Type
--> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (Seq_forall p
-s /\ p x) ==> Seq_forall p (snoc s x)}) *)
+-> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (seq_forall p
+s /\ p x) ==> seq_forall p (snoc s x)}) *)
 
 val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (reader (peerId(hsId e.h)))
 let reader_epoch #region #peer (Epoch h r w) = r
@@ -91,7 +91,7 @@ type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) 
   st_enc_inv #(hsId e.h) (writer_epoch e) h
   
 type epochs_inv c h = 
-  Seq_forall (epoch_inv #(HS.region c.hs) #(HS.peer c.hs) h) (sel h c.hs.log) /\ 
+  seq_forall (epoch_inv #(HS.region c.hs) #(HS.peer c.hs) h) (sel h c.hs.log) /\ 
   Handshake.hs_footprint_inv c.hs h
   
 type st_inv c h = 
