@@ -34,8 +34,8 @@ val cipherlen2: i:gid -> c:cipher i -> Lemma (repr_bytes (length c) <= 2)
 let cipherlen2 i c = lemma_repr_bytes_values (length c)
 
 // key materials for GCM
-private type key (i:gid) = lbytes (aeadKeySize (alg i)) 
-private type iv  (i:gid) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
+abstract type key (i:gid) = lbytes (aeadKeySize (alg i)) 
+abstract type iv  (i:gid) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
 
 // this is the same as a sequence number and in bytes, GCMNonce.nonce_explicit[8]
 type counter a = c:nat {repr_bytes c <= aeadRecordIVSize a} 
