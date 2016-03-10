@@ -548,8 +548,8 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
     let kex_s = KEX_S_DHE gy in
     let sv = kex_s_to_bytes kex_s in
     (match (cert_sign c.crt_chain n.n_sigAlg [] sv) with
-    | Correct sig -> 
-      (let ske = {ske_kex_s = kex_s; ske_sig = sig} in
+    | Correct sig_ -> 
+      (let ske = {ske_kex_s = kex_s; ske_sig = sig_} in
 	let skeb = serverKeyExchangeBytes ske in
 	let shd = serverHelloDoneBytes in
 	let nl = cb @| skeb @| shd in
