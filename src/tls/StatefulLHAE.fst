@@ -41,7 +41,7 @@ type st_log_t (r:rid) (i:id) = rref r (s:seq (entry i))
 type gcm_log_t (r:rid) (i:gid) = rref r (s:seq (AEAD_GCM.entry i))
  
 (* CF we might merge those types into State id role *)
-abstract type state (i:gid) (rw:rw) = 
+type state (i:gid) (rw:rw) = 
   | State :
       #region:rid{region<>root}
     -> peer_region:rid{peer_region <> root 
@@ -251,8 +251,7 @@ abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
         (ensures st_dec_inv rd h1)
 let frame_st_dec_inv #i rd h0 h1 = ()
 
-#reset-options
-assume abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
+abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
   -> c:cipher i{length c > CoreCrypto.aeadTagSize (alg i)}
   -> ST (option (dplain i ad c))
   (requires (fun h ->
@@ -277,18 +276,21 @@ assume abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
                       Seq.length lg = rctr                 // no more ciphers
                     \/ c <> Entry.c (Seq.index lg rctr)      // wrong cipher
                     \/ ad =!= Entry.ad (Seq.index lg rctr))))) // wrong ad
-(* let decrypt #i #ad (State _ log seqn key) c = *)
-(*   recall log; recall seqn; recall (AEAD_GCM.State.log key); *)
-(*   let h0 = get () in *)
-(*   let n = !seqn in *)
-(*   let ad' = LHAEPlain.makeAD i n ad in *)
-(*   match AEAD_GCM.decrypt i key ad' c with *)
-(*      | Some p -> *)
-(*        seqn := n + 1; *)
-(*        Some p *)
-(*      | None   -> *)
-(*        cut (found n); *)
-(*        None *)
+#reset-options		    
+let decrypt #i #ad (State _ log seqn key) c = 
+  recall log; recall seqn; recall (AEAD_GCM.State.log key); 
+  let h0 = get () in
+  let n = !seqn in
+  let ad' = LHAEPlain.makeAD i n ad in 
+  match AEAD_GCM.decrypt i key ad' c with
+     | Some p ->
+       admit();  //TODO: Fixme!
+       seqn := n + 1;
+       Some p
+     | None   ->
+       admit(); //TODO: Fixme!
+       cut (found n);
+       None
 
 (*** TODO ***)
 (*

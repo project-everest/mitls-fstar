@@ -36,7 +36,7 @@ val hsId: handshake -> Tot id
 // relocate?
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
 
-opaque type epoch_region_inv (#i:id) (rgn:rid) (peer:rid) (r:reader (peerId i)) (w:writer i) =
+type epoch_region_inv (#i:id) (rgn:rid) (peer:rid) (r:reader (peerId i)) (w:writer i) =
   parent (region r) = rgn /\ 
   parent (region w) = rgn /\ 
   parent (peer_region r) = peer /\
@@ -59,14 +59,14 @@ let set4 a b c d =
 let regions (#p:rid) (#q:rid) (e:epoch p q) = 
   set4 (region e.r) (peer_region e.r) (region e.w) (peer_region e.w)
 
-opaque type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)) =
+let epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)) =
   forall (i:nat { i < Seq.length es })
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
     let ej = Seq.index es j in
     disjoint_regions (regions ei) (regions ej)
  
-opaque type epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
+let epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
 
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
@@ -86,7 +86,7 @@ type hs =
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-type stateType (s:hs) = epochs s.region s.peer * handshake_state 
+let stateType (s:hs) = epochs s.region s.peer * handshake_state 
 
 let stateT (s:hs) (h:HyperHeap.t) : stateType s = (sel h s.log, sel h s.state)
 
@@ -161,7 +161,7 @@ assume type completed: #region:rid -> #peer:rid -> epoch region peer -> Type
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
  
-type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
+assume type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
 
 let hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
   HyperHeap.contains_ref s.log h   /\ 

@@ -216,10 +216,10 @@ MAC_SHA256.fst \
 MAC_SHA1.fst \
 AEAD_GCM.fst \
 StatefulLHAE.fst \
-Record.fst 
+Record.fst \
+ENC.fst 
 
-UREMAINING=ENC.fst \
-HS.fst \
+UREMAINING=Handshake.fsti \
 Connection.fst
 
 VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC MAC_SHA256 MAC_SHA1 StreamAE AEAD_GCM StatefulLHAE)
@@ -227,7 +227,7 @@ VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup
 #PMS Sig Cert ... known to be unverifiable
 
 uver: $(UFILES) 
-	$(FSTAR) $(LIBFILES) $(OFLAGS) --__temp_no_proj Handshake --__temp_no_proj ENC --__temp_no_proj StreamAE --__temp_no_proj AEAD_GCM --__temp_no_proj StatefulLHAE --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
+	$(FSTAR) $(LIBFILES) $(OFLAGS) --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
 
 uwc:
 	wc -l $(UFILES)
