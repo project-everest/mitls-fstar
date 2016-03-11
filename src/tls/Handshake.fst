@@ -1,9 +1,4 @@
-﻿(*--build-config
-  options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Handshake --lax;
-  other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.SeqProperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst TLSExtensions.p.fst Range.p.fst DataStream.fst TLSPRF.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fsti StatefulLHAE.fst PRF.p.fst HSCrypto.fst HandshakeMessages.fst;
-  --*)
-
-(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
 #light "off"
 
@@ -548,8 +543,8 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
     let kex_s = KEX_S_DHE gy in
     let sv = kex_s_to_bytes kex_s in
     (match (cert_sign c.crt_chain n.n_sigAlg [] sv) with
-    | Correct sig -> 
-      (let ske = {ske_kex_s = kex_s; ske_sig = sig} in
+    | Correct signature -> 
+      (let ske = {ske_kex_s = kex_s; ske_sig = signature} in
 	let skeb = serverKeyExchangeBytes ske in
 	let shd = serverHelloDoneBytes in
 	let nl = cb @| skeb @| shd in
