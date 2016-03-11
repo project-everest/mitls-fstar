@@ -22,7 +22,6 @@ FSTAR_HOME?=../../.fstar
 #   make FSTAR_HOME=../../../fstar tls-gen
 # the latter form won't work because FSTAR_HOME will incorrectly override values
 # in recursive invocations of $(MAKE)...
-add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/lib/,$(1))
 
 # The .fst files found in [lib/ml] that are realized in
 # stdlib-hyperheap.cmxa
@@ -34,7 +33,7 @@ stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.
 FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
-FSTARFLAGS=$(call add_stdlib_prefix,$(STDLIB)) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
+FSTARFLAGS=$(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 
 PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
