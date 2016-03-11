@@ -242,15 +242,15 @@ type outgoing = // by default the state changes but not the epochs
   | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
 val next_fragment: s:hs -> ST outgoing
   (requires (hs_inv s))
-  (ensures (fun h0 result h1 ->
-    let w0 = iT s Writer h0 in 
-    let w1 = iT s Writer h1 in 
-    let r0 = iT s Reader h0 in 
-    let r1 = iT s Reader h1 in 
+  (ensures (fun h0 result h1 -> 
+    let w0 = iT s Writer h0 in
+    let w1 = iT s Writer h1 in
+    let r0 = iT s Reader h0 in
+    let r1 = iT s Reader h1 in
     hs_inv s h1 /\
     HyperHeap.modifies_one s.region h0 h1 /\
     r1 = r0 /\
-    w1 = (if result = OutCCS then w0 + 1 else w0) /\
+    w1 = (if result = OutCCS then w0 + 1 else w0)  /\
     (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))))
                                               (*why do i need this?*)
 
@@ -265,56 +265,56 @@ type incoming = // the fragment is accepted, and...
   | InComplete        // signal completion of current epoch
   | InError of error  // how underspecified should it be?
 val recv_fragment: s:hs -> rg:Range.range { wider fragment_range rg } -> rbytes rg -> ST incoming
-  (requires (hs_inv s)) 
+  (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
-    let w0 = iT s Writer h0 in 
-    let w1 = iT s Writer h1 in 
-    let r0 = iT s Reader h0 in 
-    let r1 = iT s Reader h1 in 
+    let w0 = iT s Writer h0 in
+    let w1 = iT s Writer h1 in
+    let r0 = iT s Reader h0 in
+    let r1 = iT s Reader h1 in
     hs_inv s h1 /\
     HyperHeap.modifies_one s.region h0 h1 /\
-    w1 = w0 /\ 
+    w1 = w0 /\
     r1 = (if result = InCCS then r0 + 1 else r0) /\
     (result = InComplete ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))))
 
-val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3 
+val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3
   (requires (hs_inv s)) // could require pv <= 1p2
   (ensures (fun h0 result h1 ->
-    let w0 = iT s Writer h0 in 
-    let w1 = iT s Writer h1 in 
-    let r0 = iT s Reader h0 in 
-    let r1 = iT s Reader h1 in 
+    let w0 = iT s Writer h0 in
+    let w1 = iT s Writer h1 in
+    let r0 = iT s Reader h0 in
+    let r1 = iT s Reader h1 in
     (is_InError result \/ is_InCCS result) /\
     hs_inv s h1 /\
     HyperHeap.modifies_one s.region h0 h1 /\
-    w1 = w0 /\ 
+    w1 = w0 /\
     r1 = (if result = InCCS then r0 + 1 else r0)))
 
 val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
-    let w0 = iT s Writer h0 in 
-    let w1 = iT s Writer h1 in 
-    let r0 = iT s Reader h0 in 
-    let r1 = iT s Reader h1 in 
-    (is_InAck result \/ is_InError result) /\ 
+    let w0 = iT s Writer h0 in
+    let w1 = iT s Writer h1 in
+    let r0 = iT s Reader h0 in
+    let r1 = iT s Reader h1 in
+    (is_InAck result \/ is_InError result) /\
     hs_inv s h1 /\
     HyperHeap.modifies_one s.region h0 h1 /\
-    w1 = w0 /\ 
+    w1 = w0 /\
     r1 = r0 ))
 
 
 (* working notes towards covering both TLS 1.2 and 1.3, with 0RTT and falsestart
 
 type sendMsg (i:id) = // writer-indexed
-  | OutHS: 
-       rg:frange_any -> 
+  | OutHS:
+       rg:frange_any ->
        fragment i rg rbytes rg -> // first write this Handshake fragment, then
        next:bool     ->           // signal increment of the writer index
        finished:bool ->           // enable false-start sending (after sending this 1st Finished)
        complete:bool ->           // signal completion (after sending this 2nd Finished)
        outbox
-  | OutCCS  // before TLS 1.3; same semantics as above with explicit CCS (true, false, false) 
+  | OutCCS  // before TLS 1.3; same semantics as above with explicit CCS (true, false, false)
   | OutIdle // nothing to do
 
 (* e.g. in TLS 1.3 1RTT server sends OutHS (Finished ...) next
@@ -326,7 +326,7 @@ type sendMsg (i:id) = // writer-indexed
                    sending CCS implicitly says next  *)
 
 type recvMsg =
-  | InAck: 
+  | InAck:
        next:bool ->      // signal increment of the reader index (before receiving the next packet)
        finished:bool ->  // enable false-start receiving (in TLS 1.2, as we accepted the 1st Finished)
        complete:bool ->  // signal completion (as we accepted the 2nd Finished)
@@ -343,8 +343,8 @@ type recvMsg =
                    accepting CCS returns:        InAck next  *)
 
 Not sure how to handle 0RTT switches.
-"end_of_early_data" is not HS. 
-On the receiving server side, 
+"end_of_early_data" is not HS.
+On the receiving server side,
 - After processing ClientHello, HS signals switch to 0RTT-HS (or jump to 1RTT_HS) receive keys.
 - After processing Finished0, HS signals switch to 0RTT-AD
 - After receiving EED, the record calls HS, which signals switch to 1RTT-HS [too early?]
@@ -352,16 +352,16 @@ On the receiving server side,
 
 [a proper use of index 0]
 
-If we introduce dummy reverse streams (specified to remain empty), we still have to interpret 
+If we introduce dummy reverse streams (specified to remain empty), we still have to interpret
 the first client receive++ as +=3.
-What would trigger it? a locally-explicit CCS after accepting the ServerHello. 
+What would trigger it? a locally-explicit CCS after accepting the ServerHello.
 
 
 Otherwise the "next" mechanism seems fine; we just bump a ghost index
 from 2 to 4 by the time we reach AD.
 
-Also 1.3 trouble for sending HS-encrypted data immediately *after* next: 
+Also 1.3 trouble for sending HS-encrypted data immediately *after* next:
 we can increment after sending ClientHello, but we don't have the epoch yet!
 
-Ad hoc cases? or just an extra case? 
+Ad hoc cases? or just an extra case?
 In fact, ~ keeping a local, explicit CCS signal. *)

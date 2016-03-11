@@ -157,7 +157,7 @@ val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 
 //Move this to the library 
-val ghost_lemma2: #a:Type -> #b:Type -> #p:(a -> b -> Type) -> #q:(a -> b -> unit -> Type) 
+val ghost_lemma2: #a:Type -> #b:Type -> #p:(a -> b -> Tot Type) -> #q:(a -> b -> unit -> Tot Type) 
 		       -> =f:(x:a -> y:b -> Ghost unit (p x y) (q x y)) 
 		       -> Lemma (forall (x:a) (y:b). p x y ==> q x y ())
 let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -> Type)) f = 
@@ -209,7 +209,7 @@ val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
           /\ st_enc_inv wr_j h1))))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
-let frame_writer_epoch c h0 h1 = ghost_lemma2 (frame_writer_epoch_k c h0 h1)            
+let frame_writer_epoch c h0 h1 = ghost_lemma2 (frame_writer_epoch_k c h0 h1)
 
 val frame_reader_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit 
   (requires
