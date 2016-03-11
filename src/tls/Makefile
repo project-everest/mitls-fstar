@@ -223,7 +223,7 @@ StatefulLHAE.fst
 UREMAINING=Handshake.fsti \
 Connection.fst
 
-VERFLAGS=$(addprefix --verify_module ,StatefulLHAE) #TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC MAC_SHA256 MAC_SHA1 StreamAE AEAD_GCM StatefulLHAE)
+VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC MAC_SHA256 MAC_SHA1 StreamAE AEAD_GCM StatefulLHAE)
 #Encode
 #PMS Sig Cert ... known to be unverifiable
 

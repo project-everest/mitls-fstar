@@ -68,6 +68,12 @@ type state (i:gid) (rw:rw) =
 type writer i = s:state i Writer
 type reader i = s:state i Reader
 
+type matching (#i:gid) (r:reader i) (w:writer i) =
+  r.region = w.peer_region
+  /\ w.region = r.peer_region
+  /\ r.log == w.log
+  /\ disjoint (parent r.region) (parent w.region)
+
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we can drop this spec, since F* will infer something at least as precise,
 // but we keep it for documentation)
@@ -76,8 +82,8 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (reader i * write
   (ensures  (fun h0 (rw:reader i * writer i) h1 ->
            let r = fst rw in 
            let w = snd rw in 
-           (* let bang = fun x -> sel h1 x in  *)
            modifies Set.empty h0 h1
+	 /\ matching r w
          /\ w.region = r.peer_region
          /\ r.region = w.peer_region
          /\ extends (w.region) writer_parent
@@ -85,10 +91,6 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (reader i * write
          /\ fresh_region w.region h0 h1
          /\ fresh_region r.region h0 h1
          /\ op_Equality #(rref w.region (seq (entry i))) w.log r.log  //the explicit annotation here 
-         (* /\ w.log == r.log *) //
-         (* /\ bang w.counter = 0 *)
-         (* /\ bang r.counter = 0 *)
-         (* /\ bang w.log = createEmpty *)
          /\ contains_ref w.counter h1
          /\ contains_ref r.counter h1
          /\ contains_ref w.log h1
