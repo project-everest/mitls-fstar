@@ -544,14 +544,14 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
     let sv = kex_s_to_bytes kex_s in
     (match (cert_sign c.crt_chain n.n_sigAlg [] sv) with
     | Correct signature -> 
-      (let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-	let skeb = serverKeyExchangeBytes ske in
-	let shd = serverHelloDoneBytes in
-	let nl = cb @| skeb @| shd in
+       let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+       let skeb = serverKeyExchangeBytes ske in
+       let shd = serverHelloDoneBytes in
+       let nl = cb @| skeb @| shd in
 	  hsref := {!hsref with
 		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
 		 hs_log = (!hsref).hs_log @| nl;
-		 hs_state = S(S_HelloDone n None None)})
+		 hs_state = S(S_HelloDone n None None)}
     | Error e -> 
 	  hsref := {!hsref with
 		 hs_state = S(S_Error e)})
