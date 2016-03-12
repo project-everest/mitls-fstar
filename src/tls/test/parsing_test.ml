@@ -263,7 +263,7 @@ let parse_trace_file file =
   let fbytes = Bytes.create 1000000 in
   let flag = input file fbytes 0 65536 in
   if flag = 0 then print_string "Reached EOF\n"
-  else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
+  else print_string ("Read ??? " (* ^ (string_of_int flag) ^ *) ^  " characters\n");
   let bytes = Bytes.sub fbytes 0 flag in
   let hs = { bl = [bytes]; max = flag; index = 0; length = flag; } in
   parse_handshake hs;
