@@ -124,7 +124,7 @@ TLS.fst
 TLSLAX=$(subst $(NOTEXTRACTABLE),$(TLSNOTVER),$(TLSVER))
 # Use this definition instead for TLSLAX if you want to try extraction all the
 # way up to TLS.fst.
-# TLSLAX=$(TLSVER) $(TLSNOTVER)
+TLSLAX=$(TLSVER) $(TLSNOTVER)
 
 TLSGEN=$(TLSLAX)
 
