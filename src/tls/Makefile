@@ -237,6 +237,7 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
+	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS_DIR=native_int
