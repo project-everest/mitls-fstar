@@ -109,13 +109,14 @@ TLS.fst
 #the preceding space is significant (see prefix_cfg)
 #LHAE.fst \--these do not even parse
 
-TLSNOTVER=\
-TLSPRF.fst \
-PRF.p.fst \
-TLSExtensions.p.fst \
-HandshakeMessages.fst \
-Handshake.fst \
-test/TestRecord.fst
+TLSNOTVER=
+# \
+# TLSPRF.fst \
+# PRF.p.fst \
+# TLSExtensions.p.fst \
+# HandshakeMessages.fst \
+# Handshake.fst \
+# test/TestRecord.fst
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
@@ -284,19 +285,20 @@ TLSML := $(notdir $(TLSML))
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
-	# Builds everything against native_int/prims; including native_int/prims.cmx
-	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS_DIR=native_int
-	# Recursively builds everything in platform, etc.
-	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
-	# All our .cmx files
-	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
-	# A .cmxa with all the .cmx above
-	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
-	# Then our test executable
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-          -I test/ test/parsing_test.ml test/test_main.ml -o test.out
-	# Run the tests
-	$(EXTRA_PATH) ./test.out
+
+# # Builds everything against native_int/prims; including native_int/prims.cmx
+# $(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS_DIR=native_int
+# # Recursively builds everything in platform, etc.
+# $(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
+# # All our .cmx files
+# $(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
+# # A .cmxa with all the .cmx above
+# $(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
+# # Then our test executable
+# $(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+       #   -I test/ test/parsing_test.ml test/test_main.ml -o test.out
+# # Run the tests
+# $(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------
 
