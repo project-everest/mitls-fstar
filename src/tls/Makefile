@@ -59,7 +59,7 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOM
 NUBUILD_HOME=../../.nubuild
 NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
 ifdef USE_NUBUILD
-FSTAR_OR_NUBUILD=$(NUBUILD) --quiet FStarVerify $(FSTARFLAGS)
+FSTAR_OR_NUBUILD=$(NUBUILD) FStarVerify $(FSTARFLAGS)
 else
 FSTAR_OR_NUBUILD=$(FSTAR)
 endif
