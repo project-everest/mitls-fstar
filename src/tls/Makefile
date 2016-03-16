@@ -110,11 +110,9 @@ TLS.fst
 #the preceding space is significant (see prefix_cfg)
 #LHAE.fst \--these do not even parse
 
-TLSNOTVER=test/TestRecord.fst
-# TLSPRF.fst \
+TLSNOTVER=test/TestRecord.fst TLSExtensions.p.fst HandshakeMessages.fst
+# TLSPRF.fst
 # PRF.p.fst \
-# TLSExtensions.p.fst \
-# HandshakeMessages.fst \
 # Handshake.fst \
 
 NOTEXTRACTABLE=\
@@ -283,7 +281,7 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
-	$(FSTAR) --no_location_info --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
+	$(FSTAR) --no_location_info --lax --codegen OCaml --__temp_no_proj FStar.Heap --__temp_no_proj TLSExtensions $(TLSGEN_ADMIT) $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.

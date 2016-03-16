@@ -1,9 +1,4 @@
-﻿(*--build-config
-  options:--codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --admit_fsi FStar.Char --admit_fsi FStar.HyperHeap --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Seq --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Handshake --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 5 --lax;
-  other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.SeqProperties.fst /home/jkz/dev/FStar/contrib/Platform/fst/Bytes.fst /home/jkz/dev/FStar/contrib/Platform/fst/Date.fst /home/jkz/dev/FStar/contrib/Platform/fst/Error.fst /home/jkz/dev/FStar/contrib/Platform/fst/Tcp.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/CoreCrypto.fst /home/jkz/dev/FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.fst TLSConstants-redux.fst Nonce.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fsti Cert.fsti TLSInfo.fst;
-  --*)
-
-(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
 #light "off"
 
@@ -106,7 +101,7 @@ let extensionHeaderBytes ext =
   | E_supported_groups _    -> abyte2 (0x00uy, 0x0Auy)
   | E_unknown_extension(h,b)-> h
 
-type CanFail (a:Type) =
+type canFail (a:Type) =
 | ExFail of alertDescription * string
 | ExOK of list a
 
@@ -120,7 +115,7 @@ let compile_sni_list l =
 
 val parse_sni_list: b:bytes -> Tot (result (list serverName))
 let parse_sni_list b  =
-    let rec (aux:bytes -> Tot (CanFail (serverName))) = fun b ->
+    let rec (aux:bytes -> Tot (canFail (serverName))) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else
             let (ty,v) = split b 1 in
@@ -140,7 +135,7 @@ let parse_sni_list b  =
                         | SNI_DNS _, SNI_DNS _ -> true
                         | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b, _) when (a=b) -> true
                         | _ -> false)
-		       in if List.existsb snidup l then ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
+		       in if List.Tot.existsb snidup l then ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
                     else ExOK(cur :: l)))
     in (match aux b with
     | ExFail(x,y) -> Error(x,y)
@@ -165,7 +160,7 @@ let compile_curve_list l =
 
 val parse_curve_list: bytes -> Tot (result (list ECGroup.ec_all_curve))
 let parse_curve_list b =
-    let rec (aux:bytes -> Tot (CanFail ECGroup.ec_all_curve)) = fun b ->
+    let rec (aux:bytes -> Tot (canFail ECGroup.ec_all_curve)) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else if (length b) % 2 = 1 then ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Bad encoding of curve list")
         else let (u,v) = split b 2 in
@@ -181,7 +176,7 @@ let parse_curve_list b =
                     | (255uy, 2uy) -> ECGroup.EC_EXPLICIT_BINARY
                     | _ -> ECGroup.EC_UNKNOWN(int_of_bytes u))
                 in
-                    if List.mem cur l then ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Duplicate curve")
+                    if List.Tot.mem cur l then ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Duplicate curve")
                     else ExOK(cur :: l))
     in (match aux b with
     | ExFail(x,y) -> Error(x,y)
@@ -190,7 +185,7 @@ let parse_curve_list b =
 
 val parse_ecpf_list: bytes -> Tot (result (list ECGroup.point_format))
 let parse_ecpf_list b =
-    let rec (aux:bytes -> Tot (CanFail (ECGroup.point_format))) = fun b ->
+    let rec (aux:bytes -> Tot (canFail (ECGroup.point_format))) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else let (u,v) = split b 1 in
             (match aux v with
@@ -202,7 +197,7 @@ let parse_ecpf_list b =
                 in ExOK(cur :: l))
     in (match aux b with
     | ExFail(x,y) -> Error(x,y)
-    | ExOK(l) when not (List.mem ECGroup.ECP_UNCOMPRESSED l) ->
+    | ExOK(l) when not (List.Tot.mem ECGroup.ECP_UNCOMPRESSED l) ->
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
     | ExOK(l) -> correct (l))
 
@@ -220,7 +215,7 @@ let compile_ecpf_list l =
 
 val addOnce: extension -> list extension -> Tot (result (list extension))
 let addOnce ext extList =
-    if List.existsb (sameExt ext) extList then
+    if List.Tot.existsb (sameExt ext) extList then
         Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
     else
         let res = ext::extList in
@@ -373,7 +368,7 @@ let parseOptExtensions data =
   | Error(z) -> Error(z)
   
 // JK : Only client side ? 
-val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> l:list extension{List.length l < 256}
+val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> l:list extension{List.Tot.length l < 256}
 let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
@@ -388,9 +383,9 @@ let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
     let res = E_extended_padding :: res in
 #endif
     let res =
-        let curves = List.map (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
-        if curves <> [] && List.existsb (fun x -> isECDHECipherSuite x) cfg.ciphersuites then
-	  let curves = List.map (fun x -> SEC x) cfg.ecdhGroups in
+        let curves = List.Tot.map (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
+        if curves <> [] && List.Tot.existsb (fun x -> isECDHECipherSuite x) cfg.ciphersuites then
+	  let curves = List.Tot.map (fun x -> SEC x) cfg.ecdhGroups in
           E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: E_supported_groups(curves) :: res
         else res in
     res
@@ -404,7 +399,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
     match res with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
-        if List.existsb (sameExt sExt) cExtL then
+        if List.Tot.existsb (sameExt sExt) cExtL then
             match sExt with
             | E_renegotiation_info (sri) ->
               (match sri, ri with
@@ -416,7 +411,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                     Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
               | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
             | E_server_name _ ->
-                if List.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
+                if List.Tot.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
                 else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
             | E_ec_point_format(spf) ->
                 if resuming then
@@ -503,7 +498,7 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
             let rec (okcurves:list namedGroup -> Tot (list ec_curve)) = function
             | SEC(x) :: r ->
                 let rl = okcurves r in
-                if List.existsb (fun x -> x = x) cfg.ecdhGroups then x::rl else rl
+                if List.Tot.existsb (fun x -> x = x) cfg.ecdhGroups then x::rl else rl
             | x :: r -> okcurves r
             | [] -> [] in
             {neg with ne_supported_curves = Some (okcurves l)}
@@ -595,17 +590,17 @@ let default_sigHashAlg_fromSig pv sigAlg=
         //| SSL_3p0 -> [(DSA,NULL)]
     | _ -> unexpected "[default_sigHashAlg_fromSig] invoked on an invalid signature algorithm"
 
-val default_sigHashAlg: protocolVersion -> cipherSuite -> l:list Sig.alg{List.length l <= 1}
+val default_sigHashAlg: protocolVersion -> cipherSuite -> l:list Sig.alg{List.Tot.length l <= 1}
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
 
 val sigHashAlg_contains: list Sig.alg -> Sig.alg -> Tot bool
 let sigHashAlg_contains (algList:list Sig.alg) (alg:Sig.alg) =
-    List.existsb (fun a -> a = alg) algList
+    List.Tot.existsb (fun a -> a = alg) algList
 
 val sigHashAlg_bySigList: list Sig.alg -> list sigAlg -> Tot (list Sig.alg)
 let sigHashAlg_bySigList (algList:list Sig.alg) (sigAlgList:list sigAlg):list Sig.alg =
-    List.Tot.choose (fun alg -> let (sigA,_) = alg in if (List.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
+    List.Tot.choose (fun alg -> let (sigA,_) = alg in if (List.Tot.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
 
 val cert_type_to_SigHashAlg: certType -> protocolVersion -> list sigHashAlg
 let cert_type_to_SigHashAlg ct pv =
