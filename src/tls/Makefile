@@ -7,9 +7,10 @@ all: tls-ver tls-lax tls-gen
 # MK removed mitls-ml as strider was failing on it for ages
 
 CONTRIB=ucontrib
+LIB=ulib
 
 clean:
-	$(MAKE) -C $(FSTAR_HOME)/lib/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
@@ -24,7 +25,7 @@ FSTAR_HOME?=../../.fstar
 #   make FSTAR_HOME=../../../fstar tls-gen
 # the latter form won't work because FSTAR_HOME will incorrectly override values
 # in recursive invocations of $(MAKE)...
-add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/ulib/,$(1))
+add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/$(LIB)/,$(1))
 
 # The .fst files found in [lib/ml] that are realized in
 # stdlib-hyperheap.cmxa
@@ -37,7 +38,7 @@ FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
 FSTARFLAGS=--universes $(call add_stdlib_prefix,$(STDLIB)) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS) $(OFLAGS)
 
 PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
 PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
@@ -56,7 +57,7 @@ OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
 DEBUG=ocamlfind ocamlc
 OCAMLMKLIB=ocamlfind ocamlmklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
 
 # ----------------------- NuBuild integration ------------------------
 NUBUILD_HOME=../../.nubuild
@@ -109,14 +110,12 @@ TLS.fst
 #the preceding space is significant (see prefix_cfg)
 #LHAE.fst \--these do not even parse
 
-TLSNOTVER=
-# \
+TLSNOTVER=test/TestRecord.fst
 # TLSPRF.fst \
 # PRF.p.fst \
 # TLSExtensions.p.fst \
 # HandshakeMessages.fst \
 # Handshake.fst \
-# test/TestRecord.fst
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
@@ -262,7 +261,7 @@ tls-lax: $(LIBFILES) $(TLSLAX)
 # fstarlib-hyperheap has the entire F* standard library.
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa
+  $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa
 
 # .fst files realized elsewhere.
 TLSGEN_ADMIT=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
@@ -284,21 +283,20 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
-	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
-
-# # Builds everything against native_int/prims; including native_int/prims.cmx
-# $(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS_DIR=native_int
-# # Recursively builds everything in platform, etc.
-# $(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
-# # All our .cmx files
-# $(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
-# # A .cmxa with all the .cmx above
-# $(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
-# # Then our test executable
-# $(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-       #   -I test/ test/parsing_test.ml test/test_main.ml -o test.out
-# # Run the tests
-# $(EXTRA_PATH) ./test.out
+	$(FSTAR) --no_location_info --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
+	# Builds everything against native_int/prims; including native_int/prims.cmx
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
+	# Recursively builds everything in platform, etc.
+	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
+	# All our .cmx files
+	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
+	# A .cmxa with all the .cmx above
+	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
+	# Then our test executable
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+	         -I test/ test/parsing_test.ml test/test_main.ml -o test.out
+	# Run the tests
+	$(EXTRA_PATH) ./test.out
 
 # ------------------ preprocessing :( -----------------------
 

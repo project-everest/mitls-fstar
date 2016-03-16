@@ -2,8 +2,6 @@ module TestRecord
 
 //
 open FStar
-open HyperHeap
-open STHyperHeap
 
 open TLSConstants
 open TLSInfo
@@ -109,7 +107,7 @@ let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (pl
   let macKey = bytes_of_hex macKey in
   ENC.enc id w ad rg f macKey
 
-let test_count = ref 0
+let test_count = FStar.ST.ralloc r 0
 
 let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) =
   let output = fake_aead pv aeAlg key iv plain in

@@ -1064,7 +1064,7 @@ let namedGroupsBytes groups =
   vlbytes 2 b
 
 //val parseNamedGroups: pinverse_t namedGroupsBytes
-let parseNamedGroups b =
+let parseNamedGroups (b:bytes) =
   let rec (aux: b:bytes -> list namedGroup -> Tot (result (list namedGroup)) (decreases (length b))) = fun b groups ->
     if length b > 0 then
       if length b >= 2 then
