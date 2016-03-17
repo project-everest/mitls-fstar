@@ -19,16 +19,16 @@ assume val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:(bytes * bytes){
                       repr_bytes (length (fst b)) <= lSize
-                  /\  Seq.Eq vlb (vlbytes lSize (fst b) @| (snd b))}))
+                  /\  Seq.equal vlb (vlbytes lSize (fst b) @| (snd b))}))
 
-assume val split: b:bytes -> n:nat{length b >= n} -> Tot (x:(bytes*bytes){Seq.Eq b ((fst x) @| (snd x)) /\ length (fst x) = n})
+assume val split: b:bytes -> n:nat{length b >= n} -> Tot (x:(bytes*bytes){Seq.equal b ((fst x) @| (snd x)) /\ length (fst x) = n})
 
-assume val split2: b:bytes -> n1:nat -> n2:nat{length b >= n1 + n2} -> Tot (x:(lbytes n1 * lbytes n2 * bytes){forall x1. forall x2. forall x3. x = (x1,x2,x3) ==> Seq.Eq b (x1 @| x2 @| x3)})
+assume val split2: b:bytes -> n1:nat -> n2:nat{length b >= n1 + n2} -> Tot (x:(lbytes n1 * lbytes n2 * bytes){forall x1. forall x2. forall x3. x = (x1,x2,x3) ==> Seq.equal b (x1 @| x2 @| x3)})
 *)
 
 (*** Following RFC5246 A.4 *)
 
-type PreHandshakeType =
+type preHandshakeType =
     | HT_hello_request
     | HT_client_hello
     | HT_server_hello
@@ -45,9 +45,9 @@ type PreHandshakeType =
     | HT_next_protocol
     | HT_finished
 
-type HandshakeType = PreHandshakeType
+type handshakeType = preHandshakeType
 
-val htBytes : HandshakeType -> Tot (lbytes 1)
+val htBytes : handshakeType -> Tot (lbytes 1)
 let htBytes t =
     match t with
     | HT_hello_request       -> abyte   0uy
@@ -88,101 +88,101 @@ let parseHt b =
 
 /// Messages
 
-type CH = {
+type ch = {
   ch_protocol_version:protocolVersion;
   ch_client_random:TLSInfo.random;
   ch_sessionID:sessionID;
-  ch_cipher_suites:(k:known_cipher_suites{List.length k < 256});
+  ch_cipher_suites:(k:known_cipher_suites{List.Tot.length k < 256});
   ch_raw_cipher_suites: option bytes;
-  ch_compressions:(cl:list Compression{List.length cl <= 1});
-  ch_extensions:option (ce:list extension{List.length ce < 256});
+  ch_compressions:(cl:list compression{List.Tot.length cl <= 1});
+  ch_extensions:option (ce:list extension{List.Tot.length ce < 256});
 }
 
 let ch_is_resumption { ch_sessionID = sid } =
   length sid > 0
 
-type SH = {
+type sh = {
   sh_protocol_version:protocolVersion;
   sh_server_random:TLSInfo.random;
   sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
   sh_cipher_suite:known_cipher_suite;
-  sh_compression:option Compression; // JK : made optional because not present in TLS 1.3
-  sh_extensions:option (se:list extension{List.length se < 256});
+  sh_compression:option compression; // JK : made optional because not present in TLS 1.3
+  sh_extensions:option (se:list extension{List.Tot.length se < 256});
 }
 
 (* Hello retry request *)
-type HRR = {
+type hrr = {
   hrr_protocol_version:protocolVersion;
   hrr_cipher_suite:known_cipher_suite;
   hrr_named_group: namedGroup; // JK : is it the expected type here ?
-  hrr_extensions:(he:list extension{List.length he < 256});
+  hrr_extensions:(he:list extension{List.Tot.length he < 256});
 }
 
-type STICKET = {
+type sticket = {
   sticket_ticket_lifetime_hint:(b:bytes{length b = 4});
   sticket_ticket:bytes;
 }
 
-type EE = {
-  ee_extensions:(ee:list extension{List.length ee < 256});
+type ee = {
+  ee_extensions:(ee:list extension{List.Tot.length ee < 256});
 }
 
-type CRT = {
+type crt = {
   crt_chain: Cert.chain
 }
 
-type CR = {
-  cr_cert_types: (cl:list certType{List.length cl < 256});
-  cr_sig_hash_algs: option (shs:list Sig.alg{List.length shs < 256});
-  cr_distinguished_names: (dl:list dn{List.length dl < 128});
+type cr = {
+  cr_cert_types: (cl:list certType{List.Tot.length cl < 256});
+  cr_sig_hash_algs: option (shs:list Sig.alg{List.Tot.length shs < 256});
+  cr_distinguished_names: (dl:list dn{List.Tot.length dl < 128});
 }
 
 
-type KEX_S =
+type kex_s =
 | KEX_S_DHE of CoreCrypto.dh_key
 | KEX_S_ECDHE of CoreCrypto.ec_key
 | KEX_S_RSA of CoreCrypto.rsa_key
 
-type KEX_S_PRIV =
+type kex_s_PRIV =
 | KEX_S_PRIV_DHE of CoreCrypto.dh_key
 | KEX_S_PRIV_ECDHE of CoreCrypto.ec_key
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 
-type SKE = {
-  ske_kex_s: KEX_S;
+type ske = {
+  ske_kex_s: kex_s;
   ske_sig : (b:bytes{length b < 65536})
 }
 
-type KEX_C =
+type kex_c =
 | KEX_C_DHE of (b:bytes{length b < 65536})
 | KEX_C_ECDHE of (b:bytes{length b < 256})
 | KEX_C_RSA of (b:bytes{length b < 4096})
 | KEX_C_DH 
 
-type CKE = {
-  cke_kex_c: KEX_C
+type cke = {
+  cke_kex_c: kex_c
 }
 
-type CV = {
+type cv = {
   cv_sig: (l:bytes{length l < 65536});
 }
 
-type SC = {
+type sc = {
   sc_configuration_id:configurationId;
   sc_expiration_date:uint32;
   sc_named_group:namedGroup;
-  sc_server_key:KEX_C; // JK : use another type ?
+  sc_server_key:kex_c; // JK : use another type ?
   sc_early_data_type:earlyDataType;
-  sc_configuration_extensions:(l:list configurationExtension{List.length l < 65536});
+  sc_configuration_extensions:(l:list configurationExtension{List.Tot.length l < 65536});
 }
 
-type FIN = {
+type fin = {
   fin_vd: (l:bytes{length l < 65536});
 }
 
 // Next protocol message, see https://tools.ietf.org/id/draft-agl-tls-nextprotoneg-03.html
 // TODO: replace shallow implemntation by more precise one
-type NP = {
+type np = {
   np_selected_protocol: bytes;
   np_padding: bytes;
   }
@@ -190,31 +190,31 @@ type NP = {
 // TODO: unify, either keep separate finished messages for client and servers or 
 // merge them into single "finished" as it is the case for certificates
 type hs_msg =
-  | ClientHello of CH
-  | ServerHello of SH
-  | SessionTicket of STICKET
-  | EncryptedExtionsions of EE
-  | ServerKeyExchange of SKE
-  | CertificateRequest of CR
+  | ClientHello of ch
+  | ServerHello of sh
+  | SessionTicket of sticket
+  | EncryptedExtionsions of ee
+  | ServerKeyExchange of ske
+  | CertificateRequest of cr
   | ServerHelloDone
-  | Certificate of CRT
-  | ClientKeyExchange of CKE
-  | CertificateVerify of CV
-  | ServerConfiguration of SC
-  | ClientFinished of FIN
-  | ServerFinished of FIN
-  | NextProtocol of NP
+  | Certificate of crt
+  | ClientKeyExchange of cke
+  | CertificateVerify of cv
+  | ServerConfiguration of sc
+  | ClientFinished of fin
+  | ServerFinished of fin
+  | NextProtocol of np
 
 /// Handshake message format
 
-val messageBytes : ht:HandshakeType -> data:bytes{ repr_bytes (length data) <= 3 } -> Tot (lbytes (4+(length data))) 
+val messageBytes : ht:handshakeType -> data:bytes{ repr_bytes (length data) <= 3 } -> Tot (lbytes (4+(length data))) 
 let messageBytes ht data =
     let htb = htBytes ht in
     let vldata = vlbytes 3 data in
     htb @| vldata
 
 
-val parseMessage : buf:bytes -> result (option (rem:bytes & hstype:HandshakeType & payload:bytes & to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.Eq buf (to_log @| rem)) } )) 
+val parseMessage : buf:bytes -> result (option (rem:bytes & hstype:handshakeType & payload:bytes & to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.equal buf (to_log @| rem)) } )) 
 let parseMessage buf =
     (* Somewhat inefficient implementation:
        we repeatedly parse the first 4 bytes of the incoming buffer until we have a complete message;
@@ -235,7 +235,7 @@ let parseMessage buf =
 
 (** A.4.1 Hello Messages *)
 
-val clientHelloBytes : CH -> Tot bytes
+val clientHelloBytes : ch -> Tot bytes
 let clientHelloBytes ch =
   let verB      = versionBytes ch.ch_protocol_version in
   let sidB = vlbytes 1 ch.ch_sessionID in
@@ -261,7 +261,7 @@ let clientHelloBytes ch =
    as it is now 
 *)
 val parseClientHello : data:bytes{repr_bytes(length data) <= 3} -> 
-                       r:result (x:CH{exists (x':CH). Seq.Eq (clientHelloBytes x') (messageBytes HT_client_hello data)
+                       r:result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
                                                      /\ x.ch_protocol_version = x'.ch_protocol_version 
                                                      /\ x.ch_client_random = x'.ch_client_random
                                                      /\ x.ch_sessionID = x'.ch_sessionID })
@@ -296,8 +296,8 @@ let parseClientHello data =
 				| Correct (exts) ->
                                   let eok = (match exts with
                                     | None -> true
-                                    | Some l -> List.length l < 256) in
-			          if eok && List.length cm <= 256 && List.length clientCipherSuites < 256 then
+                                    | Some l -> List.Tot.length l < 256) in
+			          if eok && List.Tot.length cm <= 256 && List.Tot.length clientCipherSuites < 256 then
 				    Correct ({ch_protocol_version = cv;
                                       ch_client_random = cr;        
                                       ch_sessionID = sid;
@@ -316,7 +316,7 @@ let parseClientHello data =
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 
-val serverHelloBytes: SH -> Tot bytes
+val serverHelloBytes: sh -> Tot bytes
 let serverHelloBytes sh = 
     let verB = versionBytes sh.sh_protocol_version in
     let sidB = 
@@ -336,7 +336,7 @@ let serverHelloBytes sh =
     messageBytes HT_server_hello data
 
 val parseServerHello: data:bytes{repr_bytes(length data)<=3}  -> 
-                      r:result (x:SH{Seq.Eq (serverHelloBytes x) (messageBytes HT_server_hello data)})
+                      r:result (x:sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)})
 let parseServerHello data =
     if length data >= 34 then
         let (serverVerBytes,serverRandomBytes,data) = split2 data 2 32 in
@@ -401,11 +401,11 @@ let serverHelloDoneBytes = messageBytes HT_server_hello_done empty_bytes
 
 (** A.4.2 Server Authentication and Key Exchange Messages *)
 
-val certificateBytes: CRT -> Tot bytes
+val certificateBytes: crt -> Tot bytes
 let certificateBytes crt = messageBytes HT_certificate (Cert.certificateListBytes crt.crt_chain)
 
 val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> 
-                      result (r:CRT{Seq.Eq (certificateBytes r) (messageBytes HT_certificate data)})
+                      result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)})
 let parseCertificate data = 
     if length data >= 3 then
         match vlparse 3 data with
@@ -416,7 +416,7 @@ let parseCertificate data =
 	    Correct ({crt_chain = chain})
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-val certificateRequestBytes: CR -> Tot bytes
+val certificateRequestBytes: cr -> Tot bytes
 let certificateRequestBytes cr = 
     let ctb = certificateTypeListBytes cr.cr_cert_types in  
     let ctB = vlbytes 1 ctb in
@@ -431,7 +431,7 @@ let certificateRequestBytes cr =
     messageBytes HT_certificate_request data
 
 val parseCertificateRequest: pv:protocolVersion -> data:bytes{repr_bytes(length data) <= 3} -> 
-                             result CR
+                             result cr
 let parseCertificateRequest version data =
     if length data >= 1 then
         match vlsplit 1 data with
@@ -483,7 +483,7 @@ let mk_certificateRequestBytes sign cs version =
 
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
-val clientKeyExchangeBytes: protocolVersion -> CKE -> Tot bytes
+val clientKeyExchangeBytes: protocolVersion -> cke -> Tot bytes
 let clientKeyExchangeBytes pv cke = 
   let kexB =              
     match pv,cke.cke_kex_c with
@@ -495,7 +495,7 @@ let clientKeyExchangeBytes pv cke =
   messageBytes HT_client_key_exchange kexB
 
 val parseClientKeyExchange: p:protocolVersion -> kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    result (cke:CKE{Seq.Eq (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)})
+    result (cke:cke{Seq.equal (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)})
 let parseClientKeyExchange pv kex data = 
   match pv,kex with
   | _,Kex_DH -> 
@@ -528,7 +528,7 @@ let parseClientKeyExchange pv kex data =
 (* ServerKeyExchange *)
 
 open CoreCrypto
-val serverKeyExchangeBytes: SKE -> Tot bytes
+val serverKeyExchangeBytes: ske -> Tot bytes
 let serverKeyExchangeBytes ske =
     let kexB = 
         match ske.ske_kex_s with
@@ -543,8 +543,8 @@ let serverKeyExchangeBytes ske =
     messageBytes HT_server_key_exchange payload
 
 val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:SKE{Seq.Eq (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)})
-let parseServerKeyExchange kex payload : result SKE = 
+    result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)})
+let parseServerKeyExchange kex payload : result ske = 
     match kex with
     | Kex_DH -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     | Kex_RSA -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -593,40 +593,40 @@ let parseServerKeyExchange kex payload : result SKE =
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 (* Certificate Verify *)
-val certificateVerifyBytes: CV -> Tot bytes
+val certificateVerifyBytes: cv -> Tot bytes
 let certificateVerifyBytes cv = 
     messageBytes HT_certificate_verify cv.cv_sig
 
 val parseCertificateVerify: data:bytes{repr_bytes(length data) <= 3} ->
-    result (c:CV{Seq.Eq (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
+    result (c:cv{Seq.equal (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
 let parseCertificateVerify data = 
     correct ({cv_sig = data})
 
-val finishedBytes: FIN -> Tot bytes
+val finishedBytes: fin -> Tot bytes
 let finishedBytes fin = 
     messageBytes HT_finished fin.fin_vd
 
 val parseFinished: data:bytes{repr_bytes(length data)<=3} ->
-    result(f:FIN{Seq.Eq (finishedBytes f) (messageBytes HT_finished data)})
+    result(f:fin{Seq.equal (finishedBytes f) (messageBytes HT_finished data)})
 let parseFinished data = 
     Correct ({fin_vd = data})
 
 (* Session ticket *)
-val sessionTicketBytes: STICKET -> Tot bytes
+val sessionTicketBytes: sticket -> Tot bytes
 let sessionTicketBytes sticket =
     let payload = sticket.sticket_ticket_lifetime_hint @| sticket.sticket_ticket in
     messageBytes HT_session_ticket payload
 
 val parseSessionTicket: b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:STICKET{Seq.Eq (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
-let parseSessionTicket payload : result STICKET = 
+    result (s:sticket{Seq.equal (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
+let parseSessionTicket payload : result sticket = 
   if length payload >= 4 && length payload < 65542 then
     let (lifetime_hint, ticket) = split payload 4 in
     Correct({sticket_ticket_lifetime_hint = lifetime_hint; sticket_ticket = ticket})
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate size in received session ticket")
 
 (* Hello retry request *)
-val helloRetryRequestBytes: HRR -> Tot bytes
+val helloRetryRequestBytes: hrr -> Tot bytes
 let helloRetryRequestBytes hrr =
   let pv = versionBytes hrr.hrr_protocol_version in
   let cs_bytes = cipherSuiteBytes hrr.hrr_cipher_suite in
@@ -661,20 +661,20 @@ let parseHelloRetryRequest b =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
 
 (* Encrypted_extensions *)
-val encryptedExtensionsBytes: EE -> Tot bytes
+val encryptedExtensionsBytes: ee -> Tot bytes
 let encryptedExtensionsBytes ee =
     let payload = extensionsBytes ee.ee_extensions in
     messageBytes HT_encrypted_extensions payload
 
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:EE{Seq.Eq (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})
-let parseEncryptedExtensions payload : result EE = 
+    result (s:ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})
+let parseEncryptedExtensions payload : result ee = 
   match parseExtensions payload with
   | Error(z) -> Error(z)
   | Correct(exts) -> Correct({ee_extensions = exts;})
 
 (* Server configuration *)
-val serverConfigurationBytes: SC -> Tot bytes
+val serverConfigurationBytes: sc -> Tot bytes
 let serverConfigurationBytes sc =
   let cid = sc.sc_configuration_id in
   let date = sc.sc_expiration_date in
@@ -689,8 +689,8 @@ let serverConfigurationBytes sc =
   messageBytes HT_server_configuration payload
 
 val parseServerConfiguration: b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:SC{Seq.Eq (serverConfigurationBytes s) (messageBytes HT_server_configuration b)})
-let parseServerConfiguration payload : result SC = 
+    result (s:sc{Seq.equal (serverConfigurationBytes s) (messageBytes HT_server_configuration b)})
+let parseServerConfiguration payload : result sc = 
   match vlsplit 2 payload with
   | Correct(config_id, data) -> (
       if length data >= 6 then
@@ -728,15 +728,15 @@ let parseServerConfiguration payload : result SC =
  | Error(z) -> Error(z)
 
 (* Next protocol message *)
-val nextProtocolBytes: NP -> Tot bytes
+val nextProtocolBytes: np -> Tot bytes
 let nextProtocolBytes np =
   let selected_protocol = vlbytes 1 np.np_selected_protocol in
   let padding = vlbytes 1 np.np_padding in
   messageBytes HT_next_protocol (selected_protocol @| padding)
 
 val parseNextProtocol: b:bytes -> 
-    result (s:NP{Seq.Eq (nextProtocolBytes s) (messageBytes HT_next_protocol b)})
-let parseNextProtocol payload : result NP = 
+    result (s:np{Seq.equal (nextProtocolBytes s) (messageBytes HT_next_protocol b)})
+let parseNextProtocol payload : result np = 
   match vlsplit 1 payload with
   | Error(z) -> Error(z)
   | Correct(selected_protocol, data) ->

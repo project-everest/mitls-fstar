@@ -282,11 +282,11 @@ TLSML := $(notdir $(TLSML))
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
 	$(FSTAR) --no_location_info --lax --codegen OCaml --__temp_no_proj FStar.Heap --__temp_no_proj TLSExtensions $(TLSGEN_ADMIT) $^
-	# Builds everything against native_int/prims; including native_int/prims.cmx
+	# # Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
-	# All our .cmx files
+	# # All our .cmx files
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
 	# A .cmxa with all the .cmx above
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
