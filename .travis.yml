@@ -27,6 +27,7 @@ install:
 script:
   - make -C .fstar/src/ocaml-output
   - make -C src/tls uver
+  - make -C src/tls tls-gen
 
 notifications:
   slack: everestexpedition:NqWwcvMIxouVIbC5IhF0loqX
