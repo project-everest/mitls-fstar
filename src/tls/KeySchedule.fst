@@ -21,6 +21,61 @@ open HandshakeMessages
 open StatefulLHAE
 open HSCrypto
 
+// TLSPRF.fst for TLS 1.2
+// CoreCrypto.hkdf for TLS 1.3
+// subsumes the idealized module PRF.fst
+
+type schedule_state_13 =
+| KXS13_INIT
+| KXS13_HANDSHAKE
+| KXS13_TRAFFIC
+
+type schedule_state_12 =
+| KXS12_INIT
+| KXS12_COMMIT
+| KXS12_KEYGEN
+| KXS12_FINISHED
+
+type schedule_state =
+| KXS_13 of schedule_state_13
+| KXS_12 of schedule_state_12
+
+type kx_state = {
+ role: role;
+ pv: pv;
+ g: dh_group;
+ dh_secret: dh_priv;
+ dh_peer: dh_public;
+ dh_agreed: bytes;
+ kx_state: schedule_state;
+}
+
+//| KX_server of (pv:pv) * (g:dh_group) * (y:dh_priv) * (gy:dh_public) * (st:schedule_state)
+//| KX_client of (pv:pv) * (g:dh_group) * (x:dh_priv) * (gx:dh_pubic) * (st:schedule_state)
+
+val internal_state: Map.t rid (ref kx_state)
+let state_map = ref (const kx_state)
+
+// Init functions
+//val dh_server_init: #region:rid -> pv:pv -> ST unit (requires fun h->) (ensures contains (!state_map) rid)
+//val dh_client_iinit: 
+
+val kx_init: #region:rid -> role:role -> pv:pv -> g:dh_group -> gx:option dh_pub{gx=None <==> (pv=TLS_1p3 /\ role = Client) \/ (role = Server /\ pv<>TLS_1p3)} -> ST dh_pub
+
+val kx_set_peer: #region:rid -> gx:dh_pub -> ST unit (requires (sel !state_map rid).kx_state = KX .... ) 
+
+// New handshake interface:
+//val dh_init_server_exchange: #region:rid -> g:dh_group -> ST (gy: dh_key)
+//val dh_client_exchange: #region:rid -> g:
+
+// TLS 1.2 + 1.3
+// state-aware
+val dh_next_key: #region:rid -> log:bytes -> 
+
+assume val dh_commit
+assume val dh_server_verify
+assume val dh_client_verify
+
 (* For TLS12 and below only the server keeps state concretely *)
 type ks_12S =
     | KS_12S: #region: rid -> x: rref region (KEX_S_PRIV) -> ks_12S
@@ -32,7 +87,7 @@ type ks_13C
     ...
 
 
-(* for idealization we need a top level log *)
+(* for idealization we need a global log *)
 type state =
   | Init
   | Committed of ProtocolVersion * aeAlg * negotiatedExtensions
@@ -42,7 +97,7 @@ type kdentry = CsRands * state
 let kdlog : ref<list<kdentry>> = ref [] 
   
 (* TLS 1.2 *)
-val dh_init_12S: #region:rid g:dh_group -> ST (state:ks_12S * gx:dh_key)
+val dh_init_12S: #region:rid -> g:dh_group -> ST (state:ks_12S * gx:dh_key)
 
 let dh_init_12S r g =
   let x = dh_keygen g
