@@ -3,7 +3,7 @@ miTLS: A verified reference implementation of TLS
 
 This repository contains the new F* development a port of the stable [F# development](https://github.com/mitls/mitls-flex) to F* 0.9.
 
-[![Build status](https://travis-ci.org/mitls/mitls-fstar.svg)](https://travis-ci.org/mitls/mitls-fstar)
+[![Build status](https://travis-ci.org/mitls/mitls-fstar.svg?branch=master)](https://travis-ci.org/mitls/mitls-fstar)
 
 ### miTLS website
 
@@ -21,7 +21,7 @@ More information on F\* can be found at www.fstar-lang.org
 
 - `3rdparty/`
 	Legacy third-party libraries. We no longer depend on them, and they should be deleted at some point. Currently we link against libraries in https://github.com/FStarLang/3rdparty. New libraries should be added there or to a new 3rdparty git submodule, if needed.
-	
+
 - `src/`
 
   - `Makefile` `make all` is part of F* regression testing.
@@ -35,21 +35,21 @@ More information on F\* can be found at www.fstar-lang.org
 
   		- `mitls-ver` Full type checking of files that have been ported so far (listed in variable `VERIFY`)
   		- `mitls-ml`  OCaml code generation for files ported so far---generated files go to the `../tls-ml` directory
- 
+
   - `tls-fs/` Legacy .fs (see also matching .fs7 files in mitls-f7)
 
   - `tls-lax/` is a shallow port from .fs to .fst that codegens to OCaml
   --- but does not compile yet because of missing native dependencies
-  
+
   - `tls-ml/` OCaml code generated from tls and tls-lax files. Arguably, files here could be built and do not need to be in the repository.
- 
-   
+
+
   - `bug-reports/` Example files for Github issues should be placed here.
 
   - `fstar_proof/` an independent POPL'16 example, verifying the state machine in F* (out of date, JK is the expert; it could be moved to FStarLang/FStar).
-    
+
   - `mipki/` Antoine's development on certificate management.
- 
+
 - `atom-fstar-build.json` Build configuration for using with F* interactive mode for Atom.
 
 
@@ -60,7 +60,7 @@ More information on F\* can be found at www.fstar-lang.org
 - `data/` Persistent data used by miTLS, e.g. a DH parameter cache --- not ported yet.
 
 - `libs/` Our own libraries: CoreCrypto, Platform, and DHDB.
-CoreCrypto and Platform had been moved to `FStarLang/FStar/contrib` and remaining files are deprecated, DHDB remains to be ported. 
+CoreCrypto and Platform had been moved to `FStarLang/FStar/contrib` and remaining files are deprecated, DHDB remains to be ported.
   - `fst` F* specification
   - `fs` F# implementation
   - `ml` OCaml implementation
@@ -69,7 +69,7 @@ CoreCrypto and Platform had been moved to `FStarLang/FStar/contrib` and remainin
 
 - `tests/` Legacy test suit
 
-- `VS/` miTLS Visual Studio solution, for browsing/building the old F# files in `src/tls-fs` --- used to build as reference; currently broken. 
+- `VS/` miTLS Visual Studio solution, for browsing/building the old F# files in `src/tls-fs` --- used to build as reference; currently broken.
 
 ###Configuring Emacs and Atom F* modes
 
@@ -77,8 +77,8 @@ The Makefile in `src/tls` has the following targets:
 
 - `make json > ../atom-fstar-build.json` regenerates an atom-fstar-build.json file. To verify a module interactively, add `--verify_module <module>` in "options".
 - `make <file.fst(i)>-ver` verifies an individual file.
-- `make <file.fst(i)>-cfg` generates a `(*--build-config ... *)` that can be prepended to `<file.fst(i)>` for interactive verification or for verification from the command-line. 
-- `make <file.fst(i)>-in` generates command-line arguments to use with the `--in` flag to verify `<file.fst(i)>`. 
+- `make <file.fst(i)>-cfg` generates a `(*--build-config ... *)` that can be prepended to `<file.fst(i)>` for interactive verification or for verification from the command-line.
+- `make <file.fst(i)>-in` generates command-line arguments to use with the `--in` flag to verify `<file.fst(i)>`.
 This target can be used to pass appropriate arguments in `fstar-mode.el` using this snippet:
 
 ```elisp
@@ -96,7 +96,7 @@ This target can be used to pass appropriate arguments in `fstar-mode.el` using t
              (target (concat fname "-in"))
              (argstr (car (process-lines "make" "--quiet" target))))
         (split-string argstr)))))
-  
+
 (setq fstar-subp-prover-args #'my-fstar-compute-prover-args-using-make)
 ```
 
