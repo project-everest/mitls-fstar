@@ -27,7 +27,8 @@ open Range
 // we care about the range mostly on the sender side.
 
 // this style enables structural subtyping on range indexes
-abstract type pre_fragment (i:id) = bytes
+// JP, NS: XXX temporarily removing the abstraction for the sake of extraction
+type pre_fragment (i:id) = bytes
 val ghost_repr: #i:id -> pre_fragment i -> GTot bytes
 let ghost_repr #i f = f
 

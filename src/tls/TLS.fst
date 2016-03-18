@@ -40,7 +40,7 @@ val unexpected: #a:Type -> v:string -> ST a
   (requires (fun h -> True))
   (ensures (fun _ _ _ -> False ))
 
-let rec unexpected s = unexpected s
+let rec unexpected #a s = unexpected s
 
 
 (*** control API ***)
@@ -147,7 +147,7 @@ let request c ops     = Handshake.request     (C.hs c) ops
 // relying on a function from dispatch state to completion status
 // using polymorphism to retain the caller's epoch refinement
 //val epochT: #e:Type -> p: (e -> Type) -> xs: seq e { Seq_forall p xs } -> dispatch -> Tot (option (x:e { p x }))
-val epochT: #e:Type -> xs: seq e -> dispatch -> Tot (option (e * nat))
+val epochT: xs: seq 'e -> dispatch -> Tot (option ('e * nat))
 let epochT epochs other =
   let j : n:int { n < Seq.length epochs } =
     if other = Finishing || other = Finished
@@ -163,7 +163,7 @@ let epoch_id (#region:rid) (#peer:rid) (o: option (epoch region peer)) =
 
 
 
-val epchT: #e:Type -> es:seq e -> logIndex es -> Tot (option e)
+val epchT: es:seq 'e -> logIndex es -> Tot (option 'e)
 let epchT es n =
   if n >= 0 then Some (Seq.index es n) else None
 
@@ -210,12 +210,12 @@ let currentId (c:connection) rw =
 (** writing epochs **)
 
 val epoch_wo: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
-let epoch_wo _ _ o = writer_epoch (Some.v o)
+let epoch_wo #region #peer o = writer_epoch (Some.v o)
 
 (** reading epochs **)
 
 val epoch_ro: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (reader (peerId (epoch_id o)))
-let epoch_ro _ _ o =
+let epoch_ro #region #peer o =
   match o with
   | Some(Epoch _ r _) -> r
 
@@ -383,7 +383,7 @@ let epoch_w_h_inv c h0 h1 =
 *)
 
 val fragment_entry: #i:id -> e: entry i -> Tot (Content.fragment i)
-let fragment_entry i (Entry c ad f) = f
+let fragment_entry #i (Entry c ad f) = f
 
 (*
 val fragment_entry: #i:id -> log: seq (entry i) { Seq.length log > 0 } -> Tot (rg:frange i & Content.fragment i)
@@ -473,7 +473,7 @@ let send_payload c i f =
         let ad = StatefulPlain.makeAD i ct in
 	cut (witness (iT c.hs Writer h0));
         assert(st_enc_inv wr h0);
-        assert(is_seqn (sel h0 (seqn wr) + 1));
+        // assert(is_seqn (sel h0 (seqn wr) + 1));
         let r = encrypt #i #ad #rg wr f in
         let h1 = ST.get() in
 	frame_writer_epoch c h0 h1;
@@ -481,7 +481,7 @@ let send_payload c i f =
 
 
 // check vs record
-val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
+val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
   (requires (fun h ->
     let st = sel h c.state in
     let es = sel h c.hs.log in
@@ -518,7 +518,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (Result unit)
     ))
 
 // 15-09-09 Do we need an extra argument for every stateful index?
-let send c i f =
+let send c #i f =
   let pv = outerPV c in
   let ct, rg = Content.ct_rg i f in
   let payload = send_payload c i f in
@@ -584,7 +584,7 @@ let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is
 val project_one: #i:id -> entry i -> Tot (option (DataStream.delta i))
 let project_one #i en = match fragment_entry en with
    | Content.CT_Data (rg: frange i) d ->
-     cut(Wider fragment_range rg);
+     cut(wider fragment_range rg);
      Some (DataStream.Data d)
 
    | Content.CT_Alert rg alf -> // alert parsing may fail, or return several deltas
@@ -602,7 +602,7 @@ let maybe_snoc a b = match b with
 
 val project: #i:id -> fs:seq (entry i) -> Tot(seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
-let rec project i fs =
+let rec project #i fs =
   if Seq.length fs = 0
   then Seq.createEmpty
   else let fs, f = Content.split #(entry i) fs in
@@ -615,7 +615,7 @@ val project_snoc: #i:id -> s:seq (entry i) -> e:entry i -> Lemma
   [SMTPat (project (snoc s e))]
 let project_snoc #i s e =
   let hd, tl = Content.split (snoc s e) in
-  cut (Seq.Eq hd s)
+  cut (Seq.equal hd s)
 
 
 val no_seqn_overflow: c: connection -> ST bool
@@ -632,12 +632,14 @@ val no_seqn_overflow: c: connection -> ST bool
 let no_seqn_overflow c =
   let es = !c.hs.log in
   let j = Handshake.i c.hs Writer in
-  j < 0 ||
-  ( let Epoch h _ w = Seq.index es j in
+  if j < 0 then
+    true
+  else
+    let Epoch h _ w = Seq.index es j in
       let n = !(seqn w) + 1 in
       if n >= 72057594037927936 && n < 18446744073709551616
       then (lemma_repr_bytes_values n; true)
-      else false )
+      else false
 
 
 
@@ -922,6 +924,10 @@ let writeOne c i appdata =
                  | Error (x,y) -> unrecoverable c y)
         | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
 ))))
+
+//JP: the code below has been commented out for the sake of extraction; it was
+//using the old style of invariants
+(*
 
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
@@ -1366,3 +1372,4 @@ let refuse c (q:query) =
     let reason = perror __SOURCE_FILE__ __LINE__ "Remote certificate could not be verified locally" in
     abortWithAlert c AD_unknown_ca reason;
     writeAllClosing c
+*)

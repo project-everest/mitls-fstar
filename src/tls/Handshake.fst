@@ -24,7 +24,7 @@ open HSCrypto
 (* Negotiation: HELLO sub-module *)
 
 type ri = (cVerifyData * sVerifyData) 
-type log = bytes 
+type b_log = bytes 
 //or how about: 
 //type log = list (m:bytes{exists ht d. m = messageBytes ht d})
 type nego = {
@@ -42,14 +42,14 @@ type nego = {
      n_scsv: list scsv_suite;
 }                 
 
-type id = {
+type hs_id = {
      id_cert: Cert.chain;
      id_sigalg: option Sig.alg;
 }
 
 type ake = {
-     ake_server_id: option id;
-     ake_client_id: option id;
+     ake_server_id: option hs_id;
+     ake_client_id: option hs_id;
      ake_pms: bytes;
      ake_session_hash: bytes;
      ake_ms: bytes;
@@ -67,10 +67,10 @@ type eph_s = option kex_s_priv
 type eph_c = list kex_s_priv
 
 
-val prepareClientHello: config -> option ri -> option sessionID -> ST (ch * log)
+val prepareClientHello: config -> option ri -> option sessionID -> ST (ch * b_log)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let prepareClientHello cfg ri sido : ch * log =
+let prepareClientHello cfg ri sido : ch * b_log =
   let crand = Nonce.mkHelloRandom() in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client crand in
@@ -125,7 +125,7 @@ val getCachedSession: cfg:config -> ch:ch -> ST (option session)
 let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
-val prepareServerHello: config -> option ri -> ch -> log -> ST (result (bytes * nego * option ake * log))
+val prepareServerHello: config -> option ri -> ch -> b_log -> ST (result (bytes * nego * option ake * b_log))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ri ch i_log =
@@ -590,10 +590,12 @@ let version (HS r res cfg id l st) =
     | Some n -> n.n_protocol_version
     | None -> cfg.minVer
 
-val iT:  s:hs -> rw:rw -> ST int
+// JP: the outside has been checked against the fsti which had another
+// definition (at the bottom of this file)
+val iT_old:  s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let iT (HS r res cfg id l st) rw =
+let iT_old (HS r res cfg id l st) rw =
   match rw with 
   | Reader -> (!st).hs_reader
   | Writer -> (!st).hs_writer
@@ -822,3 +824,36 @@ assume val authorize: s:hs -> Cert.chain -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
+
+(* These definitions are here so that we can use Handshake.fst instead of
+ * Handshake.fsti. TODO: they are meant to go away once we merge Handshake.fsti
+ * into Handshake.fst *)
+assume type hs_footprint_inv (s: hs) (h: HyperHeap.t): Type0
+assume type hs_inv (s: hs) (h: HyperHeap.t): Type0
+assume type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)): Type0
+assume val regions: #p:rid -> #q:rid -> e:epoch p q -> Tot (Set.set HyperHeap.rid)
+assume type modifies_internal (h1: HyperHeap.t) (s: hs) (h2: HyperHeap.t): Type0
+
+// Idle client starts a full handshake on the current connection
+assume val rehandshake: s:hs -> config -> ST bool
+  (requires (fun h -> hs_inv s h /\ HS.r s = Client))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
+// Idle client starts an abbreviated handshake resuming the current session
+assume val rekey: s:hs -> config -> ST bool
+  (requires (fun h -> hs_inv s h /\ HS.r s = Client))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
+// (Idle) Server requests an handshake
+assume val request: s:hs -> config -> ST bool
+  (requires (fun h -> hs_inv s h /\ HS.r s = Server))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
+assume val invalidateSession: s:hs -> ST unit
+  (requires (hs_inv s))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
+
+let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
+// The return type is simplified for the sake of extraction.
+assume val iT: s:hs -> rw:rw -> h:HyperHeap.t -> Tot int
+assume val i: s:hs -> rw:rw -> St int

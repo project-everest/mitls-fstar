@@ -75,8 +75,9 @@ endif
 # Not sure which interfaces we should put in there.
 
 # these files are the stable inputs for verification -- this is the dependency
-# order for interactive verification
-TLSVER=TLSError.fst \
+# order for interactive verification; these files are now all extracted via
+# lax type-checking in tls-gen
+FSTS=TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
 RSAKey.fst \
@@ -106,35 +107,15 @@ ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
 Record.fst \
-Handshake.fsti \
-Connection.fst \
-TLS.fst 
-#the preceding space is significant (see prefix_cfg)
-#LHAE.fst \--these do not even parse
-
-TLSNOTVER=\
 test/TestRecord.fst \
 TLSExtensions.p.fst \
 HSCrypto.fst \
 HandshakeMessages.fst \
 TLSPRF.fst \
 PRF.p.fst \
-Handshake.fst
-# TODO ... add these back
-# 
-# 
-
-NOTEXTRACTABLE=\
-Handshake.fsti \
+Handshake.fst \
 Connection.fst \
 TLS.fst
-
-TLSLAX=$(subst $(NOTEXTRACTABLE),$(TLSNOTVER),$(TLSVER))
-# Use this definition instead for TLSLAX if you want to try extraction all the
-# way up to TLS.fst.
-# TLSLAX=$(TLSVER) $(TLSNOTVER)
-
-TLSGEN=$(TLSLAX)
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
@@ -171,30 +152,19 @@ MAC_SHA1
 # No, --verify_module overrides --admit_fsi
 ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Cert Handshake)
 
-# The whole TLS source tree, in dependency order --- where we are going, but not used yet.
-TLS= $(TLSVER) \
-TLSExtensions.p.fst TLSPRF.fst\
-\
-HSFragment.fst\
-MAC_SHA256.p.fst\
-MAC_SHA1.p.fst\
-ENC.fst\
-LHAE.fst\
-PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti HandshakeMessages.p.fst Handshake.p.fst\
 
-
-# truncates $(TLSVER) just before $(basename $@).fst
+# truncates $(FSTS) just before $(basename $@).fst
 define prefix_cfg
-	$(shell str="$(TLSVER)"; echo "$${str%%$(1).$(2) *}")
+	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *}")
 endef
 
-# truncates $(TLSVER) just after $(basename $@).fst
+# truncates $(FSTS) just after $(basename $@).fst
 define prefix_ver
-	$(shell str="$(TLSVER)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
+	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
 endef
 # the space in calls to prefix_ver and prefix_cfg matters!
 
-# verifying one file within $(TLSVER)
+# verifying one file within $(FSTS)
 %.fst-ver:
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) $(LIBFILES) $(ADMITTED) --verify_module $(subst .p,,$(basename $@)) $(call prefix_ver,$(basename $@),fst)
 
@@ -225,21 +195,16 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-tls-ver: $(LIBFILES) $(TLSVER)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^) | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
+tls-ver: $(LIBFILES) $(FSTS)
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $^ | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
 
 # same as tls-ver, but verifies one module at a time.
-tls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
-
-# --trace_error
-tls-ml: $(LIBFILES) $(TLSVER)
-	$(FSTAR) --lax --debug Extreme $(ADMITTED) $^ --codegen OCaml --use_native_int --trace_error
-	mv *.ml ../tls-ml
+tls-ver1: $(LIBFILES) $(FSTS) $(addsuffix .fst-ver,$(basename $(FSTS)))
 
 wc:
-	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(TLS)
+	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(FSTS)
 
-tls-lax: $(LIBFILES) $(TLSLAX)
+tls-lax: $(LIBFILES) $(FSTS)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
 # These are the .cmx files for all ML-implemented F* modules.
@@ -253,7 +218,7 @@ LIB_ML= \
 TLSGEN_ADMIT=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
 
 # All our extracted modules.
-TLSML := $(TLSGEN:.p.fst=.ml)
+TLSML := $(FSTS:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
@@ -268,12 +233,12 @@ TLSML := $(notdir $(TLSML))
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen: $(LIBFILES) $(TLSGEN)
-	#$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
+tls-gen: $(LIBFILES) $(FSTS)
+	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) \
-		--no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
-		$(TLSGEN_ADMIT) \
-		$^
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
+	  $(TLSGEN_ADMIT) \
+	  $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.

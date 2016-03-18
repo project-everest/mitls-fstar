@@ -66,7 +66,9 @@ type is_plain (i: id) (ad: adata i) (rg: range) (f: fragment i) =
   fst (ct_rg i f) = parseAD i ad /\ wider rg (snd (ct_rg i f))
 
 // naming: we switch from fragment to plain as we are no longer TLS-specific
-abstract type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
+// XXX JP, NS: figure our whether we want to make the type below abstract, and
+// if so, how
+type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
 //  { (parseAD i ad, rg) = Content.ct_rg i f }
 
 // Useful if the parameters [id], [ad] and [rg] have been constructed _after_
