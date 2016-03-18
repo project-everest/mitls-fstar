@@ -53,8 +53,8 @@ type entry (i:gid) = // records that c is an encryption of p with ad
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
 type state (i:gid) (rw:rw) =
-  | State: #region:rid 
-           -> peer_region:rid{HyperHeap.disjoint region peer_region}
+  | State: #region:rid{region <> root}
+           -> peer_region:rid{peer_region <> root /\ HyperHeap.disjoint region peer_region}
            -> key:key i
            -> iv: iv i
            -> log: rref (if rw=Reader then peer_region else region) (seq (entry i))       // ghost subject to cryptographic assumption

@@ -50,7 +50,7 @@ CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 60
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES = $(PLATFORM) $(CRYPTO)
@@ -138,9 +138,34 @@ TLSGEN=$(TLSLAX)
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM \
-StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain \
-StreamAE StatefulPlain 
+VERIFY=\
+TLSError \
+TLSConstants \
+Nonce \
+RSAKey \
+DHGroup \
+HASH \
+HMAC \
+UntrustedCert \
+TLSInfo \
+Range \
+DataStream \
+Alert \
+Content \
+StreamPlain \
+StreamAE \
+StatefulPlain \
+LHAEPlain \
+AEAD_GCM \
+MAC \
+StatefulLHAE \
+MAC_SHA256 \
+MAC_SHA1
+
+#Encode -- removed for now; too many assumes
+#Connection -- should be added, but fails currently
+#PMS Sig Cert ... known to be unverifiable
+#What about ECGroup and CommonDH?
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
@@ -198,60 +223,10 @@ endef
 	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg, $(basename $@),fsti)
 	@echo '--*)'
 
-
-UFILES=TLSError.fst \
-TLSConstants.fst \
-Nonce.fst \
-RSAKey.fst \
-DHGroup.p.fst \
-ECGroup.fst \
-CommonDH.fst \
-PMS.p.fst \
-HASH.fst \
-HMAC.fst \
-Sig.p.fst \
-UntrustedCert.fst \
-Cert.fst \
-TLSInfo.fst \
-Range.fst \
-DataStream.fst \
-Alert.fst \
-Content.fst \
-StreamPlain.fst \
-StreamAE.fst \
-StatefulPlain.fst \
-LHAEPlain.fst \
-MAC.fst \
-Encode.fst \
-MAC_SHA256.fst \
-MAC_SHA1.fst \
-AEAD_GCM.fst \
-StatefulLHAE.fst \
-Record.fst \
-ENC.fst \
-Handshake.fsti \
-Connection.fst
-
-UREMAINING=
-
-VERFLAGS=$(addprefix --verify_module ,TLSError TLSConstants Nonce RSAKey DHGroup ECGroup.fst CommonDH.fst HASH HMAC UntrustedCert TLSInfo Range DataStream Alert Content StreamPlain StatefulPlain LHAEPlain MAC MAC_SHA256 MAC_SHA1 StreamAE AEAD_GCM StatefulLHAE)
-#Encode -- tons of assumes
-#Connection -- should be added, but fails with an inlining error
-#PMS Sig Cert ... known to be unverifiable
-
-uver: $(UFILES) 
-	$(FSTAR) $(LIBFILES) $(OFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection --z3timeout 20 $(UFILES) $(VERFLAGS) | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
-
-uwc:
-	wc -l $(UFILES)
-
-not-uwc:
-	wc -l $(UREMAINING)
-
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 tls-ver: $(LIBFILES) $(TLSVER)
-	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^)
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^) | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
 
 # same as tls-ver, but verifies one module at a time.
 tls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))

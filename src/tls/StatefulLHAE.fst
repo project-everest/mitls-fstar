@@ -4,7 +4,6 @@ module StatefulLHAE
 // Stateful, agile, length-hiding authenticated encryption with additional data
 // (implemented by appending a fragment sequence number to the additional data)
 
-
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
@@ -142,7 +141,8 @@ let refs_in_w (#i:gid) (e:writer i) =
 
 abstract val frame_st_inv: #i:id -> r:reader i -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_inv r w h0
-                  /\ equal_on (regions_of w) h0 h1)
+                  /\ equal_on (Set.union (Set.singleton w.region)
+                                        (Set.singleton w.peer_region)) h0 h1)
         (ensures st_inv r w h1)
 let frame_st_inv #i r w h0 h1 = ()
 
@@ -152,13 +152,13 @@ abstract val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
       modifies Set.empty h0 h1
     /\ (let r = fst rw in
        let w = snd rw in
-      fresh_region (region r) h0 h1
-    /\ fresh_region (region w) h0 h1
-    /\ extends (region r) reader_parent
-    /\ extends (region w) writer_parent
+      fresh_region r.region h0 h1
+    /\ fresh_region w.region h0 h1
+    /\ extends r.region reader_parent
+    /\ extends w.region writer_parent
     /\ st_inv r w h1
-    /\ sel h1 (log w) = Seq.createEmpty
-    /\ sel h1 (seqn r) = 0)))
+    /\ sel h1 w.log = Seq.createEmpty
+    /\ sel h1 r.seqn = 0)))
 let gen reader_parent writer_parent i =
   lemma_repr_bytes_values 0;
   ST.recall_region reader_parent;
@@ -211,9 +211,13 @@ type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
 
 abstract val frame_st_enc_inv: #i:id -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_enc_inv w h0
-                  /\ equal_on (regions_of w) h0 h1)
+                  /\ equal_on (Set.union (Set.singleton w.region)
+                                        (Set.singleton w.peer_region)) h0 h1)
         (ensures st_enc_inv w h1)
 let frame_st_enc_inv #i w h0 h1 = ()
+
+let refs_in_e (#i:gid) (e:writer i) =
+  !{ as_ref e.log, as_ref e.seqn }
 
 abstract val encrypt: #i:gid -> #ad:adata i
   -> #rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length}
@@ -241,8 +245,8 @@ type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
   exists (w:writer i).{:pattern (matching r w)} st_inv r w h
 
 abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
-  Lemma (requires (st_dec_inv rd h0 /\ 
-                   equal_on (regions_of rd) h0 h1))
+  Lemma (requires (st_dec_inv rd h0 /\
+                   equal_on (Set.union (Set.singleton rd.region) (Set.singleton rd.peer_region)) h0 h1))
         (ensures st_dec_inv rd h1)
 let frame_st_dec_inv #i rd h0 h1 = ()
 

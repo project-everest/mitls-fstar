@@ -89,7 +89,7 @@ let mac #i #good k p =
 abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool 
 let matches #i #good p (Entry _ p') = p = p'
 
-val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
+val verify: #i:id -> #good:(bytes -> Type) -> k:key i good{HMAC.is_tls_mac (alg i)} -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True)) 
   (ensures (fun h0 b h1 -> h0 = h1 /\ (b /\ authId i ==> good p)))
 
