@@ -165,7 +165,7 @@ endef
 # the space in calls to prefix_ver and prefix_cfg matters!
 
 # verifying one file within $(FSTS)
-%.fst-ver:
+%.fst-ver: $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) $(LIBFILES) $(ADMITTED) --verify_module $(subst .p,,$(basename $@)) $(call prefix_ver,$(basename $@),fst)
 
 %.fsti-ver:
@@ -199,7 +199,7 @@ tls-ver: $(LIBFILES) $(FSTS)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $^ | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
 
 # same as tls-ver, but verifies one module at a time.
-tls-ver1: $(LIBFILES) $(FSTS) $(addsuffix .fst-ver,$(basename $(FSTS)))
+tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
 
 wc:
 	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(FSTS)
@@ -269,6 +269,12 @@ TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF TLSExtensions ENC
 # Target to generate preprocessed files for atom-interactive
 pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
 
+
+HAS_CPP := $(shell which cpp 2> /dev/null; echo $$?)
+ifeq ($(HAS_CPP),1)
+   $(error "cpp not found in PATH. Unable to proceed")
+endif
+
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
     CPP=cpp #-ffreestanding
@@ -277,6 +283,10 @@ else
     ifeq ($(UNAME_S),Linux)
         CPP=cpp -ffreestanding
     else
+        HAS_GNU_CPP := $(shell which cpp-5 2> /dev/null; echo $$?)
+        ifeq ($(HAS_GNU_CPP),1)
+            $(error "cpp-5 not found in PATH. Unable to proceed")
+        endif
         CPP=cpp-5 # GCC cpp rather than LLVM
     endif
 endif
