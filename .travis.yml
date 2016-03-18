@@ -26,7 +26,7 @@ install:
 
 script:
   - make -C .fstar/src/ocaml-output
-  - make -C src/tls uver
+  - make -C src/tls tls-ver
   - make -C src/tls tls-gen
 
 notifications:
