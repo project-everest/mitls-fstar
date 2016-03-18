@@ -4,6 +4,7 @@ module StatefulLHAE
 // Stateful, agile, length-hiding authenticated encryption with additional data
 // (implemented by appending a fragment sequence number to the additional data)
 
+
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
@@ -32,7 +33,7 @@ type entry (i:id) = (* records that c is an encryption of p with ad *)
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
 let is_seqn (n:nat) = repr_bytes n <= 8
-let seqn_t = n:nat { repr_bytes n <= 8 } (* NB: REMOVING THIS LINE TRIGGERS A FATAL ERROR WHEN CHECKING writer_seqn *)
+let seqn_t = n:nat { repr_bytes n <= 8 } (* NB: REMOVING THIS LINE TRIGGERS A FATAL ERROR WHEN CHECKING writer_seqn; NS: Stale?*)
 
 (* typing the log that specifies StatefulLHAE *)
 type st_log_t (r:rid) (i:id) = rref r (s:seq (entry i))
@@ -54,18 +55,18 @@ type state (i:gid) (rw:rw) =
 type reader i = state i Reader
 type writer i = state i Writer
 
-val region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+abstract val region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
 let region #i #rw s = State.region s
 
-val peer_region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+abstract val peer_region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
 let peer_region #i #wr s = s.peer_region
 
 let log_region    = fun (#i:id) (#rw:rw) (s:state i rw) -> if rw=Reader then peer_region s else region s
 
-val log: #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (log_region s) i)
+abstract val log: #i:id -> #rw:rw -> s:state i rw -> Tot (st_log_t (log_region s) i)
 let log #i #rw s = s.log
 
-val seqn: #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
+abstract val seqn: #i:id -> #rw:rw -> s:state i rw -> Tot (rref (region s) seqn_t)
 let seqn #i #rw s = s.seqn
 
 abstract type matching (#i:gid) (r:reader i) (w:writer i) =
@@ -124,7 +125,7 @@ abstract val unfold_st_inv: #i:id -> r:reader i -> w:writer i -> h:HyperHeap.t -
        /\ rctr <= wctr )))
 let unfold_st_inv #i r w h = ()
 
-val test_gcm_log_inv: h:HyperHeap.t -> i:gid -> r:reader i -> w:writer i{st_inv r w h} -> n:nat -> j:nat -> c:cipher i -> ad:adata i ->
+private val test_gcm_log_inv: h:HyperHeap.t -> i:gid -> r:reader i -> w:writer i{st_inv r w h} -> n:nat -> j:nat -> c:cipher i -> ad:adata i ->
   Lemma (requires (let gcm_log = sel h (AEAD_GCM.State.log w.key) in
 		   j < Seq.length gcm_log
 		   /\ repr_bytes n <= 8
@@ -141,8 +142,7 @@ let refs_in_w (#i:gid) (e:writer i) =
 
 abstract val frame_st_inv: #i:id -> r:reader i -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_inv r w h0
-                  /\ equal_on (Set.union (Set.singleton w.region)
-                                        (Set.singleton w.peer_region)) h0 h1)
+                  /\ equal_on (regions_of w) h0 h1)
         (ensures st_inv r w h1)
 let frame_st_inv #i r w h0 h1 = ()
 
@@ -152,13 +152,13 @@ abstract val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
       modifies Set.empty h0 h1
     /\ (let r = fst rw in
        let w = snd rw in
-      fresh_region r.region h0 h1
-    /\ fresh_region w.region h0 h1
-    /\ extends r.region reader_parent
-    /\ extends w.region writer_parent
+      fresh_region (region r) h0 h1
+    /\ fresh_region (region w) h0 h1
+    /\ extends (region r) reader_parent
+    /\ extends (region w) writer_parent
     /\ st_inv r w h1
-    /\ sel h1 w.log = Seq.createEmpty
-    /\ sel h1 r.seqn = 0)))
+    /\ sel h1 (log w) = Seq.createEmpty
+    /\ sel h1 (seqn r) = 0)))
 let gen reader_parent writer_parent i =
   lemma_repr_bytes_values 0;
   ST.recall_region reader_parent;
@@ -211,13 +211,9 @@ type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
 
 abstract val frame_st_enc_inv: #i:id -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_enc_inv w h0
-                  /\ equal_on (Set.union (Set.singleton w.region)
-                                        (Set.singleton w.peer_region)) h0 h1)
+                  /\ equal_on (regions_of w) h0 h1)
         (ensures st_enc_inv w h1)
 let frame_st_enc_inv #i w h0 h1 = ()
-
-let refs_in_e (#i:gid) (e:writer i) =
-  !{ as_ref e.log, as_ref e.seqn }
 
 abstract val encrypt: #i:gid -> #ad:adata i
   -> #rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length}
@@ -245,8 +241,8 @@ type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
   exists (w:writer i).{:pattern (matching r w)} st_inv r w h
 
 abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
-  Lemma (requires (st_dec_inv rd h0 /\
-                   equal_on (Set.union (Set.singleton rd.region) (Set.singleton rd.peer_region)) h0 h1))
+  Lemma (requires (st_dec_inv rd h0 /\ 
+                   equal_on (regions_of rd) h0 h1))
         (ensures st_dec_inv rd h1)
 let frame_st_dec_inv #i rd h0 h1 = ()
 
@@ -264,7 +260,8 @@ abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
              /\ (let lg = sel h0 rd.log in
                 let rctr = sel h0 rd.seqn in
                authId i
-               ==> st_dec_inv rd h0
+               ==> 
+                  st_dec_inv rd h0
                 /\ st_dec_inv rd h1
                 /\ (match res with
 	     	   | Some v -> 
@@ -292,17 +289,10 @@ let decrypt #i #ad (State _ log seqn key) c =
        None
 
 (*** TODO ***)
-(*
-   - stateful.
+(* 
    - calling gen/coerce adds i to the log of existing keys;
-   - gen can only be called when i is not yet in the log;
-   - we get this precondition from the freshness of the local nonce in i
-
-   - we use a shared, ghost log of encryptions (also subsuming the history)
-   - we encode fatal decryption errors by abstracting over the decryption counter
-
-   - add back in, from decrypt refinement. Last lines
-      /\ sel h1 (StReader.seqn rd) = rctr))))))) //reveal nothing about the seqn if it fails; rendering this key useless
+     gen can only be called when i is not yet in the log;
+     we get this precondition from the freshness of the local nonce in i
 
    - add overflow protection {is_seqn (length s)})
 *)

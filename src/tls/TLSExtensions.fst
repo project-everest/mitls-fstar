@@ -360,7 +360,7 @@ and parseExtensions b =
   | Correct(b) -> aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
 
-val parseOptExtensions: data:bytes -> result (option (list extension))
+val parseOptExtensions: data:bytes -> Tot (result (option (list extension)))
 let parseOptExtensions data =
   if length data = 0 then Correct(None)
   else match parseExtensions data with
@@ -368,7 +368,7 @@ let parseOptExtensions data =
   | Error(z) -> Error(z)
   
 // JK : Only client side ? 
-val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> l:list extension{List.Tot.length l < 256}
+val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> Tot (l:list extension{List.Tot.length l < 256})
 let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =

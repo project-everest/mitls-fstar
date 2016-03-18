@@ -485,6 +485,7 @@ type connectionInfo = pre_connectionInfo
 //$ inline
 let connectionRole ci = ci.role
 
+val initConnection: role -> random -> Tot ConnectionInfo
 let initConnection role rand =
     let ctos = InitEpoch Client in
     let stoc = InitEpoch Server in

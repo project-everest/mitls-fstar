@@ -139,7 +139,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing server key exchange message...\n";
 	 (match parseServerKeyExchange !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
-			   print_string "WARNING: ignoring test on serialization because EC point serialization is not implemnted in CoreCrypto\n"
+			   print_string "WARNING: ignoring test on serialization because EC point serialization is not implemented in CoreCrypto\n"
 (*
 			  let _,ske_bytes = split (serverKeyExchangeBytes(ch)) 4 in
 	     if equalBytes ske_bytes msg then ((print_string "Serializing server key exchange...\n...OK\n")) else
@@ -263,7 +263,7 @@ let parse_trace_file file =
   let fbytes = Bytes.create 1000000 in
   let flag = input file fbytes 0 65536 in
   if flag = 0 then print_string "Reached EOF\n"
-  else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
+  else print_string ("Read ??? " (* ^ (string_of_int flag) ^ *) ^  " characters\n");
   let bytes = Bytes.sub fbytes 0 flag in
   let hs = { bl = [bytes]; max = flag; index = 0; length = flag; } in
   parse_handshake hs;

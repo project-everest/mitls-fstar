@@ -63,6 +63,7 @@ let getParams (c : ec_curve) : ec_params =
     in { curve = EC_PRIME rawcurve; point_compression = false; }
 *)
 
+val parse_curve: bytes -> Tot (option ec_params)
 let parse_curve (b : bytes) : option ec_params =
     if length b = 3 then
         let (ty, id) = split b 1 in
@@ -82,6 +83,7 @@ let curve_id (p:ec_params) : bytes =
     | ECC_P384 -> (0uy, 24uy)
     | ECC_P521 -> (0uy, 25uy))
 
+val bytelen: ec_params -> Tot int
 let bytelen (p:ec_params) : int =
     match p.curve with
     | ECC_P256 -> 32
@@ -92,6 +94,7 @@ let bytelen (p:ec_params) : int =
 val serialize_point: ec_params -> point -> Tot (b:bytes{length b < 257})
 let serialize_point (p:ec_params) (e:point) : bytes =
   let x = CoreCrypto.ec_point_serialize e in
+  lemma_repr_bytes_values (length x);
   let y:bytes = vlbytes 1 x in
   y
 
@@ -102,7 +105,8 @@ let serialize_point (p:ec_params) (e:point) =
 *)
 let op_Star = op_Multiply
 
-let parse_point (p:ec_params) (b:bytes) : option point  =
+val parse_point: ec_params -> bytes -> Tot (option point)
+let parse_point p b =
     let clen = bytelen p in 
     if length b = 2*clen + 1 then
         let (et, r) = split b 1 in

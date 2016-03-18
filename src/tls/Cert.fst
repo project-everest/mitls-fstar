@@ -43,7 +43,7 @@ let get_hint c = failwith "Not implemented"
 abstract val validate_cert_chain : list Sig.alg  -> chain -> bool
 let validate_cert_chain l c = failwith "Not implemented"
 
-abstract val parseCertificateList: bytes -> result chain
+abstract val parseCertificateList: bytes -> Tot (result chain)
 // Dummy implementation while certificate parsing is not implemented
 let parseCertificateList b = Correct ([b]) //TODO: known to be unverified
 

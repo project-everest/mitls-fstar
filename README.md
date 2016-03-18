@@ -1,16 +1,23 @@
-mitls-fstar (port of miTLS to F* 0.9)
-=====================================
+miTLS: A verified reference implementation of TLS
+=================================================
+
+This repository contains the new F* development a port of the stable [F# development](https://github.com/mitls/mitls-flex) to F* 0.9.
 
 [![Build status](https://travis-ci.org/mitls/mitls-fstar.svg)](https://travis-ci.org/mitls/mitls-fstar)
 
+### miTLS website
+
+More information on miTLS can be found at www.mitls.org
+
+More information on F\* can be found at www.fstar-lang.org
+
+### Table of content
 
   * [Directory structure](#directory-structure)
   	* [Legacy, imported from mitls-f7](#legacy-imported-from-mitls-f7)
   * [Configuring Emacs and Atom F* modes](#configuring-emacs-and-atom-f-modes)
 
-Directory structure
-===================
-
+###Directory structure
 
 - `3rdparty/`
 	Legacy third-party libraries. We no longer depend on them, and they should be deleted at some point. Currently we link against libraries in https://github.com/FStarLang/3rdparty. New libraries should be added there or to a new 3rdparty git submodule, if needed.
@@ -46,8 +53,7 @@ Directory structure
 - `atom-fstar-build.json` Build configuration for using with F* interactive mode for Atom.
 
 
-Legacy, imported from mitls-f7
----------
+####Legacy, imported from mitls-f7
 
 - `apps/` Sample apps built on top of miTLS --- not ported yet.
 
@@ -65,8 +71,7 @@ CoreCrypto and Platform had been moved to `FStarLang/FStar/contrib` and remainin
 
 - `VS/` miTLS Visual Studio solution, for browsing/building the old F# files in `src/tls-fs` --- used to build as reference; currently broken. 
 
-Configuring Emacs and Atom F* modes
-===================================
+###Configuring Emacs and Atom F* modes
 
 The Makefile in `src/tls` has the following targets:
 

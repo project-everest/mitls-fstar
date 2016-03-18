@@ -25,7 +25,6 @@ FSTAR_HOME?=../../.fstar
 #   make FSTAR_HOME=../../../fstar tls-gen
 # the latter form won't work because FSTAR_HOME will incorrectly override values
 # in recursive invocations of $(MAKE)...
-add_stdlib_prefix=$(addprefix $(FSTAR_HOME)/$(LIB)/,$(1))
 
 # The .fst files found in [lib/ml] that are realized in
 # stdlib-hyperheap.cmxa
@@ -37,8 +36,8 @@ hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Ch
 FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
-FSTARFLAGS=--universes $(call add_stdlib_prefix,$(STDLIB)) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS) $(OFLAGS)
+FSTARFLAGS=--universes $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 
 PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
 PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
@@ -63,7 +62,7 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_
 NUBUILD_HOME=../../.nubuild
 NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
 ifdef USE_NUBUILD
-FSTAR_OR_NUBUILD=$(NUBUILD) --quiet FStarVerify $(FSTARFLAGS)
+FSTAR_OR_NUBUILD=$(NUBUILD) FStarVerify $(FSTARFLAGS)
 else
 FSTAR_OR_NUBUILD=$(FSTAR)
 endif
@@ -111,21 +110,26 @@ TLS.fst
 #LHAE.fst \--these do not even parse
 
 TLSNOTVER=test/TestRecord.fst TLSExtensions.p.fst HandshakeMessages.fst
-# TLSPRF.fst
+# TLSPRF.fst  TODO ... add these back
 # PRF.p.fst \
 # Handshake.fst \
+# HSCrypto.fst \
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
 Connection.fst \
-TLS.fst 
+TLS.fst
 
 TLSLAX=$(subst $(NOTEXTRACTABLE),$(TLSNOTVER),$(TLSVER))
+# Use this definition instead for TLSLAX if you want to try extraction all the
+# way up to TLS.fst.
+# TLSLAX=$(TLSVER) $(TLSNOTVER)
+
 TLSGEN=$(TLSLAX)
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM LHAE \
+VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM \
 StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain \
 StreamAE StatefulPlain 
 
@@ -241,7 +245,7 @@ tls-ver: $(LIBFILES) $(TLSVER)
 	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^)
 
 # same as tls-ver, but verifies one module at a time.
-tls-ver1: $(addsuffix .fst-ver,$(basename $(TLSVER)))
+tls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
 
 # --trace_error
 tls-ml: $(LIBFILES) $(TLSVER)
@@ -281,8 +285,9 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
-	$(FSTAR) --no_location_info --lax --codegen OCaml --__temp_no_proj FStar.Heap --__temp_no_proj TLSExtensions $(TLSGEN_ADMIT) $^
-	# # Builds everything against native_int/prims; including native_int/prims.cmx
+	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
+	$(FSTAR) --no_location_info --lax --codegen OCaml --__temp_no_proj --__temp_no_proj TLSExtensions FStar.Heap $(TLSGEN_ADMIT) $^
+	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml

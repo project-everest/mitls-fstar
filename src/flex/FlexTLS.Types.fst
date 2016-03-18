@@ -4,10 +4,16 @@ module FlexTLS.Types
 
 open Platform.Bytes
 
-open MiTLS.TLSInfo
-open MiTLS.TLSConstants
-open MiTLS.TLSExtensions
+open TLSInfo
+open TLSConstants
 
+
+
+assume new type ffdhGroup // CoreCrypto ?
+assume new type ConnectionState // Record.fst -> Rename connectionState
+assume new type clientExtension // TLSExtensions.fst ?
+assume new type serverExtension // TLSExtensions.fst ?
+assume new type serverConfigurationExtension // TLSExtensions.fst ?
 
 
 /// <summary>
@@ -42,7 +48,7 @@ type kexDH = {
 /// </summary>
 type kexFFDH = {
   /// <summary> Negotiated Finite Field DH group </summary>
-  group: dhGroup;
+  group: ffdhGroup;
   /// <summary> Local secret value of the DH exchange </summary>
   x:  bytes;
   /// <summary> Local public value (g^x mod p) of the DH exchange </summary>
@@ -57,7 +63,7 @@ type kexFFDH = {
 /// </summary>
 type kexECDH = {
   /// <summary> Negotiated Elliptic Curve </summary>
-  curve: ec_curve;
+  curve: CoreCrypto.ec_curve;
   /// <summary> Point format compression </summary>
   comp: bool;
   /// <summary> Local secret value of the ECDH exchange </summary>
@@ -78,7 +84,7 @@ type kex =
   /// <summary> Key Exchange Type is Diffie-Hellman and the constructor holds all DH parameters </summary>
   | DH of kexDH
   /// <summary> Key Exchange Type is Finite Field Diffie-Hellman with negotiated group and the constructor holds all DH parameters </summary>
-  | FFDH of kexFFDH
+//  | FFDH of kexFFDH
   /// <summary> Key Exchange Type is Elliptic Curve Diffie-Hellman with negotiated curve and the constructor holds all ECDH parameters </summary>
   | ECDH of kexECDH
 
@@ -89,9 +95,9 @@ type priKey =
   /// <summary> No key set </summary>
   | PK_None
   /// <summary> Private signing key and associated algorithm </summary>
-  | PK_Sig of sigHashAlg * CoreSig.sigskey
+  | PK_Sig of Sig.alg * Sig.skey
   /// <summary> Private (RSA) decryption key </summary>
-  | PK_Enc of CoreACiphers.sk
+  | PK_Enc of RSAKey.sk
 
 /// <summary>
 /// Session Secrets record,
@@ -118,7 +124,7 @@ type secrets = {
 /// <remarks> There is no CCS buffer because those are only one byte </remarks>
 type channel = {
   /// <summary> Secret and mutable state of the current epoch (keys, sequence number, etc...) </summary>
-  record: Record.ConnectionState;
+  record: ConnectionState;
   /// <summary> Public immutable data of the current epoch </summary>
   epoch:  TLSInfo.epoch;
   /// <summary> Raw bytes of the secrets currently in use. This is meant to be a read-only (informational) field: changes to this field will have no effect </summary>
@@ -144,7 +150,7 @@ type state = {
   /// <summary> Writing channel (Outgoing) </summary>
   write: channel;
   /// <summary> Network stream where the data is exchanged with the peer </summary>
-  ns: Tcp.NetworkStream;
+  ns: Platform.Tcp.networkStream;
   /// <summary> Handshake log </summary>
   hs_log: bytes;
 }
@@ -170,6 +176,22 @@ type nextSecurityContext = {
 /// </summary>
 type FHelloRequest = {
   /// <summary> Message Bytes </summary>
+  payload: bytes;
+}
+
+/// <summary>
+/// Handshake Message record type for Hello Retry Request
+/// </summary>
+type FHelloRetryRequest = {
+  /// <summary> Protocol version </summary>
+  pv: option ProtocolVersion;
+  /// <summary> Ciphersuite selected by the server </summary>
+  ciphersuite: option cipherSuiteName;
+ /// <summary> Offer of DH group and public keys from the server </summary>
+  offer: option ffdhGroup;
+  /// <summary> List of extensions </summary>
+  ext: option (list serverExtension);
+  /// <summary> Message bytes </summmary>
   payload: bytes;
 }
 
@@ -214,23 +236,6 @@ type FServerHello = {
 }
 
 /// <summary>
-/// Handshake Message record type for Hello Retry Request
-/// </summary>
-type FHelloRetryRequest = {
-  /// <summary> Protocol version </summary>
-  pv: option ProtocolVersion;
-  /// <summary> Ciphersuite selected by the server </summary>
-  ciphersuite: option cipherSuiteName;
- /// <summary> Offer of DH group and public keys from the server </summary> 
-  offer: option dhGroup;
-  /// <summary> List of extensions </summary>
-  ext: option (list serverExtension);
-  /// <summary> Message bytes </summmary>
-  payload: bytes;
-}
-
-
-/// <summary>
 /// Handshake Message record type for ServerConfiguration
 /// </summary>
 type FServerConfiguration = {
@@ -239,13 +244,13 @@ type FServerConfiguration = {
   /// <summary> The last time when this configuration is expected to be valid </summary>
   expirationDate: int;
   /// <summary> The group for the long-term DH key </summary>
-  group: dhGroup;
+  group: ffdhGroup;
   /// <summary> The long-term DH key associated to the configuration </summary>
   key: bytes;
   /// <summary> The type of 0-RTT handshake that this configuration is to be used for </summary>
   earlyDataType: earlyDataType;
   /// <summary> List of extensions associated to the serverConfiguration message </summary>
-  ext: option (list serverConfigurationExtention);
+  ext: option (list serverConfigurationExtension);
   /// <summary> Message bytes</summary>
   payload: bytes;
 }
@@ -257,20 +262,6 @@ type FCertificate = {
   /// <summary> Full certificate chain bytes </summary>
   chain: Cert.chain;
   /// <summary> Message bytes</summary>
-  payload: bytes;
-}
-
-/// <summary>
-/// Handshake Message record type for Server Key Exchange
-/// </summary>
-type FServerKeyExchange = {
-  /// <summary> Signature algorithm </summary>
-  sigAlg: Sig.alg;
-  /// <summary> Signature </summary>
-  signature: bytes;
-  /// <summary> Key Exchange Information </summary>
-  kex: kex;
-  /// <summary> Message bytes </summary>
   payload: bytes;
 }
 
@@ -289,14 +280,6 @@ type FCertificateRequest = {
 }
 
 /// <summary>
-/// Handshake Message record type for Server Hello Done
-/// </summary>
-type FServerHelloDone = {
-  /// <summary> Message Bytes</summary>
-  payload: bytes;
-}
-
-/// <summary>
 /// Handshake Message record type for Certificate Verify
 /// </summary>
 type FCertificateVerify = {
@@ -305,6 +288,28 @@ type FCertificateVerify = {
   /// <summary> Signature </summary>
   signature: bytes;
   /// <summary> Message bytes </summary>
+  payload: bytes;
+}
+
+/// <summary>
+/// Handshake Message record type for Server Key Exchange
+/// </summary>
+type FServerKeyExchange = {
+  /// <summary> Signature algorithm </summary>
+  sigAlg: Sig.alg;
+  /// <summary> Signature </summary>
+  signature: bytes;
+  /// <summary> Key Exchange Information </summary>
+  kex: kex;
+  /// <summary> Message bytes </summary>
+  payload: bytes;
+}
+
+/// <summary>
+/// Handshake Message record type for Server Hello Done
+/// </summary>
+type FServerHelloDone = {
+  /// <summary> Message Bytes</summary>
   payload: bytes;
 }
 

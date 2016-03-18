@@ -238,7 +238,7 @@ type outgoing = // by default the state changes but not the epochs
   | OutIdle
   | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
   | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
-//| OutFinished: rg:frange_any -> rbytes rg -> outgoing   // signal false start (if enabled)
+  | OutFinished: rg:frange_any -> rbytes rg -> outgoing   // signal false start (if enabled)
   | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
 val next_fragment: s:hs -> ST outgoing
   (requires (hs_inv s))

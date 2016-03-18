@@ -1,6 +1,4 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
-
-#light "off"
+(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
 (* Handshake protocol messages *)
 module HandshakeMessages
@@ -12,6 +10,7 @@ open TLSConstants
 open TLSExtensions
 open TLSInfo
 open Range
+open HSCrypto
 
 (* External functions, locally annotated for speed *)
 (*
@@ -137,19 +136,17 @@ type cr = {
   cr_distinguished_names: (dl:list dn{List.Tot.length dl < 128});
 }
 
-
 type kex_s =
 | KEX_S_DHE of CoreCrypto.dh_key
-| KEX_S_ECDHE of CoreCrypto.ec_key
 | KEX_S_RSA of CoreCrypto.rsa_key
 
 type kex_s_PRIV =
 | KEX_S_PRIV_DHE of CoreCrypto.dh_key
-| KEX_S_PRIV_ECDHE of CoreCrypto.ec_key
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 
 type ske = {
   ske_kex_s: kex_s;
+//  ske_sigval: option bytes;
   ske_sig : (b:bytes{length b < 65536})
 }
 
@@ -201,9 +198,10 @@ type hs_msg =
   | ClientKeyExchange of cke
   | CertificateVerify of cv
   | ServerConfiguration of sc
-  | ClientFinished of fin
-  | ServerFinished of fin
+  | Finished of fin
   | NextProtocol of np
+  | HelloRequest
+  | HelloRetryRequest of hrr
 
 /// Handshake message format
 
@@ -214,7 +212,10 @@ let messageBytes ht data =
     htb @| vldata
 
 
-val parseMessage : buf:bytes -> result (option (rem:bytes & hstype:handshakeType & payload:bytes & to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.equal buf (to_log @| rem)) } )) 
+val parseMessage : buf:bytes -> Tot (result (option (rem:bytes & 
+    		   	     	       	        hstype:handshakeType & 
+    		   	     	       	        payload:bytes & 
+						to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.equal buf (to_log @| rem)) } )) )
 let parseMessage buf =
     (* Somewhat inefficient implementation:
        we repeatedly parse the first 4 bytes of the incoming buffer until we have a complete message;
@@ -222,15 +223,14 @@ let parseMessage buf =
     if length buf < 4 then Correct(None) (* not enough data to start parsing *)
     else
         let (hstypeb,rem) = split buf 1 in
-        match parseHt hstypeb with
-        | Error z ->  Error z
-        | Correct(hstype) ->
+        resultMap (parseHt hstypeb) 
+	(fun hstype -> 
             (match vlsplit 3 rem with
-            | Error z -> Correct(None) // not enough payload, try next time
+            | Error z -> None // not enough payload, try next time
             | Correct(payload,rem) ->
                 let to_log = messageBytes hstype payload in
 		let x = (|rem,hstype,payload,messageBytes hstype payload|) in
-                Correct (Some x))
+                Some x))
 
 
 (** A.4.1 Hello Messages *)
@@ -261,10 +261,10 @@ let clientHelloBytes ch =
    as it is now 
 *)
 val parseClientHello : data:bytes{repr_bytes(length data) <= 3} -> 
-                       r:result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
+                       Tot (result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
                                                      /\ x.ch_protocol_version = x'.ch_protocol_version 
                                                      /\ x.ch_client_random = x'.ch_client_random
-                                                     /\ x.ch_sessionID = x'.ch_sessionID })
+                                                     /\ x.ch_sessionID = x'.ch_sessionID }))
 let parseClientHello data =
     let ld = length data in
     if ld >= 34 then
@@ -336,7 +336,7 @@ let serverHelloBytes sh =
     messageBytes HT_server_hello data
 
 val parseServerHello: data:bytes{repr_bytes(length data)<=3}  -> 
-                      r:result (x:sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)})
+                      Tot (result (x:sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)}))
 let parseServerHello data =
     if length data >= 34 then
         let (serverVerBytes,serverRandomBytes,data) = split2 data 2 32 in
@@ -405,7 +405,7 @@ val certificateBytes: crt -> Tot bytes
 let certificateBytes crt = messageBytes HT_certificate (Cert.certificateListBytes crt.crt_chain)
 
 val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> 
-                      result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)})
+                      Tot (result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)}))
 let parseCertificate data = 
     if length data >= 3 then
         match vlparse 3 data with
@@ -431,7 +431,7 @@ let certificateRequestBytes cr =
     messageBytes HT_certificate_request data
 
 val parseCertificateRequest: pv:protocolVersion -> data:bytes{repr_bytes(length data) <= 3} -> 
-                             result cr
+                             Tot (result cr)
 let parseCertificateRequest version data =
     if length data >= 1 then
         match vlsplit 1 data with
@@ -483,6 +483,13 @@ let mk_certificateRequestBytes sign cs version =
 
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
+open CoreCrypto
+val kex_c_of_dh_key: HSCrypto.dh_key -> Tot kex_c
+let kex_c_of_dh_key kex = 
+  match kex with
+  | FFKey k -> KEX_C_DHE k.dh_public
+  | ECKey k -> KEX_C_ECDHE (ec_point_serialize k.ec_point)
+
 val clientKeyExchangeBytes: protocolVersion -> cke -> Tot bytes
 let clientKeyExchangeBytes pv cke = 
   let kexB =              
@@ -495,7 +502,7 @@ let clientKeyExchangeBytes pv cke =
   messageBytes HT_client_key_exchange kexB
 
 val parseClientKeyExchange: p:protocolVersion -> kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    result (cke:cke{Seq.equal (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)})
+    Tot (result (cke:cke{Seq.equal (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)}))
 let parseClientKeyExchange pv kex data = 
   match pv,kex with
   | _,Kex_DH -> 
@@ -528,27 +535,32 @@ let parseClientKeyExchange pv kex data =
 (* ServerKeyExchange *)
 
 open CoreCrypto
-val serverKeyExchangeBytes: ske -> Tot bytes
-let serverKeyExchangeBytes ske =
-    let kexB = 
-        match ske.ske_kex_s with
-        | KEX_S_DHE dhp -> (vlbytes 2 dhp.dh_params.dh_p) @| (vlbytes 2 dhp.dh_params.dh_g) @| (vlbytes 2 dhp.dh_public)
-        | KEX_S_ECDHE ecp -> 
-                 abyte 3uy (* Named curve *)
+val kex_s_to_bytes: kex_s -> Tot bytes 
+let kex_s_to_bytes kex = 
+  match kex with
+  | KEX_S_DHE (FFKey k) ->
+	      (vlbytes 2 k.dh_params.dh_p) @| 
+	      (vlbytes 2 k.dh_params.dh_g) @| 
+	      (vlbytes 2 k.dh_public)
+  | KEX_S_DHE (ECKey ecp) ->
+	      abyte 3uy (* Named curve *)
               @| ECGroup.curve_id ecp.ec_params
               @| ECGroup.serialize_point ecp.ec_params ecp.ec_point 
-        | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
-    in
+  | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
+		    
+val serverKeyExchangeBytes: ske -> Tot bytes
+let serverKeyExchangeBytes ske =
+    let kexB = kex_s_to_bytes ske.ske_kex_s in
     let payload = kexB @| ske.ske_sig in
     messageBytes HT_server_key_exchange payload
 
 val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)})
+    Tot (result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)}))
 let parseServerKeyExchange kex payload : result ske = 
     match kex with
     | Kex_DH -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     | Kex_RSA -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | Kex_DHE -> 
+    | Kex_DHE ->
         if length payload >= 2 then
             match vlsplit 2 payload with
             | Error(z) -> Error(z)
@@ -565,10 +577,10 @@ let parseServerKeyExchange kex payload : result ske =
                     | Correct(res) ->
                     let (y,sign) = res in
                     Correct (
-                    {ske_kex_s = KEX_S_DHE (
+                    {ske_kex_s = KEX_S_DHE (FFKey (
                          {dh_params = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false};
                           dh_public = y;
-                          dh_private = None});
+                          dh_private = None}));
                      ske_sig = sign})
                 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -585,10 +597,10 @@ let parseServerKeyExchange kex payload : result ske =
                     match ECGroup.parse_point ecp rawpoint with
                     | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Invalid EC point received")
                     | Some p -> Correct (
-			{ ske_kex_s = KEX_S_ECDHE (
+			{ ske_kex_s = KEX_S_DHE (ECKey (
 			    {ec_priv = None;
 			    ec_params = ecp;
-			    ec_point = p;});
+			    ec_point = p;}));
 			  ske_sig =  payload})
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
@@ -598,7 +610,7 @@ let certificateVerifyBytes cv =
     messageBytes HT_certificate_verify cv.cv_sig
 
 val parseCertificateVerify: data:bytes{repr_bytes(length data) <= 3} ->
-    result (c:cv{Seq.equal (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
+    Tot (result (c:cv{Seq.equal (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)}))
 let parseCertificateVerify data = 
     correct ({cv_sig = data})
 
@@ -607,7 +619,7 @@ let finishedBytes fin =
     messageBytes HT_finished fin.fin_vd
 
 val parseFinished: data:bytes{repr_bytes(length data)<=3} ->
-    result(f:fin{Seq.equal (finishedBytes f) (messageBytes HT_finished data)})
+    Tot (result(f:fin{Seq.equal (finishedBytes f) (messageBytes HT_finished data)}))
 let parseFinished data = 
     Correct ({fin_vd = data})
 
@@ -618,7 +630,7 @@ let sessionTicketBytes sticket =
     messageBytes HT_session_ticket payload
 
 val parseSessionTicket: b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:sticket{Seq.equal (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
+    Tot (result (s:sticket{Seq.equal (sessionTicketBytes s) (messageBytes HT_session_ticket b)}))
 let parseSessionTicket payload : result sticket = 
   if length payload >= 4 && length payload < 65542 then
     let (lifetime_hint, ticket) = split payload 4 in
@@ -667,7 +679,7 @@ let encryptedExtensionsBytes ee =
     messageBytes HT_encrypted_extensions payload
 
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})
+    Tot (result (s:ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)}))
 let parseEncryptedExtensions payload : result ee = 
   match parseExtensions payload with
   | Error(z) -> Error(z)
@@ -689,7 +701,7 @@ let serverConfigurationBytes sc =
   messageBytes HT_server_configuration payload
 
 val parseServerConfiguration: b:bytes{repr_bytes(length b) <= 3} -> 
-    result (s:sc{Seq.equal (serverConfigurationBytes s) (messageBytes HT_server_configuration b)})
+    Tot (result (s:sc{Seq.equal (serverConfigurationBytes s) (messageBytes HT_server_configuration b)}))
 let parseServerConfiguration payload : result sc = 
   match vlsplit 2 payload with
   | Correct(config_id, data) -> (
@@ -735,7 +747,7 @@ let nextProtocolBytes np =
   messageBytes HT_next_protocol (selected_protocol @| padding)
 
 val parseNextProtocol: b:bytes -> 
-    result (s:np{Seq.equal (nextProtocolBytes s) (messageBytes HT_next_protocol b)})
+    Tot (result (s:np{Seq.equal (nextProtocolBytes s) (messageBytes HT_next_protocol b)}))
 let parseNextProtocol payload : result np = 
   match vlsplit 1 payload with
   | Error(z) -> Error(z)
@@ -746,3 +758,22 @@ let parseNextProtocol payload : result np =
       Correct( { np_selected_protocol = selected_protocol;
 		 np_padding = padding;})
 		 
+val parseHandshakeMessage: option ProtocolVersion -> option kexAlg -> HandshakeType -> bytes -> Tot (Result hs_msg)
+let parseHandshakeMessage pv kex hstype pl = 
+    match hstype,pv,kex with
+    | HT_hello_request,_,_       -> if (length pl = 0) then Correct(HelloRequest) else Error(AD_decode_error, "HelloRequest with non-empty body")
+    | HT_client_hello,_,_        -> mapResult ClientHello (parseClientHello pl)
+    | HT_server_hello,_,_        -> mapResult ServerHello (parseServerHello pl)
+    | HT_session_ticket,_,_      -> mapResult SessionTicket (parseSessionTicket pl)
+    | HT_hello_retry_request,_,_ -> mapResult HelloRetryRequest (parseHelloRetryRequest pl)
+    | HT_encrypted_extensions,_,_ -> mapResult EncryptedExtensions (parseEncryptedExtensions pl)
+    | HT_certificate,_,_         -> mapResult Certificate (parseCertificate pl)
+    | HT_server_key_exchange,_,Some kex -> mapResult ServerKeyExchange (parseServerKeyExchange kex pl)
+    | HT_certificate_request,Some pv,_ -> mapResult CertificateRequest (parseCertificateRequest pv pl)
+    | HT_server_hello_done,_,_   -> if (length pl = 0) then Correct(ServerHelloDone) else Error(AD_decode_error, "ServerHelloDone with non-empty body")
+    | HT_certificate_verify,_,_  -> mapResult CertificateVerify (parseCertificateVerify pl)
+    | HT_client_key_exchange,Some pv,Some kex -> mapResult ClientKeyExchange (parseClientKeyExchange pv kex pl)
+    | HT_server_configuration,_,_ -> mapResult ServerConfiguration (parseServerConfiguration pl)
+    | HT_next_protocol,_,_       -> mapResult NextProtocol (parseNextProtocol pl)
+    | HT_finished,_,_            -> mapResult Finished (parseFinished pl)
+
