@@ -16,7 +16,6 @@ let ssl_pad1_sha1 = createBytes 40 0x36uy
 let ssl_pad2_sha1 = createBytes 40 0x5cuy
 
 (* SSL3 keyed hash *)
-
 type sslHashAlg = h:hashAlg { h = Hash MD5 \/ h = Hash SHA1 }
 val sslKeyedHashPads: sslHashAlg -> Tot(bytes * bytes)
 let sslKeyedHashPads = function
@@ -48,14 +47,20 @@ let hmacVerify (a:hashAlg {is_Hash a}) k p t : bool =
     equalBytes result t
 
 (* Top level MAC function *)
+let is_tls_mac = function
+  | HMAC _
+  | SSLKHASH MD5
+  | SSLKHASH SHA1 -> true
+  | _ -> false
+let tls_macAlg = m:macAlg{is_tls_mac m}  
 
-val tls_mac: macAlg -> bytes -> bytes -> Tot bytes
+val tls_mac: tls_macAlg -> bytes -> bytes -> Tot bytes
 let tls_mac a k d : mac a =
     match a with
     | HMAC     alg -> hmac (Hash alg) k d  
     | SSLKHASH alg -> sslKeyedHash (Hash alg) k d 
 
-let tls_macVerify a k d t =
+let tls_macVerify (a:tls_macAlg) k d t =
     match a with
     | HMAC     alg -> hmacVerify (Hash alg) k d t
     | SSLKHASH alg -> sslKeyedHashVerify (Hash alg) k d t

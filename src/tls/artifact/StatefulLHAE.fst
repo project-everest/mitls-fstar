@@ -155,7 +155,7 @@ val encrypt: #i:gid -> #ad:adata i
             /\ modifies (Set.singleton (StWriter.region wr)) h0 h1
             /\ modifies_rref (StWriter.region wr) (refs_in_e wr) h0 h1
             /\ sel h1 (StWriter.seqn wr) = sel h0 (StWriter.seqn wr) + 1
-            /\ Wider  (Range.cipherRangeClass i (length c)) rg
+            /\ wider  (Range.cipherRangeClass i (length c)) rg
             /\ sel h1 (StWriter.log wr) = snoc (sel h0 (StWriter.log wr)) (Entry c ad f)))
 let encrypt i ad rg (StWriter #ii #r log seqn key) f =
   let n = !seqn in

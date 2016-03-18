@@ -28,9 +28,9 @@ type app_state = {
   app_outgoing: output_buffer;
 }
 
-let inStream  (c:ConnectionInfo) state = state.app_incoming
+let inStream  (c:connectionInfo) state = state.app_incoming
 
-let outStream (c:ConnectionInfo) state =
+let outStream (c:connectionInfo) state =
     match state.app_outgoing with
     | NoneOBuf(s) -> s
     | SomeOBuf(s,_,_,_) -> s
@@ -45,7 +45,7 @@ let init ci =
     }
 
 // Stores appdata in the output buffer, so that it will possibly sent on the network
-let writeAppData (c:ConnectionInfo) (a:app_state) (r:range) (f:AppFragment.plain) (s':stream) =
+let writeAppData (c:connectionInfo) (a:app_state) (r:range) (f:AppFragment.plain) (s':stream) =
     let s = outStream c a in
     {a with app_outgoing = SomeOBuf(s,r,f,s')}
 
@@ -53,7 +53,7 @@ let noneOutBuf ki s = NoneOBuf(s)
 let some x = Some x
 // When polled, gives Dispatch the next fragment to be delivered,
 // and commits to it (adds it to the output stream)
-let next_fragment (c:ConnectionInfo) (a:app_state) =
+let next_fragment (c:connectionInfo) (a:app_state) =
     let out = a.app_outgoing in
     match out with
     | NoneOBuf(_) -> None
@@ -62,26 +62,26 @@ let next_fragment (c:ConnectionInfo) (a:app_state) =
         some (r,f,{a with app_outgoing = b'})
 
 // Clear contents from the output buffer
-let clearOutBuf (c:ConnectionInfo) (a:app_state) =
+let clearOutBuf (c:connectionInfo) (a:app_state) =
     let s = outStream c a in
     {a with app_outgoing = NoneOBuf(s)}
 
 // Gets a fragment from Dispatch, adds it to the stream and return it as a delta
-let recv_fragment (ci:ConnectionInfo)  (a:app_state)  (r:range) (f:AppFragment.fragment) =
+let recv_fragment (ci:connectionInfo)  (a:app_state)  (r:range) (f:AppFragment.fragment) =
     // pre: snd a.app_incoming = None
     let s = a.app_incoming in
     let (d,ns) = AppFragment.delta ci.id_in s r f in
     let a = {a with app_incoming = ns} in
     (d,a)
 
-let reset_outgoing (ci:ConnectionInfo) (a:app_state) (nci:ConnectionInfo) =
+let reset_outgoing (ci:connectionInfo) (a:app_state) (nci:connectionInfo) =
   let ki = nci.id_out in
   let out_s = DataStream.init ki in
     {a with
        app_outgoing = NoneOBuf(out_s)
     }
 
-let reset_incoming (ci:ConnectionInfo) (a:app_state) (nci:ConnectionInfo) =
+let reset_incoming (ci:connectionInfo) (a:app_state) (nci:connectionInfo) =
   let ki = nci.id_in in
   let in_s = DataStream.init ki in
     {a with

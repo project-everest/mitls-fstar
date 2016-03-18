@@ -28,13 +28,13 @@ type id = i:id { pv_of_id i = TLS_1p3 }
 type plainLen = l:int { 0 < l /\ l -1 < max_TLSPlaintext_fragment_length }
 type plainRepr = b:bytes { 0 < length b /\ length b -1 < max_TLSPlaintext_fragment_length }
 
-private type plain (i:id) (len: plainLen) = f:fragment i { len = snd (Content.rg i f) + 1 }
+abstract type plain (i:id) (len: plainLen) = f:fragment i { len == snd (Content.rg i f) + 1 }
 
 let pad payload ct (len:plainLen { length payload < len }): plainRepr = 
   payload @| ctBytes ct @| createBytes (len - length payload - 1) 0uy
 
 val ghost_repr: #i:id -> #len: plainLen -> f:plain i len -> GTot (bs:lbytes len)
-let ghost_repr i len f = 
+let ghost_repr #i #len f = 
   let ct,_ = ct_rg i f in 
   let payload = Content.ghost_repr #i f in 
   pad payload ct len
@@ -42,7 +42,7 @@ let ghost_repr i len f =
 val repr: i:id{ ~(safeId i)} -> len: plainLen -> p:plain i len -> Tot (b:lbytes len {b = ghost_repr #i #len p})
 let repr i len f = 
   let ct,_ = ct_rg i f in 
-  let payload = Content.repr #i f in 
+  let payload = Content.repr i f in 
   pad payload ct len
 
 // slight code duplication between monads; avoidable? 
@@ -60,7 +60,7 @@ let rec scan bs j =
 val scan: i:id { ~ (authId i) } -> bs:plainRepr -> 
   j: nat { j < length bs /\ 
          (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0uy) } -> 
-  Tot(Result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
+  Tot(result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
  
 let rec scan i bs j =
   (* TODO: extraction bug *)

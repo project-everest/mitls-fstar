@@ -35,7 +35,7 @@ let ct_alert (i:id) (ad:alertDescription) : fragment i = CT_Alert (2,2) (Alert.a
 
 // move to Seq?
 val split: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
-let split s =
+let split #a s =
   let last = Seq.length s - 1 in
   Seq.slice s 0 last, Seq.index s last
 
@@ -48,20 +48,23 @@ let split s =
 // We may prove that they are never written on authentic streams.
 val project: i:id -> fs:seq (fragment i) -> Tot(seq (DataStream.delta i))
   (decreases %[Seq.length fs]) // not-quite-stuctural termination
+#reset-options
 let rec project i fs =
   if Seq.length fs = 0 then Seq.createEmpty
   else
       let fs, f = split #(fragment i) fs in
       let ds = project i fs in
-      (match f with
-      | CT_Data (rg: frange i) d -> cut(Wider fragment_range rg); snoc ds (DataStream.Data d)
+      match f with
+      | CT_Data rg d -> 
+	let d : pre_fragment i = d in //A widening coercion as a proof hint, unpacking (d:fragment i (frange i)) to a pre_fragment i
+	snoc ds (DataStream.Data d)   //so that it can be repackaged as a fragment i fragment_range
       | CT_Alert rg alf -> // alert parsing may fail, or return several deltas
           if length alf = 2 then 
           (match Alert.parse alf with
           | Correct ad -> snoc ds (DataStream.Alert ad)
           | Error _    -> ds) // ill-formed alert contents are ignored
           else ds            // ill-formed alert packets are ignored
-      | _              -> ds) // other fragments are internal to TLS
+      | _              -> ds  // other fragments are internal to TLS
 
 // try out a few lemmas
 // we may also need a projection that takes a low-level pos and yields a high-level pos
@@ -74,15 +77,15 @@ let project_ignores_Handshake i s = ()
 
 // --------------- parsing and formatting content types ---------------------
 
-type ContentType =
+type contentType =
     | Change_cipher_spec
     | Alert
     | Handshake
     | Application_data
 
-type ContentType13 = ct: ContentType { ct <> Change_cipher_spec }
+type contentType13 = ct: contentType { ct <> Change_cipher_spec }
 
-val ctBytes: ContentType -> Tot (lbytes 1)
+val ctBytes: contentType -> Tot (lbytes 1)
 let ctBytes ct =
     match ct with
     | Change_cipher_spec -> abyte 20uy
@@ -107,7 +110,7 @@ let inverse_ct x = ()
 
 val pinverse_ct: x:_ -> Lemma
   (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.Eq ctBytes parseCT x))
+  (ensures (lemma_pinverse_f_g Seq.equal ctBytes parseCT x))
   [SMTPat (ctBytes (Correct._0 (parseCT x)))]
 let pinverse_ct x = ()
 
@@ -121,7 +124,7 @@ let ctToString = function
 // --------------- conditional access to fragment representation ---------------------
 
 val ghost_repr: #i:id -> fragment i -> GTot bytes
-let ghost_repr i f =
+let ghost_repr #i f =
   match f with
   // FIXME: without the #i, extraction crashes
   | CT_Data rg d      -> DataStream.ghost_repr #i d
@@ -138,7 +141,7 @@ let repr i f =
   | CT_CCS            -> empty_bytes
   | CT_Alert rg f     -> f
 
-let ct_rg (i:id) (f:fragment i) : ContentType * frange i =
+let ct_rg (i:id) (f:fragment i) : contentType * frange i =
   match f with
   | CT_Data rg d      -> Application_data, rg
   | CT_Handshake rg f -> Handshake, rg
@@ -155,19 +158,19 @@ let rg (i:id) (f:fragment i) : frange i =
 
 // "plain interface" for conditional security (TODO restore details)
 
-val mk_fragment: i:id{ ~(authId i)} -> ct:ContentType -> rg:frange i ->
+val mk_fragment: i:id{ ~(authId i)} -> ct:contentType -> rg:frange i ->
   b:rbytes rg { ct = Change_cipher_spec ==> rg == zero }->
   Tot (p:fragment i {b = ghost_repr p})
 let mk_fragment i ct rg b =
     match ct with
-    | Application_data   -> CT_Data      rg (DataStream.mk_fragment i rg b)
+    | Application_data   -> CT_Data      rg (DataStream.mk_fragment #i rg b)
     | Handshake          -> CT_Handshake rg b
-    | Change_cipher_spec -> cut(Eq b empty_bytes);CT_CCS  //* rediscuss
+    | Change_cipher_spec -> cut(Seq.equal b empty_bytes);CT_CCS  //* rediscuss
     | Alert -> CT_Alert     rg b
 
 val mk_ct_rg: 
   i:id{ ~(authId i)} -> 
-  ct:ContentType -> 
+  ct:contentType -> 
   rg:frange i ->
   b:rbytes rg { ct = Change_cipher_spec ==> rg = zero } ->
   Lemma ((ct,rg) = ct_rg i (mk_fragment i ct rg b))

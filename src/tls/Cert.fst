@@ -19,16 +19,16 @@ let for_signing l h l2 = failwith "Not implemented"
 abstract val for_key_encryption : list Sig.alg -> hint -> enc_cert
 let for_key_encryption l h = failwith "Not implemented"
 
-abstract val get_public_signing_key : cert -> Sig.alg -> Result Sig.pkey
+abstract val get_public_signing_key : cert -> Sig.alg -> result Sig.pkey
 let get_public_signing_key c a = failwith "Not implemented"
 
-abstract val get_public_encryption_key : cert -> Result RSAKey.pk
+abstract val get_public_encryption_key : cert -> result RSAKey.pk
 let get_public_encryption_key c = failwith "Not implemented"
 
-abstract val get_chain_public_signing_key : chain -> Sig.alg -> Result Sig.pkey
+abstract val get_chain_public_signing_key : chain -> Sig.alg -> result Sig.pkey
 let get_chain_public_signing_key c a = failwith "Not implemented"
 
-abstract val get_chain_public_encryption_key : chain -> Result RSAKey.pk
+abstract val get_chain_public_encryption_key : chain -> result RSAKey.pk
 let get_chain_public_encryption_key c = failwith "Not implemented"
 
 abstract val is_chain_for_signing : chain -> bool
@@ -43,9 +43,9 @@ let get_hint c = failwith "Not implemented"
 abstract val validate_cert_chain : list Sig.alg  -> chain -> bool
 let validate_cert_chain l c = failwith "Not implemented"
 
-abstract val parseCertificateList: bytes -> Tot (Result chain)
+abstract val parseCertificateList: bytes -> Tot (result chain)
 // Dummy implementation while certificate parsing is not implemented
-let parseCertificateList b = Correct ([b])
+let parseCertificateList b = Correct ([b]) //TODO: known to be unverified
 
-abstract val certificateListBytes: chain -> Tot (b:bytes{length b < (3 * 65536)})
+abstract val certificateListBytes: chain -> Tot (b:bytes{length b < (op_Multiply 3 65536)})
 let certificateListBytes c = magic()

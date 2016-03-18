@@ -37,7 +37,7 @@ open RSAKey
 #if ideal
 // We maintain a table from dummy_pms to ideal_pms.
 // (the protocolVersion can also be extracted from dummy_pms)
-type entry = pk * ProtocolVersion * PMS.rsarepr *  PMS.rsapms
+type entry = pk * protocolVersion * PMS.rsarepr *  PMS.rsapms
 let log = ref []
 #endif
 
@@ -113,7 +113,7 @@ let real_decrypt dk si cv cvCheck ciphertext =
 //#end-real_decrypt
 
 #if ideal
-let rec assoc (pk:RSAKey.pk) (cv:ProtocolVersion) (dummy_pms:bytes) (pmss:list<entry>) = 
+let rec assoc (pk:RSAKey.pk) (cv:protocolVersion) (dummy_pms:bytes) (pmss:list<entry>) = 
     match pmss with 
     | [] -> None 
     | (pk',cv',dummy_pms',ideal_pms)::mss' when (pk=pk' && cv=cv' && dummy_pms=dummy_pms') -> Some(ideal_pms) 

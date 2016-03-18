@@ -31,11 +31,11 @@ open Handshake    // via its interface
 // dispatch records the *record* protocol version (TLS 1.0 when using TLS 1.3)
 type dispatch =
   | Init
-//  | FirstHandshake of ProtocolVersion (* bound by ServerHello's inner pv *)
+//  | FirstHandshake of protocolVersion (* bound by ServerHello's inner pv *)
   | Finishing
   | Finished
   | Open
-  | Closing of (* ProtocolVersion * *) string (* write-only, while sending a fatal alert *)
+  | Closing of (* protocolVersion * *) string (* write-only, while sending a fatal alert *)
   | Closed
 
 // revised from 2x dispatch 
@@ -69,16 +69,16 @@ let c_log c    = c.hs.log
 
 // we'll rely on the invariant to show we picked the correct index
 
-type Seq_forall (#a:Type) (p: a -> Type) (s:seq a) =
+inline let seq_forall (#a:Type) (p: a -> Type) (s:seq a) =
   forall (j: nat { j < Seq.length s }).{:pattern (Seq.index s j)} p (Seq.index s j)
 
-let test_1 (p:nat -> Type) (s:seq nat { Seq_forall p s }) = assert(p 12 ==> Seq_forall p (snoc s 12))
-let test_2 (p:nat -> Type) (s:seq nat { Seq_forall p s }) (j:nat { j < Seq.length s }) =  let x = Seq.index s j in assert(p x)
-//let test_3 (p:nat -> Type) (s:seq nat { Seq_forall p s }) x = assert(SeqProperties.mem x s ==> p x)
+let test_1 (p:nat -> Type) (s:seq nat { seq_forall p s }) = assert(p 12 ==> seq_forall p (snoc s 12))
+let test_2 (p:nat -> Type) (s:seq nat { seq_forall p s }) (j:nat { j < Seq.length s }) =  let x = Seq.index s j in assert(p x)
+//let test_3 (p:nat -> Type) (s:seq nat { seq_forall p s }) x = assert(SeqProperties.mem x s ==> p x)
 
 (* usage? how to prove this lemma?  val exercise_seq_forall: #a:Type
--> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (Seq_forall p
-s /\ p x) ==> Seq_forall p (snoc s x)}) *)
+-> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (seq_forall p
+s /\ p x) ==> seq_forall p (snoc s x)}) *)
 
 val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (reader (peerId(hsId e.h)))
 let reader_epoch #region #peer (Epoch h r w) = r
@@ -91,7 +91,7 @@ type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) 
   st_enc_inv #(hsId e.h) (writer_epoch e) h
   
 type epochs_inv c h = 
-  Seq_forall (epoch_inv #(HS.region c.hs) #(HS.peer c.hs) h) (sel h c.hs.log) /\ 
+  seq_forall (epoch_inv #(HS.region c.hs) #(HS.peer c.hs) h) (sel h c.hs.log) /\ 
   Handshake.hs_footprint_inv c.hs h
   
 type st_inv c h = 
@@ -157,7 +157,7 @@ val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 
 //Move this to the library 
-val ghost_lemma2: #a:Type -> #b:Type -> #p:(a -> b -> Type) -> #q:(a -> b -> unit -> Type) 
+val ghost_lemma2: #a:Type -> #b:Type -> #p:(a -> b -> GTot Type) -> #q:(a -> b -> unit -> GTot Type) 
 		       -> =f:(x:a -> y:b -> Ghost unit (p x y) (q x y)) 
 		       -> Lemma (forall (x:a) (y:b). p x y ==> q x y ())
 let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -> Type)) f = 
@@ -209,7 +209,7 @@ val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
           /\ st_enc_inv wr_j h1))))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
-let frame_writer_epoch c h0 h1 = ghost_lemma2 (frame_writer_epoch_k c h0 h1)            
+let frame_writer_epoch c h0 h1 = ghost_lemma2 (frame_writer_epoch_k c h0 h1)
 
 val frame_reader_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit 
   (requires

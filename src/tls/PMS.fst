@@ -23,13 +23,13 @@ type rsapms =
 
 //#if ideal
 //this function is used to determine whether idealization should be performed
-let honestRSAPMS (pk:RSAKey.pk) (cv:TLSConstants.ProtocolVersion) pms = 
+let honestRSAPMS (pk:RSAKey.pk) (cv:TLSConstants.protocolVersion) pms = 
   match pms with 
   | IdealRSAPMS(s)    -> true
   | ConcreteRSAPMS(s) -> false
 //#endif 
 
-let genRSA (pk:RSAKey.pk) (vc:ProtocolVersion): rsapms = 
+let genRSA (pk:RSAKey.pk) (vc:protocolVersion): rsapms = 
     let verBytes = versionBytes vc in
     let rnd = CoreCrypto.random 46 in
     let pms = verBytes @| rnd in
@@ -40,8 +40,8 @@ let genRSA (pk:RSAKey.pk) (vc:ProtocolVersion): rsapms =
     #endif
         ConcreteRSAPMS(pms)  
 
-let coerceRSA (pk:RSAKey.pk) (cv:ProtocolVersion) b = ConcreteRSAPMS(b)
-let leakRSA (pk:RSAKey.pk) (cv:ProtocolVersion) pms = 
+let coerceRSA (pk:RSAKey.pk) (cv:protocolVersion) b = ConcreteRSAPMS(b)
+let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms = 
   match pms with 
   #if ideal
   | IdealRSAPMS(_) -> Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
@@ -83,5 +83,5 @@ let coerceDH (dhp : dh_params) (gx:DHGroup.elt) (gy:DHGroup.elt) b = ConcreteDHP
 let coerceECDH (dhe : ec_params) (gx:ECGroup.point) (gy:ECGroup.point) b = ConcreteDHPMS(b) 
 
 type pms = 
-  | RSAPMS of RSAKey.pk * ProtocolVersion * rsapms
+  | RSAPMS of RSAKey.pk * protocolVersion * rsapms
   | DHPMS of CommonDH.parameters * CommonDH.element * CommonDH.element * dhpms

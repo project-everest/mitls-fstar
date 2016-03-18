@@ -13,9 +13,9 @@ type id2 = i:id { i.pv <> TLS_1p3 } // gradually adding TLS 1.3...
 
 (* ranges *)
 type range = r:(nat * nat) { fst r <= snd r }
-type Within (n:nat) (r:range) = fst r <= n /\ n <= snd r
-type Wider (r1:range) (r2:range) = fst r1 <= fst r2 /\ snd r2 <= snd r1
-type rbytes (r:range) = b:bytes { Within (length b) r }
+type within (n:nat) (r:range) = fst r <= n /\ n <= snd r
+type wider (r1:range) (r2:range) = fst r1 <= fst r2 /\ snd r2 <= snd r1
+type rbytes (r:range) = b:bytes { within (length b) r }
 
 let point (n:nat) : range = (n,n)
 let zero = point 0
@@ -94,16 +94,16 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
          let min = clen - aeadRecordIVSize a - aeadTagSize a - fixedPadSize i in
          let max = clen - aeadRecordIVSize a - aeadTagSize a - maxPadSize i in
          0 <= max 
-         /\ (  (0 < min /\ r == MkTuple2 #nat #nat min max) 
-            \/ (min <= 0 /\ r == MkTuple2 #nat #nat 0 max))))
+         /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max) 
+            \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
      /\ (~(is_AEAD i.aeAlg) ==> (
          let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in 
          let min = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
            0 <= max 
-         /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat min max )
-          \/ (0 < min /\ max >= max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat min max_TLSPlaintext_fragment_length)
-          \/ (min <= 0 /\ max < max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat 0 max)
-          \/ (min <= 0 /\ max >= max_TLSPlaintext_fragment_length /\ r == MkTuple2 #nat #nat 0 max_TLSPlaintext_fragment_length))
+         /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max )
+          \/ (0 < min /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max_TLSPlaintext_fragment_length)
+          \/ (min <= 0 /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat 0 max)
+          \/ (min <= 0 /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat 0 max_TLSPlaintext_fragment_length))
 // needed in Encode: 
 //         /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
 ))
@@ -156,7 +156,7 @@ val targetLength : i:id2 -> r:range -> Pure nat
     /\ (~(is_AEAD i.aeAlg) ==>
         snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
     /\ (is_AEAD i.aeAlg ==> fst r = snd r))
-  (ensures (fun clen -> valid_clen i clen /\ Wider (cipherRangeClass i clen) r))
+  (ensures (fun clen -> valid_clen i clen /\ wider (cipherRangeClass i clen) r))
 let targetLength i r =
     let l,h = r in
     let authEnc = i.aeAlg in
@@ -195,23 +195,23 @@ val targetLength_spec_nonAEAD: i:id2{~(is_AEAD i.aeAlg)}
       /\ (~(is_AEAD i.aeAlg) ==>
           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
       /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
-  -> x:nat{Within x r} 
-  -> Lemma (Let (targetLength i r) (fun clen ->
-           Let (clen - x - macSize (macAlg_of_id i) - ivSize i) (fun plen ->
+  -> x:nat{within x r} 
+  -> Lemma (let clen = targetLength i r in
+	   let plen = clen - x - macSize (macAlg_of_id i) - ivSize i in
              minimalPadding i (x + macSize (macAlg_of_id i)) <= plen
            /\ plen <= maxPadSize i
-           /\ clen == ivSize i + x + macSize (macAlg_of_id i) + plen)))
+           /\ clen == ivSize i + x + macSize (macAlg_of_id i) + plen)
 let targetLength_spec_nonAEAD i r x = ()
 
 (* Sanity check *)
 val targetLength_spec_AEAD: i:id2{is_AEAD i.aeAlg}
   -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
-  -> x:nat{Within x r} ->
-  Lemma (Let (targetLength i r) (fun clen ->
-         Let (fixedPadSize i) (fun plen ->
+  -> x:nat{within x r} ->
+  Lemma (let clen = targetLength i r in
+         let plen = fixedPadSize i in
            minimalPadding i (x + aeadTagSize (aeAlg i)) <= plen
          /\ plen <= maxPadSize i
-         /\ clen == aeadRecordIVSize (aeAlg i) + x + aeadTagSize (aeAlg i) + plen)))
+         /\ clen == aeadRecordIVSize (aeAlg i) + x + aeadTagSize (aeAlg i) + plen)
 let targetLength_spec_AEAD i r x = ()
 
 (* Sanity check *)
@@ -271,8 +271,8 @@ let fragment_range: range = (0,max_TLSPlaintext_fragment_length)
 
 // for writers, we keep track of actual ranges
 // and we require point ranges when padding is not available.
-type frange (i:id) = rg:range { Wider fragment_range rg /\ (lhae i.aeAlg || pv_of_id i = TLS_1p3 || fst rg = snd rg) }
+type frange (i:id) = rg:range { wider fragment_range rg /\ (lhae i.aeAlg || pv_of_id i = TLS_1p3 || fst rg = snd rg) }
 
 // we don't need the index for point ranges (e.g. non-appdata traffic)
-type frange_any = rg:range { Wider fragment_range rg /\ fst rg = snd rg } 
+type frange_any = rg:range { wider fragment_range rg /\ fst rg = snd rg } 
 

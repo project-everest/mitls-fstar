@@ -6,10 +6,13 @@ all: tls-ver tls-lax tls-gen
 # TODO compilation to ML & testing
 # MK removed mitls-ml as strider was failing on it for ages
 
+CONTRIB=ucontrib
+LIB=ulib
+
 clean:
-	$(MAKE) -C $(FSTAR_HOME)/lib/ml clean
-	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml clean
-	$(MAKE) -C $(FSTAR_HOME)/contrib/Platform/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 
 # ------------------ dependencies on Fstar & its libraries --------------------
@@ -27,24 +30,27 @@ FSTAR_HOME?=../../.fstar
 # stdlib-hyperheap.cmxa
 STDLIB_ADMITS=All List Heap Set ST HyperHeap IO
 
-OTHERFLAGS=--explicit_deps
-STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fsti \
-stHyperHeap.fst allHyperHeap.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
+OTHERFLAGS=
+STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
+hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
-FSTARFLAGS=$(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
+FSTARFLAGS=--universes --explicit_deps $(OTHERFLAGS) \
+	   $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	   $(STDLIB)
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
+      $(FSTARFLAGS)
 
 PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
-PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
+PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
-CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
+CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 60
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES = $(PLATFORM) $(CRYPTO)
@@ -53,7 +59,7 @@ OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
 DEBUG=ocamlfind ocamlc
 OCAMLMKLIB=ocamlfind ocamlmklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/lib/ml/native_int $(FSTAR_HOME)/lib/ml/hyperheap $(FSTAR_HOME)/lib/ml $(FSTAR_HOME)/contrib/Platform/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml $(FSTAR_HOME)/contrib/CoreCrypto/ml/db)
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
 
 # ----------------------- NuBuild integration ------------------------
 NUBUILD_HOME=../../.nubuild
@@ -107,13 +113,16 @@ TLS.fst
 #LHAE.fst \--these do not even parse
 
 TLSNOTVER=\
-TLSPRF.fst \
-PRF.p.fst \
+test/TestRecord.fst \
 TLSExtensions.p.fst \
 HSCrypto.fst \
 HandshakeMessages.fst \
-Handshake.fst \
-test/TestRecord.fst
+TLSPRF.fst \
+PRF.p.fst \
+Handshake.fst
+# TODO ... add these back
+# 
+# 
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
@@ -129,9 +138,34 @@ TLSGEN=$(TLSLAX)
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-VERIFY=TLSError TLSConstants Nonce TLSInfo Range LHAEPlain AEAD_GCM \
-StatefulLHAE MAC_SHA256 MAC_SHA1 MAC Encode DataStream Alert Content StreamPlain \
-StreamAE StatefulPlain 
+VERIFY=\
+TLSError \
+TLSConstants \
+Nonce \
+RSAKey \
+DHGroup \
+HASH \
+HMAC \
+UntrustedCert \
+TLSInfo \
+Range \
+DataStream \
+Alert \
+Content \
+StreamPlain \
+StreamAE \
+StatefulPlain \
+LHAEPlain \
+AEAD_GCM \
+MAC \
+StatefulLHAE \
+MAC_SHA256 \
+MAC_SHA1
+
+#Encode -- removed for now; too many assumes
+#Connection -- should be added, but fails currently
+#PMS Sig Cert ... known to be unverifiable
+#What about ECGroup and CommonDH?
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
@@ -189,11 +223,10 @@ endef
 	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg, $(basename $@),fsti)
 	@echo '--*)'
 
-
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 tls-ver: $(LIBFILES) $(TLSVER)
-	$(FSTAR_OR_NUBUILD) $(ADMITTED) $(VERFLAGS) $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^)
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $(filter-out TLS.fst,$^) | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
 
 # same as tls-ver, but verifies one module at a time.
 tls-ver1: $(LIBFILES) $(TLSVER) $(addsuffix .fst-ver,$(basename $(TLSVER)))
@@ -213,8 +246,8 @@ tls-lax: $(LIBFILES) $(TLSLAX)
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
 # fstarlib-hyperheap has the entire F* standard library.
 LIB_ML= \
-  $(FSTAR_HOME)/contrib/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/lib/ml/fstarlib-hyperheap.cmxa
+  $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
+  $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa
 
 # .fst files realized elsewhere.
 TLSGEN_ADMIT=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
@@ -236,19 +269,22 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
-	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
-	$(FSTAR) --lax --codegen OCaml --__temp_no_proj FStar.Heap $(TLSGEN_ADMIT) $^
+	#$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
+	$(FSTAR) \
+		--no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
+		$(TLSGEN_ADMIT) \
+		$^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
-	$(MAKE) -C $(FSTAR_HOME)/lib/ml hyperheap PRIMS_DIR=native_int
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.
-	$(MAKE) -C $(FSTAR_HOME)/contrib/CoreCrypto/ml
-	# All our .cmx files
+	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
+	# # All our .cmx files
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
 	# A .cmxa with all the .cmx above
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
 	# Then our test executable
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-          -I test/ test/parsing_test.ml test/test_main.ml -o test.out
+	         -I test/ test/parsing_test.ml test/test_main.ml -o test.out
 	# Run the tests
 	$(EXTRA_PATH) ./test.out
 

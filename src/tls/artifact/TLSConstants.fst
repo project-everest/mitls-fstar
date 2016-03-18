@@ -17,7 +17,7 @@ open CoreCrypto
 open FStar.SeqProperties
 
 (* Type representations for TLS negotiated values *)
-type ProtocolVersion =
+type protocolVersion =
     | SSL_3p0
     | TLS_1p0
     | TLS_1p1
@@ -60,16 +60,16 @@ type aeAlg =
 // MtE: ``The AE algorithms are CPA and INT-CTXT''
 // MtE: ``The MAC algorithm of id is INT-CMA.''
 
-assume val strongAuthAlg: ProtocolVersion -> aeAlg -> Tot bool
+assume val strongAuthAlg: protocolVersion -> aeAlg -> Tot bool
 //  | MtE _ m | MACOnly m   -> int_cma (macAlg_of_id i)
 //  | AEAD e m -> strongAEADalg
 
-assume val strongAEAlg: ProtocolVersion -> aeAlg -> Tot bool
+assume val strongAEAlg: protocolVersion -> aeAlg -> Tot bool
 // let strongAEAlg pv ae = match ae with
 //    | AEAD e m -> true
 //    | MtE _ -> false
 
-assume val strongAuthAE: pv:ProtocolVersion -> ae:aeAlg -> Lemma(strongAEAlg pv ae ==> strongAuthAlg pv ae)
+assume val strongAuthAE: pv:protocolVersion -> ae:aeAlg -> Lemma(strongAEAlg pv ae ==> strongAuthAlg pv ae)
 
 type sigAlg = CoreCrypto.sig_alg
 
@@ -78,7 +78,7 @@ type sigHashAlg = sigAlg * hashAlg
 (* We use this logical type to describe the injectivity of a parsing and a
    serializing function *)
 logic type pinverse (#a:Type) (#b:Type) (r:(b -> b -> Type)) (=f:(a -> Tot b)) =
-    (y:b -> Tot (xopt:Result a{(forall (x:a). r (f x) y <==> (xopt = Correct x))}))
+    (y:b -> Tot (xopt:result a{(forall (x:a). r (f x) y <==> (xopt = Correct x))}))
 
 (* Serializing function for signature algorithms *)
 val sigAlgBytes: sigAlg -> Tot (lbytes 1)
@@ -146,13 +146,13 @@ let macSize = function
   | HMAC alg
   | SSLKHASH alg -> hashSize (Hash alg)
 
-type SCSVsuite =
+type scsv_suite =
     | TLS_EMPTY_RENEGOTIATION_INFO_SCSV
 
 type cipherSuite =
     | NullCipherSuite    : cipherSuite
     | CipherSuite        : kexAlg -> option sig_alg -> aeAlg -> cipherSuite
-    | SCSV               : SCSVsuite -> cipherSuite
+    | SCSV               : scsv_suite -> cipherSuite
 
 type cipherSuites = list cipherSuite
 
@@ -160,7 +160,7 @@ type PreCompression =
     | NullCompression
 type Compression = PreCompression
 
-val parseCompression: b:bytes{Seq.length b > 0} -> Result Compression
+val parseCompression: b:bytes{Seq.length b > 0} -> result Compression
 let parseCompression b =
     match cbyte b with
     | 0uy -> Correct NullCompression
@@ -196,7 +196,7 @@ let rec compressionMethodsBytes cms =
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
-val versionBytes : ProtocolVersion -> Tot (lbytes 2)
+val versionBytes : protocolVersion -> Tot (lbytes 2)
 let versionBytes pv =
     match pv with
     | SSL_3p0 -> abyte2 ( 3uy, 0uy)
@@ -213,7 +213,7 @@ let parseVersion v =
     | ( 3uy, 3uy ) -> Correct(TLS_1p2)
     | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-let minPV (a:ProtocolVersion) (b:ProtocolVersion) =
+let minPV (a:protocolVersion) (b:protocolVersion) =
   match (a,b) with
   | SSL_3p0, _
   | _, SSL_3p0 -> SSL_3p0
@@ -226,9 +226,9 @@ let minPV (a:ProtocolVersion) (b:ProtocolVersion) =
 
   | _, _       -> TLS_1p2
 
-let somePV (a:ProtocolVersion) = Some a
+let somePV (a:protocolVersion) = Some a
 
-let geqPV (a:ProtocolVersion) (b:ProtocolVersion) =
+let geqPV (a:protocolVersion) (b:protocolVersion) =
     match (a,b) with
     | _,SSL_3p0 -> true
     | SSL_3p0,_ -> false
@@ -333,7 +333,7 @@ type known_cipher_suites = list known_cipher_suite
 val cipherSuiteBytes: known_cipher_suite -> Tot (lbytes 2)
 let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
 
-val parseCipherSuiteAux : lbytes 2 -> Tot (Result cipherSuite)
+val parseCipherSuiteAux : lbytes 2 -> Tot (result cipherSuite)
 let parseCipherSuiteAux b =
     match cbyte2 b with
     | ( 0x00uy, 0x00uy ) -> Correct(NullCipherSuite)
@@ -429,8 +429,8 @@ let parseCipherSuite b =
 (* Called by the server handshake; *)
 (* ciphersuites that we do not understand are parsed, *)
 (* but not added to the list, and thus will be ignored by the server *)
-opaque val parseCipherSuites: b:bytes -> Tot (Result known_cipher_suites) (decreases (length b))
-let rec parseCipherSuites b : Result known_cipher_suites =
+opaque val parseCipherSuites: b:bytes -> Tot (result known_cipher_suites) (decreases (length b))
+let rec parseCipherSuites b : result known_cipher_suites =
      if length b > 1 then
        let (b0,b1) = Platform.Bytes.split b 2 in
        match parseCipherSuites b1 with
@@ -505,9 +505,9 @@ type prePrfAlg =
   | PRF_TLS_1p01 of prflabel                       // MD5 xor SHA1
   | PRF_TLS_1p2 : prflabel -> macAlg -> prePrfAlg  // typically SHA256 but may depend on CS
 
-type KefAlg = prePrfAlg
-type KdfAlg = prePrfAlg
-type VdAlg = ProtocolVersion * cipherSuite
+type kefAlg = prePrfAlg
+type kdfAlg = prePrfAlg
+type vdAlg = protocolVersion * cipherSuite
 
 (* Only to be invoked with TLS 1.2 (hardcoded in previous versions *)
 let verifyDataLen_of_ciphersuite (cs:cipherSuite) = 12
@@ -520,7 +520,7 @@ let prfMacAlg_of_ciphersuite_aux = function
     | CipherSuite  _ _  (MACOnly _)  -> Some (HMAC SHA256)
     | _                                -> None
 
-let pvcs (pv:ProtocolVersion) (cs:cipherSuite) =
+let pvcs (pv:protocolVersion) (cs:cipherSuite) =
   if pv=TLS_1p2
   then is_Some (prfMacAlg_of_ciphersuite_aux cs)
   else true
@@ -544,7 +544,7 @@ let verifyDataHashAlg_of_ciphersuite_aux = function
 let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphersuite_aux =
   fun x -> Some.v (verifyDataHashAlg_of_ciphersuite_aux x)
 
-val sessionHashAlg: pv:ProtocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
+val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
 let sessionHashAlg pv cs =
     match pv with
     | SSL_3p0 | TLS_1p0 | TLS_1p1 -> MD5SHA1
@@ -557,14 +557,14 @@ let get_aeAlg cs =
 
 let null_aeAlg  = MACOnly MD5
 
-val encAlg_of_aeAlg: (pv:ProtocolVersion) -> (a:aeAlg { is_MtE a }) -> Tot (encAlg * ivMode)
+val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { is_MtE a }) -> Tot (encAlg * ivMode)
 let encAlg_of_aeAlg  pv ae =
     match pv,ae with
     | SSL_3p0, MtE (Block e) m -> (Block e),Stale
     | TLS_1p0, MtE (Block e) m -> (Block e),Stale
     | _, MtE e m -> e,Fresh
 
-val macAlg_of_aeAlg: (pv:ProtocolVersion) -> (a:aeAlg { ~(is_AEAD a) }) -> Tot macAlg
+val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { ~(is_AEAD a) }) -> Tot macAlg
 let macAlg_of_aeAlg pv ae =
     match pv,ae with
 //  | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
@@ -748,7 +748,7 @@ let name_of_cipherSuite cs =
 
     | _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Invoked on a unknown ciphersuite")
 
-val names_of_cipherSuites : cipherSuites -> Tot (Result cipherSuiteNames)
+val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
 let rec names_of_cipherSuites css =
     match css with
     | [] -> Correct []
@@ -763,13 +763,13 @@ let rec names_of_cipherSuites css =
        end
 
 (* TLS messages types *)
-type ContentType =
+type contentType =
     | Change_cipher_spec
     | Alert
     | Handshake
     | Application_data
 
-val ctBytes: ContentType -> Tot (lbytes 1)
+val ctBytes: contentType -> Tot (lbytes 1)
 let ctBytes ct =
     match ct with
     | Change_cipher_spec -> abyte 20uy
@@ -812,7 +812,7 @@ let lemma_vlbytes_inj i b b' =
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 0 --initial_fuel 0"   //need to reason about length
 val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
-  -> Tot (Result (b:(bytes * bytes){
+  -> Tot (result (b:(bytes * bytes){
                       repr_bytes (length (fst b)) <= lSize
                   /\  Seq.Eq vlb (vlbytes lSize (fst b) @| (snd b))}))
 let vlsplit lSize vlb =
@@ -823,7 +823,7 @@ let vlsplit lSize vlb =
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val vlparse: lSize:nat{lSize <= 4} -> vlb:bytes{lSize <= length vlb}
-             -> Tot (Result (b:bytes{repr_bytes (length b) <= lSize /\ Seq.Eq vlb (vlbytes lSize b)}))
+             -> Tot (result (b:bytes{repr_bytes (length b) <= lSize /\ Seq.Eq vlb (vlbytes lSize b)}))
 let vlparse lSize vlb =
     let (vl,b) = Platform.Bytes.split vlb lSize in
     let l = int_of_bytes vl in
@@ -906,7 +906,7 @@ let rec distinguishedNameListBytes names =
         let name = vlbytes 2 (utf8 h) in
         name @| distinguishedNameListBytes t
 
-val parseDistinguishedNameList: data:bytes -> res:list string -> Tot (Result (list string)) (decreases (length data))
+val parseDistinguishedNameList: data:bytes -> res:list string -> Tot (result (list string)) (decreases (length data))
 let rec parseDistinguishedNameList data res =
     if length data = 0 then
         Correct (res)

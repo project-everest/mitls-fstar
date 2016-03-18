@@ -62,7 +62,7 @@ let lastblock (i:idB) =
 //let lastblock (i:idB) (c:cipher i { length c >= CoreCrypto.blockSize (Block._0 (alg i))}) : block i =
 //  lblock (CoreCrypto.blockSize (Block._0 (alg i))) c 
 
-private type key (i:id) = bytes
+(* abstract *) type key (i:id) = bytes
 // for the reduction to non-agile algorithms, we would use
 // private type (i:id) key' = 
 //   | GoodKey_A of ideal_A.key 

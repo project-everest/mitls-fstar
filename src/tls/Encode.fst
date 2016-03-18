@@ -187,14 +187,15 @@ val verify:
   ad: LHAEPlain.adata i ->
   rg: frange i ->
   p: plain i ad rg ->
-  Result (LHAEPlain.plain i ad rg)
+  result (LHAEPlain.plain i ad rg)
 
 let verify (i:id) k ad rg p =
     let text = macPlain i rg ad p.f in
         (*@ We implement standard mitigation for padding oracles.
             Still, we note a small timing leak here:
             The time to verify the mac is linear in the plaintext length. *)
-    if MAC.verify k text p.tag && p.ok 
+    let v = MAC.verify k text p.tag in
+    if v && p.ok
     then Correct p.f 
     else Error(AD_bad_record_mac,"")
 
@@ -215,7 +216,6 @@ let pad p  = createBytes p (Bytes.byte_of_int (p-1)) //TODO: NS REVIEW!
 
 
 // plain record ---encode---> plaintext bytes
-
 val encode:
       i:id{ ~ (authId i) } -> // was not safeId i
       ad: LHAEPlain.adata i ->
@@ -225,7 +225,6 @@ val encode:
       pl: LHAEPlain.plain i ad rg ->
       tag: MAC.tag i ->
       Tot (lbytes (plainLength i (targetLength i rg)))
-
 let encode i ad rg pl tag =
     let tlen = targetLength i rg in
     let b = payload i rg ad pl in
@@ -249,27 +248,27 @@ let encode i ad rg pl tag =
 
 
 val decode:
-      i:id{ ~ (authId i) }  -> 
+      i:id{ ~ (authId i) }  ->
       ad: LHAEPlain.adata i ->
-      tlen: nat{ 
-        valid_clen i tlen /\ 
-        tlen - ivSize i >= macKeySize(macAlg_of_id i) + fixedPadSize i /\ 
-        ( let rg = cipherRangeClass i tlen in 
+      tlen: nat{
+        valid_clen i tlen /\
+        tlen - ivSize i >= macKeySize(macAlg_of_id i) + fixedPadSize i /\
+        ( let rg = cipherRangeClass i tlen in
 //          StatefulPlain.wf_ad_rg i (LHAEPlain.parseAD ad) rg /\
           snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i))) } ->
       payload: lbytes (plainLength i tlen) ->
-      p: plain i ad (cipherRangeClass i tlen) 
-      { pv_of_id i <> SSL_3p0 ==> (p.ok <==> (payload = encode i ad (cipherRangeClass i tlen) p.f p.tag ))}
+      p: plain i ad (cipherRangeClass i tlen)
+      { pv_of_id i <> SSL_3p0 ==> (b2t (p.ok) <==> (payload == encode i ad (cipherRangeClass i tlen) p.f p.tag ))}
 
 
-assume val lemma_pad: lx: nat { lx < 256 } -> 
+assume val lemma_pad: lx: nat { lx < 256 } ->
   Lemma ((createBytes lx (Bytes.byte_of_int lx) @| createBytes 1 (Bytes.byte_of_int lx)) = pad (lx+1))
   
 
 let decode i ad tlen payload =
-    let pv = pv_of_id i in 
-    let l = length payload in 
-    let lt = macSize (macAlg_of_id i) in 
+    let pv = pv_of_id i in
+    let l = length payload in
+    let lt = macSize (macAlg_of_id i) in
  
     let rg : frange i = cipherRangeClass i tlen in
     assume(StatefulPlain.wf_ad_rg i (LHAEPlain.parseAD ad) rg);
@@ -283,11 +282,11 @@ let decode i ad tlen payload =
         lemma_split payload lf; // could be automated!
         let p = LHAEPlain.mk_plain i ad rg fragment in
         assume( ~ (safeId i)); // should follow from their definitions
-        assert(payload = encode i ad rg p tag); 
+        assert(payload = encode i ad rg p tag);
         Plain p tag true
 
     // padding: we expect l = lf + lt + lx + lp bytes and tlen = lf + lx
-    | MtE (Block encAlg) hashAlg -> 
+    | MtE (Block encAlg) hashAlg ->
         let lp = fixedPadSize i in
         assert(lp = 1);
         let (ftx,b) = Bytes.split payload (l - lp) in
@@ -301,8 +300,8 @@ let decode i ad tlen payload =
                 following TLS1.1 we fail later (see RFC5246 6.2.3.2 Implementation Note) *)
             let (f, tag) = split ftx (l - lt - lp) in
             lemma_split ftx (l - lt - lp);
-            let p = LHAEPlain.mk_plain i ad rg f in  
-            assume(payload <> encode i ad rg p tag );
+            let p = LHAEPlain.mk_plain i ad rg f in
+            assume(~(payload == encode i ad rg p tag ));
             Plain p tag false
         else
             let (ft,x) = split ftx lft in
@@ -312,7 +311,7 @@ let decode i ad tlen payload =
                 (*@ Padding is random in SSL_3p0, no check to be done on its content.
                     However, its length should be at most one bs
                     (See sec 5.2.3.2 of SSL 3 draft). *)
-                  lx + lp <= CoreCrypto.blockSize encAlg 
+                  lx + lp <= CoreCrypto.blockSize encAlg
 
               | TLS_1p0 | TLS_1p1 | TLS_1p2 ->
                 (*@ We note a small timing leak here: the run time of the following two
@@ -320,19 +319,19 @@ let decode i ad tlen payload =
                     constant time comparison up to maximum padding length.*)
                   let expected = createBytes lx (Bytes.byte_of_int lx) in
                   if x = expected then
-                    ( lemma_pad lx; 
+                    ( lemma_pad lx;
                       assume(b = createBytes 1 (Bytes.byte_of_int lx));
                       assert((x @| b) = pad (lx+1));
                       true )
-                  else false 
+                  else false
 
                | _ -> false in
 
             if correctPadding then (
                 let (f, tag) = split ft lf in
-                lemma_split ft lf; 
-                assume(Within lf rg);
-                let p = LHAEPlain.mk_plain i ad rg f in  
+                lemma_split ft lf;
+                assume(within lf rg);
+                let p = LHAEPlain.mk_plain i ad rg f in
                 assume (safeId i ==> authId i);
                 assume((pv <> SSL_3p0 /\
                   (x @| b = pad (lx+1))) ==>
@@ -341,7 +340,7 @@ let decode i ad tlen payload =
                 Plain p tag true )
             else (
                 let lf = l - lt - lp in  // faking minimal padding (lx = 0)
-                assume(Within lf rg);
+                assume(within lf rg);
                 let (f, tag) = split ftx lf in
                 lemma_split ftx lf;
                 let p = LHAEPlain.mk_plain i ad rg f in
@@ -386,7 +385,7 @@ let mk_plain i ad tlen b =
 val repr:
   i:id{ ~ (authId i) } -> // was { ~ (safeId i) }
   ad: LHAEPlain.adata i ->
-  rg:range { snd rg <= max_TLSPlaintext_fragment_length /\ 
+  rg:range { snd rg <= max_TLSPlaintext_fragment_length /\
              snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i)) } ->
   plain i ad rg ->
   b: lbytes (plainLength i (targetLength i rg))

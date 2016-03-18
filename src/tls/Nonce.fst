@@ -30,14 +30,14 @@ val mkHelloRandom: unit -> ST (lbytes 32)
   (ensures (fun h0 n h1 -> 
     modifies (Set.singleton root) h0 h1 /\ 
     modifies_rref root !{ as_ref log } h0 h1 /\
-    (ideal ==> ~(List.mem n (sel h0 log)) /\
+    (ideal ==> ~(List.Tot.mem n (sel h0 log)) /\
              sel h1 log = n :: sel h0 log )))
 
 let rec mkHelloRandom() =
   recall log; 
   let cr = timestamp() @| CoreCrypto.random 28 in
   if ideal then 
-    if List.mem cr !log 
+    if List.Tot.mem cr !log 
     then mkHelloRandom () // formally retry to exclude collisions.
     else (log := cr::!log; cr)
   else cr

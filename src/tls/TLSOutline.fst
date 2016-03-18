@@ -169,7 +169,7 @@ val initial_epoch_empty : h:hh -> e:epoch{is_initial_epoch e} -> Lemma
   (ensures (Seq.length (writtenT e h) = 0
 	   /\ readseqT e h = 0))
 
-//* should we still return ConnectionInfo ?
+//* should we still return connectionInfo ?
 //* merging connect and resume with an optional sessionID
 val connect: ns:networkStream -> c:config -> resume: option sessionID -> ST conn
   (requires c_log_inv)

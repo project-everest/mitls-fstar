@@ -28,7 +28,7 @@ type keyrepr (i:id) = bytes
 type fresh_subregion rg parent h0 h1 = fresh_region rg h0 h1 /\ extends rg parent
 
 // We keep the tag in case we later want to enforce tag authentication
-private type entry (i:id) (good: bytes -> Type) = 
+abstract type entry (i:id) (good: bytes -> Type) = 
   | Entry: t:tag i -> p:bytes { authId i ==> good p } -> entry i good
 
 // readers and writers share the same private state: a log of MACed messages
@@ -41,8 +41,8 @@ type key (i:id) (good: bytes -> Type) =
 val region: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot rid
 val keyval: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot (keyrepr i)
         
-let region #i 'a (k:key i 'a) = k.region
-let keyval #i 'a (k:key i 'a) = k.kv 
+let region #i #good (k:key i good) = k.region
+let keyval #i #good (k:key i good) = k.kv 
 
 val gen: i:id -> good: (bytes -> Type) -> parent: rid -> ST(key i good)
   (requires (fun _ -> True))
@@ -59,14 +59,14 @@ val coerce: i:id -> good: (bytes -> Type) -> parent: rid -> kv:keyrepr i -> ST(k
 val leak: #i:id -> #good: (bytes -> Type) -> k:key i good {~(authId i)} -> Tot (kv:keyrepr i { kv = keyval k })
 
 // todo: mark it as private
-let gen0 i 'good parent kv = 
+private let gen0 i good parent kv = 
   let region = new_region parent in 
   let log = ralloc region Seq.createEmpty in 
-  Key #i #'good #region kv log
+  Key #i #good #region kv log
 
-let gen    i 'good parent    = gen0 i 'good parent (CoreCrypto.random (macKeySize (alg i)))
-let coerce i 'good parent kv = gen0 i 'good parent kv
-let leak   i 'good k = k.kv
+let gen    i good parent    = gen0 i good parent (CoreCrypto.random (macKeySize (alg i)))
+let coerce i good parent kv = gen0 i good parent kv
+let leak   #i #good k = k.kv
 
 val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==> good p } -> ST(tag i) 
   (requires (fun _ -> True))
@@ -78,26 +78,28 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 
 
 // We log every authenticated texts, with their index and resulting tag
-let mac i 'good k p =
-    let p : p:bytes { authId i ==> 'good p } = p in 
+let mac #i #good k p =
+    let p : p:bytes { authId i ==> good p } = p in 
     admit();
     let t = HMAC.tls_mac (alg i) k.kv p in
-    let e : entry i 'good = Entry t p in 
+    let e : entry i good = Entry t p in 
     k.log := snoc !k.log e; 
     t
 
-private val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool 
-let matches i p (Entry _ p') = p = p'
+abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool 
+let matches #i #good p (Entry _ p') = p = p'
 
-val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
+val verify: #i:id -> #good:(bytes -> Type) -> k:key i good{HMAC.is_tls_mac (alg i)} -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True)) 
   (ensures (fun h0 b h1 -> h0 = h1 /\ (b /\ authId i ==> good p)))
 
 // We use the log to correct any verification errors
-let verify i k p t =
-    HMAC.tls_macVerify (alg i) k.kv p t 
-    && 
-    ( not(authId i) || is_Some (seq_find (matches p) !k.log))
+let verify #i #good k p t =
+    let x = HMAC.tls_macVerify (alg i) k.kv p t in
+    let log = !k.log in
+    x && 
+    ( not(authId i) || is_Some (seq_find (matches p) log))
+
 
 
 

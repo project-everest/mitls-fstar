@@ -32,30 +32,30 @@ type nego = {
      n_client_random: TLSInfo.random;
      n_server_random: TLSInfo.random;
      n_sessionID: sessionID;
-     n_protocol_version: ProtocolVersion;
+     n_protocol_version: protocolVersion;
      n_kexAlg: TLSConstants.kexAlg;
      n_aeAlg: TLSConstants.aeAlg;
      n_sigAlg: option TLSConstants.sigAlg;
      n_cipher_suite: cipherSuite;
-     n_compression: Compression;
+     n_compression: compression;
      n_extensions: negotiatedExtensions;
-     n_scsv: list SCSVsuite;
+     n_scsv: list scsv_suite;
 }                 
 
-type ID = {
+type id = {
      id_cert: Cert.chain;
      id_sigalg: option Sig.alg;
 }
 
 type ake = {
-     ake_server_id: option ID;
-     ake_client_id: option ID;
+     ake_server_id: option id;
+     ake_client_id: option id;
      ake_pms: bytes;
      ake_session_hash: bytes;
      ake_ms: bytes;
 }
 
-type Session = {
+type session = {
      session_nego: nego;
      session_ake: ake;
 }     
@@ -63,14 +63,14 @@ type Session = {
 
 
 
-type eph_s = option KEX_S_PRIV
-type eph_c = list KEX_S_PRIV
+type eph_s = option kex_s_priv
+type eph_c = list kex_s_priv
 
 
-val prepareClientHello: config -> option ri -> option sessionID -> ST (CH * log)
+val prepareClientHello: config -> option ri -> option sessionID -> ST (ch * log)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let prepareClientHello cfg ri sido : CH * log =
+let prepareClientHello cfg ri sido : ch * log =
   let crand = Nonce.mkHelloRandom() in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client crand in
@@ -86,7 +86,7 @@ let prepareClientHello cfg ri sido : CH * log =
    (ch,clientHelloBytes ch)
 
 (* Is [pv1 >= pv2]? *)
-val gte_pv: ProtocolVersion -> ProtocolVersion -> Tot bool
+val gte_pv: protocolVersion -> protocolVersion -> Tot bool
 let gte_pv pv1 pv2 =
   match pv1 with
   | SSL_3p0 -> (match pv2 with | SSL_3p0 -> true | _ -> false)
@@ -97,35 +97,35 @@ let gte_pv pv1 pv2 =
 
 (* Returns [c] if [c] is within the range of acceptable versions for [cfg],
  * [Error] otherwise. *)
-val negotiateVersion: cfg:config -> c:ProtocolVersion -> Tot (Result ProtocolVersion)
+val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
 let negotiateVersion cfg c =
   if gte_pv c cfg.minVer && gte_pv cfg.maxVer c then Correct c
   else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
 
-val negotiate:#a:Type -> list a -> list a -> Tot (option a)
+val negotiate:list 'a -> list 'a -> Tot (option 'a)
 let negotiate l1 l2 =
-  List.tryFindT (fun s -> List.existsb (fun c -> c = s) l1) l2
+  List.Tot.tryFind (fun s -> List.Tot.existsb (fun c -> c = s) l1) l2
 
-val negotiateCipherSuite: cfg:config -> pv:ProtocolVersion -> c:known_cipher_suites -> Tot (Result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * known_cipher_suite))
+val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> c:known_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * known_cipher_suite))
 let negotiateCipherSuite cfg pv c =
   match negotiate c cfg.ciphersuites with
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
-val negotiateCompression: cfg:config -> pv:ProtocolVersion -> c:list Compression -> Tot (Result Compression)
+val negotiateCompression: cfg:config -> pv:protocolVersion -> c:list compression -> Tot (result compression)
 let negotiateCompression cfg pv c =
   match negotiate c cfg.compressions with
   | Some(cs) -> Correct(cs)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Compression negotiation failed")
 
 // TODO : IMPLEMENT
-val getCachedSession: cfg:config -> ch:CH -> ST (option Session)
+val getCachedSession: cfg:config -> ch:ch -> ST (option session)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
-val prepareServerHello: config -> option ri -> CH -> log -> ST (Result (bytes * nego * option ake * log))
+val prepareServerHello: config -> option ri -> ch -> log -> ST (result (bytes * nego * option ake * log))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ri ch i_log =
@@ -187,7 +187,7 @@ let prepareServerHello cfg ri ch i_log =
     Correct (shB,nego,None,o_log))
 
 (* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
-val isSentinelRandomValue: ProtocolVersion -> ProtocolVersion -> TLSInfo.random -> Tot bool
+val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
   gte_pv c_pv TLS_1p3 && gte_pv TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
   gte_pv c_pv TLS_1p2 && gte_pv TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
@@ -197,7 +197,7 @@ let isSentinelRandomValue c_pv s_pv s_random =
   - the server is not newer than the client
   - there is no undesired downgrade (as indicated by the special random values).
 *)
-val acceptableVersion: config -> CH -> ProtocolVersion -> TLSInfo.random -> Tot bool
+val acceptableVersion: config -> ch -> protocolVersion -> TLSInfo.random -> Tot bool
 let acceptableVersion cfg ch s_pv s_random =
   match negotiateVersion cfg ch.ch_protocol_version with
   | Correct c_pv -> 
@@ -212,22 +212,22 @@ let acceptableVersion cfg ch s_pv s_random =
   - TODO: [s_cs] is supported by the protocol version (e.g. no GCM with
     TLS<1.2).
 *)
-val acceptableCipherSuite: config -> CH -> ProtocolVersion -> known_cipher_suite -> Tot bool
+val acceptableCipherSuite: config -> ch -> protocolVersion -> known_cipher_suite -> Tot bool
 let acceptableCipherSuite cfg ch s_pv s_cs =
   // JP: I would think the first line implies the second one?
-  List.existsb (fun x -> x = s_cs) ch.ch_cipher_suites &&
-  List.existsb (fun x -> x = s_cs) cfg.ciphersuites &&
+  List.Tot.existsb (fun x -> x = s_cs) ch.ch_cipher_suites &&
+  List.Tot.existsb (fun x -> x = s_cs) cfg.ciphersuites &&
   not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
   
 
 (* Our server implementation doesn't support compression, meaning [cmp] is
  always [NullCompression], so it's always a valid compression. *)
-val acceptableCompression: config -> CH -> ProtocolVersion -> Compression -> Tot bool
+val acceptableCompression: config -> ch -> protocolVersion -> compression -> Tot bool
 let acceptableCompression cfg ch pv cmp =
   true
 
-val processServerHello: c:config -> option ri -> eph_c -> CH -> SH ->
-                           ST (Result (nego * option ake))
+val processServerHello: c:config -> option ri -> eph_c -> ch -> sh ->
+                           ST (result (nego * option ake))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let processServerHello cfg ri eph ch sh =
@@ -279,22 +279,22 @@ let processServerHello cfg ri eph ch sh =
 
 type clientState = 
   | C_Idle: option ri -> clientState
-  | C_HelloSent: option ri -> eph_c -> CH -> clientState
+  | C_HelloSent: option ri -> eph_c -> ch -> clientState
   | C_HelloReceived: nego -> option ake  -> clientState
-  | C_OutCCS: Session -> cVerifyData -> clientState
-  | C_FinishedSent: Session -> cVerifyData -> clientState
-  | C_CCSReceived: Session -> cVerifyData -> clientState
+  | C_OutCCS: session -> cVerifyData -> clientState
+  | C_FinishedSent: session -> cVerifyData -> clientState
+  | C_CCSReceived: session -> cVerifyData -> clientState
   | C_Error: error -> clientState
 
 type serverState = 
      | S_Idle : option ri -> serverState
      | S_HelloSent : nego -> option ake -> serverState
      | S_HelloDone : nego -> option ake -> eph_s -> serverState
-     | S_CCSReceived : Session -> serverState
-     | S_OutCCS: Session -> serverState
-     | S_FinishedSent : Session -> serverState
-     | S_ResumeFinishedSent : Session -> serverState
-     | S_ZeroRTTReceived : Session -> serverState
+     | S_CCSReceived : session -> serverState
+     | S_OutCCS: session -> serverState
+     | S_FinishedSent : session -> serverState
+     | S_ResumeFinishedSent : session -> serverState
+     | S_ZeroRTTReceived : session -> serverState
      | S_Error: error -> serverState
 
   
@@ -325,8 +325,8 @@ type handshake_state (r:role) =
        hs_writer: int;
      }
 
-val handshake_state_init: (ver:ProtocolVersion) -> (r:role) -> Tot (handshake_state r )
-let handshake_state_init (ver:ProtocolVersion) (r:role) =
+val handshake_state_init: (ver:protocolVersion) -> (r:role) -> Tot (handshake_state r )
+let handshake_state_init (ver:protocolVersion) (r:role) =
    {hs_nego = None;
     hs_ake = None;
     hs_log = empty_bytes;
@@ -339,9 +339,9 @@ let handshake_state_init (ver:ProtocolVersion) (r:role) =
     	| Server -> S (S_Idle None)) }
 
 type handshake = 
-  | Fresh of SessionInfo
-  | Resumed of abbrInfo * SessionInfo 
-val hsId: handshake -> Tot id
+  | Fresh of sessionInfo
+  | Resumed of abbrInfo * sessionInfo 
+val hsId: handshake -> Tot TLSInfo.id
 let hsId h = noId // Placeholder
 
 type epoch (rgn:rid) (peer:rid) =
@@ -350,7 +350,7 @@ type epoch (rgn:rid) (peer:rid) =
            w: writer (hsId h) -> epoch rgn peer
 
 (* This following function needs to call PRF.deriveKeys correctly to get StatefulLHAE keys *)
-assume val deriveEpoch: (r:rid) -> (p:rid) -> Session -> ST (epoch r p)
+assume val deriveEpoch: (r:rid) -> (p:rid) -> session -> ST (epoch r p)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
@@ -582,7 +582,7 @@ assume val server_send_server_finished_res: hs -> ST unit
 
 (* Handshake API: PUBLIC Functions, taken from FSTI *)
 
-val version: s:hs -> ST ProtocolVersion
+val version: s:hs -> ST protocolVersion
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let version (HS r res cfg id l st) =
@@ -640,7 +640,7 @@ let rec next_fragment hs =
 
 
 
-val parseHandshakeMessages : option ProtocolVersion -> option kexAlg -> buf:bytes -> Tot (Result (rem:bytes * list (hs_msg * bytes)))
+val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot (result (rem:bytes * list (hs_msg * bytes)))
 let rec parseHandshakeMessages pv kex buf =
     match parseMessage buf with
     | Error z -> Error z

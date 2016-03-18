@@ -131,14 +131,14 @@ let tls12VerifyData cs ms role data =
 
 (* Internal agile implementation of PRF *)
 
-val verifyData: (ProtocolVersion * cipherSuite) -> bytes -> role -> bytes -> Tot bytes
+val verifyData: (protocolVersion * cipherSuite) -> bytes -> role -> bytes -> Tot bytes
 let verifyData (pv,cs) (secret:bytes) (role:role) (data:bytes) =
   match pv with
     | SSL_3p0           -> ssl_verifyData     secret role data
     | TLS_1p0 | TLS_1p1 -> tls_verifyData     secret role data
     | TLS_1p2           -> tls12VerifyData cs secret role data
 
-val prf: (ProtocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> Tot bytes
+val prf: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> Tot bytes
 let prf (pv,cs) secret (label:bytes) data len =
   match pv with
   | SSL_3p0           -> ssl_prf     secret       data len

@@ -23,6 +23,7 @@ let leak (i:msId) ms = ms.bytes
 (** Key Derivation **) 
 
 let keyExtensionLength i =
+    let op_Star = op_Multiply in
     match i.aeAlg with
         | MtE _ _  ->
             let alg,ivm = encAlg_of_id i in
@@ -103,7 +104,7 @@ type derived (i1:id) (i2:id) = StatefulLHAE.reader i1 * StatefulLHAE.writer i2
 
 type state =
   | Init
-  | Committed of ProtocolVersion * aeAlg * negotiatedExtensions
+  | Committed of protocolVersion * aeAlg * negotiatedExtensions
   | Derived: a:id -> b:id -> derived a b -> state
 //  | Done 
 //  | Wasted
@@ -114,7 +115,7 @@ type state =
 
 type event = Mismatch of id
 
-type kdentry = CsRands * state 
+type kdentry = csRands * state 
 let kdlog : ref<list<kdentry>> = ref [] 
 
 let rec read csr (entries: list<kdentry>)  = 
@@ -137,11 +138,11 @@ let commit csr pv a ext = Committed(pv,a,ext)
 
 
 
-let keyCommit (csr:CsRands) (pv:ProtocolVersion) (a:aeAlg) (ext:negotiatedExtensions) : unit = 
+let keyCommit (csr:csRands) (pv:protocolVersion) (a:aeAlg) (ext:negotiatedExtensions) : unit = 
   #if ideal
   match read csr !kdlog with 
   | Init -> 
-      Pi.assume(KeyCommit(csr,pv,a,ext));
+      Pi.assume(keyCommit(csr,pv,a,ext));
       let state = commit csr pv a ext in
       kdlog := update csr state !kdlog
   | _    -> 
@@ -177,11 +178,11 @@ let keyGenClient (rdId:id) (wrId:id) ms =
     let aeAlg = rdId.aeAlg in
     let csr = rdId.csrConn in
     let ext = rdId.ext in
-    Pi.assume(KeyGenClient(csr,pv,aeAlg,ext));
+    Pi.assume(keyGenClient(csr,pv,aeAlg,ext));
     match read csr !kdlog with
     | Init ->
         // the server commits only on fresh SRs
-        // hence we will never have Match(csr)
+        // hence we will never have matches_id(csr)
         Pi.assume(Mismatch(rdId));
         deriveKeys rdId wrId ms Client
     | Committed(pv',aeAlg',ext') when (pv=pv' && aeAlg=aeAlg' && ext=ext' && safeKDF(rdId)) -> 
@@ -295,7 +296,7 @@ let checkVerifyData si ms role data (tag:bytes) =
 
 (** ad hoc SSL3-only **)
 
-let ssl_certificate_verify (si:SessionInfo) ms (algs:sigAlg) log =
+let ssl_certificate_verify (si:sessionInfo) ms (algs:sigAlg) log =
   let s = ms.bytes in
   match algs with
   | CoreCrypto.RSASIG -> TLSPRF.ssl_verifyCertificate MD5 s log @| TLSPRF.ssl_verifyCertificate SHA1 s log 

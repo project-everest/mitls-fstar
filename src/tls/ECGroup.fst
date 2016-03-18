@@ -103,9 +103,10 @@ let serialize_point (p:ec_params) (e:point) =
   let x = CoreCrypto.ec_point_serialize e in
   vlbytes 1 x
 *)
+let op_Star = op_Multiply
 
 val parse_point: ec_params -> bytes -> Tot (option point)
-let parse_point (p:ec_params) (b:bytes) =
+let parse_point p b =
     let clen = bytelen p in 
     if length b = 2*clen + 1 then
         let (et, r) = split b 1 in

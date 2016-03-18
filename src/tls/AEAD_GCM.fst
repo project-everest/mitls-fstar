@@ -34,8 +34,8 @@ val cipherlen2: i:gid -> c:cipher i -> Lemma (repr_bytes (length c) <= 2)
 let cipherlen2 i c = lemma_repr_bytes_values (length c)
 
 // key materials for GCM
-private type key (i:gid) = lbytes (aeadKeySize (alg i)) 
-private type iv  (i:gid) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
+abstract type key (i:gid) = lbytes (aeadKeySize (alg i)) 
+abstract type iv  (i:gid) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
 
 // this is the same as a sequence number and in bytes, GCMNonce.nonce_explicit[8]
 type counter a = c:nat {repr_bytes c <= aeadRecordIVSize a} 
@@ -53,8 +53,8 @@ type entry (i:gid) = // records that c is an encryption of p with ad
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
 type state (i:gid) (rw:rw) =
-  | State: #region:rid 
-           -> peer_region:rid{HyperHeap.disjoint region peer_region}
+  | State: #region:rid{region <> root}
+           -> peer_region:rid{peer_region <> root /\ HyperHeap.disjoint region peer_region}
            -> key:key i
            -> iv: iv i
            -> log: rref (if rw=Reader then peer_region else region) (seq (entry i))       // ghost subject to cryptographic assumption
@@ -68,6 +68,12 @@ type state (i:gid) (rw:rw) =
 type writer i = s:state i Writer
 type reader i = s:state i Reader
 
+type matching (#i:gid) (r:reader i) (w:writer i) =
+  r.region = w.peer_region
+  /\ w.region = r.peer_region
+  /\ r.log == w.log
+  /\ disjoint (parent r.region) (parent w.region)
+
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we can drop this spec, since F* will infer something at least as precise,
 // but we keep it for documentation)
@@ -76,8 +82,8 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (reader i * write
   (ensures  (fun h0 (rw:reader i * writer i) h1 ->
            let r = fst rw in 
            let w = snd rw in 
-           (* let bang = fun x -> sel h1 x in  *)
            modifies Set.empty h0 h1
+	 /\ matching r w
          /\ w.region = r.peer_region
          /\ r.region = w.peer_region
          /\ extends (w.region) writer_parent
@@ -85,15 +91,11 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (reader i * write
          /\ fresh_region w.region h0 h1
          /\ fresh_region r.region h0 h1
          /\ op_Equality #(rref w.region (seq (entry i))) w.log r.log  //the explicit annotation here 
-         (* /\ w.log == r.log *) //
-         (* /\ bang w.counter = 0 *)
-         (* /\ bang r.counter = 0 *)
-         (* /\ bang w.log = createEmpty *)
          /\ contains_ref w.counter h1
          /\ contains_ref r.counter h1
          /\ contains_ref w.log h1
-         /\ sel h1 w.counter = 0
-         /\ sel h1 r.counter = 0
+         /\ 0 = sel h1 w.counter
+         /\ 0 = sel h1 r.counter
          /\ sel h1 w.log = createEmpty
          ))
 
@@ -144,7 +146,7 @@ type decryptor i = reader i
 val enc:
   i:gid -> e:encryptor i -> ad:adata i 
   -> r:range {fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
-  -> p:bytes{Within (length p) r} 
+  -> p:bytes{within (length p) r} 
   -> ST (cipher i)
     (requires (fun h -> True))
     (ensures  (fun h0 c h1 -> 
@@ -241,7 +243,7 @@ let dec i (d:decryptor i) (ad:adata i) c =
 
 
 val matches: #i:gid -> c:cipher i -> adata i -> entry i -> Tot bool
-let matches i c ad (Entry c' ad' _) = c = c' && ad = ad'
+let matches #i c ad (Entry c' ad' _) = c = c' && ad = ad'
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: 
@@ -251,16 +253,14 @@ val decrypt:
   (ensures  (fun h0 res h1 ->
                modifies Set.empty h0 h1
              /\ (authId i ==>
-                 Let (sel h0 d.log) // no let, as we still need a type annotation
-                   (fun (log:seq (entry i)) ->
-                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
-                                            found j /\ ~(matches c ad (Seq.index log j))))
-                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
+	         (let log : seq (entry i) = sel h0 d.log in
+                  match res with 
+		    | None -> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
+                                            found j /\ ~(matches c ad (Seq.index log j)))
+	            | Some v -> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
                                            found j
                                            /\ matches c ad (Seq.index log j)
-                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
-
-
+                                           /\ Entry.p (Seq.index log j) == v)))))
 let decrypt i d ad c =
   recall d.log;
   let log = !d.log in

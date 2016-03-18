@@ -24,9 +24,9 @@ type id = i:id { pv_of_id i <> TLS_1p3 }
 
 let ad_Length i = match pv_of_id i with
     | SSL_3p0 -> 1
-    | _       -> 3 // ContentType[1] + Version[2]
+    | _       -> 3 // contentType[1] + Version[2]
 
-val makeAD: i:id -> ct:ContentType -> Tot (lbytes (ad_Length i))
+val makeAD: i:id -> ct:contentType -> Tot (lbytes (ad_Length i))
 let makeAD i ct =
     let pv   = pv_of_id i in
     let bct  = ctBytes ct in
@@ -37,9 +37,9 @@ let makeAD i ct =
 // StatefulLHAE should be parametric in this type (or its refinement), but that'd be heavy
 // here, the refinement ensures we never fail parsing indexes to retrieve ct
 // that said, we should entirely avoid parsing it.
-type adata (i:id) = b:bytes { exists ct. b = makeAD i ct }
+type adata (i:id) = b:bytes { exists ct. b == makeAD i ct }
 
-val parseAD: i:id -> ad:adata i -> Tot ContentType
+val parseAD: i:id -> ad:adata i -> Tot contentType
 let parseAD i ad =
     let pv = pv_of_id i in
 //    if pv = TLS_1p3 then 
@@ -53,7 +53,7 @@ let parseAD i ad =
       match parseCT bct, parseVersion bver with
       | Correct ct, Correct ver -> assert (ver = pv); ct
 
-val lemma_makeAD_parseAD: i:id -> ct:ContentType -> Lemma
+val lemma_makeAD_parseAD: i:id -> ct:contentType -> Lemma
   (requires (True))
   (ensures (parseAD i (makeAD i ct) = ct))
   [SMTPat (makeAD i ct)]
@@ -63,10 +63,10 @@ let lemma_makeAD_parseAD i ct = () //cut (Seq.Eq ad (parseAD i (makeAD i n ad)))
 (*** plaintext fragments ***)
 
 type is_plain (i: id) (ad: adata i) (rg: range) (f: fragment i) =
-  fst (ct_rg i f) = parseAD i ad /\ Wider rg (snd (ct_rg i f))
+  fst (ct_rg i f) = parseAD i ad /\ wider rg (snd (ct_rg i f))
 
 // naming: we switch from fragment to plain as we are no longer TLS-specific
-private type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
+abstract type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
 //  { (parseAD i ad, rg) = Content.ct_rg i f }
 
 // Useful if the parameters [id], [ad] and [rg] have been constructed _after_
@@ -77,13 +77,13 @@ let assert_is_plain i ad rg f =
   f
 
 val ghost_repr: #i:id -> #ad:adata i -> #rg:range -> plain i ad rg -> GTot (rbytes rg)
-let ghost_repr i ad rg pf = Content.ghost_repr #i pf
+let ghost_repr #i #ad #rg pf = Content.ghost_repr #i pf
 
 val repr: i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p:plain i ad rg -> Tot (b:rbytes rg {b = ghost_repr #i #ad #rg p})
 let repr i ad rg f = Content.repr i f
 
 logic type wf_ad_rg i ad rg = 
-  Wider fragment_range rg  /\ 
+  wider fragment_range rg  /\ 
   (parseAD i ad = Change_cipher_spec ==> rg = zero)
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->
