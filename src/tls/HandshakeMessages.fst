@@ -137,11 +137,11 @@ type cr = {
 }
 
 type kex_s =
-| KEX_S_DHE of CoreCrypto.dh_key
+| KEX_S_DHE of HSCrypto.dh_key
 | KEX_S_RSA of CoreCrypto.rsa_key
 
-type kex_s_PRIV =
-| KEX_S_PRIV_DHE of CoreCrypto.dh_key
+type kex_s_priv =
+| KEX_S_PRIV_DHE of HSCrypto.dh_key
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 
 type ske = {
@@ -190,7 +190,7 @@ type hs_msg =
   | ClientHello of ch
   | ServerHello of sh
   | SessionTicket of sticket
-  | EncryptedExtionsions of ee
+  | EncryptedExtensions of ee
   | ServerKeyExchange of ske
   | CertificateRequest of cr
   | ServerHelloDone
@@ -758,7 +758,7 @@ let parseNextProtocol payload : result np =
       Correct( { np_selected_protocol = selected_protocol;
 		 np_padding = padding;})
 		 
-val parseHandshakeMessage: option ProtocolVersion -> option kexAlg -> HandshakeType -> bytes -> Tot (Result hs_msg)
+val parseHandshakeMessage: option protocolVersion -> option kexAlg -> handshakeType -> bytes -> Tot (result hs_msg)
 let parseHandshakeMessage pv kex hstype pl = 
     match hstype,pv,kex with
     | HT_hello_request,_,_       -> if (length pl = 0) then Correct(HelloRequest) else Error(AD_decode_error, "HelloRequest with non-empty body")

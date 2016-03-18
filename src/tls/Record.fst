@@ -28,6 +28,7 @@ let makePacket ct ver (data: b:bytes { repr_bytes (length b) <= 2}) =
    @| bytes_of_int 2 (length data) 
    @| data 
 
+val parseHeader: h5:header -> Tot (result (contentType * protocolVersion * int))
 let parseHeader (h5:header) =
     let (ct1,b4)   = Platform.Bytes.split h5 1 in
     let (pv2,len2) = Platform.Bytes.split b4 2 in

@@ -30,14 +30,17 @@ FSTAR_HOME?=../../.fstar
 # stdlib-hyperheap.cmxa
 STDLIB_ADMITS=All List Heap Set ST HyperHeap IO
 
-OTHERFLAGS=--explicit_deps
+OTHERFLAGS=
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
 hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
-FSTARFLAGS=--universes $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS)) $(OTHERFLAGS)
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
+FSTARFLAGS=--universes --explicit_deps $(OTHERFLAGS) \
+	   $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	   $(STDLIB)
+FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
+      $(FSTARFLAGS)
 
 PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
 PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
@@ -109,11 +112,17 @@ TLS.fst
 #the preceding space is significant (see prefix_cfg)
 #LHAE.fst \--these do not even parse
 
-TLSNOTVER=test/TestRecord.fst TLSExtensions.p.fst HandshakeMessages.fst
-# TLSPRF.fst  TODO ... add these back
-# PRF.p.fst \
-# Handshake.fst \
-# HSCrypto.fst \
+TLSNOTVER=\
+test/TestRecord.fst \
+TLSExtensions.p.fst \
+HSCrypto.fst \
+HandshakeMessages.fst \
+TLSPRF.fst \
+PRF.p.fst \
+Handshake.fst
+# TODO ... add these back
+# 
+# 
 
 NOTEXTRACTABLE=\
 Handshake.fsti \
@@ -285,8 +294,11 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) $(TLSGEN)
-	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
-	$(FSTAR) --no_location_info --lax --codegen OCaml --__temp_no_proj --__temp_no_proj TLSExtensions FStar.Heap $(TLSGEN_ADMIT) $^
+	#$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
+	$(FSTAR) \
+		--no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
+		$(TLSGEN_ADMIT) \
+		$^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.

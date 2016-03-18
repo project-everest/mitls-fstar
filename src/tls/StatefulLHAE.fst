@@ -224,7 +224,7 @@ abstract val encrypt: #i:gid -> #ad:adata i
   (ensures  (fun h0 (c:cipher i) h1 ->
                   st_enc_inv wr h1
                 /\ modifies (Set.singleton wr.region) h0 h1
-                /\ modifies_rref wr.region (refs_in_e wr) h0 h1
+                /\ modifies_rref wr.region (refs_in_w wr) h0 h1
                 /\ sel h0 wr.seqn + 1 = sel h1 wr.seqn
                 /\ wider (Range.cipherRangeClass i (length c)) rg
                 /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))

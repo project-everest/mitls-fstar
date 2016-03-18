@@ -71,25 +71,25 @@ open Platform.Error
 val resT: r:result 'a { Platform.Error.is_Correct r } -> Tot 'a
 let resT (Platform.Error.Correct v) = v
 
-val mapResult: ('a -> Tot 'b) -> Result 'a -> Tot (Result 'b)
+val mapResult: ('a -> Tot 'b) -> result 'a -> Tot (result 'b)
 let mapResult f r = 
    (match r with
     | Error z -> Error z
     | Correct c -> Correct (f c))
 
-val bindResult: ('a -> Tot (Result 'b)) -> Result 'a -> Tot (Result 'b)
+val bindResult: ('a -> Tot (result 'b)) -> result 'a -> Tot (result 'b)
 let bindResult f r = 
    (match r with
     | Error z -> Error z
     | Correct c -> f c)
 
-val resultMap: Result 'a -> ('a -> Tot 'b) -> Tot (Result 'b)
+val resultMap: result 'a -> ('a -> Tot 'b) -> Tot (result 'b)
 let resultMap r f = 
    (match r with
     | Error z -> Error z
     | Correct c -> Correct (f c))
 
-val resultBind: Result 'a -> ('a -> Tot (Result 'b)) -> Tot (Result 'b)
+val resultBind: result 'a -> ('a -> Tot (result 'b)) -> Tot (result 'b)
 let resultBind r f = 
    (match r with
     | Error z -> Error z

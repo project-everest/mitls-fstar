@@ -43,8 +43,8 @@ let hkdf_expand_label ha secret label hv len =
   sp1
 
 assume val get_signing_cert: string -> option sigAlg -> list sigHashAlg -> Tot Cert.chain
-assume val cert_sign: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> Tot (Result (b:bytes{length b < 65536}))
-assume val cert_verify: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> bytes -> Tot (Result unit)
+assume val cert_sign: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> Tot (result (b:bytes{length b < 65536}))
+assume val cert_verify: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> bytes -> Tot (result unit)
 
 type ff_all_groups =
   | FF_2048
