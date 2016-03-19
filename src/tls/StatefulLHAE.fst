@@ -270,7 +270,7 @@ abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
                 /\ (match res with
 	     	   | Some v -> 
                        sel h1 rd.seqn = rctr + 1
-	     	       /\ (let entry = Seq.index lg rctr in
+                      /\ (let entry = Seq.index lg rctr in //this let-binding is important for the implicit argument in the '==' to be inferred to be 'Tot'
 	     	       	  v == Entry.p entry)
 	     	   | _ ->
                       Seq.length lg = rctr                 // no more ciphers
