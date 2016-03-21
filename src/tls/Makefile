@@ -77,7 +77,9 @@ endif
 # these files are the stable inputs for verification -- this is the dependency
 # order for interactive verification; these files are now all extracted via
 # lax type-checking in tls-gen
-FSTS=TLSError.fst \
+FSTS=$(VERIFIABLE_FSTS) $(LAX_CHECKED_FSTS)
+
+VERIFIABLE_FSTS=TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
 RSAKey.fst \
@@ -105,8 +107,9 @@ Encode.fst \
 StatefulLHAE.fst \
 ENC.fst \
 MAC_SHA256.fst \
-MAC_SHA1.fst \
-Record.fst \
+MAC_SHA1.fst 
+
+LAX_CHECKED_FSTS=Record.fst \
 test/TestRecord.fst \
 TLSExtensions.p.fst \
 HSCrypto.fst \
@@ -115,7 +118,7 @@ TLSPRF.fst \
 PRF.p.fst \
 Handshake.fst \
 Connection.fst \
-TLS.fst
+TLS.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
@@ -195,8 +198,8 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-tls-ver: $(LIBFILES) $(FSTS)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $^ | grep -vi positivity | grep -v Non-top-level | grep -v 'assume new'
+tls-ver: $(LIBFILES) $(VERIFIABLE_FSTS)
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $^ 
 
 # same as tls-ver, but verifies one module at a time.
 tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))

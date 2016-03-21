@@ -500,7 +500,7 @@ let pinverse_cipherSuite x = ()
 
 (* Called by the server handshake; *)
 (* ciphersuites that we do not understand are parsed, but ignored *)
-opaque val parseCipherSuites: b:bytes -> Tot (result known_cipher_suites) (decreases (length b))
+val parseCipherSuites: b:bytes -> Tot (result known_cipher_suites) (decreases (length b))
 let rec parseCipherSuites b : result known_cipher_suites =
      if length b > 1 then
        let (b0,b1) = split b 2 in

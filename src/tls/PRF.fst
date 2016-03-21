@@ -23,7 +23,7 @@ let leak (i:msId) ms = ms.bytes
 (** Key Derivation **) 
 
 let keyExtensionLength i =
-    let op_Star = op_Multiply in
+    let op_Star x y = op_Multiply x y in
     match i.aeAlg with
         | MtE _ _  ->
             let alg,ivm = encAlg_of_id i in
