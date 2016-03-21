@@ -30,13 +30,13 @@ FSTAR_HOME?=../../.fstar
 # stdlib-hyperheap.cmxa
 STDLIB_ADMITS=All List Heap Set ST HyperHeap IO
 
-OTHERFLAGS=
+OTHERFLAGS=--universes --explicit_deps
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
 hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
-FSTARFLAGS=--universes --explicit_deps $(OTHERFLAGS) \
+FSTARFLAGS=$(OTHERFLAGS) \
 	   $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	   $(STDLIB)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
