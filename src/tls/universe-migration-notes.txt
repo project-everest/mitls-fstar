@@ -173,4 +173,25 @@ only its type is known, not its definition.
 To prevent a top-level name in a module from polluting the global
 namespace, mark it 'private'.
 
+--------------------------------------------------------------------------------
+
+9. The '*' operator is reserved for tuples, by default
+
+If you write (a * b), by default, this is desugared as (tuple2 a b).
+
+If you want to use '*' for integer multiplication, e.g., 1 * 2, then
+you must either write:
+
+    op_Multiply 1 2
+
+Or,
+
+    let op_Star = op_Multiply in
+    1 * 2
+
+
+Our goal is to eventually allow you to use unicode '×' for
+multiplication. But, the OCaml version of fstar does not yet support
+unicode lexing.
+
 
