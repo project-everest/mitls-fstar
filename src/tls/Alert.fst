@@ -109,6 +109,13 @@ private type state = | State:
   outgoing: rref region buffer -> (* empty if nothing to be sent *)
   state
 
+val init: r0:rid -> ST state
+  (requires (fun h -> True)) 
+  (ensures (fun h0 s h1 ->
+    modifies Set.empty h0 h1 /\
+    extends (State.region s) r0 /\
+    fresh_region (State.region s) h0 h1))
+
 let init r0 =
   let r = new_region r0 in
   State (ralloc r None)
