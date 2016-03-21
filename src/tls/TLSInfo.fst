@@ -611,7 +611,7 @@ type matches_id (i:id) =
 // This index is safe for MS-based key derivation
 val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ matches_id i) })
 //defining this as true makes the context inconsitent!
-let safeKDF _ = unsafe_coerce true //TODO: THIS IS A PLACEHOLDER
+let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 
 // Needed for typechecking of PRF
 // ask !i1,i2. i2 = Swap(i1) /\ not(SafeKDF(i1)) => not(SafeKDF(i2))
