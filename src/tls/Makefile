@@ -38,7 +38,8 @@ CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
 FSTARFLAGS=$(OTHERFLAGS) \
 	   $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	   $(STDLIB)
+	   $(STDLIB) \
+	   $(OPTIONS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
       $(FSTARFLAGS)
 
@@ -77,7 +78,7 @@ endif
 # these files are the stable inputs for verification -- this is the dependency
 # order for interactive verification; these files are now all extracted via
 # lax type-checking in tls-gen
-FSTS=$(VERIFIABLE_FSTS) $(LAX_CHECKED_FSTS)
+FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
 
 VERIFIABLE_FSTS=TLSError.fst \
 TLSConstants.fst \
@@ -107,7 +108,9 @@ Encode.fst \
 StatefulLHAE.fst \
 ENC.fst \
 MAC_SHA256.fst \
-MAC_SHA1.fst 
+MAC_SHA1.fst \
+Handshake.fsti \
+Connection.fst
 
 LAX_CHECKED_FSTS=Record.fst \
 test/TestRecord.fst \
@@ -145,8 +148,8 @@ AEAD_GCM \
 MAC \
 StatefulLHAE \
 MAC_SHA256 \
-MAC_SHA1
-
+MAC_SHA1 \
+Connection 
 
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
@@ -161,13 +164,15 @@ endef
 
 # truncates $(FSTS) just after $(basename $@).fst
 define prefix_ver
-	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
+	$(shell str="$(VERIFIABLE_FSTS)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
 endef
 # the space in calls to prefix_ver and prefix_cfg matters!
 
 # verifying one file within $(FSTS)
 %.fst-ver: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) $(LIBFILES) $(ADMITTED) --verify_module $(subst .p,,$(basename $@)) $(call prefix_ver,$(basename $@),fst)
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) $(LIBFILES) $(ADMITTED) --__temp_no_proj Handshake --__temp_no_proj Connection \
+	--verify_module $(subst .p,,$(basename $@)) \
+	$(call prefix_ver,$(basename $@),fst)
 
 %.fsti-ver:
 	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver, $(basename $@),fsti) \
@@ -180,19 +185,6 @@ endef
 %.fsti-in:
 	@echo $(OTHERFLAGS) $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
-
-# prints build-config block for interactive verification
-%.fst-cfg:
-	@echo '(*--build-config'
-	@echo '    options:--trace_error '$(VERFLAGS) $(ADMITTED)' --verify_module '$(subst .p,,$(basename $@))';'
-	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg, $(basename $@),fst)
-	@echo '--*)'
-
-%.fsti-cfg:
-	@echo '(*--build-config'
-	@echo '    options:--trace_error '$(VERFLAGS) $(ADMITTED)' --verify_module '$(subst .p,,$(basename $@))';'
-	@echo '    other-files:'$(STDLIB) $(LIBFILES) $(call prefix_cfg, $(basename $@),fsti)
-	@echo '--*)'
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks

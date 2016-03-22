@@ -173,7 +173,8 @@ val frame_writer_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:
       Map.contains h0 hs_r
       /\ k < Seq.length es
       /\ j < Seq.length es 
-      /\ (let wr_j = writer_epoch (Seq.index es j) in
+      /\ (let e_j = Seq.index es j in 
+	 let wr_j = writer_epoch e_j in
            modifies (Set.singleton (region wr_j)) h0 h1 
          /\ st_enc_inv wr_j h1)))
   (ensures (fun _ -> 
@@ -192,37 +193,39 @@ let frame_writer_epoch_k c h0 h1 j k =
         frame_st_enc_inv #(hsId e_k.h) (writer_epoch e_k) h0 h1;
         frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1)
   else (let r_k = reader_epoch e_k in
-        equal_on_disjoint (regions_of wr_j) (regions_of (reader_epoch e_k)) (region wr_j) h0 h1;
+        equal_on_disjoint (regions_of wr_j) (regions_of r_k) (region wr_j) h0 h1;
         frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1)
 
-opaque type witness (#a:Type) (x:a) = True
-val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+type witness (#a:Type) (x:a) = True
+val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires
     epochs_inv c h0 /\
     (exists (j:nat). {:pattern (witness j)}
       (let es = epochs c h0 in
-       let hs_r = HS.region c.hs in 
+       let hs_r = HS.region c.hs in
        Map.contains h0 hs_r
-       /\ j < Seq.length es 
-       /\ (let wr_j = writer_epoch (Seq.index es j) in
-           modifies (Set.singleton (region wr_j)) h0 h1 
+       /\ j < Seq.length es
+       /\ (let e_j = Seq.index es j in
+	  let wr_j = writer_epoch e_j in
+           modifies (Set.singleton (region wr_j)) h0 h1
           /\ st_enc_inv wr_j h1))))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
 let frame_writer_epoch c h0 h1 = ghost_lemma2 (frame_writer_epoch_k c h0 h1)
 
-val frame_reader_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit 
+val frame_reader_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit
   (requires
     epochs_inv c h0 /\
     (let es = epochs c h0 in
-     let hs_r = HS.region c.hs in 
+     let hs_r = HS.region c.hs in
       Map.contains h0 hs_r
       /\ k < Seq.length es
-      /\ j < Seq.length es 
-      /\ (let rd_j = reader_epoch (Seq.index es j) in
-           modifies (Set.singleton (region rd_j)) h0 h1 
+      /\ j < Seq.length es
+      /\ (let e_j = Seq.index es j in
+         let rd_j = reader_epoch e_j in
+           modifies (Set.singleton (region rd_j)) h0 h1
          /\ st_dec_inv rd_j h1)))
-  (ensures (fun _ -> 
+  (ensures (fun _ ->
                 epochs c h0 = epochs c h1
               /\ k < Seq.length (epochs c h1)
               /\ epoch_inv h1 (epoch_i c h1 k)))
@@ -240,67 +243,68 @@ let frame_reader_epoch_k c h0 h1 j k =
         equal_on_disjoint (regions_of rd_j) (regions_of w_k) (region rd_j) h0 h1;
         frame_st_enc_inv w_k h0 h1)
 
-val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma 
+val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires
     epochs_inv c h0 /\
     (exists (j:nat).{:pattern (witness j)}
      (let es = epochs c h0 in
-      let hs_r = HS.region c.hs in 
+      let hs_r = HS.region c.hs in
       Map.contains h0 hs_r
-      /\ j < Seq.length es 
-      /\ (let rd_j = reader_epoch (Seq.index es j) in
-           modifies (Set.singleton (region rd_j)) h0 h1 
+      /\ j < Seq.length es
+      /\ (let e_j = Seq.index es j in
+         let rd_j = reader_epoch e_j in
+           modifies (Set.singleton (region rd_j)) h0 h1
          /\ st_dec_inv rd_j h1))))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
-let frame_reader_epoch c h0 h1 = ghost_lemma2 (frame_reader_epoch_k c h0 h1)            
+let frame_reader_epoch c h0 h1 = ghost_lemma2 (frame_reader_epoch_k c h0 h1)
 
 
 val frame_unrelated_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
-  (requires (epochs_inv c h0 
+  (requires (epochs_inv c h0
 	    /\ k < Seq.length (epochs c h0)
 	    /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
 				  (Set.singleton (HS.peer c.hs))) h0 h1))
-  (ensures (fun _ -> 
-	      epochs c h0 = epochs c h1 
+  (ensures (fun _ ->
+	      epochs c h0 = epochs c h1
 	    /\ k < Seq.length (epochs c h1)
 	    /\ epoch_inv h1 (epoch_i c h1 k)))
 let frame_unrelated_k c h0 h1 k =
   frame_epochs c h0 h1;
-  let ek = Seq.index (epochs c h0) k in 
+  let ek = Seq.index (epochs c h0) k in
   frame_st_dec_inv (reader_epoch ek) h0 h1;
   frame_st_enc_inv (writer_epoch ek) h0 h1
 
 val frame_unrelated: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires (epochs_inv c h0 
+  (requires (epochs_inv c h0
 	    /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
 				  (Set.singleton (HS.peer c.hs))) h0 h1))
-  (ensures (epochs c h0 = epochs c h1 
+  (ensures (epochs c h0 = epochs c h1
 	    /\ epochs_inv c h1))
-let frame_unrelated c h0 h1 = 
+let frame_unrelated c h0 h1 =
   ghost_lemma (frame_unrelated_k c h0 h1);
   frame_epochs c h0 h1
 
 val frame_modifies_internal_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
-  (requires (epochs_inv c h0 
+  (requires (epochs_inv c h0
 	    /\ k < Seq.length (epochs c h0)
 	    /\ modifies_internal h0 c.hs h1))
-  (ensures (fun _ -> 
-	      epochs c h0 = epochs c h1 
+  (ensures (fun _ ->
+	      epochs c h0 = epochs c h1
 	    /\ k < Seq.length (epochs c h1)
 	    /\ epoch_inv h1 (epoch_i c h1 k)))
 let frame_modifies_internal_k c h0 h1 k =
     //frame_epochs c h0 h1;
-  let ek = Seq.index (epochs c h0) k in 
+  let ek = Seq.index (epochs c h0) k in
   frame_st_dec_inv (reader_epoch ek) h0 h1;
   frame_st_enc_inv (writer_epoch ek) h0 h1
 
 val frame_internal: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires (epochs_inv c h0 
+  (requires (epochs_inv c h0
 	    /\ modifies_internal h0 c.hs h1))
-  (ensures (epochs c h0 = epochs c h1 
+  (ensures (epochs c h0 = epochs c h1
 	    /\ epochs_inv c h1))
-let frame_internal c h0 h1 = 
+let frame_internal c h0 h1 =
   ghost_lemma (frame_modifies_internal_k c h0 h1)
   
 

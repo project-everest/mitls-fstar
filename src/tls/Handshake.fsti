@@ -56,7 +56,7 @@ type epoch (rgn:rid) (peer:rid) =
 let set4 a b c d =   
   union  (singleton a) (union (singleton b) (union (singleton c) (singleton d)))
 
-let regions (#p:rid) (#q:rid) (e:epoch p q) = 
+let regions (#p:rid) (#q:rid) (e:epoch p q) : set rid = 
   set4 (region e.r) (peer_region e.r) (region e.w) (peer_region e.w)
 
 let epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)) =
@@ -70,7 +70,7 @@ let epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
 
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
-abstract type handshake_state 
+assume new type handshake_state 
 
 type hs =
   | HS: #region: rid ->

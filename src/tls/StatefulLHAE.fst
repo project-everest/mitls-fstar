@@ -57,7 +57,7 @@ type writer i = state i Writer
 abstract val region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
 let region #i #rw s = State.region s
 
-abstract val peer_region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+abstract val peer_region: #i:id -> #rw:rw -> s:state i rw -> Tot (r:rid{r<>root /\ HyperHeap.disjoint (region s) r})
 let peer_region #i #wr s = s.peer_region
 
 let log_region    = fun (#i:id) (#rw:rw) (s:state i rw) -> if rw=Reader then peer_region s else region s
@@ -132,7 +132,7 @@ private val test_gcm_log_inv: h:HyperHeap.t -> i:gid -> r:reader i -> w:writer i
         (ensures (j = n))
 let test_gcm_log_inv h i r w n j c ad = cut(found j)
 
-let regions_of (#i:id) (#rw:rw) (s:state i rw) =
+let regions_of (#i:id) (#rw:rw) (s:state i rw) : Set.set rid =
     Set.union (Set.singleton (region s))
               (Set.singleton (peer_region s))
 
@@ -211,8 +211,8 @@ type st_enc_inv (#i:gid) (w:writer i) (h:HyperHeap.t) =
 
 abstract val frame_st_enc_inv: #i:id -> w:writer i ->  h0:_ -> h1:_ ->
   Lemma (requires st_enc_inv w h0
-                  /\ equal_on (Set.union (Set.singleton w.region)
-                                        (Set.singleton w.peer_region)) h0 h1)
+                  /\ equal_on (Set.union (Set.singleton (region w))
+                                        (Set.singleton (peer_region w))) h0 h1)
         (ensures st_enc_inv w h1)
 let frame_st_enc_inv #i w h0 h1 = ()
 
@@ -246,7 +246,8 @@ type st_dec_inv (#i:gid) (r:reader i) (h:HyperHeap.t) =
 
 abstract val frame_st_dec_inv: #i:id -> rd:reader i -> h0:_ -> h1:_ ->
   Lemma (requires (st_dec_inv rd h0 /\
-                   equal_on (Set.union (Set.singleton rd.region) (Set.singleton rd.peer_region)) h0 h1))
+                   equal_on (Set.union (Set.singleton (region rd))
+				       (Set.singleton (peer_region rd))) h0 h1))
         (ensures st_dec_inv rd h1)
 let frame_st_dec_inv #i rd h0 h1 = ()
 
