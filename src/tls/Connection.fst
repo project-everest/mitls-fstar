@@ -53,7 +53,7 @@ type connection = | C:
   #region: rid ->
   peer:   rid{disjoint region peer} ->
   hs:      hs { extends (HS.region hs) region /\ extends (HS.peer hs) peer } (* providing role, config, and uid *) ->
-  alert:   Alert.state  { extends (Alert.State.region alert) region /\ HS.region hs <> Alert.State.region alert } (* review *) ->
+  alert:   Alert.state  { extends (Alert.region alert) region /\ HS.region hs <> Alert.region alert } (* review *) ->
   tcp:     networkStream ->
   state: rref region tlsState -> 
   connection

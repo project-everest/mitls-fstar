@@ -122,6 +122,7 @@ TLS.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
+# missing modules from VERIFIABLE_FSTS are: ECGroup CommonDH PMS Sig Cert Encode Enc
 VERIFY=\
 TLSError \
 TLSConstants \
@@ -146,10 +147,7 @@ StatefulLHAE \
 MAC_SHA256 \
 MAC_SHA1
 
-#Encode -- removed for now; too many assumes
-#Connection -- should be added, but fails currently
-#PMS Sig Cert ... known to be unverifiable
-#What about ECGroup and CommonDH?
+
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi

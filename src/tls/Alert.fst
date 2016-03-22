@@ -103,11 +103,13 @@ type fragment = f:lbytes 2 { exists ad. f = alertBytes ad }
 
 type buffer = option fragment
 
-//* moving to stateful private state
+//* moving to stateful private state; NS: should it be abstract?
 private type state = | State:
   #region: rid ->
   outgoing: rref region buffer -> (* empty if nothing to be sent *)
   state
+
+let region s = s.region
 
 val init: r0:rid -> ST state
   (requires (fun h -> True)) 
