@@ -235,7 +235,6 @@ tls-gen: $(LIBFILES) $(FSTS)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
 	  $(TLSGEN_ADMIT) \
-	  $(LIBFILES) \
 	  $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
