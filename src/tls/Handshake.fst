@@ -427,40 +427,43 @@ let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs
      (n.n_protocol_version <> TLS_1p3 &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
      let bgy = kex_s_to_bytes ske.ske_kex_s in
-     match (ske.ske_kex_s,cert_verify c.crt_chain n.n_sigAlg [] bgy ske.ske_sig) with
-     | _,Error z -> InError z
-     | KEX_S_DHE gy, Correct () -> 
-       let gx,pms = dh_shared_secret2 gy in
-       let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-       let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
-       let cc = {crt_chain = []} in
-       let ccb = certificateBytes cc in
-       let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
-       let csr = (n.n_client_random @| n.n_server_random) in
-       let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
-       let ake = {ake_server_id = None;
+     if Cert.validate_chain c.crt_chain n.n_sigAlg cfg.peer_name cfg.ca_file then
+       (match ske.ske_kex_s with
+       | KEX_S_DHE gy -> 
+         let gx,pms = dh_shared_secret2 gy in
+         let cke = {cke_kex_c = kex_c_of_dh_key gx} in
+         let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
+         let cc = {crt_chain = []} in
+         let ccb = certificateBytes cc in
+         let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
+         let csr = (n.n_client_random @| n.n_server_random) in
+         let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
+         let ake = {ake_server_id = None;
 	          ake_client_id = None;
 		  ake_pms = pms;
 		  ake_session_hash = empty_bytes;
 		  ake_ms = ms} in
-       let s = {session_nego = n; session_ake = ake} in
-       (match opt_msgs with 
-        | [] ->  
-	  let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in
-	  let vd = TLSPRF.verifyData pvcs ms Client log in 
-	  hsref := {!hsref with 
-            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
-	    hs_log = log;
-	    hs_state = C(C_OutCCS s vd)};
+         let s = {session_nego = n; session_ake = ake} in
+         (match opt_msgs with 
+          | [] ->  
+            let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in
+            let vd = TLSPRF.verifyData pvcs ms Client log in 
+            hsref := {!hsref with 
+              hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
+              hs_log = log;
+              hs_state = C(C_OutCCS s vd)};
 	    InAck
-	| [(CertificateRequest(cr),l)] -> 
-	  let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in
-	  let vd = TLSPRF.verifyData pvcs ms Client log in 
-	  hsref := {!hsref with 
-            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
-	    hs_log = log;
-	    hs_state = C(C_OutCCS s vd)};
+          | [(CertificateRequest(cr),l)] -> 
+	    let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in
+            let vd = TLSPRF.verifyData pvcs ms Client log in 
+            hsref := {!hsref with 
+              hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
+              hs_log = log;
+              hs_state = C(C_OutCCS s vd)};
 	    InAck)
+       )
+     // Certificate validation failed
+     else InError (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certification validation failure") 
   
 
 val client_send_client_finished: hs -> ST unit
@@ -537,7 +540,7 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
   | S(S_HelloSent n a) 
     when (n.n_protocol_version <> TLS_1p3 &&
 	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
-    let c = {crt_chain = get_signing_cert cfg.server_name n.n_sigAlg []} in
+    let c = {crt_chain = get_signing_cert cfg.peer_name n.n_sigAlg []} in
     let cb = certificateBytes c in
     let gy = dh_keygen (ECDH (ECGroup.EC_CORE CoreCrypto.ECC_P256)) in
     let kex_s = KEX_S_DHE gy in

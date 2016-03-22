@@ -4,14 +4,37 @@ module Cert
 open Platform.Bytes
 open Platform.Error
 open TLSError
+open TLSConstants
 
-type hint = UntrustedCert.hint
-type cert = UntrustedCert.cert
-type chain = UntrustedCert.chain
+type hint = string
+type cert = b:bytes {length b <= 16777215}
+type chain = list cert
+
+abstract val certificateListBytes: chain -> Tot bytes
+let rec certificateListBytes l =
+  match l with
+  | [] -> empty_bytes
+  | c::r -> (vlbytes 3 c) @| c @| (certificateListBytes r)
+
+abstract val parseCertificateList: bytes -> Tot (result chain)
+let rec parseCertificateList b =
+  if length b >= 3 then
+    match vlsplit 3 b with
+    | Correct (c,r) ->
+        let rl = parseCertificateList r in
+        (match rl with
+        | Correct x -> Correct (c::x)
+        | e -> e)
+    | _ -> Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
+  else Correct []
+
+val validate_chain : chain -> option TLSConstants.sigAlg -> option string -> string -> Tot bool
+let validate_chain c sigalg host cafile =
+  let for_signing = match sigalg with | None -> false | _ -> false in
+  CoreCrypto.chain_verify c for_signing host cafile
 
 type sign_cert = option (chain * Sig.alg * Sig.skey)
 type enc_cert  = option (chain * RSAKey.sk)
-
 
 abstract val for_signing : list Sig.alg -> hint -> list Sig.alg -> sign_cert
 let for_signing l h l2 = failwith "Not implemented"
@@ -42,10 +65,3 @@ let get_hint c = failwith "Not implemented"
 
 abstract val validate_cert_chain : list Sig.alg  -> chain -> bool
 let validate_cert_chain l c = failwith "Not implemented"
-
-abstract val parseCertificateList: bytes -> Tot (result chain)
-// Dummy implementation while certificate parsing is not implemented
-let parseCertificateList b = Correct ([b]) //TODO: known to be unverified
-
-abstract val certificateListBytes: chain -> Tot (b:bytes{length b < (op_Multiply 3 65536)})
-let certificateListBytes c = magic()
