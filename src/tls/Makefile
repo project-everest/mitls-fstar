@@ -38,7 +38,6 @@ CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
 FSTARFLAGS=$(OTHERFLAGS) \
 	   $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	   $(STDLIB) \
 	   $(OPTIONS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
       $(FSTARFLAGS)
@@ -54,7 +53,7 @@ CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20
 
 # The .fst interfaces for the platform and crypto libraries.
-LIBFILES = $(PLATFORM) $(CRYPTO)
+LIBFILES = $(addprefix $(FSTAR_HOME)/$(LIB)/, $(STDLIB)) $(PLATFORM) $(CRYPTO)
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
@@ -110,7 +109,7 @@ ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
 Handshake.fsti \
-Connection.fst
+Connection.fst #the preceding space is significant!
 
 LAX_CHECKED_FSTS=Record.fst \
 test/TestRecord.fst \
@@ -170,8 +169,10 @@ endef
 
 # verifying one file within $(FSTS)
 %.fst-ver: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) $(LIBFILES) $(ADMITTED) --__temp_no_proj Handshake --__temp_no_proj Connection \
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	--verify_module $(subst .p,,$(basename $@)) \
+	$^ \
 	$(call prefix_ver,$(basename $@),fst)
 
 %.fsti-ver:
@@ -179,23 +180,26 @@ endef
 --verify_module $(subst .p,,$(basename $@))
 
 %.fst-in:
-	@echo $(OTHERFLAGS) $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
+	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fsti-in:
-	@echo $(OTHERFLAGS) $(VERFLAGS) $(STDLIB) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
+	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 tls-ver: $(LIBFILES) $(VERIFIABLE_FSTS)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --__temp_no_proj Handshake --__temp_no_proj Connection $(addprefix --verify_module ,$(VERIFY)) $^ 
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	--__temp_no_proj Handshake --__temp_no_proj Connection \
+	$(addprefix --verify_module ,$(VERIFY)) \
+	$^
 
 # same as tls-ver, but verifies one module at a time.
 tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
 
 wc:
-	wc -l $(STDLIB) $(PLATFORM) $(CRYPTO) $(DHDB) $(FSTS)
+	wc -l $(LIBFILES)) $(FSTS)
 
 tls-lax: $(LIBFILES) $(FSTS)
 	$(FSTAR) --lax  $(ADMITTED) $^
@@ -231,6 +235,7 @@ tls-gen: $(LIBFILES) $(FSTS)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
 	  $(TLSGEN_ADMIT) \
+	  $(LIBFILES) \
 	  $^
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
