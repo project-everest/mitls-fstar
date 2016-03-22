@@ -25,6 +25,17 @@ open HSCrypto
 // CoreCrypto.hkdf for TLS 1.3
 // subsumes the idealized module PRF.fst
 
+
+// LONG TERM GLOBAL SECRETS
+
+abstract type master_secret = b:bytes{}
+abstract type resumption_secret = b:bytes{}
+type exporter_secret = b:bytes{}
+abstract type pre_share_key = b:bytes{}
+
+val cert_keys: ref RSAKey.RSA_PK; // 
+val ticket_key: ref bytes // TODO
+
 type schedule_state_13 =
 | KXS13_INIT
 | KXS13_HANDSHAKE
@@ -71,6 +82,31 @@ val kx_set_peer: #region:rid -> gx:dh_pub -> ST unit (requires (sel !state_map r
 // TLS 1.2 + 1.3
 // state-aware
 val dh_next_key: #region:rid -> log:bytes -> 
+
+
+
+
+// ADL: PROBLEM WITH RESUMPTION
+// Currently if handshake has a set ri and server rejects resumption it will fail for no good reason
+// We cannot commit to the pv and 
+let kx_init_client #region:rid cfg:config k: =
+    // create fresh sessionInfo
+    // if cfg.resumption enabled
+      // Lookup session DB for cfg.server_name
+      // if valid session found fill in sessionInfo
+    // otherwise geneate client random + client key share (if pv>=1.3) + session identifier
+    // set KS state to Init
+
+let kx_init_server #region:rid cfg:config cr:crandom ckx:option<dh_pub> pvcs:pv*cs index:option<either3<sid,psk_ids,ticket>> =
+    // Create fresh sessionINfo
+    // 
+
+
+
+
+
+// OLD
+
 
 assume val dh_commit
 assume val dh_server_verify

@@ -410,10 +410,10 @@ let parseCertificate data =
     if length data >= 3 then
         match vlparse 3 data with
         | Error z -> let (x,y) = z in Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ y)
-	| Correct (certList) -> 
-	    let chain_res = Cert.parseCertificateList certList in
-	    let chain = resT chain_res in // JK : need of pattern matching here ?
-	    Correct ({crt_chain = chain})
+	| Correct (certList) ->
+	    (match Cert.parseCertificateList certList with
+	    | Correct(l) -> Correct ({crt_chain = l})
+            | Error z -> let (x,y) = z in Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ y))
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val certificateRequestBytes: cr -> Tot bytes

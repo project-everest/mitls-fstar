@@ -106,8 +106,9 @@ type config = {
 
     (* Common *)
     safe_renegotiation: bool;   // demands this extension when renegotiating
-    server_name: UntrustedCert.hint;
-    client_name: UntrustedCert.hint;
+    peer_name: option string;   // The expected name to match against the peer certificate
+    ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
+                                // on Cygwin /etc/ssl/certs/ca-bundle.crt
 
     (* Sessions database *)
     sessionDBFileName: string;
@@ -147,8 +148,8 @@ let defaultConfig =
 
     safe_renegotiation = true;
     safe_resumption = false; // Turn to true if it gets standard
-    server_name = "mitls.example.org";
-    client_name = "client.example.org";
+    peer_name = None; // Disable hostname validation
+    ca_file = "CAFile.pem";
 
     sessionDBFileName = "sessionDBFile.bin";
     sessionDBExpiry = newTimeSpan 1 0 0 0; (*@ one day, as suggested by the RFC *)
