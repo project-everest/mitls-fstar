@@ -130,6 +130,10 @@ let parse_handshake_message bytes =
 	 print_string "Parsing certificate message...\n";
 	 (match parseCertificate msg with
 	  | Correct(ch) -> print_string "...OK\n";
+                           print_string "Running chain validation (no hostname)...";
+                           let {crt_chain = chain } = ch in
+                           let r = Cert.validate_chain chain None None "../../data/CAFile.pem" in
+                           print_string (if r then "OK\n" else "FAILED\n");
 			   print_string "WARNING: ignoring test on serialization because certificate serialization is not implemented in CoreCrypto\n"
 	  (* ;
 	     let cert_bytes = certificateBytes(ch) in
