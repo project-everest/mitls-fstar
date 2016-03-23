@@ -28,10 +28,14 @@ let rec parseCertificateList b =
     | _ -> Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
   else Correct []
 
-val validate_chain : chain -> option TLSConstants.sigAlg -> option string -> string -> Tot bool
+val validate_chain : chain -> option sigAlg -> option string -> string -> Tot bool
 let validate_chain c sigalg host cafile =
   let for_signing = match sigalg with | None -> false | _ -> false in
   CoreCrypto.chain_verify c for_signing host cafile
+
+val verify_signature : chain -> protocolVersion -> sigAlg -> option (list sigHashAlg) -> bytes -> bytes -> Tot bool
+let verify_signature c pv csa sigalgs tbs sigv =
+  true
 
 type sign_cert = option (chain * Sig.alg * Sig.skey)
 type enc_cert  = option (chain * RSAKey.sk)

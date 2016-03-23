@@ -108,7 +108,7 @@ type config = {
     safe_renegotiation: bool;   // demands this extension when renegotiating
     peer_name: option string;   // The expected name to match against the peer certificate
     ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
-                                // on Cygwin /etc/ssl/certs/ca-bundle.crt
+                      // on Cygwin /etc/ssl/certs/ca-bundle.crt
 
     (* Sessions database *)
     sessionDBFileName: string;
@@ -121,10 +121,21 @@ type config = {
 
     (* ECDH settings *)
     ecdhGroups: list ECGroup.ec_curve;
+
+    (* Signature algorithms preference string *)
+    signatureAlgorithms: list sigHashAlg;
     }
 
 #set-options "--initial_fuel 10 --max_fuel 10"
 let defaultConfig =
+    let sigPref = [CoreCrypto.ECDSA; CoreCrypto.RSAPSS; CoreCrypto.RSASIG] in
+    let hashPref = [Hash CoreCrypto.SHA512; Hash CoreCrypto.SHA384;
+                    Hash CoreCrypto.SHA256; Hash CoreCrypto.SHA1] in
+    let rec sigAlgPref : list sigAlg -> list hashAlg -> Tot (list sigHashAlg) =
+      fun s h -> (match s with
+      | [] -> []
+      | sa :: r -> List.Tot.append (List.Tot.map (fun u->sa,u) h) (sigAlgPref r h)) in
+    let sigAlgPrefs = sigAlgPref sigPref hashPref in
     let l =         [ TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
@@ -159,6 +170,7 @@ let defaultConfig =
     dhPQMinLength = DHDB.defaultPQMinLength;
 
     ecdhGroups = [CoreCrypto.ECC_P256; CoreCrypto.ECC_P384; CoreCrypto.ECC_P521];
+    signatureAlgorithms = sigAlgPref sigPref hashPref;
     }
 #reset-options
 
@@ -201,6 +213,7 @@ type negotiatedExtensions = {
     ne_supported_curves: option (list ECGroup.ec_curve);
     ne_supported_point_formats: option (list ECGroup.point_format);
     ne_server_names: option (list serverName);
+    ne_signature_algorithms: option (list sigHashAlg);
 }
 
 let ne_default =
@@ -211,6 +224,7 @@ let ne_default =
     ne_supported_curves = None;
     ne_supported_point_formats = None;
     ne_server_names = None;
+    ne_signature_algorithms = None;
 }
 
 // -------------------------------------------------------------------

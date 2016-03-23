@@ -367,7 +367,8 @@ let parseOptExtensions data =
   | Correct(exts) -> Correct(Some exts)
   | Error(z) -> Error(z)
   
-// JK : Only client side ? 
+// The extensions sent by the client
+// (for the server we negotiate the client extensions)
 val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> Tot (l:list extension{List.Tot.length l < 256})
 let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
@@ -382,6 +383,7 @@ let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
 #if TLSExt_extendedPadding
     let res = E_extended_padding :: res in
 #endif
+    let res = (E_signatureAlgorithms cfg.signatureAlgorithms) :: res in
     let res =
         let curves = List.Tot.map (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
         if curves <> [] && List.Tot.existsb (fun x -> isECDHECipherSuite x) cfg.ciphersuites then
@@ -418,6 +420,9 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                     correct l
                 else
                     correct ({l with ne_supported_point_formats = Some spf})
+            | E_signatureAlgorithms sha ->
+                if resuming then correct l
+                else correct ({l with ne_signature_algorithms = Some (sha)})
             | E_extended_ms ->
                 if resuming then
                     correct(l)
@@ -522,6 +527,9 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
                 neg
             else
                 {neg with ne_extended_padding = true}
+    | E_signatureAlgorithms sha ->
+        if resuming then neg
+        else {neg with ne_signature_algorithms = Some (sha)}
     | _ -> neg // JK : handle remaining cases
 
 val negotiateServerExtensions: protocolVersion -> option (list extension) -> known_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> bool -> Tot (result (option (list extension) * negotiatedExtensions))

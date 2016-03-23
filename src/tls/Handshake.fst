@@ -424,44 +424,53 @@ let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs
     [(Certificate(c),l1);
      (ServerKeyExchange(ske),l2);
      (ServerHelloDone,l3)] when 
-     (n.n_protocol_version <> TLS_1p3 &&
+     (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
-     let bgy = kex_s_to_bytes ske.ske_kex_s in
+     // Validate the server certificate chain before doing anything with other message
+     // TODO add check for n.n_extensions.ne_signature_algorithms
      if Cert.validate_chain c.crt_chain n.n_sigAlg cfg.peer_name cfg.ca_file then
-       (match ske.ske_kex_s with
-       | KEX_S_DHE gy -> 
-         let gx,pms = dh_shared_secret2 gy in
-         let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-         let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
-         let cc = {crt_chain = []} in
-         let ccb = certificateBytes cc in
-         let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
-         let csr = (n.n_client_random @| n.n_server_random) in
-         let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
-         let ake = {ake_server_id = None;
+       let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
+       let ske_sig = ske.ske_sig in
+       let cs_sigalg = Some.v n.n_sigAlg in
+       let csr = (n.n_client_random @| n.n_server_random) in
+       if Cert.verify_signature c.crt_chain n.n_protocol_version cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
+         (match ske.ske_kex_s with
+         | KEX_S_DHE gy ->
+           let gx, pms = dh_shared_secret2 gy in
+           let cke = {cke_kex_c = kex_c_of_dh_key gx} in
+           let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
+           let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
+
+           let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
+           let ake = {ake_server_id = None;
 	          ake_client_id = None;
 		  ake_pms = pms;
 		  ake_session_hash = empty_bytes;
 		  ake_ms = ms} in
-         let s = {session_nego = n; session_ake = ake} in
-         (match opt_msgs with 
-          | [] ->  
-            let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in
-            let vd = TLSPRF.verifyData pvcs ms Client log in 
-            hsref := {!hsref with 
-              hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
-              hs_log = log;
-              hs_state = C(C_OutCCS s vd)};
-	    InAck
-          | [(CertificateRequest(cr),l)] -> 
-	    let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in
-            let vd = TLSPRF.verifyData pvcs ms Client log in 
-            hsref := {!hsref with 
-              hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
-              hs_log = log;
-              hs_state = C(C_OutCCS s vd)};
-	    InAck)
-       )
+           let s = {session_nego = n; session_ake = ake} in
+
+           (match opt_msgs with 
+            | [] ->  
+              let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in
+              let vd = TLSPRF.verifyData pvcs ms Client log in 
+              hsref := {!hsref with 
+                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
+                hs_log = log;
+                hs_state = C(C_OutCCS s vd)};
+              InAck
+            | [(CertificateRequest(cr),l)] ->
+              let cc = {crt_chain = []} in // TODO
+              let ccb = certificateBytes cc in
+              let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in
+              let vd = TLSPRF.verifyData pvcs ms Client log in 
+              hsref := {!hsref with 
+                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
+                hs_log = log;
+                hs_state = C(C_OutCCS s vd)};
+              InAck)
+         )
+       // Signature verification failed
+       else InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
      // Certificate validation failed
      else InError (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certification validation failure") 
   
