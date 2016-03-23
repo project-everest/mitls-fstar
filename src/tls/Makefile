@@ -83,7 +83,7 @@ VERIFIABLE_FSTS=TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
 RSAKey.fst \
-DHGroup.p.fst \
+DHGroup.fst \
 ECGroup.fst \
 CommonDH.fst \
 PMS.p.fst \
@@ -255,13 +255,7 @@ tls-gen: $(LIBFILES) $(FSTS)
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= TLSExtensions PMS DHGroup Sig PRF TLSExtensions ENC
-# DHGroup.p.fst PMS.p.fst \
-	TLSExtensions.p.fst TLSPRF.p.fst \
-	HSFragment.p.fst TLSFragment.p.fst \
-	AEAD_GCM.p.fst \
-	PRF.p.fst KEF.p.fst DH.p.fst RSA.p.fst SessionDB.p.fsti \
-	HandshakeMessages.p.fst Handshake.p.fst
+TLS_PP_FILES= TLSExtensions PMS Sig PRF TLSExtensions ENC
 
 # Target to generate preprocessed files for atom-interactive
 pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
