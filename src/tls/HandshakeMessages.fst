@@ -402,7 +402,9 @@ let serverHelloDoneBytes = messageBytes HT_server_hello_done empty_bytes
 (** A.4.2 Server Authentication and Key Exchange Messages *)
 
 val certificateBytes: crt -> Tot bytes
-let certificateBytes crt = messageBytes HT_certificate (Cert.certificateListBytes crt.crt_chain)
+let certificateBytes crt =
+  let cb = Cert.certificateListBytes crt.crt_chain in
+  messageBytes HT_certificate (vlbytes 3 cb)
 
 val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> 
                       Tot (result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)}))

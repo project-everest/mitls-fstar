@@ -93,7 +93,7 @@ let bytelen (p:ec_params) : int =
 (* ADL: Stub for supporting more point format options *)
 val serialize_point: ec_params -> point -> Tot (b:bytes{length b < 257})
 let serialize_point (p:ec_params) (e:point) : bytes =
-  let x = CoreCrypto.ec_point_serialize e in
+  let x = (abyte 4uy) @| (CoreCrypto.ec_point_serialize e) in
   lemma_repr_bytes_values (length x);
   let y:bytes = vlbytes 1 x in
   y
