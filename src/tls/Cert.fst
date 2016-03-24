@@ -14,7 +14,7 @@ abstract val certificateListBytes: chain -> Tot bytes
 let rec certificateListBytes l =
   match l with
   | [] -> empty_bytes
-  | c::r -> (vlbytes 3 c) @| c @| (certificateListBytes r)
+  | c::r -> (vlbytes 3 c) @| (certificateListBytes r)
 
 abstract val parseCertificateList: bytes -> Tot (result chain)
 let rec parseCertificateList b =
@@ -31,11 +31,29 @@ let rec parseCertificateList b =
 val validate_chain : chain -> option sigAlg -> option string -> string -> Tot bool
 let validate_chain c sigalg host cafile =
   let for_signing = match sigalg with | None -> false | _ -> false in
-  CoreCrypto.chain_verify c for_signing host cafile
+  CoreCrypto.validate_chain c for_signing host cafile
 
-val verify_signature : chain -> protocolVersion -> sigAlg -> option (list sigHashAlg) -> bytes -> bytes -> Tot bool
-let verify_signature c pv csa sigalgs tbs sigv =
-  true
+val verify_signature : chain -> protocolVersion -> bytes -> sigAlg -> option (list sigHashAlg) -> bytes -> bytes -> Tot bool
+let verify_signature c pv nonces_or_log csa sigalgs tbs sigv =
+  match pv with
+  | TLS_1p0 | TLS_1p1 | TLS_1p2 ->
+    if length sigv > 2 then
+     let (h, r) = split sigv 1 in
+     let (sa, sigv) = split r 1 in
+     // TLS <= 1.2: sign cr+sr+ServerDHPArams
+     let tbs = nonces_or_log @| tbs in
+     (match (parseSigAlg sa, parseHashAlg h) with
+     | Correct sa, Correct (Hash h) ->
+        let algs : list sigHashAlg =
+          match sigalgs with
+          | Some l -> l
+          | None -> [(sa, Hash CoreCrypto.SHA1)] in
+        if List.Tot.existsb (fun (xs,xh)->(xs=sa && xh=Hash h)) algs then
+          CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv
+        else false
+     | _ -> false)
+    else false
+  | _ -> false // TODO!!
 
 type sign_cert = option (chain * Sig.alg * Sig.skey)
 type enc_cert  = option (chain * RSAKey.sk)

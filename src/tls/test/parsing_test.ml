@@ -134,30 +134,32 @@ let parse_handshake_message bytes =
                            let {crt_chain = chain } = ch in
                            let r = Cert.validate_chain chain None None "../../data/CAFile.pem" in
                            print_string (if r then "OK\n" else "FAILED\n");
-			   print_string "WARNING: ignoring test on serialization because certificate serialization is not implemented in CoreCrypto\n"
-	  (* ;
-	     let cert_bytes = certificateBytes(ch) in
-	     if equalBytes cert_bytes msg then () else print_string "Serialization failed though...\n" *)
+	     let _,cert_bytes = split (certificateBytes(ch)) 4 in
+	     if equalBytes cert_bytes msg then ()
+             else (
+              print_string "WARNING: not an inverse of parsing. ";
+              print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
+              print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cert_bytes ^ "\n"))
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0c' ->
 	 print_string "Parsing server key exchange message...\n";
 	 (match parseServerKeyExchange !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
-			   print_string "WARNING: ignoring test on serialization because EC point serialization is not implemented in CoreCrypto\n"
-(*
-			  let _,ske_bytes = split (serverKeyExchangeBytes(ch)) 4 in
-	     if equalBytes ske_bytes msg then ((print_string "Serializing server key exchange...\n...OK\n")) else
-	       (print_string "Serializing server key exchange...\nWARNING: not an inverse of parsing. ";
+             let _,ske_bytes = split (serverKeyExchangeBytes(ch)) 4 in
+             print_string "Serializing server key exchange...";
+	     if equalBytes ske_bytes msg then (print_string "OK\n")
+             else
+	       (print_string "FAILED not an inverse of parsing.\n";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes ske_bytes ^ "\n"))
- *)
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0d' ->
 	 print_string "Parsing certificate request message...\n";
 	 (match parseCertificateRequest !pv msg with
 	 | Correct(ch) -> print_string "...OK\n";
 	     let _,cr_bytes = split (certificateRequestBytes (ch)) 4 in
-	     if equalBytes cr_bytes msg then ((print_string "Serializing certificate request...\n...OK\n")) else
+	     if equalBytes cr_bytes msg then ((print_string "Serializing certificate request...\n...OK\n"))
+             else
 	       (print_string "Serializing certificate request...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cr_bytes ^ "\n"))
