@@ -187,8 +187,9 @@ endef
 %.fst-in:
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
-	$(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
---verify_module $(subst .p,,$(basename $@))
+	$(LIBFILES) $(ADMITTED) \
+	$(call prefix_cfg,$(basename $@),fst) \
+	--verify_module $(subst .p,,$(basename $@))
 
 %.fsti-in:
 	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
