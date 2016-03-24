@@ -148,7 +148,7 @@ let compile_curve_list l =
         function
         | [] -> empty_bytes
         | ECGroup.EC_CORE c :: r ->
-            let cid = ECGroup.curve_id (ECGroup.getParams c) in
+            let cid = ECGroup.curve_id (ECGroup.params_of_group c) in
             cid @| aux r
         | ECGroup.EC_EXPLICIT_PRIME :: r -> abyte2 (255uy, 01uy) @| aux r
         | ECGroup.EC_EXPLICIT_BINARY :: r -> abyte2 (255uy, 02uy) @| aux r

@@ -64,24 +64,25 @@ type dhpms =
   | ConcreteDHPMS of dhrepr
 
 #if ideal
-let honestDHPMS (p:bytes) (g:bytes) (gx:DHGroup.elt) (gy:DHGroup.elt) pms = 
+let honestDHPMS (p:bytes) (g:bytes) (gx:CommonDH.share) (gy:CommonDH.share) pms = 
   match pms with 
   | IdealDHPMS(s)    -> true
   | ConcreteDHPMS(s) -> false 
 #endif
 
-let sampleDH dhp (gx:DHGroup.elt) (gy:DHGroup.elt) = 
+(*
+let sampleDH dhp (gx:CommonDH.share) (gy:CommonDH.share) = 
     let gz = DHGroup.genElement dhp in
     #if ideal
     IdealDHPMS({seed=gz}) 
     #else
     ConcreteDHPMS(gz)  
     #endif
+*)
 
-let coerceDH (dhp : dh_params) (gx:DHGroup.elt) (gy:DHGroup.elt) b = ConcreteDHPMS(b) 
-
-let coerceECDH (dhe : ec_params) (gx:ECGroup.point) (gy:ECGroup.point) b = ConcreteDHPMS(b) 
+let coerceDH (dhp:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) b = 
+  ConcreteDHPMS(b) 
 
 type pms = 
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
-  | DHPMS of CommonDH.parameters * CommonDH.element * CommonDH.element * dhpms
+  | DHPMS of CommonDH.params * CommonDH.share * CommonDH.share * dhpms

@@ -113,6 +113,7 @@ Connection.fst #the preceding space is significant!
 
 LAX_CHECKED_FSTS=Record.fst \
 test/TestRecord.fst \
+test/TestDH.fst \
 TLSExtensions.p.fst \
 HSCrypto.fst \
 HandshakeMessages.fst \
@@ -124,13 +125,15 @@ TLS.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-# missing modules from VERIFIABLE_FSTS are: ECGroup CommonDH PMS Sig Cert Encode Enc
+# missing modules from VERIFIABLE_FSTS are: PMS Sig Cert Encode Enc
 VERIFY=\
 TLSError \
 TLSConstants \
 Nonce \
 RSAKey \
 DHGroup \
+ECGroup \
+CommonDH \
 HASH \
 HMAC \
 UntrustedCert \

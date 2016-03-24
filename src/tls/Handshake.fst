@@ -551,7 +551,7 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
 	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
     let c = {crt_chain = get_signing_cert cfg.peer_name n.n_sigAlg []} in
     let cb = certificateBytes c in
-    let gy = dh_keygen (ECDH (ECGroup.EC_CORE CoreCrypto.ECC_P256)) in
+    let gy = CommonDH.keygen CommonDH.default_group in
     let kex_s = KEX_S_DHE gy in
     let sv = kex_s_to_bytes kex_s in
     (match (cert_sign c.crt_chain n.n_sigAlg [] sv) with

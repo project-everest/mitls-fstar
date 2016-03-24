@@ -10,6 +10,7 @@ open TLSConstants
 open TLSExtensions
 open TLSInfo
 open Range
+open CommonDH
 open HSCrypto
 
 (* External functions, locally annotated for speed *)
@@ -137,11 +138,11 @@ type cr = {
 }
 
 type kex_s =
-| KEX_S_DHE of HSCrypto.dh_key
+| KEX_S_DHE of CommonDH.key
 | KEX_S_RSA of CoreCrypto.rsa_key
 
 type kex_s_priv =
-| KEX_S_PRIV_DHE of HSCrypto.dh_key
+| KEX_S_PRIV_DHE of CommonDH.key
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 
 type ske = {
@@ -486,11 +487,11 @@ let mk_certificateRequestBytes sign cs version =
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
 open CoreCrypto
-val kex_c_of_dh_key: HSCrypto.dh_key -> Tot kex_c
+val kex_c_of_dh_key: CommonDH.key -> Tot kex_c
 let kex_c_of_dh_key kex = 
   match kex with
   | FFKey k -> KEX_C_DHE k.dh_public
-  | ECKey k -> KEX_C_ECDHE (ec_point_serialize k.ec_point)
+  | ECKey k -> KEX_C_ECDHE (ECGroup.serialize_point k.ec_params k.ec_point)
 
 val clientKeyExchangeBytes: protocolVersion -> cke -> Tot bytes
 let clientKeyExchangeBytes pv cke = 
@@ -540,14 +541,7 @@ open CoreCrypto
 val kex_s_to_bytes: kex_s -> Tot bytes 
 let kex_s_to_bytes kex = 
   match kex with
-  | KEX_S_DHE (FFKey k) ->
-	      (vlbytes 2 k.dh_params.dh_p) @| 
-	      (vlbytes 2 k.dh_params.dh_g) @| 
-	      (vlbytes 2 k.dh_public)
-  | KEX_S_DHE (ECKey ecp) ->
-	      abyte 3uy (* Named curve *)
-              @| ECGroup.curve_id ecp.ec_params
-              @| ECGroup.serialize_point ecp.ec_params ecp.ec_point 
+  | KEX_S_DHE k -> CommonDH.serialize k
   | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
 		    
 val serverKeyExchangeBytes: ske -> Tot bytes

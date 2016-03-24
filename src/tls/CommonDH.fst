@@ -1,53 +1,59 @@
 ﻿module CommonDH
-open FStar.Seq
+
 open Platform.Bytes
 open Platform.Error
-open TLSConstants
 open CoreCrypto
+open TLSConstants
 
-type element = {
- dhe_p : option DHGroup.elt ;
- dhe_ec : option ECGroup.point ;
-}
+type group =
+  | FFDH of DHGroup.group
+  | ECDH of ECGroup.group
 
-let dhe_nil = {
- dhe_p = None;
- dhe_ec = None;
-}
+type params =
+  | FFP of DHGroup.params
+  | ECP of ECGroup.params
 
-type secret = 
-  | Key of bytes
+type key = 
+  | FFKey of DHGroup.key
+  | ECKey of ECGroup.key
 
-type parameters =
-| DHP_P of dh_params
-| DHP_EC of ec_params
+type share =
+  | FFShare of DHGroup.share
+  | ECShare of ECGroup.group * ECGroup.share
 
-exception Invalid_DH
+type secret = bytes
 
-let get_p (e:element) =
-    match e with
-    | {dhe_p = Some x; dhe_ec = None } -> x
-    | _ -> raise Invalid_DH
+val default_group: group
+let default_group = FFDH (DHGroup.Named FFDHE2048)
 
-let get_ec (e:element) =
-    match e with
-    | {dhe_p = None; dhe_ec = Some x } -> x
-    | _ -> raise Invalid_DH
+val keygen: group -> Tot key
+let keygen = function
+  | FFDH g -> FFKey (DHGroup.keygen g)
+  | ECDH g -> ECKey (ECGroup.keygen g)
 
-val serializeKX: parameters -> element -> bytes
-let serializeKX (p:parameters) (e:element) : bytes =
-    match p with
-    | DHP_P(dhp) -> 
-       let pl = get_p e in
-       let pb = vlbytes 2 dhp.dh_p in 
-       let gb = vlbytes 2 dhp.dh_g in
-       let pkb =vlbytes 2 pl in
-       pb @| gb @| pkb
-    | DHP_EC(ecp) ->
-           abyte 3uy (* Named curve *)
-        @| ECGroup.curve_id ecp
-        @| ECGroup.serialize_point ecp (get_ec e)
+val dh_responder: key -> Tot (key * secret)
+let dh_responder = function
+  | FFKey gx -> 
+    let y, shared = DHGroup.dh_responder gx in
+    FFKey y, shared
+  | ECKey gx -> 
+    let y, shared = ECGroup.dh_responder gx in
+    ECKey y, shared
 
+val dh_initiator: key -> key -> Tot secret
+let dh_initiator x gy =
+  match x, gy with
+  | FFKey x, FFKey gy -> DHGroup.dh_initiator x gy
+  | ECKey x, ECKey gy -> ECGroup.dh_initiator x gy
+  | _, _ -> empty_bytes (* TODO: add refinement/index to rule out cross cases *)
+
+val serialize: key -> Tot bytes
+let serialize k = 
+  match k with
+  | FFKey k -> DHGroup.serialize k.dh_params k.dh_public
+  | ECKey k -> ECGroup.serialize k.ec_params k.ec_point
+
+(*
 let checkParams dhdb minSize (p:parameters) =
     match p with
     | DHP_P(dhp) ->
@@ -73,12 +79,4 @@ let checkElement (p:parameters) (e:element) : option element  =
         | Some p -> Some ({dhe_nil with dhe_ec = Some p})
       end
     | _ -> failwith "impossible"
-
-let parse (p:parameters) (b:bytes) =
-    match p with
-    | DHP_P(dhp) -> Some ({dhe_nil with dhe_p = Some b})
-    | DHP_EC(ecp) ->
-      begin match ECGroup.parse_point ecp b with
-        | None -> None
-        | Some ecp -> Some ({dhe_nil with dhe_ec = Some ecp})
-      end
+*)
