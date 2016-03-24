@@ -1,28 +1,107 @@
-﻿#light "off"
+﻿module ECGroup
 
-module ECGroup
-
+open FStar.HyperHeap
 open Platform.Bytes
-open CoreCrypto
 open Platform.Error
+open CoreCrypto
 open TLSError
 open TLSConstants
 
-type ec_curve = CoreCrypto.ec_curve
+type params = CoreCrypto.ec_params
+
+type key = k:CoreCrypto.ec_key
+  {length k.ec_point.ecx = ec_bytelen k.ec_params.curve /\
+   length k.ec_point.ecy = ec_bytelen k.ec_params.curve}
+
+type share = CoreCrypto.ec_point
+
+type group = CoreCrypto.ec_curve
+
+type secret = bytes
 
 type ec_all_curve =
-| EC_CORE of ec_curve
-| EC_UNKNOWN of int
-| EC_EXPLICIT_PRIME
-| EC_EXPLICIT_BINARY
+  | EC_CORE of ec_curve
+  | EC_UNKNOWN of int
+  | EC_EXPLICIT_PRIME
+  | EC_EXPLICIT_BINARY
 
 type point_format =
-| ECP_UNCOMPRESSED
-| ECP_UNKNOWN of int
+  | ECP_UNCOMPRESSED
+  | ECP_UNKNOWN of int
 
-type point = ec_point
+val params_of_group: group -> Tot params 
+let params_of_group c = {curve = c; point_compression = false}
 
-let getParams (c : ec_curve) : ec_params = {curve = c; point_compression = false}
+val keygen: group -> Tot key
+let keygen g =
+  let params = params_of_group g in
+  ec_gen_key params
+
+val dh_responder: ec_key -> Tot (ec_key * secret)
+let dh_responder gx =
+  let params = gx.ec_params in
+  let y = ec_gen_key params in
+  let shared = ecdh_agreement y gx.ec_point in
+  y, shared
+
+val dh_initiator: ec_key -> ec_key -> Tot secret
+let dh_initiator x gy =
+  ecdh_agreement x gy.ec_point
+
+val parse_curve: bytes -> Tot (option params)
+let parse_curve b =
+  if length b = 3 then
+    let (ty, id) = split b 1 in
+    if cbyte ty = 3uy then
+      match cbyte2 id with
+      | (0uy, 23uy) -> Some (params_of_group ECC_P256)
+      | (0uy, 24uy) -> Some (params_of_group ECC_P384)
+      | (0uy, 25uy) -> Some (params_of_group ECC_P521)
+      | _ -> None
+    else None
+  else None
+
+val curve_id: params -> Tot (lbytes 2)
+let curve_id p =
+  abyte2 (match p.curve with
+  | ECC_P256 -> (0uy, 23uy)
+  | ECC_P384 -> (0uy, 24uy)
+  | ECC_P521 -> (0uy, 25uy))
+
+let op_Star = op_Multiply
+
+(* Assumes uncompressed point format for now (04||ecx||ecy) *) 
+val serialize_point: p:params 
+  -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
+  -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 2})
+let serialize_point p e =
+  let pc = abyte 4uy in
+  let x = pc @| e.ecx @| e.ecy in
+  lemma_repr_bytes_values (length x);
+  vlbytes 1 x
+
+val serialize: p:params
+  -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
+  -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 5})
+let serialize ecp ecdh_Y =
+  let ty = abyte 3uy in
+  let id = curve_id ecp in
+  let e = serialize_point ecp ecdh_Y in
+  ty @| id @| e
+
+val parse_point: params -> bytes -> Tot (option share)
+let parse_point p b =
+  let clen = ec_bytelen p.curve in 
+  if length b = 2*clen + 1 then
+    let (et, ecxy) = split b 1 in
+    match cbyte et with
+    | 4uy ->
+      let (x,y) = split ecxy clen in
+      let e = {ecx = x; ecy = y;} in
+      if CoreCrypto.ec_is_on_curve p e then Some e else None
+    |_ -> None
+  else None
+
 
 (* KB: older more general code below 
 let getParams (c : ec_curve) : ec_params = 
@@ -62,63 +141,3 @@ let getParams (c : ec_curve) : ec_params =
         }
     in { curve = EC_PRIME rawcurve; point_compression = false; }
 *)
-
-val parse_curve: bytes -> Tot (option ec_params)
-let parse_curve (b : bytes) : option ec_params =
-    if length b = 3 then
-        let (ty, id) = split b 1 in
-        if cbyte ty = 3uy then
-            match cbyte2 id with
-            | (0uy, 23uy) -> Some (getParams (ECC_P256))
-            | (0uy, 24uy) -> Some (getParams (ECC_P384))
-            | (0uy, 25uy) -> Some (getParams (ECC_P521))
-            | _ -> None
-        else None
-    else None
-
-val curve_id: ec_params -> Tot (lbytes 2)
-let curve_id (p:ec_params) : bytes =
-    abyte2 (match p.curve with
-    | ECC_P256 -> (0uy, 23uy)
-    | ECC_P384 -> (0uy, 24uy)
-    | ECC_P521 -> (0uy, 25uy))
-
-val bytelen: ec_params -> Tot int
-let bytelen (p:ec_params) : int =
-    match p.curve with
-    | ECC_P256 -> 32
-    | ECC_P384 -> 48
-    | ECC_P521 -> 66
-
-(* ADL: Stub for supporting more point format options *)
-val serialize_point: ec_params -> point -> Tot (b:bytes{length b < 257})
-let serialize_point (p:ec_params) (e:point) : bytes =
-  let x = CoreCrypto.ec_point_serialize e in
-  lemma_repr_bytes_values (length x);
-  let y:bytes = vlbytes 1 x in
-  y
-
-(*
-let serialize_point (p:ec_params) (e:point) =
-  let x = CoreCrypto.ec_point_serialize e in
-  vlbytes 1 x
-*)
-let op_Star = op_Multiply
-
-val parse_point: ec_params -> bytes -> Tot (option point)
-let parse_point p b =
-    let clen = bytelen p in 
-    if length b = 2*clen + 1 then
-        let (et, r) = split b 1 in
-        match cbyte et with
-        | 4uy ->
-            let (a,b) = split r clen in
-            let e = {ecx = a; ecy = b;} in
-            if CoreCrypto.ec_is_on_curve p e then Some e else None
-        |_ -> None
-    else
-        None
-
-(* TODO *)
-let checkElement (p:ec_params) (b:point): option point =
-    Some b

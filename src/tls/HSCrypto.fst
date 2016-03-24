@@ -46,45 +46,33 @@ assume val get_signing_cert: option string -> option sigAlg -> list sigHashAlg -
 assume val cert_sign: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> Tot (result (b:bytes{length b < 65536}))
 assume val cert_verify: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> bytes -> Tot (result unit)
 
-type ff_all_groups =
-  | FF_2048
-  | FF_4096
-  | FF_8192
-  | FF_arbitrary of CoreCrypto.dh_params
-  
-type dh_group = 
-  | FFDH of ff_all_groups
-  | ECDH of ECGroup.ec_all_curve
-
-type dh_key = 
-  | FFKey of CoreCrypto.dh_key
-  | ECKey of CoreCrypto.ec_key
-
-type dh_secret = bytes // -> abstract
 type ms = bytes // -> abstract
 
-assume val dh_keygen: g:dh_group -> Tot (x:dh_key)
-assume val dh_shared_secret1: y:dh_key -> gx:dh_key -> Tot (gxy:dh_secret)
-assume val dh_shared_secret2: gy:dh_key -> Tot (x:dh_key * gxy:dh_secret)
+val dh_keygen: CommonDH.group -> Tot CommonDH.key
+let dh_keygen = CommonDH.keygen
+
+val dh_shared_secret1: CommonDH.key -> CommonDH.key -> Tot CommonDH.secret
+let dh_shared_secret1 = CommonDH.dh_initiator
+
+val dh_shared_secret2: CommonDH.key -> Tot (CommonDH.key * CommonDH.secret)
+let dh_shared_secret2 = CommonDH.dh_responder
 
 (* TLS <= 1.2 *)
-assume val derive_keys: gxy:dh_secret -> cr:random -> sr:random -> log:bytes -> 
+assume val derive_keys: gxy:CommonDH.secret -> cr:random -> sr:random -> log:bytes ->
 	                rd:rid -> wr:rid -> i:id -> ST ((both i) * ms)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
 
 (* TLS 1.3 *)
-assume val derive_handshake_keys: gxy:dh_secret -> log: bytes ->
+assume val derive_handshake_keys: gxy:CommonDH.secret -> log: bytes ->
 				  rd:rid -> wr:rid -> i:id -> ST ((both i) * ms)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
-assume val derive_finished_keys: gxs:dh_secret -> gxy:dh_secret -> log: bytes -> Tot (ts:ms * cf:ms * sf:ms)
+assume val derive_finished_keys: gxs:CommonDH.secret -> gxy:CommonDH.secret -> log: bytes -> Tot (ts:ms * cf:ms * sf:ms)
 
 assume val derive_traffic_keys: ts:ms -> log: bytes -> 
 				rd:rid -> wr:rid -> i:id -> ST (both i)     
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-
-

@@ -120,7 +120,7 @@ type config = {
     dhPQMinLength: nat * nat;
 
     (* ECDH settings *)
-    ecdhGroups: list ECGroup.ec_curve;
+    ecdhGroups: list ECGroup.group;
 
     (* Signature algorithms preference string *)
     signatureAlgorithms: list sigHashAlg;
@@ -210,7 +210,7 @@ type negotiatedExtensions = {
     ne_secure_renegotiation: ri_status;
 
     //$ Cedric: these extensions were missing in F7.
-    ne_supported_curves: option (list ECGroup.ec_curve);
+    ne_supported_curves: option (list ECGroup.group);
     ne_supported_point_formats: option (list ECGroup.point_format);
     ne_server_names: option (list serverName);
     ne_signature_algorithms: option (list sigHashAlg);

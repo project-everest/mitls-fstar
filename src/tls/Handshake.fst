@@ -433,7 +433,7 @@ let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs
        let ske_sig = ske.ske_sig in
        let cs_sigalg = Some.v n.n_sigAlg in
        let csr = (n.n_client_random @| n.n_server_random) in
-       if Cert.verify_signature c.crt_chain n.n_protocol_version cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
+       if Cert.verify_signature c.crt_chain n.n_protocol_version csr cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
          (match ske.ske_kex_s with
          | KEX_S_DHE gy ->
            let gx, pms = dh_shared_secret2 gy in
@@ -551,7 +551,7 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
 	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
     let c = {crt_chain = get_signing_cert cfg.peer_name n.n_sigAlg []} in
     let cb = certificateBytes c in
-    let gy = dh_keygen (ECDH (ECGroup.EC_CORE CoreCrypto.ECC_P256)) in
+    let gy = CommonDH.keygen CommonDH.default_group in
     let kex_s = KEX_S_DHE gy in
     let sv = kex_s_to_bytes kex_s in
     (match (cert_sign c.crt_chain n.n_sigAlg [] sv) with

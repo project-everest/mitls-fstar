@@ -2,4 +2,5 @@
 
 let _ =
   Parsing_test.main ();
-  TestRecord.main ()
+  TestRecord.main ();
+  TestDH.main ()

@@ -858,8 +858,8 @@ let lemma_vlbytes_inj i b b' =
 val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:(bytes * bytes){
-                      repr_bytes (length (fst b)) <= lSize
-                  /\  Seq.equal vlb (vlbytes lSize (fst b) @| (snd b))}))
+                    repr_bytes (length (fst b)) <= lSize
+                  /\ Seq.equal vlb (vlbytes lSize (fst b) @| (snd b))}))
 let vlsplit lSize vlb =
   let (vl,b) = Platform.Bytes.split vlb lSize in
   let l = int_of_bytes vl in
