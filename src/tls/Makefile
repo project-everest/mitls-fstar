@@ -79,8 +79,8 @@ endif
 # lax type-checking in tls-gen
 FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
 
-VERIFIABLE_FSTS=TLSError.fst \
-MonotoneSeq.fst \
+VERIFIABLE_FSTS=MonotoneSeq.fst \
+TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
 RSAKey.fst \
