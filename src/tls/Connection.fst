@@ -81,10 +81,10 @@ let test_2 (p:nat -> Type) (s:seq nat { seq_forall p s }) (j:nat { j < Seq.lengt
 s /\ p x) ==> seq_forall p (snoc s x)}) *)
 
 val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (reader (peerId(hsId e.h)))
-let reader_epoch #region #peer (Epoch h r w) = r
+let reader_epoch #region #peer e = Epoch.r e
 
 val writer_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (writer (hsId e.h))
-let writer_epoch #region #peer (Epoch h r w) = w
+let writer_epoch #region #peer e = Epoch.w e
 
 type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) = 
   st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h /\ 
@@ -94,7 +94,7 @@ type epochs_inv c h =
   seq_forall (epoch_inv #(HS.region c.hs) #(HS.peer c.hs) h) (sel h c.hs.log) /\ 
   Handshake.hs_footprint_inv c.hs h
 
-#set-options "--initial_fuel 0 --initial_ifuel 0"
+#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 type st_inv c h = 
   hs_inv (C.hs c) h /\
   epochs_inv c h 
@@ -258,6 +258,8 @@ val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
          /\ st_dec_inv rd_j h1))))
   (ensures (epochs c h0 = epochs c h1
             /\ epochs_inv c h1))
+#reset-options //a bit of flakiness at the next query; reset the solver for more predictability
+#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 let frame_reader_epoch c h0 h1 = ghost_lemma2 (frame_reader_epoch_k c h0 h1)
 
 
