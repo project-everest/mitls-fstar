@@ -228,7 +228,7 @@ TLSML := $(TLSML:.fst=.ml)
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml \
+  FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   $(TLSML)
 # Last step: F* currently extracts everything in the current directory
 TLSML := $(notdir $(TLSML))
