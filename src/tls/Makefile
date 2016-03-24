@@ -161,7 +161,7 @@ ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) Session
 
 # truncates $(FSTS) just before $(basename $@).fst
 define prefix_cfg
-	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *}")
+	$(shell str="$(VERIFIABLE_FSTS)"; echo "$${str%%$(1).$(2) *}")
 endef
 
 # truncates $(FSTS) just after $(basename $@).fst
@@ -183,7 +183,9 @@ endef
 --verify_module $(subst .p,,$(basename $@))
 
 %.fst-in:
-	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
+	@echo $(OTHERFLAGS) $(VERFLAGS) \
+	--__temp_no_proj Handshake --__temp_no_proj Connection \
+	$(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fst) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fsti-in:
