@@ -93,7 +93,8 @@ type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) 
 type epochs_inv c h = 
   seq_forall (epoch_inv #(HS.region c.hs) #(HS.peer c.hs) h) (sel h c.hs.log) /\ 
   Handshake.hs_footprint_inv c.hs h
-  
+
+#set-options "--initial_fuel 0 --initial_ifuel 0"
 type st_inv c h = 
   hs_inv (C.hs c) h /\
   epochs_inv c h 
