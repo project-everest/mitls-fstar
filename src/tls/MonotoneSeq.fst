@@ -1,20 +1,26 @@
 module MonotoneSeq
 open FStar.Seq
+open FStar.SeqProperties
+
+val forall_intro: #a:Type -> #p:(x:a -> GTot Type0) 
+		-> =f:(x:a -> Lemma (p x))
+		-> Lemma (forall (x:a). p x)
+let forall_intro #a #p f = admit()
 
 (* Some basic stuff, should be moved to FStar.Squash, probably *)
-val forall_intro_2: #a:Type -> #b:(a -> Type) -> #p:(x:a -> b x -> Type0) 
+val forall_intro_2: #a:Type -> #b:(a -> Type) -> #p:(x:a -> b x -> GTot Type0) 
           -> =f: (x:a -> y:b x -> Lemma (p x y))
 	  -> Lemma (forall (x:a) (y:b x). p x y)
 let forall_intro_2 #a #b #p f = 
-  let g : x:a -> Lemma (forall (y:b x). p x y) = fun x -> qintro (f x) in
-  qintro g
+  let g : x:a -> Lemma (forall (y:b x). p x y) = fun x -> forall_intro (f x) in
+  forall_intro g
 
 val forall_intro_3: #a:Type -> #b:(a -> Type) -> #c:(x:a -> y:b x -> Type) -> #p:(x:a -> y:b x -> z:c x y -> Type0) 
           -> =f: (x:a -> y:b x -> z:c x y -> Lemma (p x y z))
 	  -> Lemma (forall (x:a) (y:b x) (z:c x y). p x y z)
 let forall_intro_3 #a #b #c #p f = 
   let g : x:a -> Lemma (forall (y:b x) (z:c x y). p x y z) = fun x -> forall_intro_2 (f x) in
-  qintro g
+  forall_intro g
 
 val exists_intro: #a:Type -> p:(a -> Type) -> witness:a -> Lemma
   (requires (p witness))
@@ -29,7 +35,7 @@ val exists_elim:
     -> #r:Type
     -> =f:(x:a -> Lemma (p x ==> r))
     -> Lemma ((exists (x:a). p x) ==> r)
-let exists_elim #a #p #b #q #r f = qintro f
+let exists_elim #a #p #b #q #r f = forall_intro f
 
 val exists_elim_2: 
       #a:Type
@@ -90,10 +96,12 @@ let grows_transitive #a s1 s2 s3 =
 
 ////////////////////////////////////////////////////////////////////////////////
 open FStar.Monotonic.RRef
+open FStar.HyperHeap
+
 val lemma_grows_monotone: #a:Type
   -> Lemma (monotonic (seq a) (grows #a))
 let lemma_grows_monotone #a =
-  qintro (seq_extension_reflexive #a);
+  forall_intro (seq_extension_reflexive #a);
   forall_intro_3 (grows_transitive #a)
 
 val snoc : #a:Type -> seq a -> a -> Tot (seq a)
@@ -114,3 +122,20 @@ val ralloc_mref_seq: #a:Type -> r:FStar.HyperHeap.rid -> init:seq a
 let ralloc_mref_seq #a r init = 
   lemma_grows_monotone #a;
   FStar.Monotonic.RRef.ralloc r init
+
+val mem : #a:Type -> #i:rid -> x:a -> r:m_rref i (seq a) grows -> t -> GTot Type0
+let mem #a #i x r h = b2t (SeqProperties.mem x (sel h (as_rref r)))
+ 
+val mem_is_stable: #a:Type -> #i:rid
+		   -> r:m_rref i (seq a) grows
+		   -> x:a
+		   -> Lemma (ensures stable_on_t r (mem x r))
+let mem_is_stable #a #i r x = 
+  let mem_is_stable_aux: 
+		     h0:t
+		   -> h1:t
+		   -> Lemma ((mem x r h0
+			    /\ grows (sel h0 (as_rref r)) (sel h1 (as_rref r)))
+			    ==> mem x r h1) = 
+       fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in
+  forall_intro_2 mem_is_stable_aux
