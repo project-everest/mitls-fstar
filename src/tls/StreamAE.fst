@@ -177,10 +177,6 @@ let enc i e l p =
     end;
    c
 
-(* val encrypted : #r:rid -> #i:id -> log:log_ref r i -> e:entry i -> h:HyperHeap.t -> GTot Type0 *)
-(* let encrypted #r #i log e = MonotoneSeq.mem e log *)
-
-
 // encryption of plaintexts; safe instances are idealized
 val encrypt:
   i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
@@ -192,7 +188,8 @@ val encrypt:
                          /\ contains_ref e.counter h1
                          (* /\ sel h1 e.counter = sel h0 e.counter + 1 *)
 			 /\ (let ent = Entry l c p in
-   			      witnessed (MonotoneSeq.mem ent e.log)
+			    let n = Seq.length (m_sel h0 e.log) in
+   			      witnessed (MonotoneSeq.at_least n ent e.log)
                            /\  m_sel h1 e.log = snoc (m_sel h0 e.log) ent)))
 
 (* we primarily model the ideal functionality, the concrete code that actually
@@ -225,13 +222,14 @@ let dec i d l c =
 val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
 let matches #i l c (Entry l' c' _) = l = l' && c = c'
 
+
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt:
   i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i l))
   (requires (fun h0 -> True))
   (ensures  (fun h0 res h1 ->
-               modifies Set.empty h0 h1
+               modifies Set.empty h0 h1 //NS: strange that the counter is not incremented on this side; confused
              /\ (authId i ==>
                  (let log :seq (entry i) = m_sel h0 d.log in
 		   match res with

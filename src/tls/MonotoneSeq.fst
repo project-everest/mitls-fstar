@@ -130,39 +130,90 @@ let alloc_mref_seq #a r init =
   lemma_grows_monotone #a;
   FStar.Monotonic.RRef.m_alloc r init
 
+
+(* TODO: this fails with a silly inconsistent qualifier error *)
+(* logic val mem_index: #a:Type -> #i:rid -> n:nat -> x:a -> r:m_rref i (seq a) grows -> t -> GTot Type0 *)
+(* logic let mem_index #a #i n x r h =  *)
+(*       mem x r h *)
+(*       /\ Seq.length (m_sel h r) > n *)
+(*       /\ Seq.index (m_sel h r) n = x *)
+
 val mem : #a:Type -> #i:rid -> x:a -> r:m_rref i (seq a) grows -> t -> GTot Type0
 let mem #a #i x r h = b2t (SeqProperties.mem x (m_sel h r))
- 
-val mem_is_stable: #a:Type -> #i:rid
-		   -> r:m_rref i (seq a) grows
+
+let at_least (#a:Type) (#i:rid) (n:nat) (x:a) (r:m_rref i (seq a) grows) (h:t) = 
+      mem x r h
+      /\ Seq.length (m_sel h r) > n
+      /\ Seq.index (m_sel h r) n = x
+
+val at_least_is_stable: #a:Type -> #i:rid
+		   -> n:nat
 		   -> x:a
-		   -> Lemma (ensures stable_on_t r (mem x r))
-let mem_is_stable #a #i r x = 
-  let mem_is_stable_aux: 
+		   -> r:m_rref i (seq a) grows
+		   -> Lemma (ensures stable_on_t r (at_least n x r))
+let at_least_is_stable #a #i n x r = 
+  let at_least_is_stable_aux: 
 		     h0:t
 		   -> h1:t
-		   -> Lemma ((mem x r h0
+		   -> Lemma ((at_least n x r h0
 			    /\ grows (m_sel h0 r) (m_sel h1 r))
-			    ==> mem x r h1) = 
+			    ==> at_least n x r h1) = 
        fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in
-  forall_intro_2 mem_is_stable_aux
+  forall_intro_2 at_least_is_stable_aux
 
-
-val write_at_end: #a:Type -> #i:rid 
+val write_at_end: #a:Type -> #i:rid
 	       -> r:m_rref i (seq a) grows
-	       -> x:a 
-	       -> ST unit 
+	       -> x:a
+	       -> ST unit
  		 (requires (fun h -> True))
-		 (ensures (fun h0 _ h1 -> 
+		 (ensures (fun h0 _ h1 ->
 	               m_contains r h1
 		     /\ modifies (Set.singleton i) h0 h1
 		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1
 		     /\ m_sel h1 r = snoc (m_sel h0 r) x
-		     /\ witnessed (mem x r)))
-let write_at_end #a #i r x = 
+		     /\ witnessed (at_least (Seq.length (m_sel h0 r)) x r)))
+let write_at_end #a #i r x =
   m_recall r;
   let s0 = m_read r in
+  let n = Seq.length s0 in
   m_write r (snoc s0 x);
-  mem_is_stable r x;
+  at_least_is_stable n x r;
   lemma_mem_snoc s0 x;
-  witness r (mem x r)
+  witness r (at_least n x r)
+
+
+(* An earlier experiment with a weaker witnessed predicate *)
+(* val write_at_end: #a:Type -> #i:rid *)
+(* 	       -> r:m_rref i (seq a) grows *)
+(* 	       -> x:a *)
+(* 	       -> ST unit *)
+(*  		 (requires (fun h -> True)) *)
+(* 		 (ensures (fun h0 _ h1 -> *)
+(* 	               m_contains r h1 *)
+(* 		     /\ modifies (Set.singleton i) h0 h1 *)
+(* 		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1 *)
+(* 		     /\ m_sel h1 r = snoc (m_sel h0 r) x *)
+(* 		     /\ witnessed (mem x r))) *)
+(* let write_at_end #a #i r x = *)
+(*   m_recall r; *)
+(*   let s0 = m_read r in *)
+(*   m_write r (snoc s0 x); *)
+(*   mem_is_stable r x; *)
+(*   lemma_mem_snoc s0 x; *)
+(*   witness r (mem x r) *)
+
+
+
+(* val mem_is_stable: #a:Type -> #i:rid *)
+(* 		   -> r:m_rref i (seq a) grows *)
+(* 		   -> x:a *)
+(* 		   -> Lemma (ensures stable_on_t r (mem x r)) *)
+(* let mem_is_stable #a #i r x =  *)
+(*   let mem_is_stable_aux:  *)
+(* 		     h0:t *)
+(* 		   -> h1:t *)
+(* 		   -> Lemma ((mem x r h0 *)
+(* 			    /\ grows (m_sel h0 r) (m_sel h1 r)) *)
+(* 			    ==> mem x r h1) =  *)
+(*        fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in *)
+(*   forall_intro_2 mem_is_stable_aux *)
