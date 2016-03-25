@@ -115,16 +115,23 @@ val lemma_snoc_extends: #a:Type
 	  [SMTPat (grows s (snoc s x))]
 let lemma_snoc_extends #a s x = ()
 
-val ralloc_mref_seq: #a:Type -> r:FStar.HyperHeap.rid -> init:seq a
+val lemma_mem_snoc: #a:Type 
+  -> s:seq a
+  -> x:a 
+  -> Lemma 
+    (ensures (SeqProperties.mem x (snoc s x)))
+let lemma_mem_snoc #a s x = SeqProperties.lemma_append_count s (Seq.create 1 x)
+
+val alloc_mref_seq: #a:Type -> r:FStar.HyperHeap.rid -> init:seq a
   -> ST (m_rref r (seq a) grows)
        (requires (fun _ -> True))
        (ensures (fun h0 m h1 -> FStar.ST.ralloc_post r init h0 (as_rref m) h1))
-let ralloc_mref_seq #a r init = 
+let alloc_mref_seq #a r init = 
   lemma_grows_monotone #a;
-  FStar.Monotonic.RRef.ralloc r init
+  FStar.Monotonic.RRef.m_alloc r init
 
 val mem : #a:Type -> #i:rid -> x:a -> r:m_rref i (seq a) grows -> t -> GTot Type0
-let mem #a #i x r h = b2t (SeqProperties.mem x (sel h (as_rref r)))
+let mem #a #i x r h = b2t (SeqProperties.mem x (m_sel h r))
  
 val mem_is_stable: #a:Type -> #i:rid
 		   -> r:m_rref i (seq a) grows
@@ -135,7 +142,27 @@ let mem_is_stable #a #i r x =
 		     h0:t
 		   -> h1:t
 		   -> Lemma ((mem x r h0
-			    /\ grows (sel h0 (as_rref r)) (sel h1 (as_rref r)))
+			    /\ grows (m_sel h0 r) (m_sel h1 r))
 			    ==> mem x r h1) = 
        fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in
   forall_intro_2 mem_is_stable_aux
+
+
+val write_at_end: #a:Type -> #i:rid 
+	       -> r:m_rref i (seq a) grows
+	       -> x:a 
+	       -> ST unit 
+ 		 (requires (fun h -> True))
+		 (ensures (fun h0 _ h1 -> 
+	               m_contains r h1
+		     /\ modifies (Set.singleton i) h0 h1
+		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1
+		     /\ m_sel h1 r = snoc (m_sel h0 r) x
+		     /\ witnessed (mem x r)))
+let write_at_end #a #i r x = 
+  m_recall r;
+  let s0 = m_read r in
+  m_write r (snoc s0 x);
+  mem_is_stable r x;
+  lemma_mem_snoc s0 x;
+  witness r (mem x r)
