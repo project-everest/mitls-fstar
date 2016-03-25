@@ -9,7 +9,7 @@ open TLSConstants
 open TLSInfo
 open CoreCrypto
 
-#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
 type id2 = i:id { i.pv <> TLS_1p3 } // gradually adding TLS 1.3... 
 
@@ -147,18 +147,15 @@ let cipherRangeClass i clen =
             (min,max)
 
 
-(* Sanity check
-   val cipherRangeClass_width: i:id2 ->
+val cipherRangeClass_width: i:id2 ->
      clen:nat{valid_clen i clen} ->
      Lemma (snd (cipherRangeClass i clen) - fst (cipherRangeClass i clen) <= maxPadSize i - fixedPadSize i)
-   #set-options "--initial_ifuel 2"
-   let cipherRangeClass_width i clen = ()
-*)
+#set-options "--initial_ifuel 2"
+let cipherRangeClass_width i clen = ()
 
 (* targetLength: given a plaintext range, what would be the length of the ciphertext? *)
 // TLS 1.2 RFC: For CBC, the encrypted data length is one more than the sum of
 // block_length, TLSPlaintext.length, mac_length, and padding_length
-#set-options "--initial_ifuel 2"
 val targetLength : i:id2 -> r:range -> Pure nat
   (requires
     snd r <= max_TLSPlaintext_fragment_length
@@ -227,16 +224,15 @@ let targetLength i r =
    let targetLength_spec_AEAD i r x = ()
 *)
 
-(* Sanity check
-   val targetLength_at_most_max_TLSCipher_fragment_length: i:id2
+val targetLength_at_most_max_TLSCipher_fragment_length: i:id2
    -> r:range{
        snd r <= max_TLSPlaintext_fragment_length
        /\ (~(is_AEAD i.aeAlg) ==>
            snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
 	   /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCipher_fragment_length)
-   let targetLength_at_most_max_TLSCipher_fragment_length i r = ()
-*)
+let targetLength_at_most_max_TLSCipher_fragment_length i r = ()
+
 
 val targetLength_converges: i:id2
   -> r:range{
@@ -245,7 +241,7 @@ val targetLength_converges: i:id2
           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
       /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
-#reset-options "--initial_fuel 2 --initial_ifuel 2 --max_fuel 2 --max_ifuel 2" //a bit flaky; reset the solver for more predictability
+#reset-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2" //a bit flaky; reset the solver for more predictability
 let targetLength_converges i r = ()
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
