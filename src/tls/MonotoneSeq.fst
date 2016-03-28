@@ -55,9 +55,9 @@ abstract let seq_extension (#a:Type) (s1:seq a) (s2:seq a) (s3:seq a) =
 abstract let grows (#a:Type) (s1:seq a) (s3:seq a) =
   exists (s2:seq a). seq_extension s1 s2 s3
   
-val seq_extension_reflexive : #a:Type -> s:seq a -> Lemma
-  (ensures (grows s s)) 
-let seq_extension_reflexive #a s = 
+val seq_extension_reflexive: #a:Type -> s:seq a -> Lemma
+  (ensures (grows s s))
+let seq_extension_reflexive #a s =
   exists_intro (fun w -> seq_extension s w s) (Seq.createEmpty #a)
 
 val seq_extension_transitive: #a:Type
@@ -138,9 +138,8 @@ let alloc_mref_seq #a r init =
 (*       /\ Seq.length (m_sel h r) > n *)
 (*       /\ Seq.index (m_sel h r) n = x *)
 
-(* val mem : #a:Type -> #i:rid -> x:a -> r:m_rref i (seq a) grows -> t -> GTot Type0 *)
-let mem (#a:Type) (#i:rid) (x:a) (r:m_rref i (seq a) grows) (h:t) : GTot Type0 = 
-  b2t (SeqProperties.mem x (m_sel h r))
+val mem : #a:Type -> #i:rid -> x:a -> r:m_rref i (seq a) grows -> t -> GTot Type0
+let mem #a #i x r h = b2t (SeqProperties.mem x (m_sel h r))
 
 let at_least (#a:Type) (#i:rid) (n:nat) (x:a) (r:m_rref i (seq a) grows) (h:t) = 
       mem x r h
@@ -162,14 +161,18 @@ let at_least_is_stable #a #i n x r =
        fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in
   forall_intro_2 at_least_is_stable_aux
 
-let write_at_end #a #i (r:m_rref i (seq a) grows) (x:a) : ST unit
-    (requires (fun h -> True))
-    (ensures (fun h0 _ h1 ->
-              m_contains r h1
-	      /\ modifies (Set.singleton i) h0 h1
-	      /\ modifies_rref i !{as_ref (as_rref r)} h0 h1
-	      /\ m_sel h1 r = snoc (m_sel h0 r) x
-	      /\ witnessed (at_least (Seq.length (m_sel h0 r)) x r))) =
+val write_at_end: #a:Type -> #i:rid
+	       -> r:m_rref i (seq a) grows
+	       -> x:a
+	       -> ST unit
+ 		 (requires (fun h -> True))
+		 (ensures (fun h0 _ h1 ->
+	               m_contains r h1
+		     /\ modifies (Set.singleton i) h0 h1
+		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1
+		     /\ m_sel h1 r = snoc (m_sel h0 r) x
+		     /\ witnessed (at_least (Seq.length (m_sel h0 r)) x r)))
+let write_at_end #a #i r x =
   m_recall r;
   let s0 = m_read r in
   let n = Seq.length s0 in
