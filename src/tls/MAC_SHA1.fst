@@ -25,7 +25,7 @@ type tag (i:id) = bytes
 type keyrepr (i:id) = bytes
 type key (i:id) = keyrepr i
 
-assume type good (i:id) (b:bytes) // TBD in Encode?
+assume type good (i:id) (b:bytes) : Type0 // TBD in Encode?
 
 
 // we keep the tag in case we want to enforce tag authentication
