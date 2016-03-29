@@ -635,11 +635,12 @@ let no_seqn_overflow c =
   if j < 0 then
     true
   else
-    let Epoch h _ w = Seq.index es j in
-      let n = !(seqn w) + 1 in
-      if n >= 72057594037927936 && n < 18446744073709551616
-      then (lemma_repr_bytes_values n; true)
-      else false
+    // JP: placeholder while I fix the int64 problem
+    (* let Epoch h _ w = Seq.index es j in
+    let n = !(seqn w) + 1 in
+    if n >= 72057594037927936 && n < 18446744073709551616
+    then (lemma_repr_bytes_values n; true)
+    else *) false
 
 
 
