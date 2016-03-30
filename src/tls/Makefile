@@ -91,7 +91,6 @@ PMS.p.fst \
 HASH.fst \
 HMAC.fst \
 Sig.p.fst \
-UntrustedCert.fst \
 Cert.fst \
 TLSInfo.fst \
 Range.fst \
@@ -138,7 +137,6 @@ ECGroup \
 CommonDH \
 HASH \
 HMAC \
-UntrustedCert \
 TLSInfo \
 Range \
 DataStream \
