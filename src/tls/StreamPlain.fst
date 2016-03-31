@@ -31,7 +31,7 @@ type plainRepr = b:bytes { 0 < length b /\ length b -1 < max_TLSPlaintext_fragme
 abstract type plain (i:id) (len: plainLen) = f:fragment i { len == snd (Content.rg i f) + 1 }
 
 let pad payload ct (len:plainLen { length payload < len }): plainRepr = 
-  payload @| ctBytes ct @| createBytes (len - length payload - 1) 0uy
+  payload @| ctBytes ct @| createBytes (len - length payload - 1) 0z
 
 val ghost_repr: #i:id -> #len: plainLen -> f:plain i len -> GTot (bs:lbytes len)
 let ghost_repr #i #len f = 
@@ -48,18 +48,18 @@ let repr i len f =
 // slight code duplication between monads; avoidable? 
 
 (* 
-val scan: bs:bytes -> j: nat { j < length bs /\ (forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0uy) } -> 
-  Tot (o:option(j:nat { j < length bs /\ Seq.index bs j <> 0uy /\ (forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0uy) }))
+val scan: bs:bytes -> j: nat { j < length bs /\ (forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0z) } -> 
+  Tot (o:option(j:nat { j < length bs /\ Seq.index bs j <> 0z /\ (forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0z) }))
  
 let rec scan bs j =
-  if Seq.index bs j <> 0uy then Some j 
+  if Seq.index bs j <> 0z then Some j 
   else if j = 0            then None 
   else scan bs (j-1)
 *)
 
 val scan: i:id { ~ (authId i) } -> bs:plainRepr -> 
   j: nat { j < length bs /\ 
-         (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0uy) } -> 
+         (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } -> 
   Tot(result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
  
 let rec scan i bs j =
@@ -71,21 +71,21 @@ let rec scan i bs j =
   (* let len = length bs in 
   if j = 0 then Error (AD_decode_error, "") else
   match Seq.index bs j with 
-  | 0uy  -> scan i bs (j-1)
-  | 21uy -> let rg: frange i = (0, len - 1) in
+  | 0z  -> scan i bs (j-1)
+  | 21z -> let rg: frange i = (0, len - 1) in
            let payload, rest = Platform.Bytes.split bs j in 
            let f = CT_Alert rg payload in 
            lemma_eq_intro bs (pad payload Alert len);
            Correct f
-  | 22uy -> let rg:frange i = (0, length bs - 1) in
+  | 22z -> let rg:frange i = (0, length bs - 1) in
            let payload = fst (Platform.Bytes.split bs j) in 
            let f = CT_Handshake rg payload in 
            lemma_eq_intro bs (pad payload Handshake len);
            Correct f
-  | 23uy -> let rg:frange i = (0, length bs - 1) in
+  | 23z -> let rg:frange i = (0, length bs - 1) in
            let payload = fst (Platform.Bytes.split bs j) in
            let d = DataStream.mk_fragment i rg payload in
-           assert(forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0uy);
+           assert(forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0z);
            lemma_eq_intro bs (pad payload Application_data len);
            Correct (CT_Data rg d)
   | _    -> Error (AD_decode_error, "") *)

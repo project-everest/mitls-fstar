@@ -143,7 +143,7 @@ let leak i role s = State.key s, State.iv s
 // we can reason about sequence-number collisions before applying it.
 let aeIV i (n:seqn i) (staticIV: iv i) : iv i =
   let l = CoreCrypto.aeadRealIVSize (alg i) in
-  let extended: iv i = createBytes (l - 8) 0uy @| bytes_of_seq n (* 64 bits *) in
+  let extended: iv i = createBytes (l - 8) 0z @| bytes_of_seq n (* 64 bits *) in
   xor l extended staticIV
 
 // not relying on additional data
@@ -204,7 +204,7 @@ val encrypt:
 let encrypt i e l p =
   m_recall e.log;  
   m_recall e.counter;
-  let text = if safeId i then createBytes l 0uy else repr i l p in
+  let text = if safeId i then createBytes l 0z else repr i l p in
   let c = enc i e l text in
   let ent = Entry l c p in
   MonotoneSeq.write_at_end e.log ent;

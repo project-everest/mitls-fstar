@@ -89,10 +89,10 @@ type sigHashAlg = sigAlg * hashAlg
 val sigAlgBytes: sigAlg -> Tot (lbytes 1)
 let sigAlgBytes sa =
     match sa with
-    | CoreCrypto.RSASIG -> abyte 1uy
-    | CoreCrypto.DSA    -> abyte 2uy
-    | CoreCrypto.ECDSA  -> abyte 3uy
-    | CoreCrypto.RSAPSS -> abyte 4uy
+    | CoreCrypto.RSASIG -> abyte 1z
+    | CoreCrypto.DSA    -> abyte 2z
+    | CoreCrypto.ECDSA  -> abyte 3z
+    | CoreCrypto.RSAPSS -> abyte 4z
 
 (* This is the old version of the inverse predicate. According to CF,
    verification was harder with this style, so we moved to the new style with
@@ -108,10 +108,10 @@ type pinverse_t (#a:Type) (#b:Type) (=f:(a -> Tot b)) =
 val parseSigAlg: pinverse_t sigAlgBytes
 let parseSigAlg b =
     match cbyte b with
-    | 1uy -> Correct CoreCrypto.RSASIG
-    | 2uy -> Correct CoreCrypto.DSA
-    | 3uy -> Correct CoreCrypto.ECDSA
-    | 4uy -> Correct CoreCrypto.RSAPSS
+    | 1z -> Correct CoreCrypto.RSASIG
+    | 2z -> Correct CoreCrypto.DSA
+    | 3z -> Correct CoreCrypto.ECDSA
+    | 4z -> Correct CoreCrypto.RSAPSS
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 inline type lemma_inverse_g_f (#a:Type) (#b:Type) (=f:(a -> Tot b)) (=g:(b -> Tot (result a))) (x:a) = 
@@ -139,22 +139,22 @@ type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
 val hashAlgBytes : hashAlg' -> Tot (lbytes 1)
  let hashAlgBytes ha =
    match ha with
-    | Hash MD5     -> abyte 1uy
-    | Hash SHA1    -> abyte 2uy
-    | Hash SHA224  -> abyte 3uy
-    | Hash SHA256  -> abyte 4uy
-    | Hash SHA384  -> abyte 5uy
-    | Hash SHA512  -> abyte 6uy
+    | Hash MD5     -> abyte 1z
+    | Hash SHA1    -> abyte 2z
+    | Hash SHA224  -> abyte 3z
+    | Hash SHA256  -> abyte 4z
+    | Hash SHA384  -> abyte 5z
+    | Hash SHA512  -> abyte 6z
 
 val parseHashAlg: pinverse_t hashAlgBytes
 let parseHashAlg b =
     match cbyte b with
-    | 1uy -> Correct (Hash MD5)
-    | 2uy -> Correct (Hash SHA1)
-    | 3uy -> Correct (Hash SHA224)
-    | 4uy -> Correct (Hash SHA256)
-    | 5uy -> Correct (Hash SHA384)
-    | 6uy -> Correct (Hash SHA512)
+    | 1z -> Correct (Hash MD5)
+    | 2z -> Correct (Hash SHA1)
+    | 3z -> Correct (Hash SHA224)
+    | 4z -> Correct (Hash SHA256)
+    | 5z -> Correct (Hash SHA384)
+    | 6z -> Correct (Hash SHA512)
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_hashAlg: x:_ -> Lemma
@@ -217,7 +217,7 @@ type compression =
 val parseCompression: b:bytes{Seq.length b > 0} -> Tot compression
 let parseCompression b =
     match cbyte b with
-    | 0uy -> NullCompression
+    | 0z -> NullCompression
     | b   -> UnknownCompression b
 
 // We ignore compression methods we don't understand. This is a departure
@@ -236,7 +236,7 @@ let rec parseCompressions b =
 val compressionBytes: compression -> Tot (lbytes 1)
 let compressionBytes (comp:compression) =
     match comp with
-    | NullCompression -> abyte 0uy
+    | NullCompression -> abyte 0z
     | UnknownCompression b -> abyte b
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -254,20 +254,20 @@ let rec compressionMethodsBytes cms =
 val versionBytes : protocolVersion -> Tot (lbytes 2)
 let versionBytes pv =
     match pv with
-    | SSL_3p0 -> abyte2 ( 3uy, 0uy)
-    | TLS_1p0 -> abyte2 ( 3uy, 1uy)
-    | TLS_1p1 -> abyte2 ( 3uy, 2uy )
-    | TLS_1p2 -> abyte2 ( 3uy, 3uy )
-    | TLS_1p3 -> abyte2 ( 3uy, 4uy )
+    | SSL_3p0 -> abyte2 ( 3z, 0z)
+    | TLS_1p0 -> abyte2 ( 3z, 1z)
+    | TLS_1p1 -> abyte2 ( 3z, 2z )
+    | TLS_1p2 -> abyte2 ( 3z, 3z )
+    | TLS_1p3 -> abyte2 ( 3z, 4z )
 
 val parseVersion: pinverse_t versionBytes
 let parseVersion v =
     match cbyte2 v with
-    | ( 3uy, 0uy ) -> Correct(SSL_3p0)
-    | ( 3uy, 1uy ) -> Correct(TLS_1p0)
-    | ( 3uy, 2uy ) -> Correct(TLS_1p1)
-    | ( 3uy, 3uy ) -> Correct(TLS_1p2)
-    | ( 3uy, 4uy ) -> Correct(TLS_1p3)
+    | ( 3z, 0z ) -> Correct(SSL_3p0)
+    | ( 3z, 1z ) -> Correct(TLS_1p0)
+    | ( 3z, 2z ) -> Correct(TLS_1p1)
+    | ( 3z, 3z ) -> Correct(TLS_1p2)
+    | ( 3z, 4z ) -> Correct(TLS_1p3)
     | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed an unknown version")
 
 val inverse_version: x:_ -> Lemma
@@ -302,83 +302,83 @@ val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))
 let cipherSuiteBytesOpt cs =
   let abyte2 b : option (lbytes 2) = Some (abyte2 b) in
     match cs with
-    | NullCipherSuite                                 -> abyte2 ( 0x00uy, 0x00uy )
+    | NullCipherSuite                                 -> abyte2 ( 0x00z, 0x00z )
 
-    | CipherSuite Kex_RSA None (MACOnly MD5)                       -> abyte2 ( 0x00uy, 0x01uy )
-    | CipherSuite Kex_RSA None (MACOnly SHA1)                      -> abyte2 ( 0x00uy, 0x02uy )
-    | CipherSuite Kex_RSA None (MACOnly SHA256)                    -> abyte2 ( 0x00uy, 0x3Buy )
-    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) MD5)           -> abyte2 ( 0x00uy, 0x04uy )
-    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) SHA1)          -> abyte2 ( 0x00uy, 0x05uy )
+    | CipherSuite Kex_RSA None (MACOnly MD5)                       -> abyte2 ( 0x00z, 0x01z )
+    | CipherSuite Kex_RSA None (MACOnly SHA1)                      -> abyte2 ( 0x00z, 0x02z )
+    | CipherSuite Kex_RSA None (MACOnly SHA256)                    -> abyte2 ( 0x00z, 0x3Bz )
+    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) MD5)           -> abyte2 ( 0x00z, 0x04z )
+    | CipherSuite Kex_RSA None(MtE (Stream RC4_128) SHA1)          -> abyte2 ( 0x00z, 0x05z )
 
-    | CipherSuite Kex_RSA None(MtE (Block TDES_EDE_CBC) SHA1)      -> abyte2 ( 0x00uy, 0x0Auy )
-    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA1)       -> abyte2 ( 0x00uy, 0x2Fuy )
-    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA1)       -> abyte2 ( 0x00uy, 0x35uy )
-    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA256)     -> abyte2 ( 0x00uy, 0x3Cuy )
-    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA256)     -> abyte2 ( 0x00uy, 0x3Duy )
-
-    (**************************************************************************)
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00uy, 0x0Duy )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00uy, 0x10uy )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00uy, 0x13uy )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00uy, 0x16uy )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x30uy )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x31uy )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x32uy )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x33uy )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x36uy )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x37uy )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x38uy )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x39uy )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x3Euy )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x3Fuy )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x40uy )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x67uy )
-
-    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x68uy )
-    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x69uy )
-    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x6Auy )
-    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00uy, 0x6Buy )
+    | CipherSuite Kex_RSA None(MtE (Block TDES_EDE_CBC) SHA1)      -> abyte2 ( 0x00z, 0x0Az )
+    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA1)       -> abyte2 ( 0x00z, 0x2Fz )
+    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA1)       -> abyte2 ( 0x00z, 0x35z )
+    | CipherSuite Kex_RSA None(MtE (Block AES_128_CBC) SHA256)     -> abyte2 ( 0x00z, 0x3Cz )
+    | CipherSuite Kex_RSA None(MtE (Block AES_256_CBC) SHA256)     -> abyte2 ( 0x00z, 0x3Dz )
 
     (**************************************************************************)
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1)       -> abyte2 ( 0xc0uy, 0x11uy )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0xc0uy, 0x12uy )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0xc0uy, 0x13uy )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0xc0uy, 0x14uy )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0xc0uy, 0x27uy )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384)  -> abyte2 ( 0xc0uy, 0x28uy )
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x0Dz )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x10z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x13z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0x00z, 0x16z )
 
-    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> abyte2 ( 0xc0uy, 0x2fuy )
-    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> abyte2 ( 0xc0uy, 0x30uy )
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x30z )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x31z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x32z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0x00z, 0x33z )
+
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x36z )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x37z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x38z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0x00z, 0x39z )
+
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x3Ez )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x3Fz )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x40z )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0x00z, 0x67z )
+
+    | CipherSuite Kex_DH (Some DSA)     (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x68z )
+    | CipherSuite Kex_DH (Some RSASIG)  (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x69z )
+    | CipherSuite Kex_DHE (Some DSA)    (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x6Az )
+    | CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA256)  -> abyte2 ( 0x00z, 0x6Bz )
 
     (**************************************************************************)
-    | CipherSuite Kex_DHE None   (MtE (Stream RC4_128) MD5)         -> abyte2 ( 0x00uy, 0x18uy )
-    | CipherSuite Kex_DHE None   (MtE (Block TDES_EDE_CBC) SHA1)    -> abyte2 ( 0x00uy, 0x1Buy )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA1)     -> abyte2 ( 0x00uy, 0x34uy )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA1)     -> abyte2 ( 0x00uy, 0x3Auy )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA256)   -> abyte2 ( 0x00uy, 0x6Cuy )
-    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA256)   -> abyte2 ( 0x00uy, 0x6Duy )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1)       -> abyte2 ( 0xc0z, 0x11z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1)   -> abyte2 ( 0xc0z, 0x12z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1)    -> abyte2 ( 0xc0z, 0x13z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)    -> abyte2 ( 0xc0z, 0x14z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256)  -> abyte2 ( 0xc0z, 0x27z )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384)  -> abyte2 ( 0xc0z, 0x28z )
+
+    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> abyte2 ( 0xc0z, 0x2fz )
+    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> abyte2 ( 0xc0z, 0x30z )
 
     (**************************************************************************)
-    | CipherSuite Kex_RSA None     (AEAD AES_128_GCM SHA256) -> abyte2( 0x00uy, 0x9Cuy )
-    | CipherSuite Kex_RSA None     (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0x9Duy )
+    | CipherSuite Kex_DHE None   (MtE (Stream RC4_128) MD5)         -> abyte2 ( 0x00z, 0x18z )
+    | CipherSuite Kex_DHE None   (MtE (Block TDES_EDE_CBC) SHA1)    -> abyte2 ( 0x00z, 0x1Bz )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA1)     -> abyte2 ( 0x00z, 0x34z )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA1)     -> abyte2 ( 0x00z, 0x3Az )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_128_CBC) SHA256)   -> abyte2 ( 0x00z, 0x6Cz )
+    | CipherSuite Kex_DHE None   (MtE (Block AES_256_CBC) SHA256)   -> abyte2 ( 0x00z, 0x6Dz )
 
-    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> abyte2( 0x00uy, 0x9Euy )
-    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0x9Fuy )
-    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_128_GCM SHA256) -> abyte2( 0x00uy, 0xA0uy )
-    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0xA1uy )
+    (**************************************************************************)
+    | CipherSuite Kex_RSA None     (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0x9Cz )
+    | CipherSuite Kex_RSA None     (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0x9Dz )
 
-    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_128_GCM SHA256) -> abyte2( 0x00uy, 0xA2uy )
-    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0xA3uy )
-    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_128_GCM SHA256) -> abyte2( 0x00uy, 0xA4uy )
-    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0xA5uy )
+    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0x9Ez )
+    | CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0x9Fz )
+    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA0z )
+    | CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA1z )
 
-    | CipherSuite Kex_DHE None (AEAD AES_128_GCM SHA256) -> abyte2( 0x00uy, 0xA6uy )
-    | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384) -> abyte2( 0x00uy, 0xA7uy )
+    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA2z )
+    | CipherSuite Kex_DHE (Some DSA) (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA3z )
+    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA4z )
+    | CipherSuite Kex_DH (Some DSA)  (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA5z )
 
-    | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00uy, 0xFFuy )
+    | CipherSuite Kex_DHE None (AEAD AES_128_GCM SHA256) -> abyte2( 0x00z, 0xA6z )
+    | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384) -> abyte2( 0x00z, 0xA7z )
+
+    | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00z, 0xFFz )
     | _ -> None
 
 let knownCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
@@ -391,83 +391,83 @@ let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
 val parseCipherSuiteAux : lbytes 2 -> Tot (result cipherSuite)
 let parseCipherSuiteAux b =
     match cbyte2 b with
-    | ( 0x00uy, 0x00uy ) -> Correct(NullCipherSuite)
+    | ( 0x00z, 0x00z ) -> Correct(NullCipherSuite)
 
-    | ( 0x00uy, 0x01uy ) -> Correct(CipherSuite Kex_RSA None (MACOnly MD5))
-    | ( 0x00uy, 0x02uy ) -> Correct(CipherSuite Kex_RSA None (MACOnly SHA1))
-    | ( 0x00uy, 0x3Buy ) -> Correct(CipherSuite Kex_RSA None (MACOnly SHA256))
-    | ( 0x00uy, 0x04uy ) -> Correct(CipherSuite Kex_RSA None (MtE (Stream RC4_128) MD5))
-    | ( 0x00uy, 0x05uy ) -> Correct(CipherSuite Kex_RSA None (MtE (Stream RC4_128) SHA1))
+    | ( 0x00z, 0x01z ) -> Correct(CipherSuite Kex_RSA None (MACOnly MD5))
+    | ( 0x00z, 0x02z ) -> Correct(CipherSuite Kex_RSA None (MACOnly SHA1))
+    | ( 0x00z, 0x3Bz ) -> Correct(CipherSuite Kex_RSA None (MACOnly SHA256))
+    | ( 0x00z, 0x04z ) -> Correct(CipherSuite Kex_RSA None (MtE (Stream RC4_128) MD5))
+    | ( 0x00z, 0x05z ) -> Correct(CipherSuite Kex_RSA None (MtE (Stream RC4_128) SHA1))
 
-    | ( 0x00uy, 0x0Auy ) -> Correct(CipherSuite Kex_RSA None (MtE (Block TDES_EDE_CBC) SHA1))
-    | ( 0x00uy, 0x2Fuy ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_128_CBC) SHA1))
-    | ( 0x00uy, 0x35uy ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_256_CBC) SHA1))
-    | ( 0x00uy, 0x3Cuy ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_128_CBC) SHA256))
-    | ( 0x00uy, 0x3Duy ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_256_CBC) SHA256))
-
-    (**************************************************************************)
-    | ( 0x00uy, 0x0Duy ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block TDES_EDE_CBC) SHA1))
-    | ( 0x00uy, 0x10uy ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
-    | ( 0x00uy, 0x13uy ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block TDES_EDE_CBC) SHA1))
-    | ( 0x00uy, 0x16uy ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
-
-    | ( 0x00uy, 0x30uy ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_128_CBC) SHA1))
-    | ( 0x00uy, 0x31uy ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_128_CBC) SHA1))
-    | ( 0x00uy, 0x32uy ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_128_CBC) SHA1))
-    | ( 0x00uy, 0x33uy ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1))
-
-    | ( 0x00uy, 0x36uy ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_256_CBC) SHA1))
-    | ( 0x00uy, 0x37uy ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_256_CBC) SHA1))
-    | ( 0x00uy, 0x38uy ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_256_CBC) SHA1))
-    | ( 0x00uy, 0x39uy ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1))
-
-    | ( 0x00uy, 0x3Euy ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_128_CBC) SHA256))
-    | ( 0x00uy, 0x3Fuy ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_128_CBC) SHA256))
-    | ( 0x00uy, 0x40uy ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_128_CBC) SHA256))
-    | ( 0x00uy, 0x67uy ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256))
-
-    | ( 0x00uy, 0x68uy ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_256_CBC) SHA256))
-    | ( 0x00uy, 0x69uy ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_256_CBC) SHA256))
-    | ( 0x00uy, 0x6Auy ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_256_CBC) SHA256))
-    | ( 0x00uy, 0x6Buy ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA256))
+    | ( 0x00z, 0x0Az ) -> Correct(CipherSuite Kex_RSA None (MtE (Block TDES_EDE_CBC) SHA1))
+    | ( 0x00z, 0x2Fz ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_128_CBC) SHA1))
+    | ( 0x00z, 0x35z ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_256_CBC) SHA1))
+    | ( 0x00z, 0x3Cz ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_128_CBC) SHA256))
+    | ( 0x00z, 0x3Dz ) -> Correct(CipherSuite Kex_RSA None (MtE (Block AES_256_CBC) SHA256))
 
     (**************************************************************************)
-    | ( 0xc0uy, 0x11uy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1))
-    | ( 0xc0uy, 0x12uy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
-    | ( 0xc0uy, 0x13uy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1))
-    | ( 0xc0uy, 0x14uy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1))
-    | ( 0xc0uy, 0x27uy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256))
-    | ( 0xc0uy, 0x28uy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384))
+    | ( 0x00z, 0x0Dz ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block TDES_EDE_CBC) SHA1))
+    | ( 0x00z, 0x10z ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
+    | ( 0x00z, 0x13z ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block TDES_EDE_CBC) SHA1))
+    | ( 0x00z, 0x16z ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
 
-    | ( 0xc0uy, 0x2fuy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256))
-    | ( 0xc0uy, 0x30uy ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384))
+    | ( 0x00z, 0x30z ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_128_CBC) SHA1))
+    | ( 0x00z, 0x31z ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_128_CBC) SHA1))
+    | ( 0x00z, 0x32z ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_128_CBC) SHA1))
+    | ( 0x00z, 0x33z ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1))
+
+    | ( 0x00z, 0x36z ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_256_CBC) SHA1))
+    | ( 0x00z, 0x37z ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_256_CBC) SHA1))
+    | ( 0x00z, 0x38z ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_256_CBC) SHA1))
+    | ( 0x00z, 0x39z ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1))
+
+    | ( 0x00z, 0x3Ez ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_128_CBC) SHA256))
+    | ( 0x00z, 0x3Fz ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_128_CBC) SHA256))
+    | ( 0x00z, 0x40z ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_128_CBC) SHA256))
+    | ( 0x00z, 0x67z ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256))
+
+    | ( 0x00z, 0x68z ) -> Correct(CipherSuite Kex_DH (Some DSA) (MtE (Block AES_256_CBC) SHA256))
+    | ( 0x00z, 0x69z ) -> Correct(CipherSuite Kex_DH (Some RSASIG) (MtE (Block AES_256_CBC) SHA256))
+    | ( 0x00z, 0x6Az ) -> Correct(CipherSuite Kex_DHE (Some DSA) (MtE (Block AES_256_CBC) SHA256))
+    | ( 0x00z, 0x6Bz ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA256))
 
     (**************************************************************************)
-    | ( 0x00uy, 0x18uy ) -> Correct(CipherSuite Kex_DHE None (MtE (Stream RC4_128) MD5))
-    | ( 0x00uy, 0x1Buy ) -> Correct(CipherSuite Kex_DHE None (MtE (Block TDES_EDE_CBC) SHA1))
-    | ( 0x00uy, 0x34uy ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_128_CBC) SHA1))
-    | ( 0x00uy, 0x3Auy ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_256_CBC) SHA1))
-    | ( 0x00uy, 0x6Cuy ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_128_CBC) SHA256))
-    | ( 0x00uy, 0x6Duy ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_256_CBC) SHA256))
+    | ( 0xc0z, 0x11z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Stream RC4_128) SHA1))
+    | ( 0xc0z, 0x12z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block TDES_EDE_CBC) SHA1))
+    | ( 0xc0z, 0x13z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA1))
+    | ( 0xc0z, 0x14z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1))
+    | ( 0xc0z, 0x27z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256))
+    | ( 0xc0z, 0x28z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384))
+
+    | ( 0xc0z, 0x2fz ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256))
+    | ( 0xc0z, 0x30z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384))
 
     (**************************************************************************)
-    | ( 0x00uy, 0x9Cuy ) -> Correct(CipherSuite Kex_RSA None     (AEAD AES_128_GCM SHA256))
-    | ( 0x00uy, 0x9Duy ) -> Correct(CipherSuite Kex_RSA None     (AEAD AES_256_GCM SHA384))
+    | ( 0x00z, 0x18z ) -> Correct(CipherSuite Kex_DHE None (MtE (Stream RC4_128) MD5))
+    | ( 0x00z, 0x1Bz ) -> Correct(CipherSuite Kex_DHE None (MtE (Block TDES_EDE_CBC) SHA1))
+    | ( 0x00z, 0x34z ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_128_CBC) SHA1))
+    | ( 0x00z, 0x3Az ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_256_CBC) SHA1))
+    | ( 0x00z, 0x6Cz ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_128_CBC) SHA256))
+    | ( 0x00z, 0x6Dz ) -> Correct(CipherSuite Kex_DHE None (MtE (Block AES_256_CBC) SHA256))
 
-    | ( 0x00uy, 0x9Euy ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_128_GCM SHA256))
-    | ( 0x00uy, 0x9Fuy ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_256_GCM SHA384))
-    | ( 0x00uy, 0xA0uy ) -> Correct(CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_128_GCM SHA256))
-    | ( 0x00uy, 0xA1uy ) -> Correct(CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_256_GCM SHA384))
+    (**************************************************************************)
+    | ( 0x00z, 0x9Cz ) -> Correct(CipherSuite Kex_RSA None     (AEAD AES_128_GCM SHA256))
+    | ( 0x00z, 0x9Dz ) -> Correct(CipherSuite Kex_RSA None     (AEAD AES_256_GCM SHA384))
 
-    | ( 0x00uy, 0xA2uy ) -> Correct(CipherSuite Kex_DHE (Some DSA) (AEAD AES_128_GCM SHA256))
-    | ( 0x00uy, 0xA3uy ) -> Correct(CipherSuite Kex_DHE (Some DSA) (AEAD AES_256_GCM SHA384))
-    | ( 0x00uy, 0xA4uy ) -> Correct(CipherSuite Kex_DH (Some DSA)  (AEAD AES_128_GCM SHA256))
-    | ( 0x00uy, 0xA5uy ) -> Correct(CipherSuite Kex_DH (Some DSA)  (AEAD AES_256_GCM SHA384))
+    | ( 0x00z, 0x9Ez ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_128_GCM SHA256))
+    | ( 0x00z, 0x9Fz ) -> Correct(CipherSuite Kex_DHE (Some RSASIG) (AEAD AES_256_GCM SHA384))
+    | ( 0x00z, 0xA0z ) -> Correct(CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_128_GCM SHA256))
+    | ( 0x00z, 0xA1z ) -> Correct(CipherSuite Kex_DH (Some RSASIG)  (AEAD AES_256_GCM SHA384))
 
-    | ( 0x00uy, 0xA6uy ) -> Correct(CipherSuite Kex_DHE None (AEAD AES_128_GCM SHA256))
-    | ( 0x00uy, 0xA7uy ) -> Correct(CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384))
+    | ( 0x00z, 0xA2z ) -> Correct(CipherSuite Kex_DHE (Some DSA) (AEAD AES_128_GCM SHA256))
+    | ( 0x00z, 0xA3z ) -> Correct(CipherSuite Kex_DHE (Some DSA) (AEAD AES_256_GCM SHA384))
+    | ( 0x00z, 0xA4z ) -> Correct(CipherSuite Kex_DH (Some DSA)  (AEAD AES_128_GCM SHA256))
+    | ( 0x00z, 0xA5z ) -> Correct(CipherSuite Kex_DH (Some DSA)  (AEAD AES_256_GCM SHA384))
 
-    | ( 0x00uy, 0xFFuy ) -> Correct(SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV))
+    | ( 0x00z, 0xA6z ) -> Correct(CipherSuite Kex_DHE None (AEAD AES_128_GCM SHA256))
+    | ( 0x00z, 0xA7z ) -> Correct(CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384))
+
+    | ( 0x00z, 0xFFz ) -> Correct(SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV))
 
     | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed unknown cipher")
 
@@ -891,18 +891,18 @@ type certType =
 val certTypeBytes : certType -> Tot (lbytes 1)
 let certTypeBytes ct =
     match ct with
-    | RSA_sign     -> abyte (1uy)
-    | DSA_sign     -> abyte (2uy)
-    | RSA_fixed_dh -> abyte (3uy)
-    | DSA_fixed_dh -> abyte (4uy)
+    | RSA_sign     -> abyte (1z)
+    | DSA_sign     -> abyte (2z)
+    | RSA_fixed_dh -> abyte (3z)
+    | DSA_fixed_dh -> abyte (4z)
 
 val parseCertType: pinverse_t certTypeBytes
 let parseCertType b =
     match cbyte b with
-    | (1uy) -> Correct(RSA_sign)
-    | (2uy) -> Correct(DSA_sign)
-    | (3uy) -> Correct(RSA_fixed_dh)
-    | (4uy) -> Correct(DSA_fixed_dh)
+    | (1z) -> Correct(RSA_sign)
+    | (2z) -> Correct(DSA_sign)
+    | (3z) -> Correct(RSA_fixed_dh)
+    | (4z) -> Correct(DSA_fixed_dh)
     | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_certType: x:_ -> Lemma
@@ -1012,39 +1012,39 @@ let namedGroupBytes ng =
   match ng with
   | SEC ec ->
     (match ec with
-    | ECC_P256                      -> abyte2 (0x00uy, 0x17uy)
-    | ECC_P384                      -> abyte2 (0x00uy, 0x18uy)
-    | ECC_P521                      -> abyte2 (0x00uy, 0x19uy))
-  | EC_UNSUPPORTED(b)               -> abyte2 (0x00uy, b)
+    | ECC_P256                      -> abyte2 (0x00z, 0x17z)
+    | ECC_P384                      -> abyte2 (0x00z, 0x18z)
+    | ECC_P521                      -> abyte2 (0x00z, 0x19z))
+  | EC_UNSUPPORTED(b)               -> abyte2 (0x00z, b)
   | FFDHE dhe ->
     (match dhe with
-    | FFDHE2048                     -> abyte2 (0x01uy, 0x00uy)
-    | FFDHE3072                     -> abyte2 (0x01uy, 0x01uy)
-    | FFDHE4096                     -> abyte2 (0x01uy, 0x02uy)
-    | FFDHE6144                     -> abyte2 (0x01uy, 0x03uy) // recheck!
-    | FFDHE8192                     -> abyte2 (0x01uy, 0x04uy) // recheck!
+    | FFDHE2048                     -> abyte2 (0x01z, 0x00z)
+    | FFDHE3072                     -> abyte2 (0x01z, 0x01z)
+    | FFDHE4096                     -> abyte2 (0x01z, 0x02z)
+    | FFDHE6144                     -> abyte2 (0x01z, 0x03z) // recheck!
+    | FFDHE8192                     -> abyte2 (0x01z, 0x04z) // recheck!
   )
-  | FFDHE_PRIVATE_USE(b)            -> abyte2 (0x01uy, b)
-  | ECDHE_PRIVATE_USE(b)            -> abyte2 (0xFEuy, b)
+  | FFDHE_PRIVATE_USE(b)            -> abyte2 (0x01z, b)
+  | ECDHE_PRIVATE_USE(b)            -> abyte2 (0xFEz, b)
 
 val parseNamedGroup: pinverse_t namedGroupBytes
 let parseNamedGroup b =
   match cbyte2 b with
-  | (0x00uy, 0x17uy) -> Correct (SEC(ECC_P256))
-  | (0x00uy, 0x18uy) -> Correct (SEC(ECC_P384))
-  | (0x00uy, 0x19uy) -> Correct (SEC(ECC_P521))
-  | (0x00uy, x) -> let v = int_of_bytes (abyte x) in
+  | (0x00z, 0x17z) -> Correct (SEC(ECC_P256))
+  | (0x00z, 0x18z) -> Correct (SEC(ECC_P384))
+  | (0x00z, 0x19z) -> Correct (SEC(ECC_P521))
+  | (0x00z, x) -> let v = int_of_bytes (abyte x) in
 		   (*if v > 0 && v < 17 then *) Correct(EC_UNSUPPORTED (x))
 //		   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong ec named group")
-  | (0x01uy, 0x00uy) -> Correct (FFDHE(FFDHE2048))
-  | (0x01uy, 0x01uy) -> Correct (FFDHE(FFDHE3072))
-  | (0x01uy, 0x02uy) -> Correct (FFDHE(FFDHE4096))
-  | (0x01uy, 0x03uy) -> Correct (FFDHE(FFDHE6144))
-  | (0x01uy, 0x04uy) -> Correct (FFDHE(FFDHE8192))
-  | (0x01uy, v)      -> if v = 0xFCuy || v = 0xFDuy || v = 0xFEuy || v = 0xFFuy
+  | (0x01z, 0x00z) -> Correct (FFDHE(FFDHE2048))
+  | (0x01z, 0x01z) -> Correct (FFDHE(FFDHE3072))
+  | (0x01z, 0x02z) -> Correct (FFDHE(FFDHE4096))
+  | (0x01z, 0x03z) -> Correct (FFDHE(FFDHE6144))
+  | (0x01z, 0x04z) -> Correct (FFDHE(FFDHE8192))
+  | (0x01z, v)      -> if v = 0xFCz || v = 0xFDz || v = 0xFEz || v = 0xFFz
 			then Correct (FFDHE_PRIVATE_USE v)
 			else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong ffdhe private use group")
-  | (0xFEuy, v)      -> Correct (ECDHE_PRIVATE_USE v)
+  | (0xFEz, v)      -> Correct (ECDHE_PRIVATE_USE v)
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong named group")
 
 
@@ -1109,16 +1109,16 @@ type earlyDataType =
 val earlyDataTypeBytes : earlyDataType -> Tot (lbytes 1)
 let earlyDataTypeBytes edt =
   match edt with
-  | ClientAuthentication          -> abyte 1uy
-  | EarlyData                     -> abyte 2uy
-  | ClientAuthenticationAndData   -> abyte 3uy
+  | ClientAuthentication          -> abyte 1z
+  | EarlyData                     -> abyte 2z
+  | ClientAuthenticationAndData   -> abyte 3z
 
 val parseEarlyDataType: pinverse_t earlyDataTypeBytes
 let parseEarlyDataType b =
     match cbyte b with
-    | (1uy) -> Correct (ClientAuthentication)
-    | (2uy) -> Correct (EarlyData)
-    | (3uy) -> Correct (ClientAuthenticationAndData)
+    | (1z) -> Correct (ClientAuthentication)
+    | (2z) -> Correct (EarlyData)
+    | (3z) -> Correct (ClientAuthenticationAndData)
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data type")
 
 // TODO : replace with more precise types when available

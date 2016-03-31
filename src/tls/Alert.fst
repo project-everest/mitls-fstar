@@ -18,38 +18,38 @@ open Range
 let alertBytes ad =
   (* Severity (warning or fatal) is hardcoded, as specified in sec. 7.2.2 *)
   match ad with
-    | AD_close_notify ->                       abyte2 (1uy,   0uy)
-    | AD_unexpected_message ->                 abyte2 (2uy,  10uy)
-    | AD_bad_record_mac ->                     abyte2 (2uy,  20uy)
-    | AD_decryption_failed ->                  abyte2 (2uy,  21uy)
-    | AD_record_overflow ->                    abyte2 (2uy,  22uy)
-    | AD_decompression_failure ->              abyte2 (2uy,  30uy)
-    | AD_handshake_failure ->                  abyte2 (2uy,  40uy)
-    | AD_no_certificate ->                     abyte2 (1uy,  41uy)
-    | AD_bad_certificate_warning ->            abyte2 (1uy,  42uy)
-    | AD_bad_certificate_fatal ->              abyte2 (2uy,  42uy)
-    | AD_unsupported_certificate_warning ->    abyte2 (1uy,  43uy)
-    | AD_unsupported_certificate_fatal ->      abyte2 (2uy,  43uy)
-    | AD_certificate_revoked_warning ->        abyte2 (1uy,  44uy)
-    | AD_certificate_revoked_fatal ->          abyte2 (2uy,  44uy)
-    | AD_certificate_expired_warning ->        abyte2 (1uy,  45uy)
-    | AD_certificate_expired_fatal ->          abyte2 (2uy,  45uy)
-    | AD_certificate_unknown_warning ->        abyte2 (1uy,  46uy)
-    | AD_certificate_unknown_fatal ->          abyte2 (2uy,  46uy)
-    | AD_illegal_parameter ->                  abyte2 (2uy,  47uy)
-    | AD_unknown_ca ->                         abyte2 (2uy,  48uy)
-    | AD_access_denied ->                      abyte2 (2uy,  49uy)
-    | AD_decode_error ->                       abyte2 (2uy,  50uy)
-    | AD_decrypt_error ->                      abyte2 (2uy,  51uy)
-    | AD_export_restriction ->                 abyte2 (2uy,  60uy)
-    | AD_protocol_version ->                   abyte2 (2uy,  70uy)
-    | AD_insufficient_security ->              abyte2 (2uy,  71uy)
-    | AD_internal_error ->                     abyte2 (2uy,  80uy)
-    | AD_user_cancelled_warning ->             abyte2 (1uy,  90uy)
-    | AD_user_cancelled_fatal ->               abyte2 (2uy,  90uy)
-    | AD_no_renegotiation ->                   abyte2 (1uy, 100uy)
-    | AD_unrecognized_name ->                  abyte2 (2uy, 112uy)
-    | AD_unsupported_extension ->              abyte2 (2uy, 110uy)
+    | AD_close_notify ->                       abyte2 (1z,   0z)
+    | AD_unexpected_message ->                 abyte2 (2z,  10z)
+    | AD_bad_record_mac ->                     abyte2 (2z,  20z)
+    | AD_decryption_failed ->                  abyte2 (2z,  21z)
+    | AD_record_overflow ->                    abyte2 (2z,  22z)
+    | AD_decompression_failure ->              abyte2 (2z,  30z)
+    | AD_handshake_failure ->                  abyte2 (2z,  40z)
+    | AD_no_certificate ->                     abyte2 (1z,  41z)
+    | AD_bad_certificate_warning ->            abyte2 (1z,  42z)
+    | AD_bad_certificate_fatal ->              abyte2 (2z,  42z)
+    | AD_unsupported_certificate_warning ->    abyte2 (1z,  43z)
+    | AD_unsupported_certificate_fatal ->      abyte2 (2z,  43z)
+    | AD_certificate_revoked_warning ->        abyte2 (1z,  44z)
+    | AD_certificate_revoked_fatal ->          abyte2 (2z,  44z)
+    | AD_certificate_expired_warning ->        abyte2 (1z,  45z)
+    | AD_certificate_expired_fatal ->          abyte2 (2z,  45z)
+    | AD_certificate_unknown_warning ->        abyte2 (1z,  46z)
+    | AD_certificate_unknown_fatal ->          abyte2 (2z,  46z)
+    | AD_illegal_parameter ->                  abyte2 (2z,  47z)
+    | AD_unknown_ca ->                         abyte2 (2z,  48z)
+    | AD_access_denied ->                      abyte2 (2z,  49z)
+    | AD_decode_error ->                       abyte2 (2z,  50z)
+    | AD_decrypt_error ->                      abyte2 (2z,  51z)
+    | AD_export_restriction ->                 abyte2 (2z,  60z)
+    | AD_protocol_version ->                   abyte2 (2z,  70z)
+    | AD_insufficient_security ->              abyte2 (2z,  71z)
+    | AD_internal_error ->                     abyte2 (2z,  80z)
+    | AD_user_cancelled_warning ->             abyte2 (1z,  90z)
+    | AD_user_cancelled_fatal ->               abyte2 (2z,  90z)
+    | AD_no_renegotiation ->                   abyte2 (1z, 100z)
+    | AD_unrecognized_name ->                  abyte2 (2z, 112z)
+    | AD_unsupported_extension ->              abyte2 (2z, 110z)
 
 val parse: b:lbytes 2 -> Tot 
   (r: result alertDescription { forall ad. (r = Correct ad ==> b = alertBytes ad) })
@@ -57,37 +57,37 @@ let parse b =
     let b1,b2 = cbyte2 b in
     Seq.lemma_eq_intro b (abyte2 (b1,b2));
     match cbyte2 b with
-    | (1uy,   0uy) -> Correct AD_close_notify
-    | (2uy,  10uy) -> Correct AD_unexpected_message
-    | (2uy,  20uy) -> Correct AD_bad_record_mac
-    | (2uy,  21uy) -> Correct AD_decryption_failed
-    | (2uy,  22uy) -> Correct AD_record_overflow
-    | (2uy,  30uy) -> Correct AD_decompression_failure
-    | (2uy,  40uy) -> Correct AD_handshake_failure
-    | (1uy,  41uy) -> Correct AD_no_certificate
-    | (1uy,  42uy) -> Correct AD_bad_certificate_warning
-    | (2uy,  42uy) -> Correct AD_bad_certificate_fatal
-    | (1uy,  43uy) -> Correct AD_unsupported_certificate_warning
-    | (2uy,  43uy) -> Correct AD_unsupported_certificate_fatal
-    | (1uy,  44uy) -> Correct AD_certificate_revoked_warning
-    | (2uy,  44uy) -> Correct AD_certificate_revoked_fatal
-    | (1uy,  45uy) -> Correct AD_certificate_expired_warning
-    | (2uy,  45uy) -> Correct AD_certificate_expired_fatal
-    | (1uy,  46uy) -> Correct AD_certificate_unknown_warning
-    | (2uy,  46uy) -> Correct AD_certificate_unknown_fatal
-    | (2uy,  47uy) -> Correct AD_illegal_parameter
-    | (2uy,  48uy) -> Correct AD_unknown_ca
-    | (2uy,  49uy) -> Correct AD_access_denied
-    | (2uy,  50uy) -> Correct AD_decode_error
-    | (2uy,  51uy) -> Correct AD_decrypt_error
-    | (2uy,  60uy) -> Correct AD_export_restriction
-    | (2uy,  70uy) -> Correct AD_protocol_version
-    | (2uy,  71uy) -> Correct AD_insufficient_security
-    | (2uy,  80uy) -> Correct AD_internal_error
-    | (1uy,  90uy) -> Correct AD_user_cancelled_warning
-    | (2uy,  90uy) -> Correct AD_user_cancelled_fatal
-    | (1uy, 100uy) -> Correct AD_no_renegotiation
-    | (2uy, 110uy) -> Correct AD_unsupported_extension
+    | (1z,   0z) -> Correct AD_close_notify
+    | (2z,  10z) -> Correct AD_unexpected_message
+    | (2z,  20z) -> Correct AD_bad_record_mac
+    | (2z,  21z) -> Correct AD_decryption_failed
+    | (2z,  22z) -> Correct AD_record_overflow
+    | (2z,  30z) -> Correct AD_decompression_failure
+    | (2z,  40z) -> Correct AD_handshake_failure
+    | (1z,  41z) -> Correct AD_no_certificate
+    | (1z,  42z) -> Correct AD_bad_certificate_warning
+    | (2z,  42z) -> Correct AD_bad_certificate_fatal
+    | (1z,  43z) -> Correct AD_unsupported_certificate_warning
+    | (2z,  43z) -> Correct AD_unsupported_certificate_fatal
+    | (1z,  44z) -> Correct AD_certificate_revoked_warning
+    | (2z,  44z) -> Correct AD_certificate_revoked_fatal
+    | (1z,  45z) -> Correct AD_certificate_expired_warning
+    | (2z,  45z) -> Correct AD_certificate_expired_fatal
+    | (1z,  46z) -> Correct AD_certificate_unknown_warning
+    | (2z,  46z) -> Correct AD_certificate_unknown_fatal
+    | (2z,  47z) -> Correct AD_illegal_parameter
+    | (2z,  48z) -> Correct AD_unknown_ca
+    | (2z,  49z) -> Correct AD_access_denied
+    | (2z,  50z) -> Correct AD_decode_error
+    | (2z,  51z) -> Correct AD_decrypt_error
+    | (2z,  60z) -> Correct AD_export_restriction
+    | (2z,  70z) -> Correct AD_protocol_version
+    | (2z,  71z) -> Correct AD_insufficient_security
+    | (2z,  80z) -> Correct AD_internal_error
+    | (1z,  90z) -> Correct AD_user_cancelled_warning
+    | (2z,  90z) -> Correct AD_user_cancelled_fatal
+    | (1z, 100z) -> Correct AD_no_renegotiation
+    | (2z, 110z) -> Correct AD_unsupported_extension
     | _            -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 

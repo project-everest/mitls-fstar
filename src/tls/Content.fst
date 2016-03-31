@@ -88,18 +88,18 @@ type contentType13 = ct: contentType { ct <> Change_cipher_spec }
 val ctBytes: contentType -> Tot (lbytes 1)
 let ctBytes ct =
     match ct with
-    | Change_cipher_spec -> abyte 20uy
-    | Alert              -> abyte 21uy
-    | Handshake          -> abyte 22uy
-    | Application_data   -> abyte 23uy
+    | Change_cipher_spec -> abyte 20z
+    | Alert              -> abyte 21z
+    | Handshake          -> abyte 22z
+    | Application_data   -> abyte 23z
 
 val parseCT: pinverse_t ctBytes
 let parseCT b =
     match cbyte b with
-    | 20uy -> Correct Change_cipher_spec
-    | 21uy -> Correct Alert
-    | 22uy -> Correct Handshake
-    | 23uy -> Correct Application_data
+    | 20z -> Correct Change_cipher_spec
+    | 21z -> Correct Alert
+    | 22z -> Correct Handshake
+    | 23z -> Correct Application_data
     | _    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_ct: x:_ -> Lemma

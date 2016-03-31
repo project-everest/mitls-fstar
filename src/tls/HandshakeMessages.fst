@@ -50,40 +50,40 @@ type handshakeType = preHandshakeType
 val htBytes : handshakeType -> Tot (lbytes 1)
 let htBytes t =
     match t with
-    | HT_hello_request       -> abyte   0uy
-    | HT_client_hello        -> abyte   1uy
-    | HT_server_hello        -> abyte   2uy
-    | HT_session_ticket      -> abyte   4uy
-    | HT_hello_retry_request -> abyte   6uy
-    | HT_encrypted_extensions -> abyte  8uy
-    | HT_certificate         -> abyte  11uy
-    | HT_server_key_exchange -> abyte  12uy
-    | HT_certificate_request -> abyte  13uy
-    | HT_server_hello_done   -> abyte  14uy
-    | HT_certificate_verify  -> abyte  15uy
-    | HT_client_key_exchange -> abyte  16uy
-    | HT_server_configuration -> abyte 17uy
-    | HT_next_protocol       -> abyte  67uy
-    | HT_finished            -> abyte  20uy
+    | HT_hello_request       -> abyte   0z
+    | HT_client_hello        -> abyte   1z
+    | HT_server_hello        -> abyte   2z
+    | HT_session_ticket      -> abyte   4z
+    | HT_hello_retry_request -> abyte   6z
+    | HT_encrypted_extensions -> abyte  8z
+    | HT_certificate         -> abyte  11z
+    | HT_server_key_exchange -> abyte  12z
+    | HT_certificate_request -> abyte  13z
+    | HT_server_hello_done   -> abyte  14z
+    | HT_certificate_verify  -> abyte  15z
+    | HT_client_key_exchange -> abyte  16z
+    | HT_server_configuration -> abyte 17z
+    | HT_next_protocol       -> abyte  67z
+    | HT_finished            -> abyte  20z
 
 (* TODO: inversion lemmas *)
 val parseHt : pinverse_t htBytes
 let parseHt b =
     match cbyte b with
-    |   0uy  -> Correct (HT_hello_request      )
-    |   1uy  -> Correct (HT_client_hello       )
-    |   2uy  -> Correct (HT_server_hello       )
-    |   4uy  -> Correct (HT_session_ticket     )
-    |   8uy  -> Correct (HT_encrypted_extensions)
-    |  11uy  -> Correct (HT_certificate        )
-    |  12uy  -> Correct (HT_server_key_exchange)
-    |  13uy  -> Correct (HT_certificate_request)
-    |  14uy  -> Correct (HT_server_hello_done  )
-    |  15uy  -> Correct (HT_certificate_verify )
-    |  16uy  -> Correct (HT_client_key_exchange)
-    |  18uy  -> Correct (HT_server_configuration)
-    |  20uy  -> Correct (HT_finished           )
-    |  67uy  -> Correct (HT_next_protocol      )
+    |   0z  -> Correct (HT_hello_request      )
+    |   1z  -> Correct (HT_client_hello       )
+    |   2z  -> Correct (HT_server_hello       )
+    |   4z  -> Correct (HT_session_ticket     )
+    |   8z  -> Correct (HT_encrypted_extensions)
+    |  11z  -> Correct (HT_certificate        )
+    |  12z  -> Correct (HT_server_key_exchange)
+    |  13z  -> Correct (HT_certificate_request)
+    |  14z  -> Correct (HT_server_hello_done  )
+    |  15z  -> Correct (HT_certificate_verify )
+    |  16z  -> Correct (HT_client_key_exchange)
+    |  18z  -> Correct (HT_server_configuration)
+    |  20z  -> Correct (HT_finished           )
+    |  67z  -> Correct (HT_next_protocol      )
     | _   -> let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_decode_error, reason)
 
 /// Messages
@@ -395,7 +395,7 @@ val helloRequestBytes: bytes
 let helloRequestBytes = messageBytes HT_hello_request empty_bytes
 
 val ccsBytes: bytes
-let ccsBytes = abyte 1uy
+let ccsBytes = abyte 1z
 
 val serverHelloDoneBytes: bytes
 let serverHelloDoneBytes = messageBytes HT_server_hello_done empty_bytes
