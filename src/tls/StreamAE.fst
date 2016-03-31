@@ -19,6 +19,7 @@ open StreamPlain
 open MonotoneSeq
 open FStar.Monotonic.RRef
 
+
 type id = i:id { pv_of_id i = TLS_1p3 }
 
 assume val alg: i:id -> Tot CoreCrypto.aead_cipher // unclear what to re-use as alg IDs
@@ -40,6 +41,10 @@ private type iv  (i:id) = lbytes (CoreCrypto.aeadRealIVSize (alg i)) // should i
 
 type seqn i = n:nat { repr_bytes n <= aeadRecordIVSize (alg i)}
 
+// unused so far
+let seqn_grows i : FStar.Monotonic.RRef.reln (seqn i) = fun x y -> y >= x //CF not usable? 
+let lemma_seqn_grows_monotone i : Lemma (monotonic (seqn i) (fun x y -> y >= x)) = ()
+
 val max_uint64: n:nat {repr_bytes n <= 8} 
 let max_uint64 = 
   //let n = 18446744073709551615 in
@@ -47,14 +52,15 @@ let max_uint64 =
   lemma_repr_bytes_values n; n
 
 type log_ref (r:rid) (i:id)  = FStar.Monotonic.RRef.m_rref r (seq (entry i)) MonotoneSeq.grows
+type seqn_ref (r:rid) (i:id) = FStar.Monotonic.RRef.m_rref r (seqn i) (fun x y -> y >= x) // (seqn_grows i)
 
-type state (i:id) (rw:rw) =
+type state (i:id) (rw:rw) = 
   | State: #region:rid 
          -> #peer_region:rid{HyperHeap.disjoint region peer_region}
          -> key:key i
          -> iv: iv i
          -> log: log_ref (if rw=Reader then peer_region else region) i // ghost, subject to cryptographic assumption
-         -> counter: rref region (seqn i) // types are sufficient to anti-alias log and counter
+         -> counter: seqn_ref region i // types are sufficient to anti-alias log and counter
          -> state i rw
 // Some invariants:
 // - the writer counter is the length of the log; the reader counter is lower or equal
@@ -82,11 +88,11 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer
          /\ fresh_region w.region h0 h1
          /\ fresh_region r.region h0 h1
          /\ op_Equality #(log_ref w.region i) w.log r.log  //the explicit annotation here *)
-         /\ contains_ref w.counter h1
-         /\ contains_ref r.counter h1
+         /\ m_contains w.counter h1
+         /\ m_contains r.counter h1
          /\ m_contains w.log h1
-         /\ 0 = sel h1 w.counter
-         /\ 0 = sel h1 r.counter
+         /\ m_sel h1 w.counter = 0
+         /\ m_sel h1 r.counter = 0
          /\ m_sel h1 w.log = createEmpty
          ))
 
@@ -96,8 +102,8 @@ let gen reader_parent writer_parent i =
   let reader_r = new_region reader_parent in
   let writer_r = new_region writer_parent in
   lemma_repr_bytes_values 0;
-  let ectr = ralloc writer_r 0 in
-  let dctr = ralloc reader_r 0 in
+  let ectr = m_alloc writer_r 0 in
+  let dctr = m_alloc reader_r 0 in
   let log  = alloc_mref_seq writer_r Seq.createEmpty in 
   let writer  = State #i #Writer #writer_r #reader_r kv iv log ectr in
   let reader  = State #i #Reader #reader_r #writer_r kv iv log dctr in
@@ -115,13 +121,9 @@ val coerce: r0:rid -> p0:rid -> i:id{~(safeId i)} -> role:rw -> kv:key i -> iv:i
 let coerce r0 p0 i role kv iv =
   let r = new_region r0 in
   let p = new_region p0 in
-  lemma_repr_bytes_values 0;
-  let ctr : rref r _ = ralloc r 0 in
-  if role=Reader
-  then let log = alloc_mref_seq p Seq.createEmpty in 
-       State #i #role #r #p kv iv log ctr
-  else let log = alloc_mref_seq r Seq.createEmpty in
-       State #i #role #r #p kv iv log ctr 
+  let log = alloc_mref_seq (if role = Reader then p else r) Seq.createEmpty in
+  let ctr = lemma_repr_bytes_values 0; m_alloc r 0 in
+  State #i #role #r #p kv iv log ctr 
 
 
 val leak: i:id{~(safeId i)} -> role:rw -> state i role -> ST (key i * iv i)
@@ -154,26 +156,29 @@ val enc:
     (requires (fun h -> True))
     (ensures  (fun h0 c h1 ->
                  modifies (Set.singleton e.region) h0 h1
-               /\ modifies_rref e.region !{as_ref e.counter} h0 h1
-	       /\ contains_ref e.counter h1
+               /\ modifies_rref e.region !{as_ref (as_rref e.counter)} h0 h1
+	       /\ m_contains e.counter h1
                // /\ sel h1 e.counter = sel h0 e.counter + 1
     ))
 
 let enc i e l p =
-  recall e.counter;
-  let iv = aeIV i !e.counter e.iv in
+  m_recall e.counter;
+  let n = m_read e.counter in
+  let iv = aeIV i n e.iv in
   let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD p in
-  let n = !e.counter in
   if n + 1 < max_uint64 then
     begin
       lemma_repr_bytes_values (n + 1);
-      e.counter := n + 1
+      assert (n + 1 >= n);
+      m_write e.counter (n + 1)
     end
   else
     begin
+      ()
+      //CF revisit; I'd prefer to statically prevent it.
       // overflow, we don't care
-      lemma_repr_bytes_values 0;
-      e.counter := 0
+      // lemma_repr_bytes_values 0;
+      // m_write e.counter 0
     end;
    c
 
@@ -183,9 +188,9 @@ val encrypt:
     (requires (fun h0 -> True))
     (ensures  (fun h0 c h1 ->
                            modifies (Set.singleton e.region) h0 h1
-                         /\ modifies_rref e.region !{as_ref e.counter, as_ref (as_rref e.log)} h0 h1
+                         /\ modifies_rref e.region !{as_ref (as_rref e.counter), as_ref (as_rref e.log)} h0 h1
                          /\ m_contains e.log h1
-                         /\ contains_ref e.counter h1
+                         /\ m_contains e.counter h1
                          (* /\ sel h1 e.counter = sel h0 e.counter + 1 *)
 			 /\ (let ent = Entry l c p in
 			    let n = Seq.length (m_sel h0 e.log) in
@@ -198,7 +203,7 @@ val encrypt:
    i.e. all idealization is turned off *)
 let encrypt i e l p =
   m_recall e.log;  
-  recall e.counter;
+  m_recall e.counter;
   let text = if safeId i then createBytes l 0uy else repr i l p in
   let c = enc i e l text in
   let ent = Entry l c p in
@@ -214,13 +219,14 @@ private val dec:
   (ensures  (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
 let dec i d l c =
-  let iv = aeIV i !d.counter d.iv  in
+  let n = m_read d.counter in
+  let iv = aeIV i n d.iv  in
   match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with
   | Some p -> Some p
   | None   -> None
 
-val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
-let matches #i l c (Entry l' c' _) = l = l' && c = c'
+//val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
+let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
 
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
