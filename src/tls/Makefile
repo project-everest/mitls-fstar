@@ -77,9 +77,7 @@ endif
 # these files are the stable inputs for verification -- this is the dependency
 # order for interactive verification; these files are now all extracted via
 # lax type-checking in tls-gen
-FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
-
-VERIFIABLE_FSTS=MonotoneSeq.fst \
+FSTAR_SOURCES=MonotoneSeq.fst \
 TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
@@ -109,10 +107,7 @@ StatefulLHAE.fst \
 ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
-Handshake.fsti \
-Connection.fst #the preceding space is significant!
-
-LAX_CHECKED_FSTS=Record.fst \
+Record.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 TLSExtensions.p.fst \
@@ -120,13 +115,14 @@ HSCrypto.fst \
 HandshakeMessages.fst \
 TLSPRF.fst \
 PRF.p.fst \
+Handshake.fsti \
 Handshake.fst \
 Connection.fst \
 TLS.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-# missing modules from VERIFIABLE_FSTS are: PMS Sig Cert Encode Enc
+# missing modules from FSTAR_SOURCES are: PMS Sig Cert Encode Enc
 VERIFY=\
 Monotone.Seq \
 TLSError \
@@ -161,18 +157,18 @@ Connection
 ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Cert Handshake)
 
 
-# truncates $(FSTS) just before $(basename $@).fst
+# truncates $(FSTAR_SOURCES) just before $(basename $@).fst
 define prefix_cfg
-	$(shell str="$(VERIFIABLE_FSTS)"; echo "$${str%%$(1).$(2) *}")
+	$(shell str="$(FSTAR_SOURCES)"; echo "$${str%%$(1).$(2) *}")
 endef
 
-# truncates $(FSTS) just after $(basename $@).fst
+# truncates $(FSTAR_SOURCES) just after $(basename $@).fst
 define prefix_ver
-	$(shell str="$(VERIFIABLE_FSTS)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
+	$(shell str="$(FSTAR_SOURCES)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
 endef
 # the space in calls to prefix_ver and prefix_cfg matters!
 
-# verifying one file within $(FSTS)
+# verifying one file within $(FSTAR_SOURCES)
 %.fst-ver: $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
@@ -197,19 +193,19 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-tls-ver: $(LIBFILES) $(VERIFIABLE_FSTS)
+tls-ver: $(LIBFILES) $(FSTAR_SOURCES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
 	$^
 
 # same as tls-ver, but verifies one module at a time.
-tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
+tls-ver1: $(FSTAR_SOURCES) $(addsuffix .fst-ver,$(VERIFY))
 
 wc:
-	wc -l $(LIBFILES)) $(FSTS)
+	wc -l $(LIBFILES)) $(FSTAR_SOURCES)
 
-tls-lax: $(LIBFILES) $(FSTS)
+tls-lax: $(LIBFILES) $(FSTAR_SOURCES)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
 # These are the .cmx files for all ML-implemented F* modules.
@@ -223,7 +219,8 @@ LIB_ML= \
 TLSGEN_ADMIT=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
 
 # All our extracted modules.
-TLSML := $(FSTS:.p.fst=.ml)
+TLSML := $(subst Handshake.fsti, , $(FSTAR_SOURCES))
+TLSML := $(TLSML:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
@@ -238,7 +235,7 @@ TLSML := $(notdir $(TLSML))
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen: $(LIBFILES) $(FSTS)
+tls-gen: $(LIBFILES) $(FSTAR_SOURCES)
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \

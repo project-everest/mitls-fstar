@@ -21,6 +21,9 @@ open HandshakeMessages
 open StatefulLHAE
 open HSCrypto
 			  
+
+let hsId h = noId // Placeholder
+
 (* Negotiation: HELLO sub-module *)
 
 type ri = (cVerifyData * sVerifyData) 
@@ -314,7 +317,7 @@ type role_state =
     | C of clientState
     | S of serverState
      
-type handshake_state (r:role) = 
+type handshake_state' (r:role) =
      {
        hs_nego: option nego;
        hs_ake: option ake;
@@ -324,6 +327,14 @@ type handshake_state (r:role) =
        hs_reader: int;
        hs_writer: int;
      }
+
+//NS: needed this renaming trick for the .fsti
+let handshake_state r = handshake_state' r
+
+//to match the external interface
+//let handshake_state (r:role) = handshake_state' r
+let iT0 s rw st = -1 //TODO:Implement!
+let i s rw = Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
 
 val handshake_state_init: (ver:protocolVersion) -> (r:role) -> Tot (handshake_state r )
 let handshake_state_init (ver:protocolVersion) (r:role) =
@@ -338,50 +349,18 @@ let handshake_state_init (ver:protocolVersion) (r:role) =
     	| Client -> C (C_Idle None)
     	| Server -> S (S_Idle None)) }
 
-type handshake = 
-  | Fresh of sessionInfo
-  | Resumed of abbrInfo * sessionInfo 
-val hsId: handshake -> Tot TLSInfo.id
-let hsId h = noId // Placeholder
-
-type epoch (rgn:rid) (peer:rid) =
-  | Epoch: h: handshake ->
-           r: reader (peerId (hsId h)) ->
-           w: writer (hsId h) -> epoch rgn peer
+//Defined in the .fsti
+//type handshake
+//type epoch 
+//type epochs
+//type hs
+//type outgoing
+//type incoming
 
 (* This following function needs to call PRF.deriveKeys correctly to get StatefulLHAE keys *)
 assume val deriveEpoch: (r:rid) -> (p:rid) -> session -> ST (epoch r p)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-
-type epochs (r:rid) (p:rid) = es: seq (epoch r p)
-
-type hs =
-  | HS: #region: rid ->
-        #peer: rid ->
-        r:role ->
-        resume: option (sid:sessionID { r = Client }) ->
-        cfg:config ->
-        id: random -> 
-        log: rref region (epochs region peer) -> 
-        state: rref region (handshake_state r) -> 
-        hs
-
-
-type outgoing = // by default the state changes but not the epochs
-  | OutIdle
-  | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
-  | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
-  | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
-  | OutError: error -> outgoing
-  
-type incoming = // the fragment is accepted, and...
-  | InAck
-  | InQuery: Cert.chain -> bool -> incoming
-  | InCCS             // signal new epoch (only in TLS 1.3)
-  | InComplete        // signal completion of current epoch
-  | InError of error  // how underspecified should it be?
-
 
 (* Handshake API: INTERNAL Callbacks, hidden from API *)
 
@@ -594,9 +573,7 @@ assume val server_send_server_finished_res: hs -> ST unit
 
 (* Handshake API: PUBLIC Functions, taken from FSTI *)
 
-val version: s:hs -> ST protocolVersion
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+//val version: see .fsti
 let version (HS r res cfg id l st) =
     match (!st).hs_nego with
     | Some n -> n.n_protocol_version
@@ -612,12 +589,7 @@ let iT_old (HS r res cfg id l st) rw =
   | Reader -> (!st).hs_reader
   | Writer -> (!st).hs_writer
 
-
-val init: r0:rid -> peer:rid -> r: role -> 
-       cfg:config -> resume: option (sid: sessionID { r = Client })  ->
-       ST hs
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+//val init: see .fsti
 let init r0 peer r cfg res = 
     let id = Nonce.mkHelloRandom() in
     let lg = createEmpty in
@@ -626,10 +598,18 @@ let init r0 peer r cfg res =
     let hsref = ralloc r0 hs in
     HS #r0 #peer r res cfg id lgref hsref
 
+// Idle client starts a full handshake on the current connection
+let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
 
-val next_fragment: s:hs -> ST outgoing
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+// Idle client starts an abbreviated handshake resuming the current session
+let rekey s c = Platform.Error.unexpected "rekey: not yet implemented"
+
+// (Idle) Server requests an handshake
+let request s c = Platform.Error.unexpected "request: not yet implemented"
+
+let invalidateSession hs = Platform.Error.unexpected "invalidateSession: not yet implemented"
+
+//val next_fragment: see .fsti
 let rec next_fragment hs = 
     let (HS #r0 #peer r res cfg id lgref hsref) = hs in
     let pv,kex,res = 
@@ -668,9 +648,7 @@ let rec parseHandshakeMessages pv kex buf =
        	     | Correct (r,hsl) -> Correct(r,(hsm,to_log)::hsl)))
 
 
-val recv_fragment: s:hs -> rg:Range.range -> rbytes rg -> ST incoming
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+//val recv_fragment: see .fsti
 let recv_fragment hs (rg:Range.range) (rb:rbytes rg) = 
     let (HS #r0 #peer r res cfg id lgref hsref) = hs in
     let b = (!hsref).hs_buffers.hs_incoming in
@@ -788,9 +766,7 @@ let recv_fragment hs (rg:Range.range) (rb:rbytes rg) =
        | _ , _ -> InAck)
 	   
 
-val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3 
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+//val recv_ccs: see .fsti  // special case: CCS before 1p3  
 let recv_ccs hs = 
     let (HS #r0 #peer r res cfg id lgref hsref) = hs in
     let pv,kex = 
@@ -832,40 +808,5 @@ let recv_ccs hs =
     | _,_ -> InError(AD_unexpected_message, "ClientCCS received at wrong time"))
 
 
-assume val authorize: s:hs -> Cert.chain -> ST incoming
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"
 
-
-(* These definitions are here so that we can use Handshake.fst instead of
- * Handshake.fsti. TODO: they are meant to go away once we merge Handshake.fsti
- * into Handshake.fst *)
-assume type hs_footprint_inv (s: hs) (h: HyperHeap.t): Type0
-assume type hs_inv (s: hs) (h: HyperHeap.t): Type0
-assume type epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)): Type0
-assume val regions: #p:rid -> #q:rid -> e:epoch p q -> Tot (Set.set HyperHeap.rid)
-assume type modifies_internal (h1: HyperHeap.t) (s: hs) (h2: HyperHeap.t): Type0
-
-// Idle client starts a full handshake on the current connection
-assume val rehandshake: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS.r s = Client))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
-
-// Idle client starts an abbreviated handshake resuming the current session
-assume val rekey: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS.r s = Client))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
-
-// (Idle) Server requests an handshake
-assume val request: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS.r s = Server))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
-
-assume val invalidateSession: s:hs -> ST unit
-  (requires (hs_inv s))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
-
-let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
-// The return type is simplified for the sake of extraction.
-assume val iT: s:hs -> rw:rw -> h:HyperHeap.t -> Tot int
-assume val i: s:hs -> rw:rw -> St int

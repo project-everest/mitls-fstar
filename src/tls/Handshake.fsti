@@ -30,6 +30,20 @@ type handshake =
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
 
+type outgoing = // by default the state changes but not the epochs
+  | OutIdle
+  | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
+  | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
+  | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
+  | OutError: error -> outgoing
+
+type incoming = // the fragment is accepted, and...
+  | InAck
+  | InQuery: Cert.chain -> bool -> incoming
+  | InCCS             // signal new epoch (only in TLS 1.3)
+  | InComplete        // signal completion of current epoch
+  | InError of error  // how underspecified should it be?
+
 // extracts a transport key identifier from a handshake record
 val hsId: handshake -> Tot id
 
@@ -70,7 +84,7 @@ let epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
 
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
-assume new type handshake_state 
+val handshake_state : role -> Type0
 
 type hs =
   | HS: #region: rid ->
@@ -80,13 +94,13 @@ type hs =
         cfg:config ->
         id: random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
         log: rref region (epochs region peer) ->  // append-only; use monotonic? 
-        state: rref region handshake_state  ->  // opaque, subject to invariant
+        state: rref region (handshake_state r)  ->  // opaque, subject to invariant
         hs
 
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-let stateType (s:hs) = epochs s.region s.peer * handshake_state 
+let stateType (s:hs) = epochs s.region s.peer * handshake_state (HS.r s)
 
 let stateT (s:hs) (h:HyperHeap.t) : stateType s = (sel h s.log, sel h s.state)
 
@@ -142,7 +156,7 @@ let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoc
 
 
 // placeholder, to be implemented as a stateful property.
-assume type completed: #region:rid -> #peer:rid -> epoch region peer -> Type
+assume val completed: #region:rid -> #peer:rid -> epoch region peer -> Type0
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -161,7 +175,7 @@ assume type completed: #region:rid -> #peer:rid -> epoch region peer -> Type
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
  
-assume type hs_invT (s:hs) (epochs:seq (epoch s.region s.peer)) : handshake_state -> Type
+assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.peer) -> handshake_state (HS.r s) -> Type0
 
 let hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
   HyperHeap.contains_ref s.log h   /\ 
@@ -233,13 +247,6 @@ val invalidateSession: s:hs -> ST unit
 
 
 (*** Outgoing ***)
-
-type outgoing = // by default the state changes but not the epochs
-  | OutIdle
-  | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
-  | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
-  | OutFinished: rg:frange_any -> rbytes rg -> outgoing   // signal false start (if enabled)
-  | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
 val next_fragment: s:hs -> ST outgoing
   (requires (hs_inv s))
   (ensures (fun h0 result h1 -> 
@@ -256,14 +263,6 @@ val next_fragment: s:hs -> ST outgoing
 
 
 (*** Incoming ***)
-
-type incoming = // the fragment is accepted, and...
-  | InAck
-  | InQuery: Cert.chain -> bool -> incoming
-  | InCCS             // signal new epoch (only in TLS 1.3)
-//| InFinished        // signal false state before TLS 1.3 (if enabled)
-  | InComplete        // signal completion of current epoch
-  | InError of error  // how underspecified should it be?
 val recv_fragment: s:hs -> rg:Range.range { wider fragment_range rg } -> rbytes rg -> ST incoming
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
