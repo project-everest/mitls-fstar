@@ -126,15 +126,17 @@ type config = {
     signatureAlgorithms: list sigHashAlg;
     }
 
+val sigAlgPref: list sigAlg -> list hashAlg -> Tot (list sigHashAlg)
+let rec sigAlgPref s h =
+    match s with
+    | [] -> []
+    | sa :: r -> List.Tot.append (List.Tot.map (fun u -> (sa,u)) h) (sigAlgPref r h)
+
 #set-options "--initial_fuel 10 --max_fuel 10"
 let defaultConfig =
     let sigPref = [CoreCrypto.ECDSA; CoreCrypto.RSAPSS; CoreCrypto.RSASIG] in
     let hashPref = [Hash CoreCrypto.SHA512; Hash CoreCrypto.SHA384;
                     Hash CoreCrypto.SHA256; Hash CoreCrypto.SHA1] in
-    let rec sigAlgPref : list sigAlg -> list hashAlg -> Tot (list sigHashAlg) =
-      fun s h -> (match s with
-      | [] -> []
-      | sa :: r -> List.Tot.append (List.Tot.map (fun u->sa,u) h) (sigAlgPref r h)) in
     let sigAlgPrefs = sigAlgPref sigPref hashPref in
     let l =         [ TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
@@ -170,7 +172,7 @@ let defaultConfig =
     dhPQMinLength = DHDB.defaultPQMinLength;
 
     ecdhGroups = [CoreCrypto.ECC_P256; CoreCrypto.ECC_P384; CoreCrypto.ECC_P521];
-    signatureAlgorithms = sigAlgPref sigPref hashPref;
+    signatureAlgorithms = sigAlgPrefs;
     }
 #reset-options
 

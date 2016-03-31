@@ -654,6 +654,13 @@ let test_send_alert (c: connection) (i: id) (ad: alertDescription) =
   | Error (x,y) ->
       unrecoverable c y
 
+let test_send (c:connection) (i:id) =
+  let hs_response = Handshake.next_fragment c.hs in
+  match hs_response with
+  | Handshake.OutSome rg f ->
+     send c #i (Content.CT_Handshake rg f)
+  | _ -> failwith "ERROR"
+
 let test_send_hs_fragment (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
   match send c #i (Content.CT_Handshake rg f) with
   | Correct ()   -> WriteAgain

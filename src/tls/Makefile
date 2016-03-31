@@ -112,8 +112,6 @@ Handshake.fsti \
 Connection.fst #the preceding space is significant!
 
 LAX_CHECKED_FSTS=Record.fst \
-test/TestRecord.fst \
-test/TestDH.fst \
 TLSExtensions.p.fst \
 HSCrypto.fst \
 HandshakeMessages.fst \
@@ -121,7 +119,10 @@ TLSPRF.fst \
 PRF.p.fst \
 Handshake.fst \
 Connection.fst \
-TLS.fst #the preceding space is significant!
+TLS.fst \
+test/TestRecord.fst \
+test/TestDH.fst \
+test/TestClient.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here

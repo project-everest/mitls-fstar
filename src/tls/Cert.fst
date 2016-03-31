@@ -55,6 +55,7 @@ let verify_signature c pv nonces_or_log csa sigalgs tbs sigv =
     else false
   | _ -> false // TODO!!
 
+(*
 type sign_cert = option (chain * Sig.alg * Sig.skey)
 type enc_cert  = option (chain * RSAKey.sk)
 
@@ -87,3 +88,4 @@ let get_hint c = failwith "Not implemented"
 
 abstract val validate_cert_chain : list Sig.alg  -> chain -> bool
 let validate_cert_chain l c = failwith "Not implemented"
+*)
