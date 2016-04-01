@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # check for regressions & comment about them!
-all: tls-ver tls-lax tls-gen
+all: tls-ver tls-sanity tls-lax tls-gen
 
 # TODO extend scope of verification
 # TODO compilation to ML & testing
@@ -202,6 +202,12 @@ tls-ver: $(LIBFILES) $(VERIFIABLE_FSTS)
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
 	$^
+
+tls-sanity: $(LIBFILES) $(VERIFIABLE_FSTS) test/False.fst
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	--__temp_no_proj Handshake --__temp_no_proj Connection \
+        --verify_module False \
+	$^ | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # same as tls-ver, but verifies one module at a time.
 tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
