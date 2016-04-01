@@ -159,7 +159,7 @@ let equal_on_disjoint s1 s2 r h0 h1 = ()
 
 //Move this to the library 
 val ghost_lemma2: #a:Type -> #b:Type -> #p:(a -> b -> GTot Type) -> #q:(a -> b -> unit -> GTot Type) 
-		       -> =f:(x:a -> y:b -> Ghost unit (p x y) (q x y)) 
+		       -> $f:(x:a -> y:b -> Ghost unit (p x y) (q x y)) 
 		       -> Lemma (forall (x:a) (y:b). p x y ==> q x y ())
 let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -> Type)) f = 
   let f : x:a -> Lemma (forall (y:b). (p x y ==> q x y ())) = 

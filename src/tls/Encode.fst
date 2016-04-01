@@ -68,8 +68,8 @@ let macPlain_bytes i rg ad b =
   ad @| vlbytes 2 b
 
 val macPlain: i:id -> r:frange i ->
-  =ad:LHAEPlain.adata i ->
-  =f:LHAEPlain.plain i ad r ->
+  $ad:LHAEPlain.adata i ->
+  $f:LHAEPlain.plain i ad r ->
   Tot bytes // (tagt i) // ?(b:bytes{ safeId i })
 let macPlain i rg ad f =
   macPlain_bytes i rg ad (payload i rg ad f)

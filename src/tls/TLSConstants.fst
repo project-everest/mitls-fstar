@@ -101,7 +101,7 @@ let sigAlgBytes sa =
 (* logic type pinverse (#a:Type) (#b:Type) (r:(b -> b -> Type)) (=f:(a -> Tot b)) =
     (y:b -> Tot (xopt:result a{(forall (x:a). r (f x) y <==> (xopt = Correct x))})) *)
 
-type pinverse_t (#a:Type) (#b:Type) (=f:(a -> Tot b)) =
+type pinverse_t (#a:Type) (#b:Type) ($f:(a -> Tot b)) =
     (y:b -> Tot (result a))
 
 (* Parsing function associated to sigAlgBytes *)
@@ -114,10 +114,10 @@ let parseSigAlg b =
     | 4z -> Correct CoreCrypto.RSAPSS
     | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-inline type lemma_inverse_g_f (#a:Type) (#b:Type) (=f:(a -> Tot b)) (=g:(b -> Tot (result a))) (x:a) = 
+inline type lemma_inverse_g_f (#a:Type) (#b:Type) ($f:(a -> Tot b)) ($g:(b -> Tot (result a))) (x:a) = 
   g (f x) = Correct x
 
-inline type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) (=f:(a -> Tot b)) (=g:(b -> Tot (result a))) (y:b) =
+inline type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:(a -> Tot b)) ($g:(b -> Tot (result a))) (y:b) =
   is_Correct (g y) ==> r (f (Correct._0 (g y))) y
 
 val inverse_sigAlg: x:_ -> Lemma
@@ -597,7 +597,7 @@ let pvcs (pv:protocolVersion) (cs:cipherSuite) =
   | TLS_1p2 | TLS_1p3 -> is_Some (prfMacAlg_of_ciphersuite_aux cs)
   | _                 -> true
 
-inline type require_some (#a:Type) (#b:Type) (=f:(a -> Tot (option b))) = 
+inline type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) = 
   x:a{is_Some (f x)} -> Tot b
 
 let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =

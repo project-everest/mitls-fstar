@@ -100,7 +100,7 @@ let tls_prf secret label seed len =
   xor len hmd5 hsha1 
 
 val tls_finished_label: role -> Tot bytes
-let tls_finished_label : role -> bytes =
+let tls_finished_label =
   let tls_client_label = utf8 "client finished" in
   let tls_server_label = utf8 "server finished" in
   function
