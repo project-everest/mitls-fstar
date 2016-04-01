@@ -204,7 +204,7 @@ let encrypt i e ad rg p =
   recall e.log;
   let tlen = targetLength i rg in
   let text =
-    if safeId i then createBytes (fst rg) 0uy
+    if safeId i then createBytes (fst rg) 0z
     else repr i ad rg p in
   targetLength_converges i rg;
   let c = enc i e ad (cipherRangeClass i tlen) text in

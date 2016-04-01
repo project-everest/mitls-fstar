@@ -37,8 +37,8 @@ val ssl_prf: bytes -> bytes -> int -> Tot bytes
 let ssl_prf secret seed nb = apply_prf secret seed nb empty_bytes  0 
 
 (*
-let ssl_sender_client = abytes [|0x43uy; 0x4Cuy; 0x4Euy; 0x54uy|]
-let ssl_sender_server = abytes [|0x53uy; 0x52uy; 0x56uy; 0x52uy|]
+let ssl_sender_client = abytes [|0x43z; 0x4Cz; 0x4Ez; 0x54z|]
+let ssl_sender_server = abytes [|0x53z; 0x52z; 0x56z; 0x52z|]
  *)
 (* JK : Temporary fix *)
 assume val ssl_sender_client: bytes

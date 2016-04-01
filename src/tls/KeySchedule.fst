@@ -36,20 +36,29 @@ abstract type pre_share_key = b:bytes{}
 val cert_keys: ref RSAKey.RSA_PK; // 
 val ticket_key: ref bytes // TODO
 
-type schedule_state_13 =
-| KXS13_INIT
-| KXS13_HANDSHAKE
-| KXS13_TRAFFIC
+type client_schedule_state =
+| C_KXS_INIT //initial state, state to get back to for renegotiation
+| C_KXS_NEGO //process server finished and go to one of following states, corresponds to C_HelloSent 
+| C_KXS12_RESUME //separate states for different handshake modes, these correspond to C_HelloReceived
+| C_KXS12_DHE
+| C_KXS12_RSA
+| C_KXS12_FINISH // keys are derived, only finished message computation, corresponds to C_CCSReceived
+//TLS13
+| C_KXS13_NEGO
+| C_KXS13_PSK
 
-type schedule_state_12 =
-| KXS12_INIT
-| KXS12_COMMIT
-| KXS12_KEYGEN
-| KXS12_FINISHED
+
+type server_schedule_state =
+| S_KXS_INIT
+| S_KXS_NEGO //process server finished
+| S_KXS12_RESUME //separate states for different handshake modes
+| S_KXS12_DHE
+| S_KXS12_RSA
+| S_KXS12_RSA
 
 type schedule_state =
-| KXS_13 of schedule_state_13
-| KXS_12 of schedule_state_12
+| KXS_client of client_schedule_state
+| KXS_server of server_schedule_state
 
 type kx_state = {
  role: role;
@@ -67,9 +76,49 @@ type kx_state = {
 val internal_state: Map.t rid (ref kx_state)
 let state_map = ref (const kx_state)
 
-// Init functions
-//val dh_server_init: #region:rid -> pv:pv -> ST unit (requires fun h->) (ensures contains (!state_map) rid)
-//val dh_client_iinit: 
+
+
+// ADL: PROBLEM WITH RESUMPTION
+// Currently if handshake has set a resumption identifier and server rejects resumption it will fail for no good reason
+
+// We cannot commit to the pv and protocol mode yet
+let kx_init_client #region:rid cfg:config -> ST unit (requires fun h-> True) (ensures contains (!state_map) rid) =
+    // if contains (!state_map) rid then state is C_KXS_INIT
+    // create fresh sessionInfo
+    // if cfg.resumption enabled
+      // Lookup session DB for cfg.server_name
+      // if valid session found fill in sessionInfo
+    // otherwise geneate client random + client key share (if pv>=1.3) + session identifier
+    // set KS state to S_KXS_NEGO
+
+let kx12_nego_client #region:rid n:nego sr:random=
+    // check that state is C_KXS_NEGO
+    // set KX state to C_KXS12_RESUME,  C_KXS12_DHE, or C_KXS12_RSA
+
+let kx12_resume_client #region:rid session_ID = //receive sessionID
+    // check that state is C_KXS12_RESUME
+    // set KX state to C_KXS12_FINISH
+
+let kx12_RSA_client #region:rid rsa_pk = //receive server RSA key
+    // check that state is C_KXS12_RSA
+    // set KX state to C_KXS12_FINISH
+
+let kx12_DHE_client #region:rid gy = //receive server share
+    // check that state is C_KXS12_DHE
+    // set KX state to C_KXS12_FINISH
+
+
+let kx_init_server #region:rid cfg:config cr:crandom ckx:option<dh_pub> pvcs:pv*cs index:option<either3<sid,psk_ids,ticket>> =
+    //
+    // Create fresh sessionInfo 
+
+
+
+
+
+
+
+(* MK: older experiment with Antoine
 
 val kx_init: #region:rid -> role:role -> pv:pv -> g:dh_group -> gx:option dh_pub{gx=None <==> (pv=TLS_1p3 /\ role = Client) \/ (role = Server /\ pv<>TLS_1p3)} -> ST dh_pub
 
@@ -83,29 +132,9 @@ val kx_set_peer: #region:rid -> gx:dh_pub -> ST unit (requires (sel !state_map r
 // state-aware
 val dh_next_key: #region:rid -> log:bytes -> 
 
+*)
 
-
-
-// ADL: PROBLEM WITH RESUMPTION
-// Currently if handshake has a set ri and server rejects resumption it will fail for no good reason
-// We cannot commit to the pv and 
-let kx_init_client #region:rid cfg:config k: =
-    // create fresh sessionInfo
-    // if cfg.resumption enabled
-      // Lookup session DB for cfg.server_name
-      // if valid session found fill in sessionInfo
-    // otherwise geneate client random + client key share (if pv>=1.3) + session identifier
-    // set KS state to Init
-
-let kx_init_server #region:rid cfg:config cr:crandom ckx:option<dh_pub> pvcs:pv*cs index:option<either3<sid,psk_ids,ticket>> =
-    // Create fresh sessionINfo
-    // 
-
-
-
-
-
-// OLD
+// OLD 
 
 
 assume val dh_commit

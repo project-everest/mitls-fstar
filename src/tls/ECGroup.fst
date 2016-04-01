@@ -52,11 +52,11 @@ val parse_curve: bytes -> Tot (option params)
 let parse_curve b =
   if length b = 3 then
     let (ty, id) = split b 1 in
-    if cbyte ty = 3uy then
+    if cbyte ty = 3z then
       match cbyte2 id with
-      | (0uy, 23uy) -> Some (params_of_group ECC_P256)
-      | (0uy, 24uy) -> Some (params_of_group ECC_P384)
-      | (0uy, 25uy) -> Some (params_of_group ECC_P521)
+      | (0z, 23z) -> Some (params_of_group ECC_P256)
+      | (0z, 24z) -> Some (params_of_group ECC_P384)
+      | (0z, 25z) -> Some (params_of_group ECC_P521)
       | _ -> None
     else None
   else None
@@ -64,9 +64,9 @@ let parse_curve b =
 val curve_id: params -> Tot (lbytes 2)
 let curve_id p =
   abyte2 (match p.curve with
-  | ECC_P256 -> (0uy, 23uy)
-  | ECC_P384 -> (0uy, 24uy)
-  | ECC_P521 -> (0uy, 25uy))
+  | ECC_P256 -> (0z, 23z)
+  | ECC_P384 -> (0z, 24z)
+  | ECC_P521 -> (0z, 25z))
 
 let op_Star = op_Multiply
 
@@ -75,7 +75,7 @@ val serialize_point: p:params
   -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
   -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 2})
 let serialize_point p e =
-  let pc = abyte 4uy in
+  let pc = abyte 4z in
   let x = pc @| e.ecx @| e.ecy in
   lemma_repr_bytes_values (length x);
   vlbytes 1 x
@@ -84,7 +84,7 @@ val serialize: p:params
   -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
   -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 5})
 let serialize ecp ecdh_Y =
-  let ty = abyte 3uy in
+  let ty = abyte 3z in
   let id = curve_id ecp in
   let e = serialize_point ecp ecdh_Y in
   ty @| id @| e
@@ -95,7 +95,7 @@ let parse_point p b =
   if length b = 2*clen + 1 then
     let (et, ecxy) = split b 1 in
     match cbyte et with
-    | 4uy ->
+    | 4z ->
       let (x,y) = split ecxy clen in
       let e = {ecx = x; ecy = y;} in
       if CoreCrypto.ec_is_on_curve p e then Some e else None
@@ -115,7 +115,7 @@ let getParams (c : ec_curve) : ec_params =
             ecp_gx = "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296";
             ecp_gy = "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5";
             ecp_bytelen = 32;
-            ecp_id = abyte2 (0uy, 23uy);
+            ecp_id = abyte2 (0z, 23z);
         }
     | ECC_P384 ->
         {
@@ -126,7 +126,7 @@ let getParams (c : ec_curve) : ec_params =
             ecp_gx = "aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7";
             ecp_gy = "3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f";
             ecp_bytelen = 48;
-            ecp_id = abyte2 (0uy, 24uy);
+            ecp_id = abyte2 (0z, 24z);
         }
     | ECC_P521 ->
         {
@@ -137,7 +137,7 @@ let getParams (c : ec_curve) : ec_params =
             ecp_gx = "0c6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d3dbaa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66";
             ecp_gy = "11839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650";
             ecp_bytelen = 66;
-            ecp_id = abyte2 (0uy, 25uy);
+            ecp_id = abyte2 (0z, 25z);
         }
     in { curve = EC_PRIME rawcurve; point_compression = false; }
 *)

@@ -31,12 +31,12 @@ let parseRenegotiationInfo b =
     | Correct(_) ->
 	let (len, payload) = split b 1 in
 	(match cbyte len with
-	| 0uy -> Correct (FirstConnection)
-	| 12uy | 36uy -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
-	| 24uy -> // TLS 1.2 case
+	| 0z -> Correct (FirstConnection)
+	| 12z | 36z -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
+	| 24z -> // TLS 1.2 case
 	    let cvd, svd = split payload 12 in
 	    Correct (ServerRenegotiationInfo (cvd, svd))
-	| 72uy -> // SSLv3
+	| 72z -> // SSLv3
 	    let cvd, svd = split payload 36 in
 	    Correct (ServerRenegotiationInfo (cvd, svd))
 	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
@@ -89,16 +89,16 @@ let sameExt a b =
 val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
   match ext with
-  | E_earlyData _           -> abyte2 (0x00uy, 0x02uy) // JK : TODO, TBD
-  | E_preSharedKey _        -> abyte2 (0x00uy, 0x03uy) // JK : TODO, TBD
-  | E_keyShare _            -> abyte2 (0x00uy, 0x04uy) // JK : TODO, TBD
-  | E_signatureAlgorithms _ -> abyte2 (0x00uy, 0x0Duy)
-  | E_renegotiation_info(_) -> abyte2 (0xFFuy, 0x01uy)
-  | E_server_name (_)       -> abyte2 (0x00uy, 0x00uy)
-  | E_extended_ms           -> abyte2 (0x00uy, 0x17uy)
-  | E_extended_padding      -> abyte2 (0xBBuy, 0x8Fuy)
-  | E_ec_point_format _     -> abyte2 (0x00uy, 0x0Buy)
-  | E_supported_groups _    -> abyte2 (0x00uy, 0x0Auy)
+  | E_earlyData _           -> abyte2 (0x00z, 0x02z) // JK : TODO, TBD
+  | E_preSharedKey _        -> abyte2 (0x00z, 0x03z) // JK : TODO, TBD
+  | E_keyShare _            -> abyte2 (0x00z, 0x04z) // JK : TODO, TBD
+  | E_signatureAlgorithms _ -> abyte2 (0x00z, 0x0Dz)
+  | E_renegotiation_info(_) -> abyte2 (0xFFz, 0x01z)
+  | E_server_name (_)       -> abyte2 (0x00z, 0x00z)
+  | E_extended_ms           -> abyte2 (0x00z, 0x17z)
+  | E_extended_padding      -> abyte2 (0xBBz, 0x8Fz)
+  | E_ec_point_format _     -> abyte2 (0x00z, 0x0Bz)
+  | E_supported_groups _    -> abyte2 (0x00z, 0x0Az)
   | E_unknown_extension(h,b)-> h
 
 type canFail (a:Type) =
@@ -109,7 +109,7 @@ val compile_sni_list: list serverName -> Tot bytes
 let compile_sni_list l =
     let rec (aux:list serverName -> Tot bytes) = function
     | [] -> empty_bytes
-    | SNI_DNS(x) :: r -> (abyte 0uy) @| bytes_of_int 2 (length x) @| x @| aux r
+    | SNI_DNS(x) :: r -> (abyte 0z) @| bytes_of_int 2 (length x) @| x @| aux r
     | SNI_UNKNOWN(t, x) :: r -> (bytes_of_int 1 t) @| bytes_of_int 2 (length x) @| x @| aux r
     in aux l
 
@@ -128,7 +128,7 @@ let parse_sni_list b  =
 		    admit();
                     let cur =
                         (match cbyte ty with
-                        | 0uy -> SNI_DNS(cur)
+                        | 0z -> SNI_DNS(cur)
                         | v -> SNI_UNKNOWN(int_of_bytes ty, cur))
                     in let (snidup:serverName -> Tot bool) = fun x ->
                         (match (x,cur) with
@@ -150,8 +150,8 @@ let compile_curve_list l =
         | ECGroup.EC_CORE c :: r ->
             let cid = ECGroup.curve_id (ECGroup.params_of_group c) in
             cid @| aux r
-        | ECGroup.EC_EXPLICIT_PRIME :: r -> abyte2 (255uy, 01uy) @| aux r
-        | ECGroup.EC_EXPLICIT_BINARY :: r -> abyte2 (255uy, 02uy) @| aux r
+        | ECGroup.EC_EXPLICIT_PRIME :: r -> abyte2 (255z, 01z) @| aux r
+        | ECGroup.EC_EXPLICIT_BINARY :: r -> abyte2 (255z, 02z) @| aux r
         | ECGroup.EC_UNKNOWN(x) :: r -> bytes_of_int 2 x @| aux r
     in
     let al = aux l in
@@ -169,11 +169,11 @@ let parse_curve_list b =
             | ExOK(l) ->
                 let cur =
                     (match cbyte2 u with
-                    | (0uy, 23uy) -> ECGroup.EC_CORE CoreCrypto.ECC_P256
-                    | (0uy, 24uy) -> ECGroup.EC_CORE CoreCrypto.ECC_P384
-                    | (0uy, 25uy) -> ECGroup.EC_CORE CoreCrypto.ECC_P521
-                    | (255uy, 1uy) -> ECGroup.EC_EXPLICIT_PRIME
-                    | (255uy, 2uy) -> ECGroup.EC_EXPLICIT_BINARY
+                    | (0z, 23z) -> ECGroup.EC_CORE CoreCrypto.ECC_P256
+                    | (0z, 24z) -> ECGroup.EC_CORE CoreCrypto.ECC_P384
+                    | (0z, 25z) -> ECGroup.EC_CORE CoreCrypto.ECC_P521
+                    | (255z, 1z) -> ECGroup.EC_EXPLICIT_PRIME
+                    | (255z, 2z) -> ECGroup.EC_EXPLICIT_BINARY
                     | _ -> ECGroup.EC_UNKNOWN(int_of_bytes u))
                 in
                     if List.Tot.mem cur l then ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Duplicate curve")
@@ -192,7 +192,7 @@ let parse_ecpf_list b =
             | ExFail(x,y) -> ExFail(x,y)
             | ExOK(l) ->
                 let cur = match cbyte u with
-                | 0uy -> ECGroup.ECP_UNCOMPRESSED
+                | 0z -> ECGroup.ECP_UNCOMPRESSED
                 | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u)
                 in ExOK(cur :: l))
     in (match aux b with
@@ -206,7 +206,7 @@ let compile_ecpf_list l =
     let rec (aux:list ECGroup.point_format -> Tot bytes) =
         function
         | [] -> empty_bytes
-        | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0uy) @| aux r
+        | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0z) @| aux r
         | ECGroup.ECP_UNKNOWN(t) :: r -> (bytes_of_int 1 t) @| aux r
     in
     let al = aux l in
@@ -267,44 +267,44 @@ let rec parseExtension b =
     match vlparse 2 payload with
     | Correct (data) ->
 	(match cbyte2 head with
-	| (0x00uy, 0x0Duy) -> // sigalgs
+	| (0x00z, 0x0Dz) -> // sigalgs
 	  (match parseSigHashAlgs (data) with
 	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
 	  | Error(z) -> Error(z))
-	| (0x00uy, 0x00uy) -> // sni
+	| (0x00z, 0x00z) -> // sni
 	  (match parse_sni_list data with
 	  | Correct(snis) -> Correct (E_server_name snis)
 	  | Error(z) -> Error(z))
-	| (0xFFuy, 0x01uy) -> // renego
+	| (0xFFz, 0x01z) -> // renego
 	  (match parseRenegotiationInfo data with
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
 	  | Error(z) -> Error(z))
-	| (0x00uy, 0x0Auy) -> // supported groups
+	| (0x00z, 0x0Az) -> // supported groups
 	  (match parseNamedGroups (data) with
 	  | Correct(groups) -> Correct (E_supported_groups(groups))
 	  | Error(z) -> Error(z))
-	| (0x00uy, 0x0Buy) -> // ec point format
+	| (0x00z, 0x0Bz) -> // ec point format
 	  (match vlparse 1 data with
 	  | Error(z) -> Error(z)
 	  | Correct(data) ->
 	  match parse_ecpf_list data with
 	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
 	  | Error(z) -> Error(z))
-	| (0x00uy, 0x17uy) -> // extended ms
+	| (0x00z, 0x17z) -> // extended ms
 	  if length data = 0 then Correct (E_extended_ms)
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended MS extension")
-	| (0xBBuy, 0x8Fuy) -> // extended padding
+	| (0xBBz, 0x8Fz) -> // extended padding
 	  if length data = 0 then Correct (E_extended_padding)
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended padding extension")
-	| (0x11uy, 0x11uy) -> // head TBD, early data
+	| (0x11z, 0x11z) -> // head TBD, early data
 	  (match parseEarlyDataIndication data with
 	  | Correct (edi) -> Correct (E_earlyData(edi))
 	  | Error(z) -> Error(z))
-	| (0x22uy, 0x22uy) -> // head TBD, pre shared key
+	| (0x22z, 0x22z) -> // head TBD, pre shared key
 	  (match parsePreSharedKey data with
 	  | Correct(psk) -> Correct (E_preSharedKey(psk))
 	  | Error(z) -> Error(z))
-	| (0x33uy, 0x33uy) -> // head TBD, key share
+	| (0x33z, 0x33z) -> // head TBD, key share
 	  (match parseKeyShare data with	    
 	  | Correct (ks) -> Correct (E_keyShare(ks))
 	  | Error(z) -> Error(z))

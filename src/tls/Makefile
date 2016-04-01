@@ -33,7 +33,7 @@ STDLIB_ADMITS=All List Heap Set ST HyperHeap IO
 OTHERFLAGS=--universes --explicit_deps --use_native_int
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
 hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
-FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti #FStar.Int64.fst 
+FStar.Seq.fst FStar.SeqProperties.fst FStar.Float.fsti FStar.IO.fsti FStar.UInt8.fst
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
 FSTARFLAGS=$(OTHERFLAGS) \
@@ -89,7 +89,6 @@ PMS.p.fst \
 HASH.fst \
 HMAC.fst \
 Sig.p.fst \
-UntrustedCert.fst \
 Cert.fst \
 TLSInfo.fst \
 Range.fst \
@@ -110,6 +109,8 @@ MAC_SHA1.fst \
 Record.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
+Handshake.fsti \
+Connection.fst \
 TLSExtensions.p.fst \
 HSCrypto.fst \
 HandshakeMessages.fst \
@@ -118,7 +119,10 @@ PRF.p.fst \
 Handshake.fsti \
 Handshake.fst \
 Connection.fst \
-TLS.fst #the preceding space is significant!
+TLS.fst \
+test/TestRecord.fst \
+test/TestDH.fst \
+test/TestClient.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
@@ -134,7 +138,6 @@ ECGroup \
 CommonDH \
 HASH \
 HMAC \
-UntrustedCert \
 TLSInfo \
 Range \
 DataStream \

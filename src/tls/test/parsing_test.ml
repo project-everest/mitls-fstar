@@ -8,6 +8,7 @@ open TLSConstants
 (* State variables *)
 let pv = ref TLS_1p2
 let kex = ref Kex_ECDHE
+let cert = ref empty_bytes
 
 (* Traces list *)
 let ecdhe_traces = [
@@ -133,7 +134,7 @@ let parse_handshake_message bytes =
                            print_string "Running chain validation (no hostname)...";
                            let {crt_chain = chain } = ch in
                            let r = Cert.validate_chain chain None None "../../data/CAFile.pem" in
-                           print_string (if r then "OK\n" else "FAILED\n");
+                           print_string (if r then (cert := List.hd chain; "OK\n") else "FAILED\n");
 	     let _,cert_bytes = split (certificateBytes(ch)) 4 in
 	     if equalBytes cert_bytes msg then ()
              else (
@@ -145,6 +146,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing server key exchange message...\n";
 	 (match parseServerKeyExchange !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
+             
              let _,ske_bytes = split (serverKeyExchangeBytes(ch)) 4 in
              print_string "Serializing server key exchange...";
 	     if equalBytes ske_bytes msg then (print_string "OK\n")

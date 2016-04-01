@@ -10,10 +10,10 @@ type mac (a:macAlg) = lbytes (macSize a)
 
 (* SSL/TLS constants *)
 
-let ssl_pad1_md5  = createBytes 48 0x36uy
-let ssl_pad2_md5  = createBytes 48 0x5cuy
-let ssl_pad1_sha1 = createBytes 40 0x36uy
-let ssl_pad2_sha1 = createBytes 40 0x5cuy
+let ssl_pad1_md5  = createBytes 48 0x36z
+let ssl_pad2_md5  = createBytes 48 0x5cz
+let ssl_pad1_sha1 = createBytes 40 0x36z
+let ssl_pad2_sha1 = createBytes 40 0x5cz
 
 (* SSL3 keyed hash *)
 type sslHashAlg = h:hashAlg { h = Hash MD5 \/ h = Hash SHA1 }

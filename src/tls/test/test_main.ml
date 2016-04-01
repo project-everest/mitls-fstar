@@ -3,4 +3,6 @@
 let _ =
   Parsing_test.main ();
   TestRecord.main ();
-  TestDH.main ()
+  TestDH.main ();
+  TestClient.main ();
+  ()

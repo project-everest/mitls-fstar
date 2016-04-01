@@ -46,7 +46,7 @@ let plainLength i clen = clen - ivSize i
 (* Interface towards LHAE *)
 
 //private val zeros: r:range -> rbytes r
-let zeros (rg:range) = createBytes (snd rg) 0uy
+let zeros (rg:range) = createBytes (snd rg) 0z
 
 val payload: i:id -> r:frange i -> ad:LHAEPlain.adata i->
   LHAEPlain.plain i ad r -> Tot (rbytes r) //$ we had?: { SafeId e }
@@ -206,7 +206,7 @@ let verify (i:id) k ad rg p =
 *)
 
 
-// padding in TLS: [| 0uy |], [| 1uy; 1uy |], ...
+// padding in TLS: [| 0z |], [| 1z; 1z |], ...
 
 val pad: l:nat { 0 < l /\ l <= 256 } -> Tot(lbytes l)
 // we may need a more precise refinement for the MEE proof:

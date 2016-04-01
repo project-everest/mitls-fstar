@@ -272,7 +272,7 @@ BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https
 let enc i s ad rg data =
     let tlen = targetLength i rg in
     let to_encrypt =
-      if safeId i then createBytes tlen 0uy
+      if safeId i then createBytes tlen 0z
       else Encode.repr i ad rg data
     in
     // we grow the log in all cases // if authId i then
