@@ -123,18 +123,20 @@ Error messages shown in the mini-buffer are sometimes truncated. It can be conve
 ###Building
 
 Check that you have the necessary dependencies via opam 
-[https://github.com/FStarLang/FStar/blob/master/contrib/CoreCrypto/INSTALL.md];   
-and that you have the F* compiler set up in .fstar (`git submodule init`; 
+(https://github.com/FStarLang/FStar/blob/master/contrib/CoreCrypto/INSTALL.md lists these, you should also symlink the mingw cpp to /usr/bin/cpp);    
+and that you have the F* compiler set up in .fstar (`git submodule init` `&&`  
 `git submodule update` if you need to). Then do this:
 
+Build the compiler: 
 ```
 make -C .fstar/src/ocaml-output
 ```
 
+Build tls: 
 ```
-make -C src tls tls-ver 
+make -C src/tls tls-ver 
 ```
 
 ```
-make -C src tls tls-gen
+make -C src/tls tls-gen
 ```  
