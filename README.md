@@ -16,6 +16,7 @@ More information on F\* can be found at www.fstar-lang.org
   * [Directory structure](#directory-structure)
   	* [Legacy, imported from mitls-f7](#legacy-imported-from-mitls-f7)
   * [Configuring Emacs and Atom F* modes](#configuring-emacs-and-atom-f-modes)
+  * [Building](#building)
 
 ###Directory structure
 
@@ -24,7 +25,7 @@ More information on F\* can be found at www.fstar-lang.org
 
 - `src/`
 
-  - `Makefile` `make all` is part of F* regression testing.
+  - `Makefile` `make all` is part of F* regression testing. (SI: not known to work right now?)
     Ideally, one should check that this target succeeds before pushing changes.
 	 This builds the following targets:
 
@@ -33,8 +34,8 @@ More information on F\* can be found at www.fstar-lang.org
 
  - `tls/` In-progress miTLS port. A few files have been ported and fully typecheck; others have been left almost untouched since Karthik ported them from mitls-f7. The `Makefile` here has two targets that are also part of regression testing:
 
-  		- `mitls-ver` Full type checking of files that have been ported so far (listed in variable `VERIFY`)
-  		- `mitls-ml`  OCaml code generation for files ported so far---generated files go to the `../tls-ml` directory
+  		- `tls-ver` Full type checking of files that have been ported so far (listed in variable `VERIFY`)
+  		- `tls-ml`  OCaml code generation for files ported so far---generated files go to the `../tls-ml` directory
 
   - `tls-fs/` Legacy .fs (see also matching .fs7 files in mitls-f7)
 
@@ -118,3 +119,21 @@ Error messages shown in the mini-buffer are sometimes truncated. It can be conve
      nil
      t)))
 ```
+
+###Building
+
+Check that you have the necessary dependencies via opam [CoreCrypto/INSTALL.md];  
+and that you have the F* compiler set up in .fstar (`git submodule init`; 
+`git submodule update` if you need to). Then do this:
+
+```
+make -C .fstar/src/ocaml-output
+```
+
+```
+make -C src tls tls-ver 
+```
+
+```
+make -C src tls tls-gen
+```  
