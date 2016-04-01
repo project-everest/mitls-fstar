@@ -122,7 +122,8 @@ Error messages shown in the mini-buffer are sometimes truncated. It can be conve
 
 ###Building
 
-Check that you have the necessary dependencies via opam [CoreCrypto/INSTALL.md];  
+Check that you have the necessary dependencies via opam 
+[https://github.com/FStarLang/FStar/blob/master/contrib/CoreCrypto/INSTALL.md];   
 and that you have the F* compiler set up in .fstar (`git submodule init`; 
 `git submodule update` if you need to). Then do this:
 
