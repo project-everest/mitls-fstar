@@ -239,6 +239,7 @@ val targetLength_converges: i:id2
           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
       /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
+#reset-options "--initial_fuel 0 --initial_ifuel 3 --max_fuel 0 --max_ifuel 3"
 let targetLength_converges i r =
   match i.aeAlg with
   | AEAD _ _ -> ()
