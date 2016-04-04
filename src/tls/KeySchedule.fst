@@ -1,4 +1,4 @@
-module KeySchedule (*SKETCH *)
+module KeySchedule
 (*the top level key schedule module, it should not expose secrets to Handshake *)
 
 (* the goal is to keep ephemerals like eph_s and eph_c as currently defined 
@@ -7,7 +7,7 @@ module KeySchedule (*SKETCH *)
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+open FStar.SeqProperties
 open FStar.Set  
 
 open Platform.Bytes
@@ -21,9 +21,11 @@ open HandshakeMessages
 open StatefulLHAE
 open HSCrypto
 
-// TLSPRF.fst for TLS 1.2
+// KEF.fst/TLSPRF.fst for TLS 1.2
 // CoreCrypto.hkdf for TLS 1.3
-// subsumes the idealized module PRF.fst
+
+// does NOT subsumes the idealized module PRF.fst
+// (we do not solve the circular dependency properly)
 
 
 // LONG TERM GLOBAL SECRETS
@@ -66,12 +68,12 @@ type id = TLSInfo.id
 //  }
 
 // abstract type resumption_secret = b:bytes{}
-type resumption_secret = b:bytes{}
+//type resumption_secret = b:bytes{}
 
-type exporter_secret = b:bytes{}
+//type exporter_secret = b:bytes{}
 
 // abstract type pre_share_key = b:bytes{}
-type pre_shared_key = PSK.psk
+//type pre_shared_key = PSK.psk
 
 // ******************************************
 // ADL: I don't think these can be module-wide variables
@@ -80,6 +82,13 @@ type pre_shared_key = PSK.psk
 //val ticket_key: ref bytes // TODO
 // ******************************************
 
+(**
+ ** ADL: commenting out this attempt to share common arguments
+ ** (e.g. PMS, DH values) accross similar states (client/server, 1.2/1.3...)
+ ** Below is the more standard encoding of arguments as part of
+ ** the key exchange internal state, at the cost of heavy redundancy
+ ** and a state space blowup.
+ **
 type client_schedule_state =
 | C_KXS_INIT //initial state, state to get back to for renegotiation
 | C_KXS_NEGO //process server finished and go to one of following states, corresponds to C_HelloSent 
@@ -119,15 +128,14 @@ let keyschedule
  dh_agreed: rref r (option dhpms);
  state: rref r schedule_state;
 }
+**)
 
-//| KX_server of (pv:pv) * (g:dh_group) * (y:dh_priv) * (gy:dh_public) * (st:schedule_state)
-//| KX_client of (pv:pv) * (g:dh_group) * (x:dh_priv) * (gx:dh_pubic) * (st:schedule_state)
-
-// Agility parameters
+// Agility parameters, extend as needed
 type ks_alpha = pv:protocolVersion * cs:cipherSuite * ems:bool
 
+// Internal KS state, now with ad-hoc parameters
 type kx_state =
-| KS_C_Init //initial state, possibly unused, corresponds to C_Idle
+| KS_C_Init
 | KS_C_12_SH_Resume of cr:random * si:sessionInfo * ms:PRF.masterSecret
 | KS_C_12_SH_Full of cr:random
 | KS_C_12_Finished_Full_RSA_EMS of cr:random * sr:random * rsapms:RSAKey.key * id:PMS.dhpms
@@ -136,7 +144,6 @@ type kx_state =
 | KS_C_12_Finished_Resume of cr:random * sr:random * si:sessionInfo * ms:PRF.masterSecret
 | KS_S_Init
 
-// Question: how to do partnering?
 type ks =
 | KS: #region:rid -> cfg:config -> state:rref region ks_state -> ks
 
