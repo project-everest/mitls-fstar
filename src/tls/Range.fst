@@ -69,12 +69,11 @@ let minimalPadding i len =
         let p = bs - lp in
         p
 
-(* Sanity check
-   #set-options "--initial_ifuel 2"
-   val minimalPadding_at_least_fixedPadSize: i:id -> len:nat ->
-     Lemma (fixedPadSize i <= minimalPadding i len)
-   let minimalPadding_at_least_fixedPadSize _ _ = ()
-*)
+(* Sanity check *)
+#set-options "--initial_ifuel 2"
+val minimalPadding_at_least_fixedPadSize: i:id -> len:nat ->
+  Lemma (fixedPadSize i <= minimalPadding i len)
+let minimalPadding_at_least_fixedPadSize _ _ = ()
 
 val minMaxPad: id2 -> Tot range
 #set-options "--initial_ifuel 2"
@@ -115,7 +114,6 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
 ))
      /\ snd r <= max_TLSPlaintext_fragment_length
 )
-
 
 let cipherRangeClass i clen =
     let authEnc = i.aeAlg in
@@ -241,8 +239,13 @@ val targetLength_converges: i:id2
           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
       /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
-#reset-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2" //a bit flaky; reset the solver for more predictability
-let targetLength_converges i r = ()
+let targetLength_converges i r =
+  match i.aeAlg with
+  | AEAD _ _ -> ()
+  | MACOnly _ | MtE (Stream _) _ -> ()  
+  | MtE (Block alg) _ ->
+    let len = max_TLSPlaintext_fragment_length + macSize (macAlg_of_id i) in
+    assert (snd r  - fst r <= max_TLSPlaintext_fragment_length - minimalPadding i len)
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> r':range
@@ -287,4 +290,3 @@ type frange (i:id) = rg:range { wider fragment_range rg /\ (lhae i.aeAlg || pv_o
 
 // we don't need the index for point ranges (e.g. non-appdata traffic)
 type frange_any = rg:range { wider fragment_range rg /\ fst rg = snd rg }
-
