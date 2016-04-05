@@ -41,10 +41,12 @@ open HSCrypto
 // abstract, but they must be concrete in order for the definition
 // of id to appear in StatefulLHAE.
 
-// abstract type master_secret = b:bytes{}
-type pms = TLSInfo.pms
+//abstract type ms = b:bytes{length b == 48}
+// ADL: Unsound!!
+type ms = PRF.masterSecret
+type pms = PMS.pms 
+// Requires meta-argument to show that pms is not used concretely in other modules
 
-// (in TLSInfo.fst)
 // type pms =
 // | DH_PMS of CommonDH.dhpms // concrete
 // | RSA_PMS of RSAKey.rsapms // concrete
@@ -136,34 +138,35 @@ type ks_alpha = pv:protocolVersion * cs:cipherSuite * ems:bool
 // Internal KS state, now with ad-hoc parameters
 type kx_state =
 | KS_C_Init
-| KS_C_12_SH_Resume of cr:random * si:sessionInfo * ms:PRF.masterSecret
+| KS_C_12_SH_Resume of cr:random * si:sessionInfo * ms:ms
 | KS_C_12_SH_Full of cr:random
-| KS_C_12_Finished_Full_RSA_EMS of cr:random * sr:random * rsapms:RSAKey.key * id:PMS.dhpms
+| KS_C_12_Finished_Full_RSA_EMS of cr:random * sr:random * pk:RSAKey.pk * rsapms:PMS.rsapms
 | KS_C_12_Finished_Full_DH_EMS of cr:random * sr:random * id:PMS.dhpms * dhpms:CommonDH.secret
-| KS_C_12_Finished_Full_noEMS of cr:random * sr:random * id:TLSInfo.msId * ms:KEF.masterSecret
-| KS_C_12_Finished_Resume of cr:random * sr:random * si:sessionInfo * ms:PRF.masterSecret
+| KS_C_12_Finished_Full_noEMS of cr:random * sr:random * id:TLSInfo.msId * ms:ms
+| KS_C_12_Finished_Resume of cr:random * sr:random * si:sessionInfo * ms:ms
 | KS_S_Init
 
 type ks =
 | KS: #region:rid -> cfg:config -> state:rref region ks_state -> ks
 
-let create #region:rid cfg:config r:role -> ST ks
-  (requires r<>root) =
+let create #region:rid cfg:config r:role
+  -> ST ks
+  (requires fun h -> r<>root)
+  (ensures fun h0 r h1 -> True) =
   ST.recall_region region;
   let ks_region = new_region region in 
   let istate = match r with | Client -> KS_C_Init | Server -> KS_S_Init in
   KS region cfg (ralloc ks_region istate)
 
-let ks_client_init_12 ks:ks resuming:option (sessionInfo * PRF.masterSecret)
-  -> ST (random)
+let ks_client_init_12 ks:ks resuming:option (sessionInfo * ms)
+  -> ST random
   (requires fun h0 -> sel h0 (KX.state ks) = KS_C_Init)
-  (ensures fun h0 r h1 -> True)
-  =
+  (ensures fun h0 r h1 -> True) =
   let cr = Nonces.mkHelloRandom () in
   let ns = match resuming with
     | None -> KS_C_12_SH_Full cr
-    | Some si,ms -> KS_C_12_SH_Resume cr si ms in
-  (KS.state ks) ns;
+    | Some (si,ms) -> KS_C_12_SH_Resume cr si ms in
+  (KS.state ks) := ns;
   cr
 
 let ks_client_12_sh_resume ks:ks sr:random pv:protocolVersion cs:cipherSuite sid:sessionID log:bytes
@@ -171,13 +174,12 @@ let ks_client_12_sh_resume ks:ks sr:random pv:protocolVersion cs:cipherSuite sid
   (requires fun h0 ->
     let kss = sel h0 (KX.state ks) in
     is_KS_C_12_SH_Resume kss /\
-    (let si, _ = KS_C_12_SH_Resume.si kss in
+    (let si = KS_C_12_SH_Resume.si kss in
       pv = si.protocol_version /\
       equalBytes sid si.sessionID /\
       cs = si.cipher_suite
     ))
-  (ensures fun h0 r h1 -> True)
-  =
+  (ensures fun h0 cvd h1 -> True) =
   let KS region cfg st = ks in
   let KS_C_12_SH_Resume cr si ms = kss in
   let cvd = TLSPRF.verifyData (pv,cs) ms Client log in
@@ -185,16 +187,18 @@ let ks_client_12_sh_resume ks:ks sr:random pv:protocolVersion cs:cipherSuite sid
   cvd
 
 let ks_client_12_sh_full_dh: ks:ks sr:random alpha:ks_alpha peer_share:CommonDH.share 
-  -> ST (our_share:CommonDH.share{CommonDH.group_of our_share = CommonDH.group_of peer_share})
+  -> ST CommonDH.share
   (requires fun h0 ->
     let st = sel h0 (KX.state ks) in
     is_KS_C_12_SH_Full st \/ is_KS_C_12_SH_Resume st)
-  =
+  (ensures fun h0 r h1 ->
+    True // modifies KS.region ks...
+    /\ CommonDH.group_of r = CommonDH.group_of peer_share) =
   let (pv, cs, ems) = alpha in
   let our_share, dhpms = dh_reponder peer_share in
   let dhpmsId = (our_share, peer_share) in
   let ns = 
-    if ems then KS_C_12_Finished_Full_RSA_EMS cr sr dhpms dhpmsId
+    if ems then KS_C_12_Finished_Full_DH_EMS cr sr dhpms dhpmsId
     else
       let csr = cr @| sr in
       let ms = TLSPRF.extract (kefAlg alpha) dhpms csr 48 in
@@ -203,10 +207,24 @@ let ks_client_12_sh_full_dh: ks:ks sr:random alpha:ks_alpha peer_share:CommonDH.
   let KS region cfg st = ks in
   st := ns; out_share
 
-let ks_client_12_sh_full_rsa:
+
+| KS_C_12_Finished_Full_RSA_EMS of cr:random * sr:random * pk:RSAKey.pk * rsapms:PMS.rsapms
+
+let ks_client_12_sh_full_rsa: ks:ks sr:random alpha:ks_alpha pk:RSAKey.pk
+  -> ST bytes (* ClientKeyExchange encrypted payload *) 
   (requires fun h0 ->
     let st = sel h0 (KX.state ks) in
     is_KS_C_12_SH_Full st \/ is_KS_C_12_SH_Resume st)
+  (ensures fun h0 r h1 -> True) =
+  let KS region cfg st = ks in
+  let (pv, cs, ems) = alpha in
+  let rsapms = PMS.genRSA pk pv in
+  let encrypted = RSA.encrypt pk pv rsapms in
+  let ns =
+    if ems then KS_C_12_Finished_Full_RSA_EMS cr sr pk rsapms
+    else
+      KS_C_12_Finished_Full_Full_noEMS
+  st := ns; encrypted
 
 let ks_client_12_finished_full_rsa_ems
 
@@ -231,46 +249,6 @@ let
 *)
 
 
-// ADL: PROBLEM WITH RESUMPTION
-// Currently if handshake has set a resumption identifier and server rejects resumption it will fail for no good reason
-
-// We cannot commit to the pv and protocol mode yet
-let kx_init_client #region:rid # cfg:config -> ST unit (requires fun h-> True) (ensures contains (!state_map) rid) =
-    // if contains (!state_map) rid then state is C_KXS_INIT
-    // create fresh sessionInfo
-    // if cfg.resumption enabled
-      // Lookup session DB for cfg.server_name
-      // if valid session found fill in sessionInfo
-    // otherwise geneate client random + client key share (if pv>=1.3) + session identifier
-    // set KS state to S_KXS_NEGO
-
-let kx12_nego_client #region:rid n:nego sr:random=
-    // check that state is C_KXS_NEGO
-    // set KX state to C_KXS12_RESUME,  C_KXS12_DHE, or C_KXS12_RSA
-
-let kx12_resume_client #region:rid session_ID = //receive sessionID
-    // check that state is C_KXS12_RESUME
-    // set KX state to C_KXS12_FINISH
-
-let kx12_RSA_client #region:rid rsa_pk = //receive server RSA key
-    // check that state is C_KXS12_RSA
-    // set KX state to C_KXS12_FINISH
-
-let kx12_DHE_client #region:rid gy = //receive server share
-    // check that state is C_KXS12_DHE
-    // set KX state to C_KXS12_FINISH
-
-
-let kx_init_server #region:rid cfg:config cr:crandom ckx:option<dh_pub> pvcs:pv*cs index:option<either3<sid,psk_ids,ticket>> =
-    //
-    // Create fresh sessionInfo 
-
-
-
-
-
-
-
 (* MK: older experiment with Antoine
 
 val kx_init: #region:rid -> role:role -> pv:pv -> g:dh_group -> gx:option dh_pub{gx=None <==> (pv=TLS_1p3 /\ role = Client) \/ (role = Server /\ pv<>TLS_1p3)} -> ST dh_pub
@@ -289,7 +267,7 @@ val dh_next_key: #region:rid -> log:bytes ->
 
 // OLD 
 
-
+(*
 assume val dh_commit
 assume val dh_server_verify
 assume val dh_client_verify
@@ -348,3 +326,5 @@ assume val derive_13S_3: state:ks_13S -> ... -> ST(both i) //traffic
 assume val derive_13C_1: state:ks_13C -> gy:dh_key -> ... -> ST(both i) //handshake
 assume val derive_13C_2: state:ks_13C -> gs:dh_key -> ... -> ST(cf:ms * sf:ms) //finished
 assume val derive_13C_3: state:ks_13C -> ... -> ST(both i) //traffic
+*)
+
