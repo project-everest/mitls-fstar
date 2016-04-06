@@ -225,8 +225,6 @@ tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
         --verify_module False \
 	$(filter-out Ideal.fst,$^) | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
-# same as tls-ver, but verifies one module at a time.
-tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
 
 wc:
 	wc -l $(LIBFILES) $(FSTS)
