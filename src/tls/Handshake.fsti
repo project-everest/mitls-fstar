@@ -18,7 +18,9 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open Range
+open HandshakeMessages
 open StatefulLHAE
+open HSCrypto
 
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
@@ -46,6 +48,14 @@ type incoming = // the fragment is accepted, and...
 
 // extracts a transport key identifier from a handshake record
 val hsId: handshake -> Tot id
+
+//<expose for TestClient>
+val ri : Type0
+type b_log = bytes 
+//or how about: 
+//type log = list (m:bytes{exists ht d. m = messageBytes ht d})
+val prepareClientHello: config -> option ri -> option sessionID -> St (ch * b_log)
+//</expose for TestClient>
 
 // relocate?
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
@@ -125,6 +135,7 @@ val i: s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
 
+
 // name-clashing
 // let reader s = i s Reader
 // let writer s = i s Reader
@@ -193,6 +204,7 @@ val version: s:hs -> ST protocolVersion
   (requires (hs_inv s))
   (ensures (fun h0 pv h1 -> h0 = h1))
 
+
 (* used to be part of TLS.pickSendPV, with 3 cases: 
 
    (1) getMinVersion hs; then 
@@ -246,6 +258,7 @@ val invalidateSession: s:hs -> ST unit
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
 
 
+
 (*** Outgoing ***)
 val next_fragment: s:hs -> ST outgoing
   (requires (hs_inv s))
@@ -261,6 +274,9 @@ val next_fragment: s:hs -> ST outgoing
     (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))))
                                               (*why do i need this?*)
 
+//<expose for TestClient>
+val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot (result (rem:bytes * list (hs_msg * bytes)))
+//</expose for TestClient>
 
 (*** Incoming ***)
 val recv_fragment: s:hs -> rg:Range.range { wider fragment_range rg } -> rbytes rg -> ST incoming

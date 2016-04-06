@@ -4,32 +4,14 @@
 
 (* Handshake protocol messages *)
 module Handshake
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.Seq
-open FStar.SeqProperties // for e.g. found
-open FStar.Set  
-
-open Platform.Bytes
-open Platform.Error
-open TLSError
-open TLSConstants
-open TLSExtensions
-open TLSInfo
-open Range
-open HandshakeMessages
-open StatefulLHAE
-open HSCrypto
-			  
+open TLSExtensions //the other opens are in the .fsti
 
 let hsId h = noId // Placeholder
 
 (* Negotiation: HELLO sub-module *)
 
-type ri = (cVerifyData * sVerifyData) 
-type b_log = bytes 
-//or how about: 
-//type log = list (m:bytes{exists ht d. m = messageBytes ht d})
+let ri = (cVerifyData * sVerifyData) 
+
 type nego = {
      n_resume: bool;
      n_client_random: TLSInfo.random;
@@ -70,9 +52,6 @@ type eph_s = option kex_s_priv
 type eph_c = list kex_s_priv
 
 
-val prepareClientHello: config -> option ri -> option sessionID -> ST (ch * b_log)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
 let prepareClientHello cfg ri sido : ch * b_log =
   let crand = Nonce.mkHelloRandom() in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
@@ -634,7 +613,6 @@ let rec next_fragment hs =
 
 
 
-val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot (result (rem:bytes * list (hs_msg * bytes)))
 let rec parseHandshakeMessages pv kex buf =
     match parseMessage buf with
     | Error z -> Error z
