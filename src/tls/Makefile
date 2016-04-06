@@ -112,7 +112,7 @@ Handshake.fsti \
 Connection.fst #the preceding space is significant!
 
 LAX_CHECKED_FSTS=Record.fst \
-TLSExtensions.p.fst \
+TLSExtensions.fst \
 HSCrypto.fst \
 HandshakeMessages.fst \
 TLSPRF.fst \
@@ -270,7 +270,7 @@ tls-gen: $(LIBFILES) $(FSTS)
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= TLSExtensions PMS Sig PRF TLSExtensions ENC
+TLS_PP_FILES= PMS Sig PRF ENC
 
 # Target to generate preprocessed files for atom-interactive
 pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
