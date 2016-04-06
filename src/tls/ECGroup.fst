@@ -73,12 +73,12 @@ let op_Star = op_Multiply
 (* Assumes uncompressed point format for now (04||ecx||ecy) *) 
 val serialize_point: p:params 
   -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
-  -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 2})
+  -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 1})
 let serialize_point p e =
   let pc = abyte 4z in
   let x = pc @| e.ecx @| e.ecy in
   lemma_repr_bytes_values (length x);
-  vlbytes 1 x
+  x
 
 val serialize: p:params
   -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
@@ -87,7 +87,8 @@ let serialize ecp ecdh_Y =
   let ty = abyte 3z in
   let id = curve_id ecp in
   let e = serialize_point ecp ecdh_Y in
-  ty @| id @| e
+  let ve = vlbytes 1 e in
+  ty @| id @| ve
 
 val parse_point: params -> bytes -> Tot (option share)
 let parse_point p b =
