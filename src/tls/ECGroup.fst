@@ -21,13 +21,13 @@ type secret = bytes
 
 type ec_all_curve =
   | EC_CORE of ec_curve
-  | EC_UNKNOWN of int
+  | EC_UNKNOWN of (n:nat{repr_bytes n <= 2})
   | EC_EXPLICIT_PRIME
   | EC_EXPLICIT_BINARY
 
 type point_format =
   | ECP_UNCOMPRESSED
-  | ECP_UNKNOWN of int
+  | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
 
 val params_of_group: group -> Tot params 
 let params_of_group c = {curve = c; point_compression = false}
