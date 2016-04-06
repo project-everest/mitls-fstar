@@ -262,8 +262,13 @@ tls-gen: $(LIBFILES) $(FSTS)
 	# Then our test executable
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ test/parsing_test.ml test/test_main.ml -o test.out
-	# Run the tests
+	# Run the test
 	$(EXTRA_PATH) ./test.out
+
+tls-client:
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+	         -I test/ test/test_client.ml -o client.out
+	$(EXTRA_PATH) ./client.out localhost 4443
 
 # ------------------ preprocessing :( -----------------------
 

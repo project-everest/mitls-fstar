@@ -168,9 +168,9 @@ let deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr =
   (cekb,civb,sekb,sivb)
 
     
-let main () =
+let main host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
-  let tcp = Platform.Tcp.connect "google.com" 443 in
+  let tcp = Platform.Tcp.connect host port in
   let log = empty_bytes in
   let (ch,chb) = Handshake.prepareClientHello config None None in
   let pv = ch.ch_protocol_version in 
