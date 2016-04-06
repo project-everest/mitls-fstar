@@ -270,7 +270,7 @@ tls-gen: $(LIBFILES) $(FSTS)
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= PMS Sig PRF ENC
+TLS_PP_FILES= PMS Sig PRF
 
 # Target to generate preprocessed files for atom-interactive
 pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
