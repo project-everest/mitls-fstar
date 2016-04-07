@@ -21,7 +21,8 @@ let config =
      {TLSInfo.defaultConfig with
          minVer = TLS_1p2;
     	 maxVer = TLS_1p2;
-	 ciphersuites = csn}
+	 ciphersuites = csn;
+	 }
 
 let id = {
     msId = noMsId;
@@ -107,16 +108,40 @@ let sendHSRecord tcp pv log hs_msg =
   let Correct _ = Platform.Tcp.send tcp r in
   log @| hs_msg
 
-let recvHSRecord tcp pv kex log = 
-  match Platform.Tcp.recv tcp 5 with 
+val really_read_rec: bytes -> Platform.Tcp.networkStream -> nat -> optResult string bytes
+let rec really_read_rec prev tcp len = 
+    if (len <= 0) 
+    then Correct(prev)
+    else 
+      match Platform.Tcp.recv tcp len with
+      | Correct b -> 
+            let lb = length b in
+      	    if (lb >= len) then Correct(prev @| b)
+      	    else really_read_rec (prev @| b) tcp (len - lb)
+      | e -> e
+      
+let really_read = really_read_rec empty_bytes
+
+val recvHSRecordRec: bytes -> Platform.Tcp.networkStream -> protocolVersion -> kexAlg -> bytes -> (hs_msg * bytes)
+let rec recvHSRecordRec prev tcp pv kex log = 
+//  IO.print_string (Platform.Bytes.print_bytes prev);
+//  IO.print_string ((string_of_int (length prev))^" left from before\n");
+  match really_read tcp 5 with 
   | Correct header ->
       match Record.parseHeader header with  
       | Correct (Content.Handshake,pv,len)  ->
-         match Platform.Tcp.recv tcp len  with
+         IO.print_string ((string_of_int len)^" bytes expected\n");
+         match really_read tcp len  with
          | Correct payload -> 
-	      let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
-     	      let [(hs_msg,to_log)] = hsm in
-	      hs_msg, log @| to_log	      
+	      let buf = prev @| payload in 
+	      let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) buf in 
+	      //IO.print_string ((string_of_int (List.Tot.length hsm))^" messages\n");
+	      //IO.print_string ((string_of_int (length rem))^" left\n");
+	      (match hsm with 
+	      | [] -> recvHSRecordRec rem tcp pv kex log 
+	      | [(hs_msg,to_log)] ->  hs_msg, log @| to_log)
+
+let recvHSRecord = recvHSRecordRec empty_bytes
 
 let sendAppDataRecord tcp pv msg = 
   let r = Record.makePacket Content.Application_data pv msg in
@@ -129,20 +154,20 @@ let sendCCSRecord tcp pv =
   ()
   
 let recvCCSRecord tcp pv = 
-  match Platform.Tcp.recv tcp 5 with 
+  match really_read tcp 5 with 
   | Correct header ->
       match Record.parseHeader header with  
       | Correct (Content.Change_cipher_spec,pv,len)  ->
-         match Platform.Tcp.recv tcp len  with
+         match really_read tcp len  with
          | Correct cipher -> cipher
 
 
 let recvEncHSRecord tcp pv kex log rd = 
-  match Platform.Tcp.recv tcp 5 with 
+  match really_read tcp 5 with 
   | Correct header ->
       match Record.parseHeader header with  
       | Correct (Content.Handshake,pv,len)  ->
-         match Platform.Tcp.recv tcp len  with
+         match really_read tcp len  with
          | Correct cipher -> 
 	      let payload = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Handshake cipher in
 	      let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
@@ -151,11 +176,11 @@ let recvEncHSRecord tcp pv kex log rd =
 
 
 let recvEncAppDataRecord tcp pv rd = 
-  match Platform.Tcp.recv tcp 5 with 
+  match really_read tcp 5 with 
   | Correct header ->
       match Record.parseHeader header with  
       | Correct (Content.Application_data,pv,len)  ->
-         match Platform.Tcp.recv tcp len  with
+         match really_read tcp len  with
          | Correct cipher -> 
 	      let payload = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Application_data cipher in
 	      payload
@@ -195,12 +220,12 @@ let main host port =
   IO.print_string "Sending ClientKeyExchange\n";
   let log = sendHSRecord tcp pv log ckeb in
   let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") (ch.ch_client_random @| sh.sh_server_random)  48 in
-  IO.print_string ("ms:"^(Platform.Bytes.print_bytes ms)^"\n");
+  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck,civ,sk,siv) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms ch.ch_client_random sh.sh_server_random in
-  IO.print_string ("ck:"^(Platform.Bytes.print_bytes ck)^"\n");
-  IO.print_string ("civ:"^(Platform.Bytes.print_bytes civ)^"\n");
-  IO.print_string ("sk:"^(Platform.Bytes.print_bytes sk)^"\n");
-  IO.print_string ("siv:"^(Platform.Bytes.print_bytes siv)^"\n");
+  IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
+  IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
+  IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
+  IO.print_string ("server AES_GCM salt:"^(Platform.Bytes.print_bytes siv)^"\n");
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
   IO.print_string "Sending ClientCCS\n";

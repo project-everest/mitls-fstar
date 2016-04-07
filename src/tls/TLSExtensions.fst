@@ -398,14 +398,10 @@ let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
        | None -> FirstConnection
        | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
     let res = [E_renegotiation_info(cri)] in
-//MUST send "extended master secret"
-//#if TLSExt_sessionHash
-    let res = E_extended_ms :: res in
-//#endif
+//Disabling extended ms
+//    let res = E_extended_ms :: res in
 //No extended padding for now
-//#if TLSExt_extendedPadding
 //    let res = E_extended_padding :: res in
-//#endif
     let res = (E_signatureAlgorithms cfg.signatureAlgorithms) :: res in
     let res =
         let curves = List.Tot.map (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
