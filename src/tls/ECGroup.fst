@@ -21,13 +21,13 @@ type secret = bytes
 
 type ec_all_curve =
   | EC_CORE of ec_curve
-  | EC_UNKNOWN of int
+  | EC_UNKNOWN of (n:nat{repr_bytes n <= 2})
   | EC_EXPLICIT_PRIME
   | EC_EXPLICIT_BINARY
 
 type point_format =
   | ECP_UNCOMPRESSED
-  | ECP_UNKNOWN of int
+  | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
 
 val params_of_group: group -> Tot params 
 let params_of_group c = {curve = c; point_compression = false}
@@ -77,7 +77,6 @@ val serialize_point: p:params
 let serialize_point p e =
   let pc = abyte 4z in
   let x = pc @| e.ecx @| e.ecy in
-  lemma_repr_bytes_values (length x);
   x
 
 val serialize: p:params
@@ -87,6 +86,7 @@ let serialize ecp ecdh_Y =
   let ty = abyte 3z in
   let id = curve_id ecp in
   let e = serialize_point ecp ecdh_Y in
+  lemma_repr_bytes_values (length e);
   let ve = vlbytes 1 e in
   ty @| id @| ve
 

@@ -186,8 +186,8 @@ type crand = random
 type srand = random
 type csRands = bytes
 
-type cVerifyData = bytes (* ClientFinished payload *)
-type sVerifyData = bytes (* ServerFinished payload *)
+type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
+type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
 
 type sessionHash = bytes
 
@@ -198,8 +198,8 @@ let noCsr:csRands = Nonce.noCsr
 // (defined here because TLSExtension is internal)
 
 type serverName =
-| SNI_DNS of bytes
-| SNI_UNKNOWN of int * bytes
+| SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
+| SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
 
 type ri_status =
 | RI_Unsupported

@@ -8,7 +8,9 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open CoreCrypto
+
 let op_At = FStar.List.Tot.append
+
 type renegotiationInfo =
   | FirstConnection
   | ClientRenegotiationInfo of (cVerifyData)
@@ -17,24 +19,30 @@ type renegotiationInfo =
 val renegotiationInfoBytes: renegotiationInfo -> Tot bytes
 let renegotiationInfoBytes ri = 
   match ri with
-  | FirstConnection -> vlbytes 1 empty_bytes
-  | ClientRenegotiationInfo(cvd) -> vlbytes 1 cvd
-  | ServerRenegotiationInfo(cvd, svd) -> vlbytes 1 (cvd @| svd)
+  | FirstConnection -> 
+    lemma_repr_bytes_values 0;
+    vlbytes 1 empty_bytes
+  | ClientRenegotiationInfo(cvd) ->
+    lemma_repr_bytes_values (length cvd);
+    vlbytes 1 cvd
+  | ServerRenegotiationInfo(cvd, svd) ->
+    lemma_repr_bytes_values (length (cvd @| svd));
+    vlbytes 1 (cvd @| svd)
 
 (* TODO: inversion lemmas *)
 val parseRenegotiationInfo: pinverse_t renegotiationInfoBytes
 let parseRenegotiationInfo b =
   if length b >= 1 then
     match vlparse 1 b with
-    | Correct(_) ->
-	let (len, payload) = split b 1 in
-	(match cbyte len with
-	| 0z -> Correct (FirstConnection)
-	| 12z | 36z -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
-	| 24z -> // TLS 1.2 case
+    | Correct(payload) ->
+	let (len, _) = split b 1 in
+	(match int_of_bytes len with
+	| 0 -> Correct (FirstConnection)
+	| 12 | 36 -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
+	| 24 -> // TLS 1.2 case
 	    let cvd, svd = split payload 12 in
 	    Correct (ServerRenegotiationInfo (cvd, svd))
-	| 72z -> // SSLv3
+	| 72 -> // SSLv3
 	    let cvd, svd = split payload 36 in
 	    Correct (ServerRenegotiationInfo (cvd, svd))
 	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
@@ -43,9 +51,9 @@ let parseRenegotiationInfo b =
 
 type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
-    ped_cipher_suite:cipherSuite;
+    ped_cipher_suite:known_cipher_suite;
     ped_extensions:list extension;
-    ped_context:bytes;
+    ped_context:b:bytes{length b < 256};
     //ped_early_data_type:earlyDataType; 
     }
 and earlyDataIndication = 
@@ -113,12 +121,13 @@ let compile_sni_list l =
 
 val parse_sni_list: b:bytes -> Tot (result (list serverName))
 let parse_sni_list b  =
-    let rec (aux:bytes -> Tot (canFail (serverName))) = fun b ->
+    let rec aux:b:bytes -> Tot (canFail (serverName)) (decreases (length b)) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else
+	  if length b >= 3 then
             let (ty,v) = split b 1 in
             (match vlsplit 2 v with
-            | Error(x,y) -> ExFail(x,"Failed to parse sni length")
+            | Error(x,y) -> ExFail(x,"Failed to parse SNI length")
             | Correct(cur, next) ->
                 (match aux next with
                 | ExFail(x,y) -> ExFail(x,y)
@@ -131,10 +140,11 @@ let parse_sni_list b  =
                     in let (snidup:serverName -> Tot bool) = fun x ->
                         (match (x,cur) with
                         | SNI_DNS _, SNI_DNS _ -> true
-                        | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b, _) when (a=b) -> true
+                        | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a=b
                         | _ -> false)
 		       in if List.Tot.existsb snidup l then ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
                     else ExOK(cur :: l)))
+          else ExFail(AD_decode_error,"Failed to parse SNI")
     in (match aux b with
     | ExFail(x,y) -> Error(x,y)
     | ExOK([]) -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
@@ -151,17 +161,21 @@ let compile_curve_list l =
         | ECGroup.EC_EXPLICIT_PRIME :: r -> abyte2 (255z, 01z) @| aux r
         | ECGroup.EC_EXPLICIT_BINARY :: r -> abyte2 (255z, 02z) @| aux r
         | ECGroup.EC_UNKNOWN(x) :: r -> bytes_of_int 2 x @| aux r
-    in
+   in
     let al = aux l in
+    assume (length al < 65536); // TODO: add pre-condition and prove it
+    lemma_repr_bytes_values (length al);
     let bl: bytes = vlbytes 2 al in
     bl
 
 val parse_curve_list: bytes -> Tot (result (list ECGroup.ec_all_curve))
 let parse_curve_list b =
-    let rec (aux:bytes -> Tot (canFail ECGroup.ec_all_curve)) = fun b ->
+    let rec aux:b:bytes -> Tot (canFail ECGroup.ec_all_curve) (decreases (length b)) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else if (length b) % 2 = 1 then ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Bad encoding of curve list")
-        else let (u,v) = split b 2 in
+        else
+	  if length b >= 2 then
+	    let (u,v) = split b 2 in
             (match aux v with
             | ExFail(x,y) -> ExFail(x,y)
             | ExOK(l) ->
@@ -176,6 +190,7 @@ let parse_curve_list b =
                 in
                     if List.Tot.mem cur l then ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Duplicate curve")
                     else ExOK(cur :: l))
+	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed curve list")
     in (match aux b with
     | ExFail(x,y) -> Error(x,y)
     | ExOK([]) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Empty supported curve list")
@@ -183,21 +198,26 @@ let parse_curve_list b =
 
 val parse_ecpf_list: bytes -> Tot (result (list ECGroup.point_format))
 let parse_ecpf_list b =
-    let rec (aux:bytes -> Tot (canFail (ECGroup.point_format))) = fun b ->
+    let rec aux:b:bytes -> Tot (canFail (ECGroup.point_format)) (decreases (length b)) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
-        else let (u,v) = split b 1 in
-            (match aux v with
-            | ExFail(x,y) -> ExFail(x,y)
-            | ExOK(l) ->
-                let cur = match cbyte u with
-                | 0z -> ECGroup.ECP_UNCOMPRESSED
-                | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u)
-                in ExOK(cur :: l))
-    in (match aux b with
+        else
+	  if (0 < length b) then 
+	    let (u,v) = split b 1 in
+              (match aux v with
+              | ExFail(x,y) -> ExFail(x,y)
+              | ExOK(l) ->
+                  let cur = match cbyte u with
+                  | 0z -> ECGroup.ECP_UNCOMPRESSED
+                  | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u)
+                  in ExOK(cur :: l))
+	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed curve list")
+    in match aux b with
     | ExFail(x,y) -> Error(x,y)
-    | ExOK(l) when not (List.Tot.mem ECGroup.ECP_UNCOMPRESSED l) ->
+    | ExOK(l) -> 
+      if (List.Tot.mem ECGroup.ECP_UNCOMPRESSED l) then
+	correct l
+      else
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
-    | ExOK(l) -> correct (l))
 
 val compile_ecpf_list: list ECGroup.point_format -> Tot bytes
 let compile_ecpf_list l =
@@ -208,6 +228,8 @@ let compile_ecpf_list l =
         | ECGroup.ECP_UNKNOWN(t) :: r -> (bytes_of_int 1 t) @| aux r
     in
     let al = aux l in
+    assume (length al < 256); // TODO: add precondition and prove it
+    lemma_repr_bytes_values (length al);
     let bl:bytes = vlbytes 1 al in
     bl
 
@@ -230,6 +252,7 @@ let rec earlyDataIndicationBytes edi =
       let cid_bytes = configurationIdBytes edi.ped_configuration_id in
       let cs_bytes = cipherSuiteBytes edi.ped_cipher_suite in
       let ext_bytes = extensionsBytes edi.ped_extensions in
+      lemma_repr_bytes_values (length edi.ped_context);
       let context_bytes = vlbytes 1 edi.ped_context in
 //      let edt_bytes = earlyDataTypeBytes edi.ped_early_data_type in
       cid_bytes @| cs_bytes @| ext_bytes @| context_bytes //@| edt_bytes

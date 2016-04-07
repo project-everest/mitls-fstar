@@ -93,6 +93,7 @@ HMAC.fst \
 Sig.p.fst \
 Cert.fst \
 TLSInfo.fst \
+TLSExtensions.fst \
 Range.fst \
 DataStream.fst \
 Alert.fst \
@@ -108,13 +109,12 @@ StatefulLHAE.fst \
 ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
+HandshakeMessages.fst \
 Handshake.fsti \
 Connection.fst #the preceding space is significant!
 
 LAX_CHECKED_FSTS=Record.fst \
-TLSExtensions.fst \
 HSCrypto.fst \
-HandshakeMessages.fst \
 TLSPRF.fst \
 PRF.p.fst \
 Handshake.fsti \
