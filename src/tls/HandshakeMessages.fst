@@ -213,7 +213,7 @@ let messageBytes ht data =
     htb @| vldata
 
 
-val parseMessage : buf:bytes -> Tot (result (option (rem:bytes & 
+irreducible val parseMessage : buf:bytes -> Tot (result (option (rem:bytes & 
     		   	     	       	        hstype:handshakeType & 
     		   	     	       	        payload:bytes & 
 						to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.equal buf (to_log @| rem)) } )) )
