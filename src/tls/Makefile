@@ -123,7 +123,8 @@ Connection.fst \
 TLS.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
-test/TestClient.fst #the preceding space is significant!
+test/TestClient.fst \
+test/TestClient13.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
