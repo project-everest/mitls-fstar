@@ -86,7 +86,7 @@ let repr i ad rg f = Content.repr i f
 
 logic type wf_ad_rg i ad rg = 
   wider fragment_range rg  /\ 
-  (parseAD i ad = Change_cipher_spec ==> rg = zero)
+  (parseAD i ad = Change_cipher_spec ==> rg = point 1)
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->
   b:rbytes rg  ->
@@ -97,4 +97,3 @@ let mk_plain i ad rg b = Content.mk_fragment i (parseAD i ad) rg b
 // should go to StatefulLHAE 
 
 type cipher (i:id) = b:bytes {valid_clen i (length b)}
-

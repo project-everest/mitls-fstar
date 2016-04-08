@@ -235,7 +235,7 @@ let dec i (d:decryptor i) (ad:adata i) c =
     let clen = length c in
     let r = cipherRangeClass i clen in
     cipherRangeClass_width i clen;
-    if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && 0 < snd r then
+    if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && r <> point 1 then
       None
     else
       let plain = mk_plain i ad r text in

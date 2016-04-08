@@ -21,7 +21,7 @@ open DataStream
 type fragment (i:id) =
     | CT_Alert     : rg: frange i -> f: rbytes rg -> fragment i // could insist we get exactly 2n bytes
     | CT_Handshake : rg: frange i -> f: rbytes rg -> fragment i // concrete
-    | CT_CCS       : fragment i // empty; never encrypted or decrypted
+    | CT_CCS       : f: rbytes (point 1) -> fragment i // one-byte; never encrypted or decrypted
     | CT_Data      : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract
 // for TLS 1.3
 //  | CT_EncryptedHandshake : rg: frange i -> f: Handshake.fragment i rg -> fragment i // abstract
@@ -129,7 +129,7 @@ let ghost_repr #i f =
   // FIXME: without the #i, extraction crashes
   | CT_Data rg d      -> DataStream.ghost_repr #i d
   | CT_Handshake rg f -> f
-  | CT_CCS            -> empty_bytes (* KB: This should be 1z not empty_bytes *)
+  | CT_CCS f          -> f
   | CT_Alert rg f     -> f
 
 val repr: i:id{ ~(safeId i)} -> p:fragment i -> Tot (b:bytes {b = ghost_repr #i p})
@@ -138,40 +138,40 @@ let repr i f =
   // FIXME: same thing
   | CT_Data rg d      -> DataStream.repr #i rg d
   | CT_Handshake rg f -> f
-  | CT_CCS            -> empty_bytes
+  | CT_CCS f          -> f
   | CT_Alert rg f     -> f
 
 let ct_rg (i:id) (f:fragment i) : contentType * frange i =
   match f with
   | CT_Data rg d      -> Application_data, rg
   | CT_Handshake rg f -> Handshake, rg
-  | CT_CCS            -> Change_cipher_spec, zero
+  | CT_CCS f          -> Change_cipher_spec, point 1
   | CT_Alert rg f     -> Alert, rg
 
 let rg (i:id) (f:fragment i) : frange i =
   match f with
   | CT_Data rg d      -> rg
   | CT_Handshake rg f -> rg
-  | CT_CCS            -> zero
+  | CT_CCS f          -> point 1
   | CT_Alert rg f     -> rg
 
 
 // "plain interface" for conditional security (TODO restore details)
 
 val mk_fragment: i:id{ ~(authId i)} -> ct:contentType -> rg:frange i ->
-  b:rbytes rg { ct = Change_cipher_spec ==> rg == zero }->
+  b:rbytes rg { ct = Change_cipher_spec ==> rg == point 1 }->
   Tot (p:fragment i {b = ghost_repr p})
 let mk_fragment i ct rg b =
     match ct with
     | Application_data   -> CT_Data      rg (DataStream.mk_fragment #i rg b)
     | Handshake          -> CT_Handshake rg b
-    | Change_cipher_spec -> cut(Seq.equal b empty_bytes);CT_CCS  //* rediscuss
+    | Change_cipher_spec -> CT_CCS b
     | Alert -> CT_Alert     rg b
 
 val mk_ct_rg: 
   i:id{ ~(authId i)} -> 
   ct:contentType -> 
   rg:frange i ->
-  b:rbytes rg { ct = Change_cipher_spec ==> rg = zero } ->
+  b:rbytes rg { ct = Change_cipher_spec ==> rg == point 1 } ->
   Lemma ((ct,rg) = ct_rg i (mk_fragment i ct rg b))
 let mk_ct_rg i ct rg b = ()

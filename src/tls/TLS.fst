@@ -877,7 +877,7 @@ let writeOne c i appdata =
             // we know j has just been incremented.
             // we send the CCS fragment on the prior epoch
             frame_admit c h1 h2; //NS: not an instance of frame_internal, since it may change the epochs log if the result is OutCCS
-            match send c #i (Content.CT_CCS #i) with
+            match send c #i (Content.CT_CCS #i (abyte 1z)) with
             | Correct _ ->
                 c.state := BC; // use renego/key-update states instead? anyway AD writing is temporarily forbidden.
                 //Alert.reset_outgoing c.alert;
