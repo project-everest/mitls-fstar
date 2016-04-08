@@ -140,13 +140,13 @@ type ks_alpha = pv:protocolVersion * cs:cipherSuite * ems:bool
 // Internal KS state, now with ad-hoc parameters
 type kx_state =
 | KS_C_Init
-| KS_C_12_Resume_CH of cr:random * si:sessionInfo * ms:ms
+| KS_C_12_Resume_CH of cr:random * si:sessionInfo * msId:TLSInfo.msId * ms:ms
 | KS_C_12_Full_CH of cr:random
 // Wait for session hash to compute EMS
-| KS_C_12_Full_SH_EMS of cr:random * sr:random * id:TLSInfo.pmsId * pms:bytes
+| KS_C_12_Full_SH_EMS of cr:random * sr:random * alpha:ks_alpha * id:TLSInfo.pmsId * pms:bytes
 // No EMS, master secret is computed immediately
-| KS_C_12_Full_SH_MS of id:TLSInfo.msId * ms:ms
-| KS_C_12_Resume_SH of cr:random * sr:random * si:sessionInfo * ms:ms
+| KS_C_12_Full_SH_MS of cr:random * sr:random * alpha:ks_alpha * id:TLSInfo.msId * ms:ms
+| KS_C_12_Resume_SH of cr:random * sr:random * alpha:ks_alpha * si:sessionInfo * id:TLSInfo.msId * ms:ms
 | KS_S_Init
 
 type ks =
@@ -168,35 +168,35 @@ let create #region:rid cfg:config r:role
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
-let ks_client_init_12 ks:ks resuming:option (sessionInfo * ms)
-  -> ST random
+let ks_client_init_12 ks:ks
+  -> ST (cr:random * si:option sessionInfo)
   (requires fun h0 -> sel h0 (KX.state ks) = KS_C_Init)
   (ensures fun h0 r h1 -> True) =
   let cr = Nonces.mkHelloRandom () in
-  let ns = match resuming with
-    | None -> KS_C_12_Full_CH cr
-    | Some (si,ms) -> KS_C_12_Resume_CH cr si ms in
+  let osi, ns = match cfg.resuming with
+    | None -> None, KS_C_12_Full_CH cr
+    | Some shard ->
+      (match DB.lookup shard with
+      | Some (si, msId, ms) -> Some si, KS_C_12_Resume_CH cr si msId ms in
+      | None -> None, KS_C_12_Full_CH cr) in
   (KS.state ks) := ns;
-  cr
+  cr, osi
 
 // Called after receiving server hello; server accepts resumption proposal
-// GHuarantees the consistency of CS & PV (do we want full alpha instead??)
-let ks_client_12_resume_sh ks:ks sr:random pv:protocolVersion cs:cipherSuite sid:sessionID log:bytes
-  -> ST cVerifyData
+// This function only checks the agility paramaters compared to the resumed sessionInfo
+// and returns to the handshake whether the resumption is permissible
+let ks_client_12_resume_sh ks:ks sr:random alpha:ks_alpha
+  -> ST bool
   (requires fun h0 ->
     let kss = sel h0 (KX.state ks) in
-    is_KS_C_12_Resume_CH kss /\
-    (let si = KS_C_12_Resume_CH.si kss in
-      pv = si.protocol_version /\
-      equalBytes sid si.sessionID /\
-      cs = si.cipher_suite
-    ))
+    is_KS_C_12_Resume_CH kss)
   (ensures fun h0 cvd h1 -> True) =
   let KS region cfg st = ks in
-  let KS_C_12_Resume_CH cr si ms = !st in
-  let cvd = TLSPRF.verifyData (pv,cs) ms Client log in
+  let KS_C_12_Resume_CH cr si msId ms = !st in
   st := KS_C_12_Resume_SH cr sr si ms;
-  cvd
+  let (pv, cs, ems) = alpha in
+  (si.protocol_version = pv) && (si.cipher_suite = cs) &&
+  ((ems && is_Some si.session_hash) || (not ems && is_None si.session_hash))
 
 // The two functions below are similar but we decide not to factor them because:
 //   1. they use different arguemtns
@@ -270,14 +270,18 @@ let ks_client_12_set_session_hash ks:ks session_hash:bytes
 //  shared accross role, key exchange, handshake mode...
 // *********************************************************************************
 
-let ks_12_get_finished ks:ks
+let ks_12_get_finished ks:ks log:bytes
   -> ST bytes
   (requires fun h0 ->
     let st = sel h0 (KX.state ks) in
     is_KS_C_12_Full_SH_MS st \/ is_KS_C_12_Full_Resume_SH st)
   (ensures fun h0 r h1 ->
     True) =
-  emptyBytes
+  let KS region cfg st = ks in
+  let ms = match kss with
+    | KS_C_12_Full_SH_MS of id:TLSInfo.msId * ms:ms
+| KS_C_12_Resume_SH of cr:random * sr:random * si:sessionInfo * ms:ms
+  TLSPRF.verifyData (pv,cs) ms Client log
 
 
 (* MK: older experiment with Antoine
