@@ -239,7 +239,8 @@ let main host port =
   IO.print_string "Received ServerCCS\n";
   let Finished(sfin),log = recvEncHSRecord tcp pv kex log rd in
   IO.print_string "Received ServerFinished\n";
-  let get = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 "GET / HTTP/1.1\r\n\r\n\r\n") in
+  let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
+  let get = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 payload) in
   IO.print_string "Sending AppData(GET /)\n";
   sendAppDataRecord tcp pv get;
   let ad = recvEncAppDataRecord tcp pv rd in

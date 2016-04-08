@@ -268,7 +268,7 @@ tls-gen: $(LIBFILES) $(FSTS)
 tls-client:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ test/test_client.ml -o client.out
-	$(EXTRA_PATH) ./client.out localhost 4443
+	$(EXTRA_PATH) ./client.out ht.vc 443
 
 # ------------------ preprocessing :( -----------------------
 
