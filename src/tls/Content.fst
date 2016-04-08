@@ -129,7 +129,7 @@ let ghost_repr #i f =
   // FIXME: without the #i, extraction crashes
   | CT_Data rg d      -> DataStream.ghost_repr #i d
   | CT_Handshake rg f -> f
-  | CT_CCS            -> empty_bytes
+  | CT_CCS            -> empty_bytes (* KB: This should be 1z not empty_bytes *)
   | CT_Alert rg f     -> f
 
 val repr: i:id{ ~(safeId i)} -> p:fragment i -> Tot (b:bytes {b = ghost_repr #i p})

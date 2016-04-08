@@ -123,7 +123,8 @@ Connection.fst \
 TLS.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
-test/TestClient.fst #the preceding space is significant!
+test/TestClient.fst \
+test/TestClient13.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
@@ -268,7 +269,7 @@ tls-gen: $(LIBFILES) $(FSTS)
 tls-client:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ test/test_client.ml -o client.out
-	$(EXTRA_PATH) ./client.out ht.vc 443
+	$(EXTRA_PATH) ./client.out 1.2 google.com 443
 
 # ------------------ preprocessing :( -----------------------
 

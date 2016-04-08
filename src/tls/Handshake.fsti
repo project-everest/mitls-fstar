@@ -54,7 +54,7 @@ val ri : Type0
 type b_log = bytes 
 //or how about: 
 //type log = list (m:bytes{exists ht d. m = messageBytes ht d})
-val prepareClientHello: config -> option ri -> option sessionID -> St (ch * b_log)
+val prepareClientHello: config -> option ri -> option sessionID -> St (option ECGroup.key * ch * b_log)
 //</expose for TestClient>
 
 // relocate?
@@ -102,7 +102,7 @@ type hs =
         r:role ->
         resume: option (sid:sessionID { r = Client }) ->
         cfg:config ->
-        id: random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
+        id: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
         log: rref region (epochs region peer) ->  // append-only; use monotonic? 
         state: rref region (handshake_state r)  ->  // opaque, subject to invariant
         hs

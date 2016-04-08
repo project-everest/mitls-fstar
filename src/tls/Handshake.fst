@@ -5,6 +5,7 @@
 (* Handshake protocol messages *)
 module Handshake
 open TLSExtensions //the other opens are in the .fsti
+open CoreCrypto
 
 let hsId h = noId // Placeholder
 
@@ -52,11 +53,19 @@ type eph_s = option kex_s_priv
 type eph_c = list kex_s_priv
 
 
-let prepareClientHello cfg ri sido : ch * b_log =
+let prepareClientHello cfg ri sido =
   let crand = Nonce.mkHelloRandom() in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client crand in
-  let ext = prepareExtensions cfg ci ri in
+  let (k,kp) = 
+      match cfg.maxVer with
+      | TLS_1p3 ->
+        let CommonDH.ECKey k = CommonDH.keygen (CommonDH.ECDH (CoreCrypto.ECC_P256)) in
+  	let g = SEC CoreCrypto.ECC_P256 in
+  	let kb = ECGroup.serialize_point k.ec_params k.ec_point in
+	(Some k,Some (ClientKeyShare [(g,kb)]))
+      | _ -> (None, None) in
+  let ext = prepareExtensions cfg ci ri kp in
   let ch = 
   {ch_protocol_version = cfg.maxVer;
    ch_client_random = crand;
@@ -65,7 +74,7 @@ let prepareClientHello cfg ri sido : ch * b_log =
    ch_raw_cipher_suites = None;
    ch_compressions = cfg.compressions;
    ch_extensions = Some ext;} in
-   (ch,clientHelloBytes ch)
+   (k,ch,clientHelloBytes ch)
 
 (* Is [pv1 >= pv2]? *)
 val gte_pv: protocolVersion -> protocolVersion -> Tot bool
@@ -349,7 +358,7 @@ val client_send_client_hello: hs -> ST unit
 let client_send_client_hello (HS #r0 #peer r res cfg id lgref hsref) = 
   match (!hsref).hs_state with
   | C(C_Idle ri) -> 
-    let (ch,l) = prepareClientHello cfg ri None in
+    let (k,ch,l) = prepareClientHello cfg ri None in
     hsref := {!hsref with 
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = l};
 	    hs_log = l;
@@ -530,6 +539,17 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
 assume val server_handle_client_ccs: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
+
+(*
+let server_handle_client_ccs (HS #r0 #peer r res cfg id lgref hsref)  msgs opt_msgs = 
+  match (!hsref).hs_state, msgs with
+  | S(S_HelloDone n i (Some (KEX_S_PRIV_DHE k))),[(ClientKeyExchange(cke),l)] when 
+     (n.n_protocol_version <> TLS_1p3 && 
+      (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
+      let pms = CommonDH.dh_initiator k 
+*)
+
+    
 assume val server_handle_client_finished: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))

@@ -390,14 +390,18 @@ let parseOptExtensions data =
   
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
-val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> Tot (l:list extension{List.Tot.length l < 256})
-let prepareExtensions (cfg:config) (conn:connectionInfo) ri =
+val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+let prepareExtensions (cfg:config) (conn:connectionInfo) ri ks =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
        match ri with
        | None -> FirstConnection
        | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
     let res = [E_renegotiation_info(cri)] in
+    let res = 
+       match cfg.maxVer,ks with
+       | TLS_1p3,Some ks -> (E_keyShare ks)::res
+       | _,_ -> res in
 //Disabling extended ms
 //    let res = E_extended_ms :: res in
 //No extended padding for now
