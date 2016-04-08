@@ -753,7 +753,45 @@ let parseNextProtocol payload : result np =
   | Correct(padding) -> 
       Correct( { np_selected_protocol = selected_protocol;
 		 np_padding = padding;})
-		 
+		
+val handshakeMessageBytes: protocolVersion -> hs_msg -> Tot bytes
+let handshakeMessageBytes pv hs = 
+    match hs,pv with
+    | ClientHello(ch),_-> clientHelloBytes ch
+    | ServerHello(sh),_-> serverHelloBytes sh
+    | Certificate(c),_-> certificateBytes c
+    | ServerKeyExchange(ske),_-> serverKeyExchangeBytes ske
+    | ServerHelloDone,_-> serverHelloDoneBytes
+    | ClientKeyExchange(cke),pv-> clientKeyExchangeBytes pv cke
+    | Finished(f),_-> finishedBytes f
+    | SessionTicket(t),_-> sessionTicketBytes t
+    | EncryptedExtensions(e),_-> encryptedExtensionsBytes e
+    | CertificateRequest(cr),_-> certificateRequestBytes cr
+    | CertificateVerify(cv),_-> certificateVerifyBytes cv
+    | HelloRequest,_-> helloRequestBytes
+    | HelloRetryRequest(hrr),_-> helloRetryRequestBytes hrr
+    | ServerConfiguration(sc),_-> serverConfigurationBytes sc
+    | NextProtocol(n),_-> nextProtocolBytes n
+
+val string_of_handshakeMessage: hs_msg -> Tot string
+let string_of_handshakeMessage hs = 
+    match hs with
+    | ClientHello(ch) -> "ClientHello"
+    | ServerHello(sh) -> "ServerHello"
+    | Certificate(c) -> "Certificate"
+    | ServerKeyExchange(ske) -> "ServerKeyExchange"
+    | ServerHelloDone -> "ServerHelloDone"
+    | ClientKeyExchange(cke) -> "ClientKeyExchange"
+    | Finished(f) -> "Finished"
+    | SessionTicket(t) -> "NewSessionTicket"
+    | EncryptedExtensions(e) -> "EncryptedExtensions"
+    | CertificateRequest(cr) -> "CertificateRequest"
+    | CertificateVerify(cv) -> "CertificateVerify"
+    | HelloRequest -> "HelloRequest"
+    | HelloRetryRequest(hrr) -> "HelloRetryRequest"
+    | ServerConfiguration(sc) -> "ServerConfiguration"
+    | NextProtocol(n) -> "NextProtocol"
+
 val parseHandshakeMessage: option protocolVersion -> option kexAlg -> handshakeType -> bytes -> Tot (result hs_msg)
 let parseHandshakeMessage pv kex hstype pl = 
     match hstype,pv,kex with

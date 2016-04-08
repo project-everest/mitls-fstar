@@ -1,5 +1,4 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
-
 module TLSExtensions
 
 open Platform.Bytes
@@ -95,9 +94,9 @@ let sameExt a b =
 val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
   match ext with
-  | E_earlyData _           -> abyte2 (0x00z, 0x02z) // JK : TODO, TBD
-  | E_preSharedKey _        -> abyte2 (0x00z, 0x03z) // JK : TODO, TBD
-  | E_keyShare _            -> abyte2 (0x00z, 0x04z) // JK : TODO, TBD
+  | E_keyShare _            -> abyte2 (0x00z, 0x28z) // KB: used Ekr's values
+  | E_preSharedKey _        -> abyte2 (0x00z, 0x29z) // KB: used Ekr's values
+  | E_earlyData _           -> abyte2 (0x00z, 0x2az) // KB: used Ekr's values
   | E_signatureAlgorithms _ -> abyte2 (0x00z, 0x0Dz)
   | E_renegotiation_info(_) -> abyte2 (0xFFz, 0x01z)
   | E_server_name (_)       -> abyte2 (0x00z, 0x00z)
