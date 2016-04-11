@@ -136,7 +136,7 @@ let pinverse_sigAlg x = ()
 type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 2"
-val hashAlgBytes : hashAlg' -> Tot (lbytes 1)
+val hashAlgBytes: hashAlg' -> Tot (lbytes 1)
  let hashAlgBytes ha =
    match ha with
     | Hash MD5     -> abyte 1z
@@ -1021,8 +1021,8 @@ let namedGroupBytes ng =
     | FFDHE2048                     -> abyte2 (0x01z, 0x00z)
     | FFDHE3072                     -> abyte2 (0x01z, 0x01z)
     | FFDHE4096                     -> abyte2 (0x01z, 0x02z)
-    | FFDHE6144                     -> abyte2 (0x01z, 0x03z) // recheck!
-    | FFDHE8192                     -> abyte2 (0x01z, 0x04z) // recheck!
+    | FFDHE6144                     -> abyte2 (0x01z, 0x03z)
+    | FFDHE8192                     -> abyte2 (0x01z, 0x04z)
   )
   | FFDHE_PRIVATE_USE(b)            -> abyte2 (0x01z, b)
   | ECDHE_PRIVATE_USE(b)            -> abyte2 (0xFEz, b)
@@ -1048,20 +1048,17 @@ let parseNamedGroup b =
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong named group")
 
 
-(* private val namedGroupsBytes0: groups:list namedGroup -> Tot (b:bytes { length b = 2*(List.Tot.length groups)}) *)
-(* let rec namedGroupsBytes0 groups = *)
-(*   match groups with *)
-(*   | [] -> empty_bytes *)
-(*   | g::gs -> namedGroupBytes g @| namedGroupsBytes0 gs *)
+private val namedGroupsBytes0: groups:list namedGroup -> Tot (b:bytes { length b = op_Multiply 2 (List.Tot.length groups)})
+let rec namedGroupsBytes0 groups =
+  match groups with
+  | [] -> empty_bytes
+  | g::gs -> namedGroupBytes g @| namedGroupsBytes0 gs
 
-(* let namedGroupsBytes groups = vlbytes 2 (namedGroupsBytes0 groups) *)
-
-
-val namedGroupsBytes: groups:list namedGroup -> Tot (b:bytes { length b = 2 + op_Multiply 2 (List.Tot.length groups)})
+val namedGroupsBytes: groups:list namedGroup{List.Tot.length groups < 65536/2}-> Tot (b:bytes { length b = 2 + op_Multiply 2 (List.Tot.length groups)})
 let namedGroupsBytes groups =
-  let b = (List.Tot.fold_left (fun l s -> namedGroupBytes s @| l) empty_bytes groups) in
-  admit(); //TODO
-  vlbytes 2 b
+  let gs = namedGroupsBytes0 groups in
+  lemma_repr_bytes_values (length gs);
+  vlbytes 2 gs
 
 //val parseNamedGroups: pinverse_t namedGroupsBytes
 let parseNamedGroups (b:bytes) =
