@@ -35,6 +35,7 @@ type alertDescription =
     | AD_user_cancelled_fatal
     | AD_no_renegotiation
     | AD_unrecognized_name
+    | AD_missing_extension
     | AD_unsupported_extension
 
 let isFatal ad =
@@ -60,6 +61,7 @@ let isFatal ad =
     | AD_insufficient_security
     | AD_internal_error
     | AD_user_cancelled_fatal
+    | AD_missing_extension
     | AD_unsupported_extension -> true
     | _ -> false
 
