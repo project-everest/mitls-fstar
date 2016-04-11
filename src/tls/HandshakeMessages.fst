@@ -28,63 +28,75 @@ assume val split2: b:bytes -> n1:nat -> n2:nat{length b >= n1 + n2} -> Tot (x:(l
 
 (*** Following RFC5246 A.4 *)
 
-type preHandshakeType =
-    | HT_hello_request
-    | HT_client_hello
-    | HT_server_hello
-    | HT_session_ticket
-    | HT_hello_retry_request
-    | HT_encrypted_extensions
-    | HT_certificate
-    | HT_server_key_exchange
-    | HT_certificate_request
-    | HT_server_hello_done
-    | HT_certificate_verify
-    | HT_client_key_exchange
-    | HT_server_configuration
-    | HT_next_protocol
-    | HT_finished
+(* TODO: move to TLSConstants *)
+type handshakeType =
+  | HT_hello_request
+  | HT_client_hello
+  | HT_server_hello
+  | HT_session_ticket
+  | HT_hello_retry_request
+  | HT_encrypted_extensions
+  | HT_certificate
+  | HT_server_key_exchange
+  | HT_certificate_request
+  | HT_server_hello_done
+  | HT_certificate_verify
+  | HT_client_key_exchange
+  | HT_server_configuration
+  | HT_finished
+  | HT_next_protocol
 
-type handshakeType = preHandshakeType
-
-val htBytes : handshakeType -> Tot (lbytes 1)
+val htBytes: handshakeType -> Tot (lbytes 1)
 let htBytes t =
-    match t with
-    | HT_hello_request       -> abyte   0z
-    | HT_client_hello        -> abyte   1z
-    | HT_server_hello        -> abyte   2z
-    | HT_session_ticket      -> abyte   4z
-    | HT_hello_retry_request -> abyte   6z
-    | HT_encrypted_extensions -> abyte  8z
-    | HT_certificate         -> abyte  11z
-    | HT_server_key_exchange -> abyte  12z
-    | HT_certificate_request -> abyte  13z
-    | HT_server_hello_done   -> abyte  14z
-    | HT_certificate_verify  -> abyte  15z
-    | HT_client_key_exchange -> abyte  16z
-    | HT_server_configuration -> abyte 17z
-    | HT_next_protocol       -> abyte  67z
-    | HT_finished            -> abyte  20z
+  match t with
+  | HT_hello_request        -> abyte  0z
+  | HT_client_hello         -> abyte  1z
+  | HT_server_hello         -> abyte  2z
+  | HT_session_ticket       -> abyte  4z
+  | HT_hello_retry_request  -> abyte  6z
+  | HT_encrypted_extensions -> abyte  8z
+  | HT_certificate          -> abyte 11z
+  | HT_server_key_exchange  -> abyte 12z
+  | HT_certificate_request  -> abyte 13z
+  | HT_server_hello_done    -> abyte 14z
+  | HT_certificate_verify   -> abyte 15z
+  | HT_client_key_exchange  -> abyte 16z
+  | HT_server_configuration -> abyte 17z
+  | HT_finished             -> abyte 20z
+  | HT_next_protocol        -> abyte 67z
 
-(* TODO: inversion lemmas *)
-val parseHt : pinverse_t htBytes
+val parseHt: pinverse_t htBytes
 let parseHt b =
-    match cbyte b with
-    |   0z  -> Correct (HT_hello_request      )
-    |   1z  -> Correct (HT_client_hello       )
-    |   2z  -> Correct (HT_server_hello       )
-    |   4z  -> Correct (HT_session_ticket     )
-    |   8z  -> Correct (HT_encrypted_extensions)
-    |  11z  -> Correct (HT_certificate        )
-    |  12z  -> Correct (HT_server_key_exchange)
-    |  13z  -> Correct (HT_certificate_request)
-    |  14z  -> Correct (HT_server_hello_done  )
-    |  15z  -> Correct (HT_certificate_verify )
-    |  16z  -> Correct (HT_client_key_exchange)
-    |  18z  -> Correct (HT_server_configuration)
-    |  20z  -> Correct (HT_finished           )
-    |  67z  -> Correct (HT_next_protocol      )
-    | _   -> let reason = perror __SOURCE_FILE__ __LINE__ "" in Error(AD_decode_error, reason)
+  match cbyte b with
+  |  0z -> Correct HT_hello_request
+  |  1z -> Correct HT_client_hello
+  |  2z -> Correct HT_server_hello
+  |  4z -> Correct HT_session_ticket
+  |  6z -> Correct HT_hello_retry_request
+  |  8z -> Correct HT_encrypted_extensions
+  | 11z -> Correct HT_certificate
+  | 12z -> Correct HT_server_key_exchange
+  | 13z -> Correct HT_certificate_request
+  | 14z -> Correct HT_server_hello_done
+  | 15z -> Correct HT_certificate_verify
+  | 16z -> Correct HT_client_key_exchange
+  | 17z -> Correct HT_server_configuration
+  | 20z -> Correct HT_finished
+  | 67z -> Correct HT_next_protocol
+  | _   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
+val inverse_ht: x:_ -> Lemma
+  (requires (True))
+  (ensures lemma_inverse_g_f htBytes parseHt x)
+  [SMTPat (parseHt (htBytes x))]
+let inverse_ht x = ()
+
+val pinverse_ht: x:_ -> Lemma
+  (requires (True))
+  (ensures (lemma_pinverse_f_g Seq.equal htBytes parseHt x))
+  [SMTPat (htBytes (Correct._0 (parseHt x)))]
+let pinverse_ht x = ()
+
 
 /// Messages
 
@@ -212,33 +224,40 @@ let messageBytes ht data =
     let vldata = vlbytes 3 data in
     htb @| vldata
 
-
-irreducible val parseMessage : buf:bytes -> Tot (result (option (rem:bytes & 
-    		   	     	       	        hstype:handshakeType & 
-    		   	     	       	        payload:bytes & 
-						to_log:bytes{ (repr_bytes (length payload) <= 3 ) /\ (to_log = messageBytes hstype payload) /\ (Seq.equal buf (to_log @| rem)) } )) )
+val parseMessage: buf:bytes
+  -> Tot (result (option
+		  (rem:bytes &
+		   hstype:handshakeType &
+		   payload:bytes{ repr_bytes (length payload) <= 3 } &
+		   to_log:bytes{ to_log = messageBytes hstype payload /\
+		                 Seq.equal buf (to_log @| rem) })))
+(*
+ Somewhat inefficient implementation:
+ - Repeatedly parse the first 4 bytes of the incoming buffer until we have a complete message;
+ - Then remove that message from the incoming buffer.
+*)
 let parseMessage buf =
-    (* Somewhat inefficient implementation:
-       we repeatedly parse the first 4 bytes of the incoming buffer until we have a complete message;
-       we then remove that message from the incoming buffer. *)
-    if length buf < 4 then Correct(None) (* not enough data to start parsing *)
-    else
-        let (hstypeb,rem) = split buf 1 in
-        resultMap (parseHt hstypeb) 
-	(fun hstype -> 
-            (match vlsplit 3 rem with
-            | Error z -> None // not enough payload, try next time
-            | Correct(payload,rem) ->
-                let to_log = messageBytes hstype payload in
-		let x = (|rem,hstype,payload,messageBytes hstype payload|) in
-                Some x))
+  if length buf < 4 then
+    Correct None // not enough data to start parsing
+  else
+    let hstypeb,rem = split buf 1 in
+    match parseHt hstypeb with
+    | Error z -> Error z
+    | Correct ht ->
+      match vlsplit 3 rem with
+      | Error z -> Correct None // not enough payload, try next time
+      | Correct(payload,rem') ->
+        //assert (Seq.equal buf (htBytes ht @| rem));
+        //assert (Seq.equal rem (vlbytes 3 payload @| rem'));
+        let to_log = messageBytes ht payload in
+        Correct (Some (|rem', ht, payload, to_log|))
 
 
 (** A.4.1 Hello Messages *)
 
 val clientHelloBytes : ch -> Tot bytes
 let clientHelloBytes ch =
-  let verB      = versionBytes ch.ch_protocol_version in
+  let verB = versionBytes ch.ch_protocol_version in
   let sidB = vlbytes 1 ch.ch_sessionID in
   let csb =
      match ch.ch_raw_cipher_suites with
@@ -810,4 +829,3 @@ let parseHandshakeMessage pv kex hstype pl =
     | HT_server_configuration,_,_ -> mapResult ServerConfiguration (parseServerConfiguration pl)
     | HT_next_protocol,_,_       -> mapResult NextProtocol (parseNextProtocol pl)
     | HT_finished,_,_            -> mapResult Finished (parseFinished pl)
-
