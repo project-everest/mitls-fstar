@@ -429,7 +429,7 @@ let parseServerHello data =
 		             sh_server_random = serverRandomBytes;
 		             sh_sessionID = Some sid;
 		             sh_cipher_suite = cs;
-		             sh_compression = None;
+		             sh_compression = Some NullCompression;
 		             sh_extensions = exts})
 			 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))))
 	      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

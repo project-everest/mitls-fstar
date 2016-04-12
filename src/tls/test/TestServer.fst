@@ -42,8 +42,9 @@ let id = {
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;
+      ne_keyShare = None;
     };
-    writer = Server
+    writer = Client
   }
 
 let encryptor_TLS12_AES_GCM_128_SHA256 key iv = 
@@ -110,6 +111,7 @@ let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher =
 
 let sendRecord tcp pv ct msg str = 
   let r = Record.makePacket ct pv msg in
+  IO.print_string ((Platform.Bytes.print_bytes r) ^ "\n\n");
   let Correct _ = Platform.Tcp.send tcp r in
   match ct with
   | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
@@ -191,7 +193,9 @@ let rec aux sock =
   let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
 
+  // Get client hello
   let ClientHello(ch), log = recvHSRecord tcp pv kex log in
+
   let pv, cr, sid, csl, ext = match ch with
     | {ch_protocol_version = pv;
        ch_client_random = cr;
@@ -200,56 +204,74 @@ let rec aux sock =
        ch_extensions = Some ext} -> pv, cr, sid, csl, ext
     | _ -> failwith "" in
  
-  let Correct (shb, nego, _, log) = Handshake.prepareServerHello config None ch log in
-  let Correct sh = parseServerHello shb in
+  // Server Hello
+  let Correct (shb, nego, _, _) = Handshake.prepareServerHello config None None ch log in
+  let tag, shb = split shb 4 in
+  let sh = match parseServerHello shb with | Correct s -> s | _ -> failwith "fail" in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
-  let pv = sh.sh_protocol_version in
+  let sr = sh.sh_server_random in
   let cs = sh.sh_cipher_suite in
-  let CipherSuite kex sa ae = cs in
+  let CipherSuite kex (Some sa) ae = cs in
+  let alg = (sa, Hash CoreCrypto.SHA256) in
 
+  // Server Certificate
+  let Correct (chain, csk) = Cert.lookup_server_chain "../../data/test_chain.pem" "../../data/test_chain.key" pv (Some sa) None in
+  let c = {crt_chain = chain} in
+  let cb = certificateBytes c in
+  let log = sendHSRecord tcp pv (Certificate c) log in
 
-  IO.print_string "DONE\n"; aux sock
-  (*
-  let Certificate(sc),log = recvHSRecord tcp pv kex log in
-  let ServerKeyExchange(ske),log = recvHSRecord tcp pv kex log in
-  let ServerHelloDone,log = recvHSRecord tcp pv kex log in
+  // Server Key Exchange
+  let dhp = ECGroup.params_of_group CoreCrypto.ECC_P256 in
+  let gy = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
+  let kex_s = KEX_S_DHE gy in
+  let sv = kex_s_to_bytes kex_s in
+  let csr = cr @| sr in
+  let Correct sigv = Cert.sign pv csr csk alg sv in
+  let ske = {ske_kex_s = kex_s; ske_sig = sigv} in
 
-  let KEX_S_DHE gy = ske.ske_kex_s in
-  let gx, pms = CommonDH.dh_responder gy in
-  let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-  let log = sendHSRecord tcp pv (ClientKeyExchange cke) log in
+  let log = sendHSRecord tcp pv (ServerKeyExchange ske) log in
+  let log = sendHSRecord tcp pv (ServerHelloDone) log in
 
-  let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") (ch.ch_client_random @| sh.sh_server_random)  48 in
+  // Get Client Key Exchange
+  let ClientKeyExchange(cke), log = recvHSRecord tcp pv kex log in
+  let gx = match cke with
+    | {cke_kex_c = KEX_C_ECDHE u} -> u
+    | _ -> failwith "Bad CKE type" in
+  IO.print_string ("client share:"^(Platform.Bytes.print_bytes gx)^"\n");
+  let gx = match ECGroup.parse_point dhp gx with | Some u -> u | _ -> failwith "point parse failure" in
+  IO.print_string "Recasting g^x...\n";
+  let gx = CommonDH.ECKey ({CoreCrypto.ec_point = gx; CoreCrypto.ec_priv = None; CoreCrypto.ec_params = dhp;}) in
+  let pms = CommonDH.dh_initiator gy gx in
+  IO.print_string ("PMS:"^(Platform.Bytes.print_bytes pms)^"\n");
+
+  // Compute MS
+  let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") csr 48 in
   IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
-  let (ck,civ,sk,siv) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms ch.ch_client_random sh.sh_server_random in
-  IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
-  IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
-  IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
-  IO.print_string ("server AES_GCM salt:"^(Platform.Bytes.print_bytes siv)^"\n");
+  let (sk,siv,ck,civ) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr in
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
-  let cfin = {fin_vd = TLSPRF.verifyData (pv,cs) ms Client log} in 
-  let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
-  let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
+  // Get CCS/Fin
+  let _ = recvCCSRecord tcp pv in
+  let Finished(cfin),log = recvEncHSRecord tcp pv kex log rd in
 
-  sendRecord tcp pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
+  let sfin = {fin_vd = TLSPRF.verifyData (pv,cs) ms Server log} in
+  let (str,sfinb,log) = makeHSRecord pv (Finished sfin) log in
+  let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake sfinb in
+
+  sendRecord tcp pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Server";
   sendRecord tcp pv Content.Handshake efinb str;
 
-  let _ = recvCCSRecord tcp pv in
-  let Finished(sfin),log = recvEncHSRecord tcp pv kex log rd in
+  let req = recvEncAppDataRecord tcp pv rd in
 
-  let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
-  let get = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 payload) in
+  let text = "You are connected to miTLS*!\r\nThis is the request you sent:\r\n\r\n" ^ (iutf8 req) in
+  let payload = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:" ^ (string_of_int (length (abytes text))) ^ "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" ^ text in
+  let payload = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 payload) in
 
-  sendRecord tcp pv Content.Application_data get "GET /";
-  let ad = recvEncAppDataRecord tcp pv rd in
-  main host port
- with
-  _ -> main host port
-
-  *)
+  let _ = sendRecord tcp pv Content.Application_data payload "httpResponse" in
+  Platform.Tcp.close tcp;
+  IO.print_string "Closing connection...\n"; aux sock
 
 let main host port =
  IO.print_string "===============================================\n Starting test TLS server...\n";

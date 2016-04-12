@@ -114,7 +114,7 @@ let prepareServerHello cfg ri ks ch i_log =
     | Error(z) -> Error(z)
     | Correct(sext,next) ->
   //  let sid = Nonce.random 32 in
-    let sid = magic() in
+    let sid = CoreCrypto.random 32 in
     let shB = 
       serverHelloBytes (
       {sh_protocol_version = pv;
