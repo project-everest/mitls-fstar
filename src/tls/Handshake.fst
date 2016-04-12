@@ -79,9 +79,6 @@ val getCachedSession: cfg:config -> ch:ch -> ST (option session)
 let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
-val prepareServerHello: config -> option ri -> option keyShare -> ch -> b_log -> ST (result (bytes * nego * option ake * b_log))
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ri ks ch i_log =
   let srand = Nonce.mkHelloRandom() in
   match getCachedSession cfg ch with

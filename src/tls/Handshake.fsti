@@ -90,6 +90,9 @@ type session = {
 }     
 
 val prepareClientHello: config -> option ri -> option sessionID -> St (option ECGroup.key * ch * b_log)
+val prepareServerHello: config -> option ri -> option keyShare -> ch -> b_log -> ST (result (bytes * nego * option ake * b_log))
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
 val processServerHello: c:config -> option ri -> eph_c -> ch -> sh ->
                            ST (result (nego * option ake))
   (requires (fun h -> True))

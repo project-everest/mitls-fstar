@@ -218,7 +218,7 @@ let rec aux sock =
   // Server Certificate
   let Correct (chain, csk) = Cert.lookup_server_chain "../../data/test_chain.pem" "../../data/test_chain.key" pv (Some sa) None in
   let c = {crt_chain = chain} in
-  let cb = certificateBytes c in
+  let cb = certificateBytes pv c in
   let log = sendHSRecord tcp pv (Certificate c) log in
 
   // Server Key Exchange
