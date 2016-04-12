@@ -34,7 +34,7 @@ let rec hkdf_expand_int ha count curr len secret prev info =
       
 val hkdf_expand_label: CoreCrypto.hash_alg -> bytes -> string -> bytes -> int -> Tot bytes
 let hkdf_expand_label ha secret label hv len = 
-  let info = (bytes_of_int len 2 ) @| 
+  let info = (bytes_of_int 2 len) @| 
 	     (vlbytes 1 (abytes ("TLS 1.3, "^label))) @|
 	     (vlbytes 1 hv) in
   let prev = empty_bytes in

@@ -167,7 +167,7 @@ let recvCCSRecord tcp pv =
   ccs
 
 let recvEncHSRecord tcp pv kex log rd = 
-  let (Content.Handshake,_,cipher) = recvRecord tcp pv in
+  let (Content.Application_data,_,cipher) = recvRecord tcp pv in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
   let [(hs_msg,to_log)] = hsm in
