@@ -243,7 +243,7 @@ let addOnce ext extList =
 val earlyDataIndicationBytes: earlyDataIndication -> Tot bytes
 val extensionPayloadBytes: extension -> Tot bytes
 val extensionBytes: extension -> Tot bytes
-val extensionsBytes: cl:list extension -> Tot bytes
+val extensionsBytes: cl:list extension -> Tot (b:bytes{length b <= 2 + 65535})
 let rec earlyDataIndicationBytes edi =
   match edi with
   | ServerEarlyDataIndication -> empty_bytes
