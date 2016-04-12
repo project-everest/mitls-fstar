@@ -283,11 +283,11 @@ let clientHelloBytes ch =
    parsing ignores some of them. For these two reasons, the
    serialization function is not an inverse of the parsing function as
    it is now *)
-val parseClientHello: data:bytes{repr_bytes(length data) <= 3}
-  -> Tot (result x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello                        /\ x.ch_protocol_version = x'.ch_protocol_version 
-                                /\ x.ch_client_random = x'.ch_client_random
-                                /\ x.ch_sessionID = x'.ch_sessionID }))
-
+val parseClientHello : data:bytes{repr_bytes(length data) <= 3} 
+  -> Tot (result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
+                                 /\ x.ch_protocol_version = x'.ch_protocol_version 
+                                 /\ x.ch_client_random = x'.ch_client_random
+                                 /\ x.ch_sessionID = x'.ch_sessionID }))
 let parseClientHello data =
   if length data < 35 then
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
