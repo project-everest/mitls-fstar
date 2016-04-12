@@ -6,6 +6,7 @@
 module Handshake
 open TLSExtensions //the other opens are in the .fsti
 open CoreCrypto
+open HSCrypto
 
 let hsId h = noId // Placeholder
 
@@ -765,4 +766,3 @@ let recv_ccs hs =
 
 
 let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"
-

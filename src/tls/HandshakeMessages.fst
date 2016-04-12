@@ -97,7 +97,6 @@ val pinverse_ht: x:_ -> Lemma
   [SMTPat (htBytes (Correct._0 (parseHt x)))]
 let pinverse_ht x = ()
 
-
 /// Messages
 
 type ch = {
@@ -105,8 +104,8 @@ type ch = {
   ch_client_random:TLSInfo.random;
   ch_sessionID:sessionID;
   ch_cipher_suites:(k:known_cipher_suites{List.Tot.length k < 256});
-  ch_raw_cipher_suites: option bytes;
-  ch_compressions:(cl:list compression{List.Tot.length cl <= 1});
+  ch_raw_cipher_suites:option (b:bytes{length b < 512});
+  ch_compressions:(cl:list compression{List.Tot.length cl < 256});
   ch_extensions:option (ce:list extension{List.Tot.length ce < 256});
 }
 
@@ -126,7 +125,7 @@ type sh = {
 type hrr = {
   hrr_protocol_version:protocolVersion;
   hrr_cipher_suite:known_cipher_suite;
-  hrr_named_group: namedGroup; // JK : is it the expected type here ?
+  hrr_named_group:namedGroup; // JK : is it the expected type here ?
   hrr_extensions:(he:list extension{List.Tot.length he < 256});
 }
 
@@ -191,11 +190,11 @@ type fin = {
 }
 
 // Next protocol message, see https://tools.ietf.org/id/draft-agl-tls-nextprotoneg-03.html
-// TODO: replace shallow implemntation by more precise one
+// TODO: replace shallow implementation by more precise one
 type np = {
   np_selected_protocol: bytes;
   np_padding: bytes;
-  }
+}
 
 // TODO: unify, either keep separate finished messages for client and servers or 
 // merge them into single "finished" as it is the case for certificates
@@ -218,11 +217,12 @@ type hs_msg =
 
 /// Handshake message format
 
-val messageBytes : ht:handshakeType -> data:bytes{ repr_bytes (length data) <= 3 } -> Tot (lbytes (4+(length data))) 
+val messageBytes : ht:handshakeType -> data:bytes{ repr_bytes (length data) <= 3 } 
+  -> Tot (lbytes (4+(length data))) 
 let messageBytes ht data =
-    let htb = htBytes ht in
-    let vldata = vlbytes 3 data in
-    htb @| vldata
+  let htb = htBytes ht in
+  let vldata = vlbytes 3 data in
+  htb @| vldata
 
 val parseMessage: buf:bytes
   -> Tot (result (option
@@ -255,179 +255,209 @@ let parseMessage buf =
 
 (** A.4.1 Hello Messages *)
 
-val clientHelloBytes : ch -> Tot bytes
+val clientHelloBytes: ch -> Tot (b:bytes{length b >= 42})
 let clientHelloBytes ch =
   let verB = versionBytes ch.ch_protocol_version in
+  lemma_repr_bytes_values (length ch.ch_sessionID);
   let sidB = vlbytes 1 ch.ch_sessionID in
-  let csb =
-     match ch.ch_raw_cipher_suites with
-     | None -> cipherSuitesBytes ch.ch_cipher_suites
-     | Some csb -> csb in
+  let csb:bytes =
+    match ch.ch_raw_cipher_suites with
+    | None -> cipherSuitesBytes ch.ch_cipher_suites
+    | Some csb -> csb in
+  lemma_repr_bytes_values (length csb);
   let csB = vlbytes 2 csb in
   let cmb = compressionMethodsBytes ch.ch_compressions in
+  lemma_repr_bytes_values (length cmb);
   let cmB = vlbytes 1 cmb in
   let extB =
-     match ch.ch_extensions with
-     | Some ext -> extensionsBytes ext
-     | None -> empty_bytes in
+    match ch.ch_extensions with
+    | Some ext -> extensionsBytes ext
+    | None -> empty_bytes in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
+  lemma_repr_bytes_values (length data);
   messageBytes HT_client_hello data
 
-(* 
-   This function adds an "first connection" renegotiation info extension to the client hello 
-   when parsing it.
-   The cipher suite parsing ignores some of them.
-   For those two reasons, the serialization function is not an inverse of the parsing function 
-   as it is now 
-*)
-val parseClientHello : data:bytes{repr_bytes(length data) <= 3} -> 
-                       Tot (result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
-                                                     /\ x.ch_protocol_version = x'.ch_protocol_version 
-                                                     /\ x.ch_client_random = x'.ch_client_random
-                                                     /\ x.ch_sessionID = x'.ch_sessionID }))
+
+(* This function adds a "first connection" renegotiation info
+   extension to the client hello when parsing it. The cipher suite
+   parsing ignores some of them. For these two reasons, the
+   serialization function is not an inverse of the parsing function as
+   it is now *)
+val parseClientHello: data:bytes{repr_bytes(length data) <= 3}
+  -> Tot (result x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello                        /\ x.ch_protocol_version = x'.ch_protocol_version 
+                                /\ x.ch_client_random = x'.ch_client_random
+                                /\ x.ch_sessionID = x'.ch_sessionID }))
+
 let parseClientHello data =
-    let ld = length data in
-    if ld >= 34 then
-      let (clVerBytes,cr,data) = split2 data 2 32 in
-      (match parseVersion clVerBytes with
-       | Error z -> Error z
-       | Correct(cv) ->
-         if length data >= 1 then
-           (match vlsplit 1 data with
-            | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse session id")
-            | Correct (sid,data) ->
-              if length sid <= 32 then
-                (if length data >= 2 then
-                   (match vlsplit 2 data with
-                    | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse cipher suite bytes")
-                    | Correct (res) ->
-                      let (clCiphsuitesBytes,data) = res in
-                      (match parseCipherSuites clCiphsuitesBytes with
-			| Error(z) -> Error(z)
-			| Correct clientCipherSuites ->
-			  if length data >= 1 then
-			    (match vlsplit 1 data with
-                            | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
-                            | Correct (res) ->
-                              let (cmBytes,extensions) = res in
-                              let cm = parseCompressions cmBytes in
-			      (match parseOptExtensions Client extensions with
-				| Error(z) -> Error(z) 
-				| Correct (exts) ->
-                                  let eok = (match exts with
-                                    | None -> true
-                                    | Some l -> List.Tot.length l < 256) in
-			          if eok && List.Tot.length cm <= 256 && List.Tot.length clientCipherSuites < 256 then
-				    Correct ({ch_protocol_version = cv;
-                                      ch_client_random = cr;        
-                                      ch_sessionID = sid;
-                                      ch_cipher_suites = clientCipherSuites;
-                                      ch_raw_cipher_suites = Some clCiphsuitesBytes;
-                                      ch_compressions = cm;
-                                      ch_extensions = exts})
-				   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-			   )
-                         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-		      )
-		   )
-		else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-              else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  if length data < 35 then
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else
+    let (clVerBytes,cr,data) = split2 data 2 32 in
+    match parseVersion clVerBytes with
+    | Error z -> Error z
+    | Correct cv ->
+      match vlsplit 1 data with
+      | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse session id")
+      | Correct (sid,data) ->
+        if length sid <= 32 then
+	  (if length data >= 2 then
+	    (match vlsplit 2 data with
+	     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse cipher suite bytes")
+	     | Correct (clCiphsuitesBytes,data) ->
+	       if length clCiphsuitesBytes < 512 then
+	       (match parseCipherSuites clCiphsuitesBytes with
+	        | Error z -> Error z
+	        | Correct clientCipherSuites ->
+	          if length data >= 1 then
+		    (match vlsplit 1 data with
+		     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
+		     | Correct (cmBytes,extensions) ->
+		       let cm = parseCompressions cmBytes in
+		       (match parseOptExtensions Client extensions with
+		        | Error z -> Error z 
+		        | Correct exts ->
+			  if (match exts with 
+			      | None -> true
+			      | Some l -> List.Tot.length l < 256)
+			     && List.Tot.length cm < 256
+			     && List.Tot.length clientCipherSuites < 256
+			  then
+			    Correct ({
+			      ch_protocol_version = cv;
+			      ch_client_random = cr;
+			      ch_sessionID = sid;
+			      ch_cipher_suites = clientCipherSuites;
+			      ch_raw_cipher_suites = Some clCiphsuitesBytes;
+			      ch_compressions = cm;
+			      ch_extensions = exts;
+			  })
+			else
+			  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
+		  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+	       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+	   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
+val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34})
+let serverHelloBytes sh =
+  let verB = versionBytes sh.sh_protocol_version in
+  let sidB =
+    match sh.sh_sessionID with
+    | Some sid -> 
+      lemma_repr_bytes_values (length sid);
+      vlbytes 1 sid 
+    | _ -> empty_bytes 
+  in
+  let csB = cipherSuiteBytes sh.sh_cipher_suite in
+  let cmB = 
+    match sh.sh_compression with
+    | Some compression -> compressionBytes compression
+    | _ -> empty_bytes 
+  in
+  let extB = 
+    match sh.sh_extensions with
+    | Some ext -> extensionsBytes ext
+    | None -> empty_bytes 
+  in
+  let data:bytes =
+    match sh.sh_protocol_version with
+    | TLS_1p3 -> verB @| sh.sh_server_random @| csB @| extB 
+    | _      -> verB @| sh.sh_server_random @| sidB @| csB @| cmB @| extB 
+  in
+  lemma_repr_bytes_values (length data);
+  data
 
-val serverHelloBytes: sh -> Tot bytes
-let serverHelloBytes sh = 
-    let verB = versionBytes sh.sh_protocol_version in
-    let sidB = 
-      match sh.sh_sessionID with
-      | Some sid -> vlbytes 1 sid 
-      | _ -> empty_bytes in
-    let csB = cipherSuiteBytes sh.sh_cipher_suite in
-    let cmB = 
-      match sh.sh_compression with
-      | Some compression -> compressionBytes compression
-      | _ -> empty_bytes in
-    let extB = 
-      match sh.sh_extensions with
-      | Some ext -> extensionsBytes ext
-      | None -> empty_bytes in
-    let data = verB @| sh.sh_server_random @| sidB @| csB @| cmB @| extB in
-    messageBytes HT_server_hello data
-
-val parseServerHello: data:bytes{repr_bytes(length data)<=3}  -> 
-                      Tot (result (x:sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)}))
+val parseServerHello: data:bytes{repr_bytes(length data) <= 3}  
+  -> Tot (result (x:sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)}))
 let parseServerHello data =
-    if length data >= 34 then
-        let (serverVerBytes,serverRandomBytes,data) = split2 data 2 32 in
-        match parseVersion serverVerBytes with
-        | Error z -> Error z
-        | Correct(serverVer) ->
-	  match serverVer with
-	  | TLS_1p3 -> 
-	    if length data >= 1 then 
-	      let (csBytes, data) = split data 2 in
-	      match parseCipherSuite csBytes with
-	      | Error(z) -> Error(z)
-	      | Correct(cs) -> 
-		(match parseOptExtensions Server data with
-		| Error(z) -> Error(z)
-                | Correct(exts) ->
-                    correct({sh_protocol_version = serverVer;       
-                      sh_server_random = serverRandomBytes;
-                      sh_sessionID = None;
-                      sh_cipher_suite = cs;
-                      sh_compression = None;
-                      sh_extensions = exts}))
-	     else  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-	  | _ ->
-            if length data >= 1 then
-                match vlsplit 1 data with
-                | Error z -> Error z
-                | Correct (res) ->
-                    let (sid,data) = res in
-                    if length sid <= 32 then
-                        if length data >= 3 then
-                            let (csBytes,cmBytes,data) = split2 data 2 1 in
-                            match parseCipherSuite csBytes with
-                            | Error(z) -> Error(z)
-                            | Correct(cs) ->
-                                let cm = parseCompression cmBytes in
-                                (match cm with
-                                | UnknownCompression _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
-                                | NullCompression ->
-                                (match parseOptExtensions Server data with
-                                | Error(z) -> Error(z)
-                                | Correct(exts) ->
-                                correct({sh_protocol_version = serverVer;       
-                                         sh_server_random = serverRandomBytes;
-                                         sh_sessionID = Some sid;
-                                         sh_cipher_suite = cs;
-                                         sh_compression = Some cm;
-                                         sh_extensions = exts})))
-                        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-                    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  if length data < 34 then
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else
+    let (serverVerBytes,serverRandomBytes,data) = split2 data 2 32 in
+    match parseVersion serverVerBytes with
+    | Error z -> Error z
+    | Correct serverVer ->
+      (match serverVer with
+       | TLS_1p3 ->
+ 	 if length data >= 2 then
+	   let (csBytes, data) = split data 2 in
+	   (match parseCipherSuite csBytes with
+	    | Error z -> Error z
+	    | Correct cs -> 
+	      (match parseOptExtensions Server data with
+	       | Error z -> Error z
+	       | Correct exts ->
+		 if (match exts with 
+		     | None -> true
+		     | Some l -> List.Tot.length l < 256)
+		 then
+		   correct ({
+		     sh_protocol_version = serverVer;	  
+		     sh_server_random = serverRandomBytes;
+		     sh_sessionID = None;
+		     sh_cipher_suite = cs;
+		     sh_compression = None;
+		     sh_extensions = exts})
+		 else
+ 		   Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
+	else 
+	  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+       | _ ->
+         (match vlsplit 1 data with
+          | Error z -> Error z
+          | Correct (sid,data) ->
+            if length sid <= 32 then
+              if length data >= 3 then
+                let (csBytes,cmBytes,data) = split2 data 2 1 in
+                (match parseCipherSuite csBytes with
+	         | Error z -> Error z
+	         | Correct cs ->
+    		   let cm = parseCompression cmBytes in
+		   (match cm with
+		    | UnknownCompression _ -> 
+		      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
+		    | NullCompression ->
+		      (match parseOptExtensions Server data with
+		       | Error z -> Error z
+		       | Correct exts ->
+			 if (match exts with 
+			     | None -> true
+			     | Some l -> List.Tot.length l < 256)
+			 then
+		           correct ({
+		             sh_protocol_version = serverVer;	      
+		             sh_server_random = serverRandomBytes;
+		             sh_sessionID = Some sid;
+		             sh_cipher_suite = cs;
+		             sh_compression = None;
+		             sh_extensions = exts})
+			 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))))
+	      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
 
 val helloRequestBytes: bytes
-let helloRequestBytes = messageBytes HT_hello_request empty_bytes
+let helloRequestBytes = 
+  lemma_repr_bytes_values 0;
+  messageBytes HT_hello_request empty_bytes
 
 val ccsBytes: bytes
 let ccsBytes = abyte 1z
 
 val serverHelloDoneBytes: bytes
-let serverHelloDoneBytes = messageBytes HT_server_hello_done empty_bytes
+let serverHelloDoneBytes = 
+  lemma_repr_bytes_values 0;
+  messageBytes HT_server_hello_done empty_bytes
 
 (** A.4.2 Server Authentication and Key Exchange Messages *)
 
 val certificateBytes: crt -> Tot bytes
 let certificateBytes crt =
   let cb = Cert.certificateListBytes crt.crt_chain in
+  lemma_repr_bytes_values (length cb);
   messageBytes HT_certificate (vlbytes 3 cb)
 
-val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> 
-                      Tot (result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)}))
+val parseCertificate: data:bytes{repr_bytes (length data) <= 3} 
+  -> Tot (result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)}))
 let parseCertificate data = 
     if length data >= 3 then
         match vlparse 3 data with
