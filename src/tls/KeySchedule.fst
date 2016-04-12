@@ -186,17 +186,20 @@ let ks_client_init_12 ks:ks
 // This function only checks the agility paramaters compared to the resumed sessionInfo
 // and returns to the handshake whether the resumption is permissible
 let ks_client_12_resume_sh ks:ks sr:random alpha:ks_alpha
-  -> ST bool
+  -> ST cvd:bytes
   (requires fun h0 ->
     let kss = sel h0 (KX.state ks) in
-    is_KS_C_12_Resume_CH kss)
+    let (pv, cs, ems) = alpha in
+    is_KS_C_12_Resume_CH kss
+    /\ (let si = KS_C_12_Resume_CH.si kss in
+      si.protocol_version = pv /\ si.cipher_suite = cs
+      /\ (is_Some si.session_hash <==> ems)))
   (ensures fun h0 cvd h1 -> True) =
   let KS region cfg st = ks in
   let KS_C_12_Resume_CH cr si msId ms = !st in
   st := KS_C_12_Resume_SH cr sr si ms;
   let (pv, cs, ems) = alpha in
-  (si.protocol_version = pv) && (si.cipher_suite = cs) &&
-  ((ems && is_Some si.session_hash) || (not ems && is_None si.session_hash))
+  
 
 // The two functions below are similar but we decide not to factor them because:
 //   1. they use different arguemtns
@@ -280,6 +283,7 @@ let ks_12_get_finished ks:ks log:bytes
   let KS region cfg st = ks in
   let ms = match kss with
     | KS_C_12_Full_SH_MS of id:TLSInfo.msId * ms:ms
+    | KS_C_12_Full_SH 
 | KS_C_12_Resume_SH of cr:random * sr:random * si:sessionInfo * ms:ms
   TLSPRF.verifyData (pv,cs) ms Client log
 

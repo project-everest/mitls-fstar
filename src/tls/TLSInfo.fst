@@ -103,6 +103,8 @@ type config = {
     (* Server side *)
     request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
     check_client_version_in_pms_for_old_tls: bool;
+    cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
+    private_key_file: string;   // TEMPORARY
 
     (* Common *)
     safe_renegotiation: bool;   // demands this extension when renegotiating
@@ -156,8 +158,11 @@ let defaultConfig =
 
     honourHelloReq = true;
     allowAnonCipherSuite = false;
+
     request_client_certificate = false;
     check_client_version_in_pms_for_old_tls = true;
+    cert_chain_file = "server.pem";
+    private_key_file = "server.key";
 
     safe_renegotiation = true;
     safe_resumption = false; // Turn to true if it gets standard

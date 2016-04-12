@@ -49,6 +49,7 @@ let alertBytes ad =
     | AD_user_cancelled_fatal ->               abyte2 (2z,  90z)
     | AD_no_renegotiation ->                   abyte2 (1z, 100z)
     | AD_unrecognized_name ->                  abyte2 (2z, 112z)
+    | AD_missing_extension ->                  abyte2 (2z, 109z)
     | AD_unsupported_extension ->              abyte2 (2z, 110z)
 
 val parse: b:lbytes 2 -> Tot 
@@ -87,6 +88,7 @@ let parse b =
     | (1z,  90z) -> Correct AD_user_cancelled_warning
     | (2z,  90z) -> Correct AD_user_cancelled_fatal
     | (1z, 100z) -> Correct AD_no_renegotiation
+    | (2z, 109z) -> Correct AD_missing_extension
     | (2z, 110z) -> Correct AD_unsupported_extension
     | _            -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
