@@ -459,6 +459,9 @@ let certificateBytes pv crt =
   else
      messageBytes HT_certificate (vlbytes 3 cb)
 
+// SZ: I think this should be
+// val parseCertificate: pv:protocolVersion -> data:bytes{3 <= length data /\ repr_bytes (length data - 3) <= 3} 
+//  -> Tot (result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)}))
 val parseCertificate: pv:protocolVersion -> data:bytes{repr_bytes (length data) <= 3} 
   -> Tot (result (r:crt{Seq.equal (certificateBytes pv r) (messageBytes HT_certificate data)}))
 let parseCertificate pv data = 
@@ -501,7 +504,7 @@ let parseCertificateRequest version data =
             (match vlsplit 2 data with
             | Error(z) -> Error(z)
             | Correct  (x,y) ->
-            if length y > 0 then 
+            if length y >= 2 then
                match parseSigHashAlgs (vlbytes 2 x) with
                | Error(z) -> Error(z)
                | Correct (sigAlgs) -> 
@@ -797,16 +800,18 @@ let nextProtocolBytes np =
 
 val parseNextProtocol: b:bytes -> 
     Tot (result (s:np{Seq.equal (nextProtocolBytes s) (messageBytes HT_next_protocol b)}))
-let parseNextProtocol payload : result np = 
+let parseNextProtocol payload : result np =
   match vlsplit 1 payload with
   | Error(z) -> Error(z)
   | Correct(selected_protocol, data) ->
-  match vlparse 1 data with
-  | Error(z) -> Error(z)
-  | Correct(padding) -> 
-      Correct( { np_selected_protocol = selected_protocol;
-		 np_padding = padding;})
-		
+  if length data >= 1 then
+    match vlparse 1 data with
+    | Error(z) -> Error(z)
+    | Correct(padding) ->
+	Correct( { np_selected_protocol = selected_protocol;
+		   np_padding = padding;})
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
 val handshakeMessageBytes: protocolVersion -> hs_msg -> Tot bytes
 let handshakeMessageBytes pv hs = 
     match hs,pv with
