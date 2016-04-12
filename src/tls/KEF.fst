@@ -75,7 +75,7 @@ let (* private *) accessPMS (pms:PMS.pms) =
         {CommonDH.dhe_ec = Some gx; CommonDH.dhe_p = None},
         {CommonDH.dhe_ec = Some gy; CommonDH.dhe_p = None},
         dhpms) -> accessECDHPMS ecp gx gy dhpms
-  | _ -> failwith "(impossible)"
+  | _ -> failwith "(accessPMS impossible)"
 
 #if ideal
 // We maintain a log for looking up good ms values using their msId

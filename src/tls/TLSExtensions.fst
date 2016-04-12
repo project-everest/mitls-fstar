@@ -276,12 +276,16 @@ and extensionBytes ext =
 and extensionsBytes exts =
   vlbytes 2 (List.Tot.fold_left (fun l s -> extensionBytes s @| l) empty_bytes exts)
 
-(* TODO: inversion lemmas *)
+(* TODO: inversion lemmas 
 val parseEarlyDataIndication: pinverse_t earlyDataIndicationBytes
 val parseExtension: pinverse_t extensionBytes
 val parseExtensions: pinverse_t extensionsBytes
+*)
 
-let rec parseExtension b =
+val parseEarlyDataIndication: r:role -> bytes -> Tot (result earlyDataIndication)
+val parseExtension: r:role -> bytes -> Tot (result extension)
+val parseExtensions: r:role -> bytes -> Tot (result (list extension))
+let rec parseExtension role b =
   if length b >= 4 then
     let (head, payload) = split b 2 in
     match vlparse 2 payload with
@@ -316,16 +320,17 @@ let rec parseExtension b =
 	| (0xBBz, 0x8Fz) -> // extended padding
 	  if length data = 0 then Correct (E_extended_padding)
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended padding extension")
-	| (0x11z, 0x11z) -> // head TBD, early data
-	  (match parseEarlyDataIndication data with
+	| (0x00z, 0x2az) -> // head TBD, early data
+	  (match parseEarlyDataIndication role data with
 	  | Correct (edi) -> Correct (E_earlyData(edi))
 	  | Error(z) -> Error(z))
-	| (0x22z, 0x22z) -> // head TBD, pre shared key
+	| (0x00z, 0x29z) -> // head TBD, pre shared key
 	  (match parsePreSharedKey data with
 	  | Correct(psk) -> Correct (E_preSharedKey(psk))
 	  | Error(z) -> Error(z))
-	| (0x33z, 0x33z) -> // head TBD, key share
-	  (match parseKeyShare data with	    
+	| (0x00z, 0x28z) -> // head TBD, key share
+	  (let is_client = (match role with | Client -> true | Server -> false) in
+	  match parseKeyShare is_client data with	    
 	  | Correct (ks) -> Correct (E_keyShare(ks))
 	  | Error(z) -> Error(z))
 	| _ -> // Unknown extension
@@ -333,7 +338,7 @@ let rec parseExtension b =
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Extension bytes are too short to store even the extension type")
 
-and parseEarlyDataIndication b = 
+and parseEarlyDataIndication role b = 
   if length b > 0 then
     match vlsplit 2 b with
     | Correct(config_id, data) ->
@@ -345,7 +350,7 @@ and parseEarlyDataIndication b =
 	  | Correct(cs) -> 
 	    match vlsplit 2 data with
 	    | Correct(exts, data) -> 
-	      match parseExtensions (vlbytes 2 exts) with
+	      match parseExtensions role (vlbytes 2 exts) with
 	      | Correct(exts) -> 
 		match vlparse 1 data with
 		| Correct(ctx) ->
@@ -362,13 +367,13 @@ and parseEarlyDataIndication b =
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data indication length")
   else Correct (ServerEarlyDataIndication)
 
-and parseExtensions b =
+and parseExtensions role b =
   let rec (aux:bytes -> list extension -> Tot (result (list extension))) = fun b exts ->
     if length b >= 4 then
       let ht, b = split b 2 in
       match vlsplit 2 b with
       | Correct(ext, bytes) ->
-	(match parseExtension (ht @| vlbytes 2 ext) with
+	(match parseExtension role (ht @| vlbytes 2 ext) with
 	| Correct(ext) -> 
 	  (match addOnce ext exts with // fails if the extension already is in the list
 	  | Correct(exts) -> aux bytes exts
@@ -380,12 +385,13 @@ and parseExtensions b =
   | Correct(b) -> aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
 
-val parseOptExtensions: data:bytes -> Tot (result (option (list extension)))
-let parseOptExtensions data =
+val parseOptExtensions: r:role -> data:bytes -> Tot (result (option (list extension)))
+let parseOptExtensions r data =
   if length data = 0 then Correct(None)
-  else match parseExtensions data with
+  else 
+  (match parseExtensions r data with
   | Correct(exts) -> Correct(Some exts)
-  | Error(z) -> Error(z)
+  | Error(z) -> Error(z))
   
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
@@ -423,7 +429,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
     match res with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
-        if List.Tot.existsb (sameExt sExt) cExtL then
+      if List.Tot.existsb (sameExt sExt) cExtL then 
             match sExt with
             | E_renegotiation_info (sri) ->
               (match sri, ri with
@@ -458,8 +464,9 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                         Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided extended padding for a MAC only ciphersuite")
                     else
                         correct({l with ne_extended_padding = true})
-        else
-            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
+	    | E_keyShare (ServerKeyShare sks) -> correct({l with ne_keyShare = Some sks})
+        else 
+            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello") 
 
 val negotiateClientExtensions: protocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
@@ -477,12 +484,15 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
         | ok -> ok)
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message"))
 
-val clientToServerExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> extension -> Tot (option extension)
-let clientToServerExtension (cfg:config) (cs:cipherSuite) ri (resuming:bool) (cExt:extension) : (option (extension)) =
+val clientToServerExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
+let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
     match cExt with
     | E_earlyData b -> None    // JK : TODO
     | E_preSharedKey b -> None // JK : TODO
-    | E_keyShare b -> None     // JK : TODO
+    | E_keyShare b -> 
+        (match ks with
+ 	| Some k -> Some (E_keyShare k)     
+	| None -> None)
     | E_renegotiation_info (_) ->
         let ric =
            match ri with
@@ -554,11 +564,11 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
         else {neg with ne_signature_algorithms = Some (sha)}
     | _ -> neg // JK : handle remaining cases
 
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> known_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> bool -> Tot (result (option (list extension) * negotiatedExtensions))
-let negotiateServerExtensions pv cExtL csl cfg cs ri resuming =
+val negotiateServerExtensions: protocolVersion -> option (list extension) -> known_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension) * negotiatedExtensions))
+let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->
-      let server = List.Tot.choose (clientToServerExtension cfg cs ri resuming) cExtL in
+      let server = List.Tot.choose (clientToServerExtension cfg cs ri ks resuming) cExtL in
       let negi = ne_default in
       let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
       Correct (Some server, nego)

@@ -147,4 +147,4 @@ let serialize (e:element) : bytes =
       let ecb = CoreCrypto.ec_point_serialize p in
       let bl = TLSConstants.vlbytes 1 ecb in
       bl
-    | _ -> failwith "(impossible)"
+    | _ -> failwith "(serialize impossible)"

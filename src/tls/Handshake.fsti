@@ -54,7 +54,47 @@ val ri : Type0
 type b_log = bytes 
 //or how about: 
 //type log = list (m:bytes{exists ht d. m = messageBytes ht d})
+type eph_s = option kex_s_priv
+type eph_c = list kex_s_priv
+type nego = {
+     n_resume: bool;
+     n_client_random: TLSInfo.random;
+     n_server_random: TLSInfo.random;
+     n_sessionID: option sessionID;
+     n_protocol_version: protocolVersion;
+     n_kexAlg: TLSConstants.kexAlg;
+     n_aeAlg: TLSConstants.aeAlg;
+     n_sigAlg: option TLSConstants.sigAlg;
+     n_cipher_suite: cipherSuite;
+     n_compression: option compression;
+     n_extensions: negotiatedExtensions;
+     n_scsv: list scsv_suite;
+}                 
+
+type hs_id = {
+     id_cert: Cert.chain;
+     id_sigalg: option Sig.alg;
+}
+
+type ake = {
+     ake_server_id: option hs_id;
+     ake_client_id: option hs_id;
+     ake_pms: bytes;
+     ake_session_hash: bytes;
+     ake_ms: bytes;
+}
+
+type session = {
+     session_nego: nego;
+     session_ake: ake;
+}     
+
 val prepareClientHello: config -> option ri -> option sessionID -> St (option ECGroup.key * ch * b_log)
+val processServerHello: c:config -> option ri -> eph_c -> ch -> sh ->
+                           ST (result (nego * option ake))
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
 //</expose for TestClient>
 
 // relocate?

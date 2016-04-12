@@ -40,6 +40,7 @@ let id = {
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;
+      ne_keyShare = None
     };
     writer = Client
   }
@@ -194,7 +195,7 @@ let main host port =
   let log = sendHSRecord tcp pv (ClientHello ch) log in
 
   let ServerHello(sh),log = recvHSRecord tcp pv kex log in
-
+  let Correct (n,None) = Handshake.processServerHello config None [] ch sh in
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex sa ae = cs in

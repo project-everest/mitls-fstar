@@ -1278,16 +1278,15 @@ let keyShareBytes = function
   | ServerKeyShare sks -> serverKeyShareBytes sks
 
 (* TODO: FIXME *)
-val parseKeyShare: pinverse_t keyShareBytes
-let parseKeyShare b =
-  admit(); //FIXME
-  match parseKeyShareEntries b with
-  | Correct(kse) ->
-      (match kse with
-      | e::[] -> Correct(ServerKeyShare e)
-      | _ -> if List.Tot.length kse >= 2 && List.Tot.length kse < 65536 then Correct(ClientKeyShare (kse))
-	     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong key share length") )
-  | Error(z) -> Error(z)
+let parseKeyShare is_client b =
+  if is_client then 
+    match parseClientKeyShare b with
+    | Correct kse -> Correct (ClientKeyShare kse)
+    | Error z -> Error z
+  else
+    match parseServerKeyShare b with
+    | Correct ks -> Correct (ServerKeyShare ks)
+    | Error z -> Error z
 
 // TODO : give more precise type
 type pskIdentity = b:bytes{length b < 65536}

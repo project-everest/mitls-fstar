@@ -292,7 +292,7 @@ let parseClientHello data =
                             | Correct (res) ->
                               let (cmBytes,extensions) = res in
                               let cm = parseCompressions cmBytes in
-			      (match parseOptExtensions extensions with
+			      (match parseOptExtensions Client extensions with
 				| Error(z) -> Error(z) 
 				| Correct (exts) ->
                                   let eok = (match exts with
@@ -351,7 +351,7 @@ let parseServerHello data =
 	      match parseCipherSuite csBytes with
 	      | Error(z) -> Error(z)
 	      | Correct(cs) -> 
-		(match parseOptExtensions data with
+		(match parseOptExtensions Server data with
 		| Error(z) -> Error(z)
                 | Correct(exts) ->
                     correct({sh_protocol_version = serverVer;       
@@ -377,7 +377,7 @@ let parseServerHello data =
                                 (match cm with
                                 | UnknownCompression _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
                                 | NullCompression ->
-                                (match parseOptExtensions data with
+                                (match parseOptExtensions Server data with
                                 | Error(z) -> Error(z)
                                 | Correct(exts) ->
                                 correct({sh_protocol_version = serverVer;       
@@ -655,7 +655,7 @@ let parseHelloRetryRequest b =
 	  let ng, data = split data 2 in
 	  (match parseNamedGroup ng with
 	  | Correct(ng) ->
-	    (match parseExtensions data with
+	    (match parseExtensions Server data with
 	    | Correct(exts) -> 
 	      Correct ({ hrr_protocol_version = pv;
 			hrr_cipher_suite = cs;
@@ -677,7 +677,7 @@ let encryptedExtensionsBytes ee =
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
     Tot (result (s:ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)}))
 let parseEncryptedExtensions payload : result ee = 
-  match parseExtensions payload with
+  match parseExtensions Server payload with
   | Error(z) -> Error(z)
   | Correct(exts) -> Correct({ee_extensions = exts;})
 

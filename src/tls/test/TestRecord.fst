@@ -28,6 +28,7 @@ let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;
+      ne_keyShare = None;
     };
     writer = Client
   } in
@@ -79,6 +80,7 @@ let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;
+      ne_keyShare = None
     };
     writer = Client
   } in

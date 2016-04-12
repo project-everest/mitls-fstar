@@ -13,44 +13,6 @@ let hsId h = noId // Placeholder
 
 let ri = (cVerifyData * sVerifyData) 
 
-type nego = {
-     n_resume: bool;
-     n_client_random: TLSInfo.random;
-     n_server_random: TLSInfo.random;
-     n_sessionID: sessionID;
-     n_protocol_version: protocolVersion;
-     n_kexAlg: TLSConstants.kexAlg;
-     n_aeAlg: TLSConstants.aeAlg;
-     n_sigAlg: option TLSConstants.sigAlg;
-     n_cipher_suite: cipherSuite;
-     n_compression: compression;
-     n_extensions: negotiatedExtensions;
-     n_scsv: list scsv_suite;
-}                 
-
-type hs_id = {
-     id_cert: Cert.chain;
-     id_sigalg: option Sig.alg;
-}
-
-type ake = {
-     ake_server_id: option hs_id;
-     ake_client_id: option hs_id;
-     ake_pms: bytes;
-     ake_session_hash: bytes;
-     ake_ms: bytes;
-}
-
-type session = {
-     session_nego: nego;
-     session_ake: ake;
-}     
-
-
-
-
-type eph_s = option kex_s_priv
-type eph_c = list kex_s_priv
 
 
 let prepareClientHello cfg ri sido =
@@ -62,7 +24,7 @@ let prepareClientHello cfg ri sido =
       | TLS_1p3 ->
         let CommonDH.ECKey k = CommonDH.keygen (CommonDH.ECDH (CoreCrypto.ECC_P256)) in
   	let g = SEC CoreCrypto.ECC_P256 in
-  	let kb = ECGroup.serialize_point k.ec_params k.ec_point in
+  	let kb = vlbytes 1 (ECGroup.serialize_point k.ec_params k.ec_point) in
 	(Some k,Some (ClientKeyShare [(g,kb)]))
       | _ -> (None, None) in
   let ext = prepareExtensions cfg ci ri kp in
@@ -116,23 +78,23 @@ val getCachedSession: cfg:config -> ch:ch -> ST (option session)
 let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
-val prepareServerHello: config -> option ri -> ch -> b_log -> ST (result (bytes * nego * option ake * b_log))
+val prepareServerHello: config -> option ri -> option keyShare -> ch -> b_log -> ST (result (bytes * nego * option ake * b_log))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let prepareServerHello cfg ri ch i_log =
+let prepareServerHello cfg ri ks ch i_log =
   let srand = Nonce.mkHelloRandom() in
   match getCachedSession cfg ch with
   | Some sentry -> 
-    (match negotiateServerExtensions sentry.session_nego.n_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg sentry.session_nego.n_cipher_suite ri true with
+    (match negotiateServerExtensions sentry.session_nego.n_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg sentry.session_nego.n_cipher_suite ri ks true with
      | Error(z) -> Error(z)
      | Correct(sext,next) ->
        let shB = 
            serverHelloBytes (
             {sh_protocol_version = sentry.session_nego.n_protocol_version;
-             sh_sessionID = Some (sentry.session_nego.n_sessionID);
+             sh_sessionID = (sentry.session_nego.n_sessionID);
              sh_server_random = srand;
              sh_cipher_suite = sentry.session_nego.n_cipher_suite;
-             sh_compression = Some (sentry.session_nego.n_compression);
+             sh_compression = (sentry.session_nego.n_compression);
              sh_extensions = sext}) in
        let o_log = i_log @| shB in
        let o_nego = {sentry.session_nego with n_extensions = next} in
@@ -147,7 +109,7 @@ let prepareServerHello cfg ri ch i_log =
     match negotiateCompression cfg pv ch.ch_compressions with
     | Error(z) -> Error(z)
     | Correct(cm) ->
-    match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri false with
+    match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ks false with
     | Error(z) -> Error(z)
     | Correct(sext,next) ->
   //  let sid = Nonce.random 32 in
@@ -163,13 +125,13 @@ let prepareServerHello cfg ri ch i_log =
     let nego = 
       {n_client_random = ch.ch_client_random;
        n_server_random = srand;
-       n_sessionID = sid;
+       n_sessionID = Some sid;
        n_protocol_version = pv;
        n_kexAlg = kex;
        n_sigAlg = sa;
        n_aeAlg  = ae;
        n_cipher_suite = cs;
-       n_compression = cm;
+       n_compression = Some cm;
        n_scsv = [];
        n_extensions = next;
        (* [getCachedSession] returned [None], so no session resumption *)
@@ -213,22 +175,18 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
 
 (* Our server implementation doesn't support compression, meaning [cmp] is
  always [NullCompression], so it's always a valid compression. *)
-val acceptableCompression: config -> ch -> protocolVersion -> compression -> Tot bool
+val acceptableCompression: config -> ch -> protocolVersion -> option compression -> Tot bool
 let acceptableCompression cfg ch pv cmp =
   true
 
-val processServerHello: c:config -> option ri -> eph_c -> ch -> sh ->
-                           ST (result (nego * option ake))
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let processServerHello cfg ri eph ch sh =
+let processServerHello cfg ri eph_c ch sh =
   let res = ch_is_resumption ch in
   // FIXME 1.3
   if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
-  else if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite) then
+  else  if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-  else if not (acceptableCompression cfg ch sh.sh_protocol_version (Some.v sh.sh_compression)) then
+  else if not (acceptableCompression cfg ch sh.sh_protocol_version sh.sh_compression) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Compression negotiation") 
   else
     match negotiateClientExtensions sh.sh_protocol_version cfg ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite ri res with
@@ -240,29 +198,29 @@ let processServerHello cfg ri eph ch sh =
         | Some sentry ->
           if sh.sh_protocol_version <> sentry.session_nego.n_protocol_version ||
             sh.sh_cipher_suite <> sentry.session_nego.n_cipher_suite ||
-            Some.v sh.sh_compression <> sentry.session_nego.n_compression
+            sh.sh_compression <> sentry.session_nego.n_compression
           then
             Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
           else 
             let o_nego = {sentry.session_nego with n_extensions = next} in
             Correct (o_nego, (Some sentry.session_ake))
-      else          
+      else           
         match sh.sh_cipher_suite with
 	| CipherSuite kex sa ae ->
         let o_nego = 
           {n_client_random = ch.ch_client_random;
            n_server_random = sh.sh_server_random;
-           n_sessionID = Some.v sh.sh_sessionID;
+           n_sessionID = sh.sh_sessionID;
            n_protocol_version = sh.sh_protocol_version;
            n_kexAlg = kex;
            n_aeAlg = ae;
 	   n_sigAlg = sa;
            n_cipher_suite = sh.sh_cipher_suite;
-           n_compression = Some.v sh.sh_compression;
+           n_compression = sh.sh_compression;
 	   n_scsv = [];
            n_extensions = next;
            n_resume = false } in
-        Correct (o_nego, None)
+           Correct (o_nego, None)
 	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
 
 
@@ -496,7 +454,7 @@ val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
 let server_handle_client_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | S(S_Idle ri),[(ClientHello(ch),l)] ->
-    (match (prepareServerHello cfg ri ch l) with
+    (match (prepareServerHello cfg ri None ch l) with
      | Error z -> InError z
      | Correct (shb,n,a,ol) ->
        hsref := {!hsref with
