@@ -36,8 +36,8 @@ type cipher i (l:plainLen) = lbytes (cipherLen i l)
 type entry (i:id) = | Entry: l:plainLen -> c:cipher i l -> p:plain i l -> entry i
 
 // key materials 
-private type key (i:id) = lbytes (CoreCrypto.aeadKeySize (alg i)) 
-private type iv  (i:id) = lbytes (CoreCrypto.aeadRealIVSize (alg i)) // should it be aeadSaltSize?
+type key (i:id) = lbytes (CoreCrypto.aeadKeySize (alg i)) 
+type iv  (i:id) = lbytes (CoreCrypto.aeadRealIVSize (alg i)) // should it be aeadSaltSize?
 
 type seqn i = n:nat { repr_bytes n <= aeadRecordIVSize (alg i)}
 
@@ -143,7 +143,7 @@ let leak i role s = State.key s, State.iv s
 // we can reason about sequence-number collisions before applying it.
 let aeIV i (n:seqn i) (staticIV: iv i) : iv i =
   let l = CoreCrypto.aeadRealIVSize (alg i) in
-  let extended: iv i = createBytes (l - 8) 0z @| bytes_of_seq n (* 64 bits *) in
+  let extended: iv i = bytes_of_int l n (* 64 bit counter extended with 0s *) in
   xor l extended staticIV
 
 // not relying on additional data
@@ -257,12 +257,10 @@ let decrypt i d l c =
     | Some e -> Some (Entry.p e)
   else
     match dec i d l c with
-    | Some pr ->
+    | Some pr -> 
        (match mk_plain i l pr with
         | Some p -> Some p
         | None  -> None)
-    | None -> None
-
 
 (* TODO
 

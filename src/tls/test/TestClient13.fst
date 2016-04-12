@@ -10,7 +10,7 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open TLSInfo
-open StatefulLHAE
+open StreamAE
 open CoreCrypto
 
 (* FlexRecord *)
@@ -49,40 +49,36 @@ let id = {
 let encryptor_TLS13_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let w: writer id =
-    let log: st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Writer =
+    let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in
+    let seqn: seqn_ref r id = FStar.Monotonic.RRef.m_alloc r 0 in
+    let key: StreamAE.key id = key |> unsafe_coerce in
+    let iv: StreamAE.iv id = iv |> unsafe_coerce in
+    let key: StreamAE.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
+      StreamAE.State #id #Writer #r #r key iv log seqn
     in
-    State r log seqn key
+    key
   in
   // StatefulLHAE.writer -> StatefulLHAE.state
   w
 
 let decryptor_TLS13_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
-  let r: reader id =
-    let log: st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Reader =
+  let rd: reader id =
+    let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in
+    let seqn: seqn_ref r id = FStar.Monotonic.RRef.m_alloc r 0 in
+    let key: StreamAE.state id Reader =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
+      let key: StreamAE.key id = key |> unsafe_coerce in
+      let iv: StreamAE.iv id = iv |> unsafe_coerce in
+      StreamAE.State #id #Reader #r #r key iv log seqn
     in
-    State r log seqn key
+    key
   in
   // StatefulLHAE.reader -> StatefulLHAE.state
-  r
+  rd
 
 let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain = 
   let pv = TLS_1p3 in
@@ -101,8 +97,8 @@ let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain =
   StatefulLHAE.encrypt #id #ad #rg w f
 
 let decryptRecord_TLS13_AES_GCM_128_SHA256 rd ct cipher = 
-  let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
-  let (Some d) = StatefulLHAE.decrypt #id #ad rd cipher in
+  IO.print_string ("cipher:"^(Platform.Bytes.print_bytes cipher)^"\n");
+  let (Some d) = StreamAE.decrypt id rd (length cipher - (StreamAE.ltag id)) cipher in
   Content.repr id d
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
@@ -236,9 +232,15 @@ let main host port =
   let wr = encryptor_TLS13_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS13_AES_GCM_128_SHA256 sk siv in
 
-  let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
+  let l = CoreCrypto.aeadRealIVSize (alg id) in
+  let extended = bytes_of_int l 0 in
+  let aeIV = xor l extended siv in
+  IO.print_string ("aeIV:"^(Platform.Bytes.print_bytes aeIV)^"\n");
+
+  let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
 
 (*
+  let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
   let ServerKeyExchange(ske),log = recvHSRecord tcp pv kex log in
   let ServerHelloDone,log = recvHSRecord tcp pv kex log in
 
