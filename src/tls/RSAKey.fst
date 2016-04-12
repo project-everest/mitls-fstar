@@ -11,8 +11,13 @@ type pred = | SK_PK of sk * pk
 
 (* TODO: use the following to idealize *)
 //let honest_log = Platform.Error.if_ideal (fun _ -> ref [])
-let honest (pk:pk): bool = failwith "only used in ideal implementation, unverified"
-let strong (pv:TLSConstants.protocolVersion): bool = failwith "only used in ideal implementation, unverified"
+
+//let honest (pk:pk): bool = failwith "only used in ideal implementation, unverified"
+let honest (pk:pk): bool = false
+
+//let strong (pv:TLSConstants.protocolVersion): bool = failwith "only used in ideal implementation, unverified"
+let strong (pv:TLSConstants.protocolVersion): bool = false
+
 
 type modulus  = bytes
 type exponent = bytes

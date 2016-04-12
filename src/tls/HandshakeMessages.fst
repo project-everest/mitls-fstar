@@ -362,10 +362,10 @@ let serverHelloBytes sh =
   let data:bytes =
     match sh.sh_protocol_version with
     | TLS_1p3 -> verB @| sh.sh_server_random @| csB @| extB 
-    | _      -> verB @| sh.sh_server_random @| sidB @| csB @| cmB @| extB 
+    | _       -> verB @| sh.sh_server_random @| sidB @| csB @| cmB @| extB 
   in
   lemma_repr_bytes_values (length data);
-  data
+  messageBytes HT_server_hello data
 
 val parseServerHello: data:bytes{repr_bytes(length data) <= 3}  
   -> Tot (result (x:sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)}))

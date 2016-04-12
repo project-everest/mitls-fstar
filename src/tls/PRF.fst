@@ -38,15 +38,12 @@ let keyExtensionLength i =
         | MACOnly (macAlg) ->
             let msize = macKeySize (macAlg_of_id i) in 
             2 * msize
-#if verify
-        | AEAD _ _ -> failwith "currently not fully implemented or verified"
-#else 
-(* AEAD currently not fully implemented or verified *)               
+        (* AEAD currently not fully implemented or verified *)               
         | AEAD cAlg _  ->
             let aksize = aeadKeySize cAlg in
             let ivsize = aeadSaltSize cAlg in
             2 * (aksize + ivsize)
-#endif
+
 
 // This code is complex because we need to reshuffle the raw key materials  
 let deriveRawKeys (i:id) (ms:ms)  =
@@ -84,10 +81,7 @@ let deriveRawKeys (i:id) (ms:ms)  =
             let ck = (cmkb @| cekb @| civb) in
             let sk = (smkb @| sekb @| sivb) in
             (ck,sk))
-#if verify
-        | AEAD _ _ -> failwith "currently not fully implemented or verified"
-#else 
-(* AEAD currently not fully implemented or verified *)
+    (* AEAD currently not fully implemented or verified *)
     | AEAD encAlg prf ->
         let aksize = aeadKeySize encAlg in
         let ivsize = aeadSaltSize encAlg in
@@ -97,7 +91,6 @@ let deriveRawKeys (i:id) (ms:ms)  =
         let ck = (cekb @| civb) in
         let sk = (sekb @| sivb) in
         (ck,sk)
-#endif
 
 
 type derived (i1:id) (i2:id) = StatefulLHAE.reader i1 * StatefulLHAE.writer i2 

@@ -474,26 +474,36 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
   match (!hsref).hs_state with
   | S(S_HelloSent n a) 
     when (n.n_protocol_version <> TLS_1p3 &&
-	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
-    let c = {crt_chain = get_signing_cert cfg.peer_name n.n_sigAlg []} in
-    let cb = certificateBytes n.n_protocol_version c in
-    let gy = CommonDH.keygen CommonDH.default_group in
-    let kex_s = KEX_S_DHE gy in
-    let sv = kex_s_to_bytes kex_s in
-    (match (cert_sign c.crt_chain n.n_sigAlg [] sv) with
-    | Correct signature -> 
-       let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-       let skeb = serverKeyExchangeBytes ske in
-       let shd = serverHelloDoneBytes in
-       let nl = cb @| skeb @| shd in
-	  hsref := {!hsref with
+	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
+    (match Cert.lookup_server_chain cfg.cert_chain_file cfg.private_key_file n.n_protocol_version n.n_sigAlg n.n_extensions.ne_signature_algorithms with
+    | Correct (chain, csk) -> 
+      let c = {crt_chain = chain} in
+      let cb = certificateBytes n.n_protocol_version c in
+      let gy = CommonDH.keygen CommonDH.default_group in
+      let kex_s = KEX_S_DHE gy in
+      let sv = kex_s_to_bytes kex_s in
+      let csr = n.n_client_random @| n.n_server_random in
+
+      // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246
+      let Some sa = n.n_sigAlg in
+      let algs = match n.n_extensions.ne_signature_algorithms with
+        | None -> [sa,Hash CoreCrypto.SHA1] | Some l -> l in
+      let algs = List.Tot.filter (fun (s,_)->s=sa) algs in
+      let alg = match algs with | h::_ -> h | [] -> (sa, Hash CoreCrypto.SHA1) in
+      (match Cert.sign n.n_protocol_version csr csk alg sv with
+      | Correct signature -> 
+         let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+         let skeb = serverKeyExchangeBytes ske in
+         let shd = serverHelloDoneBytes in
+         let nl = cb @| skeb @| shd in
+	    hsref := {!hsref with
 		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
 		 hs_log = (!hsref).hs_log @| nl;
 		 hs_state = S(S_HelloDone n None None)}
-    | Error e -> 
-	  hsref := {!hsref with
-		 hs_state = S(S_Error e)})
-
+      | Error e -> 
+	  hsref := {!hsref with hs_state = S(S_Error e)})
+    | Error e ->
+        hsref := {!hsref with hs_state = S(S_Error e)})
 
 assume val server_handle_client_ccs: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))

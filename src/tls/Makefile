@@ -87,7 +87,7 @@ RSAKey.fst \
 DHGroup.fst \
 ECGroup.fst \
 CommonDH.fst \
-PMS.p.fst \
+PMS.fst \
 HASH.fst \
 HMAC.fst \
 Sig.p.fst \
@@ -113,7 +113,7 @@ HandshakeMessages.fst \
 Handshake.fsti \
 Connection.fst #the preceding space is significant!
 
-LAX_CHECKED_FSTS=Record.fst \
+LAX_CHECKED_FSTS= Record.fst \
 HSCrypto.fst \
 TLSPRF.fst \
 PRF.p.fst \
@@ -124,12 +124,13 @@ TLS.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 test/TestClient.fst \
+test/TestServer.fst \
 test/TestClient13.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
 # missing modules from VERIFIABLE_FSTS are: PMS Sig Cert Encode Enc
-VERIFY=\
+VERIFY= \
 Monotone.Seq \
 TLSError \
 TLSConstants \
@@ -198,7 +199,7 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-tls-ver: $(LIBFILES) $(VERIFIABLE_FSTS)
+tls-ver: $(LIBFILES) Ideal.fst $(VERIFIABLE_FSTS)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
@@ -216,7 +217,7 @@ tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
 wc:
 	wc -l $(LIBFILES)) $(FSTS)
 
-tls-lax: $(LIBFILES) $(FSTS)
+tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 	$(FSTAR) --lax  $(ADMITTED) $^
 
 # These are the .cmx files for all ML-implemented F* modules.
@@ -237,6 +238,7 @@ TLSML := $(subst Handshake.fsti, , $(TLSML))
 # to our own list.
 TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
+  IdealFlags.ml \
   $(TLSML)
 # Last step: F* currently extracts everything in the current directory
 TLSML := $(notdir $(TLSML))
@@ -246,7 +248,7 @@ TLSML := $(notdir $(TLSML))
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen: $(LIBFILES) $(FSTS)
+tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
@@ -270,6 +272,11 @@ tls-client:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ test/test_client.ml -o client.out
 	$(EXTRA_PATH) ./client.out 1.2 google.com 443
+
+tls-server:
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+	         -I test/ test/test_server.ml -o server.out
+	$(EXTRA_PATH) ./server.out 0.0.0.0 4443
 
 # ------------------ preprocessing :( -----------------------
 
