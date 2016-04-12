@@ -516,7 +516,7 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) 
                 None
             else
                 Some(E_extended_padding)
-    | E_unknown_extension b -> None    
+    | _ -> None    
 
 val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
 let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =

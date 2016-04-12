@@ -37,22 +37,25 @@ val verify_signature : chain -> protocolVersion -> bytes -> sigAlg -> option (li
 let verify_signature c pv nonces_or_log csa sigalgs tbs sigv =
   match pv with
   | TLS_1p0 | TLS_1p1 | TLS_1p2 ->
-    if length sigv > 2 then
+    if length sigv > 4 then
      let (h, r) = split sigv 1 in
      let (sa, sigv) = split r 1 in
-     // TLS <= 1.2: sign cr+sr+ServerDHPArams
-     let tbs = nonces_or_log @| tbs in
-     (match (parseSigAlg sa, parseHashAlg h) with
-     | Correct sa, Correct (Hash h) ->
-        let algs : list sigHashAlg =
-          match sigalgs with
-          | Some l -> l
-          // This is the RFC default, but I'm tempted to go non-standard here and add SHA256 anyway
-          | None -> [(sa, Hash CoreCrypto.SHA1)] in
-        if List.Tot.existsb (fun (xs,xh)->(xs=sa && xh=Hash h)) algs then
-          CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv
-        else false
-     | _ -> false)
+     (match vlsplit 2 sigv with
+     | Correct (sigv, eof) -> 
+       // TLS <= 1.2: sign cr+sr+ServerDHPArams
+       let tbs = nonces_or_log @| tbs in
+       (match (length eof, parseSigAlg sa, parseHashAlg h) with
+       | 0, Correct sa, Correct (Hash h) ->
+          let algs : list sigHashAlg =
+            match sigalgs with
+            | Some l -> l
+            // This is the RFC default, but I'm tempted to go non-standard here and add SHA256 anyway
+            | None -> [(sa, Hash CoreCrypto.SHA1)] in
+          if List.Tot.existsb (fun (xs,xh)->(xs=sa && xh=Hash h)) algs then
+            CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv
+          else false
+       | _ -> false)
+      | _ -> false)
     else false
   | _ -> false // TODO! New signature format in 4.8.1
 
@@ -86,7 +89,7 @@ let sign pv csr_or_log csk sha tbs =
     | TLS_1p3 -> tbs // TODO
     | _ -> csr_or_log @| tbs in
   match CoreCrypto.cert_sign csk sa h tbs with
-  | Some sigv -> Correct (hab @| sab @| sigv)
+  | Some sigv -> Correct (hab @| sab @| (vlbytes 2 sigv))
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "failed to sign")
 
 //let certificate_sign: chain -> 
