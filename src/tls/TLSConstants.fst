@@ -214,11 +214,17 @@ type compression =
     | NullCompression
     | UnknownCompression of byte
 
-val parseCompression: b:bytes{Seq.length b > 0} -> Tot compression
+val compressionBytes: compression -> Tot (lbytes 1)
+let compressionBytes (comp:compression) =
+    match comp with
+    | NullCompression -> abyte 0z
+    | UnknownCompression b -> abyte b
+
+val parseCompression: b:lbytes 1 -> Tot (cm:compression{Seq.equal (compressionBytes cm) b})
 let parseCompression b =
     match cbyte b with
     | 0z -> NullCompression
-    | b   -> UnknownCompression b
+    | b  -> UnknownCompression b
 
 // We ignore compression methods we don't understand. This is a departure
 // from usual parsing, where we fail on unknown values, but that's how TLS
@@ -233,11 +239,6 @@ let rec parseCompressions b =
         cm :: parseCompressions b
     else []
 
-val compressionBytes: compression -> Tot (lbytes 1)
-let compressionBytes (comp:compression) =
-    match comp with
-    | NullCompression -> abyte 0z
-    | UnknownCompression b -> abyte b
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
