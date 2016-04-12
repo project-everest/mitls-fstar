@@ -1,17 +1,15 @@
-module TestClient13
+module TestServer
 
 open FStar.Seq
 open FStar.HyperHeap
 open Platform.Bytes
 open Platform.Error
 open HandshakeMessages
-open Handshake
 open TLSError
 open TLSInfo
 open TLSConstants
 open TLSInfo
-open StreamAE
-open CoreCrypto
+open StatefulLHAE
 
 (* FlexRecord *)
 
@@ -22,15 +20,18 @@ let config =
     let l =         [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
     let csn = cipherSuites_of_nameList l in
      {TLSInfo.defaultConfig with
-         minVer = TLS_1p3;
-    	 maxVer = TLS_1p3;
+         minVer = TLS_1p2;
+    	 maxVer = TLS_1p2;
 	 ciphersuites = csn;
+         signatureAlgorithms = sigAlgPrefs;
+         cert_chain_file = "server.pem";
+         private_key_file = "server.key";
 	 }
 
 let id = {
     msId = noMsId;
-    kdfAlg = PRF_SSL3_nested;
-    pv = TLS_1p3;
+    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
+    pv = TLS_1p2;
     aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
     csrConn = bytes_of_hex "";
     ext = {
@@ -41,47 +42,50 @@ let id = {
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;
-      ne_keyShare = None
     };
-    writer = Client
+    writer = Server
   }
 
-let encryptor_TLS13_AES_GCM_128_SHA256 key iv = 
+let encryptor_TLS12_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let w: writer id =
-    let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in
-    let seqn: seqn_ref r id = FStar.Monotonic.RRef.m_alloc r 0 in
-    let key: StreamAE.key id = key |> unsafe_coerce in
-    let iv: StreamAE.iv id = iv |> unsafe_coerce in
-    let key: StreamAE.state id Writer =
+    let log: st_log_t r id = ralloc r Seq.createEmpty in
+    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
+    let key: AEAD_GCM.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
-      StreamAE.State #id #Writer #r #r key iv log seqn
+      let key: AEAD_GCM.key id = key |> unsafe_coerce in
+      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
+      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
+      let counter = ralloc r 0 in
+      AEAD_GCM.State r key iv log counter
     in
-    key
+    State r log seqn key
   in
   // StatefulLHAE.writer -> StatefulLHAE.state
   w
 
-let decryptor_TLS13_AES_GCM_128_SHA256 key iv = 
+let decryptor_TLS12_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
-  let rd: reader id =
-    let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in
-    let seqn: seqn_ref r id = FStar.Monotonic.RRef.m_alloc r 0 in
-    let key: StreamAE.state id Reader =
+  let r: reader id =
+    let log: st_log_t r id = ralloc r Seq.createEmpty in
+    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
+    let key: AEAD_GCM.state id Reader =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
-      let key: StreamAE.key id = key |> unsafe_coerce in
-      let iv: StreamAE.iv id = iv |> unsafe_coerce in
-      StreamAE.State #id #Reader #r #r key iv log seqn
+      let key: AEAD_GCM.key id = key |> unsafe_coerce in
+      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
+      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
+      let counter = ralloc r 0 in
+      AEAD_GCM.State r key iv log counter
     in
-    key
+    State r log seqn key
   in
   // StatefulLHAE.reader -> StatefulLHAE.state
-  rd
+  r
 
-let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain = 
-  let pv = TLS_1p3 in
+let encryptRecord_TLS12_AES_GCM_128_SHA256 w ct plain = 
+  let pv = TLS_1p2 in
   let text = plain in
   // StatefulPlain.adata id -> bytes
   let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
@@ -96,21 +100,16 @@ let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain =
   // FIXME: without the three additional #-arguments below, extraction crashes
   StatefulLHAE.encrypt #id #ad #rg w f
 
-let decryptRecord_TLS13_AES_GCM_128_SHA256 rd ct cipher = 
-  IO.print_string ("cipher:"^(Platform.Bytes.print_bytes cipher)^"\n");
-  let (Some d) = StreamAE.decrypt id rd (length cipher - (StreamAE.ltag id)) cipher in
+let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher = 
+  let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
+  let (Some d) = StatefulLHAE.decrypt #id #ad rd cipher in
   Content.repr id d
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
 (* Even better, we should move to TLS.send *)
-let makePacket ct ver (data: b:bytes { repr_bytes (length b) <= 2}) =
-      abyte 22z
-   @| versionBytes ver
-   @| bytes_of_int 2 (length data) 
-   @| data 
 
 let sendRecord tcp pv ct msg str = 
-  let r = makePacket ct pv msg in
+  let r = Record.makePacket ct pv msg in
   let Correct _ = Platform.Tcp.send tcp r in
   match ct with
   | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
@@ -151,11 +150,9 @@ let sendHSRecord tcp pv hs_msg log =
 
 let recvHSRecord tcp pv kex log = 
   let (Content.Handshake,rpv,pl) = recvRecord tcp pv in
-  match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
-  | Correct (rem,[(hs_msg,to_log)]) -> 
-     	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-	     (hs_msg,log @| to_log))
-  | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
+  let Correct (rem,[(hs_msg,to_log)]) = Handshake.parseHandshakeMessages (Some pv) (Some kex) pl in 
+  IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
+  (hs_msg,log @| to_log)
 
 let recvCCSRecord tcp pv = 
   let (Content.Change_cipher_spec,_,ccs) = recvRecord tcp pv in
@@ -163,8 +160,8 @@ let recvCCSRecord tcp pv =
   ccs
 
 let recvEncHSRecord tcp pv kex log rd = 
-  let (Content.Application_data,_,cipher) = recvRecord tcp pv in
-  let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
+  let (Content.Handshake,_,cipher) = recvRecord tcp pv in
+  let payload = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
   let [(hs_msg,to_log)] = hsm in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
@@ -172,75 +169,49 @@ let recvEncHSRecord tcp pv kex log rd =
 
 let recvEncAppDataRecord tcp pv rd = 
   let (Content.Application_data,_,cipher) = recvRecord tcp pv in
-  let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Application_data cipher in
+  let payload = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Application_data cipher in
   IO.print_string "Received Data:\n";
   IO.print_string ((iutf8 payload)^"\n");
   payload
 
 (* Flex Handshake *)
 
-let deriveKeys_TLS13_AES_GCM_128_SHA256 (secret:bytes) (phase:string) (context:bytes) = 
-  let cekb = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
-      	     secret (phase ^ ", client write key") context 16 in
-  let civb = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
-      	     secret (phase ^ ", client write iv") context 12 in
-  let sekb = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
-      	     secret (phase ^ ", server write key") context 16 in
-  let sivb = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
-      	     secret (phase ^ ", server write iv") context 12 in
+
+let deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr = 
+  let b = TLSPRF.kdf id.kdfAlg ms (sr @| cr) 40 in
+  let cekb, b = split b 16 in
+  let sekb, b = split b 16 in
+  let civb, sivb = split b 4 in
   (cekb,civb,sekb,sivb)
 
-let derive_handshake_keys (gxy:CommonDH.secret) (log:bytes) = 
-  let log_hash = CoreCrypto.hash CoreCrypto.SHA256 log in
-  let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in
-  let xES = HSCrypto.hkdf_extract CoreCrypto.SHA256 zeroes gxy in
-  IO.print_string ("zeroes:"^(Platform.Bytes.print_bytes zeroes)^"\n");
-  IO.print_string ("gxy:"^(Platform.Bytes.print_bytes gxy)^"\n");
-  IO.print_string ("xES:"^(Platform.Bytes.print_bytes xES)^"\n");
-  let (ck,civ,sk,siv) = deriveKeys_TLS13_AES_GCM_128_SHA256 xES "handshake key expansion" log_hash in
-  IO.print_string ("client AES_GCM write log_hash:"^(Platform.Bytes.print_bytes log_hash)^"\n");
-  IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
-  IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
-  IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
-  IO.print_string ("server AES_GCM salt:"^(Platform.Bytes.print_bytes siv)^"\n");
-  (ck,civ,sk,siv)
-
-let main host port =
-  IO.print_string "===============================================\n Starting test TLS client...\n";
-  let tcp = Platform.Tcp.connect host port in
+    
+let rec aux sock =
+  let tcp = Platform.Tcp.accept sock in
   let log = empty_bytes in
-  
-  let (Some gx,ch,chb) = Handshake.prepareClientHello config None None in
-  let pv = ch.ch_protocol_version in 
+  let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
-  let log = sendHSRecord tcp pv (ClientHello ch) log in
 
-  let ServerHello(sh),log = recvHSRecord tcp pv kex log in
-  let Correct (n,ake) = Handshake.processServerHello config None [] ch sh in
+  let ClientHello(ch), log = recvHSRecord tcp pv kex log in
+  let pv, cr, sid, csl, ext = match ch with
+    | {ch_protocol_version = pv;
+       ch_client_random = cr;
+       ch_sessionID = sid;
+       ch_cipher_suites = csl;
+       ch_extensions = Some ext} -> pv, cr, sid, csl, ext
+    | _ -> failwith "" in
+ 
+  let Correct (shb, nego, _, log) = Handshake.prepareServerHello config None ch log in
+  let Correct sh = parseServerHello shb in
+  let log = sendHSRecord tcp pv (ServerHello sh) log in
+
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex sa ae = cs in
 
-  let Some (SEC ec,gyb) = n.n_extensions.ne_keyShare in
-  let Correct gyb = vlparse 1 gyb in 
-  IO.print_string ("server gy:"^(Platform.Bytes.print_bytes gyb)^"\n");
 
-  let Some gyp = ECGroup.parse_point gx.ec_params gyb in  
-  let gy = {ec_params = gx.ec_params; ec_point = gyp; ec_priv = None} in
-  let gxy = CommonDH.dh_initiator (CommonDH.ECKey gx) (CommonDH.ECKey gy) in
-  let (ck,civ,sk,siv) = derive_handshake_keys gxy log in
-  let wr = encryptor_TLS13_AES_GCM_128_SHA256 ck civ in
-  let rd = decryptor_TLS13_AES_GCM_128_SHA256 sk siv in
-
-  let l = CoreCrypto.aeadRealIVSize (alg id) in
-  let extended = bytes_of_int l 0 in
-  let aeIV = xor l extended siv in
-  IO.print_string ("aeIV:"^(Platform.Bytes.print_bytes aeIV)^"\n");
-
-  let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
-
-(*
-  let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
+  IO.print_string "DONE\n"; aux sock
+  (*
+  let Certificate(sc),log = recvHSRecord tcp pv kex log in
   let ServerKeyExchange(ske),log = recvHSRecord tcp pv kex log in
   let ServerHelloDone,log = recvHSRecord tcp pv kex log in
 
@@ -248,8 +219,7 @@ let main host port =
   let gx, pms = CommonDH.dh_responder gy in
   let cke = {cke_kex_c = kex_c_of_dh_key gx} in
   let log = sendHSRecord tcp pv (ClientKeyExchange cke) log in
-*)
-(*
+
   let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") (ch.ch_client_random @| sh.sh_server_random)  48 in
   IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck,civ,sk,siv) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms ch.ch_client_random sh.sh_server_random in
@@ -257,6 +227,8 @@ let main host port =
   IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
   IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
   IO.print_string ("server AES_GCM salt:"^(Platform.Bytes.print_bytes siv)^"\n");
+  let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
+  let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
   let cfin = {fin_vd = TLSPRF.verifyData (pv,cs) ms Client log} in 
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
@@ -273,10 +245,15 @@ let main host port =
 
   sendRecord tcp pv Content.Application_data get "GET /";
   let ad = recvEncAppDataRecord tcp pv rd in
-*)
-  ()
+  main host port
+ with
+  _ -> main host port
 
-  
+  *)
 
+let main host port =
+ IO.print_string "===============================================\n Starting test TLS server...\n";
+ let sock = Platform.Tcp.listen host port in
+ aux sock
 
 

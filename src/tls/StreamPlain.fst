@@ -28,7 +28,7 @@ type id = i:id { pv_of_id i = TLS_1p3 }
 type plainLen = l:int { 0 < l /\ l -1 < max_TLSPlaintext_fragment_length }
 type plainRepr = b:bytes { 0 < length b /\ length b -1 < max_TLSPlaintext_fragment_length }
 
-abstract type plain (i:id) (len: plainLen) = f:fragment i { len == snd (Content.rg i f) + 1 }
+type plain (i:id) (len: plainLen) = f:fragment i { len == snd (Content.rg i f) + 1 }
 
 let pad payload ct (len:plainLen { length payload < len }): plainRepr = 
   payload @| ctBytes ct @| createBytes (len - length payload - 1) 0z
@@ -61,14 +61,14 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   j: nat { j < length bs /\ 
          (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } -> 
   Tot(result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
- 
 let rec scan i bs j =
   (* TODO: extraction bug *)
   (* File "StreamPlain.ml", line 30, characters 25-27: *)
   (* Error: This expression has type Platform.Bytes.bytes *)
   (*        but an expression was expected of type 'a FStar_Seq.seq *)
-  Error (AD_decode_error, "this function currently disabled because of an extraction error")
-  (* let len = length bs in 
+  Error (AD_decode_error, "this function currently disabled because of an extraction error") 
+(*
+  let len = length bs in 
   if j = 0 then Error (AD_decode_error, "") else
   match Seq.index bs j with 
   | 0z  -> scan i bs (j-1)
@@ -84,12 +84,12 @@ let rec scan i bs j =
            Correct f
   | 23z -> let rg:frange i = (0, length bs - 1) in
            let payload = fst (Platform.Bytes.split bs j) in
-           let d = DataStream.mk_fragment i rg payload in
+           let d = DataStream.mk_fragment #i rg payload in
            assert(forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0z);
            lemma_eq_intro bs (pad payload Application_data len);
            Correct (CT_Data rg d)
-  | _    -> Error (AD_decode_error, "") *)
-
+  | _    -> Error (AD_decode_error, "") 
+*)
 (*
 val pinverse_scan: i:id {~ (authId i)} -> len:nat -> f:plain i len ->
   Lemma(is_Correct(scan i (ghost_repr #i #len f) (len - 1)))
@@ -100,8 +100,14 @@ let pinverse_scan i len f = ()
 type goodrepr i = bs: plainRepr {is_Correct(scan i bs (length bs - 1)) }
 
 val mk_plain: i:id{ ~(authId i)} -> l:plainLen -> pr:lbytes l -> Tot (option (p:plain i l {pr = ghost_repr #i #l p}))
-
 let mk_plain i l pr = 
+    let len = (length pr) - 1 in
+    let (p,ctb) = Platform.Bytes.split pr len in
+    match Content.parseCT ctb with
+    | Correct ct -> Some (Content.mk_fragment i ct (0,len) p)
+    | Error z -> None
+(*TODO: use "scan" to handle padding 
   match scan i pr (length pr - 1) with 
   | Correct p -> Some p
   | Error _ -> None
+*)

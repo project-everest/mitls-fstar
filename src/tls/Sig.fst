@@ -8,6 +8,9 @@ open Platform.Bytes
 open TLSConstants
 open CoreCrypto
 
+let ideal = IdealFlags.ideal_Sig // controls idealization of Sig.
+
+
 (* ------------------------------------------------------------------------ *)
 type alg = sigHashAlg //defined in TLSConstants 
 
@@ -84,22 +87,14 @@ let sign (a: alg) (sk: skey) (t: text): sigv =
     let asig, ahash = a in
     let ksig, khash = sigHashAlg_of_skey sk in
     if ahash <> khash then
-       #if verify
        Platform.Error.unexpected ("Sig.sign")
-       #else
-       Platform.Error.unexpected "Sig.sign"
            (* (sprintf "Sig.sign: requested sig-hash = %A, but key requires %A"
                ahash khash) *)
-       #endif
-     else
-     if asig <> RSASIG then
-       #if verify
+    else
+    if asig <> RSASIG then
        Platform.Error.unexpected("Sig.sign")
-       #else
-       Platform.Error.unexpected "Sig.sign" (*
-           (sprintf "Sig.sign: requested sig-algo = %A, but key requires %A"
+           (* (sprintf "Sig.sign: requested sig-algo = %A, but key requires %A"
                asig ksig) *)
-       #endif
     else
     let (t,ho) : (text * option hash_alg)= 
         match khash with
@@ -124,18 +119,10 @@ let verify (a : alg) (pk : pkey) (t : text) (s : sigv) =
     let asig, ahash = a in
     let ksig, khash = sigHashAlg_of_pkey pk in
     if ahash <> khash then
-       #if verify
-       Platform.Error.unexpected ("Sig.verify")
-       #else
        Platform.Error.unexpected "Sig.verify"
-       #endif
      else
      if asig <> RSASIG then
-       #if verify
-       Platform.Error.unexpected("Sig.verify")
-       #else
        Platform.Error.unexpected "Sig.verify" 
-       #endif
     else
     let t,ho : (text * option hash_alg) = 
         match khash with
@@ -149,19 +136,19 @@ let verify (a : alg) (pk : pkey) (t : text) (s : sigv) =
         | PK_DSA (k,h) -> CoreCrypto.dsa_verify k t s
         | PK_ECDSA (k,h) -> CoreCrypto.ecdsa_verify ho k t s
     in
-    #if ideal 
     //#begin-idealization
-            let s = strong a in
-            let h = honest a pk in
-            if s then 
-              if h then 
-                let m  = has_mac a pk t !log in
-                  if result then m
-                  else false
-              else result
-            else
-            #endif //#end-idealization
-            result
+    if ideal && strong a && honest a pk then 
+    #if ideal
+    let m  = has_mac a pk t !log 
+    in
+      if result then m
+      else false
+      #else
+      result
+      #endif
+    else
+    result
+           
 
 (* ------------------------------------------------------------------------ *)
 type pred = | Honest of alg * pkey
@@ -177,10 +164,14 @@ let gen (a:alg) : pkey * skey =
            PK_DSA (k,ahash), SK_DSA ({k with dsa_private=None},ahash)
         | _      -> Platform.Error.unexpected "[gen] invoked on unsupported algorithm"
     in
-    #if ideal
-    Pi.assume(Honest(a,pkey));  
-    honest_log := (a,skey,pkey)::!honest_log;
-    #endif
+    if ideal then 
+      begin
+        #if ideal
+        Pi.assume(Honest(a,pkey)); () 
+        honest_log := (a,skey,pkey)::!honest_log; 
+        #endif
+      ()
+      end;
     (pkey,skey)
 
 let leak_rsa_key (a:alg) (s:skey) : rsa_key = 
