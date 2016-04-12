@@ -5,7 +5,7 @@ open Platform.Bytes
 open Platform.Error
 open FStar.HyperHeap
  
-let ideal = true // controls idealization of random sample: collision-avoidance.
+let ideal = IdealFlags.ideal_Nonce // controls idealization of random sample: collision-avoidance.
 
 val timestamp: unit -> ST (lbytes 4)
   (requires (fun h0 -> True))

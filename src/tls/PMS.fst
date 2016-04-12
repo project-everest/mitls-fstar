@@ -10,6 +10,9 @@ open Platform.Bytes
 open TLSConstants
 open CoreCrypto
 
+let ideal = IdealFlags.ideal_PMS // controls idealization of PMS.
+
+
 type rsarepr = bytes
 (*private*) 
 type rsaseed = {seed: rsarepr}
@@ -33,19 +36,17 @@ let genRSA (pk:RSAKey.pk) (vc:protocolVersion): rsapms =
     let verBytes = versionBytes vc in
     let rnd = CoreCrypto.random 46 in
     let pms = verBytes @| rnd in
-    #if ideal
-      if RSAKey.honest pk && RSAKey.strong vc then 
+    if ideal && RSAKey.honest pk && RSAKey.strong vc then 
         IdealRSAPMS({seed=pms}) 
-      else 
-    #endif
-        ConcreteRSAPMS(pms)  
+    else 
+        ConcreteRSAPMS(pms) 
 
 let coerceRSA (pk:RSAKey.pk) (cv:protocolVersion) b = ConcreteRSAPMS(b)
 let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms = 
   match pms with 
-  #if ideal
-  | IdealRSAPMS(_) -> Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
-  #endif
+//  #if ideal
+  | IdealRSAPMS(_) -> Platform.Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
+//  #endif
   | ConcreteRSAPMS(b) -> b 
 
 
@@ -58,17 +59,17 @@ type dhrepr = bytes
 
 // To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type.
 type dhpms = 
-#if ideal 
+//#if ideal 
   | IdealDHPMS of dhseed 
-#endif
+//#endif
   | ConcreteDHPMS of dhrepr
 
-#if ideal
+//#if ideal
 let honestDHPMS (p:bytes) (g:bytes) (gx:CommonDH.share) (gy:CommonDH.share) pms = 
   match pms with 
   | IdealDHPMS(s)    -> true
   | ConcreteDHPMS(s) -> false 
-#endif
+//#endif
 
 (*
 let sampleDH dhp (gx:CommonDH.share) (gy:CommonDH.share) = 
