@@ -386,7 +386,7 @@ let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs
               InAck
             | [(CertificateRequest(cr),l)] ->
               let cc = {crt_chain = []} in // TODO
-              let ccb = certificateBytes cc in
+              let ccb = certificateBytes n.n_protocol_version cc in
               let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in
               let vd = TLSPRF.verifyData pvcs ms Client log in 
               hsref := {!hsref with 
@@ -476,7 +476,7 @@ let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
     when (n.n_protocol_version <> TLS_1p3 &&
 	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
     let c = {crt_chain = get_signing_cert cfg.peer_name n.n_sigAlg []} in
-    let cb = certificateBytes c in
+    let cb = certificateBytes n.n_protocol_version c in
     let gy = CommonDH.keygen CommonDH.default_group in
     let kex_s = KEX_S_DHE gy in
     let sv = kex_s_to_bytes kex_s in

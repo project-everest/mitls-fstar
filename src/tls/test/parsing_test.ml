@@ -129,13 +129,13 @@ let parse_handshake_message bytes =
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0b' ->
 	 print_string "Parsing certificate message...\n";
-	 (match parseCertificate msg with
+	 (match parseCertificate !pv msg with
 	  | Correct(ch) -> print_string "...OK\n";
                            print_string "Running chain validation (no hostname)...";
                            let {crt_chain = chain } = ch in
                            let r = Cert.validate_chain chain None None "../../data/CAFile.pem" in
                            print_string (if r then (cert := List.hd chain; "OK\n") else "FAILED\n");
-	     let _,cert_bytes = split (certificateBytes(ch)) 4 in
+	     let _,cert_bytes = split (certificateBytes !pv ch) 4 in
 	     if equalBytes cert_bytes msg then ()
              else (
               print_string "WARNING: not an inverse of parsing. ";

@@ -450,15 +450,19 @@ let serverHelloDoneBytes =
 
 (** A.4.2 Server Authentication and Key Exchange Messages *)
 
-val certificateBytes: crt -> Tot bytes
-let certificateBytes crt =
+val certificateBytes: protocolVersion ->  crt -> Tot bytes
+let certificateBytes pv crt =
   let cb = Cert.certificateListBytes crt.crt_chain in
   lemma_repr_bytes_values (length cb);
-  messageBytes HT_certificate (vlbytes 3 cb)
+  if (pv = TLS_1p3) then 
+     messageBytes HT_certificate ((vlbytes 1 empty_bytes) @| (vlbytes 3 cb))
+  else
+     messageBytes HT_certificate (vlbytes 3 cb)
 
-val parseCertificate: data:bytes{repr_bytes (length data) <= 3} 
-  -> Tot (result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)}))
-let parseCertificate data = 
+val parseCertificate: pv:protocolVersion -> data:bytes{repr_bytes (length data) <= 3} 
+  -> Tot (result (r:crt{Seq.equal (certificateBytes pv r) (messageBytes HT_certificate data)}))
+let parseCertificate pv data = 
+    let data = (if (pv = TLS_1p3) then snd (split data 1) else data) in (* TODO: check that the header byte is 0x00 *)
     if length data >= 3 then
         match vlparse 3 data with
         | Error z -> let (x,y) = z in Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ y)
@@ -808,7 +812,7 @@ let handshakeMessageBytes pv hs =
     match hs,pv with
     | ClientHello(ch),_-> clientHelloBytes ch
     | ServerHello(sh),_-> serverHelloBytes sh
-    | Certificate(c),_-> certificateBytes c
+    | Certificate(c),_-> certificateBytes pv c
     | ServerKeyExchange(ske),_-> serverKeyExchangeBytes ske
     | ServerHelloDone,_-> serverHelloDoneBytes
     | ClientKeyExchange(cke),pv-> clientKeyExchangeBytes pv cke
@@ -850,7 +854,7 @@ let parseHandshakeMessage pv kex hstype pl =
     | HT_session_ticket,_,_      -> mapResult SessionTicket (parseSessionTicket pl)
     | HT_hello_retry_request,_,_ -> mapResult HelloRetryRequest (parseHelloRetryRequest pl)
     | HT_encrypted_extensions,_,_ -> mapResult EncryptedExtensions (parseEncryptedExtensions pl)
-    | HT_certificate,_,_         -> mapResult Certificate (parseCertificate pl)
+    | HT_certificate,Some pv,_         -> mapResult Certificate (parseCertificate pv pl)
     | HT_server_key_exchange,_,Some kex -> mapResult ServerKeyExchange (parseServerKeyExchange kex pl)
     | HT_certificate_request,Some pv,_ -> mapResult CertificateRequest (parseCertificateRequest pv pl)
     | HT_server_hello_done,_,_   -> if (length pl = 0) then Correct(ServerHelloDone) else Error(AD_decode_error, "ServerHelloDone with non-empty body")

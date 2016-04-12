@@ -80,24 +80,23 @@ let decryptor_TLS13_AES_GCM_128_SHA256 key iv =
   // StatefulLHAE.reader -> StatefulLHAE.state
   rd
 
+val encryptRecord_TLS13_AES_GCM_128_SHA256: (StreamAE.writer id) ->
+    (ct:Content.contentType) ->  (plain:bytes) -> bytes
 let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain = 
   let pv = TLS_1p3 in
   let text = plain in
-  // StatefulPlain.adata id -> bytes
-  let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
   // Range.frange -> Range.range
-  let rg: Range.frange id = 0, length text in
+  let len = length text in
+  let rg: Range.frange id = 0, len in
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
-  // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
-  //NS: Not sure about the unsafe_coerce: but, it's presence clearly means that #id cannot be inferred
-  let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in
+  let f: StreamPlain.plain id (len+1) = Content.CT_Data #id rg f |> unsafe_coerce in
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
   // FIXME: without the three additional #-arguments below, extraction crashes
-  StatefulLHAE.encrypt #id #ad #rg w f
+  StreamAE.encrypt id w len f
 
 let decryptRecord_TLS13_AES_GCM_128_SHA256 rd ct cipher = 
-  IO.print_string ("cipher:"^(Platform.Bytes.print_bytes cipher)^"\n");
+//  IO.print_string ("cipher:"^(Platform.Bytes.print_bytes cipher)^"\n");
   let (Some d) = StreamAE.decrypt id rd (length cipher - (StreamAE.ltag id)) cipher in
   Content.repr id d
 
@@ -165,7 +164,7 @@ let recvCCSRecord tcp pv =
 let recvEncHSRecord tcp pv kex log rd = 
   let (Content.Application_data,_,cipher) = recvRecord tcp pv in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
-  let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
+  let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in 
   let [(hs_msg,to_log)] = hsm in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
   hs_msg, log @| to_log	      
@@ -203,7 +202,24 @@ let derive_handshake_keys (gxy:CommonDH.secret) (log:bytes) =
   IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
   IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
   IO.print_string ("server AES_GCM salt:"^(Platform.Bytes.print_bytes siv)^"\n");
-  (ck,civ,sk,siv)
+  (xES,ck,civ,sk,siv)
+
+let derive_finished_keys (xSS:bytes) (xES:bytes) (log:bytes) = 
+  let log_hash = CoreCrypto.hash CoreCrypto.SHA256 log in
+  let mSS = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
+            xSS "expanded static secret" log_hash 32 in
+  let mES = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
+            xES "expanded ephemeral secret" log_hash 32 in
+  let ms = HSCrypto.hkdf_extract CoreCrypto.SHA256 mSS mES in	    
+  let cfk = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
+            ms "client finished" empty_bytes 32 in
+  let sfk = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
+            ms "server finished" empty_bytes 32 in
+  let ts0 = HSCrypto.hkdf_expand_label CoreCrypto.SHA256
+            ms "traffic secret" log_hash 32 in
+  (ms,cfk,sfk,ts0)  
+  
+
 
 let main host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
@@ -228,7 +244,7 @@ let main host port =
   let Some gyp = ECGroup.parse_point gx.ec_params gyb in  
   let gy = {ec_params = gx.ec_params; ec_point = gyp; ec_priv = None} in
   let gxy = CommonDH.dh_initiator (CommonDH.ECKey gx) (CommonDH.ECKey gy) in
-  let (ck,civ,sk,siv) = derive_handshake_keys gxy log in
+  let (xES,ck,civ,sk,siv) = derive_handshake_keys gxy log in
   let wr = encryptor_TLS13_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS13_AES_GCM_128_SHA256 sk siv in
 
@@ -238,18 +254,21 @@ let main host port =
   IO.print_string ("aeIV:"^(Platform.Bytes.print_bytes aeIV)^"\n");
 
   let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
-
-(*
   let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
-  let ServerKeyExchange(ske),log = recvHSRecord tcp pv kex log in
-  let ServerHelloDone,log = recvHSRecord tcp pv kex log in
+  let CertificateVerify(cv),log = recvEncHSRecord tcp pv kex log rd in
+  let (ms,cfk,sfk,ts0) = derive_finished_keys xES xES log in
 
-  let KEX_S_DHE gy = ske.ske_kex_s in
-  let gx, pms = CommonDH.dh_responder gy in
-  let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-  let log = sendHSRecord tcp pv (ClientKeyExchange cke) log in
-*)
-(*
+  let Finished(sfin),log = recvEncHSRecord tcp pv kex log rd in
+
+  let cfin = {fin_vd = CoreCrypto.hmac CoreCrypto.SHA256 cfk (CoreCrypto.hash CoreCrypto.SHA256 log)} in 
+  let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
+  IO.print_string "before encrypt \n";
+  let efinb = encryptRecord_TLS13_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
+  sendRecord tcp pv Content.Application_data efinb str;
+
+  
+
+(*  
   let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") (ch.ch_client_random @| sh.sh_server_random)  48 in
   IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck,civ,sk,siv) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms ch.ch_client_random sh.sh_server_random in
@@ -261,7 +280,6 @@ let main host port =
   let cfin = {fin_vd = TLSPRF.verifyData (pv,cs) ms Client log} in 
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
-
   sendRecord tcp pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
   sendRecord tcp pv Content.Handshake efinb str;
 

@@ -222,7 +222,7 @@ let dec i d l c =
   let n = m_read d.counter in
   let iv = aeIV i n d.iv  in
   match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with
-  | Some p -> Some p
+  | Some p -> (m_write d.counter (n + 1); Some p)
   | None   -> None
 
 //val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
