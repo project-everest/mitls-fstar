@@ -56,23 +56,38 @@ let verify_signature c pv nonces_or_log csa sigalgs tbs sigv =
     else false
   | _ -> false // TODO! New signature format in 4.8.1
 
-val lookup_server_chain: config -> protocolVersion -> option sigAlg -> negotiatedExtensions -> Tot (result (chain * Sig.skey * list sigHashAlg))
-let lookup_server_chain cfg pv sa ne =
-  let sal = if is_None sa then None else
-    Some (match ne.ne_signature_algorithms with
-    | None ->
-       let sa = Some.v sa in
-       (match pv with
-       | TLS_1p3 -> Error(AD_missing_extension, perror __SOURCE_FILE__ __LINE__ "missing supported signature algorithm extension in a 1.3 signature-based ciphersuite") // 6.3.2.1 of TLS 1.3 requires sending the "missing extension" alert 
-       | _ -> [sa, Hash CoreCrypto.SHA1])
+val lookup_server_chain: string -> string -> protocolVersion -> option sigAlg -> option (list sigHashAlg) -> Tot (result (chain * CoreCrypto.certkey))
+let lookup_server_chain pem key pv sa ext_sig =
+(** TODO
+  let sal =
+    if is_None sa then None
+    else
+      let sa = Some.v sa in
+      (match ext_sig with
+      | None ->
+        (match pv with
+        | TLS_1p3 -> Error(AD_missing_extension, perror __SOURCE_FILE__ __LINE__ "missing supported signature algorithm extension in a 1.3 signature-based ciphersuite") // 6.3.2.1 of TLS 1.3 requires sending the "missing extension" alert 
+        | _ -> Correct (Some (sa, Hash CoreCrypto.SHA1)))
                // This doesn't comply with 7.4.1.4.1. of RFC5246
                // which requires selecting RSASIG regardless of the CS's sigAlg
                // (thus enabling the use of ECDHE_ECDSA with RSA cert if extension is omitted)
-    | Some al -> List.Tot.filter (fun (s,_)->s=sa) al) in
-  match CoreCrypto.cert_load_chain cfg.cert_chain_file cfg.private_key_file with
-  | Some (chain, sk) ->
-    let sk = match sk with 
-  | None -> Eror(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "cannot find suitable server certificate")
+      | Some al -> List.Tot.tryFind (fun (s,_)->s=sa) al) in
+*)
+  match CoreCrypto.cert_load_chain pem key with
+  | Some (csk, chain) -> Correct (chain, csk)
+  | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "cannot find suitable server certificate")
+
+val sign: protocolVersion -> bytes -> CoreCrypto.certkey -> sigHashAlg -> bytes -> Tot (result bytes)
+let sign pv csr_or_log csk sha tbs =
+  let (sa, ha) = sha in
+  let Hash h = ha in
+  let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
+  let tbs = match pv with
+    | TLS_1p3 -> tbs // TODO
+    | _ -> csr_or_log @| tbs in
+  match CoreCrypto.cert_sign csk sa h tbs with
+  | Some sigv -> Correct (hab @| sab @| sigv)
+  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "failed to sign")
 
 //let certificate_sign: chain -> 
 
