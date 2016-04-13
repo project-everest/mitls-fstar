@@ -79,8 +79,7 @@ endif
 # lax type-checking in tls-gen
 FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
 
-VERIFIABLE_FSTS=IdealFlags.fst \
-MonotoneSeq.fst \
+VERIFIABLE_FSTS=MonotoneSeq.fst \
 TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
@@ -206,14 +205,14 @@ tls-ver: $(LIBFILES) Ideal.fst $(VERIFIABLE_FSTS)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
-	$(filter-out Ideal.fst,$^)
+	IdealFlags.fst $(filter-out Ideal.fst,$^)
 
 tls-sanity: $(LIBFILES) Ideal.fst $(VERIFIABLE_FSTS) test/False.fst
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
         --verify_module False \
-	$(filter-out Ideal.fst,$^) | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
+	IdealFlags.fst $(filter-out Ideal.fst,$^) | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # same as tls-ver, but verifies one module at a time.
 tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
@@ -223,7 +222,7 @@ wc:
 
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 	cp Concrete.fst IdealFlags.fst
-	$(FSTAR) --lax  $(ADMITTED) $(filter-out Concrete.fst,$^)
+	$(FSTAR) --lax  $(ADMITTED) IdealFlags.fst $(filter-out Concrete.fst,$^)
 
 
 # These are the .cmx files for all ML-implemented F* modules.
@@ -259,7 +258,7 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
 	  $(TLSGEN_ADMIT) \
-	  $(filter-out Concrete.fst,$^)
+	  IdealFlags.fst $(filter-out Concrete.fst,$^)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
