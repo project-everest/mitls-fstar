@@ -23,10 +23,11 @@ type share =
 
 type secret = bytes
 
-val group_of: share -> group
-let group_of = function
-  | FFShare (g, _) -> FFDH g
-  | ECShare (g, _) -> ECDH g
+val same_group: share -> share -> Tot bool
+let same_group a b = match a, b with
+  | FFShare (g1, _), FFShare(g2, _) -> g1=g2
+  | ECShare (g1, _), ECShare(g2, _) -> g1=g2
+  | _ -> false
 
 val default_group: group
 let default_group = FFDH (DHGroup.Named FFDHE2048)

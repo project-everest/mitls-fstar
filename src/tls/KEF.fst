@@ -35,7 +35,7 @@ open CoreCrypto
 
 let (* private *) extractMS si pmsBytes : PRF.masterSecret =
     let data = csrands si in
-    let ca = kefAlg si in
+    let ca = kefAlg si.protocol_version si.cipher_suite false in
     let res = TLSPRF.extract ca pmsBytes data 48 in
     let i = msid si in
     PRF.coerce i res
@@ -119,7 +119,7 @@ let extract si pms: PRF.masterSecret =
 //MK unused? type log = bytes
 
 let (* private *) extractMS_extended si pmsBytes : PRF.masterSecret =
-    let ca = kefAlgExtended si in
+    let ca = kefAlg si.protocol_version si.cipher_suite true in
     let sh = si.session_hash in
     let res = TLSPRF.extract ca pmsBytes sh 48 in
     let i = msid si in

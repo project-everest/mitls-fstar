@@ -117,6 +117,7 @@ LAX_CHECKED_FSTS= Record.fst \
 HSCrypto.fst \
 TLSPRF.fst \
 PRF.p.fst \
+KeySchedule.fst \
 Handshake.fsti \
 Handshake.fst \
 Connection.fst \

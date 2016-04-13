@@ -86,4 +86,4 @@ let coerceDH (dhp:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) b =
 
 type pms = 
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
-  | DHPMS of CommonDH.params * CommonDH.share * CommonDH.share * dhpms
+  | DHPMS of CommonDH.params * CommonDH.key * CommonDH.key * dhpms

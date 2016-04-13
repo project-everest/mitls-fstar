@@ -189,7 +189,7 @@ let defaultConfig =
 type random = lbytes 32
 type crand = random
 type srand = random
-type csRands = bytes
+type csRands = lbytes 64
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
 type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
@@ -334,28 +334,21 @@ let csrands si = si.init_crand @| si.init_srand
 
 // Getting algorithms from sessionInfo
 //CF subsume mk_kefAlg, mk_kefAlgExtended, mk_kdfAlg
-val kefAlg: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg_t
-let kefAlg si =
-  match si.protocol_version with
+val kefAlg: protocolVersion -> cipherSuite -> bool -> Tot kefAlg_t
+let kefAlg pv cs ems =
+  let label = if ems then extended_extract_label else extract_label in
+  match pv with
   | SSL_3p0           -> PRF_SSL3_nested
-  | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extract_label
-  | TLS_1p2           -> PRF_TLS_1p2 extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
+  | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 label
+  | TLS_1p2           -> PRF_TLS_1p2 label (prfMacAlg_of_ciphersuite cs)
   | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
-val kefAlgExtended: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg_t
-let kefAlgExtended si =
-  match si.protocol_version with
-  | SSL_3p0           -> PRF_SSL3_nested
-  | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extended_extract_label
-  | TLS_1p2           -> PRF_TLS_1p2 extended_extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
-  | TLS_1p3           -> PRF_TLS_1p3 //TBC
-
-val kdfAlg: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kdfAlg_t
-let kdfAlg si =
-  match si.protocol_version with
+val kdfAlg: protocolVersion -> cipherSuite -> Tot kdfAlg_t
+let kdfAlg pv cs =
+  match pv with
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 kdf_label
-  | TLS_1p2           -> PRF_TLS_1p2 kdf_label (prfMacAlg_of_ciphersuite si.cipher_suite)
+  | TLS_1p2           -> PRF_TLS_1p2 kdf_label (prfMacAlg_of_ciphersuite cs)
   | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
 let vdAlg si = si.protocol_version, si.cipher_suite
@@ -389,9 +382,10 @@ let noMsId = StandardMS noPmsId noCsr PRF_SSL3_nested
 //CF subsumes both MsI and mk_msid
 val msid: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
 let msid si =
-  if si.extensions.ne_extended_ms
-  then ExtendedMS si.pmsId si.session_hash (kefAlgExtended si)
-  else StandardMS si.pmsId    (csrands si) (kefAlg si)
+  let ems = si.extensions.ne_extended_ms in
+  let kef = kefAlg si.protocol_version si.cipher_suite ems in
+  if ems then ExtendedMS si.pmsId si.session_hash kef
+  else StandardMS si.pmsId    (csrands si) kef
 
 // Strengths of Handshake algorithms
 // NS: identifier not found: sigHashAlg_of_cipherSuite
@@ -400,7 +394,7 @@ let strongSig si = Sig.strong (sigHashAlg_of_ciphersuite si.cipher_suite)
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others''
 // guarding idealization in PRF
-let strongPRF si = strongKDF(kdfAlg si) && strongVD(vdAlg si)
+let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && strongVD(vdAlg si)
 // MK I think having this joint strength predicate
 // MK guaranteeing the idealization of the complete module is useful
 
@@ -409,7 +403,7 @@ let strongPRF si = strongKDF(kdfAlg si) && strongVD(vdAlg si)
 let strongHS si =
   strongKEX (si.pmsId) &&
   is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
-  strongKEF (kefAlg si) && //NS: ... to verify this
+  strongKEF (kefAlg si.protocol_version si.cipher_suite si.extensions.ne_extended_ms) && //NS: ... to verify this
   strongPRF si &&
   strongSig si  //CF * hashAlg for certs?
 
@@ -555,7 +549,7 @@ val siId: si:sessionInfo{ is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite
 			  /\ ((si.protocol_version = TLS_1p2) && (pvcs si.protocol_version si.cipher_suite))} -> role -> Tot id
 let siId si r =
   { msId    = msid si;
-    kdfAlg  = kdfAlg si;
+    kdfAlg  = kdfAlg si.protocol_version si.cipher_suite;
     pv      = si.protocol_version; // for agility, consider together with aeAlg
     aeAlg   = siAuthEncAlg si;
     csrConn = csrands si;
@@ -684,7 +678,7 @@ let mk_id e =
     let si     = epochSI e in
     let cs     = si.cipher_suite in
     { msId     = msid si;
-      kdfAlg   = kdfAlg si;
+      kdfAlg   = kdfAlg si.protocol_version si.cipher_suite;
       pv       = si.protocol_version;
       aeAlg    = get_aeAlg cs;
       csrConn  = epochCSRands e ;

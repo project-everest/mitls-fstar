@@ -53,7 +53,7 @@ let encrypt pk cv pms =
     let plaintext = 
     #if ideal
       if PMS.honestRSAPMS pk cv pms then
-        let dummy_pms = versionBytes cv @| Nonce.random 46 in
+        let dummy_pms = versionBytes cv @| CoreCrypto.random 46 in
         log := (pk,cv,dummy_pms,pms)::!log;
         dummy_pms
       else
@@ -87,16 +87,16 @@ let encrypt pk cv pms =
 *)
 
 //#begin-real_decrypt
-let real_decrypt dk si cv cvCheck ciphertext =
+let real_decrypt dk pv cv cvCheck ciphertext =
   (* Security measures described in RFC 5246, section 7.4.7.1 *)
   (* 1. Generate 46 random bytes, for fake PMS except client version *)
-  let fakepms = Nonce.random 46 in
+  let fakepms = CoreCrypto.random 46 in
   let expected = versionBytes cv in
   (* 2. Decrypt the message to recover plaintext *)
     match CoreCrypto.rsa_decrypt (RSAKey.repr_of_rsaskey dk) CoreCrypto.Pad_PKCS1 (ciphertext) with
     | Some pms when (length pms = 48) ->
         let (clVB,postPMS) = split pms 2 in
-        (match si.protocol_version with
+        (match pv with
             | TLS_1p1 | TLS_1p2 ->
                 (* 3. If new TLS version, just go on with client version and true pms.
                     This corresponds to a check of the client version number, but we'll fail later. *)
