@@ -54,6 +54,7 @@ let gte_pv pv1 pv2 =
 val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
 let negotiateVersion cfg c =
   if gte_pv c cfg.minVer && gte_pv cfg.maxVer c then Correct c
+  else if gte_pv c cfg.maxVer then Correct cfg.maxVer
   else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
 
 val negotiate:list 'a -> list 'a -> Tot (option 'a)

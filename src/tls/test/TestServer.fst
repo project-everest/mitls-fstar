@@ -206,9 +206,12 @@ let rec aux sock =
     | _ -> failwith "" in
  
   // Server Hello
-  let Correct (shb, nego, _, _) = Handshake.prepareServerHello config None None ch log in
+  let (shb,nego) = (match Handshake.prepareServerHello config None None ch log with
+      		    | Correct (shb,nego,_,_) -> (shb,nego)
+		    | Error (x,z) -> failwith z) in
   let tag, shb = split shb 4 in
   let sh = match parseServerHello shb with | Correct s -> s | Error (y,z) -> failwith z in
+  let pv = sh.sh_protocol_version in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
   let sr = sh.sh_server_random in
