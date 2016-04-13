@@ -88,12 +88,16 @@ let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain =
   // Range.frange -> Range.range
   let len = length text in
   let rg: Range.frange id = 0, len in
-  // DataStream.fragment -> DataStream.pre_fragment -> bytes
-  let f: DataStream.fragment id rg = text |> unsafe_coerce in
-  let f: StreamPlain.plain id (len+1) = Content.CT_Data #id rg f |> unsafe_coerce in
-  // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
-  // FIXME: without the three additional #-arguments below, extraction crashes
-  StreamAE.encrypt id w len f
+  match ct with
+  |  Content.Application_data -> 
+       let f: DataStream.fragment id rg = text |> unsafe_coerce in
+       let f: StreamPlain.plain id (len+1) = Content.CT_Data #id rg f |> unsafe_coerce in
+         StreamAE.encrypt id w (len+1) f
+  |  Content.Handshake ->
+       let f: StreamPlain.plain id (len+1) = Content.CT_Handshake #id rg text |> unsafe_coerce in
+         StreamAE.encrypt id w (len+1) f
+
+
 
 let decryptRecord_TLS13_AES_GCM_128_SHA256 rd ct cipher = 
 //  IO.print_string ("cipher:"^(Platform.Bytes.print_bytes cipher)^"\n");
@@ -257,14 +261,23 @@ let main host port =
   let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
   let CertificateVerify(cv),log = recvEncHSRecord tcp pv kex log rd in
   let (ms,cfk,sfk,ts0) = derive_finished_keys xES xES log in
-
   let Finished(sfin),log = recvEncHSRecord tcp pv kex log rd in
 
+  let log_hash = CoreCrypto.hash CoreCrypto.SHA256 log in
+  let (ck,civ,sk,siv) = deriveKeys_TLS13_AES_GCM_128_SHA256 ts0 "application data key expansion" log_hash in
+  let dwr = encryptor_TLS13_AES_GCM_128_SHA256 ck civ in
+  let drd = decryptor_TLS13_AES_GCM_128_SHA256 sk siv in
+  
   let cfin = {fin_vd = CoreCrypto.hmac CoreCrypto.SHA256 cfk (CoreCrypto.hash CoreCrypto.SHA256 log)} in 
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
   IO.print_string "before encrypt \n";
   let efinb = encryptRecord_TLS13_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
   sendRecord tcp pv Content.Application_data efinb str;
+
+  let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
+  let get = encryptRecord_TLS13_AES_GCM_128_SHA256 dwr Content.Application_data (utf8 payload) in
+  sendRecord tcp pv Content.Application_data get "GET /";
+  let ad = recvEncAppDataRecord tcp pv drd in
 
   
 
