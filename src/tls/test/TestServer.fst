@@ -152,9 +152,10 @@ let sendHSRecord tcp pv hs_msg log =
 
 let recvHSRecord tcp pv kex log = 
   let (Content.Handshake,rpv,pl) = recvRecord tcp pv in
-  let Correct (rem,[(hs_msg,to_log)]) = Handshake.parseHandshakeMessages (Some pv) (Some kex) pl in 
-  IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-  (hs_msg,log @| to_log)
+  match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
+  | Correct (rem,[(hs_msg,to_log)]) -> IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n"); 
+    	    			       (hs_msg,log @| to_log)
+  | Error (y,x) -> IO.print_string("HS msg parsing error: "^x); failwith "error"
 
 let recvCCSRecord tcp pv = 
   let (Content.Change_cipher_spec,_,ccs) = recvRecord tcp pv in
@@ -207,7 +208,7 @@ let rec aux sock =
   // Server Hello
   let Correct (shb, nego, _, _) = Handshake.prepareServerHello config None None ch log in
   let tag, shb = split shb 4 in
-  let sh = match parseServerHello shb with | Correct s -> s | _ -> failwith "fail" in
+  let sh = match parseServerHello shb with | Correct s -> s | Error (y,z) -> failwith z in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
   let sr = sh.sh_server_random in

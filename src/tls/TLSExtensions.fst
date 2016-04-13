@@ -118,15 +118,15 @@ let compile_sni_list l =
     | SNI_UNKNOWN(t, x) :: r -> (bytes_of_int 1 t) @| bytes_of_int 2 (length x) @| x @| aux r
     in aux l
 
-val parse_sni_list: b:bytes -> Tot (result (list serverName))
-let parse_sni_list b  =
+val parse_sni_list: r:role -> b:bytes -> Tot (result (list serverName))
+let parse_sni_list r b  =
     let rec aux:b:bytes -> Tot (canFail (serverName)) (decreases (length b)) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else
 	  if length b >= 3 then
             let (ty,v) = split b 1 in
             (match vlsplit 2 v with
-            | Error(x,y) -> ExFail(x,"Failed to parse SNI length")
+            | Error(x,y) -> ExFail(x,"Failed to parse SNI length: "^(Platform.Bytes.print_bytes b))
             | Correct(cur, next) ->
                 (match aux next with
                 | ExFail(x,y) -> ExFail(x,y)
@@ -144,10 +144,17 @@ let parse_sni_list b  =
 		       in if List.Tot.existsb snidup l then ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
                     else ExOK(cur :: l)))
           else ExFail(AD_decode_error,"Failed to parse SNI")
-    in (match aux b with
+    in 
+    match r with 
+    | Server -> if length b = 0 then correct [] else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list: should be empty in ServerHello, has size "^string_of_int (length b)) 
+    | Client -> 
+    match vlparse 2 b with
+   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+   | Correct (b) -> 
+    match aux b with
     | ExFail(x,y) -> Error(x,y)
     | ExOK([]) -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
-    | ExOK(l) -> correct (l))
+    | ExOK(l) -> correct (l)
 
 val compile_curve_list: list ECGroup.ec_all_curve -> Tot bytes
 let compile_curve_list l =
@@ -296,7 +303,7 @@ let rec parseExtension role b =
 	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
 	  | Error(z) -> Error(z))
 	| (0x00z, 0x00z) -> // sni
-	  (match parse_sni_list data with
+	  (match parse_sni_list role data with
 	  | Correct(snis) -> Correct (E_server_name snis)
 	  | Error(z) -> Error(z))
 	| (0xFFz, 0x01z) -> // renego
@@ -448,9 +455,11 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                     correct l
                 else
                     correct ({l with ne_supported_point_formats = Some spf})
+(* not allowed for server
             | E_signatureAlgorithms sha ->
                 if resuming then correct l
                 else correct ({l with ne_signature_algorithms = Some (sha)})
+*)
             | E_extended_ms ->
                 if resuming then
                     correct(l)
@@ -499,10 +508,11 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) 
            | Some t -> ServerRenegotiationInfo t
            | None -> FirstConnection in
         Some (E_renegotiation_info ric)
-    | E_server_name l ->
+    | E_server_name l -> 
         (match List.Tot.tryFind (fun x->match x with | SNI_DNS _ -> true | _ -> false) l with
-        | Some _ -> Some(E_server_name l)
+        | Some _ -> Some(E_server_name [])
         | _ -> None)
+    
     | E_ec_point_format(l) ->
         if resuming then None
         else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
