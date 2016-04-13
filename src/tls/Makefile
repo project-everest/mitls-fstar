@@ -79,7 +79,8 @@ endif
 # lax type-checking in tls-gen
 FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
 
-VERIFIABLE_FSTS=MonotoneSeq.fst \
+VERIFIABLE_FSTS=IdealFlags.fst \
+MonotoneSeq.fst \
 TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
@@ -201,16 +202,18 @@ endef
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 tls-ver: $(LIBFILES) Ideal.fst $(VERIFIABLE_FSTS)
+	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
-	$^
+	$(filter-out Ideal.fst,$^)
 
-tls-sanity: $(LIBFILES) $(VERIFIABLE_FSTS) test/False.fst
+tls-sanity: $(LIBFILES) Ideal.fst $(VERIFIABLE_FSTS) test/False.fst
+	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
         --verify_module False \
-	$^ | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
+	$(filter-out Ideal.fst,$^) | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # same as tls-ver, but verifies one module at a time.
 tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
@@ -219,7 +222,9 @@ wc:
 	wc -l $(LIBFILES)) $(FSTS)
 
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
-	$(FSTAR) --lax  $(ADMITTED) $^
+	cp Concrete.fst IdealFlags.fst
+	$(FSTAR) --lax  $(ADMITTED) $(filter-out Concrete.fst,$^)
+
 
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
@@ -239,7 +244,6 @@ TLSML := $(subst Handshake.fsti, , $(TLSML))
 # to our own list.
 TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
-  IdealFlags.ml \
   $(TLSML)
 # Last step: F* currently extracts everything in the current directory
 TLSML := $(notdir $(TLSML))
@@ -250,11 +254,13 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
+	cp Concrete.fst IdealFlags.fst
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
 	  $(TLSGEN_ADMIT) \
-	  $^
+	  $(filter-out Concrete.fst,$^)
+
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.
