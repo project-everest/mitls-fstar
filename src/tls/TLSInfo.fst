@@ -128,7 +128,7 @@ type config = {
     signatureAlgorithms: list sigHashAlg;
     }
 
-val sigAlgPref: list sigAlg -> list hashAlg -> Tot (list sigHashAlg)
+val sigAlgPref: list sigAlg -> list hashAlg' -> Tot (list sigHashAlg)
 let rec sigAlgPref s h =
     match s with
     | [] -> []
@@ -334,7 +334,7 @@ let csrands si = si.init_crand @| si.init_srand
 
 // Getting algorithms from sessionInfo
 //CF subsume mk_kefAlg, mk_kefAlgExtended, mk_kdfAlg
-val kefAlg: protocolVersion -> cipherSuite -> bool -> Tot kefAlg_t
+val kefAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs)} -> bool -> Tot kefAlg_t
 let kefAlg pv cs ems =
   let label = if ems then extended_extract_label else extract_label in
   match pv with
@@ -343,7 +343,7 @@ let kefAlg pv cs ems =
   | TLS_1p2           -> PRF_TLS_1p2 label (prfMacAlg_of_ciphersuite cs)
   | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
-val kdfAlg: protocolVersion -> cipherSuite -> Tot kdfAlg_t
+val kdfAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs)} -> Tot kdfAlg_t
 let kdfAlg pv cs =
   match pv with
   | SSL_3p0           -> PRF_SSL3_nested
@@ -392,8 +392,9 @@ let msid si =
 assume val sigHashAlg_of_ciphersuite: cipherSuite -> Tot sigHashAlg
 let strongSig si = Sig.strong (sigHashAlg_of_ciphersuite si.cipher_suite)
 
-// ``The algorithms of si are strong for both KDF and VerifyData, despite all others''
+// ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF
+val strongPRF: si:sessionInfo{si.protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.cipher_suite \/ is_SCSV si.cipher_suite)} -> Tot bool
 let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && strongVD(vdAlg si)
 // MK I think having this joint strength predicate
 // MK guaranteeing the idealization of the complete module is useful
