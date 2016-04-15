@@ -144,12 +144,14 @@ let cipherRangeClass i clen =
         else
             (min,max)
 
-
 val cipherRangeClass_width: i:id2 ->
      clen:nat{valid_clen i clen} ->
      Lemma (snd (cipherRangeClass i clen) - fst (cipherRangeClass i clen) <= maxPadSize i - fixedPadSize i)
 #set-options "--initial_ifuel 2"
 let cipherRangeClass_width i clen = ()
+
+#reset-options
+#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 
 (* targetLength: given a plaintext range, what would be the length of the ciphertext? *)
 // TLS 1.2 RFC: For CBC, the encrypted data length is one more than the sum of
@@ -221,6 +223,9 @@ let targetLength i r =
               /\ clen == aeadRecordIVSize (aeAlg i) + x + aeadTagSize (aeAlg i) + plen)
    let targetLength_spec_AEAD i r x = ()
 *)
+
+#reset-options
+#set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2"
 
 val targetLength_at_most_max_TLSCipher_fragment_length: i:id2
    -> r:range{
