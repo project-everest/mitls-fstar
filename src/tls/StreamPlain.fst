@@ -98,7 +98,8 @@ let mk_plain i l pr =
   match scan i pr (length pr - 1) with 
   | Correct p -> Some p
   | Error _ -> None
-(*  Old version, breaking abstraction:
+
+(*  OLD VERSION, breaking abstraction:
     let len = (length pr) - 1 in
     let (p,ctb) = Platform.Bytes.split pr len in
     match Content.parseCT ctb with
