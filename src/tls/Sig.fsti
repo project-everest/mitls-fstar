@@ -1,14 +1,12 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
-#light "off"
-
 module Sig
 
 open Platform.Bytes
 open TLSConstants
 
 (* ------------------------------------------------------------------------ *)
-type alg   = sigHashAlg //MK: now defined in TLSConstants.fs7: sigAlg * hashAlg
+type alg   = sigHashAlg //MK: now defined in TLSConstants.fst: sigAlg * hashAlg'
 
 type text = bytes
 type sigv = bytes 
@@ -17,7 +15,7 @@ type sigv = bytes
 type skey
 type pkey
 
-val strong : alg -> Tot bool 
+val strong: alg -> Tot bool 
 val honest: alg -> pkey -> bool
 
 val create_pkey: alg -> CoreCrypto.Sig.sigpkey -> pkey

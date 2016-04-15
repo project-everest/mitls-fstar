@@ -76,10 +76,10 @@ let honest (a:alg) (pk:pkey) : bool =
 #else
   has_pk a pk (!honest_log)
 #endif
-let strong a = if a=(DSA ,Hash SHA384) then true else false
+let strong (a:alg) = if a=(DSA ,Hash SHA384) then true else false
 #else //ideal
 let honest (a:alg) (pk:pkey) : bool = false
-let strong a = if a=(DSA ,Hash SHA384) then true else false // JK : needed to compile OCaml, needs checking
+let strong (a:alg) = if a=(DSA ,Hash SHA384) then true else false // JK : needed to compile OCaml, needs checking
 #endif
 
 (* ------------------------------------------------------------------------ *)
