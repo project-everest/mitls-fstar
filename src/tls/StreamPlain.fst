@@ -62,15 +62,9 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
          (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } -> 
   Tot(result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
 let rec scan i bs j =
-  (* TODO: extraction bug *)
-  (* File "StreamPlain.ml", line 30, characters 25-27: *)
-  (* Error: This expression has type Platform.Bytes.bytes *)
-  (*        but an expression was expected of type 'a FStar_Seq.seq *)
-  Error (AD_decode_error, "this function currently disabled because of an extraction error") 
-(*
   let len = length bs in 
   if j = 0 then Error (AD_decode_error, "") else
-  match Seq.index bs j with 
+  match index bs j with 
   | 0z  -> scan i bs (j-1)
   | 21z -> let rg: frange i = (0, len - 1) in
            let payload, rest = Platform.Bytes.split bs j in 
@@ -89,7 +83,7 @@ let rec scan i bs j =
            lemma_eq_intro bs (pad payload Application_data len);
            Correct (CT_Data rg d)
   | _    -> Error (AD_decode_error, "") 
-*)
+
 (*
 val pinverse_scan: i:id {~ (authId i)} -> len:nat -> f:plain i len ->
   Lemma(is_Correct(scan i (ghost_repr #i #len f) (len - 1)))
@@ -101,13 +95,13 @@ type goodrepr i = bs: plainRepr {is_Correct(scan i bs (length bs - 1)) }
 
 val mk_plain: i:id{ ~(authId i)} -> l:plainLen -> pr:lbytes l -> Tot (option (p:plain i l {pr = ghost_repr #i #l p}))
 let mk_plain i l pr = 
+  match scan i pr (length pr - 1) with 
+  | Correct p -> Some p
+  | Error _ -> None
+(*  Old version, breaking abstraction:
     let len = (length pr) - 1 in
     let (p,ctb) = Platform.Bytes.split pr len in
     match Content.parseCT ctb with
     | Correct ct -> Some (Content.mk_fragment i ct (0,len) p)
     | Error z -> None
-(*TODO: use "scan" to handle padding 
-  match scan i pr (length pr - 1) with 
-  | Correct p -> Some p
-  | Error _ -> None
 *)

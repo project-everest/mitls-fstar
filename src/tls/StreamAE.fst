@@ -216,14 +216,31 @@ private val dec:
   i:id{~(authId i)} -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (lbytes l))
   (requires (fun h -> True))
-  (ensures  (fun h0 _ h1 -> modifies Set.empty h0 h1))
-
+  (ensures  (fun h0 _ h1 ->
+      modifies (Set.singleton d.region) h0 h1
+    /\ modifies_rref d.region !{as_ref (as_rref d.counter)} h0 h1
+    /\ m_contains d.counter h1))
 let dec i d l c =
+  m_recall d.counter;
   let n = m_read d.counter in
   let iv = aeIV i n d.iv  in
   match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with
-  | Some p -> (m_write d.counter (n + 1); Some p)
-  | None   -> None
+  | Some p ->
+    if n + 1 < max_uint64 then
+    begin
+      lemma_repr_bytes_values (n + 1);
+      m_write d.counter (n + 1);
+      Some p
+    end
+    else
+    begin
+      //CF revisit; I'd prefer to statically prevent it.
+      // overflow, we don't care
+      // lemma_repr_bytes_values 0;
+      // m_write d.counter 0;
+      None
+    end
+  | None -> None
 
 //val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
@@ -235,7 +252,9 @@ val decrypt:
   -> ST (option (plain i l))
   (requires (fun h0 -> True))
   (ensures  (fun h0 res h1 ->
-               modifies Set.empty h0 h1 //NS: strange that the counter is not incremented on this side; confused
+               modifies (Set.singleton d.region) h0 h1
+             /\ modifies_rref d.region !{as_ref (as_rref d.counter)} h0 h1
+             /\ m_contains d.counter h1
              /\ (authId i ==>
                  (let log :seq (entry i) = m_sel h0 d.log in
 		   match res with
@@ -246,21 +265,26 @@ val decrypt:
                                            /\ matches l c (Seq.index log j)
                                            /\ Entry.p (Seq.index log j) == p))))
 
-
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt i d l c =
   m_recall d.log;
   let log = m_read d.log in
   if authId i then
+    begin
+    admit (); // FIXME
     match seq_find (matches l c) log with
     | None -> None
     | Some e -> Some (Entry.p e)
+    end
   else
     match dec i d l c with
-    | Some pr -> 
-       (match mk_plain i l pr with
-        | Some p -> Some p
-        | None  -> None)
+    | Some pr ->
+      begin
+      match mk_plain i l pr with
+      | Some p -> Some p
+      | None  -> None
+      end
+    | None -> None
 
 (* TODO
 
@@ -299,4 +323,3 @@ val decrypt: i:sid -> d:reader i -> c:bytes -> ST (option (dplain i c))
                                            /\ matches c ad (Seq.index log j)
                                            /\ Entry.p (Seq.index log j) == Some.v res))))))
 *)
-
