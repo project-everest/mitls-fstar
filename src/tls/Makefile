@@ -55,7 +55,7 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeo
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES = $(addprefix $(FSTAR_HOME)/$(LIB)/, $(STDLIB)) $(PLATFORM) $(CRYPTO)
 
-OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3 -linkpkg -g -thread
+OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
 DEBUG=ocamlfind ocamlc
 OCAMLMKLIB=ocamlfind ocamlmklib

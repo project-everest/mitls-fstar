@@ -9,7 +9,7 @@ before_install:
   - sudo apt-get -qq update
 
 install:
-  - sudo apt-get install --yes libssl-dev opam libsqlite3-dev g++-5 gcc-5
+  - sudo apt-get install --yes libssl-dev opam libsqlite3-dev g++-5 gcc-5 libgmp-dev
   - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 200
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 200
   - export OPAMYES=true
@@ -17,7 +17,7 @@ install:
   - eval $(opam config env)
   - opam switch 4.02.3
   - eval $(opam config env)
-  - opam install batteries sqlite3 fileutils stdint
+  - opam install batteries sqlite3 fileutils stdint zarith
   - export Z3=z3-4.4.1-x64-ubuntu-14.04
   - wget https://github.com/Z3Prover/z3/releases/download/z3-4.4.1/$Z3.zip
   - unzip $Z3.zip
