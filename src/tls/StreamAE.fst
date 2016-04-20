@@ -53,8 +53,26 @@ let max_uint64 =
   let n = 1073741823 in //2^30-1 4611686018427387903 in // (2^62-1) (* TODO: Fix this *)
   lemma_repr_bytes_values n; n
 
-type log_ref (r:rid) (i:id)  = MonotoneSeq.log_t r (entry i)
-type seqn_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) = MonotoneSeq.counter r log (aeadRecordIVSize (alg i))
+let is_seqn i n =  repr_bytes n <= aeadRecordIVSize (alg i)
+type seqn i = n:nat { is_seqn i n }
+
+let ideal_log (r:rid) (i:id) = MonotoneSeq.log_t r (entry i)
+
+let log_ref (r:rid) (i:id) : Tot Type0 =
+  if authId i 
+  then ideal_log r i
+  else unit
+
+let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 = 
+  MonotoneSeq.counter r log (aeadRecordIVSize (alg i)) //we have a counter, that's increasing, at most to the min(length log, 2^
+  
+let concrete_ctr (r:rid) (i:id) : Tot Type0 = 
+  m_rref r (seqn i) increases
+
+let seqn_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 = 
+  if authId i   
+  then ideal_ctr r i (log <: ideal_log l i)
+  else m_rref r (seqn i) increases
 
 type state (i:id) (rw:rw) = 
   | State: #region:rid 
@@ -90,13 +108,22 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer
                /\ fresh_region w.region h0 h1
                /\ fresh_region r.region h0 h1
                /\ op_Equality #(log_ref w.region i) w.log r.log  //the explicit annotation here *)
-               /\ m_contains w.counter h1
-               /\ m_contains r.counter h1
-               /\ m_contains w.log h1
-               /\ m_sel h1 w.counter = 0
-               /\ m_sel h1 r.counter = 0
-               /\ m_sel h1 w.log = createEmpty
-               ))
+	       /\ (if authId i
+ 	        then let wlog:ideal_log w.region i = w.log in 
+		     let wctr:ideal_ctr w.region i wlog = w.counter in
+		     let rctr:ideal_ctr r.region i wlog = r.counter in
+		     m_contains wlog h1 /\
+		     m_contains wctr h1 /\
+		     m_contains rctr h1 /\
+		     m_sel h1 wctr = 0 /\
+		     m_sel h1 rctr = 0 /\
+		     m_sel h1 wlog = createEmpty
+		else let wctr:concrete_ctr w.region i = w.counter in
+		     let rctr:concrete_ctr r.region i = r.counter in
+		     m_contains wctr h1 /\
+		     m_contains rctr h1 /\
+     		     m_sel h1 wctr = 0 /\
+		     m_sel h1 rctr = 0)))
 
 assume val gcut : f:(unit -> GTot Type){f ()} -> Tot unit
 
@@ -106,15 +133,22 @@ let gen reader_parent writer_parent i =
   let reader_r = new_region reader_parent in
   let writer_r = new_region writer_parent in
   lemma_repr_bytes_values 0; 
-  let log  = alloc_mref_seq writer_r Seq.createEmpty in 
-  let ectr = MonotoneSeq.new_counter writer_r 0 log in
-  let dctr = MonotoneSeq.new_counter reader_r 0 log in
-  let writer  = State #i #Writer #writer_r #reader_r kv iv log ectr in
-  let reader  = State #i #Reader #reader_r #writer_r kv iv log dctr in
-  reader, writer
+  if authId i
+  then let log  : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in 
+       let ectr : ideal_ctr writer_r i log = MonotoneSeq.new_counter writer_r 0 log in
+       let dctr : ideal_ctr reader_r i log = MonotoneSeq.new_counter reader_r 0 log in
+       let writer  = State #i #Writer #writer_r #reader_r kv iv log ectr in
+       let reader  = State #i #Reader #reader_r #writer_r kv iv log dctr in
+       reader, writer
+  else let ectr : concrete_ctr writer_r i = m_alloc writer_r 0 in
+       let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
+       let writer  = State #i #Writer #writer_r #reader_r kv iv () ectr in
+       let reader  = State #i #Reader #reader_r #writer_r kv iv () dctr in
+       reader, writer
+      
 
 // Coerce an instance with index i in a fresh sub-region of r0
-val coerce: r0:rid -> p0:rid -> i:id{~(safeId i)} -> role:rw -> kv:key i -> iv:iv i -> ST (state i role)
+val coerce: r0:rid -> p0:rid -> i:id{~(authId i)} -> role:rw -> kv:key i -> iv:iv i -> ST (state i role)
   (requires (fun h0 -> disjoint r0 p0))
   (ensures  (fun h0 s h1 ->
                 modifies Set.empty h0 h1
@@ -125,20 +159,17 @@ val coerce: r0:rid -> p0:rid -> i:id{~(safeId i)} -> role:rw -> kv:key i -> iv:i
 let coerce r0 p0 i role kv iv =
   let r = new_region r0 in
   let p = new_region p0 in
-  let log = alloc_mref_seq (if role = Reader then p else r) Seq.createEmpty in
   lemma_repr_bytes_values 0; 
-  let ctr = MonotoneSeq.new_counter r 0 log in
-  State #i #role #r #p kv iv log ctr 
+  let ctr : concrete_ctr r i = m_alloc r 0 in
+  State #i #role #r #p kv iv () ctr 
 
 
-val leak: i:id{~(safeId i)} -> role:rw -> state i role -> ST (key i * iv i)
+val leak: i:id{~(authId i)} -> role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 let leak i role s = State.key s, State.iv s
 
 
-let is_seqn i n =  repr_bytes n <= aeadRecordIVSize (alg i)
-type seqn i = n:nat { is_seqn i n }
 
 // The per-record nonce for the AEAD construction is formed as follows:
 //
@@ -157,31 +188,8 @@ let aeIV i (n:seqn i) (staticIV: iv i) : iv i =
 // not relying on additional data
 let noAD = empty_bytes
  
-(* // Raw encryption (on concrete bytes), returns (cipher @| tag) *)
-(* // Keeps seqn and nonce implicit; requires the counter not to overflow *)
-(* val enc: *)
-(*   i:id -> e:writer i -> l:plainLen -> p:lbytes l -> ST (cipher i l) *)
-(*     (requires (fun h ->  *)
-(*  	  let next = m_sel h e.counter in *)
-(* 	  is_seqn i (next + 1) /\ *)
-(* 	  next < Seq.length (m_sel h e.log))) *)
-(*     (ensures  (fun h0 c h1 -> *)
-(*                  modifies (Set.singleton e.region) h0 h1 *)
-(*                /\ modifies_rref e.region !{as_ref (as_rref e.counter)} h0 h1 *)
-(* 	       /\ m_contains e.counter h1 *)
-(*                // /\ sel h1 e.counter = sel h0 e.counter + 1 *)
-(*     )) *)
-
-(* let enc i e l p = *)
-(*   m_recall e.counter; *)
-(*   let n = m_read e.counter in *)
-(*   let iv = aeIV i n e.iv in *)
-(*   let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD p in *)
-(*   lemma_repr_bytes_values (n + 1); *)
-(*   (\* assert (n + 1 >= n); *\) *)
-(*   increment_counter e.region e.log e.counter; *)
-(*   c *)
-
+// encryption (on concrete bytes), returns (cipher @| tag)
+// Keeps seqn and nonce implicit; requires the counter not to overflow
 // encryption of plaintexts; safe instances are idealized
 val encrypt:
   i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
@@ -189,7 +197,6 @@ val encrypt:
     	  is_seqn i (m_sel h0 e.counter + 1)))
     (ensures  (fun h0 c h1 ->
                            modifies (Set.singleton e.region) h0 h1
-                         /\ modifies_rref e.region !{as_ref (as_rref e.counter), as_ref (as_rref e.log)} h0 h1
                          /\ m_contains e.log h1
                          /\ m_contains e.counter h1
                          /\ m_sel h1 e.counter = m_sel h0 e.counter + 1

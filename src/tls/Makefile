@@ -18,7 +18,8 @@ clean:
 # ------------------ dependencies on Fstar & its libraries --------------------
 # When using NuBuild, FStar must be located within the source tree. Now that soft links are 
 # available on all platforms, I don't see a reason not to assume a fixed location.
-FSTAR_HOME?=../../.fstar
+#FSTAR_HOME?=../../.fstar
+FSTAR_HOME=../../../FStar
 # JP: this location can easily be overridden by doing:
 #   FSTAR_HOME=../../../fstar make tls-gen
 # BUT NOT AS FOLLOWS
