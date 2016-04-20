@@ -126,42 +126,87 @@ let write_at_end (#a:Type) (#i:rid) (r:m_rref i (seq a) grows) (x:a)
     lemma_mem_snoc s0 x;
     witness r (at_least n x r)
 
+////////////////////////////////////////////////////////////////////////////////
+//Monotonic counters, bounded by the length of a log
+////////////////////////////////////////////////////////////////////////////////
+type log_t (i:rid) (a:Type) = m_rref i (seq a) grows
 
-(* An earlier experiment with a weaker witnessed predicate *)
-(* val write_at_end: #a:Type -> #i:rid *)
-(* 	       -> r:m_rref i (seq a) grows *)
-(* 	       -> x:a *)
-(* 	       -> ST unit *)
-(*  		 (requires (fun h -> True)) *)
-(* 		 (ensures (fun h0 _ h1 -> *)
-(* 	               m_contains r h1 *)
-(* 		     /\ modifies (Set.singleton i) h0 h1 *)
-(* 		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1 *)
-(* 		     /\ m_sel h1 r = snoc (m_sel h0 r) x *)
-(* 		     /\ witnessed (mem x r))) *)
-(* let write_at_end #a #i r x = *)
-(*   m_recall r; *)
-(*   let s0 = m_read r in *)
-(*   m_write r (snoc s0 x); *)
-(*   mem_is_stable r x; *)
-(*   lemma_mem_snoc s0 x; *)
-(*   witness r (mem x r) *)
+let increases (x:nat) (y:nat) = b2t (x <= y)
 
+let at_most_log_len (#l:rid) (#a:Type) (x:nat) (log:log_t l a) 
+    : HyperHeap.t -> GTot Type0 
+    = fun h -> x <= Seq.length (m_sel h log)
 
+open Platform.Bytes
+//Note: we may want int counters, instead of nat counters 
+//because the handshake uses an initial value of -1
+type counter_val (#l:rid) (#a:Type) (i:rid) (log:log_t l a) (repr_max:nat) =
+     (x:nat{repr_bytes x <= repr_max /\ witnessed (at_most_log_len x log)}) //never more than the length of the log
+	 
+type counter (#l:rid) (#a:Type) (i:rid) (log:log_t l a) (repr_max:nat) =
+  m_rref i  //counter in region i
+         (counter_val i log repr_max) //never more than the length of the log
+	 increases //increasing
 
-(* val mem_is_stable: #a:Type -> #i:rid *)
-(* 		   -> r:m_rref i (seq a) grows *)
-(* 		   -> x:a *)
-(* 		   -> Lemma (ensures stable_on_t r (mem x r)) *)
-(* let mem_is_stable #a #i r x =  *)
-(*   let mem_is_stable_aux:  *)
-(* 		     h0:t *)
-(* 		   -> h1:t *)
-(* 		   -> Lemma ((mem x r h0 *)
-(* 			    /\ grows (m_sel h0 r) (m_sel h1 r)) *)
-(* 			    ==> mem x r h1) =  *)
-(*        fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in *)
-(*   forall_intro_2 mem_is_stable_aux *)
+let monotonic_increases (x:unit)
+  : Lemma (monotonic nat increases)
+  = ()
+
+let at_most_log_len_stable (#l:rid) (#a:Type) (x:nat) (l:log_t l a)
+  : Lemma (stable_on_t l (at_most_log_len x l))
+  = ()
+
+(* assume val gcut : f:(unit -> GTot Type){f ()} -> Tot unit *)
+
+let new_counter (#l:rid) (#a:Type) (#repr_max:nat)
+		(i:rid) (init:nat) (log:log_t l a)
+  : ST (counter i log repr_max)
+       (requires (fun h -> 
+	   repr_bytes init <= repr_max /\
+	   init <= Seq.length (m_sel h log)))
+       (ensures (fun h0 c h1 ->
+		   modifies (Set.singleton i) h0 h1 /\
+		   modifies_rref i Set.empty h0 h1 /\
+		   m_fresh c h0 h1 /\
+		   m_sel h1 c = init /\
+		   Map.contains h1 i))
+  = m_recall log; recall_region i;
+    witness log (at_most_log_len init log);
+    m_alloc i init
+
+let increment_counter (#l:rid) (#a:Type) (#repr_max:nat)
+		      (#i:rid) (#log:log_t l a) ($c:counter i log repr_max)
+  : ST unit
+       (requires (fun h -> 
+	  let log = m_sel h log in 
+	  let n = m_sel h c in 
+	  n < Seq.length log  /\
+	  repr_bytes (n + 1) <= repr_max))
+       (ensures (fun h0 _ h1 -> 
+	  modifies (Set.singleton i) h0 h1 /\
+	  modifies_rref i !{as_ref (as_rref c)} h0 h1 /\
+	  m_sel h1 c = m_sel h0 c + 1))
+  = m_recall c; m_recall log;
+    let n = m_read c + 1 in 
+    witness log (at_most_log_len n log);
+    m_write c n
+
+let testify_counter (#i:rid) (#l:rid) (#a:Type0) (#log:log_t l a) (#repr_max:nat) (ctr:counter i log repr_max)
+  : ST unit
+       (requires (fun h -> True))
+       (ensures (fun h0 _ h1 -> 
+	   h0=h1 /\
+	   at_most_log_len (m_sel h1 ctr) log h1))
+  = admit()
+    //should be implemented like so
+    (* let n = m_read ctr in *) 
+    (* testify (at_most_log_len n log) *)
+
+let test (i:rid) (l:rid) (a:Type0) (log:log_t l a) //(p:(nat -> Type))
+         (r:counter i log 8) (h:HyperHeap.t) 
+  = //assert (m_sel2 h r = HyperHeap.sel h (as_rref r));
+    assert (m_sel h r = HyperHeap.sel h (as_rref r));
+    assert (m_sel #_ #(counter_val i log 8) #_ h r = HyperHeap.sel h (as_rref r))
 
 
 (* TODO: this fails with a silly inconsistent qualifier error *)

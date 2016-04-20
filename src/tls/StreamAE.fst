@@ -39,11 +39,13 @@ type entry (i:id) = | Entry: l:plainLen -> c:cipher i l -> p:plain i l -> entry 
 type key (i:id) = lbytes (CoreCrypto.aeadKeySize (alg i)) 
 type iv  (i:id) = lbytes (CoreCrypto.aeadRealIVSize (alg i)) // should it be aeadSaltSize?
 
-type seqn i = n:nat { repr_bytes n <= aeadRecordIVSize (alg i)}
-
-// unused so far
-let seqn_grows i : FStar.Monotonic.RRef.reln (seqn i) = fun x y -> y >= x //CF not usable? 
-let lemma_seqn_grows_monotone i : Lemma (monotonic (seqn i) (fun x y -> y >= x)) = ()
+(* let is_seq (i:id) : nat -> GTot Type0 =  *)
+(*   fun n -> repr_bytes n <= aeadRecordIVSize (alg i) *)
+  
+(* type seqn i = n:nat { repr_bytes n <= aeadRecordIVSize (alg i)} *)
+(* // unused so far *)
+(* let seqn_grows i : FStar.Monotonic.RRef.reln (seqn i) = fun x y -> y >= x //CF not usable?  *)
+(* let lemma_seqn_grows_monotone i : Lemma (monotonic (seqn i) (fun x y -> y >= x)) = () *)
 
 val max_uint64: n:nat {repr_bytes n <= 8} 
 let max_uint64 = 
@@ -51,8 +53,8 @@ let max_uint64 =
   let n = 1073741823 in //2^30-1 4611686018427387903 in // (2^62-1) (* TODO: Fix this *)
   lemma_repr_bytes_values n; n
 
-type log_ref (r:rid) (i:id)  = FStar.Monotonic.RRef.m_rref r (seq (entry i)) MonotoneSeq.grows
-type seqn_ref (r:rid) (i:id) = FStar.Monotonic.RRef.m_rref r (seqn i) (fun x y -> y >= x) // (seqn_grows i)
+type log_ref (r:rid) (i:id)  = MonotoneSeq.log_t r (entry i)
+type seqn_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) = MonotoneSeq.counter r log (aeadRecordIVSize (alg i))
 
 type state (i:id) (rw:rw) = 
   | State: #region:rid 
@@ -60,7 +62,7 @@ type state (i:id) (rw:rw) =
          -> key:key i
          -> iv: iv i
          -> log: log_ref (if rw=Reader then peer_region else region) i // ghost, subject to cryptographic assumption
-         -> counter: seqn_ref region i // types are sufficient to anti-alias log and counter
+         -> counter: seqn_ref region i log // types are sufficient to anti-alias log and counter
          -> state i rw
 // Some invariants:
 // - the writer counter is the length of the log; the reader counter is lower or equal
@@ -79,32 +81,34 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer
   (ensures  (fun h0 (rw:reader i * writer i) h1 ->
            let r = fst rw in
            let w = snd rw in
-           (* let bang = fun x -> sel h1 x in  *)
-           modifies Set.empty h0 h1
-         /\ w.region = r.peer_region
-         /\ r.region = w.peer_region
-         /\ extends (w.region) writer_parent
-         /\ extends (r.region) reader_parent
-         /\ fresh_region w.region h0 h1
-         /\ fresh_region r.region h0 h1
-         /\ op_Equality #(log_ref w.region i) w.log r.log  //the explicit annotation here *)
-         /\ m_contains w.counter h1
-         /\ m_contains r.counter h1
-         /\ m_contains w.log h1
-         /\ m_sel h1 w.counter = 0
-         /\ m_sel h1 r.counter = 0
-         /\ m_sel h1 w.log = createEmpty
-         ))
+               (* let bang = fun x -> sel h1 x in  *)
+               modifies Set.empty h0 h1
+               /\ w.region = r.peer_region
+               /\ r.region = w.peer_region
+               /\ extends (w.region) writer_parent
+               /\ extends (r.region) reader_parent
+               /\ fresh_region w.region h0 h1
+               /\ fresh_region r.region h0 h1
+               /\ op_Equality #(log_ref w.region i) w.log r.log  //the explicit annotation here *)
+               /\ m_contains w.counter h1
+               /\ m_contains r.counter h1
+               /\ m_contains w.log h1
+               /\ m_sel h1 w.counter = 0
+               /\ m_sel h1 r.counter = 0
+               /\ m_sel h1 w.log = createEmpty
+               ))
 
-let gen reader_parent writer_parent i =
+assume val gcut : f:(unit -> GTot Type){f ()} -> Tot unit
+
+let gen reader_parent writer_parent i = 
   let kv   = CoreCrypto.random (CoreCrypto.aeadKeySize (alg i)) in
   let iv   = CoreCrypto.random (CoreCrypto.aeadRealIVSize (alg i)) in
   let reader_r = new_region reader_parent in
   let writer_r = new_region writer_parent in
-  lemma_repr_bytes_values 0;
-  let ectr = m_alloc writer_r 0 in
-  let dctr = m_alloc reader_r 0 in
+  lemma_repr_bytes_values 0; 
   let log  = alloc_mref_seq writer_r Seq.createEmpty in 
+  let ectr = MonotoneSeq.new_counter writer_r 0 log in
+  let dctr = MonotoneSeq.new_counter reader_r 0 log in
   let writer  = State #i #Writer #writer_r #reader_r kv iv log ectr in
   let reader  = State #i #Reader #reader_r #writer_r kv iv log dctr in
   reader, writer
@@ -122,7 +126,8 @@ let coerce r0 p0 i role kv iv =
   let r = new_region r0 in
   let p = new_region p0 in
   let log = alloc_mref_seq (if role = Reader then p else r) Seq.createEmpty in
-  let ctr = lemma_repr_bytes_values 0; m_alloc r 0 in
+  lemma_repr_bytes_values 0; 
+  let ctr = MonotoneSeq.new_counter r 0 log in
   State #i #role #r #p kv iv log ctr 
 
 
@@ -131,6 +136,9 @@ val leak: i:id{~(safeId i)} -> role:rw -> state i role -> ST (key i * iv i)
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 let leak i role s = State.key s, State.iv s
 
+
+let is_seqn i n =  repr_bytes n <= aeadRecordIVSize (alg i)
+type seqn i = n:nat { is_seqn i n }
 
 // The per-record nonce for the AEAD construction is formed as follows:
 //
@@ -149,49 +157,42 @@ let aeIV i (n:seqn i) (staticIV: iv i) : iv i =
 // not relying on additional data
 let noAD = empty_bytes
  
-// Raw encryption (on concrete bytes), returns (cipher @| tag)
-// Keeps seqn and nonce implicit; requires the counter not to overflow
-val enc:
-  i:id -> e:writer i -> l:plainLen -> p:lbytes l -> ST (cipher i l)
-    (requires (fun h -> True))
-    (ensures  (fun h0 c h1 ->
-                 modifies (Set.singleton e.region) h0 h1
-               /\ modifies_rref e.region !{as_ref (as_rref e.counter)} h0 h1
-	       /\ m_contains e.counter h1
-               // /\ sel h1 e.counter = sel h0 e.counter + 1
-    ))
+(* // Raw encryption (on concrete bytes), returns (cipher @| tag) *)
+(* // Keeps seqn and nonce implicit; requires the counter not to overflow *)
+(* val enc: *)
+(*   i:id -> e:writer i -> l:plainLen -> p:lbytes l -> ST (cipher i l) *)
+(*     (requires (fun h ->  *)
+(*  	  let next = m_sel h e.counter in *)
+(* 	  is_seqn i (next + 1) /\ *)
+(* 	  next < Seq.length (m_sel h e.log))) *)
+(*     (ensures  (fun h0 c h1 -> *)
+(*                  modifies (Set.singleton e.region) h0 h1 *)
+(*                /\ modifies_rref e.region !{as_ref (as_rref e.counter)} h0 h1 *)
+(* 	       /\ m_contains e.counter h1 *)
+(*                // /\ sel h1 e.counter = sel h0 e.counter + 1 *)
+(*     )) *)
 
-let enc i e l p =
-  m_recall e.counter;
-  let n = m_read e.counter in
-  let iv = aeIV i n e.iv in
-  let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD p in
-  if n + 1 < max_uint64 then
-    begin
-      lemma_repr_bytes_values (n + 1);
-      assert (n + 1 >= n);
-      m_write e.counter (n + 1)
-    end
-  else
-    begin
-      ()
-      //CF revisit; I'd prefer to statically prevent it.
-      // overflow, we don't care
-      // lemma_repr_bytes_values 0;
-      // m_write e.counter 0
-    end;
-   c
+(* let enc i e l p = *)
+(*   m_recall e.counter; *)
+(*   let n = m_read e.counter in *)
+(*   let iv = aeIV i n e.iv in *)
+(*   let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD p in *)
+(*   lemma_repr_bytes_values (n + 1); *)
+(*   (\* assert (n + 1 >= n); *\) *)
+(*   increment_counter e.region e.log e.counter; *)
+(*   c *)
 
 // encryption of plaintexts; safe instances are idealized
 val encrypt:
   i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
-    (requires (fun h0 -> True))
+    (requires (fun h0 -> 
+    	  is_seqn i (m_sel h0 e.counter + 1)))
     (ensures  (fun h0 c h1 ->
                            modifies (Set.singleton e.region) h0 h1
                          /\ modifies_rref e.region !{as_ref (as_rref e.counter), as_ref (as_rref e.log)} h0 h1
                          /\ m_contains e.log h1
                          /\ m_contains e.counter h1
-                         (* /\ sel h1 e.counter = sel h0 e.counter + 1 *)
+                         /\ m_sel h1 e.counter = m_sel h0 e.counter + 1
 			 /\ (let ent = Entry l c p in
 			    let n = Seq.length (m_sel h0 e.log) in
    			      witnessed (MonotoneSeq.at_least n ent e.log)
@@ -205,9 +206,15 @@ let encrypt i e l p =
   m_recall e.log;  
   m_recall e.counter;
   let text = if safeId i then createBytes l 0z else repr i l p in
-  let c = enc i e l text in
-  let ent = Entry l c p in
-  MonotoneSeq.write_at_end e.log ent;
+  let c =
+    let n = m_read e.counter in
+    let iv = aeIV i n e.iv in
+    CoreCrypto.aead_encrypt (alg i) e.key iv noAD text in
+  testify_counter e.counter;    
+  MonotoneSeq.write_at_end e.log (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
+  m_recall e.log;
+  increment_counter e.counter;
+  m_recall e.counter;
   c
 
 
@@ -245,46 +252,46 @@ let dec i d l c =
 //val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
 
-
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt:
   i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i l))
-  (requires (fun h0 -> True))
+  (requires (fun h0 -> is_seqn i (m_sel h0 d.counter + 1)))
   (ensures  (fun h0 res h1 ->
-               modifies (Set.singleton d.region) h0 h1
-             /\ modifies_rref d.region !{as_ref (as_rref d.counter)} h0 h1
-             /\ m_contains d.counter h1
-             /\ (authId i ==>
+	      (authId i ==>
                  (let log :seq (entry i) = m_sel h0 d.log in
-		   match res with
-		     | None -> forall (j:nat{j < Seq.length log}).{:pattern (found j)}
-                                            found j /\ ~(matches l c (Seq.index log j))
-                     | Some p -> exists (j:nat{j < Seq.length log}).{:pattern (found j)}
-                                           found j
-                                           /\ matches l c (Seq.index log j)
-                                           /\ Entry.p (Seq.index log j) == p))))
+		  let j = m_sel h0 d.counter in
+		  if j < Seq.length log && matches l c (Seq.index log j)
+		  then res = Some (Entry.p (Seq.index log j))
+		       /\ m_sel h1 d.counter = j + 1
+		  else res = None))
+	  /\ (match res with
+ 	     | None -> modifies Set.empty h0 h1
+	     | _ -> modifies (Set.singleton d.region) h0 h1
+	           /\ modifies_rref d.region !{as_ref (as_rref d.counter)} h0 h1)))
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt i d l c =
-  m_recall d.log;
+  m_recall d.log; m_recall d.counter;
   let log = m_read d.log in
-  if authId i then
-    begin
-    admit (); // FIXME
-    match seq_find (matches l c) log with
-    | None -> None
-    | Some e -> Some (Entry.p e)
-    end
-  else
-    match dec i d l c with
-    | Some pr ->
-      begin
-      match mk_plain i l pr with
-      | Some p -> Some p
-      | None  -> None
-      end
-    | None -> None
+  let j = m_read d.counter in
+  testify_counter d.counter; //now we know that j is at most the length of the log
+  if authId i 
+  then if j < Seq.length log && matches l c (Seq.index log j)
+       then (increment_counter d.counter;
+	     Some (Entry.p (Seq.index log j)))
+       else None
+  else //concrete
+     let iv = aeIV i j d.iv  in
+     match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with
+     | None -> None
+     | Some pr ->
+	 (match mk_plain i l pr with
+           | Some p -> 
+	     //TODO: WE SHOULD STILL INCREMENT THE COUNTER, but we need conditional idealization first
+	     Some p
+           | None  -> None)
+
 
 (* TODO
 
