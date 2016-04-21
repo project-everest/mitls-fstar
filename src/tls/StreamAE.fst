@@ -63,6 +63,10 @@ let log_ref (r:rid) (i:id) : Tot Type0 =
   then ideal_log r i
   else unit
 
+let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) 
+  : Tot (ideal_log r i) 
+  = l
+  
 let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 = 
   MonotoneSeq.counter r log (aeadRecordIVSize (alg i)) //we have a counter, that's increasing, at most to the min(length log, 2^
   
@@ -113,9 +117,8 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer
                /\ fresh_region r.region h0 h1
                /\ op_Equality #(log_ref w.region i) w.log r.log  //the explicit annotation here *)
 	       /\ (authId i ==>
-  		      (let wlog:ideal_log w.region i = w.log in 
-      		       m_contains wlog h1 /\
-		       m_sel h1 wlog = createEmpty))
+  		      (m_contains (ilog w.log) h1 /\
+		       m_sel h1 (ilog w.log) = createEmpty))
 	       /\  m_contains (ctr w.counter) h1 
 	       /\  m_contains (ctr r.counter) h1 
 	       /\  m_sel h1 (ctr w.counter) == 0 
