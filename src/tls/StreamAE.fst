@@ -74,6 +74,10 @@ let seqn_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 =
   then ideal_ctr r i (log <: ideal_log l i)
   else m_rref r (seqn i) increases
 
+let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log) 
+  : Tot (m_rref r (if authId i then counter_val #l #(entry i) r log (aeadRecordIVSize (alg i)) else (seqn i)) increases)
+  = c
+  
 type state (i:id) (rw:rw) = 
   | State: #region:rid 
          -> #peer_region:rid{HyperHeap.disjoint region peer_region}
@@ -108,22 +112,29 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer
                /\ fresh_region w.region h0 h1
                /\ fresh_region r.region h0 h1
                /\ op_Equality #(log_ref w.region i) w.log r.log  //the explicit annotation here *)
-	       /\ (if authId i
- 	        then let wlog:ideal_log w.region i = w.log in 
-		     let wctr:ideal_ctr w.region i wlog = w.counter in
-		     let rctr:ideal_ctr r.region i wlog = r.counter in
-		     m_contains wlog h1 /\
-		     m_contains wctr h1 /\
-		     m_contains rctr h1 /\
-		     m_sel h1 wctr = 0 /\
-		     m_sel h1 rctr = 0 /\
-		     m_sel h1 wlog = createEmpty
-		else let wctr:concrete_ctr w.region i = w.counter in
-		     let rctr:concrete_ctr r.region i = r.counter in
-		     m_contains wctr h1 /\
-		     m_contains rctr h1 /\
-     		     m_sel h1 wctr = 0 /\
-		     m_sel h1 rctr = 0)))
+	       /\ (authId i ==>
+  		      (let wlog:ideal_log w.region i = w.log in 
+      		       m_contains wlog h1 /\
+		       m_sel h1 wlog = createEmpty))
+	       /\  m_contains (ctr w.counter) h1 
+	       /\  m_contains (ctr r.counter) h1 
+	       /\  m_sel h1 (ctr w.counter) == 0 
+	       /\  m_sel h1 (ctr r.counter) == 0))
+	       
+	       (* let wctr:ideal_ctr w.region i wlog = w.counter in *)
+	       (* 	     let rctr:ideal_ctr r.region i wlog = r.counter in *)
+	       (* 	     m_contains wlog h1 /\ *)
+	       (* 	     m_contains wctr h1 /\ *)
+	       (* 	     m_contains rctr h1 /\ *)
+	       (* 	     m_sel h1 wctr = 0 /\ *)
+	       (* 	     m_sel h1 rctr = 0 /\ *)
+	       (* 	     m_sel h1 wlog = createEmpty *)
+	       (* 	else let wctr:concrete_ctr w.region i = w.counter in *)
+	       (* 	     let rctr:concrete_ctr r.region i = r.counter in *)
+	       (* 	     m_contains wctr h1 /\ *)
+	       (* 	     m_contains rctr h1 /\ *)
+     	       (* 	     m_sel h1 wctr = 0 /\ *)
+	       (* 	     m_sel h1 rctr = 0))) *)
 
 assume val gcut : f:(unit -> GTot Type){f ()} -> Tot unit
 
