@@ -79,9 +79,10 @@ let seqn_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 =
   else m_rref r (seqn i) increases
 
 let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log) 
-  : Tot (m_rref r (if authId i then counter_val #l #(entry i) r log (aeadRecordIVSize (alg i)) else (seqn i)) increases)
-  = c
-  
+  : Tot (m_rref r (if authId i 
+		   then counter_val #l #(entry i) r log (aeadRecordIVSize (alg i)) 
+		   else seqn i) 
+		increases) = c
 type state (i:id) (rw:rw) = 
   | State: #region:rid 
          -> #peer_region:rid{HyperHeap.disjoint region peer_region}
@@ -97,7 +98,6 @@ type state (i:id) (rw:rw) =
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
-
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we might drop this spec, since F* will infer something at least as precise,
@@ -123,21 +123,6 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer
 	       /\  m_contains (ctr r.counter) h1 
 	       /\  m_sel h1 (ctr w.counter) == 0 
 	       /\  m_sel h1 (ctr r.counter) == 0))
-	       
-	       (* let wctr:ideal_ctr w.region i wlog = w.counter in *)
-	       (* 	     let rctr:ideal_ctr r.region i wlog = r.counter in *)
-	       (* 	     m_contains wlog h1 /\ *)
-	       (* 	     m_contains wctr h1 /\ *)
-	       (* 	     m_contains rctr h1 /\ *)
-	       (* 	     m_sel h1 wctr = 0 /\ *)
-	       (* 	     m_sel h1 rctr = 0 /\ *)
-	       (* 	     m_sel h1 wlog = createEmpty *)
-	       (* 	else let wctr:concrete_ctr w.region i = w.counter in *)
-	       (* 	     let rctr:concrete_ctr r.region i = r.counter in *)
-	       (* 	     m_contains wctr h1 /\ *)
-	       (* 	     m_contains rctr h1 /\ *)
-     	       (* 	     m_sel h1 wctr = 0 /\ *)
-	       (* 	     m_sel h1 rctr = 0))) *)
 
 assume val gcut : f:(unit -> GTot Type){f ()} -> Tot unit
 
@@ -208,34 +193,41 @@ let noAD = empty_bytes
 val encrypt:
   i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 -> 
-    	  is_seqn i (m_sel h0 e.counter + 1)))
+    	  is_seqn i (m_sel h0 (ctr e.counter) + 1)))
     (ensures  (fun h0 c h1 ->
                            modifies (Set.singleton e.region) h0 h1
-                         /\ m_contains e.log h1
-                         /\ m_contains e.counter h1
-                         /\ m_sel h1 e.counter = m_sel h0 e.counter + 1
-			 /\ (let ent = Entry l c p in
-			    let n = Seq.length (m_sel h0 e.log) in
-   			      witnessed (MonotoneSeq.at_least n ent e.log)
-                           /\  m_sel h1 e.log = snoc (m_sel h0 e.log) ent)))
+                         /\ (authId i ==> m_contains (ilog e.log) h1)
+                         /\ m_contains (ctr e.counter) h1
+                         /\ m_sel h1 (ctr e.counter) == m_sel h0 (ctr e.counter) + 1
+			 /\ authId i ==> 
+			    (let log = ilog e.log in
+ 			     let ent = Entry l c p in
+			     let n = Seq.length (m_sel h0 log) in
+			      m_contains log h1
+   			   /\ witnessed (MonotoneSeq.at_least n ent log)
+                           /\ m_sel h1 log = snoc (m_sel h0 log) ent)))
 
 (* we primarily model the ideal functionality, the concrete code that actually
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
 let encrypt i e l p =
-  m_recall e.log;  
-  m_recall e.counter;
+  let ctr = ctr e.counter in 
+  m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
-  let c =
-    let n = m_read e.counter in
-    let iv = aeIV i n e.iv in
-    CoreCrypto.aead_encrypt (alg i) e.key iv noAD text in
-  testify_counter e.counter;    
-  MonotoneSeq.write_at_end e.log (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
-  m_recall e.log;
-  increment_counter e.counter;
-  m_recall e.counter;
+  let n = m_read ctr in
+  let iv = aeIV i n e.iv in
+  let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD text in
+  if authId i 
+  then (let ilog = ilog e.log in 
+        m_recall ilog;
+	let ictr : ideal_ctr e.region i ilog = e.counter in
+	testify_counter ictr;
+        MonotoneSeq.write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
+        m_recall ictr;
+	increment_counter ictr; 
+	m_recall ictr)
+  else m_write ctr (n + 1); 
   c
 
 
@@ -246,60 +238,68 @@ private val dec:
   (requires (fun h -> True))
   (ensures  (fun h0 _ h1 ->
       modifies (Set.singleton d.region) h0 h1
-    /\ modifies_rref d.region !{as_ref (as_rref d.counter)} h0 h1
-    /\ m_contains d.counter h1))
-let dec i d l c =
-  m_recall d.counter;
-  let n = m_read d.counter in
-  let iv = aeIV i n d.iv  in
-  match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with
-  | Some p ->
-    if n + 1 < max_uint64 then
-    begin
-      lemma_repr_bytes_values (n + 1);
-      m_write d.counter (n + 1);
-      Some p
-    end
-    else
-    begin
-      //CF revisit; I'd prefer to statically prevent it.
-      // overflow, we don't care
-      // lemma_repr_bytes_values 0;
-      // m_write d.counter 0;
-      None
-    end
-  | None -> None
+    /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
+    /\ m_contains (ctr d.counter) h1))
+(* let dec i d l c = *)
+(*   let ctr = ctr d.counter in  *)
+(*   m_recall ctr; *)
+(*   let n = m_read ctr in *)
+(*   let iv = aeIV i n d.iv  in *)
+(*   match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with *)
+(*   | Some p -> *)
+(*     if n + 1 < max_uint64 then *)
+(*     begin *)
+(*       lemma_repr_bytes_values (n + 1); *)
+(*       m_write d.counter (n + 1); *)
+(*       Some p *)
+(*     end *)
+(*     else *)
+(*     begin *)
+(*       //CF revisit; I'd prefer to statically prevent it. *)
+(*       // overflow, we don't care *)
+(*       // lemma_repr_bytes_values 0; *)
+(*       // m_write d.counter 0; *)
+(*       None *)
+(*     end *)
+(*   | None -> None *)
 
 //val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
+
+let ictr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log{authId i}) 
+  : Tot (ideal_ctr r i (ilog log)) = c
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt:
   i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i l))
-  (requires (fun h0 -> is_seqn i (m_sel h0 d.counter + 1)))
+  (requires (fun h0 -> is_seqn i (m_sel h0 (ctr d.counter) + 1)))
   (ensures  (fun h0 res h1 ->
 	      (authId i ==>
-                 (let log :seq (entry i) = m_sel h0 d.log in
-		  let j = m_sel h0 d.counter in
+                 (let log = m_sel h0 (ilog d.log) in 
+		  let j = m_sel h0 (ctr d.counter) in
 		  if j < Seq.length log && matches l c (Seq.index log j)
 		  then res = Some (Entry.p (Seq.index log j))
-		       /\ m_sel h1 d.counter = j + 1
+		       /\ m_sel h1 (ctr d.counter) == j + 1
 		  else res = None))
 	  /\ (match res with
  	     | None -> modifies Set.empty h0 h1
 	     | _ -> modifies (Set.singleton d.region) h0 h1
-	           /\ modifies_rref d.region !{as_ref (as_rref d.counter)} h0 h1)))
+	           /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1)))
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt i d l c =
-  m_recall d.log; m_recall d.counter;
-  let log = m_read d.log in
-  let j = m_read d.counter in
-  testify_counter d.counter; //now we know that j is at most the length of the log
+  let ctr = ctr d.counter in 
+  m_recall ctr;
+  let j = m_read ctr in
   if authId i 
-  then if j < Seq.length log && matches l c (Seq.index log j)
-       then (increment_counter d.counter;
+  then let ilog = ilog d.log in
+       let log = m_read ilog in
+       let ictr : ideal_ctr d.region i ilog = d.counter in
+       let _ = testify_counter ictr in //now we know that j <= Seq.length log
+       if j < Seq.length log && matches l c (Seq.index log j)
+       then (increment_counter ictr;
+	     m_recall ctr;
 	     Some (Entry.p (Seq.index log j)))
        else None
   else //concrete
@@ -309,7 +309,7 @@ let decrypt i d l c =
      | Some pr ->
 	 (match mk_plain i l pr with
            | Some p -> 
-	     //TODO: WE SHOULD STILL INCREMENT THE COUNTER, but we need conditional idealization first
+	     m_write ctr (j + 1);
 	     Some p
            | None  -> None)
 
