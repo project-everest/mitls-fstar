@@ -49,14 +49,15 @@ let id = {
 let encryptor_TLS13_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let w: writer id =
-    let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in
-    let seqn: seqn_ref r id = FStar.Monotonic.RRef.m_alloc r 0 in
+    (* let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in *)
+    assume (~ (authId id));
+    let seqn: StreamAE.concrete_ctr r id = FStar.Monotonic.RRef.m_alloc r 0 in
     let key: StreamAE.key id = key |> unsafe_coerce in
     let iv: StreamAE.iv id = iv |> unsafe_coerce in
     let key: StreamAE.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
-      StreamAE.State #id #Writer #r #r key iv log seqn
+      StreamAE.State #id #Writer #r #r key iv () seqn
     in
     key
   in
@@ -66,14 +67,14 @@ let encryptor_TLS13_AES_GCM_128_SHA256 key iv =
 let decryptor_TLS13_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let rd: reader id =
-    let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in
-    let seqn: seqn_ref r id = FStar.Monotonic.RRef.m_alloc r 0 in
+    assume (~ (authId id));
+    let seqn: StreamAE.concrete_ctr r id = FStar.Monotonic.RRef.m_alloc r 0 in
     let key: StreamAE.state id Reader =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: StreamAE.key id = key |> unsafe_coerce in
       let iv: StreamAE.iv id = iv |> unsafe_coerce in
-      StreamAE.State #id #Reader #r #r key iv log seqn
+      StreamAE.State #id #Reader #r #r key iv () seqn
     in
     key
   in

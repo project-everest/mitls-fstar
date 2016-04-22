@@ -230,44 +230,8 @@ let encrypt i e l p =
   else m_write ctr (n + 1); 
   c
 
-
-// raw decryption (returning concrete bytes)
-private val dec:
-  i:id{~(authId i)} -> d:reader i -> l:plainLen -> c:cipher i l
-  -> ST (option (lbytes l))
-  (requires (fun h -> True))
-  (ensures  (fun h0 _ h1 ->
-      modifies (Set.singleton d.region) h0 h1
-    /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
-    /\ m_contains (ctr d.counter) h1))
-(* let dec i d l c = *)
-(*   let ctr = ctr d.counter in  *)
-(*   m_recall ctr; *)
-(*   let n = m_read ctr in *)
-(*   let iv = aeIV i n d.iv  in *)
-(*   match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with *)
-(*   | Some p -> *)
-(*     if n + 1 < max_uint64 then *)
-(*     begin *)
-(*       lemma_repr_bytes_values (n + 1); *)
-(*       m_write d.counter (n + 1); *)
-(*       Some p *)
-(*     end *)
-(*     else *)
-(*     begin *)
-(*       //CF revisit; I'd prefer to statically prevent it. *)
-(*       // overflow, we don't care *)
-(*       // lemma_repr_bytes_values 0; *)
-(*       // m_write d.counter 0; *)
-(*       None *)
-(*     end *)
-(*   | None -> None *)
-
 //val matches: #i:id -> l:plainLen -> c:cipher i l -> entry i -> Tot bool
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
-
-let ictr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log{authId i}) 
-  : Tot (ideal_ctr r i (ilog log)) = c
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt:
@@ -317,37 +281,7 @@ let decrypt i d l c =
 (* TODO
 
 - Check that decrypt indeed must use authId and not safeId (like in the F7 code)
-- How to handle counter overflows?
 - Injective allocation table from i to refs
 
 *)
 
-(* another version; we'll probably also need an explicit invariant
-val encrypt: #i:sid -> wr:writer i -> p:plain i -> ST (cipher i (plength p))
-  (requires (fun h ->
-      st_enc_inv wr h /\
-      is_seqn (sel h wr.seqn + 1)))
-  (ensures  (fun h0 c h1 ->
-      st_enc_inv wr h1 /\
-      modifies (Set.singleton wr.region) h0 h1 /\
-      modifies_rref wr.region (refs_in_e wr) h0 h1 /\
-      sel h1 wr.seqn = sel h0 wr.seqn + 1 /\
-      sel h1 wr.log = snoc (sel h0 wr.log) (Entry c p)))
-
-val decrypt: i:sid -> d:reader i -> c:bytes -> ST (option (dplain i c))
-  (requires (fun h ->
-      (authId ==> st_dec_inv rd h) /\
-      is_seqn (sel h rd.seqn + 1)))
-
-  (ensures  (fun h0 res h1 ->
-               modifies Set.empty h0 h1
-             /\ (authId i ==>
-                 Let (sel h0 d.log) // no let, as we still need a type annotation
-                   (fun (log:seq (entry i)) ->
-                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
-                                            found j /\ ~(matches c ad (Seq.index log j))))
-                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
-                                           found j
-                                           /\ matches c ad (Seq.index log j)
-                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
-*)
