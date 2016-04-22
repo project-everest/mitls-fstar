@@ -197,10 +197,8 @@ let testify_counter (#i:rid) (#l:rid) (#a:Type0) (#log:log_t l a) (#repr_max:nat
        (ensures (fun h0 _ h1 -> 
 	   h0=h1 /\
 	   at_most_log_len (m_sel h1 ctr) log h1))
-  = admit()
-    //should be implemented like so
-    (* let n = m_read ctr in *) 
-    (* testify (at_most_log_len n log) *)
+  = let n = m_read ctr in 
+    testify (at_most_log_len n log)
 
 let test (i:rid) (l:rid) (a:Type0) (log:log_t l a) //(p:(nat -> Type))
          (r:counter i log 8) (h:HyperHeap.t) 
