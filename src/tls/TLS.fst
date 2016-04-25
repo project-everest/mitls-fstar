@@ -469,12 +469,22 @@ let send_payload c i f =
         recall c.state;
 	recall c.hs.log;
 	// assert (Map.contains h0 (HS.region c.hs));
+
+(*        
+        // use StreamAE for TLS 1.3
+        if i.pv = TLS_1p3 then 
+        let (_,maxlen) = Content.rg i f in 
+        let r = StreamAE.encrypt i wr maxlen f in 
+        r 
+        else 
+*)        
+        // use StatefulLHAE otherwise
         let ct, rg = Content.ct_rg i f in
         let ad = StatefulPlain.makeAD i ct in
 	cut (witness (iT c.hs Writer h0));
         assert(st_enc_inv wr h0);
         // assert(is_seqn (sel h0 (seqn wr) + 1));
-        let r = encrypt #i #ad #rg wr f in
+        let r = StatefulLHAE.encrypt #i #ad #rg wr f in
         let h1 = ST.get() in
 	frame_writer_epoch c h0 h1;
         r
