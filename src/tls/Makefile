@@ -28,7 +28,7 @@ FSTAR_HOME?=../../.fstar
 
 # The .fst files found in [lib/ml] that are realized in
 # stdlib-hyperheap.cmxa
-STDLIB_ADMITS=All List Heap Set ST HyperHeap IO
+STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
 OTHERFLAGS=--universes --explicit_deps --use_native_int
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
@@ -42,7 +42,7 @@ FSTARFLAGS=$(OTHERFLAGS) \
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
       $(FSTARFLAGS)
 
-PLATFORM_ADMITS=$(addprefix Platform.,Bytes Date Error Tcp)
+PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
 PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
@@ -162,7 +162,7 @@ Connection
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
-ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB DHDB CoreCrypto Cert Handshake)
+ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) SessionDB DHDB CoreCrypto Cert Handshake)
 
 
 # truncates $(FSTS) just before $(basename $@).fst
@@ -235,7 +235,9 @@ LIB_ML= \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa
 
 # .fst files realized elsewhere.
-TLSGEN_ADMIT=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_ADMITS)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
+TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
+
+OUTPUT_DIR=output
 
 # All our extracted modules.
 TLSML := $(FSTS:.p.fst=.ml)
@@ -247,7 +249,7 @@ TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   $(TLSML)
 # Last step: F* currently extracts everything in the current directory
-TLSML := $(notdir $(TLSML))
+TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
 
 # Note to self: there is little point in breaking down this rule into more
 # atomic ones. One may hope that we can only rebuild the .ml files that have
@@ -255,11 +257,12 @@ TLSML := $(notdir $(TLSML))
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
+	mkdir -p $(OUTPUT_DIR)
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
-	  $(TLSGEN_ADMIT) \
+	  --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(filter-out Concrete.fst,$^)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx
@@ -267,11 +270,11 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
 	# # All our .cmx files
-	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -c $(TLSML)
+	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
 	# A .cmxa with all the .cmx above
-	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -o mitls.cmxa
+	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
 	# Then our test executable
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa \
 	         -I test/ test/parsing_test.ml test/test_main.ml -o test.out
 	# Run the test
 	$(EXTRA_PATH) ./test.out
