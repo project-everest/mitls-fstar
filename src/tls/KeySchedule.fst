@@ -230,8 +230,9 @@ let ks_client_12_full_dh ks sr alpha dhp peer_share =
     if nego.ne_extended_ms then
       KS_C_12_wait_MS csr alpha dhpmsId pmsb
     else
-      let kef = kefAlg pv cs true in
+      let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48 in
+//      let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "master secret") csr 48 in
       let msId = StandardMS dhpmsId csr kef in
       KS_12_has_MS Client csr alpha msId ms in
   st := ns; our_share
@@ -258,7 +259,7 @@ let ks_client_12_full_rsa ks sr alpha pk =
     if nego.ne_extended_ms then
       KS_C_12_wait_MS csr alpha rsapmsId pmsb
     else
-      let kef = kefAlg pv cs true in
+      let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48 in
       let msId = StandardMS rsapmsId csr kef in
       KS_12_has_MS Client csr alpha msId ms in
@@ -275,8 +276,8 @@ let ks_client_12_set_session_hash ks session_hash =
   let KS #region cfg st = ks in
   let KS_C_12_wait_MS csr alpha pmsid pms = !st in
   let (pv, cs, nego) = alpha in
-  let kef = kefAlg pv cs nego.ne_extended_ms in
-  let ms = TLSPRF.extract kef pms session_hash 48 in
+  let kef = kefAlg pv cs true in
+  let ms = TLSPRF.prf_hashed (pv,cs) pms (utf8 "extended master secret") session_hash 48 in
   let msId = ExtendedMS pmsid session_hash kef in
   st := KS_12_has_MS Client csr alpha msId ms
 
@@ -294,6 +295,7 @@ val ks_12_finished: ks:ks -> bytes -> ST (vd:bytes * wk:bytes * wiv:bytes * rk:b
 let ks_12_finished ks log =
   let KS #region cfg st = ks in
   let KS_12_has_MS role csr alpha msId ms = !st in
+  let cr, sr = split csr 32 in
   let (pv, cs, nego) = alpha in
   let vd = TLSPRF.verifyData (pv,cs) ms role log in
   let ae_id = {
@@ -305,7 +307,7 @@ let ks_12_finished ks log =
     ext = nego;
     writer = role
   } in
-  let expand = TLSPRF.kdf ae_id.kdfAlg ms csr 40 in
+  let expand = TLSPRF.kdf ae_id.kdfAlg ms (sr @| cr) 40 in
   let k1, expand = split expand 16 in
   let k2, expand = split expand 16 in
   let iv1, iv2 = split expand 4 in

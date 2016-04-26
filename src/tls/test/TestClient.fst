@@ -24,6 +24,7 @@ let config =
          minVer = TLS_1p2;
     	 maxVer = TLS_1p2;
 	 ciphersuites = csn;
+         safe_resumption = true;
 	 }
 
 let id = {
@@ -33,7 +34,7 @@ let id = {
     aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
     csrConn = bytes_of_hex "";
     ext = {
-      ne_extended_ms = false;
+      ne_extended_ms = true;
       ne_extended_padding = false;
       ne_secure_renegotiation = RI_Unsupported;
       ne_supported_curves = None;
@@ -175,45 +176,45 @@ let recvEncAppDataRecord tcp pv rd =
 
 (* Flex Handshake *)
 
-
-let deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr = 
-  let b = TLSPRF.kdf id.kdfAlg ms (sr @| cr) 40 in
-  let cekb, b = split b 16 in
-  let sekb, b = split b 16 in
-  let civb, sivb = split b 4 in
-  (cekb,civb,sekb,sivb)
-
-    
 let main host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
   let tcp = Platform.Tcp.connect host port in
   let rid = new_region root in
   let log = empty_bytes in
-  let ks = KeySchedule.create rid config Client in
-  
-  let (None,ch,chb) = Handshake.prepareClientHello config None None in
+
+  let ks = KeySchedule.create #rid config Client in
+  let cr, _ = KeySchedule.ks_client_init_12 ks in  
+  let _, ch, _ = Handshake.prepareClientHello config None None in
+  let ch = {ch with ch_client_random = cr} in
+
   let pv = ch.ch_protocol_version in 
   let kex = TLSConstants.Kex_ECDHE in
   let log = sendHSRecord tcp pv (ClientHello ch) log in
 
   let ServerHello(sh),log = recvHSRecord tcp pv kex log in
-  let Correct (n,None) = Handshake.processServerHello config None [] ch sh in
+  let Correct n = TLSExtensions.negotiateClientExtensions sh.sh_protocol_version config ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite None false in
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
+  let sr = sh.sh_server_random in
   let CipherSuite kex sa ae = cs in
+  let alpha = (pv, cs, n) in
+  let ems = n.ne_extended_ms in
 
   let Certificate(sc),log = recvHSRecord tcp pv kex log in
   let ServerKeyExchange(ske),log = recvHSRecord tcp pv kex log in
   let ServerHelloDone,log = recvHSRecord tcp pv kex log in
 
+  let dhp = CommonDH.ECP ({CoreCrypto.curve = CoreCrypto.ECC_P256; CoreCrypto.point_compression = false; }) in
   let KEX_S_DHE gy = ske.ske_kex_s in
-  let gx, pms = CommonDH.dh_responder gy in
+  let gx = KeySchedule.ks_client_12_full_dh ks sr alpha dhp gy in
   let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-  let log = sendHSRecord tcp pv (ClientKeyExchange cke) log in
 
-  let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") (ch.ch_client_random @| sh.sh_server_random)  48 in
-  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
-  let (ck,civ,sk,siv) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms ch.ch_client_random sh.sh_server_random in
+  let log = sendHSRecord tcp pv (ClientKeyExchange cke) log in
+  if ems then KeySchedule.ks_client_12_set_session_hash ks log;
+
+  if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
+//  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
+  let (cvd, ck, civ, sk, siv) = KeySchedule.ks_12_finished ks log in
   IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
   IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
   IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
@@ -221,7 +222,7 @@ let main host port =
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
-  let cfin = {fin_vd = TLSPRF.verifyData (pv,cs) ms Client log} in 
+  let cfin = {fin_vd = cvd} in
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
 
@@ -236,6 +237,11 @@ let main host port =
 
   sendRecord tcp pv Content.Application_data get "GET /";
   let ad = recvEncAppDataRecord tcp pv rd in
+//  let ad = recvEncAppDataRecord tcp pv rd in
+//  let ad = recvEncAppDataRecord tcp pv rd in
+//  let ad = recvEncAppDataRecord tcp pv rd in
+//  let ad = recvEncAppDataRecord tcp pv rd in
+//  let ad = recvEncAppDataRecord tcp pv rd in
   ()
 
   
