@@ -145,6 +145,17 @@ let prf (pv,cs) secret (label:bytes) data len =
   | TLS_1p0 | TLS_1p1 -> tls_prf     secret label data len
   | TLS_1p2           -> tls12prf cs secret label data len
 
+// This is for Extended Master Secret
+// The data is hashed using the PV/CS-specific hash function
+val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> Tot bytes
+let prf_hashed (pv, cs) secret label data len =
+  let data = match pv with
+    | TLS_1p2 ->
+      let sessionHashAlg = verifyDataHashAlg_of_ciphersuite cs in
+      hash sessionHashAlg data
+    | _ -> data in
+  prf (pv, cs) secret label data len
+
 let prf' a secret data len =
     match a with
     | PRF_TLS_1p2 label macAlg -> tls12prf' macAlg secret label data len  // typically SHA256 but may depend on CS

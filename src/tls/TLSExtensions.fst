@@ -414,8 +414,7 @@ let prepareExtensions (cfg:config) (conn:connectionInfo) ri ks =
        match cfg.maxVer,ks with
        | TLS_1p3,Some ks -> (E_keyShare ks)::res
        | _,_ -> res in
-//Disabling extended ms
-//    let res = E_extended_ms :: res in
+    let res = if cfg.safe_resumption then E_extended_ms :: res else res in
 //No extended padding for now
 //    let res = E_extended_padding :: res in
     let res = (E_signatureAlgorithms cfg.signatureAlgorithms) :: res in
