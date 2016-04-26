@@ -85,10 +85,10 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log)
 		increases) = c
 type state (i:id) (rw:rw) = 
   | State: #region:rid 
-         -> #peer_region:rid{HyperHeap.disjoint region peer_region}
+         -> #log_region:rid{if rw=Writer then region = log_region else HyperHeap.disjoint region log_region }
          -> key:key i
          -> iv: iv i
-         -> log: log_ref (if rw=Reader then peer_region else region) i // ghost, subject to cryptographic assumption
+         -> log: log_ref log_region i // ghost, subject to cryptographic assumption
          -> counter: seqn_ref region i log // types are sufficient to anti-alias log and counter
          -> state i rw
 // Some invariants:
@@ -99,53 +99,62 @@ type state (i:id) (rw:rw) =
 type writer i = s:state i Writer
 type reader i = s:state i Reader
 
+//16-04-25 multiple-reader style: we fork new readers from the writer.
+
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we might drop this spec, since F* will infer something at least as precise,
 // but we keep it for documentation)
-val gen: reader_parent:rid -> writer_parent:rid -> i:id -> ST (reader i * writer i)
-  (requires (fun h0 -> HyperHeap.disjoint reader_parent writer_parent))
-  (ensures  (fun h0 (rw:reader i * writer i) h1 ->
-           let r = fst rw in
-           let w = snd rw in
-               (* let bang = fun x -> sel h1 x in  *)
-               modifies Set.empty h0 h1
-               /\ w.region = r.peer_region
-               /\ r.region = w.peer_region
-               /\ extends (w.region) writer_parent
-               /\ extends (r.region) reader_parent
-               /\ fresh_region w.region h0 h1
-               /\ fresh_region r.region h0 h1
-               /\ op_Equality #(log_ref w.region i) w.log r.log  //the explicit annotation here *)
-	       /\ (authId i ==>
+val gen: parent:rid -> i:id -> ST (writer i)
+  (requires (fun h0 -> True))
+  (ensures  (fun h0 (w:writer i) h1 ->
+               modifies Set.empty h0 h1 /\
+               extends (w.region) parent /\
+               fresh_region w.region h0 h1 /\
+	       (authId i ==>
   		      (m_contains (ilog w.log) h1 /\
-		       m_sel h1 (ilog w.log) = createEmpty))
-	       /\  m_contains (ctr w.counter) h1 
-	       /\  m_contains (ctr r.counter) h1 
-	       /\  m_sel h1 (ctr w.counter) == 0 
-	       /\  m_sel h1 (ctr r.counter) == 0))
+		       m_sel h1 (ilog w.log) = createEmpty)) /\
+	       m_contains (ctr w.counter) h1 /\
+	       m_sel h1 (ctr w.counter) == 0))
+
+val genReader: parent:rid -> i:id -> w:writer i -> ST (reader i)
+  (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
+  (ensures  (fun h0 (r:reader i) h1 ->
+               modifies Set.empty h0 h1 /\
+               r.log_region = w.region /\
+               extends (r.region) parent /\
+               fresh_region r.region h0 h1 /\
+               op_Equality #(log_ref w.region i) w.log r.log /\
+	       m_contains (ctr r.counter) h1 /\
+	       m_sel h1 (ctr r.counter) == 0))
 
 assume val gcut : f:(unit -> GTot Type){f ()} -> Tot unit
 
-let gen reader_parent writer_parent i = 
+let gen parent i = 
   let kv   = CoreCrypto.random (CoreCrypto.aeadKeySize (alg i)) in
   let iv   = CoreCrypto.random (CoreCrypto.aeadRealIVSize (alg i)) in
-  let reader_r = new_region reader_parent in
-  let writer_r = new_region writer_parent in
+  let writer_r = new_region parent in
   lemma_repr_bytes_values 0; 
   if authId i
   then let log  : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in 
        let ectr : ideal_ctr writer_r i log = MonotoneSeq.new_counter writer_r 0 log in
-       let dctr : ideal_ctr reader_r i log = MonotoneSeq.new_counter reader_r 0 log in
-       let writer  = State #i #Writer #writer_r #reader_r kv iv log ectr in
-       let reader  = State #i #Reader #reader_r #writer_r kv iv log dctr in
-       reader, writer
+       State #i #Writer #writer_r #writer_r kv iv log ectr
   else let ectr : concrete_ctr writer_r i = m_alloc writer_r 0 in
-       let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
-       let writer  = State #i #Writer #writer_r #reader_r kv iv () ectr in
-       let reader  = State #i #Reader #reader_r #writer_r kv iv () dctr in
-       reader, writer
-      
+       State #i #Writer #writer_r #writer_r kv iv () ectr 
 
+//16-04-25 bad syntax? let genReader parent (State #i #_ #writer_r #_ kv iv log _) = 
+//16-04-25 still getting an error below
+let genReader parent i w = 
+  let reader_r = new_region parent in
+  lemma_repr_bytes_values 0; 
+  if authId i
+  then let log  : ideal_log w.region i = w.log in 
+       let dctr : ideal_ctr reader_r i log = MonotoneSeq.new_counter reader_r 0 log in
+       State #i #Reader #reader_r #(w.region) w.key w.iv w.log dctr 
+  else let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
+       State #i #Reader #reader_r #(w.region) w.key w.iv () dctr 
+
+
+(* 16-04-25 TODO
 // Coerce an instance with index i in a fresh sub-region of r0
 val coerce: r0:rid -> p0:rid -> i:id{~(authId i)} -> role:rw -> kv:key i -> iv:iv i -> ST (state i role)
   (requires (fun h0 -> disjoint r0 p0))
@@ -168,7 +177,7 @@ val leak: i:id{~(authId i)} -> role:rw -> state i role -> ST (key i * iv i)
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 let leak i role s = State.key s, State.iv s
 
-
+*)
 
 // The per-record nonce for the AEAD construction is formed as follows:
 //

@@ -179,6 +179,9 @@ val currentEpoch: c:connection -> rw:rw -> ST (option (epoch (HS.region c.hs) (H
     st_inv c h1 /\
     o = currentEpochT c rw h0 /\
     (is_Some o /\ rw = Writer ==> st_enc_inv (writer_epoch (Some.v o)) h0)))
+//16-04-25 getting an error above: Failed to verify implicit argument: Subtyping check failed; expected type (uu___#6596:(Prims.option<0> (Handshake.epoch (Handshake.HS.region (Connection.C.hs c)) (Handshake.HS.peer (Connection.C.hs c)))){(Prims.b2t (Prims.is_Some<0> uu___@0))}); got type (Prims.option<0> (Handshake.epoch (Handshake.HS.region (Connection.C.hs c)) (Handshake.HS.peer (Connection.C.hs c))))
+
+
 let currentEpoch c rw =
   let es = !c.hs.log in
   epchT es (i c.hs rw)

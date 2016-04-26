@@ -31,6 +31,7 @@ FSTAR_HOME?=../../.fstar
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
 OTHERFLAGS=--universes --explicit_deps --use_native_int
+# --trace_error --print_universes 
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
 hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst FStar.Float.fsti FStar.IO.fsti FStar.UInt8.fst
