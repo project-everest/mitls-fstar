@@ -80,14 +80,18 @@ val minMaxPad: id2 -> Tot range
 let minMaxPad i = (fixedPadSize i, maxPadSize i)
 #set-options "--initial_ifuel 1"
 
-type valid_clen (i:id2) (clen:nat) =
-     (is_AEAD i.aeAlg ==>
-        0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i
-      /\ clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length)
-   /\ (~(is_AEAD i.aeAlg) ==>
-        0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i
-      /\ clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length)
-
+// Shared between StreamAE and StatefulLHAE
+type valid_clen (i:id) (clen:nat) = (
+  if i.pv = TLS_1p3 then
+     let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
+     tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 
+  else 
+    if is_AEAD i.aeAlg then
+      0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
+      clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+    else 
+      0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\ 
+      clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length)
 
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
