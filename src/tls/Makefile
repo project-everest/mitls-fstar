@@ -282,12 +282,12 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 
 tls-client:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-	         -I test/ test/test_client.ml -o client.out
+	         -I test/ -I output/ test/test_client.ml -o client.out
 	$(EXTRA_PATH) ./client.out 1.2 google.com 443
 
 tls-server:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-	         -I test/ test/test_server.ml -o server.out
+	         -I test/ -I output/ test/test_server.ml -o server.out
 	$(EXTRA_PATH) ./server.out 0.0.0.0 4443
 
 # ------------------ preprocessing :( -----------------------
