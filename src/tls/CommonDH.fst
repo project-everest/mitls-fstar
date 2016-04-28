@@ -59,6 +59,12 @@ let serialize k =
   | FFKey k -> DHGroup.serialize k.dh_params k.dh_public
   | ECKey k -> ECGroup.serialize k.ec_params k.ec_point
 
+val key_params: key -> Tot params
+let key_params k =
+  match k with
+  | FFKey k -> FFP k.dh_params
+  | ECKey k -> ECP k.ec_params
+
 (*
 let checkParams dhdb minSize (p:parameters) =
     match p with

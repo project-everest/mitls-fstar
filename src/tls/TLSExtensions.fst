@@ -516,7 +516,9 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) 
         if resuming then None
         else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
     | E_supported_groups(l) -> None
-    | E_extended_ms -> None (* TODO: Implemented EMS and enable it here: Some(E_extended_ms) *)
+    | E_extended_ms -> 
+        if cfg.safe_resumption then Some(E_extended_ms)
+        else None
     | E_extended_padding ->
         if resuming then
             None
@@ -559,7 +561,8 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
         if resuming then
             neg
         else
-            {neg with ne_extended_ms = true}
+            // If EMS is disabled in config, don't negotiate it
+            {neg with ne_extended_ms = cfg.safe_resumption}
     | E_extended_padding ->
         if resuming then
             neg

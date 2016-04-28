@@ -210,11 +210,11 @@ let main host port =
   let cke = {cke_kex_c = kex_c_of_dh_key gx} in
 
   let log = sendHSRecord tcp pv (ClientKeyExchange cke) log in
-  if ems then KeySchedule.ks_client_12_set_session_hash ks log;
+  if ems then KeySchedule.ks_12_set_session_hash ks log;
 
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
 //  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
-  let (cvd, ck, civ, sk, siv) = KeySchedule.ks_12_finished ks log in
+  let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
   IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
   IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
   IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
@@ -222,7 +222,7 @@ let main host port =
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
-  let cfin = {fin_vd = cvd} in
+  let cfin = {fin_vd = KeySchedule.ks_12_verify_data ks log} in
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
 

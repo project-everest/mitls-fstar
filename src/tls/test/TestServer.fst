@@ -35,7 +35,7 @@ let id = {
     aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
     csrConn = bytes_of_hex "";
     ext = {
-      ne_extended_ms = false;
+      ne_extended_ms = true;
       ne_extended_padding = false;
       ne_secure_renegotiation = RI_Unsupported;
       ne_supported_curves = None;
@@ -191,8 +191,10 @@ let deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr =
 let rec aux sock =
   let tcp = Platform.Tcp.accept sock in
   let log = empty_bytes in
+  let rid = new_region root in
   let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
+  let ks = KeySchedule.create #rid config Server in
 
   // Get client hello
   let ClientHello(ch), log = recvHSRecord tcp pv kex log in
@@ -211,13 +213,19 @@ let rec aux sock =
 		    | Error (x,z) -> failwith z) in
   let tag, shb = split shb 4 in
   let sh = match parseServerHello shb with | Correct s -> s | Error (y,z) -> failwith z in
+ 
+  let nego = match nego with | {Handshake.n_extensions = n} -> n  in
   let pv = sh.sh_protocol_version in
-  let log = sendHSRecord tcp pv (ServerHello sh) log in
-
   let sr = sh.sh_server_random in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
   let alg = (sa, Hash CoreCrypto.SHA256) in
+  let alpha = (pv, cs, nego) in
+  let sr, gy = KeySchedule.ks_server_12_init_dh ks cr alpha in
+  let sh = {sh with sh_server_random = sr} in
+  let ems = nego.ne_extended_ms in
+
+  let log = sendHSRecord tcp pv (ServerHello sh) log in
 
   // Server Certificate
   let Correct (chain, csk) = Cert.lookup_server_chain "../../data/test_chain.pem" "../../data/test_chain.key" pv (Some sa) None in
@@ -226,8 +234,6 @@ let rec aux sock =
   let log = sendHSRecord tcp pv (Certificate c) log in
 
   // Server Key Exchange
-  let dhp = ECGroup.params_of_group CoreCrypto.ECC_P256 in
-  let gy = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
   let kex_s = KEX_S_DHE gy in
   let sv = kex_s_to_bytes kex_s in
   let csr = cr @| sr in
@@ -239,6 +245,9 @@ let rec aux sock =
 
   // Get Client Key Exchange
   let ClientKeyExchange(cke), log = recvHSRecord tcp pv kex log in
+  let CommonDH.ECP dhp = CommonDH.key_params gy in
+  if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
+
   let gx = match cke with
     | {cke_kex_c = KEX_C_ECDHE u} -> u
     | _ -> failwith "Bad CKE type" in
@@ -246,21 +255,25 @@ let rec aux sock =
   let gx = match ECGroup.parse_point dhp gx with | Some u -> u | _ -> failwith "point parse failure" in
   IO.print_string "Recasting g^x...\n";
   let gx = CommonDH.ECKey ({CoreCrypto.ec_point = gx; CoreCrypto.ec_priv = None; CoreCrypto.ec_params = dhp;}) in
-  let pms = CommonDH.dh_initiator gy gx in
-  IO.print_string ("PMS:"^(Platform.Bytes.print_bytes pms)^"\n");
+  KeySchedule.ks_server_12_cke_dh ks gx;
+  if ems then KeySchedule.ks_12_set_session_hash ks log;
 
+  // Now internal to KS
+//  let pms = CommonDH.dh_initiator gy gx in
+//  IO.print_string ("PMS:"^(Platform.Bytes.print_bytes pms)^"\n");
   // Compute MS
-  let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") csr 48 in
-  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
-  let (sk,siv,ck,civ) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr in
+//  let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") csr 48 in
+//  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
+//  let (sk,siv,ck,civ) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr in
+  let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
-  // Get CCS/Fin
   let _ = recvCCSRecord tcp pv in
   let Finished(cfin),log = recvEncHSRecord tcp pv kex log rd in
 
-  let sfin = {fin_vd = TLSPRF.verifyData (pv,cs) ms Server log} in
+  let svd = KeySchedule.ks_12_verify_data ks log in
+  let sfin = {fin_vd = svd} in
   let (str,sfinb,log) = makeHSRecord pv (Finished sfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake sfinb in
 

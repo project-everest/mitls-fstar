@@ -42,10 +42,8 @@ open HSCrypto
 // of id to appear in StatefulLHAE.
 
 //abstract type ms = b:bytes{length b == 48}
-// ADL: Unsound!!
 type ms = bytes
 type pms = PMS.pms 
-// Requires meta-argument to show that pms is not used concretely in other modules
 
 // type pms =
 // | DH_PMS of CommonDH.dhpms // concrete
@@ -77,62 +75,6 @@ type pms = PMS.pms
 // abstract type pre_share_key = b:bytes{}
 //type pre_shared_key = PSK.psk
 
-// ******************************************
-// ADL: I don't think these can be module-wide variables
-// let's encapsulate in state
-//val cert_keys: ref RSAKey.RSA_PK; 
-//val ticket_key: ref bytes // TODO
-// ******************************************
-
-(**
- ** ADL: commenting out this attempt to share common arguments
- ** (e.g. PMS, DH values) accross similar states (client/server, 1.2/1.3...)
- ** Below is the more standard encoding of arguments as part of
- ** the key exchange internal state, at the cost of heavy redundancy
- ** and a state space blowup.
- **
-type client_schedule_state =
-| C_KXS_INIT //initial state, state to get back to for renegotiation
-| C_KXS_NEGO //process server finished and go to one of following states, corresponds to C_HelloSent 
-| C_KXS12_RESUME //separate states for different handshake modes, these correspond to C_HelloReceived
-| C_KXS12_DHE
-| C_KXS12_RSA
-| C_KXS12_FINISH // keys are derived, only finished message computation, corresponds to C_CCSReceived
-//TLS13
-| C_KXS13_NEGO
-| C_KXS13_PSK
-
-
-type server_schedule_state =
-| S_KXS_INIT
-| S_KXS_NEGO //process server finished
-| S_KXS12_RESUME //separate states for different handshake modes
-| S_KXS12_DHE
-| S_KXS12_RSA
-| S_KXS12_RSA
-
-type schedule_state =
-| KXS_Client of client_schedule_state
-| KXS_Server of server_schedule_state
-
-type ks =
-  | KS:
-    #r:rid ->
-    cfg:config ->
-    r:role ->
-    pv: rref r ProtocolVersion ->
-    alpha: rref r alpha ->
-    dh_secret: rref r (option bytes) ->
-    our_share: rref r (option CommonDH.share) ->
-    peer_share: rref r (option CommonDH.share) ->
-    dh_pms: rref r (option PMS.dhpms) ->
-    msId: rref r (option TLSInfo.msId) ->
-    ms: rref r (option bytes) ->
-    pmsId: rref r (option TLSInfo.pmsId) ->
-    state: rref r schedule_state ->
-    ks
-
-**)
 
 // Agility parameters, extend as needed
 // may be moved to TLSInfo for joint idealization with Handshake
@@ -140,13 +82,18 @@ type ks_alpha = pv:protocolVersion * cs:cipherSuite * nego:negotiatedExtensions
 
 // Internal KS state, now with ad-hoc parameters
 type ks_state =
+// Client
 | KS_C_Init
 | KS_C_12_Resume_CH: cr:random -> si:sessionInfo -> msId:TLSInfo.msId -> ms:ms -> ks_state
 | KS_C_12_Full_CH: cr:random -> ks_state
 | KS_C_12_wait_MS: csr:csRands -> alpha:ks_alpha -> id:TLSInfo.pmsId -> pms:bytes -> ks_state
 | KS_12_has_MS: r:role -> csr:csRands -> alpha:ks_alpha -> id:TLSInfo.msId -> ms:ms -> ks_state
+// Server
 | KS_S_Init
-| KS_Done
+| KS_S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha -> our_share:CommonDH.key -> ks_state
+| KS_S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha -> ks_state
+| KS_S_12_wait_MS: csr:csRands -> alpha:ks_alpha -> id:TLSInfo.pmsId -> pms:bytes -> ks_state // This state could be removed by always passing the session hash to ks_server_12_cke_dh as it is always available at CKE
+| KS_Done // PMS and MS must be deleted from memory
 
 type ks =
 | KS: #region:rid -> cfg:config -> state:rref region ks_state -> ks
@@ -158,7 +105,9 @@ val create: #rid:rid -> config -> role -> ST ks
   (ensures fun h0 r h1 ->
     let KS #ks_region cfg state = r in
     fresh_region ks_region h0 h1
-    /\ extends ks_region rid)
+    /\ extends ks_region rid
+    /\ modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref state} h0 h1)
 
 let create #rid cfg r =
   ST.recall_region rid;
@@ -170,7 +119,10 @@ let create #rid cfg r =
 // (the external style of resumption may become internal to protect ms abstraction)
 val ks_client_init_12: ks:ks -> ST (random * option sessionInfo)
   (requires fun h0 -> sel h0 (KS.state ks) = KS_C_Init)
-  (ensures fun h0 r h1 -> True)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
 
 // TODO resumption support
 let ks_client_init_12 ks =
@@ -185,6 +137,63 @@ let ks_client_init_12 ks =
   (KS.state ks) := ns;
   cr, osi
 
+val ks_server_12_init_dh: ks:ks -> cr:random -> alpha:ks_alpha -> ST (random * CommonDH.key)
+  (requires fun h0 ->
+    let (pv, cs, nego) = alpha in
+    sel h0 (KS.state ks) = KS_S_Init
+    /\ is_CipherSuite cs
+    /\ (let CipherSuite kex sa ae = cs in
+         (kex = Kex_DHE \/ kex = Kex_ECDHE)))
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_server_12_init_dh ks cr alpha =
+  let KS #region cfg st = ks in
+  let (pv, cs, nego) = alpha in
+  let sr = Nonce.mkHelloRandom () in
+  let CipherSuite kex sa ae = cs in
+  let group = 
+    match kex with
+    | Kex_ECDHE ->
+      (match nego.ne_supported_curves with
+      | Some (h::_) -> CommonDH.ECDH h
+      | _ -> CommonDH.ECDH (CoreCrypto.ECC_P256))
+    | Kex_DHE -> CommonDH.default_group in // TODO FFDH
+  let our_share = CommonDH.keygen group in
+  let csr = cr @| sr in
+  st := KS_S_12_wait_CKE_DH csr alpha our_share;
+  (sr, our_share)
+
+val ks_server_12_cke_dh: ks:ks -> peer_share:CommonDH.key -> ST unit
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_KS_S_12_wait_CKE_DH kss)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_server_12_cke_dh ks peer_share =
+  let KS #region cfg st = ks in
+  let KS_S_12_wait_CKE_DH csr alpha our_share = !st in
+  let (pv, cs, nego) = alpha in
+  let pmsb = CommonDH.dh_initiator our_share peer_share in
+  let dhp = CommonDH.key_params our_share in
+  let pms = PMS.DHPMS(dhp, our_share, peer_share, PMS.ConcreteDHPMS(pmsb)) in
+  let pmsId = TLSInfo.SomePmsId(pms) in
+  let kef = kefAlg pv cs nego.ne_extended_ms in
+  let ms = TLSPRF.extract kef pmsb csr 48 in
+  let ns =
+    if nego.ne_extended_ms then
+     KS_S_12_wait_MS csr alpha pmsId pmsb
+    else
+      let ms = TLSPRF.extract kef pmsb csr 48 in
+      let msId = StandardMS pmsId csr kef in
+      KS_12_has_MS Server csr alpha msId ms in
+   st := ns
+
 // Called after receiving server hello; server accepts resumption proposal
 // This function only checks the agility paramaters compared to the resumed sessionInfo
 // and returns to the handshake whether the resumption is permissible
@@ -196,7 +205,10 @@ val ks_client_12_resume: ks:ks -> random -> alpha:ks_alpha -> ST unit
     /\ (let si = KS_C_12_Resume_CH.si kss in
       si.protocol_version = pv /\ si.cipher_suite = cs
       /\ (si.extensions.ne_extended_ms <==> nego.ne_extended_ms)))
-  (ensures fun h0 cvd h1 -> True)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_resume ks sr alpha =
   let KS #region cfg st = ks in
@@ -214,7 +226,10 @@ val ks_client_12_full_dh: ks:ks -> random -> ks_alpha -> CommonDH.params -> peer
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_KS_C_12_Full_CH st \/ is_KS_C_12_Resume_CH st)
-  (ensures fun h0 r h1 -> True)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_full_dh ks sr alpha dhp peer_share =
   let KS #region cfg st = ks in
@@ -242,7 +257,10 @@ val ks_client_12_full_rsa: ks:ks -> random -> ks_alpha -> RSAKey.pk -> ST bytes
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_KS_C_12_Full_CH st \/ is_KS_C_12_Resume_CH st)
-  (ensures fun h0 r h1 -> True)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_full_rsa ks sr alpha pk =
   let KS #region cfg st = ks in
@@ -266,38 +284,44 @@ let ks_client_12_full_rsa ks sr alpha pk =
   st := ns; encrypted
 
 // This MUST be called by handshake as soon as session hash is available if EMS was negotiated
-val ks_client_12_set_session_hash: ks:ks -> bytes -> ST unit
+val ks_12_set_session_hash: ks:ks -> bytes -> ST unit
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
-    is_KS_C_12_wait_MS st)
-  (ensures fun h0 r h1 -> True)
+    is_KS_C_12_wait_MS st \/ is_KS_S_12_wait_MS st)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_client_12_set_session_hash ks session_hash =
+let ks_12_set_session_hash ks session_hash =
   let KS #region cfg st = ks in
-  let KS_C_12_wait_MS csr alpha pmsid pms = !st in
+  let role, csr, alpha, pmsId, pms =
+    match !st with
+    | KS_C_12_wait_MS csr alpha pmsId pms -> Client, csr, alpha, pmsId, pms
+    | KS_S_12_wait_MS csr alpha pmsId pms -> Server, csr, alpha, pmsId, pms in
   let (pv, cs, nego) = alpha in
   let kef = kefAlg pv cs true in
   let ms = TLSPRF.prf_hashed (pv,cs) pms (utf8 "extended master secret") session_hash 48 in
-  let msId = ExtendedMS pmsid session_hash kef in
-  st := KS_12_has_MS Client csr alpha msId ms
+  let msId = ExtendedMS pmsId session_hash kef in
+  st := KS_12_has_MS role csr alpha msId ms
 
 // *********************************************************************************
 //  All functions below assume that the MS is already computed (and thus they are
 //  shared accross role, key exchange, handshake mode...)
 // *********************************************************************************
 
-val ks_12_finished: ks:ks -> bytes -> ST (vd:bytes * wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
+val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_KS_12_has_MS st)
-  (ensures fun h0 r h1 -> True)
+  (ensures fun h0 r h1 ->
+    modifies Set.empty h0 h1)
 
-let ks_12_finished ks log =
+let ks_12_get_keys ks =
   let KS #region cfg st = ks in
   let KS_12_has_MS role csr alpha msId ms = !st in
   let cr, sr = split csr 32 in
   let (pv, cs, nego) = alpha in
-  let vd = TLSPRF.verifyData (pv,cs) ms role log in
   let ae_id = {
     msId = msId;
     kdfAlg = kdfAlg pv cs;
@@ -315,86 +339,21 @@ let ks_12_finished ks log =
     match role with
     | Client -> k1, iv1, k2, iv2
     | Server -> k2, iv2, k1, iv1 in
-  st := KS_Done; // Destroy MS
-  (vd, wk, wiv, rk, riv)
+  (wk, wiv, rk, riv)
 
+val ks_12_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
+  (requires fun h0 ->
+    let st = sel h0 (KS.state ks) in
+    is_KS_12_has_MS st)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
 
-(* MK: older experiment with Antoine
-
-val kx_init: #region:rid -> role:role -> pv:pv -> g:dh_group -> gx:option dh_pub{gx=None <==> (pv=TLS_1p3 /\ role = Client) \/ (role = Server /\ pv<>TLS_1p3)} -> ST dh_pub
-
-val kx_set_peer: #region:rid -> gx:dh_pub -> ST unit (requires (sel !state_map rid).kx_state = KX .... ) 
-
-// New handshake interface:
-//val dh_init_server_exchange: #region:rid -> g:dh_group -> ST (gy: dh_key)
-//val dh_client_exchange: #region:rid -> g:
-
-// TLS 1.2 + 1.3
-// state-aware
-val dh_next_key: #region:rid -> log:bytes -> 
-
-*)
-
-// OLD 
-
-(*
-assume val dh_commit
-assume val dh_server_verify
-assume val dh_client_verify
-
-(* For TLS12 and below only the server keeps state concretely *)
-type ks_12S =
-    | KS_12S: #region: rid -> x: rref region (KEX_S_PRIV) -> ks_12S
-    
-  
-(* For TLS13 both client and server keep state concretely *)    
-type ks_13C
-    | KS_13C: #region: rid -> x: rref region HSCrypto.dh_key -> ks_13C
-    ...
-
-
-(* for idealization we need a global log *)
-type state =
-  | Init
-  | Committed of ProtocolVersion * aeAlg * negotiatedExtensions
-  | Derived: a:id -> b:id -> derived a b -> state
-  
-type kdentry = CsRands * state 
-let kdlog : ref<list<kdentry>> = ref [] 
-  
-(* TLS 1.2 *)
-val dh_init_12S: #region:rid -> g:dh_group -> ST (state:ks_12S * gx:dh_key)
-
-let dh_init_12S r g =
-  let x = dh_keygen g
-  let xref = ralloc r 0 in
-  let xref := KEX_S_PRIV_DHE x
-  KS_12S r xref, x.public
-  
-assume val derive_12C: gx:dh_key -> ... -> ST(gy:dh_key * (both i) * ms)
-
-let derive12C gx cr sr log rd wr i = 
-  let (y, gxy) = dh_shared_secret2 gx 
-  y.public, derive_keys gxy cr sr log rd wr i
-
-
-assume val derive_12S: state:ks_12S -> gy:dh_key -> ... -> ST ((both i) * ms)
-
-let derive_12S state gy cr sr log rd wr i =
-  let (KS_12S xref) = state 
-  derive_keys (dh_shared_secret1 !xref) cr sr log rd wr i
-
-(* TLS 1.3 *)
-
-val dh_init_13S: #region:rid g:dh_group -> ST (state:ks_13S * gs:dh_key) //s
-val dh_init_13C: #region:rid g:dh_group -> ST (state:ks_13C * gx:dh_key) //x
-
-assume val derive_13S_1: state:ks_13S -> gx:dh_key -> ... -> ST(gy:dh_key * (both i)) //handshake
-assume val derive_13S_2: state:ks_13S -> ... -> ST(cf:ms * sf:ms) //finished
-assume val derive_13S_3: state:ks_13S -> ... -> ST(both i) //traffic
-
-assume val derive_13C_1: state:ks_13C -> gy:dh_key -> ... -> ST(both i) //handshake
-assume val derive_13C_2: state:ks_13C -> gs:dh_key -> ... -> ST(cf:ms * sf:ms) //finished
-assume val derive_13C_3: state:ks_13C -> ... -> ST(both i) //traffic
-*)
+let ks_12_verify_data ks log =
+  let KS #region cfg st = ks in
+  let KS_12_has_MS role csr alpha msId ms = !st in
+  let (pv, cs, nego) = alpha in
+  st := KS_Done; // Destroy MS, would be better to erase instead of garbage collect
+  TLSPRF.verifyData (pv,cs) ms role log
 
