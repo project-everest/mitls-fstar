@@ -20,7 +20,7 @@ let sample (i:msId) = {bytes = Nonce.random 48}
 let coerce (i:msId) b = {bytes = b}
 let leak (i:msId) ms = ms.bytes
 
-(** Key Derivation **) 
+(*** Key Derivation ***) 
 
 let keyExtensionLength i =
     let op_Star x y = op_Multiply x y in
@@ -229,10 +229,18 @@ let keyGenServer (rdId:id) (wrId:id) ms =
     #endif
 
 
-(** VerifyData **) 
+(*** VerifyData ***) 
 
-type text = bytes
-type tag = bytes
+// Before TLS 1.3, the payload of finished messages is a MAC keyed
+// with the master secret, thereby requiring a joint security assumption.
+// 
+// In TLS 1.3, the payload of finished messages is a MAC keyed with
+// its own derived key, so we can use a plain-vanilla, single-shot
+// INT-CMA assumption (and code similar to MAC.fst, except for the
+// baroque selection of the MAC algorithm in TLSPRF).
+
+type text = bytes // the hashed digest, aka data below
+type tag = bytes  // the verifyData payload
 
 #if ideal
 
@@ -254,7 +262,7 @@ let rec assoc (r:Role) (vd:tag) (es:list<entry>) =
   | (i',role,text,_)::es -> assoc r vd es
 #endif
 
-let (* private *) verifyData si ms role data = 
+let private verifyData si ms role data = 
   TLSPRF.verifyData (vdAlg si) ms.bytes role data
 
 let makeVerifyData si (ms:masterSecret) role data =
@@ -287,12 +295,14 @@ let checkVerifyData si ms role data (tag:bytes) =
   #endif
 *)
 
-(** ad hoc SSL3-only **)
+
+(* We do not support SSL3's ad hod certificate verify format:
 
 let ssl_certificate_verify (si:sessionInfo) ms (algs:sigAlg) log =
   let s = ms.bytes in
   match algs with
   | CoreCrypto.RSASIG -> TLSPRF.ssl_verifyCertificate MD5 s log @| TLSPRF.ssl_verifyCertificate SHA1 s log 
-  | CoreCrypto.DSA -> TLSPRF.ssl_verifyCertificate SHA1 s log 
-  | _      -> Platform.Error.unexpected "[ssl_certificate_verify] invoked on a wrong signature algorithm"
+  | CoreCrypto.DSA    -> TLSPRF.ssl_verifyCertificate SHA1 s log 
+  | _                 -> Platform.Error.unexpected "[ssl_certificate_verify] invoked on a wrong signature algorithm"
 
+*)

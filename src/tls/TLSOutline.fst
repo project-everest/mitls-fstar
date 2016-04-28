@@ -11,6 +11,8 @@ open Heap
 open FStar.HyperHeap
 open Seq
 open SeqProperties // for e.g. found
+open FStar.Monotonic.RRef
+open FStar.Ghost
 
 open Platform.Bytes
 open Platform.Error
@@ -18,24 +20,26 @@ open Platform.Tcp
 
 open TLSError
 open TLSInfo
-open FStar.Monotonic.RRef
-open FStar.Ghost
+
+// using DataStream 
 
 type hh = HyperHeap.t
 
-// using DataStream 
+
 type rid = r:rid{r<>root}
+
 assume val tls_region    : r:rid{parent r = root}
 assume val epochs_region : r:rid{parent r = root /\ r <> tls_region}
 
+// an API abstraction over epochs
 // epochs are partnered statically (ie, their partner is known at the time of creation)
 assume type epoch
 assume val epoch_region:      epoch -> Tot rid
 assume val epoch_peer_region: epoch -> Tot rid
-assume val epochId:  e:epoch -> Tot id  // globally unique; internally it is (hs_id h) for the handshake h
-assume val writtenT: e:epoch -> hh -> Tot (Seq.seq (DataStream.delta (epochId e))) //TODO: it is well-formed (note reconcile list vs seq)
-assume val readseqT: epoch -> hh -> Tot nat
-assume type is_initial_epoch : epoch -> Type //TODO: maybe this can be removed or defined as the epoch in its initial state
+assume val epochId:           epoch -> Tot id  // globally unique; internally it is (hs_id h) for the handshake h
+assume val writtenT:          epoch -> hh -> Tot (Seq.seq (DataStream.delta (epochId e))) //TODO: it is well-formed (note reconcile list vs seq)
+assume val readseqT:          epoch -> hh -> Tot nat
+assume type is_initial_epoch: epoch -> Type //TODO: maybe this can be removed or defined as the epoch in its initial state
 //TODO: an API for the duality on ids
 
 //Do we need such a function? Perhaps a stateful one to record paired epochs
@@ -50,11 +54,11 @@ assume val c_tcp:     connection -> Tot networkStream
 assume val c_resume:  connection -> Tot (option sessionID)
 assume val c_config:  connection -> Tot config
 //properties of connections for specification purposes only
-assume type c_inv  :  connection -> hh -> Type          //the private connection invariant
 assume val c_region:  connection -> Tot rid            //the region in which the connection is allocated
 assume val c_regionsT:connection -> hh -> Tot (Set.set HyperHeap.rid) //the dynamic set of regions of connection and the connection's current epochs
 //TODO: define c_regionsT c h as the c_region c and all the regions of the (epochsT c) (not including the peer regions)
 
+assume type c_inv  :  connection -> hh -> Type          //the private connection invariant
 assume val readableT: connection -> hh -> Tot bool // indicates whether read is callable (for any purpose)
 assume val writableT: connection -> hh -> Tot bool // indicates whether write is callable (for sending appdata/closing)
 assume val epochsT:   connection -> hh -> Tot (Seq.seq epoch)  //the current sequence of epochs associated to a connection
