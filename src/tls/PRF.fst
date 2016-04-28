@@ -262,7 +262,7 @@ let rec assoc (r:Role) (vd:tag) (es:list<entry>) =
   | (i',role,text,_)::es -> assoc r vd es
 #endif
 
-let private verifyData si ms role data = 
+private let verifyData si ms role data = 
   TLSPRF.verifyData (vdAlg si) ms.bytes role data
 
 let makeVerifyData si (ms:masterSecret) role data =
