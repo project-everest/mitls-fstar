@@ -19,58 +19,40 @@ open StreamPlain
 open MonotoneSeq
 open FStar.Monotonic.RRef
 
-
-
-
-assume val gcut : f:(unit -> GTot Type){f ()} -> Tot unit
-
 let gen parent i = 
   let kv   = CoreCrypto.random (CoreCrypto.aeadKeySize (alg i)) in
   let iv   = CoreCrypto.random (CoreCrypto.aeadRealIVSize (alg i)) in
   let writer_r = new_region parent in
   lemma_repr_bytes_values 0; 
-  if authId i
-  then let log  : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in 
-       let ectr : ideal_ctr writer_r i log = MonotoneSeq.new_counter writer_r 0 log in
-       State #i #Writer #writer_r #writer_r kv iv log ectr
-  else let ectr : concrete_ctr writer_r i = m_alloc writer_r 0 in
-       State #i #Writer #writer_r #writer_r kv iv () ectr 
+  if authId i then 
+    let log  : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in 
+    let ectr : ideal_ctr writer_r i log = MonotoneSeq.new_counter writer_r 0 log in
+    State #i #Writer #writer_r #writer_r kv iv log ectr
+  else 
+    let ectr : concrete_ctr writer_r i = m_alloc writer_r 0 in
+    State #i #Writer #writer_r #writer_r kv iv () ectr 
 
-let genReader parent i w = 
+let coerce parent i kv iv =
+  let writer_r = new_region parent in
+  lemma_repr_bytes_values 0; 
+  let ectr : concrete_ctr writer_r i = m_alloc writer_r 0 in
+  State #i #Writer #writer_r #writer_r kv iv () ectr 
+
+let leak #i role s = State.key s, State.iv s
+
+let genReader parent #i w = 
   let reader_r = new_region parent in
   lemma_repr_bytes_values 0; 
   if authId i
-  then let log  : ideal_log w.region i = w.log in 
-       let dctr : ideal_ctr reader_r i log = MonotoneSeq.new_counter reader_r 0 log in
-       State #i #Reader #reader_r #(w.region) w.key w.iv w.log dctr 
+  then 
+    let log  : ideal_log w.region i = w.log in 
+    let dctr : ideal_ctr reader_r i log = MonotoneSeq.new_counter reader_r 0 log in
+    State #i #Reader #reader_r #(w.region) w.key w.iv w.log dctr 
   else let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
-       State #i #Reader #reader_r #(w.region) w.key w.iv () dctr 
+    State #i #Reader #reader_r #(w.region) w.key w.iv () dctr 
 
 
-(* 16-04-25 TODO
-// Coerce an instance with index i in a fresh sub-region of r0
-val coerce: r0:rid -> p0:rid -> i:id{~(authId i)} -> role:rw -> kv:key i -> iv:iv i -> ST (state i role)
-  (requires (fun h0 -> disjoint r0 p0))
-  (ensures  (fun h0 s h1 ->
-                modifies Set.empty h0 h1
-              /\ extends s.region r0
-              /\ extends s.peer_region p0
-              /\ fresh_region s.region h0 h1
-              /\ fresh_region s.peer_region h0 h1))
-let coerce r0 p0 i role kv iv =
-  let r = new_region r0 in
-  let p = new_region p0 in
-  lemma_repr_bytes_values 0; 
-  let ctr : concrete_ctr r i = m_alloc r 0 in
-  State #i #role #r #p kv iv () ctr 
 
-
-val leak: i:id{~(authId i)} -> role:rw -> state i role -> ST (key i * iv i)
-  (requires (fun h0 -> True))
-  (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
-let leak i role s = State.key s, State.iv s
-
-*)
 
 // The per-record nonce for the AEAD construction is formed as follows:
 //
@@ -86,7 +68,7 @@ let aeIV i (n:seqn i) (staticIV: iv i) : iv i =
   let extended: iv i = bytes_of_int l n (* 64 bit counter extended with 0s *) in
   xor l extended staticIV
 
-// not relying on additional data
+// we are not relying on additional data
 let noAD = empty_bytes
  
 
@@ -94,7 +76,7 @@ let noAD = empty_bytes
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
-let encrypt i e l p =
+let encrypt #i e l p =
   let ctr = ctr e.counter in 
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
@@ -117,7 +99,7 @@ let encrypt i e l p =
 
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
-let decrypt i d l c =
+let decrypt #i d l c =
   let ctr = ctr d.counter in 
   m_recall ctr;
   let j = m_read ctr in
