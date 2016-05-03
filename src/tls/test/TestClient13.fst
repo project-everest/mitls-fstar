@@ -69,7 +69,7 @@ let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain =
   let len = length text in
   let rg: Range.frange id = 0, len in
 
-  let f = Content.mk_fragment i ct rg plain in 
+  let f = Content.mk_fragment id ct rg plain in 
   StreamAE.encrypt w (len+1) f // the extra byte is for CT with no padding
 
 (* was:
@@ -86,7 +86,7 @@ let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain =
 
 let decryptRecord_TLS13_AES_GCM_128_SHA256 rd ct cipher = 
 //  IO.print_string ("cipher:"^(Platform.Bytes.print_bytes cipher)^"\n");
-  let (Some d) = StreamAE.decrypt id rd (length cipher - (StreamAE.ltag id)) cipher in
+  let (Some d) = StreamAE.decrypt #id rd (length cipher - (StreamAE.ltag id)) cipher in
   Content.repr id d
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
