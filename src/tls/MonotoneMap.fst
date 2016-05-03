@@ -51,8 +51,9 @@ let alloc #r #a #b #inv
   = grows_monotone #a #b;
     FStar.Monotonic.RRef.m_alloc r (empty_map a b)
 
-let t_contains #r #a #b #inv (m:t r a b inv) (x:a) (y:b x) (h:HyperHeap.t) : GTot Type0 = 
-  is_Some (sel (m_sel h m) x) /\ sel (m_sel h m) x == Some y
+let t_contains #r #a #b #inv (m:t r a b inv) (x:a) (y:b x) (h:HyperHeap.t) 
+  : GTot Type0 
+  = is_Some (sel (m_sel h m) x) /\ Some.v (sel (m_sel h m) x) = y
 
 let map_contains #a #b (m1:map' a b) (m2:map' a b) (x:a) (y:b x)
   : Lemma (requires (grows m1 m2))
