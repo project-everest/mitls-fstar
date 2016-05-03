@@ -101,6 +101,7 @@ type reader i = s:state i Reader
 
 // We generate first the writer, then the reader (possibly several of them)
 
+(* ADL commenting due to bug
 let genPost (#i:id) parent h0 (w:writer i) h1 = 
                modifies Set.empty h0 h1 /\
                extends w.region parent /\
@@ -111,6 +112,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 	       m_contains (ctr w.counter) h1 /\
 	       m_sel h1 (ctr w.counter) == 0
 //16-04-30 how to share the whole ST ... instead of genPost?
+*)
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we might drop this spec, since F* will infer something at least as precise,
@@ -118,14 +120,31 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 
 val gen: parent:rid -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
-  (ensures (genPost parent))
+//  (ensures (genPost parent))
+  (ensures fun h0 w h1 -> modifies Set.empty h0 h1 /\
+               extends w.region parent /\
+               fresh_region w.region h0 h1 /\
+               (authId i ==>
+                      (m_contains (ilog w.log) h1 /\
+                       m_sel h1 (ilog w.log) = createEmpty)) /\
+               m_contains (ctr w.counter) h1 /\
+               m_sel h1 (ctr w.counter) == 0)
 
 
 // Coerce a writer with index i in a fresh subregion of parent
 // (coerced readers can then be obtained by calling genReader)
 val coerce: parent:rid -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer i)
   (requires (fun h0 -> True))
-  (ensures  (genPost parent))
+//  (ensures  (genPost parent))
+  (ensures fun h0 w h1 ->
+      modifies Set.empty h0 h1 /\
+               extends w.region parent /\
+               fresh_region w.region h0 h1 /\
+               (authId i ==>
+                      (m_contains (ilog w.log) h1 /\
+                       m_sel h1 (ilog w.log) = createEmpty)) /\
+               m_contains (ctr w.counter) h1 /\
+               m_sel h1 (ctr w.counter) == 0)
 
 val leak: #i:id{~(authId i)} -> role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
