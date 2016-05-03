@@ -16,7 +16,7 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open StreamPlain
-open MonotoneSeq
+open Monotone.Seq
 open FStar.Monotonic.RRef
 
 let gen parent i = 
@@ -26,7 +26,7 @@ let gen parent i =
   lemma_repr_bytes_values 0; 
   if authId i then 
     let log  : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in 
-    let ectr : ideal_ctr writer_r i log = MonotoneSeq.new_counter writer_r 0 log in
+    let ectr : ideal_ctr writer_r i log = Monotone.Seq.new_counter writer_r 0 log in
     State #i #Writer #writer_r #writer_r kv iv log ectr
   else 
     let ectr : concrete_ctr writer_r i = m_alloc writer_r 0 in
@@ -46,7 +46,7 @@ let genReader parent #i w =
   if authId i
   then 
     let log  : ideal_log w.region i = w.log in 
-    let dctr : ideal_ctr reader_r i log = MonotoneSeq.new_counter reader_r 0 log in
+    let dctr : ideal_ctr reader_r i log = Monotone.Seq.new_counter reader_r 0 log in
     State #i #Reader #reader_r #(w.region) w.key w.iv w.log dctr 
   else let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
     State #i #Reader #reader_r #(w.region) w.key w.iv () dctr 
@@ -88,7 +88,7 @@ let encrypt #i e l p =
         m_recall ilog;
 	let ictr : ideal_ctr e.region i ilog = e.counter in
 	testify_counter ictr;
-        MonotoneSeq.write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
+        Monotone.Seq.write_at_end ilog (Entry l c p); //need to extend the log first, before incrementing the counter for monotonicity; do this only if ideal
         m_recall ictr;
 	increment_counter ictr; 
 	m_recall ictr)

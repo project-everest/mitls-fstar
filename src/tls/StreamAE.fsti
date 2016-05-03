@@ -15,7 +15,7 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open StreamPlain
-open MonotoneSeq
+open Monotone.Seq
 open FStar.Monotonic.RRef
 
 type id = i:id { pv_of_id i = TLS_1p3 }
@@ -53,7 +53,7 @@ let max_uint64: n:nat {repr_bytes n <= 8} =
 let is_seqn i n =  repr_bytes n <= aeadRecordIVSize (alg i)
 type seqn i = n:nat { is_seqn i n }
 
-let ideal_log (r:rid) (i:id) = MonotoneSeq.log_t r (entry i)
+let ideal_log (r:rid) (i:id) = Monotone.Seq.log_t r (entry i)
 
 let log_ref (r:rid) (i:id) : Tot Type0 =
   if authId i 
@@ -65,7 +65,7 @@ let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i})
   = l
   
 let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 = 
-  MonotoneSeq.counter r log (aeadRecordIVSize (alg i)) //we have a counter, that's increasing, at most to the min(length log, 2^
+  Monotone.Seq.counter r log (aeadRecordIVSize (alg i)) //we have a counter, that's increasing, at most to the min(length log, 2^
   
 let concrete_ctr (r:rid) (i:id) : Tot Type0 = 
   m_rref r (seqn i) increases
@@ -158,7 +158,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
  			     let ent = Entry l c p in
 			     let n = Seq.length (m_sel h0 log) in
 			      m_contains log h1 /\
-   			      witnessed (MonotoneSeq.at_least n ent log) /\
+   			      witnessed (Monotone.Seq.at_least n ent log) /\
                               m_sel h1 log = snoc (m_sel h0 log) ent)))
 
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
