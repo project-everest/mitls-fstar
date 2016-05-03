@@ -1,5 +1,5 @@
 (* A library for monotonic references to partial, dependent maps, with a whole-map invariant *)
-module Monotone.Map
+module MonotoneMap
 open FStar.Monotonic.RRef
 open FStar.HyperHeap
 

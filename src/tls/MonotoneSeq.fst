@@ -1,4 +1,4 @@
-module Monotone.Seq
+module MonotoneSeq
 open FStar.Seq
 open FStar.SeqProperties
 

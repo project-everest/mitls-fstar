@@ -81,8 +81,8 @@ endif
 FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
 
 VERIFIABLE_FSTS=IdealFlags.fst \
-Monotone.Seq.fst \
-Monotone.Map.fst \
+MonotoneSeq.fst \
+MonotoneMap.fst \
 TLSError.fst \
 TLSConstants.fst \
 Nonce.fst \
@@ -137,8 +137,8 @@ test/TestClient13.fst #the preceding space is significant!
 # verifies, it should be added here
 # missing modules from VERIFIABLE_FSTS are: PMS Sig Cert Encode Enc
 VERIFY= \
-Monotone.Seq \
-Monotone.Map \
+MonotoneSeq \
+MonotoneMap \
 TLSError \
 TLSConstants \
 Nonce \
