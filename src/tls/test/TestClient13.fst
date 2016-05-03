@@ -46,58 +46,42 @@ let id = {
     writer = Client
   }
 
-let encryptor_TLS13_AES_GCM_128_SHA256 key iv = 
-  let r = HyperHeap.root in
-  let w: writer id =
-    (* let log: log_ref r id = FStar.Monotonic.RRef.m_alloc r Seq.createEmpty in *)
-    assume (~ (authId id));
-    let seqn: StreamAE.concrete_ctr r id = FStar.Monotonic.RRef.m_alloc r 0 in
-    let key: StreamAE.key id = key |> unsafe_coerce in
-    let iv: StreamAE.iv id = iv |> unsafe_coerce in
-    let key: StreamAE.state id Writer =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      StreamAE.State #id #Writer #r #r key iv () seqn
-    in
-    key
-  in
-  // StatefulLHAE.writer -> StatefulLHAE.state
-  w
+let encryptor_TLS13_AES_GCM_128_SHA256 kv iv: writer id = 
+    // needed to match length requirements?
+    let kv: StreamAE.key id = kv |> unsafe_coerce in
+    let iv: StreamAE.iv id  = iv |> unsafe_coerce in
 
-let decryptor_TLS13_AES_GCM_128_SHA256 key iv = 
-  let r = HyperHeap.root in
-  let rd: reader id =
     assume (~ (authId id));
-    let seqn: StreamAE.concrete_ctr r id = FStar.Monotonic.RRef.m_alloc r 0 in
-    let key: StreamAE.state id Reader =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: StreamAE.key id = key |> unsafe_coerce in
-      let iv: StreamAE.iv id = iv |> unsafe_coerce in
-      StreamAE.State #id #Reader #r #r key iv () seqn
-    in
-    key
-  in
-  // StatefulLHAE.reader -> StatefulLHAE.state
-  rd
+    StreamAE.coerce HyperHeap.root id kv iv
 
-val encryptRecord_TLS13_AES_GCM_128_SHA256: (StreamAE.writer id) ->
-    (ct:Content.contentType) ->  (plain:bytes) -> bytes
+let decryptor_TLS13_AES_GCM_128_SHA256 kv iv: reader id = 
+  let wr = encryptor_TLS13_AES_GCM_128_SHA256 kv iv in 
+  genReader HyperHeap.root wr
+
+
+//CF 16-04-30 it may be better to pass in a "Content.fragment i"
+
+val encryptRecord_TLS13_AES_GCM_128_SHA256: writer id -> Content.contentType -> bytes -> bytes
 let encryptRecord_TLS13_AES_GCM_128_SHA256 w ct plain = 
-  let pv = TLS_1p3 in
+  // let pv = TLS_1p3 in
   let text = plain in
   // Range.frange -> Range.range
   let len = length text in
   let rg: Range.frange id = 0, len in
+
+  let f = Content.mk_fragment i ct rg plain in 
+  StreamAE.encrypt w (len+1) f // the extra byte is for CT with no padding
+
+(* was:
   match ct with
   |  Content.Application_data -> 
        let f: DataStream.fragment id rg = text |> unsafe_coerce in
        let f: StreamPlain.plain id (len+1) = Content.CT_Data #id rg f |> unsafe_coerce in
-         StreamAE.encrypt id w (len+1) f
+         StreamAE.encrypt w (len+1) f
   |  Content.Handshake ->
        let f: StreamPlain.plain id (len+1) = Content.CT_Handshake #id rg text |> unsafe_coerce in
-         StreamAE.encrypt id w (len+1) f
-
+         StreamAE.encrypt w (len+1) f
+*)
 
 
 let decryptRecord_TLS13_AES_GCM_128_SHA256 rd ct cipher = 
@@ -107,20 +91,16 @@ let decryptRecord_TLS13_AES_GCM_128_SHA256 rd ct cipher =
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
 (* Even better, we should move to TLS.send *)
-let makePacket ct ver (data: b:bytes { repr_bytes (length b) <= 2}) =
-      abyte 22z
-   @| versionBytes ver
-   @| bytes_of_int 2 (length data) 
-   @| data 
+//let makePacket ct ver (data: b:bytes { repr_bytes (length b) <= 2}) =
+//      abyte 22z
+//   @| versionBytes ver
+//   @| bytes_of_int 2 (length data) 
+//   @| data 
 
 let sendRecord tcp pv ct msg str = 
-  let r = makePacket ct pv msg in
+  let r = Record.makePacket ct pv msg in
   let Correct _ = Platform.Tcp.send tcp r in
-  match ct with
-  | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
-  | Content.Handshake ->   IO.print_string ("Sending HS("^str^")\n")
-  | Content.Change_cipher_spec ->   IO.print_string ("Sending CCS\n")
-  | Content.Alert ->   IO.print_string ("Sending Alert("^str^")\n")
+  IO.print_string ("Sending "^Content.ctToString ct^"Data("^str^")\n")
 
 val really_read_rec: bytes -> Platform.Tcp.networkStream -> nat -> optResult string bytes
 let rec really_read_rec prev tcp len = 

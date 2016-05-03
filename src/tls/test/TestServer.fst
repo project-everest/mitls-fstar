@@ -22,6 +22,7 @@ let config =
      {TLSInfo.defaultConfig with
          minVer = TLS_1p2;
     	 maxVer = TLS_1p2;
+         safe_resumption = true; // EMS support
 	 ciphersuites = csn;
          signatureAlgorithms = sigAlgPrefs;
          cert_chain_file = "server.pem";
@@ -35,7 +36,7 @@ let id = {
     aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
     csrConn = bytes_of_hex "";
     ext = {
-      ne_extended_ms = true;
+      ne_extended_ms = false;
       ne_extended_padding = false;
       ne_secure_renegotiation = RI_Unsupported;
       ne_supported_curves = None;
@@ -220,10 +221,17 @@ let rec aux sock =
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
   let alg = (sa, Hash CoreCrypto.SHA256) in
-  let alpha = (pv, cs, nego) in
-  let sr, gy = KeySchedule.ks_server_12_init_dh ks cr alpha in
-  let sh = {sh with sh_server_random = sr} in
   let ems = nego.ne_extended_ms in
+  let group =
+    match nego.ne_supported_curves with
+    | Some (curve::_) -> CommonDH.ECDH curve
+    | _ -> failwith "No shared curve" in
+  let sr, gy = KeySchedule.ks_server_12_init_dh ks cr pv cs ems group in
+  let sh = {sh with sh_server_random = sr} in
+
+  let t = HandshakeMessages.handshakeMessageBytes pv (ServerHello sh) in
+  let ti = Handshake.parseHandshakeMessages (Some pv) (Some kex) t in
+  IO.print_string "Parsed SKE OK\n";
 
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
@@ -252,11 +260,13 @@ let rec aux sock =
     | {cke_kex_c = KEX_C_ECDHE u} -> u
     | _ -> failwith "Bad CKE type" in
   IO.print_string ("client share:"^(Platform.Bytes.print_bytes gx)^"\n");
-  let gx = match ECGroup.parse_point dhp gx with | Some u -> u | _ -> failwith "point parse failure" in
+  let gx =
+    match ECGroup.parse_point dhp gx with
+    | Some u -> u
+    | _ -> failwith "point parse failure" in
   IO.print_string "Recasting g^x...\n";
   let gx = CommonDH.ECKey ({CoreCrypto.ec_point = gx; CoreCrypto.ec_priv = None; CoreCrypto.ec_params = dhp;}) in
-  KeySchedule.ks_server_12_cke_dh ks gx;
-  if ems then KeySchedule.ks_12_set_session_hash ks log;
+  KeySchedule.ks_server_12_cke_dh ks gx log;
 
   // Now internal to KS
 //  let pms = CommonDH.dh_initiator gy gx in
@@ -272,7 +282,7 @@ let rec aux sock =
   let _ = recvCCSRecord tcp pv in
   let Finished(cfin),log = recvEncHSRecord tcp pv kex log rd in
 
-  let svd = KeySchedule.ks_12_verify_data ks log in
+  let svd = KeySchedule.ks_server_12_verify_data ks log in
   let sfin = {fin_vd = svd} in
   let (str,sfinb,log) = makeHSRecord pv (Finished sfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake sfinb in

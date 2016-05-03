@@ -34,7 +34,7 @@ let id = {
     aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
     csrConn = bytes_of_hex "";
     ext = {
-      ne_extended_ms = true;
+      ne_extended_ms = false;
       ne_extended_padding = false;
       ne_secure_renegotiation = RI_Unsupported;
       ne_supported_curves = None;
@@ -134,6 +134,7 @@ let really_read = really_read_rec empty_bytes
 let recvRecord tcp pv = 
   match really_read tcp 5 with 
   | Correct header ->
+//      IO.print_string ("GOT HEADER "^(Platform.Bytes.print_bytes header)^"\n");
       match Record.parseHeader header with  
       | Correct (ct,pv,len)  ->
          match really_read tcp len  with
@@ -197,7 +198,6 @@ let main host port =
   let cs = sh.sh_cipher_suite in
   let sr = sh.sh_server_random in
   let CipherSuite kex sa ae = cs in
-  let alpha = (pv, cs, n) in
   let ems = n.ne_extended_ms in
 
   let Certificate(sc),log = recvHSRecord tcp pv kex log in
@@ -206,13 +206,13 @@ let main host port =
 
   let dhp = CommonDH.ECP ({CoreCrypto.curve = CoreCrypto.ECC_P256; CoreCrypto.point_compression = false; }) in
   let KEX_S_DHE gy = ske.ske_kex_s in
-  let gx = KeySchedule.ks_client_12_full_dh ks sr alpha dhp gy in
+  let gx = KeySchedule.ks_client_12_full_dh ks sr pv cs ems dhp gy in
   let cke = {cke_kex_c = kex_c_of_dh_key gx} in
 
   let log = sendHSRecord tcp pv (ClientKeyExchange cke) log in
-  if ems then KeySchedule.ks_12_set_session_hash ks log;
-
+  if ems then KeySchedule.ks_client_12_set_session_hash ks log;
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
+
 //  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
   IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
@@ -222,7 +222,7 @@ let main host port =
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
-  let cfin = {fin_vd = KeySchedule.ks_12_verify_data ks log} in
+  let cfin = {fin_vd = KeySchedule.ks_client_12_verify_data ks log} in
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
 

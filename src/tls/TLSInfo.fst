@@ -165,7 +165,7 @@ let defaultConfig =
     private_key_file = "server.key";
 
     safe_renegotiation = true;
-    safe_resumption = false; // Turn to true if it gets standard
+    safe_resumption = true;
     peer_name = None; // Disable hostname validation
     ca_file = "CAFile.pem";
 
