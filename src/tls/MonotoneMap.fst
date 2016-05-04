@@ -51,7 +51,7 @@ let alloc #r #a #b #inv
   = grows_monotone #a #b;
     FStar.Monotonic.RRef.m_alloc r (empty_map a b)
 
-let t_contains #r #a #b #inv (m:t r a b inv) (x:a) (y:b x) (h:HyperHeap.t) 
+let contains #r #a #b #inv (m:t r a b inv) (x:a) (y:b x) (h:HyperHeap.t) 
   : GTot Type0 
   = is_Some (sel (m_sel h m) x) /\ Some.v (sel (m_sel h m) x) = y
 
@@ -60,8 +60,8 @@ let map_contains #a #b (m1:map' a b) (m2:map' a b) (x:a) (y:b x)
 	  (ensures (is_Some (m1 x) /\ m1 x = Some y ==> m2 x = Some y))
   = ()
 	  
-let t_contains_stable #r #a #b #inv (m:t r a b inv) (x:a) (y:b x)
-  : Lemma (ensures (stable_on_t m (t_contains m x y)))
+let contains_stable #r #a #b #inv (m:t r a b inv) (x:a) (y:b x)
+  : Lemma (ensures (stable_on_t m (contains m x y)))
   = ()
 
 let extend (#r:rid) (#a:Type) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r a b inv) (x:a) (y:b x)
@@ -73,12 +73,12 @@ let extend (#r:rid) (#a:Type) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r a
       		  /\ modifies (Set.singleton r) h0 h1
       		  /\ modifies_rref r !{as_ref (as_rref m)} h0 h1
       		  /\ m_sel h1 m = upd cur x y
-      		  /\ witnessed (t_contains m x y)))
+      		  /\ witnessed (contains m x y)))
   = m_recall m;
     let cur = m_read m in
     m_write m (upd cur x y);
-    t_contains_stable m x y;
-    witness m (t_contains m x y)
+    contains_stable m x y;
+    witness m (contains m x y)
 
 let lookup #r #a #b #inv (m:t r a b inv) (x:a)
   : ST (option (b x))
@@ -86,13 +86,13 @@ let lookup #r #a #b #inv (m:t r a b inv) (x:a)
        (ensures (fun h0 y h1 -> 
 		   h0=h1 /\
 		   y = sel (m_sel h1 m) x /\ 
-		   is_Some y ==> witnessed (t_contains m x (Some.v y))))
+		   (is_Some y ==> witnessed (contains m x (Some.v y)))))
   = let y = sel (m_read m) x in 
     match y with 
       | None -> y
       | Some b -> 
-	t_contains_stable m x b;
-	witness m (t_contains m x b);
+	contains_stable m x b;
+	witness m (contains m x b);
 	y
 
 

@@ -104,6 +104,7 @@ Content.fst \
 StreamPlain.fst \
 StreamAE.fsti \
 StreamAE.fst \
+MasterSecret.fst \
 StatefulPlain.fst \
 LHAEPlain.fst \
 AEAD_GCM.fst \
