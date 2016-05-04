@@ -29,7 +29,7 @@ let derive (r:rid) (i:AE.id)
        (ensures (fun h0 w h1 -> 
 	   HH.extends (StreamAE.State.region w) r 
 	   /\ modifies (Set.singleton tls_region) h0 h1
-	   /\ MR.witnessed (MM.t_contains ms_tab (i,r) w)))
+	   /\ MR.witnessed (MM.contains ms_tab (i,r) w)))
   = recall_region tls_region;
     let y = MM.lookup ms_tab (i, r) in
     match y with 
