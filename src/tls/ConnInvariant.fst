@@ -56,11 +56,10 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:id -> r:Hh.rid -> w:M
 		 authId i /\
 		 mc_inv h0 /\ //we're initially in the invariant
 		 Hh.modifies (Set.singleton tls_region) h0 h1 /\ //we just changed the tls_region
-		 Hh.modifies_rref tls_region !{Hh.as_ref (Mr.as_rref Ms.ms_tab)} h0 h1 /\ //and within it, the only thing that changed is the ms_tab
 		 (let old_ms = Mr.m_sel h0 Ms.ms_tab in 
 		  let new_ms = Mr.m_sel h1 Ms.ms_tab in
 		  Mm.sel old_ms (i,r) = None /\
-		  new_ms = Mm.upd old_ms (i,r) w) /\                                    //and it only changed by adding w
+		  new_ms = Mm.upd old_ms (i,r) w) /\                                    //and the ms_tab only changed by adding w
 		 Mr.m_sel h1 (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty)             //and w's log is empty
 	 (ensures mc_inv h1)                                                       //we're back in the invariant
 let ms_derive_is_ok h0 h1 i r w =  ()
