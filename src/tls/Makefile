@@ -116,7 +116,8 @@ MAC_SHA256.fst \
 MAC_SHA1.fst \
 HandshakeMessages.fst \
 Handshake.fsti \
-Connection.fst #the preceding space is significant!
+Connection.fst \
+ConnInvariant.fst #the preceding space is significant!
 
 LAX_CHECKED_FSTS= Record.fst \
 HSCrypto.fst \
