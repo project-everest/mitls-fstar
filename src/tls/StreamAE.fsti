@@ -83,8 +83,9 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log)
 
 // kept concrete for log and counter, but the key and iv should be private.
 type state (i:id) (rw:rw) = 
-  | State: #region:rid 
-         -> #log_region:rid{if rw=Writer then region = log_region else HyperHeap.disjoint region log_region }
+  | State: #region:rid{region <> root} 
+         -> #log_region:rid{log_region <> root /\
+		           (if rw=Writer then region = log_region else HyperHeap.disjoint region log_region) }
          -> key:key i
          -> iv: iv i
          -> log: log_ref log_region i // ghost, subject to cryptographic assumption

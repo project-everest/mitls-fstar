@@ -36,7 +36,7 @@ let grows_monotone #a #b
   = ()
 
 (* Monotone, partial, dependent maps, with a whole-map invariant *)
-type t r a b inv = m_rref r (map a b inv) grows 
+type t r a b inv = m_rref r (map a b inv) grows  //maybe grows can include the inv?
 
 let empty_map a b 
   : Tot (map' a b) 

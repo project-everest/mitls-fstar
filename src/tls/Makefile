@@ -115,6 +115,7 @@ ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
 HandshakeMessages.fst \
+StAE.fst \
 Handshake.fsti \
 Connection.fst \
 ConnInvariant.fst #the preceding space is significant!
@@ -137,7 +138,7 @@ test/TestClient13.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-# missing modules from VERIFIABLE_FSTS are: PMS Sig Cert Encode Enc
+# missing modules from VERIFIABLE_FSTS are: PMS Sig Cert Encode Enc Handshake
 VERIFY= \
 MonotoneSeq \
 MonotoneMap \

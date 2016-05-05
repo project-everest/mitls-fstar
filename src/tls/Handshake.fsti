@@ -19,8 +19,8 @@ open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages
-open StatefulLHAE
 open HSCrypto
+open StAE
 
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
@@ -107,10 +107,11 @@ type epoch_region_inv (#i:id) (rgn:rid) (peer:rid) (r:reader (peerId i)) (w:writ
   parent (region r) = rgn /\ 
   parent (region w) = rgn /\ 
   parent (peer_region r) = peer /\
-  parent (peer_region w) = peer /\
   disjoint rgn peer /\
   disjoint (region r) (region w) /\
-  disjoint (peer_region r) (peer_region w)
+  (is_stateful_lhae i ==> 
+    parent (peer_region w) = peer /\
+    disjoint (peer_region r) (peer_region w))
  
 type epoch (rgn:rid) (peer:rid) =
   | Epoch: h: handshake ->
@@ -120,18 +121,13 @@ type epoch (rgn:rid) (peer:rid) =
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
-let set4 a b c d =   
-  union  (singleton a) (union (singleton b) (union (singleton c) (singleton d)))
-
-let regions (#p:rid) (#q:rid) (e:epoch p q) : set rid = 
-  set4 (region e.r) (peer_region e.r) (region e.w) (peer_region e.w)
-
-let epochs_footprint (#region:rid) (#peer:rid) (es: seq (epoch region peer)) =
+(* The footprint just includes the writer regions *)
+let epochs_footprint (#r:rid) (#p:rid) (es: seq (epoch r p)) =
   forall (i:nat { i < Seq.length es })
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
     let ej = Seq.index es j in
-    disjoint_regions (regions ei) (regions ej)
+    disjoint (region ei.w) (region ej.w)
  
 let epochs (r:rid) (p:rid) = es: seq (epoch r p) { epochs_footprint es }
 
@@ -188,11 +184,11 @@ let forall_epochs (hs:hs) h (p:(epoch (hs.region) (hs.peer) -> Type)) =
   (let es = sel h hs.log in 
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
      
-//vs modifies clauses?
-let unmodified_epochs s h0 h1 = 
-  forall_epochs s h0 (fun e -> 
-    let rs = regions e in 
-    (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r))
+(* //vs modifies clauses? *)
+(* let unmodified_epochs s h0 h1 =  *)
+(*   forall_epochs s h0 (fun e ->  *)
+(*     let rs = regions e in  *)
+(*     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r)) *)
 
 //epochs in h1 extends epochs in h0 by one 
 let fresh_epoch h0 s h1 =
@@ -301,6 +297,7 @@ val invalidateSession: s:hs -> ST unit
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
 
 
+#set-options "--lax"
 
 (*** Outgoing ***)
 val next_fragment: s:hs -> ST outgoing
@@ -313,7 +310,7 @@ val next_fragment: s:hs -> ST outgoing
     hs_inv s h1 /\
     HyperHeap.modifies_one s.region h0 h1 /\
     r1 = r0 /\
-    w1 = (if result = OutCCS then w0 + 1 else w0)  /\
+    w1 = (if result = OutCCS then w0 + 1 else w0) /\
     (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))))
                                               (*why do i need this?*)
 
