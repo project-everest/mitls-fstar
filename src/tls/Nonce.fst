@@ -103,7 +103,7 @@ private let nonce_rids_exists (m:MM.map' random n_rid) =
    underneath quantifiers. So, one should really use this version of new_region 
    for every dynamic region allocation in TLS.
 *)   
-val new_region: parent:rid -> ST ex_rid 
+val new_region: parent:HH.rid -> ST ex_rid 
   (requires (fun h -> True))
   (ensures (fun h0 r h1 -> 
 	      HH.extends r parent /\
