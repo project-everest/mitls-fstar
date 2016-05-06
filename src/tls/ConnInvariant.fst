@@ -78,10 +78,63 @@ let ms_derive_is_ok h0 h1 i r w = ()
 //      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
 //      -- we need to show that the (exists e. SeqProperties.mem ...) is false (because of the fresh index for c)
 //      -- so, we're in the "not yet used" case ... so, the epoch's writer is in its initial state and we can return it (our goal is to return a fresh epoch)
+val add_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:id{StAE.is_stream_ae i /\ authId i} 
+		-> c:r_conn (idNonce i) -> e:epoch (HS.region c.hs) (HS.peer c.hs) 
+  -> Lemma (requires 
+            (let ctab = Mr.m_sel h0 conn_table in
+	     let mstab = Mr.m_sel h0 Ms.ms_tab in
+	     let old_hs_log = HH.sel h0 (HS.log c.hs) in
+     	     let new_hs_log = HH.sel h1 (HS.log c.hs) in 
+	     let rgn = HS.region c.hs in
+	     Hh.contains_ref (Mr.as_rref conn_table) h0 /\
+	     Hh.contains_ref (Mr.as_rref Ms.ms_tab) h0 /\
+	     Hh.disjoint (HS.region c.hs) tls_region /\
+	     Hh.contains_ref (HS.log c.hs) h0 /\
+	     Hh.contains_ref (HS.log c.hs) h1 /\
+	     mc_inv h0 /\ //we're initially in the invariant
+	     i=hsId (Epoch.h e) /\ //the epoch has id it
+	     (let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
+	      let epochs = Hh.sel h0 (HS.log c.hs) in
+      	      Map.contains h1 (StreamAE.State.region w) /\
+	      (forall e. SeqProperties.mem e epochs ==> hsId (Epoch.h e) <> i) /\ //i is fresh for c
+ 	      Mm.sel mstab (i, rgn) = Some w /\ //we found the writer in the ms_tab
+	      MM.sel ctab (idNonce i) = Some c /\ //we found the connection in the conn_table
+	      Hh.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
+	      Hh.modifies_rref (HS.region c.hs) !{Hh.as_ref (HS.log c.hs)} h0 h1 /\ //and within it, just the epochs log
+	      new_hs_log = SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
+	  (ensures mc_inv h1) //we're back in the invariant
+
+#reset-options "--z3timeout 10 --initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2"
+
+let add_epoch_ok h0 h1 i c e = 
+  assert (Mr.m_sel h0 Ms.ms_tab = Mr.m_sel h1 Ms.ms_tab);
+  assert (Mr.m_sel h0 conn_table = Mr.m_sel h1 conn_table);
+  let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
+  assert (Mr.m_sel h0 (StreamAE.ilog (StreamAE.State.log w)) = Mr.m_sel h1 (StreamAE.ilog (StreamAE.State.log w)));
+  let ctab = Mr.m_sel h0 conn_table in
+  let mstab = Mr.m_sel h0 Ms.ms_tab in
+  let copt = Mm.sel ctab (idNonce i) in
+  let old_hs_log = HH.sel h0 (HS.log c.hs) in
+  assert (is_Some copt);
+  assert (~ (registered i w (Some.v copt) h0));
+  MonotoneSeq.lemma_mem_snoc old_hs_log e;
+  assert (registered i w (Some.v copt) h1);
+  let j : id  = magic () in 
+  let s : HH.rid = magic () in 
+  assume (StAE.is_stream_ae j);
+  assume (authId j);
+  assume (s <> HS.region c.hs);
+  match Mm.sel mstab (j, s) with 
+  | None -> admit()
+  | Some wj -> 
+    assume (StreamAE.State.region wj <> HS.region c.hs); //can see here why the post-condition fails ... need better separation invariants between the HS.log and the writer logs
+    assume (HH.contains_ref (Mr.as_rref (StreamAE.ilog (StreamAE.State.log wj))) h0);
+    assert (Mr.m_sel h0 (StreamAE.ilog (StreamAE.State.log wj)) = Mr.m_sel h1 (StreamAE.ilog (StreamAE.State.log wj)));
+    admit()
 
 
 //3. Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
-//    --- we're in the first case, left disjunct
+//    --- we're in the first case, left disjunct (should be easy)
 
 
 //4. Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
