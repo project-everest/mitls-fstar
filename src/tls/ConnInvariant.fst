@@ -29,11 +29,12 @@ type c_tab  = Mm.map' random r_conn
 
 assume val idNonce : id -> Tot random
 
-
 let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) (h:Hh.t) = 
-  exists e. SeqProperties.mem e  (Hh.sel h (HS.log c.hs)) /\
+  Hh.disjoint (HS.region c.hs) tls_region /\
+  Hh.contains_ref (HS.log c.hs) h /\
+  (exists e. SeqProperties.mem e  (Hh.sel h (HS.log c.hs)) /\
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in
-        i=i' /\ StAE.stream_ae #i e.w == w)
+        i=i' /\ StAE.stream_ae #i e.w == w))
 
 let ms_conn_invariant (ms:ms_tab)
  		      (conn:c_tab)
@@ -44,9 +45,9 @@ let ms_conn_invariant (ms:ms_tab)
 		     | None -> True
 		     | Some w -> 
 		       Map.contains h (StreamAE.State.region w) /\ //technical for framing; need to know that the writer's region exists
-		       (Mr.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is still unused; or
+ 		       (Mr.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is still unused; or
 		        (let copt = Mm.sel conn (idNonce i) in
- 			 is_Some copt /\ registered i w (Some.v copt) h)))                         //it's been assigned to a connection
+  			 is_Some copt /\ registered i w (Some.v copt) h)))      //it's been assigned to a connection
 
 let mc_inv (h:HyperHeap.t) = ms_conn_invariant (Mr.m_sel h Ms.ms_tab) (Mr.m_sel h conn_table) h
 
@@ -57,20 +58,21 @@ let mc_inv (h:HyperHeap.t) = ms_conn_invariant (Mr.m_sel h Ms.ms_tab) (Mr.m_sel 
 
 val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:id -> r:Hh.rid -> w:Ms.writer (i,r) 
   -> Lemma (requires 
+		 Hh.contains_ref (Mr.as_rref conn_table) h0 /\
+		 Hh.contains_ref (Mr.as_rref Ms.ms_tab) h0 /\
 		 Map.contains h1 (StreamAE.State.region w) /\
 		 authId i /\ 
 		 StAE.is_stream_ae i /\
 		 mc_inv h0 /\ //we're initially in the invariant
 		 Hh.modifies (Set.singleton tls_region) h0 h1 /\ //we just changed the tls_region
+		 Hh.modifies_rref tls_region !{Hh.as_ref (Mr.as_rref Ms.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
 		 (let old_ms = Mr.m_sel h0 Ms.ms_tab in 
 		  let new_ms = Mr.m_sel h1 Ms.ms_tab in
 		  Mm.sel old_ms (i,r) = None /\
 		  new_ms = Mm.upd old_ms (i,r) w) /\                                    //and the ms_tab only changed by adding w
 		 Mr.m_sel h1 (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty)             //and w's log is empty
 	 (ensures mc_inv h1)                                                       //we're back in the invariant
-#reset-options "--log_queries"
-
-let ms_derive_is_ok h0 h1 i r w =  ()
+let ms_derive_is_ok h0 h1 i r w = ()
 
 //2. Adding a new epoch to a connection c, with a fresh index (hdId i) for c
 //      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
