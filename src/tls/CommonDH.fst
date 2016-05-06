@@ -59,6 +59,12 @@ let serialize k =
   | FFKey k -> DHGroup.serialize k.dh_params k.dh_public
   | ECKey k -> ECGroup.serialize k.ec_params k.ec_point
 
+val parse: params -> bytes -> Tot (option key)
+let parse p x =
+  match p with
+  | ECP p -> (match ECGroup.parse_point p x with | Some eck -> Some (ECKey ({ec_params=p; ec_point=eck; ec_priv=None;})) | None -> None)
+  | FFP p -> None // TODO
+
 val key_params: key -> Tot params
 let key_params k =
   match k with

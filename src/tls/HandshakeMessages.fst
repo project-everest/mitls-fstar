@@ -105,7 +105,7 @@ type ch = {
   ch_sessionID:sessionID;
   ch_cipher_suites:(k:known_cipher_suites{List.Tot.length k < 256});
   ch_raw_cipher_suites:option (b:bytes{length b < 512});
-  ch_compressions:(cl:list compression{List.Tot.length cl < 256});
+  ch_compressions:option (cl:list compression{List.Tot.length cl < 256});
   ch_extensions:option (ce:list extension{List.Tot.length ce < 256});
 }
 
@@ -266,9 +266,9 @@ let clientHelloBytes ch =
     | Some csb -> csb in
   lemma_repr_bytes_values (length csb);
   let csB = vlbytes 2 csb in
-  let cmb = compressionMethodsBytes ch.ch_compressions in
-  lemma_repr_bytes_values (length cmb);
-  let cmB = vlbytes 1 cmb in
+  let cmB = match ch.ch_compressions with
+    | Some cl -> vlbytes 1 (compressionMethodsBytes cl)
+    | None -> empty_bytes in
   let extB =
     match ch.ch_extensions with
     | Some ext -> extensionsBytes ext
@@ -308,7 +308,11 @@ let parseClientHello data =
 	       (match parseCipherSuites clCiphsuitesBytes with
 	        | Error z -> Error z
 	        | Correct clientCipherSuites ->
-	          if length data >= 1 then
+
+                  // ADL More relaxed parsing for old ClientHello messages with
+                  // no compression and no extensions
+                  let compExts =
+  	            if length data >= 1 then
 		    (match vlsplit 1 data with
 		     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
 		     | Correct (cmBytes,extensions) ->
@@ -321,19 +325,24 @@ let parseClientHello data =
 			      | Some l -> List.Tot.length l < 256)
 			     && List.Tot.length cm < 256
 			     && List.Tot.length clientCipherSuites < 256
-			  then
-			    Correct ({
-			      ch_protocol_version = cv;
-			      ch_client_random = cr;
-			      ch_sessionID = sid;
-			      ch_cipher_suites = clientCipherSuites;
-			      ch_raw_cipher_suites = Some clCiphsuitesBytes;
-			      ch_compressions = cm;
-			      ch_extensions = exts;
-			  })
-			else
-			  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
-		  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+			  then Correct (Some cm, exts)
+ 			  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
+                     else Correct (None, None) in
+                    
+                     (match compExts with
+                     | Correct (cm, exts) ->
+                            Correct ({
+                              ch_protocol_version = cv;
+                              ch_client_random = cr;
+                              ch_sessionID = sid;
+                              ch_cipher_suites = clientCipherSuites;
+                              ch_raw_cipher_suites = Some clCiphsuitesBytes;
+                              ch_compressions = cm;
+                              ch_extensions = exts;
+                          })
+                      | Error e -> Error e))
+
+//		  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 	       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 	   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

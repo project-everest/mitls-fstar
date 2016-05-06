@@ -39,7 +39,7 @@ let id = {
       ne_extended_ms = false;
       ne_extended_padding = false;
       ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_curves = None;
+      ne_supported_groups = None;
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;
@@ -223,8 +223,8 @@ let rec aux sock =
   let alg = (sa, Hash CoreCrypto.SHA256) in
   let ems = nego.ne_extended_ms in
   let group =
-    match nego.ne_supported_curves with
-    | Some (curve::_) -> CommonDH.ECDH curve
+    match nego.ne_supported_groups with
+    | Some ((SEC curve)::_) -> CommonDH.ECDH curve
     | _ -> failwith "No shared curve" in
   let sr, gy = KeySchedule.ks_server_12_init_dh ks cr pv cs ems group in
   let sh = {sh with sh_server_random = sr} in

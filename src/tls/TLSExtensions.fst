@@ -419,11 +419,12 @@ let prepareExtensions (cfg:config) (conn:connectionInfo) ri ks =
 //    let res = E_extended_padding :: res in
     let res = (E_signatureAlgorithms cfg.signatureAlgorithms) :: res in
     let res =
-        let curves = List.Tot.map (fun x -> ECGroup.EC_CORE x) cfg.ecdhGroups in
-        if curves <> [] && List.Tot.existsb (fun x -> isECDHECipherSuite x) cfg.ciphersuites then
-	  let curves = List.Tot.map (fun x -> SEC x) cfg.ecdhGroups in
-          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: E_supported_groups(curves) :: res
-        else res in
+        if List.Tot.existsb (fun x -> isECDHECipherSuite x) cfg.ciphersuites then
+          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: (E_supported_groups cfg.namedGroups) :: res
+        else
+          let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) cfg.namedGroups in
+          if g = [] then res
+          else (E_supported_groups g) :: res in
     res
 
 
@@ -543,13 +544,8 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
     | E_supported_groups l ->
         if resuming then neg
         else
-            let rec (okcurves:list namedGroup -> Tot (list ec_curve)) = function
-            | SEC(x) :: r ->
-                let rl = okcurves r in
-                if List.Tot.existsb (fun x -> x = x) cfg.ecdhGroups then x::rl else rl
-            | x :: r -> okcurves r
-            | [] -> [] in
-            {neg with ne_supported_curves = Some (okcurves l)}
+            let isOK g = List.Tot.existsb (fun x -> x = g) cfg.namedGroups in
+            {neg with ne_supported_groups = Some (List.Tot.filter isOK l)}
     | E_ec_point_format l ->
         if resuming then neg
         else

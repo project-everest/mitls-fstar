@@ -87,11 +87,12 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 
 type config = {
-    (* Supported versions, ciphersuites, and compressions *)
+    (* Supported versions, ciphersuites, groups, signature algorithms *)
     minVer: protocolVersion;
     maxVer: protocolVersion;
     ciphersuites: x:known_cipher_suites{List.Tot.length x < 256};
-    compressions: l:list compression{ List.Tot.length l <= 1 };
+    namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
+    signatureAlgorithms: list sigHashAlg;
 
     (* Handshake specific options *)
 
@@ -120,12 +121,6 @@ type config = {
     dhDBFileName: string;
     dhDefaultGroupFileName: string;
     dhPQMinLength: nat * nat;
-
-    (* ECDH settings *)
-    ecdhGroups: list ECGroup.group;
-
-    (* Signature algorithms preference string *)
-    signatureAlgorithms: list sigHashAlg;
     }
 
 val sigAlgPref: list sigAlg -> list hashAlg' -> Tot (list sigHashAlg)
@@ -148,13 +143,18 @@ let defaultConfig =
                       TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
                       TLS_RSA_WITH_3DES_EDE_CBC_SHA;
                     ] in
+    let curves = [CoreCrypto.ECC_P521; CoreCrypto.ECC_P384; CoreCrypto.ECC_P256] in
+    let ffdh = [FFDHE4096; FFDHE3072] in
+    let groups = List.Tot.append (List.Tot.map (fun x -> SEC x) curves) (List.Tot.map (fun x->FFDHE x) ffdh) in
+
     cut (List.Tot.length l == 7);//this requires 8 unfoldings
     let csn = cipherSuites_of_nameList l in
     {
-    minVer = SSL_3p0;
+    minVer = TLS_1p0;
     maxVer = TLS_1p2;
     ciphersuites = csn;
-    compressions = [ NullCompression ];
+    namedGroups = groups;
+    signatureAlgorithms = sigAlgPrefs;
 
     honourHelloReq = true;
     allowAnonCipherSuite = false;
@@ -175,9 +175,6 @@ let defaultConfig =
     dhDBFileName = DHDB.defaultFileName;
     dhDefaultGroupFileName = "default-dh.pem";
     dhPQMinLength = DHDB.defaultPQMinLength;
-
-    ecdhGroups = [CoreCrypto.ECC_P256; CoreCrypto.ECC_P384; CoreCrypto.ECC_P521];
-    signatureAlgorithms = sigAlgPrefs;
     }
 #reset-options
 
@@ -217,7 +214,7 @@ type negotiatedExtensions = {
     ne_secure_renegotiation: ri_status;
 
     //$ Cedric: these extensions were missing in F7.
-    ne_supported_curves: option (list ECGroup.group);
+    ne_supported_groups: option (list namedGroup);
     ne_supported_point_formats: option (list ECGroup.point_format);
     ne_server_names: option (list serverName);
     ne_signature_algorithms: option (list sigHashAlg);
@@ -229,7 +226,7 @@ let ne_default =
     ne_extended_ms = false;
     ne_extended_padding = false;
     ne_secure_renegotiation = RI_Unsupported;
-    ne_supported_curves = None;
+    ne_supported_groups = None;
     ne_supported_point_formats = None;
     ne_server_names = None;
     ne_signature_algorithms = None;

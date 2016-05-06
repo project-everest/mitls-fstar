@@ -35,7 +35,7 @@ let prepareClientHello cfg ri sido =
    ch_sessionID = sid;
    ch_cipher_suites = cfg.ciphersuites;
    ch_raw_cipher_suites = None;
-   ch_compressions = cfg.compressions;
+   ch_compressions = Some [NullCompression];
    ch_extensions = Some ext;} in
    (k,ch,clientHelloBytes ch)
 
@@ -66,12 +66,6 @@ let negotiateCipherSuite cfg pv c =
   match negotiate c cfg.ciphersuites with
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
-
-val negotiateCompression: cfg:config -> pv:protocolVersion -> c:list compression -> Tot (result compression)
-let negotiateCompression cfg pv c =
-  match negotiate c cfg.compressions with
-  | Some(cs) -> Correct(cs)
-  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Compression negotiation failed")
 
 // TODO : IMPLEMENT
 val getCachedSession: cfg:config -> ch:ch -> ST (option session)
@@ -105,21 +99,21 @@ let prepareServerHello cfg ri ks ch i_log =
     match negotiateCipherSuite cfg pv ch.ch_cipher_suites with
     | Error(z) -> Error(z)
     | Correct(kex,sa,ae,cs) ->
-    match negotiateCompression cfg pv ch.ch_compressions with
-    | Error(z) -> Error(z)
-    | Correct(cm) ->
     match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ks false with
     | Error(z) -> Error(z)
     | Correct(sext,next) ->
   //  let sid = Nonce.random 32 in
     let sid = CoreCrypto.random 32 in
+    let comp = match ch.ch_compressions with
+      | None -> None
+      | Some _ -> Some NullCompression in
     let shB = 
       serverHelloBytes (
       {sh_protocol_version = pv;
        sh_sessionID = Some sid;
        sh_server_random = srand;
        sh_cipher_suite = cs;
-       sh_compression = Some cm;
+       sh_compression = comp;
        sh_extensions = sext}) in
     let nego = 
       {n_client_random = ch.ch_client_random;
@@ -130,7 +124,7 @@ let prepareServerHello cfg ri ks ch i_log =
        n_sigAlg = sa;
        n_aeAlg  = ae;
        n_cipher_suite = cs;
-       n_compression = Some cm;
+       n_compression = comp;
        n_scsv = [];
        n_extensions = next;
        (* [getCachedSession] returned [None], so no session resumption *)
@@ -171,13 +165,6 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
   List.Tot.existsb (fun x -> x = s_cs) cfg.ciphersuites &&
   not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
   
-
-(* Our server implementation doesn't support compression, meaning [cmp] is
- always [NullCompression], so it's always a valid compression. *)
-val acceptableCompression: config -> ch -> protocolVersion -> option compression -> Tot bool
-let acceptableCompression cfg ch pv cmp =
-  true
-
 let processServerHello cfg ri eph_c ch sh =
   let res = ch_is_resumption ch in
   // FIXME 1.3
@@ -185,8 +172,6 @@ let processServerHello cfg ri eph_c ch sh =
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
   else  if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-  else if not (acceptableCompression cfg ch sh.sh_protocol_version sh.sh_compression) then
-    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Compression negotiation") 
   else
     match negotiateClientExtensions sh.sh_protocol_version cfg ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite ri res with
     | Error z -> Error z
