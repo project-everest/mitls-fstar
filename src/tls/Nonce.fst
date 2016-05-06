@@ -55,8 +55,18 @@ let fresh_region (r:ex_rid) (h:HH.t) =
 
 //A nonce n is registered to region r, if the table contains n -> Some r; 
 //This mapping is stable (that's what the MR.witnessed means)
-let registered (n:random) (r:ex_rid) = MR.witnessed (MM.contains nonce_rid_table n r)
+let registered (n:random) (r:HH.rid) = 
+  MR.witnessed (MR.rid_exists r) /\
+  MR.witnessed (MM.contains nonce_rid_table n r)
 
+let testify (n:random) (r:HH.rid) 
+  : ST unit (requires (fun h -> registered n r))
+	    (ensures (fun h0 _ h1 -> 
+		 h0=h1 /\
+	         registered n r /\ 
+		 MM.contains nonce_rid_table n r h1))
+  = MR.testify (MM.contains nonce_rid_table n r)
+  
 //Although the table only maps nonces to rids, externally, we also 
 //want to associate the nonce with a role. Within this module
 //what counts is the stable association of nonce to rid

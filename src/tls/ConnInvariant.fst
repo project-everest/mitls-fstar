@@ -1,7 +1,6 @@
 module ConnInvariant
 open TLSConstants
 
-
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
@@ -19,18 +18,18 @@ let pairwise_disjoint (m:MM.map' random r_conn) =
 	     ==> HH.disjoint (Some.v (MM.sel m r1)).region  
 		             (Some.v (MM.sel m r2)).region
 
-
-let tls_region = MS.tls_region
-
-type conn_table_t = MM.t tls_region random r_conn pairwise_disjoint
+type conn_table_t = MM.t tls_tables_region random r_conn pairwise_disjoint
 
 let conn_table : conn_table_t = 
-  MM.alloc #tls_region #random #r_conn #pairwise_disjoint
+  MM.alloc #tls_tables_region #random #r_conn #pairwise_disjoint
 
-type ms_tab = MM.map' MS.ids MS.writer 
+module AE = StreamAE
+
+type ms_tab = MM.map' AE.id MS.writer 
 type c_tab  = MM.map' random r_conn 
 
-assume val idNonce : id -> Tot random
+module N = Nonce
+module I = IdNonce
 
 let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) = 
   HH.disjoint (HS.region c.hs) tls_region /\
@@ -42,15 +41,16 @@ let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) 
 let ms_conn_invariant (ms:ms_tab)
  		      (conn:c_tab)
 		      (h:HyperHeap.t) 
-  = forall (i:id) (r:HH.rid).{:pattern (MM.sel ms (i,r))}
+  = forall (i:id) .{:pattern (MM.sel ms i)}
 	     authId i /\ StAE.is_stream_ae i ==>  //Focused only on TLS-1.3 for now, hence the is_stream_ae guard
-	            (match MM.sel ms (i,r) with 
+	            (match MM.sel ms i with 
 		     | None -> True
 		     | Some w -> 
 		       Map.contains h (StreamAE.State.region w) /\ //technical for framing; need to know that the writer's region exists
  		       (MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is still unused; or
-		        (let copt = MM.sel conn (idNonce i) in
-  			 is_Some copt /\ registered i w (Some.v copt) h)))      //it's been assigned to a connection
+		        False))
+		        (* (let copt = MM.sel conn (I.nonce_of_id i) in *)
+  			(*  is_Some copt /\ registered i w (Some.v copt) h)))      //it's been assigned to a connection *)
 
 let mc_inv (h:HyperHeap.t) = ms_conn_invariant (MR.m_sel h MS.ms_tab) (MR.m_sel h conn_table) h
 
@@ -59,23 +59,24 @@ let mc_inv (h:HyperHeap.t) = ms_conn_invariant (MR.m_sel h MS.ms_tab) (MR.m_sel 
 //1. Deriving a new key involves adding a new writer to the ms table (because we tried a lookup at id and it failed)
 //   Easy: because a new log is empty and both cases of the conn table allow empty logs to be in ms
  
-val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:id -> r:HH.rid -> w:MS.writer (i,r) 
+val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:id -> w:MS.writer i
   -> Lemma (requires 
 		 HH.contains_ref (MR.as_rref conn_table) h0 /\
 		 HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
 		 Map.contains h1 (StreamAE.State.region w) /\
 		 authId i /\ 
 		 StAE.is_stream_ae i /\
+		 HH.disjoint (StreamAE.State.region w) tls_tables_region /\
 		 mc_inv h0 /\ //we're initially in the invariant
-		 HH.modifies (Set.singleton tls_region) h0 h1 /\ //we just changed the tls_region
-		 HH.modifies_rref tls_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
+		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_region
+		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
 		 (let old_ms = MR.m_sel h0 MS.ms_tab in 
 		  let new_ms = MR.m_sel h1 MS.ms_tab in
-		  MM.sel old_ms (i,r) = None /\
-		  new_ms = MM.upd old_ms (i,r) w) /\                                    //and the ms_tab only changed by adding w
+		  MM.sel old_ms i = None /\
+		  new_ms = MM.upd old_ms i w) /\                                    and the ms_tab only changed by adding w
 		 MR.m_sel h1 (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty)             //and w's log is empty
 	 (ensures mc_inv h1)                                                       //we're back in the invariant
-let ms_derive_is_ok h0 h1 i r w = ()
+let ms_derive_is_ok h0 h1 i w = ()
 
 //2. Adding a new epoch to a connection c, with a fresh index (hdId i) for c
 //      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
