@@ -96,6 +96,7 @@ HMAC.fst \
 Sig.p.fst \
 Cert.fst \
 TLSInfo.fst \
+IdNonce.fst \
 TLSExtensions.fst \
 Range.fst \
 DataStream.fst \
@@ -154,6 +155,7 @@ CommonDH \
 HASH \
 HMAC \
 TLSInfo \
+IdNonce \
 Range \
 DataStream \
 Alert \

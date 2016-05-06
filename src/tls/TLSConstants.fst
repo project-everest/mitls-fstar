@@ -13,9 +13,9 @@ open TLSError
 open CoreCrypto
 module HH = FStar.HyperHeap
 
-let rid = r:HH.rid { r <> HH.root }
-let tls_region : rid = new_region HH.root
-let tls_tables_region : (r:rid{HH.parent r = tls_region}) = new_region tls_region
+let rgn = r:HH.rid { r <> HH.root }
+let tls_region : rgn = new_region HH.root
+let tls_tables_region : (r:rgn{HH.parent r = tls_region}) = new_region tls_region
 
 // -------------------------------------------------------------------
 // Polarity for reading and writing, e.g. for stateful encryption
