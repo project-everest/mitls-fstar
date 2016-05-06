@@ -11,6 +11,7 @@ open FStar.SeqProperties // for e.g. found
 
 open Platform.Bytes
 
+open TLSConstants
 open TLSError
 open TLSInfo
 open Range

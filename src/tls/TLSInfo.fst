@@ -32,20 +32,6 @@ open Cert
   This requires concrete safe/auth/strong/honest functions,
   used solely for controlling idealization.                        *)
 
-// -------------------------------------------------------------------
-// Polarity for reading and writing, e.g. for stateful encryption
-
-type rw =
-  | Reader
-  | Writer
-
-type role =
-  | Client
-  | Server
-
-let dualRole = function
-  | Client -> Server
-  | Server -> Client
 
 // -------------------------------------------------------------------
 // Application configuration

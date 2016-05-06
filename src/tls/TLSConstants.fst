@@ -11,6 +11,26 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open CoreCrypto
+module HH = FStar.HyperHeap
+
+let rid = r:HH.rid { r <> HH.root }
+let tls_region : rid = new_region HH.root
+let tls_tables_region : (r:rid{HH.parent r = tls_region}) = new_region tls_region
+
+// -------------------------------------------------------------------
+// Polarity for reading and writing, e.g. for stateful encryption
+
+type rw =
+  | Reader
+  | Writer
+
+type role =
+  | Client
+  | Server
+
+let dualRole = function
+  | Client -> Server
+  | Server -> Client
 
 (* Type representations for TLS negotiated values *)
 type protocolVersion =
