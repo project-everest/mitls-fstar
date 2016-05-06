@@ -18,11 +18,15 @@ let timestamp () =
   let time = Platform.Date.secondsFromDawn () in
   lemma_repr_bytes_values time;
   bytes_of_int 4 time
-  
+
+// ex_rid: The type of a region id that is known 
+//         to exist in the current heap and in every future one
+type ex_rid = MR.ex_rid
+
 // MM.map provide a dependent map type; 
 // In this case, we don't need the dependencey
-// The n_rid type is rid with a trivial depdendence on (n:random)
-let n_rid = fun (n:random) -> rid
+// The n_rid type has a trivial depdendence on (n:random)
+let n_rid = fun (n:random) -> ex_rid
 
 // A partial map from nonces to rid is injective, 
 // if it maps distinct nonces to distinct rids
@@ -46,25 +50,25 @@ let nonce_rid_table : MM.t tls_tables_region random n_rid injective =
 let fresh (n:random) (h:HH.t) = MM.sel (MR.m_sel h nonce_rid_table) n = None
 
 //A region is fresh if no nonce is associated with it
-let fresh_region (r:rid) (h:HH.t) = 
-  forall n. MM.sel (MR.m_sel h nonce_rid_table) n <> Some r
+let fresh_region (r:ex_rid) (h:HH.t) = 
+  forall n. Some r <> MM.sel (MR.m_sel h nonce_rid_table) n 
 
 //A nonce n is registered to region r, if the table contains n -> Some r; 
 //This mapping is stable (that's what the MR.witnessed means)
-let registered (n:random) (r:rid) = MR.witnessed (MM.contains nonce_rid_table n r)
+let registered (n:random) (r:ex_rid) = MR.witnessed (MM.contains nonce_rid_table n r)
 
 //Although the table only maps nonces to rids, externally, we also 
 //want to associate the nonce with a role. Within this module
 //what counts is the stable association of nonce to rid
 //So, we define role_nonce as an abstract predicate to capture the 
 //"event" that mkHelloRandom was called for particular triple of values
-abstract let role_nonce (cs:role) (n:random) (r:rid) = registered n r
+abstract let role_nonce (cs:role) (n:random) (r:ex_rid) = registered n r
 
-val mkHelloRandom: cs:role -> r:rid -> ST random
+val mkHelloRandom: cs:role -> r:ex_rid -> ST random
   (requires (fun h -> fresh_region r h))
   (ensures (fun h0 n h1 -> 
     HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //modifies at most the tables region
-    HH.modifies_rref tls_tables_region !{ HH.as_ref (MR.as_rref nonce_rid_table) } h0 h1 /\ //and within it, at most the nonce_rid_tabe
+    HH.modifies_rref tls_tables_region !{ HH.as_ref (MR.as_rref nonce_rid_table) } h0 h1 /\ //and within it, at most the nonce_rid_table
     (ideal ==> fresh n h0  /\        //if we're ideal then the nonce is fresh
     	       registered n r /\     //the nonce n is associated with r
     	       role_nonce cs n r))) //and the triple are associated as well, for ever more
@@ -77,7 +81,7 @@ let rec mkHelloRandom cs r =
       | Some _ -> mkHelloRandom cs r // formally retry to exclude collisions.
   else n
 
-val lookup: cs:role -> n:random -> ST (option rid)
+val lookup: cs:role -> n:random -> ST (option (ex_rid))
   (requires (fun h -> True))
   (ensures (fun h0 ropt h1 -> 
 	        h0=h1 /\ 
@@ -85,3 +89,43 @@ val lookup: cs:role -> n:random -> ST (option rid)
 		 | Some r ->  registered n r /\ role_nonce cs n r
 		 | None -> fresh n h0)))
 let lookup role n = MM.lookup nonce_rid_table n
+
+(* Would be nice to make this a local let in new_region.
+   Except, implicit argument inference for testify_forall fails *)
+private let nonce_rids_exists (m:MM.map' random n_rid) = 
+    forall (n:random{is_Some (MM.sel m n)}). MR.witnessed (MR.rid_exists (Some.v (MM.sel m n)))
+
+(* 
+   A convenient wrapper around FStar.ST.new_region, 
+   which proves that the returned region does not exist in the nonce_rid_table.
+   
+   Requires a bit of fancy footwork with reasoning about witnessed predicates 
+   underneath quantifiers. So, one should really use this version of new_region 
+   for every dynamic region allocation in TLS.
+*)   
+val new_region: parent:rid -> ST ex_rid 
+  (requires (fun h -> True))
+  (ensures (fun h0 r h1 -> 
+	      HH.extends r parent /\
+	      HH.fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
+	      fresh_region r h1)) //and it's not in the nonce table
+let new_region parent = 
+  MR.m_recall nonce_rid_table;
+  let m0 = MR.m_read nonce_rid_table in 
+  let tok : squash (nonce_rids_exists m0) = () in   
+  MR.testify_forall tok;
+  MR.ex_rid_of_rid (new_region parent)
+
+// a constant value, with negligible probability of being sampled, excluded by idealization
+let noCsr : bytes = CoreCrypto.random 64 
+
+
+(* With the upcoming improved support for top-level effects, 
+   we could  prove that noCsr is not fresh in the initial state. 
+   For example:
+
+   let noCsr : ST random
+      (requires (fun h -> Mr.m_sel h nonce_rid_table = MM.empty_map random ex_rid))
+      (ensures (fun h0 r h1 -> ~ (fresh r h1)))
+      = mkHelloRandom Client (new_region (FStar.ST.new_region HH.root))
+*)
