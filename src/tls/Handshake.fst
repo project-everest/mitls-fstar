@@ -7,6 +7,7 @@ module Handshake
 open TLSExtensions //the other opens are in the .fsti
 open CoreCrypto
 open HSCrypto
+module HH = FStar.HyperHeap
 
 let hsId h = noId // Placeholder
 
@@ -17,7 +18,8 @@ let ri = (cVerifyData * sVerifyData)
 
 
 let prepareClientHello cfg ri sido =
-  let crand = Nonce.mkHelloRandom() in
+  let place_holder_region_CHANGE_ME = new_region HH.root in 
+  let crand = Nonce.mkHelloRandom Client place_holder_region_CHANGE_ME in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client crand in
   let (k,kp) = 
@@ -75,7 +77,8 @@ let getCachedSession cfg cg = None
 
 // FIXME: TLS1.3
 let prepareServerHello cfg ri ks ch i_log =
-  let srand = Nonce.mkHelloRandom() in
+  let place_holder_region_CHANGE_ME = new_region HH.root in 
+  let srand = Nonce.mkHelloRandom Server place_holder_region_CHANGE_ME in
   match getCachedSession cfg ch with
   | Some sentry -> 
     (match negotiateServerExtensions sentry.session_nego.n_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg sentry.session_nego.n_cipher_suite ri ks true with
@@ -542,7 +545,7 @@ let iT_old (HS r res cfg id l st) rw =
 
 //val init: see .fsti
 let init r0 peer r cfg res = 
-    let id = Nonce.mkHelloRandom() in
+    let id = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
     let lg = createEmpty in
     let lgref = ralloc r0 lg in
     let hs = handshake_state_init cfg.maxVer r in

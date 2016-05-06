@@ -152,7 +152,7 @@ val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g})
 
 let ks_client_13_init_1rtt ks groups =
   let KS #rid cfg st = ks in
-  let cr = Nonce.mkHelloRandom () in
+  let cr = Nonce.mkHelloRandom Client rid in
   let kg x = x, (match x with
     | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
     | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
@@ -171,7 +171,7 @@ val ks_client_init_12: ks:ks -> ST (random * option sessionInfo)
 
 // TODO resumption support
 let ks_client_init_12 ks =
-  let cr = Nonce.mkHelloRandom () in
+  let cr = Nonce.mkHelloRandom Client ks.region in
   let osi, ns = None, (C (C_12_Full_CH cr)) in
 //    match cfg.resuming with
 //    | None -> None, (KS_C_12_Full_CH cr)
@@ -196,7 +196,7 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
 
 let ks_server_12_init_dh ks cr pv cs ems group =
   let KS #region cfg st = ks in
-  let sr = Nonce.mkHelloRandom () in
+  let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen group in
   let csr = cr @| sr in
@@ -217,7 +217,7 @@ val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gx:CommonDH.
 
 let ks_server_13_1rtt_init ks cr cs gx log_hash =
   let KS #region cfg st = ks in
-  let sr = Nonce.mkHelloRandom () in
+  let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite _ _ (AEAD ae h) = cs in
   let our_share, gxy = CommonDH.dh_responder gx in
   let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in
