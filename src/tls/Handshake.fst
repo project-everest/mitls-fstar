@@ -7,6 +7,7 @@ module Handshake
 open TLSExtensions //the other opens are in the .fsti
 open CoreCrypto
 open HSCrypto
+open HandshakeLog
 module HH = FStar.HyperHeap
 
 let hsId h = noId // Placeholder
@@ -37,7 +38,7 @@ let prepareClientHello cfg ri sido =
    ch_sessionID = sid;
    ch_cipher_suites = cfg.ciphersuites;
    ch_raw_cipher_suites = None;
-   ch_compressions = Some [NullCompression];
+   ch_compressions = [NullCompression];
    ch_extensions = Some ext;} in
    (k,ch,clientHelloBytes ch)
 
@@ -63,7 +64,7 @@ val negotiate:list 'a -> list 'a -> Tot (option 'a)
 let negotiate l1 l2 =
   List.Tot.tryFind (fun s -> List.Tot.existsb (fun c -> c = s) l1) l2
 
-val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> c:known_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * known_cipher_suite))
+val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> c:valid_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
 let negotiateCipherSuite cfg pv c =
   match negotiate c cfg.ciphersuites with
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
@@ -108,8 +109,8 @@ let prepareServerHello cfg ri ks ch i_log =
   //  let sid = Nonce.random 32 in
     let sid = CoreCrypto.random 32 in
     let comp = match ch.ch_compressions with
-      | None -> None
-      | Some _ -> Some NullCompression in
+      | [] -> None
+      | _ -> Some NullCompression in
     let shB = 
       serverHelloBytes (
       {sh_protocol_version = pv;
@@ -161,7 +162,7 @@ let acceptableVersion cfg ch s_pv s_random =
   - TODO: [s_cs] is supported by the protocol version (e.g. no GCM with
     TLS<1.2).
 *)
-val acceptableCipherSuite: config -> ch -> protocolVersion -> known_cipher_suite -> Tot bool
+val acceptableCipherSuite: config -> ch -> protocolVersion -> valid_cipher_suite -> Tot bool
 let acceptableCipherSuite cfg ch s_pv s_cs =
   // JP: I would think the first line implies the second one?
   List.Tot.existsb (fun x -> x = s_cs) ch.ch_cipher_suites &&

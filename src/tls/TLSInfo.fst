@@ -76,7 +76,8 @@ type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     minVer: protocolVersion;
     maxVer: protocolVersion;
-    ciphersuites: x:known_cipher_suites{List.Tot.length x < 256};
+    ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
+    compressions: l:list compression{ List.Tot.length l <= 1 };
     namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
     signatureAlgorithms: list sigHashAlg;
 
@@ -141,6 +142,7 @@ let defaultConfig =
     minVer = TLS_1p0;
     maxVer = TLS_1p2;
     ciphersuites = csn;
+    compressions = [NullCompression];
     namedGroups = groups;
     signatureAlgorithms = sigAlgPrefs;
 

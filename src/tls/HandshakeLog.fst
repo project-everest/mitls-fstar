@@ -11,33 +11,37 @@ open TLSConstants
 open TLSInfo
 open HandshakeMessages
 
-type log = 
-     | LOG: #region:rid -> hsl:rref region (list hs_msg) -> pv:protocolVersion -> rref region bytes -> log // bytes = handshakeMessagesBytes pv hsl
+type log =
+     | LOG: pv: protocolVersion -> #region:rid -> rref region (hsl:list hs_msg & b:bytes{b = handshakeMessagesBytes pv hsl}) -> log 
 
-val init: reg:rid -> pv:protocolVersion -> log
-let init reg pv = 
-    let r = ralloc reg empty_bytes in
-    let l: list hs_msg = [] in
-    let lr = ralloc reg l in
-    LOG #reg lr pv r
+val init: pv:protocolVersion -> reg:rid -> log 
+let init pv reg = 
+    let hsl: list hs_msg = [] in
+    let r = ralloc reg (|hsl,empty_bytes|) in
+    LOG pv #reg r 
 
-val append_log: log -> (hs_msg * bytes) -> unit
-let append_log (LOG #reg hsl pv lref) (hm,b) = 
-    lref := !lref @| b;
-    hsl := FStar.List.Tot.append !hsl [hm]
+val append_log: log -> hs_msg -> bytes
+let append_log (LOG pv #reg lref) hm = 
+    let mb = handshakeMessageBytes pv hm in
+    let (|hsl,lb|) = !lref in 
+    let hsl' = FStar.List.Tot.append hsl [hm] in
+    let lb' = lb @| mb in
+    lref := (|hsl',lb'|);
+    mb
 
 let op_At_At l h = append_log l h
 
 val getMessages: log -> ST (list hs_msg)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-
-let getMessages (LOG #reg hsl pv lref) = !hsl
+let getMessages (LOG pv #reg lref) = 
+    let (|hsl,lb|) = !lref in hsl
 
 val getBytes: log -> ST bytes 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let getBytes (LOG #reg #hsl pv lref) = !lref
+let getBytes (LOG pv #reg lref) = 
+    let (|hsl,lb|) = !lref in lb
 
 assume val checkLogSessionHash: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
 assume val checkLogClientFinished: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool

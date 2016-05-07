@@ -50,7 +50,7 @@ let parseRenegotiationInfo b =
 
 type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
-    ped_cipher_suite:known_cipher_suite;
+    ped_cipher_suite:valid_cipher_suite;
     ped_extensions:list extension;
     ped_context:b:bytes{length b < 256};
     //ped_early_data_type:earlyDataType; 
@@ -116,7 +116,8 @@ let compile_sni_list l =
     | [] -> empty_bytes
     | SNI_DNS(x) :: r -> (abyte 0z) @| bytes_of_int 2 (length x) @| x @| aux r
     | SNI_UNKNOWN(t, x) :: r -> (bytes_of_int 1 t) @| bytes_of_int 2 (length x) @| x @| aux r
-    in aux l
+    in 
+    (aux l)
 
 val parse_sni_list: r:role -> b:bytes -> Tot (result (list serverName))
 let parse_sni_list r b  =
@@ -244,44 +245,44 @@ let addOnce ext extList =
     if List.Tot.existsb (sameExt ext) extList then
         Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
     else
-        let res = ext::extList in
+        let res = FStar.List.Tot.append extList [ext] in
         correct(res)
 
 val earlyDataIndicationBytes: earlyDataIndication -> Tot bytes
-val extensionPayloadBytes: extension -> Tot bytes
-val extensionBytes: extension -> Tot bytes
-val extensionsBytes: cl:list extension -> Tot (b:bytes{length b <= 2 + 65535})
+val extensionPayloadBytes: role -> extension -> Tot bytes
+val extensionBytes: role -> extension -> Tot bytes
+val extensionsBytes: role -> cl:list extension -> Tot (b:bytes{length b <= 2 + 65535})
 let rec earlyDataIndicationBytes edi =
   match edi with
   | ServerEarlyDataIndication -> empty_bytes
   | ClientEarlyDataIndication edi ->
       let cid_bytes = configurationIdBytes edi.ped_configuration_id in
       let cs_bytes = cipherSuiteBytes edi.ped_cipher_suite in
-      let ext_bytes = extensionsBytes edi.ped_extensions in
+      let ext_bytes = extensionsBytes Client edi.ped_extensions in
       lemma_repr_bytes_values (length edi.ped_context);
       let context_bytes = vlbytes 1 edi.ped_context in
 //      let edt_bytes = earlyDataTypeBytes edi.ped_early_data_type in
       cid_bytes @| cs_bytes @| ext_bytes @| context_bytes //@| edt_bytes
-and extensionPayloadBytes ext =
+and extensionPayloadBytes role ext =
   match ext with
   | E_earlyData edt           -> earlyDataIndicationBytes edt
   | E_preSharedKey psk        -> preSharedKeyBytes psk
   | E_keyShare ks             -> keyShareBytes ks
   | E_signatureAlgorithms sha -> sigHashAlgsBytes sha
   | E_renegotiation_info(ri)  -> renegotiationInfoBytes ri
-  | E_server_name(l)          -> compile_sni_list l
+  | E_server_name(l)          -> if role = Client then vlbytes 2 (compile_sni_list l) else compile_sni_list l
   | E_extended_ms             -> empty_bytes
   | E_extended_padding        -> empty_bytes
   | E_supported_groups(l)     -> namedGroupsBytes l
   | E_ec_point_format(l)      -> compile_ecpf_list l
   | E_unknown_extension(h,b)  -> b
-and extensionBytes ext =
+and extensionBytes role ext =
     let head = extensionHeaderBytes ext in
-    let payload = extensionPayloadBytes ext in
+    let payload = extensionPayloadBytes role ext in
     let payload = vlbytes 2 payload in
     head @| payload
-and extensionsBytes exts =
-  vlbytes 2 (List.Tot.fold_left (fun l s -> extensionBytes s @| l) empty_bytes exts)
+and extensionsBytes role exts =
+  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
 
 (* TODO: inversion lemmas 
 val parseEarlyDataIndication: pinverse_t earlyDataIndicationBytes
@@ -572,7 +573,7 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
         else {neg with ne_signature_algorithms = Some (sha)}
     | _ -> neg // JK : handle remaining cases
 
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> known_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension) * negotiatedExtensions))
+val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension) * negotiatedExtensions))
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->
