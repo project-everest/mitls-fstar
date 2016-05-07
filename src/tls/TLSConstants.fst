@@ -802,7 +802,7 @@ let cipherSuite_of_name = function
   | TLS_DH_anon_WITH_AES_256_GCM_SHA384    -> CipherSuite Kex_DHE None          (AEAD AES_256_GCM SHA384)
 
 val cipherSuites_of_nameList: l1:list cipherSuiteName 
-  -> l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1}
+  -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
 let cipherSuites_of_nameList nameList = List.Tot.map cipherSuite_of_name nameList
 
 let name_of_cipherSuite cs =
