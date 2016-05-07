@@ -78,7 +78,7 @@ endif
 # these files are the stable inputs for verification -- this is the dependency
 # order for interactive verification; these files are now all extracted via
 # lax type-checking in tls-gen
-FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
+FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(subst MasterSecret.fst ConnInvariant.fst, , $(VERIFIABLE_FSTS)))
 
 VERIFIABLE_FSTS=IdealFlags.fst \
 MonotoneSeq.fst \
@@ -96,6 +96,7 @@ HMAC.fst \
 Sig.p.fst \
 Cert.fst \
 TLSInfo.fst \
+IdNonce.fst \
 TLSExtensions.fst \
 Range.fst \
 DataStream.fst \
@@ -104,7 +105,6 @@ Content.fst \
 StreamPlain.fst \
 StreamAE.fsti \
 StreamAE.fst \
-MasterSecret.fst \
 StatefulPlain.fst \
 LHAEPlain.fst \
 AEAD_GCM.fst \
@@ -118,6 +118,7 @@ HandshakeMessages.fst \
 StAE.fst \
 Handshake.fsti \
 Connection.fst \
+MasterSecret.fst \
 ConnInvariant.fst #the preceding space is significant!
 
 LAX_CHECKED_FSTS= Record.fst \
@@ -154,6 +155,7 @@ CommonDH \
 HASH \
 HMAC \
 TLSInfo \
+IdNonce \
 Range \
 DataStream \
 Alert \

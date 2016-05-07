@@ -24,7 +24,7 @@ let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
       ne_extended_ms = false;
       ne_extended_padding = false;
       ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_curves = None;
+      ne_supported_groups = None;
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;
@@ -76,7 +76,7 @@ let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (
       ne_extended_ms = false;
       ne_extended_padding = false;
       ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_curves = None;
+      ne_supported_groups = None;
       ne_supported_point_formats = None;
       ne_server_names = None;
       ne_signature_algorithms = None;

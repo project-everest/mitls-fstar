@@ -78,22 +78,28 @@ type pms = bytes
 
 // Agility parameters, extend as needed
 // may be moved to TLSInfo for joint idealization with Handshake
-type ks_alpha = pv:protocolVersion * cs:cipherSuite * ems:bool
+type ks_alpha12 = pv:protocolVersion * cs:cipherSuite * ems:bool
+type ks_alpha13 = ae:aeadAlg * h:CoreCrypto.hash_alg
 
 // Internal KS state, now with ad-hoc parameters
 type ks_client_state =
 | C_Init
 | C_12_Resume_CH: cr:random -> si:sessionInfo -> msId:TLSInfo.msId -> ms:ms -> ks_client_state
 | C_12_Full_CH: cr:random -> ks_client_state
-| C_12_wait_MS: csr:csRands -> alpha:ks_alpha -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
-| C_12_has_MS: csr:csRands -> alpha:ks_alpha -> id:TLSInfo.msId -> ms:ms -> ks_client_state
+| C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
+| C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
+| C_13_1RTT_CH: cr:random -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
+| C_13_1RTT_HTK: alpha:ks_alpha13 -> id:TLSInfo.msId -> xES:ms -> ks_client_state
+| C_13_1RTT_TS: alpha:ks_alpha13 -> sfk:bytes -> atk0:bytes -> ks_client_state
 | C_Done
 
 type ks_server_state =
 | S_Init
-| S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha -> our_share:CommonDH.key -> ks_server_state
-| S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha -> ks_server_state
-| S_12_has_MS: csr:csRands -> alpha:ks_alpha -> id:TLSInfo.msId -> ms:ms -> ks_server_state
+| S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:CommonDH.key -> ks_server_state
+| S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
+| S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
+| S_13_1RTT_HTK: alpha:ks_alpha13 -> id:TLSInfo.msId -> xES:ms -> ks_server_state
+| S_13_1RTT_TS: alpha:ks_alpha13 -> cfk:bytes -> atk0:bytes -> ks_server_state
 | S_Done
 
 // Reflecting state separation from HS
@@ -103,6 +109,22 @@ type ks_state =
 
 type ks =
 | KS: #region:rid -> cfg:config -> state:rref region ks_state -> ks
+
+type recordInstance =
+| StAEInstance: #id:StreamAE.id -> StreamAE.reader id -> StreamAE.writer id -> recordInstance
+| StLHAEInstance: #id:StatefulLHAE.id -> StatefulLHAE.reader id -> StatefulLHAE.writer id -> recordInstance
+
+// TODO replace constants (16, 12) with aeadAlg-derived values
+private let expand_13 (h:CoreCrypto.hash_alg) (secret:bytes) (phase:string) (context:bytes) =
+  let cekb = HSCrypto.hkdf_expand_label h
+             secret (phase ^ ", client write key") context 16 in
+  let civb = HSCrypto.hkdf_expand_label h
+             secret (phase ^ ", client write iv") context 12 in
+  let sekb = HSCrypto.hkdf_expand_label h
+             secret (phase ^ ", server write key") context 16 in
+  let sivb = HSCrypto.hkdf_expand_label h
+             secret (phase ^ ", server write iv") context 12 in
+  (cekb,civb,sekb,sivb)
 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
@@ -121,6 +143,23 @@ let create #rid cfg r =
   let istate = match r with | Client -> C C_Init | Server -> S S_Init in
   KS #ks_region cfg (ralloc ks_region istate)
 
+val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g}) -> ST (random * (list (namedGroup * CommonDH.key)))
+  (requires fun h0 -> sel h0 (KS.state ks) = C C_Init)
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_client_13_init_1rtt ks groups =
+  let KS #rid cfg st = ks in
+  let cr = Nonce.mkHelloRandom Client rid in
+  let kg x = x, (match x with
+    | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
+    | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
+  let gs = List.Tot.map kg groups in
+  st := C (C_13_1RTT_CH cr gs);
+  (cr, gs)
+
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
 val ks_client_init_12: ks:ks -> ST (random * option sessionInfo)
@@ -132,7 +171,7 @@ val ks_client_init_12: ks:ks -> ST (random * option sessionInfo)
 
 // TODO resumption support
 let ks_client_init_12 ks =
-  let cr = Nonce.mkHelloRandom () in
+  let cr = Nonce.mkHelloRandom Client ks.region in
   let osi, ns = None, (C (C_12_Full_CH cr)) in
 //    match cfg.resuming with
 //    | None -> None, (KS_C_12_Full_CH cr)
@@ -157,11 +196,34 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
 
 let ks_server_12_init_dh ks cr pv cs ems group =
   let KS #region cfg st = ks in
-  let sr = Nonce.mkHelloRandom () in
+  let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen group in
   let csr = cr @| sr in
   st := S (S_12_wait_CKE_DH csr (pv, cs, ems) our_share);
+  (sr, our_share)
+
+val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gx:CommonDH.key -> log_hash:bytes -> ST (random * CommonDH.key)
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_S kss /\ is_S_Init (S.s kss)
+    /\ is_CipherSuite cs
+    /\ (let CipherSuite kex _ _ = cs in
+         (kex = Kex_DHE \/ kex = Kex_ECDHE)))
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_server_13_1rtt_init ks cr cs gx log_hash =
+  let KS #region cfg st = ks in
+  let sr = Nonce.mkHelloRandom Server region in
+  let CipherSuite _ _ (AEAD ae h) = cs in
+  let our_share, gxy = CommonDH.dh_responder gx in
+  let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in
+  let msId = noMsId in
+  let xES = HSCrypto.hkdf_extract h zeroes gxy in
+  st := S (S_13_1RTT_HTK (ae, h) msId xES);
   (sr, our_share)
 
 // log is the raw HS log, used for EMS derivation
@@ -218,12 +280,131 @@ let ks_client_12_resume ks sr pv cs =
 //   2. they use different return types
 //   3. they are called at different locations
 
+val ks_client_13_1rtt: ks:ks -> cs:cipherSuite -> gy:(namedGroup * CommonDH.key) -> log_hash:bytes -> ST recordInstance
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_C kss /\ is_C_13_1RTT_CH (C.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_client_13_1rtt ks cs (gs, gy) log_hash =
+  let KS #region cfg st = ks in
+  let C (C_13_1RTT_CH cr gc) = !st in
+  let Some (_, gx) = List.Tot.find (fun (gc,_) -> gc=gs) gc in
+  let gxy = CommonDH.dh_initiator gx gy in
+  let CipherSuite _ _ (AEAD ae h) = cs in
+  let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in
+  let msId = noMsId in
+  let xES = HSCrypto.hkdf_extract h zeroes gxy in
+  let (ck,civ,sk,siv) = expand_13 h xES "handshake key expansion" log_hash in
+  // TODO fix the broken index of StreamAE
+  let id = {
+    msId = msId;
+    kdfAlg = PRF_SSL3_nested;
+    pv = TLS_1p3;
+    aeAlg = (AEAD ae h);
+    csrConn = bytes_of_hex "";
+    ext = {
+      ne_extended_ms = false;
+      ne_extended_padding = false;
+      ne_secure_renegotiation = RI_Unsupported;
+      ne_supported_groups = None;
+      ne_supported_point_formats = None;
+      ne_server_names = None;
+      ne_signature_algorithms = None;
+      ne_keyShare = None
+    };
+    writer = Client
+  } in
+  assume (~ (authId id));
+  let ckv: StreamAE.key id = ck in
+  let civ: StreamAE.iv id  = civ in
+  let w = StreamAE.coerce HyperHeap.root id ckv civ in
+  let skv: StreamAE.key id = sk in
+  let siv: StreamAE.iv id  = siv in
+  let rw = StreamAE.coerce HyperHeap.root id skv siv in
+  let r = StreamAE.genReader HyperHeap.root rw in
+  st := C (C_13_1RTT_HTK (ae, h) msId xES);
+  StAEInstance r w
+
+// Old KS: ms, cfk, sfk is up to CertificateVerify
+// application keys use atk with context up to server finished
+val ks_client_13_1rtt_server_finished: ks:ks -> log_hash:bytes -> ST (svd:bytes)
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_C kss /\ is_C_13_1RTT_HTK (C.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_client_13_1rtt_server_finished ks log_hash =
+  let KS #region cfg st = ks in
+  let C (C_13_1RTT_HTK alpha msId xES) = !st in
+  let (ae, h) = alpha in
+  let mSS = HSCrypto.hkdf_expand_label h xES "expanded static secret" log_hash 32 in
+  let mES = HSCrypto.hkdf_expand_label h xES "expanded ephemeral secret" log_hash 32 in
+  let ms = HSCrypto.hkdf_extract h mSS mES in
+
+  let cfk = HSCrypto.hkdf_expand_label h ms "client finished" empty_bytes 32 in
+  let sfk = HSCrypto.hkdf_expand_label h ms "server finished" empty_bytes 32 in
+  let ts0 = HSCrypto.hkdf_expand_label h ms "traffic secret" log_hash 32 in
+  let svd = CoreCrypto.hmac h sfk log_hash in
+  st := C (C_13_1RTT_TS alpha cfk ts0);
+  svd
+
+val ks_client_13_1rtt_client_finished: ks:ks -> log_hash:bytes -> ST (cvd:bytes * recordInstance)
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_C kss /\ is_C_13_1RTT_TS (C.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid cfg st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_client_13_1rtt_client_finished ks log_hash =
+  let KS #region cfg st = ks in
+  let C (C_13_1RTT_TS alpha cfk ts0) = !st in
+  let (ae, h) = alpha in
+  let cvd = CoreCrypto.hmac h cfk log_hash in
+  let (ck,civ,sk,siv) = expand_13 h ts0 "application data key expansion" log_hash in
+  // TODO need to completely scrap and redo 1.3 index types
+  let id = {
+    msId = noMsId;
+    kdfAlg = PRF_SSL3_nested;
+    pv = TLS_1p3;
+    aeAlg = (AEAD ae h);
+    csrConn = bytes_of_hex "";
+    ext = {
+      ne_extended_ms = false;
+      ne_extended_padding = false;
+      ne_secure_renegotiation = RI_Unsupported;
+      ne_supported_groups = None;
+      ne_supported_point_formats = None;
+      ne_server_names = None;
+      ne_signature_algorithms = None;
+      ne_keyShare = None
+    };
+    writer = Client
+  } in
+  let ckv: StreamAE.key id = ck in
+  let civ: StreamAE.iv id  = civ in
+  let w = StreamAE.coerce HyperHeap.root id ckv civ in
+  let skv: StreamAE.key id = sk in
+  let siv: StreamAE.iv id  = siv in
+  let rw = StreamAE.coerce HyperHeap.root id skv siv in
+  let r = StreamAE.genReader HyperHeap.root rw in
+  st := C (C_Done);
+  (cvd, StAEInstance r w)
+
 // Called by Hanshake when DH key echange is negotiated
 val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> CommonDH.params -> peer_share:CommonDH.key -> ST CommonDH.key
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_C st /\
-    (is_C_12_Full_CH (C.s st) \/ is_C_12_Resume_CH (C.s st)))
+    (is_C_12_Full_CH (C.s st) \/ is_C_12_Resume_CH (C.s st) \/ is_C_13_1RTT_CH (C.s st)))
   (ensures fun h0 r h1 ->
     let KS #rid cfg st = ks in
     modifies (Set.singleton rid) h0 h1
@@ -233,7 +414,8 @@ let ks_client_12_full_dh ks sr pv cs ems dhp peer_share =
   let KS #region cfg st = ks in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
-    | C (C_12_Resume_CH cr _ _ _) -> cr in
+    | C (C_12_Resume_CH cr _ _ _) -> cr
+    | C (C_13_1RTT_CH cr _ ) -> cr in
   let csr = cr @| sr in
   let alpha = (pv, cs, ems) in
   let our_share, pmsb = CommonDH.dh_responder peer_share in
