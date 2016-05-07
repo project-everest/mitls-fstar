@@ -103,8 +103,7 @@ type ch = {
   ch_protocol_version:protocolVersion;
   ch_client_random:TLSInfo.random;
   ch_sessionID:sessionID;
-  ch_cipher_suites:(k:known_cipher_suites{List.Tot.length k < 256});
-  ch_raw_cipher_suites:option (b:bytes{length b < 512});
+  ch_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   ch_compressions:(cl:list compression{List.Tot.length cl < 256});
   ch_extensions:option (ce:list extension{List.Tot.length ce < 256});
 }
@@ -116,7 +115,7 @@ type sh = {
   sh_protocol_version:protocolVersion;
   sh_server_random:TLSInfo.random;
   sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
-  sh_cipher_suite:known_cipher_suite;
+  sh_cipher_suite:valid_cipher_suite;
   sh_compression:option compression; // JK : made optional because not present in TLS 1.3
   sh_extensions:option (se:list extension{List.Tot.length se < 256});
 }
@@ -124,7 +123,7 @@ type sh = {
 (* Hello retry request *)
 type hrr = {
   hrr_protocol_version:protocolVersion;
-  hrr_cipher_suite:known_cipher_suite;
+  hrr_cipher_suite:valid_cipher_suite;
   hrr_named_group:namedGroup; // JK : is it the expected type here ?
   hrr_extensions:(he:list extension{List.Tot.length he < 256});
 }
@@ -260,10 +259,7 @@ let clientHelloBytes ch =
   let verB = versionBytes ch.ch_protocol_version in
   lemma_repr_bytes_values (length ch.ch_sessionID);
   let sidB = vlbytes 1 ch.ch_sessionID in
-  let csb:bytes =
-    match ch.ch_raw_cipher_suites with
-    | None -> cipherSuitesBytes ch.ch_cipher_suites
-    | Some csb -> csb in
+  let csb:bytes = cipherSuitesBytes ch.ch_cipher_suites in
   lemma_repr_bytes_values (length csb);
   let csB = vlbytes 2 csb in
   let cmb = compressionMethodsBytes ch.ch_compressions in
@@ -271,7 +267,7 @@ let clientHelloBytes ch =
   let cmB = vlbytes 1 cmb in
   let extB =
     match ch.ch_extensions with
-    | Some ext -> extensionsBytes ext
+    | Some ext -> extensionsBytes Client ext
     | None -> empty_bytes in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
   lemma_repr_bytes_values (length data);
@@ -284,7 +280,7 @@ let clientHelloBytes ch =
    serialization function is not an inverse of the parsing function as
    it is now *)
 val parseClientHello : data:bytes{repr_bytes(length data) <= 3} 
-  -> Tot (result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
+  -> Tot  (result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
                                  /\ x.ch_protocol_version = x'.ch_protocol_version 
                                  /\ x.ch_client_random = x'.ch_client_random
                                  /\ x.ch_sessionID = x'.ch_sessionID }))
@@ -338,6 +334,8 @@ let parseClientHello data =
 	   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
+
+
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34})
 let serverHelloBytes sh =
   let verB = versionBytes sh.sh_protocol_version in
@@ -356,7 +354,7 @@ let serverHelloBytes sh =
   in
   let extB = 
     match sh.sh_extensions with
-    | Some ext -> extensionsBytes ext
+    | Some ext -> extensionsBytes Server ext
     | None -> empty_bytes 
   in
   let data:bytes =
@@ -695,7 +693,7 @@ let helloRetryRequestBytes hrr =
   let pv = versionBytes hrr.hrr_protocol_version in
   let cs_bytes = cipherSuiteBytes hrr.hrr_cipher_suite in
   let ng = namedGroupBytes hrr.hrr_named_group in
-  let exts = extensionsBytes hrr.hrr_extensions in
+  let exts = extensionsBytes Server hrr.hrr_extensions in
   pv @| cs_bytes @| ng @| exts
 
 (* TODO: inversion lemmas *)
@@ -727,7 +725,7 @@ let parseHelloRetryRequest b =
 (* Encrypted_extensions *)
 val encryptedExtensionsBytes: ee -> Tot bytes
 let encryptedExtensionsBytes ee =
-    let payload = extensionsBytes ee.ee_extensions in
+    let payload = extensionsBytes Server ee.ee_extensions in
     messageBytes HT_encrypted_extensions payload
 
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
@@ -830,6 +828,13 @@ let handshakeMessageBytes pv hs =
     | HelloRetryRequest(hrr),_-> helloRetryRequestBytes hrr
     | ServerConfiguration(sc),_-> serverConfigurationBytes sc
     | NextProtocol(n),_-> nextProtocolBytes n
+
+val handshakeMessagesBytes: protocolVersion -> list hs_msg -> Tot bytes
+let rec handshakeMessagesBytes pv hsl = 
+    match hsl with
+    | [] -> empty_bytes
+    | h::t -> (handshakeMessageBytes pv h) @| (handshakeMessagesBytes pv t)
+  
 
 val string_of_handshakeMessage: hs_msg -> Tot string
 let string_of_handshakeMessage hs = 

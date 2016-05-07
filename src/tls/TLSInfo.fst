@@ -90,7 +90,7 @@ type config = {
     (* Supported versions, ciphersuites, and compressions *)
     minVer: protocolVersion;
     maxVer: protocolVersion;
-    ciphersuites: x:known_cipher_suites{List.Tot.length x < 256};
+    ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
     compressions: l:list compression{ List.Tot.length l <= 1 };
 
     (* Handshake specific options *)

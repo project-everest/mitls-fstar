@@ -315,7 +315,7 @@ val next_fragment: s:hs -> ST outgoing
                                               (*why do i need this?*)
 
 //<expose for TestClient>
-val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot (result (rem:bytes * list (hs_msg * bytes)))
+val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot  (result (rem:bytes * list (hs_msg * bytes)))
 //</expose for TestClient>
 
 (*** Incoming ***)
