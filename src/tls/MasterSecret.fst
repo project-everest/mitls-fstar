@@ -46,5 +46,5 @@ let derive (r:rid) (i:AE.id)
       w
     | Some w -> 
       N.testify (I.nonce_of_id i) r;   // n i -> r
-      N.testify (I.nonce_of_id i) (HH.parent w.region); //n i -> HH.parent w.region ==> r=w.region; TODO: somehow using the projector breaks extraction
+      N.testify (I.nonce_of_id i) (HH.parent w.region); //n i -> HH.parent w.region ==> r=w.region; 
       w
