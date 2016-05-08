@@ -117,7 +117,7 @@ type st_inv c h =
 
 // we should have st_env_inv & st_dec_inv for all epochs, all the time.
 // + the property that at most the current epochs' logs are extended.
-val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.peer c.hs)){epochs_footprint es /\ es = HyperHeap.sel h c.hs.log})
+val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.peer c.hs)){epochs_footprint_inv es /\ es = HyperHeap.sel h c.hs.log})
 
 //val epochs : c:connection -> h:HyperHeap.t -> GTot (Handshake.epochs (HS.region c.hs) (HS.peer c.hs))
 let epochs c h = sel h (HS.log c.hs)
