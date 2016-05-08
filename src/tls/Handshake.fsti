@@ -275,10 +275,13 @@ val init: r0:rid -> peer:rid -> r: role -> cfg:config -> resume: option (sid: se
     HS.resume s = resume /\
     HS.cfg s = cfg /\
     sel h1 (HS.log s) = Seq.createEmpty ))
-    
+
+let mods s h0 h1 = 
+  HyperHeap.modifies (Set.singleton s.region) h0 h1
+  
 let modifies_internal h0 s h1 =
     hs_inv s h1 /\
-    modifies_one s.region h0 h1 /\ 
+    mods s h0 h1 /\ 
     modifies_rref s.region !{as_ref s.state} h0 h1
 
 // Idle client starts a full handshake on the current connection
@@ -312,7 +315,7 @@ val next_fragment: s:hs -> ST outgoing
     let r0 = iT s Reader h0 in
     let r1 = iT s Reader h1 in
     hs_inv s h1 /\
-    HyperHeap.modifies_one s.region h0 h1 /\
+    mods s h0 h1 /\
     r1 = r0 /\
     w1 = (if result = OutCCS then w0 + 1 else w0) /\
     (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))))
@@ -331,7 +334,7 @@ val recv_fragment: s:hs -> rg:Range.range { wider fragment_range rg } -> rbytes 
     let r0 = iT s Reader h0 in
     let r1 = iT s Reader h1 in
     hs_inv s h1 /\
-    HyperHeap.modifies_one s.region h0 h1 /\
+    mods s h0 h1 /\
     w1 = w0 /\
     r1 = (if result = InCCS then r0 + 1 else r0) /\
     (result = InComplete ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))))
@@ -345,7 +348,7 @@ val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3
     let r1 = iT s Reader h1 in
     (is_InError result \/ is_InCCS result) /\
     hs_inv s h1 /\
-    HyperHeap.modifies_one s.region h0 h1 /\
+    mods s h0 h1 /\
     w1 = w0 /\
     r1 = (if result = InCCS then r0 + 1 else r0)))
 
@@ -358,7 +361,7 @@ val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit autho
     let r1 = iT s Reader h1 in
     (is_InAck result \/ is_InError result) /\
     hs_inv s h1 /\
-    HyperHeap.modifies_one s.region h0 h1 /\
+    mods s h0 h1 /\
     w1 = w0 /\
     r1 = r0 ))
 
