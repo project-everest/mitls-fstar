@@ -205,10 +205,10 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 (* #reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0" *)
 assume val gcut: f:(unit -> GTot Type){f()} -> Tot unit
 
-assume val lemma_mem_snoc2 : #a:Type -> s:FStar.Seq.seq a -> x:a ->
-   Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
-      SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
-  (* = SeqProperties.lemma_append_count s (Seq.create 1 x) *)
+(* assume val lemma_mem_snoc2 : #a:Type -> s:FStar.Seq.seq a -> x:a -> *)
+(*    Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))} *)
+(*       SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y)) *)
+(*   (\* = SeqProperties.lemma_append_count s (Seq.create 1 x) *\) *)
 
 
 (* let lemma_mem_snoc2 (s:FStar.Seq.seq 'a) (x:'a) *)
@@ -232,7 +232,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let old_hs_log = HH.sel h0 (HS.log c.hs) in
       let wi = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
       let nonce = I.nonce_of_id i in
-      lemma_mem_snoc2 old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
+      SeqProperties.lemma_mem_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms = new_ms);
       assert (old_conn = new_conn);
       cut (is_Some (MM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier
