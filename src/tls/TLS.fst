@@ -71,7 +71,7 @@ let create m0 peer0 tcp r cfg resume =
     let peer = new_region peer0 in
     let st1 = ST.get() in
     lemma_extends_fresh_disjoint m peer m0 peer0 st0 st1;
-    let hs = Handshake.init m peer r cfg resume in
+    let hs = Handshake.init m r cfg resume in
     let al = Alert.init m in
     let state = ralloc m BC in
     C peer hs al tcp state
@@ -155,7 +155,7 @@ let epochT epochs other =
   if j < 0 then None else Some(Seq.index epochs j, j)
 
 (* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
-let epoch_id (#region:rgn) (#peer:rgn) (o: option (epoch region peer)) =
+let epoch_id (#region:rgn) (#nonce:random) (o: option (epoch region nonce)) =
   match o with
   | Some e -> hsId e.h
   | None   -> noId
@@ -169,7 +169,7 @@ let currentEpochT c rw (h:t { st_inv c h }) =
   let ie = iT c.hs rw h in
   if ie >= 0 then Some (Seq.index (sel h c.hs.log) ie) else None
 
-val currentEpoch: c:connection -> rw:rw -> ST (option (epoch (HS.region c.hs) (HS.peer c.hs)))
+val currentEpoch: c:connection -> rw:rw -> ST (option (epoch (HS.region c.hs) (HS.nonce c.hs)))
   (requires (st_inv c))
   (ensures (fun h0 o h1 ->
     h0 == h1 /\
@@ -204,13 +204,13 @@ let currentId (c:connection) rw =
 
 (** writing epochs **)
 
-val epoch_wo: #region:rgn -> #peer:rgn -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
-let epoch_wo #region #peer o = writer_epoch (Some.v o)
+val epoch_wo: #region:rgn -> #nonce:random -> o: option (epoch region nonce){ is_Some o } -> Tot (writer (epoch_id o))
+let epoch_wo #region #nonce o = writer_epoch (Some.v o)
 
 (** reading epochs **)
 
-val epoch_ro: #region:rgn -> #peer:rgn -> o: option (epoch region peer){ is_Some o } -> Tot (reader (peerId (epoch_id o)))
-let epoch_ro #region #peer o =
+val epoch_ro: #region:rgn -> #nonce:random -> o: option (epoch region nonce){ is_Some o } -> Tot (reader (peerId (epoch_id o)))
+let epoch_ro #region #nonce o =
   match o with
   | Some(Epoch _ r _) -> r
 
