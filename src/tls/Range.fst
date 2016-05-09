@@ -82,6 +82,9 @@ let minMaxPad i = (fixedPadSize i, maxPadSize i)
 
 // Shared between StreamAE and StatefulLHAE
 type valid_clen (i:id) (clen:nat) = (
+  if i = noId 
+  then 0 <= clen /\ clen <= max_TLSPlaintext_fragment_length 
+  else
   if i.pv = TLS_1p3 then
      let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
      tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 

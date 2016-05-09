@@ -1,4 +1,7 @@
 module StAE
+
+open Platform.Bytes
+
 open TLSConstants
 open TLSInfo
 
@@ -34,3 +37,14 @@ let peer_region (#i:id) (#rw:rw) (s:state i rw{is_stateful_lhae i \/ rw=Reader})
   = match s with 
     | Stream _ s -> StreamAE.State.log_region s
     | StLHAE _ s -> StatefulLHAE.peer_region s
+
+type cipher (i:id) = b:bytes {Range.valid_clen i (length b)}
+
+let cipher_noId b : cipher noId = b 
+
+(* 16-05-09 
+type entry i 
+
+val fragment_entry: #i:id -> e: entry i -> Tot (Content.fragment i)
+let fragment_entry #i (Entry c ad f) = f
+*)
