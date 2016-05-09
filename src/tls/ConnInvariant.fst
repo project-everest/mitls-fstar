@@ -193,7 +193,8 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	      (forall e. SeqProperties.mem e epochs ==> hsId (Epoch.h e) <> i) /\ //i is fresh for c
  	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (I.nonce_of_id i) = Some c /\ //we found the connection in the conn_table
-	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
+      	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
+	      (* HH.modifies (Set.singleton (HS.region c.hs)) h0 h1 /\ //we just modified this connection's handshake region *)
 	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (HS.log c.hs)} h0 h1 /\ //and within it, just the epochs log
 	      new_hs_log = SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
@@ -201,6 +202,11 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 
 (* #reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0" *)
 assume val gcut: f:(unit -> GTot Type){f()} -> Tot unit
+
+let lemma_mem_snoc2 (s:FStar.Seq.seq 'a) (x:'a)
+  : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
+      SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
+  = SeqProperties.lemma_append_count s (Seq.create 1 x)
 
 let register_writer_in_epoch_ok h0 h1 i c e = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -212,23 +218,53 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let old_conn = MR.m_sel h0 conn_table in 
       let new_conn = MR.m_sel h1 conn_table in
       let old_hs_log = HH.sel h0 (HS.log c.hs) in
+      let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
+      let nonce = I.nonce_of_id i in
       MonotoneSeq.lemma_mem_snoc old_hs_log e;
+      lemma_mem_snoc2 old_hs_log e;
       assert (old_ms = new_ms);
       assert (old_conn = new_conn);
       if (authId j && StAE.is_stream_ae j)
-      then match MM.sel new_ms j with 
+      then match MM.sel new_ms j with
            | None -> ()
-           | Some ww -> 
-	     let log_ref = StreamAE.ilog (StreamAE.State.log ww) in
-	     assert (Map.contains h1 (StreamAE.State.region ww));
-	     assert (HH.contains_ref (MR.as_rref log_ref) h1);
-	     assert (region_separated_from_all_handshakes (StreamAE.State.region ww) new_conn); 
-	     let log0 = MR.m_sel h0 log_ref in 
-	     let log1 = MR.m_sel h1 log_ref in
-	     assert (log0 = log1);
-	     if log0 = Seq.createEmpty
+           | Some ww ->
+      	     let log_ref = StreamAE.ilog (StreamAE.State.log ww) in
+      	     assert (Map.contains h1 (StreamAE.State.region ww));
+      	     assert (HH.contains_ref (MR.as_rref log_ref) h1);
+      	     assert (region_separated_from_all_handshakes (StreamAE.State.region ww) new_conn);
+      	     let log0 = MR.m_sel h0 log_ref in
+      	     let log1 = MR.m_sel h1 log_ref in
+      	     assert (log0 = log1);
+      	     if log0 = Seq.createEmpty
+      	     then ()
+      	     else if ww=w
 	     then ()
-	     else admit() //it was previously registered to some connection; need to make sure that it is still registered
+	     else let nonce_j = I.nonce_of_id j in
+		  if nonce_j = nonce
+		  then (assert (registered j ww c h0))
+		  else (match MM.sel old_conn nonce_j with 
+		        | None -> assert false //the log must must be empty
+			| Some c' -> 
+			  assert (registered j ww c' h0);
+//			   assert (HH.disjoint (HS.region (C.hs c')) (HS.region (C.hs c)));
+			  assume (registered j ww c' h1))
+//		     admit())
+		      	      	     (* let hs0 = HH.sel h0 (HS.log (C.hs c')) in *\) *)
+ 	     (* 	     let hs1 = HH.sel h0 (HS.log (C.hs c')) in  *)
+	     (* 	     assert (hs0 = hs1); *)
+
+	     (* then () *)
+	     (* else admit() *)
+	     (* (let nn : TLSInfo.random = magic () in *)
+	     (* 	   assume (I.nonce_of_id i <> nn); *)
+	     (* 	   let c' = MM.sel old_conn nn in  *)
+	     (* 	   match c' with  *)
+	     (* 	   | None -> admit()  *)
+	     (* 	   | Some c' ->  *)
+ 	     (* 	     let hs0 = HH.sel h0 (HS.log (C.hs c')) in *)
+ 	     (* 	     let hs1 = HH.sel h0 (HS.log (C.hs c')) in  *)
+	     (* 	     assert (hs0 = hs1); *)
+	     (* 	     admit()) //it was previously registered to some connection; need to make sure that it is still registered *)
       else () in
   qintro aux
 
