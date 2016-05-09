@@ -16,7 +16,9 @@ type id = StreamAE.id
 let r_conn (r:random) = c:connection{c.hs.nonce = r}
 
 let pairwise_disjoint (m:MM.map' random r_conn) = 
-    forall r1 r2. r1<>r2 /\ is_Some (MM.sel m r1) /\ is_Some (MM.sel m r2)
+    forall r1 r2.{:pattern (is_Some (MM.sel m r1));
+		      (is_Some (MM.sel m r2))}
+	r1<>r2 /\ is_Some (MM.sel m r1) /\ is_Some (MM.sel m r2)
 	     ==> HH.disjoint (Some.v (MM.sel m r1)).region  
 		             (Some.v (MM.sel m r2)).region
 
@@ -203,10 +205,16 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 (* #reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0" *)
 assume val gcut: f:(unit -> GTot Type){f()} -> Tot unit
 
-let lemma_mem_snoc2 (s:FStar.Seq.seq 'a) (x:'a)
-  : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
+assume val lemma_mem_snoc2 : #a:Type -> s:FStar.Seq.seq a -> x:a ->
+   Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
       SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
-  = SeqProperties.lemma_append_count s (Seq.create 1 x)
+  (* = SeqProperties.lemma_append_count s (Seq.create 1 x) *)
+
+
+(* let lemma_mem_snoc2 (s:FStar.Seq.seq 'a) (x:'a) *)
+(*   : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))} *)
+(*       SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y)) *)
+(*   = SeqProperties.lemma_append_count s (Seq.create 1 x) *)
 
 let register_writer_in_epoch_ok h0 h1 i c e = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -224,6 +232,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       lemma_mem_snoc2 old_hs_log e;
       assert (old_ms = new_ms);
       assert (old_conn = new_conn);
+      cut (is_Some (MM.sel old_conn nonce));
       if (authId j && StAE.is_stream_ae j)
       then match MM.sel new_ms j with
            | None -> ()
@@ -242,17 +251,18 @@ let register_writer_in_epoch_ok h0 h1 i c e =
 	     else let nonce_j = I.nonce_of_id j in
 		  if nonce_j = nonce
 		  then (assert (registered j ww c h0))
-		  else (match MM.sel old_conn nonce_j with 
+		  else (match MM.sel old_conn nonce_j with
 		        | None -> assert false //the log must must be empty
-			| Some c' -> 
+			| Some c' ->
+			  cut (is_Some (MM.sel old_conn nonce_j));
 			  assert (registered j ww c' h0);
-//			   assert (HH.disjoint (HS.region (C.hs c')) (HS.region (C.hs c)));
-			  assume (registered j ww c' h1))
+			  (* assume (HH.disjoint (C.region c') (C.region c)); //shouldn't we get this from pairwise_disjoint? *)
+//			  assume (HH.disjoint (HS.region (C.hs c')) (HS.region (C.hs c)));
+			  assert (registered j ww c' h1))
 //		     admit())
 		      	      	     (* let hs0 = HH.sel h0 (HS.log (C.hs c')) in *\) *)
  	     (* 	     let hs1 = HH.sel h0 (HS.log (C.hs c')) in  *)
 	     (* 	     assert (hs0 = hs1); *)
-
 	     (* then () *)
 	     (* else admit() *)
 	     (* (let nn : TLSInfo.random = magic () in *)
