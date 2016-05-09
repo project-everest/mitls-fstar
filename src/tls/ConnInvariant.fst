@@ -31,7 +31,6 @@ let conn_table : conn_table_t =
 type ms_tab = MM.map' AE.id MS.writer 
 type c_tab  = MM.map' random r_conn 
 
-
 let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) = 
   HH.disjoint (HS.region c.hs) tls_region /\
   HH.contains_ref (HS.log c.hs) h /\
@@ -122,7 +121,7 @@ let ms_derive_is_ok h0 h1 i w =
       else () in
   qintro aux
 
-(* Here, we actually call MS.derive and check that it's post-condition 
+(* Here, we actually call MS.derive and check that its post-condition 
    is sufficient to call ms_derive_is_ok and re-establish the invariant *)
 let try_ms_derive (epoch_region:HH.rid) (i:AE.id) 
   : ST (AE.writer i)
@@ -202,19 +201,10 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	  (ensures mc_inv h1) //we're back in the invariant
 
 
-(* #reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0" *)
-assume val gcut: f:(unit -> GTot Type){f()} -> Tot unit
-
-(* assume val lemma_mem_snoc2 : #a:Type -> s:FStar.Seq.seq a -> x:a -> *)
-(*    Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))} *)
-(*       SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y)) *)
-(*   (\* = SeqProperties.lemma_append_count s (Seq.create 1 x) *\) *)
-
-
-(* let lemma_mem_snoc2 (s:FStar.Seq.seq 'a) (x:'a) *)
-(*   : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))} *)
-(*       SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y)) *)
-(*   = SeqProperties.lemma_append_count s (Seq.create 1 x) *)
+let lemma_mem_snoc (s:FStar.Seq.seq 'a) (x:'a)
+  : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
+      SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
+  = SeqProperties.lemma_mem_snoc s x
 
 let register_writer_in_epoch_ok h0 h1 i c e = 
   (* This proof can be simplified a lot.
@@ -232,7 +222,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let old_hs_log = HH.sel h0 (HS.log c.hs) in
       let wi = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
       let nonce = I.nonce_of_id i in
-      SeqProperties.lemma_mem_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
+      lemma_mem_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms = new_ms);
       assert (old_conn = new_conn);
       cut (is_Some (MM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier
