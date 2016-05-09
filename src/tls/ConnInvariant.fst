@@ -54,7 +54,7 @@ let ms_conn_inv (ms:ms_tab)
 	//technical: for framing; need to know that the writer's region exists
 	Map.contains h (StreamAE.State.region w) /\  
 	//separation: each writer is separated from every connection's handshake state, and from tls_tables_region
-	HH.disjoint (StreamAE.State.region w) tls_tables_region /\
+	(* HH.disjoint (StreamAE.State.region w) tls_tables_region /\ *)
 	writer_separated_from_all_handshakes w conn /\
 	//main application invariant:
 	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is either still unused; or
@@ -83,7 +83,7 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 HH.contains_ref (MR.as_rref MS.ms_tab) h0  /\
 		 Map.contains h1 (StreamAE.State.region w)  /\
 		 mc_inv h0 /\ //we're initially in the invariant
-		 HH.disjoint (StreamAE.State.region w) tls_tables_region /\
+		 (* HH.disjoint (StreamAE.State.region w) tls_tables_region /\ *)
 		 writer_separated_from_all_handshakes w conn /\
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
