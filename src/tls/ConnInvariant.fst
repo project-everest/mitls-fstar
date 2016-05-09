@@ -217,6 +217,10 @@ assume val lemma_mem_snoc2 : #a:Type -> s:FStar.Seq.seq a -> x:a ->
 (*   = SeqProperties.lemma_append_count s (Seq.create 1 x) *)
 
 let register_writer_in_epoch_ok h0 h1 i c e = 
+  (* This proof can be simplified a lot.
+     But, retaining it since it is actually quite informative 
+     about the structure of the invariant.
+  *)
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
 			   let new_conn = MR.m_sel h1 conn_table in
 			   ms_conn_inv new_ms new_conn h1 j) =
@@ -226,85 +230,38 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let old_conn = MR.m_sel h0 conn_table in 
       let new_conn = MR.m_sel h1 conn_table in
       let old_hs_log = HH.sel h0 (HS.log c.hs) in
-      let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
+      let wi = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
       let nonce = I.nonce_of_id i in
-      MonotoneSeq.lemma_mem_snoc old_hs_log e;
-      lemma_mem_snoc2 old_hs_log e;
+      lemma_mem_snoc2 old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms = new_ms);
       assert (old_conn = new_conn);
-      cut (is_Some (MM.sel old_conn nonce));
+      cut (is_Some (MM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier
       if (authId j && StAE.is_stream_ae j)
       then match MM.sel new_ms j with
-           | None -> ()
-           | Some ww ->
-      	     let log_ref = StreamAE.ilog (StreamAE.State.log ww) in
-      	     assert (Map.contains h1 (StreamAE.State.region ww));
-      	     assert (HH.contains_ref (MR.as_rref log_ref) h1);
-      	     assert (region_separated_from_all_handshakes (StreamAE.State.region ww) new_conn);
+           | None -> () //nothing allocated at id j yet; easy
+           | Some wj -> 
+      	     let log_ref = StreamAE.ilog (StreamAE.State.log wj) in
+      	     assert (Map.contains h1 (StreamAE.State.region wj)); //its region exists; from the 1st technical clause in ms_conn_inv
+      	     assert (HH.contains_ref (MR.as_rref log_ref) h1);    //its log exists; from the 2nd technical clause in ms_conn_inv
+      	     assert (region_separated_from_all_handshakes (StreamAE.State.region wj) new_conn); //from the separation clause in ms_con_inv
       	     let log0 = MR.m_sel h0 log_ref in
       	     let log1 = MR.m_sel h1 log_ref in
-      	     assert (log0 = log1);
+      	     assert (log0 = log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
       	     if log0 = Seq.createEmpty
-      	     then ()
-      	     else if ww=w
-	     then ()
+      	     then () //if the log remains empty, it's easy
+      	     else if wj=wi
+	     then () //if j is in fact the same as i, then i gets registered at the end, so that's easy too
 	     else let nonce_j = I.nonce_of_id j in
 		  if nonce_j = nonce
-		  then (assert (registered j ww c h0))
+		  then assert (registered j wj c h0) //if j and i share the same nonce, then j is registered to c and c's registered writers only grows
 		  else (match MM.sel old_conn nonce_j with
-		        | None -> assert false //the log must must be empty
-			| Some c' ->
-			  cut (is_Some (MM.sel old_conn nonce_j));
-			  assert (registered j ww c' h0);
-			  (* assume (HH.disjoint (C.region c') (C.region c)); //shouldn't we get this from pairwise_disjoint? *)
-//			  assume (HH.disjoint (HS.region (C.hs c')) (HS.region (C.hs c)));
-			  assert (registered j ww c' h1))
-//		     admit())
-		      	      	     (* let hs0 = HH.sel h0 (HS.log (C.hs c')) in *\) *)
- 	     (* 	     let hs1 = HH.sel h0 (HS.log (C.hs c')) in  *)
-	     (* 	     assert (hs0 = hs1); *)
-	     (* then () *)
-	     (* else admit() *)
-	     (* (let nn : TLSInfo.random = magic () in *)
-	     (* 	   assume (I.nonce_of_id i <> nn); *)
-	     (* 	   let c' = MM.sel old_conn nn in  *)
-	     (* 	   match c' with  *)
-	     (* 	   | None -> admit()  *)
-	     (* 	   | Some c' ->  *)
- 	     (* 	     let hs0 = HH.sel h0 (HS.log (C.hs c')) in *)
- 	     (* 	     let hs1 = HH.sel h0 (HS.log (C.hs c')) in  *)
-	     (* 	     assert (hs0 = hs1); *)
-	     (* 	     admit()) //it was previously registered to some connection; need to make sure that it is still registered *)
-      else () in
+		        | None -> assert false //we've already established that the log is non-empty; so j must be registered and this case says that it is not
+			| Some c' -> 
+			  assert (registered j wj c' h0); //it's registered initially
+			  assert (HH.disjoint (C.region c) (C.region c')); //c's region is disjoint from c'; since the conn_tab is pairwise_disjoint
+			  assert (registered j wj c' h1)) //so it remains registered
+      else () (* not ideal; nothing much to say *) in
   qintro aux
-
-
-
-  assert (MR.m_sel h0 MS.ms_tab = MR.m_sel h1 MS.ms_tab);
-  assert (MR.m_sel h0 conn_table = MR.m_sel h1 conn_table);
-  let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
-  assert (MR.m_sel h0 (StreamAE.ilog (StreamAE.State.log w)) = MR.m_sel h1 (StreamAE.ilog (StreamAE.State.log w)));
-  let ctab = MR.m_sel h0 conn_table in
-  let mstab = MR.m_sel h0 MS.ms_tab in
-  let copt = MM.sel ctab (I.nonce_of_id i) in
-  let old_hs_log = HH.sel h0 (HS.log c.hs) in
-  assert (is_Some copt);
-  assert (~ (registered i w (Some.v copt) h0));
-  MonotoneSeq.lemma_mem_snoc old_hs_log e;
-  assert (registered i w (Some.v copt) h1)
-
-
-  let j : id  = magic () in
-  let nonce = I.nonce_of_id i in 
-  assume (StAE.is_stream_ae j);
-  assume (authId j);
-  match MM.sel mstab j with
-  | None -> admit()
-  | Some wj ->
-    assert (HH.disjoint (StreamAE.State.region wj) (HS.region c.hs)); //can see here why the post-condition fails ... need better separation invariants between the HS.log and the writer logs
-    assert (MR.m_sel h0 (StreamAE.ilog (StreamAE.State.log wj)) = MR.m_sel h1 (StreamAE.ilog (StreamAE.State.log wj)));
-    admit()
-
 
 //3. Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
 //    --- we're in the first case, left disjunct (should be easy)
