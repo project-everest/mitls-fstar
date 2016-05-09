@@ -36,7 +36,8 @@ let derive (r:rid) (i:AE.id)
 	   /\ (let old_ms = MR.m_sel h0 ms_tab in
 	      let new_ms = MR.m_sel h1 ms_tab in
  	       old_ms = new_ms //either ms_tab didn't change at all
-	       \/ (new_ms = MM.upd old_ms i w //or we just added w to it
+	       \/ (MM.sel old_ms i = None
+		  /\ new_ms = MM.upd old_ms i w //or we just added w to it
 	   	  /\ (TLSInfo.authId i ==> MR.m_sel h1 (AE.ilog w.log) = Seq.createEmpty))))) //and it is a fresh log
   = MR.m_recall ms_tab;
     match MM.lookup ms_tab i with

@@ -1,14 +1,16 @@
 module ConnInvariant
 open TLSConstants
+open TLSInfo
+open Handshake
+open Connection
 
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module MS = MasterSecret
-
-open TLSInfo
-open Handshake
-open Connection
+module N = Nonce
+module I = IdNonce
+module AE = StreamAE
 
 type id = StreamAE.id
 let r_conn (r:random) = c:connection{c.hs.id = r}
@@ -23,13 +25,10 @@ type conn_table_t = MM.t tls_tables_region random r_conn pairwise_disjoint
 let conn_table : conn_table_t = 
   MM.alloc #tls_tables_region #random #r_conn #pairwise_disjoint
 
-module AE = StreamAE
 
 type ms_tab = MM.map' AE.id MS.writer 
 type c_tab  = MM.map' random r_conn 
 
-module N = Nonce
-module I = IdNonce
 
 let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) = 
   HH.disjoint (HS.region c.hs) tls_region /\
@@ -63,22 +62,21 @@ let mc_inv (h:HyperHeap.t) = ms_conn_invariant (MR.m_sel h MS.ms_tab) (MR.m_sel 
 
 //1. Deriving a new key involves adding a new writer to the ms table (because we tried a lookup at id and it failed)
 //   Easy: because a new log is empty and both cases of the conn table allow empty logs to be in ms
-val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:id -> w:MS.writer i 
+val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer i 
   -> Lemma (requires 
 		 HH.contains_ref (MR.as_rref conn_table) h0 /\
 		 HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
 		 Map.contains h1 (StreamAE.State.region w) /\
-		 authId i /\ 
-		 StAE.is_stream_ae i /\
 		 HH.disjoint (StreamAE.State.region w) tls_tables_region /\
 		 mc_inv h0 /\ //we're initially in the invariant
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
 		 (let old_ms = MR.m_sel h0 MS.ms_tab in 
 		  let new_ms = MR.m_sel h1 MS.ms_tab in
-		  MM.sel old_ms i = None /\
-		  new_ms = MM.upd old_ms i w) /\                                    //and the ms_tab only changed by adding w
-		 MR.m_sel h1 (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty)             //and w's log is empty
+ 		  old_ms = new_ms //either ms_tab didn't change at all
+		  \/ (MM.sel old_ms i = None /\
+		     new_ms = MM.upd old_ms i w /\ //or we just added w to it
+	   	     (TLSInfo.authId i ==> MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty)))) //and it is a fresh log
 	 (ensures (mc_inv h1))
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -98,7 +96,27 @@ let ms_derive_is_ok h0 h1 i w =
 	     else assert (Some ww=MM.sel old_ms j)
       else () in
   qintro aux
-  
+
+(* Here, we actually call MS.derive and check that it's post-condition 
+   is sufficeitn to call ms_derive_is_ok and re-establish the invariant *)
+let try_ms_derive (r:HH.rid) (i:AE.id) 
+  : ST (AE.writer i)
+       (requires (fun h -> 
+       	   HH.disjoint r tls_region /\
+	   N.registered (I.nonce_of_id i) r /\
+	   authId i /\
+	   mc_inv h))
+       (ensures (fun h0 w h1 -> 
+	   mc_inv h1))
+  = let h0 = ST.get () in
+    MR.m_recall conn_table;
+    MR.m_recall MS.ms_tab;
+    let w = MasterSecret.derive r i in 
+    recall_region (StreamAE.State.region w);
+    let h1 = ST.get () in 
+    ms_derive_is_ok h0 h1 i w;
+    w
+    
 
 (* //2. Adding a new epoch to a connection c, with a fresh index (hdId i) for c *)
 (* //      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first) *)
