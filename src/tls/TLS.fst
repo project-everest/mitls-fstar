@@ -16,17 +16,14 @@ open TLSConstants
 open TLSInfo
 
 open Range
-open StatefulLHAE // via its interface
-open Handshake    // via its interface
+open StAE
+open Handshake
 open Connection
 
 // using also Alert, DataStream, Content, Record
 
 // scaffolding
 
-// ugly, but needed as long as id is specialized in StatefulLHAE.
-assume val noId: id
-assume val cipher_noId: bytes -> Tot(cipher noId)
 
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (epochs_inv c h0))
@@ -34,8 +31,8 @@ assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
     epochs c h0 = epochs c h1 /\
     epochs_inv c h1))
 
-// JP: isn't failwith sufficient enough?
 // too convenient; should move to a library
+// JP: isn't failwith sufficient enough? CF: this one works in ST. 
 val unexpected: #a:Type -> v:string -> ST a
   (requires (fun h -> True))
   (ensures (fun _ _ _ -> False ))
@@ -51,20 +48,22 @@ val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
             ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 ->
-    modifies Set.empty h0 h1 /\
     fresh_region c.region h0 h1 /\
-    extends c.region r0 /\
-    c.tcp = tcp  /\
     c_role c = r /\
     c_cfg c = cfg /\
     c_resume c = resume /\
+    c.tcp = tcp  /\
+    modifies Set.empty h0 h1 /\
+    extends c.region r0 /\
     (r = Server ==> resume = None) /\
     Map.contains h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
-    (* sel h1 (c_log c) = Seq.createEmpty /\ *) //NS: this fails now ... not sure why
-    sel h1 c.state = BC
+    sel h1 (c_log c) = Seq.createEmpty /\ 
+    sel h1 c.state = BC /\
+    True
     ))
 
 let create m0 peer0 tcp r cfg resume =
+    ST.recall_region tls_tables_region;
     ST.recall_region m0;
     ST.recall_region peer0;
     let st0 = ST.get() in
@@ -156,11 +155,10 @@ let epochT epochs other =
   if j < 0 then None else Some(Seq.index epochs j, j)
 
 (* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
-let epoch_id (#region:rid) (#peer:rid) (o: option (epoch region peer)) =
+let epoch_id (#region:rgn) (#peer:rgn) (o: option (epoch region peer)) =
   match o with
   | Some e -> hsId e.h
   | None   -> noId
-
 
 
 val epchT: es:seq 'e -> logIndex es -> Tot (option 'e)
@@ -178,19 +176,13 @@ val currentEpoch: c:connection -> rw:rw -> ST (option (epoch (HS.region c.hs) (H
     st_inv c h0 /\
     st_inv c h1 /\
     o = currentEpochT c rw h0 /\
-    (is_Some o /\ rw = Writer ==> st_enc_inv (writer_epoch (Some.v o)) h0)))
-//16-04-25 getting an error above: Failed to verify implicit argument: Subtyping check failed; expected type (uu___#6596:(Prims.option<0> (Handshake.epoch (Handshake.HS.region (Connection.C.hs c)) (Handshake.HS.peer (Connection.C.hs c)))){(Prims.b2t (Prims.is_Some<0> uu___@0))}); got type (Prims.option<0> (Handshake.epoch (Handshake.HS.region (Connection.C.hs c)) (Handshake.HS.peer (Connection.C.hs c))))
+    // not needed anymore? (is_Some o /\ rw = Writer ==> st_enc_inv (writer_epoch (Some.v o)) h0) /\ 
+    True ))
 
 
 let currentEpoch c rw =
   let es = !c.hs.log in
   epchT es (i c.hs rw)
-
-(*
-let prj  (x: id { 'a }) : id = x
-
-val noId' : id //16-02-28 why can't I use TLSInfo.noId?
-*)
 
 let currentIdT (c:connection) rw h : id =
   let j = Handshake.iT c.hs rw h in
@@ -212,12 +204,12 @@ let currentId (c:connection) rw =
 
 (** writing epochs **)
 
-val epoch_wo: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
+val epoch_wo: #region:rgn -> #peer:rgn -> o: option (epoch region peer){ is_Some o } -> Tot (writer (epoch_id o))
 let epoch_wo #region #peer o = writer_epoch (Some.v o)
 
 (** reading epochs **)
 
-val epoch_ro: #region:rid -> #peer:rid -> o: option (epoch region peer){ is_Some o } -> Tot (reader (peerId (epoch_id o)))
+val epoch_ro: #region:rgn -> #peer:rgn -> o: option (epoch region peer){ is_Some o } -> Tot (reader (peerId (epoch_id o)))
 let epoch_ro #region #peer o =
   match o with
   | Some(Epoch _ r _) -> r
@@ -349,6 +341,7 @@ let abortWithAlert c ad reason =
     frame_internal c h0 h1;
     Alert.send c.alert ad;
     c.state := Half Writer; //$ do we need to store the reason?
+    admit();//16-05-09     
     frame_unrelated c h1 (ST.get())
 
 // on some errors, we attempt to send an alert before tearing down the connection
