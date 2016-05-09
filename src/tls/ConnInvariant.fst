@@ -42,7 +42,7 @@ let region_separated_from_all_handshakes (r:HH.rid) (conn:c_tab) =
        match MM.sel conn n with 
        | Some c -> HH.disjoint (HS.region (C.hs c)) r
        | None -> True
-
+		
 let ms_conn_inv (ms:ms_tab)
  		(conn:c_tab)
 		(h:HyperHeap.t) 
@@ -67,8 +67,16 @@ let ms_conn_invariant (ms:ms_tab)
 		      (h:HyperHeap.t) 
   = forall (i:id) .{:pattern (MM.sel ms i)} ms_conn_inv ms conn h i
 
+let handshake_regions_exists (conn:c_tab) (h:HH.t) = 
+  forall n.{:pattern (is_Some (MM.sel conn n))}
+      is_Some (MM.sel conn n) 
+       ==> (let hs_rgn = HS.region (C.hs (Some.v (MM.sel conn n))) in 
+ 	    Map.contains h hs_rgn /\
+	    HH.disjoint hs_rgn tls_tables_region)
+
 let mc_inv (h:HyperHeap.t) = 
     HH.as_ref (MR.as_rref conn_table) =!= HH.as_ref (MR.as_rref MS.ms_tab)
+    /\ handshake_regions_exists (MR.m_sel h conn_table) h
     /\ ms_conn_invariant (MR.m_sel h MS.ms_tab) (MR.m_sel h conn_table) h
 
 //Checking the stability of the invariant
@@ -96,19 +104,19 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 	 (ensures (mc_inv h1))
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
-			  let new_conn = MR.m_sel h1 conn_table in
-			  ms_conn_inv new_ms new_conn h1 j) =
-    fun j -> 			    
+  			  let new_conn = MR.m_sel h1 conn_table in
+  			  ms_conn_inv new_ms new_conn h1 j) =
+    fun j ->
       let old_ms = MR.m_sel h0 MS.ms_tab in 
       let new_ms = MR.m_sel h1 MS.ms_tab in
-      let new_conn = MR.m_sel h1 conn_table in
+      (* let new_conn = MR.m_sel h1 conn_table in *)
       if (authId j && StAE.is_stream_ae j)
-      then match MM.sel new_ms j with 
+      then match MM.sel new_ms j with
            | None -> ()
-           | Some ww -> 
-     	     if ww=w 
-	     then ()
-	     else assert (Some ww=MM.sel old_ms j)
+           | Some ww ->
+      	     if ww=w
+      	     then ()
+      	     else assert (Some ww=MM.sel old_ms j)
       else () in
   qintro aux
 
