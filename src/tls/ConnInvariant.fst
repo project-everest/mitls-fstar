@@ -53,6 +53,8 @@ let ms_conn_inv (ms:ms_tab)
       | Some w -> 
 	//technical: for framing; need to know that the writer's region exists
 	Map.contains h (StreamAE.State.region w) /\  
+	//technical: for framing; need to know that when idealized, the log also exists 
+	(authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h) /\
 	//separation: each writer is separated from every connection's handshake state, and from tls_tables_region
 	region_separated_from_all_handshakes (StreamAE.State.region w) conn /\
 	//main application invariant:
@@ -88,7 +90,9 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 (old_ms = new_ms //either ms_tab didn't change at all
 		  \/ (MM.sel old_ms i = None /\
 		     new_ms = MM.upd old_ms i w /\ //or we just added w to it
-	   	     (TLSInfo.authId i ==> MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty))))) //and it is a fresh log
+	   	     (TLSInfo.authId i ==> 
+		         HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1 /\  //the log exists in h1
+			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty)))))       //and it is a fresh
 	 (ensures (mc_inv h1))
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -109,7 +113,7 @@ let ms_derive_is_ok h0 h1 i w =
   qintro aux
 
 (* Here, we actually call MS.derive and check that it's post-condition 
-   is sufficeitn to call ms_derive_is_ok and re-establish the invariant *)
+   is sufficient to call ms_derive_is_ok and re-establish the invariant *)
 let try_ms_derive (epoch_region:HH.rid) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 
@@ -124,7 +128,7 @@ let try_ms_derive (epoch_region:HH.rid) (i:AE.id)
     MR.m_recall conn_table;
     MR.m_recall MS.ms_tab;
     let w = MasterSecret.derive epoch_region i in 
-    recall_region (StreamAE.State.region w);
+    MR.m_recall (AE.ilog (StreamAE.State.log w));
     let h1 = ST.get () in 
     ms_derive_is_ok h0 h1 i w;
     w
@@ -208,9 +212,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
   match MM.sel mstab j with
   | None -> admit()
   | Some wj ->
-    (* assume (registered j wj c h0); *)
     assert (HH.disjoint (StreamAE.State.region wj) (HS.region c.hs)); //can see here why the post-condition fails ... need better separation invariants between the HS.log and the writer logs
-    assume (HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log wj))) h0);
     assert (MR.m_sel h0 (StreamAE.ilog (StreamAE.State.log wj)) = MR.m_sel h1 (StreamAE.ilog (StreamAE.State.log wj)));
     admit()
 
