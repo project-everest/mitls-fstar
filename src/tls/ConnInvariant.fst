@@ -181,6 +181,7 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
               N.registered (I.nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\ 
 	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\
       	      Map.contains h1 (StreamAE.State.region w) /\
+      	      (* (authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1) /\ *)
 	      (forall e. SeqProperties.mem e epochs ==> hsId (Epoch.h e) <> i) /\ //i is fresh for c
  	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (I.nonce_of_id i) = Some c /\ //we found the connection in the conn_table
@@ -191,8 +192,40 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 
 
 (* #reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0" *)
+assume val gcut: f:(unit -> GTot Type){f()} -> Tot unit
 
 let register_writer_in_epoch_ok h0 h1 i c e = 
+  let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
+			   let new_conn = MR.m_sel h1 conn_table in
+			   ms_conn_inv new_ms new_conn h1 j) =
+    fun j -> 			    
+      let old_ms = MR.m_sel h0 MS.ms_tab in 
+      let new_ms = MR.m_sel h1 MS.ms_tab in
+      let old_conn = MR.m_sel h0 conn_table in 
+      let new_conn = MR.m_sel h1 conn_table in
+      let old_hs_log = HH.sel h0 (HS.log c.hs) in
+      MonotoneSeq.lemma_mem_snoc old_hs_log e;
+      assert (old_ms = new_ms);
+      assert (old_conn = new_conn);
+      if (authId j && StAE.is_stream_ae j)
+      then match MM.sel new_ms j with 
+           | None -> ()
+           | Some ww -> 
+	     let log_ref = StreamAE.ilog (StreamAE.State.log ww) in
+	     assert (Map.contains h1 (StreamAE.State.region ww));
+	     assert (HH.contains_ref (MR.as_rref log_ref) h1);
+	     assert (region_separated_from_all_handshakes (StreamAE.State.region ww) new_conn); 
+	     let log0 = MR.m_sel h0 log_ref in 
+	     let log1 = MR.m_sel h1 log_ref in
+	     assert (log0 = log1);
+	     if log0 = Seq.createEmpty
+	     then ()
+	     else admit() //it was previously registered to some connection; need to make sure that it is still registered
+      else () in
+  qintro aux
+
+
+
   assert (MR.m_sel h0 MS.ms_tab = MR.m_sel h1 MS.ms_tab);
   assert (MR.m_sel h0 conn_table = MR.m_sel h1 conn_table);
   let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
@@ -204,7 +237,9 @@ let register_writer_in_epoch_ok h0 h1 i c e =
   assert (is_Some copt);
   assert (~ (registered i w (Some.v copt) h0));
   MonotoneSeq.lemma_mem_snoc old_hs_log e;
-  assert (registered i w (Some.v copt) h1);
+  assert (registered i w (Some.v copt) h1)
+
+
   let j : id  = magic () in
   let nonce = I.nonce_of_id i in 
   assume (StAE.is_stream_ae j);
