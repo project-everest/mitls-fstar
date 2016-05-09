@@ -37,10 +37,10 @@ let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) 
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in
         i=i' /\ StAE.stream_ae #i e.w == w))
 
-let writer_separated_from_all_handshakes (#i:AE.id) (w:AE.writer i) (conn:c_tab) = 
+let region_separated_from_all_handshakes (r:HH.rid) (conn:c_tab) = 
   forall n.{:pattern (MM.sel conn n)}
        match MM.sel conn n with 
-       | Some c -> HH.disjoint (HS.region (C.hs c)) (StreamAE.State.region w) 
+       | Some c -> HH.disjoint (HS.region (C.hs c)) r
        | None -> True
 
 let ms_conn_inv (ms:ms_tab)
@@ -54,8 +54,7 @@ let ms_conn_inv (ms:ms_tab)
 	//technical: for framing; need to know that the writer's region exists
 	Map.contains h (StreamAE.State.region w) /\  
 	//separation: each writer is separated from every connection's handshake state, and from tls_tables_region
-	(* HH.disjoint (StreamAE.State.region w) tls_tables_region /\ *)
-	writer_separated_from_all_handshakes w conn /\
+	region_separated_from_all_handshakes (StreamAE.State.region w) conn /\
 	//main application invariant:
 	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is either still unused; or
 	             (let copt = MM.sel conn (I.nonce_of_id i) in
@@ -83,8 +82,7 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 HH.contains_ref (MR.as_rref MS.ms_tab) h0  /\
 		 Map.contains h1 (StreamAE.State.region w)  /\
 		 mc_inv h0 /\ //we're initially in the invariant
-		 (* HH.disjoint (StreamAE.State.region w) tls_tables_region /\ *)
-		 writer_separated_from_all_handshakes w conn /\
+		 region_separated_from_all_handshakes (StreamAE.State.region w) conn /\         //the new writer is suitably separated from all handshakes
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
 		 (old_ms = new_ms //either ms_tab didn't change at all
@@ -92,8 +90,6 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		     new_ms = MM.upd old_ms i w /\ //or we just added w to it
 	   	     (TLSInfo.authId i ==> MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty))))) //and it is a fresh log
 	 (ensures (mc_inv h1))
-(* assume val gadmit: f:(unit -> GTot Type0) -> Tot (u:unit{f()}) *)
-
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
 			  let new_conn = MR.m_sel h1 conn_table in
@@ -101,10 +97,7 @@ let ms_derive_is_ok h0 h1 i w =
     fun j -> 			    
       let old_ms = MR.m_sel h0 MS.ms_tab in 
       let new_ms = MR.m_sel h1 MS.ms_tab in
-      (* let old_conn = MR.m_sel h0 conn_table in *)
       let new_conn = MR.m_sel h1 conn_table in
-      assert (ms_conn_inv new_ms new_conn h1 i);
-      (* assert (old_conn = new_conn); *)
       if (authId j && StAE.is_stream_ae j)
       then match MM.sel new_ms j with 
            | None -> ()
@@ -117,11 +110,12 @@ let ms_derive_is_ok h0 h1 i w =
 
 (* Here, we actually call MS.derive and check that it's post-condition 
    is sufficeitn to call ms_derive_is_ok and re-establish the invariant *)
-let try_ms_derive (r:HH.rid) (i:AE.id) 
+let try_ms_derive (epoch_region:HH.rid) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 
-       	   HH.disjoint r tls_region /\
-	   N.registered (I.nonce_of_id i) r /\
+       	   HH.disjoint epoch_region tls_region /\
+	   N.registered (I.nonce_of_id i) epoch_region /\
+	   region_separated_from_all_handshakes epoch_region (MR.m_sel h conn_table) /\ 
 	   authId i /\
 	   mc_inv h))
        (ensures (fun h0 w h1 -> 
@@ -129,7 +123,7 @@ let try_ms_derive (r:HH.rid) (i:AE.id)
   = let h0 = ST.get () in
     MR.m_recall conn_table;
     MR.m_recall MS.ms_tab;
-    let w = MasterSecret.derive r i in 
+    let w = MasterSecret.derive epoch_region i in 
     recall_region (StreamAE.State.region w);
     let h1 = ST.get () in 
     ms_derive_is_ok h0 h1 i w;
@@ -157,7 +151,7 @@ let writer_region_within_connection
 	    (ensures (HH.includes (C.region c) (StreamAE.State.region w)))
     = ()
 
-#reset-options "--z3timeout 10 --initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2"
+(* #reset-options "--z3timeout 10 --initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2" *)
 
 //2. Adding a new epoch to a connection c, with a fresh index (hdId i) for c
 //      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
@@ -192,7 +186,7 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	  (ensures mc_inv h1) //we're back in the invariant
 
 
-#reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0"
+(* #reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0" *)
 
 let register_writer_in_epoch_ok h0 h1 i c e = 
   assert (MR.m_sel h0 MS.ms_tab = MR.m_sel h1 MS.ms_tab);
@@ -214,7 +208,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
   match MM.sel mstab j with
   | None -> admit()
   | Some wj ->
-    assume (registered j wj c h0);
+    (* assume (registered j wj c h0); *)
     assert (HH.disjoint (StreamAE.State.region wj) (HS.region c.hs)); //can see here why the post-condition fails ... need better separation invariants between the HS.log and the writer logs
     assume (HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log wj))) h0);
     assert (MR.m_sel h0 (StreamAE.ilog (StreamAE.State.log wj)) = MR.m_sel h1 (StreamAE.ilog (StreamAE.State.log wj)));
