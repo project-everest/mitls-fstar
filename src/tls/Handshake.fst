@@ -292,7 +292,7 @@ let handshake_state_init (ver:protocolVersion) (r:role) =
 //type incoming
 
 (* This following function needs to call PRF.deriveKeys correctly to get StatefulLHAE keys *)
-assume val deriveEpoch: (r:rid) -> (p:rid) -> session -> ST (epoch r p)
+assume val deriveEpoch: (r:rid) -> (n:TLSInfo.random) -> session -> ST (epoch r n)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
@@ -301,7 +301,7 @@ assume val deriveEpoch: (r:rid) -> (p:rid) -> session -> ST (epoch r p)
 val client_send_client_hello: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let client_send_client_hello (HS #r0 #peer r res cfg id lgref hsref) = 
+let client_send_client_hello (HS #r0 r res cfg id lgref hsref) = 
   match (!hsref).hs_state with
   | C(C_Idle ri) -> 
     let (k,ch,l) = prepareClientHello cfg ri None in
@@ -314,7 +314,7 @@ let client_send_client_hello (HS #r0 #peer r res cfg id lgref hsref) =
 val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let client_handle_server_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
+let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_HelloSent ri eph_c ch),[(ServerHello(sh),l)] ->
    (match (processServerHello cfg ri eph_c ch sh) with
@@ -331,7 +331,7 @@ let client_handle_server_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
 val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs opt_msgs =
+let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
   match (!hsref).hs_state, msgs with
   | C(C_HelloReceived n None), 
     [(Certificate(c),l1);
@@ -391,7 +391,7 @@ let client_handle_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) msgs
 val client_send_client_finished: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let client_send_client_finished (HS #r0 #peer r res cfg id lgref hsref) =
+let client_send_client_finished (HS #r0 r res cfg id lgref hsref) =
   match (!hsref).hs_state with
   | C(C_OutCCS s vd) ->
      let fin = {fin_vd = vd} in
@@ -405,7 +405,7 @@ let client_send_client_finished (HS #r0 #peer r res cfg id lgref hsref) =
 val client_handle_server_ccs: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let client_handle_server_ccs (HS #r0 #peer r res cfg id lgref hsref) msgs =
+let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_FinishedSent s vd),[(SessionTicket(stick),l)] ->
       hsref := {!hsref with
@@ -416,7 +416,7 @@ let client_handle_server_ccs (HS #r0 #peer r res cfg id lgref hsref) msgs =
 val client_handle_server_finished: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let client_handle_server_finished (HS #r0 #peer r res cfg id lgref hsref) msgs =
+let client_handle_server_finished (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_CCSReceived s vd), [(Finished(f),l)] ->
     let n = s.session_nego in
@@ -439,7 +439,7 @@ assume val client_handle_server_finished_13: hs -> list (hs_msg * bytes) -> ST i
 val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let server_handle_client_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
+let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | S(S_Idle ri),[(ClientHello(ch),l)] ->
     (match (prepareServerHello cfg ri None ch l) with
@@ -457,7 +457,7 @@ let server_handle_client_hello (HS #r0 #peer r res cfg id lgref hsref) msgs =
 val server_send_server_hello_done: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let server_send_server_hello_done (HS #r0 #peer r res cfg id lgref hsref) =
+let server_send_server_hello_done (HS #r0 r res cfg id lgref hsref) =
   match (!hsref).hs_state with
   | S(S_HelloSent n a) 
     when (n.n_protocol_version <> TLS_1p3 &&
@@ -497,7 +497,7 @@ assume val server_handle_client_ccs: hs -> list (hs_msg * bytes) -> list (hs_msg
   (ensures (fun h0 i h1 -> True))
 
 (*
-let server_handle_client_ccs (HS #r0 #peer r res cfg id lgref hsref)  msgs opt_msgs = 
+let server_handle_client_ccs (HS #r0 r res cfg id lgref hsref)  msgs opt_msgs = 
   match (!hsref).hs_state, msgs with
   | S(S_HelloDone n i (Some (KEX_S_PRIV_DHE k))),[(ClientKeyExchange(cke),l)] when 
      (n.n_protocol_version <> TLS_1p3 && 
@@ -545,13 +545,13 @@ let iT_old (HS r res cfg id l st) rw =
   | Writer -> (!st).hs_writer
 
 //val init: see .fsti
-let init r0 peer r cfg res = 
+let init r0 r cfg res = 
     let id = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
     let lg = createEmpty in
     let lgref = ralloc r0 lg in
     let hs = handshake_state_init cfg.maxVer r in
     let hsref = ralloc r0 hs in
-    HS #r0 #peer r res cfg id lgref hsref
+    HS #r0 r res cfg id lgref hsref
 
 // Idle client starts a full handshake on the current connection
 let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
@@ -566,7 +566,7 @@ let invalidateSession hs = Platform.Error.unexpected "invalidateSession: not yet
 
 //val next_fragment: see .fsti
 let rec next_fragment hs = 
-    let (HS #r0 #peer r res cfg id lgref hsref) = hs in
+    let (HS #r0 r res cfg id lgref hsref) = hs in
     let pv,kex,res = 
       (match (!hsref).hs_nego with 
        | None -> None, None, None
@@ -604,7 +604,7 @@ let rec parseHandshakeMessages pv kex buf =
 
 //val recv_fragment: see .fsti
 let recv_fragment hs (rg:Range.range) (rb:rbytes rg) = 
-    let (HS #r0 #peer r res cfg id lgref hsref) = hs in
+    let (HS #r0 r res cfg id lgref hsref) = hs in
     let b = (!hsref).hs_buffers.hs_incoming in
     let b = b @| rb in
     let pv,kex,res = 
@@ -722,7 +722,7 @@ let recv_fragment hs (rg:Range.range) (rb:rbytes rg) =
 
 //val recv_ccs: see .fsti  // special case: CCS before 1p3  
 let recv_ccs hs = 
-    let (HS #r0 #peer r res cfg id lgref hsref) = hs in
+    let (HS #r0 r res cfg id lgref hsref) = hs in
     let pv,kex = 
       (match (!hsref).hs_nego with 
        | None -> None, None

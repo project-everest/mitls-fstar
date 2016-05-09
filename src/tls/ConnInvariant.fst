@@ -13,7 +13,7 @@ module I = IdNonce
 module AE = StreamAE
 
 type id = StreamAE.id
-let r_conn (r:random) = c:connection{c.hs.id = r}
+let r_conn (r:random) = c:connection{c.hs.nonce = r}
 
 let pairwise_disjoint (m:MM.map' random r_conn) = 
     forall r1 r2. r1<>r2 /\ is_Some (MM.sel m r1) /\ is_Some (MM.sel m r2)
@@ -122,13 +122,14 @@ let try_ms_derive (r:HH.rid) (i:AE.id)
 (* //      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first) *)
 (* //      -- we need to show that the (exists e. SeqProperties.mem ...) is false (because of the fresh index for c) *)
 (* //      -- so, we're in the "not yet used" case ... so, the epoch's writer is in its initial state and we can return it (our goal is to return a fresh epoch) *)
-(* val add_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:id{StAE.is_stream_ae i /\ authId i}  *)
-(* 		-> c:r_conn (idNonce i) -> e:epoch (HS.region c.hs) (HS.peer c.hs)  *)
-(*   -> Lemma (requires  *)
+
+(* val add_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{authId i} *)
+(* 		-> c:r_conn (idNonce i) -> e:epoch (HS.region c.hs) (HS.peer c.hs) *)
+(*   -> Lemma (requires *)
 (*             (let ctab = MR.m_sel h0 conn_table in *)
 (* 	     let mstab = MR.m_sel h0 MS.ms_tab in *)
 (* 	     let old_hs_log = HH.sel h0 (HS.log c.hs) in *)
-(*      	     let new_hs_log = HH.sel h1 (HS.log c.hs) in  *)
+(*      	     let new_hs_log = HH.sel h1 (HS.log c.hs) in *)
 (* 	     let rgn = HS.region c.hs in *)
 (* 	     HH.contains_ref (MR.as_rref conn_table) h0 /\ *)
 (* 	     HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\ *)

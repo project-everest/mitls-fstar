@@ -50,15 +50,15 @@ type tlsState =
 
 type connection = | C:
   #region: rid ->
-  peer:   rid{disjoint region peer} ->
-  hs:      hs { extends (HS.region hs) region /\ extends (HS.peer hs) peer } (* providing role, config, and uid *) ->
+  peer:    rid{disjoint region peer} -> //TODO: remove?
+  hs:      hs { extends (HS.region hs) region } (* providing role, config, and uid *) ->
   alert:   Alert.state  { extends (Alert.region alert) region /\ HS.region hs <> Alert.region alert } (* review *) ->
   tcp:     networkStream ->
   state: rref region tlsState -> 
   connection
 
 let c_role c   = c.hs.r
-let c_id c     = c.hs.id
+let c_nonce c  = c.hs.nonce
 let c_cfg c    = c.hs.cfg
 let c_resume c = c.hs.resume
 let c_log c    = c.hs.log
@@ -79,10 +79,10 @@ let test_2 (p:nat -> Type) (s:seq nat { seq_forall p s }) (j:nat { j < Seq.lengt
 -> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (seq_forall p
 s /\ p x) ==> seq_forall p (snoc s x)}) *)
 
-val reader_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (StAE.reader (peerId(hsId e.h)))
+val reader_epoch: #region:rid -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h)))
 let reader_epoch #region #peer e = Epoch.r e
 
-val writer_epoch: #region:rid -> #peer:rid -> e:epoch region peer -> Tot (StAE.writer (hsId e.h))
+val writer_epoch: #region:rid -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h))
 let writer_epoch #region #peer e = Epoch.w e
 
 (*** 
@@ -117,15 +117,14 @@ type st_inv c h =
 
 // we should have st_env_inv & st_dec_inv for all epochs, all the time.
 // + the property that at most the current epochs' logs are extended.
-val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.peer c.hs)){epochs_footprint_inv es /\ es = HyperHeap.sel h c.hs.log})
-
-//val epochs : c:connection -> h:HyperHeap.t -> GTot (Handshake.epochs (HS.region c.hs) (HS.peer c.hs))
+val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
+  Handshake.epochs_inv es /\ es = HyperHeap.sel h c.hs.log
+})
 let epochs c h = sel h (HS.log c.hs)
 
 val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (Map.contains h0 (HS.region c.hs)
-             /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
-      				 (Set.singleton (HS.peer c.hs))) h0 h1))
+             /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
   (ensures (epochs c h0 = epochs c h1))
 let frame_epochs c h0 h1 = ()
 
@@ -169,7 +168,8 @@ let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -
     fun x -> ghost_lemma (f x) in
   qintro f
 
-type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) = True
+type epoch_inv (#region:rid) (#nonce:TLSInfo.random) (h:HyperHeap.t) (e: epoch region nonce) = True
+  (* USED TO BE *)
   (* st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h /\ *)
   (* st_enc_inv #(hsId e.h) (writer_epoch e) h *)
 
@@ -276,8 +276,7 @@ let frame_reader_epoch c h0 h1 = admit() //TODO: SZ added 04/08 to unblock the b
 val frame_unrelated_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
   (requires (epochs_inv c h0
 	    /\ k < Seq.length (epochs c h0)
-	    /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
-				  (Set.singleton (HS.peer c.hs))) h0 h1))
+	    /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
   (ensures (fun _ ->
 	      epochs c h0 = epochs c h1
 	    /\ k < Seq.length (epochs c h1)
@@ -291,8 +290,7 @@ let frame_unrelated_k c h0 h1 k =
 
 val frame_unrelated: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (epochs_inv c h0
-	    /\ equal_on (Set.union (Set.singleton (HS.region c.hs))
-				  (Set.singleton (HS.peer c.hs))) h0 h1))
+	    /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
   (ensures (epochs c h0 = epochs c h1
 	    /\ epochs_inv c h1))
 let frame_unrelated c h0 h1 = 

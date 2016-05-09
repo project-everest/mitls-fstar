@@ -103,35 +103,34 @@ val processServerHello: c:config -> option ri -> eph_c -> ch -> sh ->
 // relocate?
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
 
-
-type epoch_region_inv (#i:id) (hs_rgn:rgn) (hs_peer:rgn) (r:reader (peerId i)) (w:writer i) =
-  disjoint hs_rgn hs_peer                     /\ 
+type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
   disjoint hs_rgn (region w)                  /\ 
   parent (region w) <> FStar.HyperHeap.root    /\
   parent (region r) <> FStar.HyperHeap.root    /\
   parent hs_rgn = parent (parent (region w))  /\ //Grandparent of each writer is a sibling of the handshake
-  disjoint hs_peer (region r)                 /\ 
-  parent hs_peer = parent (parent (region r)) /\ //likewise for the peer
   disjoint (region w) (region r)     
- 
-type epoch (hs_rgn:rgn) (hs_peer:rgn) =
+
+module I = IdNonce
+
+type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
   | Epoch: h: handshake ->
            r: reader (peerId (hsId h)) ->
-           w: writer (hsId h) {epoch_region_inv hs_rgn hs_peer r w} -> epoch hs_rgn hs_peer
+           w: writer (hsId h) {epoch_region_inv hs_rgn r w /\ I.nonce_of_id (hsId h) = n} 
+	   -> epoch hs_rgn n
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
 (* The footprint just includes the writer regions *)
-let epochs_footprint_inv (#r:rgn) (#p:rgn) (es: seq (epoch r p)) =
+let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
   forall (i:nat { i < Seq.length es })
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
     let ej = Seq.index es j in
     parent (region ei.w) = parent (region ej.w) /\  //they all descend from a common epochs sub-region of the connection
-    disjoint (region ei.w) (region ej.w)          
+    disjoint (region ei.w) (region ej.w)           //each epoch writer lives in a region disjoint from the others
  
-let epochs (r:rgn) (p:rgn) = es: seq (epoch r p) { epochs_footprint_inv es }
+let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv es }
 
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
@@ -140,20 +139,18 @@ val handshake_state : role -> Type0
 
 type hs =
   | HS: #region: rgn ->
-        #peer: rgn ->
-        r:role ->
-        resume: option (sid:sessionID { r = Client }) ->
-        cfg:config ->
-        id: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-        log: rref region (epochs region peer) ->  // append-only; use monotonic? 
-        state: rref region (handshake_state r)  ->  // opaque, subject to invariant
-        hs
-
+              r: role ->
+         resume: option (sid:sessionID { r = Client }) ->
+            cfg: config ->
+          nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
+            log: rref region (epochs region nonce) ->  // append-only; use monotonic? 
+          state: rref region (handshake_state r)  ->  // opaque, subject to invariant
+             hs
 
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-let stateType (s:hs) = epochs s.region s.peer * handshake_state (HS.r s)
+let stateType (s:hs) = epochs s.region s.nonce * handshake_state (HS.r s)
 
 let stateT (s:hs) (h:HyperHeap.t) : stateType s = (sel h s.log, sel h s.state)
 
@@ -184,7 +181,7 @@ val i: s:hs -> rw:rw -> ST int
 // let writer s = i s Reader
 
 
-let forall_epochs (hs:hs) h (p:(epoch (hs.region) (hs.peer) -> Type)) = 
+let forall_epochs (hs:hs) h (p:(epoch hs.region hs.nonce -> Type)) = 
   (let es = sel h hs.log in 
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
      
@@ -210,7 +207,7 @@ let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoc
 
 
 // placeholder, to be implemented as a stateful property.
-assume val completed: #region:rgn -> #peer:rgn -> epoch region peer -> Type0
+assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce -> Type0
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -229,12 +226,11 @@ assume val completed: #region:rgn -> #peer:rgn -> epoch region peer -> Type0
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
  
-assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.peer) -> handshake_state (HS.r s) -> Type0
+assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS.r s) -> Type0
 
 let hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
   HyperHeap.contains_ref s.log h   /\ 
-  HyperHeap.contains_ref s.state h /\ 
-  Map.contains h s.peer
+  HyperHeap.contains_ref s.state h 
 
 let hs_inv (s:hs) (h: HyperHeap.t) = 
   hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
@@ -263,13 +259,12 @@ val version: s:hs -> ST protocolVersion
 (*** Control Interface ***)
 
 // Create instance for a fresh connection, with optional resumption for clients
-val init: r0:rid -> peer:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r = Client })  ->
+val init: r0:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r = Client })  ->
   ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
     fresh_subregion r0   (HS.region s) h0 h1 /\
-    fresh_subregion peer (HS.peer s)   h0 h1 /\ //NS: perhaps unreasonable; how to sync with peer's allocation?
     hs_inv s h1 /\
     HS.r s = r /\
     HS.resume s = resume /\
