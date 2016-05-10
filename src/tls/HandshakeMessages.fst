@@ -820,15 +820,15 @@ let parseNextProtocol payload : result np =
 		   np_padding = padding;})
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-val handshakeMessageBytes: protocolVersion -> hs_msg -> Tot bytes
-let handshakeMessageBytes pv hs = 
-    match hs,pv with
+val handshakeMessageBytes: option protocolVersion -> hs_msg -> Tot bytes
+let handshakeMessageBytes pvo hs = 
+    match hs,pvo with
     | ClientHello(ch),_-> clientHelloBytes ch
     | ServerHello(sh),_-> serverHelloBytes sh
-    | Certificate(c),_-> certificateBytes pv c
+    | Certificate(c),Some pv-> certificateBytes pv c
     | ServerKeyExchange(ske),_-> serverKeyExchangeBytes ske
     | ServerHelloDone,_-> serverHelloDoneBytes
-    | ClientKeyExchange(cke),pv-> clientKeyExchangeBytes pv cke
+    | ClientKeyExchange(cke),Some pv-> clientKeyExchangeBytes pv cke
     | Finished(f),_-> finishedBytes f
     | SessionTicket(t),_-> sessionTicketBytes t
     | EncryptedExtensions(e),_-> encryptedExtensionsBytes e
@@ -839,7 +839,7 @@ let handshakeMessageBytes pv hs =
     | ServerConfiguration(sc),_-> serverConfigurationBytes sc
     | NextProtocol(n),_-> nextProtocolBytes n
 
-val handshakeMessagesBytes: protocolVersion -> list hs_msg -> Tot bytes
+val handshakeMessagesBytes: option protocolVersion -> list hs_msg -> Tot bytes
 let rec handshakeMessagesBytes pv hsl = 
     match hsl with
     | [] -> empty_bytes

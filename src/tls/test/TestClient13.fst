@@ -75,7 +75,7 @@ let recvRecord tcp pv =
          | Correct payload -> (ct,pv,payload)
 
 let makeHSRecord pv hs_msg log =
-  let hs = HandshakeMessages.handshakeMessageBytes pv hs_msg in
+  let hs = HandshakeMessages.handshakeMessageBytes (Some pv) hs_msg in
   (string_of_handshakeMessage hs_msg,hs,log@|hs)
 
 let sendHSRecord tcp pv hs_msg log = 
@@ -122,7 +122,7 @@ let main host port =
   let tcp = Platform.Tcp.connect host port in
   let log = empty_bytes in
   let rid = new_region root in
-  let ks = KeySchedule.create #rid config Client in
+  let ks = KeySchedule.create #rid Client in
   
   let (Some gx,ch,chb) = Handshake.prepareClientHello config None None in
   let cr, [(gn, gx)] = KeySchedule.ks_client_13_init_1rtt ks [SEC CoreCrypto.ECC_P256] in

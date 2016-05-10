@@ -199,10 +199,10 @@ let deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr =
 let rec aux sock =
   let tcp = Platform.Tcp.accept sock in
   let rid = new_region root in
-  let log = HandshakeLog.init TLS_1p2 rid in
+  let log = HandshakeLog.create #rid in
   let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
-  let ks = KeySchedule.create #rid config Server in
+  let ks = KeySchedule.create #rid Server in
 
   // Get client hello
   let ClientHello(ch) = recvHSRecord tcp pv kex log in
@@ -238,7 +238,7 @@ let rec aux sock =
   let sr, gy = KeySchedule.ks_server_12_init_dh ks cr pv cs ems group in
   let sh = {sh with sh_server_random = sr} in
 
-  let t = HandshakeMessages.handshakeMessageBytes pv (ServerHello sh) in
+  let t = HandshakeMessages.handshakeMessageBytes None (ServerHello sh) in
   let ti = Handshake.parseHandshakeMessages (Some pv) (Some kex) t in
   IO.print_string "Parsed SKE OK\n";
 

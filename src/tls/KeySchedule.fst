@@ -108,7 +108,7 @@ type ks_state =
 | S: s:ks_server_state -> ks_state
 
 type ks =
-| KS: #region:rid -> cfg:config -> state:rref region ks_state -> ks
+| KS: #region:rid -> state:rref region ks_state -> ks
 
 type recordInstance =
 | StAEInstance: #id:StreamAE.id -> StreamAE.reader id -> StreamAE.writer id -> recordInstance
@@ -128,30 +128,30 @@ private let expand_13 (h:CoreCrypto.hash_alg) (secret:bytes) (phase:string) (con
 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
-val create: #rid:rid -> cfg:config -> role -> ST ks
+val create: #rid:rid -> role -> ST ks
   (requires fun h -> rid<>root)
   (ensures fun h0 r h1 ->
-    let KS #ks_region cfg state = r in
+    let KS #ks_region state = r in
     fresh_region ks_region h0 h1
     /\ extends ks_region rid
     /\ modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref state} h0 h1)
 
-let create #rid cfg r =
+let create #rid r =
   ST.recall_region rid;
   let ks_region = new_region rid in 
   let istate = match r with | Client -> C C_Init | Server -> S S_Init in
-  KS #ks_region cfg (ralloc ks_region istate)
+  KS #ks_region (ralloc ks_region istate)
 
 val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g}) -> ST (random * (list (namedGroup * CommonDH.key)))
   (requires fun h0 -> sel h0 (KS.state ks) = C C_Init)
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_13_init_1rtt ks groups =
-  let KS #rid cfg st = ks in
+  let KS #rid st = ks in
   let cr = Nonce.mkHelloRandom Client rid in
   let kg x = x, (match x with
     | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
@@ -165,7 +165,7 @@ let ks_client_13_init_1rtt ks groups =
 val ks_client_init_12: ks:ks -> ST (random * option sessionInfo)
   (requires fun h0 -> sel h0 (KS.state ks) = C C_Init)
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
@@ -190,12 +190,12 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
     /\ (let CipherSuite kex _ _ = cs in
          (kex = Kex_DHE \/ kex = Kex_ECDHE)))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_server_12_init_dh ks cr pv cs ems group =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen group in
@@ -211,12 +211,12 @@ val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gx:CommonDH.
     /\ (let CipherSuite kex _ _ = cs in
          (kex = Kex_DHE \/ kex = Kex_ECDHE)))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_server_13_1rtt_init ks cr cs gx log_hash =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite _ _ (AEAD ae h) = cs in
   let our_share, gxy = CommonDH.dh_responder gx in
@@ -232,12 +232,12 @@ val ks_server_12_cke_dh: ks:ks -> peer_share:CommonDH.key -> log:bytes -> ST uni
     let kss = sel h0 (KS.state ks) in
     is_S kss /\ is_S_12_wait_CKE_DH (S.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_server_12_cke_dh ks peer_share log =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let S (S_12_wait_CKE_DH csr alpha our_share) = !st in
   let (pv, cs, ems) = alpha in
   let pmsb = CommonDH.dh_initiator our_share peer_share in
@@ -264,12 +264,12 @@ val ks_client_12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite
     let kss = sel h0 (KS.state ks) in
     is_C kss /\ is_C_12_Resume_CH (C.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_resume ks sr pv cs =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let C (C_12_Resume_CH cr si msId ms) = !st in
   let csr = cr @| sr in
   let ems = si.extensions.ne_extended_ms in
@@ -285,12 +285,12 @@ val ks_client_13_1rtt: ks:ks -> cs:cipherSuite -> gy:(namedGroup * CommonDH.key)
     let kss = sel h0 (KS.state ks) in
     is_C kss /\ is_C_13_1RTT_CH (C.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_13_1rtt ks cs (gs, gy) log_hash =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let C (C_13_1RTT_CH cr gc) = !st in
   let Some (_, gx) = List.Tot.find (fun (gc,_) -> gc=gs) gc in
   let gxy = CommonDH.dh_initiator gx gy in
@@ -336,12 +336,12 @@ val ks_client_13_1rtt_server_finished: ks:ks -> log_hash:bytes -> ST (svd:bytes)
     let kss = sel h0 (KS.state ks) in
     is_C kss /\ is_C_13_1RTT_HTK (C.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_13_1rtt_server_finished ks log_hash =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let C (C_13_1RTT_HTK alpha msId xES) = !st in
   let (ae, h) = alpha in
   let mSS = HSCrypto.hkdf_expand_label h xES "expanded static secret" log_hash 32 in
@@ -360,12 +360,12 @@ val ks_client_13_1rtt_client_finished: ks:ks -> log_hash:bytes -> ST (cvd:bytes 
     let kss = sel h0 (KS.state ks) in
     is_C kss /\ is_C_13_1RTT_TS (C.s kss))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_13_1rtt_client_finished ks log_hash =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let C (C_13_1RTT_TS alpha cfk ts0) = !st in
   let (ae, h) = alpha in
   let cvd = CoreCrypto.hmac h cfk log_hash in
@@ -406,12 +406,12 @@ val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherS
     is_C st /\
     (is_C_12_Full_CH (C.s st) \/ is_C_12_Resume_CH (C.s st) \/ is_C_13_1RTT_CH (C.s st)))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_full_dh ks sr pv cs ems dhp peer_share =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
     | C (C_12_Resume_CH cr _ _ _) -> cr
@@ -438,12 +438,12 @@ val ks_client_12_full_rsa: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipher
     is_C st /\
     (is_C_12_Full_CH (C.s st) \/ is_C_12_Resume_CH (C.s st)))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_full_rsa ks sr pv cs ems pk =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let alpha = (pv, cs, ems) in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
@@ -468,12 +468,12 @@ val ks_client_12_set_session_hash: ks:ks -> log:bytes -> ST unit
     let st = sel h0 (KS.state ks) in
     is_C st /\ is_C_12_wait_MS (C.s st))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_set_session_hash ks log =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let C (C_12_wait_MS csr alpha pmsId pms) = !st in
   let (pv, cs, true) = alpha in
   let kef = kefAlg pv cs true in
@@ -500,7 +500,7 @@ val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
     modifies Set.empty h0 h1)
 
 (*private*) let ks_12_get_keys ks =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let role, csr, alpha, msId, ms =
     match !st with
     | C (C_12_has_MS csr alpha msId ms) -> Client, csr, alpha, msId, ms
@@ -533,12 +533,12 @@ val ks_client_12_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
     let st = sel h0 (KS.state ks) in
     is_C st /\ is_C_12_has_MS (C.s st))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_client_12_verify_data ks log =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let C (C_12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
   st := C C_Done;
@@ -549,12 +549,12 @@ val ks_server_12_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
     let st = sel h0 (KS.state ks) in
     is_S st /\ is_S_12_has_MS (S.s st))
   (ensures fun h0 r h1 ->
-    let KS #rid cfg st = ks in
+    let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 let ks_server_12_verify_data ks log =
-  let KS #region cfg st = ks in
+  let KS #region st = ks in
   let S (S_12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
   st := C C_Done;

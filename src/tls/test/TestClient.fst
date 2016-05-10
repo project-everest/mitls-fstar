@@ -188,9 +188,9 @@ let main host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
   let tcp = Platform.Tcp.connect host port in
   let rid = new_region root in
-  let log = HandshakeLog.init TLS_1p2 rid in
+  let log = HandshakeLog.create #rid in
 
-  let ks = KeySchedule.create #rid config Client in
+  let ks = KeySchedule.create #rid Client in
   let cr, _ = KeySchedule.ks_client_init_12 ks in  
   let _, ch, _ = Handshake.prepareClientHello config None None in
   let ch = {ch with ch_client_random = cr} in
