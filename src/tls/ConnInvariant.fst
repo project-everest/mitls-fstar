@@ -147,8 +147,6 @@ let all_epoch_writers_share_conn_nonce (c:connection) (i:AE.id) (wi:AE.writer i)
             (ensures (I.nonce_of_id i = c.hs.nonce))
     = ()
 
-#reset-options "--z3timeout 10 --initial_ifuel 2 --initial_fuel 0"
-
 let writer_registered_to_at_most_one_connection 
     (n1:random) (c1:r_conn n1)
     (n2:random) (c2:r_conn n2{n1 <> n2})
@@ -164,7 +162,6 @@ let writer_region_within_connection
 	    (ensures (HH.includes (C.region c) (StreamAE.State.region w)))
     = ()
 
-(* #reset-options "--z3timeout 10 --initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2" *)
 
 //2. Adding a new epoch to a connection c, with a fresh index (hdId i) for c
 //      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
@@ -255,7 +252,34 @@ let register_writer_in_epoch_ok h0 h1 i c e =
 
 //3. Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
 //    --- we're in the first case, left disjunct (should be easy)
-
+val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:MS.writer i -> c:r_conn (I.nonce_of_id i) -> Lemma
+    (requires (mc_inv h0 /\                                   //initially in the invariant
+	       HH.modifies_one (StreamAE.State.region w) h0 h1 /\ //we modified at most the writer's region
+	       registered i w c h0 /\                         //the writer is registered in c
+	       MM.sel (MR.m_sel h0 MS.ms_tab) i = Some w   /\  //the writer is logged in the ms_tab
+	       MM.sel (MR.m_sel h0 conn_table) (I.nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
+	       HH.contains_ref (MR.as_rref conn_table) h0 /\
+	       HH.contains_ref (MR.as_rref MS.ms_tab) h0))
+    (ensures (mc_inv h1)) 		 
+let mutate_registered_writer_ok h0 h1 i w c =
+    let old_ms = MR.m_sel h0 MS.ms_tab in 
+    let new_ms = MR.m_sel h1 MS.ms_tab in
+    let old_conn = MR.m_sel h0 conn_table in 
+    let new_conn = MR.m_sel h1 conn_table in
+    cut (handshake_regions_exists new_conn h1);    
+    (* assert (registered i w c h1); *)
+    assume (HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1);
+    let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
+      fun j -> 
+	if (authId j && StAE.is_stream_ae j)
+        then match MM.sel new_ms j with
+             | None -> () //nothing allocated at id j yet; easy
+             | Some wj -> 
+	       if j = i 
+	       then ()
+	       else assume (StreamAE.State.region wj <> StreamAE.State.region w) //need some separation among the logs in ms_tab
+	else () in
+    qintro aux
 
 //4. Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
 //    -- So, we cannot be in the Some w, None case, as this is only for bad writers
