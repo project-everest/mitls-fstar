@@ -260,25 +260,20 @@ val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:M
 	       MM.sel (MR.m_sel h0 MS.ms_tab) i = Some w   /\  //the writer is logged in the ms_tab
 	       MM.sel (MR.m_sel h0 conn_table) (I.nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref conn_table) h0 /\
-	       HH.contains_ref (MR.as_rref MS.ms_tab) h0))
+	       HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
+	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1))
     (ensures (mc_inv h1)) 		 
 let mutate_registered_writer_ok h0 h1 i w c =
     let old_ms = MR.m_sel h0 MS.ms_tab in 
     let new_ms = MR.m_sel h1 MS.ms_tab in
     let old_conn = MR.m_sel h0 conn_table in 
     let new_conn = MR.m_sel h1 conn_table in
-    cut (handshake_regions_exists new_conn h1);    
-    (* assert (registered i w c h1); *)
-    assume (HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1);
     let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
       fun j -> 
 	if (authId j && StAE.is_stream_ae j)
         then match MM.sel new_ms j with
-             | None -> () //nothing allocated at id j yet; easy
-             | Some wj -> 
-	       if j = i 
-	       then ()
-	       else () //assume (StreamAE.State.region wj <> StreamAE.State.region w) //need some separation among the logs in ms_tab
+             | None -> ()    
+             | Some wj -> () //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
 	else () in
     qintro aux
 
