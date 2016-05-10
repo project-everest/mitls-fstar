@@ -186,6 +186,7 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	      let epochs = HH.sel h0 (HS.log c.hs) in
               N.registered (I.nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\ 
 	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\
+	      MR.witnessed (MR.rid_exists (StreamAE.State.region w)) /\ 
       	      Map.contains h1 (StreamAE.State.region w) /\
       	      (* (authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1) /\ *)
 	      (forall e. SeqProperties.mem e epochs ==> hsId (Epoch.h e) <> i) /\ //i is fresh for c
@@ -277,7 +278,7 @@ let mutate_registered_writer_ok h0 h1 i w c =
              | Some wj -> 
 	       if j = i 
 	       then ()
-	       else assume (StreamAE.State.region wj <> StreamAE.State.region w) //need some separation among the logs in ms_tab
+	       else () //assume (StreamAE.State.region wj <> StreamAE.State.region w) //need some separation among the logs in ms_tab
 	else () in
     qintro aux
 

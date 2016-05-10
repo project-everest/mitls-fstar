@@ -22,7 +22,8 @@ let writer (i:AE.id) = w:AE.writer i{
 // A partial map from i:id to w:writer i is region_injective
 // if it maps distinct ids to writers with distinct regions
 let region_injective (m:MM.map' AE.id writer) = 
-  forall i1 i2. i1<>i2 ==> (match MM.sel m i1, MM.sel m i2 with
+  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)} 
+       i1<>i2 ==> (match MM.sel m i1, MM.sel m i2 with
 			  | Some w1, Some w2 -> w1.region <> w2.region
 			  | _ -> True)
 
@@ -43,15 +44,7 @@ private let contains_id_rgns (h:HH.t) =
     let m = MR.m_sel h ms_tab in 
     forall (i:AE.id{is_Some (MM.sel m i)}). Map.contains h ((Some.v (MM.sel m i)).region)
 
-
-(* val all_ms_tab_regions_exist: h0:HH.t -> r:rgn -> ST unit *)
-(*   (requires (fun h1 -> HH.fresh_region r h0 h1)) *)
-(*   (ensures (fun h1 _ h ->  *)
-(* 	      h1=h /\ *)
-(* 	      MR.witnessed (MR.rid_exists r) /\ *)
-(* 	      fresh_in_ms_tab r h1)) *)
-
-val all_ms_tab_regions_exist: unit -> ST unit
+private val all_ms_tab_regions_exist: unit -> ST unit //would be good to make such stateful lemmas STTot, once we have it; a bit loose for now
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> 
 	      h0=h1 /\
