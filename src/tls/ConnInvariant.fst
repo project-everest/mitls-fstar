@@ -263,19 +263,19 @@ val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:M
 	       HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
 	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1))
     (ensures (mc_inv h1)) 		 
-let mutate_registered_writer_ok h0 h1 i w c =
-    let old_ms = MR.m_sel h0 MS.ms_tab in 
+let mutate_registered_writer_ok h0 h1 i w c = ()
+(* a slightly more detailed proof:
     let new_ms = MR.m_sel h1 MS.ms_tab in
-    let old_conn = MR.m_sel h0 conn_table in 
     let new_conn = MR.m_sel h1 conn_table in
     let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
-      fun j -> 
-	if (authId j && StAE.is_stream_ae j)
-        then match MM.sel new_ms j with
-             | None -> ()    
-             | Some wj -> () //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
-	else () in
+      fun j ->
+    	if (authId j && StAE.is_stream_ae j)
+        then match MM.sel new_ms j with //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
+             | None -> ()
+             | Some wj -> () //basically, when i=j, the proof is easy as i remains registered; if i<>j then j didn't change since their regions are distinct
+    	else () in
     qintro aux
+*)
 
 //4. Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
 //    -- So, we cannot be in the Some w, None case, as this is only for bad writers
