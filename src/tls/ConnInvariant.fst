@@ -316,15 +316,15 @@ let add_connection_ok h0 h1 i c =
     let new_conn = MR.m_sel h1 conn_table in
     (* assert (handshake_regions_exists old_conn h0); *)
     (* assert (handshake_regions_exists old_conn h1); *)
-    (* let hs_region_exists : n:random -> Lemma  *)
-    (* 	(is_Some (MM.sel new_conn n) ==> conn_hs_region_exists (Some.v (MM.sel new_conn n)) h1) = *)
-    (*   fun n -> match MM.sel new_conn n with  *)
-    (* 	    | None -> () *)
-    (* 	    | Some c' -> if c = c' then () *)
-    (* 		        else cut (c' = Some.v (MM.sel old_conn n)) in *)
-    (* qintro hs_region_exists; *)
-    (* assert (handshake_regions_exists new_conn h1); *)
-    assume (handshake_regions_exists new_conn h1);
+    let hs_region_exists : n:random -> Lemma
+    	(is_Some (MM.sel new_conn n) ==> conn_hs_region_exists (Some.v (MM.sel new_conn n)) h1) =
+      fun n -> match MM.sel new_conn n with
+    	    | None -> ()
+    	    | Some c' -> if c = c' then ()
+    		        else cut (c' = Some.v (MM.sel old_conn n)) in
+    qintro hs_region_exists;
+    cut (handshake_regions_exists new_conn h1);
+//    assume (handshake_regions_exists new_conn h1);
     (* assert (forall n. MM.sel new_conn n == Some c \/ MM.sel new_conn n == MM.sel old_conn n); *)
     let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
       fun j ->
@@ -338,8 +338,17 @@ let add_connection_ok h0 h1 i c =
       	     let log0 = MR.m_sel h0 log_ref in
       	     let log1 = MR.m_sel h1 log_ref in
       	     assert (log0 = log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
-	     assume (region_separated_from_all_handshakes (StreamAE.State.region wj) new_conn); //from the separation clause in ms_con_inv
-	     ()
+	     let aux :  n:random -> Lemma  
+    	       (match MM.sel new_conn n with 
+	       | Some c -> HH.disjoint (HS.region (C.hs c)) (StreamAE.State.region wj)
+	       | None -> True) = 
+	       fun n -> match MM.sel new_conn n with 
+		     | None -> ()
+		     | Some c' -> if c = c' then () 
+			         else cut (c' = Some.v (MM.sel old_conn n)) in
+	     qintro aux
+	     (* assume (region_separated_from_all_handshakes (StreamAE.State.region wj) new_conn); //from the separation clause in ms_con_inv *)
+	     (* () *)
 	       (* let nonce_j = I.nonce_of_id j in *)
 	       (* match MM.sel new_conn nonce_j with *)
 	       (* | None -> admit() *)
