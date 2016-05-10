@@ -309,13 +309,13 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	      MM.sel old_conn nonce = None /\
 	      new_conn = MM.upd old_conn nonce c)))
   (ensures (mc_inv h1))	
+#reset-options "--log_queries"
+
 let add_connection_ok h0 h1 i c = 
     let old_ms = MR.m_sel h0 MS.ms_tab in 
     let new_ms = MR.m_sel h1 MS.ms_tab in
     let old_conn = MR.m_sel h0 conn_table in 
     let new_conn = MR.m_sel h1 conn_table in
-    (* assert (handshake_regions_exists old_conn h0); *)
-    (* assert (handshake_regions_exists old_conn h1); *)
     let hs_region_exists : n:random -> Lemma
     	(is_Some (MM.sel new_conn n) ==> conn_hs_region_exists (Some.v (MM.sel new_conn n)) h1) =
       fun n -> match MM.sel new_conn n with
@@ -324,38 +324,28 @@ let add_connection_ok h0 h1 i c =
     		        else cut (c' = Some.v (MM.sel old_conn n)) in
     qintro hs_region_exists;
     cut (handshake_regions_exists new_conn h1);
-//    assume (handshake_regions_exists new_conn h1);
-    (* assert (forall n. MM.sel new_conn n == Some c \/ MM.sel new_conn n == MM.sel old_conn n); *)
     let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
       fun j ->
     	if (authId j && StAE.is_stream_ae j)
-        then match MM.sel new_ms j with //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
-             | None -> ()
-             | Some wj ->
-             let log_ref = StreamAE.ilog (StreamAE.State.log wj) in
-     	     assert (Map.contains h1 (StreamAE.State.region wj)); //its region exists; from the 1st technical clause in ms_conn_inv
-      	     assert (HH.contains_ref (MR.as_rref log_ref) h1);    //its log exists; from the 2nd technical clause in ms_conn_inv
-      	     let log0 = MR.m_sel h0 log_ref in
-      	     let log1 = MR.m_sel h1 log_ref in
-      	     assert (log0 = log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
-	     let aux :  n:random -> Lemma  
-    	       (match MM.sel new_conn n with 
-	       | Some c -> HH.disjoint (HS.region (C.hs c)) (StreamAE.State.region wj)
-	       | None -> True) = 
-	       fun n -> match MM.sel new_conn n with 
-		     | None -> ()
-		     | Some c' -> if c = c' then () 
-			         else cut (c' = Some.v (MM.sel old_conn n)) in
-	     qintro aux
-	     (* assume (region_separated_from_all_handshakes (StreamAE.State.region wj) new_conn); //from the separation clause in ms_con_inv *)
-	     (* () *)
-	       (* let nonce_j = I.nonce_of_id j in *)
-	       (* match MM.sel new_conn nonce_j with *)
-	       (* | None -> admit() *)
-	       (* | Some c' -> *)
-	       (* 	 if c'=c *)
-	       (* 	 then admit() *)
-	       (* 	 else cut (c' = Some.v (MM.sel old_conn nonce_j)) *)
+        then begin match MM.sel new_ms j with
+		   | None -> ()
+		   | Some wj ->
+		     let log_ref = StreamAE.ilog (StreamAE.State.log wj) in
+      		     let log0 = MR.m_sel h0 log_ref in
+      		     let log1 = MR.m_sel h1 log_ref in
+      		     assert (log0 = log1); //the log didn't change
+		     let aux :  n:random
+    			     -> Lemma (match MM.sel new_conn n with 
+				      | Some c -> HH.disjoint (HS.region (C.hs c)) (StreamAE.State.region wj)
+				      | None -> True) = 
+		       fun n -> 
+		         match MM.sel new_conn n with 
+			 | None -> ()
+			 | Some c' -> if c = c' then () //we have a pre-condition stating that c's handshake is separated from wj
+			             else cut (c' = Some.v (MM.sel old_conn n)) //it used to be separated from c'; so it must still be
+		     in
+		     qintro aux
+	     end
     	else () in
     qintro aux
 
