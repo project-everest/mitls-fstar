@@ -252,7 +252,6 @@ let register_writer_in_epoch_ok h0 h1 i c e =
   qintro aux
 
 //3. Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
-//    --- we're in the first case, left disjunct (should be easy)
 val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:MS.writer i -> c:r_conn (I.nonce_of_id i) -> Lemma
     (requires (mc_inv h0 /\                                   //initially in the invariant
 	       HH.modifies_one (StreamAE.State.region w) h0 h1 /\ //we modified at most the writer's region
@@ -277,8 +276,79 @@ let mutate_registered_writer_ok h0 h1 i w c = ()
     qintro aux
 *)
 
+type i_conn (i:id) = r_conn (I.nonce_of_id i)
 //4. Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
 //    -- So, we cannot be in the Some w, None case, as this is only for bad writers
 //    -- We cannot also be in the first case, since the conn table is monotonic and it doesn't already contain the id
-
 //    Note: we can prove that the having a doomed writer is a monotonic property of nonces
+
+let conn_hs_region_exists (c:connection) (h:HH.t) = 
+   let hs_rgn = HS.region c.hs in
+   Map.contains h hs_rgn /\
+   HH.disjoint hs_rgn tls_tables_region
+
+let conn_hs_separated_from_all_writers (c:connection) (h:HH.t) = 
+  let ms = MR.m_sel h MS.ms_tab in
+  let hs_rgn = HS.region c.hs in
+  forall i.{:pattern (MM.sel ms i)}
+      match MM.sel ms i with
+      | None -> True
+      | Some w -> HH.disjoint hs_rgn (StreamAE.State.region w)
+
+val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
+  (requires (mc_inv h0 /\
+	     HH.modifies (Set.singleton tls_tables_region) h0 h1 /\
+	     HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref conn_table)} h0 h1 /\
+	     HH.contains_ref (MR.as_rref conn_table) h0 /\
+	     HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
+	     conn_hs_region_exists c h0 /\
+	     conn_hs_separated_from_all_writers c h0 /\
+	     (let old_conn = MR.m_sel h0 conn_table in 
+    	      let new_conn = MR.m_sel h1 conn_table in 
+	      let nonce = I.nonce_of_id i in 
+	      MM.sel old_conn nonce = None /\
+	      new_conn = MM.upd old_conn nonce c)))
+  (ensures (mc_inv h1))	
+let add_connection_ok h0 h1 i c = 
+    let old_ms = MR.m_sel h0 MS.ms_tab in 
+    let new_ms = MR.m_sel h1 MS.ms_tab in
+    let old_conn = MR.m_sel h0 conn_table in 
+    let new_conn = MR.m_sel h1 conn_table in
+    (* assert (handshake_regions_exists old_conn h0); *)
+    (* assert (handshake_regions_exists old_conn h1); *)
+    (* let hs_region_exists : n:random -> Lemma  *)
+    (* 	(is_Some (MM.sel new_conn n) ==> conn_hs_region_exists (Some.v (MM.sel new_conn n)) h1) = *)
+    (*   fun n -> match MM.sel new_conn n with  *)
+    (* 	    | None -> () *)
+    (* 	    | Some c' -> if c = c' then () *)
+    (* 		        else cut (c' = Some.v (MM.sel old_conn n)) in *)
+    (* qintro hs_region_exists; *)
+    (* assert (handshake_regions_exists new_conn h1); *)
+    assume (handshake_regions_exists new_conn h1);
+    (* assert (forall n. MM.sel new_conn n == Some c \/ MM.sel new_conn n == MM.sel old_conn n); *)
+    let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
+      fun j ->
+    	if (authId j && StAE.is_stream_ae j)
+        then match MM.sel new_ms j with //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
+             | None -> ()
+             | Some wj ->
+             let log_ref = StreamAE.ilog (StreamAE.State.log wj) in
+     	     assert (Map.contains h1 (StreamAE.State.region wj)); //its region exists; from the 1st technical clause in ms_conn_inv
+      	     assert (HH.contains_ref (MR.as_rref log_ref) h1);    //its log exists; from the 2nd technical clause in ms_conn_inv
+      	     let log0 = MR.m_sel h0 log_ref in
+      	     let log1 = MR.m_sel h1 log_ref in
+      	     assert (log0 = log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
+	     assume (region_separated_from_all_handshakes (StreamAE.State.region wj) new_conn); //from the separation clause in ms_con_inv
+	     ()
+	       (* let nonce_j = I.nonce_of_id j in *)
+	       (* match MM.sel new_conn nonce_j with *)
+	       (* | None -> admit() *)
+	       (* | Some c' -> *)
+	       (* 	 if c'=c *)
+	       (* 	 then admit() *)
+	       (* 	 else cut (c' = Some.v (MM.sel old_conn nonce_j)) *)
+    	else () in
+    qintro aux
+
+    
+
