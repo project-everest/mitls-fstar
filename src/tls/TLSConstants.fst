@@ -17,6 +17,12 @@ let rgn = r:HH.rid { r <> HH.root }
 let tls_region : rgn = new_region HH.root
 let tls_tables_region : (r:rgn{HH.parent r = tls_region}) = new_region tls_region
 
+assume val color : HH.rid -> GTot int
+let epoch_color = 1
+let hs_color = 2
+let is_epoch_rgn r = color r = epoch_color
+let is_hs_rgn r = color r = hs_color
+
 // -------------------------------------------------------------------
 // Polarity for reading and writing, e.g. for stateful encryption
 

@@ -27,7 +27,6 @@ type conn_table_t = MM.t tls_tables_region random r_conn pairwise_disjoint
 let conn_table : conn_table_t = 
   MM.alloc #tls_tables_region #random #r_conn #pairwise_disjoint
 
-
 type ms_tab = MM.map' AE.id MS.writer 
 type c_tab  = MM.map' random r_conn 
 
@@ -38,12 +37,13 @@ let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) 
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in
         i=i' /\ StAE.stream_ae #i e.w == w))
 
-let region_separated_from_all_handshakes (r:HH.rid) (conn:c_tab) = 
-  forall n.{:pattern (MM.sel conn n)}
-       match MM.sel conn n with 
-       | Some c -> HH.disjoint (HS.region (C.hs c)) r
-       | None -> True
-		
+(* let region_separated_from_all_handshakes (r:HH.rid) (conn:c_tab) =  *)
+(*   forall n.{:pattern (MM.sel conn n)} *)
+(*        match MM.sel conn n with  *)
+(*        | Some c -> HS.region (C.hs c) <> r //HH.disjoint (HS.region (C.hs c)) r *)
+(*        | None -> True *)
+assume TLS_tables_region_color: color tls_tables_region = -1
+
 let ms_conn_inv (ms:ms_tab)
  		(conn:c_tab)
 		(h:HyperHeap.t) 
@@ -54,10 +54,11 @@ let ms_conn_inv (ms:ms_tab)
       | Some w -> 
 	//technical: for framing; need to know that the writer's region exists
 	Map.contains h (StreamAE.State.region w) /\  
+	is_epoch_rgn (StreamAE.State.region w) /\
 	//technical: for framing; need to know that when idealized, the log also exists 
 	(authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h) /\
-	//separation: each writer is separated from every connection's handshake state, and from tls_tables_region
-	region_separated_from_all_handshakes (StreamAE.State.region w) conn /\
+	(* //separation: each writer is separated from every connection's handshake state, and from tls_tables_region *)
+	(* region_separated_from_all_handshakes (StreamAE.State.region w) conn /\ *)
 	//main application invariant:
 	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is either still unused; or
 	             (let copt = MM.sel conn (I.nonce_of_id i) in
@@ -93,7 +94,8 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 HH.contains_ref (MR.as_rref MS.ms_tab) h0  /\
 		 Map.contains h1 (StreamAE.State.region w)  /\
 		 mc_inv h0 /\ //we're initially in the invariant
-		 region_separated_from_all_handshakes (StreamAE.State.region w) conn /\         //the new writer is suitably separated from all handshakes
+		 is_epoch_rgn (StreamAE.State.region w) /\
+		 (* region_separated_from_all_handshakes (StreamAE.State.region w) conn /\         //the new writer is suitably separated from all handshakes *)
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
 		 (old_ms = new_ms //either ms_tab didn't change at all
@@ -121,14 +123,18 @@ let ms_derive_is_ok h0 h1 i w =
       else () in
   qintro aux
 
+assume val gcut: f:(unit -> GTot Type){f()} -> Tot unit
+assume val gadmit: f:(unit -> GTot Type) -> Tot (u:unit{f()})
+
 (* Here, we actually call MS.derive and check that its post-condition 
    is sufficient to call ms_derive_is_ok and re-establish the invariant *)
-let try_ms_derive (epoch_region:HH.rid) (i:AE.id) 
+let try_ms_derive (epoch_region:rgn) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 
        	   HH.disjoint epoch_region tls_region /\
 	   N.registered (I.nonce_of_id i) epoch_region /\
-	   region_separated_from_all_handshakes epoch_region (MR.m_sel h conn_table) /\ 
+	   is_epoch_rgn epoch_region /\
+	   (* region_separated_from_all_handshakes epoch_region (MR.m_sel h conn_table) /\  *)
 	   authId i /\
 	   mc_inv h))
        (ensures (fun h0 w h1 -> 
@@ -139,6 +145,10 @@ let try_ms_derive (epoch_region:HH.rid) (i:AE.id)
     let w = MasterSecret.derive epoch_region i in 
     MR.m_recall (AE.ilog (StreamAE.State.log w));
     let h1 = ST.get () in 
+    gadmit (fun () -> color epoch_region = color (StreamAE.State.region w));
+    (* gadmit (fun () ->  *)
+    (* 	  let conn = MR.m_sel h0 conn_table in *)
+    (* 	  region_separated_from_all_handshakes (StreamAE.State.region w) conn);         //the new writer is suitably separated from all handshakes *)
     ms_derive_is_ok h0 h1 i w;
     w
 
@@ -231,7 +241,8 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       	     let log_ref = StreamAE.ilog (StreamAE.State.log wj) in
       	     assert (Map.contains h1 (StreamAE.State.region wj)); //its region exists; from the 1st technical clause in ms_conn_inv
       	     assert (HH.contains_ref (MR.as_rref log_ref) h1);    //its log exists; from the 2nd technical clause in ms_conn_inv
-      	     assert (region_separated_from_all_handshakes (StreamAE.State.region wj) new_conn); //from the separation clause in ms_con_inv
+	     assert (is_epoch_rgn (StreamAE.State.region wj));    //from the separation clause in ms_con_inv
+      	     (* assert (region_separated_from_all_handshakes (StreamAE.State.region wj) new_conn); //from the separation clause in ms_con_inv *)
       	     let log0 = MR.m_sel h0 log_ref in
       	     let log1 = MR.m_sel h1 log_ref in
       	     assert (log0 = log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
@@ -253,10 +264,10 @@ let register_writer_in_epoch_ok h0 h1 i c e =
 
 //3. Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
 val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:MS.writer i -> c:r_conn (I.nonce_of_id i) -> Lemma
-    (requires (mc_inv h0 /\                                   //initially in the invariant
+    (requires (mc_inv h0 /\                                       //initially in the invariant
 	       HH.modifies_one (StreamAE.State.region w) h0 h1 /\ //we modified at most the writer's region
-	       registered i w c h0 /\                         //the writer is registered in c
-	       MM.sel (MR.m_sel h0 MS.ms_tab) i = Some w   /\  //the writer is logged in the ms_tab
+	       registered i w c h0 /\                             //the writer is registered in c
+	       MM.sel (MR.m_sel h0 MS.ms_tab) i = Some w   /\     //the writer is logged in the ms_tab
 	       MM.sel (MR.m_sel h0 conn_table) (I.nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref conn_table) h0 /\
 	       HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
@@ -287,13 +298,13 @@ let conn_hs_region_exists (c:connection) (h:HH.t) =
    Map.contains h hs_rgn /\
    HH.disjoint hs_rgn tls_tables_region
 
-let conn_hs_separated_from_all_writers (c:connection) (h:HH.t) = 
-  let ms = MR.m_sel h MS.ms_tab in
-  let hs_rgn = HS.region c.hs in
-  forall i.{:pattern (MM.sel ms i)}
-      match MM.sel ms i with
-      | None -> True
-      | Some w -> HH.disjoint hs_rgn (StreamAE.State.region w)
+(* let conn_hs_separated_from_all_writers (c:connection) (h:HH.t) =  *)
+(*   let ms = MR.m_sel h MS.ms_tab in *)
+(*   let hs_rgn = HS.region c.hs in *)
+(*   forall i.{:pattern (MM.sel ms i)} *)
+(*       match MM.sel ms i with *)
+(*       | None -> True *)
+(*       | Some w -> HH.disjoint hs_rgn (StreamAE.State.region w) *)
 
 val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
   (requires (mc_inv h0 /\
@@ -302,7 +313,8 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	     HH.contains_ref (MR.as_rref conn_table) h0 /\
 	     HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
 	     conn_hs_region_exists c h0 /\
-	     conn_hs_separated_from_all_writers c h0 /\
+	     is_hs_rgn (HS.region c.hs) /\
+	     (* conn_hs_separated_from_all_writers c h0 /\ *)
 	     (let old_conn = MR.m_sel h0 conn_table in 
     	      let new_conn = MR.m_sel h1 conn_table in 
 	      let nonce = I.nonce_of_id i in 
@@ -333,18 +345,18 @@ let add_connection_ok h0 h1 i c =
 		     let log_ref = StreamAE.ilog (StreamAE.State.log wj) in
       		     let log0 = MR.m_sel h0 log_ref in
       		     let log1 = MR.m_sel h1 log_ref in
-      		     assert (log0 = log1); //the log didn't change
-		     let aux :  n:random
-    			     -> Lemma (match MM.sel new_conn n with 
-				      | Some c -> HH.disjoint (HS.region (C.hs c)) (StreamAE.State.region wj)
-				      | None -> True) = 
-		       fun n -> 
-		         match MM.sel new_conn n with 
-			 | None -> ()
-			 | Some c' -> if c = c' then () //we have a pre-condition stating that c's handshake is separated from wj
-			             else cut (c' = Some.v (MM.sel old_conn n)) //it used to be separated from c'; so it must still be
-		     in
-		     qintro aux
+      		     assert (log0 = log1) //the log didn't change
+		     (* let aux :  n:random *)
+    		     (* 	     -> Lemma (match MM.sel new_conn n with  *)
+		     (* 		      | Some c -> HH.disjoint (HS.region (C.hs c)) (StreamAE.State.region wj) *)
+		     (* 		      | None -> True) =  *)
+		     (*   fun n ->  *)
+		     (*     match MM.sel new_conn n with  *)
+		     (* 	 | None -> () *)
+		     (* 	 | Some c' -> if c = c' then () //we have a pre-condition stating that c's handshake is separated from wj *)
+		     (* 	             else cut (c' = Some.v (MM.sel old_conn n)) //it used to be separated from c'; so it must still be *)
+		     (* in *)
+		     (* qintro aux *)
 	     end
     	else () in
     qintro aux
