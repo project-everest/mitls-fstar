@@ -75,12 +75,10 @@ endif
 # We try to limit the use of preprocessing, as it is messy.
 # Not sure which interfaces we should put in there.
 
-# these files are the stable inputs for verification -- this is the dependency
-# order for interactive verification; these files are now all extracted via
-# lax type-checking in tls-gen
-FSTS=$(subst Handshake.fsti Connection.fst, $(LAX_CHECKED_FSTS), $(VERIFIABLE_FSTS))
+# This is the dependency order for interactive verification;
+# these files are now all extracted via lax type-checking in tls-gen
 
-VERIFIABLE_FSTS=IdealFlags.fst \
+FSTS=IdealFlags.fst \
 MonotoneSeq.fst \
 MonotoneMap.fst \
 TLSError.fst \
@@ -117,11 +115,7 @@ MAC_SHA256.fst \
 MAC_SHA1.fst \
 HandshakeMessages.fst \
 StAE.fst \
-Handshake.fsti \
-Connection.fst \
-ConnInvariant.fst #the preceding space is significant!
-
-LAX_CHECKED_FSTS= Record.fst \
+Record.fst \
 HSCrypto.fst \
 TLSPRF.fst \
 PRF.p.fst \
@@ -130,6 +124,7 @@ KeySchedule.fst \
 Handshake.fsti \
 Handshake.fst \
 Connection.fst \
+ConnInvariant.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 test/TestClient.fst \
@@ -142,7 +137,7 @@ test/TestClient13.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-# missing modules from VERIFIABLE_FSTS are: PMS Sig Cert Encode Enc Handshake
+# missing modules from FSTS are: PMS Sig Cert Encode Enc Handshake
 VERIFY= \
 MonotoneSeq \
 MonotoneMap \
@@ -180,12 +175,12 @@ ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) Sessi
 
 # truncates $(FSTS) just before $(basename $@).fst
 define prefix_cfg
-	$(shell str="$(VERIFIABLE_FSTS)"; echo "$${str%%$(1).$(2) *}")
+	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *}")
 endef
 
 # truncates $(FSTS) just after $(basename $@).fst
 define prefix_ver
-	$(shell str="$(VERIFIABLE_FSTS)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
+	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
 endef
 # the space in calls to prefix_ver and prefix_cfg matters!
 
@@ -214,14 +209,14 @@ endef
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
-tls-ver: $(LIBFILES) Ideal.fst $(VERIFIABLE_FSTS)
+tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
 	$(filter-out Ideal.fst,$^)
 
-tls-sanity: $(LIBFILES) Ideal.fst $(VERIFIABLE_FSTS) test/False.fst
+tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
