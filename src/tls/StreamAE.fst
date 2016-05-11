@@ -63,7 +63,7 @@ let genReader parent #i w =
 //
 // The XORing is a fixed, ad hoc, random permutation; not sure what is gained;
 // we can reason about sequence-number collisions before applying it.
-let aeIV i (n:seqn i) (staticIV: iv i) : iv i =
+let aeIV i (n:seqn_t) (staticIV: iv i) : iv i =
   let l = CoreCrypto.aeadRealIVSize (alg i) in
   let extended: iv i = bytes_of_int l n (* 64 bit counter extended with 0s *) in
   xor l extended staticIV

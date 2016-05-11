@@ -1,12 +1,20 @@
 module StAE
 
+(* Multiplexing between StatefulLHAE and StreaAE for the record layer *) 
+
+open FStar.Monotonic.RRef
+
 open Platform.Bytes
 
 open TLSConstants
 open TLSInfo
 
 let is_stream_ae i = pv_of_id i = TLS_1p3
-let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg 
+let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg /\ ~ (authId i)
+
+// as a temporary hack, we currently disable AuthId for TLS 1.2.
+// so that we can experiment with TLS and StreamAE
+
 
 type state (i:id) (rw:rw) = 
   | Stream: u:unit{is_stream_ae i} -> StreamAE.state i rw -> state i rw
@@ -26,25 +34,49 @@ let st_lhae (#i:id{is_stateful_lhae i}) (#rw:rw) (s:state i rw)
 open FStar.HyperHeap
 type n_rid = r:rid{r <> root}
 
-let region (#i:id) (#rw:rw) (s:state i rw) 
-  : Tot n_rid
+let region (#i:id) (#rw:rw) (s:state i rw): Tot n_rid
   = match s with 
     | Stream _ s -> StreamAE.State.region s
     | StLHAE _ s -> StatefulLHAE.region s
 
-let peer_region (#i:id) (#rw:rw) (s:state i rw{is_stateful_lhae i \/ rw=Reader})
-  : Tot n_rid
+let log_region (#i:id) (#rw:rw) (s:state i rw): Tot n_rid
   = match s with 
     | Stream _ s -> StreamAE.State.log_region s
-    | StLHAE _ s -> StatefulLHAE.peer_region s
+    | StLHAE _ s -> StatefulLHAE.peer_region s //FIXME
 
+let writable_seqn (#i:id) (#rw:rw) (s:state i rw) h = 
+    match s with 
+    | Stream _ s -> is_seqn (m_sel h (StreamAE.ctr (StreamAE.State.counter s)) + 1)
+    | StLHAE _ s -> is_seqn (sel h (StatefulLHAE.State.seqn s) + 1) 
+
+(*
+let counter (#i:id { is_stream_ae i }) (#rw:rw) (s:state i rw): Tot seqn_ref s.region i log
+  = match s with 
+    | Stream _ s -> StreamAE.State.counter s
+
+let log (#i:id) (#rw:rw) (s:state i rw) : Tot (StreamAE.log_ref (log_region s) i)
+  = match s with 
+    | Stream _ s -> StreamAE.State.log_region s
+    | StLHAE _ s -> ()
+*)
 type cipher (i:id) = b:bytes {Range.valid_clen i (length b)}
 
 let cipher_noId b : cipher noId = b 
 
-(* 16-05-09 
-type entry i 
+type entry i = 
+  | EStream: u:unit{is_stream_ae i}     -> StreamAE.entry i  -> entry i 
+  | EStLHAE: u:unit{is_stateful_lhae i} -> StatefulLHAE.entry i  -> entry i 
 
 val fragment_entry: #i:id -> e: entry i -> Tot (Content.fragment i)
-let fragment_entry #i (Entry c ad f) = f
-*)
+
+let fragment_entry #i = function 
+  | EStream _ (StreamAE.Entry _ _ f) -> f 
+  | EStLHAE _ (StatefulLHAE.Entry _ _ f) -> f 
+
+let writer_modifies #i h0 wr h1 = 
+  match wr with 
+  | Stream _ wr -> True 
+  | StLHAE _ wr -> (
+      HyperHeap.modifies (Set.singleton (StatefulLHAE.region wr)) h0 h1 /\
+      Heap.modifies (!{ as_ref (StatefulLHAE.log wr), as_ref (StatefulLHAE.seqn wr)}) (Map.sel h0 (StatefulLHAE.region wr)) (Map.sel h1 (StatefulLHAE.region wr)) )
+

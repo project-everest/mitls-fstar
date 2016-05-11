@@ -51,8 +51,8 @@ let max_uint64: n:nat {repr_bytes n <= 8} =
   let n = 1073741823 in //2^30-1 4611686018427387903 in // (2^62-1) (* TODO: Fix this *)
   lemma_repr_bytes_values n; n
 
-let is_seqn i n =  repr_bytes n <= aeadRecordIVSize (alg i)
-type seqn i = n:nat { is_seqn i n }
+// was a bit more parametric; now moved to TLSConstants.
+//let is_seqn i n =  repr_bytes n <= aeadRecordIVSize (alg i)
 
 let ideal_log (r:rid) (i:id) = MonotoneSeq.log_t r (entry i)
 
@@ -69,24 +69,23 @@ let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 =
   MonotoneSeq.counter r log (aeadRecordIVSize (alg i)) //we have a counter, that's increasing, at most to the min(length log, 2^
   
 let concrete_ctr (r:rid) (i:id) : Tot Type0 = 
-  m_rref r (seqn i) increases
+  m_rref r seqn_t increases
 
 let seqn_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 = 
   if authId i   
   then ideal_ctr r i (log <: ideal_log l i)
-  else m_rref r (seqn i) increases
+  else m_rref r seqn_t increases
 
 let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log) 
   : Tot (m_rref r (if authId i 
 		   then counter_val #l #(entry i) r log (aeadRecordIVSize (alg i)) 
-		   else seqn i) 
+		   else seqn_t) 
 		increases) = c
 
 // kept concrete for log and counter, but the key and iv should be private.
 type state (i:id) (rw:rw) = 
-  | State: #region:rid{region <> root} 
-         -> #log_region:rid{log_region <> root /\
-		           (if rw=Writer then region = log_region else HyperHeap.disjoint region log_region) }
+  | State: #region:rgn
+         -> #log_region:rgn{ if rw=Writer then region = log_region else HyperHeap.disjoint region log_region }
          -> key:key i
          -> iv: iv i
          -> log: log_ref log_region i // ghost, subject to cryptographic assumption
@@ -151,7 +150,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 -> 
-    	  is_seqn i (m_sel h0 (ctr e.counter) + 1)))
+    	  is_seqn (m_sel h0 (ctr e.counter) + 1)))
     (ensures  (fun h0 c h1 ->
                  modifies_one e.region h0 h1 /\
                  (authId i ==> m_contains (ilog e.log) h1) /\
@@ -169,7 +168,7 @@ let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l -> ST (option (plain i l))
-  (requires (fun h0 -> is_seqn i (m_sel h0 (ctr d.counter) + 1)))
+  (requires (fun h0 -> is_seqn (m_sel h0 (ctr d.counter) + 1)))
   (ensures  (fun h0 res h1 ->
 	      (authId i ==>
                  (let log = m_sel h0 (ilog d.log) in 

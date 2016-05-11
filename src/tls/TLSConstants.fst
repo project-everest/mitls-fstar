@@ -92,7 +92,10 @@ type aeAlg =
 let lhae = function
   | MtE (Block _) _                         -> true
   | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> false 
-   
+
+// sequence numbers for StreamAE/StatefulLHAE
+let is_seqn (n:nat) = repr_bytes n <= 8
+type seqn_t = n:nat { is_seqn n } 
 
 // MtE: ``The AE algorithms are CPA and INT-CTXT''
 // MtE: ``The MAC algorithm of id is INT-CMA.''

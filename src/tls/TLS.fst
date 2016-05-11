@@ -20,9 +20,15 @@ open StAE
 open Handshake
 open Connection
 
+open MonotoneSeq
+open FStar.Monotonic.RRef
+module HH = HyperHeap
+
 // using also Alert, DataStream, Content, Record
 
 // scaffolding
+
+//16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
 
 
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
@@ -366,7 +372,7 @@ assume val epoch_w_h_inv: c: connection -> h0: HyperHeap.t -> h1: HyperHeap.t ->
        Let(epoch_wo o)(fun wr ->
         HyperHeap.modifies (Set.singleton (writer_region wr)) h0 h1)))
     ==> o = epoch_w_h c h1))
-
+ 
 let epoch_w_h_inv c h0 h1 =
   match epoch_w_h c h0 with
   | None -> ()
@@ -378,8 +384,6 @@ let epoch_w_h_inv c h0 h1 =
 )
 *)
 
-val fragment_entry: #i:id -> e: entry i -> Tot (Content.fragment i)
-let fragment_entry #i (Entry c ad f) = f
 
 (*
 val fragment_entry: #i:id -> log: seq (entry i) { Seq.length log > 0 } -> Tot (rg:frange i & Content.fragment i)
@@ -419,7 +423,7 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 // except for the null epoch, the fragment is appended to the epoch's writer log.
 
 //Question: What happened to authId at this level?
-val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulPlain.cipher i)
+val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment i -> ST (cipher i)
   (requires (fun h ->
     let es = sel h c.hs.log in
     let j = iT c.hs Writer h in
@@ -429,7 +433,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
     (j >= 0 ==> (
        let e = Seq.index es j in
        i == hsId e.h /\
-       is_seqn (sel h (seqn (writer_epoch e)) + 1)))))
+       writable_seqn (writer_epoch e)  ))))
   (ensures (fun h0 payload h1 ->
     let es = sel h0 c.hs.log in
     let j = iT c.hs Writer h0 in
@@ -442,11 +446,9 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (StatefulP
        let e = Seq.index es j in
        i == hsId e.h /\ (
        let wr: writer i = writer_epoch e in
-       HyperHeap.modifies (Set.singleton (region wr)) h0 h1 /\
-       Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
+       writer_modifies h0 wr h1 /\
        sel h1 (seqn wr) = sel h0 (seqn wr) + 1 /\
-       st_enc_inv #i wr h0 /\
-       st_enc_inv #i wr h1 /\
+       // st_enc_inv #i wr h0 /\ st_enc_inv #i wr h1 /\
        Seq.length (sel h1 (log wr)) = Seq.length (sel h0 (log wr)) + 1 /\
         ( let e: entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
           sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
