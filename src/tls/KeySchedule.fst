@@ -183,7 +183,7 @@ let ks_client_init_12 ks =
   (KS.state ks) := ns;
   cr, osi
 
-val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> group:CommonDH.group -> ST (random * CommonDH.key)
+val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> group:namedGroup -> ST (random * bytes)
   (requires fun h0 ->
     let kss = sel h0 (KS.state ks) in
     is_S kss /\ is_S_Init (S.s kss)
@@ -197,14 +197,17 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
 
 let ks_server_12_init_dh ks cr pv cs ems group =
   let KS #region st = ks in
+  let group = (match group with 
+      	       | SEC c -> CommonDH.ECDH c
+	       | FFDHE f -> CommonDH.FFDH (DHGroup.Named f)) in
   let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen group in
   let csr = cr @| sr in
   st := S (S_12_wait_CKE_DH csr (pv, cs, ems) our_share);
-  (sr, our_share)
+  (sr, CommonDH.serialize our_share)
 
-val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gx:CommonDH.key -> log_hash:bytes -> ST (random * CommonDH.key)
+val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> log_hash:bytes -> ST (random * bytes)
   (requires fun h0 ->
     let kss = sel h0 (KS.state ks) in
     is_S kss /\ is_S_Init (S.s kss)
@@ -216,8 +219,10 @@ val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gx:CommonDH.
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_server_13_1rtt_init ks cr cs gx log_hash =
+let ks_server_13_1rtt_init ks cr cs gn gxb log_hash =
   let KS #region st = ks in
+  let SEC ec = gn in
+  let Some gx = CommonDH.parse (CommonDH.ECP (ECGroup.params_of_group ec)) gxb in
   let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite _ _ (AEAD ae h) = cs in
   let our_share, gxy = CommonDH.dh_responder gx in
@@ -225,7 +230,7 @@ let ks_server_13_1rtt_init ks cr cs gx log_hash =
   let msId = noMsId in
   let xES = HSCrypto.hkdf_extract h zeroes gxy in
   st := S (S_13_1RTT_HTK (ae, h) msId xES);
-  (sr, our_share)
+  (sr, CommonDH.serialize our_share)
 
 // log is the raw HS log, used for EMS derivation
 val ks_server_12_cke_dh: ks:ks -> peer_share:CommonDH.key -> log:bytes -> ST unit
