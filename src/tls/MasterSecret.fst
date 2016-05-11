@@ -16,7 +16,9 @@ module I = IdNonce
 let writer (i:AE.id) = w:AE.writer i{
   N.registered (I.nonce_of_id i) (HH.parent w.region) /\ 
   HH.disjoint (HH.parent w.region) tls_region /\
-  MR.witnessed (MR.rid_exists w.region)
+  MR.witnessed (MR.rid_exists w.region) /\
+  is_epoch_rgn w.region /\
+  is_epoch_rgn (HH.parent w.region)
 }  
 
 // A partial map from i:id to w:writer i is region_injective
@@ -55,15 +57,20 @@ let all_ms_tab_regions_exists () =
   let tok : squash (id_rgns_witnessed m0) = () in   
   MR.testify_forall tok
 
-let derive (r:rid) (i:AE.id) 
+assume val gadmit: f:(unit -> GTot Type) -> Tot (u:unit{f()})
+
+let derive (r:rgn) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 
 	   HH.disjoint r tls_region /\
+	   is_epoch_rgn r /\
 	   N.registered (I.nonce_of_id i) r))
        (ensures (fun h0 w h1 -> 
        	   HH.disjoint r tls_region 
+	   /\ is_epoch_rgn r
 	   /\ N.registered (I.nonce_of_id i) r
 	   /\ HH.parent w.region = r
+	   /\ is_epoch_rgn w.region
 	   /\ modifies (Set.singleton tls_tables_region) h0 h1 //modifies at most the tls_tables region
 	   /\ modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref ms_tab)} h0 h1 //and within it, at most ms_tab
 	   /\ MR.witnessed (MR.rid_exists w.region) //and the writer's region is witnessed to exists also
@@ -79,6 +86,7 @@ let derive (r:rid) (i:AE.id)
     | None -> 
       all_ms_tab_regions_exists ();
       let w = AE.gen r i in 
+      gadmit (fun () -> is_epoch_rgn w.region);
       let wr = MR.ex_rid_of_rid w.region in //witness that it always exists
       MM.extend ms_tab i w;
       w

@@ -37,11 +37,6 @@ let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) 
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in
         i=i' /\ StAE.stream_ae #i e.w == w))
 
-(* let region_separated_from_all_handshakes (r:HH.rid) (conn:c_tab) =  *)
-(*   forall n.{:pattern (MM.sel conn n)} *)
-(*        match MM.sel conn n with  *)
-(*        | Some c -> HS.region (C.hs c) <> r //HH.disjoint (HS.region (C.hs c)) r *)
-(*        | None -> True *)
 assume TLS_tables_region_color: color tls_tables_region = -1
 
 let ms_conn_inv (ms:ms_tab)
@@ -54,11 +49,8 @@ let ms_conn_inv (ms:ms_tab)
       | Some w -> 
 	//technical: for framing; need to know that the writer's region exists
 	Map.contains h (StreamAE.State.region w) /\  
-	is_epoch_rgn (StreamAE.State.region w) /\
 	//technical: for framing; need to know that when idealized, the log also exists 
 	(authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h) /\
-	(* //separation: each writer is separated from every connection's handshake state, and from tls_tables_region *)
-	(* region_separated_from_all_handshakes (StreamAE.State.region w) conn /\ *)
 	//main application invariant:
 	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is either still unused; or
 	             (let copt = MM.sel conn (I.nonce_of_id i) in
@@ -95,6 +87,7 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 Map.contains h1 (StreamAE.State.region w)  /\
 		 mc_inv h0 /\ //we're initially in the invariant
 		 is_epoch_rgn (StreamAE.State.region w) /\
+		 is_epoch_rgn (HH.parent (StreamAE.State.region w)) /\
 		 (* region_separated_from_all_handshakes (StreamAE.State.region w) conn /\         //the new writer is suitably separated from all handshakes *)
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
@@ -145,10 +138,6 @@ let try_ms_derive (epoch_region:rgn) (i:AE.id)
     let w = MasterSecret.derive epoch_region i in 
     MR.m_recall (AE.ilog (StreamAE.State.log w));
     let h1 = ST.get () in 
-    gadmit (fun () -> color epoch_region = color (StreamAE.State.region w));
-    (* gadmit (fun () ->  *)
-    (* 	  let conn = MR.m_sel h0 conn_table in *)
-    (* 	  region_separated_from_all_handshakes (StreamAE.State.region w) conn);         //the new writer is suitably separated from all handshakes *)
     ms_derive_is_ok h0 h1 i w;
     w
 
@@ -321,8 +310,6 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	      MM.sel old_conn nonce = None /\
 	      new_conn = MM.upd old_conn nonce c)))
   (ensures (mc_inv h1))	
-#reset-options "--log_queries"
-
 let add_connection_ok h0 h1 i c = 
     let old_ms = MR.m_sel h0 MS.ms_tab in 
     let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -335,31 +322,5 @@ let add_connection_ok h0 h1 i c =
     	    | Some c' -> if c = c' then ()
     		        else cut (c' = Some.v (MM.sel old_conn n)) in
     qintro hs_region_exists;
-    cut (handshake_regions_exists new_conn h1);
-    let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
-      fun j ->
-    	if (authId j && StAE.is_stream_ae j)
-        then begin match MM.sel new_ms j with
-		   | None -> ()
-		   | Some wj ->
-		     let log_ref = StreamAE.ilog (StreamAE.State.log wj) in
-      		     let log0 = MR.m_sel h0 log_ref in
-      		     let log1 = MR.m_sel h1 log_ref in
-      		     assert (log0 = log1) //the log didn't change
-		     (* let aux :  n:random *)
-    		     (* 	     -> Lemma (match MM.sel new_conn n with  *)
-		     (* 		      | Some c -> HH.disjoint (HS.region (C.hs c)) (StreamAE.State.region wj) *)
-		     (* 		      | None -> True) =  *)
-		     (*   fun n ->  *)
-		     (*     match MM.sel new_conn n with  *)
-		     (* 	 | None -> () *)
-		     (* 	 | Some c' -> if c = c' then () //we have a pre-condition stating that c's handshake is separated from wj *)
-		     (* 	             else cut (c' = Some.v (MM.sel old_conn n)) //it used to be separated from c'; so it must still be *)
-		     (* in *)
-		     (* qintro aux *)
-	     end
-    	else () in
-    qintro aux
-
+    cut (handshake_regions_exists new_conn h1)
     
-
