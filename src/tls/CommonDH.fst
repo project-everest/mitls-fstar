@@ -53,11 +53,19 @@ let dh_initiator x gy =
   | ECKey x, ECKey gy -> ECGroup.dh_initiator x gy
   | _, _ -> empty_bytes (* TODO: add refinement/index to rule out cross cases *)
 
+
+// Serialize in KeyExchange message format
 val serialize: key -> Tot bytes
 let serialize k = 
   match k with
   | FFKey k -> DHGroup.serialize k.dh_params k.dh_public
   | ECKey k -> ECGroup.serialize k.ec_params k.ec_point
+
+// Serialize for keyShare extension
+val serialize_raw: key -> Tot bytes
+let serialize_raw = function
+  | ECKey k -> ECGroup.serialize_point k.ec_params k.ec_point
+  | FFKey k -> vlbytes 2 k.dh_public
 
 val parse: params -> bytes -> Tot (option key)
 let parse p x =

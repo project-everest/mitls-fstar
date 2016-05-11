@@ -235,12 +235,9 @@ let rec aux sock =
     match nego.ne_supported_groups with
     | Some ((SEC curve)::_) -> CommonDH.ECDH curve
     | _ -> failwith "No shared curve" in
+
   let sr, gy = KeySchedule.ks_server_12_init_dh ks cr pv cs ems group in
   let sh = {sh with sh_server_random = sr} in
-
-  let t = HandshakeMessages.handshakeMessageBytes None (ServerHello sh) in
-  let ti = Handshake.parseHandshakeMessages (Some pv) (Some kex) t in
-  IO.print_string "Parsed SKE OK\n";
 
   sendHSRecord tcp pv (ServerHello sh) log;
 
@@ -254,7 +251,7 @@ let rec aux sock =
   let kex_s = KEX_S_DHE gy in
   let sv = kex_s_to_bytes kex_s in
   let csr = cr @| sr in
-  let Correct sigv = Cert.sign pv csr csk alg sv in
+  let Correct sigv = Cert.sign pv Server (Some csr) csk alg sv in
   let ske = {ske_kex_s = kex_s; ske_sig = sigv} in
 
   sendHSRecord tcp pv (ServerKeyExchange ske) log;
@@ -278,13 +275,6 @@ let rec aux sock =
   let lb = HandshakeLog.getBytes log in
   KeySchedule.ks_server_12_cke_dh ks gx lb;
 
-  // Now internal to KS
-//  let pms = CommonDH.dh_initiator gy gx in
-//  IO.print_string ("PMS:"^(Platform.Bytes.print_bytes pms)^"\n");
-  // Compute MS
-//  let ms = TLSPRF.prf (pv,cs) pms (utf8 "master secret") csr 48 in
-//  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
-//  let (sk,siv,ck,civ) = deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr in
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in

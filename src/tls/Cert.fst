@@ -33,31 +33,34 @@ let validate_chain c sigalg host cafile =
   let for_signing = match sigalg with | None -> false | _ -> false in
   CoreCrypto.validate_chain c for_signing host cafile
 
-val verify_signature : chain -> protocolVersion -> bytes -> sigAlg -> option (list sigHashAlg) -> bytes -> bytes -> Tot bool
-let verify_signature c pv nonces_or_log csa sigalgs tbs sigv =
-  match pv with
-  | TLS_1p0 | TLS_1p1 | TLS_1p2 ->
-    if length sigv > 4 then
-     let (h, r) = split sigv 1 in
-     let (sa, sigv) = split r 1 in
-     (match vlsplit 2 sigv with
-     | Correct (sigv, eof) -> 
-       // TLS <= 1.2: sign cr+sr+ServerDHPArams
-       let tbs = nonces_or_log @| tbs in
+val verify_signature : chain -> pv:protocolVersion -> role -> csr:option bytes{is_None csr <==> pv = TLS_1p3} -> sigAlg -> option (list sigHashAlg) -> tbs:bytes -> sigv:bytes -> Tot bool
+let verify_signature c pv role nonces csa sigalgs tbs sigv =
+  if length sigv > 4 then
+   let (h, r) = split sigv 1 in
+   let (sa, sigv) = split r 1 in
+   (match vlsplit 2 sigv with
+   | Correct (sigv, eof) -> 
+       let tbs =
+         (match pv with
+         | TLS_1p3 ->
+           let pad = abytes (String.make 64 (Char.char_of_int 32)) in
+           let ctx = match role with
+             | Server -> "TLS 1.3, server CertificateVerify"
+             | Client -> "TLS 1.3, client CertificateVerify" in
+           pad @| (abytes ctx) @| (abyte 0z) @| tbs
+         | _ -> (Some.v nonces) @| tbs) in
        (match (length eof, parseSigAlg sa, parseHashAlg h) with
-       | 0, Correct sa, Correct (Hash h) ->
-          let algs : list sigHashAlg =
-            match sigalgs with
-            | Some l -> l
-            // This is the RFC default, but I'm tempted to go non-standard here and add SHA256 anyway
-            | None -> [(sa, Hash CoreCrypto.SHA1)] in
-          if List.Tot.existsb (fun (xs,xh)->(xs=sa && xh=Hash h)) algs then
-            CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv
-          else false
-       | _ -> false)
-      | _ -> false)
-    else false
-  | _ -> false // TODO! New signature format in 4.8.1
+         | 0, Correct sa, Correct (Hash h) ->
+           let algs : list sigHashAlg =
+             (match sigalgs with
+             | Some l -> l
+             | None -> [(csa, Hash CoreCrypto.SHA1)]) in
+             if List.Tot.existsb (fun (xs,xh)->(xs=sa && xh=Hash h)) algs then
+               CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv
+             else false
+         | _ -> false)
+    | _ -> false)
+  else false
 
 val lookup_server_chain: string -> string -> protocolVersion -> option sigAlg -> option (list sigHashAlg) -> Tot (result (chain * CoreCrypto.certkey))
 let lookup_server_chain pem key pv sa ext_sig =
@@ -80,14 +83,19 @@ let lookup_server_chain pem key pv sa ext_sig =
   | Some (csk, chain) -> Correct (chain, csk)
   | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "cannot find suitable server certificate")
 
-val sign: protocolVersion -> bytes -> CoreCrypto.certkey -> sigHashAlg -> bytes -> Tot (result bytes)
-let sign pv csr_or_log csk sha tbs =
+val sign: pv:protocolVersion -> role -> csr:option bytes{is_None csr <==> pv = TLS_1p3} -> CoreCrypto.certkey -> sigHashAlg -> bytes -> Tot (result bytes)
+let sign pv role csr csk sha tbs =
   let (sa, ha) = sha in
   let Hash h = ha in
   let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
   let tbs = match pv with
-    | TLS_1p3 -> tbs // TODO
-    | _ -> csr_or_log @| tbs in
+    | TLS_1p3 ->
+      let pad = abytes (String.make 64 (Char.char_of_int 32)) in
+      let ctx = (match role with
+        | Server -> "TLS 1.3, server CertificateVerify"
+        | Client -> "TLS 1.3, client CertificateVerify") in
+      pad @| (abytes ctx) @| (abyte 0z) @| tbs
+    | _ -> (Some.v csr) @| tbs in
   match CoreCrypto.cert_sign csk sa h tbs with
   | Some sigv -> Correct (hab @| sab @| (vlbytes 2 sigv))
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "failed to sign")

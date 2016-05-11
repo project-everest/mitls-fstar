@@ -75,12 +75,18 @@ let recvRecord tcp pv =
          | Correct payload -> (ct,pv,payload)
 
 let makeHSRecord pv hs_msg log =
-  let hs = HandshakeMessages.handshakeMessageBytes pv hs_msg in
+  let hs = HandshakeMessages.handshakeMessageBytes (Some pv) hs_msg in
   (string_of_handshakeMessage hs_msg,hs,log@|hs)
 
 let sendHSRecord tcp pv hs_msg log = 
   let (str,hs,log) = makeHSRecord pv hs_msg log in
   sendRecord tcp pv Content.Handshake hs str;
+  log
+
+let sendEncHSRecord tcp pv hs_msg log wr =
+  let (str,hs,log) = makeHSRecord pv hs_msg log in
+  let er = encryptRecord_TLS13_AES_GCM_128_SHA256 wr Content.Handshake hs in
+  sendRecord tcp pv Content.Application_data er str;
   log
 
 let recvHSRecord tcp pv kex log = 
@@ -123,90 +129,86 @@ let rec get_keyshare el =
   | _::t -> get_keyshare t
   | [] -> None
 
-let replace_keyshare gn gx e =
-  match e with
-  | TLSExtensions.E_keyShare _ -> TLSExtensions.E_keyShare (ServerKeyShare (gn, CommonDH.serialize gx))
-  | x -> x
-
-let main host port =
-  IO.print_string "===============================================\n Starting test TLS client...\n";
-  let tcp = Platform.Tcp.connect host port in
+let rec aux sock =
+  let tcp = Platform.Tcp.accept sock in
   let rid = new_region root in
   let log = empty_bytes in //HandshakeLog.init TLS_1p3 rid in
   let kex = TLSConstants.Kex_ECDHE in
   let pv = TLS_1p3 in
-  let ks = KeySchedule.create #rid config Server in
-  let logh x = CoreCrypto.hash CoreCrypto.SHA256 x in // (HandshakeLog.getBytes x) in
+  let h = CoreCrypto.SHA256 in
+  let sa = CoreCrypto.RSASIG in
+  let cs = CipherSuite kex (Some sa) (AEAD AES_128_GCM h) in
+  let ks = KeySchedule.create #rid Server in
+  let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in // (HandshakeLog.getBytes x) in
 
   let ClientHello(ch), log = recvHSRecord tcp pv kex log in
 
-  let (pv, cr, sid, csl, ext) = (match ch with
+  let (cr, sid, csl, ext) = (match ch with
     | {ch_protocol_version = TLS_1p3;
        ch_client_random = cr;
        ch_sessionID = sid;
        ch_cipher_suites = csl;
-       ch_extensions = Some ext} -> (pv, cr, sid, csl, ext)
+       ch_extensions = Some ext} -> (cr, sid, csl, ext)
     | _ -> failwith "Bad client hello (probably not 1.3)") in
 
-  let (shb,nego) = (match Handshake.prepareServerHello config None None ch log with
-                    | Correct (shb,nego,_,_) -> (shb,nego)
-                    | Error (x,z) -> failwith z) in
-  let _, shb = split shb 4 in
-
-  let sh = match parseServerHello shb with
-           | Correct s -> s
-           | Error (y,z) -> failwith z in
-
-  let pv, cs = (match sh with
-    | ({sh_protocol_version = pv; sh_cipher_suite = cs}) -> pv, cs) in
-
-  let Some (gn, gx) = get_keyshare ext in
-  let Correct gxb = vlparse 1 gx in
+  let Some (gn, gxb) = get_keyshare ext in
   let SEC ecc = gn in
   let dhp = CommonDH.ECP ({CoreCrypto.curve = ecc; CoreCrypto.point_compression = false; }) in
   IO.print_string ("client gx:"^(Platform.Bytes.print_bytes gxb)^"\n");
   let Some gx = CommonDH.parse dhp gxb in
-  let (sr, gy) = KeySchedule.ks_server_13_1rtt_init ks cr cs gx (logh log) in
-  let sh = {sh with
-    sh_server_random = sr;
-    sh_extensions = (match sh.sh_extensions with
-                    | None -> None
-                    | Some el -> Some (List.Tot.map (replace_keyshare gn gy) el))} in
+  let (sr, gy) = KeySchedule.ks_server_13_1rtt_init ks cr cs gx in
+  IO.print_string ("server gy:"^(Platform.Bytes.print_bytes (CommonDH.serialize_raw gy))^"\n");
 
+  // ADL need to change the ks argument of prepareServerHello
+  // Handshake calls KS.ks_server_13_1rtt_init to generate gy
+  let (shb,nego) = (match Handshake.prepareServerHello config None (Some (ServerKeyShare (gn, CommonDH.serialize_raw gy))) ch log with
+                    | Correct (shb,nego,_,_) -> (shb,nego)
+                    | Error (x,z) -> failwith z) in
+  let _, shb = split shb 4 in
+
+  // Need to replace server random (but not keyShare)
+  let sh = match parseServerHello shb with
+           | Correct s -> s
+           | Error (y,z) -> failwith z in
+  let sh = {sh with sh_server_random = sr;} in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
-(**
-  let ServerHello(sh),log = recvHSRecord tcp pv kex log in
-  let Correct (n,ake) = Handshake.processServerHello config None [] ch sh in
-  let pv = sh.sh_protocol_version in
-  let cs = sh.sh_cipher_suite in
+  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_get_htk ks (hash log) in
 
-  let Some (SEC ec,gyb) = n.n_extensions.ne_keyShare in
-  let Correct gyb = vlparse 1 gyb in 
-  IO.print_string ("server gy:"^(Platform.Bytes.print_bytes gyb)^"\n");
-  let Some gy = CommonDH.parse (CommonDH.key_params gx) gyb in
-  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_client_13_1rtt ks cs (gn, gy) (hash log) in
+  let Correct (chain, csk) = Cert.lookup_server_chain "../../data/test_chain.pem" "../../data/test_chain.key" pv (Some sa) None in
+  let crt = {crt_chain = chain} in
+  let log = sendEncHSRecord tcp pv (EncryptedExtensions ({ee_extensions=[]})) log wr in
+  let log = sendEncHSRecord tcp pv (Certificate crt) log wr in
 
-  let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
-  let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
-  let CertificateVerify(cv),log = recvEncHSRecord tcp pv kex log rd in
-//  let (ms,cfk,sfk,ts0) = derive_finished_keys xES xES log in
-  let svd = KeySchedule.ks_client_13_1rtt_server_finished ks (hash log) in
-  let Finished(sfin),log = recvEncHSRecord tcp pv kex log rd in
-  // TODO check server finished
+  let Correct sigv = Cert.sign pv Server None csk (sa, Hash CoreCrypto.SHA256) (hash log) in
+  let log = sendEncHSRecord tcp pv (CertificateVerify ({cv_sig = sigv})) log wr in
 
-  let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_client_13_1rtt_client_finished ks (hash log) in
-  let cfin = {fin_vd = cvd} in
-  let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
-  IO.print_string "before encrypt \n";
-  let efinb = encryptRecord_TLS13_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
-  sendRecord tcp pv Content.Application_data efinb str;
+  let svd = KeySchedule.ks_server_13_server_finished ks (hash log) in
+  let log = sendEncHSRecord tcp pv (Finished ({fin_vd = svd})) log wr in
 
-  let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
-  let get = encryptRecord_TLS13_AES_GCM_128_SHA256 dwr Content.Application_data (utf8 payload) in
-  sendRecord tcp pv Content.Application_data get "GET /";
-  let ad = recvEncAppDataRecord tcp pv drd in
 
-**)
-  ()
+  let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_server_13_client_finished ks (hash log) in
+  let Finished({fin_vd = cfin}),log = recvEncHSRecord tcp pv kex log rd in
+
+  (if equalBytes cfin cvd then
+    IO.print_string ("Server finished OK:"^(print_bytes svd)^"\n")
+  else
+    failwith "Failed to verify server finished");
+
+  let req = recvEncAppDataRecord tcp pv drd in
+  let text = "You are connected to miTLS* 1.3!\r\nThis is the request you sent:\r\n\r\n" ^ (iutf8 req) in
+  let payload = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:" ^ (string_of_int (length (abytes text))) ^ "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" ^ text in
+
+  let res = encryptRecord_TLS13_AES_GCM_128_SHA256 dwr Content.Application_data (utf8 payload) in
+  sendRecord tcp pv Content.Application_data res "HTTPResponse";
+
+  Platform.Tcp.close tcp;
+  IO.print_string "Closing connection...\n";
+
+  aux sock
+
+let main host port =
+ IO.print_string "===============================================\n Starting test TLS 1.3 server...\n";
+ let sock = Platform.Tcp.listen host port in
+ aux sock
 

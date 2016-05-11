@@ -114,7 +114,7 @@ let recvEncAppDataRecord tcp pv rd =
 // Workaround until KeySchedule is merged in Handshake
 let replace_keyshare gn gx e =
   match e with
-  | TLSExtensions.E_keyShare _ -> TLSExtensions.E_keyShare (ClientKeyShare [gn, CommonDH.serialize gx])
+  | TLSExtensions.E_keyShare _ -> TLSExtensions.E_keyShare (ClientKeyShare [gn, CommonDH.serialize_raw gx])
   | x -> x 
 
 let main host port =
@@ -134,19 +134,33 @@ let main host port =
   let Correct (n,ake) = Handshake.processServerHello config ks None ch sh in
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
+  let CipherSuite kex sa ae = cs in
 
   let Some (SEC ec,gyb) = n.n_extensions.ne_keyShare in
-  let Correct gyb = vlparse 1 gyb in 
+  let sal = n.n_extensions.ne_signature_algorithms in
+//  let Correct gyb = vlparse 1 gyb in // ADL What is the point of this??
+
   IO.print_string ("server gy:"^(Platform.Bytes.print_bytes gyb)^"\n");
   let KeySchedule.StAEInstance rd wr = KeySchedule.ks_client_13_1rtt ks cs (SEC ec, gyb) (hash log) in
 
   let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
   let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
+  IO.print_string ("Certificate validation status = " ^
+    (if Cert.validate_chain sc.crt_chain sa (Some host) "../../data/CAFile.pem" then
+      "OK" else "FAIL")^"\n");
+  let cv_log = hash log in
+
   let CertificateVerify(cv),log = recvEncHSRecord tcp pv kex log rd in
-//  let (ms,cfk,sfk,ts0) = derive_finished_keys xES xES log in
+  IO.print_string ("Signature validation status = " ^
+    (if Cert.verify_signature sc.crt_chain pv Server None (Some.v sa) sal cv_log cv.cv_sig then "OK" else "FAIL") ^ "\n");
+
   let svd = KeySchedule.ks_client_13_1rtt_server_finished ks (hash log) in
-  let Finished(sfin),log = recvEncHSRecord tcp pv kex log rd in
-  // TODO check server finished
+  let Finished({fin_vd = sfin}),log = recvEncHSRecord tcp pv kex log rd in
+
+  (if equalBytes sfin svd then
+    IO.print_string ("Server finished OK:"^(print_bytes svd)^"\n")
+  else
+    failwith "Failed to verify server finished");
 
   let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_client_13_1rtt_client_finished ks (hash log) in
   let cfin = {fin_vd = cvd} in

@@ -149,9 +149,16 @@ let sendHSRecord tcp pv hs_msg log =
   let (str,hs) = makeHSRecord pv hs_msg log in
   sendRecord tcp pv Content.Handshake hs str
 
+let hsbuf = alloc ([] <: list (hs_msg * bytes))
+
 let recvHSRecord tcp pv kex log = 
-  let (Content.Handshake,rpv,pl) = recvRecord tcp pv in
-  let Correct (rem,[(hs_msg,to_log)]) = Handshake.parseHandshakeMessages (Some pv) (Some kex) pl in 
+  let (hs_msg, to_log) = match !hsbuf with
+    | [] -> 
+      let (ct,rpv,pl) = recvRecord tcp pv in
+      let Correct (_,hsml) = Handshake.parseHandshakeMessages (Some pv) (Some kex) pl in
+      let (hs_msg, to_log)::r = hsml in
+      hsbuf := r; (hs_msg, to_log)
+    | h::t -> hsbuf := t; h in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
   let logged = log @@ hs_msg in
   IO.print_string ("Logged message = Parsed message? ");
@@ -205,9 +212,19 @@ let main host port =
   let sr = sh.sh_server_random in
   let CipherSuite kex sa ae = cs in
   let ems = n.ne_extended_ms in
+  let sal = n.ne_signature_algorithms in
 
   let Certificate(sc) = recvHSRecord tcp pv kex log in
+  IO.print_string ("Certificate validation status = " ^
+    (if Cert.validate_chain sc.crt_chain sa (Some host) "../../data/CAFile.pem" then
+      "OK" else "FAIL")^"\n");
+
   let ServerKeyExchange(ske) = recvHSRecord tcp pv kex log in
+  let tbs = kex_s_to_bytes ske.ske_kex_s in
+  let sigv = ske.ske_sig in
+  IO.print_string ("Signature validation status = " ^
+    (if Cert.verify_signature sc.crt_chain pv Server (Some (cr @| sr)) (Some.v sa) sal tbs sigv then "OK" else "FAIL") ^ "\n");
+
   let ServerHelloDone = recvHSRecord tcp pv kex log in
 
   let dhp = CommonDH.ECP ({CoreCrypto.curve = CoreCrypto.ECC_P256; CoreCrypto.point_compression = false; }) in
