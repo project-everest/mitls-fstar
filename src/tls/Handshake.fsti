@@ -89,11 +89,13 @@ type session = {
      session_ake: ake;
 }     
 
-val prepareClientHello: config -> option ri -> option sessionID -> St (option ECGroup.key * ch * b_log)
+val prepareClientHello: config -> KeySchedule.ks -> option ri -> option sessionID -> ST ch
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
 val prepareServerHello: config -> option ri -> option keyShare -> ch -> b_log -> ST (result (bytes * nego * option ake * b_log))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-val processServerHello: c:config -> option ri -> eph_c -> ch -> sh ->
+val processServerHello: c:config -> KeySchedule.ks -> option ri -> ch -> sh ->
                            ST (result (nego * option ake))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))

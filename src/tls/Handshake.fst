@@ -18,19 +18,17 @@ let ri = (cVerifyData * sVerifyData)
 
 
 
-let prepareClientHello cfg ri sido =
-  let place_holder_region_CHANGE_ME = new_region HH.root in 
-  let crand = Nonce.mkHelloRandom Client place_holder_region_CHANGE_ME in
+let prepareClientHello cfg ks ri sido =
+  let crand, kp = 
+     (match cfg.maxVer with
+      | TLS_1p3 -> 
+         let cr, gxl = KeySchedule.ks_client_13_init_1rtt ks [SEC CoreCrypto.ECC_P256] in 
+	 (cr, Some (ClientKeyShare gxl))
+      | _ -> 
+      	 let cr, _ = KeySchedule.ks_client_init_12 ks in 
+	 (cr,None)) in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client crand in
-  let (k,kp) = 
-      match cfg.maxVer with
-      | TLS_1p3 ->
-        let CommonDH.ECKey k = CommonDH.keygen (CommonDH.ECDH (CoreCrypto.ECC_P256)) in
-  	let g = SEC CoreCrypto.ECC_P256 in
-  	let kb = vlbytes 1 (ECGroup.serialize_point k.ec_params k.ec_point) in
-	(Some k,Some (ClientKeyShare [(g,kb)]))
-      | _ -> (None, None) in
   let ext = prepareExtensions cfg ci ri kp in
   let ch = 
   {ch_protocol_version = cfg.maxVer;
@@ -40,7 +38,7 @@ let prepareClientHello cfg ri sido =
    ch_raw_cipher_suites = None;
    ch_compressions = [NullCompression];
    ch_extensions = Some ext;} in
-   (k,ch,clientHelloBytes ch)
+   ch
 
 (* Is [pv1 >= pv2]? *)
 val gte_pv: protocolVersion -> protocolVersion -> Tot bool
@@ -169,7 +167,7 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
   List.Tot.existsb (fun x -> x = s_cs) cfg.ciphersuites &&
   not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
   
-let processServerHello cfg ri eph_c ch sh =
+let processServerHello cfg ks ri ch sh =
   let res = ch_is_resumption ch in
   // FIXME 1.3
   if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
@@ -253,11 +251,12 @@ type role_state =
      
 type handshake_state' (r:role) =
      {
-       hs_nego: option nego;
-       hs_ake: option ake;
-       hs_buffers: hs_msg_bufs;
        hs_state: role_state;
-       hs_log: bytes;
+       hs_nego: option nego;
+       hs_log: HandshakeLog.log;
+       hs_ks: KeySchedule.ks;
+
+       hs_buffers: hs_msg_bufs;
        hs_reader: int;
        hs_writer: int;
      }
@@ -270,11 +269,13 @@ let handshake_state r = handshake_state' r
 let iT0 s rw st = -1 //TODO:Implement!
 let i s rw = Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
 
-val handshake_state_init: (ver:protocolVersion) -> (r:role) -> Tot (handshake_state r )
-let handshake_state_init (ver:protocolVersion) (r:role) =
+val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (handshake_state r)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let handshake_state_init cfg (r:role) (reg:rid) =
    {hs_nego = None;
-    hs_ake = None;
-    hs_log = empty_bytes;
+    hs_log = HandshakeLog.create #reg;
+    hs_ks  = KeySchedule.create #reg r;
     hs_reader = -1;
     hs_writer = -1;
     hs_buffers = hs_msg_bufs_init();
@@ -304,10 +305,11 @@ val client_send_client_hello: hs -> ST unit
 let client_send_client_hello (HS #r0 r res cfg id lgref hsref) = 
   match (!hsref).hs_state with
   | C(C_Idle ri) -> 
-    let (k,ch,l) = prepareClientHello cfg ri None in
+    let ch = prepareClientHello cfg (!hsref).hs_ks ri None in
+    let lg = (!hsref).hs_log in
+    let chb = lg @@ (ClientHello ch) in
     hsref := {!hsref with 
-            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = l};
-	    hs_log = l;
+            hs_buffers = {(!hsref).hs_buffers with hs_outgoing = chb};
 	    hs_state = C(C_HelloSent ri [] ch)}
   
 	    
@@ -317,24 +319,26 @@ val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
 let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_HelloSent ri eph_c ch),[(ServerHello(sh),l)] ->
-   (match (processServerHello cfg ri eph_c ch sh) with
+   let _ = (!hsref).hs_log @@ (ServerHello(sh)) in
+   (match (processServerHello cfg (!hsref).hs_ks ri ch sh) with
     | Error z -> InError z
     | Correct (n,a) -> 
       hsref := {!hsref with
 	       hs_nego = Some n;
 	       hs_ake = a;
-	       hs_log = (!hsref).hs_log @| l;
 	       hs_state = C(C_HelloReceived n a)};
       InAck)
 
 
-val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
-  (requires (fun h -> True))
+
+(*
+val processServerHelloDone: cfg:config -> h:(handshake_state Client) -> list hs_msg -> list hs_msg -> ST Result (handshake_state Client * list hs_msg)
+  (requires (fun h -> n.protocol_version <> TLS_1p3))
   (ensures (fun h0 i h1 -> True))
-let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
-  match (!hsref).hs_state, msgs with
-  | C(C_HelloReceived n None), 
-    [(Certificate(c),l1);
+let processServerHelloDone cfg h msgs opt_msgs =
+  let n = h.hs_nego in
+  match msgs with
+  | [(Certificate(c),l1);
      (ServerKeyExchange(ske),l2);
      (ServerHelloDone,l3)] when 
      (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
@@ -386,6 +390,70 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
        else InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
      // Certificate validation failed
      else InError (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certification validation failure") 
+
+*)
+val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
+  match (!hsref).hs_state, msgs with
+  | C(C_HelloReceived n None), 
+    [(Certificate(c),l1);
+     (ServerKeyExchange(ske),l2);
+     (ServerHelloDone,l3)] when 
+     (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
+      (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
+     // Validate the server certificate chain before doing anything with other message
+     // TODO add check for n.n_extensions.ne_signature_algorithms
+     if Cert.validate_chain c.crt_chain n.n_sigAlg cfg.peer_name cfg.ca_file then
+       let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
+       let ske_sig = ske.ske_sig in
+       let cs_sigalg = Some.v n.n_sigAlg in
+       let csr = (n.n_client_random @| n.n_server_random) in
+       if Cert.verify_signature c.crt_chain n.n_protocol_version csr cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
+         (match ske.ske_kex_s with
+         | KEX_S_DHE gy ->
+           let gx, pms = dh_shared_secret2 gy in
+           let cke = {cke_kex_c = kex_c_of_dh_key gx} in
+           let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
+           let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
+
+           let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
+           let ake = {ake_server_id = None;
+	          ake_client_id = None;
+		  ake_pms = pms;
+		  ake_session_hash = empty_bytes;
+		  ake_ms = ms} in
+           let s = {session_nego = n; session_ake = ake} in
+
+           (match opt_msgs with 
+            | [] ->  
+	      let log = (!hsref).hs_log in
+
+(* TODO              let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in *)
+              let vd = TLSPRF.verifyData pvcs ms Client (HandshakeLog.getBytes log) in 
+              hsref := {!hsref with 
+                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
+                hs_log = log;
+                hs_state = C(C_OutCCS s vd)};
+              InAck
+            | [(CertificateRequest(cr),l)] ->
+              let cc = {crt_chain = []} in // TODO
+              let ccb = certificateBytes n.n_protocol_version cc in
+	      let log = (!hsref).hs_log in
+(*               let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in *)
+		 
+              let vd = TLSPRF.verifyData pvcs ms Client (HandshakeLog.getBytes log) in 
+              hsref := {!hsref with 
+                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
+                hs_log = log;
+                hs_state = C(C_OutCCS s vd)};
+              InAck)
+         )
+       // Signature verification failed
+       else InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
+     // Certificate validation failed
+     else InError (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certification validation failure") 
   
 
 val client_send_client_finished: hs -> ST unit
@@ -398,7 +466,7 @@ let client_send_client_finished (HS #r0 r res cfg id lgref hsref) =
      let finb = finishedBytes fin in
      hsref := {!hsref with 
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = finb};
-	    hs_log = (!hsref).hs_log @| finb;
+	    hs_log = (!hsref).hs_log (*  @| finb *);
 	    hs_state = C(C_FinishedSent s vd)}
   
   
@@ -409,7 +477,7 @@ let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_FinishedSent s vd),[(SessionTicket(stick),l)] ->
       hsref := {!hsref with
-	       hs_log = (!hsref).hs_log @| l;
+	       hs_log = (!hsref).hs_log (* @| l *);
 	       hs_state = C(C_CCSReceived s vd)};
       InAck
 
@@ -422,10 +490,10 @@ let client_handle_server_finished (HS #r0 r res cfg id lgref hsref) msgs =
     let n = s.session_nego in
     let ake = s.session_ake in
     let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
-    let svd = TLSPRF.verifyData pvcs ake.ake_ms Server (!hsref).hs_log in 
+    let svd = TLSPRF.verifyData pvcs ake.ake_ms Server (HandshakeLog.getBytes (!hsref).hs_log) in 
     if (equalBytes svd f.fin_vd) then 
        (hsref := {!hsref with
-		 hs_log = (!hsref).hs_log @| l;
+		 hs_log = (!hsref).hs_log (* @| l *);
   		 hs_state = C(C_Idle (Some (vd,svd)))};
         InAck)
     else InError (AD_decode_error, "Finished MAC did not verify")
@@ -449,7 +517,7 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;
 	       hs_ake = a;
-	       hs_log = ol;
+	       (*     hs_log = ol; *)
 	       hs_state = S(S_HelloSent n a)};
        InAck)
     
@@ -485,7 +553,7 @@ let server_send_server_hello_done (HS #r0 r res cfg id lgref hsref) =
          let nl = cb @| skeb @| shd in
 	    hsref := {!hsref with
 		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
-		 hs_log = (!hsref).hs_log @| nl;
+		 hs_log = (!hsref).hs_log (* @| nl *);
 		 hs_state = S(S_HelloDone n None None)}
       | Error e -> 
 	  hsref := {!hsref with hs_state = S(S_Error e)})
@@ -549,7 +617,7 @@ let init r0 r cfg res =
     let id = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
     let lg = createEmpty in
     let lgref = ralloc r0 lg in
-    let hs = handshake_state_init cfg.maxVer r in
+    let hs = handshake_state_init cfg r r0 in
     let hsref = ralloc r0 hs in
     HS #r0 r res cfg id lgref hsref
 

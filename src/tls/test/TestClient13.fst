@@ -123,31 +123,22 @@ let main host port =
   let log = empty_bytes in
   let rid = new_region root in
   let ks = KeySchedule.create #rid Client in
-  
-  let (Some gx,ch,chb) = Handshake.prepareClientHello config None None in
-  let cr, [(gn, gx)] = KeySchedule.ks_client_13_init_1rtt ks [SEC CoreCrypto.ECC_P256] in
 
+  let ch = Handshake.prepareClientHello config ks None None in
   let pv = ch.ch_protocol_version in
   let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in
   let kex = TLSConstants.Kex_ECDHE in
-  let ch = {ch with
-    ch_client_random = cr;
-    ch_extensions = (match ch.ch_extensions with
-      | None -> None
-      | Some l -> Some (List.Tot.map (replace_keyshare gn gx) l));} in
-
   let log = sendHSRecord tcp pv (ClientHello ch) log in
 
   let ServerHello(sh),log = recvHSRecord tcp pv kex log in
-  let Correct (n,ake) = Handshake.processServerHello config None [] ch sh in
+  let Correct (n,ake) = Handshake.processServerHello config ks None ch sh in
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
 
   let Some (SEC ec,gyb) = n.n_extensions.ne_keyShare in
   let Correct gyb = vlparse 1 gyb in 
   IO.print_string ("server gy:"^(Platform.Bytes.print_bytes gyb)^"\n");
-  let Some gy = CommonDH.parse (CommonDH.key_params gx) gyb in
-  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_client_13_1rtt ks cs (gn, gy) (hash log) in
+  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_client_13_1rtt ks cs (SEC ec, gyb) (hash log) in
 
   let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
   let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in

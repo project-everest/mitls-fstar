@@ -143,7 +143,7 @@ let create #rid r =
   let istate = match r with | Client -> C C_Init | Server -> S S_Init in
   KS #ks_region (ralloc ks_region istate)
 
-val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g}) -> ST (random * (list (namedGroup * CommonDH.key)))
+val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g}) -> ST (random * (list (namedGroup * bytes)))
   (requires fun h0 -> sel h0 (KS.state ks) = C C_Init)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
@@ -158,7 +158,8 @@ let ks_client_13_init_1rtt ks groups =
     | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
   let gs = List.Tot.map kg groups in
   st := C (C_13_1RTT_CH cr gs);
-  (cr, gs)
+  let pub (x,y) = x, CommonDH.serialize y in
+  (cr, List.Tot.map pub gs)
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
@@ -280,7 +281,7 @@ let ks_client_12_resume ks sr pv cs =
 //   2. they use different return types
 //   3. they are called at different locations
 
-val ks_client_13_1rtt: ks:ks -> cs:cipherSuite -> gy:(namedGroup * CommonDH.key) -> log_hash:bytes -> ST recordInstance
+val ks_client_13_1rtt: ks:ks -> cs:cipherSuite -> gy:(namedGroup * bytes) -> log_hash:bytes -> ST recordInstance
   (requires fun h0 ->
     let kss = sel h0 (KS.state ks) in
     is_C kss /\ is_C_13_1RTT_CH (C.s kss))
@@ -289,10 +290,11 @@ val ks_client_13_1rtt: ks:ks -> cs:cipherSuite -> gy:(namedGroup * CommonDH.key)
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_client_13_1rtt ks cs (gs, gy) log_hash =
+let ks_client_13_1rtt ks cs (gs, gyb) log_hash =
   let KS #region st = ks in
   let C (C_13_1RTT_CH cr gc) = !st in
   let Some (_, gx) = List.Tot.find (fun (gc,_) -> gc=gs) gc in
+  let Some gy = CommonDH.parse (CommonDH.key_params gx) gyb in
   let gxy = CommonDH.dh_initiator gx gy in
   let CipherSuite _ _ (AEAD ae h) = cs in
   let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in

@@ -192,8 +192,7 @@ let main host port =
 
   let ks = KeySchedule.create #rid Client in
   let cr, _ = KeySchedule.ks_client_init_12 ks in  
-  let _, ch, _ = Handshake.prepareClientHello config None None in
-  let ch = {ch with ch_client_random = cr} in
+  let ch = Handshake.prepareClientHello config ks None None in
 
   let pv = ch.ch_protocol_version in 
   let kex = TLSConstants.Kex_ECDHE in
