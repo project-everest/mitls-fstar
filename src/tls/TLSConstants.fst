@@ -1362,7 +1362,9 @@ let parseSigHashAlg b =
 let rec sigHashAlgsBytes_aux (b:bytes) (algs:list sigHashAlg{length b + op_Multiply 2 (List.Tot.length algs) < 65536}) : Tot (r:bytes{length r < 65536}) (decreases algs) =
   match algs with
   | [] -> b
-  | alg::algs' -> sigHashAlgsBytes_aux (sigHashAlgBytes alg @| b) algs'
+  | alg::algs' ->
+    let shb = sigHashAlgBytes alg in
+    sigHashAlgsBytes_aux (b @| shb) algs'
   
 val sigHashAlgsBytes: algs:list sigHashAlg{List.Tot.length algs < 65536/2}
   -> Tot (b:bytes{2 <= length b /\ length b < 65538})
