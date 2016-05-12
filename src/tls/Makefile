@@ -229,7 +229,7 @@ tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 tls-ver1: $(FSTS) $(addsuffix .fst-ver,$(VERIFY))
 
 wc:
-	wc -l $(LIBFILES)) $(FSTS)
+	wc -l $(LIBFILES) $(FSTS)
 
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 	cp Concrete.fst IdealFlags.fst
