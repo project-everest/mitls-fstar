@@ -66,7 +66,6 @@ let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) 
   (exists e. SeqProperties.mem e  (HH.sel h (HS.log c.hs)) /\   //one of c's epochs, e
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in   //has an id corresponding to i
         i=i' /\ StAE.stream_ae #i e.w == w))               //and holds w as as its writer
-  /\ HH.disjoint (HS.region c.hs) tls_region               //technical: TODO: we should have gotten this from the type of the connection, but seem to need it here
   /\ HH.contains_ref (HS.log c.hs) h                       //technical: the heap contains c's handshake log
 	
 //The main invariant, relating an ms_tab and a conn_tab at index i, in state h
@@ -130,19 +129,18 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 	         let old_ms = MR.m_sel h0 MS.ms_tab in 
 		 let new_ms = MR.m_sel h1 MS.ms_tab in
 		 mc_inv h0 /\ //we're initially in the invariant
-		 HH.contains_ref (MR.as_rref MS.ms_tab) h1  /\
-		 Map.contains h1 (StreamAE.State.region w)  /\
-		 is_epoch_rgn (StreamAE.State.region w) /\
-		 is_epoch_rgn (HH.parent (StreamAE.State.region w)) /\
-		 (* region_separated_from_all_handshakes (StreamAE.State.region w) conn /\         //the new writer is suitably separated from all handshakes *)
-		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_region
+		 HH.contains_ref (MR.as_rref MS.ms_tab) h1  /\ //TODO: even though ms_tab is modified in h1, a known limitation (referred to as "MODS" below) of `modifies` requires this
+		 Map.contains h1 (StreamAE.State.region w)  /\ //the writer we're adding w is in an existing region
+		 is_epoch_rgn (StreamAE.State.region w) /\     //that it is an epoch region
+		 is_epoch_rgn (HH.parent (StreamAE.State.region w)) /\ //and it's parent is as well (needed for the ms_tab invariant)
+		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_tables_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
-		 (old_ms = new_ms //either ms_tab didn't change at all
-		  \/ (MM.sel old_ms i = None /\
-		     new_ms = MM.upd old_ms i w /\ //or we just added w to it
-	   	     (TLSInfo.authId i ==> 
+		 (old_ms = new_ms //either ms_tab didn't change at all  (because we found w in the table already)
+		  \/ (MM.sel old_ms i = None /\ //or, we had to generate a fresh writer w
+		     new_ms = MM.upd old_ms i w /\ //and we just added w to the table
+	   	     (TLSInfo.authId i ==>  //and if we're idealizing i
 		         HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1 /\  //the log exists in h1
-			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty)))))       //and it is a fresh
+			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty)))))       //and w is as yet unused
 	 (ensures (mc_inv h1))
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -169,7 +167,6 @@ let try_ms_derive (epoch_region:rgn) (i:AE.id)
        	   HH.disjoint epoch_region tls_region /\
 	   N.registered (I.nonce_of_id i) epoch_region /\
 	   is_epoch_rgn epoch_region /\
-	   (* region_separated_from_all_handshakes epoch_region (MR.m_sel h conn_table) /\  *)
 	   authId i /\
 	   mc_inv h))
        (ensures (fun h0 w h1 -> 
@@ -179,11 +176,12 @@ let try_ms_derive (epoch_region:rgn) (i:AE.id)
     MR.m_recall MS.ms_tab;
     let w = MasterSecret.derive epoch_region i in 
     MR.m_recall (AE.ilog (StreamAE.State.log w));
-    MR.m_recall MS.ms_tab;
+    MR.m_recall MS.ms_tab;  //This is necessary because of the MODS limitation
     let h1 = ST.get () in 
     ms_derive_is_ok h0 h1 i w;
     w
 
+(* Some simply sanity checks on the association between connections, ids, nonces, writers regions *)
 let all_epoch_writers_share_conn_nonce (c:connection) (i:AE.id) (wi:AE.writer i) (h:HH.t)
     : Lemma (requires (registered i wi c h))
             (ensures (I.nonce_of_id i = c.hs.nonce))
@@ -204,11 +202,19 @@ let writer_region_within_connection
 	    (ensures (HH.includes (C.region c) (StreamAE.State.region w)))
     = ()
 
+//A wrapper around a Sequence lemma ... should move it 
+let lemma_mem_snoc (s:FStar.Seq.seq 'a) (x:'a)
+  : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
+      SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
+  = SeqProperties.lemma_mem_snoc s x
 
-//2. Adding a new epoch to a connection c, with a fresh index (hdId i) for c
-//      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
-//      -- we need to show that the (exists e. SeqProperties.mem ...) is false (because of the fresh index for c)
-//      -- so, we're in the "not yet used" case ... so, the epoch's writer is in its initial state and we can return it (our goal is to return a fresh epoch)
+
+(* Case 2:
+     Adding a new epoch to a connection c, with a fresh index (hdId i) for c
+      -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
+      -- we need to show that the (exists e. SeqProperties.mem ...) is false (because of the fresh index for c)
+      -- so, we're in the "not yet used" case ... so, the epoch's writer is in its initial state and we can return it (our goal is to return a fresh epoch)
+*)      
 val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{authId i}
 		-> c:r_conn (I.nonce_of_id i) -> e:epoch (HS.region c.hs) (I.nonce_of_id i)
   -> Lemma (requires
@@ -218,34 +224,22 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
      	     let new_hs_log = HH.sel h1 (HS.log c.hs) in
 	     let rgn = HS.region c.hs in
 	     mc_inv h0 /\ //we're initially in the invariant
-	     (* HH.contains_ref (MR.as_rref conn_table) h0 /\ *)
-	     (* HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\ *)
-	     (* HH.disjoint (HS.region c.hs) tls_region /\ *)
 	     HH.contains_ref (HS.log c.hs) h0 /\
 	     HH.contains_ref (HS.log c.hs) h1 /\
 	     i=hsId (Epoch.h e) /\ //the epoch has id i
 	     (let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
 	      let epochs = HH.sel h0 (HS.log c.hs) in
-              N.registered (I.nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\ 
-	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\
-	      MR.witnessed (MR.rid_exists (StreamAE.State.region w)) /\ 
-      	      Map.contains h1 (StreamAE.State.region w) /\
-      	      (* (authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1) /\ *)
-	      (forall e. SeqProperties.mem e epochs ==> hsId (Epoch.h e) <> i) /\ //i is fresh for c
+              N.registered (I.nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\  //the writer's parent region is registered in the nonce table
+	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
+	      MR.witnessed (MR.rid_exists (StreamAE.State.region w)) /\                //technical: ... needed just for well-formedness of the rest of the formula
+      	      Map.contains h1 (StreamAE.State.region w) /\                             //again, this is because of the MODS limitation
+	      (forall e. SeqProperties.mem e epochs ==> hsId (Epoch.h e) <> i) /\            //i is fresh for c
  	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (I.nonce_of_id i) = Some c /\ //we found the connection in the conn_table
       	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
-	      (* HH.modifies (Set.singleton (HS.region c.hs)) h0 h1 /\ //we just modified this connection's handshake region *)
 	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (HS.log c.hs)} h0 h1 /\ //and within it, just the epochs log
 	      new_hs_log = SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
-
-
-let lemma_mem_snoc (s:FStar.Seq.seq 'a) (x:'a)
-  : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
-      SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
-  = SeqProperties.lemma_mem_snoc s x
-
 let register_writer_in_epoch_ok h0 h1 i c e = 
   (* This proof can be simplified a lot.
      But, retaining it since it is actually quite informative 
@@ -294,16 +288,18 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       else () (* not ideal; nothing much to say *) in
   qintro aux
 
-//3. Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
+(* Case 3:
+    Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
+    Basically, we have enough framing to know that nothing else changed if just the log changed.
+    And since the log is registered, it is allowed to change, and it remains registered
+*)
 val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:MS.writer i -> c:r_conn (I.nonce_of_id i) -> Lemma
     (requires (mc_inv h0 /\                                       //initially in the invariant
 	       HH.modifies_one (StreamAE.State.region w) h0 h1 /\ //we modified at most the writer's region
 	       registered i w c h0 /\                             //the writer is registered in c
 	       MM.sel (MR.m_sel h0 MS.ms_tab) i = Some w   /\     //the writer is logged in the ms_tab
 	       MM.sel (MR.m_sel h0 conn_tab) (I.nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
-	       (* HH.contains_ref (MR.as_rref conn_tab) h0 /\ *)
-	       (* HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\ *)
-	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1))
+	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1)) //MODS
     (ensures (mc_inv h1)) 		 
 let mutate_registered_writer_ok h0 h1 i w c = ()
 (* a slightly more detailed proof:
@@ -319,29 +315,31 @@ let mutate_registered_writer_ok h0 h1 i w c = ()
     qintro aux
 *)
 
-//4. Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
-//    -- So, we cannot be in the Some w, None case, as this is only for bad writers
-//    -- We cannot also be in the first case, since the conn table is monotonic and it doesn't already contain the id
-//    Note: we can prove that the having a doomed writer is a monotonic property of nonces
+(* Case 4:
+    Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
+     -- So, we cannot be in the Some w, None case, as this is only for bad writers
+     -- We cannot also be in the first case, since the conn table is monotonic and it doesn't already contain the id
+    Note: we can prove that the having a doomed writer is a monotonic property of nonces
+    TODO: We don't handle doomed writers at all yet
+*)     
 
+(* An auxiliary formula, needed as a pre-condition to add a c to conn_tab *)
 let conn_hs_region_exists (c:connection) (h:HH.t) = 
    let hs_rgn = HS.region c.hs in
    Map.contains h hs_rgn /\
    HH.disjoint hs_rgn tls_tables_region
 
 val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
-  (requires (mc_inv h0 /\
-	     HH.modifies (Set.singleton tls_tables_region) h0 h1 /\
-	     HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref conn_tab)} h0 h1 /\
-	     HH.contains_ref (MR.as_rref conn_tab) h1 /\
-	     (* HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\ *)
-	     conn_hs_region_exists c h0 /\
-	     is_hs_rgn (HS.region c.hs) /\
+  (requires (mc_inv h0 /\ //we're initially in the invariant
+	     HH.modifies (Set.singleton tls_tables_region) h0 h1 /\  //only modified some table
+	     HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref conn_tab)} h0 h1 /\ //in fact, only conn_tab 
+	     HH.contains_ref (MR.as_rref conn_tab) h1 /\ //MODS strikes again
+	     conn_hs_region_exists c h0 /\ //we need to know that c is well-formed
 	     (let old_conn = MR.m_sel h0 conn_tab in 
     	      let new_conn = MR.m_sel h1 conn_tab in 
 	      let nonce = I.nonce_of_id i in 
-	      MM.sel old_conn nonce = None /\
-	      new_conn = MM.upd old_conn nonce c)))
+	      MM.sel old_conn nonce = None /\        //c wasn't in the table initially
+	      new_conn = MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))	
 let add_connection_ok h0 h1 i c = 
     let old_ms = MR.m_sel h0 MS.ms_tab in 
