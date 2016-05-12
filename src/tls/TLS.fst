@@ -26,11 +26,9 @@ module HH = HyperHeap
 
 // using also Alert, DataStream, Content, Record
 
-// scaffolding
-
 //16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
 
-
+// temporary scaffolding
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (epochs_inv c h0))
   (ensures (
@@ -48,8 +46,11 @@ let rec unexpected #a s = unexpected s
 
 (*** control API ***)
 
+type rid = r: HH.rid { disjoint r TLSConstants.tls_region } 
+//16-05-12 should we use a color for connection regions?
+
 // was connect, resume, accept_connected, ...
-val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
+val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
             resume: option (sid: sessionID { r = Client }) ->
             ST connection
   (requires (fun h -> True))
@@ -68,19 +69,18 @@ val create: r0:rid -> peer:rid -> tcp:networkStream -> r:role -> cfg:config ->
     True
     ))
 
-let create m0 peer0 tcp r cfg resume =
-    ST.recall_region tls_tables_region;
-    ST.recall_region m0;
-    ST.recall_region peer0;
-    let st0 = ST.get() in
-    let m = new_region m0 in
-    let peer = new_region peer0 in
-    let st1 = ST.get() in
-    lemma_extends_fresh_disjoint m peer m0 peer0 st0 st1;
-    let hs = Handshake.init m r cfg resume in
+let create parent tcp role cfg resume =
+    ST.recall_region tls_region; //tls_tables_region;
+    ST.recall_region parent;
+    let h0 = ST.get() in
+    let m = new_region parent in
+    let h1 = ST.get() in
+    //lemma_extends_fresh_disjoint m m parent parent st0 st1;
+    assert(disjoint m tls_region);
+    let hs = Handshake.init m role cfg resume in
     let al = Alert.init m in
     let state = ralloc m BC in
-    C peer hs al tcp state
+    C #m hs al tcp state
 
 //TODO upgrade commented-out types imported from TLS.fsti
 // type initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
@@ -149,6 +149,7 @@ let request c ops     = Handshake.request     (C.hs c) ops
 
 // not dealing with errors yet.
 
+(* OLD:
 // relying on a function from dispatch state to completion status
 // using polymorphism to retain the caller's epoch refinement
 //val epochT: #e:Type -> p: (e -> Type) -> xs: seq e { Seq_forall p xs } -> dispatch -> Tot (option (x:e { p x }))
@@ -165,7 +166,6 @@ let epoch_id (#region:rgn) (#nonce:random) (o: option (epoch region nonce)) =
   match o with
   | Some e -> hsId e.h
   | None   -> noId
-
 
 val epchT: es:seq 'e -> logIndex es -> Tot (option 'e)
 let epchT es n =
@@ -219,6 +219,7 @@ val epoch_ro: #region:rgn -> #nonce:random -> o: option (epoch region nonce){ is
 let epoch_ro #region #nonce o =
   match o with
   | Some(Epoch _ r _) -> r
+*)
 
 (*
 let epoch_r_h c h =
@@ -243,15 +244,13 @@ let epoch_r c =
 
 (*** outgoing ***)
 
-type msg_o (i:id) = (r:range & DataStream.fragment i r)
-
 type ioresult_w =
-    // public results
-    | Written             // Application data was written, and the connection remains writable
+    // public results returned by TLS.send
+    | Written             // the application data was written; the connection remains writable
     | WriteError: o:option alertDescription -> txt: string -> ioresult_w // The connection is down, possibly after sending an alert
 //  | WritePartial of unsent_data // worth restoring?
 
-    // transient, internal results
+    // transient internal results returned by auxiliary send functions
 //  | MustRead            // Nothing written, and the connection is busy completing a handshake
     | WriteDone           // No more data to send in the current state
     | WriteHSComplete     // The handshake is complete [while reading]
@@ -262,7 +261,9 @@ type ioresult_w =
 
 type ioresult_o = r:ioresult_w { is_Written r \/ is_WriteError r }
 
-(*
+// type msg_o (i:id) = (r:range & DataStream.fragment i r)
+
+(* OLD
 // Outcomes for internal, one-message-at-a-time functions
 // (now merged with TLS.ioresult_o)
 type writeOutcome =
@@ -299,7 +300,6 @@ let moveToOpenState c =
     let h0 = ST.get() in
     c.state := AD;
     frame_unrelated c h0 (ST.get())
-
 
 
 (* Dispatch dealing with network sockets *)
@@ -422,7 +422,9 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 // sends one fragment in the current epoch;
 // except for the null epoch, the fragment is appended to the epoch's writer log.
 
-//Question: What happened to authId at this level?
+
+//Question: What happened to authId at this level? 
+//Answer: it should not matter here; it only affects what actually happens in StreamAE. 
 val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment i -> ST (cipher i)
   (requires (fun h ->
     let es = sel h c.hs.log in
@@ -443,7 +445,7 @@ val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment
     j == iT c.hs Writer h1 /\
     (j < 0 ==> i == noId /\ h0 == h1) /\
     (j >= 0 ==> (
-       let e = Seq.index es j in
+       let e = Seq.index es j in   
        i == hsId e.h /\ (
        let wr: writer i = writer_epoch e in
        writer_modifies h0 wr h1 /\

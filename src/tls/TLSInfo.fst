@@ -511,10 +511,14 @@ let rec epochWriter (e:epoch) =
 let strongAuth e = strongAuthSI (epochSI e)
 let strongAE e = strongAESI (epochSI e)
 
+
 // -------------------------------------------------------------------
-// indexing instances of AE --- an abstract parameter for StatefulAEAD et al
-// we do not use more detailed epochs as their additional contents
-// is authenticated only once the handshake completes.
+// Indexing instances of derived keys for AE etc. 
+//
+// Intuitively, this is an abstract parameter for StatefulLHAE and
+// StreamAE, used to control their idealization. 
+// To this end, the index value should determine the concrete 
+// initial state (key, IV) of the keyed functionality.
 
 type id = {
   // indexes and algorithms of the session used in the key derivation
@@ -528,12 +532,15 @@ type id = {
   writer : role             // the role of the writer
   }
 
-let swap (i:id) = { i with writer = dualRole i.writer }
 let peerId (i:id) = { i with writer = dualRole i.writer }
-//let peerId = swap // better name?
 
-val siId: si:sessionInfo{ is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))
-			  /\ ((si.protocol_version = TLS_1p2) && (pvcs si.protocol_version si.cipher_suite))} -> role -> Tot id
+//16-05-12 deprecated: let swap = peerId
+
+val siId: si:sessionInfo{ 
+  is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 
+  si.protocol_version = TLS_1p2 /\
+  pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
+
 let siId si r =
   { msId    = msid si;
     kdfAlg  = kdfAlg si.protocol_version si.cipher_suite;

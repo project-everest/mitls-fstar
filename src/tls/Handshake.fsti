@@ -145,7 +145,7 @@ val handshake_state : role -> Type0
 #reset-options "--z3timeout 3 --initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2"
 
 type hs =
-  | HS: #region: rgn ->
+  | HS: #region: rgn { is_hs_rgn region } ->
               r: role ->
          resume: option (sid:sessionID { r = Client }) ->
             cfg: config ->
@@ -271,7 +271,7 @@ val init: r0:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r 
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
-    fresh_subregion r0   (HS.region s) h0 h1 /\
+    fresh_subregion r0 (HS.region s) h0 h1 /\
     hs_inv s h1 /\
     HS.r s = r /\
     HS.resume s = resume /\
