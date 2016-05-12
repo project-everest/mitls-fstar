@@ -74,17 +74,17 @@ val getCachedSession: cfg:config -> ch:ch -> ST (option session)
   (ensures (fun h0 i h1 -> True))
 let getCachedSession cfg cg = None
 
-val negotiateGroupKeyShare: cfg:config -> protocolVersion -> kexAlg -> exts:option list extension -> Result (namedGroup * bytes)
-let negotiateGroupKeyShare cfg pv kex exts = 
+val negotiateGroupKeyShare: cfg:config -> protocolVersion -> kexAlg -> exts:option (list extension) -> Tot (result (namedGroup * option bytes))
+let rec negotiateGroupKeyShare cfg pv kex exts = 
     match pv,kex,exts with
     | TLS_1p3, Kex_ECDHE, Some (E_keyShare (ClientKeyShare ((gn,gxb)::_)) :: _) ->
       Correct (gn,Some gxb)
-    | TLS_1p3,_, Some (h::t) -> negotiateKeyShare cfg pv kex (Some t)
+    | TLS_1p3,_, Some (h::t) -> negotiateGroupKeyShare cfg pv kex (Some t)
     | TLS_1p2, Kex_ECDHE, _ -> Correct (SEC CoreCrypto.ECC_P256, None) 
     | _ -> Error(AD_decode_error, "no supported group or key share extension found")
     
 // FIXME: TLS1.3
-let prepareServerHello cfg ks ri ch log_hash =
+let prepareServerHello cfg ks ri ch =
   match negotiateVersion cfg ch.ch_protocol_version with
     | Error(z) -> Error(z)
     | Correct(pv) ->
@@ -94,33 +94,28 @@ let prepareServerHello cfg ks ri ch log_hash =
   match negotiateGroupKeyShare cfg pv kex ch.ch_extensions with
     | Error(z) -> Error(z)
     | Correct(gn,gxo) -> 
-  let (srand,gyo) = 
+  let (srand,ks,gy) = 
     (match pv,gxo with
      | TLS_1p3,Some gxb -> 
-        let (srand,gyb) = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random cs gn gxb log_hash in
-        (srand,Some (ServerKeyShare (gn,gyb)))
-    | TLS_1p2,_ -> 
-        let (srand,gyb) = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs true in
-	(srand,None)) in
-	
+       let (sr,gyb) = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random cs gn gxb in
+       (sr,Some (ServerKeyShare (gn,gyb)), None)
+    | _ ->
+       let (sr,gy) = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs true gn in 
+       (sr,None,Some gy)) in
   match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ks false with
     | Error(z) -> Error(z)
     | Correct(sext,next) ->
-  let place_holder_region_CHANGE_ME = new_region HH.root in 
-  let srand = Nonce.mkHelloRandom Server place_holder_region_CHANGE_ME in
-  //  let sid = Nonce.random 32 in
     let sid = CoreCrypto.random 32 in
     let comp = match ch.ch_compressions with
       | [] -> None
       | _ -> Some NullCompression in
-    let shB = 
-      serverHelloBytes (
+    let sh = 
       {sh_protocol_version = pv;
        sh_sessionID = Some sid;
        sh_server_random = srand;
        sh_cipher_suite = cs;
        sh_compression = comp;
-       sh_extensions = sext}) in
+       sh_extensions = sext} in
     let nego = 
       {n_client_random = ch.ch_client_random;
        n_server_random = srand;
@@ -135,8 +130,7 @@ let prepareServerHello cfg ks ri ch log_hash =
        n_extensions = next;
        (* [getCachedSession] returned [None], so no session resumption *)
        n_resume = false} in
-    let o_log = i_log @| shB in
-    Correct (shB,nego,None,o_log))
+    Correct (sh,nego,gy)
 
 
 (* Ignoring resumption; it will need something like the following:
@@ -247,7 +241,7 @@ type clientState =
 
 type serverState = 
      | S_Idle : option ri -> serverState
-     | S_HelloSent : nego -> option ake -> serverState
+     | S_HelloSent : nego -> option CommonDH.key -> serverState
      | S_HelloDone : nego -> option ake -> eph_s -> serverState
      | S_CCSReceived : session -> serverState
      | S_OutCCS: session -> serverState
@@ -534,15 +528,14 @@ val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
 let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | S(S_Idle ri),[(ClientHello(ch),l)] ->
-    (match (prepareServerHello cfg ri None ch l) with
+    (match (prepareServerHello cfg (!hsref).hs_ks ri ch) with
      | Error z -> InError z
-     | Correct (shb,n,a,ol) ->
+     | Correct (sh,n,gy) ->
+       let shb = (!hsref).hs_log @@ (ServerHello sh) in
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;
-	       hs_ake = a;
-	       (*     hs_log = ol; *)
-	       hs_state = S(S_HelloSent n a)};
+	       hs_state = S(S_HelloSent n gy)};
        InAck)
     
 

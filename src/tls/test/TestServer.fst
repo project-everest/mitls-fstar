@@ -218,9 +218,10 @@ let rec aux sock =
   let lb = HandshakeLog.getBytes log in
 
   // Server Hello
-  let (shb,nego) = (match Handshake.prepareServerHello config None None ch lb with
-      		    | Correct (shb,nego,_,_) -> (shb,nego)
+  let (sh,nego,Some gy) = (match Handshake.prepareServerHello config ks None ch with
+      		    | Correct (sh,nego,gy) -> (sh,nego,gy)
 		    | Error (x,z) -> failwith z) in
+  let shb = log @@ (ServerHello sh) in
   let tag, shb = split shb 4 in
   let sh = match parseServerHello shb with | Correct s -> s | Error (y,z) -> failwith z in
  
@@ -231,14 +232,6 @@ let rec aux sock =
   let CipherSuite kex (Some sa) ae = cs in
   let alg = (sa, Hash CoreCrypto.SHA256) in
   let ems = nego.ne_extended_ms in
-  let group =
-    match nego.ne_supported_groups with
-    | Some ((SEC curve)::_) -> CommonDH.ECDH curve
-    | _ -> failwith "No shared curve" in
-
-  let sr, gy = KeySchedule.ks_server_12_init_dh ks cr pv cs ems group in
-  let sh = {sh with sh_server_random = sr} in
-
   sendHSRecord tcp pv (ServerHello sh) log;
 
   // Server Certificate
@@ -259,20 +252,11 @@ let rec aux sock =
 
   // Get Client Key Exchange
   let ClientKeyExchange(cke) = recvHSRecord tcp pv kex log in
-  let CommonDH.ECP dhp = CommonDH.key_params gy in
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
-
   let gx = match cke with
     | {cke_kex_c = KEX_C_ECDHE u} -> u
     | _ -> failwith "Bad CKE type" in
   IO.print_string ("client share:"^(Platform.Bytes.print_bytes gx)^"\n");
-  let gx =
-    match ECGroup.parse_point dhp gx with
-    | Some u -> u
-    | _ -> failwith "point parse failure" in
-  IO.print_string "Recasting g^x...\n";
-  let gx = CommonDH.ECKey ({CoreCrypto.ec_point = gx; CoreCrypto.ec_priv = None; CoreCrypto.ec_params = dhp;}) in
-  let lb = HandshakeLog.getBytes log in
   KeySchedule.ks_server_12_cke_dh ks gx lb;
 
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in

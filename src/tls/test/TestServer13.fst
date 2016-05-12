@@ -151,26 +151,11 @@ let rec aux sock =
        ch_extensions = Some ext} -> (cr, sid, csl, ext)
     | _ -> failwith "Bad client hello (probably not 1.3)") in
 
-  let Some (gn, gxb) = get_keyshare ext in
-  let SEC ecc = gn in
-  let dhp = CommonDH.ECP ({CoreCrypto.curve = ecc; CoreCrypto.point_compression = false; }) in
-  IO.print_string ("client gx:"^(Platform.Bytes.print_bytes gxb)^"\n");
-  let Some gx = CommonDH.parse dhp gxb in
-  let (sr, gy) = KeySchedule.ks_server_13_1rtt_init ks cr cs gx in
-  IO.print_string ("server gy:"^(Platform.Bytes.print_bytes (CommonDH.serialize_raw gy))^"\n");
-
   // ADL need to change the ks argument of prepareServerHello
   // Handshake calls KS.ks_server_13_1rtt_init to generate gy
-  let (shb,nego) = (match Handshake.prepareServerHello config None (Some (ServerKeyShare (gn, CommonDH.serialize_raw gy))) ch log with
-                    | Correct (shb,nego,_,_) -> (shb,nego)
+  let (sh,nego) = (match Handshake.prepareServerHello config ks None ch with
+                    | Correct (sh,nego,_) -> (sh,nego)
                     | Error (x,z) -> failwith z) in
-  let _, shb = split shb 4 in
-
-  // Need to replace server random (but not keyShare)
-  let sh = match parseServerHello shb with
-           | Correct s -> s
-           | Error (y,z) -> failwith z in
-  let sh = {sh with sh_server_random = sr;} in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
   let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_get_htk ks (hash log) in
