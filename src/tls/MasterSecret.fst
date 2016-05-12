@@ -57,7 +57,6 @@ let all_ms_tab_regions_exists () =
   let tok : squash (id_rgns_witnessed m0) = () in   
   MR.testify_forall tok
 
-assume val gadmit: f:(unit -> GTot Type) -> Tot (u:unit{f()})
 
 let derive (r:rgn) (i:AE.id) 
   : ST (AE.writer i)
@@ -86,7 +85,6 @@ let derive (r:rgn) (i:AE.id)
     | None -> 
       all_ms_tab_regions_exists ();
       let w = AE.gen r i in 
-      gadmit (fun () -> is_epoch_rgn w.region);
       let wr = MR.ex_rid_of_rid w.region in //witness that it always exists
       MM.extend ms_tab i w;
       w

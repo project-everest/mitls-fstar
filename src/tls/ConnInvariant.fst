@@ -37,7 +37,7 @@ let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) 
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in
         i=i' /\ StAE.stream_ae #i e.w == w))
 
-assume TLS_tables_region_color: color tls_tables_region = -1
+(* assume TLS_tables_region_color: color tls_tables_region = -1 *)
 
 let ms_conn_inv (ms:ms_tab)
  		(conn:c_tab)
@@ -115,9 +115,6 @@ let ms_derive_is_ok h0 h1 i w =
       	     else assert (Some ww=MM.sel old_ms j)
       else () in
   qintro aux
-
-assume val gcut: f:(unit -> GTot Type){f()} -> Tot unit
-assume val gadmit: f:(unit -> GTot Type) -> Tot (u:unit{f()})
 
 (* Here, we actually call MS.derive and check that its post-condition 
    is sufficient to call ms_derive_is_ok and re-establish the invariant *)
@@ -287,14 +284,6 @@ let conn_hs_region_exists (c:connection) (h:HH.t) =
    Map.contains h hs_rgn /\
    HH.disjoint hs_rgn tls_tables_region
 
-(* let conn_hs_separated_from_all_writers (c:connection) (h:HH.t) =  *)
-(*   let ms = MR.m_sel h MS.ms_tab in *)
-(*   let hs_rgn = HS.region c.hs in *)
-(*   forall i.{:pattern (MM.sel ms i)} *)
-(*       match MM.sel ms i with *)
-(*       | None -> True *)
-(*       | Some w -> HH.disjoint hs_rgn (StreamAE.State.region w) *)
-
 val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
   (requires (mc_inv h0 /\
 	     HH.modifies (Set.singleton tls_tables_region) h0 h1 /\
@@ -303,7 +292,6 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	     HH.contains_ref (MR.as_rref MS.ms_tab) h0 /\
 	     conn_hs_region_exists c h0 /\
 	     is_hs_rgn (HS.region c.hs) /\
-	     (* conn_hs_separated_from_all_writers c h0 /\ *)
 	     (let old_conn = MR.m_sel h0 conn_table in 
     	      let new_conn = MR.m_sel h1 conn_table in 
 	      let nonce = I.nonce_of_id i in 

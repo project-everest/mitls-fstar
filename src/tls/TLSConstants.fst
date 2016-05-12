@@ -13,15 +13,23 @@ open TLSError
 open CoreCrypto
 module HH = FStar.HyperHeap
 
-let rgn = r:HH.rid { r <> HH.root }
-let tls_region : rgn = new_region HH.root
-let tls_tables_region : (r:rgn{HH.parent r = tls_region}) = new_region tls_region
-
-assume val color : HH.rid -> GTot int
+let tls_color = -1
 let epoch_color = 1
 let hs_color = 2
+
+let is_tls_rgn r   = color r = tls_color
 let is_epoch_rgn r = color r = epoch_color
-let is_hs_rgn r = color r = hs_color
+let is_hs_rgn r    = color r = hs_color
+
+let rgn       = r:HH.rid{r<>HH.root}
+let tls_rgn   = r:rgn{is_tls_rgn r}
+let epoch_rgn = r:rgn{is_epoch_rgn r}
+let hs_rgn    = r:rgn{is_hs_rgn r}
+
+let tls_region : tls_rgn = new_colored_region HH.root tls_color 
+    
+let tls_tables_region : (r:tls_rgn{HH.parent r = tls_region}) = 
+    new_region tls_region
 
 // -------------------------------------------------------------------
 // Polarity for reading and writing, e.g. for stateful encryption

@@ -107,6 +107,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
                modifies Set.empty h0 h1 /\
                HH.parent w.region = parent /\
                fresh_region w.region h0 h1 /\
+	       color w.region = color parent /\
 	       (authId i ==>
   		      (m_contains (ilog w.log) h1 /\
 		       m_sel h1 (ilog w.log) = createEmpty)) /\
@@ -139,6 +140,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                modifies Set.empty h0 h1 /\
                r.log_region = w.region /\
                HH.parent r.region = parent /\
+	       color r.region = color parent /\
                fresh_region r.region h0 h1 /\
                op_Equality #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\

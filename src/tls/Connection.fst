@@ -49,7 +49,7 @@ type tlsState =
   | Close 
 
 type connection = | C:
-  #region: rid ->
+  #region: rid{disjoint region tls_region} ->
   peer:    rid{disjoint region peer} -> //TODO: remove?
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
   alert:   Alert.state  { extends (Alert.region alert) region /\ HS.region hs <> Alert.region alert } (* review *) ->
