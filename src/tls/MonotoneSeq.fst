@@ -114,7 +114,7 @@ let write_at_end (#a:Type) (#i:rid) (r:m_rref i (seq a) grows) (x:a)
        (requires (fun h -> True))
        (ensures (fun h0 _ h1 ->
 	               m_contains r h1
-		     /\ modifies (Set.singleton i) h0 h1
+		     /\ modifies_one i h0 h1
 		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1
 		     /\ m_sel h1 r = snoc (m_sel h0 r) x
 		     /\ witnessed (at_least (Seq.length (m_sel h0 r)) x r)))
@@ -165,7 +165,7 @@ let new_counter (#l:rid) (#a:Type) (#repr_max:nat)
 	   repr_bytes init <= repr_max /\
 	   init <= Seq.length (m_sel h log)))
        (ensures (fun h0 c h1 ->
-		   modifies (Set.singleton i) h0 h1 /\
+		   modifies_one i h0 h1 /\
 		   modifies_rref i Set.empty h0 h1 /\
 		   m_fresh c h0 h1 /\
 		   m_sel h1 c = init /\
@@ -183,7 +183,7 @@ let increment_counter (#l:rid) (#a:Type) (#repr_max:nat)
 	  n < Seq.length log  /\
 	  repr_bytes (n + 1) <= repr_max))
        (ensures (fun h0 _ h1 -> 
-	  modifies (Set.singleton i) h0 h1 /\
+	  modifies_one i h0 h1 /\
 	  modifies_rref i !{as_ref (as_rref c)} h0 h1 /\
 	  m_sel h1 c = m_sel h0 c + 1))
   = m_recall c; m_recall log;
