@@ -74,49 +74,48 @@ val getCachedSession: cfg:config -> ch:ch -> ST (option session)
   (ensures (fun h0 i h1 -> True))
 let getCachedSession cfg cg = None
 
+val negotiateGroupKeyShare: cfg:config -> protocolVersion -> kexAlg -> exts:option (list extension) -> Tot (result (namedGroup * option bytes))
+let rec negotiateGroupKeyShare cfg pv kex exts = 
+    match pv,kex,exts with
+    | TLS_1p3, Kex_ECDHE, Some (E_keyShare (ClientKeyShare ((gn,gxb)::_)) :: _) ->
+      Correct (gn,Some gxb)
+    | TLS_1p3,_, Some (h::t) -> negotiateGroupKeyShare cfg pv kex (Some t)
+    | TLS_1p2, Kex_ECDHE, _ -> Correct (SEC CoreCrypto.ECC_P256, None) 
+    | _ -> Error(AD_decode_error, "no supported group or key share extension found")
+    
 // FIXME: TLS1.3
-let prepareServerHello cfg ri ks ch i_log =
-  let place_holder_region_CHANGE_ME = new_region HH.root in 
-  let srand = Nonce.mkHelloRandom Server place_holder_region_CHANGE_ME in
-  match getCachedSession cfg ch with
-  | Some sentry -> 
-    (match negotiateServerExtensions sentry.session_nego.n_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg sentry.session_nego.n_cipher_suite ri ks true with
-     | Error(z) -> Error(z)
-     | Correct(sext,next) ->
-       let shB = 
-           serverHelloBytes (
-            {sh_protocol_version = sentry.session_nego.n_protocol_version;
-             sh_sessionID = (sentry.session_nego.n_sessionID);
-             sh_server_random = srand;
-             sh_cipher_suite = sentry.session_nego.n_cipher_suite;
-             sh_compression = (sentry.session_nego.n_compression);
-             sh_extensions = sext}) in
-       let o_log = i_log @| shB in
-       let o_nego = {sentry.session_nego with n_extensions = next} in
-       Correct (shB,o_nego,Some sentry.session_ake,o_log))
-  | None ->
-    (match negotiateVersion cfg ch.ch_protocol_version with
+let prepareServerHello cfg ks ri ch =
+  match negotiateVersion cfg ch.ch_protocol_version with
     | Error(z) -> Error(z)
     | Correct(pv) ->
-    match negotiateCipherSuite cfg pv ch.ch_cipher_suites with
+  match negotiateCipherSuite cfg pv ch.ch_cipher_suites with
     | Error(z) -> Error(z)
     | Correct(kex,sa,ae,cs) ->
-    match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ks false with
+  match negotiateGroupKeyShare cfg pv kex ch.ch_extensions with
+    | Error(z) -> Error(z)
+    | Correct(gn,gxo) -> 
+  let (srand,ks,gy) = 
+    (match pv,gxo with
+     | TLS_1p3,Some gxb -> 
+       let (sr,gyb) = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random cs gn gxb in
+       (sr,Some (ServerKeyShare (gn,gyb)), None)
+    | _ ->
+       let (sr,gy) = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs true gn in 
+       (sr,None,Some gy)) in
+  match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ks false with
     | Error(z) -> Error(z)
     | Correct(sext,next) ->
-  //  let sid = Nonce.random 32 in
     let sid = CoreCrypto.random 32 in
     let comp = match ch.ch_compressions with
       | [] -> None
       | _ -> Some NullCompression in
-    let shB = 
-      serverHelloBytes (
+    let sh = 
       {sh_protocol_version = pv;
        sh_sessionID = Some sid;
        sh_server_random = srand;
        sh_cipher_suite = cs;
        sh_compression = comp;
-       sh_extensions = sext}) in
+       sh_extensions = sext} in
     let nego = 
       {n_client_random = ch.ch_client_random;
        n_server_random = srand;
@@ -131,8 +130,27 @@ let prepareServerHello cfg ri ks ch i_log =
        n_extensions = next;
        (* [getCachedSession] returned [None], so no session resumption *)
        n_resume = false} in
-    let o_log = i_log @| shB in
-    Correct (shB,nego,None,o_log))
+    Correct (sh,nego,gy)
+
+
+(* Ignoring resumption; it will need something like the following:
+  match getCachedSession cfg ch with
+  | Some sentry -> 
+    (match negotiateServerExtensions sentry.session_nego.n_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg sentry.session_nego.n_cipher_suite ri ks true with
+     | Error(z) -> Error(z)
+     | Correct(sext,next) ->
+       let sh = 
+            {sh_protocol_version = sentry.session_nego.n_protocol_version;
+             sh_sessionID = (sentry.session_nego.n_sessionID);
+             sh_server_random = srand;
+             sh_cipher_suite = sentry.session_nego.n_cipher_suite;
+             sh_compression = (sentry.session_nego.n_compression);
+             sh_extensions = sext} in
+       let o_log = i_log @| shB in
+       let o_nego = {sentry.session_nego with n_extensions = next} in
+       Correct (shB,o_nego,Some sentry.session_ake,o_log))
+  | None ->
+*)
 
 (* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
@@ -223,7 +241,7 @@ type clientState =
 
 type serverState = 
      | S_Idle : option ri -> serverState
-     | S_HelloSent : nego -> option ake -> serverState
+     | S_HelloSent : nego -> option CommonDH.key -> serverState
      | S_HelloDone : nego -> option ake -> eph_s -> serverState
      | S_CCSReceived : session -> serverState
      | S_OutCCS: session -> serverState
@@ -510,15 +528,14 @@ val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
 let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | S(S_Idle ri),[(ClientHello(ch),l)] ->
-    (match (prepareServerHello cfg ri None ch l) with
+    (match (prepareServerHello cfg (!hsref).hs_ks ri ch) with
      | Error z -> InError z
-     | Correct (shb,n,a,ol) ->
+     | Correct (sh,n,gy) ->
+       let shb = (!hsref).hs_log @@ (ServerHello sh) in
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;
-	       hs_ake = a;
-	       (*     hs_log = ol; *)
-	       hs_state = S(S_HelloSent n a)};
+	       hs_state = S(S_HelloSent n gy)};
        InAck)
     
 

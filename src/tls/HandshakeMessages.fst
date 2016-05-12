@@ -148,7 +148,7 @@ type cr = {
 }
 
 type kex_s =
-| KEX_S_DHE of CommonDH.key
+| KEX_S_DHE of CommonDH.key 
 | KEX_S_RSA of CoreCrypto.rsa_key
 
 type kex_s_priv =
@@ -605,7 +605,7 @@ open CoreCrypto
 val kex_s_to_bytes: kex_s -> Tot bytes 
 let kex_s_to_bytes kex = 
   match kex with
-  | KEX_S_DHE k -> CommonDH.serialize k
+  | KEX_S_DHE k -> CommonDH.serialize k 
   | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
 		    
 val serverKeyExchangeBytes: ske -> Tot bytes
