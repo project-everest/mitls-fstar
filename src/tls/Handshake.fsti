@@ -110,7 +110,12 @@ type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
   parent (region w) <> FStar.HyperHeap.root    /\
   parent (region r) <> FStar.HyperHeap.root    /\
   parent hs_rgn = parent (parent (region w))  /\ //Grandparent of each writer is a sibling of the handshake
-  disjoint (region w) (region r)     
+  disjoint (region w) (region r)              /\ 
+  is_epoch_rgn (region w)                     /\ //they're all colored as epoch regions
+  is_epoch_rgn (region r)                     /\
+  is_epoch_rgn (parent (region w))            /\
+  is_epoch_rgn (parent (region r))            /\
+  is_hs_rgn hs_rgn                              //except for the hs_rgn, of course
 
 module I = IdNonce
 

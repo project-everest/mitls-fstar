@@ -16,7 +16,9 @@ module I = IdNonce
 let writer (i:AE.id) = w:AE.writer i{
   N.registered (I.nonce_of_id i) (HH.parent w.region) /\ 
   HH.disjoint (HH.parent w.region) tls_region /\
-  MR.witnessed (MR.rid_exists w.region)
+  MR.witnessed (MR.rid_exists w.region) /\
+  is_epoch_rgn w.region /\
+  is_epoch_rgn (HH.parent w.region)
 }  
 
 // A partial map from i:id to w:writer i is region_injective
@@ -36,7 +38,6 @@ let fresh_in_ms_tab (r:rgn) (h:HH.t) =
        | Some w -> w.region <> r
        | None -> True
 
-
 private let id_rgns_witnessed (m:MM.map' AE.id writer) = 
     forall (i:AE.id{is_Some (MM.sel m i)}). MR.witnessed (MR.rid_exists ((Some.v (MM.sel m i)).region))
 
@@ -44,26 +45,31 @@ private let contains_id_rgns (h:HH.t) =
     let m = MR.m_sel h ms_tab in 
     forall (i:AE.id{is_Some (MM.sel m i)}). Map.contains h ((Some.v (MM.sel m i)).region)
 
-private val all_ms_tab_regions_exist: unit -> ST unit //would be good to make such stateful lemmas STTot, once we have it; a bit loose for now
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> 
-	      h0=h1 /\
-	      contains_id_rgns h1))
+
+(* private val all_ms_tab_regions_exists: unit -> ST unit //would be good to make such stateful lemmas STTot, once we have it; a bit loose for now *)
+(*   (requires (fun h0 -> True)) *)
+(*   (ensures (fun h0 _ h1 ->  *)
+(* 	      h0=h1 /\ *)
+(* 	      contains_id_rgns h1)) *)
 let all_ms_tab_regions_exists () = 
   MR.m_recall ms_tab;
   let m0 = MR.m_read ms_tab in
   let tok : squash (id_rgns_witnessed m0) = () in   
   MR.testify_forall tok
 
-let derive (r:rid) (i:AE.id) 
+
+let derive (r:rgn) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 
 	   HH.disjoint r tls_region /\
+	   is_epoch_rgn r /\
 	   N.registered (I.nonce_of_id i) r))
        (ensures (fun h0 w h1 -> 
        	   HH.disjoint r tls_region 
+	   /\ is_epoch_rgn r
 	   /\ N.registered (I.nonce_of_id i) r
 	   /\ HH.parent w.region = r
+	   /\ is_epoch_rgn w.region
 	   /\ modifies (Set.singleton tls_tables_region) h0 h1 //modifies at most the tls_tables region
 	   /\ modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref ms_tab)} h0 h1 //and within it, at most ms_tab
 	   /\ MR.witnessed (MR.rid_exists w.region) //and the writer's region is witnessed to exists also

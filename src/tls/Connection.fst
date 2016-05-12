@@ -49,12 +49,12 @@ type tlsState =
   | Close 
 
 type connection = | C:
-  #region: rid ->
+  #region: rid{disjoint region tls_region} ->
   peer:    rid{disjoint region peer} -> //TODO: remove?
-  hs:      hs { extends (HS.region hs) region } (* providing role, config, and uid *) ->
+  hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
   alert:   Alert.state  { extends (Alert.region alert) region /\ HS.region hs <> Alert.region alert } (* review *) ->
   tcp:     networkStream ->
-  state: rref region tlsState -> 
+  state:   rref region tlsState -> 
   connection
 
 let c_role c   = c.hs.r
@@ -79,10 +79,10 @@ let test_2 (p:nat -> Type) (s:seq nat { seq_forall p s }) (j:nat { j < Seq.lengt
 -> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (seq_forall p
 s /\ p x) ==> seq_forall p (snoc s x)}) *)
 
-val reader_epoch: #region:rid -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h)))
+val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h)))
 let reader_epoch #region #peer e = Epoch.r e
 
-val writer_epoch: #region:rid -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h))
+val writer_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h))
 let writer_epoch #region #peer e = Epoch.w e
 
 (*** 
@@ -168,7 +168,7 @@ let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -
     fun x -> ghost_lemma (f x) in
   qintro f
 
-type epoch_inv (#region:rid) (#nonce:TLSInfo.random) (h:HyperHeap.t) (e: epoch region nonce) = True
+type epoch_inv (#region:rgn) (#nonce:TLSInfo.random) (h:HyperHeap.t) (e: epoch region nonce) = True
   (* USED TO BE *)
   (* st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h /\ *)
   (* st_enc_inv #(hsId e.h) (writer_epoch e) h *)

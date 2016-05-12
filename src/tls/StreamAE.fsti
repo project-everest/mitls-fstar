@@ -107,6 +107,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
                modifies Set.empty h0 h1 /\
                HH.parent w.region = parent /\
                fresh_region w.region h0 h1 /\
+	       color w.region = color parent /\
 	       (authId i ==>
   		      (m_contains (ilog w.log) h1 /\
 		       m_sel h1 (ilog w.log) = createEmpty)) /\
@@ -139,6 +140,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                modifies Set.empty h0 h1 /\
                r.log_region = w.region /\
                HH.parent r.region = parent /\
+	       color r.region = color parent /\
                fresh_region r.region h0 h1 /\
                op_Equality #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
@@ -151,7 +153,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 -> 
     	  is_seqn i (m_sel h0 (ctr e.counter) + 1)))
     (ensures  (fun h0 c h1 ->
-                 modifies (Set.singleton e.region) h0 h1 /\
+                 modifies_one e.region h0 h1 /\
                  (authId i ==> m_contains (ilog e.log) h1) /\
                  m_contains (ctr e.counter) h1 /\
                  m_sel h1 (ctr e.counter) == m_sel h0 (ctr e.counter) + 1 /\
@@ -178,6 +180,6 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l -> ST (option (pl
 		  else res = None))
 	  /\ (match res with
  	     | None -> modifies Set.empty h0 h1
-	     | _ -> modifies (Set.singleton d.region) h0 h1
+	     | _ -> modifies_one d.region h0 h1
 	           /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1)))
 
