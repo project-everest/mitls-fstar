@@ -158,6 +158,7 @@ Alert \
 Content \
 StreamPlain \
 StreamAE \
+MasterSecret \
 StatefulPlain \
 LHAEPlain \
 AEAD_GCM \
@@ -165,7 +166,8 @@ MAC \
 StatefulLHAE \
 MAC_SHA256 \
 MAC_SHA1 \
-Connection 
+Connection \
+ConnInvariant
 
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
