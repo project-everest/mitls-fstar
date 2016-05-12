@@ -134,6 +134,7 @@ test/TestRecord.fst \
 test/TestDH.fst \
 test/TestClient.fst \
 test/TestServer.fst \
+test/TestServer13.fst \
 test/TestClient13.fst #the preceding space is significant!
 
 # BREAKING LAX CHECKING WITH StAE
@@ -300,7 +301,7 @@ tls-client:
 tls-server:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ -I output/ test/test_server.ml -o server.out
-	$(EXTRA_PATH) ./server.out 0.0.0.0 4443
+	$(EXTRA_PATH) ./server.out 1.2 0.0.0.0 4443
 
 # ------------------ preprocessing :( -----------------------
 

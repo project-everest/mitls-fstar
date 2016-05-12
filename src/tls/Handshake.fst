@@ -434,7 +434,7 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
        let ske_sig = ske.ske_sig in
        let cs_sigalg = Some.v n.n_sigAlg in
        let csr = (n.n_client_random @| n.n_server_random) in
-       if Cert.verify_signature c.crt_chain n.n_protocol_version csr cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
+       if Cert.verify_signature c.crt_chain n.n_protocol_version Server (Some csr) cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
          (match ske.ske_kex_s with
          | KEX_S_DHE gy ->
            let gx, pms = dh_shared_secret2 gy in
@@ -569,7 +569,7 @@ let server_send_server_hello_done (HS #r0 r res cfg id lgref hsref) =
         | None -> [sa,Hash CoreCrypto.SHA1] | Some l -> l in
       let algs = List.Tot.filter (fun (s,_)->s=sa) algs in
       let alg = match algs with | h::_ -> h | [] -> (sa, Hash CoreCrypto.SHA1) in
-      (match Cert.sign n.n_protocol_version csr csk alg sv with
+      (match Cert.sign n.n_protocol_version Server (Some csr) csk alg sv with
       | Correct signature -> 
          let ske = {ske_kex_s = kex_s; ske_sig = signature} in
          let skeb = serverKeyExchangeBytes ske in
