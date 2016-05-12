@@ -70,13 +70,7 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
     ))
 
 let create parent tcp role cfg resume =
-    ST.recall_region tls_region; //tls_tables_region;
-    ST.recall_region parent;
-    let h0 = ST.get() in
     let m = new_region parent in
-    let h1 = ST.get() in
-    //lemma_extends_fresh_disjoint m m parent parent st0 st1;
-    assert(disjoint m tls_region);
     let hs = Handshake.init m role cfg resume in
     let al = Alert.init m in
     let state = ralloc m BC in
@@ -102,15 +96,15 @@ let create parent tcp role cfg resume =
 //    initial Client ns c resume cn h1
 //    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
 //  ))
-let connect m0 peer0 tcp r cfg        = create m0 peer0 tcp Client cfg None
-let resume  m0 peer0 tcp r cfg sid    = create m0 peer0 tcp Client cfg (Some sid)
+let connect m0 tcp r cfg        = create m0 tcp Client cfg None
+let resume  m0 tcp r cfg sid    = create m0 tcp Client cfg (Some sid)
 //val accept_connected: ns:Tcp.networkStream -> c:config -> ST connection
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 cn h1 ->
 //    modifies Set.empty h0 h1 /\
 //    initial Server ns c None cn h1
 //  ))
-let accept_connected m0 peer0 tcp cfg = create m0 peer0 tcp Server cfg None
+let accept_connected m0 tcp cfg = create m0 tcp Server cfg None
 
 //* do we need accept and accept_connected?
 //val accept: Tcp.tcpListener -> c:config -> ST connection
@@ -119,9 +113,9 @@ let accept_connected m0 peer0 tcp cfg = create m0 peer0 tcp Server cfg None
 //    modifies Set.empty h0 h1 /\
 //    (exists ns. initial Server ns c None cn h1)
 //  ))
-let accept m0 peer0 listener cfg =
+let accept m0 listener cfg =
     let tcp = Platform.Tcp.accept listener in
-    accept_connected m0 peer0 tcp cfg
+    accept_connected m0 tcp cfg
 
 //val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
 //  (requires (fun h0 -> True))
