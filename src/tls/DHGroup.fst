@@ -95,3 +95,9 @@ let serialize dhp dh_Y =
   let gb  = vlbytes 2 dhp.dh_g in
   let pkb = vlbytes 2 dh_Y in
   pb @| gb @| pkb
+
+val serialize_public: share -> Tot bytes
+let serialize_public dh_Y =
+  lemma_repr_bytes_values (length dh_Y);
+  vlbytes 2 dh_Y
+
