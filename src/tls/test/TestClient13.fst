@@ -112,9 +112,9 @@ let recvEncAppDataRecord tcp pv rd =
   payload
 
 // Workaround until KeySchedule is merged in Handshake
-let replace_keyshare gn gx e =
+let replace_keyshare ksl e =
   match e with
-  | TLSExtensions.E_keyShare _ -> TLSExtensions.E_keyShare (ClientKeyShare [gn, CommonDH.serialize_raw gx])
+  | TLSExtensions.E_keyShare _ -> TLSExtensions.E_keyShare (ClientKeyShare ksl)
   | x -> x 
 
 let main host port =
@@ -122,8 +122,9 @@ let main host port =
   let tcp = Platform.Tcp.connect host port in
   let log = empty_bytes in
   let rid = new_region root in
-  let ks = KeySchedule.create #rid Client in
+  let ks, cr = KeySchedule.create #rid Client in
 
+  // This will call KS.ks_client_13_init_1rtt
   let ch = Handshake.prepareClientHello config ks None None in
   let pv = ch.ch_protocol_version in
   let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in

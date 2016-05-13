@@ -83,7 +83,7 @@ type ks_alpha13 = ae:aeadAlg * h:CoreCrypto.hash_alg
 
 // Internal KS state, now with ad-hoc parameters
 type ks_client_state =
-| C_Init
+| C_Init: cr:random -> ks_client_state
 | C_12_Resume_CH: cr:random -> si:sessionInfo -> msId:TLSInfo.msId -> ms:ms -> ks_client_state
 | C_12_Full_CH: cr:random -> ks_client_state
 | C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
@@ -94,7 +94,7 @@ type ks_client_state =
 | C_Done
 
 type ks_server_state =
-| S_Init
+| S_Init: sr:random -> ks_server_state
 | S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:CommonDH.key -> ks_server_state
 | S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
@@ -126,11 +126,29 @@ private let expand_13 (h:CoreCrypto.hash_alg) (secret:bytes) (phase:string) (con
              secret (phase ^ ", server write iv") context 12 in
   (cekb,civb,sekb,sivb)
 
+val ks_client_random: ks:ks -> ST random
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_C kss /\ is_C_Init (C.s kss))
+  (ensures fun h0 _ h1 -> h0 = h1)
+let ks_client_random ks =
+  let KS #rid st = ks in
+  let C (C_Init cr) = !st in cr
+
+val ks_server_random: ks:ks -> ST random
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_S kss /\ is_S_Init (S.s kss))
+  (ensures fun h0 _ h1 -> h0 = h1)
+let ks_server_random ks =
+  let KS #rid st = ks in
+  let S (S_Init sr) = !st in sr
+
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
-val create: #rid:rid -> role -> ST ks
+val create: #rid:rid -> role -> ST (ks * random)
   (requires fun h -> rid<>root)
-  (ensures fun h0 r h1 ->
+  (ensures fun h0 (r,_) h1 ->
     let KS #ks_region state = r in
     fresh_region ks_region h0 h1
     /\ extends ks_region rid
@@ -140,11 +158,16 @@ val create: #rid:rid -> role -> ST ks
 let create #rid r =
   ST.recall_region rid;
   let ks_region = new_region rid in 
-  let istate = match r with | Client -> C C_Init | Server -> S S_Init in
-  KS #ks_region (ralloc ks_region istate)
+  let nonce = Nonce.mkHelloRandom r ks_region in
+  let istate = match r with
+    | Client -> C (C_Init nonce)
+    | Server -> S (S_Init nonce) in
+  (KS #ks_region (ralloc ks_region istate)), nonce
 
-val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g}) -> ST (random * (list (namedGroup * bytes)))
-  (requires fun h0 -> sel h0 (KS.state ks) = C C_Init)
+val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g}) -> ST (list (namedGroup * bytes))
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_C kss /\ is_C_Init (C.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
@@ -152,19 +175,21 @@ val ks_client_13_init_1rtt: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g})
 
 let ks_client_13_init_1rtt ks groups =
   let KS #rid st = ks in
-  let cr = Nonce.mkHelloRandom Client rid in
+  let C (C_Init cr) = !st in
   let kg x = x, (match x with
     | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
     | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
   let gs = List.Tot.map kg groups in
   st := C (C_13_1RTT_CH cr gs);
   let pub (x,y) = x, CommonDH.serialize_raw y in
-  (cr, List.Tot.map pub gs)
+  List.Tot.map pub gs
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
-val ks_client_init_12: ks:ks -> ST (random * option sessionInfo)
-  (requires fun h0 -> sel h0 (KS.state ks) = C C_Init)
+val ks_client_init_12: ks:ks -> ST (option sessionInfo)
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_C kss /\ is_C_Init (C.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
@@ -172,7 +197,8 @@ val ks_client_init_12: ks:ks -> ST (random * option sessionInfo)
 
 // TODO resumption support
 let ks_client_init_12 ks =
-  let cr = Nonce.mkHelloRandom Client ks.region in
+  let KS #rid st = ks in
+  let C (C_Init cr) = !st in
   let osi, ns = None, (C (C_12_Full_CH cr)) in
 //    match cfg.resuming with
 //    | None -> None, (KS_C_12_Full_CH cr)
@@ -181,9 +207,9 @@ let ks_client_init_12 ks =
 //      | Some (si, msId, ms) -> (Some si), (KS_C_12_Resume_CH cr si msId ms)
 //      | None -> None, (KS_C_12_Full_CH cr)) in
   (KS.state ks) := ns;
-  cr, osi
+  osi
 
-val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> group:namedGroup -> ST (random * CommonDH.key)
+val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> group:namedGroup -> ST CommonDH.key
   (requires fun h0 ->
     let kss = sel h0 (KS.state ks) in
     is_S kss /\ is_S_Init (S.s kss)
@@ -197,17 +223,17 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
 
 let ks_server_12_init_dh ks cr pv cs ems group =
   let KS #region st = ks in
+  let S (S_Init sr) = !st in
   let group = (match group with 
       	       | SEC c -> CommonDH.ECDH c
 	       | FFDHE f -> CommonDH.FFDH (DHGroup.Named f)) in
-  let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen group in
   let csr = cr @| sr in
   st := S (S_12_wait_CKE_DH csr (pv, cs, ems) our_share);
-  (sr, our_share)
+  our_share
 
-val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> ST (random * bytes)
+val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> ST bytes
   (requires fun h0 ->
     let kss = sel h0 (KS.state ks) in
     is_S kss /\ is_S_Init (S.s kss)
@@ -221,16 +247,16 @@ val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGrou
 
 let ks_server_13_1rtt_init ks cr cs gn gxb =
   let KS #region st = ks in
+  let S (S_Init sr) = !st in
   let SEC ec = gn in
   let Some gx = CommonDH.parse (CommonDH.ECP (ECGroup.params_of_group ec)) gxb in
-  let sr = Nonce.mkHelloRandom Server region in
   let CipherSuite _ _ (AEAD ae h) = cs in
   let our_share, gxy = CommonDH.dh_responder gx in
   let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in
   let msId = noMsId in
   let xES = HSCrypto.hkdf_extract h zeroes gxy in
   st := S (S_13_1RTT_wait_HTK (ae, h) msId xES);
-  (sr, CommonDH.serialize_raw our_share)
+  CommonDH.serialize_raw our_share
 
 val ks_server_13_get_htk: ks:ks -> log_hash:bytes -> ST recordInstance
   (requires fun h0 ->

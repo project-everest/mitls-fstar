@@ -205,17 +205,16 @@ let rec aux sock =
   let log = HandshakeLog.create #rid in
   let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
-  let ks = KeySchedule.create #rid Server in
+  let ks, sr = KeySchedule.create #rid Server in
 
   // Get client hello
   let ClientHello(ch) = recvHSRecord tcp pv kex log in
 
-  let pv, cr, sid, csl, ext = match ch with
-    | {ch_protocol_version = pv;
-       ch_client_random = cr;
+  let cr, sid, csl, ext = match ch with
+    | {ch_client_random = cr;
        ch_sessionID = sid;
        ch_cipher_suites = csl;
-       ch_extensions = Some ext} -> pv, cr, sid, csl, ext
+       ch_extensions = Some ext} -> cr, sid, csl, ext
     | _ -> failwith "" in
  
   let lb = HandshakeLog.getBytes log in
@@ -229,8 +228,6 @@ let rec aux sock =
   let sh = match parseServerHello shb with | Correct s -> s | Error (y,z) -> failwith z in
  
   let nego = match nego with | {Handshake.n_extensions = n} -> n  in
-  let pv = sh.sh_protocol_version in
-  let sr = sh.sh_server_random in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
   let alg = (sa, Hash CoreCrypto.SHA256) in

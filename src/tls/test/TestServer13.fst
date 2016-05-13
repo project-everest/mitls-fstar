@@ -138,7 +138,7 @@ let rec aux sock =
   let h = CoreCrypto.SHA256 in
   let sa = CoreCrypto.RSASIG in
   let cs = CipherSuite kex (Some sa) (AEAD AES_128_GCM h) in
-  let ks = KeySchedule.create #rid Server in
+  let ks, sr = KeySchedule.create #rid Server in
   let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in // (HandshakeLog.getBytes x) in
 
   let ClientHello(ch), log = recvHSRecord tcp pv kex log in

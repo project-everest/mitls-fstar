@@ -19,20 +19,21 @@ let ri = (cVerifyData * sVerifyData)
 
 
 let prepareClientHello cfg ks ri sido =
-  let crand, kp = 
+  let cr = KeySchedule.ks_client_random ks in
+  let kp = 
      (match cfg.maxVer with
       | TLS_1p3 -> 
-         let cr, gxl = KeySchedule.ks_client_13_init_1rtt ks [SEC CoreCrypto.ECC_P256] in 
-	 (cr, Some (ClientKeyShare gxl))
+         let gxl = KeySchedule.ks_client_13_init_1rtt ks cfg.namedGroups in 
+	 Some (ClientKeyShare gxl)
       | _ -> 
-      	 let cr, _ = KeySchedule.ks_client_init_12 ks in 
-	 (cr,None)) in
+      	 let _ = KeySchedule.ks_client_init_12 ks in 
+	 None) in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
-  let ci = initConnection Client crand in
+  let ci = initConnection Client cr in
   let ext = prepareExtensions cfg ci ri kp in
   let ch = 
   {ch_protocol_version = cfg.maxVer;
-   ch_client_random = crand;
+   ch_client_random = cr;
    ch_sessionID = sid;
    ch_cipher_suites = cfg.ciphersuites;
    ch_raw_cipher_suites = None;
@@ -93,16 +94,17 @@ let prepareServerHello cfg ks ri ch =
     | Correct(kex,sa,ae,cs) ->
   match negotiateGroupKeyShare cfg pv kex ch.ch_extensions with
     | Error(z) -> Error(z)
-    | Correct(gn,gxo) -> 
-  let (srand,ks,gy) = 
+    | Correct(gn,gxo) ->
+  let srand = KeySchedule.ks_server_random ks in
+  let (ksl,gy) = 
     (match pv,gxo with
      | TLS_1p3,Some gxb -> 
-       let (sr,gyb) = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random cs gn gxb in
-       (sr,Some (ServerKeyShare (gn,gyb)), None)
+       let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random cs gn gxb in
+       (Some (ServerKeyShare (gn,gyb)), None)
     | _ ->
-       let (sr,gy) = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs true gn in 
-       (sr,None,Some gy)) in
-  match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ks false with
+       let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs true gn in 
+       (None,Some gy)) in
+  match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ksl false with
     | Error(z) -> Error(z)
     | Correct(sext,next) ->
     let sid = CoreCrypto.random 32 in
@@ -291,9 +293,10 @@ val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (h
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let handshake_state_init cfg (r:role) (reg:rid) =
+   let ks, nonce = KeySchedule.create #reg r in
    {hs_nego = None;
     hs_log = HandshakeLog.create #reg;
-    hs_ks  = KeySchedule.create #reg r;
+    hs_ks  = ks;
     hs_reader = -1;
     hs_writer = -1;
     hs_buffers = hs_msg_bufs_init();
