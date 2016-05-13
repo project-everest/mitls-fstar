@@ -91,7 +91,7 @@ CommonDH.fst \
 PMS.fst \
 HASH.fst \
 HMAC.fst \
-Sig.p.fst \
+Signature.fst \
 Cert.fst \
 TLSInfo.fst \
 IdNonce.fst \
@@ -137,7 +137,7 @@ ConnInvariant.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-# missing modules from FSTS are: PMS Sig Cert Encode Enc Handshake
+# missing modules from FSTS are: PMS Cert Encode Enc Handshake
 VERIFY= \
 MonotoneSeq \
 MonotoneMap \
@@ -150,6 +150,7 @@ ECGroup \
 CommonDH \
 HASH \
 HMAC \
+Signature \
 TLSInfo \
 IdNonce \
 Range \
@@ -305,7 +306,7 @@ tls-server:
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= PMS Sig PRF
+TLS_PP_FILES= PMS PRF
 
 # Target to generate preprocessed files for atom-interactive
 pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))

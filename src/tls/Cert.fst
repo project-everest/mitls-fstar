@@ -5,6 +5,8 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
+open CoreCrypto
+open Signature
 
 type hint = string
 type cert = b:bytes {length b <= 16777215}
@@ -14,7 +16,9 @@ abstract val certificateListBytes: chain -> Tot bytes
 let rec certificateListBytes l =
   match l with
   | [] -> empty_bytes
-  | c::r -> (vlbytes 3 c) @| (certificateListBytes r)
+  | c::r -> 
+    lemma_repr_bytes_values (length c);
+    (vlbytes 3 c) @| (certificateListBytes r)
 
 abstract val parseCertificateList: bytes -> Tot (result chain)
 let rec parseCertificateList b =
@@ -33,7 +37,32 @@ let validate_chain c sigalg host cafile =
   let for_signing = match sigalg with | None -> false | _ -> false in
   CoreCrypto.validate_chain c for_signing host cafile
 
-val verify_signature : chain -> pv:protocolVersion -> role -> csr:option bytes{is_None csr <==> pv = TLS_1p3} -> sigAlg -> option (list sigHashAlg) -> tbs:bytes -> sigv:bytes -> Tot bool
+val get_chain_public_signing_key : chain -> sigAlg -> Tot (result Signature.public_repr)
+let get_chain_public_signing_key c a =
+  let cert = List.Tot.hd c in
+  match a with
+  | DSA ->
+    begin
+    match CoreCrypto.get_dsa_from_cert cert with
+    | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "failed to get signing key")
+    | Some k -> Correct (PK_DSA k)
+    end
+  | RSASIG ->
+    begin
+    match CoreCrypto.get_rsa_from_cert cert with
+    | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "failed to get signing key")
+    | Some k -> Correct (PK_RSA k)
+    end
+  | ECDSA ->
+    begin
+    match CoreCrypto.get_ecdsa_from_cert cert with
+    | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "failed to get signing key")
+    | Some k -> Correct (PK_ECDSA k)
+    end
+  | RSAPSS ->
+    Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "unimplemented")
+
+val verify_signature : chain -> pv:protocolVersion -> role -> csr:option bytes{is_None csr <==> pv = TLS_1p3} -> sigAlg -> option (list sigHashAlg) -> tbs:bytes -> sigv:bytes -> ST bool (fun _ -> True) (fun _ _ _ -> True)
 let verify_signature c pv role nonces csa sigalgs tbs sigv =
   if length sigv > 4 then
    let (h, r) = split sigv 1 in
@@ -56,7 +85,15 @@ let verify_signature c pv role nonces csa sigalgs tbs sigv =
              | Some l -> l
              | None -> [(csa, Hash CoreCrypto.SHA1)]) in
              if List.Tot.existsb (fun (xs,xh)->(xs=sa && xh=Hash h)) algs then
-               CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv
+	       begin
+	       match get_chain_public_signing_key c sa with
+	       | Correct pk ->
+	         let a = Signature.Use (fun _ -> True) sa [Hash h] false false in
+	         let (|_,pk|) = endorse #a pk in
+                 Signature.verify (Hash h) pk tbs sigv
+	       | Error z -> false
+	       end
+               (* CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv *)
              else false
          | _ -> false)
     | _ -> false)
