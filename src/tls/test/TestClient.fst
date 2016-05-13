@@ -15,17 +15,14 @@ open HandshakeLog
 (* FlexRecord *)
 
 let config =
-    let sigPref = [CoreCrypto.RSASIG] in
-    let hashPref = [Hash CoreCrypto.SHA256] in
-    let sigAlgPrefs = sigAlgPref sigPref hashPref in
-    let l =         [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
-    cut (List.Tot.length l == 7);//this requires 8 unfoldings
+    let l = [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
     let csn = cipherSuites_of_nameList l in
      {TLSInfo.defaultConfig with
          minVer = TLS_1p2;
     	 maxVer = TLS_1p2;
 	 ciphersuites = csn;
          safe_resumption = true;
+         signatureAlgorithms = [(CoreCrypto.RSASIG, Hash CoreCrypto.SHA512); (CoreCrypto.RSASIG, Hash CoreCrypto.SHA384);(CoreCrypto.RSASIG, Hash CoreCrypto.SHA256)];
 	 }
 
 let id = {
@@ -213,6 +210,7 @@ let main host port =
   let CipherSuite kex sa ae = cs in
   let ems = n.ne_extended_ms in
   let sal = n.ne_signature_algorithms in
+  IO.print_string ("SIG ALG list = " ^ (print_bytes (sigHashAlgsBytes (match sal with | None -> [] | Some l -> l))) ^ "\n CLI = " ^ (print_bytes (sigHashAlgsBytes config.signatureAlgorithms)) ^ "\n");
 
   let Certificate(sc) = recvHSRecord tcp pv kex log in
   IO.print_string ("Certificate validation status = " ^
@@ -222,6 +220,7 @@ let main host port =
   let ServerKeyExchange(ske) = recvHSRecord tcp pv kex log in
   let tbs = kex_s_to_bytes ske.ske_kex_s in
   let sigv = ske.ske_sig in
+  IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^ (print_bytes sigv) ^ "\n");
   IO.print_string ("Signature validation status = " ^
     (if Cert.verify_signature sc.crt_chain pv Server (Some (cr @| sr)) (Some.v sa) sal tbs sigv then "OK" else "FAIL") ^ "\n");
 

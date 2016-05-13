@@ -113,7 +113,7 @@ let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher =
 
 let sendRecord tcp pv ct msg str = 
   let r = Record.makePacket ct pv msg in
-  IO.print_string ((Platform.Bytes.print_bytes r) ^ "\n\n");
+//  IO.print_string ((Platform.Bytes.print_bytes r) ^ "\n\n");
   let Correct _ = Platform.Tcp.send tcp r in
   match ct with
   | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
@@ -195,6 +195,9 @@ let deriveKeys_TLS12_AES_GCM_128_SHA256 ms cr sr =
   let civb, sivb = split b 4 in
   (cekb,civb,sekb,sivb)
 
+let rec print_chain = function
+  | [] -> ()
+  | h::t -> IO.print_string (print_bytes h); print_chain t
     
 let rec aux sock =
   let tcp = Platform.Tcp.accept sock in
@@ -242,10 +245,14 @@ let rec aux sock =
 
   // Server Key Exchange
   let kex_s = KEX_S_DHE gy in
-  let sv = kex_s_to_bytes kex_s in
-  let csr = cr @| sr in
-  let Correct sigv = Cert.sign pv Server (Some csr) csk alg sv in
+  let tbs = kex_s_to_bytes kex_s in
+  let Correct sigv = Cert.sign pv Server (Some (cr @| sr)) csk alg tbs in
   let ske = {ske_kex_s = kex_s; ske_sig = sigv} in
+  IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^(print_bytes sigv)^ "\n");
+
+  print_chain chain;
+  IO.print_string ("Signature validation status = " ^
+    (if Cert.verify_signature chain pv Server (Some (cr @| sr)) sa nego.ne_signature_algorithms tbs sigv then "OK" else "FAIL") ^ "\n");
 
   sendHSRecord tcp pv (ServerKeyExchange ske) log;
   sendHSRecord tcp pv (ServerHelloDone) log;
