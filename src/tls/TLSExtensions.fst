@@ -639,16 +639,16 @@ let default_sigHashAlg_fromSig pv sigAlg=
         //| SSL_3p0 -> [(DSA,NULL)]
     | _ -> unexpected "[default_sigHashAlg_fromSig] invoked on an invalid signature algorithm"
 
-val default_sigHashAlg: protocolVersion -> cipherSuite -> l:list Sig.alg{List.Tot.length l <= 1}
+val default_sigHashAlg: protocolVersion -> cipherSuite -> l:list sigHashAlg{List.Tot.length l <= 1}
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
 
-val sigHashAlg_contains: list Sig.alg -> Sig.alg -> Tot bool
-let sigHashAlg_contains (algList:list Sig.alg) (alg:Sig.alg) =
-    List.Tot.existsb (fun a -> a = alg) algList
+val sigHashAlg_contains: list sigHashAlg -> sigHashAlg -> Tot bool
+let sigHashAlg_contains (algList:list sigHashAlg) (alg:sigHashAlg) =
+    List.Tot.mem alg algList
 
-val sigHashAlg_bySigList: list Sig.alg -> list sigAlg -> Tot (list Sig.alg)
-let sigHashAlg_bySigList (algList:list Sig.alg) (sigAlgList:list sigAlg):list Sig.alg =
+val sigHashAlg_bySigList: list sigHashAlg -> list sigAlg -> Tot (list sigHashAlg)
+let sigHashAlg_bySigList (algList:list sigHashAlg) (sigAlgList:list sigAlg) =
     List.Tot.choose (fun alg -> let (sigA,_) = alg in if (List.Tot.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
 
 val cert_type_to_SigHashAlg: certType -> protocolVersion -> list sigHashAlg
