@@ -1,27 +1,28 @@
-module StAE // See StAE.fsti
+module StAE
 
-open FStar.HyperHeap
+(* Multiplexing between StatefulLHAE and StreaAE for the record layer *) 
+
 open FStar.Monotonic.RRef
 
 open Platform.Bytes
 
 open TLSConstants
 open TLSInfo
-open Content
 
 let is_stream_ae i = pv_of_id i = TLS_1p3
 let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg /\ ~ (authId i)
 
-// NB as a temporary hack, we currently disable AuthId for TLS 1.2.
+// as a temporary hack, we currently disable AuthId for TLS 1.2.
 // so that we can experiment with TLS and StreamAE
 
-type state' (i:id) (rw:rw) = 
-  | Stream: u:unit{is_stream_ae i}         -> StreamAE.state i rw -> state' i rw
-  | StLHAE: u:unit{is_stateful_lhae i} -> StatefulLHAE.state i rw -> state' i rw
 
-let state = state'
+type state (i:id) (rw:rw) = 
+  | Stream: u:unit{is_stream_ae i} -> StreamAE.state i rw -> state i rw
+  | StLHAE: u:unit{is_stateful_lhae i} -> StatefulLHAE.state i rw -> state i rw
 
-(*
+type reader i = state i Reader
+type writer i = state i Writer
+
 let stream_ae (#i:id{is_stream_ae i}) (#rw:rw) (s:state i rw) 
   : Tot (StreamAE.state i rw)
   = let Stream _ s = s in s
@@ -29,64 +30,35 @@ let stream_ae (#i:id{is_stream_ae i}) (#rw:rw) (s:state i rw)
 let st_lhae (#i:id{is_stateful_lhae i}) (#rw:rw) (s:state i rw) 
   : Tot (StatefulLHAE.state i rw)
   = let StLHAE _ s = s in s
-*)
 
-let region (#i:id) (#rw:rw) (s:state i rw): Tot rgn
+open FStar.HyperHeap
+type n_rid = r:rid{r <> root}
+
+let region (#i:id) (#rw:rw) (s:state i rw): Tot n_rid
   = match s with 
     | Stream _ s -> StreamAE.State.region s
     | StLHAE _ s -> StatefulLHAE.region s
 
-let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn
+let log_region (#i:id) (#rw:rw) (s:state i rw): Tot n_rid
   = match s with 
     | Stream _ s -> StreamAE.State.log_region s
-    | StLHAE _ s -> if rw = Writer then StatefulLHAE.region s else StatefulLHAE.peer_region s //FIXME
+    | StLHAE _ s -> StatefulLHAE.peer_region s //FIXME
 
 let writable_seqn (#i:id) (#rw:rw) (s:state i rw) h = 
     match s with 
     | Stream _ s -> is_seqn (m_sel h (StreamAE.ctr (StreamAE.State.counter s)) + 1)
     | StLHAE _ s -> is_seqn (sel h (StatefulLHAE.State.seqn s) + 1) 
 
-// TODO extend library? We need a full spec
-assume val seq_mapT: ('a -> Tot 'b) -> seq 'a -> Tot (seq 'b)
-
-let logT #i #rw (s:state i rw) h = 
-  match s with 
-  | Stream _ s -> let written = m_sel h (StreamAE.State.log s) in 
-                 let projet (StreamAE.Entry #i l c p) : fragment i = p in
-                 seq_mapT #(StreamAE.entry i) #(fragment i) project written 
-
-let seqnT #i #rw (s:state i rw) h = 
-  match s with 
-  | Stream _ s       -> m_sel (StreamAE.State.counter s) h
-  | StLHAE _ s -> sel (StatefulLHAE.State.seqn) h
-
-let gen parent i = 
-  assert(is_stream_ae i); 
-  Stream(StreamAE.gen parent i)
-
-let coerce parent i kiv = 
-  assert(is_stream_ae i); 
-  let kv, iv = split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in
-  Stream(StreamAE.coerce parent i kv iv)
-
-let leak #i #role s = 
-  assert(is_stream_ae i); 
-  StreamAE.leak s 
-
-let genReader parent w i = 
-  assert(is_stream_ae i); 
-  Stream(StreamAE.genReader parent i w)
-
-let encrypt #i e f = 
-  match e with
-  | Stream _ s -> StreamAE.encrypt s f
-
-let decrypt #i d c = 
-  match d with
-  | Stream _ s -> StreamAE.decrypt s c
-
 (*
+let counter (#i:id { is_stream_ae i }) (#rw:rw) (s:state i rw): Tot seqn_ref s.region i log
+  = match s with 
+    | Stream _ s -> StreamAE.State.counter s
 
+let log (#i:id) (#rw:rw) (s:state i rw) : Tot (StreamAE.log_ref (log_region s) i)
+  = match s with 
+    | Stream _ s -> StreamAE.State.log_region s
+    | StLHAE _ s -> ()
+*)
 type cipher (i:id) = b:bytes {Range.valid_clen i (length b)}
 
 let cipher_noId b : cipher noId = b 
@@ -108,4 +80,3 @@ let writer_modifies #i h0 wr h1 =
       HyperHeap.modifies (Set.singleton (StatefulLHAE.region wr)) h0 h1 /\
       Heap.modifies (!{ as_ref (StatefulLHAE.log wr), as_ref (StatefulLHAE.seqn wr)}) (Map.sel h0 (StatefulLHAE.region wr)) (Map.sel h1 (StatefulLHAE.region wr)) )
 
-*)

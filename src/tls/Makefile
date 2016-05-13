@@ -114,7 +114,6 @@ ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
 HandshakeMessages.fst \
-StAE.fsti \
 StAE.fst \
 Record.fst \
 HSCrypto.fst \
