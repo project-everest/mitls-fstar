@@ -129,8 +129,8 @@ test/TestDH.fst \
 test/TestClient.fst \
 test/TestServer.fst \
 test/TestServer13.fst \
-test/TestClient13.fst #the preceding space is significant!
-ConnInvariant.fst 
+test/TestClient13.fst \
+ConnInvariant.fst #the preceding space is significant!
 
 # BREAKING LAX CHECKING WITH StAE
 #TLS.fst \
