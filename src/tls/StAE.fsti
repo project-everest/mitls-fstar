@@ -1,5 +1,7 @@
 module StAE
 
+(*** NB This interface is not used for now ***)
+
 // Authenticated encryptions of streams of TLS fragments (from Content)
 // multiplexing StatefulLHAE and StreamAE with (some) length hiding
 // (for now, under-specifying ciphertexts lengths and values)

@@ -10,6 +10,7 @@ open Content
 
 module HH = HyperHeap
 module MR = FStar.Monotonic.RRef
+
 // plaintexts are defined in Content.fragment i
 
 // ciphertexts, ignoring details for now (would be needed for functional correctness)
@@ -24,8 +25,8 @@ let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg /\ ~ (authId i
 assume val validCipherLen: i:id -> l:nat -> Type0 // sufficient to ensure the cipher can be processed without length errors
 assume val cipherLen: i:id -> fragment i -> Tot (l:nat {validCipherLen i l})
 
-type encipher (#i:id) (f:fragment i) = lbytes (cipherLen i f)
-type decipher (i:id) = b:bytes { validCipherLen i (length b) }
+type encrypted (#i:id) (f:fragment i) = lbytes (cipherLen i f)
+type decrypted (i:id) = b:bytes { validCipherLen i (length b) }
 
 // concrete key materials, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
@@ -103,7 +104,6 @@ let writable_seqn (#i:id) (#rw:rw) (s:state i rw) h =
     | Stream _ s -> is_seqn (m_sel h (StreamAE.ctr (StreamAE.State.counter s)) + 1)
     | StLHAE _ s -> is_seqn (sel h (StatefulLHAE.State.seqn s) + 1) 
 
-
 (*
 
 type cipher (i:id) = b:bytes {Range.valid_clen i (length b)}
@@ -120,9 +120,8 @@ let fragment_entry #i = function
   | EStream _ (StreamAE.Entry _ _ f) -> f 
   | EStLHAE _ (StatefulLHAE.Entry _ _ f) -> f 
 
-let writer_modifies #i h0 wr h1 = 
-  match wr with 
-  | Stream _ wr -> True 
+let writer_modifies #i wr h0 h1 = 
+  HyperHeap.modifies (Set.singleton (region wr))) h0 h1 
   | StLHAE _ wr -> (
       HyperHeap.modifies (Set.singleton (StatefulLHAE.region wr)) h0 h1 /\
       Heap.modifies (!{ as_ref (StatefulLHAE.log wr), as_ref (StatefulLHAE.seqn wr)}) (Map.sel h0 (StatefulLHAE.region wr)) (Map.sel h1 (StatefulLHAE.region wr)) )
@@ -174,7 +173,7 @@ assume val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                //?? op_Equality #(log_ref w.region i) w.log r.log /\
                seqnT r h1 = 0))
 // encryption, recorded in the log; safe instances are idealized
-assume val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encipher f)
+assume val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
                modifies_one (region e) h0 h1 /\
@@ -183,7 +182,7 @@ assume val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encipher f)
 //TODO restore monotonic post; see StreamAE.fsti
 
 // decryption, idealized as a lookup for safe instances
-assume val decrypt: #i:id -> d:reader i -> c:decipher i -> ST (option (f:fragment i { length c = cipherLen i f}))
+assume val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { length c = cipherLen i f}))
   (requires (fun h0 -> incrementable d h0))
   (ensures  (fun h0 res h1 ->
 	      match res with

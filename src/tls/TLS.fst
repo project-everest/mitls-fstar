@@ -416,53 +416,49 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 // sends one fragment in the current epoch;
 // except for the null epoch, the fragment is appended to the epoch's writer log.
 
+let epochsT c h = Handshake.logT c.hs h
 
-//Question: What happened to authId at this level? 
-//Answer: it should not matter here; it only affects what actually happens in StreamAE. 
-val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment i -> ST (cipher i)
+val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
-    let es = sel h c.hs.log in
+    let es = epochsT c h in
     let j = iT c.hs Writer h in
     j < Seq.length es /\
     st_inv c h /\
-    (j < 0 ==> i == noId) /\
-    (j >= 0 ==> (
+    (if j < 0 then i == noId else
        let e = Seq.index es j in
-       i == hsId e.h /\
-       writable_seqn (writer_epoch e)  ))))
+       i = hsId e.h /\
+       writable_seqn (writer_epoch e) h)))
   (ensures (fun h0 payload h1 ->
-    let es = sel h0 c.hs.log in
+    let es = epochsT c h0 in
     let j = iT c.hs Writer h0 in
     j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\
-    (j < 0 ==> i == noId /\ h0 == h1) /\
-    (j >= 0 ==> (
+(*
+    (if j < 0 then i == noId /\ h0 == h1 else
        let e = Seq.index es j in   
-       i == hsId e.h /\ (
+       i = hsId e.h /\ (
        let wr: writer i = writer_epoch e in
-       writer_modifies h0 wr h1 /\
-       sel h1 (seqn wr) = sel h0 (seqn wr) + 1 /\
-       // st_enc_inv #i wr h0 /\ st_enc_inv #i wr h1 /\
-       Seq.length (sel h1 (log wr)) = Seq.length (sel h0 (log wr)) + 1 /\
-        ( let e: entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
-          sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
-          fragment_entry e = f ))))))
+       modifies (Set.singleton (region wr)) h0 h1 /\
+       seqnT wr h1 = seqnT wr h0 + 1 /\
+       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))) /\
+*)
+    True ))
 
 let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j = -1
-    then cipher_noId (Content.repr i f)
+    then Content.repr i f
     else
       let es = !c.hs.log in
-      match Seq.index es j with
-      | Epoch h _ wr ->
-        let h0 = ST.get() in
- 	// assert (epochs_inv c h0);
-        recall c.state;
-	recall c.hs.log;
-	// assert (Map.contains h0 (HS.region c.hs));
+      let wr = writer_epoch (Seq.index es j) in
+      let h0 = ST.get() in
+      // assert (epochs_inv c h0);
+      recall c.state;
+      recall c.hs.log;
+      // assert (Map.contains h0 (HS.region c.hs));
+      StAE.encrypt wr f
 
 (*        
         // use StreamAE for TLS 1.3
@@ -476,7 +472,7 @@ let send_payload c i f =
         let ct, rg = Content.ct_rg i f in
         let ad = StatefulPlain.makeAD i ct in
 	cut (witness (iT c.hs Writer h0));
-        assert(st_enc_inv wr h0);
+        //assert(st_enc_inv wr h0);
         // assert(is_seqn (sel h0 (seqn wr) + 1));
         let r = StatefulLHAE.encrypt #i #ad #rg wr f in
         let h1 = ST.get() in

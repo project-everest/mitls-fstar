@@ -157,6 +157,8 @@ type hs =
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
+let logT (s:hs) (h:HyperHeap.t) = sel h s.log
+
 let stateType (s:hs) = epochs s.region s.nonce * handshake_state (HS.r s)
 
 let stateT (s:hs) (h:HyperHeap.t) : stateType s = (sel h s.log, sel h s.state)
