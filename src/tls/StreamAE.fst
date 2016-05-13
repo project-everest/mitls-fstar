@@ -38,7 +38,7 @@ let coerce parent i kv iv =
   let ectr : concrete_ctr writer_r i = m_alloc writer_r 0 in
   State #i #Writer #writer_r #writer_r kv iv () ectr 
 
-let leak #i role s = State.key s, State.iv s
+let leak #i #role s = State.key s, State.iv s
 
 let genReader parent #i w = 
   let reader_r = new_region parent in

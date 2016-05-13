@@ -114,6 +114,7 @@ ENC.fst \
 MAC_SHA256.fst \
 MAC_SHA1.fst \
 HandshakeMessages.fst \
+StAE.fsti \
 StAE.fst \
 Record.fst \
 HSCrypto.fst \
@@ -166,6 +167,7 @@ MAC \
 StatefulLHAE \
 MAC_SHA256 \
 MAC_SHA1 \
+StAE \
 Connection \
 ConnInvariant
 
@@ -252,6 +254,7 @@ TLSML := $(FSTS:.p.fst=.ml)
 TLSML := $(TLSML:.fst=.ml)
 TLSML := $(subst Handshake.fsti, , $(TLSML))
 TLSML := $(subst StreamAE.fsti, , $(TLSML))
+TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \

@@ -1,8 +1,7 @@
 module StreamAE
 
-// Provides authenticated encryption for a stream of variable-length
-// plaintexts; concretely, we use AES_GCM but any other algorithm
-// would do.
+// Authenticated encryption for a stream of variable-length plaintexts.
+// Concretely, we use AES_GCM but any other algorithm would do.
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -46,10 +45,10 @@ type iv  (i:id) = lbytes (CoreCrypto.aeadRealIVSize (alg i)) // should it be aea
 (* let seqn_grows i : FStar.Monotonic.RRef.reln (seqn i) = fun x y -> y >= x //CF not usable?  *)
 (* let lemma_seqn_grows_monotone i : Lemma (monotonic (seqn i) (fun x y -> y >= x)) = () *)
 
-let max_uint64: n:nat {repr_bytes n <= 8} = 
-  //let n = 18446744073709551615 in
-  let n = 1073741823 in //2^30-1 4611686018427387903 in // (2^62-1) (* TODO: Fix this *)
-  lemma_repr_bytes_values n; n
+//let max_uint64: n:nat {repr_bytes n <= 8} = 
+//  //let n = 18446744073709551615 in
+//  let n = 1073741823 in //2^30-1 4611686018427387903 in // (2^62-1) (* TODO: Fix this *)
+//  lemma_repr_bytes_values n; n
 
 // was a bit more parametric; now moved to TLSConstants.
 //let is_seqn i n =  repr_bytes n <= aeadRecordIVSize (alg i)
@@ -129,7 +128,7 @@ val coerce: parent:rid -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 
-val leak: #i:id{~(authId i)} -> role:rw -> state i role -> ST (key i * iv i)
+val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
