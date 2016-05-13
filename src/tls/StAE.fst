@@ -49,15 +49,16 @@ let writable_seqn (#i:id) (#rw:rw) (s:state i rw) h =
     | Stream _ s -> is_seqn (m_sel h (StreamAE.ctr (StreamAE.State.counter s)) + 1)
     | StLHAE _ s -> is_seqn (sel h (StatefulLHAE.State.seqn s) + 1) 
 
-(*
-let counter (#i:id { is_stream_ae i }) (#rw:rw) (s:state i rw): Tot seqn_ref s.region i log
+let log (#i:id { is_stream_ae i }) (#rw:rw) (s:state i rw) : Tot (StreamAE.log_ref (log_region s) i)
+  = match s with 
+    | Stream _ s -> StreamAE.State.log s
+
+let seqn (#i:id { is_stream_ae i }) (#rw:rw) (s:state i rw): Tot (StreamAE.seqn_ref (region s) i (log s))
   = match s with 
     | Stream _ s -> StreamAE.State.counter s
 
-let log (#i:id) (#rw:rw) (s:state i rw) : Tot (StreamAE.log_ref (log_region s) i)
-  = match s with 
-    | Stream _ s -> StreamAE.State.log_region s
-    | StLHAE _ s -> ()
+(*
+
 *)
 type cipher (i:id) = b:bytes {Range.valid_clen i (length b)}
 
