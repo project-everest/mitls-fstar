@@ -134,7 +134,7 @@ let cipherRangeClass i clen =
         let max = clen - ivL - macLen - minPad in
         let min = clen - ivL - macLen - maxPad in
         if min < 0 then
-            (0,max)
+            (0, (if max < 0 then 0 else max))
         else
           if max < max_TLSPlaintext_fragment_length then
             (min,max)
@@ -147,7 +147,7 @@ let cipherRangeClass i clen =
         let max = clen - ivL - tagL - minPad in
         let min = clen - ivL - tagL - maxPad in
         if min < 0 then
-            (0,max)
+            (0,(if max < 0 then 0 else max))
         else
             (min,max)
 

@@ -65,7 +65,7 @@ let serialize k =
 val serialize_raw: key -> Tot bytes
 let serialize_raw = function
   | ECKey k -> ECGroup.serialize_point k.ec_params k.ec_point
-  | FFKey k -> vlbytes 2 k.dh_public
+  | FFKey k -> DHGroup.serialize_public k.dh_public
 
 val parse: params -> bytes -> Tot (option key)
 let parse p x =

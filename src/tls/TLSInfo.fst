@@ -116,6 +116,14 @@ let rec sigAlgPref s h =
     | [] -> []
     | sa :: r -> List.Tot.append (List.Tot.map (fun u -> (sa,u)) h) (sigAlgPref r h)
 
+val ec_ff_to_ng: list CoreCrypto.ec_curve -> list ffdhe -> Tot (list (n:namedGroup{is_SEC n \/ is_FFDHE n}))
+let rec ec_ff_to_ng ecl ffl =
+  match ecl with
+  | ec::r -> (SEC ec) :: (ec_ff_to_ng r ffl)
+  | [] -> (match ffl with
+    | ff :: r -> (FFDHE ff) :: (ec_ff_to_ng ecl r)
+    | [] -> [])
+
 #set-options "--initial_fuel 10 --max_fuel 10"
 val defaultConfig : config
 let defaultConfig =
@@ -133,7 +141,7 @@ let defaultConfig =
                     ] in
     let curves = [CoreCrypto.ECC_P521; CoreCrypto.ECC_P384; CoreCrypto.ECC_P256] in
     let ffdh = [FFDHE4096; FFDHE3072] in
-    let groups = List.Tot.append (List.Tot.map SEC curves) (List.Tot.map FFDHE ffdh) in
+    let groups = ec_ff_to_ng curves ffdh in
 
     cut (List.Tot.length l == 7);//this requires 8 unfoldings
     let csn = cipherSuites_of_nameList l in
@@ -320,7 +328,7 @@ let csrands si = si.init_crand @| si.init_srand
 
 // Getting algorithms from sessionInfo
 //CF subsume mk_kefAlg, mk_kefAlgExtended, mk_kdfAlg
-val kefAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs)} -> bool -> Tot kefAlg_t
+val kefAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs) /\ is_Some (prfMacAlg_of_ciphersuite_aux cs)} -> bool -> Tot kefAlg_t
 let kefAlg pv cs ems =
   let label = if ems then extended_extract_label else extract_label in
   match pv with
@@ -329,7 +337,7 @@ let kefAlg pv cs ems =
   | TLS_1p2           -> PRF_TLS_1p2 label (prfMacAlg_of_ciphersuite cs)
   | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
-val kdfAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs)} -> Tot kdfAlg_t
+val kdfAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs) /\ is_Some (prfMacAlg_of_ciphersuite_aux cs)} -> Tot kdfAlg_t
 let kdfAlg pv cs =
   match pv with
   | SSL_3p0           -> PRF_SSL3_nested
@@ -380,7 +388,7 @@ let strongSig si = Sig.strong (sigHashAlg_of_ciphersuite si.cipher_suite)
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF
-val strongPRF: si:sessionInfo{si.protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.cipher_suite \/ is_SCSV si.cipher_suite)} -> Tot bool
+val strongPRF: si:sessionInfo{si.protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.cipher_suite \/ is_SCSV si.cipher_suite) /\ is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite)} -> Tot bool
 let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && strongVD(vdAlg si)
 // MK I think having this joint strength predicate
 // MK guaranteeing the idealization of the complete module is useful

@@ -412,15 +412,13 @@ let cipherSuiteBytesOpt cs =
     | _ -> None
 
 let validCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
-
-type valid_cipher_suite = c:cipherSuite{validCipherSuite c}
-
-type valid_cipher_suites = list valid_cipher_suite
+let valid_cipher_suite = c:cipherSuite{validCipherSuite c}
+let valid_cipher_suites = list valid_cipher_suite
 
 val cipherSuiteBytes: valid_cipher_suite -> Tot (lbytes 2)
 let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
 
-val parseCipherSuiteAux : lbytes 2 -> Tot (result cipherSuite)
+val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
   match cbyte2 b with
   | ( 0x00z, 0x00z ) -> Correct(NullCipherSuite)
@@ -511,7 +509,9 @@ let parseCipherSuite b =
 
 #set-options "--max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
 val inverse_cipherSuite: x:cipherSuite -> Lemma
-  (requires (True))
+  (requires (~ (is_UnknownCipherSuite x)))
+  // parse (bytes (Unknown 0 0)) = NullCiphersuite
+  // must exclude this case... 
   (ensures (let y = cipherSuiteBytesOpt x in
 	(is_Some y ==> parseCipherSuiteAux (Some.v y) = Correct x)))
   [SMTPat (parseCipherSuiteAux (Some.v (cipherSuiteBytesOpt x)))]
@@ -520,15 +520,17 @@ let inverse_cipherSuite x = ()
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
   (requires (True))
   (ensures (let y = parseCipherSuiteAux x in
-	    (is_Correct y ==> (is_Some (cipherSuiteBytesOpt (Correct._0 y))
-			       /\ Seq.equal x (Some.v (cipherSuiteBytesOpt (Correct._0 y)))))))
+	    (is_Correct y ==>
+              (if is_UnknownCipherSuite (Correct._0 y) then true
+              else is_Some (cipherSuiteBytesOpt (Correct._0 y))
+               /\ Seq.equal x (Some.v (cipherSuiteBytesOpt (Correct._0 y)))))))
   [SMTPat (cipherSuiteBytesOpt (Correct._0 (parseCipherSuiteAux x)))]
 let pinverse_cipherSuite x = ()
 
 #reset-options
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 1 --initial_fuel 1"
 
-val cipherSuitesBytes: css:valid_cipher_suites -> Tot (lbytes (op_Multiply 2 (List.Tot.length css)))
+val cipherSuitesBytes: css:list (c:cipherSuite{validCipherSuite c}) -> Tot (lbytes (op_Multiply 2 (List.Tot.length css)))
 let rec cipherSuitesBytes css =
   match css with
   | [] -> empty_bytes
@@ -537,35 +539,32 @@ let rec cipherSuitesBytes css =
 
 (* Called by the server handshake; *)
 (* ciphersuites that we do not understand are parsed, but ignored *)
-val parseCipherSuites: b:bytes -> Tot (result valid_cipher_suites) (decreases (length b))
-let rec parseCipherSuites b : result valid_cipher_suites =
+val parseCipherSuites: b:bytes -> Tot (result (list (c:cipherSuite{validCipherSuite c}))) (decreases (length b))
+let rec parseCipherSuites b =
   if length b > 1 then
     let (b0,b1) = split b 2 in
-    let cs = 
     match parseCipherSuites b1 with
       | Correct(css) ->
 	(match parseCipherSuite b0 with
 	 | Error z ->	Error z (* should never happen *) (* was: Correct css ; ignore this cs *)
 	 | Correct cs -> Correct (cs::css))
-      | Error z -> Error z in
-    let Correct cs = cs in
-    Correct cs
+      | Error z -> Error z
   else
   if length b = 0 then Correct []
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Odd cs bytes number")
 
-val inverse_cipherSuites: x:valid_cipher_suites -> Lemma
-  (requires (True))
+val inverse_cipherSuites: x:list (c:cipherSuite{validCipherSuite c}) -> Lemma
+  (requires (true))
   (ensures (parseCipherSuites (cipherSuitesBytes x) = Correct x))
   [SMTPat (parseCipherSuites (cipherSuitesBytes x))]
 let rec inverse_cipherSuites x =
   match x with
   | [] -> ()
-  | cs::css -> 
-    let b = (cipherSuiteBytes cs) @| (cipherSuitesBytes css) in
-    let (b0,b1) = split b 2 in
-    lemma_split b 2;
-    lemma_append_inj b0 b1 (cipherSuiteBytes cs) (cipherSuitesBytes css);  
+  | cs::css ->
+    assume (~ (is_UnknownCipherSuite cs)); // TODO enforce it
+    let csb = cipherSuiteBytes cs in
+    pinverse_cipherSuite csb;
+    inverse_cipherSuite cs;
     inverse_cipherSuites css
 
 (* 
@@ -1161,11 +1160,19 @@ let rec parseNamedGroups0 b groups =
   if length b > 0 then
     if length b >= 2 then
       let (ng, bytes) = split b 2 in
+      lemma_split b 2;
       match parseNamedGroup ng with
-      | Correct ng -> parseNamedGroups0 bytes (FStar.List.Tot.append groups [ng])
+      |Correct ng ->
+//        assert (length bytes = length b - 2);
+        let groups' = ng :: groups in
+//        assert (List.Tot.length groups' = List.Tot.length groups + 1);
+        parseNamedGroups0 bytes groups'
       | Error z    -> Error z
     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  else Correct groups
+  else
+   let grev = List.Tot.rev groups in
+   assume (List.Tot.length grev == List.Tot.length groups);
+   Correct grev
 
 val parseNamedGroups: b:bytes { 2 <= length b /\ length b < 65538 }
   -> Tot (result (groups:list namedGroup{List.Tot.length groups = (length b - 2) / 2}))
