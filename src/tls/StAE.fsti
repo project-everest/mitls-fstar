@@ -24,6 +24,12 @@ module HH = HyperHeap
 // ciphertexts, ignoring details for now (would be needed for functional correctness)
 // the first two should be concretely defined (for now in TLSInfo)
 
+let is_stream_ae i = pv_of_id i = TLS_1p3
+let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg /\ ~ (authId i)
+
+// NB as a temporary hack, we currently disable AuthId for TLS 1.2.
+// so that we can experiment with TLS and StreamAE
+
 assume val validCipherLen: i:id -> l:nat -> Type0 // sufficient to ensure the cipher can be processed without length errors
 
 assume val cipherLen: i:id -> fragment i -> Tot (l:nat {validCipherLen i l})
@@ -130,3 +136,8 @@ val decrypt: #i:id -> d:reader i -> c:decipher i -> ST (option (f:fragment i { l
                            (let written = logT #i #Reader d h1 in 
                            j < Seq.length written /\
                            f = Seq.index written j)))) 
+
+
+
+
+

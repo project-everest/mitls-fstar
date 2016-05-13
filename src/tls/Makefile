@@ -124,13 +124,13 @@ KeySchedule.fst \
 Handshake.fsti \
 Handshake.fst \
 Connection.fst \
-ConnInvariant.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 test/TestClient.fst \
 test/TestServer.fst \
 test/TestServer13.fst \
 test/TestClient13.fst #the preceding space is significant!
+ConnInvariant.fst 
 
 # BREAKING LAX CHECKING WITH StAE
 #TLS.fst \
