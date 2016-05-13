@@ -434,8 +434,8 @@ val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment
     j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
-    j == iT c.hs Writer h1 /\
 (*
+    j == iT c.hs Writer h1 /\
     (if j < 0 then i == noId /\ h0 == h1 else
        let e = Seq.index es j in   
        i = hsId e.h /\ (
@@ -452,13 +452,18 @@ let send_payload c i f =
     then Content.repr i f
     else
       let es = !c.hs.log in
-      let wr = writer_epoch (Seq.index es j) in
+      let wr : writer i = writer_epoch (Seq.index es j) in
       let h0 = ST.get() in
-      // assert (epochs_inv c h0);
+      assert (epochs_inv c h0);
       recall c.state;
       recall c.hs.log;
       // assert (Map.contains h0 (HS.region c.hs));
-      StAE.encrypt wr f
+      cut (frame_witness (iT c.hs Writer h0));
+      let encrypted = StAE.encrypt wr f in
+      let h1 = ST.get() in
+      frame_writer_epoch c h0 h1;
+      encrypted
+
 
 (*        
         // use StreamAE for TLS 1.3
@@ -467,7 +472,6 @@ let send_payload c i f =
         let r = StreamAE.encrypt i wr maxlen f in 
         r 
         else 
-*)        
         // use StatefulLHAE otherwise
         let ct, rg = Content.ct_rg i f in
         let ad = StatefulPlain.makeAD i ct in
@@ -478,6 +482,7 @@ let send_payload c i f =
         let h1 = ST.get() in
 	frame_writer_epoch c h0 h1;
         r
+*)        
 
 
 // check vs record

@@ -204,11 +204,11 @@ let frame_writer_epoch_k c h0 h1 j k = admit()
   (*       equal_on_disjoint (regions_of wr_j) (regions_of r_k) (region wr_j) h0 h1 *)
   (*       (\* ; frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1 *\)) *)
 
-type witness (#a:Type) (x:a) = True
+type frame_witness (#a:Type) (x:a) = True
 val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires
     epochs_inv c h0 /\
-    (exists (j:nat). {:pattern (witness j)}
+    (exists (j:nat). {:pattern (frame_witness j)}
       (let es = epochs c h0 in
        let hs_r = HS.region c.hs in
        Map.contains h0 hs_r
@@ -257,7 +257,7 @@ let frame_reader_epoch_k c h0 h1 j k = admit()
 val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires
     epochs_inv c h0 /\
-    (exists (j:nat).{:pattern (witness j)}
+    (exists (j:nat).{:pattern (frame_witness j)}
      (let es = epochs c h0 in
       let hs_r = HS.region c.hs in
       Map.contains h0 hs_r
