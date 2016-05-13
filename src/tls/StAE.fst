@@ -67,15 +67,20 @@ let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn
 
 type ideal_log (i:id) = seq (fragment i)  // TODO: consider adding constraint on terminator fragments
 
-// TODO extend library? We need a full spec
-assume val seq_mapT: ('a -> Tot 'b) -> seq 'a -> Tot (seq 'b)
+// TODO extend library? We need a full spec; NS: nope, no need for a full spec; it is Tot
 
-assume val logT: #i:id { authId i } -> #rw:rw -> state i rw -> HH.t -> GTot (ideal_log i)
-(* let logT #i #rw (s:state i rw) h =  *)
-(*   match s with  *)
-(*   | Stream _ s -> let written = m_sel h (StreamAE.State.log s) in  *)
-(*                  let project (StreamAE.Entry #i l c p) (\*: Content.fragment i *\) = p in *)
-(*                  seq_mapT #(StreamAE.entry i) #(fragment i) project written  *)
+val seq_mapT: ('a -> Tot 'b) -> s:seq 'a -> Tot (seq 'b)
+    (decreases (Seq.length s))
+let rec seq_mapT f s = 
+  if Seq.length s = 0 then Seq.createEmpty
+  else let prefix, last = Content.split s in
+       SeqProperties.snoc (seq_mapT f prefix) (f last)
+
+val logT: #i:id { authId i } -> #rw:rw -> state i rw -> HH.t -> GTot (ideal_log i)
+let logT #i #rw s h = 
+  match s with
+  | Stream _ s -> let written = m_sel h (StreamAE.ilog (StreamAE.State.log s)) in
+                 seq_mapT #(StreamAE.entry i) #(fragment i) StreamAE.Entry.p written
 
 val seqnT: #i:id -> #rw:rw -> state i rw -> HH.t -> GTot seqn_t 
 let seqnT #i #rw (s:state i rw) h = 
