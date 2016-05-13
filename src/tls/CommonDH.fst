@@ -23,6 +23,13 @@ type share =
 
 type secret = bytes
 
+val group_of_namedGroup: namedGroup -> Tot (option group)
+let group_of_namedGroup g =
+  match g with
+  | SEC ec    -> Some (ECDH ec) 
+  | FFDHE dhe -> Some (FFDH (DHGroup.Named dhe))
+  | _ -> None
+
 val same_group: share -> share -> Tot bool
 let same_group a b = match a, b with
   | FFShare (g1, _), FFShare(g2, _) -> g1=g2

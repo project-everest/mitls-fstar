@@ -310,9 +310,9 @@ type sessionInfo = {
     session_hash: sessionHash;
     client_auth: bool;
     clientID: Cert.chain;
-    clientSigAlg: Sig.alg;
+    clientSigAlg: sigHashAlg;
     serverID: Cert.chain;
-    serverSigAlg: Sig.alg;
+    serverSigAlg: sigHashAlg;
     sessionID: sessionID;
     }
 
@@ -361,7 +361,7 @@ type msId = // We record the parameters used to derive the master secret;
 // ``the MS at this index is abstractly generated and used within PRF''
 let honestMS = function
   | StandardMS pmsId csr ka -> honestPMS pmsId && strongKEF ka
-  | ExtendedMS pmsId  sh ka  -> honestPMS pmsId && strongKEF ka
+  | ExtendedMS pmsId  sh ka -> honestPMS pmsId && strongKEF ka
 
 //CF are we missing a correlation with csr?
 //MK we don't allow leak, so every MS derived from an
@@ -382,9 +382,15 @@ let msid si =
   else StandardMS si.pmsId    (csrands si) kef
 
 // Strengths of Handshake algorithms
+
+// SZ: Not as simple, because the ciphersuite doesn't determine the
+// hash algorithm. When using the `signature_algorithms` extension, this is
+// even more complicated.
 // NS: identifier not found: sigHashAlg_of_cipherSuite
 assume val sigHashAlg_of_ciphersuite: cipherSuite -> Tot sigHashAlg
-let strongSig si = Sig.strong (sigHashAlg_of_ciphersuite si.cipher_suite)
+
+// SZ: To be replaced by Signature.int_cma
+//let strongSig si = Sig.strong (sigHashAlg_of_ciphersuite si.cipher_suite)
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF
@@ -399,8 +405,9 @@ let strongHS si =
   strongKEX (si.pmsId) &&
   is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
   strongKEF (kefAlg si.protocol_version si.cipher_suite si.extensions.ne_extended_ms) && //NS: ... to verify this
-  strongPRF si &&
-  strongSig si  //CF * hashAlg for certs?
+  strongPRF si
+  //strongSig si //SZ: need to state the precise agile INT-CMA assumption, with a designated hash algorithm and a set of hash algorithms allowed in signing queries
+  //CF * hashAlg for certs?
 
 // Safety of sessionInfo crypto processing
 

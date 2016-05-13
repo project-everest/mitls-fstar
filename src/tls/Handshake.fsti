@@ -73,7 +73,7 @@ type nego = {
 
 type hs_id = {
      id_cert: Cert.chain;
-     id_sigalg: option Sig.alg;
+     id_sigalg: option sigHashAlg;
 }
 
 type ake = {

@@ -105,12 +105,16 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
          let a = aeAlg i in 
          let min = clen - aeadRecordIVSize a - aeadTagSize a - fixedPadSize i in
          let max = clen - aeadRecordIVSize a - aeadTagSize a - maxPadSize i in
+         let min = if min < 0 then 0 else min in
+         let max = if max < 0 then 0 else max in
          0 <= max 
          /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max) 
             \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
      /\ (~(is_AEAD i.aeAlg) ==> (
          let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in 
          let min = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
+         let min = if min < 0 then 0 else min in
+         let max = if max < 0 then 0 else max in
            0 <= max 
          /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max )
           \/ (0 < min /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max_TLSPlaintext_fragment_length)

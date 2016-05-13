@@ -143,7 +143,7 @@ type crt = {
 
 type cr = {
   cr_cert_types: (cl:list certType{List.Tot.length cl < 256});
-  cr_sig_hash_algs: option (shs:list Sig.alg{List.Tot.length shs < 256});
+  cr_sig_hash_algs: option (shs:list sigHashAlg{List.Tot.length shs < 256});
   cr_distinguished_names: (dl:list dn{List.Tot.length dl < 128});
 }
 

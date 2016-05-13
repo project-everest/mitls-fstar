@@ -546,13 +546,15 @@ let rec parseCipherSuites b =
     match parseCipherSuites b1 with
       | Correct(css) ->
 	(match parseCipherSuite b0 with
-	 | Error z ->	Error z (* should never happen *) (* was: Correct css ; ignore this cs *)
+	 | Error z ->	Correct css
 	 | Correct cs -> Correct (cs::css))
       | Error z -> Error z
   else
   if length b = 0 then Correct []
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Odd cs bytes number")
 
+#reset-options
+#set-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 2 --initial_fuel 2"
 val inverse_cipherSuites: x:list (c:cipherSuite{validCipherSuite c}) -> Lemma
   (requires (true))
   (ensures (parseCipherSuites (cipherSuitesBytes x) = Correct x))
@@ -561,17 +563,20 @@ let rec inverse_cipherSuites x =
   match x with
   | [] -> ()
   | cs::css ->
-    assume (~ (is_UnknownCipherSuite cs)); // TODO enforce it
-    let csb = cipherSuiteBytes cs in
-    pinverse_cipherSuite csb;
-    inverse_cipherSuite cs;
-    inverse_cipherSuites css
+     assume (~ (is_UnknownCipherSuite cs)); // TODO enforce it
+     let b = (cipherSuiteBytes cs) @| (cipherSuitesBytes css) in
+     let (b0,b1) = split b 2 in
+     lemma_append_inj b0 b1 (cipherSuiteBytes cs) (cipherSuitesBytes css);
+     inverse_cipherSuite cs;
+     inverse_cipherSuites css
 
 (* 
   REMARK: cipherSuitesBytes is not a partial inverse of parseCipherSuites,
   because parseCipherSuites drops unknown ciphersuites.
   Alternatively, we could add an UNKNOWN of (lbyte 2) constructor in cipherSuite
   to make this hold.
+
+  TODO: We added such constructor, so this is the case now. Prove it.
 *)
 
 let isAnonCipherSuite cs =
