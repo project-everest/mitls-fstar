@@ -352,13 +352,12 @@ let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
       InAck)
 
 
-
 (*
-val processServerHelloDone: cfg:config -> h:(handshake_state Client) -> list hs_msg -> list hs_msg -> ST Result (handshake_state Client * list hs_msg)
+val processServerHelloDone: cfg:config -> ks:KeySchedule.ks -> nego:nego -> 
+    			    list hs_msg -> list hs_msg -> ST Result bytes
   (requires (fun h -> n.protocol_version <> TLS_1p3))
   (ensures (fun h0 i h1 -> True))
-let processServerHelloDone cfg h msgs opt_msgs =
-  let n = h.hs_nego in
+let processServerHelloDone cfg ks n msgs opt_msgs =
   match msgs with
   | [(Certificate(c),l1);
      (ServerKeyExchange(ske),l2);
@@ -375,7 +374,9 @@ let processServerHelloDone cfg h msgs opt_msgs =
        if Cert.verify_signature c.crt_chain n.n_protocol_version csr cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
          (match ske.ske_kex_s with
          | KEX_S_DHE gy ->
-           let gx, pms = dh_shared_secret2 gy in
+           let gx = KeySchedule.ks_client_12_full_dh ks n.n_server_random n.n_protocol_version n.cipher_suite n.n_extensions.ne_extended_ms 
+
+, pms = dh_shared_secret2 gy in
            let cke = {cke_kex_c = kex_c_of_dh_key gx} in
            let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
            let pvcs = (n.n_protocol_version, n.n_cipher_suite) in

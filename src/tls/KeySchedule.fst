@@ -541,7 +541,7 @@ let ks_client_13_1rtt_client_finished ks log_hash =
   (cvd, StAEInstance r w)
 
 // Called by Hanshake when DH key echange is negotiated
-val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> CommonDH.params -> peer_share:CommonDH.key -> ST CommonDH.key
+val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> peer_share:CommonDH.key -> ST CommonDH.key
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_C st /\
@@ -551,7 +551,7 @@ val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherS
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_client_12_full_dh ks sr pv cs ems dhp peer_share =
+let ks_client_12_full_dh ks sr pv cs ems peer_share =
   let KS #region st = ks in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
@@ -560,6 +560,7 @@ let ks_client_12_full_dh ks sr pv cs ems dhp peer_share =
   let csr = cr @| sr in
   let alpha = (pv, cs, ems) in
   let our_share, pmsb = CommonDH.dh_responder peer_share in
+  let dhp = CommonDH.key_params peer_share in
   let dhpms = PMS.DHPMS(dhp, our_share, peer_share, PMS.ConcreteDHPMS(pmsb)) in
   let dhpmsId = TLSInfo.SomePmsId(dhpms) in
   let ns = 

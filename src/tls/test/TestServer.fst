@@ -223,10 +223,6 @@ let rec aux sock =
   let (sh,nego) = (match Handshake.prepareServerHello config ks None ch with
       		    | Correct (sh,nego) -> (sh,nego)
 		    | Error (x,z) -> failwith z) in
-  let shb = log @@ (ServerHello sh) in
-  let tag, shb = split shb 4 in
-  let sh = match parseServerHello shb with | Correct s -> s | Error (y,z) -> failwith z in
- 
   let next = match nego with | {Handshake.n_extensions = n} -> n  in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in

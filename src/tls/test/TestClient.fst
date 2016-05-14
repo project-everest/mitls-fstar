@@ -225,15 +225,15 @@ let main host port =
 
   let ServerHelloDone = recvHSRecord tcp pv kex log in
 
-  let dhp = CommonDH.ECP ({CoreCrypto.curve = CoreCrypto.ECC_P256; CoreCrypto.point_compression = false; }) in
   let KEX_S_DHE gy = ske.ske_kex_s in
-  let gx = KeySchedule.ks_client_12_full_dh ks sr pv cs ems dhp gy in
+  let gx = KeySchedule.ks_client_12_full_dh ks sr pv cs ems gy in
   let cke = {cke_kex_c = kex_c_of_dh_key gx} in
 
   sendHSRecord tcp pv (ClientKeyExchange cke) log;
   let lb = HandshakeLog.getBytes log in
   if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
+
 
 //  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
@@ -254,6 +254,8 @@ let main host port =
 
   let _ = recvCCSRecord tcp pv in
   let Finished(sfin) = recvEncHSRecord tcp pv kex log rd in
+
+  IO.print_string ("Recd fin = sent fin? ");
 
   let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
   let get = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 payload) in
