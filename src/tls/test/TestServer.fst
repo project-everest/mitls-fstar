@@ -269,7 +269,7 @@ let rec aux sock =
   let Finished(cfin) = recvEncHSRecord tcp pv kex log rd in
 
   let lb = HandshakeLog.getBytes log in
-  let svd = KeySchedule.ks_server_12_verify_data ks lb in
+  let svd = KeySchedule.ks_server_12_server_verify_data ks lb in
   let sfin = {fin_vd = svd} in
   let (str,sfinb) = makeHSRecord pv (Finished sfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake sfinb in

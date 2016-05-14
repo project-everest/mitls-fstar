@@ -152,7 +152,8 @@ let recvHSRecord tcp pv kex log =
   let (hs_msg, to_log) = match !hsbuf with
     | [] -> 
       let (ct,rpv,pl) = recvRecord tcp pv in
-      let Correct (_,hsml) = Handshake.parseHandshakeMessages (Some pv) (Some kex) pl in
+      let hsml = match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
+      	         | Correct(_,hsml) -> hsml | Error (y,z) -> IO.print_string(z); failwith "parseHSM failed" in
       let (hs_msg, to_log)::r = hsml in
       hsbuf := r; (hs_msg, to_log)
     | h::t -> hsbuf := t; h in
@@ -245,17 +246,22 @@ let main host port =
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
   let lb = HandshakeLog.getBytes log in
-  let cfin = {fin_vd = KeySchedule.ks_client_12_verify_data ks lb} in
+  let cfin = {fin_vd = KeySchedule.ks_client_12_client_verify_data ks lb} in
   let (str,cfinb) = makeHSRecord pv (Finished cfin) log in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
 
   sendRecord tcp pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
   sendRecord tcp pv Content.Handshake efinb str;
 
+  let lb = HandshakeLog.getBytes log in
+  let svd = KeySchedule.ks_client_12_server_verify_data ks lb in
+
   let _ = recvCCSRecord tcp pv in
   let Finished(sfin) = recvEncHSRecord tcp pv kex log rd in
 
-  IO.print_string ("Recd fin = sent fin? ");
+  IO.print_string ("Recd fin = expected fin? ");
+  if (Platform.Bytes.equalBytes sfin.fin_vd svd) then IO.print_string "yes\n" else IO.print_string "no\n";
+
 
   let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
   let get = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 payload) in

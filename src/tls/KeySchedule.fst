@@ -670,7 +670,7 @@ val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
 
 // VD functions split because we think the log agreement predicate may be different
 
-val ks_client_12_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
+val ks_client_12_client_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_C st /\ is_C_12_has_MS (C.s st))
@@ -679,14 +679,14 @@ val ks_client_12_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_client_12_verify_data ks log =
+let ks_client_12_client_verify_data ks log =
   let KS #region st = ks in
   let C (C_12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
-  st := C C_Done;
   TLSPRF.verifyData (pv,cs) ms Client log
 
-val ks_server_12_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
+
+val ks_server_12_client_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_S st /\ is_S_12_has_MS (S.s st))
@@ -695,9 +695,41 @@ val ks_server_12_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_server_12_verify_data ks log =
+let ks_server_12_client_verify_data ks log =
   let KS #region st = ks in
   let S (S_12_has_MS csr alpha msId ms) = !st in
+  let (pv, cs, ems) = alpha in
+  TLSPRF.verifyData (pv,cs) ms Client log
+
+
+val ks_server_12_server_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
+  (requires fun h0 ->
+    let st = sel h0 (KS.state ks) in
+    is_S st /\ is_S_12_has_MS (S.s st))
+  (ensures fun h0 r h1 ->
+    let KS #rid st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_server_12_server_verify_data ks log =
+  let KS #region st = ks in
+  let S (S_12_has_MS csr alpha msId ms) = !st in
+  let (pv, cs, ems) = alpha in
+  st := S S_Done;
+  TLSPRF.verifyData (pv,cs) ms Server log
+
+val ks_client_12_server_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
+  (requires fun h0 ->
+    let st = sel h0 (KS.state ks) in
+    is_C st /\ is_C_12_has_MS (C.s st))
+  (ensures fun h0 r h1 ->
+    let KS #rid st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+
+let ks_client_12_server_verify_data ks log =
+  let KS #region st = ks in
+  let C (C_12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
   st := C C_Done;
   TLSPRF.verifyData (pv,cs) ms Server log

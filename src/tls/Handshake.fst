@@ -235,22 +235,22 @@ let processServerHello cfg ks ri ch sh =
 
 type clientState = 
   | C_Idle: option ri -> clientState
-  | C_HelloSent: option ri -> eph_c -> ch -> clientState
-  | C_HelloReceived: nego -> option ake  -> clientState
-  | C_OutCCS: session -> cVerifyData -> clientState
-  | C_FinishedSent: session -> cVerifyData -> clientState
-  | C_CCSReceived: session -> cVerifyData -> clientState
+  | C_HelloSent: option ri -> ch -> clientState
+  | C_HelloReceived: nego -> clientState
+  | C_OutCCS: nego -> clientState
+  | C_FinishedSent: nego -> cVerifyData -> clientState
+  | C_CCSReceived: nego -> cVerifyData -> clientState
   | C_Error: error -> clientState
 
 type serverState = 
      | S_Idle : option ri -> serverState
      | S_HelloSent : nego -> serverState
-     | S_HelloDone : nego -> option ake -> eph_s -> serverState
-     | S_CCSReceived : session -> serverState
-     | S_OutCCS: session -> serverState
-     | S_FinishedSent : session -> serverState
-     | S_ResumeFinishedSent : session -> serverState
-     | S_ZeroRTTReceived : session -> serverState
+     | S_HelloDone : nego -> serverState
+     | S_CCSReceived : nego -> serverState
+     | S_OutCCS: nego -> serverState
+     | S_FinishedSent : nego -> serverState
+     | S_ResumeFinishedSent : nego -> serverState
+     | S_ZeroRTTReceived : nego -> serverState
      | S_Error: error -> serverState
 
   
@@ -332,7 +332,7 @@ let client_send_client_hello (HS #r0 r res cfg id lgref hsref) =
     let chb = lg @@ (ClientHello ch) in
     hsref := {!hsref with 
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = chb};
-	    hs_state = C(C_HelloSent ri [] ch)}
+	    hs_state = C(C_HelloSent ri ch)}
   
 	    
 val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
@@ -340,7 +340,7 @@ val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (ensures (fun h0 i h1 -> True))
 let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
-  | C(C_HelloSent ri eph_c ch),[(ServerHello(sh),l)] ->
+  | C(C_HelloSent ri ch),[(ServerHello(sh),l)] ->
    let _ = (!hsref).hs_log @@ (ServerHello(sh)) in
    (match (processServerHello cfg (!hsref).hs_ks ri ch sh) with
     | Error z -> InError z
@@ -348,20 +348,17 @@ let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
       hsref := {!hsref with
 	       hs_nego = Some n;
 	       hs_ake = a;
-	       hs_state = C(C_HelloReceived n a)};
+	       hs_state = C(C_HelloReceived n)};
       InAck)
 
 
-(*
-val processServerHelloDone: cfg:config -> ks:KeySchedule.ks -> nego:nego -> 
-    			    list hs_msg -> list hs_msg -> ST Result bytes
-  (requires (fun h -> n.protocol_version <> TLS_1p3))
+val processServerHelloDone: cfg:config -> nego:nego -> ks:KeySchedule.ks -> log:HandshakeLog.log ->
+    			    list (hs_msg*bytes) -> list (hs_msg * bytes) -> ST (result (list (hs_msg * bytes)))
+  (requires (fun h -> nego.n_protocol_version <> TLS_1p3))
   (ensures (fun h0 i h1 -> True))
-let processServerHelloDone cfg ks n msgs opt_msgs =
+let processServerHelloDone cfg n ks log msgs opt_msgs =
   match msgs with
-  | [(Certificate(c),l1);
-     (ServerKeyExchange(ske),l2);
-     (ServerHelloDone,l3)] when 
+  | [(Certificate(c),_); (ServerKeyExchange(ske),_); (ServerHelloDone,_)] when 
      (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
      // Validate the server certificate chain before doing anything with other message
@@ -371,126 +368,72 @@ let processServerHelloDone cfg ks n msgs opt_msgs =
        let ske_sig = ske.ske_sig in
        let cs_sigalg = Some.v n.n_sigAlg in
        let csr = (n.n_client_random @| n.n_server_random) in
-       if Cert.verify_signature c.crt_chain n.n_protocol_version csr cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
+       if Cert.verify_signature c.crt_chain n.n_protocol_version Server (Some csr) 
+          cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
          (match ske.ske_kex_s with
          | KEX_S_DHE gy ->
-           let gx = KeySchedule.ks_client_12_full_dh ks n.n_server_random n.n_protocol_version n.cipher_suite n.n_extensions.ne_extended_ms 
-
-, pms = dh_shared_secret2 gy in
+           let gx = KeySchedule.ks_client_12_full_dh ks n.n_server_random n.n_protocol_version 
+	            n.n_cipher_suite n.n_extensions.ne_extended_ms gy in 
            let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-           let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
-           let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
-
-           let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
-           let ake = {ake_server_id = None;
-	          ake_client_id = None;
-		  ake_pms = pms;
-		  ake_session_hash = empty_bytes;
-		  ake_ms = ms} in
-           let s = {session_nego = n; session_ake = ake} in
-
-           (match opt_msgs with 
-            | [] ->  
-              let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in
-              let vd = TLSPRF.verifyData pvcs ms Client log in 
-              hsref := {!hsref with 
-                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
-                hs_log = log;
-                hs_state = C(C_OutCCS s vd)};
-              InAck
-            | [(CertificateRequest(cr),l)] ->
+            (match opt_msgs with 
+            | [] -> 
+	      let _ = log @@ Certificate(c) in
+	      let _ = log @@ ServerKeyExchange(ske) in
+	      let _ = log @@ ServerHelloDone in
+	      let b = log @@ ClientKeyExchange cke in
+	      Correct [(ClientKeyExchange cke,b)]
+            | [(CertificateRequest(cr),_)] ->
               let cc = {crt_chain = []} in // TODO
-              let ccb = certificateBytes n.n_protocol_version cc in
-              let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in
-              let vd = TLSPRF.verifyData pvcs ms Client log in 
-              hsref := {!hsref with 
-                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
-                hs_log = log;
-                hs_state = C(C_OutCCS s vd)};
-              InAck)
+	      let _ = log @@ Certificate(c) in
+	      let _ = log @@ ServerKeyExchange(ske) in
+	      let _ = log @@ CertificateRequest(cr) in
+	      let _ = log @@ ServerHelloDone in
+	      let b1 = log @@ ClientKeyExchange cke in	
+	      let b2 = log @@ Certificate(cc) in
+      	    Correct [ClientKeyExchange cke,b1; Certificate cc,b2])
+	  | _ -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "only support ECDHE/DHE SKE")
          )
        // Signature verification failed
-       else InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
+       else Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
      // Certificate validation failed
-     else InError (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certification validation failure") 
+     else Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certification validation failure") 
 
-*)
+
 val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
-  match (!hsref).hs_state, msgs with
-  | C(C_HelloReceived n None), 
-    [(Certificate(c),l1);
-     (ServerKeyExchange(ske),l2);
-     (ServerHelloDone,l3)] when 
+  match (!hsref).hs_state with
+  | C(C_HelloReceived n) when 
      (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
-     // Validate the server certificate chain before doing anything with other message
-     // TODO add check for n.n_extensions.ne_signature_algorithms
-     if Cert.validate_chain c.crt_chain n.n_sigAlg cfg.peer_name cfg.ca_file then
-       let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-       let ske_sig = ske.ske_sig in
-       let cs_sigalg = Some.v n.n_sigAlg in
-       let csr = (n.n_client_random @| n.n_server_random) in
-       if Cert.verify_signature c.crt_chain n.n_protocol_version Server (Some csr) cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
-         (match ske.ske_kex_s with
-         | KEX_S_DHE gy ->
-           let gx, pms = dh_shared_secret2 gy in
-           let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-           let ckeb = clientKeyExchangeBytes n.n_protocol_version cke in
-           let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
-
-           let ms = TLSPRF.prf pvcs pms (utf8 "master secret") csr 48 in
-           let ake = {ake_server_id = None;
-	          ake_client_id = None;
-		  ake_pms = pms;
-		  ake_session_hash = empty_bytes;
-		  ake_ms = ms} in
-           let s = {session_nego = n; session_ake = ake} in
-
-           (match opt_msgs with 
-            | [] ->  
-	      let log = (!hsref).hs_log in
-
-(* TODO              let log = (!hsref).hs_log @| l1 @| l2 @| l3 @| ckeb in *)
-              let vd = TLSPRF.verifyData pvcs ms Client (HandshakeLog.getBytes log) in 
-              hsref := {!hsref with 
-                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ckeb};
-                hs_log = log;
-                hs_state = C(C_OutCCS s vd)};
+     (match processServerHelloDone cfg n (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
+      | Correct [(ClientKeyExchange(cke),b1)] ->
+             hsref := {!hsref with 
+                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = b1};
+                hs_state = C(C_OutCCS n)};
               InAck
-            | [(CertificateRequest(cr),l)] ->
-              let cc = {crt_chain = []} in // TODO
-              let ccb = certificateBytes n.n_protocol_version cc in
-	      let log = (!hsref).hs_log in
-(*               let log = (!hsref).hs_log @| l1 @| l2 @| l @| l3 @| ccb @| ckeb in *)
-		 
-              let vd = TLSPRF.verifyData pvcs ms Client (HandshakeLog.getBytes log) in 
-              hsref := {!hsref with 
-                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = ccb @| ckeb};
-                hs_log = log;
-                hs_state = C(C_OutCCS s vd)};
-              InAck)
-         )
-       // Signature verification failed
-       else InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
-     // Certificate validation failed
-     else InError (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certification validation failure") 
-  
+      | Correct [(ClientKeyExchange(cke),b1);(Certificate(cc),b2)] ->
+             hsref := {!hsref with 
+                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = b1 @| b2};
+                hs_state = C(C_OutCCS n)};
+              InAck
+      | Error (x,y) -> InError(x,y))
+   | _ -> InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "unexpected state")
 
 val client_send_client_finished: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let client_send_client_finished (HS #r0 r res cfg id lgref hsref) =
-  match (!hsref).hs_state with
-  | C(C_OutCCS s vd) ->
-     let fin = {fin_vd = vd} in
-     let finb = finishedBytes fin in
+  let hs = !hsref in
+  match hs.hs_state with
+  | C(C_OutCCS n) ->
+     let lb = HandshakeLog.getBytes hs.hs_log in
+     let fin = {fin_vd = KeySchedule.ks_client_12_client_verify_data hs.hs_ks lb} in
+     let finb = (!hsref).hs_log @@ (Finished fin) in
      hsref := {!hsref with 
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = finb};
-	    hs_log = (!hsref).hs_log (*  @| finb *);
-	    hs_state = C(C_FinishedSent s vd)}
+	    hs_state = C(C_FinishedSent n fin.fin_vd)}
   
   
 val client_handle_server_ccs: hs -> list (hs_msg * bytes) -> ST incoming
@@ -498,10 +441,10 @@ val client_handle_server_ccs: hs -> list (hs_msg * bytes) -> ST incoming
   (ensures (fun h0 i h1 -> True))
 let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
-  | C(C_FinishedSent s vd),[(SessionTicket(stick),l)] ->
+  | C(C_FinishedSent n vd),[(SessionTicket(stick),l)] ->
+      let _ = (!hsref).hs_log @@ SessionTicket(stick) in
       hsref := {!hsref with
-	       hs_log = (!hsref).hs_log (* @| l *);
-	       hs_state = C(C_CCSReceived s vd)};
+	       hs_state = C(C_CCSReceived n vd)};
       InAck
 
 val client_handle_server_finished: hs -> list (hs_msg * bytes) -> ST incoming
@@ -509,16 +452,14 @@ val client_handle_server_finished: hs -> list (hs_msg * bytes) -> ST incoming
   (ensures (fun h0 i h1 -> True))
 let client_handle_server_finished (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
-  | C(C_CCSReceived s vd), [(Finished(f),l)] ->
-    let n = s.session_nego in
-    let ake = s.session_ake in
-    let pvcs = (n.n_protocol_version, n.n_cipher_suite) in
-    let svd = TLSPRF.verifyData pvcs ake.ake_ms Server (HandshakeLog.getBytes (!hsref).hs_log) in 
+  | C(C_CCSReceived n vd), [(Finished(f),l)] ->
+    let lb = HandshakeLog.getBytes (!hsref).hs_log in
+    let svd = KeySchedule.ks_client_12_server_verify_data (!hsref).hs_ks lb in
     if (equalBytes svd f.fin_vd) then 
-       (hsref := {!hsref with
-		 hs_log = (!hsref).hs_log (* @| l *);
+      (let _ = (!hsref).hs_log @@ (Finished(f)) in
+       hsref := {!hsref with
   		 hs_state = C(C_Idle (Some (vd,svd)))};
-        InAck)
+       InAck)
     else InError (AD_decode_error, "Finished MAC did not verify")
     
 
@@ -576,7 +517,7 @@ let server_send_server_hello_done (HS #r0 r res cfg id lgref hsref) =
 	    hsref := {!hsref with
 		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
 		 hs_log = (!hsref).hs_log (* @| nl *);
-		 hs_state = S(S_HelloDone n None None)}
+		 hs_state = S(S_HelloDone n)}
       | Error e -> 
 	  hsref := {!hsref with hs_state = S(S_Error e)})
     | Error e ->
@@ -589,7 +530,7 @@ assume val server_handle_client_ccs: hs -> list (hs_msg * bytes) -> list (hs_msg
 (*
 let server_handle_client_ccs (HS #r0 r res cfg id lgref hsref)  msgs opt_msgs = 
   match (!hsref).hs_state, msgs with
-  | S(S_HelloDone n i (Some (KEX_S_PRIV_DHE k))),[(ClientKeyExchange(cke),l)] when 
+  | S(S_HelloDone n),[(ClientKeyExchange(cke),l)] when 
      (n.n_protocol_version <> TLS_1p3 && 
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
       let pms = CommonDH.dh_initiator k 
@@ -671,7 +612,7 @@ let rec next_fragment hs =
        | C (C_Error e) -> OutError e
        | S (S_Error e) -> OutError e
        | C (C_Idle ri) -> (client_send_client_hello hs; next_fragment hs)
-       | C (C_OutCCS s cv) -> (client_send_client_finished hs; OutCCS)
+       | C (C_OutCCS n) -> (client_send_client_finished hs; OutCCS)
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) -> server_send_server_hello_done hs; next_fragment hs
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) -> server_send_server_finished_res hs; next_fragment hs
        | S (S_HelloSent n) when (is_Some pv && pv = Some TLS_1p3) -> server_send_server_finished_13 hs; next_fragment hs
@@ -707,11 +648,11 @@ let recv_fragment hs (rg:Range.range) (rb:rbytes rg) =
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
       (match (!hsref).hs_state,hsl with 
        | C (C_Idle ri), _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
-       | C (C_HelloSent ri eph ch), (ServerHello(sh),l)::hsl 
+       | C (C_HelloSent ri ch), (ServerHello(sh),l)::hsl 
 	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) -> 
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 	   client_handle_server_hello hs [(ServerHello(sh),l)]
-       | C (C_HelloReceived n a), (Certificate(c),l)::
+       | C (C_HelloReceived n), (Certificate(c),l)::
 			          (ServerKeyExchange(ske),l')::
 				  (ServerHelloDone,l'')::
 				  hsl 
@@ -723,7 +664,7 @@ let recv_fragment hs (rg:Range.range) (rb:rbytes rg) =
 			   (ServerKeyExchange(ske),l') ;
 			   (ServerHelloDone,l'')]
 			   []
-       | C (C_HelloReceived n a), (Certificate(c),l)::
+       | C (C_HelloReceived n), (Certificate(c),l)::
 			          (ServerKeyExchange(ske),l')::
 			          (CertificateRequest(cr),l'')::
 				  (ServerHelloDone,l''')::
@@ -738,13 +679,13 @@ let recv_fragment hs (rg:Range.range) (rb:rbytes rg) =
 			   [(CertificateRequest(cr),l'')]
 
        
-       | C (C_CCSReceived s cv), (Finished(f),l)::hsl 
+       | C (C_CCSReceived n cv), (Finished(f),l)::hsl 
        	 when (is_Some pv && pv <> Some TLS_1p3) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 			   client_handle_server_finished hs 
 			   [(Finished(f),l)]
 
-       | C (C_HelloReceived n a), (EncryptedExtensions(ee),l1)::
+       | C (C_HelloReceived n), (EncryptedExtensions(ee),l1)::
 			          (Certificate(c),l2)::
 			          (CertificateVerify(cv),l3)::
 				  (Finished(f),l4)::
@@ -757,7 +698,7 @@ let recv_fragment hs (rg:Range.range) (rb:rbytes rg) =
 			   (Certificate(c),l2) ;
 			   (CertificateVerify(cv),l3) ;
 			   (Finished(f),l4)]
-       | C (C_HelloReceived n a), (EncryptedExtensions(ee),l1)::
+       | C (C_HelloReceived n), (EncryptedExtensions(ee),l1)::
 			          (CertificateRequest(cr),ll)::
 			          (Certificate(c),l2)::
 			          (CertificateVerify(cv),l3)::
@@ -818,19 +759,19 @@ let recv_ccs hs =
        | None -> None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg) in
     (match ((!hsref).hs_state,(!hsref).hs_buffers.hs_incoming_parsed) with 
-    | C (C_FinishedSent s cv), 
+    | C (C_FinishedSent n cv), 
       (SessionTicket(st),l)::[] ->
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
        client_handle_server_ccs hs 
         [(SessionTicket(st),l)]
-    | S (S_HelloDone n i eph), 
+    | S (S_HelloDone n), 
       (ClientKeyExchange(cke),l)::[] 
       when (is_Some pv && pv <> Some TLS_1p3 && 
             (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
       server_handle_client_ccs hs
       [(ClientKeyExchange(cke),l)] []
-    | S (S_HelloDone n i eph), 
+    | S (S_HelloDone n), 
       (Certificate(c),l)::
       (ClientKeyExchange(cke),l')::[] 
       when (c.crt_chain = [] && is_Some pv && pv <> Some TLS_1p3 && 
@@ -838,7 +779,7 @@ let recv_ccs hs =
       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
       server_handle_client_ccs hs
       [(ClientKeyExchange(cke),l')] [(Certificate(c),l)]
-    | S (S_HelloDone n i eph), 
+    | S (S_HelloDone n), 
       (Certificate(c),l)::
       (ClientKeyExchange(cke),l')::
       (CertificateVerify(cv),l'')::[]

@@ -620,49 +620,18 @@ let parseServerKeyExchange kex payload : result ske =
     match kex with
     | Kex_DH -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     | Kex_RSA -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | Kex_DHE ->
-        if length payload >= 2 then
-            match vlsplit 2 payload with
-            | Error(z) -> Error(z)
-            | Correct(res) ->
-            let (p,payload) = res in
-            if length payload >= 2 then
-                match vlsplit 2 payload with
-                | Error(z) -> Error(z)
-                | Correct(res) ->
-                let (g,payload) = res in
-                if length payload >= 2 then
-                    match vlsplit 2 payload with
-                    | Error(z) -> Error(z)
-                    | Correct(res) ->
-                    let (y,sign) = res in
-                    Correct (
-                    {ske_kex_s = KEX_S_DHE (FFKey (
-                         {dh_params = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false};
-                          dh_public = y;
-                          dh_private = None}));
-                     ske_sig = sign})
-                else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | Kex_DHE -> 
+       (match CommonDH.parse_partial payload false with
+	| Correct (k,sign) -> 
+          Correct ({ske_kex_s = KEX_S_DHE k;
+                    ske_sig = sign})
+        | Error z -> Error z)
     | Kex_ECDHE -> 
-        if length payload >= 7 then
-            let (curve, point) = split payload 3 in
-            match ECGroup.parse_curve curve with
-            | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Unsupported curve")
-            | Some(ecp) ->
-                match vlsplit 1 point with
-                | Error(z) -> Error(z)
-                | Correct(rawpoint, payload) ->
-                    match ECGroup.parse_point ecp rawpoint with
-                    | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Invalid EC point received")
-                    | Some p -> Correct (
-			{ ske_kex_s = KEX_S_DHE (ECKey (
-			    {ec_priv = None;
-			    ec_params = ecp;
-			    ec_point = p;}));
-			  ske_sig =  payload})
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+       (match CommonDH.parse_partial payload true with
+	| Correct (k,sign) -> 
+          Correct ({ske_kex_s = KEX_S_DHE k;
+                    ske_sig = sign})
+        | Error z -> Error z)
 
 (* Certificate Verify *)
 val certificateVerifyBytes: cv -> Tot bytes

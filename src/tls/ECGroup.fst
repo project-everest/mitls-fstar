@@ -68,6 +68,35 @@ let curve_id p =
   | ECC_P384 -> (0z, 24z)
   | ECC_P521 -> (0z, 25z))
 
+
+val parse_point: params -> bytes -> Tot (option share)
+let parse_point p b =
+  let clen = ec_bytelen p.curve in 
+  if length b = (op_Multiply 2 clen) + 1 then
+    let (et, ecxy) = split b 1 in
+    match cbyte et with
+    | 4z ->
+      let (x,y) = split ecxy clen in
+      let e = {ecx = x; ecy = y;} in
+      if CoreCrypto.ec_is_on_curve p e then Some e else None
+    |_ -> None
+  else None
+
+val parse_partial: bytes -> Tot (TLSError.result ( key * bytes ))
+let parse_partial payload = 
+    if length payload >= 7 then
+      let (curve, point) = split payload 3 in
+      match parse_curve curve with
+      | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Unsupported curve")
+      | Some(ecp) ->
+        match vlsplit 1 point with
+        | Error(z) -> Error(z)
+        | Correct(rawpoint, rem) ->
+           match parse_point ecp rawpoint with
+           | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Invalid EC point received:"^(Platform.Bytes.print_bytes rawpoint)))
+           | Some p -> Correct ({ec_params = ecp; ec_point = p; ec_priv = None},rem)
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
 let op_Star = op_Multiply
 
 (* Assumes uncompressed point format for now (04||ecx||ecy) *) 
@@ -90,18 +119,7 @@ let serialize ecp ecdh_Y =
   let ve = vlbytes 1 e in
   ty @| id @| ve
 
-val parse_point: params -> bytes -> Tot (option share)
-let parse_point p b =
-  let clen = ec_bytelen p.curve in 
-  if length b = 2*clen + 1 then
-    let (et, ecxy) = split b 1 in
-    match cbyte et with
-    | 4z ->
-      let (x,y) = split ecxy clen in
-      let e = {ecx = x; ecy = y;} in
-      if CoreCrypto.ec_is_on_curve p e then Some e else None
-    |_ -> None
-  else None
+
 
 
 (* KB: older more general code below 
