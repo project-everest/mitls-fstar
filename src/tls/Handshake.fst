@@ -84,6 +84,7 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
     | TLS_1p2, Kex_ECDHE, _ -> Correct (SEC CoreCrypto.ECC_P256, None) 
     | _ -> Error(AD_decode_error, "no supported group or key share extension found")
     
+
 // FIXME: TLS1.3
 let prepareServerHello cfg ks ri ch =
   match negotiateVersion cfg ch.ch_protocol_version with
@@ -96,14 +97,12 @@ let prepareServerHello cfg ks ri ch =
     | Error(z) -> Error(z)
     | Correct(gn,gxo) ->
   let srand = KeySchedule.ks_server_random ks in
-  let (ksl,gy) = 
+  let ksl = 
     (match pv,gxo with
      | TLS_1p3,Some gxb -> 
        let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random cs gn gxb in
-       (Some (ServerKeyShare (gn,gyb)), None)
-    | _ ->
-       let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs true gn in 
-       (None,Some gy)) in
+       (Some (ServerKeyShare (gn,gyb)))
+    | _ -> None) in
   match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ksl false with
     | Error(z) -> Error(z)
     | Correct(sext,next) ->
@@ -128,11 +127,12 @@ let prepareServerHello cfg ks ri ch =
        n_aeAlg  = ae;
        n_cipher_suite = cs;
        n_compression = comp;
+       n_dh_group = Some gn;
        n_scsv = [];
        n_extensions = next;
        (* [getCachedSession] returned [None], so no session resumption *)
        n_resume = false} in
-    Correct (sh,nego,gy)
+    Correct (sh,nego)
 
 
 (* Ignoring resumption; it will need something like the following:
@@ -222,6 +222,7 @@ let processServerHello cfg ks ri ch sh =
            n_aeAlg = ae;
 	   n_sigAlg = sa;
            n_cipher_suite = sh.sh_cipher_suite;
+	   n_dh_group = None;
            n_compression = sh.sh_compression;
 	   n_scsv = [];
            n_extensions = next;
@@ -243,7 +244,7 @@ type clientState =
 
 type serverState = 
      | S_Idle : option ri -> serverState
-     | S_HelloSent : nego -> option CommonDH.key -> serverState
+     | S_HelloSent : nego -> serverState
      | S_HelloDone : nego -> option ake -> eph_s -> serverState
      | S_CCSReceived : session -> serverState
      | S_OutCCS: session -> serverState
@@ -533,12 +534,12 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
   | S(S_Idle ri),[(ClientHello(ch),l)] ->
     (match (prepareServerHello cfg (!hsref).hs_ks ri ch) with
      | Error z -> InError z
-     | Correct (sh,n,gy) ->
+     | Correct (sh,n) ->
        let shb = (!hsref).hs_log @@ (ServerHello sh) in
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;
-	       hs_state = S(S_HelloSent n gy)};
+	       hs_state = S(S_HelloSent n)};
        InAck)
     
 
@@ -547,7 +548,7 @@ val server_send_server_hello_done: hs -> ST unit
   (ensures (fun h0 i h1 -> True))
 let server_send_server_hello_done (HS #r0 r res cfg id lgref hsref) =
   match (!hsref).hs_state with
-  | S(S_HelloSent n a) 
+  | S(S_HelloSent n) 
     when (n.n_protocol_version <> TLS_1p3 &&
 	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
     (match Cert.lookup_server_chain cfg.cert_chain_file cfg.private_key_file n.n_protocol_version n.n_sigAlg n.n_extensions.ne_signature_algorithms with
@@ -670,9 +671,9 @@ let rec next_fragment hs =
        | S (S_Error e) -> OutError e
        | C (C_Idle ri) -> (client_send_client_hello hs; next_fragment hs)
        | C (C_OutCCS s cv) -> (client_send_client_finished hs; OutCCS)
-       | S (S_HelloSent n a) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) -> server_send_server_hello_done hs; next_fragment hs
-       | S (S_HelloSent n a) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) -> server_send_server_finished_res hs; next_fragment hs
-       | S (S_HelloSent n a) when (is_Some pv && pv = Some TLS_1p3) -> server_send_server_finished_13 hs; next_fragment hs
+       | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) -> server_send_server_hello_done hs; next_fragment hs
+       | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) -> server_send_server_finished_res hs; next_fragment hs
+       | S (S_HelloSent n) when (is_Some pv && pv = Some TLS_1p3) -> server_send_server_finished_13 hs; next_fragment hs
        | S (S_OutCCS s) -> server_send_server_finished hs; OutCCS)
 
 

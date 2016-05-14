@@ -195,7 +195,6 @@ let main host port =
   let log = HandshakeLog.create #rid in
 
   let ks, cr = KeySchedule.create #rid Client in
-  let _ = KeySchedule.ks_client_init_12 ks in  
   let ch = Handshake.prepareClientHello config ks None None in
 
   let pv = ch.ch_protocol_version in 

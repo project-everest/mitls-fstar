@@ -66,6 +66,7 @@ type nego = {
      n_aeAlg: TLSConstants.aeAlg;
      n_sigAlg: option TLSConstants.sigAlg;
      n_cipher_suite: cipherSuite;
+     n_dh_group: option namedGroup;
      n_compression: option compression;
      n_extensions: negotiatedExtensions;
      n_scsv: list scsv_suite;
@@ -92,7 +93,7 @@ type session = {
 val prepareClientHello: config -> KeySchedule.ks -> option ri -> option sessionID -> ST ch
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-val prepareServerHello: config -> KeySchedule.ks -> option ri -> ch -> ST (result (sh * nego * option CommonDH.key))
+val prepareServerHello: config -> KeySchedule.ks -> option ri -> ch -> ST (result (sh * nego))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 val processServerHello: c:config -> KeySchedule.ks -> option ri -> ch -> sh ->

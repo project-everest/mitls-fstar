@@ -220,18 +220,18 @@ let rec aux sock =
   let lb = HandshakeLog.getBytes log in
 
   // Server Hello
-  let (sh,nego,Some gy) = (match Handshake.prepareServerHello config ks None ch with
-      		    | Correct (sh,nego,gy) -> (sh,nego,gy)
+  let (sh,nego) = (match Handshake.prepareServerHello config ks None ch with
+      		    | Correct (sh,nego) -> (sh,nego)
 		    | Error (x,z) -> failwith z) in
   let shb = log @@ (ServerHello sh) in
   let tag, shb = split shb 4 in
   let sh = match parseServerHello shb with | Correct s -> s | Error (y,z) -> failwith z in
  
-  let nego = match nego with | {Handshake.n_extensions = n} -> n  in
+  let next = match nego with | {Handshake.n_extensions = n} -> n  in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
   let alg = (sa, Hash CoreCrypto.SHA256) in
-  let ems = nego.ne_extended_ms in
+  let ems = next.ne_extended_ms in
   sendHSRecord tcp pv (ServerHello sh) log;
 
   // Server Certificate
@@ -240,6 +240,8 @@ let rec aux sock =
   let cb = certificateBytes pv c in
   sendHSRecord tcp pv (Certificate c) log;
 
+  let gn = match nego with | {Handshake.n_dh_group = Some n} -> n  in
+  let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs ems gn in
   // Server Key Exchange
   let kex_s = KEX_S_DHE gy in
   let tbs = kex_s_to_bytes kex_s in
@@ -249,7 +251,7 @@ let rec aux sock =
 
   print_chain chain;
   IO.print_string ("Signature validation status = " ^
-    (if Cert.verify_signature chain pv Server (Some (cr @| sr)) sa nego.ne_signature_algorithms tbs sigv then "OK" else "FAIL") ^ "\n");
+    (if Cert.verify_signature chain pv Server (Some (cr @| sr)) sa next.ne_signature_algorithms tbs sigv then "OK" else "FAIL") ^ "\n");
 
   sendHSRecord tcp pv (ServerKeyExchange ske) log;
   sendHSRecord tcp pv (ServerHelloDone) log;

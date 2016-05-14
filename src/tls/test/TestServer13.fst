@@ -154,7 +154,7 @@ let rec aux sock =
   // ADL need to change the ks argument of prepareServerHello
   // Handshake calls KS.ks_server_13_1rtt_init to generate gy
   let (sh,nego) = (match Handshake.prepareServerHello config ks None ch with
-                    | Correct (sh,nego,_) -> (sh,nego)
+                    | Correct (sh,nego) -> (sh,nego)
                     | Error (x,z) -> failwith z) in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
