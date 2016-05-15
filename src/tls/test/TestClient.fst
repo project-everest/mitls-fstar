@@ -11,7 +11,7 @@ open TLSConstants
 open TLSInfo
 open StatefulLHAE
 open HandshakeLog
-
+open Handshake
 (* FlexRecord *)
 
 let config =
@@ -138,13 +138,10 @@ let recvRecord tcp pv =
          match really_read tcp len  with
          | Correct payload -> (ct,pv,payload)
 
-let makeHSRecord pv hs_msg log =
-  let mb = log @@ hs_msg in 
-  (string_of_handshakeMessage hs_msg,mb)
+let sendHSRecord tcp pv (m,b) = 
+  let str = string_of_handshakeMessage m in
+  sendRecord tcp pv Content.Handshake b str
 
-let sendHSRecord tcp pv hs_msg log = 
-  let (str,hs) = makeHSRecord pv hs_msg log in
-  sendRecord tcp pv Content.Handshake hs str
 
 let hsbuf = alloc ([] <: list (hs_msg * bytes))
 
@@ -158,10 +155,10 @@ let recvHSRecord tcp pv kex log =
       hsbuf := r; (hs_msg, to_log)
     | h::t -> hsbuf := t; h in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-  let logged = log @@ hs_msg in
+  let logged = handshakeMessageBytes (Some pv) hs_msg in
   IO.print_string ("Logged message = Parsed message? ");
   if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
-  hs_msg
+  (hs_msg,to_log)
 
 let recvCCSRecord tcp pv = 
   let (Content.Change_cipher_spec,_,ccs) = recvRecord tcp pv in
@@ -174,10 +171,10 @@ let recvEncHSRecord tcp pv kex log rd =
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
   let [(hs_msg,to_log)] = hsm in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-  let logged = log @@ hs_msg in
+  let logged = handshakeMessageBytes (Some pv) hs_msg in
   IO.print_string ("Logged message = Parsed message? ");
   if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
-  hs_msg
+  hs_msg,to_log
 
 let recvEncAppDataRecord tcp pv rd = 
   let (Content.Application_data,_,cipher) = recvRecord tcp pv in
@@ -196,46 +193,46 @@ let main host port =
   let log = HandshakeLog.create #rid in
 
   let ks, cr = KeySchedule.create #rid Client in
-  let ch = Handshake.prepareClientHello config ks None None in
-
+  let (ClientHello ch,chb) = Handshake.prepareClientHello config ks log None None in
   let pv = ch.ch_protocol_version in 
   let kex = TLSConstants.Kex_ECDHE in
-  sendHSRecord tcp pv (ClientHello ch) log;
 
-  let ServerHello(sh) = recvHSRecord tcp pv kex log in
-  let Correct n = TLSExtensions.negotiateClientExtensions sh.sh_protocol_version config ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite None false in
-  let pv = sh.sh_protocol_version in
-  let cs = sh.sh_cipher_suite in
-  let sr = sh.sh_server_random in
+  sendHSRecord tcp pv (ClientHello ch,chb);
+
+  let (ServerHello(sh),shb) = recvHSRecord tcp pv kex log in
+  
+  let Correct n = Handshake.processServerHello config ks log None ch (ServerHello(sh),shb) in
+
+  let pv = n.n_protocol_version in
+  let cs = n.n_cipher_suite in
   let CipherSuite kex sa ae = cs in
-  let ems = n.ne_extended_ms in
-  let sal = n.ne_signature_algorithms in
-  IO.print_string ("SIG ALG list = " ^ (print_bytes (sigHashAlgsBytes (match sal with | None -> [] | Some l -> l))) ^ "\n CLI = " ^ (print_bytes (sigHashAlgsBytes config.signatureAlgorithms)) ^ "\n");
+  let ems = n.n_extensions.ne_extended_ms in
+  let sal = n.n_extensions.ne_signature_algorithms in
 
-  let Certificate(sc) = recvHSRecord tcp pv kex log in
-  IO.print_string ("Certificate validation status = " ^
-    (if Cert.validate_chain sc.crt_chain sa (Some host) "../../data/CAFile.pem" then
-      "OK" else "FAIL")^"\n");
+  let (Certificate(sc),scb) = recvHSRecord tcp pv kex log in
+  let (ServerKeyExchange(ske),skeb) = recvHSRecord tcp pv kex log in
+  let (ServerHelloDone,shdb) = recvHSRecord tcp pv kex log in
 
-  let ServerKeyExchange(ske) = recvHSRecord tcp pv kex log in
   let tbs = kex_s_to_bytes ske.ske_kex_s in
   let sigv = ske.ske_sig in
+  let cr = ch.ch_client_random in
+  let sr = sh.sh_server_random in
   IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^ (print_bytes sigv) ^ "\n");
   IO.print_string ("Signature validation status = " ^
     (if Cert.verify_signature sc.crt_chain pv Server (Some (cr @| sr)) (Some.v sa) sal tbs sigv then "OK" else "FAIL") ^ "\n");
+  
+  let (ClientKeyExchange cke,ckeb) = 
+     match
+       processServerHelloDone config n ks log 
+      	[(Certificate sc,scb);(ServerKeyExchange ske, skeb);(ServerHelloDone,shdb)] 
+	[] with
+     | Correct [x] -> x 
+     | Error (y,z) -> failwith (z ^ "\n") in
 
-  let ServerHelloDone = recvHSRecord tcp pv kex log in
+  sendHSRecord tcp pv (ClientKeyExchange cke,ckeb);
 
-  let KEX_S_DHE gy = ske.ske_kex_s in
-  let gx = KeySchedule.ks_client_12_full_dh ks sr pv cs ems gy in
-  let cke = {cke_kex_c = kex_c_of_dh_key gx} in
-
-  sendHSRecord tcp pv (ClientKeyExchange cke) log;
   let lb = HandshakeLog.getBytes log in
-  if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
-
-
 //  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
   IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
@@ -245,19 +242,17 @@ let main host port =
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
-  let lb = HandshakeLog.getBytes log in
-  let cfin = {fin_vd = KeySchedule.ks_client_12_client_verify_data ks lb} in
-  let (str,cfinb) = makeHSRecord pv (Finished cfin) log in
+  let (Finished cfin, cfinb) = Handshake.prepareClientFinished ks log in
+  let str = string_of_handshakeMessage (Finished cfin) in 
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
 
   sendRecord tcp pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
   sendRecord tcp pv Content.Handshake efinb str;
 
-  let lb = HandshakeLog.getBytes log in
-  let svd = KeySchedule.ks_client_12_server_verify_data ks lb in
-
   let _ = recvCCSRecord tcp pv in
-  let Finished(sfin) = recvEncHSRecord tcp pv kex log rd in
+  let (Finished(sfin),sfinb) = recvEncHSRecord tcp pv kex log rd in
+  let Correct svd = Handshake.processServerFinished ks log (Finished sfin, sfinb) in
+
 
   IO.print_string ("Recd fin = expected fin? ");
   if (Platform.Bytes.equalBytes sfin.fin_vd svd) then IO.print_string "yes\n" else IO.print_string "no\n";

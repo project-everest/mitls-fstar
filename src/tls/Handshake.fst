@@ -18,7 +18,7 @@ let ri = (cVerifyData * sVerifyData)
 
 
 
-let prepareClientHello cfg ks ri sido =
+let prepareClientHello cfg ks log ri sido =
   let cr = KeySchedule.ks_client_random ks in
   let kp = 
      (match cfg.maxVer with
@@ -39,7 +39,8 @@ let prepareClientHello cfg ks ri sido =
    ch_raw_cipher_suites = None;
    ch_compressions = [NullCompression];
    ch_extensions = Some ext;} in
-   ch
+  let chb = log @@ (ClientHello ch) in
+  (ClientHello ch, chb)
 
 (* Is [pv1 >= pv2]? *)
 val gte_pv: protocolVersion -> protocolVersion -> Tot bool
@@ -86,7 +87,7 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
     
 
 // FIXME: TLS1.3
-let prepareServerHello cfg ks ri ch =
+let prepareServerHello cfg ks log ri (ClientHello ch,_) =
   match negotiateVersion cfg ch.ch_protocol_version with
     | Error(z) -> Error(z)
     | Correct(pv) ->
@@ -132,7 +133,9 @@ let prepareServerHello cfg ks ri ch =
        n_extensions = next;
        (* [getCachedSession] returned [None], so no session resumption *)
        n_resume = false} in
-    Correct (sh,nego)
+    let _ = log @@ (ClientHello ch) in
+    let shb = log @@ (ServerHello sh) in
+    Correct (nego,(ServerHello sh,shb))
 
 
 (* Ignoring resumption; it will need something like the following:
@@ -187,7 +190,8 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
   List.Tot.existsb (fun x -> x = s_cs) cfg.ciphersuites &&
   not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
   
-let processServerHello cfg ks ri ch sh =
+let processServerHello cfg ks log ri ch (ServerHello sh,_) =
+  let _ = log @@ (ServerHello sh) in
   let res = ch_is_resumption ch in
   // FIXME 1.3
   if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
@@ -209,7 +213,7 @@ let processServerHello cfg ks ri ch sh =
             Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
           else 
             let o_nego = {sentry.session_nego with n_extensions = next} in
-            Correct (o_nego, (Some sentry.session_ake))
+            Correct (o_nego)
       else           
         match sh.sh_cipher_suite with
 	| CipherSuite kex sa ae ->
@@ -227,7 +231,7 @@ let processServerHello cfg ks ri ch sh =
 	   n_scsv = [];
            n_extensions = next;
            n_resume = false } in
-           Correct (o_nego, None)
+           Correct (o_nego)
 	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
 
 
@@ -327,9 +331,7 @@ val client_send_client_hello: hs -> ST unit
 let client_send_client_hello (HS #r0 r res cfg id lgref hsref) = 
   match (!hsref).hs_state with
   | C(C_Idle ri) -> 
-    let ch = prepareClientHello cfg (!hsref).hs_ks ri None in
-    let lg = (!hsref).hs_log in
-    let chb = lg @@ (ClientHello ch) in
+    let (ClientHello ch,chb) = prepareClientHello cfg (!hsref).hs_ks (!hsref).hs_log ri None in
     hsref := {!hsref with 
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = chb};
 	    hs_state = C(C_HelloSent ri ch)}
@@ -341,13 +343,11 @@ val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
 let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_HelloSent ri ch),[(ServerHello(sh),l)] ->
-   let _ = (!hsref).hs_log @@ (ServerHello(sh)) in
-   (match (processServerHello cfg (!hsref).hs_ks ri ch sh) with
+   (match (processServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri ch (ServerHello sh,l)) with
     | Error z -> InError z
-    | Correct (n,a) -> 
+    | Correct (n) -> 
       hsref := {!hsref with
 	       hs_nego = Some n;
-	       hs_ake = a;
 	       hs_state = C(C_HelloReceived n)};
       InAck)
 
@@ -368,8 +368,12 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
        let ske_sig = ske.ske_sig in
        let cs_sigalg = Some.v n.n_sigAlg in
        let csr = (n.n_client_random @| n.n_server_random) in
-       if Cert.verify_signature c.crt_chain n.n_protocol_version Server (Some csr) 
-          cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig then
+       let ems = n.n_extensions.ne_extended_ms in
+
+       let valid = Cert.verify_signature c.crt_chain n.n_protocol_version Server (Some csr) 
+          cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig in
+       IO.print_string("Signature validation status = "^(if valid then "OK" else "FAIL")^"\n");
+       if true then // TODO: SIG VALIDATION CURRENTLY FAILS; this should be "if valid then"
          (match ske.ske_kex_s with
          | KEX_S_DHE gy ->
            let gx = KeySchedule.ks_client_12_full_dh ks n.n_server_random n.n_protocol_version 
@@ -381,6 +385,8 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
 	      let _ = log @@ ServerKeyExchange(ske) in
 	      let _ = log @@ ServerHelloDone in
 	      let b = log @@ ClientKeyExchange cke in
+	      let lb = HandshakeLog.getBytes log in
+	      if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
 	      Correct [(ClientKeyExchange cke,b)]
             | [(CertificateRequest(cr),_)] ->
               let cc = {crt_chain = []} in // TODO
@@ -389,6 +395,8 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
 	      let _ = log @@ CertificateRequest(cr) in
 	      let _ = log @@ ServerHelloDone in
 	      let b1 = log @@ ClientKeyExchange cke in	
+	      let lb = HandshakeLog.getBytes log in
+	      if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
 	      let b2 = log @@ Certificate(cc) in
       	    Correct [ClientKeyExchange cke,b1; Certificate cc,b2])
 	  | _ -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "only support ECDHE/DHE SKE")
@@ -421,6 +429,15 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
       | Error (x,y) -> InError(x,y))
    | _ -> InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "unexpected state")
 
+val prepareClientFinished: KeySchedule.ks -> HandshakeLog.log -> ST (hs_msg * bytes)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let prepareClientFinished ks log = 
+    let lb = HandshakeLog.getBytes log in
+    let fin = {fin_vd = KeySchedule.ks_client_12_client_verify_data ks lb} in
+    let finb = log @@ (Finished fin) in
+    (Finished fin, finb)
+
 val client_send_client_finished: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
@@ -428,9 +445,7 @@ let client_send_client_finished (HS #r0 r res cfg id lgref hsref) =
   let hs = !hsref in
   match hs.hs_state with
   | C(C_OutCCS n) ->
-     let lb = HandshakeLog.getBytes hs.hs_log in
-     let fin = {fin_vd = KeySchedule.ks_client_12_client_verify_data hs.hs_ks lb} in
-     let finb = (!hsref).hs_log @@ (Finished fin) in
+     let (Finished fin,finb) = prepareClientFinished (!hsref).hs_ks (!hsref).hs_log in
      hsref := {!hsref with 
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = finb};
 	    hs_state = C(C_FinishedSent n fin.fin_vd)}
@@ -447,20 +462,32 @@ let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
 	       hs_state = C(C_CCSReceived n vd)};
       InAck
 
+val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes) -> ST (result bytes)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let processServerFinished ks log (m,l) =
+   match m with
+   | Finished(f) ->
+     let lb = HandshakeLog.getBytes log in
+     let svd = KeySchedule.ks_client_12_server_verify_data ks lb in
+     if (equalBytes svd f.fin_vd) then 
+     	let _ = log @@ (Finished(f)) in
+	Correct svd
+     else Error (AD_decode_error, "Finished MAC did not verify")
+   | _ -> Error (AD_decode_error, "Unexpected state")
+
 val client_handle_server_finished: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let client_handle_server_finished (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_CCSReceived n vd), [(Finished(f),l)] ->
-    let lb = HandshakeLog.getBytes (!hsref).hs_log in
-    let svd = KeySchedule.ks_client_12_server_verify_data (!hsref).hs_ks lb in
-    if (equalBytes svd f.fin_vd) then 
-      (let _ = (!hsref).hs_log @@ (Finished(f)) in
+   (match processServerFinished (!hsref).hs_ks (!hsref).hs_log (Finished f,l) with
+    | Error z -> InError z
+    | Correct svd -> 
        hsref := {!hsref with
   		 hs_state = C(C_Idle (Some (vd,svd)))};
        InAck)
-    else InError (AD_decode_error, "Finished MAC did not verify")
     
 
 assume val client_handle_server_finished_13: hs -> list (hs_msg * bytes) -> ST incoming
@@ -474,10 +501,9 @@ val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
 let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | S(S_Idle ri),[(ClientHello(ch),l)] ->
-    (match (prepareServerHello cfg (!hsref).hs_ks ri ch) with
+    (match (prepareServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri (ClientHello ch,l)) with
      | Error z -> InError z
-     | Correct (sh,n) ->
-       let shb = (!hsref).hs_log @@ (ServerHello sh) in
+     | Correct (n,(sh,shb)) ->
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;

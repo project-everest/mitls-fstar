@@ -94,7 +94,7 @@ let recvHSRecord tcp pv kex log =
   match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
   | Correct (rem,[(hs_msg,to_log)]) -> 
      	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-	     (hs_msg,log @| to_log))
+	     (hs_msg,to_log,log @| to_log))
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
 
 let recvCCSRecord tcp pv = 
@@ -139,9 +139,10 @@ let rec aux sock =
   let sa = CoreCrypto.RSASIG in
   let cs = CipherSuite kex (Some sa) (AEAD AES_128_GCM h) in
   let ks, sr = KeySchedule.create #rid Server in
+  let lg = HandshakeLog.create #rid in
   let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in // (HandshakeLog.getBytes x) in
 
-  let ClientHello(ch), log = recvHSRecord tcp pv kex log in
+  let ClientHello(ch), chb, log = recvHSRecord tcp pv kex log in
 
   let (cr, sid, csl, ext) = (match ch with
     | {ch_protocol_version = TLS_1p3;
@@ -153,8 +154,8 @@ let rec aux sock =
 
   // ADL need to change the ks argument of prepareServerHello
   // Handshake calls KS.ks_server_13_1rtt_init to generate gy
-  let (sh,nego) = (match Handshake.prepareServerHello config ks None ch with
-                    | Correct (sh,nego) -> (sh,nego)
+  let (nego,(ServerHello sh,shb)) = (match Handshake.prepareServerHello config ks lg None (ClientHello ch,chb) with
+                    | Correct z -> z 
                     | Error (x,z) -> failwith z) in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 

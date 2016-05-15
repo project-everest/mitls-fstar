@@ -159,7 +159,7 @@ let recvHSRecord tcp pv kex log =
 	    let logged = log @@ hs_msg in
 	    IO.print_string ("Logged message = Parsed message? ");
 	    if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
-	    hs_msg
+	    hs_msg,to_log
   | Error (y,x) -> IO.print_string("HS msg parsing error: "^x); failwith "error"
 
 let recvCCSRecord tcp pv = 
@@ -208,7 +208,7 @@ let rec aux sock =
   let ks, sr = KeySchedule.create #rid Server in
 
   // Get client hello
-  let ClientHello(ch) = recvHSRecord tcp pv kex log in
+  let ClientHello(ch),chb = recvHSRecord tcp pv kex log in
 
   let cr, sid, csl, ext = match ch with
     | {ch_client_random = cr;
@@ -220,9 +220,10 @@ let rec aux sock =
   let lb = HandshakeLog.getBytes log in
 
   // Server Hello
-  let (sh,nego) = (match Handshake.prepareServerHello config ks None ch with
-      		    | Correct (sh,nego) -> (sh,nego)
-		    | Error (x,z) -> failwith z) in
+  let (nego,(ServerHello sh,shb)) = 
+      (match Handshake.prepareServerHello config ks log None (ClientHello ch,chb) with
+       | Correct x -> x
+       | Error (x,z) -> failwith z) in
   let next = match nego with | {Handshake.n_extensions = n} -> n  in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
@@ -253,7 +254,7 @@ let rec aux sock =
   sendHSRecord tcp pv (ServerHelloDone) log;
 
   // Get Client Key Exchange
-  let ClientKeyExchange(cke) = recvHSRecord tcp pv kex log in
+  let (ClientKeyExchange(cke),ckeb) = recvHSRecord tcp pv kex log in
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
   let gx = match cke with
     | {cke_kex_c = KEX_C_ECDHE u} -> u

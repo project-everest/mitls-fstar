@@ -90,14 +90,14 @@ type session = {
      session_ake: ake;
 }     
 
-val prepareClientHello: config -> KeySchedule.ks -> option ri -> option sessionID -> ST ch
+val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-val prepareServerHello: config -> KeySchedule.ks -> option ri -> ch -> ST (result (sh * nego))
+val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> (hs_msg * bytes) -> ST (result (nego * (hs_msg * bytes)))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-val processServerHello: c:config -> KeySchedule.ks -> option ri -> ch -> sh ->
-                           ST (result (nego * option ake))
+val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> ch -> (hs_msg * bytes) ->
+                        ST (result (nego))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 

@@ -123,16 +123,17 @@ let main host port =
   let log = empty_bytes in
   let rid = new_region root in
   let ks, cr = KeySchedule.create #rid Client in
+  let lg = HandshakeLog.create #rid in
 
   // This will call KS.ks_client_13_init_1rtt
-  let ch = Handshake.prepareClientHello config ks None None in
+  let (ClientHello ch,chb) = Handshake.prepareClientHello config ks lg None None in
   let pv = ch.ch_protocol_version in
   let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in
   let kex = TLSConstants.Kex_ECDHE in
   let log = sendHSRecord tcp pv (ClientHello ch) log in
 
   let ServerHello(sh),log = recvHSRecord tcp pv kex log in
-  let Correct (n,ake) = Handshake.processServerHello config ks None ch sh in
+  let Correct (n) = Handshake.processServerHello config ks lg None ch (ServerHello sh,log) in
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex sa ae = cs in
