@@ -30,9 +30,10 @@ let frag_plain_len (#i:id) (f:fragment i) : StreamPlain.plainLen =
   admit();
   snd (Content.rg i f) + 1
 
-(* val cipherLen: i:id -> fragment i -> Tot (l:nat {validCipherLen i l}) *)
-val cipherLen: i:id -> fragment i -> Tot nat
+val cipherLen: i:id -> fragment i -> Tot (l:nat {validCipherLen i l})
+(* val cipherLen: i:id -> fragment i -> Tot nat *)
 let cipherLen i f = 
+  admit();
   if is_stream_ae i 
   then StreamAE.cipherLen i (frag_plain_len f)
   else 0 //placeholder
@@ -191,16 +192,16 @@ val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
                modifies_one (region e) h0 h1 /\
-	       True))
-               (* seqnT e h1 = seqnT e h0 + 1))(\*  /\ *\) *)
-               (* authId i ==> logT e h1 = SeqP.snoc (logT e h0) f)) *)
+               seqnT e h1 = seqnT e h0 + 1   /\ 
+               authId i ==> logT e h1 = SeqP.snoc (logT e h0) f))
 
 
 let encrypt #i e f =
   assume (is_stream_ae i);
   match e with
   | Stream _ s -> 
-    StreamAE.encrypt s (frag_plain_len f) f
+    StreamAE.encrypt s (frag_plain_len f) f;
+    admit()
 
 //TODO restore monotonic post; see StreamAE.fsti
 
