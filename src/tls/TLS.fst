@@ -161,19 +161,15 @@ let no_seqn_overflow c =
   else (
     let e = Seq.index es j in 
     let h = ST.get() in 
-    //16-05-16 to be fixed after "Effects FStar.ST.STATE and Prims.GHOST cannot be composed"
-    // assume(incrementable (writer_epoch e) h); 
-    assume(false); 
+    assume(incrementable (writer_epoch e) h); 
     true )
-    
-    // JP: placeholder while I fix the int64 problem
+// JP: placeholder while I fix the int64 problem
     (* 
     let n = !(seqn w) + 1 in
     if n >= 72057594037927936 && n < 18446744073709551616
     then (lemma_repr_bytes_values n; true)
     else false *)
     
-
 
 (*** outgoing ***)
 
@@ -878,19 +874,15 @@ let rec writeAllClosing c i =
 // in TLS 1.3 we send e.g. ServerHello in plaintext then encrypted HS
 
 
-//JP: the code below has been commented out for the sake of extraction; it was
-//using the old style of invariants
-(*
-
 val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
     st_inv c h /\
-    i == epoch_id (epoch_w_h c h) /\
-    sel h c.writing <> Closed
+    sel h c.state <> Close /\
+    sel h c.state <> Half Reader //16-05-16  TBC
   ))
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 /\
-    (is_WriteError r \/ is_SentClose r \/ is_MustRead r \/ is_Written r)
+    (is_WriteError r \/ is_SentClose r \/ is_Written r)
   ))
 
 let rec writeAllFinishing c i =
@@ -912,41 +904,46 @@ let rec writeAllFinishing c i =
                           -> unexpected "[writeAllFinishing] writeOne returned wrong result"
     else                    unexpected "[writeAllFinishing] seqn overflow"
 
+
+
 // called both by read (with no appData) and write (with some appData fragment)
 // returns to read  { WriteError, SentClose, WriteDone, WriteHSComplete }
 // returns to write { WriteError, Written }
 // (TODO: write returns { WriteHSComplete, MustRead } in renegotiation)
-
 val writeAllTop: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
-    st_inv c h /\
+    st_inv c h //16-05-16  TBC
+(*
     (let o = epoch_w_h c h in
      let st = sel h c.state in
       st <> Close  /\
       (is_Some appdata ==> st = AD) /\
       i == epoch_id o /\
-      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))))
+      (is_Some o ==> is_seqn (sel h (seqn (writer_epoch (Some.v o))) + 1)))
+*)      
+      ))
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1
   ))
 let rec writeAllTop c i appdata =
     if no_seqn_overflow c then
+    (assume false; // TODO
     match writeOne c i appdata with
 //TODO | WriteAgain          -> writeAllTop c i appdata
-    | WriteAgainClosing   -> writeAllClosing c (admit(); epoch_id (epoch_w c)) // TODO
+    | WriteAgainClosing   -> writeAllClosing c (admit(); i) // TODO, using updated epoch_id (epoch_w c)
     | WriteAgainFinishing -> // next writer epoch!
-                            writeAllFinishing c (admit(); epoch_id (epoch_w c)) // TODO
+                            writeAllFinishing c (admit(); i) // TODO, using updated epoch_id (epoch_w c)
     | WriteError x y      -> WriteError x y
     | SentClose           -> SentClose
     | WriteDone           -> WriteDone
-    | MustRead            -> MustRead
+//  | MustRead            -> MustRead
     | Written             -> Written
-    | _                   -> unexpected "[writeAllTop] writeOne returned wrong result"
+    | _                   -> unexpected "[writeAllTop] writeOne returned wrong result")
     else                    unexpected "[writeAllTop] seqn overflow"
 
 //Question: NS, BP, JL: Is it possible for write to return WriteAgain or a partially written data?
 // no: we always write the whole fragment or we get a fatal error.
-let write c i rg data = writeAllTop c i (Some (| rg, data |))
+
 
 (*
 // prior spec-level abbreviations?
@@ -984,14 +981,15 @@ val write: c:connection -> i: id -> rg:frange i -> data:DataStream.fragment i rg
   ))
 *)
 
+let write c i rg data = writeAllTop c i (Some (| rg, data |))
+
 let full_shutdown c =
-    Alert.send_alert id !c.alert AD_close_notify
+    Alert.send c.alert AD_close_notify
 
 let half_shutdown c =
-    Alert.send_alert id !c.alert AD_close_notify;
+    Alert.send c.alert AD_close_notify;
     writeAllClosing c
 
-*)
 
 (*** incoming (with implicit writing) ***)
 
