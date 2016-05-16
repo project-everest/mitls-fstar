@@ -372,7 +372,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
 
        let valid = Cert.verify_signature c.crt_chain n.n_protocol_version Server (Some csr) 
           cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig in
-       IO.print_string("Signature validation status = "^(if valid then "OK" else "FAIL")^"\n");
+       let _ = IO.debug_print_string("Signature validation status = "^(if valid then "OK" else "FAIL")^"\n") in
        if true then // TODO: SIG VALIDATION CURRENTLY FAILS; this should be "if valid then"
          (match ske.ske_kex_s with
          | KEX_S_DHE gy ->
