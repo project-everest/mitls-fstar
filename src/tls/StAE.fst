@@ -10,6 +10,8 @@ open Content
 
 module HH = HyperHeap
 module MR = FStar.Monotonic.RRef
+module SeqP = SeqProperties
+module S = StreamAE
 
 #reset-options "--z3timeout 10 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
@@ -82,27 +84,32 @@ type ideal_log (i:id) = seq (fragment i)  // TODO: consider adding constraint on
 
 // TODO extend library? We need a full spec; NS: nope, no need for a full spec; it is Tot
 
+val un_snoc: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
+let un_snoc #a s =
+  let last = Seq.length s - 1 in
+  Seq.slice s 0 last, Seq.index s last
+
 val seq_mapT: ('a -> Tot 'b) -> s:seq 'a -> Tot (seq 'b)
     (decreases (Seq.length s))
 let rec seq_mapT f s = 
   if Seq.length s = 0 then Seq.createEmpty
-  else let prefix, last = Content.split s in
+  else let prefix, last = un_snoc s in
        SeqProperties.snoc (seq_mapT f prefix) (f last)
 
+val seq_map_snoc: f:('a -> Tot 'b) -> s:seq 'a -> a:'a -> Lemma
+  (seq_mapT f (SeqP.snoc s a) = SeqP.snoc (seq_mapT f s) (f a))
+#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+let seq_map_snoc f s a = 
+  let prefix, last = un_snoc (SeqP.snoc s a) in 
+  cut (Seq.equal prefix s)
+
+#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 val logT: #i:id -> #rw:rw -> s:state i rw{ authId i } -> HH.t -> GTot (ideal_log i)
 let logT #i #rw s h = 
   match s with
   | Stream _ s -> let written = m_sel h (StreamAE.ilog (StreamAE.State.log s)) in
                  seq_mapT #(StreamAE.entry i) #(fragment i) StreamAE.Entry.p written
-
-val seqnT: #i:id -> #rw:rw -> state i rw -> HH.t -> GTot seqn_t 
-let seqnT #i #rw (s:state i rw) h = 
-  match s with 
-  | Stream _ s -> m_sel h (StreamAE.ctr (StreamAE.State.counter s))
-  | StLHAE _ s -> sel h (StatefulLHAE.State.seqn s)
-
-let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:HH.t) = is_seqn (seqnT s h + 1)
 
 let stream_ae (#i:id{is_stream_ae i}) (#rw:rw) (s:state i rw) 
   : Tot (StreamAE.state i rw)
@@ -111,6 +118,28 @@ let stream_ae (#i:id{is_stream_ae i}) (#rw:rw) (s:state i rw)
 let st_lhae (#i:id{is_stateful_lhae i}) (#rw:rw) (s:state i rw) 
   : Tot (StatefulLHAE.state i rw)
   = let StLHAE _ s = s in s
+
+val lemma_logT_snoc_commutes: #i:id -> w:writer i{is_stream_ae i} 
+    -> h0:HH.t -> h1:HH.t -> e:S.entry i
+    -> Lemma (authId i 
+	     ==>  (let sw = stream_ae w in
+                   let log = S.ilog (StreamAE.State.log sw) in
+	               MR.m_sel h1 log = SeqP.snoc (MR.m_sel h0 log) e
+  	           ==> logT w h1 = SeqP.snoc (logT w h0) (StreamAE.Entry.p e)))
+let lemma_logT_snoc_commutes #i w h0 h1 e = 
+  if authId i 
+  then let sw = stream_ae w in
+       let log = S.ilog (StreamAE.State.log sw) in
+       seq_map_snoc #(S.entry i) #(fragment i) StreamAE.Entry.p (MR.m_sel h0 log) e
+  else ()       
+  
+val seqnT: #i:id -> #rw:rw -> state i rw -> HH.t -> GTot seqn_t 
+let seqnT #i #rw (s:state i rw) h = 
+  match s with 
+  | Stream _ s -> m_sel h (StreamAE.ctr (StreamAE.State.counter s))
+  | StLHAE _ s -> sel h (StatefulLHAE.State.seqn s)
+
+let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:HH.t) = is_seqn (seqnT s h + 1)
 
 let writable_seqn (#i:id) (#rw:rw) (s:state i rw) h = 
     match s with 
@@ -186,20 +215,23 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                //?? op_Equality #(log_ref w.region i) w.log r.log /\
                seqnT r h1 = 0))
 // encryption, recorded in the log; safe instances are idealized
-module SeqP = SeqProperties
 
 val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
                modifies_one (region e) h0 h1 /\
-               seqnT e h1 = seqnT e h0 + 1   /\ 
-               authId i ==> logT e h1 = SeqP.snoc (logT e h0) f))
-
-
+               seqnT e h1 = seqnT e h0 + 1   /\
+               (authId i ==> logT e h1 = SeqP.snoc (logT e h0) f)))
 let encrypt #i e f =
   assume (is_stream_ae i);
   match e with
-  | Stream _ s -> StreamAE.encrypt s (frag_plain_len f) f 
+  | Stream _ s -> 
+    let h0 = ST.get() in
+    let l = frag_plain_len f in
+    let c = StreamAE.encrypt s l f in
+    let h1 = ST.get() in
+    lemma_logT_snoc_commutes e h0 h1 (S.Entry l c f);
+    c
 
 //TODO restore monotonic post; see StreamAE.fsti
 
@@ -219,25 +251,30 @@ val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { 
 
 
 let gen parent i =  
+   assume false;
    // assert(is_stream_ae i);  
    Stream () (StreamAE.gen parent i) 
 
 let coerce parent i kiv = 
+    assume false;
    // assert(is_stream_ae i); 
    let kv, iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in 
    Stream () (StreamAE.coerce parent i kv iv) 
 
 let leak #i #role s =  
+    assume false;
    // assert(is_stream_ae i); 
    match s with 
    | Stream _ s -> let kv, iv = StreamAE.leak s in kv @| iv
 
 let genReader parent #i w =  
+    assume false;
   // assert(is_stream_ae i);  *)
   match w with 
   | Stream _ w -> Stream () (StreamAE.genReader parent w) 
 
 let decrypt #i d c =  
+    assume false;
    match d with 
    | Stream _ s -> 
        ( match StreamAE.decrypt s (StreamAE.lenCipher i c) c with 

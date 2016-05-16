@@ -28,7 +28,7 @@ type id = i:id { pv_of_id i = TLS_1p3 }
 type plainLen = l:int { 0 < l /\ l -1 < max_TLSPlaintext_fragment_length }
 type plainRepr = b:bytes { 0 < length b /\ length b -1 < max_TLSPlaintext_fragment_length }
 
-type plain (i:id) (len: plainLen) = f:fragment i { len == snd (Content.rg i f) + 1 }
+type plain (i:id) (len: plainLen) = f:fragment i { len = snd (Content.rg i f) + 1 }
 
 let pad payload ct (len:plainLen { length payload < len }): plainRepr = 
   payload @| ctBytes ct @| createBytes (len - length payload - 1) 0z
