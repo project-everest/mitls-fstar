@@ -24,8 +24,9 @@ assume val alg: i:id -> Tot CoreCrypto.aead_cipher // unclear what to re-use as 
 
 let ltag i : nat = CoreCrypto.aeadTagSize (alg i)
 let cipherLen i (l:plainLen) : nat = l + ltag i
-
 type cipher i (l:plainLen) = lbytes (cipherLen i l)
+
+let lenCipher i (c:bytes { ltag i <= length c }) : nat = length c - ltag i // will require proving before decryption
 
 type entry (i:id) = | Entry: l:plainLen -> c:cipher i l -> p:plain i l -> entry i
 

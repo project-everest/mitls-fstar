@@ -51,25 +51,25 @@ let aeKeySize (i:id) =
 type keybytes (i:id) = lbytes (aeKeySize i)
 
 // abstract instances
-
+  
 type state (i:id) (rw:rw) = 
-  | Stream: u:unit{is_stream_ae i}         -> StreamAE.state i rw -> state i rw
-  | StLHAE: u:unit{is_stateful_lhae i} -> StatefulLHAE.state i rw -> state i rw
+  | Stream: u:unit{is_stream_ae i}         -> StreamAE.state i rw -> state i rw 
+  | StLHAE: u:unit{is_stateful_lhae i} -> StatefulLHAE.state i rw -> state i rw 
+
+val region: #i:id -> #rw:rw -> state i rw -> Tot rgn
+let region (#i:id) (#rw:rw) (s:state i rw): Tot rgn = 
+  match s with 
+  | Stream u x -> StreamAE.State.region x
+  | StLHAE u x -> StatefulLHAE.region x
+
+val log_region: #i:id -> #rw:rw -> state i rw -> Tot rgn
+let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn = 
+  match s with 
+  | Stream _ s -> StreamAE.State.log_region s
+  | StLHAE _ s -> if rw = Writer then StatefulLHAE.region s else StatefulLHAE.peer_region s //FIXME
 
 type reader i = state i Reader
 type writer i = state i Writer
-
-val region:     #i:id -> #rw:rw -> state i rw -> Tot rgn
-let region (#i:id) (#rw:rw) (s:state i rw): Tot rgn
-  = match s with 
-    | Stream _ s -> StreamAE.State.region s
-    | StLHAE _ s -> StatefulLHAE.region s
-
-val log_region: #i:id -> #rw:rw -> state i rw -> Tot rgn
-let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn
-  = match s with 
-    | Stream _ s -> StreamAE.State.log_region s
-    | StLHAE _ s -> if rw = Writer then StatefulLHAE.region s else StatefulLHAE.peer_region s //FIXME
 
 
 // how to specify those two? Their properties are available at creation-time. 
@@ -161,21 +161,21 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 
 // Generate a fresh instance with index i in a fresh sub-region 
 
-assume val gen: parent:rid -> i:id -> ST (writer i)
+val gen: parent:rid -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
 
 // Coerce a writer with index i in a fresh subregion of parent
 // (coerced readers can then be obtained by calling genReader)
-assume val coerce: parent:rid -> i:id{~(authId i)} -> keybytes i -> ST (writer i)
+val coerce: parent:rid -> i:id{~(authId i)} -> keybytes i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 
-assume val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (keybytes i)
+val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (keybytes i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
-assume val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
+val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> HyperHeap.disjoint parent (region w))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
                modifies Set.empty h0 h1 /\
@@ -199,14 +199,12 @@ val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
 let encrypt #i e f =
   assume (is_stream_ae i);
   match e with
-  | Stream _ s -> 
-    let _ = StreamAE.encrypt s (frag_plain_len f) f in
-    admit()
+  | Stream _ s -> StreamAE.encrypt s (frag_plain_len f) f 
 
 //TODO restore monotonic post; see StreamAE.fsti
 
 // decryption, idealized as a lookup for safe instances
-assume val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { length c = cipherLen i f}))
+val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { length c = cipherLen i f}))
   (requires (fun h0 -> incrementable d h0))
   (ensures  (fun h0 res h1 ->
 	      match res with
@@ -220,24 +218,28 @@ assume val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragme
                            f = Seq.index written j)))) 
 
 
-(* let gen parent i =  *)
-(*   assert(is_stream_ae i);  *)
-(*   Stream(StreamAE.gen parent i) *)
+let gen parent i =  
+   // assert(is_stream_ae i);  
+   Stream () (StreamAE.gen parent i) 
 
-(* let coerce parent i kiv =  *)
-(*   assert(is_stream_ae i);  *)
-(*   let kv, iv = split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in *)
-(*   Stream(StreamAE.coerce parent i kv iv) *)
+let coerce parent i kiv = 
+   // assert(is_stream_ae i); 
+   let kv, iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in 
+   Stream () (StreamAE.coerce parent i kv iv) 
 
-(* let leak #i #role s =  *)
-(*   assert(is_stream_ae i);  *)
-(*   StreamAE.leak s  *)
+let leak #i #role s =  
+   // assert(is_stream_ae i); 
+   match s with 
+   | Stream _ s -> let kv, iv = StreamAE.leak s in kv @| iv
 
-(* let genReader parent w i =  *)
-(*   assert(is_stream_ae i);  *)
-(*   Stream(StreamAE.genReader parent i w) *)
+let genReader parent #i w =  
+  // assert(is_stream_ae i);  *)
+  match w with 
+  | Stream _ w -> Stream () (StreamAE.genReader parent w) 
 
-
-(* let decrypt #i d c =  *)
-(*   match d with *)
-(*   | Stream _ s -> StreamAE.decrypt s c *)
+let decrypt #i d c =  
+   match d with 
+   | Stream _ s -> 
+       ( match StreamAE.decrypt s (StreamAE.lenCipher i c) c with 
+         | Some x -> Some x 
+         | None   -> None)
