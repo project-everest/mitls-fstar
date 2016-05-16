@@ -130,7 +130,10 @@ test/TestClient.fst \
 test/TestServer.fst \
 test/TestServer13.fst \
 test/TestClient13.fst \
-ConnInvariant.fst #the preceding space is significant!
+ConnInvariant.fst \
+TLS.fst #the preceding space is significant!
+
+
 
 # BREAKING LAX CHECKING WITH StAE
 #TLS.fst \
@@ -169,8 +172,8 @@ MAC_SHA256 \
 MAC_SHA1 \
 StAE \
 Connection \
-ConnInvariant
-
+ConnInvariant \
+TLS
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi

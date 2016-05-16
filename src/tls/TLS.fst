@@ -877,7 +877,11 @@ let rec writeAllClosing c i =
 // in TLS 1.2 we send the Finished messages immediately after CCS
 // in TLS 1.3 we send e.g. ServerHello in plaintext then encrypted HS
 
+
+//JP: the code below has been commented out for the sake of extraction; it was
+//using the old style of invariants
 (*
+
 val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
     st_inv c h /\
@@ -888,7 +892,6 @@ val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
     st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 /\
     (is_WriteError r \/ is_SentClose r \/ is_MustRead r \/ is_Written r)
   ))
-*)
 
 let rec writeAllFinishing c i =
     if no_seqn_overflow c then
@@ -908,11 +911,6 @@ let rec writeAllFinishing c i =
     | WriteHSComplete     // excluded since we need an incoming CCS (not easily proved)
                           -> unexpected "[writeAllFinishing] writeOne returned wrong result"
     else                    unexpected "[writeAllFinishing] seqn overflow"
-
-//JP: the code below has been commented out for the sake of extraction; it was
-//using the old style of invariants
-(*
-
 
 // called both by read (with no appData) and write (with some appData fragment)
 // returns to read  { WriteError, SentClose, WriteDone, WriteHSComplete }
@@ -993,6 +991,8 @@ let half_shutdown c =
     Alert.send_alert id !c.alert AD_close_notify;
     writeAllClosing c
 
+*)
+
 (*** incoming (with implicit writing) ***)
 
 // FIXME: Put the following definitions close to range and delta, and use them
@@ -1048,6 +1048,10 @@ type ioresult_i (i:id) =
 //  | DontWrite
 //      // Nothing read yet, but we can't write anymore.
 
+
+
+
+(* 
 
 let live_i e r = // is the connection still live?
   match r with
@@ -1305,3 +1309,4 @@ let refuse c (q:query) =
     abortWithAlert c AD_unknown_ca reason;
     writeAllClosing c
 *)
+
