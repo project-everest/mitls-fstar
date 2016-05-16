@@ -23,6 +23,7 @@ let config =
 	 ciphersuites = csn;
          safe_resumption = true;
          signatureAlgorithms = [(CoreCrypto.RSASIG, Hash CoreCrypto.SHA512); (CoreCrypto.RSASIG, Hash CoreCrypto.SHA384);(CoreCrypto.RSASIG, Hash CoreCrypto.SHA256)];
+         ca_file = "../../data/CAFile.pem";
 	 }
 
 let id = {
