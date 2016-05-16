@@ -216,12 +216,33 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                seqnT r h1 = 0))
 // encryption, recorded in the log; safe instances are idealized
 
+////////////////////////////////////////////////////////////////////////////////
+//Encryption
+////////////////////////////////////////////////////////////////////////////////
+
+let log_prefix (#i:id) (#rw:rw) (w:state i rw{authId i}) 
+	       (fs:seq (fragment i)) (h:HH.t) 
+  : GTot Type0 = 
+    MonotoneSeq.grows fs (logT w h)
+
+(* assume val tlog: #i:id -> #rw:rw -> e:state i rw{authId i} -> h:HH.t -> Tot (s:seq (fragment i){s = logT e h}) *)
+
+let log_prefix_stable (#i:S.id) (#rw:rw) (w:state i rw{is_stream_ae i /\ authId i}) (h:HH.t) 
+  : Lemma (let fs = logT w h in
+	   MonotoneSeq.grows fs fs 
+	   /\ MR.stable_on_t (S.ilog (StreamAE.State.log (stream_ae w)))
+	   		    (log_prefix w (logT w h)))
+  = admit()
+
+
 val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
-               modifies_one (region e) h0 h1 /\
-               seqnT e h1 = seqnT e h0 + 1   /\
-               (authId i ==> logT e h1 = SeqP.snoc (logT e h0) f)))
+               modifies_one (region e) h0 h1 
+	       /\ seqnT e h1 = seqnT e h0 + 1   
+	       /\ (authId i 
+		  ==> logT e h1 = SeqP.snoc (logT e h0) f
+		      /\ witnessed (log_prefix e (logT e h1)))))
 let encrypt #i e f =
   assume (is_stream_ae i);
   match e with
@@ -231,10 +252,18 @@ let encrypt #i e f =
     let c = StreamAE.encrypt s l f in
     let h1 = ST.get() in
     lemma_logT_snoc_commutes e h0 h1 (S.Entry l c f);
+    if authId i 
+    then begin 
+         log_prefix_stable e h1;
+	 MR.witness (S.ilog (StreamAE.State.log (stream_ae e)))
+		    (log_prefix e (logT e h1))
+    end;
     c
 
-//TODO restore monotonic post; see StreamAE.fsti
 
+////////////////////////////////////////////////////////////////////////////////
+//Decryption
+////////////////////////////////////////////////////////////////////////////////
 // decryption, idealized as a lookup for safe instances
 val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { length c = cipherLen i f}))
   (requires (fun h0 -> incrementable d h0))
