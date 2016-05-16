@@ -137,26 +137,6 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
     let shb = log @@ (ServerHello sh) in
     Correct (nego,(ServerHello sh,shb))
 
-
-(* Ignoring resumption; it will need something like the following:
-  match getCachedSession cfg ch with
-  | Some sentry -> 
-    (match negotiateServerExtensions sentry.session_nego.n_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg sentry.session_nego.n_cipher_suite ri ks true with
-     | Error(z) -> Error(z)
-     | Correct(sext,next) ->
-       let sh = 
-            {sh_protocol_version = sentry.session_nego.n_protocol_version;
-             sh_sessionID = (sentry.session_nego.n_sessionID);
-             sh_server_random = srand;
-             sh_cipher_suite = sentry.session_nego.n_cipher_suite;
-             sh_compression = (sentry.session_nego.n_compression);
-             sh_extensions = sext} in
-       let o_log = i_log @| shB in
-       let o_nego = {sentry.session_nego with n_extensions = next} in
-       Correct (shB,o_nego,Some sentry.session_ake,o_log))
-  | None ->
-*)
-
 (* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
@@ -192,29 +172,16 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
   
 let processServerHello cfg ks log ri ch (ServerHello sh,_) =
   let _ = log @@ (ServerHello sh) in
-  let res = ch_is_resumption ch in
-  // FIXME 1.3
+  // Assuming no resumption; TODO: add it 
   if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
   else  if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
   else
-    match negotiateClientExtensions sh.sh_protocol_version cfg ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite ri res with
+  let resume = false in
+  match negotiateClientExtensions sh.sh_protocol_version cfg ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite ri resume with
     | Error z -> Error z
     | Correct next -> 
-      if res then
-        match getCachedSession cfg ch with
-        | None -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption disallowed")
-        | Some sentry ->
-          if sh.sh_protocol_version <> sentry.session_nego.n_protocol_version ||
-            sh.sh_cipher_suite <> sentry.session_nego.n_cipher_suite ||
-            sh.sh_compression <> sentry.session_nego.n_compression
-          then
-            Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
-          else 
-            let o_nego = {sentry.session_nego with n_extensions = next} in
-            Correct (o_nego)
-      else           
         match sh.sh_cipher_suite with
 	| CipherSuite kex sa ae ->
         let o_nego = 
@@ -231,7 +198,10 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
 	   n_scsv = [];
            n_extensions = next;
            n_resume = false } in
-           Correct (o_nego)
+	   (match sh.sh_protocol_version, kex, next.ne_keyShare with
+	    | TLS_1p3, Kex_DHE, Some (gn,gyb) 
+	    | TLS_1p3, Kex_ECDHE, Some (gn,gyb) -> Correct (o_nego)
+            | _ -> Correct (o_nego))
 	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
 
 
@@ -352,10 +322,6 @@ let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
       InAck)
 
 
-val processServerHelloDone: cfg:config -> nego:nego -> ks:KeySchedule.ks -> log:HandshakeLog.log ->
-    			    list (hs_msg*bytes) -> list (hs_msg * bytes) -> ST (result (list (hs_msg * bytes)))
-  (requires (fun h -> nego.n_protocol_version <> TLS_1p3))
-  (ensures (fun h0 i h1 -> True))
 let processServerHelloDone cfg n ks log msgs opt_msgs =
   match msgs with
   | [(Certificate(c),_); (ServerKeyExchange(ske),_); (ServerHelloDone,_)] when 
@@ -429,9 +395,6 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
       | Error (x,y) -> InError(x,y))
    | _ -> InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "unexpected state")
 
-val prepareClientFinished: KeySchedule.ks -> HandshakeLog.log -> ST (hs_msg * bytes)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
 let prepareClientFinished ks log = 
     let lb = HandshakeLog.getBytes log in
     let fin = {fin_vd = KeySchedule.ks_client_12_client_verify_data ks lb} in
@@ -462,9 +425,6 @@ let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
 	       hs_state = C(C_CCSReceived n vd)};
       InAck
 
-val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes) -> ST (result bytes)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
 let processServerFinished ks log (m,l) =
    match m with
    | Finished(f) ->

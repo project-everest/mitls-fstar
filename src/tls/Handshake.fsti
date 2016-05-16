@@ -101,6 +101,7 @@ val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
+
 //</expose for TestClient>
 
 // relocate?
@@ -185,6 +186,16 @@ val i: s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
 
+val processServerHelloDone: cfg:config -> nego:nego -> ks:KeySchedule.ks -> log:HandshakeLog.log ->
+    			    list (hs_msg*bytes) -> list (hs_msg * bytes) -> ST (result (list (hs_msg * bytes)))
+  (requires (fun h -> nego.n_protocol_version <> TLS_1p3))
+  (ensures (fun h0 i h1 -> True))
+val prepareClientFinished: KeySchedule.ks -> HandshakeLog.log -> ST (hs_msg * bytes)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes) -> ST (result bytes)
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
 
 // name-clashing
 // let reader s = i s Reader
