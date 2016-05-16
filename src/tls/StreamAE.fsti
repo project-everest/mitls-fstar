@@ -22,8 +22,8 @@ type id = i:id { pv_of_id i = TLS_1p3 }
 
 assume val alg: i:id -> Tot CoreCrypto.aead_cipher // unclear what to re-use as alg IDs
 
-let ltag i = CoreCrypto.aeadTagSize (alg i)
-let cipherLen i (l:plainLen) = l + ltag i
+let ltag i : nat = CoreCrypto.aeadTagSize (alg i)
+let cipherLen i (l:plainLen) : nat = l + ltag i
 
 type cipher i (l:plainLen) = lbytes (cipherLen i l)
 
@@ -155,13 +155,13 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
                  (authId i ==> m_contains (ilog e.log) h1) /\
                  m_contains (ctr e.counter) h1 /\
                  m_sel h1 (ctr e.counter) == m_sel h0 (ctr e.counter) + 1 /\
-	         authId i ==> 
+	         (authId i ==> 
 			    (let log = ilog e.log in
  			     let ent = Entry l c p in
 			     let n = Seq.length (m_sel h0 log) in
 			      m_contains log h1 /\
    			      witnessed (MonotoneSeq.at_least n ent log) /\
-                              m_sel h1 log = snoc (m_sel h0 log) ent)))
+                              m_sel h1 log = snoc (m_sel h0 log) ent))))
 
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
 
