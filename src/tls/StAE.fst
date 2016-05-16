@@ -232,8 +232,10 @@ let log_prefix_stable (#i:S.id) (#rw:rw) (w:state i rw{is_stream_ae i /\ authId 
 	   MonotoneSeq.grows fs fs 
 	   /\ MR.stable_on_t (S.ilog (StreamAE.State.log (stream_ae w)))
 	   		    (log_prefix w (logT w h)))
-  = admit()
-
+  = let fs = logT w h in
+    let log = S.ilog (StreamAE.State.log (stream_ae w)) in
+    MonotoneSeq.seq_extension_reflexive fs;
+    assume (MR.stable_on_t log (log_prefix w fs))
 
 val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
