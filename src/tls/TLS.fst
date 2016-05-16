@@ -434,7 +434,6 @@ val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment
     j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
-(*
     j == iT c.hs Writer h1 /\
     (if j < 0 then i == noId /\ h0 == h1 else
        let e = Seq.index es j in   
@@ -443,7 +442,6 @@ val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
        (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))) /\
-*)
     True ))
 
 let send_payload c i f =
@@ -457,33 +455,15 @@ let send_payload c i f =
       assert (epochs_inv c h0);
       recall c.state;
       recall c.hs.log;
-      // assert (Map.contains h0 (HS.region c.hs));
+      assert (Map.contains h0 (HS.region c.hs));
       cut (frame_witness (iT c.hs Writer h0));
       let encrypted = StAE.encrypt wr f in
       let h1 = ST.get() in
+      // assert(j = iT c.hs Writer h1);
+      // assert(modifies_one (region wr) h0 h1);
+      admit();//16-05-14 broken footprinting?
       frame_writer_epoch c h0 h1;
       encrypted
-
-
-(*        
-        // use StreamAE for TLS 1.3
-        if i.pv = TLS_1p3 then 
-        let (_,maxlen) = Content.rg i f in 
-        let r = StreamAE.encrypt i wr maxlen f in 
-        r 
-        else 
-        // use StatefulLHAE otherwise
-        let ct, rg = Content.ct_rg i f in
-        let ad = StatefulPlain.makeAD i ct in
-	cut (witness (iT c.hs Writer h0));
-        //assert(st_enc_inv wr h0);
-        // assert(is_seqn (sel h0 (seqn wr) + 1));
-        let r = StatefulLHAE.encrypt #i #ad #rg wr f in
-        let h1 = ST.get() in
-	frame_writer_epoch c h0 h1;
-        r
-*)        
-
 
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
@@ -499,7 +479,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     (j >= 0 ==> (
        let e = Seq.index es j in
        i == hsId e.h /\
-       is_seqn (sel h (seqn (writer_epoch e)) + 1)))))
+       writable_seqn (writer_epoch e) h))))
   (ensures (fun h0 _ h1 ->
     let es = sel h0 c.hs.log in
     let j = iT c.hs Writer h0  in
@@ -514,13 +494,16 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
        i == hsId e.h /\ (
        let wr:writer i = writer_epoch e in
        HyperHeap.modifies (Set.singleton (region wr)) h0 h1 /\
-       Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
-       sel h1 (seqn wr) = sel h0 (seqn wr) + 1 /\
-       (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr))) /\
-       ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
-         sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
-         fragment_entry e = f ))))
-    ))
+       // Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
+       seqnT wr h1 = seqnT wr h0 + 1 /\
+       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))))))
+       
+//       (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr))) /\
+//       ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
+//         sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
+//         fragment_entry e = f ))))
+//    ))
+
 
 // 15-09-09 Do we need an extra argument for every stateful index?
 let send c #i f =
