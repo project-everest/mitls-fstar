@@ -28,6 +28,8 @@ module HH = HyperHeap
 
 //16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
 
+let id = i:id{ is_stream_ae i }
+
 // temporary scaffolding
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (epochs_inv c h0))
@@ -139,102 +141,7 @@ let request c ops     = Handshake.request     (C.hs c) ops
 
 // the index of messages depends on the connection state,
 // and may be different for reading and for writing.
-// also provide access to older epochs?
 
-// not dealing with errors yet.
-
-(* OLD:
-// relying on a function from dispatch state to completion status
-// using polymorphism to retain the caller's epoch refinement
-//val epochT: #e:Type -> p: (e -> Type) -> xs: seq e { Seq_forall p xs } -> dispatch -> Tot (option (x:e { p x }))
-val epochT: xs: seq 'e -> dispatch -> Tot (option ('e * nat))
-let epochT epochs other =
-  let j : n:int { n < Seq.length epochs } =
-    if other = Finishing || other = Finished
-    then Seq.length epochs - 2
-    else Seq.length epochs - 1 in
-  if j < 0 then None else Some(Seq.index epochs j, j)
-
-(* TODO, ~ TLSInfo.siId; a bit awkward with null_Id *)
-let epoch_id (#region:rgn) (#nonce:random) (o: option (epoch region nonce)) =
-  match o with
-  | Some e -> hsId e.h
-  | None   -> noId
-
-val epchT: es:seq 'e -> logIndex es -> Tot (option 'e)
-let epchT es n =
-  if n >= 0 then Some (Seq.index es n) else None
-
-let currentEpochT c rw (h:t { st_inv c h }) =
-  let ie = iT c.hs rw h in
-  if ie >= 0 then Some (Seq.index (sel h c.hs.log) ie) else None
-
-val currentEpoch: c:connection -> rw:rw -> ST (option (epoch (HS.region c.hs) (HS.nonce c.hs)))
-  (requires (st_inv c))
-  (ensures (fun h0 o h1 ->
-    h0 == h1 /\
-    st_inv c h0 /\
-    st_inv c h1 /\
-    o = currentEpochT c rw h0 /\
-    // not needed anymore? (is_Some o /\ rw = Writer ==> st_enc_inv (writer_epoch (Some.v o)) h0) /\ 
-    True ))
-
-
-let currentEpoch c rw =
-  let es = !c.hs.log in
-  epchT es (i c.hs rw)
-
-let currentIdT (c:connection) rw h : id =
-  let j = Handshake.iT c.hs rw h in
-  let es =  sel h c.hs.log in
-  if j >= 0
-  then let Epoch h _ _ = Seq.index es j in hsId h
-  else noId
-
-val currentId: c:connection -> rw:rw -> ST id
-  (requires (st_inv c))
-  (ensures (fun h0 i h1 -> h0 == h1 /\ st_inv c h0 /\ i = currentIdT c rw h0))
-
-let currentId (c:connection) rw =
-  let j = Handshake.i c.hs rw in
-  let es = !c.hs.log in
-  if j >= 0
-  then let Epoch h _ _ = Seq.index es j in hsId h
-  else noId
-
-(** writing epochs **)
-
-val epoch_wo: #region:rgn -> #nonce:random -> o: option (epoch region nonce){ is_Some o } -> Tot (writer (epoch_id o))
-let epoch_wo #region #nonce o = writer_epoch (Some.v o)
-
-(** reading epochs **)
-
-val epoch_ro: #region:rgn -> #nonce:random -> o: option (epoch region nonce){ is_Some o } -> Tot (reader (peerId (epoch_id o)))
-let epoch_ro #region #nonce o =
-  match o with
-  | Some(Epoch _ r _) -> r
-*)
-
-(*
-let epoch_r_h c h =
-  let log = sel h (c_log c) in
-  let other = sel h (C.writing c) in
-  match epochT log other with
-  | None -> None
-  | Some (e, _) -> Some e
-
-val epoch_r: c:connection -> ST _
-  (requires (fun h -> True))
-  (ensures (fun h0 o h1 ->
-    h0 = h1 /\
-    o = epoch_r_h c h1 ))
-let epoch_r c =
-  let log = !c.hs.log in
-  let other = !c.writing in
-  match epochT log other with
-  | None -> None
-  | Some (e, _) -> Some e
-*)
 
 (*** outgoing ***)
 
@@ -356,27 +263,6 @@ let closable c reason =
 
 // -------------
 
-(*
-assume val epoch_w_h_inv: c: connection -> h0: HyperHeap.t -> h1: HyperHeap.t ->
-  Lemma (
-    Let(epoch_w_h c h0) (fun o ->
-      (st_inv c h0 /\
-      (is_None o ==> HyperHeap.modifies Set.empty h0 h1) /\
-      (is_Some o ==>
-       Let(epoch_wo o)(fun wr ->
-        HyperHeap.modifies (Set.singleton (writer_region wr)) h0 h1)))
-    ==> o = epoch_w_h c h1))
- 
-let epoch_w_h_inv c h0 h1 =
-  match epoch_w_h c h0 with
-  | None -> ()
-  | Some(Epoch _ r w) ->
-    ( cut(b2t(extends (HS.region (C.hs c)) (C.region c)));
-      cut(b2t(extends (writer_region w) (HS.region (C.hs c))));
-      admit (); // something needed in st_inv
-      ()
-)
-*)
 
 
 (*
@@ -418,7 +304,7 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 
 let epochsT c h = Handshake.logT c.hs h
 
-val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment i -> ST (encrypted f)
+val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
     let es = epochsT c h in
     let j = iT c.hs Writer h in
@@ -434,8 +320,22 @@ val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment
     j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
-    j == iT c.hs Writer h1 /\
-    (if j < 0 then i == noId /\ h0 == h1 else
+    op_Equality #int j (iT c.hs Writer h1) /\
+    (if j < 0 then i == noId /\ h0 == h1 else 
+       let e = Seq.index es j in   
+       i = hsId e.h /\ (
+       let wr: writer i = writer_epoch e in
+       modifies (Set.singleton (region wr)) h0 h1 /\
+       seqnT wr h1 = seqnT wr h0 + 1 /\
+       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f )
+       ))))
+    (*
+       
+       i = hsId e.h /\ (
+       let wr: writer i = writer_epoch e in
+       modifies (Set.singleton (region wr)) h0 h1 /\
+       seqnT wr h1 = seqnT wr h0 + 1 /\
+       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))) /\
        let e = Seq.index es j in   
        i = hsId e.h /\ (
        let wr: writer i = writer_epoch e in
@@ -443,6 +343,12 @@ val send_payload: c:connection -> i:id { is_stream_ae i } -> f: Content.fragment
        seqnT wr h1 = seqnT wr h0 + 1 /\
        (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))) /\
     True ))
+*)
+
+assume val frame_ae: 
+  h0:HH.t -> h1: HH.t -> c:connection -> Lemma(
+    // restrictions of h0 and h1 to the footprint of st_inv and iT in c are the same /\
+    st_inv c h0 ==> st_inv c h1 /\ op_Equality #int (iT c.hs Writer h0) (iT c.hs Writer h1))
 
 let send_payload c i f =
     let j = Handshake.i c.hs Writer in
@@ -456,13 +362,15 @@ let send_payload c i f =
       recall c.state;
       recall c.hs.log;
       assert (Map.contains h0 (HS.region c.hs));
+      assume (Map.contains h0 (region wr)); //16-05-16 failing; should it come from a static refinement on the epoch?
       cut (frame_witness (iT c.hs Writer h0));
       let encrypted = StAE.encrypt wr f in
       let h1 = ST.get() in
       // assert(j = iT c.hs Writer h1);
-      // assert(modifies_one (region wr) h0 h1);
-      admit();//16-05-14 broken footprinting?
-      frame_writer_epoch c h0 h1;
+      assume(modifies_one (region wr) h0 h1); //16-05-16 failing; why?
+      frame_ae h0 h1 c;//16-05-14 broken footprinting?
+      // frame_writer_epoch c h0 h1;
+      admit();
       encrypted
 
 // check vs record
@@ -517,12 +425,13 @@ let send c #i f =
   recall (c_log c); recall (c.state);
   let j = Handshake.i c.hs Writer in
 
+(*
   // seems necessary, not sure how to make it less verbose
   if j >= 0 then (
     let es = !c.hs.log in
     match Seq.index es j with
     | Epoch h _ wr -> recall (log wr); recall (seqn wr));
-
+*)
   //15-11-27 we need a trivial framing lemma and scaffolding to carry
   //15-11-27 st_inv c h1 across this call; what's a better style?
   let h0 = ST.get() in
@@ -565,6 +474,8 @@ let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is
   match o with
   | Some (| rg, f |) -> DataStream.Data f
 
+(* 16-05-16 handled in StAE? 
+
 // we should rely on nice libraries... for now inlined from Content.fst
 //val fragments_log: #i:id -> es: seq (entry i) -> Tot (seq Content.fragment i)
 //let fragments_log i es = Seq.map fragment_entry es
@@ -604,7 +515,7 @@ val project_snoc: #i:id -> s:seq (entry i) -> e:entry i -> Lemma
 let project_snoc #i s e =
   let hd, tl = Content.split (snoc s e) in
   cut (Seq.equal hd s)
-
+*)
 
 val no_seqn_overflow: c: connection -> ST bool
   (requires (fun h -> st_inv c h))
