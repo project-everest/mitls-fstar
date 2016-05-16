@@ -142,6 +142,38 @@ let request c ops     = Handshake.request     (C.hs c) ops
 // the index of messages depends on the connection state,
 // and may be different for reading and for writing.
 
+val no_seqn_overflow: c: connection -> ST bool
+  (requires (fun h -> st_inv c h))
+  (ensures (fun h0 b h1 ->
+    let es = sel h1 c.hs.log in
+    let j = iT c.hs Writer h1 in
+    j < Seq.length es /\
+    h0 == h1 /\
+    (b /\ j >= 0) ==> (
+    let e = Seq.index es j in
+    incrementable (writer_epoch e)) h0))
+
+let no_seqn_overflow c =
+  let es = !c.hs.log in
+  let j = Handshake.i c.hs Writer in
+  if j < 0 then
+    true
+  else (
+    let e = Seq.index es j in 
+    let h = ST.get() in 
+    //16-05-16 to be fixed after "Effects FStar.ST.STATE and Prims.GHOST cannot be composed"
+    // assume(incrementable (writer_epoch e) h); 
+    assume(false); 
+    true )
+    
+    // JP: placeholder while I fix the int64 problem
+    (* 
+    let n = !(seqn w) + 1 in
+    if n >= 72057594037927936 && n < 18446744073709551616
+    then (lemma_repr_bytes_values n; true)
+    else false *)
+    
+
 
 (*** outgoing ***)
 
@@ -320,7 +352,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
-    op_Equality #int j (iT c.hs Writer h1) /\
+    op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
     (if j < 0 then i == noId /\ h0 == h1 else 
        let e = Seq.index es j in   
        i = hsId e.h /\ (
@@ -328,22 +360,8 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
        (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f )
-       ))))
-    (*
-       
-       i = hsId e.h /\ (
-       let wr: writer i = writer_epoch e in
-       modifies (Set.singleton (region wr)) h0 h1 /\
-       seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))) /\
-       let e = Seq.index es j in   
-       i = hsId e.h /\ (
-       let wr: writer i = writer_epoch e in
-       modifies (Set.singleton (region wr)) h0 h1 /\
-       seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))) /\
+       )) /\
     True ))
-*)
 
 assume val frame_ae: 
   h0:HH.t -> h1: HH.t -> c:connection -> Lemma(
@@ -355,6 +373,7 @@ let send_payload c i f =
     if j = -1
     then Content.repr i f
     else
+      begin
       let es = !c.hs.log in
       let wr : writer i = writer_epoch (Seq.index es j) in
       let h0 = ST.get() in
@@ -372,7 +391,8 @@ let send_payload c i f =
       // frame_writer_epoch c h0 h1;
       admit();
       encrypted
-
+      end
+      
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
   (requires (fun h ->
@@ -413,7 +433,19 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
 //    ))
 
 
-// 15-09-09 Do we need an extra argument for every stateful index?
+let send c #i f =
+  let pv = outerPV c in
+  let ct, rg = Content.ct_rg i f in
+  let payload = send_payload c i f in
+  lemma_repr_bytes_values (length payload);
+  let record = Record.makePacket ct pv payload in
+  let r = Platform.Tcp.send (C.tcp c) record in
+  assume(false);//16-05-16 
+  match r with
+    | Error(x)  -> Error(AD_internal_error,x)
+    | Correct _ -> Correct()
+
+(* 16-05-16 was:
 let send c #i f =
   let pv = outerPV c in
   let ct, rg = Content.ct_rg i f in
@@ -440,8 +472,10 @@ let send c #i f =
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
+*)
 
-(* not needed as long as st_inv is trivial
+
+(* 
 assume val admit_st_inv: c: connection -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 = h1 /\ st_inv h1 c))
@@ -472,7 +506,8 @@ let appfragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_
 
 let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : DataStream.delta i =
   match o with
-  | Some (| rg, f |) -> DataStream.Data f
+  | Some (| rg, f |) -> let f: DataStream.pre_fragment i = f in //16-05-16 unclear why we now need this step
+                       DataStream.Data f
 
 (* 16-05-16 handled in StAE? 
 
@@ -516,30 +551,6 @@ let project_snoc #i s e =
   let hd, tl = Content.split (snoc s e) in
   cut (Seq.equal hd s)
 *)
-
-val no_seqn_overflow: c: connection -> ST bool
-  (requires (fun h -> st_inv c h))
-  (ensures (fun h0 b h1 ->
-    let es = sel h1 c.hs.log in
-    let j = iT c.hs Writer h1 in
-    j < Seq.length es /\
-    h0 == h1 /\
-    (b /\ j >= 0) ==> (
-    let e = Seq.index es j in
-    is_seqn (sel h1 (seqn (writer_epoch e)) + 1))))
-
-let no_seqn_overflow c =
-  let es = !c.hs.log in
-  let j = Handshake.i c.hs Writer in
-  if j < 0 then
-    true
-  else
-    // JP: placeholder while I fix the int64 problem
-    (* let Epoch h _ w = Seq.index es j in
-    let n = !(seqn w) + 1 in
-    if n >= 72057594037927936 && n < 18446744073709551616
-    then (lemma_repr_bytes_values n; true)
-    else *) false
 
 
 
@@ -588,7 +599,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
       let e = Seq.index es j in
       st = AD /\
       i = hsId e.h /\
-      is_seqn (sel h (seqn (writer_epoch e)) + 1)))))
+      incrementable (writer_epoch e) h))))
   (ensures (fun h0 r h1 ->
     let st = sel h0 c.state in
     let es = sel h0 c.hs.log in
@@ -596,7 +607,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
     j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
-    j = iT c.hs Writer h1 /\
+    j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above
     (j < 0 ==> i == noId /\ HyperHeap.modifies Set.empty h0 h1) /\
     (j >= 0 ==> (
        let e = Seq.index es j in
@@ -737,13 +748,14 @@ let writeOne c i appdata =
   let h0 = ST.get() in
   let st = !c.state in
 
+  (*
   // does this help?
   let j = Handshake.i c.hs Writer in
   if j >= 0 then (
     let es = !c.hs.log in
     (match Seq.index es j with
     | Epoch h _ wr -> recall (log wr); recall (seqn wr)));
-
+  *)
   admit();
 
         // alerts have highest priority; we send only close_notify and fatal alerts
@@ -832,33 +844,40 @@ let writeOne c i appdata =
         | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
 ))))
 
-//JP: the code below has been commented out for the sake of extraction; it was
-//using the old style of invariants
-(*
 
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
+    let st = sel h c.state in
+    let es = sel h c.hs.log in
+    let j = iT c.hs Writer h in
+    j < Seq.length es /\
     st_inv c h /\
-    i == epoch_id (epoch_w_h c h) /\
-    sel h c.writing <> Closed
-  ))
+    st <> Close /\
+    st <> Half Reader /\
+    (j < 0 ==> i == noId) /\
+    (j >= 0 ==> (
+      let e = Seq.index es j in
+      st = AD /\
+      i = hsId e.h /\
+      incrementable (writer_epoch e) h))))
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\  modifies (Set.singleton (C.region c)) h0 h1 /\
     (is_WriteError r \/ is_SentClose r)
   ))
 let rec writeAllClosing c i =
     if no_seqn_overflow c then
-    match writeOne c i None with
+    match assume false; writeOne c i None  //16-05-16 can't prove it, although same PRE syntactically?
+    with
     | WriteAgain          -> writeAllClosing c i
     | WriteError x y      -> WriteError x y
     | SentClose           -> SentClose
     | _                   -> unexpected "[writeAllClosing] writeOne returned wrong result"
     else                    unexpected "[writeAllClosing] seqn overflow"
 
-
 // in TLS 1.2 we send the Finished messages immediately after CCS
 // in TLS 1.3 we send e.g. ServerHello in plaintext then encrypted HS
 
+(*
 val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
     st_inv c h /\
@@ -869,15 +888,17 @@ val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
     st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 /\
     (is_WriteError r \/ is_SentClose r \/ is_MustRead r \/ is_Written r)
   ))
+*)
+
 let rec writeAllFinishing c i =
     if no_seqn_overflow c then
-    match writeOne c i None with
-    // we disable ADwriting temporarily
+    match assume false; writeOne c i None with
+    // we disable writing temporarily
     | WriteAgain          -> writeAllFinishing c i
-    | WriteDone           -> MustRead
+//   | WriteDone           -> MustRead
 
     // all other cases disable writing permanently
-    | WriteAgainClosing   -> admit(); writeAllClosing c i
+    | WriteAgainClosing   -> assume false; writeAllClosing c i
     | WriteError x y      -> WriteError x y
     | SentClose           -> SentClose // why would we do that?
 
@@ -887,6 +908,10 @@ let rec writeAllFinishing c i =
     | WriteHSComplete     // excluded since we need an incoming CCS (not easily proved)
                           -> unexpected "[writeAllFinishing] writeOne returned wrong result"
     else                    unexpected "[writeAllFinishing] seqn overflow"
+
+//JP: the code below has been commented out for the sake of extraction; it was
+//using the old style of invariants
+(*
 
 
 // called both by read (with no appData) and write (with some appData fragment)
