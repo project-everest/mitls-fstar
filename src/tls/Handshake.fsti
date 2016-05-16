@@ -32,12 +32,20 @@ type handshake =
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
 
+
 type outgoing = // by default the state changes but not the epochs
   | OutIdle
   | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
   | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
   | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
   | OutError: error -> outgoing
+(*
+Proposed:
+type outgoing = // by default the state changes but not the epochs
+  | OutIdle
+  | OutSome:  rg:frange_any -> rbytes rg -> change_cipher:bool -> complete: bool -> outgoing   // send a HS fragment
+  | OutError: error -> outgoing
+*)
 
 type incoming = // the fragment is accepted, and...
   | InAck
@@ -45,6 +53,13 @@ type incoming = // the fragment is accepted, and...
   | InCCS             // signal new epoch (only in TLS 1.3)
   | InComplete        // signal completion of current epoch
   | InError of error  // how underspecified should it be?
+(*
+Proposed:
+type incoming = // by default the state changes but not the epochs
+  | InAck: change_cipher:bool -> complete:bool -> incoming
+  | InQuery: Cert.chain -> bool -> incoming // Is this needed?
+  | Inrror: error -> incoming
+*)
 
 // extracts a transport key identifier from a handshake record
 val hsId: handshake -> Tot id
