@@ -200,7 +200,7 @@ let encrypt #i e f =
   assume (is_stream_ae i);
   match e with
   | Stream _ s -> 
-    StreamAE.encrypt s (frag_plain_len f) f;
+    let _ = StreamAE.encrypt s (frag_plain_len f) f in
     admit()
 
 //TODO restore monotonic post; see StreamAE.fsti
