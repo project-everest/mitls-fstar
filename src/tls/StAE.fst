@@ -39,7 +39,6 @@ let frag_plain_len (#i:id) (f:fragment i) : StreamPlain.plainLen =
   snd (Content.rg i f) + 1
 
 val cipherLen: i:id -> fragment i -> Tot (l:nat {validCipherLen i l})
-(* val cipherLen: i:id -> fragment i -> Tot nat *)
 let cipherLen i f = 
   if is_stream_ae i 
   then StreamAE.cipherLen i (frag_plain_len f)
@@ -220,6 +219,29 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 // encryption, recorded in the log; safe instances are idealized
 
 ////////////////////////////////////////////////////////////////////////////////
+//Framing
+////////////////////////////////////////////////////////////////////////////////
+
+val frame_logT : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> s:Set.set rid 
+	       -> Lemma 
+    (requires HH.modifies_just s h0 h1
+	      /\ Map.contains h0 (log_region st)
+	      /\ not (Set.mem (log_region st) s))
+    (ensures authId i ==> logT st h0 = logT st h1)
+let frame_logT #i #rw st h0 h1 s = ()
+
+val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> s:Set.set rid 
+	       -> Lemma 
+    (requires HH.modifies_just s h0 h1
+    	      /\ Map.contains h0 (region st)
+	      /\ not (Set.mem (region st) s))
+    (ensures seqnT st h0 = seqnT st h1) 
+let frame_seqnT #i #rw st h0 h1 s = 
+  if is_stream_ae i then ()
+  else admit() //seem to require authId i to prove it for 1.2; should not be the case; need to investigate why
+
+
+////////////////////////////////////////////////////////////////////////////////
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -232,7 +254,7 @@ val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
 		  ==> logT e h1 = SeqP.snoc (logT e h0) f
 		      /\ witnessed (log_prefix e (logT e h1)))))
 let encrypt #i e f =
-  assume (is_stream_ae i);
+  assume (is_stream_ae i); //FIXME: Not handling TLS-1.2 yet
   match e with
   | Stream _ s -> 
     let h0 = ST.get() in
@@ -249,7 +271,7 @@ let encrypt #i e f =
     c
 
 
-////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
 //Decryption
 ////////////////////////////////////////////////////////////////////////////////
 // decryption, idealized as a lookup for safe instances

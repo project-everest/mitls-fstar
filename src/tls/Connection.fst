@@ -50,7 +50,6 @@ type tlsState =
 
 type connection = | C:
   #region: rid{disjoint region tls_region} ->
-  // peer:    rid{disjoint region peer} -> //TODO: remove?
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
   alert:   Alert.state  { extends (Alert.region alert) region /\ HS.region hs <> Alert.region alert } (* review *) ->
   tcp:     networkStream ->
@@ -63,22 +62,6 @@ let c_cfg c    = c.hs.cfg
 let c_resume c = c.hs.resume
 let c_log c    = c.hs.log
 
-
-(*** top-level invariant ***) 
-
-// we'll rely on the invariant to show we picked the correct index
-
-inline let seq_forall (#a:Type) (p: a -> Type) (s:seq a) =
-  forall (j: nat { j < Seq.length s }).{:pattern (Seq.index s j)} p (Seq.index s j)
-
-let test_1 (p:nat -> Type) (s:seq nat { seq_forall p s }) = assert(p 12 ==> seq_forall p (snoc s 12))
-let test_2 (p:nat -> Type) (s:seq nat { seq_forall p s }) (j:nat { j < Seq.length s }) =  let x = Seq.index s j in assert(p x)
-//let test_3 (p:nat -> Type) (s:seq nat { seq_forall p s }) x = assert(SeqProperties.mem x s ==> p x)
-
-(* usage? how to prove this lemma?  val exercise_seq_forall: #a:Type
--> p: (a -> Type) -> s:seq a -> x: a -> Lemma (u:unit { (seq_forall p
-s /\ p x) ==> seq_forall p (snoc s x)}) *)
-
 val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h)))
 let reader_epoch #region #peer e = Epoch.r e
 
@@ -86,37 +69,13 @@ val writer_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.w
 let writer_epoch #region #peer e = Epoch.w e
 
 (*** 
-     MUCH OF THE REST OF THIS IS EXTREMELY SPECIFIC TO Stateful_LHAE.
-     REMOVING IT UNTIL WE RESTORE VERIFICATION FOR TLS-1.2.
      WE WILL FOCUS VERIFICATION ON StreamAE and TLS-1.3 FOR NOW.
+     Ignores StatefulLHAE, which needs to be upgraded
  ***)
-
-(* type epoch_inv (#region:rid) (#peer:rid) (h:HyperHeap.t) (e: epoch region peer) =  *)
-(*   st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h /\  *)
-(*   st_enc_inv #(hsId e.h) (writer_epoch e) h *)
-  
-type epochs_inv c h = 
-  Handshake.hs_footprint_inv c.hs h
-
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-type st_inv c h =
-  hs_inv (C.hs c) h /\
-  epochs_inv c h
+type st_inv c h = hs_inv (C.hs c) h 
 
-(* val test_st_inv: c:connection -> j:nat -> ST (epoch (HS.region c.hs) (HS.peer c.hs)) *)
-(*   (requires (fun h -> st_inv c h /\ j < Seq.length (sel h (HS.log c.hs)))) *)
-(*   (ensures (fun h0 e h1 -> *)
-(*     h0 == h1 /\ *)
-(*     st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h1 /\ *)
-(*     st_enc_inv #(hsId e.h) (writer_epoch e) h1)) *)
-
-(* let test_st_inv c j =  *)
-(*   let h = ST.get() in *)
-(*   let epochs = !c.hs.log in *)
-(*   Seq.index epochs j *)
-
-// we should have st_env_inv & st_dec_inv for all epochs, all the time.
-// + the property that at most the current epochs' logs are extended.
+//TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
   Handshake.epochs_inv es /\ es = HyperHeap.sel h c.hs.log
 })
@@ -159,162 +118,3 @@ let epoch_i c h i = Seq.index (epochs c h) i
 val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:t -> h1:t{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 h0 h1)
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 
-//Move this to the library
-val ghost_lemma2: #a:Type -> #b:Type -> #p:(a -> b -> GTot Type) -> #q:(a -> b -> unit -> GTot Type)
-		       -> $f:(x:a -> y:b -> Ghost unit (p x y) (q x y))
-		       -> Lemma (forall (x:a) (y:b). p x y ==> q x y ())
-let ghost_lemma2 (#a:Type) (#b:Type) (#p:(a -> b -> Type)) (#q:(a -> b -> unit -> Type)) f =
-  let f : x:a -> Lemma (forall (y:b). (p x y ==> q x y ())) =
-    fun x -> ghost_lemma (f x) in
-  qintro f
-
-type epoch_inv (#region:rgn) (#nonce:TLSInfo.random) (h:HyperHeap.t) (e: epoch region nonce) = True
-  (* USED TO BE *)
-  (* st_dec_inv #(peerId (hsId e.h)) (reader_epoch e) h /\ *)
-  (* st_enc_inv #(hsId e.h) (writer_epoch e) h *)
-
-val frame_writer_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit
-  (requires
-    epochs_inv c h0 /\
-    (let es = epochs c h0 in
-     let hs_r = HS.region c.hs in
-      Map.contains h0 hs_r
-      /\ k < Seq.length es
-      /\ j < Seq.length es
-      /\ (let e_j = Seq.index es j in
-	 let wr_j = writer_epoch e_j in
-           modifies (Set.singleton (StAE.region wr_j)) h0 h1)))
-         (* /\ st_enc_inv wr_j h1))) *)
-  (ensures (fun _ ->
-                epochs c h0 = epochs c h1
-              /\ k < Seq.length (epochs c h1)
-              /\ epoch_inv h1 (epoch_i c h1 k)
-))
-let frame_writer_epoch_k c h0 h1 j k = admit()
-  (* let es = epochs c h0 in *)
-  (* let hs_r = HS.region c.hs in *)
-  (* let e_j = Seq.index es j in *)
-  (* let e_k = Seq.index es k in *)
-  (* let wr_j = writer_epoch e_j in *)
-  (* if k<>j *)
-  (* then (equal_on_disjoint (regions e_j) (Set.singleton (StAE.region e_k.w)) (StAE.region wr_j) h0 h1 *)
-  (*       (\*; frame_st_enc_inv #(hsId e_k.h) (writer_epoch e_k) h0 h1; *\) *)
-  (*       (\* frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1 *\)) *)
-  (* else (let r_k = reader_epoch e_k in *)
-  (*       equal_on_disjoint (regions_of wr_j) (regions_of r_k) (region wr_j) h0 h1 *)
-  (*       (\* ; frame_st_dec_inv #(peerId (hsId e_k.h)) (reader_epoch e_k) h0 h1 *\)) *)
-
-type frame_witness (#a:Type) (x:a) = True
-val frame_writer_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires
-    epochs_inv c h0 /\
-    (exists (j:nat). {:pattern (frame_witness j)}
-      (let es = epochs c h0 in
-       let hs_r = HS.region c.hs in
-       Map.contains h0 hs_r
-       /\ j < Seq.length es
-       /\ (let e_j = Seq.index es j in
-	  let wr_j = writer_epoch e_j in
-           modifies (Set.singleton (StAE.region wr_j)) h0 h1
-          (* /\ st_enc_inv wr_j h1 *)))))
-  (ensures (epochs c h0 = epochs c h1
-            /\ epochs_inv c h1))
-#reset-options
-#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
-let frame_writer_epoch c h0 h1 = admit() //TODO: SZ added 04/08 to unblock the broken build
-  (* ghost_lemma2 (frame_writer_epoch_k c h0 h1) *)
-
-val frame_reader_epoch_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> j:nat -> k:nat -> Ghost unit
-  (requires
-    epochs_inv c h0 /\
-    (let es = epochs c h0 in
-     let hs_r = HS.region c.hs in
-      Map.contains h0 hs_r
-      /\ k < Seq.length es
-      /\ j < Seq.length es
-      /\ (let e_j = Seq.index es j in
-         let rd_j = reader_epoch e_j in
-           modifies (Set.singleton (StAE.region rd_j)) h0 h1
-         (* /\ st_dec_inv rd_j h1 *))))
-  (ensures (fun _ ->
-                epochs c h0 = epochs c h1
-              /\ k < Seq.length (epochs c h1)
-              /\ epoch_inv h1 (epoch_i c h1 k)))
-let frame_reader_epoch_k c h0 h1 j k = admit()
-  (* let es = epochs c h0 in *)
-  (* let hs_r = HS.region c.hs in *)
-  (* let e_j = Seq.index es j in *)
-  (* let e_k = Seq.index es k in *)
-  (* let rd_j = reader_epoch e_j in *)
-  (* if k<>j *)
-  (* then (equal_on_disjoint (regions e_j) (regions e_k) (region rd_j) h0 h1; *)
-  (*       frame_st_enc_inv (writer_epoch e_k) h0 h1; *)
-  (*       frame_st_dec_inv (reader_epoch e_k) h0 h1) *)
-  (* else (let w_k = writer_epoch e_k in *)
-  (*       equal_on_disjoint (regions_of rd_j) (regions_of w_k) (region rd_j) h0 h1; *)
-  (*       frame_st_enc_inv w_k h0 h1) *)
-
-val frame_reader_epoch: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires
-    epochs_inv c h0 /\
-    (exists (j:nat).{:pattern (frame_witness j)}
-     (let es = epochs c h0 in
-      let hs_r = HS.region c.hs in
-      Map.contains h0 hs_r
-      /\ j < Seq.length es
-      /\ (let e_j = Seq.index es j in
-         let rd_j = reader_epoch e_j in
-           modifies (Set.singleton (StAE.region rd_j)) h0 h1
-         (* /\ st_dec_inv rd_j h1 *)))))
-  (ensures (epochs c h0 = epochs c h1
-            /\ epochs_inv c h1))
-#reset-options //a bit of flakiness at the next query; reset the solver for more predictability
-#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-let frame_reader_epoch c h0 h1 = admit() //TODO: SZ added 04/08 to unblock the broken build
-  (* ghost_lemma2 (frame_reader_epoch_k c h0 h1) *)
-
-val frame_unrelated_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
-  (requires (epochs_inv c h0
-	    /\ k < Seq.length (epochs c h0)
-	    /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
-  (ensures (fun _ ->
-	      epochs c h0 = epochs c h1
-	    /\ k < Seq.length (epochs c h1)
-	    /\ epoch_inv h1 (epoch_i c h1 k)))
-let frame_unrelated_k c h0 h1 k =
-  frame_epochs c h0 h1
-  (* ; *)
-  (* let ek = Seq.index (epochs c h0) k in *)
-  (* frame_st_dec_inv (reader_epoch ek) h0 h1; *)
-  (* frame_st_enc_inv (writer_epoch ek) h0 h1 *)
-
-val frame_unrelated: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires (epochs_inv c h0
-	    /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
-  (ensures (epochs c h0 = epochs c h1
-	    /\ epochs_inv c h1))
-let frame_unrelated c h0 h1 = 
-  ghost_lemma (frame_unrelated_k c h0 h1);
-  frame_epochs c h0 h1
-
-val frame_modifies_internal_k: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> k:nat -> Ghost unit
-  (requires (epochs_inv c h0
-	    /\ k < Seq.length (epochs c h0)
-	    /\ modifies_internal h0 c.hs h1))
-  (ensures (fun _ ->
-	      epochs c h0 = epochs c h1
-	    /\ k < Seq.length (epochs c h1)
-	    /\ epoch_inv h1 (epoch_i c h1 k)))
-let frame_modifies_internal_k c h0 h1 k = admit()
-   (* frame_epochs c h0 h1 *)
-  (* let ek = Seq.index (epochs c h0) k in *)
-  (* frame_st_dec_inv (reader_epoch ek) h0 h1; *)
-  (* frame_st_enc_inv (writer_epoch ek) h0 h1 *)
-
-val frame_internal: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires (epochs_inv c h0
-	    /\ modifies_internal h0 c.hs h1))
-  (ensures (epochs c h0 = epochs c h1
-	    /\ epochs_inv c h1))
-let frame_internal c h0 h1 = admit()//TODO: NS added 04/07 to unblock the broken build
-  (* ghost_lemma (frame_modifies_internal_k c h0 h1) *)

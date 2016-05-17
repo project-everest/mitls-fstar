@@ -7,6 +7,7 @@ module Handshake
 
 open FStar.Heap
 open FStar.HyperHeap
+//FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
 open FStar.Set  
@@ -21,6 +22,7 @@ open Range
 open HandshakeMessages
 open HSCrypto
 open StAE
+module HH = HyperHeap
 
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
@@ -189,7 +191,30 @@ let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
 val iT0: s:hs -> rw:rw -> st:stateType s -> Tot (logIndex (fst st))
 let iT s rw h = iT0 s rw (stateT s h) 
 
+//A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
+let frame_iT_trivial  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) 
+  : Lemma (stateT s h0 = stateT s h1
+           ==> iT s rw h0 = iT s rw h1) 
+  = ()	                               
 
+//Here's a framing on stateT connecting it to the region discipline
+let frame_stateT  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) (mods:Set.set rid)
+  : Lemma (requires HH.modifies_just mods h0 h1
+		    /\ Map.contains h0 s.region
+		    /\ not (Set.mem s.region mods))
+          (ensures stateT s h0 = stateT s h1)
+  = ()	                               
+
+//This is probably the framing lemma that a client of this module will want to use
+let frame_iT  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) (mods:Set.set rid)
+  : Lemma (requires HH.modifies_just mods h0 h1
+		    /\ Map.contains h0 s.region
+		    /\ not (Set.mem s.region mods))
+          (ensures stateT s h0 = stateT s h1
+		   /\ iT s rw h0 = iT s rw h1)
+  = frame_stateT s rw h0 h1 mods;
+    frame_iT_trivial s rw h0 h1
+    
 // returns the epoch for reading or writing
 let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (sel h s.log) (iT s rw h)
 
@@ -270,13 +295,10 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
  
 assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS.r s) -> Type0
 
-let hs_footprint_inv (s:hs) (h:HyperHeap.t) = 
-  HyperHeap.contains_ref s.log h   /\ 
-  HyperHeap.contains_ref s.state h 
-
 let hs_inv (s:hs) (h: HyperHeap.t) = 
-  hs_invT s (sel h (HS.log s)) (sel h (HS.state s)) 
-  /\ hs_footprint_inv s h
+  hs_invT s (sel h (HS.log s)) (sel h (HS.state s))  //An abstract invariant of HS-internal state
+  /\ HyperHeap.contains_ref s.log h                   //Nothing deep about these next two, since they can always 
+  /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 
 // returns the protocol version negotiated so far

@@ -8,7 +8,6 @@ open TLSExtensions //the other opens are in the .fsti
 open CoreCrypto
 open HSCrypto
 open HandshakeLog
-module HH = FStar.HyperHeap
 
 let hsId h = noId // Placeholder
 
