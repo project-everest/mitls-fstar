@@ -299,7 +299,6 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
   (requires (fun h ->
     let es = epochsT c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
-    //now follows from iT: j < Seq.length es /\
     st_inv c h /\
     (if j < 0 then i == noId else
        let e = Seq.index es j in
@@ -308,7 +307,6 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
   (ensures (fun h0 payload h1 ->
     let es = epochsT c h0 in
     let j = iT c.hs Writer h0 in
-    //j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
     op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
@@ -329,12 +327,11 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
 
 let send_payload c i f =
     let j = Handshake.i c.hs Writer in
-    if j = -1
+    if j<0 
     then Content.repr i f
     else let es = !c.hs.log in
-	 let e = Seq.index es j in 
-	 let wr : writer i = writer_epoch e in
-	 StAE.encrypt wr f 
+	 let e = (Seq.index es j) in 
+	 StAE.encrypt (writer_epoch e) f 
 
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
@@ -355,26 +352,16 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     let es = sel h0 c.hs.log in
     let j = iT c.hs Writer h0  in
     let st = sel h0 c.state in
-    // j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
-    j == iT c.hs Writer h1 /\
-    (j < 0 ==> i == noId /\ HyperHeap.modifies Set.empty h0 h1) /\
-    (j >= 0 ==> (
+    j == iT c.hs Writer h1 /\ // should follow from the modifies clause
+    (if j < 0 then i == noId /\ h0 = h1 else
        let e = Seq.index es j in
-       i == hsId e.h /\ (
-       let wr:writer i = writer_epoch e in
-       HyperHeap.modifies (Set.singleton (region wr)) h0 h1 /\
-       // Heap.modifies (!{ as_ref (log wr), as_ref (seqn wr)}) (Map.sel h0 (region wr)) (Map.sel h1 (region wr)) /\
+       i = hsId e.h /\ (
+       let wr: writer i = writer_epoch e in
+       modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f ))))))
-       
-//       (Seq.length (sel h0 (log wr)) < Seq.length (sel h1 (log wr))) /\
-//       ( let e : entry i = Seq.index (sel h1 (log wr)) (Seq.length (sel h0 (log wr))) in
-//         sel h1 (log wr) = snoc (sel h0 (log wr)) e /\
-//         fragment_entry e = f ))))
-//    ))
-
+       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f )))))
 
 let send c #i f =
   let pv = outerPV c in
@@ -382,8 +369,18 @@ let send c #i f =
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
   let record = Record.makePacket ct pv payload in
+  let h0 = ST.get() in 
   let r  = Platform.Tcp.send (C.tcp c) record in
-  assume false;//16-05-16: FIXME!
+  let h1 = ST.get() in
+  (*
+    let j = Handshake.i c.hs Writer in
+    (if j>=0 then 
+         let es = !c.hs.log in
+	 let e = Seq.index es j in 
+         let wr = writer_epoch e in 
+         StAE.frame_logT wr h0 h1 Set.empty);
+  *)
+  assume (h0 = h1);
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
