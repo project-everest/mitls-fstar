@@ -15,31 +15,32 @@ module S = StreamAE
 
 #reset-options "--z3timeout 10 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
-// plaintexts are defined in Content.fragment i
+// Authenticated encryptions of streams of TLS fragments (from Content)
+// multiplexing StatefulLHAE and StreamAE with (some) length hiding
+// (for now, under-specifying ciphertexts lengths and values)
 
 
 // the first two should be concretely defined (for now in TLSInfo)
 let is_stream_ae i = pv_of_id i = TLS_1p3
 let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg /\ ~ (authId i)
-
-
-// ciphertexts. 
-// ignoring details for now (would be needed for CTXT and functional correctness of decryption).
-
 // NB as a temporary hack, we currently disable AuthId for TLS 1.2.
 // so that we can experiment with TLS and StreamAE
 
+// PLAINTEXTS are defined in Content.fragment i
 
-assume val validCipherLen: i:id -> l:nat -> Type0 // sufficient to ensure the cipher can be processed without length errors
+// CIPHERTEXTS. 
+
+// sufficient to ensure the cipher can be processed without length errors
+let validCipherLen (i:id) (l:nat) = 
+  if is_stream_ae i then StreamPlain.plainLength (l - StreamAE.ltag i)
+  else True //placeholder
 
 let frag_plain_len (#i:id) (f:fragment i) : StreamPlain.plainLen = 
-  admit();
   snd (Content.rg i f) + 1
 
 val cipherLen: i:id -> fragment i -> Tot (l:nat {validCipherLen i l})
 (* val cipherLen: i:id -> fragment i -> Tot nat *)
 let cipherLen i f = 
-  admit();
   if is_stream_ae i 
   then StreamAE.cipherLen i (frag_plain_len f)
   else 0 //placeholder
@@ -47,7 +48,8 @@ let cipherLen i f =
 type encrypted (#i:id) (f:fragment i) = lbytes (cipherLen i f)
 type decrypted (i:id) = b:bytes { validCipherLen i (length b) }
 
-// concrete key materials, for leaking & coercing.
+
+// CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
 let aeKeySize (i:id) = 
   if pv_of_id i = TLS_1p3 
@@ -55,6 +57,7 @@ let aeKeySize (i:id) =
   else 0 //FIXME!
 
 type keybytes (i:id) = lbytes (aeKeySize i)
+
 
 // abstract instances
   
