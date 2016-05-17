@@ -1,8 +1,7 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
+﻿module PRF
 
-#light "off"
+(* 16-05-17 removed precompilation flags, commenting out ideal code still to be upgraded to F* *)
 
-module PRF
 open FStar.Seq
 open Platform.Bytes
 open TLSConstants
@@ -13,9 +12,9 @@ type repr = bytes
 type ms = { bytes: repr }
 type masterSecret = ms
 
-#if ideal
+(* ideal 
 let sample (i:msId) = {bytes = Nonce.random 48}
-#endif
+*)
 
 let coerce (i:msId) b = {bytes = b}
 let leak (i:msId) ms = ms.bytes
@@ -104,7 +103,7 @@ type state =
 
 
 
-#if ideal
+(* ideal
 
 type event = Mismatch of id
 
@@ -125,14 +124,14 @@ let rec update csr s (entries: list<kdentry>) =
 
 //CF to circumvent an F7 limitation?
 let commit csr pv a ext = Committed(pv,a,ext)
-#endif
+*)
 
 //CF We could statically enforce the state machine.
 
 
 
 let keyCommit (csr:csRands) (pv:protocolVersion) (a:aeAlg) (ext:negotiatedExtensions) : unit = 
-  #if ideal
+(* ideal
   match read csr !kdlog with 
   | Init -> 
       Pi.assume(keyCommit(csr,pv,a,ext));
@@ -140,9 +139,8 @@ let keyCommit (csr:csRands) (pv:protocolVersion) (a:aeAlg) (ext:negotiatedExtens
       kdlog := update csr state !kdlog
   | _    -> 
       Platform.Error.unexpected "prevented by freshness of the server random"
-  #else
+*)
   ()
-  #endif
 
 let wrap (rdId:id) (wrId:id) r w = (r,w)
 let wrap2 (a:id) (b:id) rw csr = Derived a b rw
@@ -166,7 +164,7 @@ let deriveKeys rdId wrId (ms:masterSecret) role  =
   
 //CF We could merge the two keyGen.
 let keyGenClient (rdId:id) (wrId:id) ms =   
-    #if ideal
+(* ideal
     let pv = pv_of_id rdId in
     let aeAlg = rdId.aeAlg in
     let csr = rdId.csrConn in
@@ -192,12 +190,11 @@ let keyGenClient (rdId:id) (wrId:id) ms =
         deriveKeys rdId wrId ms Client
     | Derived(_,_,_) ->
         Platform.Error.unexpected "Excluded by usage restriction (affinity)"
-    #else
+*)
     deriveKeys rdId wrId ms Client
-    #endif
 
 let keyGenServer (rdId:id) (wrId:id) ms =
-    #if ideal
+(* ideal
     let csr = rdId.csrConn in
     match read csr !kdlog with  
     | Init -> 
@@ -224,9 +221,8 @@ let keyGenServer (rdId:id) (wrId:id) ms =
     | Derived(wrId',rdId',derived)  ->
         // we logically deduce not Auth for both indexes
         deriveKeys rdId wrId ms Server
-    #else
+*)
     deriveKeys rdId wrId ms Server
-    #endif
 
 
 (*** VerifyData ***) 
@@ -242,7 +238,7 @@ let keyGenServer (rdId:id) (wrId:id) ms =
 type text = bytes // the hashed digest, aka data below
 type tag = bytes  // the verifyData payload
 
-#if ideal
+(* ideal
 
 type eventVD = MakeVerifyData of msId * Role * text * tag
 
@@ -260,14 +256,14 @@ let rec assoc (r:Role) (vd:tag) (es:list<entry>) =
   | [] -> None
   | (i',role,text,tag)::es when (r=role && vd=tag) -> Some(i',text)
   | (i',role,text,_)::es -> assoc r vd es
-#endif
+*)
 
 private let verifyData si ms role data = 
   TLSPRF.verifyData (vdAlg si) ms.bytes role data
 
 let makeVerifyData si (ms:masterSecret) role data =
   let tag = verifyData si ms role data in
-  #if ideal
+(* ideal
   //MK rename predicate and function
   //if safeVD si then
   let i = mk_msid si in
@@ -278,7 +274,7 @@ let makeVerifyData si (ms:masterSecret) role data =
   else
     Pi.assume(MakeVerifyData(i, role, data, tag));
     log := (i,role,data,tag)::!log;
-  #endif
+*)
     tag
 
 let checkVerifyData si ms role data (tag:bytes) =

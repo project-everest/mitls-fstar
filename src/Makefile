@@ -47,30 +47,3 @@ TLSLAX= $(addprefix tls-lax/,TLSError.fst Nonce.p.fst TLSConstants.fst \
 
 mitls-lax: $(LIBFILES) $(TLSLAX)
 	$(FSTAR) --lax --debug yes $(ADMITTED) $^
-
-mitls-redux:
-	make -C tls redux
-
-ifeq ($(OS),Windows_NT)
-    CPP=cpp #-ffreestanding
-else
-    UNAME_S := $(shell uname -s)
-    ifeq ($(UNAME_S),Linux)
-        CPP=cpp -ffreestanding
-    else
-        CPP=cpp-5 # GCC cpp rather than LLVM
-    endif
-endif
-
-%.p.fsi: %.fsi
-	$(CPP)  -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fsti: %.fsti
-	$(CPP) -P -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fst: %.fst
-	$(CPP) -P -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fs: %.fs
-	$(CPP)  -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
