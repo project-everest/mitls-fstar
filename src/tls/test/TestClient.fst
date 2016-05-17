@@ -202,7 +202,7 @@ let main host port =
 
   let (ServerHello(sh),shb) = recvHSRecord tcp pv kex log in
   
-  let Correct n = Handshake.processServerHello config ks log None ch (ServerHello(sh),shb) in
+  let Correct (n,None) = Handshake.processServerHello config ks log None ch (ServerHello(sh),shb) in
 
   let pv = n.n_protocol_version in
   let cs = n.n_cipher_suite in

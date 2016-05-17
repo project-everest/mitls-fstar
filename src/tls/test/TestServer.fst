@@ -147,16 +147,16 @@ let makeHSRecord pv hs_msg log =
   let mb = log @@ hs_msg in 
   (string_of_handshakeMessage hs_msg,mb)
 
-let sendHSRecord tcp pv hs_msg log = 
-  let (str,hs) = makeHSRecord pv hs_msg log in
-  sendRecord tcp pv Content.Handshake hs str
+let sendHSRecord tcp pv (m,b) = 
+  let str = string_of_handshakeMessage m in
+  sendRecord tcp pv Content.Handshake b str
 
-let recvHSRecord tcp pv kex log = 
+let recvHSRecord tcp pv kex = 
   let (Content.Handshake,rpv,pl) = recvRecord tcp pv in
   match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
   | Correct (rem,[(hs_msg,to_log)]) -> 
     	    IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n"); 
-	    let logged = log @@ hs_msg in
+	    let logged = handshakeMessageBytes (Some pv) hs_msg in
 	    IO.print_string ("Logged message = Parsed message? ");
 	    if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
 	    hs_msg,to_log
@@ -167,13 +167,13 @@ let recvCCSRecord tcp pv =
   IO.print_string "Received CCS\n";
   ccs
 
-let recvEncHSRecord tcp pv kex log rd = 
+let recvEncHSRecord tcp pv kex rd = 
   let (Content.Handshake,_,cipher) = recvRecord tcp pv in
   let payload = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
   let [(hs_msg,to_log)] = hsm in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-  let logged = log @@ hs_msg in
+  let logged = handshakeMessageBytes (Some pv) hs_msg in
   IO.print_string ("Logged message = Parsed message? ");
   if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
   hs_msg
@@ -208,16 +208,7 @@ let rec aux sock =
   let ks, sr = KeySchedule.create #rid Server in
 
   // Get client hello
-  let ClientHello(ch),chb = recvHSRecord tcp pv kex log in
-
-  let cr, sid, csl, ext = match ch with
-    | {ch_client_random = cr;
-       ch_sessionID = sid;
-       ch_cipher_suites = csl;
-       ch_extensions = Some ext} -> cr, sid, csl, ext
-    | _ -> failwith "" in
- 
-  let lb = HandshakeLog.getBytes log in
+  let ClientHello(ch),chb = recvHSRecord tcp pv kex in
 
   // Server Hello
   let (nego,(ServerHello sh,shb)) = 
@@ -229,19 +220,21 @@ let rec aux sock =
   let CipherSuite kex (Some sa) ae = cs in
   let alg = (sa, Hash CoreCrypto.SHA256) in
   let ems = next.ne_extended_ms in
-  sendHSRecord tcp pv (ServerHello sh) log;
+
+  sendHSRecord tcp pv (ServerHello sh,shb);
 
   // Server Certificate
   let Correct (chain, csk) = Cert.lookup_server_chain "../../data/test_chain.pem" "../../data/test_chain.key" pv (Some sa) None in
   let c = {crt_chain = chain} in
   let cb = certificateBytes pv c in
-  sendHSRecord tcp pv (Certificate c) log;
 
   let gn = match nego with | {Handshake.n_dh_group = Some n} -> n  in
   let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs ems gn in
   // Server Key Exchange
   let kex_s = KEX_S_DHE gy in
   let tbs = kex_s_to_bytes kex_s in
+  let cr = ch.ch_client_random in
+  let sr = sh.sh_server_random in
   let Correct sigv = Cert.sign pv Server (Some (cr @| sr)) csk alg tbs in
   let ske = {ske_kex_s = kex_s; ske_sig = sigv} in
   IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^(print_bytes sigv)^ "\n");
@@ -250,16 +243,25 @@ let rec aux sock =
   IO.print_string ("Signature validation status = " ^
     (if Cert.verify_signature chain pv Server (Some (cr @| sr)) sa next.ne_signature_algorithms tbs sigv then "OK" else "FAIL") ^ "\n");
 
-  sendHSRecord tcp pv (ServerKeyExchange ske) log;
-  sendHSRecord tcp pv (ServerHelloDone) log;
+
+  let cb = log @@ Certificate(c) in
+  sendHSRecord tcp pv (Certificate c,cb);
+  let skeb = log @@ ServerKeyExchange(ske) in
+  sendHSRecord tcp pv (ServerKeyExchange ske,skeb);
+  let shdb = log @@ ServerHelloDone in
+  sendHSRecord tcp pv (ServerHelloDone,shdb);
+  
 
   // Get Client Key Exchange
-  let (ClientKeyExchange(cke),ckeb) = recvHSRecord tcp pv kex log in
+  let (ClientKeyExchange(cke),ckeb) = recvHSRecord tcp pv kex in
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
   let gx = match cke with
     | {cke_kex_c = KEX_C_ECDHE u} -> u
     | _ -> failwith "Bad CKE type" in
   IO.print_string ("client share:"^(Platform.Bytes.print_bytes gx)^"\n");
+
+  let _ = log @@ ClientKeyExchange(cke) in
+  let lb = HandshakeLog.getBytes log in
   KeySchedule.ks_server_12_cke_dh ks gx lb;
 
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
@@ -267,13 +269,14 @@ let rec aux sock =
   let rd = decryptor_TLS12_AES_GCM_128_SHA256 sk siv in
 
   let _ = recvCCSRecord tcp pv in
-  let Finished(cfin) = recvEncHSRecord tcp pv kex log rd in
-
+  let Finished(cfin) = recvEncHSRecord tcp pv kex rd in
+  let _ = log @@ Finished(cfin) in
   let lb = HandshakeLog.getBytes log in
   let svd = KeySchedule.ks_server_12_server_verify_data ks lb in
   let sfin = {fin_vd = svd} in
-  let (str,sfinb) = makeHSRecord pv (Finished sfin) log in
+  let sfinb = log @@ Finished(sfin) in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake sfinb in
+  let str = string_of_handshakeMessage (Finished sfin) in 
 
   sendRecord tcp pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Server";
   sendRecord tcp pv Content.Handshake efinb str;

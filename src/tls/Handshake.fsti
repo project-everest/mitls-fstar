@@ -112,7 +112,7 @@ val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option r
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> ch -> (hs_msg * bytes) ->
-                        ST (result (nego))
+                        ST (result (nego * option KeySchedule.recordInstance))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 
@@ -211,6 +211,12 @@ val prepareClientFinished: KeySchedule.ks -> HandshakeLog.log -> ST (hs_msg * by
 val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes) -> ST (result bytes)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
+
+val processServerFinished_13: cfg:config -> n:nego -> ks:KeySchedule.ks -> log:HandshakeLog.log ->
+    			      list (hs_msg*bytes) -> ST (result (list (hs_msg * bytes) * bytes * KeySchedule.recordInstance))
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+
 
 // name-clashing
 // let reader s = i s Reader
