@@ -42,7 +42,7 @@ let parseHeader (h5:header) =
       | Error z -> Error z
       | Correct pv ->
           let len = int_of_bytes len2 in
-          if len <= 0 || len > max_TLSCipher_fragment_length 
+          if len <= 0 || len > max_TLSCiphertext_fragment_length 
           then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
           else correct(ct,pv,len)
 
