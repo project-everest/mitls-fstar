@@ -17,14 +17,18 @@ module S = StreamAE
 
 // plaintexts are defined in Content.fragment i
 
-// ciphertexts, ignoring details for now (would be needed for functional correctness)
+
 // the first two should be concretely defined (for now in TLSInfo)
- 
 let is_stream_ae i = pv_of_id i = TLS_1p3
 let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg /\ ~ (authId i)
 
+
+// ciphertexts. 
+// ignoring details for now (would be needed for CTXT and functional correctness of decryption).
+
 // NB as a temporary hack, we currently disable AuthId for TLS 1.2.
 // so that we can experiment with TLS and StreamAE
+
 
 assume val validCipherLen: i:id -> l:nat -> Type0 // sufficient to ensure the cipher can be processed without length errors
 

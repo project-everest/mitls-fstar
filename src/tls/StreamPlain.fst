@@ -25,7 +25,7 @@ type id = i:id { pv_of_id i = TLS_1p3 }
 // similarly, the length accounts for the TLS-specific CT byte.
 // internally, we know len > 0
 
-let plainLength (l:nat) = 1 <= l /\ l <= max_TLSCiphertext_fragment_length_13
+let plainLength (l:int) = 1 <= l /\ l <= max_TLSCiphertext_fragment_length_13
 type plainLen = l:nat { plainLength l }
 type plainRepr = b:bytes { plainLength (length b) }
 

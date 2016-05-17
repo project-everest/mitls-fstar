@@ -15,6 +15,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 
+
 # ------------------ dependencies on Fstar & its libraries --------------------
 # When using NuBuild, FStar must be located within the source tree. Now that soft links are 
 # available on all platforms, I don't see a reason not to assume a fixed location.
@@ -61,6 +62,12 @@ OCAML=ocamlfind ocamlopt
 DEBUG=ocamlfind ocamlc
 OCAMLMKLIB=ocamlfind ocamlmklib
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
+
+
+refresh:
+	git fetch -v 
+	git submodule update 
+	make -C $(FSTAR_HOME)/src/ocaml-output
 
 # ----------------------- NuBuild integration ------------------------
 NUBUILD_HOME=../../.nubuild
