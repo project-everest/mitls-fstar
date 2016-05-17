@@ -172,6 +172,27 @@ let rec map_append f s_1 s_2 =
   		       (m_s_1 @ SeqP.snoc m_p_2 flast));                 //              = map f s1 @ (snoc (map f p) (f last))
         map_snoc f prefix_2 last)                                       //              = map f s1 @ map f (snoc p last)
 
+val map_length: f:('a -> Tot 'b) -> s1:seq 'a -> Lemma
+  (requires True)
+  (ensures (Seq.length s1 = Seq.length (map f s1)))
+  (decreases (length s1))
+  [SMTPat (Seq.length (map f s1))]
+let rec map_length f s1 = 
+  if Seq.length s1 = 0 then ()
+  else let prefix, last = un_snoc s1 in
+       map_length f prefix
+
+val map_index: f:('a -> Tot 'b) -> s:seq 'a -> i:nat{i<Seq.length s} -> Lemma
+  (requires True)
+  (ensures (Seq.index (map f s) i = f (Seq.index s i)))
+  (decreases (Seq.length s))
+  [SMTPat (Seq.index (map f s) i)]
+let rec map_index f s i = 
+  if i = Seq.length s - 1
+  then ()
+  else let prefix, last = un_snoc s in
+       map_index f prefix i
+       
 let map_grows (f:'a -> Tot 'b) 
 	      (s1:seq 'a) (s3:seq 'a) (s2:seq 'a)  
   : Lemma (seq_extension s1 s2 s3
@@ -197,6 +218,21 @@ let map_prefix_stable (#a:Type) (#b:Type) (#i:rid) (r:m_rref i (seq a) grows) (f
 	  exists_elim (map_grows f s1 s3);
 	  grows_transitive bs (map f s1) (map f s3) in
     forall_intro_2 aux
+
+let map_has_at_index (#a:Type) (#b:Type) (#i:rid) 
+		     (r:m_rref i (seq a) grows)
+		     (f:a -> Tot b)
+		     (n:nat) (v:b) (h:HH.t) = 
+    let s = MR.m_sel h r in 
+    n < Seq.length s 
+  /\ Seq.index (map f s) n = v
+
+let map_has_at_index_stable (#a:Type) (#b:Type) (#i:rid) 
+			    (r:m_rref i (seq a) grows)
+			    (f:a -> Tot b) (n:nat) (v:b)
+  : Lemma (MR.stable_on_t r (map_has_at_index r f n v))
+  = ()
+		     
 
 ////////////////////////////////////////////////////////////////////////////////
 //Monotonic counters, bounded by the length of a log

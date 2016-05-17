@@ -275,7 +275,17 @@ let encrypt #i e f =
 //Decryption
 ////////////////////////////////////////////////////////////////////////////////
 // decryption, idealized as a lookup for safe instances
-val decrypt: #i:id -> d:reader i{is_stream_ae i} -> c:decrypted i -> ST (option (fragment i))//(f:fragment i { length c = cipherLen i f}))
+let logT_at_j (#i:id) (#rw:rw) (st:state i rw{authId i}) (n:nat) (f:fragment i) h = 
+  let log = StreamAE.ilog (StreamAE.State.log (stream_ae st)) in
+  MS.map_has_at_index log StreamAE.Entry.p n f h
+  
+let logT_at_j_stable (#i:id) (#rw:rw) (st:state i rw{authId i}) (n:nat) (f:fragment i)
+  : Lemma (MR.stable_on_t (StreamAE.ilog (StreamAE.State.log (stream_ae st)))
+		          (logT_at_j st n f))
+  = let log = StreamAE.ilog (StreamAE.State.log (stream_ae st)) in
+    MS.map_has_at_index_stable log StreamAE.Entry.p n f
+
+val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { frag_plain_len f <= cipherLen i f}))
   (requires (fun h0 -> incrementable d h0))
   (ensures  (fun h0 res h1 ->
 	      match res with
@@ -284,25 +294,26 @@ val decrypt: #i:id -> d:reader i{is_stream_ae i} -> c:decrypted i -> ST (option 
 		        seqnT d h1 = j + 1 /\
                         modifies_one (region d) h0 h1 /\
 			(authId i ==>
-			   (* (let written = logT d h0 in  *)
-  			   (*  j < Seq.length written /\ *)
-			   (*  f = Seq.index written j)))) *)
-			   (let log = StreamAE.ilog (StreamAE.State.log (stream_ae d)) in
-			    let entries = MR.m_sel h0 log in
-			    j < Seq.length entries /\
-			    f = StreamAE.Entry.p (Seq.index entries j)))))
-			    
-                           (* (let written = logT d h1 in *)
-			   (* ))))(\*  /\  *\) *)
-                           (* j < Seq.length written /\ *)
-                           (* f = Seq.index written j)))) *)
+			   (let written = logT d h0 in
+  			    j < Seq.length written /\
+			    f = Seq.index written j /\
+			    witnessed (logT_at_j d j f)))))
 let decrypt #i d c =  
    assume (is_stream_ae i);
+   let h0 = ST.get () in
    match d with 
    | Stream _ s -> 
+         recall_region (StreamAE.State.log_region s);
          (match StreamAE.decrypt s (StreamAE.lenCipher i c) c with 
-         | Some x -> Some x 
-         | None   -> None)
+          | Some f -> 
+  	    if authId i
+	    then (let h1 = ST.get() in
+  	 	  frame_logT d h0 h1 (Set.singleton (StreamAE.State.region s));
+		  logT_at_j_stable d (seqnT d h0) f;
+		  let log = StreamAE.ilog (StreamAE.State.log (stream_ae d)) in
+		  MR.witness log (logT_at_j d (seqnT d h0) f));
+ 	    Some f 
+          | None   -> None)
 
 
 let gen parent i =  
