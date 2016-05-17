@@ -235,6 +235,96 @@ let map_has_at_index_stable (#a:Type) (#b:Type) (#i:rid)
 		     
 
 ////////////////////////////////////////////////////////////////////////////////
+//Collecting monotone sequences
+////////////////////////////////////////////////////////////////////////////////
+
+val collect: ('a -> Tot (seq 'b)) -> s:seq 'a -> Tot (seq 'b)
+    (decreases (Seq.length s))
+let rec collect f s = 
+  if Seq.length s = 0 then Seq.createEmpty
+  else let prefix, last = un_snoc s in
+       Seq.append (collect f prefix) (f last)
+
+val collect_snoc: f:('a -> Tot (seq 'b)) -> s:seq 'a -> a:'a -> Lemma
+  (collect f (SeqP.snoc s a) = Seq.append (collect f s) (f a))
+let collect_snoc f s a = 
+  let prefix, last = un_snoc (SeqP.snoc s a) in 
+  cut (Seq.equal prefix s)
+
+val collect_append: f:('a -> Tot (seq 'b)) -> s1:seq 'a -> s2:seq 'a -> Lemma
+  (requires True)
+  (ensures (collect f (s1@s2) = (collect f s1 @ collect f s2)))
+  (decreases (Seq.length s2))
+#reset-options "--z3timeout 3 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"  
+let rec collect_append f s_1 s_2 = 
+  if Seq.length s_2 = 0
+  then (cut (Seq.equal (s_1@s_2) s_1);
+        cut (Seq.equal (collect f s_1 @ collect f s_2) (collect f s_1)))
+  else (let prefix_2, last = un_snoc s_2 in
+        let m_s_1 = collect f s_1 in
+  	let m_p_2 = collect f prefix_2 in
+  	let flast = f last in
+  	cut (Seq.equal (s_1@s_2) (SeqP.snoc (s_1@prefix_2) last));         //map f (s1@s2) = map f (snoc (s1@p) last)
+  	collect_snoc f (Seq.append s_1 prefix_2) last;                       //              = snoc (map f (s1@p)) (f last)
+        collect_append f s_1 prefix_2;                                       //              = snoc (map f s_1 @ map f p) (f last)
+  	cut (Seq.equal ((m_s_1 @ m_p_2) @ flast)
+  		       (m_s_1 @ (m_p_2 @ flast)));                 //              = map f s1 @ (snoc (map f p) (f last))
+        collect_snoc f prefix_2 last)                                       //              = map f s1 @ map f (snoc p last)
+
+let collect_grows (f:'a -> Tot (seq 'b))
+		  (s1:seq 'a) (s3:seq 'a) (s2:seq 'a)  
+  : Lemma (seq_extension s1 s2 s3
+	   ==> grows (collect f s1) (collect f s3))
+  = collect_append f s1 s2
+
+let collect_prefix (#a:Type) (#b:Type) (#i:rid) 
+		   (r:m_rref i (seq a) grows) 
+		   (f:a -> Tot (seq b))
+		   (bs:seq b)
+		   (h:HH.t) =
+  grows bs (collect f (MR.m_sel h r))
+
+let collect_prefix_stable (#a:Type) (#b:Type) (#i:rid) (r:m_rref i (seq a) grows) (f:a -> Tot (seq b)) (bs:seq b) 
+  : Lemma (MR.stable_on_t r (collect_prefix r f bs))
+  = let aux : h0:HH.t -> h1:HH.t -> Lemma 
+      (collect_prefix r f bs h0 
+       /\ grows (MR.m_sel h0 r) (MR.m_sel h1 r)
+       ==> collect_prefix r f bs h1) = 
+      fun h0 h1 -> 
+	  let s1 = MR.m_sel h0 r in
+	  let s3 = MR.m_sel h1 r in
+	  exists_elim (collect_grows f s1 s3);
+	  grows_transitive bs (collect f s1) (collect f s3) in
+    forall_intro_2 aux
+
+
+let collect_has_at_index (#a:Type) (#b:Type) (#i:rid) 
+			 (r:m_rref i (seq a) grows)
+			 (f:a -> Tot (seq b))
+			 (n:nat) (v:b) (h:HH.t) = 
+    let s = MR.m_sel h r in 
+    n < Seq.length (collect f s)
+  /\ Seq.index (collect f s) n = v
+
+let collect_has_at_index_stable (#a:Type) (#b:Type) (#i:rid) 
+				(r:m_rref i (seq a) grows)
+				(f:a -> Tot (seq b)) (n:nat) (v:b)
+  : Lemma (MR.stable_on_t r (collect_has_at_index r f n v))
+  = let aux : h0:HH.t -> h1:HH.t -> Lemma 
+      (collect_has_at_index r f n v h0 
+       /\ grows (MR.m_sel h0 r) (MR.m_sel h1 r)
+       ==> collect_has_at_index r f n v h1) = 
+      fun h0 h1 -> 
+	  let s1 = MR.m_sel h0 r in
+	  let s3 = MR.m_sel h1 r in
+	  let aux2 : s2:seq a -> Lemma ((s1@s2 = s3 /\ collect_has_at_index r f n v h0)
+				       ==> collect_has_at_index r f n v h1)
+	      = fun s2 -> collect_append f s1 s2 in
+	  exists_elim aux2 in
+    forall_intro_2 aux
+
+
+////////////////////////////////////////////////////////////////////////////////
 //Monotonic counters, bounded by the length of a log
 ////////////////////////////////////////////////////////////////////////////////
 type log_t (i:rid) (a:Type) = m_rref i (seq a) grows

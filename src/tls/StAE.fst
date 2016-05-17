@@ -242,6 +242,15 @@ let frame_seqnT #i #rw st h0 h1 s =
   if is_stream_ae i then ()
   else admit() //FIXME! doesn't go through in 1.2; need to investigate why
 
+////////////////////////////////////////////////////////////////////////////////
+//Experimenting with reads clauses
+////////////////////////////////////////////////////////////////////////////////
+let reads (s:Set.set rid) (a:Type) = 
+    f: (h:HH.t -> GTot a){forall h1 h2. (HH.equal_on s h1 h2 /\ Set.subset s (Map.domain h1))
+				  ==> f h1 = f h2}
+
+val fragments : #i:id -> #rw:rw -> s:state i rw{ authId i } -> Tot (reads (Set.singleton (log_region s)) (ideal_log i))
+let fragments #i #rw s = logT s
 
 ////////////////////////////////////////////////////////////////////////////////
 //Encryption
@@ -309,9 +318,7 @@ let decrypt #i d c =
          (match StreamAE.decrypt s (StreamAE.lenCipher i c) c with 
           | Some f -> 
   	    if authId i
-	    then (let h1 = ST.get() in
-  	 	  frame_logT d h0 h1 (Set.singleton (StreamAE.State.region s));
-		  logT_at_j_stable d (seqnT d h0) f;
+	    then (logT_at_j_stable d (seqnT d h0) f;
 		  let log = StreamAE.ilog (StreamAE.State.log (stream_ae d)) in
 		  MR.witness log (logT_at_j d (seqnT d h0) f));
  	    Some f 
