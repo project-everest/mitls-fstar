@@ -1,6 +1,9 @@
 module MonotoneSeq
 open FStar.Seq
 open FStar.SeqProperties
+module HH   = FStar.HyperHeap
+module MR   = FStar.Monotonic.RRef
+module SeqP = SeqProperties
 
 let forall_intro (#a:Type) (#p:(x:a -> GTot Type0)) ($f:(x:a -> Lemma (p x)))
   : Lemma (forall (x:a). p x)
@@ -24,7 +27,7 @@ let exists_intro (#a:Type) (p:(a -> Type)) (witness:a)
 	  (ensures (exists (x:a). p x))
   = ()
 
-let exists_elim (#a:Type) (#p:(a -> Type)) (#b:Type) (#q:(b -> Type)) (#r:Type) ($f:(x:a -> Lemma (p x ==> r)))
+let exists_elim (#a:Type) (#p:(a -> Type)) (#r:Type) ($f:(x:a -> Lemma (p x ==> r)))
   : Lemma ((exists (x:a). p x) ==> r)
   = forall_intro f
 
@@ -74,12 +77,12 @@ let snoc (s:seq 'a) (x:'a)
 
 let lemma_snoc_extends (s:seq 'a) (x:'a)
   : Lemma (requires True)
-	  (ensures (grows s (snoc s x)))
-	  [SMTPat (grows s (snoc s x))]
+	  (ensures (grows s (SeqP.snoc s x)))
+	  [SMTPat (grows s (SeqP.snoc s x))]
   = ()
 
 let lemma_mem_snoc (s:seq 'a) (x:'a)
-  : Lemma (ensures (SeqProperties.mem x (snoc s x)))
+  : Lemma (ensures (SeqProperties.mem x (SeqP.snoc s x)))
   = SeqProperties.lemma_append_count s (Seq.create 1 x)
 
 let alloc_mref_seq (#a:Type) (r:FStar.HyperHeap.rid) (init:seq a)
@@ -116,15 +119,84 @@ let write_at_end (#a:Type) (#i:rid) (r:m_rref i (seq a) grows) (x:a)
 	               m_contains r h1
 		     /\ modifies_one i h0 h1
 		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1
-		     /\ m_sel h1 r = snoc (m_sel h0 r) x
+		     /\ m_sel h1 r = SeqP.snoc (m_sel h0 r) x
 		     /\ witnessed (at_least (Seq.length (m_sel h0 r)) x r)))
   = m_recall r;
     let s0 = m_read r in
     let n = Seq.length s0 in
-    m_write r (snoc s0 x);
+    m_write r (SeqP.snoc s0 x);
     at_least_is_stable n x r;
     lemma_mem_snoc s0 x;
     witness r (at_least n x r)
+
+////////////////////////////////////////////////////////////////////////////////
+//Mapping functions over monotone sequences
+////////////////////////////////////////////////////////////////////////////////
+val un_snoc: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
+let un_snoc #a s =
+  let last = Seq.length s - 1 in
+  Seq.slice s 0 last, Seq.index s last
+
+val map: ('a -> Tot 'b) -> s:seq 'a -> Tot (seq 'b)
+    (decreases (Seq.length s))
+let rec map f s = 
+  if Seq.length s = 0 then Seq.createEmpty
+  else let prefix, last = un_snoc s in
+       SeqP.snoc (map f prefix) (f last)
+
+val map_snoc: f:('a -> Tot 'b) -> s:seq 'a -> a:'a -> Lemma
+  (map f (SeqP.snoc s a) = SeqP.snoc (map f s) (f a))
+let map_snoc f s a = 
+  let prefix, last = un_snoc (SeqP.snoc s a) in 
+  cut (Seq.equal prefix s)
+
+private let op_At s1 s2 = Seq.append s1 s2
+
+val map_append: f:('a -> Tot 'b) -> s1:seq 'a -> s2:seq 'a -> Lemma
+  (requires True)
+  (ensures (map f (s1@s2) = (map f s1 @ map f s2)))
+  (decreases (Seq.length s2))
+#reset-options "--z3timeout 3 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"  
+let rec map_append f s_1 s_2 = 
+  if Seq.length s_2 = 0
+  then (cut (Seq.equal (s_1@s_2) s_1);
+        cut (Seq.equal (map f s_1 @ map f s_2) (map f s_1)))
+  else (let prefix_2, last = un_snoc s_2 in
+        let m_s_1 = map f s_1 in
+  	let m_p_2 = map f prefix_2 in
+  	let flast = f last in
+  	cut (Seq.equal (s_1@s_2) (SeqP.snoc (s_1@prefix_2) last));         //map f (s1@s2) = map f (snoc (s1@p) last)
+  	map_snoc f (Seq.append s_1 prefix_2) last;                       //              = snoc (map f (s1@p)) (f last)
+        map_append f s_1 prefix_2;                                       //              = snoc (map f s_1 @ map f p) (f last)
+  	cut (Seq.equal (SeqP.snoc (m_s_1 @ m_p_2) flast)
+  		       (m_s_1 @ SeqP.snoc m_p_2 flast));                 //              = map f s1 @ (snoc (map f p) (f last))
+        map_snoc f prefix_2 last)                                       //              = map f s1 @ map f (snoc p last)
+
+let map_grows (f:'a -> Tot 'b) 
+	      (s1:seq 'a) (s3:seq 'a) (s2:seq 'a)  
+  : Lemma (seq_extension s1 s2 s3
+	   ==> grows (map f s1) (map f s3))
+  = map_append f s1 s2
+
+let map_prefix (#a:Type) (#b:Type) (#i:rid) 
+	       (r:m_rref i (seq a) grows) 
+	       (f:a -> Tot b)
+	       (bs:seq b)
+	       (h:HH.t) =
+  grows bs (map f (MR.m_sel h r))
+
+let map_prefix_stable (#a:Type) (#b:Type) (#i:rid) (r:m_rref i (seq a) grows) (f:a -> Tot b) (bs:seq b) 
+  : Lemma (MR.stable_on_t r (map_prefix r f bs))
+  = let aux : h0:HH.t -> h1:HH.t -> Lemma 
+      (map_prefix r f bs h0 
+       /\ grows (MR.m_sel h0 r) (MR.m_sel h1 r)
+       ==> map_prefix r f bs h1) = 
+      fun h0 h1 -> 
+	  let s1 = MR.m_sel h0 r in
+	  let s3 = MR.m_sel h1 r in
+	  exists_elim (map_grows f s1 s3);
+	  grows_transitive bs (map f s1) (map f s3) in
+    forall_intro_2 aux
 
 ////////////////////////////////////////////////////////////////////////////////
 //Monotonic counters, bounded by the length of a log
