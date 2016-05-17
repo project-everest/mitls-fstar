@@ -139,7 +139,7 @@ let send (State b) (ad:alertDescription{isFatal ad}) =
 
 val next_fragment: s:state -> ST (option alertDescription)
   (requires (fun _ -> True))
-  (ensures (fun h0 r h1 -> modifies (Set.singleton(State.region s)) h0 h1))
+  (ensures (fun h0 r h1 -> modifies_one (State.region s) h0 h1))
 
 let next_fragment (State b) =  
   match !b with 
