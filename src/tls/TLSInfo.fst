@@ -616,23 +616,20 @@ let sinfo_to_string (si:sessionInfo) = ""
 // note that TLS 1.3 lowers a bit the upper bound of cipher lengths (Ok in principle)
 // but still enables padding beyond plausible plaintext lengths.
 
-// API and protocol-level fragments are in 0..2^14
+// API and protocol-level fragments are in [0..2^14]
 let max_TLSPlaintext_fragment_length = 16384 
 
 // the rest should be internal
 
-// in TLS 1.2, compression and AE may add stuff
+// In TLS 1.2, compression and encryption may add stuff
 let max_TLSCompressed_fragment_length = max_TLSPlaintext_fragment_length + 1024
-let max_TLSCipher_fragment_length = max_TLSCompressed_fragment_length + 1024
+let max_TLSCiphertext_fragment_length = max_TLSPlaintext_fragment_length + 2048
 
-// the length of what's AE'ed, after CTing and padding
+// The length of what's AE'ed, after adding the CT byte and padding
 // in TLS 1.3, CT adds 1 byte, and AE adds up to 255 bytes
 let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 256
 
-// deprecate?
-let fragmentLength = max_TLSPlaintext_fragment_length
-
-val cipher_repr: n:nat -> Lemma( n <= max_TLSCipher_fragment_length ==> repr_bytes n <= 2 )
+val cipher_repr: n:nat -> Lemma( n <= max_TLSCiphertext_fragment_length ==> repr_bytes n <= 2 )
 let cipher_repr n = lemma_repr_bytes_values n
 
 // -----------------------------------------------------------------------

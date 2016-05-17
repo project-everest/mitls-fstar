@@ -176,7 +176,7 @@ let enc i e ad r p =
       lemma_repr_bytes_values 0;
       e.counter := 0
     end;
-   Range.targetLength_at_most_max_TLSCipher_fragment_length i r;
+   Range.targetLength_at_most_max_TLSCiphertext_fragment_length i r;
    nonce_explicit @| c
 
 

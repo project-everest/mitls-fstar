@@ -35,7 +35,7 @@ type idB = i:id { is_Block (alg i) }
 type cipher (i:id) = 
   b:bytes { let l = length b in
             l >= 0 /\ //16-01-13 why explicit?
-            l <= max_TLSCipher_fragment_length /\ 
+            l <= max_TLSCiphertext_fragment_length /\ 
             valid_clen i l }
 
 let explicitIV (i:id) = 
@@ -207,7 +207,7 @@ let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
     | StreamState _ ss -> CoreCrypto.stream_process ss d 
 
 (*
-        if length cipher <> tlen || tlen > max_TLSCipher_fragment_length then
+        if length cipher <> tlen || tlen > max_TLSCiphertext_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
@@ -222,7 +222,7 @@ let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
 
 (* 
             let cl = length cipher in
-            if cl <> tlen || tlen > max_TLSCipher_fragment_length then
+            if cl <> tlen || tlen > max_TLSCiphertext_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
@@ -236,7 +236,7 @@ let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
 
 (*
             let res = iv @| cipher in
-            if length res <> tlen || tlen > max_TLSCipher_fragment_length then
+            if length res <> tlen || tlen > max_TLSCiphertext_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
@@ -256,7 +256,7 @@ BlockCipher(s) -> (match alg,ivm with Block alg, Stale -> //workaround for https
         | NoIV   ->
     | StreamCipher(s) -> (match alg,ivm with Stream _, _ ->
         let cipher = (CoreCrypto.stream_process s.sstate (d)) in
-        if length cipher <> tlen || tlen > max_TLSCipher_fragment_length then
+        if length cipher <> tlen || tlen > max_TLSCiphertext_fragment_length then
                 // unexpected, because it is enforced statically by the
                 // CompatibleLength predicate
                 unexpected "[enc] Length of encrypted data do not match expected length"
@@ -287,7 +287,7 @@ let cbcdec alg k iv e = CoreCrypto.block_decrypt alg k iv e
 private val dec_int: i:id -> s: decryptor i -> c:cipher 
   { 
     (*@length c >= minTlen i /\ *)
-    length c <= max_TLSCipher_fragment_length 
+    length c <= max_TLSCiphertext_fragment_length 
     (*@/\ 
     (!enc,mac. i.aeAlg = MtE(CBC_Stale(enc),mac) \/ i.aeAlg = MtE(CBC_Fresh(enc),mac) => Length(c)>=BlockSize(enc)) *)
     } -> 
@@ -342,7 +342,7 @@ val dec: i:id -> s: decryptor i-> ad: LHAEPlain.adata i -> c:cipher
   { 
      (*@ (safeId i ==> (exists p'. Encrypted i ad c p')) /\*)
      (*@ length c >= minTlen i /\ *)
-     length c <= max_TLSCipher_fragment_length } -> 
+     length c <= max_TLSCiphertext_fragment_length } -> 
 
   ( (s': decryptor i (* todo?: { stateID i Reader s' = stateID i Reader s + 1 }*) )  *
     (p : Encode.plain i ad (cipherRangeClass i (length c))))

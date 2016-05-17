@@ -238,14 +238,14 @@ let targetLength i r =
 #reset-options
 #set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2"
 
-val targetLength_at_most_max_TLSCipher_fragment_length: i:id2
+val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
    -> r:range{
        snd r <= max_TLSPlaintext_fragment_length
        /\ (~(is_AEAD i.aeAlg) ==>
            snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
 	   /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
-   -> Lemma (targetLength i r <= max_TLSCipher_fragment_length)
-let targetLength_at_most_max_TLSCipher_fragment_length i r = ()
+   -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
+let targetLength_at_most_max_TLSCiphertext_fragment_length i r = ()
 
 
 val targetLength_converges: i:id2
@@ -289,7 +289,7 @@ let rangeClass i (r:range) =
                 let macLen = macSize (macAlg_of_id i) in
                 let minPad, maxPad = minMaxPad i in
                 let max = tlen - ivL - macLen - minPad in
-                if tlen <= max_TLSCipher_fragment_length then
+                if tlen <= max_TLSCiphertext_fragment_length then
                     cipherRangeClass i tlen
                 else
                     //Unreachable when snd r <= max_TLSPlaintext_fragment_length (see lemma below)
