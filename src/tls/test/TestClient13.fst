@@ -133,18 +133,13 @@ let main host port =
   let log = sendHSRecord tcp pv (ClientHello ch) log in
 
   let ServerHello(sh),log = recvHSRecord tcp pv kex log in
-  let Correct (n) = Handshake.processServerHello config ks lg None ch (ServerHello sh,log) in
+  let Correct (n,Some k) = Handshake.processServerHello config ks lg None ch (ServerHello sh,log) in
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex sa ae = cs in
+  let KeySchedule.StAEInstance rd wr = k in
 
-  let Some (SEC ec,gyb) = n.n_extensions.ne_keyShare in
   let sal = n.n_extensions.ne_signature_algorithms in
-//  let Correct gyb = vlparse 1 gyb in // ADL What is the point of this??
-
-  IO.print_string ("server gy:"^(Platform.Bytes.print_bytes gyb)^"\n");
-  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_client_13_1rtt ks cs (SEC ec, gyb) (hash log) in
-
   let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
   let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
   IO.print_string ("Certificate validation status = " ^

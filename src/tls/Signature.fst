@@ -86,7 +86,7 @@ private val st_update: #a:alg
   -> Tot (s2:state a{evolves s1 s2})
 let st_update #a st t =
   match st with
-  | Signed ts -> Signed (snoc ts t)
+  | Signed ts -> lemma_snoc_extends ts t; Signed (snoc ts t)
   | Corrupt   -> Corrupt
 
 

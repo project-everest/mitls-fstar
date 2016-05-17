@@ -95,7 +95,7 @@ type maconly_entry =
     i:id * ad:LHAEPlain.adata i * rg:range * tlen:nat *
      payload:bytes * text:bytes * p:LHAEPlain.plain i ad rg * MAC.tag
   { authId i /\ //
-    tlen <= max_TLSCipher_fragment_length /\ tlen = targetLength i rg /\ //
+    tlen <= max_TLSCiphertext_fragment_length /\ tlen = targetLength i rg /\ //
     is_MACOnly i.aeAlg /\ //
     MAC.Msg(i,text) /\ //
     text = MACPlain i rg ad p /\ //
@@ -105,7 +105,7 @@ type maconly_entry =
 private val maconly_log: maconly_entry list ref
 private val maconly_mem:
 	i:id{AuthId(i) /\ (?mac. i.aeAlg = MACOnly(mac))} ->
-	ad:(;i)LHAEPlain.adata -> tlen:nat{tlen <= max_TLSCipher_fragment_length} ->
+	ad:(;i)LHAEPlain.adata -> tlen:nat{tlen <= max_TLSCiphertext_fragment_length} ->
 	pl:bytes -> t:bytes{B(t) = B(ad) @| VLBytes(2,B(pl)) /\
 		(?rg,p. B(pl) = LHAEPlain.Payload(i,B(ad),rg,p) )} ->
 	(;i)MAC.tag -> xs:maconly_entry list ->
@@ -152,7 +152,7 @@ let mac i k ad rg plain =
 //   ad: LHAEPlain.adata e ->
 //   rg: range ->
 //   tlen: nat{
-//     tlen <= max_TLSCipher_fragment_length /\//
+//     tlen <= max_TLSCiphertext_fragment_length /\//
 //     rg = cipherRangeClass e tlen
 //     } ->
 //   b: rbytes rg ->
@@ -371,7 +371,7 @@ val mk_plain:
   ad: LHAEPlain.adata i ->
   tlen:nat{
     tlen >= minTlen i /\
-    tlen <= max_TLSCipher_fragment_length /\
+    tlen <= max_TLSCiphertext_fragment_length /\
     valid_clen i tlen
   } ->
   lbytes (plainLength i tlen) ->
@@ -389,7 +389,7 @@ val repr:
              snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i)) } ->
   plain i ad rg ->
   b: lbytes (plainLength i (targetLength i rg))
-  { targetLength i rg <= max_TLSCipher_fragment_length }
+  { targetLength i rg <= max_TLSCiphertext_fragment_length }
   // should that be a property of targetLength?
 
 let repr i ad rg pl =

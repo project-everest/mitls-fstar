@@ -10,30 +10,37 @@ open Content
 
 module HH = HyperHeap
 module MR = FStar.Monotonic.RRef
+module SeqP = SeqProperties
+module S = StreamAE
 
 #reset-options "--z3timeout 10 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
-// plaintexts are defined in Content.fragment i
+// Authenticated encryptions of streams of TLS fragments (from Content)
+// multiplexing StatefulLHAE and StreamAE with (some) length hiding
+// (for now, under-specifying ciphertexts lengths and values)
 
-// ciphertexts, ignoring details for now (would be needed for functional correctness)
+
 // the first two should be concretely defined (for now in TLSInfo)
- 
 let is_stream_ae i = pv_of_id i = TLS_1p3
 let is_stateful_lhae i = pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg /\ ~ (authId i)
-
 // NB as a temporary hack, we currently disable AuthId for TLS 1.2.
 // so that we can experiment with TLS and StreamAE
 
-assume val validCipherLen: i:id -> l:nat -> Type0 // sufficient to ensure the cipher can be processed without length errors
+// PLAINTEXTS are defined in Content.fragment i
+
+// CIPHERTEXTS. 
+
+// sufficient to ensure the cipher can be processed without length errors
+let validCipherLen (i:id) (l:nat) = 
+  if is_stream_ae i then StreamPlain.plainLength (l - StreamAE.ltag i)
+  else True //placeholder
 
 let frag_plain_len (#i:id) (f:fragment i) : StreamPlain.plainLen = 
-  admit();
   snd (Content.rg i f) + 1
 
 val cipherLen: i:id -> fragment i -> Tot (l:nat {validCipherLen i l})
 (* val cipherLen: i:id -> fragment i -> Tot nat *)
 let cipherLen i f = 
-  admit();
   if is_stream_ae i 
   then StreamAE.cipherLen i (frag_plain_len f)
   else 0 //placeholder
@@ -41,7 +48,8 @@ let cipherLen i f =
 type encrypted (#i:id) (f:fragment i) = lbytes (cipherLen i f)
 type decrypted (i:id) = b:bytes { validCipherLen i (length b) }
 
-// concrete key materials, for leaking & coercing.
+
+// CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
 let aeKeySize (i:id) = 
   if pv_of_id i = TLS_1p3 
@@ -49,6 +57,7 @@ let aeKeySize (i:id) =
   else 0 //FIXME!
 
 type keybytes (i:id) = lbytes (aeKeySize i)
+
 
 // abstract instances
   
@@ -79,22 +88,53 @@ type writer i = state i Writer
 // TODO: write down their joint monotonic specification: both are monotonic, and seqn = length log when ideal
 
 type ideal_log (i:id) = seq (fragment i)  // TODO: consider adding constraint on terminator fragments
-
-// TODO extend library? We need a full spec; NS: nope, no need for a full spec; it is Tot
-
-val seq_mapT: ('a -> Tot 'b) -> s:seq 'a -> Tot (seq 'b)
-    (decreases (Seq.length s))
-let rec seq_mapT f s = 
-  if Seq.length s = 0 then Seq.createEmpty
-  else let prefix, last = Content.split s in
-       SeqProperties.snoc (seq_mapT f prefix) (f last)
-
+module MS = MonotoneSeq
 
 val logT: #i:id -> #rw:rw -> s:state i rw{ authId i } -> HH.t -> GTot (ideal_log i)
 let logT #i #rw s h = 
   match s with
-  | Stream _ s -> let written = m_sel h (StreamAE.ilog (StreamAE.State.log s)) in
-                 seq_mapT #(StreamAE.entry i) #(fragment i) StreamAE.Entry.p written
+  | Stream _ s -> 
+    let entries = m_sel h (StreamAE.ilog (StreamAE.State.log s)) in
+    MS.map StreamAE.Entry.p entries
+  
+let stream_ae (#i:id{is_stream_ae i}) (#rw:rw) (s:state i rw) 
+  : Tot (StreamAE.state i rw)
+  = let Stream _ s = s in s
+
+let st_lhae (#i:id{is_stateful_lhae i}) (#rw:rw) (s:state i rw) 
+  : Tot (StatefulLHAE.state i rw)
+  = let StLHAE _ s = s in s
+
+val lemma_logT_snoc_commutes: #i:id -> w:writer i{is_stream_ae i} 
+    -> h0:HH.t -> h1:HH.t -> e:S.entry i
+    -> Lemma (authId i 
+	     ==>  (let sw = stream_ae w in
+                   let log = S.ilog (StreamAE.State.log sw) in
+	               MR.m_sel h1 log = SeqP.snoc (MR.m_sel h0 log) e
+  	           ==> logT w h1 = SeqP.snoc (logT w h0) (StreamAE.Entry.p e)))
+let lemma_logT_snoc_commutes #i w h0 h1 e = 
+  if authId i 
+  then let sw = stream_ae w in
+       let log = S.ilog (StreamAE.State.log sw) in
+       MS.map_snoc #(S.entry i) #(fragment i) StreamAE.Entry.p (MR.m_sel h0 log) e
+  else ()       
+
+
+let log_prefix (#i:id) (#rw:rw) (w:state i rw{authId i /\ is_stream_ae i}) 
+	       (fs:seq (fragment i)) (h:HH.t) 
+  : GTot Type0 = 
+    let log = S.ilog (StreamAE.State.log (stream_ae w)) in
+    MS.map_prefix log StreamAE.Entry.p fs h
+
+let log_prefix_stable (#i:S.id) (#rw:rw) (w:state i rw{is_stream_ae i /\ authId i}) (h:HH.t) 
+  : Lemma (let fs = logT w h in
+           let log = S.ilog (StreamAE.State.log (stream_ae w)) in
+	   MonotoneSeq.grows fs fs 
+	   /\ MR.stable_on_t log (log_prefix w (logT w h)))
+  = let fs = logT w h in
+    let log = S.ilog (StreamAE.State.log (stream_ae w)) in
+    MS.seq_extension_reflexive fs;
+    MS.map_prefix_stable log StreamAE.Entry.p fs
 
 val seqnT: #i:id -> #rw:rw -> state i rw -> HH.t -> GTot seqn_t 
 let seqnT #i #rw (s:state i rw) h = 
@@ -103,14 +143,6 @@ let seqnT #i #rw (s:state i rw) h =
   | StLHAE _ s -> sel h (StatefulLHAE.State.seqn s)
 
 let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:HH.t) = is_seqn (seqnT s h + 1)
-
-let stream_ae (#i:id{is_stream_ae i}) (#rw:rw) (s:state i rw) 
-  : Tot (StreamAE.state i rw)
-  = let Stream _ s = s in s
-
-let st_lhae (#i:id{is_stateful_lhae i}) (#rw:rw) (s:state i rw) 
-  : Tot (StatefulLHAE.state i rw)
-  = let StLHAE _ s = s in s
 
 let writable_seqn (#i:id) (#rw:rw) (s:state i rw) h = 
     match s with 
@@ -186,23 +218,40 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                //?? op_Equality #(log_ref w.region i) w.log r.log /\
                seqnT r h1 = 0))
 // encryption, recorded in the log; safe instances are idealized
-module SeqP = SeqProperties
+
+////////////////////////////////////////////////////////////////////////////////
+//Encryption
+////////////////////////////////////////////////////////////////////////////////
 
 val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
-               modifies_one (region e) h0 h1 /\
-               seqnT e h1 = seqnT e h0 + 1   /\ 
-               authId i ==> logT e h1 = SeqP.snoc (logT e h0) f))
-
-
+               modifies_one (region e) h0 h1 
+	       /\ seqnT e h1 = seqnT e h0 + 1   
+	       /\ (authId i 
+		  ==> logT e h1 = SeqP.snoc (logT e h0) f
+		      /\ witnessed (log_prefix e (logT e h1)))))
 let encrypt #i e f =
   assume (is_stream_ae i);
   match e with
-  | Stream _ s -> StreamAE.encrypt s (frag_plain_len f) f 
+  | Stream _ s -> 
+    let h0 = ST.get() in
+    let l = frag_plain_len f in
+    let c = StreamAE.encrypt s l f in
+    let h1 = ST.get() in
+    lemma_logT_snoc_commutes e h0 h1 (S.Entry l c f);
+    if authId i 
+    then begin 
+         log_prefix_stable e h1;
+	 MR.witness (S.ilog (StreamAE.State.log (stream_ae e)))
+		    (log_prefix e (logT e h1))
+    end;
+    c
 
-//TODO restore monotonic post; see StreamAE.fsti
 
+////////////////////////////////////////////////////////////////////////////////
+//Decryption
+////////////////////////////////////////////////////////////////////////////////
 // decryption, idealized as a lookup for safe instances
 val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { length c = cipherLen i f}))
   (requires (fun h0 -> incrementable d h0))
@@ -219,25 +268,30 @@ val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { 
 
 
 let gen parent i =  
+   assume false;
    // assert(is_stream_ae i);  
    Stream () (StreamAE.gen parent i) 
 
 let coerce parent i kiv = 
+    assume false;
    // assert(is_stream_ae i); 
    let kv, iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in 
    Stream () (StreamAE.coerce parent i kv iv) 
 
 let leak #i #role s =  
+    assume false;
    // assert(is_stream_ae i); 
    match s with 
    | Stream _ s -> let kv, iv = StreamAE.leak s in kv @| iv
 
 let genReader parent #i w =  
+    assume false;
   // assert(is_stream_ae i);  *)
   match w with 
   | Stream _ w -> Stream () (StreamAE.genReader parent w) 
 
 let decrypt #i d c =  
+    assume false;
    match d with 
    | Stream _ s -> 
        ( match StreamAE.decrypt s (StreamAE.lenCipher i c) c with 

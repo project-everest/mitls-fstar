@@ -118,13 +118,13 @@ let min (a:nat) (b:nat) =
 
 // note these two functions are currently typed in ML, hence unusable
 
-val maxLHPad: id -> l:nat{l < fragmentLength} -> nat
+val maxLHPad: id -> l:nat{l < max_TLSPlaintext_fragment_length} -> nat
 val splitRange: id:epoch -> r:range -> s:(range * range) { r = sum (fst s) (snd s) }
 //* nicer syntax for refined tuples?
 // (* )/\ within r0 r *))
 
 let maxLHPad id len =
-    let fs = TLSInfo.fragmentLength in
+    let fs = TLSInfo.max_TLSPlaintext_fragment_length in
     let ps = maxPadSize id in
     let thisPad = min ps (fs-len) in
     let authEnc = id.aeAlg in
@@ -148,7 +148,7 @@ let splitRange ki r =
     let (l,h) = r in
     let si = epochSI(ki) in
     let cs = si.cipher_suite in
-    let fs = TLSInfo.fragmentLength in
+    let fs = TLSInfo.max_TLSPlaintext_fragment_length in
     let id = mk_id ki in
     let ps = maxPadSize id in
     if ps = 0 || l = h then

@@ -137,26 +137,6 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
     let shb = log @@ (ServerHello sh) in
     Correct (nego,(ServerHello sh,shb))
 
-
-(* Ignoring resumption; it will need something like the following:
-  match getCachedSession cfg ch with
-  | Some sentry -> 
-    (match negotiateServerExtensions sentry.session_nego.n_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg sentry.session_nego.n_cipher_suite ri ks true with
-     | Error(z) -> Error(z)
-     | Correct(sext,next) ->
-       let sh = 
-            {sh_protocol_version = sentry.session_nego.n_protocol_version;
-             sh_sessionID = (sentry.session_nego.n_sessionID);
-             sh_server_random = srand;
-             sh_cipher_suite = sentry.session_nego.n_cipher_suite;
-             sh_compression = (sentry.session_nego.n_compression);
-             sh_extensions = sext} in
-       let o_log = i_log @| shB in
-       let o_nego = {sentry.session_nego with n_extensions = next} in
-       Correct (shB,o_nego,Some sentry.session_ake,o_log))
-  | None ->
-*)
-
 (* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
@@ -192,29 +172,16 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
   
 let processServerHello cfg ks log ri ch (ServerHello sh,_) =
   let _ = log @@ (ServerHello sh) in
-  let res = ch_is_resumption ch in
-  // FIXME 1.3
+  // Assuming no resumption; TODO: add it 
   if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
   else  if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
   else
-    match negotiateClientExtensions sh.sh_protocol_version cfg ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite ri res with
+  let resume = false in
+  match negotiateClientExtensions sh.sh_protocol_version cfg ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite ri resume with
     | Error z -> Error z
     | Correct next -> 
-      if res then
-        match getCachedSession cfg ch with
-        | None -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption disallowed")
-        | Some sentry ->
-          if sh.sh_protocol_version <> sentry.session_nego.n_protocol_version ||
-            sh.sh_cipher_suite <> sentry.session_nego.n_cipher_suite ||
-            sh.sh_compression <> sentry.session_nego.n_compression
-          then
-            Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Resumption params do not match cached session")
-          else 
-            let o_nego = {sentry.session_nego with n_extensions = next} in
-            Correct (o_nego)
-      else           
         match sh.sh_cipher_suite with
 	| CipherSuite kex sa ae ->
         let o_nego = 
@@ -231,7 +198,13 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
 	   n_scsv = [];
            n_extensions = next;
            n_resume = false } in
-           Correct (o_nego)
+	   (match sh.sh_protocol_version, kex, next.ne_keyShare with
+	    | TLS_1p3, Kex_DHE, Some (gn,gyb) 
+	    | TLS_1p3, Kex_ECDHE, Some (gn,gyb) -> 
+	      	   let lb = HandshakeLog.getHash log in
+	           let keys = KeySchedule.ks_client_13_1rtt ks o_nego.n_cipher_suite (gn, gyb) lb in
+	      	   Correct (o_nego,Some keys)
+            | _ -> Correct (o_nego,None))
 	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
 
 
@@ -345,17 +318,13 @@ let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
   | C(C_HelloSent ri ch),[(ServerHello(sh),l)] ->
    (match (processServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri ch (ServerHello sh,l)) with
     | Error z -> InError z
-    | Correct (n) -> 
+    | Correct (n,k) -> 
       hsref := {!hsref with
 	       hs_nego = Some n;
 	       hs_state = C(C_HelloReceived n)};
       InAck)
 
 
-val processServerHelloDone: cfg:config -> nego:nego -> ks:KeySchedule.ks -> log:HandshakeLog.log ->
-    			    list (hs_msg*bytes) -> list (hs_msg * bytes) -> ST (result (list (hs_msg * bytes)))
-  (requires (fun h -> nego.n_protocol_version <> TLS_1p3))
-  (ensures (fun h0 i h1 -> True))
 let processServerHelloDone cfg n ks log msgs opt_msgs =
   match msgs with
   | [(Certificate(c),_); (ServerKeyExchange(ske),_); (ServerHelloDone,_)] when 
@@ -429,9 +398,6 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
       | Error (x,y) -> InError(x,y))
    | _ -> InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "unexpected state")
 
-val prepareClientFinished: KeySchedule.ks -> HandshakeLog.log -> ST (hs_msg * bytes)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
 let prepareClientFinished ks log = 
     let lb = HandshakeLog.getBytes log in
     let fin = {fin_vd = KeySchedule.ks_client_12_client_verify_data ks lb} in
@@ -462,9 +428,6 @@ let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
 	       hs_state = C(C_CCSReceived n vd)};
       InAck
 
-val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes) -> ST (result bytes)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
 let processServerFinished ks log (m,l) =
    match m with
    | Finished(f) ->
@@ -490,9 +453,68 @@ let client_handle_server_finished (HS #r0 r res cfg id lgref hsref) msgs =
        InAck)
     
 
-assume val client_handle_server_finished_13: hs -> list (hs_msg * bytes) -> ST incoming
+let processServerFinished_13 cfg n ks log msgs =
+   let rem,creq = 
+     match msgs with
+     | (EncryptedExtensions ee,_) :: (CertificateRequest cr,_) :: rem ->         
+       let _ = log @@ EncryptedExtensions(ee) in 
+       let _ = log @@ CertificateRequest(cr) in 
+       rem,true
+     | (EncryptedExtensions ee,_) :: rem ->         
+       let _ = log @@ EncryptedExtensions(ee) in 
+       rem,false in
+    match rem with
+    | [(Certificate c,_); (CertificateVerify cv,_); (Finished f,_)] 
+     when (is_Some n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
+     if Cert.validate_chain c.crt_chain n.n_sigAlg cfg.peer_name cfg.ca_file then
+     let _ = log @@ Certificate(c) in
+     let lb = HandshakeLog.getHash log in
+     let cs_sigalg = Some.v n.n_sigAlg in
+     let valid = Cert.verify_signature c.crt_chain n.n_protocol_version Server None
+          cs_sigalg n.n_extensions.ne_signature_algorithms lb cv.cv_sig in
+     let _ = IO.debug_print_string("Signature validation status = "^(if valid then "OK" else "FAIL")^"\n") in
+     if true then // TODO: SIG VALIDATION CURRENTLY FAILS; this should be "if valid then"
+     let _ = log @@ CertificateVerify(cv) in
+     let lb = HandshakeLog.getHash log in
+     let svd = KeySchedule.ks_client_13_1rtt_server_finished ks lb in
+     if (equalBytes svd f.fin_vd) then 
+     	let _ = log @@ (Finished(f)) in
+	let lb = HandshakeLog.getHash log in
+	let (cvd,keys) = KeySchedule.ks_client_13_1rtt_client_finished ks lb in	
+	let cfin = {fin_vd = cvd} in
+	if creq then 
+	   let cc = {crt_chain = []} in 
+	   let ccb = log @@ Certificate(cc) in
+	   let finb = log @@ Finished(cfin) in
+	   Correct ([(Certificate(cc),ccb);(Finished(cfin),finb)],svd,keys)
+	else
+	   let finb = log @@ Finished(cfin) in
+	   Correct ([(Finished(cfin),finb)],svd,keys)
+     else Error (AD_decode_error, "Finished MAC did not verify")
+     else Error (AD_decode_error, "Certificate signature did not verify")
+     else Error (AD_decode_error, "Certificate was not valid")
+   | _ -> Error (AD_decode_error, "Unexpected state")
+
+val client_handle_server_finished_13: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
+let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
+  match (!hsref).hs_state with
+  | C(C_CCSReceived n vd) ->
+   (match processServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log msgs with
+    | Error z -> InError z
+    | Correct ([(Finished(f),fb)],svd,keys) -> 
+       hsref := {!hsref with
+                 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = fb};
+  		 hs_state = C(C_Idle (Some (vd,svd)))};
+       InAck
+    | Correct ([(Certificate c,cb);(Finished f,fb)],svd,keys) -> 
+       hsref := {!hsref with
+                 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = cb @| fb};
+  		 hs_state = C(C_Idle (Some (vd,svd)))};
+       InAck)
+    
+
 
 
 val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming

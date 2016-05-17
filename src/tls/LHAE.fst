@@ -19,7 +19,7 @@ open TLSConstants
 open TLSInfo
 open Range
 
-type cipher = b:bytes { length b <= max_TLSCipher_fragment_length }
+type cipher = b:bytes { length b <= max_TLSCiphertext_fragment_length }
 
 
 (*** keying ***)
@@ -178,7 +178,7 @@ val decrypt:
         (forall p. ENC.Encrypted i ad c p <==> exists k r. res = Correct (k,r,p)))}
 
 let decrypt' e key data cipher =
-    let cl = length cipher in  // by typing, we know that cl <= max_TLSCipher_fragment_length
+    let cl = length cipher in  // by typing, we know that cl <= max_TLSCiphertext_fragment_length
     match e.aeAlg,key with
     | (MtE encAlg macAlg, MtEK (ka,ke)) ->
         let macSize = macSize macAlg in

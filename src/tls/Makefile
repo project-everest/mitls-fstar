@@ -15,6 +15,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
 
+
 # ------------------ dependencies on Fstar & its libraries --------------------
 # When using NuBuild, FStar must be located within the source tree. Now that soft links are 
 # available on all platforms, I don't see a reason not to assume a fixed location.
@@ -118,7 +119,7 @@ StAE.fst \
 Record.fst \
 HSCrypto.fst \
 TLSPRF.fst \
-PRF.p.fst \
+PRF.fst \
 HandshakeLog.fst \
 KeySchedule.fst \
 Handshake.fsti \
@@ -130,7 +131,10 @@ test/TestClient.fst \
 test/TestServer.fst \
 test/TestServer13.fst \
 test/TestClient13.fst \
-ConnInvariant.fst #the preceding space is significant!
+ConnInvariant.fst \
+TLS.fst #the preceding space is significant!
+
+
 
 # BREAKING LAX CHECKING WITH StAE
 #TLS.fst \
@@ -169,8 +173,8 @@ MAC_SHA256 \
 MAC_SHA1 \
 StAE \
 Connection \
-ConnInvariant
-
+ConnInvariant \
+TLS 
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
@@ -190,30 +194,35 @@ endef
 
 # verifying one file within $(FSTS)
 %.fst-ver: $(LIBFILES)
+	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
-	--verify_module $(subst .p,,$(basename $@)) \
+	--verify_module $(basename $@) \
 	$^ \
 	$(call prefix_ver,$(basename $@),fst)
 
 %.fsti-ver:
+	$(MAKE) refresh
 	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver, $(basename $@),fsti) \
---verify_module $(subst .p,,$(basename $@))
+--verify_module $(basename $@)
 
 %.fst-in:
+	$(MAKE) refresh
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(LIBFILES) $(ADMITTED) \
 	$(call prefix_cfg,$(basename $@),fst) \
-	--verify_module $(subst .p,,$(basename $@))
+	--verify_module $(basename $@)
 
 %.fsti-in:
+	$(MAKE) refresh
 	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
---verify_module $(subst .p,,$(basename $@))
+--verify_module $(basename $@)
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
+	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
@@ -221,6 +230,7 @@ tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	$(filter-out Ideal.fst,$^)
 
 tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
+	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
@@ -232,6 +242,7 @@ wc:
 	wc -l $(LIBFILES) $(FSTS)
 
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
+	$(MAKE) refresh
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) --lax  $(ADMITTED) $(filter-out Concrete.fst,$^)
 
@@ -250,8 +261,7 @@ TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)
 OUTPUT_DIR=output
 
 # All our extracted modules.
-TLSML := $(FSTS:.p.fst=.ml)
-TLSML := $(TLSML:.fst=.ml)
+TLSML := $(FSTS:.fst=.ml)
 TLSML := $(subst Handshake.fsti, , $(TLSML))
 TLSML := $(subst StreamAE.fsti, , $(TLSML))
 TLSML := $(subst StAE.fsti, , $(TLSML))
@@ -263,15 +273,18 @@ TLSML := \
 # Last step: F* currently extracts everything in the current directory
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
 
+refresh:
+	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
+
 # Note to self: there is little point in breaking down this rule into more
 # atomic ones. One may hope that we can only rebuild the .ml files that have
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
+	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	cp Concrete.fst IdealFlags.fst
-	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
 	  --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
@@ -301,46 +314,6 @@ tls-server:
 	         -I test/ -I output/ test/test_server.ml -o server.out
 	$(EXTRA_PATH) ./server.out 1.2 0.0.0.0 4443
 
-# ------------------ preprocessing :( -----------------------
-
-# preprocessing is still a necessary pain; pls remove files below when possible
-# Nonce still has an #ideal flag
-# many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= PMS PRF
-
-# Target to generate preprocessed files for atom-interactive
-pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
-
-
-HAS_CPP := $(shell which cpp 2> /dev/null; echo $$?)
-ifeq ($(HAS_CPP),1)
-   $(error "cpp not found in PATH. Unable to proceed")
-endif
-
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-    CPP=cpp #-ffreestanding
-else
-    UNAME_S := $(shell uname -s)
-    ifeq ($(UNAME_S),Linux)
-        CPP=cpp -ffreestanding
-    else
-        HAS_GNU_CPP := $(shell which cpp-5 2> /dev/null; echo $$?)
-        ifeq ($(HAS_GNU_CPP),1)
-            $(error "cpp-5 not found in PATH. Unable to proceed")
-        endif
-        CPP=cpp-5 # GCC cpp rather than LLVM
-    endif
 endif
-
-%.p.fsi: %.fsi
-	$(CPP)  -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fsti: %.fsti
-	$(CPP) -P -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fst: %.fst
-	$(CPP) -P -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fs: %.fs
-	$(CPP)  -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@

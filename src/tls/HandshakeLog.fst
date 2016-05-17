@@ -64,6 +64,14 @@ val getBytes: log -> ST bytes
 let getBytes (LOG #reg lref) = 
     let (|pv,hsl,lb|) = !lref in lb
 
+
+val getHash: log -> ST bytes 
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let getHash (LOG #reg lref) = 
+    let (|pv,hsl,lb|) = !lref in 
+    CoreCrypto.hash CoreCrypto.SHA256 lb
+
 assume val checkLogSessionHash: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
 assume val checkLogClientFinished: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
 assume val checkLogServerFinished: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
