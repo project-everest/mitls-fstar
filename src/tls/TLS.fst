@@ -303,7 +303,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     (if j < 0 then i == noId else
        let e = Seq.index es j in
        i = hsId e.h /\
-       writable_seqn (writer_epoch e) h)))
+       incrementable (writer_epoch e) h)))
   (ensures (fun h0 payload h1 ->
     let es = epochsT c h0 in
     let j = iT c.hs Writer h0 in
@@ -347,7 +347,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     (j >= 0 ==> (
        let e = Seq.index es j in
        i == hsId e.h /\
-       writable_seqn (writer_epoch e) h))))
+       incrementable (writer_epoch e) h))))
   (ensures (fun h0 _ h1 ->
     let es = sel h0 c.hs.log in
     let j = iT c.hs Writer h0  in
@@ -385,33 +385,6 @@ let send c #i f =
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
 
-(* 16-05-16 was:
-let send c #i f =
-  let pv = outerPV c in
-  let ct, rg = Content.ct_rg i f in
-  let payload = send_payload c i f in
-  lemma_repr_bytes_values (length payload);
-  let record = Record.makePacket ct pv payload in
-
-  // we need all that to cross an ST function with HyperHeap.modifies Set.empty!
-  recall (c_log c); recall (c.state);
-  let j = Handshake.i c.hs Writer in
-
-  // seems necessary, not sure how to make it less verbose
-  if j >= 0 then (
-    let es = !c.hs.log in
-    match Seq.index es j with
-    | Epoch h _ wr -> recall (log wr); recall (seqn wr));
-
-  //15-11-27 we need a trivial framing lemma and scaffolding to carry
-  //15-11-27 st_inv c h1 across this call; what's a better style?
-  let h0 = ST.get() in
-  let r = Platform.Tcp.send (C.tcp c) record in
-  frame_unrelated c h0 (ST.get());
-  match r with
-    | Error(x)  -> Error(AD_internal_error,x)
-    | Correct _ -> Correct()
-*)
 
 
 (* 
@@ -419,23 +392,6 @@ assume val admit_st_inv: c: connection -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 = h1 /\ st_inv h1 c))
 *)
-
-
-(* which fragment should we send next? *)
-(* we must send this fragment before restoring the connection invariant *)
-
-//* pick & send one pending message from any protocol state, in two modes:
-//* when writing for the application code, we may send is_Some ghost.
-//* when writing while reading, is_None ghost.
-//* the result ranges over...
-//* | WriteDone         when is_None ghost, notifying there is nothing left to send
-//* | Written when is_Some ghost, notifying the appdata fragment was sent
-//* | WriteError (unrecoverable \/ after sending alert)
-//* | SentClose
-//* | WriteAgain | WriteAgainFinishing | WriteAgainClosing
-//* | WriteHSComplete
-//* the state changes accordingly.
-//
 
 
 // auxiliary functions for projections; floating.
@@ -521,6 +477,23 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
   | Error (x,y) -> unrecoverable c y
 
 
+
+
+(* which fragment should we send next? *)
+(* we must send this fragment before restoring the connection invariant *)
+
+//* pick & send one pending message from any protocol state, in two modes:
+//* when writing for the application code, we may send is_Some ghost.
+//* when writing while reading, is_None ghost.
+//* the result ranges over...
+//* | WriteDone         when is_None ghost, notifying there is nothing left to send
+//* | Written when is_Some ghost, notifying the appdata fragment was sent
+//* | WriteError (unrecoverable \/ after sending alert)
+//* | SentClose
+//* | WriteAgain | WriteAgainFinishing | WriteAgainClosing
+//* | WriteHSComplete
+//* the state changes accordingly.
+
 //Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
 //            How do we conclude that after these two calls all the appData was written?
 // CF: this is guarantees only when returning Written.
@@ -529,31 +502,27 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
     let st = sel h c.state in
     let es = sel h c.hs.log in
     let j = iT c.hs Writer h in
-    j < Seq.length es /\
     st_inv c h /\
     st <> Close /\
     st <> Half Reader /\
-    (j < 0 ==> i == noId) /\
-    (j >= 0 ==> (
+    (if j < 0 then i == noId else
       let e = Seq.index es j in
       st = AD /\
       i = hsId e.h /\
-      incrementable (writer_epoch e) h))))
+      incrementable (writer_epoch e) h)))
   (ensures (fun h0 r h1 ->
     let st = sel h0 c.state in
     let es = sel h0 c.hs.log in
     let j = iT c.hs Writer h0  in
-    j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above
-    (j < 0 ==> i == noId /\ HyperHeap.modifies Set.empty h0 h1) /\
-    (j >= 0 ==> (
+    (if j < 0 then i == noId /\ h0 = h1 else
        let e = Seq.index es j in
        i == hsId e.h /\ (
        let wr:writer i = writer_epoch e in
        modifies (Set.singleton (C.region c)) h0 h1
-)))))
+))))
 
 (* the rest of the spec below still uses the old state machine
     // TODO: conditionally prove that i == epoch_id (epoch_w_h c h), at least when appdata is set.
@@ -680,42 +649,33 @@ let writeOne c i appdata =
                         | Error (x,y) -> unrecoverable c y)
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
 *)
-
+ 
 let writeOne c i appdata =
-  recall (c_log c); //NS: Should not be necessary; it's part of hs_inv now
-  recall (c.state); // needed to get stability for i across ST calls
   let h0 = ST.get() in
   let st = !c.state in
 
-  (*
-  // does this help?
-  let j = Handshake.i c.hs Writer in
-  if j >= 0 then (
-    let es = !c.hs.log in
-    (match Seq.index es j with
-    | Epoch h _ wr -> recall (log wr); recall (seqn wr)));
-  *)
-  admit();
+  // alerts have highest priority; we send only close_notify and fatal alerts
+  let alert_response = Alert.next_fragment c.alert in
+  let h1 = ST.get() in
 
-        // alerts have highest priority; we send only close_notify and fatal alerts
-        let alert_response = Alert.next_fragment c.alert in
-        let h1 = ST.get() in
-        (match alert_response with
-        | Some AD_close_notify -> ( // graceful closure
-            match send c #i (Content.ct_alert i AD_close_notify) with
-            | Correct()   ->
-                let h2 = ST.get () in
-                c.state := (if st = Half Writer then Close else Half Reader);
-                SentClose
-            | Error (x,y) -> unrecoverable c y )
-        | Some ad -> (
-            match send c #i (Content.ct_alert i ad) with
-            | Correct() ->
-                // let reason = match writing with | Closing(_,reason) -> reason | _ -> "" in
-                closeConnection c;
-                WriteError (Some ad) ""
-            | Error (x,y) -> unrecoverable c y )
-        | None ->
+  frame_iT c.hs Writer h0 h1 (Set.singleton (Alert.region c.alert));
+  assume false; // TODO can't get the precondition of send below. 
+  (match alert_response with
+  | Some AD_close_notify -> ( // graceful closure
+      match send c #i (Content.ct_alert i AD_close_notify) with
+      | Correct()   ->
+          let h2 = ST.get () in
+          c.state := (if st = Half Writer then Close else Half Reader);
+          SentClose
+      | Error (x,y) -> unrecoverable c y )
+  | Some ad -> (
+      match send c #i (Content.ct_alert i ad) with
+      | Correct() ->
+          // let reason = match writing with | Closing(_,reason) -> reason | _ -> "" in
+          closeConnection c;
+          WriteError (Some ad) ""
+      | Error (x,y) -> unrecoverable c y )
+  | None -> // SentClose )
 
         // next we check if there is outgoing Handshake traffic
         let hs_response = Handshake.next_fragment c.hs in

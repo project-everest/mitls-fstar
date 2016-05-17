@@ -143,10 +143,12 @@ let seqnT #i #rw (s:state i rw) h =
 
 let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:HH.t) = is_seqn (seqnT s h + 1)
 
+(* same as above? 
 let writable_seqn (#i:id) (#rw:rw) (s:state i rw) h = 
     match s with 
     | Stream _ s -> is_seqn (m_sel h (StreamAE.ctr (StreamAE.State.counter s)) + 1)
     | StLHAE _ s -> is_seqn (sel h (StatefulLHAE.State.seqn s) + 1) 
+*)
 
 (*
 
