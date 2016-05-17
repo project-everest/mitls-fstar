@@ -63,12 +63,6 @@ DEBUG=ocamlfind ocamlc
 OCAMLMKLIB=ocamlfind ocamlmklib
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
 
-
-refresh:
-	git fetch -v 
-	git submodule update 
-	make -C $(FSTAR_HOME)/src/ocaml-output
-
 # ----------------------- NuBuild integration ------------------------
 NUBUILD_HOME=../../.nubuild
 NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
@@ -200,6 +194,7 @@ endef
 
 # verifying one file within $(FSTS)
 %.fst-ver: $(LIBFILES)
+	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	--verify_module $(subst .p,,$(basename $@)) \
@@ -207,10 +202,12 @@ endef
 	$(call prefix_ver,$(basename $@),fst)
 
 %.fsti-ver:
+	$(MAKE) refresh
 	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
 
 %.fst-in:
+	$(MAKE) refresh
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(LIBFILES) $(ADMITTED) \
@@ -218,12 +215,14 @@ endef
 	--verify_module $(subst .p,,$(basename $@))
 
 %.fsti-in:
+	$(MAKE) refresh
 	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
 --verify_module $(subst .p,,$(basename $@))
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
 tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
+	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
@@ -231,6 +230,7 @@ tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	$(filter-out Ideal.fst,$^)
 
 tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
+	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
@@ -242,6 +242,7 @@ wc:
 	wc -l $(LIBFILES) $(FSTS)
 
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
+	$(MAKE) refresh
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) --lax  $(ADMITTED) $(filter-out Concrete.fst,$^)
 
@@ -273,15 +274,18 @@ TLSML := \
 # Last step: F* currently extracts everything in the current directory
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
 
+refresh:
+	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
+
 # Note to self: there is little point in breaking down this rule into more
 # atomic ones. One may hope that we can only rebuild the .ml files that have
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
+	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	cp Concrete.fst IdealFlags.fst
-	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
 	  --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
