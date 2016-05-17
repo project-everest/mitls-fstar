@@ -300,6 +300,8 @@ let hs_inv (s:hs) (h: HyperHeap.t) =
   /\ HyperHeap.contains_ref s.log h                   //Nothing deep about these next two, since they can always 
   /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
+//TODO: need a lemma to frame hs_inv across updates that don't clash with HS.region
+//TODO: need a lemma to frame a write to one epoch across the state of the other epochs
 
 // returns the protocol version negotiated so far
 // (used for formatting outgoing packets, but not trusted)

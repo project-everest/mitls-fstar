@@ -32,10 +32,8 @@ let id = i:id{ is_stream_ae i }
 
 // temporary scaffolding
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires (epochs_inv c h0))
-  (ensures (
-    epochs c h0 = epochs c h1 /\
-    epochs_inv c h1))
+  (requires True)
+  (ensures epochs c h0 = epochs c h1)
 
 // too convenient; should move to a library
 // JP: isn't failwith sufficient enough? CF: this one works in ST. 
@@ -203,9 +201,8 @@ val moveToOpenState: c:connection -> ST unit
 
 let moveToOpenState c =
     let h0 = ST.get() in
-    c.state := AD;
-    frame_unrelated c h0 (ST.get())
-
+    c.state := AD
+    
 
 (* Dispatch dealing with network sockets *)
 // we need st_inv h c /\ wr > Init ==> is_Some epoch_w
@@ -221,14 +218,9 @@ val closeConnection: c: connection -> ST unit
   (ensures (fun h0 _ h1 -> st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1))
 
 let closeConnection c =
-    let h0 = ST.get() in
-    recall (HS.log c.hs);
-    recall (HS.state c.hs); // needed to preserve hs_inv within inv
     invalidateSession c.hs; //changes (HS.region c.hs)
-    let h1 = ST.get() in
-    frame_internal c h0 h1;
-    c.state := Close;
-    frame_unrelated c h1 (ST.get())
+    c.state := Close
+
 
 // on some errors, we locally give up the connection
 let unrecoverable c reason =
@@ -246,14 +238,9 @@ val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:st
   ))
 
 let abortWithAlert c ad reason =
-    let h0 = ST.get() in
     invalidateSession c.hs;
-    let h1 = ST.get() in
-    frame_internal c h0 h1;
     Alert.send c.alert ad;
-    c.state := Half Writer; //$ do we need to store the reason?
-    admit();//16-05-09     
-    frame_unrelated c h1 (ST.get())
+    c.state := Half Writer
 
 // on some errors, we attempt to send an alert before tearing down the connection
 val closable: c:connection -> reason:string -> ST ioresult_w
@@ -335,36 +322,20 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
        )) /\
     True ))
 
-assume val frame_ae: 
-  h0:HH.t -> h1: HH.t -> c:connection -> Lemma(
-    // restrictions of h0 and h1 to the footprint of st_inv and iT in c are the same /\
-    st_inv c h0 ==> st_inv c h1 /\ op_Equality #int (iT c.hs Writer h0) (iT c.hs Writer h1))
+(* assume val frame_ae:  *)
+(*   h0:HH.t -> h1: HH.t -> c:connection -> Lemma( *)
+(*     // restrictions of h0 and h1 to the footprint of st_inv and iT in c are the same /\ *)
+(*     st_inv c h0 ==> st_inv c h1 /\ op_Equality #int (iT c.hs Writer h0) (iT c.hs Writer h1)) *)
 
 let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j = -1
     then Content.repr i f
-    else
-      begin
-      let es = !c.hs.log in
-      let e = Seq.index es j in 
-      let wr : writer i = writer_epoch e in
-      // assert(Handshake.epochs_inv es);
-      let h0 = ST.get() in
-      // assert (epochs_inv c h0);
-      // those two now follow from st_inv: recall c.state; recall c.hs.log;
-      // assert (Map.contains h0 (HS.region c.hs));
-      // assert (Map.contains h0 (region wr)); //16-05-16 failing; should it come from a static refinement on the epoch?
-      // cut (frame_witness (iT c.hs Writer h0));
-      let encrypted = StAE.encrypt wr f in
-      let h1 = ST.get() in
-      // assert(j = iT c.hs Writer h1);
-      // assert(modifies_one (region wr) h0 h1); //16-05-16 failing; why?
-      frame_ae h0 h1 c;//16-05-14 broken footprinting?
-      // frame_writer_epoch c h0 h1;
-      encrypted
-      end
-      
+    else let es = !c.hs.log in
+	 let e = Seq.index es j in 
+	 let wr : writer i = writer_epoch e in
+	 StAE.encrypt wr f 
+
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
   (requires (fun h ->
@@ -411,8 +382,8 @@ let send c #i f =
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
   let record = Record.makePacket ct pv payload in
-  let r = Platform.Tcp.send (C.tcp c) record in
-  assume false;//16-05-16 
+  let r  = Platform.Tcp.send (C.tcp c) record in
+  assume false;//16-05-16: FIXME!
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
@@ -732,14 +703,12 @@ let writeOne c i appdata =
         // alerts have highest priority; we send only close_notify and fatal alerts
         let alert_response = Alert.next_fragment c.alert in
         let h1 = ST.get() in
-        frame_unrelated c h0 h1;
         (match alert_response with
         | Some AD_close_notify -> ( // graceful closure
             match send c #i (Content.ct_alert i AD_close_notify) with
             | Correct()   ->
                 let h2 = ST.get () in
                 c.state := (if st = Half Writer then Close else Half Reader);
-                frame_unrelated c h2 (ST.get());
                 SentClose
             | Error (x,y) -> unrecoverable c y )
         | Some ad -> (
@@ -771,7 +740,6 @@ let writeOne c i appdata =
 
         | Handshake.OutSome rg f -> (
             // we send some handshake fragment
-            frame_internal c h1 h2;
             match send c #i (Content.CT_Handshake rg f) with
             | Correct()   -> WriteAgain
             | Error (x,y) -> unrecoverable c y)
@@ -806,7 +774,6 @@ let writeOne c i appdata =
         | Handshake.OutIdle -> (
 
         // finally attempt to send some application data
-        frame_internal c h1 h2;
         (match st, appdata with
         | AD, Some (|rg,f|) ->
                ( match send c (Content.CT_Data rg f) with
