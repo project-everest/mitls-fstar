@@ -25,8 +25,9 @@ type id = i:id { pv_of_id i = TLS_1p3 }
 // similarly, the length accounts for the TLS-specific CT byte.
 // internally, we know len > 0
 
-type plainLen = l:int { 0 < l /\ l -1 < max_TLSPlaintext_fragment_length }
-type plainRepr = b:bytes { 0 < length b /\ length b -1 < max_TLSPlaintext_fragment_length }
+let plainLength (l:nat) = 1 <= l /\ l <= max_TLSCiphertext_fragment_length_13
+type plainLen = l:nat { plainLength l }
+type plainRepr = b:bytes { plainLength (length b) }
 
 type plain (i:id) (len: plainLen) = f:fragment i { len = snd (Content.rg i f) + 1 }
 
@@ -63,26 +64,33 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   Tot(result(p:plain i (length bs) { bs = ghost_repr #i #(length bs) p }))
 let rec scan i bs j =
   let len = length bs in 
-  if j = 0 then Error (AD_decode_error, "") else
-  match index bs j with 
-  | 0z  -> scan i bs (j-1)
-  | 21z -> let rg: frange i = (0, len - 1) in
+  let v = index bs j in 
+  if j > max_TLSPlaintext_fragment_length + 1 then 
+    // the CT byte cannot be beyond the largest plaintext length; so those bytes must be 0z
+    if v = 0z then scan i bs (j-1) 
+    else Error (AD_decode_error, "")  //TODO pick better error
+  else 
+  match v with 
+  | 0z  -> if j > 0 then scan i bs (j-1) 
+          else Error (AD_decode_error, "") 
+  | 21z -> let rg: frange i = (0, j) in
            let payload, rest = Platform.Bytes.split bs j in 
            let f = CT_Alert rg payload in 
            lemma_eq_intro bs (pad payload Alert len);
            Correct f
-  | 22z -> let rg:frange i = (0, length bs - 1) in
+  | 22z -> let rg:frange i = (0, j) in
            let payload = fst (Platform.Bytes.split bs j) in 
            let f = CT_Handshake rg payload in 
            lemma_eq_intro bs (pad payload Handshake len);
            Correct f
-  | 23z -> let rg:frange i = (0, length bs - 1) in
+  | 23z -> let rg:frange i = (0, j) in
            let payload = fst (Platform.Bytes.split bs j) in
            let d = DataStream.mk_fragment #i rg payload in
            assert(forall (k:nat {j < k /\ k < length bs}). Seq.index bs k = 0z);
            lemma_eq_intro bs (pad payload Application_data len);
            Correct (CT_Data rg d)
   | _    -> Error (AD_decode_error, "") 
+
 
 (*
 val pinverse_scan: i:id {~ (authId i)} -> len:nat -> f:plain i len ->
