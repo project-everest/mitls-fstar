@@ -192,30 +192,6 @@ type ioresult_o = r:ioresult_w { is_Written r \/ is_WriteError r }
 
 // type msg_o (i:id) = (r:range & DataStream.fragment i r)
 
-(* OLD
-// Outcomes for internal, one-message-at-a-time functions
-// (now merged with TLS.ioresult_o)
-type writeOutcome =
-    // now WriteError(None,err)
-    | WError of string (* internal *)
-
-    // now Written
-    | WAppDataDone (* App data have been sent, no more data to send *)
-
-    // now MustRead
-    | WriteFinished (* The finished message has been sent, but the handshake is not over *)
-
-    // now WriteError(Some ad, err)
-    | SentFatal of alertDescription * string (* The alert we sent *)
-
-    // internal states only
-    | WriteDone (* No more data to send in the current state *)
-    | WriteHSComplete (* The handshake is complete *)
-    | SentClose
-    | WriteAgain (* Possibly more data to send *)
-    | WriteAgainFinishing (* Possibly more data to send, and the outgoing epoch changed *)
-    | WriteAgainClosing (* An alert must be sent before the connection is torn down *)
-*)
 
 val moveToOpenState: c:connection -> ST unit
   (requires (fun h ->
@@ -453,13 +429,12 @@ let send c #i f =
   recall (c_log c); recall (c.state);
   let j = Handshake.i c.hs Writer in
 
-(*
   // seems necessary, not sure how to make it less verbose
   if j >= 0 then (
     let es = !c.hs.log in
     match Seq.index es j with
     | Epoch h _ wr -> recall (log wr); recall (seqn wr));
-*)
+
   //15-11-27 we need a trivial framing lemma and scaffolding to carry
   //15-11-27 st_inv c h1 across this call; what's a better style?
   let h0 = ST.get() in
@@ -1048,39 +1023,45 @@ type ioresult_i (i:id) =
 
 
 
-
-(* 
-
 let live_i e r = // is the connection still live?
   match r with
-  | Read d      -> not(DataStream.final e d)
-  | ReadError _ -> false
-  | _           -> true
-
+  | Read d        -> not(DataStream.final e d)
+  | ReadError _ _ -> false
+  | _             -> true
 
 // let's specify reading d off the input DataStream (incrementing the reader pos)
 
-type delta h0 cn =
-  DataStream.delta (fst (sel_reader h cn))
-
-val sel_reader: h:heap -> cn:connection -> Tot (i:id * StatefulLHAE.reader i) // self-specified
-let sel_reader h cn =
-  let hs_log = sel h (Handshake.HS.log (Connection.hs cn)) in
-  match fst (List.hd hs_log) with
-  | Keys h r w -> (hs_id h, r)
+val sel_reader: h:HyperHeap.t -> connection -> Tot (option (| i:id & StAE.reader i |)) // self-specified
+let sel_reader h c =
+  let es = sel h (c_log c) in
+  let j = iT c.hs Reader h in
+  (if j < 0 then None else 
+  let e = Seq.index es j in 
+  let i = peerId (hsId e.h) in
+  assume(is_stream_ae i);
+  Some (| i, reader_epoch e|))
+  
   // todo: add other cases depending on dispatch state
 
-val append_r: h0:heap -> heap -> cn:connection -> d: delta h0 cn -> Tot bool
-let append_r h0 h1 cn d  =
-  let id, reader = sel_reader h0 cn in // we statically know those are unchanged
-  let log0 = sel h0 (StatefulLHAE.StReader.log reader) in
-  let log1 = sel h1 (StatefulLHAE.StReader.log reader) in
-  let pos0 = sel h0 (StatefulLHAE.StReader.seqn reader) in
-  let pos1 = sel h1 (StatefulLHAE.StReader.seqn reader) in
-  log1 = log0 &&
-  pos1 = pos0 + 1 &&
-  List.nth log1 pos0 = d
+type delta h c = 
+  (match sel_reader h c with 
+  | Some (| i , _ |) -> DataStream.delta i
+  | None             -> DataStream.delta noId)
 
+(*
+val append_r: h0:HH.t -> HH.t -> c:connection -> d: delta h0 c -> Type0
+let append_r h0 h1 c d =
+  match sel_reader h0 c with  // we statically know those are unchanged
+  | Some (| i, r |) -> 
+    let pos0 = StAE.seqnT r h0  in
+    let pos1 = StAE.seqnT r h1  in
+    pos1 = pos0 + 1  /\
+    (if authId i then 
+    let log0 = StAE.logT r h0 in 
+    let log1 = StAE.logT r h1 in 
+    (log1 = log0 /\
+    Seq.index log1 pos0 = d ))
+  | None -> True
 
 
 assume val rd_i: c: connection -> Tot id

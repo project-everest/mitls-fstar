@@ -125,7 +125,7 @@ StAE.fst \
 Record.fst \
 HSCrypto.fst \
 TLSPRF.fst \
-PRF.p.fst \
+PRF.fst \
 HandshakeLog.fst \
 KeySchedule.fst \
 Handshake.fsti \
@@ -180,7 +180,7 @@ MAC_SHA1 \
 StAE \
 Connection \
 ConnInvariant \
-TLS
+TLS 
 
 # admitting things verified elsewhere; redundant with lax and --verify_module?
 # No, --verify_module overrides --admit_fsi
@@ -316,7 +316,7 @@ tls-server:
 # preprocessing is still a necessary pain; pls remove files below when possible
 # Nonce still has an #ideal flag
 # many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= PMS PRF
+TLS_PP_FILES= PMS 
 
 # Target to generate preprocessed files for atom-interactive
 pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
