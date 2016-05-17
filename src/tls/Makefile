@@ -207,7 +207,7 @@ endef
 --verify_module $(basename $@)
 
 %.fst-in:
-	$(MAKE) refresh
+	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(LIBFILES) $(ADMITTED) \
@@ -215,7 +215,7 @@ endef
 	--verify_module $(basename $@)
 
 %.fsti-in:
-	$(MAKE) refresh
+	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
 --verify_module $(basename $@)
 
