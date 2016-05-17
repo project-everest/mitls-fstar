@@ -238,7 +238,7 @@ val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> s:Se
     (ensures seqnT st h0 = seqnT st h1) 
 let frame_seqnT #i #rw st h0 h1 s = 
   if is_stream_ae i then ()
-  else admit() //seem to require authId i to prove it for 1.2; should not be the case; need to investigate why
+  else admit() //FIXME! doesn't go through in 1.2; need to investigate why
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -271,22 +271,38 @@ let encrypt #i e f =
     c
 
 
-  ////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 //Decryption
 ////////////////////////////////////////////////////////////////////////////////
 // decryption, idealized as a lookup for safe instances
-val decrypt: #i:id -> d:reader i -> c:decrypted i -> ST (option (f:fragment i { length c = cipherLen i f}))
+val decrypt: #i:id -> d:reader i{is_stream_ae i} -> c:decrypted i -> ST (option (fragment i))//(f:fragment i { length c = cipherLen i f}))
   (requires (fun h0 -> incrementable d h0))
   (ensures  (fun h0 res h1 ->
 	      match res with
  	     | None   -> modifies Set.empty h0 h1
 	     | Some f -> let j = seqnT d h0 in 
-                        modifies_one (region d) h0 h1 /\ 
-                        seqnT d h1 = j + 1 /\
-                        (authId i ==>
-                           (let written = logT d h1 in 
-                           j < Seq.length written /\
-                           f = Seq.index written j)))) 
+		        seqnT d h1 = j + 1 /\
+                        modifies_one (region d) h0 h1 /\
+			(authId i ==>
+			   (* (let written = logT d h0 in  *)
+  			   (*  j < Seq.length written /\ *)
+			   (*  f = Seq.index written j)))) *)
+			   (let log = StreamAE.ilog (StreamAE.State.log (stream_ae d)) in
+			    let entries = MR.m_sel h0 log in
+			    j < Seq.length entries /\
+			    f = StreamAE.Entry.p (Seq.index entries j)))))
+			    
+                           (* (let written = logT d h1 in *)
+			   (* ))))(\*  /\  *\) *)
+                           (* j < Seq.length written /\ *)
+                           (* f = Seq.index written j)))) *)
+let decrypt #i d c =  
+   assume (is_stream_ae i);
+   match d with 
+   | Stream _ s -> 
+         (match StreamAE.decrypt s (StreamAE.lenCipher i c) c with 
+         | Some x -> Some x 
+         | None   -> None)
 
 
 let gen parent i =  
@@ -312,10 +328,3 @@ let genReader parent #i w =
   match w with 
   | Stream _ w -> Stream () (StreamAE.genReader parent w) 
 
-let decrypt #i d c =  
-    assume false;
-   match d with 
-   | Stream _ s -> 
-       ( match StreamAE.decrypt s (StreamAE.lenCipher i c) c with 
-         | Some x -> Some x 
-         | None   -> None)

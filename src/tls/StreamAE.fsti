@@ -170,15 +170,16 @@ let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
 val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l -> ST (option (plain i l))
   (requires (fun h0 -> is_seqn (m_sel h0 (ctr d.counter) + 1)))
   (ensures  (fun h0 res h1 ->
-	      (authId i ==>
-                 (let log = m_sel h0 (ilog d.log) in 
-		  let j = m_sel h0 (ctr d.counter) in
-		  if j < Seq.length log && matches l c (Seq.index log j)
-		  then res = Some (Entry.p (Seq.index log j))
-		       /\ m_sel h1 (ctr d.counter) == j + 1
-		  else res = None))
-	  /\ (match res with
- 	     | None -> modifies Set.empty h0 h1
-	     | _ -> modifies_one d.region h0 h1
-	           /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1)))
+      let j = m_sel h0 (ctr d.counter) in
+      (authId i 
+       ==> (let log = m_sel h0 (ilog d.log) in 
+	    if j < Seq.length log && matches l c (Seq.index log j)
+	    then res = Some (Entry.p (Seq.index log j))
+	    else res = None))
+    /\ (match res with
+       | None -> modifies Set.empty h0 h1
+       | _ -> modifies_one d.region h0 h1
+             /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
+	     /\ m_sel h1 (ctr d.counter) == j + 1)))
+
 
