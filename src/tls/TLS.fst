@@ -310,9 +310,9 @@ let epochsT c h = Handshake.logT c.hs h
 
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
-    let es = epochsT c h in
+    let es = epochsT c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
-    j < Seq.length es /\
+    //now follows from iT: j < Seq.length es /\
     st_inv c h /\
     (if j < 0 then i == noId else
        let e = Seq.index es j in
@@ -321,7 +321,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
   (ensures (fun h0 payload h1 ->
     let es = epochsT c h0 in
     let j = iT c.hs Writer h0 in
-    j < Seq.length es /\
+    //j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
     op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
@@ -347,21 +347,21 @@ let send_payload c i f =
     else
       begin
       let es = !c.hs.log in
-      let wr : writer i = writer_epoch (Seq.index es j) in
+      let e = Seq.index es j in 
+      let wr : writer i = writer_epoch e in
+      // assert(Handshake.epochs_inv es);
       let h0 = ST.get() in
-      assert (epochs_inv c h0);
-      recall c.state;
-      recall c.hs.log;
-      assert (Map.contains h0 (HS.region c.hs));
-      assume (Map.contains h0 (region wr)); //16-05-16 failing; should it come from a static refinement on the epoch?
-      cut (frame_witness (iT c.hs Writer h0));
+      // assert (epochs_inv c h0);
+      // those two now follow from st_inv: recall c.state; recall c.hs.log;
+      // assert (Map.contains h0 (HS.region c.hs));
+      // assert (Map.contains h0 (region wr)); //16-05-16 failing; should it come from a static refinement on the epoch?
+      // cut (frame_witness (iT c.hs Writer h0));
       let encrypted = StAE.encrypt wr f in
       let h1 = ST.get() in
       // assert(j = iT c.hs Writer h1);
-      assume(modifies_one (region wr) h0 h1); //16-05-16 failing; why?
+      // assert(modifies_one (region wr) h0 h1); //16-05-16 failing; why?
       frame_ae h0 h1 c;//16-05-14 broken footprinting?
       // frame_writer_epoch c h0 h1;
-      admit();
       encrypted
       end
       
@@ -371,7 +371,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     let st = sel h c.state in
     let es = sel h c.hs.log in
     let j = iT c.hs Writer h in
-    j < Seq.length es /\
+    // j < Seq.length es /\
     st_inv c h /\
     st <> Close /\
     st <> Half Reader /\
@@ -384,7 +384,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     let es = sel h0 c.hs.log in
     let j = iT c.hs Writer h0  in
     let st = sel h0 c.state in
-    j < Seq.length es /\
+    // j < Seq.length es /\
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\
@@ -412,7 +412,7 @@ let send c #i f =
   lemma_repr_bytes_values (length payload);
   let record = Record.makePacket ct pv payload in
   let r = Platform.Tcp.send (C.tcp c) record in
-  assume(false);//16-05-16 
+  assume false;//16-05-16 
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
