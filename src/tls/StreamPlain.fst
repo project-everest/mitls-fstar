@@ -97,15 +97,7 @@ let rec scan i bs j =
       Correct f
   | _    -> Error (AD_decode_error, "") 
 
-
-(*
-val pinverse_scan: i:id {~ (authId i)} -> len:nat -> f:plain i len ->
-  Lemma(is_Correct(scan i (ghost_repr #i #len f) (len - 1)))
-
-let pinverse_scan i len f = () 
-*)
-
-type goodrepr i = bs: plainRepr {is_Correct(scan i bs (length bs - 1)) }
+type goodrepr i = bs: plainRepr {is_Correct (scan i bs (length bs - 1)) }
 
 val mk_plain: i:id{ ~(authId i)} -> l:plainLen -> pr:lbytes l -> Tot (option (p:plain i l {pr = ghost_repr #i #l p}))
 let mk_plain i l pr = 
