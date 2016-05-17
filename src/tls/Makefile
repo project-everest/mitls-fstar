@@ -197,14 +197,14 @@ endef
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
-	--verify_module $(subst .p,,$(basename $@)) \
+	--verify_module $(basename $@) \
 	$^ \
 	$(call prefix_ver,$(basename $@),fst)
 
 %.fsti-ver:
 	$(MAKE) refresh
 	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver, $(basename $@),fsti) \
---verify_module $(subst .p,,$(basename $@))
+--verify_module $(basename $@)
 
 %.fst-in:
 	$(MAKE) refresh
@@ -212,12 +212,12 @@ endef
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(LIBFILES) $(ADMITTED) \
 	$(call prefix_cfg,$(basename $@),fst) \
-	--verify_module $(subst .p,,$(basename $@))
+	--verify_module $(basename $@)
 
 %.fsti-in:
 	$(MAKE) refresh
 	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
---verify_module $(subst .p,,$(basename $@))
+--verify_module $(basename $@)
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
@@ -261,8 +261,7 @@ TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)
 OUTPUT_DIR=output
 
 # All our extracted modules.
-TLSML := $(FSTS:.p.fst=.ml)
-TLSML := $(TLSML:.fst=.ml)
+TLSML := $(FSTS:.fst=.ml)
 TLSML := $(subst Handshake.fsti, , $(TLSML))
 TLSML := $(subst StreamAE.fsti, , $(TLSML))
 TLSML := $(subst StAE.fsti, , $(TLSML))
@@ -315,46 +314,6 @@ tls-server:
 	         -I test/ -I output/ test/test_server.ml -o server.out
 	$(EXTRA_PATH) ./server.out 1.2 0.0.0.0 4443
 
-# ------------------ preprocessing :( -----------------------
-
-# preprocessing is still a necessary pain; pls remove files below when possible
-# Nonce still has an #ideal flag
-# many files have __SOURCE_FILE__ __LINE__ macros
-TLS_PP_FILES= PMS 
-
-# Target to generate preprocessed files for atom-interactive
-pp:: $(addsuffix .p.fst, $(TLS_PP_FILES))
-
-
-HAS_CPP := $(shell which cpp 2> /dev/null; echo $$?)
-ifeq ($(HAS_CPP),1)
-   $(error "cpp not found in PATH. Unable to proceed")
-endif
-
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-    CPP=cpp #-ffreestanding
-else
-    UNAME_S := $(shell uname -s)
-    ifeq ($(UNAME_S),Linux)
-        CPP=cpp -ffreestanding
-    else
-        HAS_GNU_CPP := $(shell which cpp-5 2> /dev/null; echo $$?)
-        ifeq ($(HAS_GNU_CPP),1)
-            $(error "cpp-5 not found in PATH. Unable to proceed")
-        endif
-        CPP=cpp-5 # GCC cpp rather than LLVM
-    endif
 endif
-
-%.p.fsi: %.fsi
-	$(CPP)  -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fsti: %.fsti
-	$(CPP) -P -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fst: %.fst
-	$(CPP) -P -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@
-
-%.p.fs: %.fs
-	$(CPP)  -C $^ 2>/dev/null | sed '/^[#] 1 "<.*/d' > $@

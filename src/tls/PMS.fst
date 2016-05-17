@@ -1,8 +1,4 @@
-﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
-
-#light "off"
-
-module PMS 
+﻿module PMS 
 
 (* Split from KEF *) 
 
