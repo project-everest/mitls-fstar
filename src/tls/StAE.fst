@@ -81,36 +81,15 @@ type writer i = state i Writer
 // TODO: write down their joint monotonic specification: both are monotonic, and seqn = length log when ideal
 
 type ideal_log (i:id) = seq (fragment i)  // TODO: consider adding constraint on terminator fragments
-
-// TODO extend library? We need a full spec; NS: nope, no need for a full spec; it is Tot
-
-val un_snoc: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
-let un_snoc #a s =
-  let last = Seq.length s - 1 in
-  Seq.slice s 0 last, Seq.index s last
-
-val seq_mapT: ('a -> Tot 'b) -> s:seq 'a -> Tot (seq 'b)
-    (decreases (Seq.length s))
-let rec seq_mapT f s = 
-  if Seq.length s = 0 then Seq.createEmpty
-  else let prefix, last = un_snoc s in
-       SeqProperties.snoc (seq_mapT f prefix) (f last)
-
-val seq_map_snoc: f:('a -> Tot 'b) -> s:seq 'a -> a:'a -> Lemma
-  (seq_mapT f (SeqP.snoc s a) = SeqP.snoc (seq_mapT f s) (f a))
-#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
-let seq_map_snoc f s a = 
-  let prefix, last = un_snoc (SeqP.snoc s a) in 
-  cut (Seq.equal prefix s)
-
-#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+module MS = MonotoneSeq
 
 val logT: #i:id -> #rw:rw -> s:state i rw{ authId i } -> HH.t -> GTot (ideal_log i)
 let logT #i #rw s h = 
   match s with
-  | Stream _ s -> let written = m_sel h (StreamAE.ilog (StreamAE.State.log s)) in
-                 seq_mapT #(StreamAE.entry i) #(fragment i) StreamAE.Entry.p written
-
+  | Stream _ s -> 
+    let entries = m_sel h (StreamAE.ilog (StreamAE.State.log s)) in
+    MS.map StreamAE.Entry.p entries
+  
 let stream_ae (#i:id{is_stream_ae i}) (#rw:rw) (s:state i rw) 
   : Tot (StreamAE.state i rw)
   = let Stream _ s = s in s
@@ -130,9 +109,26 @@ let lemma_logT_snoc_commutes #i w h0 h1 e =
   if authId i 
   then let sw = stream_ae w in
        let log = S.ilog (StreamAE.State.log sw) in
-       seq_map_snoc #(S.entry i) #(fragment i) StreamAE.Entry.p (MR.m_sel h0 log) e
+       MS.map_snoc #(S.entry i) #(fragment i) StreamAE.Entry.p (MR.m_sel h0 log) e
   else ()       
-  
+
+
+let log_prefix (#i:id) (#rw:rw) (w:state i rw{authId i /\ is_stream_ae i}) 
+	       (fs:seq (fragment i)) (h:HH.t) 
+  : GTot Type0 = 
+    let log = S.ilog (StreamAE.State.log (stream_ae w)) in
+    MS.map_prefix log StreamAE.Entry.p fs h
+
+let log_prefix_stable (#i:S.id) (#rw:rw) (w:state i rw{is_stream_ae i /\ authId i}) (h:HH.t) 
+  : Lemma (let fs = logT w h in
+           let log = S.ilog (StreamAE.State.log (stream_ae w)) in
+	   MonotoneSeq.grows fs fs 
+	   /\ MR.stable_on_t log (log_prefix w (logT w h)))
+  = let fs = logT w h in
+    let log = S.ilog (StreamAE.State.log (stream_ae w)) in
+    MS.seq_extension_reflexive fs;
+    MS.map_prefix_stable log StreamAE.Entry.p fs
+
 val seqnT: #i:id -> #rw:rw -> state i rw -> HH.t -> GTot seqn_t 
 let seqnT #i #rw (s:state i rw) h = 
   match s with 
@@ -219,23 +215,6 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 ////////////////////////////////////////////////////////////////////////////////
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
-
-let log_prefix (#i:id) (#rw:rw) (w:state i rw{authId i}) 
-	       (fs:seq (fragment i)) (h:HH.t) 
-  : GTot Type0 = 
-    MonotoneSeq.grows fs (logT w h)
-
-(* assume val tlog: #i:id -> #rw:rw -> e:state i rw{authId i} -> h:HH.t -> Tot (s:seq (fragment i){s = logT e h}) *)
-
-let log_prefix_stable (#i:S.id) (#rw:rw) (w:state i rw{is_stream_ae i /\ authId i}) (h:HH.t) 
-  : Lemma (let fs = logT w h in
-	   MonotoneSeq.grows fs fs 
-	   /\ MR.stable_on_t (S.ilog (StreamAE.State.log (stream_ae w)))
-	   		    (log_prefix w (logT w h)))
-  = let fs = logT w h in
-    let log = S.ilog (StreamAE.State.log (stream_ae w)) in
-    MonotoneSeq.seq_extension_reflexive fs;
-    assume (MR.stable_on_t log (log_prefix w fs))
 
 val encrypt: #i:id -> e:writer i -> f:fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
