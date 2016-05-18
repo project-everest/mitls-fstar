@@ -52,7 +52,7 @@ CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES = $(addprefix $(FSTAR_HOME)/$(LIB)/, $(STDLIB)) $(PLATFORM) $(CRYPTO)
@@ -196,7 +196,6 @@ endef
 %.fst-ver: $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	--verify_module $(basename $@) \
 	$^ \
 	$(call prefix_ver,$(basename $@),fst)
@@ -209,17 +208,18 @@ endef
 %.fst-in:
 	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	--verify_module $(basename $@) \
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
-	$(LIBFILES) $(ADMITTED) \
-	$(call prefix_cfg,$(basename $@),fst)
-
+	$(ADMITTED) \
+	$(basename $@).fst
 
 %.fsti-in:
 	$(MAKE) refresh > /dev/null
-	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
---verify_module $(basename $@)
+	@echo $(OTHERFLAGS) $(VERFLAGS) --dep make \
+	--verify_module $(basename $@) \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(ADMITTED) \
+	$(basename $@).fsti
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
@@ -227,7 +227,6 @@ tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
 	$(filter-out Ideal.fst,$^)
 
@@ -235,7 +234,6 @@ tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
         --verify_module False \
 	$(filter-out Ideal.fst,$^) | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
