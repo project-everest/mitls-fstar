@@ -50,5 +50,5 @@ let project_fragment_deltas #i #rw s fs =
 			    ==> deltas_prefix s (project_deltas fs) h) =
 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in
   qintro aux;
-  weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
+  MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
 
