@@ -38,9 +38,7 @@ hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Ch
 FStar.Seq.fst FStar.SeqProperties.fst FStar.Float.fsti FStar.IO.fsti FStar.UInt8.fst
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
-FSTARFLAGS=$(OTHERFLAGS) \
-	   $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	   $(OPTIONS)
+FSTARFLAGS=$(OTHERFLAGS) $(OPTIONS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
       $(FSTARFLAGS)
 
@@ -281,7 +279,9 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	mkdir -p $(OUTPUT_DIR)
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj \
+	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	  TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	  $(FSTS)
