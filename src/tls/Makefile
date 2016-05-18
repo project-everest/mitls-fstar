@@ -210,9 +210,11 @@ endef
 	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--__temp_no_proj Handshake --__temp_no_proj Connection \
+	--verify_module $(basename $@) \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
 	$(LIBFILES) $(ADMITTED) \
-	$(call prefix_cfg,$(basename $@),fst) \
-	--verify_module $(basename $@)
+	$(call prefix_cfg,$(basename $@),fst)
+
 
 %.fsti-in:
 	$(MAKE) refresh > /dev/null
