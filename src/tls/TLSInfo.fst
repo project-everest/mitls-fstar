@@ -97,6 +97,7 @@ type config = {
     (* Common *)
     safe_renegotiation: bool;   // demands this extension when renegotiating
     peer_name: option string;   // The expected name to match against the peer certificate
+    check_peer_certificate: bool; // To disable certificate validation
     ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
                       // on Cygwin /etc/ssl/certs/ca-bundle.crt
 
@@ -163,7 +164,8 @@ let defaultConfig =
 
     safe_renegotiation = true;
     safe_resumption = true;
-    peer_name = None; // Disable hostname validation
+    peer_name = None; // Disables hostname validation
+    check_peer_certificate = true;
     ca_file = "CAFile.pem";
 
     sessionDBFileName = "sessionDBFile.bin";
