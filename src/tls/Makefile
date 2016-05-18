@@ -173,6 +173,7 @@ StatefulLHAE \
 MAC_SHA256 \
 MAC_SHA1 \
 StAE \
+StreamDeltas \
 Connection \
 ConnInvariant \
 TLS 
