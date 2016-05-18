@@ -31,7 +31,7 @@ FSTAR_HOME?=../../.fstar
 # stdlib-hyperheap.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
-OTHERFLAGS=--universes --explicit_deps --use_native_int
+OTHERFLAGS=--universes --use_native_int
 # --trace_error --print_universes 
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
 hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
@@ -52,7 +52,7 @@ CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES = $(addprefix $(FSTAR_HOME)/$(LIB)/, $(STDLIB)) $(PLATFORM) $(CRYPTO)
@@ -197,7 +197,6 @@ endef
 %.fst-ver: $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	--verify_module $(basename $@) \
 	$^ \
 	$(call prefix_ver,$(basename $@),fst)
@@ -210,15 +209,18 @@ endef
 %.fst-in:
 	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
-	$(LIBFILES) $(ADMITTED) \
-	$(call prefix_cfg,$(basename $@),fst) \
-	--verify_module $(basename $@)
+	--verify_module $(basename $@) \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(ADMITTED) \
+	$(basename $@).fst
 
 %.fsti-in:
 	$(MAKE) refresh > /dev/null
-	@echo $(OTHERFLAGS) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_cfg, $(basename $@),fsti) \
---verify_module $(basename $@)
+	@echo $(OTHERFLAGS) $(VERFLAGS) \
+	--verify_module $(basename $@) \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(ADMITTED) \
+	$(basename $@).fsti
 
 # verifying everything stable
 # Add TLS.fst again when at least it lax type checks
@@ -226,7 +228,6 @@ tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
 	$(addprefix --verify_module ,$(VERIFY)) \
 	$(filter-out Ideal.fst,$^)
 
@@ -234,7 +235,6 @@ tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	--__temp_no_proj Handshake --__temp_no_proj Connection \
         --verify_module False \
 	$(filter-out Ideal.fst,$^) | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
@@ -271,7 +271,7 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   $(TLSML)
-# Last step: F* currently extracts everything in the current directory
+# Last step: prefix with the output directory.
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
 
 refresh:
@@ -287,8 +287,8 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	mkdir -p $(OUTPUT_DIR)
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
-	  --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
+	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(filter-out Concrete.fst,$^)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx

@@ -93,7 +93,9 @@ val parse: params -> bytes -> Tot (option key)
 let parse p x =
   match p with
   | ECP p -> (match ECGroup.parse_point p x with | Some eck -> Some (ECKey ({ec_params=p; ec_point=eck; ec_priv=None;})) | None -> None)
-  | FFP p -> None // TODO
+  | FFP p -> (match DHGroup.parse_public x with
+    | Correct r -> Some (FFKey ({dh_params = p; dh_public = r; dh_private = None;}))
+    | _ -> None)
 
 val key_params: key -> Tot params
 let key_params k =

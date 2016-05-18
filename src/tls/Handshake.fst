@@ -331,7 +331,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
      // Validate the server certificate chain before doing anything with other message
      // TODO add check for n.n_extensions.ne_signature_algorithms
-     if Cert.validate_chain c.crt_chain n.n_sigAlg cfg.peer_name cfg.ca_file then
+     if (not cfg.check_peer_certificate) || Cert.validate_chain c.crt_chain n.n_sigAlg cfg.peer_name cfg.ca_file then
        let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
        let ske_sig = ske.ske_sig in
        let cs_sigalg = Some.v n.n_sigAlg in

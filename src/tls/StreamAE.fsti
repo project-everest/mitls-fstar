@@ -166,8 +166,11 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
 
+private inline let min (a:nat) (b:nat): nat = if a < b then a else b
+
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
-val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l -> ST (option (plain i l))
+val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l 
+  -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
   (requires (fun h0 -> is_seqn (m_sel h0 (ctr d.counter) + 1)))
   (ensures  (fun h0 res h1 ->
       let j = m_sel h0 (ctr d.counter) in
