@@ -156,41 +156,6 @@ let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:HH.t) = is_seqn (seqnT s h 
 
 // We generate first the writer, then the reader (possibly several of them)
 
-let genPost (#i:id) parent h0 (w:writer i) h1 = 
-  let r = region w in 
-  HH.modifies Set.empty h0 h1 /\
-  HH.parent r = parent /\
-  HH.fresh_region r h0 h1 /\
-  color r = color parent /\
-  seqnT w h1 = 0 /\
-  (authId i ==> fragments w h1 = Seq.createEmpty) // we need to re-apply #i knowning authId
-
-// Generate a fresh instance with index i in a fresh sub-region 
-val gen: parent:rid -> i:id -> ST (writer i)
-  (requires (fun h0 -> True))
-  (ensures (genPost parent))
-
-// Coerce a writer with index i in a fresh subregion of parent
-// (coerced readers can then be obtained by calling genReader)
-val coerce: parent:rid -> i:id{~(authId i)} -> keybytes i -> ST (writer i)
-  (requires (fun h0 -> True))
-  (ensures  (genPost parent))
-
-val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (keybytes i)
-  (requires (fun h0 -> True))
-  (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
-
-val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent (region w))) //16-04-25  we may need w.region's parent instead
-  (ensures  (fun h0 (r:reader i) h1 ->
-               modifies Set.empty h0 h1 /\
-               log_region r = region w /\
-               HH.parent (region r) = parent /\
-	       color (region r) = color parent /\
-               fresh_region (region r ) h0 h1 /\
-               //?? op_Equality #(log_ref w.region i) w.log r.log /\
-               seqnT r h1 = 0))
-// encryption, recorded in the log; safe instances are idealized
 
 ////////////////////////////////////////////////////////////////////////////////
 //Framing
@@ -213,8 +178,12 @@ let frame_seqnT #i #rw st h0 h1 s =
   if is_stream_ae i then ()
   else admit() //FIXME! doesn't go through in 1.2; need to investigate why
 
-inline let frame_f (#a:Type) (f:HH.t -> GTot a) (h0:HH.t) (s:Set.set rid) =
-  forall h1. HH.equal_on s h0 h1 ==> f h0 = f h1
+let trigger_frame (h:HH.t) = True
+
+let frame_f (#a:Type) (f:HH.t -> GTot a) (h0:HH.t) (s:Set.set rid) =
+  forall h1.{:pattern trigger_frame h1} 
+        trigger_frame h1
+        /\ (HH.equal_on s h0 h1 ==> f h0 = f h1)
   
 ////////////////////////////////////////////////////////////////////////////////
 //Experimenting with reads clauses: probably unnecessary
@@ -229,22 +198,72 @@ let fragments' #i #rw s = fragments s
 ////////////////////////////////////////////////////////////////////////////////
 //Generation
 ////////////////////////////////////////////////////////////////////////////////
+let genPost (#i:id) parent h0 (w:writer i) h1 = 
+  let r = region w in 
+  HH.modifies Set.empty h0 h1 /\
+  HH.parent r = parent /\
+  HH.fresh_region r h0 h1 /\
+  color r = color parent /\
+  seqnT w h1 = 0 /\
+  (authId i ==> fragments w h1 = Seq.createEmpty) // we need to re-apply #i knowning authId
 
+// Generate a fresh instance with index i in a fresh sub-region 
+val gen: parent:rid -> i:id -> ST (writer i)
+  (requires (fun h0 -> True))
+  (ensures (genPost parent))
+#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"  
+let gen parent i = 
+  assume (is_stream_ae i);
+  Stream () (StreamAE.gen parent i)
 
-let gen parent i =  
-   assume false;
-   // assert(is_stream_ae i);  
-   Stream () (StreamAE.gen parent i) 
+val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
+  (requires (fun h0 -> HyperHeap.disjoint parent (region w))) //16-04-25  we may need w.region's parent instead
+  (ensures  (fun h0 (r:reader i) h1 ->
+               modifies Set.empty h0 h1 /\
+               log_region r = region w /\
+               HH.parent (region r) = parent /\
+	       color (region r) = color parent /\
+               fresh_region (region r ) h0 h1 /\
+               //?? op_Equality #(log_ref w.region i) w.log r.log /\
+               seqnT r h1 = 0))
+// encryption, recorded in the log; safe instances are idealized
+let genReader parent #i w =  
+  assume (is_stream_ae i);
+  match w with 
+  | Stream _ w -> Stream () (StreamAE.genReader parent w) 
+
+////////////////////////////////////////////////////////////////////////////////
+//Coerce & Leak
+////////////////////////////////////////////////////////////////////////////////
+
+// Coerce a writer with index i in a fresh subregion of parent
+// (coerced readers can then be obtained by calling genReader)
+val coerce: parent:rid -> i:id{~(authId i)} -> keybytes i -> ST (writer i)
+  (requires (fun h0 -> True))
+  (ensures  (genPost parent))
+let coerce parent i kiv = 
+   assume(is_stream_ae i); 
+   let kv, iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in 
+   Stream () (StreamAE.coerce parent i kv iv) 
+
+val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (keybytes i)
+  (requires (fun h0 -> True))
+  (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
+let leak #i #role s =  
+   assume (is_stream_ae i); 
+   match s with 
+   | Stream _ s -> let kv, iv = StreamAE.leak s in kv @| iv
 
 ////////////////////////////////////////////////////////////////////////////////
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
-
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"  
 val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
                modifies_one (region e) h0 h1 
 	       /\ seqnT e h1 = seqnT e h0 + 1   
+	       /\ frame_f (seqnT e) h1 (Set.singleton (log_region e))
 	       /\ (authId i 
 		  ==> fragments e h1 = SeqP.snoc (fragments e h0) f
 		      /\ frame_f (fragments e) h1 (Set.singleton (log_region e))
@@ -306,21 +325,6 @@ let decrypt #i d c =
 	Some f) 
 
 
-let coerce parent i kiv = 
-    assume false;
-   // assert(is_stream_ae i); 
-   let kv, iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StreamAE.alg i)) in 
-   Stream () (StreamAE.coerce parent i kv iv) 
   
-let leak #i #role s =  
-    assume false;
-   // assert(is_stream_ae i); 
-   match s with 
-   | Stream _ s -> let kv, iv = StreamAE.leak s in kv @| iv
 
-let genReader parent #i w =  
-    assume false;
-  // assert(is_stream_ae i);  *)
-  match w with 
-  | Stream _ w -> Stream () (StreamAE.genReader parent w) 
 
