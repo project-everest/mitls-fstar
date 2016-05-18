@@ -121,9 +121,6 @@ let parse_partial payload =
               match vlsplit 2 payload with
               | Error(z) -> Error(z)
               | Correct(gy, rem) ->
-                lemma_repr_bytes_values (length p); 
-                lemma_repr_bytes_values (length g);
-                lemma_repr_bytes_values (length gy);
 		let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
 		let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
 		lemma_repr_bytes_values (length p);
