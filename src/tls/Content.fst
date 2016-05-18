@@ -19,7 +19,7 @@ open DataStream
 
 
 type fragment (i:id) =
-    | CT_Alert     : rg: frange i -> f: rbytes rg -> fragment i // could insist we get exactly 2n bytes
+    | CT_Alert     : rg: frange i -> f: rbytes rg -> fragment i // could insist we get exactly 2 bytes
     | CT_Handshake : rg: frange i -> f: rbytes rg -> fragment i // concrete
     | CT_CCS       : f: rbytes (point 1) -> fragment i // one-byte; never encrypted or decrypted
     | CT_Data      : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract

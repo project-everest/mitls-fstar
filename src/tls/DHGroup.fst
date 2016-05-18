@@ -101,9 +101,11 @@ let serialize_public dh_Y =
   lemma_repr_bytes_values (length dh_Y);
   vlbytes 2 dh_Y
 
-val parse_public: bytes -> Tot (result share)
-let parse_public p = 
-  vlparse 2 p
+val parse_public: p:bytes{2 <= length p} -> Tot (result share)
+let parse_public p =
+  match vlparse 2 p with
+  | Correct n -> lemma_repr_bytes_values (length n); Correct n
+  | Error z -> Error z
 
 val parse_partial: bytes -> Tot (result (key * bytes))
 let parse_partial payload = 
@@ -124,6 +126,9 @@ let parse_partial payload =
 	        let (gy,rem) = res in 
 		let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
 		let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
+		lemma_repr_bytes_values (length p);
+		lemma_repr_bytes_values (length g);
+		lemma_repr_bytes_values (length gy);
 		Correct (dhk,rem)
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

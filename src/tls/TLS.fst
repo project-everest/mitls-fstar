@@ -199,9 +199,7 @@ val moveToOpenState: c:connection -> ST unit
      modifies (Set.singleton (C.region c)) h0 h1 /\
      sel h1 c.state = AD))
 
-let moveToOpenState c =
-    let h0 = ST.get() in
-    c.state := AD
+let moveToOpenState c = c.state := AD
     
 
 (* Dispatch dealing with network sockets *)
@@ -316,7 +314,8 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f )
+       (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f)
+//		     /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
        )) /\
     True ))
 
@@ -346,6 +345,8 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     (j < 0 ==> i == noId) /\
     (j >= 0 ==> (
        let e = Seq.index es j in
+       let wr = writer_epoch e in 
+       Map.contains h (StAE.log_region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
        i == hsId e.h /\
        incrementable (writer_epoch e) h))))
   (ensures (fun h0 _ h1 ->
@@ -361,7 +362,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.logT #i wr h1 = snoc (StAE.logT #i wr h0) f )))))
+       (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f )))))
 
 let send c #i f =
   let pv = outerPV c in
@@ -369,18 +370,7 @@ let send c #i f =
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
   let record = Record.makePacket ct pv payload in
-  let h0 = ST.get() in 
   let r  = Platform.Tcp.send (C.tcp c) record in
-  let h1 = ST.get() in
-  (*
-    let j = Handshake.i c.hs Writer in
-    (if j>=0 then 
-         let es = !c.hs.log in
-	 let e = Seq.index es j in 
-         let wr = writer_epoch e in 
-         StAE.frame_logT wr h0 h1 Set.empty);
-  *)
-  assume (h0 = h1);
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
@@ -981,8 +971,8 @@ let append_r h0 h1 c d =
     let pos1 = StAE.seqnT r h1  in
     pos1 = pos0 + 1  /\
     (if authId i then 
-    let log0 = StAE.logT r h0 in 
-    let log1 = StAE.logT r h1 in 
+    let log0 = StAE.fragments r h0 in 
+    let log1 = StAE.fragments r h1 in 
     (log1 = log0 /\
     Seq.index log1 pos0 = d ))
   | None -> True
