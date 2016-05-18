@@ -215,7 +215,7 @@ endef
 
 %.fsti-in:
 	$(MAKE) refresh > /dev/null
-	@echo $(OTHERFLAGS) $(VERFLAGS) --dep make \
+	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--verify_module $(basename $@) \
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
 	$(ADMITTED) \
