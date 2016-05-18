@@ -11,6 +11,7 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open CoreCrypto
+
 module HH = FStar.HyperHeap
 
 let tls_color = -1
@@ -824,7 +825,10 @@ let cipherSuite_of_name = function
 
 val cipherSuites_of_nameList: l1:list cipherSuiteName 
   -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
-let cipherSuites_of_nameList nameList = List.Tot.map cipherSuite_of_name nameList
+let cipherSuites_of_nameList nameList = 
+  // REMARK: would trigger automatically if ListProperties is loaded
+  ListProperties.map_lemma cipherSuite_of_name nameList; 
+  List.Tot.map cipherSuite_of_name nameList
 
 let name_of_cipherSuite cs =
   match cs with
