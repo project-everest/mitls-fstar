@@ -116,6 +116,7 @@ MAC_SHA256.fst \
 MAC_SHA1.fst \
 HandshakeMessages.fst \
 StAE.fst \
+StreamDeltas.fst \
 Record.fst \
 HSCrypto.fst \
 TLSPRF.fst \

@@ -271,12 +271,17 @@ let rec collect_append f s_1 s_2 =
   		       (m_s_1 @ (m_p_2 @ flast)));                 //              = map f s1 @ (snoc (map f p) (f last))
         collect_snoc f prefix_2 last)                                       //              = map f s1 @ map f (snoc p last)
 
-let collect_grows (f:'a -> Tot (seq 'b))
+let collect_grows_aux (f:'a -> Tot (seq 'b))
 		  (s1:seq 'a) (s3:seq 'a) (s2:seq 'a)  
   : Lemma (seq_extension s1 s2 s3
 	   ==> grows (collect f s1) (collect f s3))
   = collect_append f s1 s2
 
+let collect_grows (f:'a -> Tot (seq 'b))
+		  (s1:seq 'a) (s2:seq 'a)
+  : Lemma (grows s1 s2 ==> grows (collect f s1) (collect f s2))
+  = exists_elim (collect_grows_aux f s1 s2)
+  
 let collect_prefix (#a:Type) (#b:Type) (#i:rid) 
 		   (r:m_rref i (seq a) grows) 
 		   (f:a -> Tot (seq b))
@@ -293,7 +298,7 @@ let collect_prefix_stable (#a:Type) (#b:Type) (#i:rid) (r:m_rref i (seq a) grows
       fun h0 h1 -> 
 	  let s1 = MR.m_sel h0 r in
 	  let s3 = MR.m_sel h1 r in
-	  exists_elim (collect_grows f s1 s3);
+	  collect_grows f s1 s3;
 	  grows_transitive bs (collect f s1) (collect f s3) in
     forall_intro_2 aux
 
