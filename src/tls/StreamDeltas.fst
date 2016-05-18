@@ -17,7 +17,7 @@ let deltas i = Seq.seq (DS.delta i) //not yet handling the well-formedness condi
 
 let singleton (x:'a) : Tot (Seq.seq 'a) = Seq.create 1 x
 
-#reset-options "--z3timeout 5 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3timeout 10 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
 val project_one_frag: #i:id -> f:C.fragment i -> Tot (Seq.seq (DS.delta i))
 let project_one_frag #i = function
