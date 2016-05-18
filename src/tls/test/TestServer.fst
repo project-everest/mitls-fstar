@@ -145,7 +145,7 @@ let recvRecord tcp pv =
 
 let makeHSRecord pv hs_msg log =
   let mb = log @@ hs_msg in 
-  (string_of_handshakeMessage hs_msg,mb)
+  (string_of_handshakeMessage hs_msg, mb)
 
 let sendHSRecord tcp pv (m,b) = 
   let str = string_of_handshakeMessage m in
@@ -158,7 +158,7 @@ let recvHSRecord tcp pv kex =
     	    IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n"); 
 	    let logged = handshakeMessageBytes (Some pv) hs_msg in
 	    IO.print_string ("Logged message = Parsed message? ");
-	    if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
+	    if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string ("no\nBEFORE="^(print_bytes to_log)^"\nAFTER="^(print_bytes logged)^"\n");
 	    hs_msg,to_log
   | Error (y,x) -> IO.print_string("HS msg parsing error: "^x); failwith "error"
 
@@ -203,6 +203,7 @@ let rec aux sock =
   let tcp = Platform.Tcp.accept sock in
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
+  let dummy_log = HandshakeLog.create #rid in // To avoid duplication with HS
   let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
   let ks, sr = KeySchedule.create #rid Server in
@@ -239,10 +240,9 @@ let rec aux sock =
   let ske = {ske_kex_s = kex_s; ske_sig = sigv} in
   IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^(print_bytes sigv)^ "\n");
 
-  print_chain chain;
+//  print_chain chain;
   IO.print_string ("Signature validation status = " ^
     (if Cert.verify_signature chain pv Server (Some (cr @| sr)) sa next.ne_signature_algorithms tbs sigv then "OK" else "FAIL") ^ "\n");
-
 
   let cb = log @@ Certificate(c) in
   sendHSRecord tcp pv (Certificate c,cb);
@@ -250,7 +250,6 @@ let rec aux sock =
   sendHSRecord tcp pv (ServerKeyExchange ske,skeb);
   let shdb = log @@ ServerHelloDone in
   sendHSRecord tcp pv (ServerHelloDone,shdb);
-  
 
   // Get Client Key Exchange
   let (ClientKeyExchange(cke),ckeb) = recvHSRecord tcp pv kex in

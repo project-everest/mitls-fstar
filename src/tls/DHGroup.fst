@@ -61,7 +61,7 @@ let ffdhe8192 =
   assume (length (bytes_of_hex p) < 65536);
   make_ffdhe p q
 
-private val params_of_group: group -> Tot params
+val params_of_group: group -> Tot params
 let params_of_group = function
   | Named FFDHE2048 -> ffdhe2048
   | Named FFDHE3072 -> ffdhe3072
@@ -112,18 +112,15 @@ let parse_partial payload =
     if length payload >= 2 then
       match vlsplit 2 payload with
       | Error(z) -> Error(z)
-      | Correct(res) ->
-        let (p,payload) = res in
+      | Correct(p, payload) ->
         if length payload >= 2 then
           match vlsplit 2 payload with
           | Error(z) -> Error(z)
-          | Correct(res) ->
-            let (g,payload) = res in
+          | Correct(g, payload) ->
             if length payload >= 2 then
               match vlsplit 2 payload with
               | Error(z) -> Error(z)
-              | Correct(res) ->
-	        let (gy,rem) = res in 
+              | Correct(gy, rem) ->
 		let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
 		let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
 		lemma_repr_bytes_values (length p);

@@ -248,8 +248,11 @@ val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGrou
 let ks_server_13_1rtt_init ks cr cs gn gxb =
   let KS #region st = ks in
   let S (S_Init sr) = !st in
-  let SEC ec = gn in
-  let Some gx = CommonDH.parse (CommonDH.ECP (ECGroup.params_of_group ec)) gxb in
+  let gx = match gn with
+    | SEC ec ->
+      let Some gx = CommonDH.parse (CommonDH.ECP (ECGroup.params_of_group ec)) gxb in gx
+    | FFDHE ff ->
+      let Some gx =  CommonDH.parse (CommonDH.FFP (DHGroup.params_of_group (DHGroup.Named ff))) gxb in gx in
   let CipherSuite _ _ (AEAD ae h) = cs in
   let our_share, gxy = CommonDH.dh_responder gx in
   let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in

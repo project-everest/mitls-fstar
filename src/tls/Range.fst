@@ -11,7 +11,7 @@ open CoreCrypto
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
-type id2 = i:id { i.pv <> TLS_1p3 } // gradually adding TLS 1.3... 
+type id2 = i:id { i.pv <> TLS_1p3 /\ ~(i == noId) } // gradually adding TLS 1.3... 
 
 (* ranges *)
 type range = r:(nat * nat) { fst r <= snd r }
@@ -82,12 +82,12 @@ let minMaxPad i = (fixedPadSize i, maxPadSize i)
 
 // Shared between StreamAE and StatefulLHAE
 type valid_clen (i:id) (clen:nat) = (
-  if i = noId 
-  then 0 <= clen /\ clen <= max_TLSPlaintext_fragment_length 
-  else
+  if i = noId then // i.aeAlg = MACOnly MD5
+    0 <= clen - hashSize MD5 /\ clen - hashSize MD5 <= max_TLSPlaintext_fragment_length
+  else 
   if i.pv = TLS_1p3 then
-     let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
-     tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 
+    let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
+    tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 
   else 
     if is_AEAD i.aeAlg then
       0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
@@ -105,16 +105,12 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
          let a = aeAlg i in 
          let min = clen - aeadRecordIVSize a - aeadTagSize a - fixedPadSize i in
          let max = clen - aeadRecordIVSize a - aeadTagSize a - maxPadSize i in
-         let min = if min < 0 then 0 else min in
-         let max = if max < 0 then 0 else max in
          0 <= max 
          /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max) 
             \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
      /\ (~(is_AEAD i.aeAlg) ==> (
          let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in 
          let min = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
-         let min = if min < 0 then 0 else min in
-         let max = if max < 0 then 0 else max in
            0 <= max 
          /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max )
           \/ (0 < min /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max_TLSPlaintext_fragment_length)
@@ -138,7 +134,7 @@ let cipherRangeClass i clen =
         let max = clen - ivL - macLen - minPad in
         let min = clen - ivL - macLen - maxPad in
         if min < 0 then
-            (0, (if max < 0 then 0 else max))
+            (0, max)
         else
           if max < max_TLSPlaintext_fragment_length then
             (min,max)
@@ -151,7 +147,7 @@ let cipherRangeClass i clen =
         let max = clen - ivL - tagL - minPad in
         let min = clen - ivL - tagL - maxPad in
         if min < 0 then
-            (0,(if max < 0 then 0 else max))
+            (0, max)
         else
             (min,max)
 

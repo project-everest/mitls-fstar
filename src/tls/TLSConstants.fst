@@ -1168,9 +1168,7 @@ let rec parseNamedGroups0 b groups =
       lemma_split b 2;
       match parseNamedGroup ng with
       |Correct ng ->
-//        assert (length bytes = length b - 2);
         let groups' = ng :: groups in
-//        assert (List.Tot.length groups' = List.Tot.length groups + 1);
         parseNamedGroups0 bytes groups'
       | Error z    -> Error z
     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -1376,7 +1374,7 @@ let rec sigHashAlgsBytes_aux (b:bytes) (algs:list sigHashAlg{length b + op_Multi
   | [] -> b
   | alg::algs' ->
     let shb = sigHashAlgBytes alg in
-    sigHashAlgsBytes_aux (b @| shb) algs'
+    sigHashAlgsBytes_aux (shb @| b) algs'
   
 val sigHashAlgsBytes: algs:list sigHashAlg{List.Tot.length algs < 65536/2}
   -> Tot (b:bytes{2 <= length b /\ length b < 65538})

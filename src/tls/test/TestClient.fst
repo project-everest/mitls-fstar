@@ -23,6 +23,7 @@ let config =
 	 ciphersuites = csn;
          safe_resumption = true;
          signatureAlgorithms = [(CoreCrypto.RSASIG, Hash CoreCrypto.SHA512); (CoreCrypto.RSASIG, Hash CoreCrypto.SHA384);(CoreCrypto.RSASIG, Hash CoreCrypto.SHA256)];
+         check_peer_certificate = false;
          ca_file = "../../data/CAFile.pem";
 	 }
 
@@ -211,6 +212,10 @@ let main host port =
   let sal = n.n_extensions.ne_signature_algorithms in
 
   let (Certificate(sc),scb) = recvHSRecord tcp pv kex log in
+  IO.print_string ("Certificate validation status = " ^
+    (if Cert.validate_chain sc.crt_chain sa (Some host) "../../data/CAFile.pem" then
+      "OK" else "FAIL")^"\n");
+
   let (ServerKeyExchange(ske),skeb) = recvHSRecord tcp pv kex log in
   let (ServerHelloDone,shdb) = recvHSRecord tcp pv kex log in
 
