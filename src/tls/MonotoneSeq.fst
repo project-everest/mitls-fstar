@@ -145,9 +145,7 @@ let rec map f s =
        SeqP.snoc (map f prefix) (f last)
 
 val map_snoc: f:('a -> Tot 'b) -> s:seq 'a -> a:'a -> Lemma
-  (requires True)
-  (ensures (map f (SeqP.snoc s a) = SeqP.snoc (map f s) (f a)))
-  [SMTPat (map f (SeqP.snoc s a))]
+  (map f (SeqP.snoc s a) = SeqP.snoc (map f s) (f a))
 let map_snoc f s a = 
   let prefix, last = un_snoc (SeqP.snoc s a) in 
   cut (Seq.equal prefix s)
