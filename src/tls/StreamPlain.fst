@@ -16,8 +16,6 @@ open Content
 
 // This module is used only for TLS 1.3.
 
-#set-options "--print_fuels"
-
 type id = i:id { pv_of_id i = TLS_1p3 }  
 
 
