@@ -11,7 +11,6 @@ open TLSExtensions
 open TLSInfo
 open Range
 open CommonDH
-open HSCrypto
 
 (* External functions, locally annotated for speed *)
 (*

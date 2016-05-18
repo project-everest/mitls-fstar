@@ -31,7 +31,7 @@ FSTAR_HOME?=../../.fstar
 # stdlib-hyperheap.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
-OTHERFLAGS=--universes --explicit_deps --use_native_int
+OTHERFLAGS=--universes --use_native_int
 # --trace_error --print_universes 
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
 hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
@@ -270,7 +270,7 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   $(TLSML)
-# Last step: F* currently extracts everything in the current directory
+# Last step: prefix with the output directory.
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
 
 refresh:
@@ -286,8 +286,8 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	mkdir -p $(OUTPUT_DIR)
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions --__temp_no_proj FStar.Heap \
-	  --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
+	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(filter-out Concrete.fst,$^)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx

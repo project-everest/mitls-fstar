@@ -13,7 +13,6 @@ open TLSConstants
 open TLSExtensions
 open TLSInfo
 open Range
-open HandshakeMessages
 open StatefulLHAE
 
 (* CRYPTO sub-module *)
