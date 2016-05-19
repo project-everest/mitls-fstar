@@ -140,8 +140,11 @@ TLS.fst #the preceding space is significant!
 
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
-# missing modules from FSTS are: PMS Cert Encode Enc Handshake
+# missing modules from FSTS are: Cert, TLSExtensions, Encode, ENC,
+# HandshakeMessages, Record, HSCrypto, TLSPRF, PRF, HandshakeLog,
+# KeySchedule, Handshake
 VERIFY= \
+IdealFlags \
 MonotoneSeq \
 MonotoneMap \
 TLSError \
@@ -151,6 +154,7 @@ RSAKey \
 DHGroup \
 ECGroup \
 CommonDH \
+PMS \
 HASH \
 HMAC \
 Signature \

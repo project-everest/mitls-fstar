@@ -25,6 +25,7 @@ install:
   - ocamlfind ocamlopt -config
 
 script:
+  - ./scripts/travis.sh
   - make -C .fstar/src/ocaml-output
   - make -C src/tls tls-ver
   - make -C src/tls tls-gen
