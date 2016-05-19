@@ -64,7 +64,7 @@ type incoming = // by default the state changes but not the epochs
 *)
 
 // extracts a transport key identifier from a handshake record
-val hsId: handshake -> Tot id
+val hsId: handshake -> Tot (i:id { is_stream_ae i }) //16-05-19 focus on TLS 1.3
 
 //<expose for TestClient>
 val ri : Type0

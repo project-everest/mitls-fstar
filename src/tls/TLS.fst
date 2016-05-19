@@ -324,13 +324,23 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
 (*     // restrictions of h0 and h1 to the footprint of st_inv and iT in c are the same /\ *)
 (*     st_inv c h0 ==> st_inv c h1 /\ op_Equality #int (iT c.hs Writer h0) (iT c.hs Writer h1)) *)
 
+// used e.g. for writing while reading
+let currentId (c:connection) (rw:rw) = 
+  let j = Handshake.i c.hs rw in 
+  if j<0 then noId 
+  else 
+    let es = !c.hs.log in
+    let e = Seq.index es j in
+    let id = hsId e.h in
+    if rw = Writer then id else peerId id
+
 let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j<0 
     then Content.repr i f
     else let es = !c.hs.log in
 	 let e = (Seq.index es j) in 
-	 StAE.encrypt (writer_epoch e) f 
+	 StAE.encrypt (writer_epoch e) f
 
 // check vs record
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
@@ -882,6 +892,9 @@ let half_shutdown c =
 
 (*** incoming (with implicit writing) ***)
 
+// By default, all i:id are reader identifiers, i.e. peerId (hsId (reader_epoch.h)
+// Tricky for noId?       
+
 // FIXME: Put the following definitions close to range and delta, and use them
 
 type query = Cert.chain
@@ -917,7 +930,7 @@ type ioresult_i (i:id) =
         // or None in case of an internal error.
         // The connection is gone; its state is undefined.
 
-    | CertQuery of query * bool
+    | CertQuery: query -> bool -> ioresult_i i
         // We received the peer certificates for the next epoch, to be authorized before proceeding.
         // the bool is what the Windows certificate store said about this certificate.
     | CompletedFirst
@@ -978,117 +991,159 @@ let append_r h0 h1 c d =
   | None -> True
 *)
 
-assume val rd_i: c: connection -> Tot id //16-05-18 unimplementable
-
 // frequent error handler
-let alertFlush c x y : ioresult_i (rd_i c) =
+let alertFlush c i x y: ioresult_i i =
   abortWithAlert c x y;
-  let written = writeAllClosing c (rd_i c) in
+  let written = writeAllClosing c i in
   match written with
   | SentClose      -> Read DataStream.Close // do we need this case?
   | WriteError x y -> ReadError x y
 
-(*
+val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
+  (requires (fun h0 ->
+    let es = epochsT c h0 in 
+    let j = iT c.hs Reader h0 in 
+    st_inv c h0 /\
+    (if j < 0 then i == noId else 
+      let e = Seq.index es j in
+      i = peerId (hsId e.h) /\
+      incrementable (reader_epoch e) h0)))
+  (ensures (fun h0 r h1 -> 
+    let es = epochsT c h0 in 
+    let j = iT c.hs Reader h0 in 
+    st_inv c h0 /\
+    st_inv c h1 /\
+    j == iT c.hs Reader h1 /\
+    (if j < 0 then i == noId /\ h0 == h1 else 
+      let e = Seq.index es j in
+      i = peerId (hsId e.h) /\
+      (let rd: reader i = reader_epoch e in 
+      modifies (Set.singleton (region rd)) h0 h1 /\
+      (match r with 
+      | Error e -> True // don't know what seqnT is, don't care.
+      | Correct f -> 
+          seqnT rd h1 = seqnT rd h0 + 1 /\
+          (authId i ==>
+            (let frs = StAE.fragments #i rd h0 in
+            let n = seqnT rd h0 in 
+            n < Seq.length frs /\
+            f == Seq.index frs n) 
+  ))))))
+
 let readFragment c i = 
-  match Record.read with 
+  assume false; // 16-05-19 can't prove POST.
+  match Record.read c.tcp i.pv with 
   | Correct(ct,pv,payload) -> 
-      // either payload is a plaintext protocol fragment, or we decrypt
-  | Error e -> Error e
+     begin
+       // either payload is a plaintext protocol fragment, or we decrypt
+       let j = Handshake.i c.hs Reader in 
+       if j = 0 then 
+         let rg = Range.point (length payload) in 
+         Correct(Content.mk_fragment i ct rg payload)
+       else
+         let es = !c.hs.log in 
+         let e = Seq.index es j in 
+         match StAE.decrypt (reader_epoch e) payload with 
+         | Some f -> Correct f
+         | None   -> Error(AD_internal_error,"") //16-05-19 ADJUST! 
+     end
+  | Error e       -> Error e
 
-//* private val getFragment: c:connection -> ct:ct -> len:nat -> ST (rg * msg)
-//* "stateful, but only affecting the StAE instance"
-//* can we even deduce the range from len?
-let getFragment c ct len : TLSError.Result (Content.fragment (rd_i c)) =
-    match Platform.Tcp.recv c.tcp len with
-    | Error x -> Error(AD_internal_error,x)
-    | Correct payload -> unexpected "todo"
-//        let c_read = c.read in
-//        let c_read_conn = c_read.conn in
-//        Record.recordPacketIn id.id_in c_read_conn ct payload
 
-//TODO: getFragment ensures ct = fst (ct_rg fragment), removing cases below.
+// We receive, decrypt, verify a record (ct,f); what to do with it?
+// i is the presumed reader, threaded from the application.
 
-
-(* we receive, decrypt, verify a record (ct,f); what to do with it? *)
-//private val readOne: Connection -> ST ioresult_i //$ which epoch index to use??
+private val readOne: c:connection -> i:id -> St (ioresult_i i) 
 //  (ensures ioresult is not CompletedFirst | CompletedSecond | DontWrite)
 
-let readOne c : ioresult_i (rd_i c) =
-  match getHeader c with
-  | Error (x,y)       -> alertFlush c x y
-  | Correct (ct,len)  ->
-  match getFragment c ct len with
-  | Error (x,y)       -> alertFlush c x y
-  | Correct fragment  ->
-  match fragment with
-    | Content.CT_Alert rg f -> (
-      match Alert.recv_fragment c.alert rg f with
-      | Error (x,y)   -> alertFlush c x y
-      | Correct AD_close_notify ->          // an outgoing close_notify has already been buffered, if necessary
+let readOne c i =
+  assume false; //16-05-19 
+  match readFragment c i with 
+  | Error (x,y) ->  alertFlush c i x y
+  | Correct(Content.CT_Alert rg f) -> 
+      begin 
+        match Alert.recv_fragment c.alert rg f with
+        | Error (x,y)   -> alertFlush c i x y
+        | Correct AD_close_notify ->          // an outgoing close_notify has already been buffered, if necessary
               if !c.state = Half Reader
-              then c.state := Closed
+              then c.state := Close
               else c.state := Half Writer; // we close the reading side
               Read DataStream.Close
-      | Correct alert ->
+        | Correct alert ->
               if isFatal alert then closeConnection c; // else we carry on; the user will know what to do
-              Read (DataStream.Alert alert))
-
+              Read (DataStream.Alert alert)
+      end
       // recheck we tolerate alerts in all states; used to be just Init|Open, otherwise:
       // alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 
-    | Content.CT_Handshake rg f -> (
-      match Handshake.recv_fragment c.hs rg f with
-      | Handshake.InError (x,y) -> alertFlush c x y
-      | Handshake.InAck         -> ReadAgain
-      | Handshake.InQuery (q,a) -> CertQuery (q,a)
-      | Handshake.InFinished    -> ReadAgain // should we care? probably before e.g. accepting falseStart traffic
-      | Handshake.InComplete    ->
-          (match !c.state with
-          | BC -> // additional sanity check: in and out epochs should be the same
-                 if epoch_r c = epoch_w c
-	         then (c.state := AD; CompletedFirst)
-                 else (closeConnection c; ReadError None "Invalid connection state"))
-
+  | Correct (Content.CT_Handshake rg f) -> 
+      begin
+        match Handshake.recv_fragment c.hs rg f with
+        | Handshake.InError (x,y) -> alertFlush c i x y
+        | Handshake.InAck         -> ReadAgain
+        | Handshake.InQuery q a   -> CertQuery q a
+      //| Handshake.InFinished    -> ReadAgain // should we care? probably before e.g. accepting falseStart traffic
+        | Handshake.InComplete    ->
+          ( match !c.state with
+            | BC -> // TODO: additional sanity check: in and out epochs should be the same
+                   // if epoch_r c = epoch_w c then 
+                   (c.state := AD; CompletedFirst)
+                   // else (closeConnection c; ReadError None "Invalid connection state")
+                   )
       // recheck correctness for all states; used to be just Init|Finishing|Open
+      end
+  | Correct(Content.CT_CCS _) ->
+      begin
+        match Handshake.recv_ccs c.hs with
+        | InError (x,y)        -> alertFlush c i x y
+        | InAck                -> // We know statically that Handshake and Application data buffers are empty.
+                                 ReadAgainFinishing
+      end
+  | Correct(Content.CT_Data #i rg d) -> 
+      begin
+        match !c.state with
+        | AD | Half Reader        -> let d : DataStream.fragment i fragment_range = d in Read #i (DataStream.Data d)
+        | _                       -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
+      end
 
-    | Content.CT_CCS ->
-      (match Handshake.recv_ccs c.hs with
-      | InCCSError (x,y)        -> alertFlush c x y
-      | InCCSAck                -> // We know statically that Handshake and Application data buffers are empty.
-                                  ReadAgainFinishing)
 
-    | Content.CT_Data #i rg d   -> (
-      match !c.state with
-      | AD | Half Reader        -> let d : DataStream.fragment i fragment_range = d in Read (DataStream.Data d)
-      | _                       -> alertFlush c AD_unexpected_message
-      "Application Data received in wrong state"))
+(*** VERIFIES UP TO HERE (WITH GAPS) ***)
 
-
-(*** VERIFIES UP TO HERE ***)
 
   (* JP: the definitions below were in the .fst but didn't match what was in the
    .fsti -- the definitions above are from the .fsti, and the (commented-out)
    definitions below are from the .fst.  *)
 
-let rec readAllFinishing c =
-    admit(); // FIXME!
-    let outcome = readOne c in
+val readAllFinishing: connection -> i:id -> St(ioresult_i i) 
+let rec readAllFinishing c i = 
+    assume false; //16-05-19 
+    let outcome = readOne c i in 
     match outcome with
-    | ReadAgain      -> readAllFinishing c
-    | CompletedFirst -> CompletedFirst #(rd_i c)
+    | ReadAgain      -> readAllFinishing c i
+    | CompletedFirst -> CompletedFirst #i
     | Read (DataStream.Alert ad) ->
-       ( if isFatal ad
+       begin
+         if isFatal ad
          then outcome  (* silently dropping the error? recheck *)
-         else ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened."))
+         else ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened.")
+       end
     | ReadError _ _  -> unexpected "[readAllFinishing] should not return ReadError"
+    | Read DataStream.Close ->
+        (* This is the dual of the case above: we received the CCS, which implicitly closed the receiving epoch,
+           and the new epoch is not open yet, so we can neither receive authenticated data, nor close this epoch.  *)
+         ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened.")
+(* 16-05-19 ?
     | ReadFinished   ->
-        ( let i = epoch_id (epoch_w c) in
+        begin
+          let i = epoch_id (epoch_w c) in
           let written = writeAllTop c i None in
           match written with
           | WriteHSComplete
           | WriteError _ _ -> outcome (* hiding the error? double-check *)
           | SentClose      -> unexpected "[readAllFinishing] There should be no way of sending a closure alert after we validated the peer Finished message"
-          | _              -> unexpected "[readAllFinishing] writeAllTop should never return such write outcome")
+          | _              -> unexpected "[readAllFinishing] writeAllTop should never return such write outcome"
+        end 
+*)        
 //    | ReadAgainFinishing | Read _  | CertQuery _ -> unexpected "[readAllFinishing] readOne returned wrong result"
 
 //    | WriteOutcome(SentFatal(x,y)) -> WriteOutcome(SentFatal(x,y))
@@ -1098,34 +1153,32 @@ let rec readAllFinishing c =
            In this case, sending our CCS already implicitly closed the previous sending epoch, and the new epoch is not open
            yet, so there's nothing to close. *)
 
-    | Read DataStream.Close ->
-        (* This is the dual of the case above: we received the CCS, which implicitly closed the receiving epoch,
-           and the new epoch is not open yet, so we can neither receive authenticated data, nor close this epoch.  *)
-         ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened.")
 
-//16-02-29 we should probably add a caller (i:id)
-val writerId: c:connection -> ST id
 
 // scheduling: we always write up before reading.
 // those writes are never AppData; they may be for other/changing epochs
-let rec read c =
-    let wId = writerId c in
-    match writeAllTop c wId None with
+val read: connection -> i:id -> St (ioresult_i i)
+let rec read c i =
+    assume false;//16-05-19 
+    let wi = currentId c Writer in
+    match writeAllTop c wi None with
     | SentClose       -> Read DataStream.Close // TODO: add support for Half Reader?
     | WriteError x y  -> ReadError x y         // TODO: review error result is unambiguous
 //  | WriteFinished   -> DontWrite
     | WriteHSComplete -> CompletedFirst        // return at once, so that the app can authorize
     | WriteDone       ->                       // nothing happened; now we can read
 
-    let res = readOne c in (
+    // TODO: deal with updates of i
+    let res = readOne c i in (
     match res with
     // TODO: specify which results imply that c.state & epochs are unchanged
-    | ReadAgain             -> read c
-    | ReadAgainFinishing    -> read c //was: readAllFinishing c
+    | ReadAgain             -> read c i
+    | ReadAgainFinishing    -> read c i //was: readAllFinishing c
     | ReadError x y         -> ReadError x y
-    | CertQuery(q,adv)      -> CertQuery(q,adv)
+    | CertQuery q adv       -> CertQuery q adv
     | Read delta            -> Read delta
     )
+
 
 (* readOne already updated the state, so no special case for Read DataStream.Close
     | Read DataStream.Close ->
