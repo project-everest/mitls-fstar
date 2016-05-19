@@ -289,6 +289,10 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	# Run the test
 	$(EXTRA_PATH) ./test.out
 
+mitls.exe: tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+		-I test/ -I output/ test/mitls.ml -o mitls.exe
+
 tls-client:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ -I output/ test/test_client.ml -o client.out

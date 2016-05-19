@@ -15,20 +15,6 @@ open CoreCrypto
 
 (* FlexRecord *)
 
-let config =
-    let sigPref = [CoreCrypto.RSASIG] in
-    let hashPref = [Hash CoreCrypto.SHA256] in
-    let sigAlgPrefs = sigAlgPref sigPref hashPref in
-    let l =         [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
-    let csn = cipherSuites_of_nameList l in
-     {TLSInfo.defaultConfig with
-         minVer = TLS_1p3;
-    	 maxVer = TLS_1p3;
-	 ciphersuites = csn;
-	 }
-
-//CF 16-04-30 it may be better to pass in a "Content.fragment i"
-
 val encryptRecord_TLS13_AES_GCM_128_SHA256: #id:id -> writer id -> Content.contentType -> bytes -> bytes
 let encryptRecord_TLS13_AES_GCM_128_SHA256 #id w ct plain = 
   // let pv = TLS_1p3 in
@@ -96,7 +82,7 @@ let replace_keyshare ksl e =
   | TLSExtensions.E_keyShare _ -> TLSExtensions.E_keyShare (ClientKeyShare ksl)
   | x -> x 
 
-let main host port =
+let main config host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
   let tcp = Platform.Tcp.connect host port in
   let log = empty_bytes in

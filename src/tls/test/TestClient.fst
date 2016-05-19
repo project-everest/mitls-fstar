@@ -14,19 +14,6 @@ open HandshakeLog
 open Handshake
 (* FlexRecord *)
 
-let config =
-    let l = [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
-    let csn = cipherSuites_of_nameList l in
-     {TLSInfo.defaultConfig with
-         minVer = TLS_1p2;
-    	 maxVer = TLS_1p2;
-	 ciphersuites = csn;
-         safe_resumption = true;
-         signatureAlgorithms = [(CoreCrypto.RSASIG, Hash CoreCrypto.SHA512); (CoreCrypto.RSASIG, Hash CoreCrypto.SHA384);(CoreCrypto.RSASIG, Hash CoreCrypto.SHA256)];
-         check_peer_certificate = false;
-         ca_file = "../../data/CAFile.pem";
-	 }
-
 let id = {
     msId = noMsId;
     kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
@@ -188,7 +175,7 @@ let recvEncAppDataRecord tcp pv rd =
 (* Flex Handshake *)
 
 
-let main host port =
+let main config host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
   let tcp = Platform.Tcp.connect host port in
   let rid = new_region root in

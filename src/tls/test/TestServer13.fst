@@ -15,18 +15,6 @@ open CoreCrypto
 
 (* FlexRecord *)
 
-let config =
-    let sigPref = [CoreCrypto.RSASIG] in
-    let hashPref = [Hash CoreCrypto.SHA256] in
-    let sigAlgPrefs = sigAlgPref sigPref hashPref in
-    let l =         [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
-    let csn = cipherSuites_of_nameList l in
-     {TLSInfo.defaultConfig with
-         minVer = TLS_1p3;
-    	 maxVer = TLS_1p3;
-	 ciphersuites = csn;
-	 }
-
 //CF 16-04-30 it may be better to pass in a "Content.fragment i"
 
 val encryptRecord_TLS13_AES_GCM_128_SHA256: #id:id -> writer id -> Content.contentType -> bytes -> bytes
@@ -129,7 +117,7 @@ let rec get_keyshare el =
   | _::t -> get_keyshare t
   | [] -> None
 
-let rec aux sock =
+let rec aux config sock =
   let tcp = Platform.Tcp.accept sock in
   let rid = new_region root in
   let log = empty_bytes in //HandshakeLog.init TLS_1p3 rid in
@@ -161,7 +149,7 @@ let rec aux sock =
 
   let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_get_htk ks (hash log) in
 
-  let Correct (chain, csk) = Cert.lookup_server_chain "../../data/test_chain.pem" "../../data/test_chain.key" pv (Some sa) None in
+  let Correct (chain, csk) = Cert.lookup_server_chain config.cert_chain_file config.private_key_file pv (Some sa) None in
   let crt = {crt_chain = chain} in
   let log = sendEncHSRecord tcp pv (EncryptedExtensions ({ee_extensions=[]})) log wr in
   let log = sendEncHSRecord tcp pv (Certificate crt) log wr in
@@ -191,10 +179,10 @@ let rec aux sock =
   Platform.Tcp.close tcp;
   IO.print_string "Closing connection...\n";
 
-  aux sock
+  aux config sock
 
-let main host port =
+let main config host port =
  IO.print_string "===============================================\n Starting test TLS 1.3 server...\n";
  let sock = Platform.Tcp.listen host port in
- aux sock
+ aux config sock
 
