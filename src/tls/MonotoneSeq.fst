@@ -156,7 +156,7 @@ val map_append: f:('a -> Tot 'b) -> s1:seq 'a -> s2:seq 'a -> Lemma
   (requires True)
   (ensures (map f (s1@s2) = (map f s1 @ map f s2)))
   (decreases (Seq.length s2))
-#reset-options "--z3timeout 3 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"  
+#reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"  
 let rec map_append f s_1 s_2 = 
   if Seq.length s_2 = 0
   then (cut (Seq.equal (s_1@s_2) s_1);
@@ -255,7 +255,7 @@ val collect_append: f:('a -> Tot (seq 'b)) -> s1:seq 'a -> s2:seq 'a -> Lemma
   (requires True)
   (ensures (collect f (s1@s2) = (collect f s1 @ collect f s2)))
   (decreases (Seq.length s2))
-#reset-options "--z3timeout 10 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"  
+#reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"  
 let rec collect_append f s_1 s_2 = 
   if Seq.length s_2 = 0
   then (cut (Seq.equal (s_1@s_2) s_1);
