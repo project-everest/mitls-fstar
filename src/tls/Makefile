@@ -182,30 +182,20 @@ TLS
 # No, --verify_module overrides --admit_fsi
 ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) SessionDB DHDB CoreCrypto Cert Handshake)
 
-
-# truncates $(FSTS) just before $(basename $@).fst
-define prefix_cfg
-	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *}")
-endef
-
-# truncates $(FSTS) just after $(basename $@).fst
-define prefix_ver
-	$(shell str="$(FSTS)"; echo "$${str%%$(1).$(2) *} $(1).$(2)")
-endef
-# the space in calls to prefix_ver and prefix_cfg matters!
-
 # verifying one file within $(FSTS)
 %.fst-ver: $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--verify_module $(basename $@) \
-	$^ \
-	$(call prefix_ver,$(basename $@),fst)
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(basename $@).fst
 
 %.fsti-ver:
 	$(MAKE) refresh
-	$(FSTAR) $(VERFLAGS) $(LIBFILES) $(ADMITTED) $(call prefix_ver, $(basename $@),fsti) \
---verify_module $(basename $@)
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	--verify_module $(basename $@) \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(basename $@).fsti
 
 %.fst-in:
 	$(MAKE) refresh > /dev/null
@@ -224,20 +214,21 @@ endef
 	$(basename $@).fsti
 
 # verifying everything stable
-# Add TLS.fst again when at least it lax type checks
 tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(addprefix --verify_module ,$(VERIFY)) \
-	$(filter-out Ideal.fst,$^)
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(FSTS)
 
 tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
         --verify_module False \
-	$(filter-out Ideal.fst,$^) | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 
 wc:
@@ -246,7 +237,9 @@ wc:
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 	$(MAKE) refresh
 	cp Concrete.fst IdealFlags.fst
-	$(FSTAR) --lax  $(ADMITTED) $(filter-out Concrete.fst,$^)
+	$(FSTAR) --lax \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	$(ADMITTED) $(FSTS)
 
 IdealFlags.fst:
 
@@ -290,7 +283,8 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
-	  $(filter-out Concrete.fst,$^)
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	  $(FSTS)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
