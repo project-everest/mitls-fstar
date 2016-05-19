@@ -55,7 +55,7 @@ type state (i:gid) (rw:rw) =
 type reader i = state i Reader
 type writer i = state i Writer
 
-abstract val region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
+val region: #i:id -> #rw:rw -> state i rw -> Tot (r:rid{r<>root})
 let region #i #rw s = State.region s
 
 abstract val peer_region: #i:id -> #rw:rw -> s:state i rw -> Tot (r:rid{r<>root /\ HyperHeap.disjoint (region s) r})

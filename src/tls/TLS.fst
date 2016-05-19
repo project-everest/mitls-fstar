@@ -24,6 +24,20 @@ open MonotoneSeq
 open FStar.Monotonic.RRef
 module HH = HyperHeap
 
+(* #set-options "--lax" *)
+
+(* #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0" *)
+
+//allowing inverting optResult without having to globally increase the fuel just for this
+// Will add a lemma to Platform.Error so that we don't have this ugly assume here
+assume InvertOptResult: forall (a:Type) (b:Type) (x:optResult a b). is_Error x \/ is_Correct x 
+(* let invertOptResult (a:Type)  (b:Type) (x:optResult a b) *)
+(*   : Lemma (requires True) *)
+(* 	  (ensures (is_Error x \/ is_Correct x)) *)
+(* 	  [] *)
+(*   = () *)
+
+
 // using also Alert, DataStream, Content, Record
 
 //16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
@@ -46,14 +60,16 @@ let rec unexpected #a s = unexpected s
 
 (*** control API ***)
 
+
 type rid = r: HH.rid { disjoint r TLSConstants.tls_region } 
 //16-05-12 should we use a color for connection regions?
 
 // was connect, resume, accept_connected, ...
 val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
-            resume: option (sid: sessionID { r = Client }) ->
+//            resume: option (sid: sessionID { r = Client }) -> //NS: This style should be considered an anti-pattern; it requires an inversion of option to prove this post-condition:     (r = Server ==> resume = None) /\ 
+            resume: resume_id r  ->
             ST connection
-  (requires (fun h -> True))
+  (requires (fun h ->  True))
   (ensures (fun h0 c h1 ->
     fresh_region c.region h0 h1 /\
     c_role c = r /\
@@ -62,12 +78,14 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
     c.tcp = tcp  /\
     modifies Set.empty h0 h1 /\
     extends c.region r0 /\
-    (r = Server ==> resume = None) /\
+    (* (r = Server ==> resume = None) /\  *)
     Map.contains h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
     sel h1 (c_log c) = Seq.createEmpty /\ 
     sel h1 c.state = BC /\
     True
     ))
+
+
 
 let create parent tcp role cfg resume =
     let m = new_region parent in
@@ -235,6 +253,7 @@ val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:st
     sel h1 c.state = Half Writer
   ))
 
+
 let abortWithAlert c ad reason =
     invalidateSession c.hs;
     Alert.send c.alert ad;
@@ -319,6 +338,17 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
        )) /\
     True ))
 
+(* #reset-options "--log_queries --initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0" *)
+let send_payload c i f =
+    let j = Handshake.i c.hs Writer in
+    if j<0 
+    then Content.repr i f
+    else let es = !c.hs.log in
+	 let e = Seq.index es j in 
+	 (* let _ = reveal_epoch_region_inv e in *)
+	 StAE.encrypt (writer_epoch e) f
+
+
 (* assume val frame_ae:  *)
 (*   h0:HH.t -> h1: HH.t -> c:connection -> Lemma( *)
 (*     // restrictions of h0 and h1 to the footprint of st_inv and iT in c are the same /\ *)
@@ -334,17 +364,9 @@ let currentId (c:connection) (rw:rw) =
     let id = hsId e.h in
     if rw = Writer then id else peerId id
 
-let send_payload c i f =
-    let j = Handshake.i c.hs Writer in
-    if j<0 
-    then Content.repr i f
-    else let es = !c.hs.log in
-	 let e = (Seq.index es j) in 
-	 StAE.encrypt (writer_epoch e) f
 
 // check vs record
-val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
-  (requires (fun h ->
+let send_requires (c:connection) (i:id) (h:HH.t) = 
     let st = sel h c.state in
     let es = sel h c.hs.log in
     let j = iT c.hs Writer h in
@@ -352,13 +374,17 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     st_inv c h /\
     st <> Close /\
     st <> Half Reader /\
-    (j < 0 ==> i == noId) /\
+    (j < 0 ==> i = noId) /\
     (j >= 0 ==> (
        let e = Seq.index es j in
        let wr = writer_epoch e in 
+       Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
        Map.contains h (StAE.log_region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
-       i == hsId e.h /\
-       incrementable (writer_epoch e) h))))
+       i = hsId e.h /\
+       incrementable (writer_epoch e) h))
+       
+val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
+  (requires (send_requires c i))
   (ensures (fun h0 _ h1 ->
     let es = sel h0 c.hs.log in
     let j = iT c.hs Writer h0  in
@@ -381,6 +407,8 @@ let send c #i f =
   lemma_repr_bytes_values (length payload);
   let record = Record.makePacket ct pv payload in
   let r  = Platform.Tcp.send (C.tcp c) record in
+  (* let h1 = ST.get() in *)
+  (* cut (trigger_frame h1); *)
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
@@ -499,30 +527,23 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
 // CF: this is guarantees only when returning Written.
 val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
-    let st = sel h c.state in
-    let es = sel h c.hs.log in
-    let j = iT c.hs Writer h in
-    st_inv c h /\
-    st <> Close /\
-    st <> Half Reader /\
-    (if j < 0 then i == noId else
-      let e = Seq.index es j in
-      st = AD /\
-      i = hsId e.h /\
-      incrementable (writer_epoch e) h)))
-  (ensures (fun h0 r h1 ->
-    let st = sel h0 c.state in
-    let es = sel h0 c.hs.log in
-    let j = iT c.hs Writer h0  in
-    st_inv c h0 /\
-    st_inv c h1 /\
-    j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above
-    (if j < 0 then i == noId /\ h0 = h1 else
-       let e = Seq.index es j in
-       i == hsId e.h /\ (
-       let wr:writer i = writer_epoch e in
-       modifies (Set.singleton (C.region c)) h0 h1
-))))
+    send_requires c i h
+    /\ (let st = sel h c.state in
+       let j = iT c.hs Writer h in
+       j >= 0 ==> st=AD)))
+  (ensures (fun h0 r h1 -> True))
+(*     let st = sel h0 c.state in *)
+(*     let es = sel h0 c.hs.log in *)
+(*     let j = iT c.hs Writer h0  in *)
+(*     st_inv c h0 /\ *)
+(*     st_inv c h1 /\ *)
+(*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
+(*     (if j < 0 then i == noId /\ h0 = h1 else *)
+(*        let e = Seq.index es j in *)
+(*        i == hsId e.h /\ ( *)
+(*        let wr:writer i = writer_epoch e in *)
+(*        modifies (Set.singleton (C.region c)) h0 h1 *)
+(* )))) *)
 
 (* the rest of the spec below still uses the old state machine
     // TODO: conditionally prove that i == epoch_id (epoch_w_h c h), at least when appdata is set.
@@ -649,35 +670,56 @@ let writeOne c i appdata =
                         | Error (x,y) -> unrecoverable c y)
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
 *)
- 
+
+#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
+
+let send_requires' (c:connection) (i:id) (h:HH.t) = 
+    let st = sel h c.state in
+    let es = sel h c.hs.log in
+    let j = iT c.hs Writer h in
+    (* j < Seq.length es /\ *)
+    st_inv c h /\
+    st <> Close /\
+    st <> Half Reader   /\
+    (j < 0 ==> i = noId) /\
+    (j >= 0 ==> (
+       let e = Seq.index es j in
+       let wr = writer_epoch e in
+       Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
+       Map.contains h (StAE.log_region wr)))(*  /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property *)
+       (* i = hsId e.h))(\*  /\ *\) *)
+       (* (\* incrementable (writer_epoch e) h)) *\) *)
+
 let writeOne c i appdata =
   let h0 = ST.get() in
   let st = !c.state in
-
+  assert (send_requires c i h0);
   // alerts have highest priority; we send only close_notify and fatal alerts
   let alert_response = Alert.next_fragment c.alert in
   let h1 = ST.get() in
 
   frame_iT c.hs Writer h0 h1 (Set.singleton (Alert.region c.alert));
-  assume false; // TODO can't get the precondition of send below. 
+  (* assume false; // TODO can't get the precondition of send below.  *)
   (match alert_response with
-  | Some AD_close_notify -> ( // graceful closure
-      match send c #i (Content.ct_alert i AD_close_notify) with
-      | Correct()   ->
+  | Some ad -> 
+    begin match ad with 
+      | AD_close_notify -> // graceful closure
+        (match send c #i (Content.ct_alert i AD_close_notify) with
+	 | Correct()   ->
           let h2 = ST.get () in
           c.state := (if st = Half Writer then Close else Half Reader);
           SentClose
-      | Error (x,y) -> unrecoverable c y )
-  | Some ad -> (
-      match send c #i (Content.ct_alert i ad) with
+         | Error (x,y) -> unrecoverable c y )
+     | _ ->
+      (match send c #i (Content.ct_alert i ad) with
       | Correct() ->
           // let reason = match writing with | Closing(_,reason) -> reason | _ -> "" in
           closeConnection c;
           WriteError (Some ad) ""
-      | Error (x,y) -> unrecoverable c y )
-  | None -> // SentClose )
-
-        // next we check if there is outgoing Handshake traffic
+      | Error (x,y) -> unrecoverable c y)
+    end
+    
+  | _ ->  // next we check if there is outgoing Handshake traffic
         let hs_response = Handshake.next_fragment c.hs in
         let h2 = ST.get() in
         (match hs_response with
@@ -685,6 +727,7 @@ let writeOne c i appdata =
             // we know j has just been incremented.
             // we send the CCS fragment on the prior epoch
             frame_admit c h1 h2; //NS: not an instance of frame_internal, since it may change the epochs log if the result is OutCCS
+	    admit();
             match send c #i (Content.CT_CCS #i (abyte 1z)) with
             | Correct _ ->
                 c.state := BC; // use renego/key-update states instead? anyway AD writing is temporarily forbidden.
@@ -697,9 +740,13 @@ let writeOne c i appdata =
 
         | Handshake.OutSome rg f -> (
             // we send some handshake fragment
+	    (* assert (iT c.hs Writer h1 == iT c.hs Writer h2); *)
+	    frame_admit c h1 h2;
+	    (* admit(); *)
             match send c #i (Content.CT_Handshake rg f) with
             | Correct()   -> WriteAgain
             | Error (x,y) -> unrecoverable c y)
+
             //$ | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
 (*
         | Handshake.OutFinished rg last_fragment -> (* check we are finishing & send last fragment *)
@@ -728,16 +775,19 @@ let writeOne c i appdata =
                      | Error (x,y) -> unrecoverable c y)
             | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
 
-        | Handshake.OutIdle -> (
-
+        | Handshake.OutIdle -> 
         // finally attempt to send some application data
-        (match st, appdata with
-        | AD, Some (|rg,f|) ->
+          frame_admit c h1 h2; 
+          begin match st, appdata with
+          | AD, Some (|rg,f|) ->
                ( match send c (Content.CT_Data rg f) with
                  | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
                  | Error (x,y) -> unrecoverable c y)
-        | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
-))))
+          | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
+	  end 
+       
+       | _ -> unexpected "NYI"))
+
 
 
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w

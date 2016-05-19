@@ -59,14 +59,14 @@ type connection = | C:
 let c_role c   = c.hs.r
 let c_nonce c  = c.hs.nonce
 let c_cfg c    = c.hs.cfg
-let c_resume c = c.hs.resume
+let c_resume c : resume_id (c_role c) = c.hs.resume
 let c_log c    = c.hs.log
 
-val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h)))
-let reader_epoch #region #peer e = Epoch.r e
+(* val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h))) *)
+(* let reader_epoch #region #peer e = Epoch.r e *)
 
-val writer_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h))
-let writer_epoch #region #peer e = Epoch.w e
+(* val writer_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h)) *)
+(* let writer_epoch #region #peer e = Handshake.writer_epoch e *)
 
 (*** 
      WE WILL FOCUS VERIFICATION ON StreamAE and TLS-1.3 FOR NOW.

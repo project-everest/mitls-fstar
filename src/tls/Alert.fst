@@ -125,7 +125,9 @@ let init r0 =
   State (ralloc r None)
 
 // ---------------- outgoing alerts -------------------
-
+val send : s:state -> ad:alertDescription{isFatal ad} -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 _ h1 -> modifies_one (region s) h0 h1))
 let send (State b) (ad:alertDescription{isFatal ad}) =
     if !b = None 
     then b := Some (alertBytes ad)

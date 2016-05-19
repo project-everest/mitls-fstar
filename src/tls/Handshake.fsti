@@ -125,30 +125,47 @@ val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
 
 type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
-  disjoint hs_rgn (region w)                  /\ 
+  disjoint hs_rgn (region w)                  /\
   parent (region w) <> FStar.HyperHeap.root    /\
   parent (region r) <> FStar.HyperHeap.root    /\
   parent hs_rgn = parent (parent (region w))  /\ //Grandparent of each writer is a sibling of the handshake
-  disjoint (region w) (region r)              /\ 
+  disjoint (region w) (region r)              /\
   is_epoch_rgn (region w)                     /\ //they're all colored as epoch regions
   is_epoch_rgn (region r)                     /\
   is_epoch_rgn (parent (region w))            /\
   is_epoch_rgn (parent (region r))            /\
   is_hs_rgn hs_rgn                              //except for the hs_rgn, of course
 
+abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
+  epoch_region_inv hs_rgn r w
+  
 module I = IdNonce
 
 type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
   | Epoch: h: handshake ->
            r: reader (peerId (hsId h)) ->
-           w: writer (hsId h) {epoch_region_inv hs_rgn r w /\ I.nonce_of_id (hsId h) = n} 
+           w: writer (hsId h) {epoch_region_inv' hs_rgn r w /\ I.nonce_of_id (hsId h) = n} 
 	   -> epoch hs_rgn n
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
+let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
+  : Lemma (let r = Epoch.r e in 
+	   let w = Epoch.w e in 
+	   epoch_region_inv hs_rgn r w)
+  = ()
+
+let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
+  : Tot (w:writer (hsId (e.h)) {epoch_region_inv hs_rgn (Epoch.r e) w})
+  = Epoch.w e
+
+let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
+  : Tot (r:reader (peerId (hsId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
+  = Epoch.r e
+
 (* The footprint just includes the writer regions *)
-let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
+abstract let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
   forall (i:nat { i < Seq.length es })
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
@@ -158,20 +175,24 @@ let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
  
 let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv es }
 
+
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
 val handshake_state : role -> Type0
 #reset-options "--z3timeout 3 --initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2"
 
+let resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
+
 type hs =
   | HS: #region: rgn { is_hs_rgn region } ->
               r: role ->
-         resume: option (sid:sessionID { r = Client }) ->
+         resume: resume_id r ->
             cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-            log: rref region (epochs region nonce) ->  // append-only; use monotonic? 
-          state: rref region (handshake_state r)  ->  // opaque, subject to invariant
+            log: MS.log_t region (epochs region nonce) ->  // append-only, monotonic log of epochs
+          state: rref region (handshake_state r)  ->       // opaque, subject to invariant
              hs
+
 
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
@@ -325,7 +346,7 @@ val version: s:hs -> ST protocolVersion
 (*** Control Interface ***)
 
 // Create instance for a fresh connection, with optional resumption for clients
-val init: r0:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r = Client })  ->
+val init: r0:rid -> r: role -> cfg:config -> resume: resume_id r -> 
   ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
@@ -338,7 +359,7 @@ val init: r0:rid -> r: role -> cfg:config -> resume: option (sid: sessionID { r 
     sel h1 (HS.log s) = Seq.createEmpty ))
 
 let mods s h0 h1 = 
-  HyperHeap.modifies (Set.singleton s.region) h0 h1
+  HyperHeap.modifies_one s.region h0 h1
   
 let modifies_internal h0 s h1 =
     hs_inv s h1 /\

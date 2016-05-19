@@ -174,9 +174,7 @@ val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> s:Se
     	      /\ Map.contains h0 (region st)
 	      /\ not (Set.mem (region st) s))
     (ensures seqnT st h0 = seqnT st h1) 
-let frame_seqnT #i #rw st h0 h1 s = 
-  if is_stream_ae i then ()
-  else admit() //FIXME! doesn't go through in 1.2; need to investigate why
+let frame_seqnT #i #rw st h0 h1 s = ()
 
 let trigger_frame (h:HH.t) = True
 
@@ -184,7 +182,25 @@ let frame_f (#a:Type) (f:HH.t -> GTot a) (h0:HH.t) (s:Set.set rid) =
   forall h1.{:pattern trigger_frame h1} 
         trigger_frame h1
         /\ (HH.equal_on s h0 h1 ==> f h0 = f h1)
-  
+
+val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:HH.t -> h1:HH.t -> 
+  Lemma (requires   HH.equal_on (Set.singleton (region s)) h0 h1 
+		  /\ Map.contains h0 (region s))
+        (ensures seqnT s h0 = seqnT s h1)
+	[SMTPat (seqnT s h0); 
+	 SMTPat (seqnT s h1)]
+//	 SMTPatT (trigger_frame h1)]
+let frame_seqT_auto i rw s h0 h1 = ()
+
+val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:HH.t -> h1:HH.t -> 
+  Lemma (requires    HH.equal_on (Set.singleton (log_region s)) h0 h1 
+		  /\ Map.contains h0 (log_region s))
+        (ensures fragments s h0 = fragments s h1)
+	[SMTPat (fragments s h0); 
+	 SMTPat (fragments s h1)] 
+	 (* SMTPatT (trigger_frame h1)] *)
+let frame_fragments_auto i rw s h0 h1 = ()
+
 ////////////////////////////////////////////////////////////////////////////////
 //Experimenting with reads clauses: probably unnecessary
 ////////////////////////////////////////////////////////////////////////////////
