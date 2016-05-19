@@ -71,7 +71,6 @@ FSTAR_OR_NUBUILD=$(FSTAR)
 endif
 
 # ------------------------- miTLS* -------------------------------------------
-# We try to limit the use of preprocessing, as it is messy.
 # Not sure which interfaces we should put in there.
 
 # This is the dependency order for interactive verification;
@@ -133,11 +132,6 @@ test/TestClient13.fst \
 ConnInvariant.fst \
 TLS.fst #the preceding space is significant!
 
-
-
-# BREAKING LAX CHECKING WITH StAE
-#TLS.fst \
-
 # these files are verified here for regression testing -- any time one more file
 # verifies, it should be added here
 # missing modules from FSTS are: Cert, TLSExtensions, Encode, ENC,
@@ -184,7 +178,7 @@ TLS
 # No, --verify_module overrides --admit_fsi
 ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) SessionDB DHDB CoreCrypto Cert Handshake)
 
-# verifying one file within $(FSTS)
+# verifying one file
 %.fst-ver: $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
@@ -199,12 +193,12 @@ ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) Sessi
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(basename $@).fsti
 
+# Targets to get F* arguments in interactive mode
 %.fst-in:
 	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--verify_module $(basename $@) \
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
-	$(ADMITTED) \
 	$(basename $@).fst
 
 %.fsti-in:
@@ -212,7 +206,6 @@ ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) Sessi
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--verify_module $(basename $@) \
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
-	$(ADMITTED) \
 	$(basename $@).fsti
 
 # verifying everything stable
@@ -220,10 +213,10 @@ tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	$(addprefix --verify_module ,$(VERIFY)) \
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
-	$(FSTS)
+	$(addsuffix .fst,$(VERIFY))
 
+# Sanity check
 tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
@@ -232,16 +225,15 @@ tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
-
-wc:
-	wc -l $(LIBFILES) $(FSTS)
-
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 	$(MAKE) refresh
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) --lax \
 	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
-	$(ADMITTED) $(FSTS)
+	$(FSTS)
+
+wc:
+	wc -l $(LIBFILES) $(FSTS)
 
 IdealFlags.fst:
 
