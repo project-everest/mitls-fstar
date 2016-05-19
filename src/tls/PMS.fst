@@ -48,7 +48,7 @@ let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms =
 
 
 // The trusted setup for Diffie-Hellman computations
-open CoreCrypto.Keys
+//open CoreCrypto.Keys
 
 type dhrepr = bytes
 (*private*) type dhseed = {seed: dhrepr}

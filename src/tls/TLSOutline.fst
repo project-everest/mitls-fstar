@@ -7,10 +7,10 @@ module TLSOutline
 // - each secure stream maintains a log of data (and warnings) written so far
 //   and the reader position in that log.
 
-open Heap
+open FStar.Heap
 open FStar.HyperHeap
-open Seq
-open SeqProperties // for e.g. found
+open FStar.Seq
+open FStar.SeqProperties // for e.g. found
 open FStar.Monotonic.RRef
 open FStar.Ghost
 
