@@ -976,9 +976,9 @@ let append_r h0 h1 c d =
     (log1 = log0 /\
     Seq.index log1 pos0 = d ))
   | None -> True
+*)
 
-
-assume val rd_i: c: connection -> Tot id
+assume val rd_i: c: connection -> Tot id //16-05-18 unimplementable
 
 // frequent error handler
 let alertFlush c x y : ioresult_i (rd_i c) =
@@ -988,21 +988,12 @@ let alertFlush c x y : ioresult_i (rd_i c) =
   | SentClose      -> Read DataStream.Close // do we need this case?
   | WriteError x y -> ReadError x y
 
-//* private val getHeader: c:Connection -> ST (Result ((ct:ContentType * len:nat){len > 0 /\ len <= max_TLSCipher_fragment_length}))
-//*   (requires (fun h -> True))
-//*   (ensures (fun h0 r h1 -> h0 = h1))
-//* we should require the c.read is not Closing \/ Closed
-let getHeader c =
-    match Platform.Tcp.recv c.tcp 5 with // read & parse the header
-    | Error x -> Error(AD_internal_error,x)
-    | Correct header ->
-      match Record.parseHeader header with
-      | Error x -> Error x
-      | Correct (ct,pv,len) -> correct(ct,len)
-        // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
-        // our server never treats the ClientHello's record pv as its minimum supported pv;
-        // our client never checks the consistency of the server's record pv.
-        // (see earlier versions for the checks we used to perform)
+(*
+let readFragment c i = 
+  match Record.read with 
+  | Correct(ct,pv,payload) -> 
+      // either payload is a plaintext protocol fragment, or we decrypt
+  | Error e -> Error e
 
 //* private val getFragment: c:connection -> ct:ct -> len:nat -> ST (rg * msg)
 //* "stateful, but only affecting the StAE instance"
@@ -1083,7 +1074,7 @@ let rec readAllFinishing c =
     admit(); // FIXME!
     let outcome = readOne c in
     match outcome with
-    | ReadAgain      ~> readAllFinishing c
+    | ReadAgain      -> readAllFinishing c
     | CompletedFirst -> CompletedFirst #(rd_i c)
     | Read (DataStream.Alert ad) ->
        ( if isFatal ad
@@ -1154,6 +1145,7 @@ let rec read c =
 
 // -----------------------------------------------------------------------------
 
+(* =================///////////////////================
 
 //* we used to specify the resulting connection in ioresult_i,
 //* now we do that in the read postcondition

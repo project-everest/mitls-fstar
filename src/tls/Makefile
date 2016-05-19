@@ -309,6 +309,16 @@ tls-server:
 	         -I test/ -I output/ test/test_server.ml -o server.out
 	$(EXTRA_PATH) ./server.out 1.2 0.0.0.0 4443
 
+# depends on tls-gen
+test13: 
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+	         -I test/ -I output/ test/test_client.ml -o client13.exe
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+	         -I test/ -I output/ test/test_server.ml -o server13.exe
+	$(EXTRA_PATH) ./server13.exe 1.3 0.0.0.0 4443 & 
+	$(EXTRA_PATH) ./client13.exe 1.3 127.0.0.1 4443
+	taskkill /F /IM server13.exe 
+
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
 endif
