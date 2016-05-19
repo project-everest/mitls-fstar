@@ -239,17 +239,33 @@ let macSize = function
 type scsv_suite =
   | TLS_EMPTY_RENEGOTIATION_INFO_SCSV
 
+(* let known_cs_list = [( 0x00z, 0x00z ); *)
+(* ( 0x00z, 0x01z );( 0x00z, 0x02z ); ( 0x00z, 0x3Bz ); ( 0x00z, 0x04z ); ( 0x00z, 0x05z ); *)
+(* ( 0x00z, 0x0Az ); ( 0x00z, 0x2Fz ); ( 0x00z, 0x35z ); ( 0x00z, 0x3Cz );( 0x00z, 0x3Dz ); *)
+(*  ( 0x00z, 0x0Dz ); ( 0x00z, 0x10z ); ( 0x00z, 0x13z ); ( 0x00z, 0x16z ); *)
+(*  ( 0x00z, 0x30z ); ( 0x00z, 0x31z ); ( 0x00z, 0x32z ); ( 0x00z, 0x33z ); *)
+(*  ( 0x00z, 0x36z ); ( 0x00z, 0x37z ); ( 0x00z, 0x38z ); ( 0x00z, 0x39z ); *)
+(*  ( 0x00z, 0x3Ez ); ( 0x00z, 0x3Fz ); ( 0x00z, 0x40z ); ( 0x00z, 0x67z ); *)
+(*  ( 0x00z, 0x68z ); ( 0x00z, 0x69z ); ( 0x00z, 0x6Az ); ( 0x00z, 0x6Bz ); *)
+(*  ( 0xc0z, 0x11z ); ( 0xc0z, 0x12z ); ( 0xc0z, 0x13z ); ( 0xc0z, 0x14z ); ( 0xc0z, 0x27z ); ( 0xc0z, 0x28z ); *)
+(*  ( 0xc0z, 0x2fz ); ( 0xc0z, 0x30z ); *)
+(*  ( 0x00z, 0x18z ); ( 0x00z, 0x1Bz ); ( 0x00z, 0x34z ); ( 0x00z, 0x3Az ); ( 0x00z, 0x6Cz ); ( 0x00z, 0x6Dz ); *)
+(* ( 0x00z, 0x9Cz );( 0x00z, 0x9Dz ); *)
+(* ( 0x00z, 0x9Ez );( 0x00z, 0x9Fz );( 0x00z, 0xA0z );( 0x00z, 0xA1z ); *)
+(* ( 0x00z, 0xA2z );( 0x00z, 0xA3z );( 0x00z, 0xA4z );( 0x00z, 0xA5z ); *)
+(* ( 0x00z, 0xA6z ); ( 0x00z, 0xA7z ); ( 0x00z, 0xFFz )] *)
+
 type cipherSuite =
   | NullCipherSuite: cipherSuite
   | CipherSuite    : kexAlg -> option sig_alg -> aeAlg -> cipherSuite
   | SCSV           : scsv_suite -> cipherSuite
-  | UnknownCipherSuite: byte -> byte  -> cipherSuite
+  | UnknownCipherSuite: a:byte -> b:byte(* {not(List.Tot.contains (a,b) known_cs_list)}  *) -> cipherSuite // JK: incomplete spec
 
 type cipherSuites = list cipherSuite
 
 type compression =
   | NullCompression
-  | UnknownCompression of byte
+  | UnknownCompression of (b:byte{b <> 0z})
 
 val compressionBytes: compression -> Tot (lbytes 1)
 let compressionBytes comp =
@@ -327,7 +343,8 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
 
 let geqPV a b = (b = minPV a b)
 
-
+(* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
+   have to be distinct from the 'correct' ones *)
 val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))
 let cipherSuiteBytesOpt cs =
   let abyte2 b: option (lbytes 2) = Some (abyte2 b) in
@@ -929,6 +946,16 @@ val lemma_vlbytes_inj : i:nat
 let lemma_vlbytes_inj i b b' =
   let l = bytes_of_int i (length b) in
   SeqProperties.lemma_append_inj l b l b'
+
+val vlbytes_length_lemma: n:nat -> a:bytes{repr_bytes (length a) <= n} -> b:bytes{repr_bytes (length b) <= n} -> 
+  Lemma (requires (Seq.equal (Seq.slice (vlbytes n a) 0 n) (Seq.slice (vlbytes n b) 0 n)))
+        (ensures (length a = length b))
+let vlbytes_length_lemma n a b = 
+  let lena = Seq.slice (vlbytes n a) 0 n in
+  let lenb = Seq.slice (vlbytes n b) 0 n in
+  assert(Seq.equal lena (bytes_of_int n (length a)));
+  assert(Seq.equal lenb (bytes_of_int n (length b)));
+  int_of_bytes_of_int n (length a); int_of_bytes_of_int n (length b)
 
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 0 --initial_fuel 0"   //need to reason about length
 val vlsplit: lSize:nat{lSize <= 4}

@@ -1149,7 +1149,7 @@ let readOne c i =
         | InAck                -> // We know statically that Handshake and Application data buffers are empty.
                                  ReadAgainFinishing
       end
-  | Correct(Content.CT_Data #i rg d) -> 
+  | Correct(Content.CT_Data rg d) ->
       begin
         match !c.state with
         | AD | Half Reader        -> let d : DataStream.fragment i fragment_range = d in Read #i (DataStream.Data d)

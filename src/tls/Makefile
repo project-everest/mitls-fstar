@@ -1,10 +1,6 @@
 # These are all the known working targets in this file,
-# check for regressions & comment about them!
+# Check for regressions & comment about them!
 all: tls-ver tls-sanity tls-lax tls-gen
-
-# TODO extend scope of verification
-# TODO compilation to ML & testing
-# MK removed mitls-ml as strider was failing on it for ages
 
 CONTRIB=ucontrib
 LIB=ulib
@@ -13,32 +9,32 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
-	rm -rf *.ml *.p.* *.cm* *.o *~ *.out
+	rm -rf *.ml *.p.* *.cm* *.o *~ *.out output
 
-
-# ------------------ dependencies on Fstar & its libraries --------------------
-# When using NuBuild, FStar must be located within the source tree. Now that soft links are 
-# available on all platforms, I don't see a reason not to assume a fixed location.
+# ------------------ Dependencies on F* & its libraries --------------
+# When using NuBuild, FStar must be located within the source tree.
+# Now that soft links are available on all platforms, I don't see a
+# reason not to assume a fixed location.
 FSTAR_HOME?=../../.fstar
-# JP: this location can easily be overridden by doing:
+# This location can easily be overridden by doing:
 #   FSTAR_HOME=../../../fstar make tls-gen
 # BUT NOT AS FOLLOWS
 #   make FSTAR_HOME=../../../fstar tls-gen
-# the latter form won't work because FSTAR_HOME will incorrectly override values
-# in recursive invocations of $(MAKE)...
+# the latter form won't work because FSTAR_HOME will incorrectly override
+# values in recursive invocations of $(MAKE)...
 
-# The .fst files found in [lib/ml] that are realized in
-# stdlib-hyperheap.cmxa
+# .fst files in [lib/ml] that are realized in stdlib-hyperheap.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
-OTHERFLAGS=--universes --use_native_int
-# --trace_error --print_universes 
+OPTIONS=--universes --use_native_int
+
 STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
 hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
 FStar.Seq.fst FStar.SeqProperties.fst FStar.Float.fsti FStar.IO.fsti FStar.UInt8.fst
+
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
-FSTARFLAGS=$(OTHERFLAGS) $(OPTIONS)
+FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
       $(FSTARFLAGS)
 
@@ -53,15 +49,15 @@ CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 # The .fst interfaces for the platform and crypto libraries.
-LIBFILES = $(addprefix $(FSTAR_HOME)/$(LIB)/, $(STDLIB)) $(PLATFORM) $(CRYPTO)
+LIBFILES=$(addprefix $(FSTAR_HOME)/$(LIB)/, $(STDLIB)) $(PLATFORM) $(CRYPTO)
+
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap 
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
-DEBUG=ocamlfind ocamlc
-OCAMLMKLIB=ocamlfind ocamlmklib
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
 
-# ----------------------- NuBuild integration ------------------------
+# ----------------------- NuBuild integration -------------------------
 NUBUILD_HOME=../../.nubuild
 NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
 ifdef USE_NUBUILD
@@ -70,11 +66,9 @@ else
 FSTAR_OR_NUBUILD=$(FSTAR)
 endif
 
-# ------------------------- miTLS* -------------------------------------------
-# Not sure which interfaces we should put in there.
-
-# This is the dependency order for interactive verification;
-# these files are now all extracted via lax type-checking in tls-gen
+# ---------------------------------------------------------------------
+# These files are all extracted via lax type-checking in tls-gen
+# Files are listed in dependency order
 
 FSTS=IdealFlags.fst \
 MonotoneSeq.fst \
@@ -132,11 +126,14 @@ test/TestClient13.fst \
 ConnInvariant.fst \
 TLS.fst #the preceding space is significant!
 
-# these files are verified here for regression testing -- any time one more file
-# verifies, it should be added here
-# missing modules from FSTS are: Cert, TLSExtensions, Encode, ENC,
-# HandshakeMessages, Record, HSCrypto, TLSPRF, PRF, HandshakeLog,
-# KeySchedule, Handshake
+# --------------------------------------------------------------------
+# Modules verified in tls-ver -- any time one more file verifies, it
+# should be added here.
+#
+# Missing modules from FSTS:
+# Cert, TLSExtensions, Encode, ENC, HandshakeMessages, Record, HSCrypto,
+# TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
+
 VERIFY= \
 IdealFlags \
 MonotoneSeq \
@@ -174,46 +171,42 @@ Connection \
 ConnInvariant \
 TLS 
 
-# admitting things verified elsewhere; redundant with lax and --verify_module?
-# No, --verify_module overrides --admit_fsi
-ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) SessionDB DHDB CoreCrypto Cert Handshake)
-
-# verifying one file
+# Verifying one file at a time
 %.fst-ver: $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(basename $@).fst
 
 %.fsti-ver:
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
 %.fst-in:
 	$(MAKE) refresh > /dev/null
-	@echo $(OTHERFLAGS) $(VERFLAGS) \
+	@echo $(OPTIONS) $(VERFLAGS) \
+	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(basename $@).fst
 
 %.fsti-in:
 	$(MAKE) refresh > /dev/null
-	@echo $(OTHERFLAGS) $(VERFLAGS) \
+	@echo $(OPTIONS) $(VERFLAGS) \
+	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(basename $@).fsti
 
-# verifying everything stable
+# Verifying everything stable
 tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
+	$(FSTAR_INCLUDE_PATHS) \
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
@@ -221,15 +214,16 @@ tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	$(MAKE) refresh
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR_INCLUDE_PATHS) \
         --verify_module False \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
+# Lax typecheck all files
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 	$(MAKE) refresh
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) --lax \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
+	$(FSTAR_INCLUDE_PATHS) \
 	$(FSTS)
 
 wc:
@@ -245,7 +239,7 @@ LIB_ML= \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa
 
 # .fst files realized elsewhere.
-TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_ADMITS) SessionDB DB DHDB CoreCrypto)
+TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto)
 
 OUTPUT_DIR=output
 
@@ -278,7 +272,7 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	  --include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
+	  $(FSTAR_INCLUDE_PATHS) \
 	  $(FSTS)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx
@@ -295,6 +289,10 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	# Run the test
 	$(EXTRA_PATH) ./test.out
 
+mitls.exe: tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+		-I test/ -I output/ test/mitls.ml -o mitls.exe
+
 tls-client:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ -I output/ test/test_client.ml -o client.out
@@ -306,14 +304,14 @@ tls-server:
 	$(EXTRA_PATH) ./server.out 1.2 0.0.0.0 4443
 
 # depends on tls-gen
-test13: 
+test13:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ -I output/ test/test_client.ml -o client13.exe
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ -I output/ test/test_server.ml -o server13.exe
-	$(EXTRA_PATH) ./server13.exe 1.3 0.0.0.0 4443 & 
+	$(EXTRA_PATH) ./server13.exe 1.3 0.0.0.0 4443 &
 	$(EXTRA_PATH) ./client13.exe 1.3 127.0.0.1 4443
-	taskkill /F /IM server13.exe 
+	taskkill /F /IM server13.exe
 
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
