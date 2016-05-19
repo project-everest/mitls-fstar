@@ -22,7 +22,10 @@ open Range
 open HandshakeMessages
 open HSCrypto
 open StAE
+
 module HH = HyperHeap
+module MS = MonotoneSeq
+module MR = FStar.Monotonic.RRef
 
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
@@ -150,6 +153,13 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
+let reveal_epoch_region_inv_all (u:unit)
+  : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}
+	   epoch_region_inv' #i hs_rgn r w
+	   <==>
+   	   epoch_region_inv #i hs_rgn r w)
+  = ()	   
+
 let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
   : Lemma (let r = Epoch.r e in 
 	   let w = Epoch.w e in 
@@ -189,7 +199,7 @@ type hs =
          resume: resume_id r ->
             cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-            log: MS.log_t region (epochs region nonce) ->  // append-only, monotonic log of epochs
+            log: MR.m_rref region (epochs region nonce) MS.grows ->  // append-only, monotonic log of epochs
           state: rref region (handshake_state r)  ->       // opaque, subject to invariant
              hs
 
@@ -197,13 +207,13 @@ type hs =
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-let logT (s:hs) (h:HyperHeap.t) = sel h s.log
+let logT (s:hs) (h:HyperHeap.t) = MR.m_sel h s.log
 
 let stateType (s:hs) = epochs s.region s.nonce * handshake_state (HS.r s)
 
-let stateT (s:hs) (h:HyperHeap.t) : stateType s = (sel h s.log, sel h s.state)
+let stateT (s:hs) (h:HyperHeap.t) : stateType s = (logT s h, sel h s.state)
 
-let non_empty h s = Seq.length (sel h s.log) > 0
+let non_empty h s = Seq.length (logT s h) > 0
 
 let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
 
@@ -237,7 +247,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) (mods:Set.set rid)
     frame_iT_trivial s rw h0 h1
     
 // returns the epoch for reading or writing
-let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (sel h s.log) (iT s rw h)
+let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (logT s h) (iT s rw h)
 
 let readerT s h = eT s Reader h 
 let writerT s h = eT s Writer h
@@ -270,7 +280,7 @@ val processServerFinished_13: cfg:config -> n:nego -> ks:KeySchedule.ks -> log:H
 
 
 let forall_epochs (hs:hs) h (p:(epoch hs.region hs.nonce -> Type)) = 
-  (let es = sel h hs.log in 
+  (let es = logT hs h in
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
      
 (* //vs modifies clauses? *)
@@ -281,13 +291,13 @@ let forall_epochs (hs:hs) h (p:(epoch hs.region hs.nonce -> Type)) =
 
 //epochs in h1 extends epochs in h0 by one 
 let fresh_epoch h0 s h1 =
-  let es0 = sel h0 s.log in
-  let es1 = sel h1 s.log in 
+  let es0 = logT s h0 in 
+  let es1 = logT s h1 in 
   Seq.length es1 > 0 &&
   es0 = Seq.slice es1 0 (Seq.length es1 - 1)
 
-let latest h (s:hs{Seq.length (sel h s.log) > 0}) = // accessing the latest epoch
- let es = sel h (HS.log s) in
+let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
+ let es = logT s h in
  Seq.index es (Seq.length es - 1)
 
 // separation policy: the handshake mutates its private state, 
@@ -317,8 +327,8 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
 assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS.r s) -> Type0
 
 let hs_inv (s:hs) (h: HyperHeap.t) = 
-  hs_invT s (sel h (HS.log s)) (sel h (HS.state s))  //An abstract invariant of HS-internal state
-  /\ HyperHeap.contains_ref s.log h                   //Nothing deep about these next two, since they can always 
+  hs_invT s (logT s h) (sel h (HS.state s))  //An abstract invariant of HS-internal state
+  /\ MR.m_contains s.log h                    //Nothing deep about these next two, since they can always 
   /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 //TODO: need a lemma to frame hs_inv across updates that don't clash with HS.region
@@ -356,7 +366,7 @@ val init: r0:rid -> r: role -> cfg:config -> resume: resume_id r ->
     HS.r s = r /\
     HS.resume s = resume /\
     HS.cfg s = cfg /\
-    sel h1 (HS.log s) = Seq.createEmpty ))
+    logT s h1 = Seq.createEmpty ))
 
 let mods s h0 h1 = 
   HyperHeap.modifies_one s.region h0 h1

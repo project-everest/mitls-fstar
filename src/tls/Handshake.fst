@@ -625,8 +625,7 @@ let iT_old (HS r res cfg id l st) rw =
 //val init: see .fsti
 let init r0 r cfg res = 
     let id = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-    let lg = createEmpty in
-    let lgref = ralloc r0 lg in
+    let lgref = MS.alloc_mref_seq r0 Seq.createEmpty in
     let hs = handshake_state_init cfg r r0 in
     let hsref = ralloc r0 hs in
     HS #r0 r res cfg id lgref hsref

@@ -23,6 +23,7 @@ open Connection
 open MonotoneSeq
 open FStar.Monotonic.RRef
 module HH = HyperHeap
+module MR = FStar.Monotonic.RRef
 
 (* #set-options "--lax" *)
 
@@ -80,7 +81,7 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
     extends c.region r0 /\
     (* (r = Server ==> resume = None) /\  *)
     Map.contains h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
-    sel h1 (c_log c) = Seq.createEmpty /\ 
+    epochs c h1 = Seq.createEmpty /\ 
     sel h1 c.state = BC /\
     True
     ))
@@ -161,7 +162,7 @@ let request c ops     = Handshake.request     (C.hs c) ops
 val no_seqn_overflow: c: connection -> ST bool
   (requires (fun h -> st_inv c h))
   (ensures (fun h0 b h1 ->
-    let es = sel h1 c.hs.log in
+    let es = epochs c h1 in
     let j = iT c.hs Writer h1 in
     j < Seq.length es /\
     h0 == h1 /\
@@ -170,7 +171,7 @@ val no_seqn_overflow: c: connection -> ST bool
     incrementable (writer_epoch e)) h0))
 
 let no_seqn_overflow c =
-  let es = !c.hs.log in
+  let es = MR.m_read c.hs.log in
   let j = Handshake.i c.hs Writer in
   if j < 0 then
     true
@@ -310,11 +311,10 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 // sends one fragment in the current epoch;
 // except for the null epoch, the fragment is appended to the epoch's writer log.
 
-let epochsT c h = Handshake.logT c.hs h
 
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
-    let es = epochsT c h in // implying epochs_inv es
+    let es = epochs c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
     st_inv c h /\
     (if j < 0 then i == noId else
@@ -322,7 +322,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
        i = hsId e.h /\
        incrementable (writer_epoch e) h)))
   (ensures (fun h0 payload h1 ->
-    let es = epochsT c h0 in
+    let es = epochs c h0 in
     let j = iT c.hs Writer h0 in
     st_inv c h0 /\
     st_inv c h1 /\
@@ -343,7 +343,7 @@ let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j<0 
     then Content.repr i f
-    else let es = !c.hs.log in
+    else let es = MR.m_read c.hs.log in
 	 let e = Seq.index es j in 
 	 (* let _ = reveal_epoch_region_inv e in *)
 	 StAE.encrypt (writer_epoch e) f
@@ -359,7 +359,7 @@ let currentId (c:connection) (rw:rw) =
   let j = Handshake.i c.hs rw in 
   if j<0 then noId 
   else 
-    let es = !c.hs.log in
+    let es = MR.m_read c.hs.log in
     let e = Seq.index es j in
     let id = hsId e.h in
     if rw = Writer then id else peerId id
@@ -368,7 +368,7 @@ let currentId (c:connection) (rw:rw) =
 // check vs record
 let send_requires (c:connection) (i:id) (h:HH.t) = 
     let st = sel h c.state in
-    let es = sel h c.hs.log in
+    let es = epochs c h in 
     let j = iT c.hs Writer h in
     // j < Seq.length es /\
     st_inv c h /\
@@ -386,7 +386,7 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
   (requires (send_requires c i))
   (ensures (fun h0 _ h1 ->
-    let es = sel h0 c.hs.log in
+    let es = epochs c h0 in
     let j = iT c.hs Writer h0  in
     let st = sel h0 c.state in
     st_inv c h0 /\
@@ -675,7 +675,7 @@ let writeOne c i appdata =
 
 let send_requires' (c:connection) (i:id) (h:HH.t) = 
     let st = sel h c.state in
-    let es = sel h c.hs.log in
+    let es = epochs c h in
     let j = iT c.hs Writer h in
     (* j < Seq.length es /\ *)
     st_inv c h /\
@@ -793,7 +793,7 @@ let writeOne c i appdata =
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
     let st = sel h c.state in
-    let es = sel h c.hs.log in
+    let es = epochs c h in
     let j = iT c.hs Writer h in
     j < Seq.length es /\
     st_inv c h /\
@@ -1008,9 +1008,9 @@ let live_i e r = // is the connection still live?
 
 // let's specify reading d off the input DataStream (incrementing the reader pos)
 
-val sel_reader: h:HyperHeap.t -> connection -> Tot (option (| i:id & StAE.reader i |)) // self-specified
+val sel_reader: h:HyperHeap.t -> connection -> GTot (option (| i:id & StAE.reader i |)) // self-specified
 let sel_reader h c =
-  let es = sel h (c_log c) in
+  let es = epochs c h in
   let j = iT c.hs Reader h in
   (if j < 0 then None else 
   let e = Seq.index es j in 
@@ -1051,7 +1051,7 @@ let alertFlush c i x y: ioresult_i i =
 
 val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
   (requires (fun h0 ->
-    let es = epochsT c h0 in 
+    let es = epochs c h0 in 
     let j = iT c.hs Reader h0 in 
     st_inv c h0 /\
     (if j < 0 then i == noId else 
@@ -1059,7 +1059,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
       i = peerId (hsId e.h) /\
       incrementable (reader_epoch e) h0)))
   (ensures (fun h0 r h1 -> 
-    let es = epochsT c h0 in 
+    let es = epochs c h0 in 
     let j = iT c.hs Reader h0 in 
     st_inv c h0 /\
     st_inv c h1 /\
@@ -1091,7 +1091,7 @@ let readFragment c i =
          let rg = Range.point (length payload) in 
          Correct(Content.mk_fragment i ct rg payload)
        else
-         let es = !c.hs.log in 
+         let es = MR.m_read c.hs.log in 
          let e = Seq.index es j in 
          match StAE.decrypt (reader_epoch e) payload with 
          | Some f -> Correct f

@@ -18,6 +18,7 @@ open TLSInfo
   
 open Range
 open Handshake    // via its interface
+module MR = FStar.Monotonic.RRef
 
 // using also Alert, Range, DataStream, TLSFragment, Record
 
@@ -77,9 +78,9 @@ type st_inv c h = hs_inv (C.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
-  Handshake.epochs_inv es /\ es = HyperHeap.sel h c.hs.log
+  Handshake.epochs_inv es /\ es = logT c.hs h
 })
-let epochs c h = sel h (HS.log c.hs)
+let epochs c h = logT c.hs h
 
 val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (Map.contains h0 (HS.region c.hs)

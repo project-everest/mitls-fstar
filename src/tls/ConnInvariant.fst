@@ -65,10 +65,10 @@ type c_t  = MM.map' random r_conn
 
 //w is registered with c, in state h
 let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) = 
-  (exists e. SeqProperties.mem e  (HH.sel h (HS.log c.hs)) /\   //one of c's epochs, e
+  (exists e. SeqProperties.mem e  (epochs c h) /\               //one of c's epochs, e
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in   //has an id corresponding to i
         i=i' /\ StAE.stream_ae #i e.w == w))               //and holds w as as its writer
-  /\ HH.contains_ref (HS.log c.hs) h                       //technical: the heap contains c's handshake log
+  /\ MR.m_contains (HS.log c.hs) h                         //technical: the heap contains c's handshake log
 	
 //The main invariant, relating an ms_tab and a conn_tab at index i, in state h
 let ms_conn_inv (ms:ms_t)
@@ -201,7 +201,7 @@ let writer_region_within_connection
     (i:AE.id {I.nonce_of_id i = n}) (w:AE.writer i) (h:HH.t)
     : Lemma (requires (registered i w c h))
 	    (ensures (HH.includes (C.region c) (StreamAE.State.region w)))
-    = ()
+    = reveal_epoch_region_inv_all ()
 
 //A wrapper around a Sequence lemma ... should move it
 let lemma_mem_snoc (s:FStar.Seq.seq 'a) (x:'a)
@@ -221,15 +221,16 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
   -> Lemma (requires
             (let ctab = MR.m_sel h0 conn_tab in
 	     let mstab = MR.m_sel h0 MS.ms_tab in
-	     let old_hs_log = HH.sel h0 (HS.log c.hs) in
-     	     let new_hs_log = HH.sel h1 (HS.log c.hs) in
+	     let old_hs_log = epochs c h0 in
+     	     let new_hs_log = epochs c h1 in
 	     let rgn = HS.region c.hs in
+	     let _ = reveal_epoch_region_inv_all () in
 	     mc_inv h0 /\ //we're initially in the invariant
-	     HH.contains_ref (HS.log c.hs) h0 /\
-	     HH.contains_ref (HS.log c.hs) h1 /\
+	     MR.m_contains (HS.log c.hs) h0 /\
+	     MR.m_contains (HS.log c.hs) h1 /\
 	     i=hsId (Epoch.h e) /\ //the epoch has id i
 	     (let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
-	      let epochs = HH.sel h0 (HS.log c.hs) in
+	      let epochs = epochs c h0 in
               N.registered (I.nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\  //the writer's parent region is registered in the nonce table
 	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
 	      MR.witnessed (MR.rid_exists (StreamAE.State.region w)) /\                //technical: ... needed just for well-formedness of the rest of the formula
@@ -237,7 +238,7 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
  	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (I.nonce_of_id i) = Some c /\ //we found the connection in the conn_table
       	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
-	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (HS.log c.hs)} h0 h1 /\ //and within it, just the epochs log
+	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (MR.as_rref (HS.log c.hs))} h0 h1 /\ //and within it, just the epochs log
 	      new_hs_log = SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
 let register_writer_in_epoch_ok h0 h1 i c e =
@@ -253,7 +254,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let new_ms = MR.m_sel h1 MS.ms_tab in
       let old_conn = MR.m_sel h0 conn_tab in
       let new_conn = MR.m_sel h1 conn_tab in
-      let old_hs_log = HH.sel h0 (HS.log c.hs) in
+      let old_hs_log = epochs c h0 in
       let wi = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
       let nonce = I.nonce_of_id i in
       lemma_mem_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it

@@ -171,6 +171,16 @@ Connection \
 ConnInvariant \
 TLS 
 
+all-ver: $(addsuffix .fst-ver, $(VERIFY))
+
+# Lax-checking one file at a time
+%.fst-lax: $(LIBFILES)
+	$(MAKE) refresh
+	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
+	$(FSTAR_INCLUDE_PATHS) \
+	--verify_module $(basename $@) \
+	$(basename $@).fst
+
 # Verifying one file at a time
 %.fst-ver: $(LIBFILES)
 	$(MAKE) refresh
