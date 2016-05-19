@@ -187,21 +187,21 @@ ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) Sessi
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(basename $@).fst
 
 %.fsti-ver:
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(basename $@).fsti
 
 %.fst-in:
 	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(ADMITTED) \
 	$(basename $@).fst
 
@@ -209,7 +209,7 @@ ADMITTED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) Sessi
 	$(MAKE) refresh > /dev/null
 	@echo $(OTHERFLAGS) $(VERFLAGS) \
 	--verify_module $(basename $@) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(ADMITTED) \
 	$(basename $@).fsti
 
@@ -219,7 +219,7 @@ tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(addprefix --verify_module ,$(VERIFY)) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(FSTS)
 
 tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
@@ -227,7 +227,7 @@ tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
 	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
         --verify_module False \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 
@@ -238,7 +238,7 @@ tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 	$(MAKE) refresh
 	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) --lax \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	$(ADMITTED) $(FSTS)
 
 IdealFlags.fst:
@@ -283,7 +283,7 @@ tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
-	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/HyperHeap \
+	--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap \
 	  $(FSTS)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx
