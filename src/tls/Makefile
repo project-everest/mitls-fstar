@@ -9,7 +9,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
-	rm -rf *.ml *.p.* *.cm* *.o *~ *.out output
+	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *~ *.out output
 
 # ------------------ Dependencies on F* & its libraries --------------
 # When using NuBuild, FStar must be located within the source tree.
@@ -171,10 +171,10 @@ Connection \
 ConnInvariant \
 TLS 
 
-all-ver: $(addsuffix .fst-ver, $(VERIFY))
+all-ver: IdealFlags.fst $(addsuffix .fst-ver, $(VERIFY))
 
 # Lax-checking one file at a time
-%.fst-lax: $(LIBFILES)
+%.fst-lax: IdealFlags.fst $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -182,14 +182,14 @@ all-ver: $(addsuffix .fst-ver, $(VERIFY))
 	$(basename $@).fst
 
 # Verifying one file at a time
-%.fst-ver: $(LIBFILES)
+%.fst-ver: IdealFlags.fst $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
-%.fsti-ver:
+%.fsti-ver: IdealFlags.fst $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -197,14 +197,14 @@ all-ver: $(addsuffix .fst-ver, $(VERIFY))
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
-%.fst-in:
+%.fst-in: IdealFlags.fst
 	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
-%.fsti-in:
+%.fsti-in: IdealFlags.fst
 	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -212,26 +212,24 @@ all-ver: $(addsuffix .fst-ver, $(VERIFY))
 	$(basename $@).fsti
 
 # Verifying everything stable
-tls-ver: $(LIBFILES) Ideal.fst $(FSTS)
+tls-ver: $(LIBFILES) $(FSTS)
 	$(MAKE) refresh
-	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
-tls-sanity: $(LIBFILES) Ideal.fst $(FSTS) test/False.fst
+tls-sanity: $(LIBFILES) $(FSTS) test/False.fst
 	$(MAKE) refresh
-	cp Ideal.fst IdealFlags.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
         --verify_module False \
 	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
-# Lax typecheck all files
+# Lax typecheck all files (with ideal flag off)
 tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
-	$(MAKE) refresh
 	cp Concrete.fst IdealFlags.fst
+	$(MAKE) refresh
 	$(FSTAR) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	$(FSTS)
@@ -239,7 +237,8 @@ tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 wc:
 	wc -l $(LIBFILES) $(FSTS)
 
-IdealFlags.fst:
+IdealFlags.fst: Ideal.fst
+	cp Ideal.fst IdealFlags.fst
 
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
@@ -275,9 +274,9 @@ refresh:
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
+	cp Concrete.fst IdealFlags.fst
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
-	cp Concrete.fst IdealFlags.fst
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
