@@ -20,6 +20,39 @@ let rec certificateListBytes l =
     lemma_repr_bytes_values (length c);
     (vlbytes 3 c) @| (certificateListBytes r)
 
+val certificateListBytes_is_injective: c1:chain -> c2:chain ->
+  Lemma (requires (True))
+	(ensures (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 = c2))
+let rec certificateListBytes_is_injective c1 c2 =
+  match c1, c2 with
+  | [], [] -> ()
+  | hd::tl, hd'::tl' ->
+      if certificateListBytes c1 = certificateListBytes c2 then (
+	lemma_repr_bytes_values (length hd); lemma_repr_bytes_values (length hd');
+	cut(Seq.equal ((vlbytes 3 hd) @| (certificateListBytes tl)) ((vlbytes 3 hd') @| (certificateListBytes tl')));
+	lemma_repr_bytes_values (length hd);
+	lemma_repr_bytes_values (length hd');	
+	cut(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3) (Seq.slice (certificateListBytes c1) 0 3));
+	cut(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3) (Seq.slice (certificateListBytes c1) 0 3));
+	vlbytes_length_lemma 3 hd hd';
+	lemma_append_inj (vlbytes 3 hd) (certificateListBytes tl) (vlbytes 3 hd') (certificateListBytes tl');
+	lemma_vlbytes_inj 3 hd hd';
+	certificateListBytes_is_injective tl tl';
+	()
+      )
+  | [], hd::tl -> (
+      cut (length (certificateListBytes c1) = 0); 
+      lemma_repr_bytes_values (length hd);
+      cut (Seq.equal (certificateListBytes c2) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+      lemma_vlbytes_len 3 hd
+    )
+  | hd::tl, [] -> (
+      cut (length (certificateListBytes c2) = 0); 
+      lemma_repr_bytes_values (length hd);
+      cut (Seq.equal (certificateListBytes c1) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+      lemma_vlbytes_len 3 hd
+  )
+	
 abstract val parseCertificateList: bytes -> Tot (result chain)
 let rec parseCertificateList b =
   if length b >= 3 then

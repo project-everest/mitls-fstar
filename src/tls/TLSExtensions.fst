@@ -8,6 +8,8 @@ open TLSConstants
 open TLSInfo
 open CoreCrypto
 
+#set-options "--lax"
+
 let op_At = FStar.List.Tot.append
 
 type renegotiationInfo =
@@ -283,6 +285,15 @@ and extensionBytes role ext =
     head @| payload
 and extensionsBytes role exts =
   vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
+
+#reset-options 
+
+(* JK: For some reason without that I do not manage to get the definition of extensionsBytes *)
+assume val extensionsBytes_def: r:role -> cl:list extension{repr_bytes (length (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes cl)) <= 2} -> 
+  Lemma (requires (True))
+	(ensures (extensionsBytes r cl = vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes cl)))
+  [SMTPat (extensionsBytes r cl)]
+
 
 (* TODO: inversion lemmas 
 val parseEarlyDataIndication: pinverse_t earlyDataIndicationBytes
