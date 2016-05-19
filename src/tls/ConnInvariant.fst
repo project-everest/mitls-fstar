@@ -13,6 +13,7 @@ module I  = IdNonce
 module AE = StreamAE
 
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+
 type id = StreamAE.id
 //The type of connection with a particular nonce
 //   `r_conn n` should never really have more than 1 inhabitant, 
@@ -299,10 +300,11 @@ val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:M
 	       MM.sel (MR.m_sel h0 conn_tab) (I.nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1)) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
-let mutate_registered_writer_ok h0 h1 i w c = ()
-(* a slightly more detailed proof:
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+let mutate_registered_writer_ok h0 h1 i w c = (* () *)
+(* a slightly more detailed proof: *)
     let new_ms = MR.m_sel h1 MS.ms_tab in
-    let new_conn = MR.m_sel h1 conn_table in
+    let new_conn = MR.m_sel h1 conn_tab in
     let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
       fun j ->
     	if (authId j && StAE.is_stream_ae j)
@@ -311,7 +313,6 @@ let mutate_registered_writer_ok h0 h1 i w c = ()
              | Some wj -> () //basically, when i=j, the proof is easy as i remains registered; if i<>j then j didn't change since their regions are distinct
     	else () in
     qintro aux
-*)
 
 (* Case 4:
     Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
@@ -338,6 +339,7 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	      MM.sel old_conn nonce = None /\        //c wasn't in the table initially
 	      new_conn = MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let add_connection_ok h0 h1 i c =
     cut (HH.contains_ref (MR.as_rref conn_tab) h1);
     let old_ms = MR.m_sel h0 MS.ms_tab in
@@ -352,4 +354,3 @@ let add_connection_ok h0 h1 i c =
     		        else cut (c' = Some.v (MM.sel old_conn n)) in
     qintro hs_region_exists;
     cut (handshake_regions_exists new_conn h1)
-    
