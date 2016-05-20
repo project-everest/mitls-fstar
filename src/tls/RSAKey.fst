@@ -1,8 +1,10 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module RSAKey
-open CoreCrypto
 
+open CoreCrypto
 open Platform.Bytes
+
+module TC = TLSConstants
 
 type pk = (k:CoreCrypto.rsa_key{is_None k.rsa_prv_exp})
 type sk = CoreCrypto.rsa_key
@@ -16,7 +18,7 @@ type pred = | SK_PK of sk * pk
 let honest (pk:pk): bool = false
 
 //let strong (pv:TLSConstants.protocolVersion): bool = failwith "only used in ideal implementation, unverified"
-let strong (pv:TLSConstants.protocolVersion): bool = false
+let strong (pv:TC.protocolVersion): bool = false
 
 
 type modulus  = bytes
