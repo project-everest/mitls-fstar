@@ -156,7 +156,7 @@ let ms_derive_is_ok h0 h1 i w =
       then match MM.sel new_ms j with
            | None -> ()
            | Some ww ->
-      	     if ww=w
+      	     if i=j 
       	     then ()
       	     else assert (Some ww=MM.sel old_ms j)
       else () in

@@ -406,8 +406,8 @@ val next_fragment: s:hs -> ST outgoing
     let r1 = iT s Reader h1 in
     hs_inv s h1 /\
     mods s h0 h1 /\
-    r1 == r0 /\
-    w1 == (if result = OutCCS then w0 + 1 else w0) /\
+    r1 = r0 /\
+    w1 = (if result = OutCCS then w0 + 1 else w0) /\
     (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))))
                                               (*why do i need this?*)
 
@@ -425,8 +425,8 @@ val recv_fragment: s:hs -> rg:Range.range { wider fragment_range rg } -> rbytes 
     let r1 = iT s Reader h1 in
     hs_inv s h1 /\
     mods s h0 h1 /\
-    w1 == w0 /\
-    r1 == (if result = InCCS then r0 + 1 else r0) /\
+    w1 = w0 /\
+    r1 = (if result = InCCS then r0 + 1 else r0) /\
     (result = InComplete ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))))
 
 val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3
@@ -439,8 +439,8 @@ val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3
     (is_InError result \/ is_InCCS result) /\
     hs_inv s h1 /\
     mods s h0 h1 /\
-    w1 == w0 /\
-    r1 == (if result = InCCS then r0 + 1 else r0)))
+    w1 = w0 /\
+    r1 = (if result = InCCS then r0 + 1 else r0)))
 
 val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
@@ -452,8 +452,8 @@ val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit autho
     (is_InAck result \/ is_InError result) /\
     hs_inv s h1 /\
     mods s h0 h1 /\
-    w1 == w0 /\
-    r1 == r0 ))
+    w1 = w0 /\
+    r1 = r0 ))
 
 
 (* working notes towards covering both TLS 1.2 and 1.3, with 0RTT and falsestart
