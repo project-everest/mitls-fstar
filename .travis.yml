@@ -27,7 +27,7 @@ install:
 script:
   - ./scripts/travis.sh
   - make -C .fstar/src/ocaml-output
-  - make -C src/tls -j 4 all-ver
+  - make -C src/tls -j2 all-ver
   - make -C src/tls tls-gen
 
 notifications:
