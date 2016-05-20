@@ -176,16 +176,24 @@ let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
     | Epoch h r w -> r
 
 (* The footprint just includes the writer regions *)
-abstract let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
+let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
   forall (i:nat { i < Seq.length es })
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
     let ej = Seq.index es j in
     parent (region ei.w) = parent (region ej.w) /\  //they all descend from a common epochs sub-region of the connection
     disjoint (region ei.w) (region ej.w)           //each epoch writer lives in a region disjoint from the others
- 
-let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv es }
 
+abstract let epochs_inv' (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) = epochs_inv es
+
+let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv' es }
+
+let reveal_epochs_inv' (u:unit)
+  : Lemma (forall (r:rgn) (#n:TLSInfo.random) (es:seq (epoch r n)). {:pattern (epochs_inv' es)}
+	     epochs_inv' es
+	     <==>
+	     epochs_inv es)
+  = ()
 
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)

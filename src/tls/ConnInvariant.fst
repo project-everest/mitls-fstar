@@ -12,6 +12,47 @@ module N  = Nonce
 module I  = IdNonce
 module AE = StreamAE
 
+
+////////////////////////////////////////////////////////////////////////////////
+//Framing writes to an epoch
+////////////////////////////////////////////////////////////////////////////////
+let epoch_regions_exist (s:hs) (h0:HH.t) = 
+  let epochs = logT s h0 in 
+  Map.contains h0 (HS.region s)
+  /\ (forall (k:nat{k < Seq.length epochs}).{:pattern (Seq.index epochs k)}
+      let wr = writer_epoch (Seq.index epochs k) in
+      Map.contains h0 (StAE.region wr))
+      
+val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t -> 
+  Lemma (requires (let j = iT s Writer h0 in 
+		   let epochs = logT s h0 in 
+		     j >= 0 
+		   /\ epoch_regions_exist s h0 
+		   /\ (let e_j = Seq.index epochs j in
+		      HH.modifies_one (StAE.region (writer_epoch e_j)) h0 h1)))
+	(ensures (let epochs0 = logT s h0 in 
+		  let epochs1 = logT s h1 in 
+		  let j = iT s Writer h0 in 
+		  epochs0 = epochs1
+		  /\(forall (k:nat{k < Seq.length epochs0 /\ j<>k}). 
+		      let wr = writer_epoch (Seq.index epochs0 k) in
+		      HH.equal_on (Set.singleton (StAE.region wr)) h0 h1)))
+#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+let frame_epoch_writer s h0 h1 = 
+  let epochs = logT s h0 in 
+  let j = iT s Writer h0 in 
+  let e_j = Seq.index epochs j in
+  reveal_epoch_region_inv e_j;
+  let wj = writer_epoch e_j in
+  let aux : (k:nat{k < Seq.length epochs /\ j<>k}) -> Lemma 
+    (let wr = writer_epoch (Seq.index epochs k) in
+     HH.equal_on (Set.singleton (StAE.region wr)) h0 h1) =
+     fun k -> let wk = writer_epoch (Seq.index epochs k) in
+	   reveal_epochs_inv'();
+	   assert (HH.disjoint (StAE.region wk) (StAE.region wj)) in
+  qintro aux
+
+////////////////////////////////////////////////////////////////////////////////
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 type id = StreamAE.id
