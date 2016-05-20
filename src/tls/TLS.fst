@@ -758,23 +758,21 @@ let writeOne c i appdata =
   frame_iT c.hs Writer h0 h1 (Set.singleton (Alert.region c.alert));
   match alert_response with
   | Some ad -> 
-    begin match ad with 
-      | AD_close_notify -> // graceful closure
-        (match send c #i (Content.ct_alert i AD_close_notify) with
-	 | Correct()   ->
-          let h2 = ST.get () in
-          c.state := (if st = Half Writer then Close else Half Reader);
-          SentClose
-         | Error (x,y) -> unrecoverable c y )
-     | _ ->
-      (match send c #i (Content.ct_alert i ad) with
-      | Correct() ->
-          // let reason = match writing with | Closing(_,reason) -> reason | _ -> "" in
-          closeConnection c;
-          WriteError (Some ad) ""
-      | Error (x,y) -> unrecoverable c y)
+    begin 
+      match send c #i (Content.ct_alert i ad) with 
+      | Error (x,y) -> unrecoverable c y 
+      | Correct()   ->
+          if ad = AD_close_notify then 
+            begin // graceful closure
+              c.state := (if st = Half Writer then Close else Half Reader);
+              SentClose
+            end
+          else 
+            begin 
+              closeConnection c;
+              WriteError (Some ad) ""
+            end  
     end
-    
   | _ ->  // next we check if there is outgoing Handshake traffic
 
       ( assume false;
@@ -807,6 +805,7 @@ let writeOne c i appdata =
                   else 
 
         // finally attempt to send some application data
+        // (we may statically know that st = AD)
           begin match st, appdata with
           | AD, Some (|rg,f|) ->
                ( match send c (Content.CT_Data rg f) with
