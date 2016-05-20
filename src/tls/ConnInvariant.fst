@@ -62,13 +62,14 @@ type ms_t = MM.map' AE.id MS.writer
 
 //conn_tab is a monotonic reference to a c_t
 type c_t  = MM.map' random r_conn 
+module MonSeq = MonotoneSeq
 
 //w is registered with c, in state h
 let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) = 
   (exists e. SeqProperties.mem e  (epochs c h) /\               //one of c's epochs, e
       (let i' = Handshake.hsId (Handshake.Epoch.h e) in   //has an id corresponding to i
         i=i' /\ StAE.stream_ae #i e.w == w))               //and holds w as as its writer
-  /\ MR.m_contains (HS.log c.hs) h                         //technical: the heap contains c's handshake log
+  /\ MonSeq.i_contains (HS.log c.hs) h                         //technical: the heap contains c's handshake log
 	
 //The main invariant, relating an ms_tab and a conn_tab at index i, in state h
 let ms_conn_inv (ms:ms_t)
@@ -226,8 +227,8 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	     let rgn = HS.region c.hs in
 	     let _ = reveal_epoch_region_inv_all () in
 	     mc_inv h0 /\ //we're initially in the invariant
-	     MR.m_contains (HS.log c.hs) h0 /\
-	     MR.m_contains (HS.log c.hs) h1 /\
+	     MonSeq.i_contains (HS.log c.hs) h0 /\
+	     MonSeq.i_contains (HS.log c.hs) h1 /\
 	     i=hsId (Epoch.h e) /\ //the epoch has id i
 	     (let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
 	      let epochs = epochs c h0 in
