@@ -16,7 +16,7 @@ open CommonDH
 (* JK: for verification purposes the "--lax" flag is set throughout the file in order to
    skip the already verified part of it.
    Just comment out '#set-options "--lax"' *)
-#set-options "--lax"
+//#set-options "--lax"
 
 (* External functions, locally annotated for speed *)
 (*
@@ -614,7 +614,7 @@ let valid_sh : Type0 = s:sh{
   /\ (s.sh_protocol_version <> TLS_1p3 ==> (is_Some s.sh_sessionID /\ is_Some s.sh_compression)) }
 
 #reset-options "--z3timeout 50"
-#set-options "--lax"
+//#set-options "--lax"
 
 val serverHelloBytes_is_injective: msg1:valid_sh -> msg2:valid_sh -> 
   Lemma (requires (True))
@@ -714,7 +714,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
     end
 
 #reset-options
-#set-options "--lax"
+//#set-options "--lax"
 
 (* JK: should return a valid_sh to match the serialization function *)
 val parseServerHello: data:bytes{repr_bytes(length data) <= 3}  
@@ -924,7 +924,7 @@ assume val distinguishedNameListBytes_is_injective: n1:list dn -> n2:list dn ->
 	(ensures (Seq.equal (distinguishedNameListBytes n1) (distinguishedNameListBytes n2) ==> n1 = n2))
 
 #reset-options
-#set-options "--lax"
+//#set-options "--lax"
 
 val certificateRequestBytes_is_injective: c1:cr -> c2:cr -> 
   Lemma (requires (True))
@@ -1024,7 +1024,7 @@ let kex_c_of_dh_key kex =
   | ECKey k -> KEX_C_ECDHE (ECGroup.serialize_point k.ec_params k.ec_point)
 
 #reset-options
-#set-options "--lax"
+//#set-options "--lax"
 
 (* JK: TODO: add the kex as an extra parameter, otherwise not injective *)
 val clientKeyExchangeBytes: protocolVersion -> cke -> Tot (b:bytes{hs_msg_bytes HT_client_key_exchange b})
@@ -1054,7 +1054,7 @@ let clientKeyExchangeBytes pv cke =
   messageBytes HT_client_key_exchange kexB
 
 #reset-options 
-#set-options "--lax"
+//#set-options "--lax"
 
 val clientKeyExchangeBytes_is_injective: pv:protocolVersion -> cke1:cke -> cke2:cke ->
   Lemma (requires (True))
@@ -1148,7 +1148,7 @@ assume val serverKeyExchangeBytes_is_injective: s1:ske -> s2:ske ->
   (*   kex_s_to_bytes_is_injective s1.ske_kex_s s2.ske_kex_s; *)
   (* ) *)
 
-#set-options "--lax"
+//#set-options "--lax"
 
 val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
     Tot (result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)}))
@@ -1450,7 +1450,6 @@ let parseNextProtocol payload =
 		   np_padding = padding;})
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-(* JK: TODO, WIP *)
 #reset-options
 
 let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : Type0  =
@@ -1494,44 +1493,12 @@ let splitHandshakeMessage b =
   assert(Seq.equal b (messageBytes ht data));
   (ht, data)
 
-(* val handshakeMessageBytes_lemma: pv:option protocolVersion -> msg:valid_hs_msg{associated_to_pv pv msg}  ->  *)
-(*   Lemma (requires (True)) *)
-(* 	(ensures (let b = handshakeMessageBytes pv msg in *)
-(* 		  let ht,len,payload = split2 b 1 3 in *)
-(* 		  is_Correct (parseHt ht) /\ hs_msg_bytes (Correct._0 (parseHt ht)) payload)) *)
-(* let handshakeMessageBytes_lemma pv msg =  *)
-(*   let b = handshakeMessageBytes pv msg in *)
-(*   cut (exists (ht:handshakeType). hs_msg_bytes ht b); *)
-  
-(*   admit() *)
-
-
-(* val handshakeMessageBytes_lemma_1: pv:option protocolVersion -> msg:valid_hs_msg{associated_to_pv pv msg} ->  *)
-(*   Lemma (requires (True)) *)
-(* 	(ensures ( *)
-(* 	  let bytes = handshakeMessageBytes pv msg in *)
-(* 	  (is_ClientHello msg ==> bytes = messageBytes HT_client_hello (snd (split bytes 4))) *)
-(* 	  /\ (is_ServerHello msg ==> bytes = messageBytes HT_server_hello (snd (split bytes 4))) *)
-(* 	  /\ (is_Certificate msg ==> bytes = messageBytes HT_certificate (snd (split bytes 4))) *)
-(* 	  /\ (is_ServerKeyExchange msg ==> bytes = messageBytes HT_server_key_exchange (snd (split bytes 4))) *)
-(* 	  /\ (is_ServerHelloDone msg ==> bytes = messageBytes HT_server_hello_done (snd (split bytes 4))) *)
-(* 	  /\ (is_ClientKeyExchange msg ==> bytes = messageBytes HT_client_key_exchange (snd (split bytes 4))) *)
-(* 	  /\ (is_Finished msg ==> bytes = messageBytes HT_finished (snd (split bytes 4))) *)
-(* 	  /\ (is_SessionTicket msg ==> bytes = messageBytes HT_session_ticket (snd (split bytes 4))) *)
-(* 	  /\ (is_EncryptedExtensions msg ==> bytes = messageBytes HT_encrypted_extensions (snd (split bytes 4))) *)
-(* 	  /\ (is_CertificateRequest msg ==> bytes = messageBytes HT_certificate_request (snd (split bytes 4))) *)
-(* 	  /\ (is_CertificateVerify msg ==> bytes = messageBytes HT_certificate_verify (snd (split bytes 4))) *)
-(* 	  /\ (is_HelloRequest msg ==> bytes = messageBytes HT_hello_request (snd (split bytes 4))) *)
-(* 	  /\ (is_HelloRetryRequest msg ==> bytes = messageBytes HT_hello_retry_request (snd (split bytes 4))) *)
-(* 	  /\ (is_ServerConfiguration msg ==> bytes = messageBytes HT_server_configuration (snd (split bytes 4))) *)
-(* 	  /\ (is_NextProtocol msg ==> bytes = messageBytes HT_next_protocol (snd (split bytes 4))))) *)
-(* let handshakeMessageBytes_lemma_1 pv msg = () *)
-
 val handshakeMessageBytes_is_injective: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2) ==> msg1 = msg2))
 
 #reset-options "--z3timeout 100"
+#set-options "--lax"
 
 (* JK: TODO, WIP *)
 let handshakeMessageBytes_is_injective pv msg1 msg2 =
