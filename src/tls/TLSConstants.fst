@@ -525,7 +525,7 @@ let parseCipherSuite b =
   | Correct c -> Correct c
   | Error z -> Error z
 
-#set-options "--max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
+#reset-options "--z3timeout 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
 val inverse_cipherSuite: x:cipherSuite -> Lemma
   (requires (~ (is_UnknownCipherSuite x)))
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
