@@ -3,7 +3,7 @@ module TLS
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+open FStar.SeqProperties 
 open FStar.Set
 
 open Platform
@@ -17,11 +17,12 @@ open TLSInfo
 
 open Range
 open StAE
-open Handshake
+open NewHandshake module Handshake = NewHandshake //16-05-20 open Handshake
 open Connection
 
 open MonotoneSeq
 open FStar.Monotonic.RRef
+
 module HH = HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
@@ -30,35 +31,32 @@ module MS = MonotoneSeq
 
 //A wrapper around Handshake.next_fragment; using monotonicity to show that 
 //the i'th epoch doesn't change
-let next_fragment_ensures (s:hs) h0 (result:outgoing) h1 = 
-    let w0 = iT s Writer h0 in
-    let w1 = iT s Writer h1 in
-    let r0 = iT s Reader h0 in
-    let r1 = iT s Reader h1 in
-    hs_inv s h1 /\
-    mods s h0 h1 /\
-    r1 == r0 /\
-    w1 == (if result = OutCCS then w0 + 1 else w0) /\
-    (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))
 
-val next_fragment: s:hs -> ST outgoing
-  (requires (hs_inv s))
+//16-05-20 move to Handshake.fsti?
+val next_fragment: i:id -> s:hs -> ST (outgoing i)
+  (requires (fun h0 -> 
+    let es = logT s h0 in
+    let j = iT s Writer h0 in 
+    hs_inv s h0 /\
+    (if j = -1 then i = noId else let e = Seq.index es j in i = hsId e.h)   
+  ))
   (ensures (fun h0 result h1 -> 
     next_fragment_ensures s h0 result h1 /\
     (let w0 = iT s Writer h0 in   //Augmenting the post-condition of Handhshake.next_fragment 
      let es = logT s h0 in        //with this monotonicity propery
-     w0 >= 0 ==> Seq.index (logT s h0) w0 = Seq.index (logT s h1) w0))) //NS puzzled: How come we can prove w0 in bounds for (logT s h1)?
-let next_fragment s =  
+     w0 >= 0 ==> Seq.index (logT s h0) w0 = Seq.index (logT s h1) w0))) 
+let next_fragment i s =  
   let h0 = ST.get() in 
   let ilog = HS.log s in 
   let w0 = Handshake.i s Writer in 
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (Seq.index (MS.i_sel h0 ilog) w0) ilog;
 	         MR.witness ilog (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog)) in
-  let res = Handshake.next_fragment s in
+  let res = Handshake.next_fragment i s in
   let _ = if w0 >= 0
 	  then MR.testify (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog) in
   res
+
 
 //allowing inverting optResult without having to globally increase the fuel just for this
 // Will add a lemma to Platform.Error so that we don't have this ugly assume here
@@ -70,7 +68,7 @@ assume InvertOptResult: forall (a:Type) (b:Type) (x:optResult a b). is_Error x \
 (*   = () *)
 
 
-// using also Alert, DataStream, Content, Record
+
 
 //16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
 
@@ -117,14 +115,13 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config ->
     True
     ))
 
-
-
 let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.init m role cfg resume in
     let al = Alert.init m in
     let state = ralloc m BC in
     C #m hs al tcp state
+
 
 //TODO upgrade commented-out types imported from TLS.fsti
 // type initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
@@ -339,9 +336,36 @@ val ct_rg_test : i:id -> f:Content.fragment i -> Tot (ContentType * range)
 let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 *)
 
-// sends one fragment in the current epoch;
-// except for the null epoch, the fragment is appended to the epoch's writer log.
 
+(* 16-05-20 TBC
+assume val sendFragment: c:connection -> #i:id -> wo:option(writer i) -> f: Content.fragment i -> ST (result unit)
+  (requires (fun h0 -> 
+     match wo with 
+     | None    -> i = noId
+     | Some wr -> incrementable wr h0))
+  (ensures (fun h0 r h1 -> 
+     match wo with 
+     | None    -> modifies Set.empty h0 h1 
+     | Some wr -> modifies_one (region wr) h0 h1 /\
+                 seqnT wr h1 = seqnT wr h0 + 1 /\
+                 (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f)
+//	     /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
+  ))
+
+let sendFragment c #i wo f =
+  let payload: encrypted f = 
+    match wo with
+    | None    -> Content.repr i f //16-05-20 don't understand error.
+    | Some wr -> StAE.encrypt wr f in 
+  let pv = outerPV c in //16-05-20  compare with i.pv?
+  let ct, rg = Content.ct_rg i f in
+  lemma_repr_bytes_values (length payload);
+  let record = Record.makePacket ct pv payload in
+  let r  = Platform.Tcp.send (c.tcp) record in
+  match r with
+    | Error(x)  -> Error(AD_internal_error,x)
+    | Correct _ -> Correct()
+*)
 
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
@@ -386,7 +410,7 @@ let send_payload c i f =
 (*     st_inv c h0 ==> st_inv c h1 /\ op_Equality #int (iT c.hs Writer h0) (iT c.hs Writer h1)) *)
 
 // used e.g. for writing while reading
-let currentId (c:connection) (rw:rw) = 
+let currentId (c:connection) (rw:rw) : id = 
   let j = Handshake.i c.hs rw in 
   if j<0 then noId 
   else 
@@ -507,6 +531,7 @@ let project_snoc #i s e =
 *)
 
 
+(*16-05-20 not used yet?
 
 (* Several test functions to drive the Handshake manually until the big
  [writeOne] function is complete. *)
@@ -535,6 +560,7 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
   | Correct ()   -> Written (* Fairly, tell we're done, and we won't write more data *)
   | Error (x,y) -> unrecoverable c y
 
+*) 
 
 
 
@@ -730,8 +756,7 @@ let writeOne c i appdata =
   let h1 = ST.get() in
 
   frame_iT c.hs Writer h0 h1 (Set.singleton (Alert.region c.alert));
-  (* assume false; // TODO can't get the precondition of send below.  *)
-  (match alert_response with
+  match alert_response with
   | Some ad -> 
     begin match ad with 
       | AD_close_notify -> // graceful closure
@@ -751,59 +776,36 @@ let writeOne c i appdata =
     end
     
   | _ ->  // next we check if there is outgoing Handshake traffic
-        let hs_response = next_fragment c.hs in
+
+      ( assume false;
+        let hs_response = next_fragment i c.hs in
         let h2 = ST.get() in
         (match hs_response with
-        | Handshake.OutCCS -> (
-            // we know j has just been incremented.
-            // we send the CCS fragment on the prior epoch
-            frame_admit c h1 h2; //NS: not an instance of frame_internal, since it may change the epochs log if the result is OutCCS
-	    admit();
-            match send c #i (Content.CT_CCS #i (abyte 1z)) with
-            | Correct _ ->
-                c.state := BC; // use renego/key-update states instead? anyway AD writing is temporarily forbidden.
-                //Alert.reset_outgoing c.alert;
-                frame_admit c h0 (ST.get());
-                WriteAgainFinishing
-            | Error (x,y) -> unrecoverable c y)
+        | Handshake.OutError (x,y) -> unrecoverable c y // a bit blunt
+        | Handshake.Outgoing om send_ccs next_keys complete -> (
 
-            //$ | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending CCS in wrong state"))
+            let result0 = // first try to send handshake fragment, if any
+              (match om with 
+              | None             -> Correct() 
+              | Some (| rg, f |) -> send c #i (Content.CT_Handshake rg f)) in //wrong epoch, use sendFragment instead!
 
-        | Handshake.OutSome rg f -> (
-            // we send some handshake fragment
-            match send c #i (Content.CT_Handshake rg f) with
-            | Correct()   -> WriteAgain
-            | Error (x,y) -> unrecoverable c y)
+            let result1 = // then try to send CCS fragment, if requested
+              (match result0, send_ccs with
+              | Error e, _       -> Error e 
+              | Correct _, false -> Correct()
+              | Correct _, true  -> send c #i (Content.CT_CCS #i (abyte 1z))) in //wrong epoch, use sendFragment instead!
 
-            //$ | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
-(*
-        | Handshake.OutFinished rg last_fragment -> (* check we are finishing & send last fragment *)
-                frame_internal c h1 h2;
-                ( match writing with
-                  | Finishing ->
-                      ( match send c #i (Content.CT_Handshake rg last_fragment) with
-                        | Correct()   ->
-			  let h3 = ST.get () in
-			  c.writing := Finished;
-			  frame_unrelated c h3 (ST.get());
-			  WriteAgain (* TODO 15-09-11 recheck, was WriteFinished *)
-                                     (* also move to the Finished state *)
-                        | Error (x,y) -> unrecoverable c y)
-                  | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
-*)
-        | Handshake.OutComplete rg f -> (
-            // we send the final handshake fragment and open AD
-            frame_admit c h1 h2; //NS: may change the epochs log if the result is OutComplete
-            match st with
-            | BC -> ( match send c #i (Content.CT_Handshake rg f) with
-                     | Correct() -> moveToOpenState c; WriteHSComplete
-                            // removed sanity check: reader and writer indexes should be the same
-                            //if !C_reading c) epochSI id.id_in = epochSI id.id_out then
-                            //else unrecoverable c (perror __SOURCE_FILE__ __LINE__ "Invalid connection state")
-                     | Error (x,y) -> unrecoverable c y)
-            | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake message in wrong state"))
+            // then consider key changes (TODO:restore precise checks and error handling)
+            (match result1 with 
+            | Error (x,y) -> unrecoverable c y 
+            | Correct _   -> 
+                  if next_keys           then c.state := BC; // much happening ghostly
+                  let st = !c.state in
+                  if complete && st = BC then c.state := AD; // much happening ghostly too
+                  if complete                    then WriteHSComplete
+                  else if is_Some om && send_ccs then WriteAgain
+                  else 
 
-        | Handshake.OutIdle -> 
         // finally attempt to send some application data
           begin match st, appdata with
           | AD, Some (|rg,f|) ->
@@ -812,8 +814,11 @@ let writeOne c i appdata =
                  | Error (x,y) -> unrecoverable c y)
           | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
 	  end 
-       
-       | _ -> unexpected "NYI"))
+))))        
+
+(*16-05-20 stopped here, trying new HS interface. 
+
+//? | _ -> unexpected "NYI"))
 
 ////////////////////////////////////////////////////////////////////////////////
 //NS reached up to here
@@ -1078,6 +1083,9 @@ let alertFlush c i x y: ioresult_i i =
   | SentClose      -> Read DataStream.Close // do we need this case?
   | WriteError x y -> ReadError x y
 
+
+#reset-options 
+
 val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
   (requires (fun h0 ->
     let es = epochs c h0 in 
@@ -1142,8 +1150,8 @@ let readOne c i =
   | Correct(Content.CT_Alert rg f) -> 
       begin 
         match Alert.recv_fragment c.alert rg f with
-        | Error (x,y)   -> alertFlush c i x y
-        | Correct AD_close_notify ->          // an outgoing close_notify has already been buffered, if necessary
+        | Error (x,y) -> alertFlush c i x y
+        | Correct AD_close_notify  ->          // an outgoing close_notify has already been buffered, if necessary
               if !c.state = Half Reader
               then c.state := Close
               else c.state := Half Writer; // we close the reading side
@@ -1173,6 +1181,7 @@ let readOne c i =
       end
   | Correct(Content.CT_CCS _) ->
       begin
+        // TODO exclude TLS 1.3, here or in the handshake
         match Handshake.recv_ccs c.hs with
         | InError (x,y)        -> alertFlush c i x y
         | InAck                -> // We know statically that Handshake and Application data buffers are empty.
@@ -1193,6 +1202,9 @@ let readOne c i =
    .fsti -- the definitions above are from the .fsti, and the (commented-out)
    definitions below are from the .fst.  *)
 
+(*
+//[<1p3] We have received CCS, are now waiting for the Finished message to enable application data.
+
 val readAllFinishing: connection -> i:id -> St(ioresult_i i) 
 let rec readAllFinishing c i = 
     assume false; //16-05-19 
@@ -1203,10 +1215,10 @@ let rec readAllFinishing c i =
     | Read (DataStream.Alert ad) ->
        begin
          if isFatal ad
-         then outcome  (* silently dropping the error? recheck *)
+         then outcome  (* recheck *)
          else ReadError None (perror __SOURCE_FILE__ __LINE__ "Trying to close an epoch after CCS has been sent, but before new epoch opened.")
        end
-    | ReadError _ _  -> unexpected "[readAllFinishing] should not return ReadError"
+    | ReadError _ _  -> outcome // unexpected "[readAllFinishing] should not return ReadError"
     | Read DataStream.Close ->
         (* This is the dual of the case above: we received the CCS, which implicitly closed the receiving epoch,
            and the new epoch is not open yet, so we can neither receive authenticated data, nor close this epoch.  *)
@@ -1231,14 +1243,14 @@ let rec readAllFinishing c i =
            These are inconsistent states of the protocol that should be explicitly forbidden by the RFC.
            In this case, sending our CCS already implicitly closed the previous sending epoch, and the new epoch is not open
            yet, so there's nothing to close. *)
-
+*)
 
 
 // scheduling: we always write up before reading.
 // those writes are never AppData; they may be for other/changing epochs
 val read: connection -> i:id -> St (ioresult_i i)
 let rec read c i =
-    assume false;//16-05-19 
+    //assume false;//16-05-19 
     let wi = currentId c Writer in
     match writeAllTop c wi None with
     | SentClose       -> Read DataStream.Close // TODO: add support for Half Reader?
@@ -1275,12 +1287,12 @@ let rec read c i =
                 )
 *)
 
-// -----------------------------------------------------------------------------
-
-(* =================///////////////////================
-
 //* we used to specify the resulting connection in ioresult_i,
 //* now we do that in the read postcondition
+
+
+(*
+// -----------------------------------------------------------------------------
 
 // responding to a certificate-validation query,
 // so that we have an explicit user decision to blame,
@@ -1327,3 +1339,4 @@ let refuse c (q:query) =
     writeAllClosing c
 *)
 
+*)

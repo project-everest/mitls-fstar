@@ -684,7 +684,7 @@ let safeId (i:id) = safeKDF i && strongAEId i
 // -------------------------------------------------------------------------
 // Re-indexing from epochs to ids
 
-val noId: i:id { ~(authId i) }
+val noId: i:id { ~(authId i) /\ ~(safeId i) }
 let noId = {
   msId    = noMsId;
   kdfAlg  = PRF_SSL3_nested;

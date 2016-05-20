@@ -17,7 +17,9 @@ open TLSConstants
 open TLSInfo
   
 open Range
-open Handshake    // via its interface
+
+open NewHandshake module Handshake = NewHandshake //16-05-20 open Handshake
+
 module MR = FStar.Monotonic.RRef
 
 // using also Alert, Range, DataStream, TLSFragment, Record
