@@ -12,6 +12,12 @@ open TLSInfo
 open Range
 open CommonDH
 
+
+(* JK: for verification purposes the "--lax" flag is set throughout the file in order to
+   skip the already verified part of it.
+   Just comment out '#set-options "--lax"' *)
+#set-options "--lax"
+
 (* External functions, locally annotated for speed *)
 (*
 assume val vlsplit: lSize:nat{lSize <= 4}
@@ -232,6 +238,12 @@ let messageBytes ht data =
   let vldata = vlbytes 3 data in
   htb @| vldata
 
+let hs_msg_bytes (ht:handshakeType) (b:bytes) =
+  length b >= 4 
+  /\ (let b' = snd (split b 4) in
+    repr_bytes (length b') <= 3 
+    /\ b = messageBytes ht b')
+
 val messageBytes_is_injective: 
   ht1:handshakeType -> data1:bytes{ repr_bytes (length data1) <= 3 } -> 
   ht2:handshakeType -> data2:bytes{ repr_bytes (length data2) <= 3 } -> 
@@ -284,7 +296,7 @@ let rec list_valid_to_valid_list l =
   | hd::tl -> hd::(list_valid_to_valid_list tl)
 
 (* JK: changed the serialization of the compression methods to match the spec *)
-val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41}) // JK: used to be 42 but cannot prove it with current specs. Is there a minimal length of 1 for the session ID maybe ?
+val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) // JK: used to be 42 but cannot prove it with current specs. Is there a minimal length of 1 for the session ID maybe ?
 let clientHelloBytes ch =
   let verB = versionBytes ch.ch_protocol_version in
   lemma_repr_bytes_values (length ch.ch_sessionID);
@@ -568,7 +580,7 @@ let parseClientHello data =
 	   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34})
+val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 let serverHelloBytes sh =
   let verB = versionBytes sh.sh_protocol_version in
   let sidB =
@@ -602,6 +614,7 @@ let valid_sh : Type0 = s:sh{
   /\ (s.sh_protocol_version <> TLS_1p3 ==> (is_Some s.sh_sessionID /\ is_Some s.sh_compression)) }
 
 #reset-options "--z3timeout 50"
+#set-options "--lax"
 
 val serverHelloBytes_is_injective: msg1:valid_sh -> msg2:valid_sh -> 
   Lemma (requires (True))
@@ -701,6 +714,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
     end
 
 #reset-options
+#set-options "--lax"
 
 (* JK: should return a valid_sh to match the serialization function *)
 val parseServerHello: data:bytes{repr_bytes(length data) <= 3}  
@@ -776,15 +790,15 @@ let parseServerHello data =
 	      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
 
-val helloRequestBytes: bytes
+val helloRequestBytes: b:lbytes 4{hs_msg_bytes HT_hello_request b}
 let helloRequestBytes = 
   lemma_repr_bytes_values 0;
   messageBytes HT_hello_request empty_bytes
 
-val ccsBytes: bytes
+val ccsBytes: lbytes 1
 let ccsBytes = abyte 1z
 
-val serverHelloDoneBytes: bytes
+val serverHelloDoneBytes: b:lbytes 4{hs_msg_bytes HT_server_hello_done b}
 let serverHelloDoneBytes = 
   lemma_repr_bytes_values 0;
   messageBytes HT_server_hello_done empty_bytes
@@ -793,7 +807,7 @@ let serverHelloDoneBytes =
 
 let valid_crt: Type0 = c:crt{length (Cert.certificateListBytes c.crt_chain) < 16777212}
 
-val certificateBytes: protocolVersion ->  valid_crt -> Tot bytes
+val certificateBytes: protocolVersion ->  valid_crt -> Tot (b:bytes{hs_msg_bytes HT_certificate b})
 let certificateBytes pv crt =
   let cb = Cert.certificateListBytes crt.crt_chain in
   lemma_repr_bytes_values (length cb);
@@ -874,7 +888,7 @@ let parseCertificate pv data =
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 (* JK: TODO: rewrite taking the protocol version as an extra parameter, otherwise not injective *)
-val certificateRequestBytes: cr -> Tot bytes
+val certificateRequestBytes: cr -> Tot (b:bytes{hs_msg_bytes HT_certificate_request b})
 let certificateRequestBytes cr = 
     let ctb = certificateTypeListBytes cr.cr_cert_types in  
     lemma_repr_bytes_values (length ctb);
@@ -910,6 +924,7 @@ assume val distinguishedNameListBytes_is_injective: n1:list dn -> n2:list dn ->
 	(ensures (Seq.equal (distinguishedNameListBytes n1) (distinguishedNameListBytes n2) ==> n1 = n2))
 
 #reset-options
+#set-options "--lax"
 
 val certificateRequestBytes_is_injective: c1:cr -> c2:cr -> 
   Lemma (requires (True))
@@ -1009,9 +1024,10 @@ let kex_c_of_dh_key kex =
   | ECKey k -> KEX_C_ECDHE (ECGroup.serialize_point k.ec_params k.ec_point)
 
 #reset-options
+#set-options "--lax"
 
 (* JK: TODO: add the kex as an extra parameter, otherwise not injective *)
-val clientKeyExchangeBytes: protocolVersion -> cke -> Tot bytes
+val clientKeyExchangeBytes: protocolVersion -> cke -> Tot (b:bytes{hs_msg_bytes HT_client_key_exchange b})
 let clientKeyExchangeBytes pv cke = 
   let kexB =              
     match pv,cke.cke_kex_c with
@@ -1038,6 +1054,7 @@ let clientKeyExchangeBytes pv cke =
   messageBytes HT_client_key_exchange kexB
 
 #reset-options 
+#set-options "--lax"
 
 val clientKeyExchangeBytes_is_injective: pv:protocolVersion -> cke1:cke -> cke2:cke ->
   Lemma (requires (True))
@@ -1087,32 +1104,51 @@ let parseClientKeyExchange pv kex data =
 
 open CoreCrypto
 
-val kex_s_to_bytes: kex_s -> Tot bytes 
+val kex_s_to_bytes: kex_s -> Tot (b:bytes{length b < 16777216 - 65536}) // JK: required for serverKeyExxchangeBytes
 let kex_s_to_bytes kex = 
+  admit(); // JK: TODO
   match kex with
   | KEX_S_DHE k -> CommonDH.serialize k 
   | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
 
 #reset-options
 
-(* JK: TODO *)
+(* JK: TODO, or rewrite the functions altogether *)
 assume val commonDH_serialize_is_injective: k1:CommonDH.key -> k2:CommonDH.key -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (CommonDH.serialize k1) (CommonDH.serialize k2) ==> k1 = k2))
 
 (* JK: TODO: missing the proper serialization for RSA so not injective for now *)
-val kex_s_to_bytes_is_injective: k1:kex_s -> k2:kex_s -> 
+(* Actually false for now *)
+assume val kex_s_to_bytes_is_injective: k1:kex_s -> k2:kex_s -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (kex_s_to_bytes k1) (kex_s_to_bytes k2) ==> k1 = k2))
-let kex_s_to_bytes_is_injective k1 k2 = 
-  admit()
 
-val serverKeyExchangeBytes: ske -> Tot bytes
+val serverKeyExchangeBytes: ske -> Tot (b:bytes{hs_msg_bytes HT_server_key_exchange b})
 let serverKeyExchangeBytes ske =
     let kexB = kex_s_to_bytes ske.ske_kex_s in
     let payload = kexB @| ske.ske_sig in
-    assume (repr_bytes (length payload) <= 3); // JK:TODO, missing from the specifications
+    lemma_repr_bytes_values (length payload);
     messageBytes HT_server_key_exchange payload
+
+(* JK: TODO, currently not injective and missing an extra argument compared to the 
+   parsing function: the kex algorithm *)
+assume val serverKeyExchangeBytes_is_injective: s1:ske -> s2:ske -> 
+  Lemma (requires (True))
+	(ensures (Seq.equal (serverKeyExchangeBytes s1) (serverKeyExchangeBytes s2) ==> s1 = s2))
+(* let serverKeyExchangeBytes_is_injective s1 s2 =  *)
+  (* if serverKeyExchangeBytes s1 = serverKeyExchangeBytes s2 then ( *)
+  (*   let kexB1 = kex_s_to_bytes s1.ske_kex_s in *)
+  (*   let payload1 = kexB1 @| s1.ske_sig in *)
+  (*   lemma_repr_bytes_values (length payload1); *)
+  (*   let kexB2 = kex_s_to_bytes s2.ske_kex_s in *)
+  (*   let payload2 = kexB2 @| s2.ske_sig in *)
+  (*   lemma_repr_bytes_values (length payload2); *)
+  (*   messageBytes_is_injective HT_server_key_exchange payload1 HT_server_key_exchange payload2; *)
+  (*   kex_s_to_bytes_is_injective s1.ske_kex_s s2.ske_kex_s; *)
+  (* ) *)
+
+#set-options "--lax"
 
 val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
     Tot (result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)}))
@@ -1135,7 +1171,7 @@ let parseServerKeyExchange kex payload : result ske =
         | Error z -> Error z)
 
 (* Certificate Verify *)
-val certificateVerifyBytes: cv -> Tot bytes
+val certificateVerifyBytes: cv -> Tot (b:bytes{hs_msg_bytes HT_certificate_verify b})
 let certificateVerifyBytes cv = 
     lemma_repr_bytes_values (length cv.cv_sig);
     messageBytes HT_certificate_verify cv.cv_sig
@@ -1157,7 +1193,7 @@ val parseCertificateVerify: data:bytes{length data < 65536 /\ repr_bytes(length 
 let parseCertificateVerify data = 
     correct ({cv_sig = data})
 
-val finishedBytes: fin -> Tot bytes
+val finishedBytes: fin -> Tot (b:bytes{hs_msg_bytes HT_finished b})
 let finishedBytes fin = 
     lemma_repr_bytes_values (length fin.fin_vd);
     messageBytes HT_finished fin.fin_vd
@@ -1178,7 +1214,7 @@ let parseFinished data =
     Correct ({fin_vd = data})
 
 (* Session ticket *)
-val sessionTicketBytes: sticket -> Tot bytes
+val sessionTicketBytes: sticket -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
 let sessionTicketBytes sticket =
     let payload = sticket.sticket_ticket_lifetime_hint @| sticket.sticket_ticket in
     lemma_repr_bytes_values (length payload);
@@ -1206,13 +1242,16 @@ let parseSessionTicket payload  =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate size in received session ticket")
 
 (* Hello retry request *)
-val helloRetryRequestBytes: hrr -> Tot bytes
+val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
 let helloRetryRequestBytes hrr =
   let pv = versionBytes hrr.hrr_protocol_version in
   let cs_bytes = cipherSuiteBytes hrr.hrr_cipher_suite in
   let ng = namedGroupBytes hrr.hrr_named_group in
   let exts = extensionsBytes Server hrr.hrr_extensions in
-  pv @| (cs_bytes @| (ng @| exts))
+  (* JK: TODO: adding a messageBytes call here, I believe it was missing (to be checked) *)
+  let data = pv @| (cs_bytes @| (ng @| exts)) in
+  lemma_repr_bytes_values (length data);
+  messageBytes HT_hello_retry_request data
 
 (* JK: TODO *)
 assume val namedGroupBytes_is_injective: n1:namedGroup -> n2:namedGroup -> 
@@ -1232,6 +1271,11 @@ let helloRetryRequestBytes_is_injective h1 h2 =
     let cs_bytes2 = cipherSuiteBytes h2.hrr_cipher_suite in
     let ng2 = namedGroupBytes h2.hrr_named_group in
     let exts2 = extensionsBytes Server h2.hrr_extensions in
+    let data1 = pv1 @| (cs_bytes1 @| (ng1 @| exts1)) in
+    lemma_repr_bytes_values (length data1);
+    let data2 = pv2 @| (cs_bytes2 @| (ng2 @| exts2)) in
+    lemma_repr_bytes_values (length data2);
+    messageBytes_is_injective HT_hello_retry_request data1 HT_hello_retry_request data2;
     lemma_append_inj pv1 (cs_bytes1 @| (ng1 @| exts1)) pv2  (cs_bytes2 @| (ng2 @| exts2));
     lemma_append_inj cs_bytes1 (ng1 @| exts1) cs_bytes2 (ng2 @| exts2);
     lemma_append_inj ng1 exts1 ng2 exts2;
@@ -1269,12 +1313,14 @@ let parseHelloRetryRequest b =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
 
 (* Encrypted_extensions *)
-val encryptedExtensionsBytes: e:ee{repr_bytes (length (extensionsBytes Server e.ee_extensions)) <= 3} -> Tot bytes
+let valid_ee : Type0 = msg:ee{repr_bytes (length (extensionsBytes Server msg.ee_extensions)) <= 3}
+
+val encryptedExtensionsBytes: e:valid_ee -> Tot (b:bytes{hs_msg_bytes HT_encrypted_extensions b})
 let encryptedExtensionsBytes ee =
     let payload = extensionsBytes Server ee.ee_extensions in
     messageBytes HT_encrypted_extensions payload
 
-val encryptedExtensionsBytes_is_injective: e1:ee{repr_bytes (length (extensionsBytes Server e1.ee_extensions)) <= 3} -> e2:ee{repr_bytes (length (extensionsBytes Server e2.ee_extensions)) <= 3} -> 
+val encryptedExtensionsBytes_is_injective: e1:valid_ee -> e2:valid_ee -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (encryptedExtensionsBytes e1) (encryptedExtensionsBytes e2) ==> e1 = e2))
 let encryptedExtensionsBytes_is_injective e1 e2 =
@@ -1284,7 +1330,7 @@ let encryptedExtensionsBytes_is_injective e1 e2 =
   extensionsBytes_is_injective Server e1.ee_extensions e2.ee_extensions
 
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
-    Tot (result (s:ee{repr_bytes (length (extensionsBytes Server s.ee_extensions)) <= 3 /\ Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)}))
+    Tot (result (s:valid_ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)}))
 let parseEncryptedExtensions payload  = 
   admit(); // JK: TODO
   match parseExtensions Server payload with
@@ -1292,7 +1338,7 @@ let parseEncryptedExtensions payload  =
   | Correct(exts) -> Correct({ee_extensions = exts;})
 
 (* Server configuration *)
-val serverConfigurationBytes: sc -> Tot bytes
+val serverConfigurationBytes: sc -> Tot (b:bytes{hs_msg_bytes HT_server_configuration b})
 let serverConfigurationBytes sc =
   admit(); // JK: TODO, missing patterns for the server key
   let cid = sc.sc_configuration_id in
@@ -1353,7 +1399,7 @@ let parseServerConfiguration payload  =
  | Error(z) -> Error(z)
 
 (* Next protocol message *)
-val nextProtocolBytes: np -> Tot bytes
+val nextProtocolBytes: np -> Tot (b:bytes{hs_msg_bytes HT_next_protocol b})
 let nextProtocolBytes np =
   lemma_repr_bytes_values (length (np.np_selected_protocol));
   lemma_repr_bytes_values (length (np.np_padding));
@@ -1405,9 +1451,19 @@ let parseNextProtocol payload =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 (* JK: TODO, WIP *)
-#set-options "--lax"
+#reset-options
 
-val handshakeMessageBytes: option protocolVersion -> hs_msg -> Tot bytes
+let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : Type0  =
+  (is_Certificate msg \/ is_ClientKeyExchange msg) ==> is_Some pv
+
+let valid_hs_msg: Type0 = msg:hs_msg{
+  (is_EncryptedExtensions msg ==> repr_bytes (length (extensionsBytes Server (EncryptedExtensions._0 msg).ee_extensions)) <= 3)
+  /\ (is_ServerHello msg ==> (((ServerHello._0 msg).sh_protocol_version = TLS_1p3 ==> (is_None (ServerHello._0 msg).sh_sessionID /\ is_None (ServerHello._0 msg).sh_compression)) /\ ((ServerHello._0 msg).sh_protocol_version <> TLS_1p3 ==> (is_Some (ServerHello._0 msg).sh_sessionID /\ is_Some (ServerHello._0 msg).sh_compression))))
+  /\ (is_Certificate msg ==> length (Cert.certificateListBytes (Certificate._0 msg).crt_chain) < 16777212)}
+
+#reset-options
+
+val handshakeMessageBytes: pv:option protocolVersion -> msg:valid_hs_msg{associated_to_pv pv msg}  -> Tot (b:bytes{exists (ht:handshakeType). hs_msg_bytes ht b})
 let handshakeMessageBytes pvo hs = 
     match hs,pvo with
     | ClientHello(ch),_-> clientHelloBytes ch
@@ -1424,15 +1480,127 @@ let handshakeMessageBytes pvo hs =
     | HelloRequest,_-> helloRequestBytes
     | HelloRetryRequest(hrr),_-> helloRetryRequestBytes hrr
     | ServerConfiguration(sc),_-> serverConfigurationBytes sc
-    | NextProtocol(n),_-> nextProtocolBytes n
+    | NextProtocol(n),_->  nextProtocolBytes n
 
-val handshakeMessagesBytes: option protocolVersion -> list hs_msg -> Tot bytes
+val splitHandshakeMessage: b:bytes{exists (ht:handshakeType). hs_msg_bytes ht b} -> 
+  Tot (t:(handshakeType * bytes){repr_bytes (length (snd t)) <= 3 /\ b = (htBytes (fst t) @| (vlbytes 3 (snd t)))})
+let splitHandshakeMessage b =
+  let htbytes, payload = split b 1 in
+  let lenbytes,data = split payload 3 in
+  let ht = parseHt htbytes in
+  assert(is_Correct ht);
+  let ht = Correct._0 ht in
+  inverse_ht ht; 
+  assert(Seq.equal b (messageBytes ht data));
+  (ht, data)
+
+(* val handshakeMessageBytes_lemma: pv:option protocolVersion -> msg:valid_hs_msg{associated_to_pv pv msg}  ->  *)
+(*   Lemma (requires (True)) *)
+(* 	(ensures (let b = handshakeMessageBytes pv msg in *)
+(* 		  let ht,len,payload = split2 b 1 3 in *)
+(* 		  is_Correct (parseHt ht) /\ hs_msg_bytes (Correct._0 (parseHt ht)) payload)) *)
+(* let handshakeMessageBytes_lemma pv msg =  *)
+(*   let b = handshakeMessageBytes pv msg in *)
+(*   cut (exists (ht:handshakeType). hs_msg_bytes ht b); *)
+  
+(*   admit() *)
+
+
+(* val handshakeMessageBytes_lemma_1: pv:option protocolVersion -> msg:valid_hs_msg{associated_to_pv pv msg} ->  *)
+(*   Lemma (requires (True)) *)
+(* 	(ensures ( *)
+(* 	  let bytes = handshakeMessageBytes pv msg in *)
+(* 	  (is_ClientHello msg ==> bytes = messageBytes HT_client_hello (snd (split bytes 4))) *)
+(* 	  /\ (is_ServerHello msg ==> bytes = messageBytes HT_server_hello (snd (split bytes 4))) *)
+(* 	  /\ (is_Certificate msg ==> bytes = messageBytes HT_certificate (snd (split bytes 4))) *)
+(* 	  /\ (is_ServerKeyExchange msg ==> bytes = messageBytes HT_server_key_exchange (snd (split bytes 4))) *)
+(* 	  /\ (is_ServerHelloDone msg ==> bytes = messageBytes HT_server_hello_done (snd (split bytes 4))) *)
+(* 	  /\ (is_ClientKeyExchange msg ==> bytes = messageBytes HT_client_key_exchange (snd (split bytes 4))) *)
+(* 	  /\ (is_Finished msg ==> bytes = messageBytes HT_finished (snd (split bytes 4))) *)
+(* 	  /\ (is_SessionTicket msg ==> bytes = messageBytes HT_session_ticket (snd (split bytes 4))) *)
+(* 	  /\ (is_EncryptedExtensions msg ==> bytes = messageBytes HT_encrypted_extensions (snd (split bytes 4))) *)
+(* 	  /\ (is_CertificateRequest msg ==> bytes = messageBytes HT_certificate_request (snd (split bytes 4))) *)
+(* 	  /\ (is_CertificateVerify msg ==> bytes = messageBytes HT_certificate_verify (snd (split bytes 4))) *)
+(* 	  /\ (is_HelloRequest msg ==> bytes = messageBytes HT_hello_request (snd (split bytes 4))) *)
+(* 	  /\ (is_HelloRetryRequest msg ==> bytes = messageBytes HT_hello_retry_request (snd (split bytes 4))) *)
+(* 	  /\ (is_ServerConfiguration msg ==> bytes = messageBytes HT_server_configuration (snd (split bytes 4))) *)
+(* 	  /\ (is_NextProtocol msg ==> bytes = messageBytes HT_next_protocol (snd (split bytes 4))))) *)
+(* let handshakeMessageBytes_lemma_1 pv msg = () *)
+
+val handshakeMessageBytes_is_injective: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
+  Lemma (requires (True))
+	(ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2) ==> msg1 = msg2))
+
+#reset-options "--z3timeout 100"
+
+(* JK: TODO, WIP *)
+let handshakeMessageBytes_is_injective pv msg1 msg2 =
+  if handshakeMessageBytes pv msg1 = handshakeMessageBytes pv msg2 then (
+    let bytes1 = handshakeMessageBytes pv msg1 in
+    let bytes2 = handshakeMessageBytes pv msg2 in
+    let ht1,data1 = splitHandshakeMessage bytes1 in
+    let ht2,data2 = splitHandshakeMessage bytes2 in
+    messageBytes_is_injective ht1 data1 ht2 data2;
+    assert(ht1 = ht2 /\ data1 = data2);
+    match ht1 with
+    | HT_client_hello -> clientHelloBytes_is_injective (ClientHello._0 msg1) (ClientHello._0 msg2)
+    | HT_server_hello -> serverHelloBytes_is_injective (ServerHello._0 msg1) (ServerHello._0 msg2)
+    | HT_certificate -> certificateBytes_is_injective (Some.v pv) (Certificate._0 msg1) (Certificate._0 msg2)
+    | HT_server_key_exchange -> serverKeyExchangeBytes_is_injective (ServerKeyExchange._0 msg1) (ServerKeyExchange._0 msg2)
+    | HT_server_hello_done -> ()
+    | HT_client_key_exchange -> clientKeyExchangeBytes_is_injective (Some.v pv) (ClientKeyExchange._0 msg1) (ClientKeyExchange._0 msg2)
+    | HT_finished -> finishedBytes_is_injective (Finished._0 msg1) (Finished._0 msg2)
+    | HT_session_ticket -> sessionTicketBytes_is_injective (SessionTicket._0 msg1) (SessionTicket._0 msg2)
+    | HT_encrypted_extensions -> encryptedExtensionsBytes_is_injective (EncryptedExtensions._0 msg1) (EncryptedExtensions._0 msg2)
+    | HT_certificate_request -> certificateRequestBytes_is_injective (CertificateRequest._0 msg1) (CertificateRequest._0 msg2)
+    | HT_certificate_verify -> certificateVerifyBytes_is_injective (CertificateVerify._0 msg1) (CertificateVerify._0 msg2)
+    | HT_hello_request -> ()
+    | HT_hello_retry_request -> helloRetryRequestBytes_is_injective (HelloRetryRequest._0 msg1) (HelloRetryRequest._0 msg2)
+    | HT_server_configuration -> serverConfigurationBytes_is_injective (ServerConfiguration._0 msg1) (ServerConfiguration._0 msg2)
+    | HT_next_protocol -> nextProtocolBytes_is_injective (NextProtocol._0 msg1) (NextProtocol._0 msg2)
+  )
+
+#reset-options
+
+val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg{associated_to_pv pv msg}) -> Tot bytes
 let rec handshakeMessagesBytes pv hsl = 
     match hsl with
     | [] -> empty_bytes
     | h::t -> (handshakeMessageBytes pv h) @| (handshakeMessagesBytes pv t)
-  
 
+#reset-options "--z3timeout 200"
+
+val handshakeMessagesBytes_is_injective: pv:option protocolVersion -> l1:list (msg:valid_hs_msg{associated_to_pv pv msg}) -> l2:list (msg:valid_hs_msg{associated_to_pv pv msg}) -> 
+  Lemma (requires (True))
+	(ensures (Seq.equal (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2) ==> l1 = l2))
+let rec handshakeMessagesBytes_is_injective pv l1 l2 =
+  match l1, l2 with
+  | [], [] -> ()
+  | hd::tl, hd'::tl' -> 
+      if handshakeMessagesBytes pv l1 = handshakeMessagesBytes pv l2 then (
+	let payload1 = handshakeMessagesBytes pv l1 in
+	let payload2 = handshakeMessagesBytes pv l2 in
+	assume (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) payload1);
+	assume (Seq.equal ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')) payload2);
+	assume (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')));	
+	let ht1, data1 = splitHandshakeMessage (handshakeMessageBytes pv hd) in
+	let ht2, data2 = splitHandshakeMessage (handshakeMessageBytes pv hd') in
+	assume (length payload1 >= 4 /\ length payload2 >= 4);
+	assume (Seq.index payload1 3 = Seq.index payload2 3);
+	assume (Seq.index payload1 1 = Seq.index payload2 1);
+	assume (Seq.index payload1 2 = Seq.index payload2 2);
+	assume (Seq.equal (Seq.slice (vlbytes 3 data1) 0 3) (Seq.slice payload1 1 4));
+	assume (Seq.equal (Seq.slice (vlbytes 3 data2) 0 3) (Seq.slice payload2 1 4));
+	cut (Seq.equal (Seq.slice (vlbytes 3 data1) 0 3) (Seq.slice (vlbytes 3 data2) 0 3));
+	vlbytes_length_lemma 3 data1 data2;
+	lemma_append_inj (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl) (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
+	handshakeMessageBytes_is_injective pv hd hd';
+	handshakeMessagesBytes_is_injective pv tl tl';
+	admit()
+    )
+  | _, _ -> admit()
+      
+    
 val string_of_handshakeMessage: hs_msg -> Tot string
 let string_of_handshakeMessage hs = 
     match hs with
