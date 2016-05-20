@@ -100,23 +100,30 @@ let verify_signature c pv role nonces csa sigalgs tbs sigv =
   if length sigv > 4 then
    let (h, r) = split sigv 1 in
    let (sa, sigv) = split r 1 in
-   (match vlsplit 2 sigv with
-   | Correct (sigv, eof) -> 
+   begin
+   match vlsplit 2 sigv with
+   | Correct (sigv, eof) ->
        let tbs =
-         (match pv with
+	 begin
+         match pv with
          | TLS_1p3 ->
            let pad = abytes (String.make 64 (Char.char_of_int 32)) in
            let ctx = match role with
              | Server -> "TLS 1.3, server CertificateVerify"
              | Client -> "TLS 1.3, client CertificateVerify" in
            pad @| (abytes ctx) @| (abyte 0z) @| tbs
-         | _ -> (Some.v nonces) @| tbs) in
-       (match (length eof, parseSigAlg sa, parseHashAlg h) with
+         | _ -> (Some.v nonces) @| tbs
+	 end
+       in
+       begin
+	 match (length eof, parseSigAlg sa, parseHashAlg h) with
          | 0, Correct sa, Correct (Hash h) ->
            let algs : list sigHashAlg =
-             (match sigalgs with
+	     begin
+	     match sigalgs with
              | Some l -> l
-             | None -> [(csa, Hash CoreCrypto.SHA1)]) in
+             | None -> [(csa, Hash CoreCrypto.SHA1)]
+	     end in
              if List.Tot.existsb (fun (xs,xh)->(xs=sa && xh=Hash h)) algs then
 	       begin
 	       match get_chain_public_signing_key c sa with
@@ -126,10 +133,11 @@ let verify_signature c pv role nonces csa sigalgs tbs sigv =
                  Signature.verify (Hash h) pk tbs sigv
 	       | Error z -> false
 	       end
-               (* CoreCrypto.cert_verify_sig (List.Tot.hd c) sa h tbs sigv *)
              else false
-         | _ -> false)
-    | _ -> false)
+         | _ -> false
+	 end
+    | _ -> false
+    end
   else false
 
 val lookup_server_chain: string -> string -> protocolVersion -> option sigAlg -> option (list sigHashAlg) -> Tot (result (chain * CoreCrypto.certkey))

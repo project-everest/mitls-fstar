@@ -210,10 +210,6 @@ let main config host port =
   let sigv = ske.ske_sig in
   let cr = ch.ch_client_random in
   let sr = sh.sh_server_random in
-  IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^ (print_bytes sigv) ^ "\n");
-  IO.print_string ("Signature validation status = " ^
-    (if Cert.verify_signature sc.crt_chain pv Server (Some (cr @| sr)) (Some.v sa) sal tbs sigv then "OK" else "FAIL") ^ "\n");
-  
   let (ClientKeyExchange cke,ckeb) = 
      match
        processServerHelloDone config n ks log 

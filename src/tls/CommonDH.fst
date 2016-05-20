@@ -70,16 +70,18 @@ let serialize k =
 
 val parse_partial: bytes -> bool -> Tot (TLSError.result (key * bytes)) 
 let parse_partial p ec = 
-    if ec then 	 
-      (match ECGroup.parse_partial p with
-       | Correct(eck,rem) -> 
-	 Correct (ECKey eck, rem)
-       | Error z -> Error z)
-    else 
-      (match DHGroup.parse_partial p with
-       | Correct(dhk,rem) -> 	   
-         Correct (FFKey dhk, rem)
-       | Error z -> Error z)
+  if ec then
+    begin
+    match ECGroup.parse_partial p with
+    | Correct(eck,rem) -> Correct (ECKey eck, rem)
+    | Error z -> Error z
+    end
+  else
+    begin
+    match DHGroup.parse_partial p with
+    | Correct(dhk,rem) -> Correct (FFKey dhk, rem)
+    | Error z -> Error z
+    end
 
         
   

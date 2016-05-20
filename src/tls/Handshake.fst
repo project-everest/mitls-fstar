@@ -341,7 +341,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
        let valid = Cert.verify_signature c.crt_chain n.n_protocol_version Server (Some csr) 
           cs_sigalg n.n_extensions.ne_signature_algorithms ske_tbs ske_sig in
        let _ = IO.debug_print_string("Signature validation status = "^(if valid then "OK" else "FAIL")^"\n") in
-       if true then // TODO: SIG VALIDATION CURRENTLY FAILS; this should be "if valid then"
+       if valid then
          (match ske.ske_kex_s with
          | KEX_S_DHE gy ->
            let gx = KeySchedule.ks_client_12_full_dh ks n.n_server_random n.n_protocol_version 
@@ -472,7 +472,7 @@ let processServerFinished_13 cfg n ks log msgs =
      let valid = Cert.verify_signature c.crt_chain n.n_protocol_version Server None
           cs_sigalg n.n_extensions.ne_signature_algorithms lb cv.cv_sig in
      let _ = IO.debug_print_string("Signature validation status = "^(if valid then "OK" else "FAIL")^"\n") in
-     if true then // TODO: SIG VALIDATION CURRENTLY FAILS; this should be "if valid then"
+     if valid then
      let _ = log @@ CertificateVerify(cv) in
      let lb = HandshakeLog.getHash log in
      let svd = KeySchedule.ks_client_13_1rtt_server_finished ks lb in
