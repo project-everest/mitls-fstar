@@ -25,27 +25,11 @@ More information on F\* can be found at www.fstar-lang.org
 
 - `src/`
 
-  - `Makefile` `make all` is part of F* regression testing. (SI: not known to work right now?)
-    Ideally, one should check that this target succeeds before pushing changes.
-	 This builds the following targets:
-
-    	- `mitls-lax`      for lax typechecking (legacy) files in `tls-lax`.
-   		- `mitls-redux`    for lax typechecking selected files in `tls` and `tls-lax` (quite brittle).
-
  - `tls/` In-progress miTLS port. A few files have been ported and fully typecheck; others have been left almost untouched since Karthik ported them from mitls-f7. The `Makefile` here has two targets that are also part of regression testing:
 
-  		- `tls-ver` Full type checking of files that have been ported so far (listed in variable `VERIFY`)
-  		- `tls-ml`  OCaml code generation for files ported so far---generated files go to the `../tls-ml` directory
-
-  - `tls-fs/` Legacy .fs (see also matching .fs7 files in mitls-f7)
-
-  - `tls-lax/` is a shallow port from .fs to .fst that codegens to OCaml
-  --- but does not compile yet because of missing native dependencies
-
-  - `tls-ml/` OCaml code generated from tls and tls-lax files. Arguably, files here could be built and do not need to be in the repository.
-
-
-  - `bug-reports/` Example files for Github issues should be placed here.
+    - `tls-ver` Full type checking of files that have been ported so far (listed in variable `VERIFY`)
+    - `tls-gen`  OCaml code generation for files ported so far---generated files go to the `output/` directory
+    - `mitls.exe` openssl-like command line client and server. See `mitls.exe --help` for details on how to use the tool.
 
   - `fstar_proof/` an independent POPL'16 example, verifying the state machine in F* (out of date, JK is the expert; it could be moved to FStarLang/FStar).
 
@@ -58,10 +42,9 @@ More information on F\* can be found at www.fstar-lang.org
 
 - `apps/` Sample apps built on top of miTLS --- not ported yet.
 
-- `data/` Persistent data used by miTLS, e.g. a DH parameter cache --- not ported yet.
+- `data/` Persistent data used by miTLS, e.g. the OpenSSL root certificate store; sample chains for the test server; a DH parameter cache --- not ported yet.
 
-- `libs/` Our own libraries: CoreCrypto, Platform, and DHDB.
-CoreCrypto and Platform had been moved to `FStarLang/FStar/contrib` and remaining files are deprecated, DHDB remains to be ported.
+- `libs/` miTLS libraries; CoreCrypto and Platform had been moved to `FStarLang/FStar/contrib` and remaining files are deprecated, DHDB remains to be ported.
   - `fst` F* specification
   - `fs` F# implementation
   - `ml` OCaml implementation
