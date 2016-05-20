@@ -26,7 +26,7 @@ FSTAR_HOME?=../../.fstar
 # .fst files in [lib/ml] that are realized in stdlib-hyperheap.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
-OPTIONS=--universes --use_native_int
+OPTIONS=--universes --use_native_int --fstar_home $(FSTAR_HOME)
 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
@@ -192,7 +192,7 @@ all-ver: IdealFlags.fst $(addsuffix .fst-ver, $(VERIFY))
 # Targets to get F* arguments in interactive mode
 %.fst-in: IdealFlags.fst
 	$(MAKE) refresh > /dev/null
-	@echo --fstar_home $(FSTAR_HOME) $(OPTIONS) $(VERFLAGS) \
+	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
