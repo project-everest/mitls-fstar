@@ -200,7 +200,7 @@ let main config host port =
 
   let (Certificate(sc),scb) = recvHSRecord tcp pv kex log in
   IO.print_string ("Certificate validation status = " ^
-    (if Cert.validate_chain sc.crt_chain sa (Some host) "../../data/CAFile.pem" then
+    (if Cert.validate_chain sc.crt_chain sa (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
 
   let (ServerKeyExchange(ske),skeb) = recvHSRecord tcp pv kex log in
