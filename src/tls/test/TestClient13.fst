@@ -108,7 +108,7 @@ let main config host port =
   let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
   let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
   IO.print_string ("Certificate validation status = " ^
-    (if Cert.validate_chain sc.crt_chain sa (Some host) "../../data/CAFile.pem" then
+    (if Cert.validate_chain sc.crt_chain sa (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
   let cv_log = hash log in
 

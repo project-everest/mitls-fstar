@@ -12,6 +12,7 @@ open TLSInfo
 open Range
 open CommonDH
 
+#set-options "--lax"
 
 (* JK: for verification purposes the "--lax" flag is set throughout the file in order to
    skip the already verified part of it.
@@ -1481,6 +1482,8 @@ let handshakeMessageBytes pvo hs =
     | ServerConfiguration(sc),_-> serverConfigurationBytes sc
     | NextProtocol(n),_->  nextProtocolBytes n
 
+#reset-options
+
 val splitHandshakeMessage: b:bytes{exists (ht:handshakeType). hs_msg_bytes ht b} -> 
   Tot (t:(handshakeType * bytes){repr_bytes (length (snd t)) <= 3 /\ b = (htBytes (fst t) @| (vlbytes 3 (snd t)))})
 let splitHandshakeMessage b =
@@ -1488,10 +1491,11 @@ let splitHandshakeMessage b =
   let lenbytes,data = split payload 3 in
   let ht = parseHt htbytes in
   assert(is_Correct ht);
-  let ht = Correct._0 ht in
-  inverse_ht ht; 
-  assert(Seq.equal b (messageBytes ht data));
-  (ht, data)
+  match ht with
+  | Correct ht ->
+    inverse_ht ht;
+    assert(Seq.equal b (messageBytes ht data));
+    (ht, data)
 
 val handshakeMessageBytes_is_injective: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
   Lemma (requires (True))
