@@ -192,7 +192,7 @@ all-ver: IdealFlags.fst $(addsuffix .fst-ver, $(VERIFY))
 # Targets to get F* arguments in interactive mode
 %.fst-in: IdealFlags.fst
 	$(MAKE) refresh > /dev/null
-	@echo $(OPTIONS) $(VERFLAGS) \
+	@echo --fstar_home $(FSTAR_HOME) $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
