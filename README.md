@@ -13,15 +13,36 @@ More information on F\* can be found at www.fstar-lang.org
 
 ### Table of content
 
+  * [Building](#building)
   * [Directory structure](#directory-structure)
   	* [Legacy, imported from mitls-f7](#legacy-imported-from-mitls-f7)
   * [Configuring Emacs and Atom F* modes](#configuring-emacs-and-atom-f-modes)
-  * [Building](#building)
+
+###Building
+
+Check that you have the necessary dependencies.
+First, check that you have the F\* compiler set up and running in .fstar (`git submodule init` && `git submodule update` if you need to), following the instructions in https://github.com/FStarLang/FStar
+You also need to setup OCaml and OPAM, following the instructions in https://github.com/FStarLang/FStar/blob/master/INSTALL.md
+In addition to `ocamlfind`, `batteries`, `stdint`, and `zarith`, you will also need to install the `sqlite3` package.
+To build CoreCrypto, you will need to install `libssl-dev`. On Windows, you can use `opam depext ssl` to install the appropriate Cygwin packages.
+You also need a `cpp` (on Cygwin you could symlink the mingw cpp to /usr/bin/cpp).
+
+To verify the current miTLS:
+```
+cd src/tls
+make tls-ver
+```
+
+To build the mitls.exe command line tool:
+```
+cd src/tls
+make mitls.exe
+./mitls.exe -v 1.2 google.com
+./mitls.exe -s 0.0.0.0 4443 &
+./mitls.exe 127.0.0.1 4443
+```
 
 ###Directory structure
-
-- `3rdparty/`
-	Legacy third-party libraries. We no longer depend on them, and they should be deleted at some point. Currently we link against libraries in https://github.com/FStarLang/3rdparty. New libraries should be added there or to a new 3rdparty git submodule, if needed.
 
 - `src/`
 
@@ -103,24 +124,3 @@ Error messages shown in the mini-buffer are sometimes truncated. It can be conve
      t)))
 ```
 
-###Building
-
-Check that you have the necessary dependencies. 
-The opam ones are listed at https://github.com/FStarLang/FStar/blob/master/contrib/CoreCrypto/INSTALL.md.
-You also need a `cpp` (on Cygwin you could symlink the mingw cpp to /usr/bin/cpp). 
-Finally, check that you have the F* compiler set up in .fstar (`git submodule init` && `git submodule update` if you need to). 
-Then do this:
-
-Build the compiler: 
-```
-make -C .fstar/src/ocaml-output
-```
-
-Build tls: 
-```
-make -C src/tls tls-ver 
-```
-
-```
-make -C src/tls tls-gen
-```  
