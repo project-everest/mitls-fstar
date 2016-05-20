@@ -67,7 +67,7 @@ let rec parseCertificateList b =
 
 val validate_chain : chain -> option sigAlg -> option string -> string -> Tot bool
 let validate_chain c sigalg host cafile =
-  let for_signing = match sigalg with | None -> false | _ -> false in
+  let for_signing = match sigalg with | None -> false | _ -> true in
   CoreCrypto.validate_chain c for_signing host cafile
 
 val get_chain_public_signing_key : chain -> sigAlg -> Tot (result Signature.public_repr)
