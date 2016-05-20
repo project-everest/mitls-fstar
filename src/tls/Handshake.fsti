@@ -199,7 +199,7 @@ type hs =
          resume: resume_id r ->
             cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-            log: MR.m_rref region (epochs region nonce) MS.grows ->  // append-only, monotonic log of epochs
+            log: MS.i_seq region (epoch region nonce) epochs_inv ->  // append-only, monotonic log of epochs
           state: rref region (handshake_state r)  ->       // opaque, subject to invariant
              hs
 
@@ -207,7 +207,7 @@ type hs =
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-let logT (s:hs) (h:HyperHeap.t) = MR.m_sel h s.log
+let logT (s:hs) (h:HyperHeap.t) = MS.i_sel h s.log
 
 let stateType (s:hs) = epochs s.region s.nonce * handshake_state (HS.r s)
 
@@ -328,7 +328,7 @@ assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_st
 
 let hs_inv (s:hs) (h: HyperHeap.t) = 
   hs_invT s (logT s h) (sel h (HS.state s))  //An abstract invariant of HS-internal state
-  /\ MR.m_contains s.log h                    //Nothing deep about these next two, since they can always 
+  /\ MS.i_contains s.log h                    //Nothing deep about these next two, since they can always 
   /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 //TODO: need a lemma to frame hs_inv across updates that don't clash with HS.region

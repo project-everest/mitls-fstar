@@ -130,6 +130,95 @@ let write_at_end (#a:Type) (#i:rid) (r:m_rref i (seq a) grows) (x:a)
     witness r (at_least n x r)
 
 ////////////////////////////////////////////////////////////////////////////////
+//Monotone sequences with invariants
+////////////////////////////////////////////////////////////////////////////////
+
+let i_seq (r:rid) (a:Type) (p:seq a -> Type) = m_rref r (s:seq a{p s}) grows
+
+let alloc_mref_iseq (#a:Type) (p:seq a -> Type) (r:FStar.HyperHeap.rid) (init:seq a{p init})
+  : ST (i_seq r a p)
+       (requires (fun _ -> True))
+       (ensures (fun h0 m h1 -> FStar.ST.ralloc_post r init h0 (as_rref m) h1))
+  = lemma_grows_monotone #a;
+    FStar.Monotonic.RRef.m_alloc r init
+
+let i_mem (#r:rid) (#a:Type) (#p:(seq a -> Type)) (x:a) (m:i_seq r a p) (h:t)
+  : GTot Type0
+  = b2t (SeqProperties.mem x (m_sel h m))
+
+let i_at_least (#r:rid) (#a:Type) (#p:(seq a -> Type)) (n:nat) (x:a) (m:i_seq r a p) (h:t) =
+      i_mem x m h
+      /\ Seq.length (m_sel h m) > n
+      /\ Seq.index (m_sel h m) n = x
+
+let i_at_least_is_stable (#r:rid) (#a:Type) (#p:seq a -> Type) (n:nat) (x:a) (m:i_seq r a p)
+  : Lemma (ensures stable_on_t m (i_at_least n x m))
+  = let at_least_is_stable_aux:
+		     h0:t
+		   -> h1:t
+		   -> Lemma ((i_at_least n x m h0
+			    /\ grows (m_sel h0 m) (m_sel h1 m))
+			    ==> i_at_least n x m h1) =
+       fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in
+    forall_intro_2 at_least_is_stable_aux
+
+
+let i_sel (#r:rid) (#a:Type) (#p:seq a -> Type) (h:HH.t) (m:i_seq r a p)
+  : GTot (s:seq a{p s})
+  = m_sel h m
+
+let i_read (#r:rid) (#a:Type) (#p:Seq.seq a -> Type) (m:i_seq r a p)
+  : ST (s:seq a{p s})
+       (requires (fun h -> True))
+       (ensures (fun h0 x h1 -> h0=h1 /\ x = i_sel h0 m))
+  = MR.m_read m
+
+let i_contains (#r:rid) (#a:Type) (#p:seq a -> Type) (m:i_seq r a p) (h:HH.t)
+  : GTot bool
+  = m_contains m h
+
+let i_write_at_end (#rgn:rid) (#a:Type) (#p:seq a -> Type) (r:i_seq rgn a p) (x:a)
+  : ST unit
+       (requires (fun h -> p (SeqP.snoc (i_sel h r) x)))
+       (ensures (fun h0 _ h1 ->
+	               i_contains r h1
+		     /\ modifies_one rgn h0 h1
+		     /\ modifies_rref rgn !{as_ref (as_rref r)} h0 h1
+		     /\ i_sel h1 r = SeqP.snoc (i_sel h0 r) x
+		     /\ witnessed (i_at_least (Seq.length (i_sel h0 r)) x r)))
+  = m_recall r;
+    let s0 = m_read r in
+    let n = Seq.length s0 in
+    m_write r (SeqP.snoc s0 x);
+    i_at_least_is_stable n x r;
+    lemma_mem_snoc s0 x;
+    witness r (i_at_least n x r)
+
+////////////////////////////////////////////////////////////////////////////////
+//Testing invariant sequences
+////////////////////////////////////////////////////////////////////////////////
+
+let invariant (s:seq nat) = 
+  forall (i:nat) (j:nat). i < Seq.length s /\ j < Seq.length s /\ i<>j 
+		 ==> Seq.index s i <> Seq.index s j
+  
+val test0: r:rid -> a:m_rref r (seq nat) grows -> k:nat -> ST unit
+  (requires (fun h -> k < Seq.length (m_sel h a)))
+  (ensures (fun h0 result h1 -> True))
+let test0 r a k = 
+  let h0 = ST.get() in
+  at_least_is_stable k (Seq.index (m_sel h0 a) k) a;
+  MR.witness a (at_least k (Seq.index (m_sel h0 a) k) a)
+  
+val itest: r:rid -> a:i_seq r nat invariant -> k:nat -> ST unit
+  (requires (fun h -> k < Seq.length (i_sel h a)))
+  (ensures (fun h0 result h1 -> True))
+let itest r a k = 
+  let h0 = ST.get() in
+  i_at_least_is_stable k (Seq.index (i_sel h0 a) k) a;
+  MR.witness a (i_at_least k (Seq.index (i_sel h0 a) k) a)
+
+////////////////////////////////////////////////////////////////////////////////
 //Mapping functions over monotone sequences
 ////////////////////////////////////////////////////////////////////////////////
 val un_snoc: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
@@ -233,6 +322,10 @@ let map_has_at_index_stable (#a:Type) (#b:Type) (#i:rid)
   : Lemma (MR.stable_on_t r (map_has_at_index r f n v))
   = ()
 		     
+
+////////////////////////////////////////////////////////////////////////////////
+//Collecting monotone sequences
+////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
 //Collecting monotone sequences

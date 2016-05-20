@@ -24,10 +24,41 @@ open MonotoneSeq
 open FStar.Monotonic.RRef
 module HH = HyperHeap
 module MR = FStar.Monotonic.RRef
+module MS = MonotoneSeq
 
-(* #set-options "--lax" *)
+#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 
-(* #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0" *)
+//A wrapper around Handshake.next_fragment; using monotonicity to show that 
+//the i'th epoch doesn't change
+let next_fragment_ensures (s:hs) h0 (result:outgoing) h1 = 
+    let w0 = iT s Writer h0 in
+    let w1 = iT s Writer h1 in
+    let r0 = iT s Reader h0 in
+    let r1 = iT s Reader h1 in
+    hs_inv s h1 /\
+    mods s h0 h1 /\
+    r1 == r0 /\
+    w1 == (if result = OutCCS then w0 + 1 else w0) /\
+    (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))
+
+val next_fragment: s:hs -> ST outgoing
+  (requires (hs_inv s))
+  (ensures (fun h0 result h1 -> 
+    next_fragment_ensures s h0 result h1 /\
+    (let w0 = iT s Writer h0 in   //Augmenting the post-condition of Handhshake.next_fragment 
+     let es = logT s h0 in        //with this monotonicity propery
+     w0 >= 0 ==> Seq.index (logT s h0) w0 = Seq.index (logT s h1) w0))) //NS puzzled: How come we can prove w0 in bounds for (logT s h1)?
+let next_fragment s =  
+  let h0 = ST.get() in 
+  let ilog = HS.log s in 
+  let w0 = Handshake.i s Writer in 
+  let _  = if w0 >= 0 
+	   then (MS.i_at_least_is_stable w0 (Seq.index (MS.i_sel h0 ilog) w0) ilog;
+	         MR.witness ilog (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog)) in
+  let res = Handshake.next_fragment s in
+  let _ = if w0 >= 0
+	  then MR.testify (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog) in
+  res
 
 //allowing inverting optResult without having to globally increase the fuel just for this
 // Will add a lemma to Platform.Error so that we don't have this ugly assume here
@@ -171,7 +202,7 @@ val no_seqn_overflow: c: connection -> ST bool
     incrementable (writer_epoch e)) h0))
 
 let no_seqn_overflow c =
-  let es = MR.m_read c.hs.log in
+  let es = MS.i_read c.hs.log in //MR.m_read c.hs.log in
   let j = Handshake.i c.hs Writer in
   if j < 0 then
     true
@@ -343,7 +374,7 @@ let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j<0 
     then Content.repr i f
-    else let es = MR.m_read c.hs.log in
+    else let es = MS.i_read c.hs.log in
 	 let e = Seq.index es j in 
 	 (* let _ = reveal_epoch_region_inv e in *)
 	 StAE.encrypt (writer_epoch e) f
@@ -720,7 +751,7 @@ let writeOne c i appdata =
     end
     
   | _ ->  // next we check if there is outgoing Handshake traffic
-        let hs_response = Handshake.next_fragment c.hs in
+        let hs_response = next_fragment c.hs in
         let h2 = ST.get() in
         (match hs_response with
         | Handshake.OutCCS -> (
@@ -740,9 +771,6 @@ let writeOne c i appdata =
 
         | Handshake.OutSome rg f -> (
             // we send some handshake fragment
-	    (* assert (iT c.hs Writer h1 == iT c.hs Writer h2); *)
-	    frame_admit c h1 h2;
-	    (* admit(); *)
             match send c #i (Content.CT_Handshake rg f) with
             | Correct()   -> WriteAgain
             | Error (x,y) -> unrecoverable c y)
@@ -777,7 +805,6 @@ let writeOne c i appdata =
 
         | Handshake.OutIdle -> 
         // finally attempt to send some application data
-          frame_admit c h1 h2; 
           begin match st, appdata with
           | AD, Some (|rg,f|) ->
                ( match send c (Content.CT_Data rg f) with
@@ -788,7 +815,9 @@ let writeOne c i appdata =
        
        | _ -> unexpected "NYI"))
 
-
+////////////////////////////////////////////////////////////////////////////////
+//NS reached up to here
+////////////////////////////////////////////////////////////////////////////////
 
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
