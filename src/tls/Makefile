@@ -175,7 +175,6 @@ all-ver: IdealFlags.fst $(addsuffix .fst-ver, $(VERIFY))
 
 # Lax-checking one file at a time
 %.fst-lax: IdealFlags.fst $(LIBFILES)
-	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
@@ -183,14 +182,12 @@ all-ver: IdealFlags.fst $(addsuffix .fst-ver, $(VERIFY))
 
 # Verifying one file at a time
 %.fst-ver: IdealFlags.fst $(LIBFILES)
-	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
 %.fsti-ver: IdealFlags.fst $(LIBFILES)
-	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
