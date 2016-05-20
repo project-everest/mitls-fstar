@@ -28,10 +28,6 @@ STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
 OPTIONS=--universes --use_native_int
 
-STDLIB=FStar.Ghost.fst FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
-hyperheap/FStar.ST.fst hyperheap/FStar.All.fst FStar.Monotonic.RRef.fst FStar.Char.fsti FStar.String.fsti FStar.List.fst FStar.ListProperties.fst \
-FStar.Seq.fst FStar.SeqProperties.fst FStar.Float.fsti FStar.IO.fsti FStar.UInt8.fst
-
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
@@ -49,7 +45,7 @@ CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 # The .fst interfaces for the platform and crypto libraries.
-LIBFILES=$(addprefix $(FSTAR_HOME)/$(LIB)/, $(STDLIB)) $(PLATFORM) $(CRYPTO)
+LIBFILES=$(PLATFORM) $(CRYPTO)
 
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap 
 
