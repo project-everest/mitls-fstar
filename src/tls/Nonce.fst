@@ -34,7 +34,7 @@ let n_rid = fun (n:random) -> ex_rid
 // if it maps distinct nonces to distinct rids
 let injective (n:MM.map' random n_rid) = 
   forall n1 n2. n1<>n2 ==> (match MM.sel n n1, MM.sel n n2 with
-			  | Some r1, Some r2 -> r1 = r2
+			  | Some r1, Some r2 -> r1 <> r2
 			  | _ -> True)
 
 //nonce_rid_table:
