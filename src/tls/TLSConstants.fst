@@ -1341,17 +1341,15 @@ val pinverse_configurationExtension: x:_ -> Lemma
 let pinverse_configurationExtension x = ()
 
 // Choice: truncate when maximum length is exceeded
-// Non top-level let rec yields stack overflow during extraction
-let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
-  match ces with
-  | [] -> b
-  | ce::ces ->
-    if length (b @| configurationExtensionBytes ce) < 65536 then
-      configurationExtensionsBytes_aux (b @| configurationExtensionBytes ce) ces
-    else b
-
 val configurationExtensionsBytes: list configurationExtension -> Tot bytes
 let configurationExtensionsBytes ce =
+  let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
+    match ces with
+    | [] -> b
+    | ce::ces ->
+      if length (b @| configurationExtensionBytes ce) < 65536 then
+         configurationExtensionsBytes_aux (b @| configurationExtensionBytes ce) ces
+      else b in
   let b = configurationExtensionsBytes_aux empty_bytes ce in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
