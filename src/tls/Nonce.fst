@@ -7,8 +7,6 @@ module HH = FStar.HyperHeap
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 
-#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
-
 type random = lbytes 32
 
 let ideal = IdealFlags.ideal_Nonce // controls idealization of random sample: collision-avoidance.
@@ -92,8 +90,6 @@ let rec mkHelloRandom cs r =
       | None -> MM.extend nonce_rid_table n r; n
       | Some _ -> mkHelloRandom cs r // formally retry to exclude collisions.
   else n
-
-#reset-options
 
 val lookup: cs:role -> n:random -> ST (option (ex_rid))
   (requires (fun h -> True))
