@@ -31,7 +31,7 @@ script:
   - make -C src/tls tls-gen
 
 notifications:
-  slack
+  slack:
     rooms:
       secure: Ouq+9IrqRsd3Db8dcoaIoBKHnZnxsgzs8QAfWsxCjI++v6/PtJ9vYqpi8KMpTiGa9ERhN2NV5e7wQCkSkBMWxoyPEYraU4sYtNdDclTRfI4tzKeoi6I1jrisiVpeWsaw7fmUf+yO15cb7KVN2hPKMw6hgQ2MoEZDlkweSw20JbRrk7Uz2y0lpCcw3eJY/2BNtSP6OxHtCTcbO58CzbNIEKeMAXSQoMrrKciaXKn7YdT4mxQjzZrd4jNoMsuM+38Pck74AAxQu34KsE/oQW6O08b01tOedlbhkUlz/vbBZA8pDeEYHMOX0Q6juHH7oNeKC5/Mc6ijuzwKgzMVDppOmtT22abxMaFMnup2iXxmulp1vzJh7wR/qMpVbuLDacH4ba514Kb0GdUQuG0oc4wW4DTjLJnn+04oH4lQphKrOdB/xwwqCP8F4dDx/+93ywb8qWGqdJZ264cmB22Szvita5cA91XImSU6/3fYReOsq9LY/DLWZXcnGyBKmJ0rZQosHbezeNm5epP9hYuXo9pD7LAG40ryIS/ny+/6RwEl++S9TVx8Z/kvnWrnslA0+qZJG37W5sJDdhcFoZA7ygukPUSCxd9b+UKGZkMApENVnWL8BoP8NFICqIxXRsRm4/A9UAL1+RMwe1loQPmS652NyMtNeoBikRLD1b7kvsIIZAc=
 
