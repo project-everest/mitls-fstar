@@ -31,7 +31,7 @@ script:
   - make -C src/tls tls-gen
 
 notifications:
-  slack: everestexpedition:NqWwcvMIxouVIbC5IhF0loqX
+  slack: everestexpedition:NqWwcvMIxouVIbC5IhF0loqX#mitls-build
 
 git:
     depth: 3
