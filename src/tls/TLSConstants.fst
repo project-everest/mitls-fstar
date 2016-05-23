@@ -1075,7 +1075,7 @@ let rec distinguishedNameListBytes names =
     let name = vlbytes 2 (utf8 h) in
     name @| distinguishedNameListBytes t
 
-val parseDistinguishedNameList: data:bytes -> res:list string -> Tot (result (list string)) (decreases (length data))
+val parseDistinguishedNameList: data:bytes -> res:list dn -> Tot (result (list dn)) (decreases (length data))
 let rec parseDistinguishedNameList data res =
   if length data = 0 then
     Correct res
@@ -1090,8 +1090,10 @@ let rec parseDistinguishedNameList data res =
 	match iutf8_opt nameBytes with
         | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         | Some name ->
+	  if length (utf8 name) < 256 then
           let res = name :: res in
           parseDistinguishedNameList data res
+	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
 
 let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
