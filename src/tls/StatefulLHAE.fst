@@ -279,8 +279,8 @@ abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
                       Seq.length lg = rctr                 // no more ciphers
                     \/ c <> Entry.c (Seq.index lg rctr)      // wrong cipher
                     \/ ad =!= Entry.ad (Seq.index lg rctr))))) // wrong ad
-#reset-options 
-#set-options "--initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2 --lax" //NS: 05/12 added lax, has been failing for a while; need to dig		     
+#reset-options
+#set-options "--initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2"
 let decrypt #i #ad (State _ log seqn key) c = 
   recall log;
   recall seqn;
