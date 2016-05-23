@@ -193,16 +193,6 @@ let parse_handshake_message bytes =
 		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes cke_bytes ^ "\n"))
 
 	 | Error(z) -> print_string "...FAILED\n")
-      | '\x11' ->
-	 print_string "Parsing server configuration message...\n";
-	 (match parseServerConfiguration msg with
-	 | Correct(ch) -> print_string "...OK\n";
-	     let _,sc_bytes = split (serverConfigurationBytes(ch)) 4 in
-	     if equalBytes sc_bytes msg then ((print_string "Serializing server configuration...\n...OK\n")) else
-	       (print_string "Serializing server configuration...\nWARNING: not an inverse of parsing. ";
-		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
-		print_string ("Serialized:\n" ^ Platform.Bytes.print_bytes sc_bytes ^ "\n"))
-	 | Error(z) -> print_string "...FAILED\n")
       | '\x14' ->
 	 print_string "Parsing finished message...\n";
 	 (match parseFinished msg with
