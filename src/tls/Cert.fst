@@ -72,7 +72,9 @@ let rec parseCertificateList b =
 
 val lemma_parseCertificateList_length: b:bytes -> 
   Lemma (requires (True))
-	(ensures (is_Correct (parseCertificateList b) ==> length (certificateListBytes (Correct._0 (parseCertificateList b))) = length b))
+	(ensures (match parseCertificateList b with
+		  | Correct ces -> length (certificateListBytes ces) = length b
+		  | _ -> True))
 	(decreases (length b))
 let rec lemma_parseCertificateList_length b = 
   match parseCertificateList b with
@@ -192,9 +194,12 @@ let verify_signature c pv role nonces csa sigalgs tbs sigv =
 let rec check_length (l:list bytes) : Tot (result chain) =
   match l with
   | [] -> Correct []
-  | hd::tl -> let l' = check_length tl in
-	     if length hd < 16777216 && is_Correct l' then  Correct (hd :: Correct._0 l')
-	     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  | hd::tl ->
+    match check_length tl with
+    | Correct l' ->
+      if length hd < 16777216 then Correct (hd :: l')
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val lookup_server_chain: string -> string -> protocolVersion -> option sigAlg -> option (list sigHashAlg) -> Tot (result (chain * CoreCrypto.certkey))
 let lookup_server_chain pem key pv sa ext_sig =
