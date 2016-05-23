@@ -26,6 +26,13 @@ module HH = HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 
+//allowing inverting optResult without having to globally increase the fuel just for this
+val invertOptResult : a:Type -> b:Type -> Lemma 
+  (requires True)
+  (ensures (forall (x:optResult a b). is_Error x \/ is_Correct x))
+  [SMTPatT (optResult a b)]
+let invertOptResult a b = ()  
+
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 
 //A wrapper around Handshake.next_fragment; using monotonicity to show that 
@@ -59,16 +66,6 @@ let next_fragment s =
   let _ = if w0 >= 0
 	  then MR.testify (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog) in
   res
-
-//allowing inverting optResult without having to globally increase the fuel just for this
-// Will add a lemma to Platform.Error so that we don't have this ugly assume here
-assume InvertOptResult: forall (a:Type) (b:Type) (x:optResult a b). is_Error x \/ is_Correct x 
-(* let invertOptResult (a:Type)  (b:Type) (x:optResult a b) *)
-(*   : Lemma (requires True) *)
-(* 	  (ensures (is_Error x \/ is_Correct x)) *)
-(* 	  [] *)
-(*   = () *)
-
 
 // using also Alert, DataStream, Content, Record
 
