@@ -9,7 +9,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
-	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *~ *.out output
+	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
 
 # ------------------ Dependencies on F* & its libraries --------------
 # When using NuBuild, FStar must be located within the source tree.
