@@ -233,7 +233,6 @@ abstract val encrypt: #i:gid -> #ad:adata i
                 /\ sel h0 wr.seqn + 1 = sel h1 wr.seqn
                 /\ wider (Range.cipherRangeClass i (length c)) rg
                 /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))
-#reset-options
 let encrypt #i #ad #rg (State _ log seqn key) f =
   let n = !seqn in
   let l= !log in
@@ -266,10 +265,9 @@ abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
              /\ contains_ref rd.log h0
              /\ (let lg = sel h0 rd.log in
                 let rctr = sel h0 rd.seqn in
-               authId i
+               (authId i /\ st_dec_inv rd h0)
                ==> 
-                  st_dec_inv rd h0
-                /\ st_dec_inv rd h1
+                  st_dec_inv rd h1
                 /\ (match res with
 	     	   | Some v -> 
                        sel h1 rd.seqn = rctr + 1
@@ -278,22 +276,21 @@ abstract val decrypt: #i:gid -> #ad:adata i -> rd:reader i
 	     	   | _ ->
                       Seq.length lg = rctr                 // no more ciphers
                     \/ c <> Entry.c (Seq.index lg rctr)      // wrong cipher
-                    \/ ad =!= Entry.ad (Seq.index lg rctr))))) // wrong ad
-#reset-options
-#set-options "--initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2"
-let decrypt #i #ad (State _ log seqn key) c = 
+                    \/ ad <> Entry.ad (Seq.index lg rctr))))) // wrong ad
+let decrypt #i #ad (State _ log seqn key) c =
   recall log;
   recall seqn;
   recall (AEAD_GCM.State.log key);
   let n = !seqn in
   let ad' = LHAEPlain.makeAD i n ad in
   match AEAD_GCM.decrypt i key ad' c with
-     | Some p ->
-       seqn := n + 1;
-       Some p
-     | None   ->
-       cut (found n);
-       None
+  | Some p ->
+    seqn := n + 1;
+    Some p
+  | None   ->
+    cut (found n);
+    None
+
 
 (*** TODO ***)
 (* 
