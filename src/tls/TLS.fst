@@ -27,12 +27,27 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 
+#set-options "--initial_fuel 1 --initial_ifuel 1 --max_fuel 0 --max_ifuel 0"
+
 //allowing inverting optResult without having to globally increase the fuel just for this
 val invertOptResult : a:Type -> b:Type -> Lemma 
   (requires True)
   (ensures (forall (x:optResult a b). is_Error x \/ is_Correct x))
   [SMTPatT (optResult a b)]
 let invertOptResult a b = ()  
+
+val invertOption : a:Type -> Lemma 
+  (requires True)
+  (ensures (forall (x:option a). is_None x \/ is_Some x))
+  [SMTPatT (option a)]
+let invertOption a = ()  
+
+let outerPV c : ST protocolVersion
+  (requires (hs_inv c.hs))
+  (ensures (fun h0 pv h1 -> h0 = h1)) =
+  match Handshake.version c.hs with
+  | TLS_1p3 -> TLS_1p0
+  | pv      -> pv
 
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 
@@ -247,11 +262,6 @@ let moveToOpenState c = c.state := AD
 
 (* Dispatch dealing with network sockets *)
 // we need st_inv h c /\ wr > Init ==> is_Some epoch_w
-
-let outerPV c =
-  match Handshake.version c.hs with
-  | TLS_1p3 -> TLS_1p0
-  | pv      -> pv
 
 //15-11-27 illustrating overhead of "unrelated" updates; still missing modifies clauses
 val closeConnection: c: connection -> ST unit
@@ -575,6 +585,45 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
 //* | WriteHSComplete
 //* the state changes accordingly.
 
+let cwriter (i:id) (c:connection) = 
+  w:writer i{exists (r:reader (peerId i)). epoch_region_inv' (HS.region c.hs) r w}
+val sendFragment: c:connection -> #i:id -> wo:option(cwriter i c) -> f: Content.fragment i -> ST (result unit)
+  (requires (fun h0 -> 
+     hs_inv c.hs h0
+  /\ (match wo with 
+     | None    -> i = noId
+     | Some wr -> incrementable wr h0 
+	       /\ Map.contains h0 (StAE.region wr)
+	       /\ Map.contains h0 (StAE.log_region wr))))
+  (ensures (fun h0 r h1 -> 
+     match wo with 
+     | None    -> modifies Set.empty h0 h1 
+     | Some wr -> modifies_one (region wr) h0 h1 /\
+                 seqnT wr h1 = seqnT wr h0 + 1 /\
+                 (authId i ==> StAE.fragments wr h1 = snoc (StAE.fragments wr h0) f)
+//      /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
+  ))
+
+let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) = 
+  match wopt with 
+  | None -> Set.empty
+  | Some wr -> Set.singleton (region wr)
+  
+let sendFragment c #i wo f =
+  reveal_epoch_region_inv_all ();
+  let payload: encrypted f = 
+    match wo with
+    | None    -> Content.repr i f //16-05-20 don't understand error.
+    | Some wr -> StAE.encrypt wr f in 
+  let pv = outerPV c in //16-05-20  compare with i.pv?; Needs hs_inv
+  let ct, rg = Content.ct_rg i f in
+  lemma_repr_bytes_values (length payload);
+  let record = Record.makePacket ct pv payload in
+  let r  = Platform.Tcp.send (c.tcp) record in
+  match r with
+    | Error(x)  -> Error(AD_internal_error,x)
+    | Correct _ -> Correct()
+
 //Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
 //            How do we conclude that after these two calls all the appData was written?
 // CF: this is guarantees only when returning Written.
@@ -726,22 +775,22 @@ let writeOne c i appdata =
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 
-let send_requires' (c:connection) (i:id) (h:HH.t) = 
-    let st = sel h c.state in
-    let es = epochs c h in
-    let j = iT c.hs Writer h in
-    (* j < Seq.length es /\ *)
-    st_inv c h /\
-    st <> Close /\
-    st <> Half Reader   /\
-    (j < 0 ==> i = noId) /\
-    (j >= 0 ==> (
-       let e = Seq.index es j in
-       let wr = writer_epoch e in
-       Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
-       Map.contains h (StAE.log_region wr)))(*  /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property *)
-       (* i = hsId e.h))(\*  /\ *\) *)
-       (* (\* incrementable (writer_epoch e) h)) *\) *)
+(* let send_requires' (c:connection) (i:id) (h:HH.t) =  *)
+(*     let st = sel h c.state in *)
+(*     let es = epochs c h in *)
+(*     let j = iT c.hs Writer h in *)
+(*     (\* j < Seq.length es /\ *\) *)
+(*     st_inv c h /\ *)
+(*     st <> Close /\ *)
+(*     st <> Half Reader   /\ *)
+(*     (j < 0 ==> i = noId) /\ *)
+(*     (j >= 0 ==> ( *)
+(*        let e = Seq.index es j in *)
+(*        let wr = writer_epoch e in *)
+(*        Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property *)
+(*        Map.contains h (StAE.log_region wr)))(\*  /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property *\) *)
+(*        (\* i = hsId e.h))(\\*  /\ *\\) *\) *)
+(*        (\* (\\* incrementable (writer_epoch e) h)) *\\) *\) *)
 
 let writeOne c i appdata =
   let h0 = ST.get() in

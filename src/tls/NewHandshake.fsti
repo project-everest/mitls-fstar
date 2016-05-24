@@ -26,8 +26,8 @@ open HSCrypto
 open StAE
 
 module HH = FStar.HyperHeap
-module MS = MonotoneSeq
 module MR = FStar.Monotonic.RRef
+module MS = MonotoneSeq
 
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
@@ -171,7 +171,6 @@ let reveal_epochs_inv' (u:unit)
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
 val handshake_state : role -> Type0
-(* #reset-options "--z3timeout 3 --initial_fuel 2 --max_fuel 2 --initial_ifuel 2 --max_ifuel 2" *)
 
 let resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
 
