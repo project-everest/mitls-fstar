@@ -162,7 +162,6 @@ MAC \
 StatefulLHAE \
 MAC_SHA256 \
 MAC_SHA1 \
-HandshakeMessages \
 StAE \
 StreamDeltas \
 Connection \
