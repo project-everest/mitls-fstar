@@ -25,7 +25,7 @@ open HandshakeMessages
 open HSCrypto
 open StAE
 
-module HH = HyperHeap
+module HH = FStar.HyperHeap
 module MS = MonotoneSeq
 module MR = FStar.Monotonic.RRef
 
@@ -156,9 +156,17 @@ abstract let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
     let ej = Seq.index es j in
     parent (region ei.w) = parent (region ej.w) /\  //they all descend from a common epochs sub-region of the connection
     disjoint (region ei.w) (region ej.w)           //each epoch writer lives in a region disjoint from the others
- 
-let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv es }
 
+abstract let epochs_inv' (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) = epochs_inv es
+
+let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv' es }
+
+let reveal_epochs_inv' (u:unit)
+  : Lemma (forall (r:rgn) (#n:TLSInfo.random) (es:seq (epoch r n)). {:pattern (epochs_inv' es)}
+	     epochs_inv' es
+	     <==>
+	     epochs_inv es)
+  = ()
 
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
