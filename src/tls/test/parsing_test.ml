@@ -53,6 +53,7 @@ let print_error error =
   | AD_insufficient_security -> "Insufficient security error:"
   | AD_internal_error -> "Internal error:"
   | AD_user_cancelled_fatal -> "User canceled error:"
+  | AD_missing_extension -> "Missing extension error:"
   | AD_unsupported_extension -> "Unsupported extension error:"
   | AD_user_cancelled_warning -> "User canceled error:"
   | AD_no_renegotiation -> "No renegotiation error:"
@@ -261,7 +262,7 @@ let parse_trace_file file =
   let fbytes = Bytes.create 1000000 in
   let flag = input file fbytes 0 65536 in
   if flag = 0 then print_string "Reached EOF\n"
-  else print_string ("Read ??? " (* ^ (string_of_int flag) ^ *) ^  " characters\n");
+  else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
   let bytes = Bytes.sub fbytes 0 flag in
   let hs = { bl = [bytes]; max = flag; index = 0; length = flag; } in
   parse_handshake hs;
