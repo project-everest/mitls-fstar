@@ -731,6 +731,30 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (* )))) *)
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60"  
 
+let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) = 
+  match wopt with 
+  | None -> True
+  | Some w -> 
+    iT c.hs Writer h >= 0
+    /\ (let epoch_i = eT c.hs Writer h in 
+       w == Epoch.w epoch_i)
+	
+(* let sendHandshakeCCS (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool) *)
+(*   : ST (result unit) *)
+(*        (requires (fun h -> is_current_writer wopt h /\ sendFragment_requires wopt h)) *)
+(*        (ensures (fun h0 r h1 -> modifies_just (regions wopt) h0 h1)) *)
+(*   =  let result0 = // first try to send handshake fragment, if any *)
+(*          match om with  *)
+(*          | None             -> Correct()  *)
+(*          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in //wrong epoch, use sendFragment instead! *)
+(*      // then try to send CCS fragment, if requested *)
+(*      match result0 with  *)
+(*      | Error e -> Error e *)
+(*      | _ ->  *)
+(*        if not send_ccs  *)
+(*        then result0 *)
+(*        else sendFragment c wopt (Content.CT_CCS #i (abyte 1z)) //wrong epoch, use sendFragment instead! *)
+
 let writeOne c i appdata =
   let h0 = ST.get() in
   let wopt = current_writer c i in
