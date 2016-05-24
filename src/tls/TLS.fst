@@ -592,43 +592,63 @@ let cwriter (i:id) (c:connection) =
   w:writer i{exists (r:reader (peerId i)).{:pattern (trigger_peer r)}
 	       epoch_region_inv' (HS.region c.hs) r w}
 
-val sendFragment: c:connection -> #i:id -> wo:option(cwriter i c) -> f: Content.fragment i -> ST (result unit)
-  (requires (fun h0 -> 
-     hs_inv c.hs h0
+private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i c))
+  : ST bool
+    (requires (fun h -> True))
+    (ensures (fun h0 b h1 -> 
+	      h0 = h1 
+	      /\ (b <==> (match wopt with 
+		        | None -> True
+			| Some w -> incrementable w h1))))
+  = admit()//TODO
+
+let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
+     st_inv c h 
   /\ (match wo with 
      | None    -> i = noId
-     | Some wr -> incrementable wr h0 
-	       /\ Map.contains h0 (StAE.region wr)
-	       /\ Map.contains h0 (StAE.log_region wr))))
+     | Some wr ->  Map.contains h (StAE.region wr)
+	       /\ Map.contains h (StAE.log_region wr))
+
+#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
+
+let ad_overflow : result unit = Error (AD_record_overflow, "overflow")
+
+val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
+  (requires (sendFragment_requires wo))
   (ensures (fun h0 r h1 -> 
-     match wo with 
-     | None    -> modifies Set.empty h0 h1 
-     | Some wr -> modifies_one (region wr) h0 h1 /\
-                 seqnT wr h1 = seqnT wr h0 + 1 /\
-                 (authId i ==> StAE.fragments wr h1 = snoc (StAE.fragments wr h0) f)
-//      /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
-  ))
+    (r=ad_overflow ==> is_Some wo /\ not(incrementable (Some.v wo) h1))
+    /\ (is_None wo \/ r=ad_overflow ==> modifies Set.empty h0 h1)
+    /\ (is_Some wo /\ r<>ad_overflow ==> 
+	(let wr = Some.v wo in
+ 	   modifies_one (region wr) h0 h1 
+        /\ seqnT wr h1 = seqnT wr h0 + 1 
+        /\ (authId i ==> StAE.fragments wr h1 = snoc (StAE.fragments wr h0) f)))))
 
 let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) = 
   match wopt with 
   | None -> Set.empty
   | Some wr -> Set.singleton (region wr)
-  
+
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
-  let payload: encrypted f = 
-    match wo with
-    | None    -> Content.repr i f //16-05-20 don't understand error.
-    | Some wr -> StAE.encrypt wr f in 
-  let pv = outerPV c in //16-05-20  compare with i.pv?; Needs hs_inv
-  let ct, rg = Content.ct_rg i f in
-  lemma_repr_bytes_values (length payload);
-  let record = Record.makePacket ct pv payload in
-  let r  = Platform.Tcp.send (c.tcp) record in
-  match r with
-    | Error(x)  -> Error(AD_internal_error,x)
-    | Correct _ -> Correct()
-
+  if not (check_incrementable wo)
+  then ad_overflow
+  else begin
+       let payload: encrypted f = 
+           match wo with
+	   | None    -> Content.repr i f //16-05-20 don't understand error.
+	   | Some wr -> StAE.encrypt wr f in 
+       let pv = outerPV c in //16-05-20  compare with i.pv?; Needs hs_inv
+       let ct, rg = Content.ct_rg i f in
+       lemma_repr_bytes_values (length payload);
+       let record = Record.makePacket ct pv payload in
+       let r  = Platform.Tcp.send (c.tcp) record in
+       match r with
+       | Error(x)  -> Error(AD_internal_error,x)
+       | Correct _ -> Correct()
+  end       
+       
+  
 let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot Type0 = 
     let hs = c.hs in 
     let ix = iT hs Writer h in
@@ -658,7 +678,35 @@ let current_writer c i =
        let e = Seq.index epochs ix in
        let _ = cut (trigger_peer (Epoch.r e)) in
        Some (Epoch.w e)
-  
+
+
+private val sendAlert : c:connection -> i:id -> ST (option ioresult_w)
+  (requires (send_requires c i))
+  (ensures (fun h0 o h1 -> is_None o ==> modifies_one (Alert.region c.alert) h0 h1))
+let sendAlert c i =
+  let wopt = current_writer c i in 
+  let st = !c.state in
+  let alert_response = Alert.next_fragment c.alert in
+  match alert_response with
+  | Some ad ->
+    begin
+      match sendFragment c #i wopt (Content.ct_alert i ad) with
+      | Error xy -> Some (unrecoverable c (snd xy))
+      | Correct _   ->
+          if ad = AD_close_notify then
+            begin // graceful closure
+              c.state := (if st = Half Writer then Close else Half Reader);
+              Some SentClose
+            end
+          else
+            begin
+              closeConnection c;
+              Some (WriteError (Some ad) "")
+            end
+    end
+ | _ -> None
+ 
+
 //Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
 //            How do we conclude that after these two calls all the appData was written?
 // CF: this is guaranteed only when returning Written.
@@ -681,6 +729,55 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C.region c)) h0 h1 *)
 (* )))) *)
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60"  
+
+let writeOne c i appdata =
+  let h0 = ST.get() in
+  let wopt = current_writer c i in
+  // alerts have highest priority; we send only close_notify and fatal alerts
+  match sendAlert c i with 
+  | Some io_res -> io_res //done; we just sent an alert
+  | _ -> 
+    match next_fragment i c.hs with
+    | Handshake.OutError (x,y) -> unrecoverable c y // a bit blunt
+    | Handshake.Outgoing om send_ccs next_keys complete ->
+      let result0 = // first try to send handshake fragment, if any
+          match om with 
+          | None             -> Correct() 
+          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in //wrong epoch, use sendFragment instead!
+	
+      let result1 = // then try to send CCS fragment, if requested
+	  match result0 with 
+	  | Error e -> Error e
+	  | _ -> 
+	    if not send_ccs 
+	    then result0
+	    else sendFragment c wopt (Content.CT_CCS #i (abyte 1z)) in //wrong epoch, use sendFragment instead!
+	    
+      // then consider key changes (TODO:restore precise checks and error handling)
+      match result1 with 
+      | Error (_,y) -> unrecoverable c y
+      | _   -> 
+        if next_keys           then c.state := BC; // much happening ghostly
+        let st = !c.state in
+        if complete && st = BC then c.state := AD; // much happening ghostly too
+        if complete            
+	then WriteHSComplete
+        else if is_Some om && send_ccs 
+	then WriteAgain
+        else match st, appdata with // finally attempt to send some application data; we may statically know that st = AD
+	     | AD, Some (|rg,f|) -> begin
+	       match sendFragment c wopt (Content.CT_Data rg f) with
+	       | Error (_,y) -> unrecoverable c y
+	       | _   -> Written (* Fairly, tell we're done, and we won't write more data *)
+	       end
+             | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
+		        
+
+
+
+
+
 
 (* the rest of the spec below still uses the old state machine
     // TODO: conditionally prove that i == epoch_id (epoch_w_h c h), at least when appdata is set.
@@ -827,79 +924,9 @@ let writeOne c i appdata =
 (*        (\* i = hsId e.h))(\\*  /\ *\\) *\) *)
 (*        (\* (\\* incrementable (writer_epoch e) h)) *\\) *\) *)
 
-#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60"
+(* #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60" *)
 
-assume val admit_incrementable : #c:connection -> #i:id -> wopt:option (cwriter i c) -> ST unit
-  (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> 
-	      h0 = h1 
-	      /\ (match wopt with 
-		 | None -> True
-		 | Some w -> incrementable w h1)))
-let writeOne c i appdata =
-  let h0 = ST.get() in
-  let st = !c.state in
-  assert (send_requires c i h0);
-  // alerts have highest priority; we send only close_notify and fatal alerts
-  let alert_response = Alert.next_fragment c.alert in
-  let h1 = ST.get() in
 
-  frame_iT c.hs Writer h0 h1 (Set.singleton (Alert.region c.alert));
-  match alert_response with
-  | Some ad -> 
-    begin 
-      match send c #i (Content.ct_alert i ad) with 
-      | Error (x,y) -> unrecoverable c y 
-      | Correct()   ->
-          if ad = AD_close_notify then 
-            begin // graceful closure
-              c.state := (if st = Half Writer then Close else Half Reader);
-              SentClose
-            end
-          else 
-            begin 
-              closeConnection c;
-              WriteError (Some ad) ""
-            end  
-    end
-  | _ ->  // next we check if there is outgoing Handshake traffic
-
-      ( let wopt = current_writer c i in
-        let hs_response = next_fragment i c.hs in
-        (match hs_response with
-        | Handshake.OutError (x,y) -> unrecoverable c y // a bit blunt
-        | Handshake.Outgoing om send_ccs next_keys complete -> (
-
-            let result0 = // first try to send handshake fragment, if any
-              (match om with 
-              | None             -> Correct() 
-              | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f)) in //wrong epoch, use sendFragment instead!
-	
-	   let result1 = // then try to send CCS fragment, if requested
-              (match result0, send_ccs with
-              | Error e, _       -> Error e 
-              | Correct _, false -> Correct()
-              | Correct _, true  -> 
-		admit_incrementable wopt;
-	 	sendFragment c wopt (Content.CT_CCS #i (abyte 1z))) in //wrong epoch, use sendFragment instead!
-            // then consider key changes (TODO:restore precise checks and error handling)
-            (match result1 with 
-            | Error (x,y) -> unrecoverable c y 
-            | Correct _   -> 
-                  if next_keys           then c.state := BC; // much happening ghostly
-                  let st = !c.state in
-                  if complete && st = BC then c.state := AD; // much happening ghostly too
-                  if complete                    then WriteHSComplete
-                  else if is_Some om && send_ccs then WriteAgain
-                  else match st, appdata with // finally attempt to send some application data; we may statically know that st = AD
-		       | AD, Some (|rg,f|) ->
-			 admit_incrementable wopt;
-			 ( match sendFragment c wopt (Content.CT_Data rg f) with
-			   | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
-		 	   | Error (x,y) -> unrecoverable c y)
-		       | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
-		        
-))))        
 
 (*16-05-20 stopped here, trying new HS interface. 
 

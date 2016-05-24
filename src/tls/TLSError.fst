@@ -38,6 +38,7 @@ type alertDescription =
     | AD_missing_extension
     | AD_unsupported_extension
 
+
 let isFatal ad =
     match ad with
     | AD_unexpected_message
@@ -69,7 +70,10 @@ type error = alertDescription * string
 
 type result 'a = Platform.Error.optResult error 'a
 
+
 open Platform.Error
+
+
 val resT: r:result 'a { Platform.Error.is_Correct r } -> Tot 'a
 let resT (Platform.Error.Correct v) = v
 
