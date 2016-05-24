@@ -127,7 +127,7 @@ TLS.fst #the preceding space is significant!
 # should be added here.
 #
 # Missing modules from FSTS:
-# Cert, TLSExtensions, Encode, ENC, HandshakeMessages, Record, HSCrypto,
+# TLSExtensions, Encode, ENC, HandshakeMessages, Record, HSCrypto,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
 VERIFY= \
@@ -145,6 +145,7 @@ PMS \
 HASH \
 HMAC \
 Signature \
+Cert \
 TLSInfo \
 IdNonce \
 Range \
@@ -161,6 +162,7 @@ MAC \
 StatefulLHAE \
 MAC_SHA256 \
 MAC_SHA1 \
+HandshakeMessages \
 StAE \
 StreamDeltas \
 Connection \
