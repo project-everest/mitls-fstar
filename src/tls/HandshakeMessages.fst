@@ -12,7 +12,7 @@ open TLSInfo
 open Range
 open CommonDH
 
-#set-options "--lax"
+//#set-options "--lax"
 
 (* JK: for verification purposes the "--lax" flag is set throughout the file in order to
    skip the already verified part of it.
@@ -224,7 +224,6 @@ type hs_msg =
   | Certificate of crt
   | ClientKeyExchange of cke
   | CertificateVerify of cv
-  | ServerConfiguration of sc
   | Finished of fin
   | NextProtocol of np
   | HelloRequest
@@ -295,6 +294,12 @@ let rec list_valid_to_valid_list l =
   match l with
   | [] -> []
   | hd::tl -> hd::(list_valid_to_valid_list tl)
+
+val valid_list_to_list_valid: l':list (c:cipherSuite{validCipherSuite c}) -> Tot (l:valid_cipher_suites{List.Tot.length l = List.Tot.length l'})
+let rec valid_list_to_list_valid l = 
+  match l with
+  | [] -> []
+  | hd::tl -> hd::(valid_list_to_list_valid tl)
 
 (* JK: changed the serialization of the compression methods to match the spec *)
 val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) // JK: used to be 42 but cannot prove it with current specs. Is there a minimal length of 1 for the session ID maybe ?
@@ -509,18 +514,27 @@ let clientHelloBytes_is_injective msg1 msg2 =
    end
   else ()
 
-(* This function adds a "first connection" renegotiation info
-   extension to the client hello when parsing it. The cipher suite
-   parsing ignores some of them. For these two reasons, the
-   serialization function is not an inverse of the parsing function as
-   it is now *)
-val parseClientHello : data:bytes{repr_bytes(length data) <= 3} 
-  -> Tot  (result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data)
-                                 /\ x.ch_protocol_version = x'.ch_protocol_version 
-                                 /\ x.ch_client_random = x'.ch_client_random
-                                 /\ x.ch_sessionID = x'.ch_sessionID }))
+(* JK: to work around a subtyping difficulty in parseClientHello *)
+val coercion_helper: o:option (list extension){is_Some o ==> List.Tot.length (Some.v o) < 256} -> 
+  Tot (x:option (l:list extension{List.Tot.length l < 256}))
+let coercion_helper o = 
+  match o with
+  | None -> None
+  | Some li -> (cut (List.Tot.length li < 256); Some li)
+
+(* This function adds a "first connection" renegotiation info *)
+(*    extension to the client hello when parsing it. The cipher suite *)
+(*    parsing ignores some of them. For these two reasons, the *)
+(*    serialization function is not an inverse of the parsing function as *)
+(*    it is now *)
+(* JK: Do we want the specification to be that precise ? I weakened it for now *)
+(* val parseClientHello : data:bytes{repr_bytes(length data) <= 3} *)
+(*   -> Tot  (result (x:ch{exists (x':ch). Seq.equal (clientHelloBytes x') (messageBytes HT_client_hello data) *)
+(*                                  /\ x.ch_protocol_version = x'.ch_protocol_version *)
+(*                                  /\ x.ch_client_random = x'.ch_client_random *)
+(*                                  /\ x.ch_sessionID = x'.ch_sessionID })) *)
+val parseClientHello: data:bytes{repr_bytes(length data) <= 3} -> Tot (result ch)
 let parseClientHello data =
-  admit(); // JK: TODO
   if length data < 35 then
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   else
@@ -540,11 +554,10 @@ let parseClientHello data =
 	       (match parseCipherSuites clCiphsuitesBytes with
 	        | Error z -> Error z
 	        | Correct clientCipherSuites ->
-
-                  // ADL More relaxed parsing for old ClientHello messages with
-                  // no compression and no extensions
+                  (* ADL More relaxed parsing for old ClientHello messages with *)
+                  (* no compression and no extensions *)
                   let compExts =
-  	            if length data >= 1 then
+  	            if length data >= 1 && List.Tot.length clientCipherSuites < 256 then
 		    (match vlsplit 1 data with
 		     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
 		     | Correct (cmBytes,extensions) ->
@@ -556,26 +569,30 @@ let parseClientHello data =
 			      | None -> true
 			      | Some l -> List.Tot.length l < 256)
 			     && List.Tot.length cm < 256
-			     && List.Tot.length clientCipherSuites < 256
-			  then Correct (cm, exts)
+			     && List.Tot.length cm > 0
+			  then (
+			    let exts = coercion_helper exts in
+			    Correct (cm, exts)
+			    )
  			  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
                      (* else Correct ([], None) in *) // JK: there has to be a compression method
 						      // according to the spec
-                     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") in
-						                      
+                     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") in            
                      (match compExts with
-                     | Correct (cm, exts) ->
+                     | Correct (cm, exts) -> (
+			 cut (List.Tot.length clientCipherSuites < 256);
+			 let cCS = valid_list_to_list_valid clientCipherSuites in
                             Correct ({
                               ch_protocol_version = cv;
                               ch_client_random = cr;
                               ch_sessionID = sid;
-                              ch_cipher_suites = clientCipherSuites;
+                              ch_cipher_suites = cCS;
                               ch_raw_cipher_suites = Some clCiphsuitesBytes;
                               ch_compressions = cm;
                               ch_extensions = exts;
                           })
+			)
                       | Error e -> Error e))
-
 //		  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 	       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
 	   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
@@ -718,13 +735,12 @@ let serverHelloBytes_is_injective msg1 msg2 =
 //#set-options "--lax"
 
 (* JK: should return a valid_sh to match the serialization function *)
+(* JK: same as parseClientHello, weakening spec to get verification *)
 val parseServerHello: data:bytes{repr_bytes(length data) <= 3}  
-  -> Tot (result (x:valid_sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)}))
-(* JK: old declaration *)
+  -> Tot (result (x:valid_sh))
 (* val parseServerHello: data:bytes{repr_bytes(length data) <= 3}   *)
 (*   -> Tot (result (x:sh{Seq.equal (serverHelloBytes x) (messageBytes HT_server_hello data)})) *)
 let parseServerHello data =
-  admit(); // JK: TODO
   if length data < 34 then
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   else
@@ -743,10 +759,11 @@ let parseServerHello data =
 	       | Error z -> Error z
 	       | Correct exts ->
 		 if (match exts with 
-		     | None -> true // JK: check how to handle the no extension case (empty variable
+		     | None -> false // JK: check how to handle the no extension case (empty variable
 				    // length vector according to the spec
 		     | Some l -> List.Tot.length l < 256)
 		 then
+		   let exts = coercion_helper exts in
 		   correct ({
 		     sh_protocol_version = serverVer;	  
 		     sh_server_random = serverRandomBytes;
@@ -759,7 +776,9 @@ let parseServerHello data =
 	else 
 	  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
        | _ ->
-         (match vlsplit 1 data with
+         (
+	   if length data >= 1 then
+	   match vlsplit 1 data with
           | Error z -> Error z
           | Correct (sid,data) ->
             if length sid <= 32 then
@@ -780,6 +799,7 @@ let parseServerHello data =
 			     | None -> true
 			     | Some l -> List.Tot.length l < 256)
 			 then
+			   let exts = coercion_helper exts in
 		           correct ({
 		             sh_protocol_version = serverVer;	      
 		             sh_server_random = serverRandomBytes;
@@ -788,6 +808,7 @@ let parseServerHello data =
 		             sh_compression = Some NullCompression;
 		             sh_extensions = exts})
 			 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))))
+	      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 	      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
 
@@ -872,21 +893,33 @@ let certificateBytes_is_injective pv c1 c2 =
 // SZ: I think this should be
 // val parseCertificate: pv:protocolVersion -> data:bytes{3 <= length data /\ repr_bytes (length data - 3) <= 3} 
 //  -> Tot (result (r:crt{Seq.equal (certificateBytes r) (messageBytes HT_certificate data)}))
-(* JK: changed the returned result to a 'valid_crt' to match serialization spec.
-   It means that for non TLS1.3 certificates the parsing we would be too strict of 1 byte *)
+(* val parseCertificate: pv:protocolVersion -> data:bytes{repr_bytes (length data) <= 3}  *)
+(*   -> Tot (result (r:valid_crt{Seq.equal (certificateBytes pv r) (messageBytes HT_certificate data)})) *)
 val parseCertificate: pv:protocolVersion -> data:bytes{repr_bytes (length data) <= 3} 
-  -> Tot (result (r:valid_crt{Seq.equal (certificateBytes pv r) (messageBytes HT_certificate data)}))
+  -> Tot (result (r:valid_crt))
 let parseCertificate pv data = 
-  admit(); // JK: TODO
-    let data = (if (pv = TLS_1p3) then snd (split data 1) else data) in (* TODO: check that the header byte is 0x00 *)
-    if length data >= 3 then
+    let data = (
+      if (pv = TLS_1p3) then (
+	if length data >= 1 then Correct (snd (split data 1)) else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
+      else Correct data
+      ) in (* TODO: check that the header byte is 0x00 *)
+    match data with
+    | Correct data -> (
+      if length data >= 3 then
         match vlparse 3 data with
         | Error z -> let (x,y) = z in Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ y)
 	| Correct (certList) ->
 	    (match Cert.parseCertificateList certList with
-	    | Correct(l) -> Correct ({crt_chain = l})
+	    | Correct(l) -> 
+		if length certList < 16777212 then (
+		  Cert.lemma_parseCertificateList_length certList;
+		  Correct ({crt_chain = l})
+		 )
+		else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
             | Error z -> let (x,y) = z in Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ y))
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    )
+   | Error z -> Error z
 
 (* JK: TODO: rewrite taking the protocol version as an extra parameter, otherwise not injective *)
 val certificateRequestBytes: cr -> Tot (b:bytes{hs_msg_bytes HT_certificate_request b})
@@ -919,12 +952,67 @@ let rec certificateTypeListBytes_is_injective ctl1 ctl2 =
     )
   | _, _ -> () 
 
-(* JK: TODO *)
-assume val distinguishedNameListBytes_is_injective: n1:list dn -> n2:list dn -> 
+#reset-options
+
+let lemma_distinguishedNameListBytes_def (n:list dn{is_Cons n /\ repr_bytes (length (utf8 (Cons.hd n))) <= 2}) : Lemma
+  (distinguishedNameListBytes n = (vlbytes 2 (utf8 (Cons.hd n)) @| distinguishedNameListBytes (Cons.tl n))) = ()
+
+let lemma_distinguishedNameListBytes_def2 (n:list dn{is_Nil n}) : Lemma (distinguishedNameListBytes n = empty_bytes) = ()
+
+(* TODO: port to Platform.Bytes *)
+assume val utf8_is_injective: s:string -> s':string -> 
+  Lemma (requires (True))
+	(ensures (Seq.equal (utf8 s) (utf8 s') ==> s = s'))
+
+val distinguishedNameListBytes_is_injective: n1:list dn -> n2:list dn -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (distinguishedNameListBytes n1) (distinguishedNameListBytes n2) ==> n1 = n2))
+let rec distinguishedNameListBytes_is_injective n1 n2 = 
+  match n1, n2 with
+  | [],[] -> ()
+  | hd::tl, hd'::tl' -> 
+      let payload1 = distinguishedNameListBytes n1 in
+      let payload2 = distinguishedNameListBytes n2 in
+      if payload1 = payload2 then (
+	lemma_repr_bytes_values (length (utf8 hd'));
+	lemma_repr_bytes_values (length (utf8 hd));
+	lemma_distinguishedNameListBytes_def n1;
+	lemma_distinguishedNameListBytes_def n2;
+	cut (forall b b'. {:pattern (b@|b')} (b@|b') = Seq.append b b');
+	Seq.lemma_eq_refl payload1 payload2;
+	cut (Seq.equal ((vlbytes 2 (utf8 hd)) @| (distinguishedNameListBytes tl))
+		       ((vlbytes 2 (utf8 hd')) @| (distinguishedNameListBytes tl')));	
+	cut (Seq.equal (Seq.append (vlbytes 2 (utf8 hd)) (distinguishedNameListBytes tl))
+		       (Seq.append (vlbytes 2 (utf8 hd')) (distinguishedNameListBytes tl')));
+        cut (Seq.index (vlbytes 2 (utf8 hd)) 0 = Seq.index payload1 0);
+        cut (Seq.index (vlbytes 2 (utf8 hd)) 1 = Seq.index payload1 1);
+        cut (Seq.index (vlbytes 2 (utf8 hd')) 0 = Seq.index payload2 0);
+        cut (Seq.index (vlbytes 2 (utf8 hd')) 1 = Seq.index payload2 1);
+	cut (Seq.index payload1 0 = Seq.index payload2 0);
+        cut (Seq.index payload1 1 = Seq.index payload2 1);		
+	vlbytes_length_lemma 2 (utf8 hd) (utf8 hd');	
+	lemma_append_inj (vlbytes 2 (utf8 hd)) (distinguishedNameListBytes tl) (vlbytes 2 (utf8 hd')) (distinguishedNameListBytes tl');
+	distinguishedNameListBytes_is_injective tl tl';
+	lemma_vlbytes_inj 2 (utf8 hd) (utf8 hd');
+	utf8_is_injective hd hd'
+      )
+  | [],hd::tl -> (
+      lemma_repr_bytes_values (length (utf8 hd));
+      lemma_distinguishedNameListBytes_def n2;
+      lemma_distinguishedNameListBytes_def2 n1;
+      cut (forall b b'. {:pattern (b@|b')} (b@|b') = Seq.append b b');
+      cut (length (distinguishedNameListBytes n2) >= 2);
+      cut (length (distinguishedNameListBytes n1) = 0)
+      )
+  | hd::tl,[] -> (
+      lemma_repr_bytes_values (length (utf8 hd));
+      lemma_distinguishedNameListBytes_def n1;
+      lemma_distinguishedNameListBytes_def2 n2;
+      cut (forall b b'. {:pattern (b@|b')} (b@|b') = Seq.append b b');
+      cut (length (distinguishedNameListBytes n1) >= 2);
+      cut (length (distinguishedNameListBytes n2) = 0)
+      )
 
-#reset-options
 //#set-options "--lax"
 
 val certificateRequestBytes_is_injective: c1:cr -> c2:cr -> 
@@ -966,20 +1054,21 @@ let certificateRequestBytes_is_injective c1 c2 =
 val parseCertificateRequest: pv:protocolVersion -> data:bytes{repr_bytes(length data) <= 3} -> 
                              Tot (result cr)
 let parseCertificateRequest version data =
-  admit(); // JK: TODO
     if length data >= 1 then
         match vlsplit 1 data with
         | Error(z) -> Error(z)
         | Correct (res) ->
         let (certTypeListBytes,data) = res in
         let certTypeList = parseCertificateTypeList certTypeListBytes in
+	if List.Tot.length certTypeList < 256 then (
         if length data >= 2 then
             match version with
             | TLS_1p2 -> 
             (match vlsplit 2 data with
             | Error(z) -> Error(z)
             | Correct  (x,y) ->
-            if length y >= 2 then
+            if length y >= 2 then begin
+	       lemma_repr_bytes_values (length x);
                match parseSigHashAlgs (vlbytes 2 x) with
                | Error(z) -> Error(z)
                | Correct (sigAlgs) -> 
@@ -989,21 +1078,27 @@ let parseCertificateRequest version data =
                match parseDistinguishedNameList y [] with
                | Error(z) -> Error(z)
                | Correct (distNamesList) ->
+		 if List.Tot.length distNamesList < 128 && List.Tot.length sigAlgs < 256 then
                  correct (
                  {cr_cert_types = certTypeList;
                   cr_sig_hash_algs = Some sigAlgs;
                   cr_distinguished_names = distNamesList})
+		 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+	    end
             else      
                Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
             | _ ->
                match parseDistinguishedNameList data [] with
                | Error(z) -> Error(z)
                | Correct (distNamesList) ->
+		 if List.Tot.length distNamesList < 128 then
                  correct (
                  {cr_cert_types = certTypeList;
                   cr_sig_hash_algs = None;
                   cr_distinguished_names = distNamesList})
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+		 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") 
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 let mk_certificateRequestBytes sign cs version =
@@ -1014,7 +1109,6 @@ let mk_certificateRequestBytes sign cs version =
                          | _ -> None);
      cr_distinguished_names = []})                    
 
-
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
 open CoreCrypto
@@ -1023,9 +1117,6 @@ let kex_c_of_dh_key kex =
   match kex with
   | FFKey k -> KEX_C_DHE k.dh_public
   | ECKey k -> KEX_C_ECDHE (ECGroup.serialize_point k.ec_params k.ec_point)
-
-#reset-options
-//#set-options "--lax"
 
 (* JK: TODO: add the kex as an extra parameter, otherwise not injective *)
 val clientKeyExchangeBytes: protocolVersion -> cke -> Tot (b:bytes{hs_msg_bytes HT_client_key_exchange b})
@@ -1054,9 +1145,6 @@ let clientKeyExchangeBytes pv cke =
   lemma_repr_bytes_values (length kexB);
   messageBytes HT_client_key_exchange kexB
 
-#reset-options 
-//#set-options "--lax"
-
 val clientKeyExchangeBytes_is_injective: pv:protocolVersion -> cke1:cke -> cke2:cke ->
   Lemma (requires (True))
 	(ensures (Seq.equal (clientKeyExchangeBytes pv cke1) (clientKeyExchangeBytes pv cke2) ==> cke1 = cke2))
@@ -1068,11 +1156,12 @@ let clientKeyExchangeBytes_is_injective pv cke1 cke2 =
   else if clientKeyExchangeBytes pv cke1 = clientKeyExchangeBytes pv cke2 then (
     ()
   ) else ()
-    
+
+(* val parseClientKeyExchange: p:protocolVersion -> kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} ->  *)
+(*     Tot (result (cke:cke{Seq.equal (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)})) *)
 val parseClientKeyExchange: p:protocolVersion -> kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    Tot (result (cke:cke{Seq.equal (clientKeyExchangeBytes p cke) (messageBytes HT_client_key_exchange b)}))
+    Tot (result cke)
 let parseClientKeyExchange pv kex data = 
-  admit(); // TODO
   match pv,kex with
   | _,Kex_DH -> 
       if length data = 0 
@@ -1082,22 +1171,24 @@ let parseClientKeyExchange pv kex data =
       if length data >= 2
       then (match vlparse 2 data with
            | Error(z) -> Error(z)
-           | Correct(y) -> Correct({cke_kex_c = KEX_C_DHE y}))
+           | Correct(y) -> (lemma_repr_bytes_values (length y); Correct({cke_kex_c = KEX_C_DHE y})))
       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   | _,Kex_ECDHE -> 
       if length data >= 1
       then (match vlparse 1 data with
            | Error(z) -> Error(z)
-           | Correct(y) -> Correct({cke_kex_c = KEX_C_ECDHE y}))
+           | Correct(y) -> (lemma_repr_bytes_values (length y); Correct({cke_kex_c = KEX_C_ECDHE y})))
       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   | SSL_3p0,Kex_RSA -> 
       if length data < 4096 then
-         Correct({cke_kex_c = KEX_C_RSA data})
+         (lemma_repr_bytes_values (length data); Correct({cke_kex_c = KEX_C_RSA data}))
       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   | _,Kex_RSA  -> 
         if length data >= 2 then
             match vlparse 2 data with
-            | Correct (encPMS) -> correct({cke_kex_c = KEX_C_RSA encPMS})
+            | Correct (encPMS) -> 
+	      if length encPMS < 4096 then (lemma_repr_bytes_values (length encPMS); correct({cke_kex_c = KEX_C_RSA encPMS}))
+	      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
             | Error(z) -> Error(z)
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
@@ -1111,8 +1202,6 @@ let kex_s_to_bytes kex =
   match kex with
   | KEX_S_DHE k -> CommonDH.serialize k 
   | KEX_S_RSA pk -> (*TODO: Ephemeral RSA*) empty_bytes
-
-#reset-options
 
 (* JK: TODO, or rewrite the functions altogether *)
 assume val commonDH_serialize_is_injective: k1:CommonDH.key -> k2:CommonDH.key -> 
@@ -1149,26 +1238,29 @@ assume val serverKeyExchangeBytes_is_injective: s1:ske -> s2:ske ->
   (*   kex_s_to_bytes_is_injective s1.ske_kex_s s2.ske_kex_s; *)
   (* ) *)
 
-//#set-options "--lax"
-
-val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> 
-    Tot (result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)}))
+(* val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} ->  *)
+(*     Tot (result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)})) *)
+val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> Tot (result ske)
 let parseServerKeyExchange kex payload : result ske = 
-  admit(); // JK: TODO
     match kex with
     | Kex_DH -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     | Kex_RSA -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     | Kex_DHE -> 
        (match CommonDH.parse_partial payload false with
 	| Correct (k,sign) -> 
+	  if length sign < 65536 then // JK: TODO propagate from the DH parsing if possible to 
+				      // avoid unnecessary length checks
           Correct ({ske_kex_s = KEX_S_DHE k;
                     ske_sig = sign})
+	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         | Error z -> Error z)
     | Kex_ECDHE -> 
        (match CommonDH.parse_partial payload true with
-	| Correct (k,sign) -> 
+	| Correct (k,sign) ->
+	  if length sign < 65536 then // JK: idem
           Correct ({ske_kex_s = KEX_S_DHE k;
                     ske_sig = sign})
+	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         | Error z -> Error z)
 
 (* Certificate Verify *)
@@ -1208,6 +1300,9 @@ let finishedBytes_is_injective f1 f2 =
     lemma_repr_bytes_values (length f2.fin_vd);    
     messageBytes_is_injective HT_finished f1.fin_vd HT_finished f2.fin_vd
   )
+
+#reset-options
+//#set-options "--lax"
 
 val parseFinished: data:bytes{length data < 65536 /\ repr_bytes(length data)<=3} ->
     Tot (result(f:fin{Seq.equal (finishedBytes f) (messageBytes HT_finished data)}))
@@ -1249,15 +1344,15 @@ let helloRetryRequestBytes hrr =
   let cs_bytes = cipherSuiteBytes hrr.hrr_cipher_suite in
   let ng = namedGroupBytes hrr.hrr_named_group in
   let exts = extensionsBytes Server hrr.hrr_extensions in
-  (* JK: TODO: adding a messageBytes call here, I believe it was missing (to be checked) *)
   let data = pv @| (cs_bytes @| (ng @| exts)) in
   lemma_repr_bytes_values (length data);
   messageBytes HT_hello_retry_request data
 
-(* JK: TODO *)
-assume val namedGroupBytes_is_injective: n1:namedGroup -> n2:namedGroup -> 
+val namedGroupBytes_is_injective: n1:namedGroup -> n2:namedGroup -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (namedGroupBytes n1) (namedGroupBytes n2) ==> n1 = n2))
+let namedGroupBytes_is_injective n1 n2 = 
+  if namedGroupBytes n1 = namedGroupBytes n2 then pinverse_namedGroup (namedGroupBytes n1)
 
 val helloRetryRequestBytes_is_injective: h1:hrr -> h2:hrr -> 
   Lemma (requires (True))
@@ -1287,9 +1382,8 @@ let helloRetryRequestBytes_is_injective h1 h2 =
   )
 
 (* TODO: inversion lemmas *)
-val parseHelloRetryRequest: pinverse_t helloRetryRequestBytes
+val parseHelloRetryRequest: bytes -> Tot (result hrr)
 let parseHelloRetryRequest b = 
-  admit(); // JK: TODO
   if length b >= 4 then 
     let pv, cs, data = split2 b 2 2 in
     (match TLSConstants.parseVersion pv with
@@ -1302,10 +1396,12 @@ let parseHelloRetryRequest b =
 	  | Correct(ng) ->
 	    (match parseExtensions Server data with
 	    | Correct(exts) -> 
+	      if List.Tot.length exts < 256 then
 	      Correct ({ hrr_protocol_version = pv;
 			hrr_cipher_suite = cs;
 			hrr_named_group = ng;
 			hrr_extensions = exts })
+		else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
 	    | Error(z) -> Error(z))
 	  | Error(z) -> Error(z))
 	else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
@@ -1330,74 +1426,23 @@ let encryptedExtensionsBytes_is_injective e1 e2 =
   messageBytes_is_injective HT_encrypted_extensions payload1 HT_encrypted_extensions payload2;
   extensionsBytes_is_injective Server e1.ee_extensions e2.ee_extensions
 
+(* JK : TODO *)
+assume val lemma_extensionsBytes_length: r:role -> b:bytes -> 
+  Lemma (requires (True))
+	(ensures (is_Correct (parseExtensions r b) ==> length (extensionsBytes r (Correct._0 (parseExtensions r b))) = length b))
+
+(* val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->  *)
+(*     Tot (result (s:valid_ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})) *)
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} -> 
-    Tot (result (s:valid_ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)}))
+    Tot (result valid_ee)
 let parseEncryptedExtensions payload  = 
-  admit(); // JK: TODO
   match parseExtensions Server payload with
   | Error(z) -> Error(z)
-  | Correct(exts) -> Correct({ee_extensions = exts;})
-
-(* Server configuration *)
-val serverConfigurationBytes: sc -> Tot (b:bytes{hs_msg_bytes HT_server_configuration b})
-let serverConfigurationBytes sc =
-  admit(); // JK: TODO, missing patterns for the server key
-  let cid = sc.sc_configuration_id in
-  let date = sc.sc_expiration_date in
-  let ng = namedGroupBytes sc.sc_named_group in
-  let sk = 
-    match sc.sc_server_key with
-    | KEX_C_DHE b -> b
-    | KEX_C_ECDHE b -> b in
-  let edt = earlyDataTypeBytes sc.sc_early_data_type in 
-  let exts = configurationExtensionsBytes sc.sc_configuration_extensions in
-  let payload = cid @| date @| ng @| sk @| edt @| exts in
-  messageBytes HT_server_configuration payload
-
-(* JK: TODO, see comment above *)
-assume val serverConfigurationBytes_is_injective: sc1:sc -> sc2:sc -> 
-  Lemma (requires (True))
-	(ensures (Seq.equal (serverConfigurationBytes sc1) (serverConfigurationBytes sc2) ==> sc1 = sc2))
-
-val parseServerConfiguration: b:bytes{repr_bytes(length b) <= 2} -> 
-    Tot (result (s:sc{Seq.equal (serverConfigurationBytes s) (messageBytes HT_server_configuration b)}))
-let parseServerConfiguration payload  = 
-  admit(); // JK: TODO
-  match vlsplit 2 payload with
-  | Correct(config_id, data) -> (
-      if length data >= 6 then
-	let (date, ng, data) = split2 data 4 2 in
-	match parseNamedGroup ng with
-	| Correct(ng) -> 
-	  match vlsplit 2 data with
-	  | Correct(sk, data) ->
-	      let sk = match ng with
-		      | SEC _ | ECDHE_PRIVATE_USE _ -> KEX_C_ECDHE sk
-		      | FFDHE _ | FFDHE_PRIVATE_USE _ -> KEX_C_DHE sk in	      
-	      if length data >= 2 then
-		let (edt, exts) = split data 2 in
-		match parseEarlyDataType edt with
-		| Correct(edt) ->
-		  match vlsplit 2 exts with
-		  | Correct(exts, tail) -> 
-		      if equalBytes tail empty_bytes then
-		        match parseConfigurationExtensions exts with
-			| Correct(exts) ->
-			    Correct({ sc_configuration_id = config_id;
-				      sc_expiration_date = date;
-				      sc_named_group = ng;
-				      sc_server_key = sk;
-				      sc_early_data_type = edt;
-				      sc_configuration_extensions = exts;})
-		        | Error(z) -> Error(z)
-		      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-		  | Error(z) -> Error(z)
-		| Error(z) -> Error(z)
-	      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-	  | Error(z) -> Error(z)
-	| Error(z) -> Error(z)
-      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
- | Error(z) -> Error(z)
+  | Correct(exts) -> if List.Tot.length exts < 256 then (
+		       lemma_extensionsBytes_length Server payload;
+		       Correct({ee_extensions = exts;})
+		       )
+		     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "too many extensions")
 
 (* Next protocol message *)
 val nextProtocolBytes: np -> Tot (b:bytes{hs_msg_bytes HT_next_protocol b})
@@ -1436,10 +1481,11 @@ let nextProtocolBytes_is_injective np1 np2 =
     lemma_vlbytes_inj 1 np1.np_padding np2.np_padding
   )
 
-val parseNextProtocol: b:bytes{repr_bytes (length b) <= 3} -> 
-    Tot (result (s:np{Seq.equal (nextProtocolBytes s) (messageBytes HT_next_protocol b)}))
+(* val parseNextProtocol: b:bytes{repr_bytes (length b) <= 3} ->  *)
+(*     Tot (result (s:np{Seq.equal (nextProtocolBytes s) (messageBytes HT_next_protocol b)})) *)
+val parseNextProtocol: b:bytes{repr_bytes (length b) <= 3} ->Tot (result np)
 let parseNextProtocol payload =
-  admit(); // JK: TODO
+  if length payload >= 1 then
   match vlsplit 1 payload with
   | Error(z) -> Error(z)
   | Correct(selected_protocol, data) ->
@@ -1450,8 +1496,7 @@ let parseNextProtocol payload =
 	Correct( { np_selected_protocol = selected_protocol;
 		   np_padding = padding;})
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-#reset-options
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : Type0  =
   (is_Certificate msg \/ is_ClientKeyExchange msg) ==> is_Some pv
@@ -1460,8 +1505,6 @@ let valid_hs_msg: Type0 = msg:hs_msg{
   (is_EncryptedExtensions msg ==> repr_bytes (length (extensionsBytes Server (EncryptedExtensions._0 msg).ee_extensions)) <= 3)
   /\ (is_ServerHello msg ==> (((ServerHello._0 msg).sh_protocol_version = TLS_1p3 ==> (is_None (ServerHello._0 msg).sh_sessionID /\ is_None (ServerHello._0 msg).sh_compression)) /\ ((ServerHello._0 msg).sh_protocol_version <> TLS_1p3 ==> (is_Some (ServerHello._0 msg).sh_sessionID /\ is_Some (ServerHello._0 msg).sh_compression))))
   /\ (is_Certificate msg ==> length (Cert.certificateListBytes (Certificate._0 msg).crt_chain) < 16777212)}
-
-#reset-options
 
 val handshakeMessageBytes: pv:option protocolVersion -> msg:valid_hs_msg{associated_to_pv pv msg}  -> Tot (b:bytes{exists (ht:handshakeType). hs_msg_bytes ht b})
 let handshakeMessageBytes pvo hs = 
@@ -1479,10 +1522,8 @@ let handshakeMessageBytes pvo hs =
     | CertificateVerify(cv),_-> certificateVerifyBytes cv
     | HelloRequest,_-> helloRequestBytes
     | HelloRetryRequest(hrr),_-> helloRetryRequestBytes hrr
-    | ServerConfiguration(sc),_-> serverConfigurationBytes sc
+    (* | ServerConfiguration(sc),_-> serverConfigurationBytes sc *)
     | NextProtocol(n),_->  nextProtocolBytes n
-
-#reset-options
 
 val splitHandshakeMessage: b:bytes{exists (ht:handshakeType). hs_msg_bytes ht b} -> 
   Tot (t:(handshakeType * bytes){repr_bytes (length (snd t)) <= 3 /\ b = (htBytes (fst t) @| (vlbytes 3 (snd t)))})
@@ -1497,14 +1538,12 @@ let splitHandshakeMessage b =
     assert(Seq.equal b (messageBytes ht data));
     (ht, data)
 
+#reset-options "--z3timeout 100"
+//#set-options "--lax"
+
 val handshakeMessageBytes_is_injective: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2) ==> msg1 = msg2))
-
-#reset-options "--z3timeout 100"
-#set-options "--lax"
-
-(* JK: TODO, WIP *)
 let handshakeMessageBytes_is_injective pv msg1 msg2 =
   if handshakeMessageBytes pv msg1 = handshakeMessageBytes pv msg2 then (
     let bytes1 = handshakeMessageBytes pv msg1 in
@@ -1527,11 +1566,9 @@ let handshakeMessageBytes_is_injective pv msg1 msg2 =
     | HT_certificate_verify -> certificateVerifyBytes_is_injective (CertificateVerify._0 msg1) (CertificateVerify._0 msg2)
     | HT_hello_request -> ()
     | HT_hello_retry_request -> helloRetryRequestBytes_is_injective (HelloRetryRequest._0 msg1) (HelloRetryRequest._0 msg2)
-    | HT_server_configuration -> serverConfigurationBytes_is_injective (ServerConfiguration._0 msg1) (ServerConfiguration._0 msg2)
+    (* | HT_server_configuration -> serverConfigurationBytes_is_injective (ServerConfiguration._0 msg1) (ServerConfiguration._0 msg2) *)
     | HT_next_protocol -> nextProtocolBytes_is_injective (NextProtocol._0 msg1) (NextProtocol._0 msg2)
   )
-
-#reset-options
 
 val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg{associated_to_pv pv msg}) -> Tot bytes
 let rec handshakeMessagesBytes pv hsl = 
@@ -1539,7 +1576,73 @@ let rec handshakeMessagesBytes pv hsl =
     | [] -> empty_bytes
     | h::t -> (handshakeMessageBytes pv h) @| (handshakeMessagesBytes pv t)
 
-#reset-options "--z3timeout 200"
+#reset-options
+
+let lemma_handshakeMessagesBytes_def (pv:option protocolVersion) (li:list (msg:valid_hs_msg{associated_to_pv pv msg}){is_Cons li}) : Lemma (handshakeMessagesBytes pv li = ((handshakeMessageBytes pv (Cons.hd li)) @| (handshakeMessagesBytes pv (Cons.tl li)))) = ()
+
+let lemma_handshakeMessagesBytes_def2 (pv:option protocolVersion) (li:list (msg:valid_hs_msg{associated_to_pv pv msg}){is_Nil li}) : Lemma (handshakeMessagesBytes pv li = empty_bytes) = ()
+
+val lemma_handshakeMessageBytes_aux: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
+  Lemma (requires (let b1 = handshakeMessageBytes pv msg1 in
+		       let b2 = handshakeMessageBytes pv msg2 in
+		       length b2 >= length b1 
+		       /\ Seq.equal b1 (Seq.slice b2 0 (length b1))))
+	(ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2)))
+
+#reset-options "--z3timeout 50"
+//#set-options "--lax"
+
+let lemma_handshakeMessageBytes_aux pv msg1 msg2 =
+  let payload1 = handshakeMessageBytes pv msg1 in
+  let payload2 = handshakeMessageBytes pv msg2 in
+  let ht1, data1 = splitHandshakeMessage payload1 in
+  let ht2, data2 = splitHandshakeMessage payload2 in
+  cut (payload1 = (htBytes ht1 @| vlbytes 3 data1));
+  cut (payload2 = (htBytes ht2 @| vlbytes 3 data2));
+  cut (length payload1 >= 4 /\ length payload2 >= 4);
+  Seq.lemma_index_slice payload1 1 (length payload1) 0;
+  Seq.lemma_index_slice payload1 1 (length payload1) 1;
+  Seq.lemma_index_slice payload1 1 (length payload1) 2;
+  Seq.lemma_index_slice payload2 1 (length payload2) 0;
+  Seq.lemma_index_slice payload2 1 (length payload2) 1;
+  Seq.lemma_index_slice payload2 1 (length payload2) 2;
+  Seq.lemma_eq_intro (Seq.slice (vlbytes 3 data1) 0 3) (Seq.slice (vlbytes 3 data2) 0 3);
+  vlbytes_length_lemma 3 data1 data2;
+  cut (length (vlbytes 3 data1) = length (vlbytes 3 data2));
+  cut (length payload1 = length payload2);
+  Seq.lemma_eq_intro (Seq.slice payload2 0 (length payload1)) payload2;
+  lemma_append_inj (htBytes ht1) (vlbytes 3 data1) (htBytes ht2) (vlbytes 3 data2)
+
+#reset-options
+
+let lemma_aux_1 (a:bytes) (b:bytes) (c:bytes) (d:bytes) : Lemma 
+  (requires (Seq.equal (a @| b) (c @| d)))
+  (ensures ((length a >= length c ==> Seq.equal (Seq.slice a 0 (length c)) c)
+	    /\ (length a < length c ==> Seq.equal (Seq.slice c 0 (length a)) a))) 
+ = if length a >= length c then (
+     cut (Seq.equal (a @| b) (c @| d));
+     cut (forall (i:nat). {:pattern (Seq.index (a@|b) i) \/ (Seq.index (c@|d) i)} i < length (a@|b) ==> Seq.index (a@|b) i = Seq.index (c@|d) i);
+     cut (length a <= length (a@|b) /\ length c <= length (a@|b));
+     ()
+     )
+   else (
+     cut (Seq.equal (a @| b) (c @| d));
+     cut (forall (i:nat). {:pattern (Seq.index (a@|b) i) \/ (Seq.index (c@|d) i)} i < length (a@|b) ==> Seq.index (a@|b) i = Seq.index (c@|d) i);
+     cut (length a <= length (a@|b) /\ length c <= length (a@|b));
+     ()
+  )
+
+let lemma_op_At_Bar_def (b:bytes) (b':bytes) : Lemma (requires (True)) (ensures ((b@|b') = Seq.append b b')) = ()
+
+let lemma_handshakeMessageBytes_min_length (pv:option protocolVersion) (msg:valid_hs_msg{associated_to_pv pv msg}) : Lemma (length (handshakeMessageBytes pv msg) >= 4) = ()
+
+let lemma_aux_2 (pv:option protocolVersion) (l:list (msg:valid_hs_msg{associated_to_pv pv msg})) :
+  Lemma (requires (is_Cons l))
+	(ensures (length (handshakeMessagesBytes pv l) > 0))
+  = ()
+
+let lemma_aux_3 (b:bytes) (b':bytes) : Lemma (requires (length b <> length b'))
+					    (ensures (~(Seq.equal b b'))) = ()
 
 val handshakeMessagesBytes_is_injective: pv:option protocolVersion -> l1:list (msg:valid_hs_msg{associated_to_pv pv msg}) -> l2:list (msg:valid_hs_msg{associated_to_pv pv msg}) -> 
   Lemma (requires (True))
@@ -1547,31 +1650,44 @@ val handshakeMessagesBytes_is_injective: pv:option protocolVersion -> l1:list (m
 let rec handshakeMessagesBytes_is_injective pv l1 l2 =
   match l1, l2 with
   | [], [] -> ()
-  | hd::tl, hd'::tl' -> 
-      if handshakeMessagesBytes pv l1 = handshakeMessagesBytes pv l2 then (
-	let payload1 = handshakeMessagesBytes pv l1 in
-	let payload2 = handshakeMessagesBytes pv l2 in
-	assume (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) payload1);
-	assume (Seq.equal ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')) payload2);
-	assume (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')));	
-	let ht1, data1 = splitHandshakeMessage (handshakeMessageBytes pv hd) in
-	let ht2, data2 = splitHandshakeMessage (handshakeMessageBytes pv hd') in
-	assume (length payload1 >= 4 /\ length payload2 >= 4);
-	assume (Seq.index payload1 3 = Seq.index payload2 3);
-	assume (Seq.index payload1 1 = Seq.index payload2 1);
-	assume (Seq.index payload1 2 = Seq.index payload2 2);
-	assume (Seq.equal (Seq.slice (vlbytes 3 data1) 0 3) (Seq.slice payload1 1 4));
-	assume (Seq.equal (Seq.slice (vlbytes 3 data2) 0 3) (Seq.slice payload2 1 4));
-	cut (Seq.equal (Seq.slice (vlbytes 3 data1) 0 3) (Seq.slice (vlbytes 3 data2) 0 3));
-	vlbytes_length_lemma 3 data1 data2;
+  | hd::tl, hd'::tl' -> ();
+      let payload1 = handshakeMessagesBytes pv l1 in
+      lemma_handshakeMessagesBytes_def pv l1;
+      cut (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) payload1);
+      lemma_op_At_Bar_def (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl);
+      let payload2 = handshakeMessagesBytes pv l2 in
+      lemma_handshakeMessagesBytes_def pv l2;
+      cut (Seq.equal ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')) payload2);
+      lemma_op_At_Bar_def (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
+      if payload1 = payload2 then (
+	cut (Seq.equal (Seq.append (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl))
+		       (Seq.append (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl')));
+	cut (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')));	
+	if length (handshakeMessageBytes pv hd) >= length (handshakeMessageBytes pv hd')
+	then (
+	  lemma_aux_1 (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl) (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
+	  lemma_handshakeMessageBytes_aux pv hd' hd
+	  )
+	else (
+	  lemma_aux_1 (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl) (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
+	  lemma_handshakeMessageBytes_aux pv hd hd'
+	);
 	lemma_append_inj (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl) (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
 	handshakeMessageBytes_is_injective pv hd hd';
 	handshakeMessagesBytes_is_injective pv tl tl';
-	admit()
+	()
     )
-  | _, _ -> admit()
-      
-    
+  | [],hd::tl -> (
+      lemma_handshakeMessagesBytes_def2 pv l1;
+      lemma_aux_2 pv l2;
+      lemma_aux_3 (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2)
+    )
+  | hd::tl, [] -> (
+      lemma_handshakeMessagesBytes_def2 pv l2;
+      lemma_aux_2 pv l1;
+      lemma_aux_3 (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2)
+    )
+
 val string_of_handshakeMessage: hs_msg -> Tot string
 let string_of_handshakeMessage hs = 
     match hs with
@@ -1588,11 +1704,14 @@ let string_of_handshakeMessage hs =
     | CertificateVerify(cv) -> "CertificateVerify"
     | HelloRequest -> "HelloRequest"
     | HelloRetryRequest(hrr) -> "HelloRetryRequest"
-    | ServerConfiguration(sc) -> "ServerConfiguration"
+    (* | ServerConfiguration(sc) -> "ServerConfiguration" *)
     | NextProtocol(n) -> "NextProtocol"
 
-val parseHandshakeMessage: option protocolVersion -> option kexAlg -> handshakeType -> bytes -> Tot (result hs_msg)
+(* val parseHandshakeMessage: option protocolVersion -> option kexAlg -> handshakeType -> b:bytes{repr_bytes (length b) <= 3} -> Tot (result hs_msg) *)
+val parseHandshakeMessage: option protocolVersion -> option kexAlg -> ht:handshakeType -> b:bytes{repr_bytes (length b) <= 3} -> Tot (result hs_msg)
 let parseHandshakeMessage pv kex hstype pl = 
+  if length pl < 16777216 then (
+    lemma_repr_bytes_values (length pl);
     match hstype,pv,kex with
     | HT_hello_request,_,_       -> if (length pl = 0) then Correct(HelloRequest) else Error(AD_decode_error, "HelloRequest with non-empty body")
     | HT_client_hello,_,_        -> mapResult ClientHello (parseClientHello pl)
@@ -1604,8 +1723,16 @@ let parseHandshakeMessage pv kex hstype pl =
     | HT_server_key_exchange,_,Some kex -> mapResult ServerKeyExchange (parseServerKeyExchange kex pl)
     | HT_certificate_request,Some pv,_ -> mapResult CertificateRequest (parseCertificateRequest pv pl)
     | HT_server_hello_done,_,_   -> if (length pl = 0) then Correct(ServerHelloDone) else Error(AD_decode_error, "ServerHelloDone with non-empty body")
-    | HT_certificate_verify,_,_  -> mapResult CertificateVerify (parseCertificateVerify pl)
+    | HT_certificate_verify,_,_  -> (
+      if length pl < 65536 then mapResult CertificateVerify (parseCertificateVerify pl)
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      )
     | HT_client_key_exchange,Some pv,Some kex -> mapResult ClientKeyExchange (parseClientKeyExchange pv kex pl)
-    | HT_server_configuration,_,_ -> mapResult ServerConfiguration (parseServerConfiguration pl)
+    (* | HT_server_configuration,_,_ -> mapResult ServerConfiguration (parseServerConfiguration pl) *)
     | HT_next_protocol,_,_       -> mapResult NextProtocol (parseNextProtocol pl)
-    | HT_finished,_,_            -> mapResult Finished (parseFinished pl)
+    | HT_finished,_,_            -> (if length pl < 65536 then mapResult Finished (parseFinished pl)
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
+    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") 
+    )
+  else  Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") 
+   

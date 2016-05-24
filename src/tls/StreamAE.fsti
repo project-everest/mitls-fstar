@@ -16,7 +16,7 @@ open TLSInfo
 open StreamPlain
 open MonotoneSeq
 open FStar.Monotonic.RRef
-module HH = HyperHeap
+module HH = FStar.HyperHeap
 
 type id = i:id { pv_of_id i = TLS_1p3 }
 

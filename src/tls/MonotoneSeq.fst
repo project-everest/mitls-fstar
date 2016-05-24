@@ -3,7 +3,7 @@ open FStar.Seq
 open FStar.SeqProperties
 module HH   = FStar.HyperHeap
 module MR   = FStar.Monotonic.RRef
-module SeqP = SeqProperties
+module SeqP = FStar.SeqProperties
 
 let forall_intro (#a:Type) (#p:(x:a -> GTot Type0)) ($f:(x:a -> Lemma (p x)))
   : Lemma (forall (x:a). p x)

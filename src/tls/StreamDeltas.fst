@@ -6,7 +6,7 @@ open FStar.HyperHeap
 open TLSConstants
 open TLSInfo
 
-module HH   = HyperHeap
+module HH   = FStar.HyperHeap
 module MR   = FStar.Monotonic.RRef
 module S    = StAE
 module MS   = MonotoneSeq

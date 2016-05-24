@@ -9,7 +9,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
-	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *~ *.out output
+	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
 
 # ------------------ Dependencies on F* & its libraries --------------
 # When using NuBuild, FStar must be located within the source tree.
@@ -57,7 +57,7 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_
 NUBUILD_HOME=../../.nubuild
 NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
 ifdef USE_NUBUILD
-FSTAR_OR_NUBUILD=$(NUBUILD) FStarVerify $(FSTARFLAGS)
+FSTAR_OR_NUBUILD=$(NUBUILD) $(NUBUILDFLAGS) FStarVerify $(FSTARFLAGS)
 else
 FSTAR_OR_NUBUILD=$(FSTAR)
 endif
@@ -127,7 +127,7 @@ TLS.fst #the preceding space is significant!
 # should be added here.
 #
 # Missing modules from FSTS:
-# Cert, TLSExtensions, Encode, ENC, HandshakeMessages, Record, HSCrypto,
+# TLSExtensions, Encode, ENC, HandshakeMessages, Record, HSCrypto,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
 VERIFY= \
@@ -145,6 +145,7 @@ PMS \
 HASH \
 HMAC \
 Signature \
+Cert \
 TLSInfo \
 IdNonce \
 Range \

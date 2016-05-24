@@ -96,7 +96,7 @@ val lookup: cs:role -> n:random -> ST (option (ex_rid))
   (ensures (fun h0 ropt h1 -> 
 	        h0=h1 /\ 
 	        (match ropt with
-		 | Some r ->  registered n r /\ role_nonce cs n r
+		 | Some r -> registered n r /\ role_nonce cs n r
 		 | None -> fresh n h0)))
 let lookup role n = MM.lookup nonce_rid_table n
 

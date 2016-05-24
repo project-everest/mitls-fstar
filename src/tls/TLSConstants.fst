@@ -525,7 +525,7 @@ let parseCipherSuite b =
   | Correct c -> Correct c
   | Error z -> Error z
 
-#set-options "--max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
+#reset-options "--z3timeout 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
 val inverse_cipherSuite: x:cipherSuite -> Lemma
   (requires (~ (is_UnknownCipherSuite x)))
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
@@ -1075,7 +1075,7 @@ let rec distinguishedNameListBytes names =
     let name = vlbytes 2 (utf8 h) in
     name @| distinguishedNameListBytes t
 
-val parseDistinguishedNameList: data:bytes -> res:list string -> Tot (result (list string)) (decreases (length data))
+val parseDistinguishedNameList: data:bytes -> res:list dn -> Tot (result (list dn)) (decreases (length data))
 let rec parseDistinguishedNameList data res =
   if length data = 0 then
     Correct res
@@ -1090,8 +1090,10 @@ let rec parseDistinguishedNameList data res =
 	match iutf8_opt nameBytes with
         | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         | Some name ->
+	  if length (utf8 name) < 256 then
           let res = name :: res in
           parseDistinguishedNameList data res
+	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
 
 let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
@@ -1341,17 +1343,16 @@ val pinverse_configurationExtension: x:_ -> Lemma
 let pinverse_configurationExtension x = ()
 
 // Choice: truncate when maximum length is exceeded
-// Non top-level let rec yields stack overflow during extraction
-let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
+val configurationExtensionsBytes: list configurationExtension -> Tot bytes
+let configurationExtensionsBytes ce =
+  let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
   match ces with
   | [] -> b
   | ce::ces ->
     if length (b @| configurationExtensionBytes ce) < 65536 then
       configurationExtensionsBytes_aux (b @| configurationExtensionBytes ce) ces
     else b
-
-val configurationExtensionsBytes: list configurationExtension -> Tot bytes
-let configurationExtensionsBytes ce =
+  in
   let b = configurationExtensionsBytes_aux empty_bytes ce in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
@@ -1399,14 +1400,15 @@ let parseSigHashAlg b =
     end
   | Error z -> Error z
 
-// Non top-level let rec yields stack overflow during extraction
-let rec sigHashAlgsBytes_aux (b:bytes) (algs:list sigHashAlg{length b + op_Multiply 2 (List.Tot.length algs) < 65536}) : Tot (r:bytes{length r < 65536}) (decreases algs) =
+// Moving this inside sigHashAlgsBytes gives a `Bound term variable not found` error
+// See https://github.com/FStarLang/FStar/issues/533
+let rec sigHashAlgsBytes_aux (b:bytes) (algs:list sigHashAlg{b2t (length b + op_Multiply 2 (List.Tot.length algs) < 65536)}) : Tot (r:bytes{length r < 65536}) (decreases algs) =
   match algs with
   | [] -> b
   | alg::algs' ->
     let shb = sigHashAlgBytes alg in
     sigHashAlgsBytes_aux (shb @| b) algs'
-  
+
 val sigHashAlgsBytes: algs:list sigHashAlg{List.Tot.length algs < 65536/2}
   -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 let sigHashAlgsBytes algs =
@@ -1478,8 +1480,9 @@ val pinverse_keyShareEntry: x:_ -> Lemma
 let pinverse_keyShareEntry x = ()
 
 // Choice: truncate when maximum length is exceeded
-// Non top-level let rec yields stack overflow during extraction
-let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
+val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
+let keyShareEntriesBytes kes =
+  let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
   match kes with
   | [] -> b
   | ke::kes ->
@@ -1487,9 +1490,7 @@ let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareE
     if length b' < 65536 then
       keyShareEntriesBytes_aux b' kes
     else b
-
-val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
-let keyShareEntriesBytes kes =
+  in
   let b = keyShareEntriesBytes_aux empty_bytes kes in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
@@ -1574,8 +1575,9 @@ let parsePskIdentity b =
 
 
 // Choice: truncate when maximum length is exceeded
-// Non top-level let rec yields stack overflow during extraction
-let rec pskIdentitiesBytes_aux (b:bytes{length b < 65536}) (ids:list pskIdentity): Tot (b:bytes{length b < 65536}) (decreases ids) =
+val pskIdentitiesBytes: list pskIdentity -> Tot (b:bytes{2 <= length b /\ length b < 65538})
+let pskIdentitiesBytes ids =
+  let rec pskIdentitiesBytes_aux (b:bytes{length b < 65536}) (ids:list pskIdentity): Tot (b:bytes{length b < 65536}) (decreases ids) =
   match ids with
   | [] -> b
   | id::ids ->
@@ -1583,9 +1585,7 @@ let rec pskIdentitiesBytes_aux (b:bytes{length b < 65536}) (ids:list pskIdentity
     if length b' < 65536 then
       pskIdentitiesBytes_aux b' ids
     else b
-
-val pskIdentitiesBytes: list pskIdentity -> Tot (b:bytes{2 <= length b /\ length b < 65538})
-let pskIdentitiesBytes ids =
+  in
   let b = pskIdentitiesBytes_aux empty_bytes ids in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b

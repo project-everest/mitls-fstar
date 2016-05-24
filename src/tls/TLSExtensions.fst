@@ -493,17 +493,31 @@ val negotiateClientExtensions: protocolVersion -> config -> option (list extensi
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   match pv with
   | SSL_3p0 ->
-     (match sExtL with
-     | None -> Correct (ne_default)
-     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello"))
+     begin
+     match sExtL with
+     | None -> Correct ne_default
+     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello")
+     end
   | _ ->
-     (match cExtL, sExtL with
+     begin
+     match cExtL, sExtL with
      | Some cExtL, Some sExtL ->
+	begin
         let nes = ne_default in
-        (match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
+        match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
         | Error(x,y) -> Error(x,y)
-        | ok -> ok)
-     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message"))
+        | Correct l ->
+          if resuming then correct l
+          else
+	  begin
+	    match List.Tot.tryFind is_E_signatureAlgorithms cExtL with
+	    | Some (E_signatureAlgorithms shal) ->
+	      correct({l with ne_signature_algorithms = Some shal})
+	    | None -> correct l
+	  end
+	end
+     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message")
+     end
 
 val clientToServerExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
 let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =

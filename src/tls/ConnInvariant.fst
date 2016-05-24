@@ -12,6 +12,47 @@ module N  = Nonce
 module I  = IdNonce
 module AE = StreamAE
 
+
+////////////////////////////////////////////////////////////////////////////////
+//Framing writes to an epoch
+////////////////////////////////////////////////////////////////////////////////
+let epoch_regions_exist (s:hs) (h0:HH.t) = 
+  let epochs = logT s h0 in 
+  Map.contains h0 (HS.region s)
+  /\ (forall (k:nat{k < Seq.length epochs}).{:pattern (Seq.index epochs k)}
+      let wr = writer_epoch (Seq.index epochs k) in
+      Map.contains h0 (StAE.region wr))
+      
+val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t -> 
+  Lemma (requires (let j = iT s Writer h0 in 
+		   let epochs = logT s h0 in 
+		     j >= 0 
+		   /\ epoch_regions_exist s h0 
+		   /\ (let e_j = Seq.index epochs j in
+		      HH.modifies_one (StAE.region (writer_epoch e_j)) h0 h1)))
+	(ensures (let epochs0 = logT s h0 in 
+		  let epochs1 = logT s h1 in 
+		  let j = iT s Writer h0 in 
+		  epochs0 = epochs1
+		  /\(forall (k:nat{k < Seq.length epochs0 /\ j<>k}). 
+		      let wr = writer_epoch (Seq.index epochs0 k) in
+		      HH.equal_on (Set.singleton (StAE.region wr)) h0 h1)))
+#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+let frame_epoch_writer s h0 h1 = 
+  let epochs = logT s h0 in 
+  let j = iT s Writer h0 in 
+  let e_j = Seq.index epochs j in
+  reveal_epoch_region_inv e_j;
+  let wj = writer_epoch e_j in
+  let aux : (k:nat{k < Seq.length epochs /\ j<>k}) -> Lemma 
+    (let wr = writer_epoch (Seq.index epochs k) in
+     HH.equal_on (Set.singleton (StAE.region wr)) h0 h1) =
+     fun k -> let wk = writer_epoch (Seq.index epochs k) in
+	   reveal_epochs_inv'();
+	   assert (HH.disjoint (StAE.region wk) (StAE.region wj)) in
+  qintro aux
+
+////////////////////////////////////////////////////////////////////////////////
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 type id = StreamAE.id
@@ -144,7 +185,13 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		         HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1 /\  //the log exists in h1
 			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty)))))       //and w is as yet unused
 	 (ensures (mc_inv h1))
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+val invertOption : a:Type -> Lemma 
+  (requires True)
+  (ensures (forall (x:option a). is_None x \/ is_Some x))
+  [SMTPatT (option a)]
+let invertOption a = ()  
+	 
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"	 
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
   			  let new_conn = MR.m_sel h1 conn_tab in
@@ -156,7 +203,7 @@ let ms_derive_is_ok h0 h1 i w =
       then match MM.sel new_ms j with
            | None -> ()
            | Some ww ->
-      	     if ww=w
+      	     if i=j 
       	     then ()
       	     else assert (Some ww=MM.sel old_ms j)
       else () in
@@ -302,7 +349,6 @@ val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:M
 	       MM.sel (MR.m_sel h0 conn_tab) (I.nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1)) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 let mutate_registered_writer_ok h0 h1 i w c = (* () *)
 (* a slightly more detailed proof: *)
     let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -341,7 +387,7 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	      MM.sel old_conn nonce = None /\        //c wasn't in the table initially
 	      new_conn = MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" //NS: this one seems to require an inversion somewhere, but not sure exactly where
 let add_connection_ok h0 h1 i c =
     cut (HH.contains_ref (MR.as_rref conn_tab) h1);
     let old_ms = MR.m_sel h0 MS.ms_tab in
@@ -349,10 +395,14 @@ let add_connection_ok h0 h1 i c =
     let old_conn = MR.m_sel h0 conn_tab in
     let new_conn = MR.m_sel h1 conn_tab in
     let hs_region_exists : n:random -> Lemma
-    	(is_Some (MM.sel new_conn n) ==> conn_hs_region_exists (Some.v (MM.sel new_conn n)) h1) =
+    	(match MM.sel new_conn n with
+	 | None -> True
+	 | Some v -> conn_hs_region_exists v h1) =
       fun n -> match MM.sel new_conn n with
     	    | None -> ()
     	    | Some c' -> if c = c' then ()
-    		        else cut (c' = Some.v (MM.sel old_conn n)) in
+    		        else match MM.sel old_conn n with
+			     | None -> ()
+			     | Some c'' -> cut (c' = c'') in// Some.v (MM.sel old_conn n)) in
     qintro hs_region_exists;
     cut (handshake_regions_exists new_conn h1)

@@ -196,7 +196,7 @@ val verify: #a:alg
     (ensures  (fun h0 b h1 -> 
 	           modifies Set.empty h0 h1
 		 /\ (b /\ ideal
-		    /\ List.Tot.existsb (fun (k:pkey) -> let (|_,pk'|) = k in pk = pk') (m_sel h0 rkeys)
+		    /\ List.Tot.existsb (fun (k:pkey) -> let (|a',pk'|) = k in a=a' && pk = pk') (m_sel h0 rkeys)
 		    /\ int_cma a h
 		    /\ is_Signed (m_sel h0 (PK.log pk))) ==>
 		    a.info t))
@@ -218,7 +218,7 @@ let verify #a h pk t s =
     in
     let honest =
       let kset = m_read rkeys in
-      List.Tot.existsb (fun (k:pkey) -> let (|_,pk'|) = k in pk = pk') kset
+      List.Tot.existsb (fun (k:pkey) -> let (|a',pk'|) = k in a=a' && pk = pk') kset
     in
     verified && (signed || not (honest && int_cma a h))
   else
