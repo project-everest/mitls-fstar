@@ -12,7 +12,7 @@ open TLSInfo
 open Range
 open CommonDH
 
-#set-options "--lax"
+//#set-options "--lax"
 
 (* JK: for verification purposes the "--lax" flag is set throughout the file in order to
    skip the already verified part of it.
@@ -213,7 +213,6 @@ type np = {
 
 // TODO: unify, either keep separate finished messages for client and servers or 
 // merge them into single "finished" as it is the case for certificates
-(* JK: What is the status of 'next_protocol' ? *)
 type hs_msg =
   | ClientHello of ch
   | ServerHello of sh
@@ -225,9 +224,8 @@ type hs_msg =
   | Certificate of crt
   | ClientKeyExchange of cke
   | CertificateVerify of cv
-  (* | ServerConfiguration of sc *) // JK: has been removed
   | Finished of fin
-  | NextProtocol of np // JK: removed or message from extension ?
+  | NextProtocol of np
   | HelloRequest
   | HelloRetryRequest of hrr
 
@@ -634,7 +632,7 @@ let valid_sh : Type0 = s:sh{
   /\ (s.sh_protocol_version <> TLS_1p3 ==> (is_Some s.sh_sessionID /\ is_Some s.sh_compression)) }
 
 #reset-options "--z3timeout 50"
-#set-options "--lax"
+//#set-options "--lax"
 
 val serverHelloBytes_is_injective: msg1:valid_sh -> msg2:valid_sh -> 
   Lemma (requires (True))
@@ -734,7 +732,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
     end
 
 #reset-options
-#set-options "--lax"
+//#set-options "--lax"
 
 (* JK: should return a valid_sh to match the serialization function *)
 (* JK: same as parseClientHello, weakening spec to get verification *)
@@ -923,8 +921,6 @@ let parseCertificate pv data =
     )
    | Error z -> Error z
 
-//#set-options "--lax"
-
 (* JK: TODO: rewrite taking the protocol version as an extra parameter, otherwise not injective *)
 val certificateRequestBytes: cr -> Tot (b:bytes{hs_msg_bytes HT_certificate_request b})
 let certificateRequestBytes cr = 
@@ -956,10 +952,68 @@ let rec certificateTypeListBytes_is_injective ctl1 ctl2 =
     )
   | _, _ -> () 
 
-(* JK: TODO *)
-assume val distinguishedNameListBytes_is_injective: n1:list dn -> n2:list dn -> 
+#reset-options
+
+let lemma_distinguishedNameListBytes_def (n:list dn{is_Cons n /\ repr_bytes (length (utf8 (Cons.hd n))) <= 2}) : Lemma
+  (distinguishedNameListBytes n = (vlbytes 2 (utf8 (Cons.hd n)) @| distinguishedNameListBytes (Cons.tl n))) = ()
+
+let lemma_distinguishedNameListBytes_def2 (n:list dn{is_Nil n}) : Lemma (distinguishedNameListBytes n = empty_bytes) = ()
+
+(* TODO: port to Platform.Bytes *)
+assume val utf8_is_injective: s:string -> s':string -> 
+  Lemma (requires (True))
+	(ensures (Seq.equal (utf8 s) (utf8 s') ==> s = s'))
+
+val distinguishedNameListBytes_is_injective: n1:list dn -> n2:list dn -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (distinguishedNameListBytes n1) (distinguishedNameListBytes n2) ==> n1 = n2))
+let rec distinguishedNameListBytes_is_injective n1 n2 = 
+  match n1, n2 with
+  | [],[] -> ()
+  | hd::tl, hd'::tl' -> 
+      let payload1 = distinguishedNameListBytes n1 in
+      let payload2 = distinguishedNameListBytes n2 in
+      if payload1 = payload2 then (
+	lemma_repr_bytes_values (length (utf8 hd'));
+	lemma_repr_bytes_values (length (utf8 hd));
+	lemma_distinguishedNameListBytes_def n1;
+	lemma_distinguishedNameListBytes_def n2;
+	cut (forall b b'. {:pattern (b@|b')} (b@|b') = Seq.append b b');
+	Seq.lemma_eq_refl payload1 payload2;
+	cut (Seq.equal ((vlbytes 2 (utf8 hd)) @| (distinguishedNameListBytes tl))
+		       ((vlbytes 2 (utf8 hd')) @| (distinguishedNameListBytes tl')));	
+	cut (Seq.equal (Seq.append (vlbytes 2 (utf8 hd)) (distinguishedNameListBytes tl))
+		       (Seq.append (vlbytes 2 (utf8 hd')) (distinguishedNameListBytes tl')));
+        cut (Seq.index (vlbytes 2 (utf8 hd)) 0 = Seq.index payload1 0);
+        cut (Seq.index (vlbytes 2 (utf8 hd)) 1 = Seq.index payload1 1);
+        cut (Seq.index (vlbytes 2 (utf8 hd')) 0 = Seq.index payload2 0);
+        cut (Seq.index (vlbytes 2 (utf8 hd')) 1 = Seq.index payload2 1);
+	cut (Seq.index payload1 0 = Seq.index payload2 0);
+        cut (Seq.index payload1 1 = Seq.index payload2 1);		
+	vlbytes_length_lemma 2 (utf8 hd) (utf8 hd');	
+	lemma_append_inj (vlbytes 2 (utf8 hd)) (distinguishedNameListBytes tl) (vlbytes 2 (utf8 hd')) (distinguishedNameListBytes tl');
+	distinguishedNameListBytes_is_injective tl tl';
+	lemma_vlbytes_inj 2 (utf8 hd) (utf8 hd');
+	utf8_is_injective hd hd'
+      )
+  | [],hd::tl -> (
+      lemma_repr_bytes_values (length (utf8 hd));
+      lemma_distinguishedNameListBytes_def n2;
+      lemma_distinguishedNameListBytes_def2 n1;
+      cut (forall b b'. {:pattern (b@|b')} (b@|b') = Seq.append b b');
+      cut (length (distinguishedNameListBytes n2) >= 2);
+      cut (length (distinguishedNameListBytes n1) = 0)
+      )
+  | hd::tl,[] -> (
+      lemma_repr_bytes_values (length (utf8 hd));
+      lemma_distinguishedNameListBytes_def n1;
+      lemma_distinguishedNameListBytes_def2 n2;
+      cut (forall b b'. {:pattern (b@|b')} (b@|b') = Seq.append b b');
+      cut (length (distinguishedNameListBytes n1) >= 2);
+      cut (length (distinguishedNameListBytes n2) = 0)
+      )
+
+//#set-options "--lax"
 
 val certificateRequestBytes_is_injective: c1:cr -> c2:cr -> 
   Lemma (requires (True))
@@ -1248,7 +1302,7 @@ let finishedBytes_is_injective f1 f2 =
   )
 
 #reset-options
-#set-options "--lax"
+//#set-options "--lax"
 
 val parseFinished: data:bytes{length data < 65536 /\ repr_bytes(length data)<=3} ->
     Tot (result(f:fin{Seq.equal (finishedBytes f) (messageBytes HT_finished data)}))
@@ -1290,15 +1344,15 @@ let helloRetryRequestBytes hrr =
   let cs_bytes = cipherSuiteBytes hrr.hrr_cipher_suite in
   let ng = namedGroupBytes hrr.hrr_named_group in
   let exts = extensionsBytes Server hrr.hrr_extensions in
-  (* JK: TODO: adding a messageBytes call here, I believe it was missing (to be checked) *)
   let data = pv @| (cs_bytes @| (ng @| exts)) in
   lemma_repr_bytes_values (length data);
   messageBytes HT_hello_retry_request data
 
-(* JK: TODO *)
-assume val namedGroupBytes_is_injective: n1:namedGroup -> n2:namedGroup -> 
+val namedGroupBytes_is_injective: n1:namedGroup -> n2:namedGroup -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (namedGroupBytes n1) (namedGroupBytes n2) ==> n1 = n2))
+let namedGroupBytes_is_injective n1 n2 = 
+  if namedGroupBytes n1 = namedGroupBytes n2 then pinverse_namedGroup (namedGroupBytes n1)
 
 val helloRetryRequestBytes_is_injective: h1:hrr -> h2:hrr -> 
   Lemma (requires (True))
@@ -1485,7 +1539,7 @@ let splitHandshakeMessage b =
     (ht, data)
 
 #reset-options "--z3timeout 100"
-#set-options "--lax"
+//#set-options "--lax"
 
 val handshakeMessageBytes_is_injective: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
   Lemma (requires (True))
@@ -1522,9 +1576,11 @@ let rec handshakeMessagesBytes pv hsl =
     | [] -> empty_bytes
     | h::t -> (handshakeMessageBytes pv h) @| (handshakeMessagesBytes pv t)
 
-#reset-options //"--z3timeout 200"
+#reset-options
 
 let lemma_handshakeMessagesBytes_def (pv:option protocolVersion) (li:list (msg:valid_hs_msg{associated_to_pv pv msg}){is_Cons li}) : Lemma (handshakeMessagesBytes pv li = ((handshakeMessageBytes pv (Cons.hd li)) @| (handshakeMessagesBytes pv (Cons.tl li)))) = ()
+
+let lemma_handshakeMessagesBytes_def2 (pv:option protocolVersion) (li:list (msg:valid_hs_msg{associated_to_pv pv msg}){is_Nil li}) : Lemma (handshakeMessagesBytes pv li = empty_bytes) = ()
 
 val lemma_handshakeMessageBytes_aux: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
   Lemma (requires (let b1 = handshakeMessageBytes pv msg1 in
@@ -1534,7 +1590,7 @@ val lemma_handshakeMessageBytes_aux: pv:option protocolVersion -> msg1:valid_hs_
 	(ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2)))
 
 #reset-options "--z3timeout 50"
-#set-options "--lax"
+//#set-options "--lax"
 
 let lemma_handshakeMessageBytes_aux pv msg1 msg2 =
   let payload1 = handshakeMessageBytes pv msg1 in
@@ -1559,47 +1615,78 @@ let lemma_handshakeMessageBytes_aux pv msg1 msg2 =
 
 #reset-options
 
+let lemma_aux_1 (a:bytes) (b:bytes) (c:bytes) (d:bytes) : Lemma 
+  (requires (Seq.equal (a @| b) (c @| d)))
+  (ensures ((length a >= length c ==> Seq.equal (Seq.slice a 0 (length c)) c)
+	    /\ (length a < length c ==> Seq.equal (Seq.slice c 0 (length a)) a))) 
+ = if length a >= length c then (
+     cut (Seq.equal (a @| b) (c @| d));
+     cut (forall (i:nat). {:pattern (Seq.index (a@|b) i) \/ (Seq.index (c@|d) i)} i < length (a@|b) ==> Seq.index (a@|b) i = Seq.index (c@|d) i);
+     cut (length a <= length (a@|b) /\ length c <= length (a@|b));
+     ()
+     )
+   else (
+     cut (Seq.equal (a @| b) (c @| d));
+     cut (forall (i:nat). {:pattern (Seq.index (a@|b) i) \/ (Seq.index (c@|d) i)} i < length (a@|b) ==> Seq.index (a@|b) i = Seq.index (c@|d) i);
+     cut (length a <= length (a@|b) /\ length c <= length (a@|b));
+     ()
+  )
+
+let lemma_op_At_Bar_def (b:bytes) (b':bytes) : Lemma (requires (True)) (ensures ((b@|b') = Seq.append b b')) = ()
+
+let lemma_handshakeMessageBytes_min_length (pv:option protocolVersion) (msg:valid_hs_msg{associated_to_pv pv msg}) : Lemma (length (handshakeMessageBytes pv msg) >= 4) = ()
+
+let lemma_aux_2 (pv:option protocolVersion) (l:list (msg:valid_hs_msg{associated_to_pv pv msg})) :
+  Lemma (requires (is_Cons l))
+	(ensures (length (handshakeMessagesBytes pv l) > 0))
+  = ()
+
+let lemma_aux_3 (b:bytes) (b':bytes) : Lemma (requires (length b <> length b'))
+					    (ensures (~(Seq.equal b b'))) = ()
+
 val handshakeMessagesBytes_is_injective: pv:option protocolVersion -> l1:list (msg:valid_hs_msg{associated_to_pv pv msg}) -> l2:list (msg:valid_hs_msg{associated_to_pv pv msg}) -> 
   Lemma (requires (True))
 	(ensures (Seq.equal (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2) ==> l1 = l2))
-
-#reset-options "--z3timeout 100"
-
 let rec handshakeMessagesBytes_is_injective pv l1 l2 =
-  admit(); // TODO: finish
   match l1, l2 with
-  | [], [] -> admit()
-  | hd::tl, hd'::tl' -> 
+  | [], [] -> ()
+  | hd::tl, hd'::tl' -> ();
       let payload1 = handshakeMessagesBytes pv l1 in
       lemma_handshakeMessagesBytes_def pv l1;
       cut (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) payload1);
+      lemma_op_At_Bar_def (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl);
       let payload2 = handshakeMessagesBytes pv l2 in
       lemma_handshakeMessagesBytes_def pv l2;
       cut (Seq.equal ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')) payload2);
+      lemma_op_At_Bar_def (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
       if payload1 = payload2 then (
+	cut (Seq.equal (Seq.append (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl))
+		       (Seq.append (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl')));
 	cut (Seq.equal ((handshakeMessageBytes pv hd) @| (handshakeMessagesBytes pv tl)) ((handshakeMessageBytes pv hd') @| (handshakeMessagesBytes pv tl')));	
 	if length (handshakeMessageBytes pv hd) >= length (handshakeMessageBytes pv hd')
 	then (
-	  Seq.lemma_len_append (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
-	  Seq.lemma_len_append (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl);
-	  Seq.lemma_eq_intro (Seq.slice payload2 0 (length (handshakeMessageBytes pv hd')))
-			     (handshakeMessageBytes pv hd');
-	  Seq.lemma_eq_intro (Seq.slice payload1 0 (length (handshakeMessageBytes pv hd)))
-			     (Seq.slice (handshakeMessageBytes pv hd) 0 (length (handshakeMessageBytes pv hd')));
+	  lemma_aux_1 (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl) (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
 	  lemma_handshakeMessageBytes_aux pv hd' hd
 	  )
 	else (
-	  admit();
+	  lemma_aux_1 (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl) (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
 	  lemma_handshakeMessageBytes_aux pv hd hd'
 	);
 	lemma_append_inj (handshakeMessageBytes pv hd) (handshakeMessagesBytes pv tl) (handshakeMessageBytes pv hd') (handshakeMessagesBytes pv tl');
 	handshakeMessageBytes_is_injective pv hd hd';
 	handshakeMessagesBytes_is_injective pv tl tl';
-	admit()
+	()
     )
-  | _, _ -> admit()
-
-#reset-options
+  | [],hd::tl -> (
+      lemma_handshakeMessagesBytes_def2 pv l1;
+      lemma_aux_2 pv l2;
+      lemma_aux_3 (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2)
+    )
+  | hd::tl, [] -> (
+      lemma_handshakeMessagesBytes_def2 pv l2;
+      lemma_aux_2 pv l1;
+      lemma_aux_3 (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2)
+    )
 
 val string_of_handshakeMessage: hs_msg -> Tot string
 let string_of_handshakeMessage hs = 
