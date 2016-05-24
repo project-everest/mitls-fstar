@@ -7,9 +7,9 @@ open Platform.Bytes
 open TLSConstants
 open TLSInfo
 
-module HH   = HyperHeap
+module HH   = FStar.HyperHeap
 module MR   = FStar.Monotonic.RRef
-module SeqP = SeqProperties
+module SeqP = FStar.SeqProperties
 module S    = StreamAE
 module MS   = MonotoneSeq
 module C    = Content

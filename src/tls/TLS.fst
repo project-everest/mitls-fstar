@@ -22,7 +22,7 @@ open Connection
 
 open MonotoneSeq
 open FStar.Monotonic.RRef
-module HH = HyperHeap
+module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 

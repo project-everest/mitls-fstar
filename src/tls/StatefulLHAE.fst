@@ -20,7 +20,7 @@ open AEAD_GCM
 open StatefulPlain
 open MonotoneSeq
 open FStar.Monotonic.RRef
-module HH = HyperHeap
+module HH = FStar.HyperHeap
 
 type id = AEAD_GCM.gid //TODO: TEMPORARY, until we add back LHAE 
 

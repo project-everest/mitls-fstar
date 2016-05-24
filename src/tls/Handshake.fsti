@@ -23,9 +23,9 @@ open HandshakeMessages
 open HSCrypto
 open StAE
 
-module HH = HyperHeap
-module MS = MonotoneSeq
+module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
+module MS = MonotoneSeq
 
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
