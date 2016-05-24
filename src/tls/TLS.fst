@@ -585,8 +585,13 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
 //* | WriteHSComplete
 //* the state changes accordingly.
 
+let trigger_peer (#a:Type) (x:a) = True
+
+
 let cwriter (i:id) (c:connection) = 
-  w:writer i{exists (r:reader (peerId i)). epoch_region_inv' (HS.region c.hs) r w}
+  w:writer i{exists (r:reader (peerId i)).{:pattern (trigger_peer r)}
+	       epoch_region_inv' (HS.region c.hs) r w}
+
 val sendFragment: c:connection -> #i:id -> wo:option(cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (fun h0 -> 
      hs_inv c.hs h0
@@ -624,9 +629,39 @@ let sendFragment c #i wo f =
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
 
+let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot Type0 = 
+    let hs = c.hs in 
+    let ix = iT hs Writer h in
+    if ix < 0
+    then b2t (i = noId)
+    else let epoch_i = eT hs Writer h in 
+ 	 b2t (i=hsId (Epoch.h epoch_i))
+
+val current_writer : c:connection -> i:id -> ST (option (cwriter i c))
+  (requires (current_writer_pre c i))
+  (ensures (fun h0 wo h1 -> 
+	       current_writer_pre c i h1
+	       /\ h0=h1
+	       /\ (match wo with 
+		  | None -> i=noId
+		  | Some w -> 
+		    i<>noId //needed for well-formedness of eT
+		    /\ (let epoch_i = eT c.hs Writer h1 in 
+	               let w_i = Epoch.w epoch_i in
+		       trigger_peer (Epoch.r epoch_i) /\
+		       op_Equality #(cwriter i c) w w_i))))
+let current_writer c i = 
+  let ix = Handshake.i c.hs Writer in 
+  if ix < 0
+  then None
+  else let epochs = MS.i_read (HS.log c.hs) in
+       let e = Seq.index epochs ix in
+       let _ = cut (trigger_peer (Epoch.r e)) in
+       Some (Epoch.w e)
+  
 //Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
 //            How do we conclude that after these two calls all the appData was written?
-// CF: this is guarantees only when returning Written.
+// CF: this is guaranteed only when returning Written.
 val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
     send_requires c i h
@@ -792,6 +827,15 @@ let writeOne c i appdata =
 (*        (\* i = hsId e.h))(\\*  /\ *\\) *\) *)
 (*        (\* (\\* incrementable (writer_epoch e) h)) *\\) *\) *)
 
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60"
+
+assume val admit_incrementable : #c:connection -> #i:id -> wopt:option (cwriter i c) -> ST unit
+  (requires (fun h -> True))
+  (ensures (fun h0 _ h1 -> 
+	      h0 = h1 
+	      /\ (match wopt with 
+		 | None -> True
+		 | Some w -> incrementable w h1)))
 let writeOne c i appdata =
   let h0 = ST.get() in
   let st = !c.state in
@@ -820,9 +864,8 @@ let writeOne c i appdata =
     end
   | _ ->  // next we check if there is outgoing Handshake traffic
 
-      ( assume false;
+      ( let wopt = current_writer c i in
         let hs_response = next_fragment i c.hs in
-        let h2 = ST.get() in
         (match hs_response with
         | Handshake.OutError (x,y) -> unrecoverable c y // a bit blunt
         | Handshake.Outgoing om send_ccs next_keys complete -> (
@@ -830,14 +873,15 @@ let writeOne c i appdata =
             let result0 = // first try to send handshake fragment, if any
               (match om with 
               | None             -> Correct() 
-              | Some (| rg, f |) -> send c #i (Content.CT_Handshake rg f)) in //wrong epoch, use sendFragment instead!
-
-            let result1 = // then try to send CCS fragment, if requested
+              | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f)) in //wrong epoch, use sendFragment instead!
+	
+	   let result1 = // then try to send CCS fragment, if requested
               (match result0, send_ccs with
               | Error e, _       -> Error e 
               | Correct _, false -> Correct()
-              | Correct _, true  -> send c #i (Content.CT_CCS #i (abyte 1z))) in //wrong epoch, use sendFragment instead!
-
+              | Correct _, true  -> 
+		admit_incrementable wopt;
+	 	sendFragment c wopt (Content.CT_CCS #i (abyte 1z))) in //wrong epoch, use sendFragment instead!
             // then consider key changes (TODO:restore precise checks and error handling)
             (match result1 with 
             | Error (x,y) -> unrecoverable c y 
@@ -847,17 +891,14 @@ let writeOne c i appdata =
                   if complete && st = BC then c.state := AD; // much happening ghostly too
                   if complete                    then WriteHSComplete
                   else if is_Some om && send_ccs then WriteAgain
-                  else 
-
-        // finally attempt to send some application data
-        // (we may statically know that st = AD)
-          begin match st, appdata with
-          | AD, Some (|rg,f|) ->
-               ( match send c (Content.CT_Data rg f) with
-                 | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
-                 | Error (x,y) -> unrecoverable c y)
-          | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
-	  end 
+                  else match st, appdata with // finally attempt to send some application data; we may statically know that st = AD
+		       | AD, Some (|rg,f|) ->
+			 admit_incrementable wopt;
+			 ( match sendFragment c wopt (Content.CT_Data rg f) with
+			   | Correct()   -> Written (* Fairly, tell we're done, and we won't write more data *)
+		 	   | Error (x,y) -> unrecoverable c y)
+		       | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
+		        
 ))))        
 
 (*16-05-20 stopped here, trying new HS interface. 
