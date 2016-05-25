@@ -748,9 +748,6 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C.region c)) h0 h1 *)
 (* )))) *)
-
-#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
-
 let writeOne c i appdata =
   let h0 = ST.get() in
   let wopt = current_writer c i in
