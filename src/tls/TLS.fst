@@ -648,18 +648,18 @@ let sendFragment c #i wo f =
        | Correct _ -> Correct()
   end       
        
-  
-let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot Type0 = 
-    let hs = c.hs in 
-    let ix = iT hs Writer h in
-    if ix < 0
-    then b2t (i = noId)
-    else let epoch_i = eT hs Writer h in 
- 	 b2t (i=hsId (Epoch.h epoch_i))
 
-val current_writer : c:connection -> i:id -> ST (option (cwriter i c))
-  (requires (current_writer_pre c i))
-  (ensures (fun h0 wo h1 -> 
+val current_writer : //A slightly exotic style here; using a local definition for the pre-condition, repeated in the post
+    (let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot Type0 = 
+	let hs = c.hs in 
+	let ix = iT hs Writer h in
+	if ix < 0
+	then b2t (i = noId)
+	else let epoch_i = eT hs Writer h in 
+   	     b2t (i=hsId (Epoch.h epoch_i)) in
+     c:connection -> i:id -> ST (option (cwriter i c))
+       (requires (current_writer_pre c i))
+       (ensures (fun h0 wo h1 -> 
 	       current_writer_pre c i h1
 	       /\ h0=h1
 	       /\ (match wo with 
@@ -669,7 +669,7 @@ val current_writer : c:connection -> i:id -> ST (option (cwriter i c))
 		    /\ (let epoch_i = eT c.hs Writer h1 in 
 	               let w_i = Epoch.w epoch_i in
 		       trigger_peer (Epoch.r epoch_i) /\
-		       op_Equality #(cwriter i c) w w_i))))
+		       op_Equality #(cwriter i c) w w_i)))))
 let current_writer c i = 
   let ix = Handshake.i c.hs Writer in 
   if ix < 0
@@ -680,16 +680,15 @@ let current_writer c i =
        Some (Epoch.w e)
 
 
-private val sendAlert : c:connection -> i:id -> ST (option ioresult_w)
-  (requires (send_requires c i))
-  (ensures (fun h0 o h1 -> is_None o ==> modifies_one (Alert.region c.alert) h0 h1))
-let sendAlert c i =
-  let wopt = current_writer c i in 
-  let st = !c.state in
-  let alert_response = Alert.next_fragment c.alert in
-  match alert_response with
-  | Some ad ->
-    begin
+private let sendAlert (c:connection) (i:id)
+  :  ST (option ioresult_w)
+	(requires (send_requires c i))
+	(ensures (fun h0 o h1 -> is_None o ==> modifies_one (Alert.region c.alert) h0 h1))
+  = let wopt = current_writer c i in 
+    let st = !c.state in
+    let alert_response = Alert.next_fragment c.alert in
+    match alert_response with
+    | Some ad -> begin
       match sendFragment c #i wopt (Content.ct_alert i ad) with
       | Error xy -> Some (unrecoverable c (snd xy))
       | Correct _   ->
@@ -704,8 +703,28 @@ let sendAlert c i =
               Some (WriteError (Some ad) "")
             end
     end
- | _ -> None
- 
+  | _ -> None
+
+private let sendHandshakeCCS (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
+  : ST (result unit)
+       (requires (fun h -> sendFragment_requires wopt h))
+       (ensures (fun h0 r h1 -> modifies_just (regions wopt) h0 h1))
+  =  let result0 = // first try to send handshake fragment, if any
+         match om with
+         | None             -> Correct()
+         | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in //
+     reveal_epoch_region_inv_all ();
+     let h1 = ST.get() in 
+     cut (st_inv c h1);
+     // then try to send CCS fragment, if requested
+     match result0 with
+     | Error e -> Error e
+     | _ ->
+       if not send_ccs
+       then result0
+       else sendFragment c wopt (Content.CT_CCS #i (abyte 1z)) //
+
+
 
 //Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
 //            How do we conclude that after these two calls all the appData was written?
@@ -729,31 +748,8 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C.region c)) h0 h1 *)
 (* )))) *)
-#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60"  
 
-let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) = 
-  match wopt with 
-  | None -> True
-  | Some w -> 
-    iT c.hs Writer h >= 0
-    /\ (let epoch_i = eT c.hs Writer h in 
-       w == Epoch.w epoch_i)
-	
-(* let sendHandshakeCCS (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool) *)
-(*   : ST (result unit) *)
-(*        (requires (fun h -> is_current_writer wopt h /\ sendFragment_requires wopt h)) *)
-(*        (ensures (fun h0 r h1 -> modifies_just (regions wopt) h0 h1)) *)
-(*   =  let result0 = // first try to send handshake fragment, if any *)
-(*          match om with  *)
-(*          | None             -> Correct()  *)
-(*          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in //wrong epoch, use sendFragment instead! *)
-(*      // then try to send CCS fragment, if requested *)
-(*      match result0 with  *)
-(*      | Error e -> Error e *)
-(*      | _ ->  *)
-(*        if not send_ccs  *)
-(*        then result0 *)
-(*        else sendFragment c wopt (Content.CT_CCS #i (abyte 1z)) //wrong epoch, use sendFragment instead! *)
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 
 let writeOne c i appdata =
   let h0 = ST.get() in
@@ -765,21 +761,9 @@ let writeOne c i appdata =
     match next_fragment i c.hs with
     | Handshake.OutError (x,y) -> unrecoverable c y // a bit blunt
     | Handshake.Outgoing om send_ccs next_keys complete ->
-      let result0 = // first try to send handshake fragment, if any
-          match om with 
-          | None             -> Correct() 
-          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in //wrong epoch, use sendFragment instead!
-	
-      let result1 = // then try to send CCS fragment, if requested
-	  match result0 with 
-	  | Error e -> Error e
-	  | _ -> 
-	    if not send_ccs 
-	    then result0
-	    else sendFragment c wopt (Content.CT_CCS #i (abyte 1z)) in //wrong epoch, use sendFragment instead!
 	    
       // then consider key changes (TODO:restore precise checks and error handling)
-      match result1 with 
+      match sendHandshakeCCS wopt om send_ccs with 
       | Error (_,y) -> unrecoverable c y
       | _   -> 
         if next_keys           then c.state := BC; // much happening ghostly
@@ -796,11 +780,20 @@ let writeOne c i appdata =
 	       | _   -> Written (* Fairly, tell we're done, and we won't write more data *)
 	       end
              | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
-		        
 
 
+let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) = 
+  match wopt with 
+  | None -> True
+  | Some w -> 
+    iT c.hs Writer h >= 0
+    /\ (let epoch_i = eT c.hs Writer h in 
+       w == Epoch.w epoch_i)
 
 
+////////////////////////////////////////////////////////////////////////////////
+//NS reached up to here
+////////////////////////////////////////////////////////////////////////////////
 
 
 (* the rest of the spec below still uses the old state machine
@@ -929,36 +922,9 @@ let writeOne c i appdata =
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
 *)
 
-#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
-
-(* let send_requires' (c:connection) (i:id) (h:HH.t) =  *)
-(*     let st = sel h c.state in *)
-(*     let es = epochs c h in *)
-(*     let j = iT c.hs Writer h in *)
-(*     (\* j < Seq.length es /\ *\) *)
-(*     st_inv c h /\ *)
-(*     st <> Close /\ *)
-(*     st <> Half Reader   /\ *)
-(*     (j < 0 ==> i = noId) /\ *)
-(*     (j >= 0 ==> ( *)
-(*        let e = Seq.index es j in *)
-(*        let wr = writer_epoch e in *)
-(*        Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property *)
-(*        Map.contains h (StAE.log_region wr)))(\*  /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property *\) *)
-(*        (\* i = hsId e.h))(\\*  /\ *\\) *\) *)
-(*        (\* (\\* incrementable (writer_epoch e) h)) *\\) *\) *)
-
-(* #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60" *)
-
-
-
 (*16-05-20 stopped here, trying new HS interface. 
 
 //? | _ -> unexpected "NYI"))
-
-////////////////////////////////////////////////////////////////////////////////
-//NS reached up to here
-////////////////////////////////////////////////////////////////////////////////
 
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
