@@ -27,20 +27,21 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 
-#set-options "--initial_fuel 1 --initial_ifuel 1 --max_fuel 0 --max_ifuel 0"
+
+#set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
 
 //allowing inverting optResult without having to globally increase the fuel just for this
 val invertOptResult : a:Type -> b:Type -> Lemma 
   (requires True)
   (ensures (forall (x:optResult a b). is_Error x \/ is_Correct x))
   [SMTPatT (optResult a b)]
-let invertOptResult a b = ()  
+let invertOptResult a b = allow_inversion (optResult a b)
 
 val invertOption : a:Type -> Lemma 
   (requires True)
   (ensures (forall (x:option a). is_None x \/ is_Some x))
   [SMTPatT (option a)]
-let invertOption a = ()  
+let invertOption a = allow_inversion (option a)
 
 let outerPV c : ST protocolVersion
   (requires (hs_inv c.hs))
@@ -48,8 +49,6 @@ let outerPV c : ST protocolVersion
   match Handshake.version c.hs with
   | TLS_1p3 -> TLS_1p0
   | pv      -> pv
-
-#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 
 //A wrapper around Handshake.next_fragment; using monotonicity to show that 
 //the i'th epoch doesn't change
@@ -712,7 +711,7 @@ private let sendHandshakeCCS (#c:connection) (#i:id) (wopt:option (cwriter i c))
   =  let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
-         | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in //
+         | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in 
      reveal_epoch_region_inv_all ();
      let h1 = ST.get() in 
      cut (st_inv c h1);
@@ -722,7 +721,7 @@ private let sendHandshakeCCS (#c:connection) (#i:id) (wopt:option (cwriter i c))
      | _ ->
        if not send_ccs
        then result0
-       else sendFragment c wopt (Content.CT_CCS #i (abyte 1z)) //
+       else sendFragment c wopt (Content.CT_CCS #i (abyte 1z)) 
 
 
 
@@ -748,7 +747,10 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C.region c)) h0 h1 *)
 (* )))) *)
+
+#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"  
 let writeOne c i appdata =
+  allow_inversion (NewHandshake.outgoing i);
   let h0 = ST.get() in
   let wopt = current_writer c i in
   // alerts have highest priority; we send only close_notify and fatal alerts
