@@ -1402,16 +1402,19 @@ let parseSigHashAlg b =
 
 // Moving this inside sigHashAlgsBytes gives a `Bound term variable not found` error
 // See https://github.com/FStarLang/FStar/issues/533
-let rec sigHashAlgsBytes_aux (b:bytes) (algs:list sigHashAlg{b2t (length b + op_Multiply 2 (List.Tot.length algs) < 65536)}) : Tot (r:bytes{length r < 65536}) (decreases algs) =
-  match algs with
-  | [] -> b
-  | alg::algs' ->
-    let shb = sigHashAlgBytes alg in
-    sigHashAlgsBytes_aux (shb @| b) algs'
 
 val sigHashAlgsBytes: algs:list sigHashAlg{List.Tot.length algs < 65536/2}
   -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 let sigHashAlgsBytes algs =
+  let rec sigHashAlgsBytes_aux: b:bytes
+    -> algs:list sigHashAlg{b2t (length b + op_Multiply 2 (List.Tot.length algs) < 65536)}
+    -> Tot (r:bytes{length r < 65536}) (decreases algs) = fun b algs ->
+    match algs with
+    | [] -> b
+    | alg::algs' ->
+      let shb = sigHashAlgBytes alg in
+      sigHashAlgsBytes_aux (shb @| b) algs'
+  in
   let b = sigHashAlgsBytes_aux empty_bytes algs in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
