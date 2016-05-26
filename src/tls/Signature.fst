@@ -103,6 +103,9 @@ type pkey = (a:alg & pubkey a)
 val pkey_repr: pkey -> Tot public_repr
 let pkey_repr (| a,  p |) = PK.repr p
 
+val pkey_alg: pkey -> Tot alg
+let pkey_alg (| a,  p |) = a
+
 type skey (a:alg) = 
   k:(pubkey a * secret_repr){let _,sk = k in sigAlg_of_secret_repr sk = a.core}
 
@@ -293,13 +296,16 @@ let coerce #a pkr skr =
 (* ------------------------------------------------------------------------ *)
 val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST pkey
   (requires (fun _ -> True))
-  (ensures  (fun h0 k h1 -> 
-	     pkey_repr k = pkr
-             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr ==> k = k')))
+  (ensures  (fun h0 k h1 ->
+	     pkey_alg k = a
+	     /\ pkey_repr k = pkr
+             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' = a ==> k = k')))
 let endorse #a pkr =
   let keys = m_read rkeys in
   match find_key pkr keys with
-  | Some k -> k
+  | Some k ->
+    if pkey_alg k = a then k
+    else (| a, alloc_pubkey Corrupt pkr |)
   | None   -> (| a, alloc_pubkey Corrupt pkr |)
 
 

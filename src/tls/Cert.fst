@@ -90,6 +90,7 @@ let rec lemma_parseCertificateList_length b =
   | Error _ -> ()
 
 (* JK: why is that necessary ? *)
+(* SZ: proving that `chain` is a subtype of `list bytes` requires a positivity check *)
 let rec list_chain_is_list_bytes (c:chain) : Tot (list bytes) = 
   match c with
   | [] -> []
@@ -142,7 +143,6 @@ let rec list_sigHashAlg_is_list_tuple_sig_hash (lsha:list sigHashAlg) : Tot (lis
   | [] -> []
   | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd)::(list_sigHashAlg_is_list_tuple_sig_hash tl)
 
-(* TODO: FIXME, an assumed hypothesis in the body *)
 val verify_signature : chain -> pv:protocolVersion -> role -> csr:option bytes{is_None csr <==> pv = TLS_1p3} -> sigAlg -> option (list sigHashAlg) -> tbs:bytes -> sigv:bytes -> ST bool (fun _ -> True) (fun _ _ _ -> True)
 let verify_signature c pv role nonces csa sigalgs tbs sigv =
   if length sigv > 4 then
@@ -177,10 +177,8 @@ let verify_signature c pv role nonces csa sigalgs tbs sigv =
 	       match get_chain_public_signing_key c sa with
 	       | Correct pk ->
 	         let a = Signature.Use (fun _ -> True) sa [Hash h] false false in
-	         let (|a,pk|) = endorse #a pk in
-		 let h' = Hash h in
-		 assume (List.Tot.mem h' a.digest);
-                 Signature.verify #a h' pk tbs sigv
+	         let (|_,pk|) = endorse #a pk in
+	         Signature.verify (Hash h) pk tbs sigv
 	       | Error z -> false
 	       end
              else false
@@ -190,16 +188,13 @@ let verify_signature c pv role nonces csa sigalgs tbs sigv =
     end
   else false
 
-(* JK: TODO: Not tailrec *)
-let rec check_length (l:list bytes) : Tot (result chain) =
-  match l with
-  | [] -> Correct []
-  | hd::tl ->
-    match check_length tl with
-    | Correct l' ->
-      if length hd < 16777216 then Correct (hd :: l')
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+private val check_length: list bytes -> chain -> Tot (result chain)
+let rec check_length cs acc =
+  match cs with
+  | [] -> Correct (List.Tot.rev acc)
+  | c::cs' ->
+    if length c < 16777216 then check_length cs' (c::acc)
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val lookup_server_chain: string -> string -> protocolVersion -> option sigAlg -> option (list sigHashAlg) -> Tot (result (chain * CoreCrypto.certkey))
 let lookup_server_chain pem key pv sa ext_sig =
@@ -220,7 +215,7 @@ let lookup_server_chain pem key pv sa ext_sig =
 *)
   match CoreCrypto.cert_load_chain pem key with
   | Some (csk, chain) -> (
-      match check_length chain with
+      match check_length chain [] with
       | Correct chain -> Correct (chain, csk)
       | Error z -> Error z)
   | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "cannot find suitable server certificate")
