@@ -342,36 +342,6 @@ let ct_rg_test i f = let x, y = Content.ct_rg i f in (x,y)
 *)
 
 
-(* 16-05-20 TBC
-assume val sendFragment: c:connection -> #i:id -> wo:option(writer i) -> f: Content.fragment i -> ST (result unit)
-  (requires (fun h0 -> 
-     match wo with 
-     | None    -> i = noId
-     | Some wr -> incrementable wr h0))
-  (ensures (fun h0 r h1 -> 
-     match wo with 
-     | None    -> modifies Set.empty h0 h1 
-     | Some wr -> modifies_one (region wr) h0 h1 /\
-                 seqnT wr h1 = seqnT wr h0 + 1 /\
-                 (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f)
-//	     /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
-  ))
-
-let sendFragment c #i wo f =
-  let payload: encrypted f = 
-    match wo with
-    | None    -> Content.repr i f //16-05-20 don't understand error.
-    | Some wr -> StAE.encrypt wr f in 
-  let pv = outerPV c in //16-05-20  compare with i.pv?
-  let ct, rg = Content.ct_rg i f in
-  lemma_repr_bytes_values (length payload);
-  let record = Record.makePacket ct pv payload in
-  let r  = Platform.Tcp.send (c.tcp) record in
-  match r with
-    | Error(x)  -> Error(AD_internal_error,x)
-    | Correct _ -> Correct()
-*)
-
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
     let es = epochs c h in // implying epochs_inv es
@@ -780,7 +750,6 @@ let writeOne c i appdata =
 	       end
              | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
 
-
 let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) = 
   match wopt with 
   | None -> True
@@ -921,10 +890,11 @@ let writeOne c i appdata =
                   | _ -> closable c (perror __SOURCE_FILE__ __LINE__ "Sending handshake messages in wrong state"))
 *)
 
-(*16-05-20 stopped here, trying new HS interface. 
 
 //? | _ -> unexpected "NYI"))
 
+// We flush any alert to close down the outgoing stream
+// [we could enforce not sending any HS traffic]
 val writeAllClosing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
     let st = sel h c.state in
@@ -956,7 +926,6 @@ let rec writeAllClosing c i =
 
 // in TLS 1.2 we send the Finished messages immediately after CCS
 // in TLS 1.3 we send e.g. ServerHello in plaintext then encrypted HS
-
 
 val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
   (requires (fun h ->
@@ -1219,24 +1188,21 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
   ))))))
 
 let readFragment c i = 
-  assume false; // 16-05-19 can't prove POST.
+  //assume false; // 16-05-19 can't prove POST.
   match Record.read c.tcp i.pv with 
+  | Error e -> Error e
   | Correct(ct,pv,payload) -> 
-     begin
-       // either payload is a plaintext protocol fragment, or we decrypt
-       let j = Handshake.i c.hs Reader in 
-       if j = 0 then 
-         let rg = Range.point (length payload) in 
-         Correct(Content.mk_fragment i ct rg payload)
-       else
-         let es = MR.m_read c.hs.log in 
-         let e = Seq.index es j in 
-         match StAE.decrypt (reader_epoch e) payload with 
-         | Some f -> Correct f
-         | None   -> Error(AD_internal_error,"") //16-05-19 ADJUST! 
-     end
-  | Error e       -> Error e
-
+    let j = Handshake.i c.hs Reader in 
+    if j < 0 then // payload is in plaintext
+      let rg = Range.point (length payload) in 
+      Correct(Content.mk_fragment i ct rg payload)
+    else
+      // payload decryption
+      let es = MR.m_read c.hs.log in 
+      let e = Seq.index es j in 
+      match StAE.decrypt (reader_epoch e) payload with 
+      | Some f -> Correct f
+      | None   -> Error(AD_internal_error,"") //16-05-19 adjust! 
 
 // We receive, decrypt, verify a record (ct,f); what to do with it?
 // i is the presumed reader, threaded from the application.
@@ -1440,4 +1406,3 @@ let refuse c (q:query) =
     writeAllClosing c
 *)
 
-*)
