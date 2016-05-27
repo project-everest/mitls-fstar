@@ -41,10 +41,6 @@ let hkdf_expand_label ha secret label hv len =
   let (sp1,sp2) = split res len in
   sp1
 
-assume val get_signing_cert: option string -> option sigAlg -> list sigHashAlg -> Tot Cert.chain
-assume val cert_sign: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> Tot (result (b:bytes{length b < 65536}))
-assume val cert_verify: Cert.chain -> option sigAlg -> list sigHashAlg -> bytes -> bytes -> Tot (result unit)
-
 type ms = bytes // -> abstract
 
 val dh_keygen: CommonDH.group -> Tot CommonDH.key
