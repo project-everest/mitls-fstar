@@ -455,7 +455,9 @@ val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
 val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge with recv_fragment
   (requires (hs_inv s)) // could require pv <= 1p2
   (ensures (fun h0 result h1 ->
-    ~(is_InQuery result) /\ recv_ensures s h0 result h1 ))
+    recv_ensures s h0 result h1 /\
+    (is_InError result \/ result = InAck true false)
+    ))
 
 val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
@@ -524,3 +526,7 @@ we can increment after sending ClientHello, but we don't have the epoch yet!
 
 Ad hoc cases? or just an extra case?
 In fact, ~ keeping a local, explicit CCS signal. *)
+
+
+(*** Reference Traces ***) 
+

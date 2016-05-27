@@ -151,13 +151,6 @@ let next_fragment (State b) =
 
 // ---------------- incoming alerts -------------------
 
-let recv_fragment s (r:range) (f:bytes) : result (ad: alertDescription { f = alertBytes ad }) =
-    if length f = 2 then 
-    match parse f with 
-    | Correct ad -> 
-        if ad = AD_close_notify then send s ad; (* we possibly send a close_notify back *)
-        Correct ad
-    | Error z -> Error z
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "expected exactly 2 bytes of alert")
+// no more recv_fragment as alerts are now parsed by Content.
 
 let reset s = s.outgoing := None   // we silently discard any unsent alert. 

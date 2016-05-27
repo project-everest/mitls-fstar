@@ -225,8 +225,9 @@ val request: cn:conn { c_role cn = Server } -> c:config -> ST unit
 type ioresult_w =
     // public results
     | Written             // Application data was written, and the connection remains writable
-    | WriteError: al:option alertDescription -> txt: string -> ioresult_w // The connection is down, possibly after sending an alert
+    | WriteError: al:option alertDescription -> txt: string -> ioresult_w // The connection is down, optionally after sending a fatal alert (on the current writer)
 //  | WritePartial of unsent_data // worth restoring?
+
     // transient, internal results
     | MustRead            // Nothing written, and the connection is busy completing a handshake
     | WriteDone           // No more data to send in the current state

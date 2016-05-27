@@ -30,6 +30,7 @@ module MR = FStar.Monotonic.RRef
 // e.g. , reading, and writing transitions are tighly related
 // TODO recheck large logical invariants GState in Dispatch.fs7
 
+(*
 // dispatch records the *record* protocol version (TLS 1.0 when using TLS 1.3)
 type dispatch =
   | Init
@@ -39,6 +40,7 @@ type dispatch =
   | Open
   | Closing of (* protocolVersion * *) string (* write-only, while sending a fatal alert *)
   | Closed
+*)
 
 // revised from 2x dispatch 
 type tlsState = 
