@@ -196,7 +196,7 @@ let rec aux config sock =
   let ClientHello(ch),chb = recvHSRecord tcp pv kex in
 
   // Server Hello
-  let (nego,(ServerHello sh,shb)) = 
+  let (nego,None,(ServerHello sh,shb)) = 
       (match Handshake.prepareServerHello config ks log None (ClientHello ch,chb) with
        | Correct x -> x
        | Error (x,z) -> failwith z) in
