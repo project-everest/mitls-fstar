@@ -27,10 +27,8 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 
-// using also Alert, DataStream, Content, Record
+// using also DataStream, Content, Record
 
-//16-05-28  too brittle otherwise
-#set-options "--lax" 
 
 (*** to be relocated ***)
 
@@ -78,7 +76,7 @@ let next_fragment i s =
 	  then MR.testify (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog) in
   res
 
-
+ 
 // temporary scaffolding
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires True)
@@ -98,7 +96,6 @@ let rec unexpected #a s = unexpected s
 //16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
 
 let id = i:id{ is_stream_ae i }
-
  
 let outerPV c : ST protocolVersion
   (requires (hs_inv c.hs))
@@ -134,9 +131,8 @@ val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config -> resume: resum
 let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.init m role cfg resume in
-    let al = Alert.init m in
     let state = ralloc m BC in
-    C #m hs al tcp state
+    C #m hs tcp state
 
 
 //TODO upgrade commented-out types imported from TLS.fsti
@@ -249,17 +245,22 @@ let no_seqn_overflow c rw =
 type ioresult_w =
     // public results returned by TLS.send
     | Written             // the application data was written; the connection remains writable
-    | WriteError: o:option alertDescription -> txt: string -> ioresult_w // The connection is down, possibly after sending an alert
+    | WriteClose          // a final closeNotify was written; the connection is either closed or read-only
+    | WriteError: o:option alertDescription -> txt: string -> ioresult_w 
+                          // The connection is gone, possibly after sending a fata alert 
 //  | WritePartial of unsent_data // worth restoring?
 
     // transient internal results returned by auxiliary send functions
+    | WrittenHS: newWriter:bool -> complete:bool -> ioresult_w // the handshake progressed
+(*
 //  | MustRead            // Nothing written, and the connection is busy completing a handshake
     | WriteDone           // No more data to send in the current state
     | WriteHSComplete     // The handshake is complete [while reading]
-    | SentClose           // a closeNotify was finally written.
+    | WriteClose           // a closeNotify was finally written.
     | WriteAgain          // sent something; there may be more to send (loop)
     | WriteAgainFinishing // outgoing epoch changed; there may be more to send to finish the handshake (loop)
     | WriteAgainClosing   // we are tearing down the connection & must still send an alert
+*)
 
 type ioresult_o = r:ioresult_w { is_Written r \/ is_WriteError r }
 
@@ -280,32 +281,6 @@ let unrecoverable c reason =
     disconnect c;
     WriteError None reason
 
-// on some errors, we try to send a final alert then tear down the connection
-// (layer-style: the alert is queued, then sent; consider inlining )
-val abortWithAlert: c:connection -> ad:alertDescription{isFatal ad} -> reason:string -> ST unit
-  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.state <> Close))
-  (ensures (fun h0 _ h1 ->
-    st_inv c h1 /\
-    modifies (Set.singleton (C.region c)) h0 h1 /\
-    sel h1 c.state = Half Writer
-  ))
-let abortWithAlert c ad reason =
-    // done as the alert is sent: invalidateSession c.hs;
-    Alert.send c.alert ad;
-    c.state := Half Writer
-
-(*
-val closable: c:connection -> reason:string -> ST ioresult_w
-  (requires (fun h0 -> st_inv c h0 /\ sel h0 c.state <> Close))
-  (ensures (fun h0 r h1 ->
-    st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1 /\
-    sel h1 c.state = Half Writer /\ r = WriteAgainClosing))
-let closable c reason =
-    abortWithAlert c AD_internal_error reason;
-    WriteAgainClosing
-*)
-
-// -------------
 
 val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
@@ -342,7 +317,7 @@ let send_payload c i f =
 	 let e = Seq.index es j in 
 	 (* let _ = reveal_epoch_region_inv e in *)
 	 StAE.encrypt (writer_epoch e) f
-
+ 
 
 (* assume val frame_ae:  *)
 (*   h0:HH.t -> h1: HH.t -> c:connection -> Lemma( *)
@@ -395,6 +370,8 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
        seqnT wr h1 = seqnT wr h0 + 1 /\
        (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f )))))
 
+//16-05-29 timing out?
+#set-options "--lax" 
 let send c #i f =
   let pv = outerPV c in
   let ct, rg = Content.ct_rg i f in
@@ -469,7 +446,7 @@ let test_send_data (c: connection) (i: id) (rg: frange i) (f: rbytes rg) =
 //* | WriteDone         when is_None ghost, notifying there is nothing left to send
 //* | Written when is_Some ghost, notifying the appdata fragment was sent
 //* | WriteError (unrecoverable \/ after sending alert)
-//* | SentClose
+//* | WriteClose
 //* | WriteAgain | WriteAgainFinishing | WriteAgainClosing
 //* | WriteHSComplete
 //* the state changes accordingly.
@@ -481,6 +458,7 @@ let cwriter (i:id) (c:connection) =
   w:writer i{exists (r:reader (peerId i)).{:pattern (trigger_peer r)}
 	       epoch_region_inv' (HS.region c.hs) r w}
 
+//16-05-29 duplicating no_seqn_overflow?
 private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i c))
   : ST bool
     (requires (fun h -> True))
@@ -500,7 +478,8 @@ let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
 
-let ad_overflow : result unit = Error (AD_record_overflow, "overflow")
+//16-05-29 note that AD_record_overflow os for oversized incoming records, not seqn overflows.
+let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_requires wo))
@@ -570,30 +549,31 @@ let current_writer c i =
        Some (Epoch.w e)
 
 
-private let sendAlert (c:connection) (i:id)
-  :  ST (option ioresult_w)
-	(requires (send_requires c i))
-	(ensures (fun h0 o h1 -> is_None o ==> modifies_one (Alert.region c.alert) h0 h1))
-  = let wopt = current_writer c i in 
+private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
+  :  ST ioresult_w
+	(requires (fun _ -> True)) //was: send_requires c i
+	(ensures (fun h0 r h1 -> True))
+          //16-05-29 TODO: write precise post, adapted from sendFragment, with three cases:
+          // | WriteError (Some ad) txt  -> write log += ad; state = Close
+          // | WriteClose                 -> write log += closeNotify; state = ...
+          // | WriteError None txt       -> no change except state = Close
+
+  = let i = currentId c Writer in 
+    let wopt = current_writer c i in 
     let st = !c.state in
-    let alert_response = Alert.next_fragment c.alert in
-    match alert_response with
-    | Some ad -> begin
-      match sendFragment c #i wopt (Content.CT_Alert #i ad) with
-      | Error xy -> Some (unrecoverable c (snd xy))
-      | Correct _   ->
-          if ad = AD_close_notify then
-            begin // graceful closure
-              c.state := (if st = Half Writer then Close else Half Reader);
-              Some SentClose
-            end
-          else
-            begin
-              disconnect c;
-              Some (WriteError (Some ad) "")
-            end
-    end
-  | _ -> None
+    match sendFragment c #i wopt (Content.CT_Alert #i ad) with
+    | Error xy -> unrecoverable c (snd xy) // or reason?
+    | Correct _   ->
+        if ad = AD_close_notify then
+          begin // graceful closure
+            c.state := (if st = Half Writer then Close else Half Reader);
+            WriteClose
+          end
+        else
+          begin
+            disconnect c;
+            WriteError (Some ad) reason
+          end
 
 
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
@@ -616,42 +596,19 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
        else sendFragment c wopt (Content.CT_CCS #i) 
 
 
-//Question: NS, BP, JL: What happens when (writeOne _ _ (Some appdata) returns WriteAgain and then is called again (writeOne _ _ None)?
-//            How do we conclude that after these two calls all the appData was written?
-// CF: this is guaranteed only when returning Written.
-val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
-  (requires (fun h ->
-    send_requires c i h
-    /\ (let st = sel h c.state in
-       let j = iT c.hs Writer h in
-       j >= 0 ==> st=AD))) // CF 16-05-27 too strong
-  (ensures (fun h0 r h1 -> True))
-(*     let st = sel h0 c.state in *)
-(*     let es = sel h0 c.hs.log in *)
-(*     let j = iT c.hs Writer h0  in *)
-(*     st_inv c h0 /\ *)
-(*     st_inv c h1 /\ *)
-(*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
-(*     (if j < 0 then i == noId /\ h0 = h1 else *)
-(*        let e = Seq.index es j in *)
-(*        i == hsId e.h /\ ( *)
-(*        let wr:writer i = writer_epoch e in *)
-(*        modifies (Set.singleton (C.region c)) h0 h1 *)
-(* )))) *)
 
-
-// outcomes?
+// (old) outcomes?
 // | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
 // | Written    -> sent application fragment (when is_Some appdata)
 // | WriteDone  -> sent nothing              (when appdata = None)
 // | WriteError None      _ -> closed the connection on unrecoverable error (same log, unclear app-level signal)
 // | WriteError (Some ad) _ -> closed the connection (log extended with fatal alert)
 // | WriteAgainClosing      -> will attempt to send an alert before closing
-// | SentClose              -> similar
+// | WriteClose              -> similar
 // | WriteAgainFinishing    -> incremented the writer epoch.
 
-//16-05-27 updated post-condition branches to be shared by writeOne...write
-//         still missing some details
+//16-05-27 updated post-condition branches; 
+//         to be share between writing functions (each returning a subset of results); still missing details.
 
 let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStream.fragment i rg)) (r: ioresult_w) h0 h1 =
   let st0 = sel h0 c.state in 
@@ -674,28 +631,35 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
           (authId i ==> StAE.fragments wr h1 = snoc (StAE.fragments wr h0) (Content.CT_Data rg f))) *)
           // add something on the projection?
         )  
+    | WriteClose -> // writer view += Close (so we can't send anymore); only from calling sendAlert.
+        st1 <> AD
+
+    | WriteError oad reason -> 
+        // Something bad happened while writing (underspecified, for convenience)
+        // * if appdata = None, then the current writer may have changed.
+        // * current writer view += appdata.value (or not) += oad.value (or not) 
+        st1 = Close /\
+        (match oad with 
+        | Some ad -> True //TBC: writer view += at most appdata.value + ad  
+        | None    -> True //TBC: writer view += at most appdata.value 
+        )
+        // TBC, describing what may have been added to the projection
+
+    | WrittenHS newWriter complete -> True
+        // we sent higher-priority traffic; no visible effects,
+        // we may be in a new epoch and/or have completed a handshake
+        // several cases to be detailed (see below), none of them changing writer views.
+
+(* replacing:
     | WriteAgain -> // we sent higher-priority traffic; no visible effects.
         st0 = st1
         // only HS, Alert, and region wr were modified
         // the writer projection is unchanged
         // the iT indexes are unchanged
 
-    | SentClose -> // writer view += CloseNotify (so we can't send anymore)
-        st1 <> AD
-
-    | WriteError oad _text -> 
-        st1 = Close /\
-        (match oad with 
-        | Some ad -> True //TBC: other effect: we have sent this fatal error. 
-        | None    -> True //TBC: no other visible effect
-        )
-        // TBC, describing what may have been added to the projection
-        // if oad is Some ad, then ad was added to the write stream
-        // otherwise, nothing was added to the write stream
-
     | WriteDone -> // there was nothing to send [before reading]
         is_None appdata
-        // only internal changes in HS (and possibly Alert)
+        // only internal changes in HS.
 
     | WriteAgainFinishing -> 
         st0 = st1 
@@ -707,26 +671,86 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
         iT c.hs Writer h1 = iT c.hs Reader h1
         // should also state that the old epoch's log is unchanged, and the new epoch's log is empty.
 
-  (* for flushing fatal alerts; unused? 
-    | WriteAgainClosing -> // something bad happened; we are ready to send a fatal alert
-        st1 = Half Writer 
-        // only HS and Alert were modified
-  *)
-
     | WriteAgainClosing -> False
+*)
   end
 
 
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"  
+
+// simplified to loop over Handshake traffic only;
+// called both when writing and reading 
+// returns WriteError or WrittenHandshake
+//TODO: consider sending handshake warnings
+//TODO: consider keeping some errors private
+//TODO: consider inlining sendHandshake to save a spec.
+//TODO: consider immediately sending post-completion traffic (e.g. TLS 1.2 Finished and TLS 1.3 Tickets)
+let rec writeHandshake (c:connection) (newWriter:bool) : St ioresult_w =
+  let i = currentId c Writer in 
+  let wopt = current_writer c i in
+  match next_fragment i c.hs with
+  | Handshake.OutError (ad,reason) -> sendAlert c ad reason 
+  | Handshake.Outgoing om send_ccs next_keys complete ->
+	    
+      // we send handshake & CCS messages, and process key changes
+      match sendHandshake wopt om send_ccs with 
+      | Error (ad,reason) -> sendAlert c ad reason 
+      | _   -> 
+        if next_keys           then c.state := BC; // much happening ghostly
+        let st = !c.state in
+        let newWriter = newWriter || next_keys in 
+        if complete && st = BC then c.state := AD; // much happening ghostly too
+        if complete || ( is_None om && not send_ccs) 
+	then 
+          // done, either to completion or because there is nothing left to do
+          WrittenHS newWriter complete
+        else 
+          // keep writing until something happens
+          writeHandshake c newWriter  
+
+// then we can use this variant of write, and get rid of the rest below.
+let write c i rg data = 
+  let wopt = current_writer c i in
+  match writeHandshake c false with 
+  | WrittenHS false false -> 
+      begin // we attempt to send some application data
+        match sendFragment c wopt (Content.CT_Data rg data) with
+	| Error(ad,reason) -> sendAlert c ad reason
+	| _                -> Written 
+      end
+  | r  -> r // we report some handshake action; the user may retry at a different index.
+           // variants may be more convenient, 
+           // e.g WrittenHS true false signals 0.5 writing, and we could then write AD and report completion.
+
+(*16-05-29 BEGIN OLDER VARIANT 
+
+val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
+  (requires (fun h ->
+    send_requires c i h
+    /\ (let st = sel h c.state in
+       let j = iT c.hs Writer h in
+       j >= 0 ==> st=AD))) // CF 16-05-27 too strong
+  (ensures (fun h0 r h1 -> True))
+(*     let st = sel h0 c.state in *)
+(*     let es = sel h0 c.hs.log in *)
+(*     let j = iT c.hs Writer h0  in *)
+(*     st_inv c h0 /\ *)
+(*     st_inv c h1 /\ *)
+(*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
+(*     (if j < 0 then i == noId /\ h0 = h1 else *)
+(*        let e = Seq.index es j in *)
+(*        i == hsId e.h /\ ( *)
+(*        let wr:writer i = writer_epoch e in *)
+(*        modifies (Set.singleton (C.region c)) h0 h1 *)
+(* )))) *)
+
+
 let writeOne c i appdata =
   allow_inversion (NewHandshake.outgoing i);
   let h0 = ST.get() in
   let wopt = current_writer c i in
-  // alerts have highest priority; we send only close_notify and fatal alerts
-  match sendAlert c i with 
-  | Some io_res -> io_res //done; we just sent an alert
-  | _ -> 
-    match next_fragment i c.hs with
+  // alerts are now sent immediately, so we now start with Handshake
+   match next_fragment i c.hs with
     | Handshake.OutError (x,y) -> unrecoverable c y // a bit blunt
     | Handshake.Outgoing om send_ccs next_keys complete ->
 	    
@@ -751,6 +775,8 @@ let writeOne c i appdata =
 	       end
              | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
 
+
+
 let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) = 
   match wopt with 
   | None -> True
@@ -764,22 +790,6 @@ let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.
 //NS reached up to here
 ////////////////////////////////////////////////////////////////////////////////
 
-// 16-05-27 simplified (used to loop over all writers)
-// We flush any pending alert and terminate the outgoing stream
-val writeClosing: c:connection -> i:id -> ST ioresult_w
-  (requires (fun h ->
-    send_requires c i h))  //16-05-28 too strong: already includes incrementable.
-  (ensures (fun h0 r h1 ->
-    st_inv c h1 /\  modifies (Set.singleton (C.region c)) h0 h1 /\
-    (is_WriteError r \/ is_SentClose r)
-  ))
-let writeClosing c i =
-    assume false; //16-05-27 don't understand why it fails otherwise
-    if no_seqn_overflow c Writer then
-    match sendAlert c i with 
-      | Some r -> r
-      | None   -> unexpected "[writeClosing] no alert to send" 
-    else         unexpected "[writeClosing] overflow" 
 
 // in TLS 1.2 we send the Finished messages immediately after CCS
 // in TLS 1.3 we send e.g. ServerHello in plaintext then encrypted HS
@@ -789,7 +799,7 @@ val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
     send_requires c i h)) //16-05-28 too strong: already includes incrementable.
   (ensures (fun h0 r h1 ->
     st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 /\
-    (is_WriteError r \/ is_SentClose r \/ is_Written r)
+    (is_WriteError r \/ is_WriteClose r \/ is_Written r)
   ))
 
 let rec writeAllFinishing c i =
@@ -803,7 +813,7 @@ let rec writeAllFinishing c i =
     // all other cases disable writing permanently
 //  | WriteAgainClosing   -> writeClosing c i
     | WriteError x y      -> WriteError x y
-    | SentClose           -> SentClose // why would we do that?
+    | WriteClose           -> WriteClose // why would we do that?
 
 //  | MustRead            // excluded since responded only here
 //  | Written             // excluded since we are not sending AD
@@ -814,7 +824,7 @@ let rec writeAllFinishing c i =
 
 
 // called both by read (with no appData) and write (with some appData fragment)
-// returns to read  { WriteError, SentClose, WriteDone, WriteHSComplete }
+// returns to read  { WriteError, WriteClose, WriteDone, WriteHSComplete }
 // returns to write { WriteError, Written }
 // (TODO: write returns { WriteHSComplete, MustRead } in renegotiation)
 val writeAll: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
@@ -834,7 +844,7 @@ let rec writeAll c i appdata =
     | WriteAgainFinishing -> // next writer epoch!
                             writeAllFinishing c i // TODO, using updated epoch_id (epoch_w c)
     | WriteError x y      -> WriteError x y
-    | SentClose           -> SentClose
+    | WriteClose           -> WriteClose
     | WriteDone           -> WriteDone
 //  | MustRead            -> MustRead
     | Written             -> Written
@@ -847,6 +857,9 @@ let rec writeAll c i appdata =
 
 let write c i rg data = writeAll c i (Some (| rg, data |))
 
+END OLDER VARIANT *)
+
+
 
 // Two API functions to close down the connection
 // [review function names]
@@ -855,23 +868,23 @@ let write c i rg data = writeAll c i (Some (| rg, data |))
 // whether the last delta is final, so there is no need
 // for additional state to keep track of half-closure.
 
-// We just notify, and hope to get back the peer's notify.
-// Usually followed by a read to flush the alert and wait.
+// We notify, and hope to get back the peer's notify.
 
 let full_shutdown c =
-    Alert.send c.alert AD_close_notify
+  sendAlert c AD_close_notify "full shutdown"
 
-// We immediately notify and don't wait for confirmation.
+// We notify and don't wait for confirmation.
 // Less reliable. Makes the connection unwritable.
 // Returns sentClose  ==> the datastream is extended with AD_close_notify
 //      or some unrecoverable error (in which case we don't know)
 
 let half_shutdown c =
-    Alert.send c.alert AD_close_notify;
-    writeClosing c
+  let r = sendAlert c AD_close_notify "half shutdown" in
+  c.state := Close;
+  r
 
 
-(*** incoming (with implicit writing) ***)
+(*** incoming (implicitly writing) ***)
 
 // By default, all i:id are reader identifiers, i.e. peerId (hsId (reader_epoch.h)
 // Tricky for noId?       
@@ -950,7 +963,6 @@ let sel_reader h c =
   let i = peerId (hsId e.h) in
   assume(is_stream_ae i);
   Some (| i, reader_epoch e|))
-  
   // todo: add other cases depending on dispatch state
 
 type delta h c = 
@@ -958,29 +970,13 @@ type delta h c =
   | Some (| i , _ |) -> DataStream.delta i
   | None             -> DataStream.delta noId)
 
-(*
-val append_r: h0:HH.t -> HH.t -> c:connection -> d: delta h0 c -> Type0
-let append_r h0 h1 c d =
-  match sel_reader h0 c with  // we statically know those are unchanged
-  | Some (| i, r |) -> 
-    let pos0 = StAE.seqnT r h0  in
-    let pos1 = StAE.seqnT r h1  in
-    pos1 = pos0 + 1  /\
-    (if authId i then 
-    let log0 = StAE.fragments r h0 in 
-    let log1 = StAE.fragments r h1 in 
-    (log1 = log0 /\
-    Seq.index log1 pos0 = d ))
-  | None -> True
-*)
 
-// frequent error handler
-let alertFlush c i x y: ioresult_i i =
-  abortWithAlert c x y;
-  let written = writeClosing c i in
+// frequent error handler; note that i is the (unused) reader index
+let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string): ioresult_i ri =
+  let written = sendAlert c ad reason in
   match written with
-  | SentClose      -> Read DataStream.Close // do we need this case?
-  | WriteError x y -> ReadError x y
+  | WriteClose      -> Read DataStream.Close // do we need this case?
+  | WriteError x y -> ReadError x y         // how to compose ad reason x y ? 
 
 
 #reset-options 
@@ -1047,14 +1043,16 @@ let readOne c i =
       begin
         if ad = AD_close_notify then 
           if !c.state = Half Reader 
-          then c.state := Close  // received a notify response; cleanly close the connection.
+          then ( // received a notify response; cleanly close the connection.
+            c.state := Close; 
+            Read (DataStream.Alert ad))
           else ( // received first notification; immediately enqueue notify response [RFC 7.2.1]
             c.state := Half Writer; 
-            Alert.send c.alert AD_close_notify )
-        else 
+            alertFlush c i AD_close_notify "notify response")  // NB we could ignore write errors here. 
+        else (   // 
           if isFatal ad then disconnect c; 
+          Read (DataStream.Alert ad))
           // else we carry on; the user will know what to do
-        Read (DataStream.Alert ad)
       end
       // recheck we tolerate alerts in all states; used to be just Init|Open, otherwise:
       // alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
@@ -1092,23 +1090,20 @@ let readOne c i =
 
 
  
-// scheduling: we always write up before reading; 
+// scheduling: we always write up before reading, to advance the Handshake.
 // those writes are never AppData; they may be for other/changing epochs;
 // the write outcomes that matter are: Error, Complete, and Done.
 val read: connection -> i:id -> St (ioresult_i i)
 let rec read c i =
     assume false;//16-05-19 
-    let wi = currentId c Writer in // could be encapsulated
-    match writeAll c wi None with
+    match writeHandshake c false with
 
-    | WriteError x y  -> ReadError x y         // TODO review errors; check this is not ambiguous
-    | WriteHSComplete -> CompletedFirst        // return at once, so that the app can authorize and use new indexes.
-
-// unclear how this can happen while reading
-    | SentClose       -> unexpected "Sent Close"
-//  | WriteFinished   -> DontWrite
-   
-    | WriteDone       ->                       
+    | WriteError x y             -> ReadError x y           // TODO review errors; check this is not ambiguous
+    | WriteClose                  -> unexpected "Sent Close" // can't happen while sending?
+    | WrittenHS newWriter complete -> 
+        if complete then CompletedFirst // return at once, so that the app can authorize and use new indexes.
+        // else ... then                // return at once, signalling falsestart
+        else
     
     // nothing written; now we can read
     // note that the reader index is unchanged
@@ -1121,6 +1116,7 @@ let rec read c i =
     | CertQuery q adv       -> CertQuery q adv
     | Read delta            -> Read delta
     )
+
 
 (* 16-05-28 WIP 
 
@@ -1174,7 +1170,7 @@ let read_ensures (c:connection) (i:id) (r:ioresult_i i) h0 h1 =
             | _ ->
                 let written = writeClosing c (rd_i c) (*FIXME*) in
                 match written with
-                | SentClose      -> Read DataStream.Close // clean shutdown
+                | WriteClose      -> Read DataStream.Close // clean shutdown
                 | WriteError x y -> ReadError x y
                 | _              -> ReadError None (perror __SOURCE_FILE__ __LINE__ "") // internal error
                 )

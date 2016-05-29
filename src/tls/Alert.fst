@@ -12,6 +12,7 @@ open TLSConstants
 open TLSInfo
 open Range
 
+//16-05-29 not much protocol left; consider merging with TLSError 
 
 (* Conversions *)
 
@@ -93,6 +94,8 @@ let parse b =
     | _            -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 
+(* 16-05-29 now integrated with the record layer, for simplicity
+
 (*** alert protocol ***)
 
 // TLS 1.2 and earlier miTLS supported alert fragmentation;
@@ -154,3 +157,5 @@ let next_fragment (State b) =
 // no more recv_fragment as alerts are now parsed by Content.
 
 let reset s = s.outgoing := None   // we silently discard any unsent alert. 
+
+*)

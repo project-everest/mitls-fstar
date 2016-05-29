@@ -22,27 +22,9 @@ open NewHandshake module Handshake = NewHandshake //16-05-20 open Handshake
 
 module MR = FStar.Monotonic.RRef
 
-// using also Alert, Range, DataStream, TLSFragment, Record
+// using also Range, DataStream, TLSFragment, Record
 
 
-// internal state machine (one for reading, one for writing; a bit much)
-// TODO make it private? write invariant, to cut out cases in code
-// e.g. , reading, and writing transitions are tighly related
-// TODO recheck large logical invariants GState in Dispatch.fs7
-
-(*
-// dispatch records the *record* protocol version (TLS 1.0 when using TLS 1.3)
-type dispatch =
-  | Init
-//  | FirstHandshake of protocolVersion (* bound by ServerHello's inner pv *)
-  | Finishing
-  | Finished
-  | Open
-  | Closing of (* protocolVersion * *) string (* write-only, while sending a fatal alert *)
-  | Closed
-*)
-
-// revised from 2x dispatch 
 type tlsState = 
 //| Early       // TLS 1.3 0RTT in 
 //| KeyUpdate   // TLS 1.3 after sending first KeyUpdate
@@ -56,7 +38,6 @@ type tlsState =
 type connection = | C:
   #region: rid{disjoint region tls_region} ->
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
-  alert:   Alert.state  { extends (Alert.region alert) region /\ HS.region hs <> Alert.region alert } (* review *) ->
   tcp:     networkStream ->
   state:   rref region tlsState -> 
   connection
