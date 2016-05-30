@@ -148,6 +148,7 @@ Signature \
 Cert \
 TLSInfo \
 IdNonce \
+TLSExtensions \
 Range \
 DataStream \
 Alert \
