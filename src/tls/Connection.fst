@@ -1,6 +1,6 @@
 module Connection
 
-// 2015-08-25 largely rewritten to implement both stateful dispatch and TLS
+// Connections are top-level instances of TLS clients and servers
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -67,6 +67,8 @@ val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.h
 })
 let epochs c h = logT c.hs h
 
+
+//16-05-30 unused?
 val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (Map.contains h0 (HS.region c.hs)
              /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))

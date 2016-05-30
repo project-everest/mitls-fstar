@@ -82,7 +82,7 @@ assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemm
   (requires True)
   (ensures epochs c h0 = epochs c h1)
 
-// too convenient; should move to a library
+// too convenient; use sparingly. Should move to a library
 // JP: isn't failwith sufficient enough? CF: this one works in ST. 
 val unexpected: #a:Type -> v:string -> ST a
   (requires (fun h -> True))
@@ -109,10 +109,11 @@ let outerPV c : ST protocolVersion
 
 type rid = r: HH.rid { disjoint r TLSConstants.tls_region } 
 //16-05-12 should we use a color for connection regions?
+//16-05-30 should that imply r <> root? 
 
 // was connect, resume, accept_connected, ...
 val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config -> resume: resume_id r -> ST connection
-  (requires (fun h ->  True))
+  (requires (fun h -> True))
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
     extends c.region r0 /\ 
@@ -155,8 +156,8 @@ let create parent tcp role cfg resume =
 //    initial Client ns c resume cn h1
 //    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
 //  ))
-let connect m0 tcp r cfg        = create m0 tcp Client cfg None
-let resume  m0 tcp r cfg sid    = create m0 tcp Client cfg (Some sid)
+let connect m0 tcp cfg        = create m0 tcp Client cfg None
+let resume  m0 tcp cfg sid    = create m0 tcp Client cfg (Some sid)
 //val accept_connected: ns:Tcp.networkStream -> c:config -> ST connection
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 cn h1 ->
@@ -277,7 +278,7 @@ let disconnect c =
     c.state := Close
 
 // on some errors, we locally give up the connection
-let unrecoverable c reason =
+let unrecoverable c reason : ioresult_w =
     disconnect c;
     WriteError None reason
 
@@ -709,7 +710,7 @@ let rec writeHandshake (c:connection) (newWriter:bool) : St ioresult_w =
           writeHandshake c newWriter  
 
 // then we can use this variant of write, and get rid of the rest below.
-let write c i rg data = 
+let write c #i #rg data = 
   let wopt = current_writer c i in
   match writeHandshake c false with 
   | WrittenHS false false -> 
@@ -870,7 +871,7 @@ END OLDER VARIANT *)
 
 // We notify, and hope to get back the peer's notify.
 
-let full_shutdown c =
+let writeCloseNotify c =
   sendAlert c AD_close_notify "full shutdown"
 
 // We notify and don't wait for confirmation.
@@ -878,7 +879,7 @@ let full_shutdown c =
 // Returns sentClose  ==> the datastream is extended with AD_close_notify
 //      or some unrecoverable error (in which case we don't know)
 
-let half_shutdown c =
+let writeClose c =
   let r = sendAlert c AD_close_notify "half shutdown" in
   c.state := Close;
   r
@@ -899,7 +900,7 @@ type readOutcome (e:epoch) =
     | WriteOutcome of writeOutcome    // now? { ReadError, DontWrite, CompletedSecond, Read(Close) }
     | RError of string (* internal *) // now ReadError(None,err)
     | CertQuery of query * bool       // now CertQuery
-    | RHSDone                         // now CompletedFirst
+    | RHSDone                         // now Complete
     // now Read(delta e) with subcases Data, Close, Alert
     | RAppDataDone of msg_i | RClose
     | RFatal of alertDescription (* The alert we received *)
@@ -929,12 +930,10 @@ type ioresult_i (i:id) =
     | CertQuery: query -> bool -> ioresult_i i
         // We received the peer certificates for the next epoch, to be authorized before proceeding.
         // the bool is what the Windows certificate store said about this certificate.
-    | CompletedFirst
+    | Complete
         // Handshake is completed, and we have already sent our finished message,
         // so only the incoming epoch changes
-    | CompletedSecond
-        // Handshake is completed, and we have already sent our finished message,
-        // so only the incoming epoch changes
+//    | CompletedSecond
 
     // internal states only
     | ReadAgain
@@ -1029,11 +1028,11 @@ let readFragment c i =
       | Some f -> Correct f
       | None   -> Error(AD_internal_error,"") //16-05-19 adjust! 
 
-// We receive, decrypt, verify a record (ct,f); what to do with it?
+// We receive, decrypt, parse a record (ct,f); what to do with it?
 // i is the presumed reader, threaded from the application.
 
 private val readOne: c:connection -> i:id -> St (ioresult_i i) 
-//  (ensures ioresult is not CompletedFirst | CompletedSecond | DontWrite)
+//  (ensures ioresult is not Complete | CompletedSecond | DontWrite)
 
 let readOne c i =
   assume false; //16-05-19 
@@ -1067,7 +1066,7 @@ let readOne c i =
             ( match !c.state with
             | BC -> // TODO: additional sanity check: in and out epochs should be the same
                    // if epoch_r c = epoch_w c then 
-                   (c.state := AD; CompletedFirst)
+                   (c.state := AD; Complete)
                    // else (disconnect c; ReadError None "Invalid connection state")
                    )
             else ReadAgain
@@ -1101,7 +1100,7 @@ let rec read c i =
     | WriteError x y             -> ReadError x y           // TODO review errors; check this is not ambiguous
     | WriteClose                  -> unexpected "Sent Close" // can't happen while sending?
     | WrittenHS newWriter complete -> 
-        if complete then CompletedFirst // return at once, so that the app can authorize and use new indexes.
+        if complete then Complete // return at once, so that the app can authorize and use new indexes.
         // else ... then                // return at once, signalling falsestart
         else
     
@@ -1227,4 +1226,5 @@ let refuse c (q:query) =
     abortWithAlert c AD_unknown_ca reason;
     writeClosing c
 *)
+
 
