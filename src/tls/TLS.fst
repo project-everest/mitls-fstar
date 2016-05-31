@@ -107,12 +107,8 @@ let outerPV c : ST protocolVersion
 
 (*** control API ***)
 
-type rid = r: HH.rid { disjoint r TLSConstants.tls_region } 
-//16-05-12 should we use a color for connection regions?
-//16-05-30 should that imply r <> root? 
-
 // was connect, resume, accept_connected, ...
-val create: r0:rid -> tcp:networkStream -> r:role -> cfg:config -> resume: resume_id r -> ST connection
+val create: r0:c_rgn -> tcp:networkStream -> r:role -> cfg:config -> resume: resume_id r -> ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
@@ -200,10 +196,10 @@ let request c ops     = Handshake.request     (C.hs c) ops
 // the index of messages depends on the connection state,
 // and may be different for reading and for writing.
 
-#reset-options 
+#set-options "--initial_ifuel 0 --max_ifuel 1 --initial_fuel 0 --max_fuel 0"
 //16-05-28 we need pattern matching! 
 
-
+// to be replaced with check_incrementable (and pushed).
 // dynamically checks for overflows
 val no_seqn_overflow: c: connection -> rw:rw -> ST bool
   (requires (fun h -> st_inv c h))
@@ -371,6 +367,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
        seqnT wr h1 = seqnT wr h0 + 1 /\
        (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f )))))
 
+
 //16-05-29 timing out?
 #set-options "--lax" 
 let send c #i f =
@@ -385,6 +382,7 @@ let send c #i f =
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
+
 
 (* 
 assume val admit_st_inv: c: connection -> ST unit
@@ -479,8 +477,9 @@ let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
 
-//16-05-29 note that AD_record_overflow os for oversized incoming records, not seqn overflows.
-let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
+//16-05-29 note that AD_record_overflow os for oversized incoming records, not seqn overflows! See slack.
+// let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
+let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_requires wo))
@@ -519,7 +518,7 @@ let sendFragment c #i wo f =
   end       
 
 
-val current_writer : //A slightly exotic style here; using a local definition for the pre-condition, repeated in the post
+val current_writer : //A slightly exotic style here, because we can; using a local definition for the pre-condition, repeated in the post
     (let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot Type0 = 
 	let hs = c.hs in 
 	let ix = iT hs Writer h in

@@ -35,8 +35,10 @@ type tlsState =
   | Half of rw  // the other direction is closed (reachable from BC?)
   | Close 
 
+type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region } 
+
 type connection = | C:
-  #region: rid{disjoint region tls_region} ->
+  #region: c_rgn ->
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
   tcp:     networkStream ->
   state:   rref region tlsState -> 
