@@ -1,7 +1,7 @@
 module ConnInvariant
 open TLSConstants
 open TLSInfo
-open MergedHandshake module Handshake = MergedHandshake //16-05-20 open Handshake
+open Handshake
 open Connection
 
 module MM = MonotoneMap

@@ -17,7 +17,7 @@ open TLSInfo
 
 open Range
 open StAE
-open MergedHandshake module Handshake = MergedHandshake //16-05-20 open Handshake
+open Handshake
 open Connection
 
 open MonotoneSeq

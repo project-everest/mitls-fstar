@@ -110,9 +110,7 @@ TLSPRF.fst \
 PRF.fst \
 HandshakeLog.fst \
 KeySchedule.fst \
-Handshake.fsti \
 Handshake.fst \
-MergedHandshake.fst \
 Connection.fst \
 test/TestRecord.fst \
 test/TestDH.fst \

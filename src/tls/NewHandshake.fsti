@@ -527,6 +527,3 @@ we can increment after sending ClientHello, but we don't have the epoch yet!
 Ad hoc cases? or just an extra case?
 In fact, ~ keeping a local, explicit CCS signal. *)
 
-
-(*** Reference Traces ***) 
-
