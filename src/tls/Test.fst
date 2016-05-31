@@ -13,7 +13,7 @@ let fragment_1 i (b:bytes) =
   let rg : frange i = point(length b) in 
   appFragment i rg b 
 
-let client (here:rid) tcp config_1 (request:bytes) =
+let client (here:Connection.c_rgn) tcp config_1 (request:bytes) =
   let c = connect here tcp config_1 in
   // nothing sent yet, except possibly for TCP
   // we write in cleartext until we have the 0RTT index.
@@ -56,7 +56,7 @@ let client (here:rid) tcp config_1 (request:bytes) =
   // we have exactly the same code for 1.2 and 1.3 1RTT 
   // (even with falseStart)
 
-let server (here:rid) tcp config_1 (respond: (bytes -> bytes)) =
+let server (here:Connection.c_rgn) tcp config_1 (respond: (bytes -> bytes)) =
   let c = accept here tcp config_1 in
   match read c noId with
   | Complete i ->
