@@ -112,7 +112,7 @@ HandshakeLog.fst \
 KeySchedule.fst \
 Handshake.fsti \
 Handshake.fst \
-NewHandshake.fsti \
+MergedHandshake.fst \
 Connection.fst \
 test/TestRecord.fst \
 test/TestDH.fst \

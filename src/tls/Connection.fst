@@ -18,7 +18,7 @@ open TLSInfo
   
 open Range
 
-open NewHandshake module Handshake = NewHandshake //16-05-20 open Handshake
+open MergedHandshake module Handshake = MergedHandshake //16-05-20 open Handshake
 
 module MR = FStar.Monotonic.RRef
 

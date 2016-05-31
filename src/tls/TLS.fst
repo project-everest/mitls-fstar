@@ -17,7 +17,7 @@ open TLSInfo
 
 open Range
 open StAE
-open NewHandshake module Handshake = NewHandshake //16-05-20 open Handshake
+open MergedHandshake module Handshake = MergedHandshake //16-05-20 open Handshake
 open Connection
 
 open MonotoneSeq
@@ -747,7 +747,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 
 
 let writeOne c i appdata =
-  allow_inversion (NewHandshake.outgoing i);
+  allow_inversion (Handshake.outgoing i);
   let h0 = ST.get() in
   let wopt = current_writer c i in
   // alerts are now sent immediately, so we now start with Handshake
