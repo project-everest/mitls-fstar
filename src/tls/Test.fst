@@ -8,7 +8,7 @@ open Range
 open DataStream
 open TLS
 
-let fragment_1 i (b:bytes) =
+let fragment_1 i (b:bytes) : fragment i (point (length b)) = 
   assume(length b <= max_TLSPlaintext_fragment_length);
   let rg : frange i = point(length b) in 
   appFragment i rg b 
