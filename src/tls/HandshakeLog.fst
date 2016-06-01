@@ -26,7 +26,9 @@ let getLogVersion hsl =
     | _ -> None
 
 type log =
-     | LOG: #region:rid -> logref:rref region (pv:option protocolVersion & hsl:list hs_msg & b:bytes{validLog hsl && getLogVersion hsl = pv && handshakeMessagesBytes pv hsl = b}) -> log 
+  | LOG: #region:rid -> 
+         logref:rref region (pv:option protocolVersion & hsl:list hs_msg & b:bytes
+                             {validLog hsl /\ getLogVersion hsl = pv /\ handshakeMessagesBytes pv hsl = b}) -> log 
 
 val create: #reg:rid -> ST log
   (requires (fun h -> True))
@@ -72,7 +74,7 @@ let getHash (LOG #reg lref) =
     let (|pv,hsl,lb|) = !lref in 
     CoreCrypto.hash CoreCrypto.SHA256 lb
 
-assume val checkLogSessionHash: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
+assume val checkLogSessionHash:    list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
 assume val checkLogClientFinished: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
 assume val checkLogServerFinished: list hs_msg -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
     

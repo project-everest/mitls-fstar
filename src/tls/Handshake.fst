@@ -124,6 +124,7 @@ let prepareClientHello cfg ks log ri sido =
   let chb = log @@ (ClientHello ch) in
   (ClientHello ch, chb)
 
+//16-05-31 somewhat duplicating TLSConstants.geqPV
 (* Is [pv1 >= pv2]? *)
 val gte_pv: protocolVersion -> protocolVersion -> Tot bool
 let gte_pv pv1 pv2 =
@@ -306,59 +307,65 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
 (* Handshake API: TYPES, taken from FSTI *)
 
 type clientState = 
-  | C_Idle: option ri -> clientState
-  | C_HelloSent: option ri -> ch -> clientState
-  | C_HelloReceived: nego -> clientState
-  | C_OutCCS: nego -> clientState
+  | C_Idle:                  option ri -> clientState
+  | C_HelloSent:        option ri -> ch -> clientState
+  | C_HelloReceived:              nego -> clientState
+  | C_OutCCS:                     nego -> clientState
   | C_FinishedSent: nego -> cVerifyData -> clientState
-  | C_CCSReceived: nego -> cVerifyData -> clientState
-  | C_Error: error -> clientState
+  | C_CCSReceived:  nego -> cVerifyData -> clientState
+  | C_Error:                     error -> clientState
 
 type serverState = 
-     | S_Idle : option ri -> serverState
-     | S_HelloSent : nego -> serverState
-     | S_HelloDone : nego -> serverState
-     | S_CCSReceived : nego -> serverState
-     | S_OutCCS: nego -> serverState
-     | S_FinishedSent : nego -> serverState
-     | S_ResumeFinishedSent : nego -> serverState
-     | S_ZeroRTTReceived : nego -> serverState
-     | S_Error: error -> serverState
+  | S_Idle:                  option ri -> serverState
+  | S_HelloSent :                 nego -> serverState
+  | S_HelloDone :                 nego -> serverState
+  | S_CCSReceived :               nego -> serverState
+  | S_OutCCS:                     nego -> serverState
+  | S_FinishedSent :              nego -> serverState
+  | S_ResumeFinishedSent :        nego -> serverState
+  | S_ZeroRTTReceived :           nego -> serverState
+  | S_Error:                     error -> serverState
 
-  
+type role_state = 
+    | C of clientState
+    | S of serverState
+
+
+//16-06-01 we don't need to precisely track this part of the state
+//16-06-01 later, pre-allocate large-enough buffers for the connection.
+//16-06-01 also revisit type of encrypted messages
+
 type hs_msg_bufs = {
-     hs_incoming_parsed : list (hs_msg * bytes);
-     hs_incoming: bytes;
-     hs_outgoing: bytes;
+     hs_incoming_parsed : list (hs_msg * bytes); // messages parsed earlier
+     hs_incoming: bytes;                         // incomplete message received earlier
+     hs_outgoing: bytes;                         // messages to be sent in current epoch
 }
-
 let hs_msg_bufs_init() = {
      hs_incoming_parsed = [];
      hs_incoming = empty_bytes;
      hs_outgoing = empty_bytes;
 }
 
-type role_state = 
-    | C of clientState
-    | S of serverState
-     
-type handshake_state' (r:role) =
+
+//16-05-31 this type should be private to HS
+//16-06-01 simplify: use a record of mutable things, subject to monotonicity and region, 
+//16-06-01 rather than a mutable ref to a record
+type handshake_state (r:role) =
      {
        hs_state: role_state;
        hs_nego: option nego;
-       hs_log: HandshakeLog.log;
-       hs_ks: KeySchedule.ks;
+       hs_log: HandshakeLog.log; // already stateful
+       hs_ks: KeySchedule.ks;    // already stateful
 
        hs_buffers: hs_msg_bufs;
-       hs_reader: int;
+
+       //16-06-01 could use the StreamAE.ideal_ctr pattern; see also logIndex below.
+       hs_reader: int;               
        hs_writer: int;
      }
 
 //NS: needed this renaming trick for the .fsti
-//16-05-31 this type should be private to HS
-let handshake_state r = handshake_state' r
-
-let resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
+//let handshake_state r = handshake_state' r
 
 
 //</expose for TestClient>
@@ -435,6 +442,9 @@ let reveal_epochs_inv' (u:unit)
 
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
+
+type resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
+
 
 type hs =
   | HS: #region: rgn { is_hs_rgn region } ->
@@ -603,6 +613,7 @@ type incoming =
 let in_next_keys (r:incoming) = is_InAck r && InAck.next_keys r
 let in_complete (r:incoming)  = is_InAck r && InAck.complete r
 
+
 (* Handshake API: INTERNAL Callbacks, hidden from API *)
 
 val client_send_client_hello: hs -> ST unit
@@ -615,8 +626,7 @@ let client_send_client_hello (HS #r0 r res cfg id lgref hsref) =
     hsref := {!hsref with 
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = chb};
 	    hs_state = C(C_HelloSent ri ch)}
-  
-	  
+  	  
   
 val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
@@ -1088,11 +1098,7 @@ assume val server_send_server_finished_res: hs -> ST unit
 
 
 
-
 (* Handshake API: PUBLIC Functions, taken from FSTI *)
-
-//val version: see .fsti
-
 
 // returns the protocol version negotiated so far
 // (used for formatting outgoing packets, but not trusted)
@@ -1117,7 +1123,6 @@ let iT_old (HS r res cfg id l st) rw =
 
 (*** Control Interface ***)
 
-//val init: see .fsti
 // Create instance for a fresh connection, with optional resumption for clients
 val init: r0:rid -> r: role -> cfg:config -> resume: resume_id r -> 
   ST hs
@@ -1200,6 +1205,7 @@ let rec next_fragment i hs =
        | None -> None, None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
     let b = (!hsref).hs_buffers.hs_outgoing in
+    //16-06-01 TODO: handle fragmentation; return fragment + flags set in some cases
     let l = length b in
     if (l > 0) then (
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_outgoing = empty_bytes}};
@@ -1243,6 +1249,7 @@ let recv_ensures (s:hs) (h0:HyperHeap.t) (result:incoming) (h1:HyperHeap.t) =
     r1 == (if in_next_keys result then r0 + 1 else r0) /\
     (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))
 
+//16-06-01 handshake state-machine transitions; could separate between C and S.
 val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
   (requires (hs_inv s))
   (ensures (recv_ensures s))
