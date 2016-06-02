@@ -80,21 +80,6 @@ type session = {
      session_nego: nego;
 }     
 
-
-val getId: KeySchedule.recordInstance -> GTot id
-let getId k = 
-    match k with
-    | KeySchedule.StAEInstance #i rd wr -> i
-    | KeySchedule.StLHAEInstance #i rd wr -> i
-
-val recordInstanceToEpoch: h:handshake -> ks:KeySchedule.recordInstance -> (StAE.reader (peerId (hsId h)) * StAE.writer (hsId h))
-let recordInstanceToEpoch hs ri = 
-    match ri with
-    | KeySchedule.StAEInstance #i rd wr -> (StAE.Stream () rd),(StAE.Stream () wr)
-    | KeySchedule.StLHAEInstance #i rd wr -> (StAE.StLHAE () rd),(StAE.StLHAE () wr)
-
-
-       
     
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
@@ -411,6 +396,21 @@ let recordInstanceToEpoch #hs_rgn #n hs ri =
     match ri with
     | KeySchedule.StAEInstance #i rd wr -> Epoch hs (StAE.Stream () rd) (StAE.Stream () wr)
     | KeySchedule.StLHAEInstance #i rd wr -> Epoch hs (StAE.StLHAE () rd) (StAE.StLHAE () wr)
+
+(* 16-06-02 unmerged variant:
+val getId: KeySchedule.recordInstance -> GTot id
+let getId k = 
+    match k with
+    | KeySchedule.StAEInstance #i rd wr -> i
+    | KeySchedule.StLHAEInstance #i rd wr -> i
+
+val recordInstanceToEpoch: h:handshake -> ks:KeySchedule.recordInstance -> (StAE.reader (peerId (hsId h)) * StAE.writer (hsId h))
+let recordInstanceToEpoch hs ri = 
+    match ri with
+    | KeySchedule.StAEInstance #i rd wr -> (StAE.Stream () rd),(StAE.Stream () wr)
+    | KeySchedule.StLHAEInstance #i rd wr -> (StAE.StLHAE () rd),(StAE.StLHAE () wr)
+*)
+
 
 let id_TLS12_AES_GCM_128_SHA256  = {
     msId = noMsId;
