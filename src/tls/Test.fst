@@ -8,10 +8,29 @@ open Range
 open DataStream
 open TLS
 
-let fragment_1 i (b:bytes) : fragment i (point (length b)) = 
-  assume(length b <= max_TLSPlaintext_fragment_length);
+let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length }) : fragment i (point (length b)) = 
   let rg : frange i = point(length b) in 
   appFragment i rg b 
+
+// move to Bytes
+let sub (buffer:bytes) (first:nat) (len:nat { first + len <= length buffer }) = 
+  let before, now = split buffer first in 
+  let now, after = split buffer len in 
+  now 
+
+val write_all': c:Connection.connection -> i:id -> buffer:bytes -> sent:nat {sent <= length buffer} -> St ioresult_w 
+let rec write_all' c i buffer sent =  
+  if sent = length buffer then Written 
+  else 
+  let size = min (length buffer - sent) max_TLSPlaintext_fragment_length in
+  let payload = sub buffer sent size in
+  let rg : frange i = point(length payload) in
+  let f : fragment i rg = fragment_1 i payload in
+  match assume false; write c f with
+  | Written -> write_all' c i buffer (sent+size)
+  | r       -> r 
+
+let write_all c i b = write_all' c i b 0
 
 let client (here:Connection.c_rgn) tcp config_1 (request:bytes) =
   let c = connect here tcp config_1 in
@@ -71,3 +90,11 @@ let server (here:Connection.c_rgn) tcp config_1 (respond: (bytes -> bytes)) =
   // At this point, if authId i, I know that 
   // (1) my peer's writer view is exactly ( Data f0 ; Close )
   // but not what my peer has read, unless the app semantics says so.
+
+
+(* Notes towards a second example: RPC *)
+
+let N = 100000
+
+type request = rbytes (0,N)
+
