@@ -83,6 +83,21 @@ type session = {
 }     
 
 
+val getId: KeySchedule.recordInstance -> GTot id
+let getId k = 
+    match k with
+    | KeySchedule.StAEInstance #i rd wr -> i
+    | KeySchedule.StLHAEInstance #i rd wr -> i
+
+val recordInstanceToEpoch: h:handshake -> ks:KeySchedule.recordInstance -> (StAE.reader (peerId (hsId h)) * StAE.writer (hsId h))
+let recordInstanceToEpoch hs ri = 
+    match ri with
+    | KeySchedule.StAEInstance #i rd wr -> (StAE.Stream () rd),(StAE.Stream () wr)
+    | KeySchedule.StLHAEInstance #i rd wr -> (StAE.StLHAE () rd),(StAE.StLHAE () wr)
+
+
+       
+    
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
@@ -1162,6 +1177,7 @@ let server_handle_client_finished_13 (HS #r0 r res cfg id lgref hsref) msgs opt_
 assume val server_send_server_finished_res: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
+
 
 
 
