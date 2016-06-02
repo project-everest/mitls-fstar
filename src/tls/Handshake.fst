@@ -83,19 +83,6 @@ type session = {
 }     
 
 
-val getId: KeySchedule.recordInstance -> GTot id
-let getId k = 
-    match k with
-    | KeySchedule.StAEInstance #i rd wr -> i
-    | KeySchedule.StLHAEInstance #i rd wr -> i
-
-val recordInstanceToEpoch: h:handshake -> ks:KeySchedule.recordInstance -> (StAE.reader (peerId (hsId h)) * StAE.writer (hsId h))
-let recordInstanceToEpoch hs ri = 
-    match ri with
-    | KeySchedule.StAEInstance #i rd wr -> (StAE.Stream () rd),(StAE.Stream () wr)
-    | KeySchedule.StLHAEInstance #i rd wr -> (StAE.StLHAE () rd),(StAE.StLHAE () wr)
-       
-    
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
@@ -398,6 +385,86 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
+
+
+val getId: KeySchedule.recordInstance -> GTot id
+let getId k = 
+    match k with
+    | KeySchedule.StAEInstance #i rd wr -> i
+    | KeySchedule.StLHAEInstance #i rd wr -> i
+
+val recordInstanceToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> ks:KeySchedule.recordInstance -> epoch hs_rgn n
+let recordInstanceToEpoch #hs_rgn #n hs ri = 
+    match ri with
+    | KeySchedule.StAEInstance #i rd wr -> Epoch hs (StAE.Stream () rd) (StAE.Stream () wr)
+    | KeySchedule.StLHAEInstance #i rd wr -> Epoch hs (StAE.StLHAE () rd) (StAE.StLHAE () wr)
+
+let id_TLS12_AES_GCM_128_SHA256  = {
+    msId = noMsId;
+    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
+    pv = TLS_1p2;
+    aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
+    csrConn = bytes_of_hex "";
+    ext = {
+      ne_extended_ms = false;
+      ne_extended_padding = false;
+      ne_secure_renegotiation = RI_Unsupported;
+      ne_supported_groups = None;
+      ne_supported_point_formats = None;
+      ne_server_names = None;
+      ne_signature_algorithms = None;
+      ne_keyShare = None;
+    };
+    writer = Client
+  }
+     
+val encryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> StAE.writer (hsId hs)
+let encryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
+  let id = hsId hs in
+  let r = HyperHeap.root in
+  let w: StatefulLHAE.writer id =
+    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
+    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
+    let key: AEAD_GCM.state id Writer =
+      // The calls to [unsafe_coerce] are here because we're breaking
+      // abstraction, as both [key] and [iv] are declared as private types.
+      let key: AEAD_GCM.key id = key |> unsafe_coerce in
+      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
+      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
+      let counter = ralloc r 0 in
+      AEAD_GCM.State r key iv log counter
+    in
+    StatefulLHAE.State r log seqn key
+  in
+  // StatefulLHAE.writer -> StatefulLHAE.state
+  StAE.StLHAE () w
+
+val decryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> StAE.reader (peerId (hsId hs))
+let decryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
+  let id = peerId (hsId hs) in
+  let r = HyperHeap.root in
+  let r: StatefulLHAE.reader id =
+    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
+    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
+    let key: AEAD_GCM.state id Reader =
+      // The calls to [unsafe_coerce] are here because we're breaking
+      // abstraction, as both [key] and [iv] are declared as private types.
+      let key: AEAD_GCM.key id = key |> unsafe_coerce in
+      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
+      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
+      let counter = ralloc r 0 in
+      AEAD_GCM.State r key iv log counter
+    in
+    StatefulLHAE.State r log seqn key
+  in
+  // StatefulLHAE.reader -> StatefulLHAE.state
+  StAE.StLHAE () r
+
+val recordKeysToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> (bytes * bytes * bytes * bytes) -> epoch hs_rgn n
+let recordKeysToEpoch #hs_rgn #n h (ck,civ,sk,siv) = 
+  let wr: StAE.writer (hsId h) = encryptor_TLS12_AES_GCM_128_SHA256 h ck civ in
+  let rd: StAE.reader (peerId (hsId h)) = decryptor_TLS12_AES_GCM_128_SHA256 h sk siv in
+  Epoch h rd wr
 
 let reveal_epoch_region_inv_all (u:unit)
   : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}
