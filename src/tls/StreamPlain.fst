@@ -83,16 +83,17 @@ let rec scan i bs j =
     if j > 0 then scan i bs (j - 1)
     else Error (AD_decode_error, "No ContentType byte")
   | 21z ->
-    if j = 0 then Error (AD_decode_error, "Empty Alert fragment")
-    else
-      if j > max_TLSPlaintext_fragment_length then
-	Error (AD_record_overflow, "TLSPlaintext fragment exceeds maximum length")
-      else
-	let payload, _ = Platform.Bytes.split bs j in
-	let rg = (1, len - 1) in
-	let f = CT_Alert rg payload in
-	lemma_eq_intro bs' (pad payload Alert len);
-        Correct f
+    (match j with 
+    | 0 -> Error (AD_decode_error, "Empty Alert fragment")
+    | 1 -> Error (AD_decode_error, "Fragmented Alert")
+    | 2 -> let payload, _ = Platform.Bytes.split bs j in
+          ( 
+          match Alert.parse payload with 
+          | Correct ad -> let f = CT_Alert #i ad in 
+                         let _ = lemma_eq_intro bs' (pad (Alert.alertBytes ad) Alert len) in
+                         (assume false; Correct f)//16-05-26 TODO
+          | Error e    -> Error e)
+    | _ -> Error (AD_record_overflow, "TLSPlaintext fragment exceeds maximum length"))
   | 22z ->
     if j = 0 then Error (AD_decode_error, "Empty Handshake fragment")
     else

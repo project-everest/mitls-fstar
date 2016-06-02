@@ -39,13 +39,14 @@ let repr #i rg f = f
 val mk_fragment: #i:id { ~(authId i)} -> rg:frange i -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
 let mk_fragment #i rg b = b
 
-(* revisit:
 // these two functions are used only by the application (or ghostly)
-val createDelta: i:id -> rg:range -> rbytes rg -> Tot (fragment i rg)
-val deltaBytes:  i:id -> rg:range -> fragment i rg -> Tot (rbytes rg)
+val appFragment: i:id -> rg:frange i -> rbytes rg -> Tot (fragment i rg)
+val appBytes:  #i:id -> #rg:frange i -> fragment i rg -> Tot (rbytes rg)
 
-let createDelta i rg f = f
-let deltaBytes  i rg f = f
+let appFragment i rg f = f
+let appBytes  #i #rg f = f
+
+(* revisit:
 
 // these two functions are used only on unsafe epochs
 //* how to specify both abstraction & functional correctness? see AppData.fs7

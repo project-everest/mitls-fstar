@@ -1,5 +1,8 @@
 module TLSOutline
 
+//16-05-30 this file is now out of date vs TLS.fst (not sure what views to use)
+//16-05-30 but still provides exemplary clients and servers.
+
 // Draft TLS API using hyperheaps in F*
 // incorporating definitions and comments from TLS.fs7 and TLS.fsi
 // - each connection runs through a sequence of epochs
@@ -20,6 +23,7 @@ open Platform.Tcp
 
 open TLSError
 open TLSInfo
+
 
 // using DataStream 
 
@@ -225,8 +229,9 @@ val request: cn:conn { c_role cn = Server } -> c:config -> ST unit
 type ioresult_w =
     // public results
     | Written             // Application data was written, and the connection remains writable
-    | WriteError: al:option alertDescription -> txt: string -> ioresult_w // The connection is down, possibly after sending an alert
+    | WriteError: al:option alertDescription -> txt: string -> ioresult_w // The connection is down, optionally after sending a fatal alert (on the current writer)
 //  | WritePartial of unsent_data // worth restoring?
+
     // transient, internal results
     | MustRead            // Nothing written, and the connection is busy completing a handshake
     | WriteDone           // No more data to send in the current state
@@ -374,56 +379,126 @@ assume val read: c:conn -> i:id -> ST (ioresult_i i)              // unclear whe
 
 (* // ------------------- typical call sequence ------------------------- *)
 
-(* // for simplicity, we assume both requests and responses fit in a single fragment. *)
+(* // for simplicity, we assume all requests and responses fit in a single fragment. *)
 
-(* let client_0RTT tcp config_0RTT request =  *)
-(*   let c = connect tcp config_0RTT None in  *)
-(*   // nothing sent yet, except possibly for TCP *)
-(*   // we write in cleartext until we have the 0RTT index. *)
-(*   match write0 c  *)
-(*   //    ClientHello *)
-(*   //      + KeyShare *)
-(*   //      + EarlyDataIndication  --------> *)
-(*   with  *)
-(*   | SendError   -> failwith "dunno"  *)
-(*   | ZeroRTT id0 -> id0  *)
-(*   let f0 = DataStream.plain id0 rg0 request in  *)
-(*   match write c f0  *)
-(*   //   (Certificate*\) *)
-(*   //   (CertificateVerify*\) *)
-(*   //   (Finished) *)
-(*   //   (Application Data*\)       --------> *)
-(*   with  *)
-(*   | SendError -> failwith "dunno"  *)
-(*   | Sent ->  *)
-(*   match read c *)
-(*   //   (end_of_early_data)       --------> *)
-(*   //                                                  ServerHello *)
-(*   //                                        + EarlyDataIndication*    *)
-(*   //                                                   + KeyShare *)
-(*   //                                         {EncryptedExtensions} *)
-(*   //                                         {CertificateRequest*} *)
-(*   //                                        {ServerConfiguration*} *)
-(*   //                                                {Certificate*} *)
-(*   //                                          {CertificateVerify*} *)
-(*   //                             <--------              {Finished} *)
-(*   with  *)
-(*   | ReadError | Read (Alert _) -> failwith "give up"  *)
-(*   | ZeroRTTmiss -> failwith "give up (lazy)" *)
-(*   | CertQuery _ -> // what checks should I do?  *)
-(*   match read c  *)
-(*   //   {Certificate*} *)
-(*   //   {CertificateVerify*} *)
-(*   //   {Finished}                --------> *)
-(*   with  *)
-(*   | ReadError | Read (Alert _) -> failwith "give up" *)
-(*   | Complete id1 -> // what checks should I do? *)
-(*   match read c   *)
-(*   //                             <--------      [Application Data] *)
-(*   with  *)
-(*   | Read (Data response) -> response  // by typing, response is indexed by id1 *)
-(*   | _ -> failwith "dunno" *)
-(*   ... *)
+
+let client (here:rid) tcp config_1 request =
+  let c = connect here tcp config_0RTT None in
+  // nothing sent yet, except possibly for TCP
+  // we write in cleartext until we have the 0RTT index.
+  match read c noId with
+  //    ClientHello
+  //      + KeyShare             -------->
+  //                                                  ServerHello
+  //                                                   + KeyShare
+  //                                         {EncryptedExtensions}
+  //                                         {CertificateRequest*}
+  //                                        {ServerConfiguration*}
+  //                                                {Certificate*}
+  //                                          {CertificateVerify*}
+  //                             <--------              {Finished}
+  //   {Certificate*}
+  //   {CertificateVerify*}
+  //   {Finished}                -------->
+  | Complete i -> 
+  let f0 = DataStream.plain i rg0 request in
+  match write c f0 with 
+  //   [Request]                 -------->
+  | Written ->
+  match read c i with 
+  //                             <--------      [Application Data]
+  | Read (Data g0) -> 
+  closeNotify c; 
+  //   [CloseNotify]             -------->
+  match read c i with 
+  //                             <--------           [CloseNotify] 
+  | Read Close -> g0 
+  // At this point, if authId i, I know that 
+  // (1) my peer's writer view is exactly ( Data g0 ; Close ), 
+  // (2) my peer's reader view is exactly ( Data f0 ; Close ).
+
+  // it seems convenient to have complete return i.
+  // the client need not be aware of the handshake epoch.
+  // should connect read to completion?
+
+  // we have exactly the same code for 1.2 and 1.3 1RTT 
+  // (even with falseStart)
+
+let client_05 (here:rid) tcp config_05 request =
+  let c = connect here tcp config_0RTT None in
+  // nothing sent yet, except possibly for TCP
+  // we write in cleartext until we have the 0RTT index.
+  match read c noId with
+  | FalseStart i -> 
+  // let's hope we are Ok...
+  let f0 = DataStream.plain i rg0 request in
+  match write c f0 with 
+  | Written ->
+  match read c i with 
+  | Complete i -> 
+  // we were Ok!
+  match read c i with 
+  | Read (Data g0) -> g0 
+  //...
+
+
+// could write e.g. 
+let complete c = 
+  match read c noId with
+  | Complete i -> i 
+  | _          -> failwith "no secure connection"
+
+let plain i f = DataStream.plain i (Range.point (length f)) f
+
+
+let client0RTT_13 tcp config_0RTT request =
+  let c = connect tcp config_0RTT None in
+  // nothing sent yet, except possibly for TCP
+  // we write in cleartext until we have the 0RTT index.
+  match write0 c
+  //    ClientHello
+  //      + KeyShare
+  //      + EarlyDataIndication  -------->
+  with
+  | SendError   -> failwith "dunno"
+  | ZeroRTT id0 -> 
+  let f0 = DataStream.plain id0 rg0 request in
+  match write c f0
+  //   (Certificate*)
+  //   (CertificateVerify*)
+  //   (Finished)
+  //   (Application Data*)       -------->
+  with
+  | SendError -> failwith "dunno"
+  | Sent ->
+  match read c
+  //   (end_of_early_data)       -------->
+  //                                                  ServerHello
+  //                                        + EarlyDataIndication*
+  //                                                   + KeyShare
+  //                                         {EncryptedExtensions}
+  //                                         {CertificateRequest*}
+  //                                        {ServerConfiguration*}
+  //                                                {Certificate*}
+  //                                          {CertificateVerify*}
+  //                             <--------              {Finished}
+  with
+  | ReadError | Read (Alert _) -> failwith "give up"
+  | ZeroRTTmiss -> failwith "give up (lazy)"
+  | CertQuery _ -> // what checks should I do?
+  match read c
+  //   {Certificate*}
+  //   {CertificateVerify*}
+  //   {Finished}                -------->
+  with
+  | ReadError | Read (Alert _) -> failwith "give up"
+  | Complete id1 -> // what checks should I do?
+  match read c
+  //                             <--------      [Application Data]
+  with
+  | Read (Data response) -> response  // by typing, response is indexed by id1
+  | _ -> failwith "dunno"
+  //  ...
 
   
 (* let server_0RTT tcp config_0RTT =  *)

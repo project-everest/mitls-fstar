@@ -1,4 +1,6 @@
-module Handshake
+module NewHandshake
+
+(*** Updated Interface (Temp File) ***)
 
 // current limitations: 
 // - no abstract type for encrypted handshake traffic
@@ -37,34 +39,6 @@ type handshake =
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
 
-
-type outgoing = // by default the state changes but not the epochs
-  | OutIdle
-  | OutSome:     rg:frange_any -> rbytes rg -> outgoing   // send a HS fragment
-  | OutCCS                                              // signal new epoch (sending a CCS fragment first, up to 1.2)
-  | OutComplete: rg:frange_any -> rbytes rg -> outgoing   // signal completion of current epoch
-  | OutError: error -> outgoing
-(*
-Proposed:
-type outgoing = // by default the state changes but not the epochs
-  | OutIdle
-  | OutSome:  rg:frange_any -> rbytes rg -> change_cipher:bool -> complete: bool -> outgoing   // send a HS fragment
-  | OutError: error -> outgoing
-*)
-
-type incoming = // the fragment is accepted, and...
-  | InAck
-  | InQuery: Cert.chain -> bool -> incoming
-  | InCCS             // signal new epoch (only in TLS 1.3)
-  | InComplete        // signal completion of current epoch
-  | InError of error  // how underspecified should it be?
-(*
-Proposed:
-type incoming = // by default the state changes but not the epochs
-  | InAck: change_cipher:bool -> complete:bool -> incoming
-  | InQuery: Cert.chain -> bool -> incoming // Is this needed?
-  | Inrror: error -> incoming
-*)
 
 // extracts a transport key identifier from a handshake record
 val hsId: handshake -> Tot (i:id { is_stream_ae i }) //16-05-19 focus on TLS 1.3
@@ -172,11 +146,10 @@ let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
 
 let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
   : Tot (r:reader (peerId (hsId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
-  = match e with 
-    | Epoch h r w -> r
+  = match e with | Epoch h r w -> r //16-05-20 Epoch.r e failed.
 
 (* The footprint just includes the writer regions *)
-let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
+abstract let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
   forall (i:nat { i < Seq.length es })
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
@@ -405,64 +378,92 @@ val invalidateSession: s:hs -> ST unit
 
 
 (*** Outgoing ***)
-val next_fragment: s:hs -> ST outgoing
-  (requires (hs_inv s))
-  (ensures (fun h0 result h1 -> 
+
+// payload of a handshake fragment, to be made opaque eventually
+type message (i:id) = (| rg: frange i & rbytes rg |)
+
+// What the HS asks the record layer to do, in that order.
+type outgoing (i:id) (* initial index *) = 
+  | Outgoing: 
+      send_first: option (message i) -> // HS fragment to be sent;  (with current id)
+      send_ccs  : bool               -> // CCS fragment to be sent; (with current id)
+      next_keys : bool               -> // the writer index increases;
+      complete  : bool               -> // the handshake is complete!
+      outgoing i 
+  | OutError: error -> outgoing i       // usage? in case something goes wrong when preparing messages. 
+
+let out_next_keys (#i:id) (r:outgoing i) = is_Outgoing r && Outgoing.next_keys r
+let out_complete (#i:id) (r:outgoing i)  = is_Outgoing r && Outgoing.complete r
+
+let next_fragment_ensures (#i:id) (s:hs) h0 (result:outgoing i) h1 = 
+    let es = logT s h0 in
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
     let r0 = iT s Reader h0 in
     let r1 = iT s Reader h1 in
     hs_inv s h1 /\
     mods s h0 h1 /\
-    r1 = r0 /\
-    w1 = (if result = OutCCS then w0 + 1 else w0) /\
-    (is_OutComplete result ==> (w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)))))
-                                              (*why do i need this?*)
+    r1 == r0 /\
+//  w1 == (match result with | Outgoing _ _ true _ -> w0 + 1 | _ -> w0 ) /\
+    w1 == (if out_next_keys result then  w0 + 1 else w0 ) /\
+    (b2t (out_complete result) ==> w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)) 
+
+val next_fragment: i:id -> s:hs -> ST (outgoing i)
+  (requires (fun h0 -> 
+    let es = logT s h0 in
+    let j = iT s Writer h0 in 
+    hs_inv s h0 /\
+    (if j = -1 then i = noId else let e = Seq.index es j in i = hsId e.h)   
+  ))
+  (ensures (next_fragment_ensures s))
 
 //<expose for TestClient>
 val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot  (result (rem:bytes * list (hs_msg * bytes)))
 //</expose for TestClient>
 
+
 (*** Incoming ***)
-val recv_fragment: s:hs -> rg:Range.range { wider fragment_range rg } -> rbytes rg -> ST incoming
-  (requires (hs_inv s))
-  (ensures (fun h0 result h1 ->
+
+type incoming = 
+  // the fragment is accepted, and...
+  | InAck: 
+      next_keys : bool -> // the reader index increases;
+      complete  : bool -> // the handshake is complete!
+      incoming
+
+  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
+  | InError: error -> incoming // how underspecified should it be?
+
+let in_next_keys (r:incoming) = is_InAck r && InAck.next_keys r
+let in_complete (r:incoming)  = is_InAck r && InAck.complete r
+
+let recv_ensures (s:hs) (h0:HyperHeap.t) (result:incoming) (h1:HyperHeap.t) = 
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
     let r0 = iT s Reader h0 in
     let r1 = iT s Reader h1 in
     hs_inv s h1 /\
     mods s h0 h1 /\
-    w1 = w0 /\
-    r1 = (if result = InCCS then r0 + 1 else r0) /\
-    (result = InComplete ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))))
+    w1 == w0 /\
+    r1 == (if in_next_keys result then r0 + 1 else r0) /\
+    (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))
 
-val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3
+val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
+  (requires (hs_inv s))
+  (ensures (recv_ensures s))
+
+val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge with recv_fragment
   (requires (hs_inv s)) // could require pv <= 1p2
   (ensures (fun h0 result h1 ->
-    let w0 = iT s Writer h0 in
-    let w1 = iT s Writer h1 in
-    let r0 = iT s Reader h0 in
-    let r1 = iT s Reader h1 in
-    (is_InError result \/ is_InCCS result) /\
-    hs_inv s h1 /\
-    mods s h0 h1 /\
-    w1 = w0 /\
-    r1 = (if result = InCCS then r0 + 1 else r0)))
+    recv_ensures s h0 result h1 /\
+    (is_InError result \/ result = InAck true false)
+    ))
 
 val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
-    let w0 = iT s Writer h0 in
-    let w1 = iT s Writer h1 in
-    let r0 = iT s Reader h0 in
-    let r1 = iT s Reader h1 in
-    (is_InAck result \/ is_InError result) /\
-    hs_inv s h1 /\
-    mods s h0 h1 /\
-    w1 = w0 /\
-    r1 = r0 ))
-
+    (is_InAck result \/ is_InError result) /\ recv_ensures s h0 result h1 ))
+    
 
 (* working notes towards covering both TLS 1.2 and 1.3, with 0RTT and falsestart
 
@@ -525,3 +526,4 @@ we can increment after sending ClientHello, but we don't have the epoch yet!
 
 Ad hoc cases? or just an extra case?
 In fact, ~ keeping a local, explicit CCS signal. *)
+
