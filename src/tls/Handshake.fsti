@@ -113,7 +113,7 @@ type session = {
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> (hs_msg * bytes) -> ST (result (nego * (hs_msg * bytes)))
+val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> (hs_msg * bytes) -> ST (result (nego * option KeySchedule.recordInstance * (hs_msg * bytes)))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> ch -> (hs_msg * bytes) ->

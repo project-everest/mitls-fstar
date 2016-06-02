@@ -165,7 +165,7 @@ type cr = {
 
 type kex_s =
 | KEX_S_DHE of CommonDH.key 
-| KEX_S_RSA of CoreCrypto.rsa_key
+| KEX_S_RSA of (pk:CoreCrypto.rsa_key{False}) // Unimplemented
 
 type kex_s_priv =
 | KEX_S_PRIV_DHE of CommonDH.key

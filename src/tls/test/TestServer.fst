@@ -196,7 +196,7 @@ let rec aux config sock =
   let ClientHello(ch),chb = recvHSRecord tcp pv kex in
 
   // Server Hello
-  let (nego,(ServerHello sh,shb)) = 
+  let (nego,None,(ServerHello sh,shb)) = 
       (match Handshake.prepareServerHello config ks log None (ClientHello ch,chb) with
        | Correct x -> x
        | Error (x,z) -> failwith z) in
@@ -229,7 +229,7 @@ let rec aux config sock =
   let sigv = Signature.sign ha csk tbs in
   let signature = (hab @| sab @| (vlbytes 2 sigv)) in
   let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-  IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^ (print_bytes sigv) ^ "\n");
+  //IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^ (print_bytes sigv) ^ "\n");
 
   let cb = log @@ Certificate(c) in
   sendHSRecord tcp pv (Certificate c,cb);

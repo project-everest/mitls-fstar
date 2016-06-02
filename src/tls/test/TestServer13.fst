@@ -142,12 +142,14 @@ let rec aux config sock =
 
   // ADL need to change the ks argument of prepareServerHello
   // Handshake calls KS.ks_server_13_1rtt_init to generate gy
-  let (nego,(ServerHello sh,shb)) = (match Handshake.prepareServerHello config ks lg None (ClientHello ch,chb) with
+  let (nego,Some keys,(ServerHello sh,shb)) = (match Handshake.prepareServerHello config ks lg None (ClientHello ch,chb) with
                     | Correct z -> z 
                     | Error (x,z) -> failwith z) in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
   let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_get_htk ks (hash log) in
+  //FIXME: should use the keys from prepareServerHello, but they're incorrect
+  //let KeySchedule.StAEInstance rd wr = keys in
 
   let Correct chain = Cert.lookup_chain config.cert_chain_file in
   let crt = {crt_chain = chain} in
