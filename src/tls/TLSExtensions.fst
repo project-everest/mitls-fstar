@@ -334,7 +334,7 @@ let rec parseExtension role b =
     | Correct (data) ->
 	(match cbyte2 head with
 	| (0x00z, 0x0Dz) -> // sigalgs
-	  if length data = 2 then (
+	  if length data >= 2 && length data < 65538 then (
 	  (match parseSigHashAlgs (data) with
 	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
 	  | Error(z) -> Error(z))
