@@ -108,13 +108,20 @@ let main config host port =
   let EncryptedExtensions(ee),log = recvEncHSRecord tcp pv kex log rd in
   let Certificate(sc),log = recvEncHSRecord tcp pv kex log rd in
   IO.print_string ("Certificate validation status = " ^
-    (if Cert.validate_chain sc.crt_chain sa (Some host) config.ca_file then
+    (if Cert.validate_chain sc.crt_chain true (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
   let cv_log = hash log in
 
   let CertificateVerify(cv),log = recvEncHSRecord tcp pv kex log rd in
+
+  //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
+  let Some ((sa,h), sigv) = Handshake.sigHashAlg_of_ske cv.cv_sig in
+  let a = Signature.Use (fun _ -> True) sa [h] false false in
+  let tbs = Handshake.to_be_signed pv Server None cv_log in
+  let Some pk = Signature.get_chain_public_key #a sc.crt_chain in
+
   IO.print_string ("Signature validation status = " ^
-    (if Cert.verify_signature sc.crt_chain pv Server None (Some.v sa) sal cv_log cv.cv_sig then "OK" else "FAIL") ^ "\n");
+    (if Signature.verify h pk tbs sigv then "OK" else "FAIL") ^ "\n");
 
   let svd = KeySchedule.ks_client_13_1rtt_server_finished ks (hash log) in
   let Finished({fin_vd = sfin}),log = recvEncHSRecord tcp pv kex log rd in

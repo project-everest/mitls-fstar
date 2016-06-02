@@ -200,7 +200,7 @@ let main config host port =
 
   let (Certificate(sc),scb) = recvHSRecord tcp pv kex log in
   IO.print_string ("Certificate validation status = " ^
-    (if Cert.validate_chain sc.crt_chain sa (Some host) config.ca_file then
+    (if Cert.validate_chain sc.crt_chain true (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
 
   let (ServerKeyExchange(ske),skeb) = recvHSRecord tcp pv kex log in
@@ -212,8 +212,8 @@ let main config host port =
   let sr = sh.sh_server_random in
   let (ClientKeyExchange cke,ckeb) = 
      match
-       processServerHelloDone config n ks log 
-      	[(Certificate sc,scb);(ServerKeyExchange ske, skeb);(ServerHelloDone,shdb)] 
+       Handshake.processServerHelloDone config n ks log
+      	[(Certificate sc,scb);(ServerKeyExchange ske, skeb);(ServerHelloDone,shdb)]
 	[] with
      | Correct [x] -> x 
      | Error (y,z) -> failwith (z ^ "\n") in

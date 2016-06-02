@@ -79,8 +79,8 @@ CommonDH.fst \
 PMS.fst \
 HASH.fst \
 HMAC.fst \
-Signature.fst \
 Cert.fst \
+Signature.fst \
 TLSInfo.fst \
 IdNonce.fst \
 TLSExtensions.fst \
@@ -144,8 +144,8 @@ CommonDH \
 PMS \
 HASH \
 HMAC \
-Signature \
 Cert \
+Signature \
 TLSInfo \
 IdNonce \
 Range \
@@ -296,11 +296,13 @@ mitls.exe: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 
+# depends on tls-gen
 tls-client:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ -I output/ test/test_client.ml -o client.out
 	$(EXTRA_PATH) ./client.out 1.2 google.com 443
 
+# depends on tls-gen
 tls-server:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 	         -I test/ -I output/ test/test_server.ml -o server.out

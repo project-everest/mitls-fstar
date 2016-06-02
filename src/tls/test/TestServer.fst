@@ -209,24 +209,27 @@ let rec aux config sock =
   sendHSRecord tcp pv (ServerHello sh,shb);
 
   // Server Certificate
-  let Correct (chain, csk) = Cert.lookup_server_chain config.cert_chain_file config.private_key_file pv (Some sa) None in
+  let Correct chain = Cert.lookup_chain config.cert_chain_file in
   let c = {crt_chain = chain} in
   let cb = certificateBytes pv c in
 
+  // Server Key Exchange
   let gn = match nego with | {Handshake.n_dh_group = Some n} -> n  in
   let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs ems gn in
-  // Server Key Exchange
   let kex_s = KEX_S_DHE gy in
-  let tbs = kex_s_to_bytes kex_s in
+  let sv = kex_s_to_bytes kex_s in
   let cr = ch.ch_client_random in
   let sr = sh.sh_server_random in
-  let Correct sigv = Cert.sign pv Server (Some (cr @| sr)) csk alg tbs in
-  let ske = {ske_kex_s = kex_s; ske_sig = sigv} in
-  IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^(print_bytes sigv)^ "\n");
-
-//  print_chain chain;
-  IO.print_string ("Signature validation status = " ^
-    (if Cert.verify_signature chain pv Server (Some (cr @| sr)) sa next.ne_signature_algorithms tbs sigv then "OK" else "FAIL") ^ "\n");
+  let csr = cr @| sr in
+  let tbs = Handshake.to_be_signed pv Server (Some csr) sv in
+  let sa, ha = alg in
+  let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
+  let a = Signature.Use (fun _ -> True) sa [ha] false false in
+  let Some csk = Signature.lookup_key #a config.private_key_file in
+  let sigv = Signature.sign ha csk tbs in
+  let signature = (hab @| sab @| (vlbytes 2 sigv)) in
+  let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+  IO.print_string ("TBS = " ^ (print_bytes tbs) ^ "\n SIG = " ^ (print_bytes sigv) ^ "\n");
 
   let cb = log @@ Certificate(c) in
   sendHSRecord tcp pv (Certificate c,cb);
@@ -280,5 +283,3 @@ let main config host port =
  IO.print_string "===============================================\n Starting test TLS server...\n";
  let sock = Platform.Tcp.listen host port in
  aux config sock
-
-

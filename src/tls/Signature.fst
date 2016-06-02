@@ -7,7 +7,7 @@ open Platform.Bytes
 open MonotoneSeq
 open TLSConstants
 open CoreCrypto
-
+open Cert
 
 (* ------------------------------------------------------------------------ *)
 type text = bytes
@@ -31,7 +31,7 @@ let ideal = IdealFlags.ideal_Sig
 // Encodes agile INT-CMA assumption
 assume type int_cma: a:alg -> h:hashAlg{List.Tot.mem h a.digest} -> Tot bool
 
-type public_repr = 
+type public_repr =
   | PK_RSA   of rsa_key
   | PK_DSA   of dsa_key
   | PK_ECDSA of ec_key
@@ -66,23 +66,23 @@ type state (a:alg) =
   | Signed: log:Seq.seq (signed a) -> state a
   | Corrupt
 
-(* 
+(*
   Allowed state transitions:
   Corrupt  -> Corrupt
   Signed l -> Corrupt
   Signed l -> Signed l++l'
 *)
 abstract let evolves (#a:alg) (s1:state a) (s2:state a) =
-  is_Corrupt s2 \/ 
+  is_Corrupt s2 \/
   (is_Signed s1 /\ is_Signed s2 /\ grows (Signed.log s1) (Signed.log s2))
 
-let lemma_evolves_monotone (#a:alg): Lemma (monotonic (state a) (evolves #a)) = 
+let lemma_evolves_monotone (#a:alg): Lemma (monotonic (state a) (evolves #a)) =
   forall_intro (seq_extension_reflexive #(signed a));
   forall_intro_3 (grows_transitive #(signed a))
 
-private val st_update: #a:alg 
-  -> s1:state a 
-  -> signed a 
+private val st_update: #a:alg
+  -> s1:state a
+  -> signed a
   -> Tot (s2:state a{evolves s1 s2})
 let st_update #a st t =
   match st with
@@ -104,13 +104,13 @@ val pkey_repr: pkey -> Tot public_repr
 let pkey_repr (| a,  p |) = PK.repr p
 
 val pkey_alg: pkey -> Tot alg
-let pkey_alg (| a,  p |) = a
+let pkey_alg (| a,  _ |) = a
 
-type skey (a:alg) = 
+type skey (a:alg) =
   k:(pubkey a * secret_repr){let _,sk = k in sigAlg_of_secret_repr sk = a.core}
 
 val alloc_pubkey: #a:alg
-  -> s:state a 
+  -> s:state a
   -> r:public_repr{sigAlg_of_public_repr r = a.core}
   -> ST (pubkey a)
     (requires (fun h0 -> True))
@@ -119,7 +119,7 @@ val alloc_pubkey: #a:alg
                            /\ m_fresh (PK.log p) h0 h1))
 let alloc_pubkey #a s r =
   lemma_evolves_monotone #a;
-  let log = m_alloc keyRegion s in 
+  let log = m_alloc keyRegion s in
   PK log r
 
 
@@ -133,15 +133,15 @@ let alloc_pubkey #a s r =
 
 type kset = s:list pkey{ forall x y. (List.Tot.mem x s /\ List.Tot.mem y s /\ pkey_repr x = pkey_repr y) ==> x = y }
 
-val find_key: r:public_repr -> ks: kset 
+val find_key: r:public_repr -> ks: kset
   -> Tot (o:option (k:pkey {pkey_repr k = r && List.Tot.mem k ks})
         { is_None o ==> (forall k. List.Tot.mem k ks ==> pkey_repr k <> r) })
 let rec find_key r ks = match ks with
   | []   -> None
   | k::ks -> if pkey_repr k = r then Some k else find_key r ks
 
-val add_key: ks:kset 
-  -> k:pkey { forall k'. List.Tot.mem k' ks ==> pkey_repr k <> pkey_repr k' } 
+val add_key: ks:kset
+  -> k:pkey { forall k'. List.Tot.mem k' ks ==> pkey_repr k <> pkey_repr k' }
   -> Tot kset
 let add_key ks k = k::ks
 
@@ -157,17 +157,17 @@ type generated (k:pkey) (h:HyperHeap.t) : Type0 = List.Tot.mem k (m_sel h rkeys)
 
 (* ------------------------------------------------------------------------ *)
 val sign: #a:alg
-  -> h:hashAlg{List.Tot.mem h (a.digest)} 
-  -> s:skey a 
-  -> t:signed a 
+  -> h:hashAlg{List.Tot.mem h (a.digest)}
+  -> s:skey a
+  -> t:signed a
   -> ST (sigv a)
     (requires (fun h -> True))
     (ensures  (fun h0 _ h1 ->
       if ideal then
-        let (pk,sk) = s in 
+        let (pk,sk) = s in
         let log = PK.log pk in
         modifies (Set.singleton keyRegion) h0 h1 /\
-        m_sel h1 log == st_update (m_sel h0 log) t 
+        m_sel h1 log == st_update (m_sel h0 log) t
       else modifies Set.empty h0 h1))
 
 let sign #a h s t =
@@ -189,14 +189,14 @@ let sign #a h s t =
 
 
 (* ------------------------------------------------------------------------ *)
-val verify: #a:alg 
-  -> h:hashAlg{List.Tot.mem h (a.digest)} 
-  -> pk:pubkey a 
+val verify: #a:alg
+  -> h:hashAlg{List.Tot.mem h (a.digest)}
+  -> pk:pubkey a
   -> t:text
   -> sigv a
   -> ST bool
     (requires (fun h -> True))
-    (ensures  (fun h0 b h1 -> 
+    (ensures  (fun h0 b h1 ->
 	           modifies Set.empty h0 h1
 		 /\ (b /\ ideal
 		    /\ List.Tot.existsb (fun (k:pkey) -> let (|a',pk'|) = k in a=a' && pk = pk') (m_sel h0 rkeys)
@@ -229,10 +229,10 @@ let verify #a h pk t s =
 
 
 (* ------------------------------------------------------------------------ *)
-val genrepr: a:alg 
+val genrepr: a:alg
   -> All (public_repr * secret_repr)
     (requires (fun h -> True))
-    (ensures  (fun h0 k h1 -> 
+    (ensures  (fun h0 k h1 ->
       	is_V k ==>
 	(let (pk,sk) = V.v k in
         modifies Set.empty h0 h1
@@ -246,14 +246,13 @@ let genrepr a =
   | RSAPSS -> failwith "Signature.genrepr: RSA-PSS unsupported"
 
 val gen: a:alg -> All (skey a)
-                     (requires (fun h -> m_contains rkeys h))
-                     (ensures  (fun h0 (s:result (skey a)) h1 ->
-			       modifies_one keyRegion h0 h1
-                               /\ modifies_rref keyRegion !{as_ref (as_rref rkeys)} h0 h1
-                               /\ m_contains rkeys h1
-			       /\ (is_V s ==>
-				 witnessed (generated (|a, fst (V.v s) |))
-				 /\ m_fresh (PK.log (fst (V.v s))) h0 h1 )))
+  (requires (fun h -> m_contains rkeys h))
+  (ensures  (fun h0 (s:result (skey a)) h1 ->
+	         modifies_one keyRegion h0 h1
+               /\ modifies_rref keyRegion !{as_ref (as_rref rkeys)} h0 h1
+               /\ m_contains rkeys h1
+	       /\ (is_V s ==>   witnessed (generated (|a, fst (V.v s) |))
+			     /\ m_fresh (PK.log (fst (V.v s))) h0 h1 )))
 
 let rec gen a =
   let pkr,skr = genrepr a in // Could be inlined
@@ -261,12 +260,12 @@ let rec gen a =
   match find_key pkr keys with
   | Some _ -> gen a // retry until distinct. SZ: why not just throw an exception?
   | None ->
-     let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
-     let k = (| a, p |) in
-     let keys' = add_key keys k in
-     m_write rkeys keys';
-     witness rkeys (generated (|a, p|));
-     p, skr
+    let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
+    let k = (| a, p |) in
+    let keys' = add_key keys k in
+    m_write rkeys keys';
+    witness rkeys (generated (|a, p|));
+    p, skr
 
 
 (* ------------------------------------------------------------------------ *)
@@ -276,9 +275,9 @@ val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
 	      modifies_one keyRegion h0 h1
 	      /\ modifies_rref keyRegion !{as_ref (as_rref (PK.log (fst s)))} h0 h1
 	      /\ is_Corrupt (m_sel h1 (PK.log (fst s)))
-	      /\ fst r = PK.repr (fst s)))     
+	      /\ fst r = PK.repr (fst s)))
 let leak #a (PK log pkr, skr) =
-  m_write log Corrupt; 
+  m_write log Corrupt;
   pkr, skr
 
 
@@ -309,7 +308,58 @@ let endorse #a pkr =
   | None   -> (| a, alloc_pubkey Corrupt pkr |)
 
 
-#reset-options 
+(* ------------------------------------------------------------------------ *)
+val get_chain_public_key: #a:alg -> chain -> St (option (pubkey a))
+let get_chain_public_key #a c =
+  let sa = a.core in
+  match c with
+  | cert::_ ->
+    begin
+    match sa, CoreCrypto.get_key_from_cert cert with
+    | RSASIG, Some (KeyRSA k)   ->
+      let (|_,pk|) = endorse #a (PK_RSA k) in
+      Some pk
+    | DSA,    Some (KeyDSA k)   ->
+      let (|_,pk|) = endorse #a (PK_DSA k) in
+      Some pk
+    | ECDSA,  Some (KeyECDSA k) ->
+      let (|_,pk|) = endorse #a (PK_ECDSA k) in
+      Some pk
+    | _, _ -> None
+    end
+  | _ -> None
+
+
+(* ------------------------------------------------------------------------ *)
+//FIXME: use unique public-key representation
+val lookup_key: #a:alg -> string -> St (option (skey a))
+let lookup_key #a keyfile =
+  let keys = m_read rkeys in
+  let sa = a.core in
+  let key =
+    match sa, CoreCrypto.load_key keyfile with
+    | RSASIG, Some (KeyRSA k)   -> Some (PK_RSA k, SK_RSA k)
+    | DSA,    Some (KeyDSA k)   -> Some (PK_DSA k, SK_DSA k)
+    | ECDSA,  Some (KeyECDSA k) -> Some (PK_ECDSA k, SK_ECDSA k)
+    | _, _ -> None
+  in
+  match key with
+  | Some (pkr, skr) ->
+    begin
+    match find_key pkr keys with
+    | Some (| a', p |) -> if a' = a then Some (p, skr) else None
+    | None ->
+      let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
+      let k = (| a, p |) in
+      let keys' = add_key keys k in
+      m_write rkeys keys';
+      witness rkeys (generated (|a, p|));
+      Some (p, skr)
+    end
+  | None -> None
+
+(*
+#reset-options
 #set-options "--initial_fuel 2 --max_fuel 2 --detail_errors"
 
 val test: bytes -> bytes -> All unit
@@ -332,3 +382,4 @@ let test t0 t1 =
   let sigv1 = sign (Hash SHA256) s t1 in
   //let sigv2 = sign (Hash SHA256) s' t0 in // should fail, can only sign t1
   ()
+*)

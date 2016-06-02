@@ -149,17 +149,22 @@ let rec aux config sock =
 
   let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_get_htk ks (hash log) in
 
-  let Correct (chain, csk) = Cert.lookup_server_chain config.cert_chain_file config.private_key_file pv (Some sa) None in
+  let Correct chain = Cert.lookup_chain config.cert_chain_file in
   let crt = {crt_chain = chain} in
   let log = sendEncHSRecord tcp pv (EncryptedExtensions ({ee_extensions=[]})) log wr in
   let log = sendEncHSRecord tcp pv (Certificate crt) log wr in
 
-  let Correct sigv = Cert.sign pv Server None csk (sa, Hash CoreCrypto.SHA256) (hash log) in
-  let log = sendEncHSRecord tcp pv (CertificateVerify ({cv_sig = sigv})) log wr in
+  let tbs = Handshake.to_be_signed pv Server None (hash log) in
+  let ha = Hash CoreCrypto.SHA256 in
+  let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
+  let a = Signature.Use (fun _ -> True) sa [ha] false false in
+  let Some csk = Signature.lookup_key #a config.private_key_file in
+  let sigv = Signature.sign ha csk tbs in
+  let signature = (hab @| sab @| (vlbytes 2 sigv)) in
+  let log = sendEncHSRecord tcp pv (CertificateVerify ({cv_sig = signature})) log wr in
 
   let svd = KeySchedule.ks_server_13_server_finished ks (hash log) in
   let log = sendEncHSRecord tcp pv (Finished ({fin_vd = svd})) log wr in
-
 
   let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_server_13_client_finished ks (hash log) in
   let Finished({fin_vd = cfin}),log = recvEncHSRecord tcp pv kex log rd in
