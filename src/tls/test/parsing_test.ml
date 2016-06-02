@@ -134,7 +134,7 @@ let parse_handshake_message bytes =
 	  | Correct(ch) -> print_string "...OK\n";
                            print_string "Running chain validation (no hostname)...";
                            let {crt_chain = chain } = ch in
-                           let r = Cert.validate_chain chain None None "../../data/CAFile.pem" in
+                           let r = Cert.validate_chain chain false None "../../data/CAFile.pem" in
                            print_string (if r then (cert := List.hd chain; "OK\n") else "FAILED\n");
 	     let _,cert_bytes = split (certificateBytes !pv ch) 4 in
 	     if equalBytes cert_bytes msg then ()
@@ -275,5 +275,3 @@ let main () =
   List.iter parse_trace_file ecdhe_handshakes;
   kex := Kex_DHE;
   List.iter parse_trace_file dhe_handshakes
-
-
