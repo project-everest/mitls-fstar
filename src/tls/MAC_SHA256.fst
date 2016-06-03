@@ -54,10 +54,9 @@ val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
     sel h1 wr.log = snoc (sel h0 wr.log) (Entry t p)))
 
 let mac i wr p =
-    admit(); //$ why?
-    let t : tag i = HMAC.tls_mac a wr.key p in
-    wr.log := snoc !wr.log (Entry #i t p); // We log every authenticated texts, with their index and resulting tag
-    t
+  let t : tag i = HMAC.tls_mac a wr.key p in
+  wr.log := snoc !wr.log (Entry #i t p); // We log every authenticated texts, with their index and resulting tag
+  t
 
 val matches: i:id -> p:text -> entry i -> Tot bool 
 let matches i p (Entry _ p') = p = p'

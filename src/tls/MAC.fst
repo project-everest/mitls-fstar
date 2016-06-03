@@ -79,12 +79,11 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 
 // We log every authenticated texts, with their index and resulting tag
 let mac #i #good k p =
-    let p : p:bytes { authId i ==> good p } = p in 
-    admit();
-    let t = HMAC.tls_mac (alg i) k.kv p in
-    let e : entry i good = Entry t p in 
-    k.log := snoc !k.log e; 
-    t
+  let p : p:bytes { authId i ==> good p } = p in
+  let t = HMAC.tls_mac (alg i) k.kv p in
+  let e : entry i good = Entry t p in
+  k.log := snoc !k.log e;
+  t
 
 abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool 
 let matches #i #good p (Entry _ p') = p = p'
@@ -95,19 +94,7 @@ val verify: #i:id -> #good:(bytes -> Type) -> k:key i good{HMAC.is_tls_mac (alg 
 
 // We use the log to correct any verification errors
 let verify #i #good k p t =
-    let x = HMAC.tls_macVerify (alg i) k.kv p t in
-    let log = !k.log in
-    x && 
-    ( not(authId i) || is_Some (seq_find (matches p) log))
-
-
-
-
-
-
-
-
-
-
-
-
+  let x = HMAC.tls_macVerify (alg i) k.kv p t in
+  let log = !k.log in
+  x &&
+  ( not(authId i) || is_Some (seq_find (matches p) log))
