@@ -17,12 +17,12 @@ open TLSInfo
 open Range
 open DataStream
 
-
+// this description is detailed enough to compute the size of the plaintext and ciphertext
 type fragment (i:id) =
-    | CT_Alert     : alertDescription                           -> fragment i // could insist we get exactly 2 bytes
-    | CT_Handshake : rg: frange i -> f: rbytes rg                -> fragment i // concrete
-    | CT_CCS       :                                              fragment i // one-byte; never encrypted or decrypted
-    | CT_Data      : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract
+    | CT_Alert     : rg: frange i {fst rg >= 2} -> alertDescription -> fragment i // could insist we get exactly 2 bytes
+    | CT_Handshake : rg: frange i -> f: rbytes rg                  -> fragment i // concrete for now
+    | CT_CCS       : rg: frange i {fst rg >= 1}                    -> fragment i // one-byte; never encrypted or decrypted
+    | CT_Data      : rg: frange i -> f: DataStream.fragment i rg   -> fragment i // abstract
 // for TLS 1.3
 //  | CT_EncryptedHandshake : rg: frange i -> f: Handshake.fragment i rg -> fragment i // abstract
 //  | CT_EarlyData : rg: frange i -> f: DataStream.fragment i rg -> fragment i // abstract
