@@ -168,37 +168,50 @@ Connection \
 ConnInvariant \
 TLS 
 
-all-ver: IdealFlags.fst $(addsuffix .fst-ver, $(VERIFY))
+depend:
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
+
+#include .depend
+
+ConcreteFlags: Concrete.fst
+	cp Concrete.fst IdealFlags.fst
+
+IdealFlags: Ideal.fst
+	cp Ideal.fst IdealFlags.fst
+
+all-ver: IdealFlags $(addsuffix .fst-ver, $(VERIFY))
+
+all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 
 # Lax-checking one file at a time
-%.fst-lax: IdealFlags.fst $(LIBFILES)
+%.fst-lax: ConcreteFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
 # Verifying one file at a time
-%.fst-ver: IdealFlags.fst $(LIBFILES)
+%.fst-ver: IdealFlags %.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
-%.fsti-ver: IdealFlags.fst $(LIBFILES)
+%.fsti-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
-%.fst-in: IdealFlags.fst
+%.fst-in: IdealFlags
 	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
-%.fsti-in: IdealFlags.fst
+%.fsti-in: IdealFlags
 	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -206,14 +219,14 @@ all-ver: IdealFlags.fst $(addsuffix .fst-ver, $(VERIFY))
 	$(basename $@).fsti
 
 # Verifying everything stable
-tls-ver: $(LIBFILES) $(FSTS)
+tls-ver: IdealFlags $(LIBFILES) $(FSTS)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
-tls-sanity: $(LIBFILES) $(FSTS) test/False.fst
+tls-sanity: IdealFlags $(LIBFILES) $(FSTS) test/False.fst
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -221,8 +234,7 @@ tls-sanity: $(LIBFILES) $(FSTS) test/False.fst
 	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # Lax typecheck all files (with ideal flag off)
-tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
-	cp Concrete.fst IdealFlags.fst
+tls-lax: $(LIBFILES) ConcreteFlags $(FSTS)
 	$(MAKE) refresh
 	$(FSTAR) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -230,9 +242,6 @@ tls-lax: $(LIBFILES) Concrete.fst $(FSTS)
 
 wc:
 	wc -l $(LIBFILES) $(FSTS)
-
-IdealFlags.fst: Ideal.fst
-	cp Ideal.fst IdealFlags.fst
 
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
@@ -267,8 +276,7 @@ refresh:
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen: $(LIBFILES) Concrete.fst $(FSTS)
-	cp Concrete.fst IdealFlags.fst
+tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	$(FSTAR) \
