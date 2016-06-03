@@ -25,7 +25,7 @@ let project_one_frag #i = function
       let d : DS.pre_fragment i = d in //A widening coercion as a proof hint, unpacking (d:fragment i (frange i)) to a pre_fr
       singleton (DataStream.Data d)
     
-    | C.CT_Alert ad -> singleton (DataStream.Alert ad)
+    | C.CT_Alert _ ad -> singleton (DataStream.Alert ad)
     | _ -> Seq.createEmpty                 // other fragments are internal to TLS
 
 val project_deltas: #i:id -> fs:S.frags i -> Tot (deltas i)

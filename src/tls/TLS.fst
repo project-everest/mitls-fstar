@@ -561,7 +561,8 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
   = let i = currentId c Writer in 
     let wopt = current_writer c i in 
     let st = !c.state in
-    match sendFragment c #i wopt (Content.CT_Alert #i ad) with
+    // We don't pad alerts
+    match sendFragment c #i wopt (Content.CT_Alert #i (point 2) ad) with
     | Error xy -> unrecoverable c (snd xy) // or reason?
     | Correct _   ->
         if ad = AD_close_notify then
@@ -593,7 +594,7 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
      | _ ->
        if not send_ccs
        then result0
-       else sendFragment c wopt (Content.CT_CCS #i) 
+       else sendFragment c wopt (Content.CT_CCS #i (point 1)) // Don't pad
 
 
 
@@ -1036,8 +1037,8 @@ private val readOne: c:connection -> i:id -> St (ioresult_i i)
 let readOne c i =
   assume false; //16-05-19 
   match readFragment c i with 
-  | Error (x,y) ->  alertFlush c i x y
-  | Correct (Content.CT_Alert ad) -> 
+  | Error (x,y) -> alertFlush c i x y
+  | Correct (Content.CT_Alert rg ad) ->
       begin
         if ad = AD_close_notify then 
           if !c.state = Half Reader 
@@ -1072,7 +1073,7 @@ let readOne c i =
       //| InFinished    -> ReadAgain // should we care? probably before e.g. accepting falseStart traffic
       // recheck correctness for all states; used to be just Init|Finishing|Open
       end
-  | Correct(Content.CT_CCS) ->
+  | Correct(Content.CT_CCS rg) ->
       begin
         // TODO exclude TLS 1.3, here or in the handshake
         match recv_ccs c.hs with

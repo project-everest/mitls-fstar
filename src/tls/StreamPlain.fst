@@ -159,6 +159,9 @@ let rec scan_pad_correct i payload ct len j =
     cut (abyte (index bs j) = ctBytes ct);
     match index bs j with
     | 20z -> lemma_split bs 1; lemma_eq_intro payload (fst (split bs 1))
+    | 21z -> ()
+    | 22z -> ()
+    | 23z -> ()
     | _ -> ()
     end
   else
