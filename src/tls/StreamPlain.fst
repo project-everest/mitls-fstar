@@ -150,22 +150,26 @@ val scan_pad_correct: i:id {~ (authId i)} -> payload:bytes -> ct:contentType
 		        length payload = 2 /\ is_Correct (Alert.parse payload))))
 	  (ensures is_Correct (scan i (pad payload ct len) j) )
 
-#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 0 --max_ifuel 0"
 
 let rec scan_pad_correct i payload ct len j =
   let bs = pad payload ct len in
   if j = length payload then
     begin
     cut (abyte (index bs j) = ctBytes ct);
+    lemma_split bs j;
+    lemma_eq_intro payload (fst (split bs j));
     match index bs j with
-    | 20z -> lemma_split bs 1; lemma_eq_intro payload (fst (split bs 1))
-    | 21z -> ()
+    | 20z -> cut (j = 1)
+    | 21z -> cut (j = 2)
     | 22z -> ()
     | 23z -> ()
     | _ -> ()
     end
   else
     scan_pad_correct i payload ct len (j - 1)
+
+#reset-options
 
 val inverse_scan: i:id{~(authId i)} -> len:plainLen -> f:plain i len ->
   Lemma (requires (let ct,_ = ct_rg i f in
