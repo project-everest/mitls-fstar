@@ -79,6 +79,7 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 
 // We log every authenticated texts, with their index and resulting tag
 let mac #i #good k p =
+  assume (HMAC.is_tls_mac (alg i));
   let p : p:bytes { authId i ==> good p } = p in
   let t = HMAC.tls_mac (alg i) k.kv p in
   let e : entry i good = Entry t p in

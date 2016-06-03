@@ -54,6 +54,7 @@ val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
     sel h1 wr.log = snoc (sel h0 wr.log) (Entry t p)))
 
 let mac i wr p =
+  assume (HMAC.is_tls_mac (macAlg_of_id i));
   let t : tag i = HMAC.tls_mac a wr.key p in
   wr.log := snoc !wr.log (Entry #i t p); // We log every authenticated texts, with their index and resulting tag
   t

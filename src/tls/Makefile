@@ -191,7 +191,7 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 	$(basename $@).fst
 
 # Verifying one file at a time
-%.fst-ver: IdealFlags %.fst
+%.fst-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
