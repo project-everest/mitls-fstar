@@ -19,13 +19,13 @@ open DataStream
 
 // this description is detailed enough to compute the size of the plaintext and ciphertext
 type fragment (i:id) =
-  | CT_Alert    : rg:frange i {fst rg >= 2} -> alertDescription -> fragment i // could insist we get exactly 2 bytes
-  | CT_Handshake: rg:frange i -> f:rbytes rg                   -> fragment i // concrete for now
-  | CT_CCS      : rg:frange i {fst rg >= 1}                    -> fragment i // one-byte; never encrypted or decrypted
-  | CT_Data     : rg:frange i -> f: DataStream.fragment i rg   -> fragment i // abstract
+  | CT_Alert    : rg:frange i {wider rg (point 2)} -> alertDescription -> fragment i
+  | CT_Handshake: rg:frange i -> f:rbytes rg                           -> fragment i  // concrete for now
+  | CT_CCS      : rg:frange i {wider rg (point 1)}                    -> fragment i
+  | CT_Data     : rg:frange i -> f:DataStream.fragment i rg            -> fragment i // abstract
 // for TLS 1.3
-//  | CT_EncryptedHandshake : rg:frange i -> f:Handshake.fragment i rg  -> fragment i // abstract
-//  | CT_EarlyData          : rg:frange i -> f:DataStream.fragment i rg -> fragment i // abstract
+//  | CT_EncryptedHandshake: rg:frange i -> f:Handshake.fragment i rg  -> fragment i // abstract
+//  | CT_EarlyData         : rg:frange i -> f:DataStream.fragment i rg -> fragment i // abstract
 
 // move to Seq?
 private val split: #a: Type -> s:seq a {Seq.length s > 0} -> Tot(seq a * a)
@@ -110,14 +110,30 @@ let ctToString = function
 
 // --------------- conditional access to fragment representation ---------------------
 
+val rg: i:id -> fragment i -> Tot (frange i)
+let rg i = function
+  | CT_Data rg _      -> rg
+  | CT_Handshake rg _ -> rg
+  | CT_CCS rg         -> rg
+  | CT_Alert rg _     -> rg
+
+val ct: i:id -> fragment i -> Tot contentType
+let ct i = function
+  | CT_Data _ _      -> Application_data
+  | CT_Handshake _ _ -> Handshake
+  | CT_CCS _         -> Change_cipher_spec
+  | CT_Alert _ _     -> Alert
+
+let ct_rg i f = ct i f, rg i f
+
 let ccsBytes = abyte 1z
 
-val ghost_repr: #i:id -> fragment i -> GTot bytes
+val ghost_repr: #i:id -> f:fragment i -> GTot (rbytes (rg i f))
 let ghost_repr #i = function
   // FIXME: without the #i, extraction crashes
   | CT_Data _ d      -> DataStream.ghost_repr #i d
   | CT_Handshake _ f -> f
-  | CT_CCS _         -> ccsBytes
+  | CT_CCS rg        -> ccsBytes
   | CT_Alert _ ad    -> Alert.alertBytes ad
 
 val repr: i:id{ ~(safeId i) } -> p:fragment i -> Tot (b:bytes {b = ghost_repr #i p})
@@ -128,28 +144,12 @@ let repr i = function
   | CT_CCS _         -> ccsBytes
   | CT_Alert _ ad    -> Alert.alertBytes ad
 
-val ct: i:id -> fragment i -> Tot contentType
-let ct i = function
-  | CT_Data _ _      -> Application_data
-  | CT_Handshake _ _ -> Handshake
-  | CT_CCS _         -> Change_cipher_spec
-  | CT_Alert _ _     -> Alert
-
-val rg: i:id -> fragment i -> Tot (frange i)
-let rg i = function
-  | CT_Data rg _      -> rg
-  | CT_Handshake rg _ -> rg
-  | CT_CCS rg         -> rg
-  | CT_Alert rg _     -> rg
-
-let ct_rg i f = ct i f, rg i f
-
 // "plain interface" for conditional security (TODO restore details)
 
 let fragmentRepr (#i:id) (ct:contentType) (rg:frange i) (b:rbytes rg) = 
   match ct with 
-  | Change_cipher_spec -> 1 <= fst rg /\ b = ccsBytes
-  | Alert              -> 2 <= fst rg /\ length b = 2 /\ is_Correct (Alert.parse b)
+  | Change_cipher_spec -> wider rg (point 1) /\ b = ccsBytes
+  | Alert              -> wider rg (point 2) /\ length b = 2 /\ is_Correct (Alert.parse b)
   | _                  -> True
 
 val mk_fragment: i:id{ ~(authId i) } -> ct:contentType -> rg:frange i -> b:rbytes rg { fragmentRepr ct rg b } ->

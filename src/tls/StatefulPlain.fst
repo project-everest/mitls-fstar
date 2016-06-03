@@ -75,21 +75,26 @@ type plain (i:id) (ad:adata i) (rg:range) = f:fragment i{is_plain i ad rg f}
 // the fragment [f]; allows solving some scoping errors.
 val assert_is_plain: i:id -> ad:adata i -> rg:range -> f:fragment i ->
   Pure (plain i ad rg) (requires (is_plain i ad rg f)) (ensures (fun _ -> true))
-let assert_is_plain i ad rg f =
-  f
+let assert_is_plain i ad rg f = f
 
 val ghost_repr: #i:id -> #ad:adata i -> #rg:range -> plain i ad rg -> GTot (rbytes rg)
-let ghost_repr #i #ad #rg pf = Content.ghost_repr #i pf
+let ghost_repr #i #ad #rg pf =
+  (Content.ghost_repr #i pf <: bytes) // Workaround for #543
 
 val repr: i:id{ ~(safeId i)} -> ad:adata i -> rg:range -> p:plain i ad rg -> Tot (b:rbytes rg {b = ghost_repr #i #ad #rg p})
 let repr i ad rg f = Content.repr i f
 
 logic type wf_ad_rg i ad rg = 
-  wider fragment_range rg  /\ 
-  (parseAD i ad = Change_cipher_spec ==> rg = point 1)
+  wider fragment_range rg
+  /\ (parseAD i ad = Change_cipher_spec ==> wider rg (point 1))
+  /\ (parseAD i ad = Alert ==> wider rg (point 2))
+
+logic type wf_payload_ad_rg i ad rg (b:rbytes rg) =
+  (parseAD i ad = Change_cipher_spec ==> b = ccsBytes)
+  /\ (parseAD i ad = Alert ==> length b = 2 /\ is_Correct (Alert.parse b))
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->
-  b:rbytes rg  ->
+    b:rbytes rg { wf_payload_ad_rg i ad rg b } ->
   Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
 
 let mk_plain i ad rg b = Content.mk_fragment i (parseAD i ad) rg b

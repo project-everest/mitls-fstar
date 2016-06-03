@@ -65,7 +65,7 @@ let repr i ad rg p = StatefulPlain.repr i (parseAD ad) rg p
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> 
   rg:(frange i){ StatefulPlain.wf_ad_rg i (parseAD ad) rg } ->
-  b:rbytes rg ->
+  b:rbytes rg { StatefulPlain.wf_payload_ad_rg i (parseAD ad) rg b } ->
     Tot (p:plain i ad rg {b = ghost_repr #i #ad #rg p})
 let mk_plain i ad rg b = StatefulPlain.mk_plain i (parseAD ad) rg b
 

@@ -235,7 +235,11 @@ let dec i (d:decryptor i) (ad:adata i) c =
     let clen = length c in
     let r = cipherRangeClass i clen in
     cipherRangeClass_width i clen;
-    if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && r <> point 1 then
+    // Decryption is probably doing more than it should in checking the content of
+    // CCS and Alert fragments
+    if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec &&text <> Content.ccsBytes then
+      None
+    else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || Platform.Error.is_Error (Alert.parse text)) then
       None
     else
       let plain = mk_plain i ad r text in
