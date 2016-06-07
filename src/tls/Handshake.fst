@@ -28,8 +28,6 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 
-#set-options "--lax" 
-
 // represents the outcome of a successful handshake, 
 // providing context for the derived epoch
 type handshake = 
@@ -46,15 +44,15 @@ val hsId: handshake -> Tot id
 
 let hsId h = noId // Placeholder 
 
-
 //<expose for TestClient>
 (* Negotiation: HELLO sub-module *)
 private type ri = cVerifyData * sVerifyData 
-type b_log = bytes 
 
+type b_log = bytes
 
 type eph_s = option kex_s_priv
 type eph_c = list kex_s_priv
+
 type nego = {
      n_resume: bool;
      n_client_random: TLSInfo.random;
@@ -80,7 +78,7 @@ type session = {
      session_nego: nego;
 }     
 
-    
+#set-options "--lax"
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
@@ -109,6 +107,7 @@ let prepareClientHello cfg ks log ri sido =
   let chb = log @@ (ClientHello ch) in
   (ClientHello ch, chb)
 
+(*
 //16-05-31 somewhat duplicating TLSConstants.geqPV
 (* Is [pv1 >= pv2]? *)
 val gte_pv: protocolVersion -> protocolVersion -> Tot bool
@@ -120,17 +119,25 @@ let gte_pv pv1 pv2 =
   | TLS_1p2 -> (match pv2 with | TLS_1p3 -> false | _ -> true)
   | TLS_1p3 -> true
 
+//SZ: Indeed.
+val gte_pv_geqPV: pv1:protocolVersion -> pv2:protocolVersion
+  -> Lemma (gte_pv pv1 pv2 <==> geqPV pv1 pv2)
+let gte_pv_geqPV pv1 pv2 = ()
+*)
+
+#reset-options
+
 (* Returns [c] if [c] is within the range of acceptable versions for [cfg],
  * [Error] otherwise. *)
 val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
 let negotiateVersion cfg c =
-  if gte_pv c cfg.minVer && gte_pv cfg.maxVer c then Correct c
-  else if gte_pv c cfg.maxVer then Correct cfg.maxVer
+  if geqPV c cfg.minVer && geqPV cfg.maxVer c then Correct c
+  else if geqPV c cfg.maxVer then Correct cfg.maxVer
   else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
 
-val negotiate:list 'a -> list 'a -> Tot (option 'a)
+val negotiate:l1:list valid_cipher_suite -> list valid_cipher_suite -> Tot (option (c:valid_cipher_suite{is_CipherSuite c && List.Tot.mem c l1}))
 let negotiate l1 l2 =
-  List.Tot.tryFind (fun s -> List.Tot.existsb (fun c -> c = s) l1) l2
+  List.Tot.find #valid_cipher_suite (fun s -> is_CipherSuite s && List.Tot.mem s l1) l2
 
 val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> c:valid_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
 let negotiateCipherSuite cfg pv c =
@@ -144,15 +151,29 @@ val getCachedSession: cfg:config -> ch:ch -> ST (option session)
   (ensures (fun h0 i h1 -> True))
 let getCachedSession cfg cg = None
 
-val negotiateGroupKeyShare: cfg:config -> protocolVersion -> kexAlg -> exts:option (list extension) -> Tot (result (namedGroup * option bytes))
-let rec negotiateGroupKeyShare cfg pv kex exts = 
-    match pv,kex,exts with
-    | TLS_1p3, Kex_ECDHE, Some (E_keyShare (ClientKeyShare ((gn,gxb)::_)) :: _) ->
-      Correct (gn,Some gxb)
-    | TLS_1p3,_, Some (h::t) -> negotiateGroupKeyShare cfg pv kex (Some t)
-    | TLS_1p2, Kex_ECDHE, _ -> Correct (SEC CoreCrypto.ECC_P256, None) 
+// FIXME: no FFDHE, doesn't check cfg.namedGroups
+val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (namedGroup * option bytes))
+let rec negotiateGroupKeyShare cfg pv kex exts =
+  match exts with
+  | None ->
+    begin
+    match pv,kex with
+    | TLS_1p2, Kex_ECDHE -> Correct (SEC ECC_P256, None)
     | _ -> Error(AD_decode_error, "no supported group or key share extension found")
-    
+    end
+  | Some exts ->
+    begin
+    let rec aux: config -> protocolVersion -> kexAlg -> list extension -> Tot (result (namedGroup * option bytes)) = fun cfg pv kex es ->
+      match pv,kex,es with
+      | TLS_1p3, Kex_ECDHE, E_keyShare (ClientKeyShare ((gn,gxb)::_)) :: _ ->
+	Correct (gn,Some gxb)
+      | TLS_1p3,_, h::t -> aux cfg pv kex t
+      | _ -> Error(AD_decode_error, "no supported group or key share extension found")
+    in
+    aux cfg pv kex exts
+    end
+
+#set-options "--lax"
 
 // FIXME: TLS1.3
 val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> (hs_msg * bytes) -> ST (result (nego * option KeySchedule.recordInstance * (hs_msg * bytes)))
@@ -217,8 +238,8 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
 (* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
-  gte_pv c_pv TLS_1p3 && gte_pv TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
-  gte_pv c_pv TLS_1p2 && gte_pv TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
+  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
+  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
 
 (* If [true], then:
   - both the client and server versions are within the range specified by [cfg]
@@ -229,7 +250,7 @@ val acceptableVersion: config -> ch -> protocolVersion -> TLSInfo.random -> Tot 
 let acceptableVersion cfg ch s_pv s_random =
   match negotiateVersion cfg ch.ch_protocol_version with
   | Correct c_pv -> 
-    gte_pv c_pv s_pv && gte_pv s_pv cfg.minVer &&
+    geqPV c_pv s_pv && geqPV s_pv cfg.minVer &&
     not (isSentinelRandomValue c_pv s_pv s_random)
   | Error _ ->
     false
@@ -248,9 +269,9 @@ let acceptableCipherSuite cfg ch s_pv s_cs =
   not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
   
 val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> ch -> (hs_msg * bytes) ->
-                        ST (result (nego * option KeySchedule.recordInstance))
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+  ST (result (nego * option KeySchedule.recordInstance))
+     (requires (fun h -> True))
+     (ensures (fun h0 i h1 -> True))
 let processServerHello cfg ks log ri ch (ServerHello sh,_) =
   let _ = log @@ (ServerHello sh) in
   // Assuming no resumption; TODO: add it 
@@ -288,6 +309,7 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
             | _ -> Correct (o_nego,None))
 	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
 
+#reset-options
 
 (* Handshake API: TYPES, taken from FSTI *)
 
@@ -391,6 +413,8 @@ let getId k =
     | KeySchedule.StAEInstance #i rd wr -> i
     | KeySchedule.StLHAEInstance #i rd wr -> i
 
+#set-options "--lax"
+
 val recordInstanceToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> ks:KeySchedule.recordInstance -> epoch hs_rgn n
 let recordInstanceToEpoch #hs_rgn #n hs ri = 
     match ri with
@@ -398,12 +422,6 @@ let recordInstanceToEpoch #hs_rgn #n hs ri =
     | KeySchedule.StLHAEInstance #i rd wr -> Epoch hs (StAE.StLHAE () rd) (StAE.StLHAE () wr)
 
 (* 16-06-02 unmerged variant:
-val getId: KeySchedule.recordInstance -> GTot id
-let getId k = 
-    match k with
-    | KeySchedule.StAEInstance #i rd wr -> i
-    | KeySchedule.StLHAEInstance #i rd wr -> i
-
 val recordInstanceToEpoch: h:handshake -> ks:KeySchedule.recordInstance -> (StAE.reader (peerId (hsId h)) * StAE.writer (hsId h))
 let recordInstanceToEpoch hs ri = 
     match ri with
@@ -411,13 +429,12 @@ let recordInstanceToEpoch hs ri =
     | KeySchedule.StLHAEInstance #i rd wr -> (StAE.StLHAE () rd),(StAE.StLHAE () wr)
 *)
 
-
 let id_TLS12_AES_GCM_128_SHA256  = {
     msId = noMsId;
     kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
     pv = TLS_1p2;
     aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
-    csrConn = bytes_of_hex "";
+    csrConn = createBytes 64 0x00z;
     ext = {
       ne_extended_ms = false;
       ne_extended_padding = false;
@@ -430,7 +447,7 @@ let id_TLS12_AES_GCM_128_SHA256  = {
     };
     writer = Client
   }
-     
+
 val encryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> StAE.writer (hsId hs)
 let encryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
   let id = hsId hs in
