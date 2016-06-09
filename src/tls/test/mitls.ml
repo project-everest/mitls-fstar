@@ -10,6 +10,9 @@ let config = ref {defaultConfig with
   minVer = TLS_1p3;
   maxVer = TLS_1p3;
   check_peer_certificate = false;
+  cert_chain_file = "../../data/test_chain.pem";
+  private_key_file = "../../data/test_chain.key";
+  ca_file = "../../data/CAFile.pem";
   safe_resumption = true;
   ciphersuites = cipherSuites_of_nameList [TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256];
 }
