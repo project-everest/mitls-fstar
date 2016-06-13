@@ -76,9 +76,8 @@ effect EXT (a:Type) = ST a
   (requires (fun _ -> True)) 
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
-//16-05-19  to be patched in ulib
 val tcp_recv: Platform.Tcp.networkStream -> max:nat -> EXT (optResult string (b:bytes {length b <= max}))
-let tcp_recv = assume false; Platform.Tcp.recv
+let tcp_recv = Platform.Tcp.recv
 
 
 private val really_read_rec: b:bytes -> Platform.Tcp.networkStream -> l:nat -> EXT (result (lbytes (l+length b)))
