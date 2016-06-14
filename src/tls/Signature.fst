@@ -166,7 +166,8 @@ val sign: #a:alg
       if ideal then
         let (pk,sk) = s in
         let log = PK.log pk in
-        modifies (Set.singleton keyRegion) h0 h1 /\
+        modifies_one keyRegion h0 h1 /\
+        modifies_rref keyRegion !{as_ref (as_rref log)} h0 h1 /\
         m_sel h1 log == st_update (m_sel h0 log) t
       else modifies Set.empty h0 h1))
 
@@ -197,12 +198,10 @@ val verify: #a:alg
   -> ST bool
     (requires (fun h -> True))
     (ensures  (fun h0 b h1 ->
-	           modifies Set.empty h0 h1
-		 /\ (b /\ ideal
-		    /\ List.Tot.existsb (fun (k:pkey) -> let (|a',pk'|) = k in a=a' && pk = pk') (m_sel h0 rkeys)
-		    /\ int_cma a h
-		    /\ is_Signed (m_sel h0 (PK.log pk))) ==>
-		    a.info t))
+         modifies Set.empty h0 h1
+       /\ ((b /\ ideal /\ List.Tot.mem (|a,pk|) (m_sel h0 rkeys)
+           /\ int_cma a h
+	   /\ is_Signed (m_sel h0 (PK.log pk))) ==> a.info t)))
 
 let verify #a h pk t s =
   let verified =
