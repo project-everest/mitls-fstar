@@ -220,7 +220,7 @@ let verify #a h pk t s =
     in
     let honest =
       let kset = m_read rkeys in
-      List.Tot.existsb (fun (k:pkey) -> let (|a',pk'|) = k in a=a' && pk = pk') kset
+      List.Tot.mem (|a,pk|)  kset
     in
     verified && (signed || not (honest && int_cma a h))
   else
