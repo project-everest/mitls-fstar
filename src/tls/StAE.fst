@@ -114,8 +114,8 @@ val lemma_fragments_snoc_commutes: #i:id -> w:writer i{is_stream_ae i}
     -> h0:HH.t -> h1:HH.t -> e:S.entry i
     -> Lemma (authId i
             ==>  ( let log = ilog w in
-                      MR.m_sel h1 log = SeqP.snoc (MR.m_sel h0 log) e
-                  ==> fragments w h1 = SeqP.snoc (fragments w h0) (StreamAE.Entry.p e)))
+                      MR.m_sel h1 log == SeqP.snoc (MR.m_sel h0 log) e
+                  ==> fragments w h1 == SeqP.snoc (fragments w h0) (StreamAE.Entry.p e)))
 let lemma_fragments_snoc_commutes #i w h0 h1 e =
   if authId i
   then let log = ilog w in
@@ -165,7 +165,7 @@ val frame_fragments : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> 
     (requires HH.modifies_just s h0 h1
 	      /\ Map.contains h0 (log_region st)
 	      /\ not (Set.mem (log_region st) s))
-    (ensures authId i ==> fragments st h0 = fragments st h1)
+    (ensures authId i ==> fragments st h0 == fragments st h1)
 let frame_fragments #i #rw st h0 h1 s = ()
 
 val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> s:Set.set rid 
@@ -181,7 +181,7 @@ let trigger_frame (h:HH.t) = True
 let frame_f (#a:Type) (f:HH.t -> GTot a) (h0:HH.t) (s:Set.set rid) =
   forall h1.{:pattern trigger_frame h1} 
         trigger_frame h1
-        /\ (HH.equal_on s h0 h1 ==> f h0 = f h1)
+        /\ (HH.equal_on s h0 h1 ==> f h0 == f h1)
 
 val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:HH.t -> h1:HH.t -> 
   Lemma (requires   HH.equal_on (Set.singleton (region s)) h0 h1 
@@ -195,7 +195,7 @@ let frame_seqT_auto i rw s h0 h1 = ()
 val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:HH.t -> h1:HH.t -> 
   Lemma (requires    HH.equal_on (Set.singleton (log_region s)) h0 h1 
 		  /\ Map.contains h0 (log_region s))
-        (ensures fragments s h0 = fragments s h1)
+        (ensures fragments s h0 == fragments s h1)
 	[SMTPat (fragments s h0); 
 	 SMTPat (fragments s h1)] 
 	 (* SMTPatT (trigger_frame h1)] *)
@@ -206,7 +206,7 @@ let frame_fragments_auto i rw s h0 h1 = ()
 ////////////////////////////////////////////////////////////////////////////////
 let reads (s:Set.set rid) (a:Type) = 
     f: (h:HH.t -> GTot a){forall h1 h2. (HH.equal_on s h1 h2 /\ Set.subset s (Map.domain h1))
-				  ==> f h1 = f h2}
+				  ==> f h1 == f h2}
 
 val fragments' : #i:id -> #rw:rw -> s:state i rw{ authId i } -> Tot (reads (Set.singleton (log_region s)) (frags i))
 let fragments' #i #rw s = fragments s
@@ -221,7 +221,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   HH.fresh_region r h0 h1 /\
   color r = color parent /\
   seqnT w h1 = 0 /\
-  (authId i ==> fragments w h1 = Seq.createEmpty) // we need to re-apply #i knowning authId
+  (authId i ==> fragments w h1 == Seq.createEmpty) // we need to re-apply #i knowning authId
 
 // Generate a fresh instance with index i in a fresh sub-region 
 val gen: parent:rid -> i:id -> ST (writer i)
@@ -281,7 +281,7 @@ val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (encrypted f)
 	       /\ seqnT e h1 = seqnT e h0 + 1   
 	       /\ frame_f (seqnT e) h1 (Set.singleton (log_region e))
 	       /\ (authId i 
-		  ==> fragments e h1 = SeqP.snoc (fragments e h0) f
+		  ==> fragments e h1 == SeqP.snoc (fragments e h0) f
 		      /\ frame_f (fragments e) h1 (Set.singleton (log_region e))
 		      /\ MR.witnessed (fragments_prefix e (fragments e h1)))))
 

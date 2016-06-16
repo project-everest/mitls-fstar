@@ -52,7 +52,7 @@ type dplain (i:gid) (ad:adata i) (c:cipher i) =
 type entry (i:gid) = // records that c is an encryption of p with ad
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
-type state (i:gid) (rw:rw) =
+noeq type state (i:gid) (rw:rw) =
   | State: #region:rid{region <> root}
            -> peer_region:rid{peer_region <> root /\ HyperHeap.disjoint region peer_region}
            -> key:key i
@@ -90,13 +90,13 @@ val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (reader i * write
          /\ extends (r.region) reader_parent
          /\ fresh_region w.region h0 h1
          /\ fresh_region r.region h0 h1
-         /\ op_Equality #(rref w.region (seq (entry i))) w.log r.log  //the explicit annotation here 
+         /\ eq2 #(rref w.region (seq (entry i))) w.log r.log  //the explicit annotation here 
          /\ contains_ref w.counter h1
          /\ contains_ref r.counter h1
          /\ contains_ref w.log h1
          /\ 0 = sel h1 w.counter
          /\ 0 = sel h1 r.counter
-         /\ sel h1 w.log = createEmpty
+         /\ sel h1 w.log == createEmpty
          ))
 
 let gen reader_parent writer_parent i =
@@ -194,7 +194,7 @@ val encrypt:
                          /\ contains_ref e.counter h1
                          /\ length c = Range.targetLength i r
                          (* /\ sel h1 e.counter = sel h0 e.counter + 1 *)
-                         /\ sel h1 e.log = snoc (sel h0 e.log) (Entry c ad p)))
+                         /\ sel h1 e.log == snoc (sel h0 e.log) (Entry c ad p)))
 
 (* we primarily model the ideal functionality, the concrete code that actually
    runs on the network is what remains after dead code elimination when

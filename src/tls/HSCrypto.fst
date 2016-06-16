@@ -30,7 +30,9 @@ let rec hkdf_expand_int ha count curr len secret prev info =
       let next = hkdf_expand_int ha count curr len secret prev info in
       prev @| next
     else empty_bytes
-      
+
+(* TODO: AR: subtyping check failed *)
+
 val hkdf_expand_label: CoreCrypto.hash_alg -> bytes -> string -> bytes -> int -> Tot bytes
 let hkdf_expand_label ha secret label hv len = 
   let info = (bytes_of_int 2 len) @| 

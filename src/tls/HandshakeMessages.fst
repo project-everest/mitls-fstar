@@ -12,6 +12,8 @@ open TLSInfo
 open Range
 open CommonDH
 
+(* TODO: AR: unknown assertion failures *)
+
 //#set-options "--lax"
 
 (* JK: for verification purposes the "--lax" flag is set throughout the file in order to
@@ -115,7 +117,7 @@ let pinverse_ht x = ()
 
 /// Messages
 
-type ch = {
+noeq type ch = {
   ch_protocol_version:protocolVersion;
   ch_client_random:TLSInfo.random;
   ch_sessionID:sessionID;
@@ -127,7 +129,7 @@ type ch = {
 let ch_is_resumption { ch_sessionID = sid } =
   length sid > 0
 
-type sh = {
+noeq type sh = {
   sh_protocol_version:protocolVersion;
   sh_server_random:TLSInfo.random;
   sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
@@ -137,7 +139,7 @@ type sh = {
 }
 
 (* Hello retry request *)
-type hrr = {
+noeq type hrr = {
   hrr_protocol_version:protocolVersion;
   hrr_cipher_suite:valid_cipher_suite;
   hrr_named_group:namedGroup; // JK : is it the expected type here ?
@@ -149,7 +151,7 @@ type sticket = {
   sticket_ticket:(b:bytes{length b < 16777212});
 }
 
-type ee = {
+noeq type ee = {
   ee_extensions:(ee:list extension{List.Tot.length ee < 256});
 }
 
@@ -191,7 +193,7 @@ type cv = {
   cv_sig: (l:bytes{length l < 65536});
 }
 
-type sc = {
+noeq type sc = {
   sc_configuration_id:configurationId;
   sc_expiration_date:uint32;
   sc_named_group:namedGroup;
@@ -213,7 +215,7 @@ type np = {
 
 // TODO: unify, either keep separate finished messages for client and servers or 
 // merge them into single "finished" as it is the case for certificates
-type hs_msg =
+noeq type hs_msg =
   | ClientHello of ch
   | ServerHello of sh
   | SessionTicket of sticket
@@ -413,12 +415,12 @@ let rec compressionMethodsBytes_is_injective l1 l2 =
 (* JK: TODO *)
 assume val extensionsBytes_is_injective: r:role -> ext1:list extension{List.Tot.length ext1 < 256} -> ext2:list extension{List.Tot.length ext2 < 256} -> 
   Lemma (requires (True)) 
-	(ensures (Seq.equal (extensionsBytes r ext1) (extensionsBytes r ext2) ==> ext1 = ext2))
+	(ensures (Seq.equal (extensionsBytes r ext1) (extensionsBytes r ext2) ==> ext1 == ext2))
 
 val optionExtensionsBytes_is_injective: r:role -> ext1:option (ce:list extension{List.Tot.length ce < 256}) -> 
   ext2:option (ce2:list extension{List.Tot.length ce2 < 256}) -> 
   Lemma (requires (True)) 
-	(ensures (Seq.equal (optionExtensionsBytes r ext1) (optionExtensionsBytes r ext2) ==> ext1 = ext2))
+	(ensures (Seq.equal (optionExtensionsBytes r ext1) (optionExtensionsBytes r ext2) ==> ext1 == ext2))
 let optionExtensionsBytes_is_injective r ext1 ext2 =
   (* JK: TODO: make the assumes part of the specifications *)
   assume (is_Some ext1 ==> repr_bytes (length (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes (Some.v ext1))) <= 2);
@@ -431,7 +433,7 @@ let optionExtensionsBytes_is_injective r ext1 ext2 =
 
 val clientHelloBytes_is_injective: msg1:ch -> msg2:ch ->
   Lemma (requires (True)) 
-	(ensures (Seq.equal (clientHelloBytes msg1) (clientHelloBytes msg2) ==> (msg1 = msg2)))
+	(ensures (Seq.equal (clientHelloBytes msg1) (clientHelloBytes msg2) ==> (msg1 == msg2)))
   [SMTPat (clientHelloBytes msg1); SMTPat (clientHelloBytes msg2)]
 let clientHelloBytes_is_injective msg1 msg2 =
   if clientHelloBytes msg1 = clientHelloBytes msg2 then
@@ -509,7 +511,7 @@ let clientHelloBytes_is_injective msg1 msg2 =
       optionExtensionsBytes_is_injective Client msg1.ch_extensions msg2.ch_extensions;
       cut(msg1.ch_cipher_suites = msg2.ch_cipher_suites);
       cut(msg1.ch_compressions = msg2.ch_compressions);
-      cut(msg1.ch_extensions = msg2.ch_extensions);
+      cut(msg1.ch_extensions == msg2.ch_extensions);
       ()
    end
   else ()
@@ -636,7 +638,7 @@ let valid_sh : Type0 = s:sh{
 
 val serverHelloBytes_is_injective: msg1:valid_sh -> msg2:valid_sh -> 
   Lemma (requires (True))
-	(ensures (Seq.equal (serverHelloBytes msg1) (serverHelloBytes msg2) ==> msg1 = msg2))
+	(ensures (Seq.equal (serverHelloBytes msg1) (serverHelloBytes msg2) ==> msg1 == msg2))
 let serverHelloBytes_is_injective msg1 msg2 =
   if serverHelloBytes msg1 = serverHelloBytes msg2 then 
   begin
@@ -1356,7 +1358,7 @@ let namedGroupBytes_is_injective n1 n2 =
 
 val helloRetryRequestBytes_is_injective: h1:hrr -> h2:hrr -> 
   Lemma (requires (True))
-	(ensures (Seq.equal (helloRetryRequestBytes h1) (helloRetryRequestBytes h2) ==> h1 = h2))
+	(ensures (Seq.equal (helloRetryRequestBytes h1) (helloRetryRequestBytes h2) ==> h1 == h2))
 let helloRetryRequestBytes_is_injective h1 h2 = 
   if helloRetryRequestBytes h1 = helloRetryRequestBytes h2 then (
     let pv1 = versionBytes h1.hrr_protocol_version in
@@ -1419,7 +1421,7 @@ let encryptedExtensionsBytes ee =
 
 val encryptedExtensionsBytes_is_injective: e1:valid_ee -> e2:valid_ee -> 
   Lemma (requires (True))
-	(ensures (Seq.equal (encryptedExtensionsBytes e1) (encryptedExtensionsBytes e2) ==> e1 = e2))
+	(ensures (Seq.equal (encryptedExtensionsBytes e1) (encryptedExtensionsBytes e2) ==> e1 == e2))
 let encryptedExtensionsBytes_is_injective e1 e2 =
   let payload1 = extensionsBytes Server e1.ee_extensions in
   let payload2 = extensionsBytes Server e2.ee_extensions in

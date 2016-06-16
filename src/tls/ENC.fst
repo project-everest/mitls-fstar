@@ -71,7 +71,7 @@ let lastblock (i:idB) =
 
 // JP: disabled for testing purposes
 // private
-type localState (region:rid): i:id -> Type = 
+noeq type localState (region:rid): i:id -> Type = 
   | StreamState:   i:id{ is_Stream (alg i) }                         -> s: CoreCrypto.cipher_stream -> localState region i
   | OldBlockState: i:id{ is_Block (alg i) /\ ~(explicitIV i) } -> iv i -> localState region i
   | NewBlockState: i:id{ is_Block (alg i) /\ explicitIV i  }          -> localState region i
@@ -80,12 +80,12 @@ type localState (region:rid): i:id -> Type =
 //   Encode.plain i ad (cipherRangeClass i (length c))
 
 
-type entry (i:id) = | Entry:
+noeq type entry (i:id) = | Entry:
   c: cipher i -> p: Encode.dplain i (length c) -> entry i
 
 // JP: disabled for testing purposes
 // private
-type state (i:id) (rw:rw) = | StateB:
+noeq type state (i:id) (rw:rw) = | StateB:
   #region: rid ->
   #peer_region: rid { HyperHeap.disjoint region peer_region } -> 
   k: key i -> // only ghost for stream ciphers
@@ -198,6 +198,8 @@ let leak (ki:id) (rw:rw) s =
 let cbcenc = CoreCrypto.block_encrypt
 
 (* Parametric enc/dec functions *)
+
+(* TODO: AR: 220 ? *)
 
 val enc_int: i:id -> e: encryptor i -> tlen:nat -> bytes -> CoreCrypto.EXT bytes // (cipher i)
 let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions

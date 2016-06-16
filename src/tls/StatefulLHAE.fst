@@ -42,7 +42,7 @@ type st_log_t (r:rid) (i:id) = rref r (s:seq (entry i))
 type gcm_log_t (r:rid) (i:gid) = rref r (s:seq (AEAD_GCM.entry i))
  
 (* CF we might merge those types into State id role *)
-type state (i:gid) (rw:rw) = 
+noeq type state (i:gid) (rw:rw) = 
   | State :
       #region:rid{region<>root}
     -> peer_region:rid{peer_region <> root 
@@ -83,7 +83,7 @@ val unfold_matching: #i:id -> r:reader i -> w:writer i ->
           /\ region r <> root
           /\ region w <> root
           /\ disjoint (parent (region r)) (parent (region w))
-          /\ log r = log w))
+          /\ log r == log w))
 let unfold_matching #i r w = ()
 
 (* CF could we instead compute the derived state? let st i d e h = ... *)
@@ -158,7 +158,7 @@ abstract val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
     /\ extends r.region reader_parent
     /\ extends w.region writer_parent
     /\ st_inv r w h1
-    /\ sel h1 w.log = Seq.createEmpty
+    /\ sel h1 w.log == Seq.createEmpty
     /\ sel h1 r.seqn = 0)))
 let gen reader_parent writer_parent i =
   lemma_repr_bytes_values 0;
@@ -196,7 +196,7 @@ abstract val coerce: r0:rid -> p0:rid {disjoint r0 p0} -> role:rw -> i:gid{~(saf
           /\ extends s.peer_region p0
           /\ fresh_region s.region h0 h1
           /\ fresh_region s.peer_region h0 h1
-          /\ sel h1 s.log = Seq.createEmpty
+          /\ sel h1 s.log == Seq.createEmpty
           /\ 0 = sel h1 s.seqn))
 let coerce r0 p0 role i kv iv =
   lemma_repr_bytes_values 0;
@@ -232,7 +232,7 @@ abstract val encrypt: #i:gid -> #ad:adata i
                 /\ modifies_rref wr.region (refs_in_w wr) h0 h1
                 /\ sel h0 wr.seqn + 1 = sel h1 wr.seqn
                 /\ wider (Range.cipherRangeClass i (length c)) rg
-                /\ sel h1 wr.log = snoc (sel h0 wr.log) (Entry c ad f)))
+                /\ sel h1 wr.log == snoc (sel h0 wr.log) (Entry c ad f)))
 let encrypt #i #ad #rg (State _ log seqn key) f =
   let n = !seqn in
   let l= !log in

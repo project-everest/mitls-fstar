@@ -31,7 +31,7 @@ assume type good (i:id) (b:bytes) : Type0 // TBD in Encode?
 type entry (i:id) = | Entry: t:tag i -> p:bytes { good i p } -> entry i
 
 // readers and writers share the same state: a log of MACed messages
-type state (i:id) (rw:rw) = | State: 
+noeq type state (i:id) (rw:rw) = | State: 
   #region:rid -> // the region of the *writer*
   key: key i ->
   log: rref region (seq (entry i)) -> 
@@ -51,7 +51,7 @@ val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> 
     modifies (Set.singleton wr.region) h0 h1 /\ // skipping modifies rref, as the region contains only one ref
-    sel h1 wr.log = snoc (sel h0 wr.log) (Entry t p)))
+    sel h1 wr.log == snoc (sel h0 wr.log) (Entry t p)))
 
 let mac i wr p =
   assume (HMAC.is_tls_mac (macAlg_of_id i));
@@ -65,7 +65,7 @@ let matches i p (Entry _ p') = p = p'
 val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 b h1 -> 
-    h0 = h1 /\ 
+    h0 == h1 /\ 
     (b ==> good i p)))
 
 let verify i rd p t =

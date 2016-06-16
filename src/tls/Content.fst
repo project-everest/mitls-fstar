@@ -59,7 +59,7 @@ let rec project i fs =
 // we may also need a projection that takes a low-level pos and yields a high-level pos
 
 val project_ignores_Handshake: i:id -> s:seq (fragment i) {Seq.length s > 0 /\ is_CT_Handshake (Seq.index s (Seq.length s - 1))} ->
-  Lemma(project i s = project i (Seq.slice s 0 (Seq.length s - 1)))
+  Lemma(project i s == project i (Seq.slice s 0 (Seq.length s - 1)))
 let project_ignores_Handshake i s = ()
 
 

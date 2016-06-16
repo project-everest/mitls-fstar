@@ -1,5 +1,7 @@
 module StreamAE
 
+(* TODO: AR: I get many errors of same kind, a match (..) type is expected, found int *)
+
 // Authenticated encryption for a stream of variable-length plaintexts.
 // Concretely, we use AES_GCM but any other algorithm would do.
 
@@ -83,7 +85,7 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log)
 		increases) = c
 
 // kept concrete for log and counter, but the key and iv should be private.
-type state (i:id) (rw:rw) = 
+noeq type state (i:id) (rw:rw) = 
   | State: #region:rgn
          -> #log_region:rgn{ if rw=Writer then region = log_region else HyperHeap.disjoint region log_region }
          -> key:key i
@@ -109,9 +111,9 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 	       color w.region = color parent /\
 	       (authId i ==>
   		      (m_contains (ilog w.log) h1 /\
-		       m_sel h1 (ilog w.log) = createEmpty)) /\
+		       m_sel h1 (ilog w.log) == createEmpty)) /\
 	       m_contains (ctr w.counter) h1 /\
-	       m_sel h1 (ctr w.counter) == 0
+	       m_sel h1 (ctr w.counter) = 0
 //16-04-30 how to share the whole ST ... instead of genPost?
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
@@ -162,7 +164,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 			     let n = Seq.length (m_sel h0 log) in
 			      m_contains log h1 /\
    			      witnessed (MonotoneSeq.at_least n ent log) /\
-                              m_sel h1 log = snoc (m_sel h0 log) ent))))
+                              m_sel h1 log == snoc (m_sel h0 log) ent))))
 
 let matches #i l (c: cipher i l) (Entry l' c' _) = l = l' && c = c'
 
