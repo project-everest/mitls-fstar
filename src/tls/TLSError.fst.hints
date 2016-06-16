@@ -1,65 +1,60 @@
 [
   "|)º4qhø/Qx.Ž+Ã9œ",
   [
-    [ 0, 1, [ "@query_2536" ], 443 ],
+    [ 0, 1, [ "@query_2536" ], 48 ],
     [
       0,
       1,
       [
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2542",
         "disc_equation_Platform.Error.Correct", "equation_TLSError.error",
-        "@query_2543"
+        "refinement_interpretation_Tm_refine_2542", "@query_2543"
       ],
-      84
+      62
     ],
     [
       0,
       1,
       [
-        "equation_TLSError.result",
         "fuel_guarded_inversion_Platform.Error.optResult_2351",
         "disc_equation_Platform.Error.Error",
         "disc_equation_Platform.Error.Correct", "equation_TLSError.error",
-        "@query_2553"
+        "equation_TLSError.result", "@query_2553"
       ],
-      107
+      50
     ],
     [
       0,
       1,
       [
-        "equation_TLSError.result",
         "fuel_guarded_inversion_Platform.Error.optResult_2351",
         "disc_equation_Platform.Error.Error",
         "disc_equation_Platform.Error.Correct", "equation_TLSError.error",
-        "@query_2564"
+        "equation_TLSError.result", "@query_2564"
       ],
-      88
+      49
     ],
     [
       0,
       1,
       [
-        "equation_TLSError.result",
         "fuel_guarded_inversion_Platform.Error.optResult_2351",
         "disc_equation_Platform.Error.Error",
         "disc_equation_Platform.Error.Correct", "equation_TLSError.error",
-        "@query_2575"
+        "equation_TLSError.result", "@query_2575"
       ],
-      101
+      41
     ],
     [
       0,
       1,
       [
-        "equation_TLSError.result",
         "fuel_guarded_inversion_Platform.Error.optResult_2351",
         "disc_equation_Platform.Error.Error",
         "disc_equation_Platform.Error.Correct", "equation_TLSError.error",
-        "@query_2584"
+        "equation_TLSError.result", "@query_2584"
       ],
-      123
+      48
     ]
   ]
 ]

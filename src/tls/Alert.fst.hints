@@ -40,16 +40,16 @@
         "disc_equation_TLSError.AD_missing_extension",
         "disc_equation_TLSError.AD_unsupported_extension", "@query_11348"
       ],
-      1864
+      243
     ],
-    [ 0, 1, [ "projection_inverse_BoxInt_proj_0", "@query_11351" ], 226 ],
+    [ 0, 1, [ "projection_inverse_BoxInt_proj_0", "@query_11351" ], 110 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxInt_proj_0", "int_inversion",
-        "primitive_Prims.op_Subtraction", "primitive_Prims.op_Addition",
-        "constructor_distinct_Prims.Mktuple2",
+        "projection_inverse_BoxInt_proj_0", "@pretyping__302",
+        "int_inversion", "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Addition", "constructor_distinct_Prims.Mktuple2",
         "projection_inverse_Prims.Mktuple2__a",
         "projection_inverse_Prims.Mktuple2__b",
         "projection_inverse_Prims.Mktuple2__1",
@@ -58,7 +58,6 @@
         "equation_Prims.fst", "function_token_typing_Prims.nat",
         "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
         "refinement_interpretation_Tm_refine_1287",
-        "typing_FStar.Seq.length",
         "refinement_interpretation_Tm_refine_1315",
         "typing_FStar.Seq.create", "lemma_FStar.Seq.lemma_create_len",
         "lemma_FStar.Seq.lemma_len_append",
@@ -146,7 +145,7 @@
         "equation_Range.point", "function_token_typing_Range.zero",
         "equation_Range.zero", "equation_Alert.alertBytes", "@query_11360"
       ],
-      8570
+      1571
     ]
   ]
 ]

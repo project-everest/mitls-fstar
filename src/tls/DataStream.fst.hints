@@ -1,21 +1,21 @@
 [
   "\u000b0\bæÍhÃCÖ¸ºêèe\u0014A",
   [
-    [ 0, 1, [ "@query_11354" ], 1438 ],
-    [ 0, 1, [ "@query_11361" ], 8 ],
+    [ 0, 1, [ "@query_11354" ], 156 ],
+    [ 0, 1, [ "@query_11361" ], 151 ],
     [
       0,
       1,
       [
-        "refinement_interpretation_Tm_refine_11363",
-        "refinement_interpretation_Tm_refine_11358", "@query_11364",
-        "equation_DataStream.fragment",
         "fuel_guarded_inversion_TLSInfo.id_11085",
-        "equation_DataStream.ghost_repr"
+        "equation_DataStream.ghost_repr",
+        "refinement_interpretation_Tm_refine_11358",
+        "equation_DataStream.fragment",
+        "refinement_interpretation_Tm_refine_11363", "@query_11364"
       ],
-      443
+      98
     ],
-    [ 0, 1, [ "@query_11378" ], 15 ],
+    [ 0, 1, [ "@query_11378" ], 154 ],
     [
       0,
       1,
@@ -23,14 +23,14 @@
         "equation_Platform.Bytes.bytes",
         "fuel_guarded_inversion_TLSInfo.id_11085",
         "refinement_interpretation_Tm_refine_11293", "equation_Range.rbytes",
-        "refinement_interpretation_Tm_refine_11380",
-        "equation_DataStream.ghost_repr", "@query_11381"
+        "equation_DataStream.ghost_repr",
+        "refinement_interpretation_Tm_refine_11380", "@query_11381"
       ],
-      478
+      100
     ],
-    [ 0, 1, [ "equation_DataStream.ghost_repr", "@query_11393" ], 189 ],
-    [ 0, 1, [ "equation_DataStream.ghost_repr", "@query_11398" ], 189 ],
-    [ 0, 1, [ "@query_11438" ], 21 ],
+    [ 0, 1, [ "equation_DataStream.ghost_repr", "@query_11393" ], 98 ],
+    [ 0, 1, [ "equation_DataStream.ghost_repr", "@query_11398" ], 149 ],
+    [ 0, 1, [ "@query_11438" ], 147 ],
     [
       0,
       1,
@@ -40,31 +40,31 @@
         "disc_equation_DataStream.Data",
         "refinement_interpretation_Tm_refine_11440", "@query_11447"
       ],
-      403
+      124
     ],
-    [ 0, 1, [ "@query_11448" ], 10 ],
+    [ 0, 1, [ "@query_11448" ], 148 ],
     [
       0,
       1,
       [
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_11450",
         "fuel_guarded_inversion_TLSInfo.id_11085",
-        "disc_equation_DataStream.Alert", "@query_11457"
+        "disc_equation_DataStream.Alert",
+        "refinement_interpretation_Tm_refine_11450", "@query_11457"
       ],
-      393
+      132
     ],
     [
       0,
       1,
       [
-        "disc_equation_DataStream.Close", "disc_equation_DataStream.Data",
-        "disc_equation_DataStream.Alert",
-        "fuel_guarded_inversion_DataStream.delta_11407", "@query_11458"
+        "fuel_guarded_inversion_DataStream.delta_11407",
+        "disc_equation_DataStream.Data", "disc_equation_DataStream.Close",
+        "disc_equation_DataStream.Alert", "@query_11458"
       ],
-      475
+      149
     ],
-    [ 0, 1, [ "@query_11470" ], 14 ],
+    [ 0, 1, [ "@query_11470" ], 153 ],
     [
       0,
       1,
@@ -72,35 +72,32 @@
         "fuel_guarded_inversion_Prims.list_323", "disc_equation_Prims.Nil",
         "disc_equation_Prims.Cons", "binder_s__2959", "@query_11488"
       ],
-      427
+      128
     ],
-    [ 0, 1, [ "@query_11516" ], 18 ],
-    [ 0, 1, [ "@query_11522" ], 194 ],
-    [ 0, 1, [ "@query_11523" ], 6 ],
+    [ 0, 1, [ "@query_11516" ], 116 ],
+    [ 0, 1, [ "@query_11522" ], 141 ],
+    [ 0, 1, [ "@query_11523" ], 143 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "bool_typing", "bool_inversion",
         "disc_equation_Prims.Some",
-        "fuel_guarded_inversion_DataStream.state_11502",
-        "proj_equation_DataStream.State_region",
-        "projection_inverse_DataStream.State_region", "@query_11534",
+        "projection_inverse_DataStream.State_region",
         "projection_inverse_DataStream.State_log",
-        "data_elim_DataStream.State",
-        "refinement_interpretation_Tm_refine_11508"
+        "fuel_guarded_inversion_DataStream.state_11502",
+        "proj_equation_DataStream.State_region", "@query_11534"
       ],
-      421
+      147
     ],
-    [ 0, 1, [ "@query_11535" ], 8 ],
+    [ 0, 1, [ "@query_11535" ], 134 ],
     [
       0,
       1,
       [
-        "@query_11541", "proj_equation_DataStream.State_region",
-        "projection_inverse_DataStream.State_region"
+        "projection_inverse_DataStream.State_region",
+        "proj_equation_DataStream.State_region", "@query_11541"
       ],
-      349
+      150
     ],
     [
       2,
@@ -111,11 +108,11 @@
         "constructor_distinct_Prims.None", "constructor_distinct_Prims.Some",
         "projection_inverse_Prims.Some_a", "projection_inverse_Prims.Some_v",
         "disc_equation_Prims.Some",
-        "fuel_guarded_inversion_TLSInfo.id_11085", "@query_11542",
-        "equation_with_fuel_DataStream.wellformed__11492",
-        "fuel_correspondence_DataStream.wellformed__11492"
+        "fuel_guarded_inversion_TLSInfo.id_11085",
+        "fuel_correspondence_DataStream.wellformed__11492",
+        "equation_with_fuel_DataStream.wellformed__11492", "@query_11542"
       ],
-      1872
+      147
     ],
     [
       0,
@@ -124,7 +121,7 @@
         "int_inversion", "refinement_interpretation_Tm_refine_1013",
         "equation_Prims.nat", "@query_11543"
       ],
-      432
+      137
     ]
   ]
 ]

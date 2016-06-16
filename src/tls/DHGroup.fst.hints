@@ -8,7 +8,7 @@
         "projection_inverse_BoxBool_proj_0", "disc_equation_DHGroup.Named",
         "refinement_interpretation_Tm_refine_8000", "@query_8007"
       ],
-      1272
+      93
     ],
     [
       0,
@@ -18,14 +18,15 @@
         "disc_equation_DHGroup.Explicit",
         "refinement_interpretation_Tm_refine_8009", "@query_8016"
       ],
-      211
+      84
     ],
     [
       0,
       1,
       [
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_BoxBool_proj_0", "primitive_Prims.op_LessThan",
+        "projection_inverse_BoxBool_proj_0", "@pretyping__302",
+        "primitive_Prims.op_LessThan",
         "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
         "lemma_FStar.Seq.lemma_create_len", "kinding_FStar.Char.char_@tok",
         "data_typing_intro_FStar.Char.Char@tok", "equation_FStar.Char.char",
@@ -41,43 +42,41 @@
         "equation_TLSConstants.hs_color",
         "refinement_interpretation_Tm_refine_8018", "@query_8019"
       ],
-      211
+      119
     ],
-    [ 0, 1, [ "@query_8029" ], 9 ],
-    [ 0, 1, [ "@query_8033" ], 7 ],
-    [ 0, 1, [ "@query_8037" ], 7 ],
-    [ 0, 1, [ "@query_8041" ], 7 ],
-    [ 0, 1, [ "@query_8045" ], 7 ],
+    [ 0, 1, [ "@query_8029" ], 103 ],
+    [ 0, 1, [ "@query_8033" ], 102 ],
+    [ 0, 1, [ "@query_8037" ], 106 ],
+    [ 0, 1, [ "@query_8041" ], 113 ],
+    [ 0, 1, [ "@query_8045" ], 108 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_DHGroup.Named",
-        "disc_equation_DHGroup.Explicit", "proj_equation_DHGroup.Named__0",
-        "typing_DHGroup.Named._0",
-        "refinement_interpretation_Tm_refine_8000",
-        "fuel_guarded_inversion_DHGroup.group_7976",
+        "projection_inverse_BoxBool_proj_0",
         "fuel_guarded_inversion_TLSConstants.ffdhe_7448",
         "disc_equation_TLSConstants.FFDHE2048",
         "disc_equation_TLSConstants.FFDHE3072",
         "disc_equation_TLSConstants.FFDHE4096",
         "disc_equation_TLSConstants.FFDHE6144",
-        "disc_equation_TLSConstants.FFDHE8192", "@query_8048",
-        "equation_DHGroup.ffdhe4096", "equation_DHGroup.ffdhe2048",
-        "equation_DHGroup.ffdhe8192", "equation_DHGroup.ffdhe6144",
-        "equation_DHGroup.ffdhe3072"
+        "disc_equation_TLSConstants.FFDHE8192",
+        "fuel_guarded_inversion_DHGroup.group_7976",
+        "disc_equation_DHGroup.Named", "disc_equation_DHGroup.Explicit",
+        "refinement_interpretation_Tm_refine_8000",
+        "typing_DHGroup.Named._0", "proj_equation_DHGroup.Named__0",
+        "equation_DHGroup.ffdhe2048", "equation_DHGroup.ffdhe3072",
+        "equation_DHGroup.ffdhe4096", "equation_DHGroup.ffdhe6144",
+        "equation_DHGroup.ffdhe8192", "@query_8048"
       ],
-      379
+      122
     ],
     [
       0,
       1,
       [
         "projection_inverse_BoxBool_proj_0", "bool_inversion",
-        "primitive_Prims.op_LessThan",
-        "refinement_interpretation_Tm_refine_7968",
-        "typing_FStar.HyperHeap.includes",
-        "refinement_interpretation_Tm_refine_2204",
+        "primitive_Prims.op_LessThan", "typing_FStar.HyperHeap.includes",
+        "@query_8051", "refinement_interpretation_Tm_refine_2204",
         "lemma_FStar.HyperHeap.lemma_extends_includes",
         "lemma_FStar.HyperHeap.lemma_extends_parent",
         "refinement_interpretation_Tm_refine_4097",
@@ -88,11 +87,12 @@
         "equation_TLSConstants.tls_region",
         "refinement_interpretation_Tm_refine_6327",
         "function_token_typing_TLSConstants.tls_tables_region",
-        "equation_TLSConstants.tls_tables_region", "equation_DHGroup.params",
-        "@query_8051", "equation_DHGroup.params_of_group",
-        "typing_DHGroup.params_of_group"
+        "equation_TLSConstants.tls_tables_region",
+        "refinement_interpretation_Tm_refine_7968",
+        "equation_DHGroup.params", "typing_DHGroup.params_of_group",
+        "equation_DHGroup.params_of_group"
       ],
-      333
+      95
     ],
     [
       0,
@@ -101,7 +101,7 @@
         "projection_inverse_BoxBool_proj_0", "bool_inversion",
         "primitive_Prims.op_LessThan", "typing_FStar.HyperHeap.includes",
         "refinement_interpretation_Tm_refine_2204",
-        "lemma_FStar.HyperHeap.lemma_extends_includes",
+        "lemma_FStar.HyperHeap.lemma_extends_includes", "@query_8054",
         "lemma_FStar.HyperHeap.lemma_extends_parent",
         "typing_CoreCrypto.Mkdh_key.dh_params",
         "proj_equation_CoreCrypto.Mkdh_key_dh_params",
@@ -113,10 +113,10 @@
         "equation_TLSConstants.tls_region",
         "refinement_interpretation_Tm_refine_6327",
         "function_token_typing_TLSConstants.tls_tables_region",
-        "equation_TLSConstants.tls_tables_region", "equation_DHGroup.key",
-        "refinement_interpretation_Tm_refine_7972", "@query_8054"
+        "equation_TLSConstants.tls_tables_region",
+        "refinement_interpretation_Tm_refine_7972", "equation_DHGroup.key"
       ],
-      242
+      106
     ],
     [
       0,
@@ -124,33 +124,34 @@
       [
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_BoxBool_proj_0", "primitive_Prims.op_LessThan",
-        "@query_8067", "refinement_interpretation_Tm_refine_7968",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_DHGroup.share", "refinement_interpretation_Tm_refine_7970",
-        "equation_DHGroup.params"
+        "refinement_interpretation_Tm_refine_7968",
+        "equation_DHGroup.params",
+        "refinement_interpretation_Tm_refine_7970", "equation_DHGroup.share",
+        "@query_8067"
       ],
-      372
+      116
     ],
     [
       0,
       1,
       [
         "projection_inverse_BoxInt_proj_0", "equation_Platform.Bytes.bytes",
-        "equation_DHGroup.share", "refinement_interpretation_Tm_refine_7970",
+        "refinement_interpretation_Tm_refine_7970", "equation_DHGroup.share",
         "@query_8072"
       ],
-      293
+      83
     ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxInt_proj_0",
+        "constructor_distinct_Tm_unit", "projection_inverse_BoxInt_proj_0",
         "projection_inverse_BoxBool_proj_0",
         "constructor_distinct_Prims.unit", "@pretyping__127",
-        "unit_inversion", "int_inversion", "primitive_Prims.op_Equality",
+        "unit_inversion", "@pretyping__302", "int_inversion",
+        "primitive_Prims.op_Equality",
         "projection_inverse_Prims.Mktuple2__1",
-        "projection_inverse_Prims.Mktuple2__2",
         "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
         "typing_Prims.fst", "equation_Prims.fst", "typing_Prims.snd",
         "equation_Prims.snd", "refinement_interpretation_Tm_refine_1013",
@@ -160,9 +161,6 @@
         "constructor_distinct_Platform.Error.optResult",
         "projection_inverse_Platform.Error.optResult@x1", "@pretyping__2355",
         "constructor_distinct_Platform.Error.Error",
-        "projection_inverse_Platform.Error.Error__a",
-        "projection_inverse_Platform.Error.Error__b",
-        "projection_inverse_Platform.Error.Error__0",
         "constructor_distinct_Platform.Error.Correct",
         "projection_inverse_Platform.Error.Correct__0",
         "fuel_guarded_inversion_Platform.Error.optResult_2351",
@@ -186,27 +184,21 @@
         "typing_TLSConstants.vlparse", "equation_TLSConstants.vlparse",
         "refinement_interpretation_Tm_refine_7940", "@query_8085"
       ],
-      475
+      114
     ],
     [
       0,
       1,
       [
-        "constructor_distinct_Tm_unit", "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_BoxBool_proj_0", "int_inversion",
-        "primitive_Prims.op_GreaterThanOrEqual",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_BoxBool_proj_0", "@pretyping__302",
+        "int_inversion", "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThan",
-        "projection_inverse_Prims.Mktuple2__a",
-        "projection_inverse_Prims.Mktuple2__b",
         "projection_inverse_Prims.Mktuple2__1",
-        "projection_inverse_Prims.Mktuple2__2",
         "fuel_guarded_inversion_Prims.tuple2_609",
-        "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
-        "equation_Prims.fst", "refinement_interpretation_Tm_refine_1013",
-        "equation_Prims.nat", "refinement_interpretation_Tm_refine_1015",
-        "constructor_distinct_Platform.Error.Error",
-        "constructor_distinct_Platform.Error.Correct",
-        "projection_inverse_Platform.Error.Correct__b",
+        "proj_equation_Prims.Mktuple2__1", "equation_Prims.fst",
+        "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
+        "refinement_interpretation_Tm_refine_1015",
         "projection_inverse_Platform.Error.Correct__0",
         "data_elim_Platform.Error.Correct",
         "fuel_guarded_inversion_Platform.Error.optResult_2351",
@@ -214,7 +206,7 @@
         "disc_equation_Platform.Error.Correct", "equation_FStar.Char.char",
         "typing_Platform.Bytes.repr_bytes", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "typing_Platform.Bytes.length",
-        "equation_Platform.Bytes.length", "equation_Platform.Bytes.split",
+        "equation_Platform.Bytes.length",
         "projection_inverse_CoreCrypto.Mkdh_params_dh_p",
         "projection_inverse_CoreCrypto.Mkdh_params_dh_g",
         "proj_equation_CoreCrypto.Mkdh_params_dh_p",
@@ -224,11 +216,9 @@
         "proj_equation_CoreCrypto.Mkdh_key_dh_params",
         "proj_equation_CoreCrypto.Mkdh_key_dh_public",
         "equation_TLSError.error", "equation_TLSError.result",
-        "refinement_interpretation_Tm_refine_7344",
-        "equation_TLSConstants.vlsplit",
         "refinement_interpretation_Tm_refine_8092", "@query_8114"
       ],
-      1670
+      194
     ]
   ]
 ]

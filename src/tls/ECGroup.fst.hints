@@ -1,53 +1,52 @@
 [
   "%p$gW·B\u0002“Ê\u0011@¯úMw",
   [
-    [ 0, 1, [ "@query_7967" ], 852 ],
-    [ 0, 1, [ "@query_7973" ], 8 ],
+    [ 0, 1, [ "@query_7967" ], 99 ],
+    [ 0, 1, [ "@query_7973" ], 79 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "@query_8020",
-        "refinement_interpretation_Tm_refine_8013",
-        "disc_equation_ECGroup.EC_CORE"
+        "projection_inverse_BoxBool_proj_0", "disc_equation_ECGroup.EC_CORE",
+        "refinement_interpretation_Tm_refine_8013", "@query_8020"
       ],
-      328
+      100
     ],
-    [ 0, 1, [ "@query_8024" ], 7 ],
+    [ 0, 1, [ "@query_8024" ], 110 ],
     [
       0,
       1,
       [
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_8026",
-        "disc_equation_ECGroup.EC_UNKNOWN", "@query_8038"
+        "disc_equation_ECGroup.EC_UNKNOWN",
+        "refinement_interpretation_Tm_refine_8026", "@query_8038"
       ],
-      302
+      91
     ],
-    [ 0, 1, [ "@query_8042" ], 5 ],
-    [ 0, 1, [ "@query_8072" ], 8 ],
+    [ 0, 1, [ "@query_8042" ], 80 ],
+    [ 0, 1, [ "@query_8072" ], 92 ],
     [
       0,
       1,
       [
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_8074",
-        "disc_equation_ECGroup.ECP_UNKNOWN", "@query_8086"
+        "disc_equation_ECGroup.ECP_UNKNOWN",
+        "refinement_interpretation_Tm_refine_8074", "@query_8086"
       ],
-      255
+      98
     ],
     [
       0,
       1,
       [
-        "equation_ECGroup.params",
         "refinement_interpretation_Tm_refine_4209",
-        "typing_CoreCrypto.ec_gen_key", "typing_ECGroup.params_of_group",
-        "equation_ECGroup.params_of_group", "@query_8089"
+        "typing_CoreCrypto.ec_gen_key", "equation_ECGroup.params",
+        "typing_ECGroup.params_of_group", "equation_ECGroup.params_of_group",
+        "@query_8089"
       ],
-      266
+      92
     ],
-    [ 0, 1, [ "@query_8092" ], 4 ],
+    [ 0, 1, [ "@query_8092" ], 105 ],
     [
       0,
       1,
@@ -70,22 +69,22 @@
         "equation_TLSConstants.tls_region",
         "refinement_interpretation_Tm_refine_8102", "@query_8103"
       ],
-      369
+      106
     ],
-    [ 0, 1, [ "projection_inverse_BoxInt_proj_0", "@query_8106" ], 127 ],
+    [ 0, 1, [ "projection_inverse_BoxInt_proj_0", "@query_8106" ], 112 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxInt_proj_0", "int_typing", "int_inversion",
-        "primitive_Prims.op_Addition", "constructor_distinct_Prims.Mktuple2",
+        "projection_inverse_BoxInt_proj_0", "@pretyping__302", "int_typing",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "constructor_distinct_Prims.Mktuple2",
         "projection_inverse_Prims.Mktuple2__a",
         "projection_inverse_Prims.Mktuple2__b",
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
         "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
-        "equation_ECGroup.params", "typing_FStar.Seq.create",
-        "lemma_FStar.Seq.lemma_create_len",
+        "typing_FStar.Seq.create", "lemma_FStar.Seq.lemma_create_len",
         "lemma_FStar.Seq.lemma_len_append", "kinding_FStar.Char.char_@tok",
         "data_typing_intro_FStar.Char.Char@tok", "equation_FStar.Char.char",
         "equation_Platform.Bytes.byte", "typing_Platform.Bytes.length",
@@ -94,8 +93,6 @@
         "equality_tok_CoreCrypto.ECC_P256@tok",
         "constructor_distinct_CoreCrypto.ECC_P384",
         "equality_tok_CoreCrypto.ECC_P384@tok",
-        "constructor_distinct_CoreCrypto.ECC_P521",
-        "equality_tok_CoreCrypto.ECC_P521@tok",
         "fuel_guarded_inversion_CoreCrypto.ec_curve_4109",
         "disc_equation_CoreCrypto.ECC_P256",
         "disc_equation_CoreCrypto.ECC_P384",
@@ -104,9 +101,10 @@
         "typing_CoreCrypto.Mkec_params.curve",
         "proj_equation_CoreCrypto.Mkec_params_curve",
         "function_token_typing_TLSConstants.epoch_color",
-        "equation_TLSConstants.epoch_color", "@query_8107"
+        "equation_TLSConstants.epoch_color", "equation_ECGroup.params",
+        "@query_8107"
       ],
-      379
+      125
     ],
     [
       0,
@@ -121,7 +119,6 @@
         "projection_inverse_Prims.Mktuple2__2",
         "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
         "equation_Prims.fst", "equation_Prims.snd",
-        "equation_ECGroup.params",
         "refinement_interpretation_Tm_refine_2204",
         "equation_FStar.Char.char", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
@@ -132,10 +129,10 @@
         "refinement_interpretation_Tm_refine_6321",
         "equation_TLSConstants.tls_rgn",
         "function_token_typing_TLSConstants.tls_region",
-        "equation_TLSConstants.tls_region", "@query_8114",
-        "refinement_interpretation_Tm_refine_8111"
+        "equation_TLSConstants.tls_region", "equation_ECGroup.params",
+        "refinement_interpretation_Tm_refine_8111", "@query_8114"
       ],
-      356
+      114
     ],
     [
       0,
@@ -144,21 +141,19 @@
         "constructor_distinct_Tm_unit", "projection_inverse_BoxInt_proj_0",
         "projection_inverse_BoxBool_proj_0",
         "constructor_distinct_Prims.unit", "@pretyping__127",
-        "unit_inversion", "bool_inversion", "int_typing", "int_inversion",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
-        "primitive_Prims.op_Addition",
+        "unit_inversion", "bool_inversion", "@pretyping__302", "int_typing",
+        "int_inversion", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction", "primitive_Prims.op_Addition",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_Equality", "constructor_distinct_Prims.None",
         "constructor_distinct_Prims.Some", "projection_inverse_Prims.Some_v",
         "fuel_guarded_inversion_Prims.option_426",
         "disc_equation_Prims.None", "disc_equation_Prims.Some",
-        "refinement_interpretation_Tm_refine_8120",
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
         "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
         "equation_Prims.fst", "typing_Prims.snd", "equation_Prims.snd",
         "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
-        "equation_ECGroup.params",
         "refinement_interpretation_Tm_refine_2204",
         "function_token_typing_FStar.HyperHeap.test0",
         "equation_FStar.HyperHeap.test0",
@@ -171,24 +166,16 @@
         "projection_inverse_Platform.Error.Correct__a",
         "projection_inverse_Platform.Error.Correct__b",
         "projection_inverse_Platform.Error.Correct__0",
-        "data_elim_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error",
         "disc_equation_Platform.Error.Correct",
-        "lemma_FStar.Seq.lemma_len_append",
         "equation_FStar.SeqProperties.split",
         "refinement_interpretation_Tm_refine_2966",
-        "kinding_FStar.Char.char_@tok", "equation_FStar.Char.char",
-        "equation_Platform.Bytes.byte",
+        "equation_FStar.Char.char", "equation_Platform.Bytes.byte",
         "function_token_typing_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.op_At_Bar",
-        "typing_Platform.Bytes.length", "equation_Platform.Bytes.length",
-        "refinement_interpretation_Tm_refine_3203",
-        "equation_Platform.Bytes.lbytes",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
         "refinement_interpretation_Tm_refine_3255",
         "typing_Platform.Bytes.split", "equation_Platform.Bytes.split",
-        "refinement_interpretation_Tm_refine_3282",
-        "typing_Platform.Bytes.bytes_of_int", "typing_CoreCrypto.ec_bytelen",
-        "equation_CoreCrypto.ec_bytelen",
+        "typing_CoreCrypto.ec_bytelen", "equation_CoreCrypto.ec_bytelen",
         "typing_CoreCrypto.Mkec_params.curve",
         "projection_inverse_CoreCrypto.Mkec_point_ecx",
         "projection_inverse_CoreCrypto.Mkec_point_ecy",
@@ -207,25 +194,24 @@
         "equation_TLSConstants.tls_rgn",
         "function_token_typing_TLSConstants.tls_region",
         "equation_TLSConstants.tls_region", "equation_TLSConstants.vlsplit",
-        "equation_ECGroup.share", "typing_ECGroup.parse_curve",
-        "typing_ECGroup.parse_point",
-        "refinement_interpretation_Tm_refine_8124", "@query_8132",
-        "equation_ECGroup.parse_curve", "equation_ECGroup.parse_point"
+        "equation_ECGroup.params", "equation_ECGroup.share",
+        "typing_ECGroup.parse_curve", "equation_ECGroup.parse_curve",
+        "typing_ECGroup.parse_point", "equation_ECGroup.parse_point",
+        "refinement_interpretation_Tm_refine_8120", "@query_8132"
       ],
-      1563
+      216
     ],
-    [ 0, 1, [ "@query_8144" ], 13 ],
+    [ 0, 1, [ "@query_8144" ], 102 ],
     [
       0,
       1,
       [
         "constructor_distinct_Tm_unit", "projection_inverse_BoxInt_proj_0",
-        "int_typing", "int_inversion", "primitive_Prims.op_Multiply",
-        "primitive_Prims.op_Addition",
+        "@pretyping__302", "int_typing", "int_inversion",
+        "primitive_Prims.op_Multiply", "primitive_Prims.op_Addition",
         "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
-        "equation_ECGroup.params", "lemma_FStar.Seq.lemma_create_len",
-        "lemma_FStar.Seq.lemma_len_append", "equation_ECGroup.op_Star",
-        "kinding_FStar.Char.char_@tok",
+        "lemma_FStar.Seq.lemma_create_len",
+        "lemma_FStar.Seq.lemma_len_append", "kinding_FStar.Char.char_@tok",
         "data_typing_intro_FStar.Char.Char@tok", "equation_FStar.Char.char",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "typing_Platform.Bytes.op_At_Bar",
@@ -239,23 +225,23 @@
         "typing_CoreCrypto.Mkec_point.ecy",
         "proj_equation_CoreCrypto.Mkec_point_ecy",
         "function_token_typing_TLSConstants.epoch_color",
-        "equation_TLSConstants.epoch_color", "equation_ECGroup.share",
+        "equation_TLSConstants.epoch_color", "equation_ECGroup.params",
+        "equation_ECGroup.share", "equation_ECGroup.op_Star",
         "refinement_interpretation_Tm_refine_8146", "@query_8147"
       ],
-      308
+      123
     ],
-    [ 0, 1, [ "@query_8160" ], 11 ],
+    [ 0, 1, [ "@query_8160" ], 95 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxInt_proj_0", "int_typing", "int_inversion",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Addition",
+        "projection_inverse_BoxInt_proj_0", "@pretyping__302", "int_typing",
+        "int_inversion", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Addition",
         "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
-        "equation_ECGroup.params", "@query_8165", "typing_FStar.Seq.length",
-        "lemma_FStar.Seq.lemma_create_len",
-        "lemma_FStar.Seq.lemma_len_append", "equation_ECGroup.op_Star",
-        "kinding_FStar.Char.char_@tok",
+        "typing_FStar.Seq.length", "lemma_FStar.Seq.lemma_create_len",
+        "lemma_FStar.Seq.lemma_len_append", "kinding_FStar.Char.char_@tok",
         "data_typing_intro_FStar.Char.Char@tok", "equation_FStar.Char.char",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "typing_Platform.Bytes.op_At_Bar",
@@ -272,14 +258,15 @@
         "typing_CoreCrypto.Mkec_point.ecx",
         "proj_equation_CoreCrypto.Mkec_point_ecx",
         "typing_CoreCrypto.Mkec_point.ecy",
-        "proj_equation_CoreCrypto.Mkec_point_ecy",
-        "equation_ECGroup.curve_id", "typing_ECGroup.curve_id",
-        "equation_ECGroup.share", "refinement_interpretation_Tm_refine_8164",
+        "proj_equation_CoreCrypto.Mkec_point_ecy", "equation_ECGroup.params",
+        "equation_ECGroup.share", "typing_ECGroup.curve_id",
+        "equation_ECGroup.curve_id", "equation_ECGroup.op_Star",
         "refinement_interpretation_Tm_refine_8149",
+        "refinement_interpretation_Tm_refine_8153",
         "equation_ECGroup.serialize_point",
-        "refinement_interpretation_Tm_refine_8153"
+        "refinement_interpretation_Tm_refine_8164", "@query_8165"
       ],
-      362
+      131
     ]
   ]
 ]

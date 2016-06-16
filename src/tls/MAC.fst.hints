@@ -1,53 +1,53 @@
 [
   "¶+2‰ð\u001aÇú5\u0001[mˆ™>",
   [
-    [ 0, 1, [ "@query_11312" ], 1227 ],
+    [ 0, 1, [ "@query_11312" ], 143 ],
     [
       0,
       1,
       [
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_11314",
         "disc_equation_TLSConstants.MACOnly",
         "disc_equation_TLSConstants.MtE", "disc_equation_TLSConstants.AEAD",
-        "@query_11315", "fuel_guarded_inversion_TLSInfo.id_11097",
+        "fuel_guarded_inversion_TLSInfo.id_11097",
         "proj_equation_TLSInfo.Mkid_aeAlg", "equation_TLSInfo.pv_of_id",
-        "equation_MAC.id"
+        "refinement_interpretation_Tm_refine_11314", "equation_MAC.id",
+        "@query_11315"
       ],
-      455
+      140
     ],
-    [ 0, 1, [ "@query_11324" ], 12 ],
-    [ 0, 1, [ "@query_11352" ], 17 ],
-    [ 0, 1, [ "@query_11361" ], 267 ],
-    [ 0, 1, [ "@query_11363" ], 10 ],
+    [ 0, 1, [ "@query_11324" ], 112 ],
+    [ 0, 1, [ "@query_11352" ], 135 ],
+    [ 0, 1, [ "@query_11361" ], 110 ],
+    [ 0, 1, [ "@query_11363" ], 137 ],
     [
       0,
       1,
       [
-        "equation_Platform.Bytes.bytes", "@query_11376",
-        "refinement_interpretation_Tm_refine_11341"
+        "equation_Platform.Bytes.bytes",
+        "refinement_interpretation_Tm_refine_11341", "@query_11376"
       ],
-      466
+      133
     ],
-    [ 0, 1, [ "@query_11396" ], 16 ],
-    [ 0, 1, [ "@query_11404" ], 276 ],
-    [ 0, 1, [ "@query_11406" ], 11 ],
-    [ 0, 1, [ "@query_11414" ], 270 ],
-    [ 0, 1, [ "@query_11416" ], 10 ],
+    [ 0, 1, [ "@query_11396" ], 111 ],
+    [ 0, 1, [ "@query_11404" ], 122 ],
+    [ 0, 1, [ "@query_11406" ], 119 ],
+    [ 0, 1, [ "@query_11414" ], 106 ],
+    [ 0, 1, [ "@query_11416" ], 147 ],
     [
       0,
       1,
       [
-        "projection_inverse_MAC.Key_region", "@query_11424",
-        "proj_equation_MAC.Key_region"
+        "projection_inverse_MAC.Key_region", "proj_equation_MAC.Key_region",
+        "@query_11424"
       ],
-      449
+      151
     ],
-    [ 0, 1, [ "@query_11426" ], 9 ],
-    [ 0, 1, [ "@query_11433" ], 8 ],
-    [ 0, 1, [ "@query_11440" ], 11 ],
-    [ 0, 1, [ "@query_11442" ], 9 ],
-    [ 0, 1, [ "@query_11446" ], 10 ],
+    [ 0, 1, [ "@query_11426" ], 134 ],
+    [ 0, 1, [ "@query_11433" ], 143 ],
+    [ 0, 1, [ "@query_11440" ], 112 ],
+    [ 0, 1, [ "@query_11442" ], 137 ],
+    [ 0, 1, [ "@query_11446" ], 124 ],
     [
       0,
       1,
@@ -56,11 +56,11 @@
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
         "primitive_Prims.op_Equality", "typing_FStar.Set.mem",
         "typing_FStar.Set.empty", "typing_FStar.Set.singleton",
-        "typing_FStar.Set.union", "typing_FStar.Set.complement",
-        "lemma_FStar.Set.mem_singleton", "lemma_FStar.Set.mem_union",
-        "lemma_FStar.Set.subset_mem", "lemma_FStar.Set.mem_subset",
-        "lemma_FStar.Set.lemma_equal_elim", "typing_FStar.Seq.seq",
-        "refinement_interpretation_Tm_refine_1335",
+        "@query_11448", "typing_FStar.Set.union",
+        "typing_FStar.Set.complement", "lemma_FStar.Set.mem_singleton",
+        "lemma_FStar.Set.mem_union", "lemma_FStar.Set.subset_mem",
+        "lemma_FStar.Set.mem_subset", "lemma_FStar.Set.lemma_equal_elim",
+        "typing_FStar.Seq.seq", "refinement_interpretation_Tm_refine_1335",
         "typing_FStar.Seq.createEmpty",
         "function_token_typing_FStar.Heap.heap", "@pretyping__2461",
         "typing_FStar.Heap.upd", "function_token_typing_FStar.Heap.emp",
@@ -78,7 +78,7 @@
         "lemma_FStar.Map.lemma_equal_elim",
         "function_token_typing_FStar.HyperHeap.rid",
         "equation_FStar.HyperHeap.t", "typing_FStar.HyperHeap.as_ref",
-        "typing_FStar.HyperHeap.includes", "typing_FStar.HyperHeap.extends",
+        "typing_FStar.HyperHeap.extends",
         "lemma_FStar.HyperHeap.lemma_includes_refl",
         "refinement_interpretation_Tm_refine_2817",
         "lemma_FStar.HyperHeap.lemma_extends_only_parent",
@@ -89,12 +89,11 @@
         "equality_tok_TLSConstants.TLS_1p2@tok",
         "data_elim_TLSInfo.Mkconfig",
         "function_token_typing_TLSInfo.defaultConfig",
-        "equation_TLSInfo.defaultConfig",
-        "projection_inverse_MAC.Key_region", "@query_11448",
-        "equation_MAC.fresh_subregion", "kinding_MAC.entry@tok",
-        "equation_MAC.region", "proj_equation_MAC.Key_region"
+        "equation_TLSInfo.defaultConfig", "equation_MAC.fresh_subregion",
+        "kinding_MAC.entry@tok", "projection_inverse_MAC.Key_region",
+        "proj_equation_MAC.Key_region", "equation_MAC.region"
       ],
-      873
+      158
     ],
     [
       0,
@@ -130,38 +129,19 @@
         "equation_FStar.HyperHeap.fresh_region",
         "equation_FStar.HyperHeap.upd", "typing_FStar.HyperHeap.mod_set",
         "equation_FStar.HyperHeap.modifies",
-        "equality_tok_TLSConstants.Client@tok",
-        "equality_tok_TLSConstants.SSL_3p0@tok",
         "equality_tok_TLSConstants.TLS_1p0@tok",
         "equality_tok_TLSConstants.TLS_1p2@tok",
-        "equality_tok_TLSConstants.PRF_SSL3_nested@tok",
-        "equation_TLSConstants.null_aeAlg", "equation_Nonce.noCsr",
         "data_elim_TLSInfo.Mkconfig",
         "function_token_typing_TLSInfo.defaultConfig",
-        "equation_TLSInfo.defaultConfig", "equation_TLSInfo.noCsr",
-        "equation_TLSInfo.ne_default",
-        "constructor_distinct_TLSInfo.NoPmsId",
-        "equality_tok_TLSInfo.NoPmsId@tok", "equation_TLSInfo.honestPMS",
-        "equation_TLSInfo.noPmsId",
-        "constructor_distinct_TLSInfo.StandardMS",
-        "projection_inverse_TLSInfo.StandardMS__0",
-        "projection_inverse_TLSInfo.StandardMS__1",
-        "projection_inverse_TLSInfo.StandardMS__2",
-        "equation_TLSInfo.honestMS", "equation_TLSInfo.noMsId",
-        "projection_inverse_TLSInfo.Mkid_msId",
-        "proj_equation_TLSInfo.Mkid_msId",
-        "refinement_interpretation_Tm_refine_11189",
-        "typing_TLSInfo.safeKDF", "equation_TLSInfo.safeKDF",
-        "refinement_interpretation_Tm_refine_11204",
-        "function_token_typing_TLSInfo.noId", "equation_TLSInfo.noId",
-        "projection_inverse_MAC.Key_region", "@query_11450",
+        "equation_TLSInfo.defaultConfig", "@query_11450",
         "equation_MAC.fresh_subregion", "kinding_MAC.entry@tok",
-        "equation_MAC.region", "proj_equation_MAC.Key_region"
+        "projection_inverse_MAC.Key_region", "proj_equation_MAC.Key_region",
+        "equation_MAC.region"
       ],
-      1016
+      131
     ],
-    [ 0, 1, [ "equation_MAC.keyval", "@query_11454" ], 177 ],
-    [ 0, 1, [ "@query_11471" ], 11 ],
+    [ 0, 1, [ "equation_MAC.keyval", "@query_11454" ], 101 ],
+    [ 0, 1, [ "@query_11471" ], 103 ],
     [
       0,
       1,
@@ -174,9 +154,10 @@
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2", "typing_FStar.Set.mem",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union",
-        "typing_FStar.Set.complement", "lemma_FStar.Set.mem_singleton",
-        "lemma_FStar.Set.mem_union", "lemma_FStar.Set.mem_complement",
-        "lemma_FStar.Set.mem_subset", "lemma_FStar.Set.lemma_equal_elim",
+        "@query_11474", "typing_FStar.Set.complement",
+        "lemma_FStar.Set.mem_singleton", "lemma_FStar.Set.mem_union",
+        "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_subset",
+        "lemma_FStar.Set.lemma_equal_elim",
         "constructor_distinct_FStar.Seq.seq", "@pretyping__1285",
         "typing_FStar.Seq.seq", "equation_FStar.Char.char",
         "function_token_typing_FStar.Heap.heap", "@pretyping__2461",
@@ -186,7 +167,7 @@
         "lemma_FStar.Map.lemma_SelUpd2", "lemma_FStar.Map.lemma_SelRestrict",
         "lemma_FStar.Map.lemma_SelConcat1",
         "lemma_FStar.Map.lemma_SelConcat2",
-        "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
+        "lemma_FStar.Map.lemma_InDomUpd1",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
         "lemma_FStar.Map.lemma_ContainsDom",
@@ -201,9 +182,7 @@
         "assumption_FStar.HyperHeap.Mod_set_def_2843",
         "equation_FStar.HyperHeap.modifies", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "typing_Platform.Bytes.op_At_Bar",
-        "equation_Platform.Bytes.op_At_Bar",
-        "refinement_interpretation_Tm_refine_3053",
-        "equation_Platform.Bytes.lbytes", "@pretyping__3661",
+        "equation_Platform.Bytes.op_At_Bar", "@pretyping__3661",
         "typing_tok_CoreCrypto.MD5@tok", "equality_tok_CoreCrypto.MD5@tok",
         "data_typing_intro_CoreCrypto.SHA1@tok",
         "refinement_interpretation_Tm_refine_3912", "typing_CoreCrypto.hash",
@@ -223,39 +202,40 @@
         "function_token_typing_HMAC.ssl_pad2_sha1",
         "equation_HMAC.ssl_pad2_sha1", "equation_HMAC.sslKeyedHashPads",
         "equation_HMAC.sslKeyedHash", "equation_HMAC.hmac",
-        "equation_HMAC.tls_mac", "proj_equation_MAC.Key_kv",
-        "typing_MAC.Key.log", "data_elim_MAC.Entry", "typing_MAC.Key.kv",
-        "proj_equation_MAC.Key_log", "@query_11474", "typing_MAC.alg",
-        "equation_MAC.alg", "equation_MAC.tag", "equation_MAC.keyrepr",
-        "kinding_MAC.entry@tok", "refinement_interpretation_Tm_refine_11341",
-        "fuel_guarded_inversion_MAC.key_11382", "equation_MAC.region",
-        "typing_MAC.Key.region", "proj_equation_MAC.Key_region"
+        "equation_HMAC.tls_mac", "typing_MAC.alg", "equation_MAC.alg",
+        "equation_MAC.tag", "equation_MAC.keyrepr", "kinding_MAC.entry@tok",
+        "refinement_interpretation_Tm_refine_11341", "data_elim_MAC.Entry",
+        "fuel_guarded_inversion_MAC.key_11382", "typing_MAC.Key.region",
+        "proj_equation_MAC.Key_region", "typing_MAC.Key.kv",
+        "proj_equation_MAC.Key_kv", "typing_MAC.Key.log",
+        "proj_equation_MAC.Key_log", "equation_MAC.region"
       ],
-      1044
+      192
     ],
-    [ 0, 1, [ "@query_11477" ], 220 ],
-    [ 0, 1, [ "@query_11488" ], 12 ],
+    [ 0, 1, [ "@query_11477" ], 99 ],
+    [ 0, 1, [ "@query_11488" ], 109 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "bool_typing",
-        "refinement_interpretation_Tm_refine_11491",
-        "interpretation_Tm_arrow_210", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Equality", "data_elim_Prims.Some",
-        "disc_equation_Prims.Some", "equation_Prims.nat",
-        "typing_FStar.Seq.index", "refinement_interpretation_Tm_refine_1675",
+        "projection_inverse_BoxBool_proj_0", "@pretyping__136",
+        "bool_typing", "interpretation_Tm_arrow_210",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Equality",
+        "data_elim_Prims.Some", "disc_equation_Prims.Some",
+        "equation_Prims.nat", "typing_FStar.Seq.index",
+        "refinement_interpretation_Tm_refine_1675",
         "typing_FStar.SeqProperties.seq_find",
         "equation_FStar.SeqProperties.seq_find",
-        "equation_Platform.Bytes.bytes", "equation_MAC.id", "@query_11508",
-        "data_elim_MAC.Entry", "equation_MAC.matches",
-        "token_correspondence_MAC.matches", "interpretation_Tm_arrow_11481",
-        "equation_MAC.text", "function_token_typing_MAC.matches",
-        "kinding_MAC.entry@tok", "refinement_interpretation_Tm_refine_11341",
-        "fuel_guarded_inversion_MAC.entry_11334"
+        "equation_Platform.Bytes.bytes", "equation_MAC.id",
+        "equation_MAC.text", "kinding_MAC.entry@tok",
+        "refinement_interpretation_Tm_refine_11341", "data_elim_MAC.Entry",
+        "fuel_guarded_inversion_MAC.entry_11334",
+        "interpretation_Tm_arrow_11481", "token_correspondence_MAC.matches",
+        "function_token_typing_MAC.matches", "equation_MAC.matches",
+        "refinement_interpretation_Tm_refine_11491", "@query_11508"
       ],
-      659
+      101
     ]
   ]
 ]
