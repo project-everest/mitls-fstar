@@ -81,20 +81,36 @@ let minMaxPad i = (fixedPadSize i, maxPadSize i)
 #set-options "--initial_ifuel 1"
 
 // Shared between StreamAE and StatefulLHAE
-type valid_clen (i:id) (clen:nat) = (
-  if i = noId then // i.aeAlg = MACOnly MD5
-    0 <= clen - hashSize MD5 /\ clen - hashSize MD5 <= max_TLSPlaintext_fragment_length
-  else 
-  if i.pv = TLS_1p3 then
-    let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
-    tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 
-  else 
-    if is_AEAD i.aeAlg then
-      0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
-      clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
-    else 
-      0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\ 
-      clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length)
+type valid_clen (i:id) (clen:nat) =
+  ((i == noId) ==> (0 <= clen - hashSize MD5 /\ clen - hashSize MD5 <= max_TLSPlaintext_fragment_length)) 
+  /\
+  ((i =!= noId) ==>
+    (if i.pv = TLS_1p3 then
+      let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
+      tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 
+      else 
+      if is_AEAD i.aeAlg then
+	0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
+	clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+	else 
+	0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\ 
+	clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length))
+
+
+(* ( *)
+(*   if i == noId then // i.aeAlg = MACOnly MD5 *)
+(*     0 <= clen - hashSize MD5 /\ clen - hashSize MD5 <= max_TLSPlaintext_fragment_length *)
+(*   else  *)
+(*   if i.pv = TLS_1p3 then *)
+(*     let tlen = 16 (\* FIXME CoreCrypto.aeadTagSize (aeAlg i) *\) in  *)
+(*     tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length  *)
+(*   else  *)
+(*     if is_AEAD i.aeAlg then *)
+(*       0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\  *)
+(*       clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length *)
+(*     else  *)
+(*       0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\  *)
+(*       clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length) *)
 
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)

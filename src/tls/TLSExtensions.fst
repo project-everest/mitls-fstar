@@ -48,7 +48,7 @@ let parseRenegotiationInfo b =
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
 
-type preEarlyDataIndication : Type0 =
+noeq type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
     ped_cipher_suite:valid_cipher_suite;
     ped_extensions:list extension;
