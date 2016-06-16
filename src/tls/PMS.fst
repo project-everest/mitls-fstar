@@ -11,10 +11,10 @@ let ideal = IdealFlags.ideal_PMS // controls idealization of PMS.
 
 type rsarepr = bytes
 (*private*) 
-type rsaseed = {seed: rsarepr}
+noeq type rsaseed = {seed: rsarepr}
 
 // To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type. 
-type rsapms = 
+noeq type rsapms = 
 //#if ideal 
   | IdealRSAPMS of rsaseed 
 //#endif
@@ -51,10 +51,10 @@ let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms =
 //open CoreCrypto.Keys
 
 type dhrepr = bytes
-(*private*) type dhseed = {seed: dhrepr}
+(*private*) noeq type dhseed = {seed: dhrepr}
 
 // To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type.
-type dhpms = 
+noeq type dhpms = 
 //#if ideal 
   | IdealDHPMS of dhseed 
 //#endif
@@ -80,6 +80,6 @@ let sampleDH dhp (gx:CommonDH.share) (gy:CommonDH.share) =
 let coerceDH (dhp:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) b = 
   ConcreteDHPMS(b) 
 
-type pms = 
+noeq type pms = 
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
   | DHPMS of CommonDH.params * CommonDH.key * CommonDH.key * dhpms

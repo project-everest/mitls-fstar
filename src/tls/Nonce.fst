@@ -9,6 +9,9 @@ module MR = FStar.Monotonic.RRef
 
 type random = lbytes 32
 
+(* TODO: AR *)
+assume HasEq_random : hasEq random
+
 let ideal = IdealFlags.ideal_Nonce // controls idealization of random sample: collision-avoidance.
 
 val timestamp: unit -> ST (lbytes 4)
@@ -31,7 +34,7 @@ let n_rid = fun (n:random) -> ex_rid
 // A partial map from nonces to rid is injective, 
 // if it maps distinct nonces to distinct rids
 let injective (n:MM.map' random n_rid) = 
-  forall n1 n2. n1<>n2 ==> (match MM.sel n n1, MM.sel n n2 with
+  forall n1 n2. n1=!=n2 ==> (match MM.sel n n1, MM.sel n n2 with
 			  | Some r1, Some r2 -> r1 <> r2
 			  | _ -> True)
 
@@ -62,7 +65,7 @@ let registered (n:random) (r:HH.rid) =
 let testify (n:random) (r:HH.rid) 
   : ST unit (requires (fun h -> registered n r))
 	    (ensures (fun h0 _ h1 -> 
-		 h0=h1 /\
+		 h0==h1 /\
 	         registered n r /\ 
 		 MM.contains nonce_rid_table n r h1))
   = MR.testify (MM.contains nonce_rid_table n r)
@@ -94,7 +97,7 @@ let rec mkHelloRandom cs r =
 val lookup: cs:role -> n:random -> ST (option (ex_rid))
   (requires (fun h -> True))
   (ensures (fun h0 ropt h1 -> 
-	        h0=h1 /\ 
+	        h0==h1 /\ 
 	        (match ropt with
 		 | Some r -> registered n r /\ role_nonce cs n r
 		 | None -> fresh n h0)))

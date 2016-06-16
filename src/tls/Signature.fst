@@ -12,7 +12,7 @@ open Cert
 (* ------------------------------------------------------------------------ *)
 type text = bytes
 
-type alg =
+noeq type alg =
   | Use: info:(text -> Type0)
        -> core: sigAlg
        -> digest: list hashAlg
@@ -62,7 +62,7 @@ let sig_digest h t =
 
 
 (* ------------------------------------------------------------------------ *)
-type state (a:alg) =
+noeq type state (a:alg) =
   | Signed: log:Seq.seq (signed a) -> state a
   | Corrupt
 
@@ -95,7 +95,7 @@ assume val keyRegion: rid
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
-type pubkey (a:alg) =
+noeq type pubkey (a:alg) =
   | PK: log:log_t a -> repr:public_repr{sigAlg_of_public_repr repr = a.core} -> pubkey a
 
 type pkey = (a:alg & pubkey a)
@@ -130,6 +130,9 @@ let alloc_pubkey #a s r =
   we might not record keys generated with hopeless algorithms.
 
   We maintain this property as a stateful invariaint in rkeys *)
+
+(* TODO: AR *)
+assume HasEq_pkey: hasEq pkey
 
 type kset = s:list pkey{ forall x y. (List.Tot.mem x s /\ List.Tot.mem y s /\ pkey_repr x = pkey_repr y) ==> x = y }
 
@@ -190,6 +193,12 @@ let sign #a h s t =
 
 
 (* ------------------------------------------------------------------------ *)
+
+(* TODO: AR *)
+assume HasEq_alg: hasEq alg
+assume HasEq_text: hasEq text
+assume HasEq_pubkey: forall a. hasEq (pubkey a)
+
 val verify: #a:alg
   -> h:hashAlg{List.Tot.mem h (a.digest)}
   -> pk:pubkey a
