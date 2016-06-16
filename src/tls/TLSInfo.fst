@@ -72,7 +72,7 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 *) 
 
 
-type config = {
+noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     minVer: protocolVersion;
     maxVer: protocolVersion;
@@ -235,7 +235,7 @@ let ne_default =
 // -------------------------------------------------------------------
 // Pre Master Secret indexes
 
-type pmsId = (* we use pmsId as an opaque index to pms *)
+noeq type pmsId = (* we use pmsId as an opaque index to pms *)
   | NoPmsId
   | SomePmsId of PMS.pms
 
@@ -301,7 +301,7 @@ type sessionID = b:bytes { length b <= 32 }
 // ``An arbitrary byte sequence chosen by the server
 // to identify an active or resumable session state.''
 
-type sessionInfo = {
+noeq type sessionInfo = {
     init_crand: crand;
     init_srand: srand;
     protocol_version: p:protocolVersion; // { p <> TLS_1p3 };
@@ -353,7 +353,7 @@ val siAuthEncAlg: si:sessionInfo { si.protocol_version = TLS_1p2 &&
                               pvcs si.protocol_version si.cipher_suite } -> Tot aeAlg
 let siAuthEncAlg si = get_aeAlg si.cipher_suite
 
-type msId = // We record the parameters used to derive the master secret;
+noeq type msId = // We record the parameters used to derive the master secret;
   | StandardMS : pmsId -> csRands -> kefAlg_t -> msId
             // the pms index, the nonces, and the PMS-PRF algorithm
   | ExtendedMS : pmsId -> sessionHash -> kefAlg_t -> msId
@@ -435,7 +435,7 @@ type abbrInfo =
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
 
-type preEpoch =
+noeq type preEpoch =
     | InitEpoch of role
     | FullEpoch : sessionInfo  -> preEpoch -> preEpoch
     | AbbrEpoch : ai:abbrInfo -> resumed:preEpoch -> pred:preEpoch -> preEpoch
@@ -497,7 +497,7 @@ let epochCSRands e =
   let e' : succEpoch = unsafe_coerce e in //TODO: THIS FAILS CURRENTLY! FIXME
   epochCRand e' @| epochSRand e'
 
-type pre_connectionInfo = {
+noeq type pre_connectionInfo = {
     role: role;      // cached, could be retrieved from id_out
     id_rand: random; // our random
     id_in: epoch;
@@ -537,7 +537,7 @@ let strongAE e = strongAESI (epochSI e)
 // To this end, the index value should determine the concrete 
 // initial state (key, IV) of the keyed functionality.
 
-type id = {
+noeq type id = {
   // indexes and algorithms of the session used in the key derivation
   msId   : msId;            // the index of the master secret used for key derivation
   kdfAlg : kdfAlg_t;          // the KDF algorithm used for key derivation
