@@ -5,213 +5,211 @@
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_CommonDH.FFDH",
-        "refinement_interpretation_Tm_refine_8438", "@query_8445"
-      ],
-      111
-    ],
-    [
-      0,
-      1,
-      [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_CommonDH.ECDH",
-        "refinement_interpretation_Tm_refine_8447", "@query_8454"
-      ],
-      99
-    ],
-    [
-      0,
-      1,
-      [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_CommonDH.FFP",
-        "refinement_interpretation_Tm_refine_8480", "@query_8487"
-      ],
-      113
-    ],
-    [
-      0,
-      1,
-      [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_CommonDH.ECP",
-        "refinement_interpretation_Tm_refine_8489", "@query_8496"
-      ],
-      93
-    ],
-    [
-      0,
-      1,
-      [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_CommonDH.FFKey",
-        "refinement_interpretation_Tm_refine_8522", "@query_8529"
-      ],
-      125
-    ],
-    [
-      0,
-      1,
-      [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_CommonDH.ECKey",
-        "refinement_interpretation_Tm_refine_8531", "@query_8538"
-      ],
-      109
-    ],
-    [
-      0,
-      1,
-      [
+        "@query_8445", "disc_equation_CommonDH.FFDH",
         "projection_inverse_BoxBool_proj_0",
-        "disc_equation_CommonDH.FFShare",
-        "refinement_interpretation_Tm_refine_8566", "@query_8573"
+        "refinement_interpretation_Tm_refine_8438"
       ],
-      108
+      0
     ],
     [
       0,
       1,
       [
+        "@query_8454", "disc_equation_CommonDH.ECDH",
         "projection_inverse_BoxBool_proj_0",
-        "disc_equation_CommonDH.ECShare",
-        "refinement_interpretation_Tm_refine_8575", "@query_8582"
+        "refinement_interpretation_Tm_refine_8447"
       ],
-      96
-    ],
-    [ 0, 1, [ "@query_8583" ], 88 ],
-    [ 0, 1, [ "@query_8588" ], 107 ],
-    [
-      0,
-      1,
-      [
-        "fuel_guarded_inversion_CommonDH.group_8414",
-        "disc_equation_CommonDH.FFDH", "disc_equation_CommonDH.ECDH",
-        "@query_8593"
-      ],
-      102
+      0
     ],
     [
       0,
       1,
       [
-        "projection_inverse_Prims.Mktuple2__1",
-        "equation_Platform.Bytes.bytes", "@pretyping__4176",
-        "typing_CoreCrypto.Mkec_key.ec_params",
+        "@query_8487", "disc_equation_CommonDH.FFP",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8480"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8496", "disc_equation_CommonDH.ECP",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8489"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8529", "disc_equation_CommonDH.FFKey",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8522"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8538", "disc_equation_CommonDH.ECKey",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8531"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8573", "disc_equation_CommonDH.FFShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8566"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8582", "disc_equation_CommonDH.ECShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8575"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_8583" ], 0 ],
+    [ 0, 1, [ "@query_8588" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_8593", "disc_equation_CommonDH.ECDH",
+        "disc_equation_CommonDH.FFDH",
+        "fuel_guarded_inversion_CommonDH.group_8414"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@pretyping__4176", "@query_8598", "disc_equation_CommonDH.ECKey",
+        "disc_equation_CommonDH.FFKey", "equation_ECGroup.dh_responder",
+        "equation_ECGroup.key", "equation_ECGroup.secret",
+        "equation_Platform.Bytes.bytes",
+        "fuel_guarded_inversion_CommonDH.key_8500",
         "proj_equation_CoreCrypto.Mkec_key_ec_params",
+        "projection_inverse_Prims.Mktuple2__1",
         "refinement_interpretation_Tm_refine_4209",
-        "typing_CoreCrypto.ec_gen_key",
-        "refinement_interpretation_Tm_refine_8273", "equation_ECGroup.key",
-        "equation_ECGroup.secret", "equation_ECGroup.dh_responder",
-        "fuel_guarded_inversion_CommonDH.key_8500",
-        "disc_equation_CommonDH.FFKey", "disc_equation_CommonDH.ECKey",
-        "@query_8598"
+        "refinement_interpretation_Tm_refine_8273",
+        "typing_CoreCrypto.Mkec_key.ec_params",
+        "typing_CoreCrypto.ec_gen_key"
       ],
-      113
+      0
     ],
-    [ 0, 1, [ "equation_Platform.Bytes.empty_bytes", "@query_8603" ], 95 ],
+    [ 0, 1, [ "@query_8603", "equation_Platform.Bytes.empty_bytes" ], 0 ],
     [
       0,
       1,
       [
-        "refinement_interpretation_Tm_refine_8060", "equation_DHGroup.key",
-        "refinement_interpretation_Tm_refine_8273", "equation_ECGroup.key",
-        "fuel_guarded_inversion_CommonDH.key_8500",
-        "disc_equation_CommonDH.FFKey", "disc_equation_CommonDH.ECKey",
-        "@query_8610"
+        "@query_8610", "disc_equation_CommonDH.ECKey",
+        "disc_equation_CommonDH.FFKey", "equation_DHGroup.key",
+        "equation_ECGroup.key", "fuel_guarded_inversion_CommonDH.key_8500",
+        "refinement_interpretation_Tm_refine_8060",
+        "refinement_interpretation_Tm_refine_8273"
       ],
-      121
+      0
     ],
     [
       0,
       1,
       [
-        "fuel_guarded_inversion_Platform.Error.optResult_2351",
+        "@query_8613", "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error",
-        "disc_equation_Platform.Error.Correct", "equation_TLSError.error",
-        "equation_TLSError.result", "typing_DHGroup.parse_partial",
-        "equation_DHGroup.parse_partial", "typing_ECGroup.parse_partial",
-        "equation_ECGroup.parse_partial", "@query_8613"
+        "equation_DHGroup.parse_partial", "equation_ECGroup.parse_partial",
+        "equation_TLSError.error", "equation_TLSError.result",
+        "fuel_guarded_inversion_Platform.Error.optResult_2351",
+        "typing_DHGroup.parse_partial", "typing_ECGroup.parse_partial"
       ],
-      141
+      0
     ],
     [
       0,
       1,
       [
-        "refinement_interpretation_Tm_refine_8060", "equation_DHGroup.key",
-        "refinement_interpretation_Tm_refine_8273", "equation_ECGroup.key",
-        "fuel_guarded_inversion_CommonDH.key_8500",
-        "disc_equation_CommonDH.FFKey", "disc_equation_CommonDH.ECKey",
-        "@query_8620"
+        "@query_8620", "disc_equation_CommonDH.ECKey",
+        "disc_equation_CommonDH.FFKey", "equation_DHGroup.key",
+        "equation_ECGroup.key", "fuel_guarded_inversion_CommonDH.key_8500",
+        "refinement_interpretation_Tm_refine_8060",
+        "refinement_interpretation_Tm_refine_8273"
       ],
-      119
+      0
     ],
     [
       0,
       1,
       [
-        "constructor_distinct_Tm_unit", "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_BoxBool_proj_0",
-        "constructor_distinct_Prims.unit", "@pretyping__127",
-        "unit_inversion", "@pretyping__302", "int_inversion",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_Equality", "constructor_distinct_Prims.option",
-        "@pretyping__430", "constructor_distinct_Prims.None",
-        "constructor_distinct_Prims.Some", "projection_inverse_Prims.Some_v",
-        "fuel_guarded_inversion_Prims.option_426",
+        "@pretyping__302", "@query_8623", "constructor_distinct_Prims.None",
+        "constructor_distinct_Prims.Some", "constructor_distinct_Tm_unit",
+        "disc_equation_CommonDH.ECP", "disc_equation_CommonDH.FFP",
         "disc_equation_Prims.None", "disc_equation_Prims.Some",
-        "projection_inverse_Prims.Mktuple2__2",
-        "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
-        "equation_Prims.fst", "typing_Prims.snd", "equation_Prims.snd",
-        "refinement_interpretation_Tm_refine_1013", "equation_Prims.nat",
-        "function_token_typing_FStar.HyperHeap.test0",
-        "equation_FStar.HyperHeap.test0",
-        "refinement_interpretation_Tm_refine_2877",
-        "typing_FStar.SeqProperties.split",
-        "equation_FStar.SeqProperties.split",
-        "refinement_interpretation_Tm_refine_2966",
-        "kinding_FStar.Char.char_@tok", "equation_FStar.Char.char",
-        "equation_Platform.Bytes.byte",
-        "function_token_typing_Platform.Bytes.bytes",
+        "equation_CoreCrypto.ec_bytelen", "equation_DHGroup.params",
+        "equation_DHGroup.share", "equation_ECGroup.params",
+        "equation_ECGroup.parse_point", "equation_ECGroup.share",
+        "equation_FStar.Char.char", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "refinement_interpretation_Tm_refine_3255",
-        "typing_Platform.Bytes.split", "equation_Platform.Bytes.split",
-        "projection_inverse_CoreCrypto.Mkdh_key_dh_params",
-        "projection_inverse_CoreCrypto.Mkdh_key_dh_public",
+        "equation_Platform.Bytes.split", "equation_Prims.fst",
+        "equation_Prims.nat", "equation_Prims.snd",
+        "equation_TLSConstants.epoch_color",
+        "fuel_guarded_inversion_CommonDH.params_8458",
+        "fuel_guarded_inversion_Prims.option_426",
+        "function_token_typing_DHGroup.ffdhe2048",
+        "function_token_typing_Platform.Bytes.bytes",
+        "function_token_typing_TLSConstants.epoch_color", "int_inversion",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction",
         "proj_equation_CoreCrypto.Mkdh_key_dh_params",
         "proj_equation_CoreCrypto.Mkdh_key_dh_public",
-        "typing_CoreCrypto.ec_bytelen", "equation_CoreCrypto.ec_bytelen",
-        "typing_CoreCrypto.Mkec_params.curve",
-        "projection_inverse_CoreCrypto.Mkec_point_ecx",
-        "projection_inverse_CoreCrypto.Mkec_point_ecy",
-        "proj_equation_CoreCrypto.Mkec_point_ecx",
-        "proj_equation_CoreCrypto.Mkec_point_ecy",
-        "projection_inverse_CoreCrypto.Mkec_key_ec_params",
-        "projection_inverse_CoreCrypto.Mkec_key_ec_point",
         "proj_equation_CoreCrypto.Mkec_key_ec_params",
         "proj_equation_CoreCrypto.Mkec_key_ec_point",
-        "function_token_typing_TLSConstants.epoch_color",
-        "equation_TLSConstants.epoch_color",
+        "proj_equation_CoreCrypto.Mkec_point_ecx",
+        "proj_equation_CoreCrypto.Mkec_point_ecy",
+        "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_CoreCrypto.Mkdh_key_dh_params",
+        "projection_inverse_CoreCrypto.Mkdh_key_dh_public",
+        "projection_inverse_CoreCrypto.Mkec_key_ec_params",
+        "projection_inverse_CoreCrypto.Mkec_key_ec_point",
+        "projection_inverse_CoreCrypto.Mkec_point_ecx",
+        "projection_inverse_CoreCrypto.Mkec_point_ecy",
+        "projection_inverse_Prims.Some_v",
+        "refinement_interpretation_Tm_refine_1013",
+        "refinement_interpretation_Tm_refine_2966",
+        "refinement_interpretation_Tm_refine_3255",
         "refinement_interpretation_Tm_refine_8056",
-        "equation_DHGroup.params",
-        "refinement_interpretation_Tm_refine_8058", "equation_DHGroup.share",
-        "function_token_typing_DHGroup.ffdhe2048", "equation_ECGroup.params",
-        "equation_ECGroup.share", "typing_ECGroup.parse_point",
-        "equation_ECGroup.parse_point",
-        "fuel_guarded_inversion_CommonDH.params_8458",
-        "disc_equation_CommonDH.FFP", "disc_equation_CommonDH.ECP",
-        "@query_8623"
+        "refinement_interpretation_Tm_refine_8058",
+        "typing_CoreCrypto.Mkec_params.curve",
+        "typing_CoreCrypto.ec_bytelen", "typing_ECGroup.parse_point",
+        "typing_Platform.Bytes.split", "typing_Prims.snd"
       ],
-      161
+      0
     ],
     [
       0,
       1,
       [
-        "refinement_interpretation_Tm_refine_8060", "equation_DHGroup.key",
+        "@query_8628", "disc_equation_CommonDH.ECKey",
+        "disc_equation_CommonDH.FFKey", "equation_DHGroup.key",
         "fuel_guarded_inversion_CommonDH.key_8500",
-        "disc_equation_CommonDH.FFKey", "disc_equation_CommonDH.ECKey",
-        "@query_8628"
+        "refinement_interpretation_Tm_refine_8060"
       ],
-      120
+      0
     ]
   ]
 ]

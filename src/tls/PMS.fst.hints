@@ -5,79 +5,83 @@
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_PMS.IdealRSAPMS",
-        "refinement_interpretation_Tm_refine_8913", "@query_8920"
-      ],
-      101
-    ],
-    [
-      0,
-      1,
-      [
+        "@query_8920", "disc_equation_PMS.IdealRSAPMS",
         "projection_inverse_BoxBool_proj_0",
-        "disc_equation_PMS.ConcreteRSAPMS",
-        "refinement_interpretation_Tm_refine_8922", "@query_8929"
+        "refinement_interpretation_Tm_refine_8913"
       ],
-      89
+      0
     ],
     [
       0,
       1,
       [
-        "fuel_guarded_inversion_PMS.rsapms_8889",
-        "disc_equation_PMS.IdealRSAPMS", "disc_equation_PMS.ConcreteRSAPMS",
-        "@query_8930"
-      ],
-      109
-    ],
-    [ 0, 1, [ "@query_8935" ], 96 ],
-    [
-      0,
-      1,
-      [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_PMS.IdealDHPMS",
-        "refinement_interpretation_Tm_refine_8984", "@query_8991"
-      ],
-      104
-    ],
-    [
-      0,
-      1,
-      [
+        "@query_8929", "disc_equation_PMS.ConcreteRSAPMS",
         "projection_inverse_BoxBool_proj_0",
-        "disc_equation_PMS.ConcreteDHPMS",
-        "refinement_interpretation_Tm_refine_8993", "@query_9000"
+        "refinement_interpretation_Tm_refine_8922"
       ],
-      110
+      0
     ],
     [
       0,
       1,
       [
-        "fuel_guarded_inversion_PMS.dhpms_8960",
-        "disc_equation_PMS.IdealDHPMS", "disc_equation_PMS.ConcreteDHPMS",
-        "@query_9001"
+        "@query_8930", "disc_equation_PMS.ConcreteRSAPMS",
+        "disc_equation_PMS.IdealRSAPMS",
+        "fuel_guarded_inversion_PMS.rsapms_8889"
       ],
-      105
+      0
     ],
-    [ 0, 1, [ "@query_9006" ], 108 ],
+    [ 0, 1, [ "@query_8935" ], 0 ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_PMS.RSAPMS",
-        "refinement_interpretation_Tm_refine_9038", "@query_9045"
+        "@query_8991", "disc_equation_PMS.IdealDHPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8984"
       ],
-      123
+      0
     ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0", "disc_equation_PMS.DHPMS",
-        "refinement_interpretation_Tm_refine_9047", "@query_9054"
+        "@query_9000", "disc_equation_PMS.ConcreteDHPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8993"
       ],
-      101
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_9001", "disc_equation_PMS.ConcreteDHPMS",
+        "disc_equation_PMS.IdealDHPMS",
+        "fuel_guarded_inversion_PMS.dhpms_8960"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_9006" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_9045", "disc_equation_PMS.RSAPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_9038"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_9054", "disc_equation_PMS.DHPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_9047"
+      ],
+      0
     ]
   ]
 ]

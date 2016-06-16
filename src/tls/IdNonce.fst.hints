@@ -5,67 +5,67 @@
       0,
       1,
       [
-        "projection_inverse_BoxInt_proj_0", "equation_FStar.Char.char",
+        "@query_11218", "data_elim_TLSInfo.Mkid", "equation_FStar.Char.char",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.length",
-        "refinement_interpretation_Tm_refine_3053",
-        "equation_Platform.Bytes.lbytes", "equation_TLSInfo.csRands",
-        "data_elim_TLSInfo.Mkid", "fuel_guarded_inversion_TLSInfo.id_11085",
+        "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
+        "equation_TLSInfo.csRands",
+        "fuel_guarded_inversion_TLSInfo.id_11085",
         "proj_equation_TLSInfo.Mkid_csrConn",
-        "refinement_interpretation_Tm_refine_11217", "@query_11218"
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_11217",
+        "refinement_interpretation_Tm_refine_3053"
       ],
-      137
+      0
     ],
-    [ 0, 1, [ "@query_11223" ], 121 ],
-    [ 0, 1, [ "projection_inverse_BoxInt_proj_0", "@query_11224" ], 106 ],
-    [ 0, 1, [ "@query_11259" ], 101 ],
-    [ 0, 1, [ "equation_IdNonce.id_of_nonce", "@query_11284" ], 152 ],
+    [ 0, 1, [ "@query_11223" ], 0 ],
+    [ 0, 1, [ "@query_11224", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_11259" ], 0 ],
+    [ 0, 1, [ "@query_11284", "equation_IdNonce.id_of_nonce" ], 0 ],
     [
       0,
       1,
       [
-        "@pretyping__117", "typing_tok_Prims.T@tok",
-        "equality_tok_Prims.T@tok",
+        "@pretyping__117", "@query_11297", "disc_equation_Prims.None",
+        "disc_equation_Prims.Some", "equality_tok_Prims.T@tok",
+        "fuel_guarded_inversion_Prims.option_426", "typing_tok_Prims.T@tok"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_11306", "disc_equation_Prims.Some",
+        "equation_IdNonce.id_of_nonce",
         "fuel_guarded_inversion_Prims.option_426",
-        "disc_equation_Prims.None", "disc_equation_Prims.Some",
-        "@query_11297"
+        "proj_equation_Prims.Some_v", "projection_inverse_BoxBool_proj_0"
       ],
-      138
+      0
     ],
     [
       0,
       1,
       [
-        "projection_inverse_BoxBool_proj_0",
-        "fuel_guarded_inversion_Prims.option_426",
-        "disc_equation_Prims.Some", "proj_equation_Prims.Some_v",
-        "equation_IdNonce.id_of_nonce", "@query_11306"
-      ],
-      147
-    ],
-    [
-      0,
-      1,
-      [
-        "projection_inverse_BoxInt_proj_0", "equation_Platform.Bytes.bytes",
+        "@query_11310", "equation_IdNonce.nonce_of_id",
+        "equation_Nonce.random", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.lbytes", "equation_TLSInfo.random",
+        "fuel_guarded_inversion_TLSInfo.id_11085",
+        "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_3053",
-        "equation_Platform.Bytes.lbytes", "equation_Nonce.random",
-        "equation_TLSInfo.random", "fuel_guarded_inversion_TLSInfo.id_11085",
-        "typing_IdNonce.nonce_of_id", "equation_IdNonce.nonce_of_id",
-        "@query_11310"
+        "typing_IdNonce.nonce_of_id"
       ],
-      148
+      0
     ],
-    [ 0, 1, [ "@query_11315" ], 129 ],
+    [ 0, 1, [ "@query_11315" ], 0 ],
     [
       0,
       1,
       [
+        "@query_11331", "equation_IdNonce.id_of_nonce",
         "equation_MonotoneMap.contains",
-        "equation_TLSConstants.tls_tables_region", "equation_TLSInfo.random",
-        "equation_IdNonce.id_of_nonce", "@query_11331"
+        "equation_TLSConstants.tls_tables_region", "equation_TLSInfo.random"
       ],
-      105
+      0
     ]
   ]
 ]

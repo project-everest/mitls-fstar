@@ -1,40 +1,41 @@
 [
   "Q”7âvÅK\u0004lt\be|\u0017ƒ~",
   [
-    [ 0, 1, [ "@query_14538" ], 122 ],
-    [ 0, 1, [ "projection_inverse_BoxInt_proj_0", "@query_14541" ], 107 ],
+    [ 0, 1, [ "@query_14538" ], 0 ],
+    [ 0, 1, [ "@query_14541", "projection_inverse_BoxInt_proj_0" ], 0 ],
     [
       1,
       1,
       [
-        "equation_Prims.nat", "equation_Platform.Bytes.length",
-        "equation_Range.range", "equation_Range.within",
-        "equation_Range.wider", "equation_Range.fragment_range",
-        "refinement_interpretation_Tm_refine_11345", "equation_Range.frange",
-        "refinement_interpretation_Tm_refine_11522",
-        "equation_DataStream.fragment", "@query_14547"
+        "@query_14547", "equation_DataStream.fragment",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_Range.fragment_range", "equation_Range.frange",
+        "equation_Range.range", "equation_Range.wider",
+        "equation_Range.within", "refinement_interpretation_Tm_refine_11345",
+        "refinement_interpretation_Tm_refine_11522"
       ],
-      117
+      0
     ],
-    [ 1, 1, [ "@query_14552" ], 143 ],
-    [ 1, 1, [ "@query_14562" ], 142 ],
-    [ 1, 1, [ "@query_14581" ], 117 ],
+    [ 1, 1, [ "@query_14552" ], 0 ],
+    [ 1, 1, [ "@query_14562" ], 0 ],
+    [ 1, 1, [ "@query_14581" ], 0 ],
     [
       1,
       1,
       [
-        "@pretyping__127", "unit_typing",
-        "fuel_guarded_inversion_TLSInfo.id_11085",
-        "equation_MonotoneSeq.map_prefix", "equation_StAE.is_stateful_lhae",
-        "refinement_interpretation_Tm_refine_14390", "data_elim_StAE.StLHAE",
-        "fuel_guarded_inversion_StAE.state_14373", "equation_StAE.stream_ae",
-        "refinement_interpretation_Tm_refine_14461", "equation_StAE.ilog",
-        "equation_StAE.fragments", "equation_StAE.fragments_prefix",
+        "@pretyping__127", "@query_14614", "data_elim_StAE.StLHAE",
+        "equation_MonotoneSeq.map_prefix", "equation_StAE.fragments",
+        "equation_StAE.fragments_prefix", "equation_StAE.ilog",
+        "equation_StAE.is_stateful_lhae", "equation_StAE.stream_ae",
+        "equation_StreamDeltas.deltas_prefix",
         "equation_StreamDeltas.project_deltas",
-        "equation_StreamDeltas.deltas_prefix", "@query_14614"
+        "fuel_guarded_inversion_StAE.state_14373",
+        "fuel_guarded_inversion_TLSInfo.id_11085",
+        "refinement_interpretation_Tm_refine_14390",
+        "refinement_interpretation_Tm_refine_14461", "unit_typing"
       ],
-      147
+      0
     ],
-    [ 1, 1, [ "@query_14625" ], 136 ]
+    [ 1, 1, [ "@query_14625" ], 0 ]
   ]
 ]
