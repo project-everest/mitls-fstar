@@ -367,7 +367,8 @@
       0,
       2,
       [
-        "@query_11308", "constructor_distinct_TLSConstants.Hash",
+        "@pretyping__302", "@query_11308",
+        "constructor_distinct_TLSConstants.Hash",
         "constructor_distinct_Tm_unit", "data_elim_TLSConstants.AEAD",
         "data_elim_TLSConstants.HMAC", "data_elim_TLSConstants.SSLKHASH",
         "disc_equation_TLSConstants.AEAD", "equation_CoreCrypto.aeadTagSize",
