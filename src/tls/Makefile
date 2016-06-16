@@ -222,7 +222,7 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 tls-ver: IdealFlags $(LIBFILES) $(FSTS)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
+	$(FSTAR_INCLUDE_PATHS) $(addprefix --verify_module , $(VERIFY)) \
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
