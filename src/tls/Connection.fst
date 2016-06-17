@@ -37,7 +37,7 @@ type tlsState =
 
 type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region } 
 
-type connection = | C:
+noeq type connection = | C:
   #region: c_rgn ->
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
   tcp:     networkStream ->
@@ -65,7 +65,7 @@ type st_inv c h = hs_inv (C.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
-  Handshake.epochs_inv es /\ es = logT c.hs h
+  Handshake.epochs_inv es /\ es == logT c.hs h
 })
 let epochs c h = logT c.hs h
 
@@ -74,7 +74,7 @@ let epochs c h = logT c.hs h
 val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (Map.contains h0 (HS.region c.hs)
              /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
-  (ensures (epochs c h0 = epochs c h1))
+  (ensures (epochs c h0 == epochs c h1))
 let frame_epochs c h0 h1 = ()
 
 let epoch_i c h i = Seq.index (epochs c h) i

@@ -94,7 +94,7 @@ let deriveRawKeys (i:id) (ms:ms)  =
 
 type derived (i1:id) (i2:id) = StatefulLHAE.reader i1 * StatefulLHAE.writer i2 
 
-type state =
+noeq type state =
   | Init
   | Committed of protocolVersion * aeAlg * negotiatedExtensions
   | Derived: a:id -> b:id -> derived a b -> state

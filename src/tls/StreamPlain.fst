@@ -69,7 +69,6 @@ private inline let min (a:nat) (b:nat): nat = if a < b then a else b
 // the padding and compute a value of type `plain` with a public range.
 // The representation of the result is the original
 // AE-decrypted plaintext truncated to max_TLSPlaintext_fragment_length + 1.
-(* TODO: AR: this times out for me *)
 val scan: i:id { ~ (authId i) } -> bs:plainRepr -> 
   j:nat { j < length bs 
 	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } ->

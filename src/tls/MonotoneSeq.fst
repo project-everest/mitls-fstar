@@ -121,15 +121,14 @@ let write_at_end (#a:eqtype) (#i:rid) (r:m_rref i (seq a) grows) (x:a)
 		     /\ modifies_rref i !{as_ref (as_rref r)} h0 h1
 		     /\ m_sel h1 r == SeqP.snoc (m_sel h0 r) x
 		     /\ witnessed (at_least (Seq.length (m_sel h0 r)) x r)))
-  = admit ()
-    (* TODO: AR *)
-    (* m_recall r; *)
-    (* let s0 = m_read r in *)
-    (* let n = Seq.length s0 in *)
-    (* m_write r (SeqP.snoc s0 x); *)
-    (* at_least_is_stable n x r; *)
-    (* lemma_mem_snoc s0 x; *)
-    (* witness r (at_least n x r) *)
+  =
+    m_recall r;
+    let s0 = m_read r in
+    let n = Seq.length s0 in
+    m_write r (SeqP.snoc s0 x);
+    at_least_is_stable n x r;
+    lemma_mem_snoc s0 x;
+    witness r (at_least n x r)
 
 ////////////////////////////////////////////////////////////////////////////////
 //Monotone sequences with invariants
@@ -188,15 +187,14 @@ let i_write_at_end (#rgn:rid) (#a:eqtype) (#p:seq a -> Type) (r:i_seq rgn a p) (
 		     /\ modifies_rref rgn !{as_ref (as_rref r)} h0 h1
 		     /\ i_sel h1 r == SeqP.snoc (i_sel h0 r) x
 		     /\ witnessed (i_at_least (Seq.length (i_sel h0 r)) x r)))
-  = admit ()
-    (* TODO: AR *)
-    (* m_recall r; *)
-    (* let s0 = m_read r in *)
-    (* let n = Seq.length s0 in *)
-    (* m_write r (SeqP.snoc s0 x); *)
-    (* i_at_least_is_stable n x r; *)
-    (* lemma_mem_snoc s0 x; *)
-    (* witness r (i_at_least n x r) *)
+  =
+    m_recall r;
+    let s0 = m_read r in
+    let n = Seq.length s0 in
+    m_write r (SeqP.snoc s0 x);
+    i_at_least_is_stable n x r;
+    lemma_mem_snoc s0 x;
+    witness r (i_at_least n x r)
 
 ////////////////////////////////////////////////////////////////////////////////
 //Testing invariant sequences
@@ -470,11 +468,10 @@ let new_counter (#l:rid) (#a:Type) (#repr_max:nat)
 		   m_fresh c h0 h1 /\
 		   m_sel h1 c = init /\
 		   Map.contains h1 i))
-  = admit ()
-    (* TODO: AR *)
-    (* m_recall log; recall_region i; *)
-    (* witness log (at_most_log_len init log); *)
-    (* m_alloc i init *)
+  =
+    m_recall log; recall_region i;
+    witness log (at_most_log_len init log);
+    m_alloc i init
 
 let increment_counter (#l:rid) (#a:Type) (#repr_max:nat)
 		      (#i:rid) (#log:log_t l a) ($c:counter i log repr_max)
