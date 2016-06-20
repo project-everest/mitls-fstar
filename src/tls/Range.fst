@@ -158,7 +158,7 @@ val cipherRangeClass_width: i:id2 ->
 let cipherRangeClass_width i clen = ()
 
 #reset-options
-#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
+#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0" //very puzzled how the next query could succeed with 0 fuel
 
 (* targetLength: given a plaintext range, what would be the length of the ciphertext? *)
 // TLS 1.2 RFC: For CBC, the encrypted data length is one more than the sum of
@@ -170,6 +170,7 @@ val targetLength : i:id2 -> r:range -> Pure nat
         snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
     /\ (is_AEAD i.aeAlg ==> fst r = snd r))
   (ensures (fun clen -> valid_clen i clen /\ wider (cipherRangeClass i clen) r))
+#set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2" 
 let targetLength i r =
     let l,h = r in
     let authEnc = i.aeAlg in

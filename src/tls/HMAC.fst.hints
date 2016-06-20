@@ -1,16 +1,16 @@
 [
   "\u000b^TZc\u0005Bˆ;ð\rh[\n\fë",
   [
-    [ 0, 1, [ "@query_7983", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_7984", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_7985", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_7986", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_7987" ], 0 ],
+    [ 0, 1, [ "@query_7979", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_7980", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_7981", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_7982", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_7983" ], 0 ],
     [
       0,
       1,
       [
-        "@query_7990", "constructor_distinct_CoreCrypto.MD5",
+        "@query_7986", "constructor_distinct_CoreCrypto.MD5",
         "constructor_distinct_CoreCrypto.SHA1",
         "constructor_distinct_TLSConstants.Hash",
         "disc_equation_CoreCrypto.MD5", "disc_equation_CoreCrypto.SHA1",
@@ -18,32 +18,32 @@
         "equality_tok_CoreCrypto.SHA1@tok", "equation_HMAC.sslHashAlg",
         "proj_equation_TLSConstants.Hash__0",
         "projection_inverse_TLSConstants.Hash__0",
-        "refinement_interpretation_Tm_refine_7989"
+        "refinement_interpretation_Tm_refine_7985"
       ],
       0
     ],
-    [ 0, 1, [ "@query_7995" ], 0 ],
+    [ 0, 1, [ "@query_7991" ], 0 ],
     [
       0,
       1,
       [
-        "@query_8006", "disc_equation_TLSConstants.Hash",
+        "@query_8002", "disc_equation_TLSConstants.Hash",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_6508"
+        "refinement_interpretation_Tm_refine_6504"
       ],
       0
     ],
-    [ 0, 1, [ "@query_8016" ], 0 ],
+    [ 0, 1, [ "@query_8012" ], 0 ],
     [
       0,
       1,
       [
-        "@query_8024", "bool_inversion", "equation_TLSConstants.is_tls_rgn",
+        "@query_8020", "bool_inversion", "equation_TLSConstants.is_tls_rgn",
         "equation_TLSConstants.rgn", "equation_TLSConstants.tls_region",
         "equation_TLSConstants.tls_rgn",
         "function_token_typing_TLSConstants.tls_region",
         "refinement_interpretation_Tm_refine_2204",
-        "refinement_interpretation_Tm_refine_6321",
+        "refinement_interpretation_Tm_refine_6317",
         "typing_TLSConstants.is_tls_rgn"
       ],
       0
@@ -52,11 +52,12 @@
       0,
       1,
       [
-        "@pretyping__127", "@pretyping__2600", "@query_8029",
+        "@pretyping__127", "@pretyping__2600", "@query_8025",
         "bool_inversion", "constructor_distinct_FStar.Seq.seq",
         "constructor_distinct_Prims.unit",
         "constructor_distinct_TLSConstants.HMAC",
         "constructor_distinct_TLSConstants.Hash",
+        "data_typing_intro_TLSConstants.Hash@tok",
         "disc_equation_TLSConstants.HMAC", "disc_equation_TLSConstants.Hash",
         "disc_equation_TLSConstants.SSLKHASH",
         "equality_tok_CoreCrypto.MD5@tok",
@@ -69,23 +70,28 @@
         "equation_HMAC.ssl_pad2_sha1", "equation_HMAC.tls_macAlg",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.op_At_Bar",
-        "equation_TLSConstants.hashSize", "equation_TLSConstants.macSize",
-        "fuel_guarded_inversion_TLSConstants.macAlg_6517",
+        "equation_TLSConstants.hashSize", "equation_TLSConstants.is_tls_rgn",
+        "equation_TLSConstants.macSize", "equation_TLSConstants.rgn",
+        "equation_TLSConstants.tls_region", "equation_TLSConstants.tls_rgn",
+        "fuel_guarded_inversion_TLSConstants.macAlg_6513",
         "function_token_typing_FStar.HyperHeap.test0",
         "function_token_typing_HMAC.ssl_pad1_md5",
         "function_token_typing_HMAC.ssl_pad1_sha1",
         "function_token_typing_HMAC.ssl_pad2_md5",
         "function_token_typing_HMAC.ssl_pad2_sha1",
-        "projection_inverse_BoxBool_proj_0",
+        "function_token_typing_TLSConstants.tls_region",
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
         "projection_inverse_TLSConstants.HMAC__0",
         "projection_inverse_TLSConstants.Hash__0",
         "projection_inverse_TLSConstants.SSLKHASH__0",
-        "refinement_interpretation_Tm_refine_4062",
-        "refinement_interpretation_Tm_refine_8028", "typing_CoreCrypto.hash",
-        "typing_CoreCrypto.hmac", "typing_HMAC.is_tls_mac",
-        "typing_Platform.Bytes.op_At_Bar", "unit_inversion"
+        "refinement_interpretation_Tm_refine_2204",
+        "refinement_interpretation_Tm_refine_4058",
+        "refinement_interpretation_Tm_refine_6317",
+        "refinement_interpretation_Tm_refine_8024", "typing_CoreCrypto.hash",
+        "typing_CoreCrypto.hmac", "typing_HASH.hash",
+        "typing_HMAC.is_tls_mac", "typing_Platform.Bytes.op_At_Bar",
+        "typing_TLSConstants.is_tls_rgn", "unit_inversion"
       ],
       0
     ],
@@ -93,7 +99,7 @@
       0,
       1,
       [
-        "@query_8032", "bool_inversion",
+        "@query_8028", "bool_inversion",
         "constructor_distinct_TLSConstants.Hash",
         "constructor_distinct_TLSConstants.SSLKHASH",
         "disc_equation_TLSConstants.HMAC", "disc_equation_TLSConstants.Hash",
@@ -101,11 +107,11 @@
         "equality_tok_CoreCrypto.MD5@tok",
         "equality_tok_CoreCrypto.SHA1@tok", "equation_HMAC.is_tls_mac",
         "equation_HMAC.tls_macAlg",
-        "fuel_guarded_inversion_TLSConstants.macAlg_6517",
+        "fuel_guarded_inversion_TLSConstants.macAlg_6513",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSConstants.Hash__0",
         "projection_inverse_TLSConstants.SSLKHASH__0",
-        "refinement_interpretation_Tm_refine_8028", "typing_HMAC.is_tls_mac"
+        "refinement_interpretation_Tm_refine_8024", "typing_HMAC.is_tls_mac"
       ],
       0
     ]
