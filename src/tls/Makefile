@@ -42,7 +42,8 @@ CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints
+HINTS_ENABLED?=--use_hints
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO)
