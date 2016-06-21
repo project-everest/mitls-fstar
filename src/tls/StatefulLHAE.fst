@@ -148,7 +148,8 @@ abstract val frame_st_inv: #i:id -> r:reader i -> w:writer i ->  h0:_ -> h1:_ ->
 let frame_st_inv #i r w h0 h1 = ()
 
 abstract val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
-  (requires (fun h -> disjoint reader_parent writer_parent))
+  (requires (fun h ->
+      disjoint reader_parent writer_parent))
   (ensures  (fun h0 (rw:both i) h1 ->
       modifies Set.empty h0 h1
     /\ (let r = fst rw in
@@ -162,13 +163,8 @@ abstract val gen: reader_parent:rid -> writer_parent:rid -> i:gid -> ST (both i)
     /\ sel h1 r.seqn = 0)))
 let gen reader_parent writer_parent i =
   lemma_repr_bytes_values 0;
-  ST.recall_region reader_parent;
-  ST.recall_region writer_parent;
-  let m0 = ST.get() in
   let reader_region = new_region reader_parent in
   let writer_region = new_region writer_parent in
-  let m1 = ST.get() in
-  lemma_extends_fresh_disjoint reader_region writer_region reader_parent writer_parent m0 m1;
   let r,w = AEAD_GCM.gen reader_region writer_region i in
   let log = ralloc writer_region Seq.createEmpty in
   let r (* : reader i *) = State #i #Reader #reader_region writer_region log (ralloc reader_region 0) r in
