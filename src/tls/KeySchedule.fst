@@ -19,7 +19,7 @@ open TLSInfo
 open Range
 open HandshakeMessages
 open StatefulLHAE
-open HSCrypto
+open HKDF
 
 // KEF.fst/TLSPRF.fst for TLS 1.2
 // CoreCrypto.hkdf for TLS 1.3
@@ -116,13 +116,13 @@ type recordInstance =
 
 // TODO replace constants (16, 12) with aeadAlg-derived values
 private let expand_13 (h:CoreCrypto.hash_alg) (secret:bytes) (phase:string) (context:bytes) =
-  let cekb = HSCrypto.hkdf_expand_label h
+  let cekb = HKDF.hkdf_expand_label h
              secret (phase ^ ", client write key") context 16 in
-  let civb = HSCrypto.hkdf_expand_label h
+  let civb = HKDF.hkdf_expand_label h
              secret (phase ^ ", client write iv") context 12 in
-  let sekb = HSCrypto.hkdf_expand_label h
+  let sekb = HKDF.hkdf_expand_label h
              secret (phase ^ ", server write key") context 16 in
-  let sivb = HSCrypto.hkdf_expand_label h
+  let sivb = HKDF.hkdf_expand_label h
              secret (phase ^ ", server write iv") context 12 in
   (cekb,civb,sekb,sivb)
 
@@ -257,7 +257,7 @@ let ks_server_13_1rtt_init ks cr cs gn gxb =
   let our_share, gxy = CommonDH.dh_responder gx in
   let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in
   let msId = noMsId in
-  let xES = HSCrypto.hkdf_extract h zeroes gxy in
+  let xES = HKDF.hkdf_extract h zeroes gxy in
   st := S (S_13_1RTT_wait_HTK (ae, h) msId xES);
   CommonDH.serialize_raw our_share
 
@@ -374,7 +374,7 @@ let ks_client_13_1rtt ks cs (gs, gyb) log_hash =
   let CipherSuite _ _ (AEAD ae h) = cs in
   let zeroes = Platform.Bytes.abytes (String.make 32 (Char.char_of_int 0)) in
   let msId = noMsId in
-  let xES = HSCrypto.hkdf_extract h zeroes gxy in
+  let xES = HKDF.hkdf_extract h zeroes gxy in
   let (ck,civ,sk,siv) = expand_13 h xES "handshake key expansion" log_hash in
   // TODO fix the broken index of StreamAE
   let id = {
@@ -421,13 +421,13 @@ let ks_client_13_1rtt_server_finished ks log_hash =
   let KS #region st = ks in
   let C (C_13_1RTT_HTK alpha msId xES) = !st in
   let (ae, h) = alpha in
-  let mSS = HSCrypto.hkdf_expand_label h xES "expanded static secret" log_hash 32 in
-  let mES = HSCrypto.hkdf_expand_label h xES "expanded ephemeral secret" log_hash 32 in
-  let ms = HSCrypto.hkdf_extract h mSS mES in
+  let mSS = HKDF.hkdf_expand_label h xES "expanded static secret" log_hash 32 in
+  let mES = HKDF.hkdf_expand_label h xES "expanded ephemeral secret" log_hash 32 in
+  let ms = HKDF.hkdf_extract h mSS mES in
 
-  let cfk = HSCrypto.hkdf_expand_label h ms "client finished" empty_bytes 32 in
-  let sfk = HSCrypto.hkdf_expand_label h ms "server finished" empty_bytes 32 in
-  let ts0 = HSCrypto.hkdf_expand_label h ms "traffic secret" log_hash 32 in
+  let cfk = HKDF.hkdf_expand_label h ms "client finished" empty_bytes 32 in
+  let sfk = HKDF.hkdf_expand_label h ms "server finished" empty_bytes 32 in
+  let ts0 = HKDF.hkdf_expand_label h ms "traffic secret" log_hash 32 in
   let svd = CoreCrypto.hmac h sfk log_hash in
   st := C (C_13_TS alpha cfk ts0);
   svd
@@ -444,13 +444,13 @@ val ks_server_13_server_finished: ks:ks -> log_hash:bytes -> ST (svd:bytes)
 let ks_server_13_server_finished ks log_hash =
   let KS #region st = ks in
   let S (S_13_1RTT_wait_HTK (ae, h) msId xES) = !st in
-  let mSS = HSCrypto.hkdf_expand_label h xES "expanded static secret" log_hash 32 in
-  let mES = HSCrypto.hkdf_expand_label h xES "expanded ephemeral secret" log_hash 32 in
-  let ms = HSCrypto.hkdf_extract h mSS mES in
+  let mSS = HKDF.hkdf_expand_label h xES "expanded static secret" log_hash 32 in
+  let mES = HKDF.hkdf_expand_label h xES "expanded ephemeral secret" log_hash 32 in
+  let ms = HKDF.hkdf_extract h mSS mES in
 
-  let cfk = HSCrypto.hkdf_expand_label h ms "client finished" empty_bytes 32 in
-  let sfk = HSCrypto.hkdf_expand_label h ms "server finished" empty_bytes 32 in
-  let ts0 = HSCrypto.hkdf_expand_label h ms "traffic secret" log_hash 32 in
+  let cfk = HKDF.hkdf_expand_label h ms "client finished" empty_bytes 32 in
+  let sfk = HKDF.hkdf_expand_label h ms "server finished" empty_bytes 32 in
+  let ts0 = HKDF.hkdf_expand_label h ms "traffic secret" log_hash 32 in
   let svd = CoreCrypto.hmac h sfk log_hash in
   st := S (S_13_TS (ae, h) cfk ts0);
   svd

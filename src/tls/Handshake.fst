@@ -15,7 +15,6 @@ open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages
-open HSCrypto
 open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less

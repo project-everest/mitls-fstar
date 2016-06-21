@@ -106,7 +106,7 @@ HandshakeMessages.fst \
 StAE.fst \
 StreamDeltas.fst \
 Record.fst \
-HSCrypto.fst \
+HKDF.fst \
 TLSPRF.fst \
 PRF.fst \
 HandshakeLog.fst \
@@ -127,7 +127,7 @@ TLS.fst #the preceding space is significant!
 # should be added here.
 #
 # Missing modules from FSTS:
-# TLSExtensions, Encode, ENC, HandshakeMessages, Record, HSCrypto,
+# TLSExtensions, Encode, ENC, HandshakeMessages, Record,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
 VERIFY= \
@@ -165,6 +165,7 @@ MAC_SHA256 \
 MAC_SHA1 \
 StAE \
 StreamDeltas \
+HKDF \
 Connection \
 ConnInvariant \
 TLS 
