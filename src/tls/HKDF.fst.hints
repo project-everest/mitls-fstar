@@ -1,5 +1,5 @@
 [
-  "¢\u0005ˆ4ôÒ¬QÍcÄÍ`»\u0017ü",
+  "\u0004\u001aÁHV\nñuð‹öA\u0018eâQ",
   [
     [ 0, 1, [ "@query_7963", "int_inversion" ], 0 ],
     [
@@ -26,8 +26,8 @@
       0,
       1,
       [
-        "@pretyping__302", "@query_8013", "binder_count__1073",
-        "binder_curr__1074", "binder_ha__1069", "binder_len__1072",
+        "@pretyping__302", "@query_8013", "binder_count__1086",
+        "binder_curr__1087", "binder_ha__1082", "binder_len__1085",
         "bool_inversion", "equality_tok_Prims.LexTop@tok",
         "equation_CoreCrypto.hashSize", "equation_FStar.Char.char",
         "equation_HKDF.max", "equation_Platform.Bytes.byte",
@@ -37,14 +37,10 @@
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
         "equation_TLSConstants.is_tls_rgn", "equation_TLSConstants.rgn",
         "equation_TLSConstants.tls_region", "equation_TLSConstants.tls_rgn",
-        "equation_TLSConstants.tls_tables_region",
         "fuel_guarded_inversion_CoreCrypto.hash_alg_3803",
         "function_token_typing_Platform.Bytes.empty_bytes",
-        "function_token_typing_TLSConstants.tls_region",
-        "function_token_typing_TLSConstants.tls_tables_region",
-        "int_inversion", "int_typing", "kinding_FStar.Char.char_@tok",
-        "lemma_FStar.HyperHeap.lemma_extends_includes",
-        "lemma_FStar.HyperHeap.lemma_extends_parent",
+        "function_token_typing_TLSConstants.tls_region", "int_inversion",
+        "int_typing", "kinding_FStar.Char.char_@tok",
         "lemma_FStar.Seq.lemma_len_append", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThan",
         "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
@@ -55,12 +51,10 @@
         "refinement_interpretation_Tm_refine_3194",
         "refinement_interpretation_Tm_refine_3298",
         "refinement_interpretation_Tm_refine_6317",
-        "refinement_interpretation_Tm_refine_6323",
         "refinement_interpretation_Tm_refine_7981",
         "refinement_interpretation_Tm_refine_7984",
         "refinement_interpretation_Tm_refine_8009",
-        "refinement_interpretation_Tm_refine_8011",
-        "typing_FStar.HyperHeap.includes", "typing_HKDF.max",
+        "refinement_interpretation_Tm_refine_8011", "typing_HKDF.max",
         "typing_TLSConstants.is_tls_rgn", "well-founded-ordering-on-nat"
       ],
       0
@@ -69,11 +63,10 @@
       0,
       1,
       [
-        "@query_8058", "equation_CoreCrypto.hashSize",
+        "@query_8049", "equation_CoreCrypto.hashSize",
         "equation_FStar.Char.char", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.fst", "equation_Prims.nat",
-        "fuel_guarded_inversion_CoreCrypto.hash_alg_3803", "int_inversion",
+        "equation_Prims.fst", "equation_Prims.nat", "int_inversion",
         "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
         "proj_equation_Prims.Mktuple2__1",
         "projection_inverse_BoxInt_proj_0",
@@ -81,9 +74,32 @@
         "refinement_interpretation_Tm_refine_1013",
         "refinement_interpretation_Tm_refine_3246",
         "refinement_interpretation_Tm_refine_8017",
-        "refinement_interpretation_Tm_refine_8047",
-        "refinement_interpretation_Tm_refine_8049",
-        "refinement_interpretation_Tm_refine_8056"
+        "refinement_interpretation_Tm_refine_8047"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_8060", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_8062" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_8074", "equation_CoreCrypto.hashSize",
+        "equation_FStar.Char.char", "equation_HKDF.tls13_prefix",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.cbytes", "equation_Platform.Bytes.lbytes",
+        "equation_Platform.Bytes.length",
+        "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
+        "fuel_guarded_inversion_CoreCrypto.hash_alg_3803",
+        "function_token_typing_HKDF.tls13_prefix",
+        "kinding_FStar.Char.char_@tok", "lemma_FStar.Seq.lemma_len_append",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_3194",
+        "refinement_interpretation_Tm_refine_8017",
+        "refinement_interpretation_Tm_refine_8066",
+        "refinement_interpretation_Tm_refine_8068", "string_typing",
+        "typing_Platform.Bytes.abytes"
       ],
       0
     ]

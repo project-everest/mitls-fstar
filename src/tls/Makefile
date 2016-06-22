@@ -298,13 +298,25 @@ tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
 	# Then our test executable
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa \
-	         -I test/ test/parsing_test.ml test/test_main.ml -o test.out
-	# Run the test
+	         -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+	# Run the tests
 	$(EXTRA_PATH) ./test.out
 
 mitls.exe: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
+
+rpc.ml:
+	$(FSTAR) \
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
+	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
+	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	  $(FSTAR_INCLUDE_PATHS) \
+	  Formatting.fst RPC.fst
+
+rpc.exe:
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+		-I output/ output/Formatting.ml output/RPC.ml rpc_test.ml -o rpc.exe
 
 # depends on tls-gen
 tls-client:
