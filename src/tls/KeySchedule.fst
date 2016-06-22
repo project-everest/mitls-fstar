@@ -36,52 +36,57 @@ module HH = FStar.HyperHeap
 //  - pskid is the TLS PSK identifier, an internal index to the PSK table
 //  - for tickets, the encrypted serialized state is the PSK identifier
 //  - we store in the table the PSK context and compromise status
-let pskid = b:bytes{length b < 65536}
 
-// TODO: add certificates and other authPSK info
-let psk_context = {
+type psk_context = {
+  time_created: int;
   allow_early_data: bool;      // New draft 13 flag
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag
-  time_created: int;
   early_ae: aeadAlg;
   early_hash: hashAlg;
-  resumption_context: option b:bytes{length b <= 64}; // None for application PSK
 }
+
+type psk_identifier = identifier:bytes{length identifier < 65536}
 
 // We rule out all PSK that do not have at least one non-null byte
 // thus avoiding possible confusion with non-PSK for all possible hash algs
-type psk = b:bytes{exists i.{:pattern index b i} index b i <> 0z}
+abstract let app_psk (i:psk_identifier) =
+  b:bytes{exists i.{:pattern index b i} index b i <> 0z}
 
-// TODO store the leaked ref in a better region?
-abstract let psk (i:pskid) =
-  psk * ctx:psk_context * leaked:(rref tls_tables_region bool)
+private type application_psk_entry (i:psk_identifier) =
+  (app_psk i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
 
-// injectivity predicate on map from PSK identities to secret key
-let psk_injective (m:MM.map' pskid psk) =
+let application_psk_injective (m:MM.map' psk_identifier application_psk_entry) =
   forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
        equalBytes i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with
-                  | Some (psk1,_,_), Some (psk2,_,_) -> equalBytes psk1 psk2
+                  | Some (psk1, _, _), Some (psk2, _, _) -> (equalBytes psk1 psk2)
                   | _ -> True)
 
-// Monotonic table mapping injectively PSK identities to keys and context
-let psk_table : MM.t tls_tables_region pskid psk psk_injective =
-  MM.alloc #TLSConstants.tls_tables_region #pskid #psk #psk_injective
+let app_psk_table : MM.t tls_tables_region psk_identifier application_psk_entry application_psk_injective =
+  MM.alloc #TLSConstants.tls_tables_region #psk_identifier #application_psk_entry #application_psk_injective
 
-let registered_psk (i:pskid) = is_Some (MM.sel psk_table i)
+// Is the identifier i currently registered as an application PSK?
+val registered_app_psk: h:HH.t -> i:psk_identifier -> GTot bool
+let registered_app_psk (i:psk_identifier) =
+  is_Some (HH.m_sel h (MM.sel (HH.m_sel h app_psk_table) i))
 
-let get_psk_context (i:pskid{registered_psk i}) =
-  let (_, c, _) = Some.v (MM.sel psk_table i) in c
+val app_psk_context: i:psk_identifier -> ST psk_context
+  (requires (fun h -> registered_app_psk h i))
+  (ensures (fun h0 r h1 -> h0=h1))
+let app_psk_context i =
+  let (_, c, _) = Some.v (MM.sel app_psk_table i) in c
 
-let leaked_psk (i:pskid{registered_psk i}) =
+// Attacker interface
+
+let leaked_psk (i:psk_identifier{registered_app_psk i}) =
   let (_, _, l) = Some.v (MM.sel psk_table i) in !l
 
-let leak (i:pskid{registered_psk i}) =
-  let (v, _, l) = Somve.v (MM.sel psk_table i) in
+let leak (i:psk_identifier{registered_app_psk i}) =
+  let (v, _, l) = Some.v (MM.sel psk_table i) in
   l := true; v
 
 // Generates a fresh PSK identity
-let fresh_psk_id () : St i:pskid{~ registered_psk i} =
+let fresh_psk_id () : i:psk_identifier{~ registered_app_psk i} =
   let rec subgen () =
      let id = CoreCrypto.random 8 in
      match MM.sel psk_table id with
@@ -91,7 +96,14 @@ let fresh_psk_id () : St i:pskid{~ registered_psk i} =
 
 // "Application PSK" generator (enforces empty session context)
 // Usual caveat of random producing pairwise distinct keys (TODO)
-let gen_psk i:pskid{~ registered_psk i} ctx:psk_context{is_None ctx.session_context} : psk i =
+val gen_psk: i:psk_identifier -> ctx:psk_context -> ST (app_psk i)
+  (requires (fun h0 -> ~(registered_psk i)))
+  (ensures (fun h0 r h1 -> 
+    modifies (Set.singleton tls_tables_region) h0 h1
+    /\ modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref app_psk_table)} h0 h1
+    /\ registered_psk i))
+
+let gen_psk i ctx =
   let psk = CoreCrypto.random 32 in
   let leaked = ralloc tls_tables_region false in
   let add : psk i = (psk, ctx, leaked) in
@@ -101,24 +113,135 @@ let gen_psk i:pskid{~ registered_psk i} ctx:psk_context{is_None ctx.session_cont
   MM.extend psk_table i add;
   add
 
-// Lifted psk_injective lemma
-let registered_psk_injective #i1:pskid #i2:pskid ((p1, _, _):psk i1) ((p2, _, _):psk i2)
-  : Lemma (requires (registered_psk i1) /\ (registered_psk i2))
-    (ensures (equalBytes p1 p2) <==> (equalBytes i1 i2))
-  = admit ()
+
+// Index type definitions [1.3]:
+//
+//  -----<--------
+// |              \
+// |  keyId <- secretId  => finishedId
+// V   ||     /   |   \
+// |   id    /    |    \
+// |        /     |     \    
+//  --->  esId -> hsId -> asId
+//          \
+//           --<-- psk_identifier
+//
+// Index type definitions [1.2]:
+//
+//    pmsId -> msId -> keyId12 = id
+//
+type esId =
+  | ApplicationPSK: i:psk_identifier{registered_application_psk i} -> esId
+  | ResumptionPSK: rms:secretId -> esId
+
+and hsId =
+  | HSID_PSK: i:esId -> hsId
+  | HSID_PSK_DHE: i:esId -> initiator:CommonDH.share -> responder:CommonDH.share -> hsId
+  | HSID_DHE: h:hashAlg -> initiator:CommonDH.share -> responder:CommonDH.share -> hsId
+
+and asId =
+  | ASID: hsId:hsId -> asId
+
+and secretId =
+  | EarlySecret: i:esId -> log:HandshakeLog.hs_log -> secretId
+  | HandshakeSecret: i:hsId -> log:HandshakeLog.hs_log -> secretId
+  | ApplicationSecret: i:asId -> log:HandshakeLog.hs_log -> secretId
+  | ResumptionSecret: i:asId -> log:HandshakeLog.hs_log -> secretId
+  | ExporterSecret: i:asId -> log:HandshakeLog.hs_log -> secretId
+  | RekeySecret: i:secretId -> log:HandshakeLog.hs_log -> secretId
+
+let rec esId_hash = function
+  | ApplicationPSK i -> let c = app_psk_context i in c.early_hash
+  | ResumptionPSK rmsId -> secretId_hash rmsId
+
+and hsId_hash = function
+  | HSID_PSK i -> esId_hash i
+  | HSID_DHE h _ _ -> h
+  | HSID_PSK_DHE i _ _ -> esId_hash i
+
+and asId_hash = function
+  | ASID i -> hsId_hash i
+
+and secretId_hash = function
+  | EarlySecret i _ -> esId_hash i
+  | HandshakeSecret i _ -> hsId_hash i
+  | ApplicationSecret i _
+  | ResumptionSecret i _
+  | ExporterSecret i _ -> asId_hash i
+  | RekeySecret i _ -> secretId_hash i
+
+(*
+and esExpandId = i:esId * log:HandshakeLog.hs_log
+and hsExpandId = i:hsId * log:HandshakeLog.hs_log
+and asExpandId = i:asId * log:HandshakeLog.hs_log 
+and rmsId = i:asId * log:HandshakeLog.hs_log
+and exporterId = i:asId * log:HandshakeLog.hs_log
+and rekeyId =
+  | FirstRekey: i:asExpandId -> rekeyId
+  | NextRekey: i:rekeyId -> rekeyId // TODO log:HandshakeLog.hs_log not in current KS
+*)
+
+// type keyId (i:secretId) =
+// | EarlyTrafficKey
+// ...
+
+type keyId =
+  | EarlyTrafficKey: i:secretId{is_EarlySecret i} -> keyId
+  | EarlyApplicationDataKey: i:secretId{is_EarlySecret i} -> r:role -> keyId
+  | HandshakeKey: i:secretId{is_HandshakeSecret i} -> r:role -> keyId
+  | ApplicationDataKey: i:secretId{is_ApplicationSecret i \/ is_RekeySecret i} -> r:role -> keyId
+
+type finishedId =
+  | EarlyFinished: i:secretId{is_EarlySecret i} -> finishedId
+  | HandshakeFinished: i:secretId{is_HandshakeSecret i} -> r:role -> finishedId
+  | LateFinished: i:secretId{is_ApplicationSecret i \/ is_RekeySecret i} -> finishedId
+
+let secretLabel = function
+  | EarlySecret _ _ -> "early traffic secret"
+  | HandshakeSecret _ _ -> "handshake traffic secret"
+  | ApplicationSecret _ _ -> "application traffic secret"
+  | ResumptionSecret _ _ -> "resumption master secret"
+  | ExporterSecret _ _ -> "exporter master secret"
+  | RekeySecret _ _ -> "traffic secret"
+
+let keyLabel = function
+  | EarlyTrafficKey _ -> "early traffic key expansion"
+  | EarlyApplicationDataKey _ _ -> "early application data key expansion"
+  | HandshakeKey _ _ -> "handshake key expansion"
+  | ApplicationDataKey _ _ -> "application data key expansion"
+
+let rmsId = i:secretId{is_ResumptionSecret i}
+
+abstract type res_psk (i:rmsId) =
+  b:bytes{exists i.{:pattern index b i} index b i <> 0z}
+
+abstract type res_context (i:rmsId) =
+  b:bytes{length b = CoreCrypto.hashSize (secretId_hash i)}
+
+private type res_psk_entry (i:rmsId) =
+  (res_psk i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
+
+let res_psk_injective (m:MM.map' rmsId res_psk_entry) =
+  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
+       equalBytes i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with
+                  | Some (psk1, _, _), Some (psk2, _, _) -> (equalBytes psk1 psk2)
+                  | _ -> True)
+
+let res_psk_table : MM.t tls_tables_region rmsId res_psk_entry res_psk_injective =
+  MM.alloc #TLSConstants.tls_tables_region #rmsId #res_psk_entry #res_psk_injective
+
+let registered_res_psk (i:rmsId) = is_Some (MM.sel res_psk_table i)
+
+abstract let psk (i:esId) =
+  match i with
+  | ResumptionPSK i -> res_psk_entry i
+  | ApplicationPSK pskid -> application_psk_entry pskid
 
 // Agile "0" hash
 private let zH h =
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   CoreCrypto.hash h zeroes
-
-// Resumption context from PSK
-let pskid_rc i:pskid{registered_psk i} =
-  let c = get_psk_context i in
-  match c.resumption_context with
-  | Some b -> CoreCrypto.hash (c.early_hash) b
-  | None -> zH h
 
 // miTLS 0.9:
 // ==========
@@ -128,17 +251,18 @@ let pskid_rc i:pskid{registered_psk i} =
 type ms = bytes
 type pms = bytes 
 
-// Early secrets are indexed by registered PSK identifiers
-type esId = i:pskid{registered_psk i}
 abstract type es (i:esId) =
   b:bytes{let c = get_psk_context i in length b = CoreCrypto.hashSize c.early_hash}
 
-// Index of handshake secret
-// Split between DHE, PSK_DHE, and pure PSK
-type hsId =
-  | HSID_PSK: i:esId -> hsId
-  | HSID_PSK_DHE: i:esId -> initiator:CommonDH.share -> responder:CommonDH.share -> hsId
-  | HSID_DHE: h:hashAlg -> initiator:CommonDH.share -> responder:CommonDH.share -> hsId
+let esId_hash i =
+  let c = get_psk_context i in
+  c.early_hash
+
+let esId_rc i:esId =
+  let c = get_psk_context i in
+  match c.resumption_context with
+  | Some b -> CoreCrypto.hash (c.early_hash) b
+  | None -> zH c.early_hash
 
 let hsId_hash = function
   | HSID_PSK i | HSID_PSK_DHE i _ _ -> let c = get_psk_context i in c.early_hash
@@ -147,14 +271,10 @@ let hsId_hash = function
 // Get the hashed resumption context
 let hsId_rc = function
   | HSID_DHE h _ _ -> zH h
-  | HSID_PSK i | HSID_PSK_DHE i _ _ -> pskid_rc i
+  | HSID_PSK i | HSID_PSK_DHE i _ _ -> esId_rc i
 
 abstract type hs (i:hsId) =
   b:bytes{length b = CoreCrypto.hashSize (hsId_hash i)}
-
-// Can be extended with e.g. MSID_staticDH hsid share
-type msId13 =
-  | MSID: hsId:hsId -> msId13
 
 let msId_rc = function
   | MSID hsId -> hsId_rc hsId
@@ -164,13 +284,7 @@ let msId_hash = function
 
 // TLS 1.3 master secret (abstract)
 abstract type ms13 (i:msId13) =
-  b:bytes{length b = CoreCrpyot.hashSize (msId_hash i)}
-
-// Sum of the 3 secret index types
-type secretId =
-  | EarlySecret: i:aeId -> secretId
-  | HandshakeSecret: i:hsId -> secretId
-  | MasterSecret: i:msId13 -> secretId
+  b:bytes{length b = CoreCrypto.hashSize (msId_hash i)}
 
 let secretId_hash = function
   | EarlySecret i -> esId_hash i
@@ -180,7 +294,7 @@ let secretId_hash = function
 // Index of derived secrets
 type derivedID = {
   underlying_secret: secretId;
-  handshake_log: list HandshakeMessage.hs_msg;
+  handshake_log: list hs_msg;
   label: string;
 }
 
@@ -269,7 +383,7 @@ type ks_client_state =
 | C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
 | C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
 | C_13_wait_CH: cr:random -> i:pskid{registered_psk i} -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
-| C_13_wait_SH: cr:random -> es:option (| i:esId & es i & cfk:bytes |) -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
+| C_13_wait_SH: cr:random -> es:option (| i:esId & es i |) -> cfk0:option (| i:macId & mac i |) -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
 | C_13_wait_SF: alpha:ks_alpha13 -> cfk:bytes -> sfk:bytes -> (| i:hsId & hs:hs i |) -> ks_client_state
 | C_13_wait_CF: alpha:ks_alpha13 -> cfk:bytes -> late_cfk:bytes -> ms_derived:bytes -> (| i:msId13 & ms:ms13 i |) -> ks_client_state
 | C_13_postHS: alpha:ks_alpha13 -> late_cfk:bytes -> i:msId13 -> ats:bytes -> rms:bytes -> ks_client_state
@@ -280,11 +394,10 @@ type ks_server_state =
 | S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:CommonDH.key -> ks_server_state
 | S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
-| S_13_wait_SH: alpha:ks_alpha13 -> es:option (| i:pskid{registered_psk i} & es i|) -> ks_server_state
+| S_13_wait_SH: alpha:ks_alpha13 -> es:option (| i:esId & es i|) -> ks_server_state
 | S_13_wait_SF: alpha:ks_alpha13 -> cfk:bytes -> sfk:bytes -> (| i:hsId & hs:hs i |) -> ks_server_state
 | S_13_wait_CF: alpha:ks_alpha13 -> cfk:bytes -> late_cfk:bytes -> ms_derived:bytes -> (| i:msId13 & ms:ms13 i|) -> ks_server_state
-| S_13_postHS: alpha:ks_alpha13 -> late_cfk:bytes -> i:msId13 -> ats:bytes -> rm
-s:bytes -> ks_server_state
+| S_13_postHS: alpha:ks_alpha13 -> late_cfk:bytes -> i:msId13 -> ats:bytes -> rms:bytes -> ks_server_state
 | S_Done
 
 // Reflecting state separation from HS
@@ -426,7 +539,7 @@ let ks_client_13_0rtt_ch ks log_hash
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es : es pskid = HSCrypto.hkdf_extract h zeroes psk in
-  let sh_rctx = log_hash @| (pskid_rc pskid) in
+  let sh_rctx = log_hash @| (esId_rc pskid) in
   let es_derived = HSCrypto.hkdf_expand_label h hs "early traffic secret" sh_rctx hL in
 
   // Expand all keys from the derived early secret
@@ -439,14 +552,14 @@ let ks_client_13_0rtt_ch ks log_hash
   let civ: StreamAE.iv id  = civ in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
   let r = StreamAE.genReader HyperHeap.root rw in
-  let early_hs = StAEInstance r w
+  let early_hs = StAEInstance r w in
 
   let id = badid ae h Client in
   let ckv: StreamAE.key id = ck' in
   let civ: StreamAE.iv id  = civ' in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
   let r = StreamAE.genReader HyperHeap.root rw in
-  let early_d = StAEInstance r w
+  let early_d = StAEInstance r w in
 
   let (ck,civ, _, _) = keygen_13 h es_derived "early application data key expansion" ae in
   let (cfk, _) = finished_13 h es_derived in
@@ -466,7 +579,7 @@ let ks_client_13_0rtt_finished ks log_hash =
   let C (C_13_wait_SH cr (Some (pskid, es, cfk)) gs) = !st in
   let (psk, ctx, _) = Some.v (MM.sel psk_table pskid) in
   let h = c.early_hash in
-  CoreCrypto.hmac h cfk (log_hash |@ (pskid_rc pskid))
+  CoreCrypto.hmac h cfk (log_hash |@ (esId_rc pskid))
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
@@ -520,11 +633,13 @@ let ks_server_12_init_dh ks cr pv cs ems group =
 private let s13_dh gn gxb =
   let gx = match gn with
     | SEC ec ->
-      let Some gx = CommonDH.parse (CommonDH.ECP (ECGroup.params_of_group ec)) gxb in gx
+      let g = CommonDH.ECP (ECGroup.params_of_group ec) in
+      let Some gx = CommonDH.parse g gxb in gx
     | FFDHE ff ->
-      let Some gx =  CommonDH.parse (CommonDH.FFP (DHGroup.params_of_group (DHGroup.Named ff))) gxb in gxi
+      let g = CommonDH.FFP (DHGroup.params_of_group (DHGroup.Named ff)) in
+      let Some gx =  CommonDH.parse g gxb in gxi
   in let gy, gxy = CommonDH.dh_responder gx in
-  (gy, 
+  (gy, gx, gxy)
 
 val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:pskid{registered_psk i} -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> log_hash:bytes -> ST (recordInstance * recordInstance * our_share:bytes)
   (requires fun h0 ->
@@ -555,8 +670,8 @@ let ks_server_13_1rtt_init ks cr cs gn gxb =
   let KS #region st = ks in
   let S (S_Init sr) = !st in
   let CipherSuite _ _ (AEAD ae h) = cs in
-  let our_share, gxy = s13_dh gn gxb in
-  let hsId = HSID h 
+  let our_share, peer_share, gxy = s13_dh gn gxb in
+  let hsId = HSID h peer_share our_share in
   let hs = HSCrypto.hkdf_extract h zeroes gxy in
   st := S (S_13_wait_SH (ae, h) msId xES);
   CommonDH.serialize_raw our_share

@@ -11,6 +11,8 @@ open TLSConstants
 open TLSInfo
 open HandshakeMessages
 
+abstract type hs_log = list hs_msg
+
 val validLog: list hs_msg -> Tot bool
 let validLog hsl = 
     match hsl with
