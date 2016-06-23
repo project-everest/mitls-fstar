@@ -66,8 +66,7 @@ let minimalPadding i len =
     | MtE (Block alg) _ ->
         let bs = blockSize alg in
         let lp = len % bs in
-        let p = bs - lp in
-        p
+        bs - lp
 
 (* Sanity check *)
 #set-options "--initial_ifuel 2"
@@ -88,7 +87,7 @@ type valid_clen (i:id) (clen:nat) = (
   if i.pv = TLS_1p3 then
     let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
     tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 
-  else 
+  else
     if is_AEAD i.aeAlg then
       0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
       clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
@@ -133,23 +132,20 @@ let cipherRangeClass i clen =
         let minPad, maxPad = minMaxPad i in
         let max = clen - ivL - macLen - minPad in
         let min = clen - ivL - macLen - maxPad in
-        if min < 0 then
-            (0, max)
-        else
-          if max < max_TLSPlaintext_fragment_length then
-            (min,max)
-          else
-            (min, max_TLSPlaintext_fragment_length)
+	if min < 0 then
+	  (0,max)
+	else
+	  if max < max_TLSPlaintext_fragment_length then
+	    (min,max)
+	  else
+	    (min,max_TLSPlaintext_fragment_length)
     | AEAD aeadAlg _ ->
         let ivL = aeadRecordIVSize aeadAlg in
         let tagL = aeadTagSize aeadAlg in
         let minPad, maxPad = minMaxPad i in
         let max = clen - ivL - tagL - minPad in
         let min = clen - ivL - tagL - maxPad in
-        if min < 0 then
-            (0, max)
-        else
-            (min,max)
+        min, max
 
 val cipherRangeClass_width: i:id2 ->
      clen:nat{valid_clen i clen} ->
@@ -170,7 +166,6 @@ val targetLength : i:id2 -> r:range -> Pure nat
         snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
     /\ (is_AEAD i.aeAlg ==> fst r = snd r))
   (ensures (fun clen -> valid_clen i clen /\ wider (cipherRangeClass i clen) r))
-#set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2" 
 let targetLength i r =
     let l,h = r in
     let authEnc = i.aeAlg in
@@ -202,34 +197,33 @@ let targetLength i r =
    This always holds when l <= h
 *)
 
-
 (* Sanity check
-   val targetLength_spec_nonAEAD: i:id2{~(is_AEAD i.aeAlg)}
-   -> r:range{
-       snd r <= max_TLSPlaintext_fragment_length
-       /\ (~(is_AEAD i.aeAlg) ==>
-           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-	   /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
-   -> x:nat{within x r}
-   -> Lemma (let clen = targetLength i r in
-		let plen = clen - x - macSize (macAlg_of_id i) - ivSize i in
-		minimalPadding i (x + macSize (macAlg_of_id i)) <= plen
-		/\ plen <= maxPadSize i
-		/\ clen == ivSize i + x + macSize (macAlg_of_id i) + plen)
-   #set-options "--initial_ifuel 2"
-   let targetLength_spec_nonAEAD i r x = ()
+  val targetLength_spec_nonAEAD: i:id2{~(is_AEAD i.aeAlg)}
+  -> r:range{
+      snd r <= max_TLSPlaintext_fragment_length
+      /\ (~(is_AEAD i.aeAlg) ==>
+   	snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
+     /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
+  -> x:nat{within x r}
+  -> Lemma (let clen = targetLength i r in
+   	let plen = clen - x - macSize (macAlg_of_id i) - ivSize i in
+   	minimalPadding i (x + macSize (macAlg_of_id i)) <= plen
+   	/\ plen <= maxPadSize i
+   	/\ clen = ivSize i + x + macSize (macAlg_of_id i) + plen)
+  #set-options "--initial_ifuel 2"
+  let targetLength_spec_nonAEAD i r x = ()
 *)
 
 (* Sanity check
-   val targetLength_spec_AEAD: i:id2{is_AEAD i.aeAlg}
-   -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
-   -> x:nat{within x r} ->
-   Lemma (let clen = targetLength i r in
-              let plen = fixedPadSize i in
-              minimalPadding i (x + aeadTagSize (aeAlg i)) <= plen
-              /\ plen <= maxPadSize i
-              /\ clen == aeadRecordIVSize (aeAlg i) + x + aeadTagSize (aeAlg i) + plen)
-   let targetLength_spec_AEAD i r x = ()
+  val targetLength_spec_AEAD: i:id2{is_AEAD i.aeAlg}
+  -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
+  -> x:nat{within x r} ->
+  Lemma (let clen = targetLength i r in
+   	   let plen = fixedPadSize i in
+   	   minimalPadding i (x + aeadTagSize (aeAlg i)) <= plen
+   	   /\ plen <= maxPadSize i
+   	   /\ clen = aeadRecordIVSize (aeAlg i) + x + aeadTagSize (aeAlg i) + plen)
+  let targetLength_spec_AEAD i r x = ()
 *)
 
 #reset-options
@@ -256,15 +250,8 @@ val targetLength_converges: i:id2
           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
       /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
-#reset-options "--initial_fuel 0 --initial_ifuel 3 --max_fuel 0 --max_ifuel 3"
-let targetLength_converges i r =
-  match i.aeAlg with
-  | AEAD _ _ -> ()
-  | MACOnly _ | MtE (Stream _) _ -> ()  
-  | MtE (Block alg) _ ->
-    admit (); // FIXME: see https://github.com/mitls/mitls-fstar/issues/22
-    let len = max_TLSPlaintext_fragment_length + macSize (macAlg_of_id i) in
-    assert (snd r  - fst r <= max_TLSPlaintext_fragment_length - minimalPadding i len)
+#reset-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
+let targetLength_converges i r = ()
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> r':range
