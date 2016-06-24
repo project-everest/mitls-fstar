@@ -116,6 +116,20 @@ type recordInstance =
 | StAEInstance: #id:StreamAE.id -> StreamAE.reader id -> StreamAE.writer id -> recordInstance
 | StLHAEInstance: #id:StatefulLHAE.id -> StatefulLHAE.reader id -> StatefulLHAE.writer id -> recordInstance
 
+(* 2 choices - I prefer the second: 
+   (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
+   (2) redefine recordInstance as follows, and then import epoch_region_inv over here from Epochs:
+type recordInstance (rgn:rid) (n:TLSInfo.random) =
+| RI: #id:StAE.id -> r:StAE.reader (peerId id) -> w:StAE.writer id{epoch_region_inv' rgn r w /\ I.nonce_of_id id = n} -> recordInstance rgn n
+
+In (2) we would define Epochs.epoch as:
+type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
+  | Epoch: h:handshake -> 
+    	   r:recordInstance hs_rgn n ->	
+	   epich hs_rgn n
+*)
+
+
 // TODO replace constants (16, 12) with aeadAlg-derived values
 private let expand_13 (h:CoreCrypto.hash_alg) (secret:bytes) (phase:string) (context:bytes) =
   let cekb = HKDF.hkdf_expand_label h
