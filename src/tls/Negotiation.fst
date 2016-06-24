@@ -52,10 +52,10 @@ type handshake =
 // We should probably do the same in the session store.
 
 // extracts a transport key identifier from a handshake record
-val hsId: handshake -> Tot id 
+val handshakeId: handshake -> Tot id 
 //16-05-31 TODO breaking TC in TLS; was (i:id { is_stream_ae i }) //16-05-19 focus on TLS 1.3
 
-let hsId h = noId // Placeholder 
+let handshakeId h = noId // Placeholder 
 
 type clientOffer = {
   co_protocol_version:protocolVersion;
