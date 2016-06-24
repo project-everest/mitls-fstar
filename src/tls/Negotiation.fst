@@ -57,3 +57,22 @@ val hsId: handshake -> Tot id
 
 let hsId h = noId // Placeholder 
 
+type clientOffer = {
+  co_protocol_version:protocolVersion;
+  co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
+  co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
+ // co_extensions:option (ce:list extension{List.Tot.length ce < 256});
+}
+
+val prepareClientOffer: config -> Tot clientOffer
+let prepareClientOffer cfg =
+  let co = 
+  {co_protocol_version = cfg.maxVer;
+   co_cipher_suites = cfg.ciphersuites;
+   co_raw_cipher_suites = None;
+   co_compressions = [NullCompression];
+   } in
+  co
+ // let ext = prepareExtensions cfg ci ri kp in 
+ // MK: ignoring extensions for now as we don't have ci ...
+ //  co_extensions = Some ext;} in

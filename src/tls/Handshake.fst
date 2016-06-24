@@ -48,13 +48,14 @@ let prepareClientHello cfg ks log ri sido =
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client cr in
   let ext = prepareExtensions cfg ci ri kp in
+  let co = prepareClientOffer cfg in
   let ch = 
-  {ch_protocol_version = cfg.maxVer;
+  {ch_protocol_version = co.co_protocol_version;
    ch_client_random = cr;
    ch_sessionID = sid;
-   ch_cipher_suites = cfg.ciphersuites;
+   ch_cipher_suites = co.co_cipher_suites;
    ch_raw_cipher_suites = None;
-   ch_compressions = [NullCompression];
+   ch_compressions = co.co_compressions;
    ch_extensions = Some ext;} in
   let chb = log @@ (ClientHello ch) in
   (ClientHello ch, chb)
