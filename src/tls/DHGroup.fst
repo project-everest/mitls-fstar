@@ -22,6 +22,10 @@ type group =
 
 type secret = bytes
 
+val share_of_key: key -> Tot (group * share)
+let share_of_key k =
+  (Explicit k.dh_params, k.dh_public)
+
 val make_ffdhe: (p:string{length (bytes_of_hex p) < 65536}) -> string -> Tot params
 let make_ffdhe p q =
   {

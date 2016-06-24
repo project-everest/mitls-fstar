@@ -32,6 +32,10 @@ type point_format =
 val params_of_group: group -> Tot params 
 let params_of_group c = {curve = c; point_compression = false}
 
+val share_of_key: key -> Tot (group * share)
+let share_of_key k =
+  k.ec_params.curve, k.ec_point
+
 val keygen: group -> Tot key
 let keygen g =
   let params = params_of_group g in
@@ -67,7 +71,6 @@ let curve_id p =
   | ECC_P256 -> (0z, 23z)
   | ECC_P384 -> (0z, 24z)
   | ECC_P521 -> (0z, 25z))
-
 
 val parse_point: params -> bytes -> Tot (option share)
 let parse_point p b =

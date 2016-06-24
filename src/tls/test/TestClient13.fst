@@ -84,7 +84,7 @@ let replace_keyshare ksl e =
   | x -> x 
 
 let main config host port =
-  IO.print_string "===============================================\n Starting test TLS client...\n";
+  IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
   let tcp = Platform.Tcp.connect host port in
   let log = empty_bytes in
   let rid = new_region root in
