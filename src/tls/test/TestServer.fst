@@ -10,6 +10,7 @@ open TLSInfo
 open TLSConstants
 open TLSInfo
 open StatefulLHAE
+open Negotiation
 open HandshakeLog
 
 (* FlexRecord *)
@@ -200,7 +201,7 @@ let rec aux config sock =
       (match Handshake.prepareServerHello config ks log None (ClientHello ch,chb) with
        | Correct x -> x
        | Error (x,z) -> failwith z) in
-  let next = match nego with | {Handshake.n_extensions = n} -> n  in
+  let next = match nego with | {Negotiation.n_extensions = n} -> n  in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
   let alg = (sa, Hash CoreCrypto.SHA256) in
@@ -214,7 +215,7 @@ let rec aux config sock =
   let cb = certificateBytes pv c in
 
   // Server Key Exchange
-  let gn = match nego with | {Handshake.n_dh_group = Some n} -> n  in
+  let gn = match nego with | {Negotiation.n_dh_group = Some n} -> n  in
   let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs ems gn in
   let kex_s = KEX_S_DHE gy in
   let sv = kex_s_to_bytes kex_s in

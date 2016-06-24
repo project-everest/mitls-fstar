@@ -110,6 +110,8 @@ HKDF.fst \
 TLSPRF.fst \
 PRF.fst \
 HandshakeLog.fst \
+Negotiation.fst \
+Epochs.fst \
 KeySchedule.fst \
 Handshake.fst \
 Connection.fst \

@@ -5,6 +5,7 @@ open FStar.HyperHeap
 open Platform.Bytes
 open Platform.Error
 open HandshakeMessages
+open Negotiation
 open Handshake
 open TLSError
 open TLSInfo

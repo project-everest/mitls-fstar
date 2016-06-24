@@ -20,6 +20,8 @@ open StAE
 //16-05-31 these opens are implementation-only; overall we should open less
 open TLSExtensions 
 open CoreCrypto
+open Negotiation
+open Epochs
 open HandshakeLog
 
 
@@ -27,56 +29,7 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 
-// represents the outcome of a successful handshake, 
-// providing context for the derived epoch
-type handshake = 
-  | Fresh of sessionInfo
-  | Resumed of abbrInfo * sessionInfo //changed: was hs * seq epoch (creating cycle)
-// We use SessionInfo as unique session indexes.
-// We tried using instead hs, but this creates circularities
-// We'll probably need a global log to reason about them.
-// We should probably do the same in the session store.
-
-// extracts a transport key identifier from a handshake record
-val hsId: handshake -> Tot id 
-//16-05-31 TODO breaking TC in TLS; was (i:id { is_stream_ae i }) //16-05-19 focus on TLS 1.3
-
-let hsId h = noId // Placeholder 
-
 //<expose for TestClient>
-(* Negotiation: HELLO sub-module *)
-private type ri = cVerifyData * sVerifyData 
-
-type b_log = bytes
-
-type eph_s = option kex_s_priv
-type eph_c = list kex_s_priv
-
-type nego = {
-     n_resume: bool;
-     n_client_random: TLSInfo.random;
-     n_server_random: TLSInfo.random;
-     n_sessionID: option sessionID;
-     n_protocol_version: protocolVersion;
-     n_kexAlg: TLSConstants.kexAlg;
-     n_aeAlg: TLSConstants.aeAlg;
-     n_sigAlg: option TLSConstants.sigAlg;
-     n_cipher_suite: cipherSuite;
-     n_dh_group: option namedGroup;
-     n_compression: option compression;
-     n_extensions: negotiatedExtensions;
-     n_scsv: list scsv_suite;
-}                 
-
-type hs_id = {
-     id_cert: Cert.chain;
-     id_sigalg: option sigHashAlg;
-}
-
-type session = {
-     session_nego: nego;
-}     
-
 #set-options "--lax"
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
@@ -375,172 +328,10 @@ type handshake_state (r:role) =
 
 
 //</expose for TestClient>
-
-// relocate?
-type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
-
-type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
-  disjoint hs_rgn (region w)                  /\
-  parent (region w) <> FStar.HyperHeap.root    /\
-  parent (region r) <> FStar.HyperHeap.root    /\
-  parent hs_rgn = parent (parent (region w))  /\ //Grandparent of each writer is a sibling of the handshake
-  disjoint (region w) (region r)              /\
-  is_epoch_rgn (region w)                     /\ //they're all colored as epoch regions
-  is_epoch_rgn (region r)                     /\
-  is_epoch_rgn (parent (region w))            /\
-  is_epoch_rgn (parent (region r))            /\
-  is_hs_rgn hs_rgn                              //except for the hs_rgn, of course
-
-abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
-  epoch_region_inv hs_rgn r w
-  
-module I = IdNonce
-
-type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
-  | Epoch: h: handshake ->
-           r: reader (peerId (hsId h)) ->
-           w: writer (hsId h) {epoch_region_inv' hs_rgn r w /\ I.nonce_of_id (hsId h) = n} 
-	   -> epoch hs_rgn n
-  // we would extend/adapt it for TLS 1.3,
-  // e.g. to notify 0RTT/forwad-privacy transitions
-  // for now epoch completion is a total function on handshake --- should be stateful
-
-
-val getId: KeySchedule.recordInstance -> GTot id
-let getId k = 
-    match k with
-    | KeySchedule.StAEInstance #i rd wr -> i
-    | KeySchedule.StLHAEInstance #i rd wr -> i
-
-#set-options "--lax"
-
-val recordInstanceToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> ks:KeySchedule.recordInstance -> epoch hs_rgn n
-let recordInstanceToEpoch #hs_rgn #n hs ri = 
-    match ri with
-    | KeySchedule.StAEInstance #i rd wr -> Epoch hs (StAE.Stream () rd) (StAE.Stream () wr)
-    | KeySchedule.StLHAEInstance #i rd wr -> Epoch hs (StAE.StLHAE () rd) (StAE.StLHAE () wr)
-
-(* 16-06-02 unmerged variant:
-val recordInstanceToEpoch: h:handshake -> ks:KeySchedule.recordInstance -> (StAE.reader (peerId (hsId h)) * StAE.writer (hsId h))
-let recordInstanceToEpoch hs ri = 
-    match ri with
-    | KeySchedule.StAEInstance #i rd wr -> (StAE.Stream () rd),(StAE.Stream () wr)
-    | KeySchedule.StLHAEInstance #i rd wr -> (StAE.StLHAE () rd),(StAE.StLHAE () wr)
-*)
-
-let id_TLS12_AES_GCM_128_SHA256  = {
-    msId = noMsId;
-    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
-    pv = TLS_1p2;
-    aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
-    csrConn = createBytes 64 0x00z;
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None;
-    };
-    writer = Client
-  }
-
-val encryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> StAE.writer (hsId hs)
-let encryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = hsId hs in
-  let r = HyperHeap.root in
-  let w: StatefulLHAE.writer id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Writer =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.writer -> StatefulLHAE.state
-  StAE.StLHAE () w
-
-val decryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> StAE.reader (peerId (hsId hs))
-let decryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = peerId (hsId hs) in
-  let r = HyperHeap.root in
-  let r: StatefulLHAE.reader id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Reader =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.reader -> StatefulLHAE.state
-  StAE.StLHAE () r
-
-val recordKeysToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> (bytes * bytes * bytes * bytes) -> epoch hs_rgn n
-let recordKeysToEpoch #hs_rgn #n h (ck,civ,sk,siv) = 
-  let wr: StAE.writer (hsId h) = encryptor_TLS12_AES_GCM_128_SHA256 h ck civ in
-  let rd: StAE.reader (peerId (hsId h)) = decryptor_TLS12_AES_GCM_128_SHA256 h sk siv in
-  Epoch h rd wr
-
-let reveal_epoch_region_inv_all (u:unit)
-  : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}
-	   epoch_region_inv' #i hs_rgn r w
-	   <==>
-   	   epoch_region_inv #i hs_rgn r w)
-  = ()	   
-
-let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Lemma (let r = Epoch.r e in 
-	   let w = Epoch.w e in 
-	   epoch_region_inv hs_rgn r w)
-  = ()
-
-let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (w:writer (hsId (e.h)) {epoch_region_inv hs_rgn (Epoch.r e) w})
-  = Epoch.w e
-
-let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (r:reader (peerId (hsId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
-  = match e with | Epoch h r w -> r //16-05-20 Epoch.r e failed.
-
-(* The footprint just includes the writer regions *)
-abstract let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
-  forall (i:nat { i < Seq.length es })
-    (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
-    let ei = Seq.index es i in
-    let ej = Seq.index es j in
-    parent (region ei.w) = parent (region ej.w) /\  //they all descend from a common epochs sub-region of the connection
-    disjoint (region ei.w) (region ej.w)           //each epoch writer lives in a region disjoint from the others
-
-abstract let epochs_inv' (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) = epochs_inv es
-
-let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv' es }
-
-let reveal_epochs_inv' (u:unit)
-  : Lemma (forall (r:rgn) (#n:TLSInfo.random) (es:seq (epoch r n)). {:pattern (epochs_inv' es)}
-	     epochs_inv' es
-	     <==>
-	     epochs_inv es)
-  = ()
-
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
 
 type resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
-
 
 type hs =
   | HS: #region: rgn { is_hs_rgn region } ->
@@ -548,7 +339,7 @@ type hs =
          resume: resume_id r ->
             cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-            log: MS.i_seq region (epoch region nonce) epochs_inv ->  // append-only, monotonic log of epochs
+            log: epochs region nonce ->
           state: rref region (handshake_state r)  ->       // opaque, subject to invariant
              hs
 
@@ -556,9 +347,9 @@ type hs =
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-let logT (s:hs) (h:HyperHeap.t) = MS.i_sel h s.log
+let logT (s:hs) (h:HyperHeap.t) = Epochs.epochsT s.log h
 
-let stateType (s:hs) = epochs s.region s.nonce * handshake_state (HS.r s)
+let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS.r s)
 
 let stateT (s:hs) (h:HyperHeap.t) : stateType s = (logT s h, sel h s.state)
 
@@ -569,13 +360,6 @@ let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
 let forall_epochs (hs:hs) h (p:(epoch hs.region hs.nonce -> Type)) = 
   (let es = logT hs h in
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
-     
-(* //vs modifies clauses? *)
-(* let unmodified_epochs s h0 h1 =  *)
-(*   forall_epochs s h0 (fun e ->  *)
-(*     let rs = regions e in  *)
-(*     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r)) *)
-
 //epochs in h1 extends epochs in h0 by one 
 let fresh_epoch h0 s h1 =
   let es0 = logT s h0 in 
@@ -586,6 +370,15 @@ let fresh_epoch h0 s h1 =
 let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
  let es = logT s h in
  Seq.index es (Seq.length es - 1)
+
+
+     
+(* //vs modifies clauses? *)
+(* let unmodified_epochs s h0 h1 =  *)
+(*   forall_epochs s h0 (fun e ->  *)
+(*     let rs = regions e in  *)
+(*     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r)) *)
+
 
 // separation policy: the handshake mutates its private state, 
 // only depends on it, and only extends the log with fresh epochs.
@@ -615,17 +408,14 @@ assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_st
 
 let hs_inv (s:hs) (h: HyperHeap.t) = 
   hs_invT s (logT s h) (sel h (HS.state s))  //An abstract invariant of HS-internal state
-  /\ MS.i_contains s.log h                    //Nothing deep about these next two, since they can always 
+  /\ Epochs.containsT s.log h                //Nothing deep about these next two, since they can always 
   /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 
-//to match the external interface
-//let handshake_state (r:role) = handshake_state' r
-val iT0: s:hs -> rw:rw -> st:stateType s -> Tot (logIndex (fst st))
-let iT0 s rw st = -1 //TODO:Implement!
-// returns the current index in the log for reading or writing, or -1 if there is none.
-// depends only on the internal state of the handshake
-let iT s rw h = iT0 s rw (stateT s h) 
+let iT (s:hs) rw (h:HyperHeap.t) = 
+    match rw with
+    | Reader -> Epochs.readerT s.log h
+    | Writer -> Epochs.writerT s.log h
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) 
@@ -1015,11 +805,19 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
    (match processServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log msgs with
     | Error z -> InError z
     | Correct ([(Finished(f),fb)],svd,keys) -> 
+       let h = Negotiation.Fresh ({session_nego = n}) in
+       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+       Epochs.add_epoch lgref ep;
+       Epochs.set_reader lgref 1;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
        InAck false false
     | Correct ([(Certificate c,cb);(Finished f,fb)],svd,keys) -> 
+       let h = Negotiation.Fresh ({session_nego = n}) in
+       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+       Epochs.add_epoch lgref ep;
+       Epochs.set_reader lgref 1;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = cb @| fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
@@ -1037,6 +835,13 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
     (match (prepareServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri (ClientHello ch,l)) with
      | Error z -> InError z
      | Correct (n,keys,(sh,shb)) ->
+       (match keys with
+        | Some ri ->      
+	  let h = Negotiation.Fresh ({session_nego = n}) in
+	  let ep = KeySchedule.recordInstanceToEpoch #r0 #id h ri in
+	  Epochs.add_epoch lgref ep;
+	  Epochs.set_reader lgref 0
+	| None -> ());
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;
@@ -1260,6 +1065,7 @@ let server_send_server_finished_13 (HS #r0 r res cfg id lgref hsref) =
     (match prepareServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log with
      | Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(f),sfinb)]) ->    
             let nl = eeb @| cb @| scvb @| sfinb in
+	    Epochs.set_writer lgref 0;
 	    hsref := {!hsref with
 		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
 		 hs_state = S(S_FinishedSent n)}
@@ -1297,7 +1103,12 @@ let server_handle_client_finished_13 (HS #r0 r res cfg id lgref hsref) msgs opt_
   match (!hsref).hs_state with
   | S(S_FinishedSent n) -> 
     (match processClientFinished_13 (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
-     | Correct svd ->
+     | Correct (cvd,keys) ->
+       let h = Negotiation.Fresh ({session_nego = n}) in
+       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+       Epochs.add_epoch lgref ep;
+       Epochs.set_reader lgref 1;
+       Epochs.set_writer lgref 1;
        (hsref := {!hsref with
   	           hs_state = S(S_Idle None)};
         InAck false false)
@@ -1351,7 +1162,7 @@ val init: r0:rid -> r: role -> cfg:config -> resume: resume_id r ->
     logT s h1 = Seq.createEmpty ))
 let init r0 r cfg res = 
     let id = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-    let lgref = MS.alloc_mref_seq r0 Seq.createEmpty in
+    let lgref = Epochs.epochs_init r0 id in
     let hs = handshake_state_init cfg r r0 in
     let hsref = ralloc r0 hs in
     HS #r0 r res cfg id lgref hsref

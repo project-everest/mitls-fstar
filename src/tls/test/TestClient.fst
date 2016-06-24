@@ -10,6 +10,7 @@ open TLSInfo
 open TLSConstants
 open TLSInfo
 open StatefulLHAE
+open Negotiation
 open HandshakeLog
 open Handshake
 (* FlexRecord *)
