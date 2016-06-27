@@ -312,11 +312,11 @@ rpc.ml:
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
-	  Formatting.fst RPC.fst
+	  test/Formatting.fst test/RPC.fst
 
 rpc.exe:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-		-I output/ output/Formatting.ml output/RPC.ml rpc_test.ml -o rpc.exe
+		-I output/ output/Formatting.ml output/RPC.ml test/rpc_test.ml -o rpc.exe
 
 # depends on tls-gen
 tls-client:
