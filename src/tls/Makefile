@@ -209,14 +209,12 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 
 # Targets to get F* arguments in interactive mode
 %.fst-in: IdealFlags
-	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
 %.fsti-in: IdealFlags
-	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
