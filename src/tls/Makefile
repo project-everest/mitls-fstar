@@ -82,6 +82,7 @@ HASH.fst \
 HMAC.fst \
 Cert.fst \
 Signature.fst \
+PSK.fst \
 TLSInfo.fst \
 IdNonce.fst \
 TLSExtensions.fst \

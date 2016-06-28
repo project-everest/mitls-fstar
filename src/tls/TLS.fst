@@ -59,7 +59,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then i = noId else let e = Seq.index es j in i = hsId e.h)   
+    (if j = -1 then i = noId else let e = Seq.index es j in i = handshakeId e.h)   
   ))
   (ensures (fun h0 result h1 -> 
     next_fragment_ensures s h0 result h1 /\
@@ -288,7 +288,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     st_inv c h /\
     (if j < 0 then i == noId else
        let e = Seq.index es j in
-       i = hsId e.h /\
+       i = handshakeId e.h /\
        incrementable (writer_epoch e) h)))
   (ensures (fun h0 payload h1 ->
     let es = epochs c h0 in
@@ -298,7 +298,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
     (if j < 0 then i == noId /\ h0 == h1 else 
        let e = Seq.index es j in   
-       i = hsId e.h /\ (
+       i = handshakeId e.h /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
@@ -330,7 +330,7 @@ let currentId (c:connection) (rw:rw) : id =
   else 
     let es = MR.m_read (Epochs.es c.hs.log) in
     let e = Seq.index es j in
-    let id = hsId e.h in
+    let id = handshakeId e.h in
     if rw = Writer then id else peerId id
 
 
@@ -349,7 +349,7 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
        let wr = writer_epoch e in 
        Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
        Map.contains h (StAE.log_region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
-       i = hsId e.h /\
+       i = handshakeId e.h /\
        incrementable (writer_epoch e) h))
        
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
@@ -363,7 +363,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     j == iT c.hs Writer h1 /\ // should follow from the modifies clause
     (if j < 0 then i == noId /\ h0 = h1 else
        let e = Seq.index es j in
-       i = hsId e.h /\ (
+       i = handshakeId e.h /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
@@ -527,7 +527,7 @@ val current_writer : //A slightly exotic style here, because we can; using a loc
 	if ix < 0
 	then b2t (i = noId)
 	else let epoch_i = eT hs Writer h in 
-   	     b2t (i=hsId (Epoch.h epoch_i)) in
+   	     b2t (i=handshakeId (Epoch.h epoch_i)) in
      c:connection -> i:id -> ST (option (cwriter i c))
        (requires (current_writer_pre c i))
        (ensures (fun h0 wo h1 -> 
@@ -742,7 +742,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
 (*     (if j < 0 then i == noId /\ h0 = h1 else *)
 (*        let e = Seq.index es j in *)
-(*        i == hsId e.h /\ ( *)
+(*        i == handshakeId e.h /\ ( *)
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C.region c)) h0 h1 *)
 (* )))) *)
@@ -889,7 +889,7 @@ let writeClose c =
 
 (*** incoming (implicitly writing) ***)
 
-// By default, all i:id are reader identifiers, i.e. peerId (hsId (reader_epoch.h)
+// By default, all i:id are reader identifiers, i.e. peerId (handshakeId (reader_epoch.h)
 // Tricky for noId?       
 
 // FIXME: Put the following definitions close to range and delta, and use them
@@ -961,7 +961,7 @@ let sel_reader h c =
   let j = iT c.hs Reader h in
   (if j < 0 then None else 
   let e = Seq.index es j in 
-  let i = peerId (hsId e.h) in
+  let i = peerId (handshakeId e.h) in
   assume(is_stream_ae i);
   Some (| i, reader_epoch e|))
   // todo: add other cases depending on dispatch state
@@ -989,7 +989,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     st_inv c h0 /\
     (if j < 0 then i == noId else 
       let e = Seq.index es j in
-      i = peerId (hsId e.h) /\
+      i = peerId (handshakeId e.h) /\
       incrementable (reader_epoch e) h0)))
   (ensures (fun h0 r h1 -> 
     let es = epochs c h0 in 
@@ -999,7 +999,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     j == iT c.hs Reader h1 /\
     (if j < 0 then i == noId /\ h0 == h1 else 
       let e = Seq.index es j in
-      i = peerId (hsId e.h) /\
+      i = peerId (handshakeId e.h) /\
       (let rd: reader i = reader_epoch e in 
       modifies (Set.singleton (region rd)) h0 h1 /\
       (match r with 
