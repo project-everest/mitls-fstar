@@ -617,7 +617,7 @@ let ks_server_12_cke_dh ks gxb =
     if ems then
       let Hash h = sessionHashAlg pv cs in // TODO TLS 1.0
       let log = HandshakeLog.getHash hsl h in
-      let ms = TLSPRF.prf_hashed (pv,cs) pmsb (utf8 "extended master secret") log 48 in
+      let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") log 48 in
       let msId = ExtendedMS pmsId log kef in
       (msId, ms)
     else
@@ -813,6 +813,48 @@ let ks_client_13_sf ks
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| ri, rk1 |) (| cfkId, late_cfk |));
   StAEInstance r w
 
+let ks_server_13_sf ks
+  : ST (recordInstance)
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_S kss /\ is_C_13_wait_SF (C.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid st _ = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+  =
+  let KS #region st hsl = ks in
+  let S (S_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
+  let (ae, h) = alpha in
+  let hL = CoreCrypto.hashSize h in
+  let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+
+  // Derived applcation master secret
+  let sh_rctx = (HandshakeLog.getHash hsl h) @| (asId_rc asId) in
+  let ams_derived = HKDF.hkdf_expand_label h ams "application traffic secret" sh_rctx hL in
+  let (ck,civ,sk,siv) = keygen_13 h ams_derived "application data key expansion" ae in
+
+  // Post-handshake finished key
+  let cfkId = LateFinished asId (HandshakeLog.getHash hsl h) in
+  let (late_cfk, _) = finished_13 h ams_derived in
+  let late_cfk: fink cfkId = late_cfk in
+
+  // Rekeying secret
+  let ri = RekeyID asId (HandshakeLog.getHash hsl h) 1 in
+  let rk1 : rekey_secret ri = HKDF.hkdf_expand_label h ams_derived "application traffic secret" empty_bytes hL in
+
+  let id = badid ae h Server in
+  let skv: StreamAE.key id = sk in
+  let siv: StreamAE.iv id  = siv in
+  let w = StreamAE.coerce HyperHeap.root id skv siv in
+  let ckv: StreamAE.key id = ck in
+  let civ: StreamAE.iv id  = civ in
+  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
+  let r = StreamAE.genReader HyperHeap.root rw in
+
+  st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| ri, rk1 |) (| cfkId, late_cfk |));
+  StAEInstance r w
+
 // Handshake must call this when ClientFinished goes into log
 let ks_client_13_cf ks
   : ST (| i:exportId & ems i |)
@@ -907,7 +949,7 @@ let ks_client_12_full_rsa ks sr pv cs ems pk =
       C_12_has_MS csr alpha msId ms in
   st := C ns; encrypted
 
-val ks_client_12_set_session_hash: ks:ks -> log:bytes -> ST unit
+val ks_client_12_set_session_hash: ks:ks -> ST unit
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_C st /\ is_C_12_wait_MS (C.s st))
@@ -916,12 +958,14 @@ val ks_client_12_set_session_hash: ks:ks -> log:bytes -> ST unit
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_client_12_set_session_hash ks log =
-  let KS #region st _ = ks in
+let ks_client_12_set_session_hash ks =
+  let KS #region st hsl = ks in
   let C (C_12_wait_MS csr alpha pmsId pms) = !st in
   let (pv, cs, true) = alpha in
   let kef = kefAlg pv cs true in
-  let ms = TLSPRF.prf_hashed (pv,cs) pms (utf8 "extended master secret") log 48 in
+  let h = verifyDataHashAlg_of_ciphersuite cs in
+  let log = HandshakeLog.getHash hsl h in
+  let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
   let msId = ExtendedMS pmsId log kef in
   st := C (C_12_has_MS csr alpha msId ms)
 
@@ -1021,7 +1065,7 @@ let ks_server_12_server_verify_data ks log =
   st := S S_Done;
   TLSPRF.verifyData (pv,cs) ms Server log
 
-val ks_client_12_server_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
+val ks_client_12_server_verify_data: ks:ks -> ST (vd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_C st /\ is_C_12_has_MS (C.s st))
@@ -1030,12 +1074,13 @@ val ks_client_12_server_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
-let ks_client_12_server_verify_data ks log =
-  let KS #region st _ = ks in
+let ks_client_12_server_verify_data ks =
+  let KS #region st hsl = ks in
   let C (C_12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
   st := C C_Done;
-  TLSPRF.verifyData (pv,cs) ms Server log
+  let h = verifyDataHashAlg_of_ciphersuite cs in
+  TLSPRF.verifyData (pv,cs) ms Server (HandshakeLog.getHash hsl h)
 
 
 val getId: recordInstance -> GTot id

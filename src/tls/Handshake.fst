@@ -146,7 +146,7 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
   let lb = HandshakeLog.getHash log in
   let keys = (match mode.sm_protocol_version with
     	     | TLS_1p3 -> 
-	       let keys = KeySchedule.ks_server_13_get_htk ks lb  in
+	       let keys = KeySchedule.ks_server_13_sh ks in
 	       Some keys
 	     | _ -> None) in
     Correct (nego,keys,(ServerHello sh,shb))
@@ -179,9 +179,8 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
     (match o_nego.n_protocol_version, o_nego.n_kexAlg, mode.cm_dh_group, mode.cm_dh_share with
      | TLS_1p3, Kex_DHE, Some gn, Some gyb 
      | TLS_1p3, Kex_ECDHE, Some gn, Some gyb -> 
-    	   let lb = HandshakeLog.getHash log in
-	           let keys = KeySchedule.ks_client_13_1rtt ks o_nego.n_cipher_suite (gn, gyb) lb in
-	      	   Correct (o_nego,Some keys)
+           let keys = KeySchedule.ks_client_13_sh ks o_nego.n_cipher_suite (gn, gyb) false in
+      	   Correct (o_nego,Some keys)
      | _ -> Correct (o_nego,None))
     
 #reset-options
@@ -379,9 +378,10 @@ val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (h
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let handshake_state_init cfg (r:role) (reg:rid) =
-   let ks, nonce = KeySchedule.create #reg r in
+   let log = HandshakeLog.create #reg in
+   let ks, nonce = KeySchedule.create #reg r log in
    {hs_nego = None;
-    hs_log = HandshakeLog.create #reg;
+    hs_log = log;
     hs_ks  = ks;
     hs_reader = -1;
     hs_writer = -1;
@@ -539,8 +539,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
 	             let _ = log @@ ServerKeyExchange(ske) in
 	             let _ = log @@ ServerHelloDone in
 	             let b = log @@ ClientKeyExchange cke in
-	             let lb = HandshakeLog.getBytes log in
-	             if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
+	             if ems then KeySchedule.ks_client_12_set_session_hash ks;
 	             Correct [(ClientKeyExchange cke,b)]
                    | [(CertificateRequest(cr),_)] ->
 		     begin
@@ -551,8 +550,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
 		     let _ = log @@ ServerHelloDone in
 		     let b1 = log @@ Certificate(cc) in
 		     let b2 = log @@ ClientKeyExchange cke in
-		     let lb = HandshakeLog.getBytes log in
-		     if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
+		     if ems then KeySchedule.ks_client_12_set_session_hash ks;
       		     Correct [(Certificate cc,b1); (ClientKeyExchange cke,b2)]
 		     end
 		   | _ ->
@@ -634,8 +632,7 @@ val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes
 let processServerFinished ks log (m,l) =
    match m with
    | Finished(f) ->
-     let lb = HandshakeLog.getBytes log in
-     let svd = KeySchedule.ks_client_12_server_verify_data ks lb in
+     let svd = KeySchedule.ks_client_12_server_verify_data ks in
      if (equalBytes svd f.fin_vd) then 
      	let _ = log @@ (Finished(f)) in
 	Correct svd
@@ -675,7 +672,8 @@ let processServerFinished_13 cfg n ks log msgs =
      when (is_Some n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
      if (not cfg.check_peer_certificate) || Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file then
        let _ = log @@ Certificate(c) in
-       let lb = HandshakeLog.getHash log in
+       let h = verifyDataHashAlg_of_ciphersuite n.n_cipher_suite in
+       let lb = HandshakeLog.getHash log h in
        let Some cs_sigalg = n.n_sigAlg in
        let Some algs = n.n_extensions.ne_signature_algorithms in
        //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
@@ -693,20 +691,21 @@ let processServerFinished_13 cfg n ks log msgs =
              let _ = IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n") in
              if valid then
                let _ = log @@ CertificateVerify(cv) in
-               let lb = HandshakeLog.getHash log in
-               let svd = KeySchedule.ks_client_13_1rtt_server_finished ks lb in
+               let svd = KeySchedule.ks_client_13_server_finished ks in
                if (equalBytes svd f.fin_vd) then
 		 let _ = log @@ (Finished(f)) in
-        	 let lb = HandshakeLog.getHash log in
-        	 let (cvd,keys) = KeySchedule.ks_client_13_1rtt_client_finished ks lb in
+                 let keys = KeySchedule.ks_client_13_sf ks in
+        	 let cvd = KeySchedule.ks_client_13_client_finished ks in
         	 let cfin = {fin_vd = cvd} in
         	 if creq then
         	   let cc = {crt_chain = []} in
         	   let ccb = log @@ Certificate(cc) in
         	   let finb = log @@ Finished(cfin) in
+                   let ems = KeySchedule.ks_client_13_cf ks in
         	   Correct ([(Certificate(cc),ccb);(Finished(cfin),finb)],svd,keys)
         	 else
         	   let finb = log @@ Finished(cfin) in
+                   let ems = KeySchedule.ks_client_13_cf ks in
         	   Correct ([(Finished(cfin),finb)],svd,keys)
                else Error (AD_decode_error, "Finished MAC did not verify")
              else Error (AD_decode_error, "Certificate signature did not verify")
@@ -859,11 +858,10 @@ let processClientCCS n ks log msgs opt_msgs =
     | Correct [(ClientKeyExchange cke,_)] ->
       let ems = n.n_extensions.ne_extended_ms in
       let _ = log @@ ClientKeyExchange(cke) in
-      let lb = HandshakeLog.getBytes log in
       (match cke.cke_kex_c with 
        | KEX_C_DHE b 
        | KEX_C_ECDHE b -> 
-             (KeySchedule.ks_server_12_cke_dh ks b lb;
+             (KeySchedule.ks_server_12_cke_dh ks b;
 	      Correct ())
        | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE"))
     | Error z -> Error z
@@ -966,10 +964,11 @@ let prepareServerFinished_13 cfg n ks log =
 	let signature = (hab @| sab @| (vlbytes 2 sigv)) in
         let scv = {cv_sig = signature} in
         let scvb = log @@ CertificateVerify(scv) in
-	let svd = KeySchedule.ks_server_13_server_finished ks finv in
+	let svd = KeySchedule.ks_server_13_server_finished ks in
 	let fin = {fin_vd = svd} in
 	let finb = log @@ Finished(fin) in
-	Correct [(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(fin),finb)]
+        let keys = KeySchedule.ks_server_13_sf ks in
+	Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(fin),finb)], keys)
       | None -> Error (AD_internal_error, perror __SOURCE_FILE__ __LINE__ "could not load signing key")
       end
     | Error z -> Error z
@@ -985,9 +984,14 @@ let server_send_server_finished_13 (HS #r0 r res cfg id lgref hsref) =
     when (n.n_protocol_version = TLS_1p3 &&
 	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
     (match prepareServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log with
-     | Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(f),sfinb)]) ->    
+     | Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(f),sfinb)], keys) ->    
             let nl = eeb @| cb @| scvb @| sfinb in
-	    Epochs.set_writer lgref 0;
+            let h = Negotiation.Fresh ({session_nego = n}) in
+            let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+
+            // Switch to ATK on write channel
+            Epochs.add_epoch lgref ep;
+            Epochs.incr_writer lgref;
 	    hsref := {!hsref with
 		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
 		 hs_state = S(S_FinishedSent n)}
@@ -996,7 +1000,7 @@ let server_send_server_finished_13 (HS #r0 r res cfg id lgref hsref) =
 
 
 val processClientFinished_13: KeySchedule.ks -> HandshakeLog.log -> list (hs_msg * bytes) -> list (hs_msg * bytes) ->
-    			      ST (result (bytes * KeySchedule.recordInstance))
+    			      ST (result (bytes))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let processClientFinished_13 ks log msgs opt_msgs =
@@ -1009,11 +1013,10 @@ let processClientFinished_13 ks log msgs opt_msgs =
    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected Certificate only before CKE") in
    match rem with
    | Correct ([(Finished(f),finb)]) ->
-     let lb = HandshakeLog.getHash log in
-     let (cvd,keys) = KeySchedule.ks_server_13_client_finished ks lb in
+     let cvd = KeySchedule.ks_server_13_client_finished ks in
      if (equalBytes cvd f.fin_vd) then 
      	let _ = log @@ (Finished(f)) in
-	Correct (cvd,keys)
+	Correct cvd
      else Error (AD_decode_error, "Finished MAC did not verify")
    | _ -> Error (AD_decode_error, "Unexpected state")
 
@@ -1025,12 +1028,9 @@ let server_handle_client_finished_13 (HS #r0 r res cfg id lgref hsref) msgs opt_
   match (!hsref).hs_state with
   | S(S_FinishedSent n) -> 
     (match processClientFinished_13 (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
-     | Correct (cvd,keys) ->
-       let h = Negotiation.Fresh ({session_nego = n}) in
-       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
-       Epochs.add_epoch lgref ep;
-       Epochs.set_reader lgref 1;
-       Epochs.set_writer lgref 1;
+     | Correct cvd ->
+       // Switch to ATK on read channel
+       Epochs.incr_reader lgref;
        (hsref := {!hsref with
   	           hs_state = S(S_Idle None)};
         InAck false false)
@@ -1142,7 +1142,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then i = noId else let e = Seq.index es j in i = hsId e.h)   
+    (if j = -1 then i = noId else let e = Seq.index es j in i = handshakeId e.h)   
   ))
   (ensures (next_fragment_ensures s))
 let rec next_fragment i hs = 
