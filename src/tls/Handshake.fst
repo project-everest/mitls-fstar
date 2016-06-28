@@ -40,10 +40,10 @@ let prepareClientHello cfg ks log ri sido =
   let kp = 
      (match cfg.maxVer with
       | TLS_1p3 -> 
-         let gxl = KeySchedule.ks_client_13_init_1rtt ks cfg.namedGroups in 
+         let gxl = KeySchedule.ks_client_13_1rtt_init ks cfg.namedGroups in 
 	 Some (ClientKeyShare gxl)
       | _ -> 
-      	 let _ = KeySchedule.ks_client_init_12 ks in 
+      	 let _ = KeySchedule.ks_client_12_init ks in 
 	 None) in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client cr in
@@ -296,7 +296,7 @@ let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
 
 
      
-(* //vs modifies clauses? *)
+(* vs modifies clauses? *)
 (* let unmodified_epochs s h0 h1 =  *)
 (*   forall_epochs s h0 (fun e ->  *)
 (*     let rs = regions e in  *)

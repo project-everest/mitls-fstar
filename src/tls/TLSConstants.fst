@@ -59,6 +59,7 @@ type protocolVersion =
 type kexAlg =
   | Kex_RSA
   | Kex_DH
+  | Kex_PSK
   | Kex_PSK_DHE
   | Kex_PSK_ECDHE
   | Kex_DHE

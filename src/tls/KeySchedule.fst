@@ -412,7 +412,7 @@ let ks_client_13_0rtt_finished ks =
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
-val ks_client_init_12: ks:ks -> ST (option sessionInfo)
+val ks_client_12_init: ks:ks -> ST (option sessionInfo)
   (requires fun h0 ->
     let kss = sel h0 (KS.state ks) in
     is_C kss /\ is_C_Init (C.s kss))
@@ -422,7 +422,7 @@ val ks_client_init_12: ks:ks -> ST (option sessionInfo)
     /\ modifies_rref rid !{as_ref st} h0 h1)
 
 // TODO resumption support
-let ks_client_init_12 ks =
+let ks_client_12_init ks =
   let KS #rid st _ = ks in
   let C (C_Init cr) = !st in
   let osi, ns = None, (C (C_12_Full_CH cr)) in
@@ -510,6 +510,18 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   st := S (S_13_wait_SH (ae, h) (Some (| esId, es |)) (Some (| efId, cfk0 |)) (| hsId, hs |));
   let ourshare = CommonDH.serialize_raw our_share in
   early_hs, early_d, ourshare
+
+val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
+  (requires fun h0 ->
+    let kss = sel h0 (KS.state ks) in
+    is_S kss /\ is_S_Init (S.s kss)
+    /\ is_CipherSuite cs
+    /\ (let CipherSuite kex _ _ = cs in
+         (kex = Kex_PSK)))
+  (ensures fun h0 r h1 ->
+    let KS #rid st _ = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
 
 val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> ST (our_share:bytes)
   (requires fun h0 ->
