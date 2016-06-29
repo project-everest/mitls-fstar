@@ -85,8 +85,8 @@ type valid_clen (i:id) (clen:nat) = (
     0 <= clen - hashSize MD5 /\ clen - hashSize MD5 <= max_TLSPlaintext_fragment_length
   else 
   if i.pv = TLS_1p3 then
-    let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in 
-    tlen <= clen /\ clen <= tlen + max_TLSPlaintext_fragment_length 
+    let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in
+    tlen < clen /\ clen <= tlen + max_TLSCiphertext_fragment_length_13
   else
     if is_AEAD i.aeAlg then
       0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
@@ -236,7 +236,7 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
            snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
 	   /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
-#set-options "--z3timeout 60" 
+#set-options "--z3timeout 60"
 //without hints, this next query succeeds in around 19s on a powerful desktop; that's too close the default 20s timeout for CI
 //with hints, it takes about 3.5s on the same machine. So, for CI with hints, the 60s timeouts is very generous but harmless
 //At least with the long timeout it should work reliably with or without hints
@@ -251,7 +251,8 @@ val targetLength_converges: i:id2
       /\ (is_AEAD i.aeAlg ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
 #reset-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-let targetLength_converges i r = ()
+let targetLength_converges i r =
+  cut (i.pv <> TLS_1p3)
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> r':range
