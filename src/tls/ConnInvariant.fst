@@ -108,10 +108,10 @@ type c_t  = MM.map' random r_conn
 module MonSeq = MonotoneSeq
 
 //w is registered with c, in state h
-let registered (i:id{StAE.is_stream_ae i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) = 
+let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) =
   (exists e. SeqProperties.mem e  (epochs c h) /\               //one of c's epochs, e
       (let i' = Negotiation.hsId (Epochs.Epoch.h e) in   //has an id corresponding to i
-        i=i' /\ StAE.stream_ae #i e.w == w))               //and holds w as as its writer
+        i=i' /\ StAE.stream_state #i e.w == w))               //and holds w as as its writer
   /\ MonSeq.i_contains (Epochs.es c.hs.log) h                         //technical: the heap contains c's handshake log
 	
 //The main invariant, relating an ms_tab and a conn_tab at index i, in state h
@@ -119,7 +119,7 @@ let ms_conn_inv (ms:ms_t)
  		(conn:c_t)
 		(h:HyperHeap.t) 
 		(i:id) 
-   = authId i /\ StAE.is_stream_ae i ==>  //Focused only on TLS-1.3 for now, hence the is_stream_ae guard
+   = authId i /\ StAE.is_stream i ==>  //Focused only on TLS-1.3 for now, hence the is_stream guard
      (match MM.sel ms i with 
       | None -> True
       | Some w -> 
@@ -201,7 +201,7 @@ let ms_derive_is_ok h0 h1 i w =
     fun j ->
       let old_ms = MR.m_sel h0 MS.ms_tab in
       let new_ms = MR.m_sel h1 MS.ms_tab in
-      if authId j && StAE.is_stream_ae j
+      if authId j && StAE.is_stream j
       then match MM.sel new_ms j with
            | None -> ()
            | Some ww ->
@@ -279,7 +279,7 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	     MonSeq.i_contains (Epochs.es c.hs.log) h0 /\
 	     MonSeq.i_contains (Epochs.es c.hs.log) h1 /\
 	     i=hsId (Epoch.h e) /\ //the epoch has id i
-	     (let w = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
+	     (let w = StAE.stream_state #i (Epoch.w e) in //the epoch writer
 	      let epochs = epochs c h0 in
               N.registered (I.nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\  //the writer's parent region is registered in the nonce table
 	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
@@ -305,13 +305,13 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let old_conn = MR.m_sel h0 conn_tab in
       let new_conn = MR.m_sel h1 conn_tab in
       let old_hs_log = epochs c h0 in
-      let wi = StAE.stream_ae #i (Epoch.w e) in //the epoch writer
+      let wi = StAE.stream_state #i (Epoch.w e) in //the epoch writer
       let nonce = I.nonce_of_id i in
       lemma_mem_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms = new_ms);
       assert (old_conn = new_conn);
       cut (is_Some (MM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier
-      if (authId j && StAE.is_stream_ae j)
+      if (authId j && StAE.is_stream j)
       then match MM.sel new_ms j with
            | None -> () //nothing allocated at id j yet; easy
            | Some wj ->
@@ -357,7 +357,7 @@ let mutate_registered_writer_ok h0 h1 i w c = (* () *)
     let new_conn = MR.m_sel h1 conn_tab in
     let aux :  j:id -> Lemma (ms_conn_inv new_ms new_conn h1 j) =
       fun j ->
-    	if (authId j && StAE.is_stream_ae j)
+    	if (authId j && StAE.is_stream j)
         then match MM.sel new_ms j with //the case analysis is to trigger the pattern guarding MasterSecret.region_injective
              | None -> ()
              | Some wj -> () //basically, when i=j, the proof is easy as i remains registered; if i<>j then j didn't change since their regions are distinct

@@ -97,7 +97,7 @@ let rec unexpected #a s = unexpected s
 
 //16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
 
-let id = i:id{ is_stream_ae i }
+let id = i:id{ is_stream i }
  
 let outerPV c : ST protocolVersion
   (requires (hs_inv c.hs))
@@ -962,7 +962,7 @@ let sel_reader h c =
   (if j < 0 then None else 
   let e = Seq.index es j in 
   let i = peerId (hsId e.h) in
-  assume(is_stream_ae i);
+  assume(is_stream i);
   Some (| i, reader_epoch e|))
   // todo: add other cases depending on dispatch state
 
@@ -1026,7 +1026,7 @@ let readFragment c i =
     else
       // payload decryption
       let e = Seq.index es j in 
-      match StAE.decrypt (reader_epoch e) payload with 
+      match StAE.decrypt (reader_epoch e) (ct,payload) with
       | Some f -> Correct f
       | None   -> Error(AD_internal_error,"") //16-05-19 adjust! 
 
