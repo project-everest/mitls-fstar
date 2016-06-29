@@ -87,18 +87,29 @@ void FFI_mitls_config(size_t *configptr, const char *tls_version, const char *ho
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(config)));
         *configptr = 0;
     } else {
-        // Tell the OCaml GC about the caller's variable address, so it is treated
-        // as a GC root, keeping the config object live.
-        caml_register_generational_global_root((value*)configptr);
-        *configptr = config;
+        value * heapconfig;
+        
+        // Allocate space on the heap, to store an OCaml value
+        heapconfig = (value*)malloc(sizeof(value));
+        if (heapconfig == NULL) {
+            *configptr = 0;
+        } else {
+            // Tell the OCaml GC about the heap address, so it is treated
+            // as a GC root, keeping the config object live.
+            *heapconfig = config; 
+            caml_register_generational_global_root(heapconfig);
+            *configptr = (size_t)heapconfig;
+        }
     }
 }
 
 void FFI_mitls_release_value(size_t *v)
 {
-    if (*v) {
+    if (v && *v) {
+        value* pv = *(value**)v;
         // Remove the root from the OCaml GC tracker, so the object can be collected.
-        caml_remove_generational_global_root((value*)v);
+        caml_remove_generational_global_root(pv);
+        free(pv);
         *v = 0;
     }
 }
@@ -124,7 +135,8 @@ void FFI_mitls_free_packet(void *packet)
 
 void * FFI_mitls_prepare_simple(value *f, /* in out */ size_t *state, /* out */ size_t *packet_size)
 {
-    value state_value = (value)*state;
+    value* pstate = *(value**)state;
+    value state_value = *pstate;
     void *p = NULL;
     CAMLparam1(state_value);
     CAMLlocal1(ret);
@@ -135,7 +147,7 @@ void * FFI_mitls_prepare_simple(value *f, /* in out */ size_t *state, /* out */ 
         p = NULL;
     } else {
         // The return value is a tuple containing the packet and the new config object
-        *state = Field(ret, 1);
+        *pstate = Field(ret, 1);
         p = copypacket(Field(ret, 0), packet_size);
     }
     
@@ -151,7 +163,8 @@ void * FFI_mitls_prepare_client_hello(/* in out */ size_t *state, /* out */ size
 
 int FFI_mitls_handle_simple(value* f, /* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size)
 {
-    value state_value = (value)*state;
+    value* pstate = *(value**)state;
+    value state_value = *pstate;
     int ret = 0;
     CAMLparam1(state_value);
     CAMLlocal3(header_value, record_value, result);
@@ -168,7 +181,7 @@ int FFI_mitls_handle_simple(value* f, /* in out */ size_t *state, char* header, 
         ret = 0;
     } else {
         // The return is a just the updated state
-        *state = result;
+        *pstate = result;
         ret = 1;
     }
     
@@ -256,7 +269,8 @@ int FFI_mitls_handle_server_finished(/* in out */ size_t *state, char* header, s
 
 void * FFI_mitls_prepare_send(/* in out */ size_t *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size)
 {
-    value state_value = (value)*state;
+    value* pstate = *(value**)state;
+    value state_value = *pstate;
     void *p = NULL;
     CAMLparam1(state_value);
     CAMLlocal2(buffer_value, result);
@@ -279,7 +293,8 @@ void * FFI_mitls_prepare_send(/* in out */ size_t *state, const void* buffer, si
 
 void * FFI_mitls_handle_receive(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size)
 {
-    value state_value = (value)*state;
+    value* pstate = *(value**)state;
+    value state_value = *pstate;
     void *p = NULL;
     CAMLparam1(state_value);
     CAMLlocal3(header_value, record_value, result);
@@ -301,4 +316,3 @@ void * FFI_mitls_handle_receive(/* in out */ size_t *state, char* header, size_t
     
     CAMLreturnT(void*, p);
 }
-
