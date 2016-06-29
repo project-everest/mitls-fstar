@@ -181,7 +181,7 @@ let main config host port =
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
 
-  let ks, cr = KeySchedule.create #rid Client in
+  let ks, cr = KeySchedule.create #rid Client log in
   let (ClientHello ch,chb) = Handshake.prepareClientHello config ks log None None in
   let pv = ch.ch_protocol_version in 
   let kex = TLSConstants.Kex_ECDHE in

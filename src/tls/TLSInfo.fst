@@ -15,6 +15,11 @@ open TLSConstants
 //open PMS
 open Cert
 
+module MM = MonotoneMap
+module MR = FStar.Monotonic.RRef
+module HH = FStar.HyperHeap
+
+
 (**************** SPECIFYING SAFETY (GENERAL COMMENTS) **************
   In the code of ideal implementations only,
   we use F# functions that characterize the Safe and Auth predicates.
@@ -531,11 +536,157 @@ let strongAE e = strongAESI (epochSI e)
 
 // -------------------------------------------------------------------
 // Indexing instances of derived keys for AE etc. 
+
+// Index type definitions [1.3]:
 //
-// Intuitively, this is an abstract parameter for StatefulLHAE and
-// StreamAE, used to control their idealization. 
-// To this end, the index value should determine the concrete 
-// initial state (key, IV) of the keyed functionality.
+//  -----<--------
+// |              \
+// |  keyId <- secretId  => finishedId
+// V   ||     /   |   \
+// |   id    /    |    \
+// |        /     |     \
+//  --->  esId -> hsId -> asId
+//          \
+//           --<-- psk_identifier
+//
+// Index type definitions [1.2]:
+//
+//    pmsId -> msId -> keyId12 = id
+//
+
+type hashed_log = bytes
+
+type pre_esId : Type0 =
+  | ApplicationPSK: i:PSK.psk_identifier -> h:CoreCrypto.hash_alg -> pre_esId
+  | ResumptionPSK: pre_rmsId -> pre_esId
+
+and pre_hsId =
+  | HSID_PSK: pre_esId -> pre_hsId
+  | HSID_PSK_DHE: pre_esId -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
+  | HSID_DHE: CoreCrypto.hash_alg -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
+
+and pre_asId =
+  | ASID: pre_hsId -> pre_asId
+
+and pre_rmsId =
+  | RMSID: pre_asId -> hashed_log -> pre_rmsId
+
+and pre_exportId =
+  | ExportID: pre_asId -> hashed_log -> pre_exportId
+
+and pre_rekeyId =
+  | RekeyID: pre_asId -> hashed_log -> int -> pre_rekeyId
+
+and pre_keyId =
+  | EarlyTrafficKey: pre_esId -> hashed_log -> pre_keyId
+  | EarlyApplicationDataKey: pre_esId -> hashed_log -> pre_keyId
+  | HandshakeKey: pre_hsId -> hashed_log -> role -> pre_keyId
+  | ApplicationDataKey: pre_asId -> hashed_log -> role -> pre_keyId
+  | ApplicationRekey: pre_rekeyId -> role -> pre_keyId
+
+and pre_finishedId =
+  | EarlyFinished: pre_esId -> hashed_log -> pre_finishedId
+  | HandshakeFinished: pre_hsId -> hashed_log -> role -> pre_finishedId
+  | LateFinished: pre_asId -> hashed_log -> pre_finishedId
+
+val esId_hash: pre_esId -> Tot CoreCrypto.hash_alg
+val hsId_hash: pre_hsId -> Tot CoreCrypto.hash_alg
+val asId_hash: pre_asId -> Tot CoreCrypto.hash_alg
+val rmsId_hash: pre_rmsId -> Tot CoreCrypto.hash_alg
+val exportId_hash: pre_exportId -> Tot CoreCrypto.hash_alg
+val rekeyId_hash: pre_rekeyId -> Tot CoreCrypto.hash_alg
+val finishedId_hash: pre_finishedId -> Tot CoreCrypto.hash_alg
+
+let rec esId_hash = function
+//  | ApplicationPSK i -> let c = app_psk_context i in c.early_hash
+  | ApplicationPSK i h -> h
+//  | ResumptionPSK rmsId -> rmsId_hash rmsId
+
+and hsId_hash = function
+  | HSID_PSK i -> esId_hash i
+  | HSID_DHE h _ _ -> h
+  | HSID_PSK_DHE i _ _ -> esId_hash i
+
+and asId_hash = function
+  | ASID i -> hsId_hash i
+
+and rmsId_hash = function
+  | RMSID asId _ -> asId_hash asId
+
+and exportId_hash = function
+  | ExportID asId _ -> asId_hash asId
+
+and rekeyId_hash = function
+  | RekeyID i _ _ -> asId_hash i
+
+and finishedId_hash = function
+  | EarlyFinished i _ -> esId_hash i
+  | HandshakeFinished i _ _ -> hsId_hash i
+  | LateFinished i _ -> asId_hash i
+
+type valid_hlen (b:bytes) (h:CoreCrypto.hash_alg) =
+  length b = CoreCrypto.hashSize h
+
+val valid_esId: pre_esId -> GTot Type0
+val valid_hsId: pre_hsId -> GTot Type0
+val valid_asId: pre_asId -> GTot Type0
+val valid_rmsId: pre_rmsId -> GTot Type0
+val valid_exportId: pre_exportId -> GTot Type0
+val valid_rekeyId: pre_rekeyId -> GTot Type0
+val valid_keyId: pre_keyId -> GTot Type0
+val valid_finishedId: pre_finishedId -> GTot Type0
+
+let rec valid_esId = function
+  | ApplicationPSK i h ->
+     MR.witnessed (PSK.registered_app_psk i) /\ MR.witnessed (PSK.app_psk_hash i h)
+  | ResumptionPSK i -> valid_rmsId i /\ True
+
+and valid_hsId = function
+  | HSID_PSK i | HSID_PSK_DHE i _ _ -> valid_esId i
+  | HSID_DHE _ _ _ -> True
+
+and valid_asId = function
+  | ASID i -> valid_hsId i
+
+and valid_rmsId = function
+  | RMSID i log -> valid_asId i /\ valid_hlen log (asId_hash i)
+
+and valid_exportId = function
+  | ExportID i log -> valid_asId i /\ valid_hlen log (asId_hash i)
+
+and valid_rekeyId = function
+  | RekeyID i log _ -> valid_asId i /\ valid_hlen log (asId_hash i)
+
+and valid_keyId = function
+  | EarlyTrafficKey i log -> valid_esId i /\ valid_hlen log (esId_hash i)
+  | EarlyApplicationDataKey i log -> valid_esId i /\ valid_hlen log (esId_hash i)
+  | HandshakeKey i log _ -> valid_hsId i /\ valid_hlen log (hsId_hash i)
+  | ApplicationDataKey i log _ -> valid_asId i /\ valid_hlen log (asId_hash i)
+  | ApplicationRekey i _ -> valid_rekeyId i
+
+and valid_finishedId = function
+  | EarlyFinished i log -> valid_esId i /\ valid_hlen log (esId_hash i)
+  | HandshakeFinished i log _ -> valid_hsId i /\ valid_hlen log (hsId_hash i)
+  | LateFinished i log -> valid_asId i /\ valid_hlen log (asId_hash i)
+
+type esId = i:pre_esId{valid_esId i}
+type hsId = i:pre_hsId{valid_hsId i}
+type asId = i:pre_asId{valid_asId i}
+type rmsId = i:pre_rmsId{valid_rmsId i}
+type exportId = i:pre_exportId{valid_exportId i}
+type rekeyId = i:pre_rekeyId{valid_rekeyId i}
+type keyId = i:pre_keyId{valid_keyId i}
+type finishedId = i:pre_finishedId{valid_finishedId i}
+
+(*
+and secretId =
+  | EarlySecret: i:esId -> log:HandshakeLog.hs_log -> secretId
+  | HandshakeSecret: i:hsId -> log:HandshakeLog.hs_log -> secretId
+  | ApplicationSecret: i:asId -> log:HandshakeLog.hs_log -> secretId
+  | ResumptionSecret: i:asId -> log:HandshakeLog.hs_log -> secretId
+  | ExporterSecret: i:asId -> log:HandshakeLog.hs_log -> secretId
+  | RekeySecret: i:secretId -> log:HandshakeLog.hs_log -> secretId
+*)
 
 type id = {
   // indexes and algorithms of the session used in the key derivation

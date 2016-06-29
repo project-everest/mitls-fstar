@@ -84,12 +84,12 @@ let replace_keyshare ksl e =
   | x -> x 
 
 let main config host port =
-  IO.print_string "===============================================\n Starting test TLS client...\n";
+  IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
   let tcp = Platform.Tcp.connect host port in
   let log = empty_bytes in
   let rid = new_region root in
-  let ks, cr = KeySchedule.create #rid Client in
   let lg = HandshakeLog.create #rid in
+  let ks, cr = KeySchedule.create #rid Client lg in
 
   // This will call KS.ks_client_13_init_1rtt
   let (ClientHello ch,chb) = Handshake.prepareClientHello config ks lg None None in
@@ -124,15 +124,16 @@ let main config host port =
   IO.print_string ("Signature validation status = " ^
     (if Signature.verify h pk tbs sigv then "OK" else "FAIL") ^ "\n");
 
-  let svd = KeySchedule.ks_client_13_1rtt_server_finished ks (hash log) in
+  let svd = KeySchedule.ks_client_13_server_finished ks in
   let Finished({fin_vd = sfin}),log = recvEncHSRecord tcp pv kex log rd in
 
   (if equalBytes sfin svd then
     IO.print_string ("Server finished OK:"^(print_bytes svd)^"\n")
   else
     failwith "Failed to verify server finished");
+  let KeySchedule.StAEInstance drd dwr = KeySchedule.ks_client_13_sf ks in
 
-  let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_client_13_1rtt_client_finished ks (hash log) in
+  let cvd = KeySchedule.ks_client_13_client_finished ks in
   let cfin = {fin_vd = cvd} in
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
   IO.print_string "before encrypt \n";

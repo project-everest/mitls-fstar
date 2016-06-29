@@ -126,8 +126,8 @@ let rec aux config sock =
   let h = CoreCrypto.SHA256 in
   let sa = CoreCrypto.RSASIG in
   let cs = CipherSuite kex (Some sa) (AEAD AES_128_GCM h) in
-  let ks, sr = KeySchedule.create #rid Server in
   let lg = HandshakeLog.create #rid in
+  let ks, sr = KeySchedule.create #rid Server lg in
   let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in // (HandshakeLog.getBytes x) in
 
   let ClientHello(ch), chb, log = recvHSRecord tcp pv kex log in
@@ -147,7 +147,7 @@ let rec aux config sock =
                     | Error (x,z) -> failwith z) in
   let log = sendHSRecord tcp pv (ServerHello sh) log in
 
-  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_get_htk ks (hash log) in
+  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_sf ks in
   //FIXME: should use the keys from prepareServerHello, but they're incorrect
   //let KeySchedule.StAEInstance rd wr = keys in
 
@@ -165,10 +165,11 @@ let rec aux config sock =
   let signature = (hab @| sab @| (vlbytes 2 sigv)) in
   let log = sendEncHSRecord tcp pv (CertificateVerify ({cv_sig = signature})) log wr in
 
-  let svd = KeySchedule.ks_server_13_server_finished ks (hash log) in
+  let svd = KeySchedule.ks_server_13_server_finished ks in
   let log = sendEncHSRecord tcp pv (Finished ({fin_vd = svd})) log wr in
+  let KeySchedule.StAEInstance drd dwr = KeySchedule.ks_server_13_sf ks in
 
-  let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_server_13_client_finished ks (hash log) in
+  let cvd = KeySchedule.ks_server_13_client_finished ks in
   let Finished({fin_vd = cfin}),log = recvEncHSRecord tcp pv kex log rd in
 
   (if equalBytes cfin cvd then

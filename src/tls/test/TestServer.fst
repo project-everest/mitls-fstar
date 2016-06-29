@@ -191,7 +191,7 @@ let rec aux config sock =
   let dummy_log = HandshakeLog.create #rid in // To avoid duplication with HS
   let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
-  let ks, sr = KeySchedule.create #rid Server in
+  let ks, sr = KeySchedule.create #rid Server log in
 
   // Get client hello
   let ClientHello(ch),chb = recvHSRecord tcp pv kex in
@@ -250,8 +250,7 @@ let rec aux config sock =
   IO.print_string ("client share:"^(Platform.Bytes.print_bytes gx)^"\n");
 
   let _ = log @@ ClientKeyExchange(cke) in
-  let lb = HandshakeLog.getBytes log in
-  KeySchedule.ks_server_12_cke_dh ks gx lb;
+  KeySchedule.ks_server_12_cke_dh ks gx;
 
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
   let wr = encryptor_TLS12_AES_GCM_128_SHA256 ck civ in

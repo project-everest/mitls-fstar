@@ -60,11 +60,11 @@ let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
   = ()
 
 let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (w:writer (hsId (e.h)) {epoch_region_inv hs_rgn (Epoch.r e) w})
+  : Tot (w:writer (handshakeId (e.h)) {epoch_region_inv hs_rgn (Epoch.r e) w})
   = Epoch.w e
 
 let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (r:reader (peerId (hsId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
+  : Tot (r:reader (peerId (handshakeId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
   = match e with | Epoch hs #i r w -> r //16-05-20 Epoch.r e failed.
 
 (* The footprint just includes the writer regions *)
@@ -118,12 +118,23 @@ val set_reader: #r:rgn -> #n:TLSInfo.random ->
        (ensures (fun h0 x h1 -> True))
 let set_reader #r #n (Epochs es r w) i' = r := i'
 
+val incr_reader: #r:rgn -> #n:TLSInfo.random ->
+               es:epochs r n -> ST unit
+       (requires (fun h -> True))
+       (ensures (fun h0 x h1 -> True))
+let incr_reader #r #n (Epochs es r w) = r := !r + 1
 
 val set_writer: #r:rgn -> #n:TLSInfo.random -> 
     	       es:epochs r n -> i:nat -> ST unit
        (requires (fun h -> True))
        (ensures (fun h0 x h1 -> True))
 let set_writer #r #n (Epochs es r w) i' = w := i'
+
+val incr_writer: #r:rgn -> #n:TLSInfo.random ->
+               es:epochs r n -> ST unit
+       (requires (fun h -> True))
+       (ensures (fun h0 x h1 -> True))
+let incr_writer #r #n (Epochs es r w) = w := !w + 1
 
 let get_epochs (Epochs es r w) = es 
 

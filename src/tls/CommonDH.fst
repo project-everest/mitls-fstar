@@ -36,6 +36,11 @@ let same_group a b = match a, b with
   | ECShare (g1, _), ECShare(g2, _) -> g1=g2
   | _ -> false
 
+val share_of_key: key -> Tot share
+let share_of_key = function
+  | ECKey k -> let (g,s) = ECGroup.share_of_key k in ECShare(g,s)
+  | FFKey k -> let (g,s) = DHGroup.share_of_key k in FFShare(g,s)
+
 val default_group: group
 let default_group = FFDH (DHGroup.Named FFDHE2048)
 
