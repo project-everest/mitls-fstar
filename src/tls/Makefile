@@ -129,7 +129,7 @@ TLS.fst #the preceding space is significant!
 # should be added here.
 #
 # Missing modules from FSTS:
-# TLSExtensions, Encode, ENC, HandshakeMessages, Record,
+# TLSExtensions, Encode, ENC, HandshakeMessages,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
 VERIFY= \
@@ -163,6 +163,7 @@ LHAEPlain \
 AEAD_GCM \
 MAC \
 StatefulLHAE \
+Record \
 MAC_SHA256 \
 MAC_SHA1 \
 StAE \
