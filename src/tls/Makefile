@@ -267,6 +267,7 @@ TLSML := \
   $(TLSML)
 # Last step: prefix with the output directory.
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
+TLSML := $(TLSML) ../../libs/ml/FFI.ml
 
 refresh:
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
@@ -329,3 +330,10 @@ test13:
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
 endif
+
+# FFI support - calling from C into miTLS
+#depends on tls-gen
+tls-ffi: libmitls.dll
+
+libmitls.dll: ffi.c mitls.cmxa #tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -inline 0 ffi.c -linkall -g -output-obj mitls.cmxa -o libmitls.dll
