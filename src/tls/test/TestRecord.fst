@@ -35,18 +35,18 @@ let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
 
   // StatefulLHAE.writer -> StatefulLHAE.state
   let w: writer id =
-    let log: st_log_t r id = ralloc r Seq.createEmpty in
+    assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 1 in
-    let key: AEAD_GCM.state id Writer =
+    let st: AEAD_GCM.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = bytes_of_hex key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = bytes_of_hex iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
+      AEAD_GCM.State key iv () counter
     in
-    State r log seqn key
+    st
   in
 
   let text = bytes_of_hex plain in
@@ -62,7 +62,7 @@ let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
 
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
   // FIXME: without the three additional #-arguments below, extraction crashes
-  StatefulLHAE.encrypt #id #ad #rg w f
+  StatefulLHAE.encrypt #id w ad rg f
 
 let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
   // TLSInfo.id

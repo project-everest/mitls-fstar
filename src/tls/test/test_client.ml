@@ -34,4 +34,4 @@ let _ =
      if (Sys.argv.(1) = "1.3") then
         TestClient13.main (config "1.3") Sys.argv.(2) (int_of_string Sys.argv.(3))
      else 
-        TestClient.main (config "1.2") Sys.argv.(2) (int_of_string Sys.argv.(3))
+        TestClient.main () () () () () () (config "1.2") Sys.argv.(2) (int_of_string Sys.argv.(3))

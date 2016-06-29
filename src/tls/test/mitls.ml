@@ -95,7 +95,7 @@ let _ =
 
   match !role, !config.maxVer with
   | Client, TLS_1p3 ->  TestClient13.main !config host port
-  | Client, _ -> TestClient.main !config host port
+  | Client, _ -> TestClient.main  () () () () () () !config host port
   | Server, TLS_1p3 -> TestServer13.main !config host port
   | Server, _ -> TestServer.main !config host port
  

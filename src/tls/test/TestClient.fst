@@ -37,18 +37,18 @@ let id = {
 let encryptor_TLS12_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let w: writer id =
-    let log: st_log_t r id = ralloc r Seq.createEmpty in
+    assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Writer =
+    let st: AEAD_GCM.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
+      AEAD_GCM.State key iv () counter
     in
-    State r log seqn key
+    st
   in
   // StatefulLHAE.writer -> StatefulLHAE.state
   w
@@ -56,18 +56,18 @@ let encryptor_TLS12_AES_GCM_128_SHA256 key iv =
 let decryptor_TLS12_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let r: reader id =
-    let log: st_log_t r id = ralloc r Seq.createEmpty in
+    assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Reader =
+    let st: AEAD_GCM.state id Reader =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
+      AEAD_GCM.State key iv () counter
     in
-    State r log seqn key
+    st
   in
   // StatefulLHAE.reader -> StatefulLHAE.state
   r
@@ -86,11 +86,11 @@ let encryptRecord_TLS12_AES_GCM_128_SHA256 w ct plain =
   let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
   // FIXME: without the three additional #-arguments below, extraction crashes
-  StatefulLHAE.encrypt #id #ad #rg w f
+  StatefulLHAE.encrypt #id w ad rg f
 
 let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher = 
   let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
-  let (Some d) = StatefulLHAE.decrypt #id #ad rd cipher in
+  let (Some d) = StatefulLHAE.decrypt #id rd ad cipher in
   Content.repr id d
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
@@ -175,7 +175,6 @@ let recvEncAppDataRecord tcp pv rd =
 
 (* Flex Handshake *)
 
-
 let main config host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
   let tcp = Platform.Tcp.connect host port in
@@ -259,8 +258,3 @@ let main config host port =
 //  let ad = recvEncAppDataRecord tcp pv rd in
 //  let ad = recvEncAppDataRecord tcp pv rd in
   ()
-
-  
-
-
-
