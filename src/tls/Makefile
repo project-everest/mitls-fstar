@@ -26,7 +26,7 @@ FSTAR_HOME?=../../.fstar
 # .fst files in [lib/ml] that are realized in stdlib-hyperheap.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
-OPTIONS=--universes --use_native_int --fstar_home $(FSTAR_HOME)
+OPTIONS=--use_native_int --fstar_home $(FSTAR_HOME)
 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
 
