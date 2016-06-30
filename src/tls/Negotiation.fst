@@ -19,7 +19,10 @@ type clientOffer = {
   co_protocol_version:protocolVersion;
   co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
-  co_extensions:option (ce:list extension{List.Tot.length ce < 256});
+  co_namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
+  co_sigAlgs: list sigHashAlg;
+  co_safe_resumption: bool;
+  co_safe_renegotiation: bool;
 }
 
 type serverMode = {
@@ -32,6 +35,7 @@ type serverMode = {
      sm_dh_share: option bytes;
      sm_comp: option compression;
      sm_ext: option negotiatedExtensions;
+     
 }
 
 type clientMode = {
@@ -44,6 +48,7 @@ type clientMode = {
      cm_dh_share: option bytes;
      cm_comp: option compression;
      cm_ext: negotiatedExtensions;
+
 }
 
 
@@ -90,15 +95,16 @@ val handshakeId: handshake -> Tot id
 
 let handshakeId h = noId // Placeholder 
 
-val prepareClientOffer: cfg:config -> ci:connectionInfo -> ri:option (cVerifyData *sVerifyData) -> kp: option keyShare -> Tot clientOffer
-let prepareClientOffer cfg ci ri kp =
-  let ext = prepareExtensions cfg ci ri kp in
+val prepareClientOffer: cfg:config -> Tot clientOffer
+let prepareClientOffer cfg =
   let co = 
   {co_protocol_version = cfg.maxVer;
    co_cipher_suites = cfg.ciphersuites;
-   co_raw_cipher_suites = None;
    co_compressions = [NullCompression];
-   co_extensions = Some ext;
+   co_namedGroups = cfg.namedGroups;
+   co_sigAlgs = cfg.signatureAlgorithms;
+   co_safe_resumption = cfg.safe_resumption;
+   co_safe_renegotiation = cfg.safe_renegotiation;
    } in
   co
 

@@ -47,7 +47,8 @@ let prepareClientHello cfg ks log ri sido =
 	 None) in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
   let ci = initConnection Client cr in
-  let co = prepareClientOffer cfg ci ri kp in
+  let co = prepareClientOffer cfg in
+  let ext = prepareExtensions co.co_protocol_version co.co_cipher_suites co.co_safe_resumption co.co_safe_renegotiation co.co_sigAlgs co.co_namedGroups ci ri kp in
   let ch = 
   {ch_protocol_version = co.co_protocol_version;
    ch_client_random = cr;
@@ -55,7 +56,7 @@ let prepareClientHello cfg ks log ri sido =
    ch_cipher_suites = co.co_cipher_suites;
    ch_raw_cipher_suites = None;
    ch_compressions = co.co_compressions;
-   ch_extensions = co.co_extensions;} in
+   ch_extensions = Some ext;} in
   let chb = log @@ (ClientHello ch) in
   (ClientHello ch, chb)
 

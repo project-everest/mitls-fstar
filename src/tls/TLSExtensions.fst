@@ -461,8 +461,8 @@ let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup
 
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
-val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
-let prepareExtensions (cfg:config) (conn:connectionInfo) ri ks =
+val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{is_SEC x \/ is_FFDHE x}) -> connectionInfo -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+let prepareExtensions pv cs sres sren sigAlgs namedGroups (conn:connectionInfo) ri ks =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
        match ri with
@@ -470,18 +470,18 @@ let prepareExtensions (cfg:config) (conn:connectionInfo) ri ks =
        | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
     let res = [E_renegotiation_info(cri)] in
     let res = 
-       match cfg.maxVer,ks with
+       match pv, ks with
        | TLS_1p3,Some ks -> (E_keyShare ks)::res
        | _,_ -> res in
-    let res = if cfg.safe_resumption then E_extended_ms :: res else res in
+    let res = if sres then E_extended_ms :: res else res in
 //No extended padding for now
 //    let res = E_extended_padding :: res in
-    let res = (E_signatureAlgorithms cfg.signatureAlgorithms) :: res in
+    let res = (E_signatureAlgorithms sigAlgs) :: res in
     let res =
-        if List.Tot.existsb (fun x -> isECDHECipherSuite x) (list_valid_cs_is_list_cs cfg.ciphersuites) then
-          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups)) :: res
+        if List.Tot.existsb (fun x -> isECDHECipherSuite x) (list_valid_cs_is_list_cs cs) then
+          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: (E_supported_groups (list_valid_ng_is_list_ng namedGroups)) :: res
         else
-          let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) (list_valid_ng_is_list_ng cfg.namedGroups) in
+          let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) (list_valid_ng_is_list_ng namedGroups) in
           if g = [] then res
           else (E_supported_groups g) :: res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
