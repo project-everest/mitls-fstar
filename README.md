@@ -105,7 +105,7 @@ If you use F* for other projects that lack a Makefile with a <file.fst(i)-in> ta
 	   (target (concat fname "-in"))
 	   (argstr (condition-case nil
 		       (car (process-lines "make" "--quiet" target))
-		     (error "--universes --debug Low"))))
+		     (error "--debug Low"))))
       (split-string argstr))))
 ```
 
