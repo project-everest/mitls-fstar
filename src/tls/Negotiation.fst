@@ -34,7 +34,7 @@ type serverMode = {
      sm_dh_group: option namedGroup;
      sm_dh_share: option bytes;
      sm_comp: option compression;
-     sm_ext: option negotiatedExtensions;
+     sm_ext: negotiatedExtensions;
      
 }
 
@@ -193,8 +193,8 @@ let acceptableCipherSuite cfg spv cs =
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
-val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> Tot (result serverMode)
- let computeServerMode cfg cpv ccs cexts comps = 
+val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result serverMode)
+ let computeServerMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 
     | Error(z) -> Error(z)
     | Correct(npv) -> 
@@ -204,6 +204,22 @@ val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_sui
   match negotiateGroupKeyShare cfg npv kex cexts with
     | Error(z) -> Error(z)
     | Correct(gn,gxo) ->
+  let nego = ne_default in 
+  let next = (match cexts with
+   | Some cexts -> Correct(List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri false) nego cexts)
+//   | None -> ne_default)
+   | None -> (match npv with
+              | SSL_3p0 ->
+                let cre =
+                  if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs ccs) then
+                     {ne_default with ne_secure_renegotiation = RI_Valid}
+                  else ne_default 
+                in Correct (cre)
+             | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))) 
+  in
+  match next with
+    | Error(z) -> Error(z)
+    | Correct(next) ->
   let comp = match comps with
     | [] -> None
     | _ -> Some NullCompression in
@@ -216,29 +232,9 @@ val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_sui
      sm_dh_group = Some gn;
      sm_dh_share = gxo;
      sm_comp = comp;
-     sm_ext = None;
+     sm_ext = next;
     } in
   Correct (mode))
-
-val updateServerMode: cfg:config -> sm:serverMode -> cexts:option (list extension) -> ccs:valid_cipher_suites -> ri:option (cVerifyData *sVerifyData) -> kp: option keyShare -> Tot (result (option (list extension) * negotiatedExtensions * serverMode))
-let updateServerMode cfg sm cexts ccs ri kp =
-  (match negotiateServerExtensions sm.sm_protocol_version cexts ccs cfg sm.sm_cipher_suite ri kp false with
-   | Error(z) -> Error(z)
-   | Correct(sext,next) ->
-  let mode =
-   {sm_protocol_version = sm.sm_protocol_version;
-    sm_kexAlg = sm.sm_kexAlg;
-    sm_aeAlg = sm.sm_aeAlg;
-    sm_sigAlg = sm.sm_sigAlg;
-    sm_cipher_suite = sm.sm_cipher_suite;
-    sm_dh_group = sm.sm_dh_group;
-    sm_dh_share = sm.sm_dh_share;
-    sm_comp = sm.sm_comp;
-    sm_ext = Some next;
-   } in
-  Correct (sext, next, mode))
-
-
 
 val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result clientMode)
 let computeClientMode cfg cext cpv spv sr cs sext comp ri =

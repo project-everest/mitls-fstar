@@ -611,8 +611,8 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) 
     | _ -> None    
 
 val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
-let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
-    match cExt with
+let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
+  match cExt with
     | E_renegotiation_info (cri) ->
         let rs = 
            match cri, ri with
@@ -652,22 +652,23 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
         else {neg with ne_signature_algorithms = Some (sha)}
     | _ -> neg // JK : handle remaining cases
 
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension) * negotiatedExtensions))
+val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension)))
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->
       let server = List.Tot.choose (clientToServerExtension cfg cs ri ks resuming) cExtL in
-      let negi = ne_default in
-      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
-      Correct (Some server, nego)
+      Correct (Some server)
+//      let negi = ne_default in
+//      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
+//      Correct (Some server, nego)
    | None -> 
        (match pv with
        | SSL_3p0 ->
           let cre =
               if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs csl) then
-                 Some [E_renegotiation_info (FirstConnection)], {ne_default with ne_secure_renegotiation = RI_Valid}
-              else None, ne_default in
-          Correct cre
+                 Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
+              else None //, ne_default in
+          in Correct cre
        | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))
 
 val isClientRenegotiationInfo: extension -> Tot (option cVerifyData)

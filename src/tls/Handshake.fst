@@ -96,29 +96,20 @@ val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option r
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ks log ri (ClientHello ch,_) =
- let mode_wo_ext = computeServerMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions in  
-  match mode_wo_ext with
+ let mode = computeServerMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in  
+  match mode with
    | Error(z) -> Error(z)
-   | Correct(mode_wo_ext) ->
-
+   | Correct(mode) ->
   let srand = KeySchedule.ks_server_random ks in
   let ksl = 
-    (match mode_wo_ext.sm_protocol_version, mode_wo_ext.sm_dh_group, mode_wo_ext.sm_dh_share with
+    (match mode.sm_protocol_version, mode.sm_dh_group, mode.sm_dh_share with
      | TLS_1p3, Some gn, Some gxb -> 
-       let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode_wo_ext.sm_cipher_suite gn gxb in
+       let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.sm_cipher_suite gn gxb in
        (Some (ServerKeyShare (gn,gyb)))
      | _ -> None) in
-  match updateServerMode cfg mode_wo_ext ch.ch_extensions ch.ch_cipher_suites ri ksl with
-    | Error(z) -> Error(z)
-    | Correct(sext,next,mode) ->
-
-//let (sext, mode) = updateServerMode cfg mode_wo_ext ch.ch_extensions ch.ch_cipher_suites ri ksl in
-//    match (sext, mode) with
-//     | Error(z) -> Error(z)
-//     | Correct(sext,mode) ->
-//  match negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
-//  | Error(z) -> Error(z)
-//   | Correct(sext,next) ->
+  match negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
+  | Error(z) -> Error(z)
+  | Correct(sext) ->
   let sid = CoreCrypto.random 32 in
   let sh = 
    {sh_protocol_version = mode.sm_protocol_version;
@@ -139,7 +130,7 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
     n_compression = mode.sm_comp;
     n_dh_group = mode.sm_dh_group;
     n_scsv = [];
-    n_extensions = next;
+    n_extensions = mode.sm_ext;
     (* [getCachedSession] returned [None], so no session resumption *)
     n_resume = false} in
   let _ = log @@ (ClientHello ch) in
