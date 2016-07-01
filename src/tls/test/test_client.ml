@@ -13,6 +13,9 @@ let config pv =
          minVer = TLS_1p3;
          maxVer = TLS_1p3;
          ciphersuites = csn;
+         namedGroups = [SEC CoreCrypto.ECC_P256; SEC CoreCrypto.ECC_P384];
+         check_peer_certificate = false;
+         ca_file = "../../data/CAFile.pem";
          })
   else
     let l = [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in

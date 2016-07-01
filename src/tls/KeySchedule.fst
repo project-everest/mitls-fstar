@@ -543,7 +543,8 @@ let ks_server_13_1rtt_init ks cr cs gn gxb =
   let hsId = HSID_DHE h (CommonDH.share_of_key peer_share) (CommonDH.share_of_key our_share) in
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-  let hs : hs hsId = HKDF.hkdf_extract h zeroes gxy in
+  let es = HKDF.hkdf_extract h zeroes zeroes in
+  let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   st := S (S_13_wait_SH (ae, h) None None (| hsId, hs |));
   CommonDH.serialize_raw our_share
 
@@ -716,9 +717,9 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
 
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let w = StreamAE.coerce HyperHeap.root id ckv civ in
   let skv: StreamAE.key id = sk in
   let siv: StreamAE.iv id  = siv in
+  let w = StreamAE.coerce HyperHeap.root id ckv civ in
   let rw = StreamAE.coerce HyperHeap.root id skv siv in
   let r = StreamAE.genReader HyperHeap.root rw in
   st := C (C_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |));

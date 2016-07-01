@@ -1525,7 +1525,7 @@ let parseKeyShareEntries b =
 	| Correct(kex, bytes) ->
 	  begin
 	  match parseKeyShareEntry (ng @| vlbytes 2 kex) with
-	  | Correct entry -> aux bytes (entry::entries)
+	  | Correct entry -> aux bytes (entries @ [entry])
 	  | Error z -> Error z
 	  end
 	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")

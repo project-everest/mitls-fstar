@@ -188,10 +188,9 @@ let rec aux config sock =
   let tcp = Platform.Tcp.accept sock in
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
-  let dummy_log = HandshakeLog.create #rid in // To avoid duplication with HS
+  let ks, sr = KeySchedule.create #rid Server log in
   let pv = TLS_1p2 in
   let kex = TLSConstants.Kex_ECDHE in
-  let ks, sr = KeySchedule.create #rid Server log in
 
   // Get client hello
   let ClientHello(ch),chb = recvHSRecord tcp pv kex in

@@ -135,7 +135,6 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
     n_resume = false} in
   let _ = log @@ (ClientHello ch) in
   let shb = log @@ (ServerHello sh) in
-  let lb = HandshakeLog.getHash log in
   let keys = (match mode.sm_protocol_version with
     	     | TLS_1p3 -> 
 	       let keys = KeySchedule.ks_server_13_sh ks in
