@@ -589,8 +589,7 @@ val prepareClientFinished: KeySchedule.ks -> HandshakeLog.log -> ST (hs_msg * by
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareClientFinished ks log = 
-    let lb = HandshakeLog.getBytes log in
-    let fin = {fin_vd = KeySchedule.ks_client_12_client_verify_data ks lb} in
+    let fin = {fin_vd = KeySchedule.ks_client_12_client_finished ks} in
     let finb = log @@ (Finished fin) in
     (Finished fin, finb)
 
@@ -624,7 +623,7 @@ val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes
 let processServerFinished ks log (m,l) =
    match m with
    | Finished(f) ->
-     let svd = KeySchedule.ks_client_12_server_verify_data ks in
+     let svd = KeySchedule.ks_client_12_server_finished ks in
      if (equalBytes svd f.fin_vd) then 
      	let _ = log @@ (Finished(f)) in
 	Correct svd
@@ -878,14 +877,14 @@ let server_handle_client_ccs (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
 let processClientFinished n ks log msgs =   
     match msgs with
     | [(Finished f,_)] ->
-      let lb = HandshakeLog.getBytes log in
-      let cvd = KeySchedule.ks_server_12_client_verify_data ks lb in
-      let _ = log @@ Finished(f) in
-      let lb = HandshakeLog.getBytes log in
-      let svd = KeySchedule.ks_server_12_server_verify_data ks lb in
-      let fin = Finished ({fin_vd = svd}) in
-      let finb = log @@ fin in
-      Correct [(fin,finb)]
+      let cvd = KeySchedule.ks_server_12_client_finished ks in
+      if (equalBytes cvd f.fin_vd) then
+        let _ = log @@ Finished(f) in
+        let svd = KeySchedule.ks_server_12_server_finished ks in
+        let fin = Finished ({fin_vd = svd}) in
+        let finb = log @@ fin in
+        Correct [(fin,finb)]
+      else Error (AD_decode_error, "Finished MAC did not verify")
    | _ -> Error (AD_unexpected_message, perror __SOURCE_FILE__ __LINE__ "ClientFinished expected")
 
 val server_handle_client_finished: hs -> list (hs_msg * bytes) -> ST incoming

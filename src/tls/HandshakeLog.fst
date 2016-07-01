@@ -68,6 +68,11 @@ let append_log (LOG #reg lref) hm =
 
 let op_At_At l h = append_log l h
 
+let print_log hs_log =
+    let sl = List.Tot.map (HandshakeMessages.string_of_handshakeMessage) hs_log in
+    let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
+    IO.debug_print_string("LOG : " ^ s ^ "\n")
+
 val getMessages: log -> St hs_log
 let getMessages (LOG #reg lref) = 
     let (| pv, hsl, lb |) = !lref in hsl
@@ -78,7 +83,8 @@ let getBytes (LOG #reg lref) =
 
 val getHash: log -> h:CoreCrypto.hash_alg -> St (b:bytes{length b = CoreCrypto.hashSize h})
 let getHash (LOG #reg lref) h = 
-    let (| pv, hsl, lb|) = !lref in 
+    let (| pv, hsl, lb|) = !lref in
+    let b = print_log hsl in
     CoreCrypto.hash h lb
 
 assume val checkLogSessionHash: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool

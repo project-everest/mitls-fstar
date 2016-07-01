@@ -220,7 +220,6 @@ let main config host port =
 
   sendHSRecord tcp pv (ClientKeyExchange cke,ckeb);
 
-  let lb = HandshakeLog.getBytes log in
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
 //  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in

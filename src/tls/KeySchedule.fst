@@ -1017,71 +1017,73 @@ val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
 (******************************************************************)
 (******************************************************************)
 
-val ks_client_12_client_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
+let ks_client_12_client_finished ks
+  : ST (cvd:bytes)
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     is_C st /\ is_C_12_has_MS (C.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} h0 h1)
-
-let ks_client_12_client_verify_data ks log =
-  let KS #region st _ = ks in
-  let C (C_12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-  TLSPRF.verifyData (pv,cs) ms Client log
-
-
-val ks_server_12_client_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS.state ks) in
-    is_S st /\ is_S_12_has_MS (S.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} h0 h1)
-
-let ks_server_12_client_verify_data ks log =
-  let KS #region st _ = ks in
-  let S (S_12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-  TLSPRF.verifyData (pv,cs) ms Client log
-
-
-val ks_server_12_server_verify_data: ks:ks -> log:bytes -> ST (vd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS.state ks) in
-    is_S st /\ is_S_12_has_MS (S.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} h0 h1)
-
-let ks_server_12_server_verify_data ks log =
-  let KS #region st _ = ks in
-  let S (S_12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-  st := S S_Done;
-  TLSPRF.verifyData (pv,cs) ms Server log
-
-val ks_client_12_server_verify_data: ks:ks -> ST (vd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS.state ks) in
-    is_C st /\ is_C_12_has_MS (C.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} h0 h1)
-
-let ks_client_12_server_verify_data ks =
+  (ensures fun h0 r h1 -> h1 = h0)
+  =
   let KS #region st hsl = ks in
   let C (C_12_has_MS csr alpha msId ms) = !st in
   let (pv, cs, ems) = alpha in
-  st := C C_Done;
-  let h = verifyDataHashAlg_of_ciphersuite cs in
-  TLSPRF.verifyData (pv,cs) ms Server (HandshakeLog.getHash hsl h)
+//  let h = verifyDataHashAlg_of_ciphersuite cs in
+//  let log = HandshakeLog.getHash hsl h in
+  let log = HandshakeLog.getBytes hsl in
+  TLSPRF.verifyData (pv,cs) ms Client log
 
+let ks_server_12_client_finished ks
+  : ST (cvd:bytes)
+  (requires fun h0 ->
+    let st = sel h0 (KS.state ks) in
+    is_S st /\ is_S_12_has_MS (S.s st))
+  (ensures fun h0 r h1 -> h1 = h0)
+  =
+  let KS #region st hsl = ks in
+  let S (S_12_has_MS csr alpha msId ms) = !st in
+  let (pv, cs, ems) = alpha in
+//  let h = verifyDataHashAlg_of_ciphersuite cs in
+//  let log = HandshakeLog.getHash hsl h in
+  let log = HandshakeLog.getBytes hsl in
+  TLSPRF.verifyData (pv,cs) ms Client log
+
+let ks_server_12_server_finished ks
+  : ST (svd:bytes)
+  (requires fun h0 ->
+    let st = sel h0 (KS.state ks) in
+    is_S st /\ is_S_12_has_MS (S.s st))
+  (ensures fun h0 r h1 ->
+    let KS #rid st _ = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+  =
+  let KS #region st hsl = ks in
+  let S (S_12_has_MS csr alpha msId ms) = !st in
+  let (pv, cs, ems) = alpha in
+//  let h = verifyDataHashAlg_of_ciphersuite cs in
+//  let log = HandshakeLog.getHash hsl h in
+  let log = HandshakeLog.getBytes hsl in
+  st := S S_Done;
+  TLSPRF.verifyData (pv,cs) ms Server log
+
+let ks_client_12_server_finished ks
+  : ST (svd:bytes)
+  (requires fun h0 ->
+    let st = sel h0 (KS.state ks) in
+    is_C st /\ is_C_12_has_MS (C.s st))
+  (ensures fun h0 r h1 ->
+    let KS #rid st _ = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid !{as_ref st} h0 h1)
+  =
+  let KS #region st hsl = ks in
+  let C (C_12_has_MS csr alpha msId ms) = !st in
+  let (pv, cs, ems) = alpha in
+//  let h = verifyDataHashAlg_of_ciphersuite cs in
+//  let log = HandshakeLog.getHash hsl h in
+  let log = HandshakeLog.getBytes hsl in
+  st := C C_Done;
+  TLSPRF.verifyData (pv,cs) ms Server log
 
 val getId: recordInstance -> GTot id
 let getId k = 
