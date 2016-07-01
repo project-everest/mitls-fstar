@@ -133,27 +133,38 @@ let negotiateCipherSuite cfg pv ccs =
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
-// FIXME: no FFDHE, doesn't check cfg.namedGroups
-val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (namedGroup * option bytes))
+val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (option namedGroup * option bytes))
 let rec negotiateGroupKeyShare cfg pv kex exts =
   match exts with
-  | None ->
-    begin
-    match pv,kex with
-    | TLS_1p2, Kex_ECDHE -> Correct (SEC ECC_P256, None)
-    | _ -> Error(AD_decode_error, "no supported group or key share extension found")
-    end
-  | Some exts ->
-    begin
-    let rec aux: config -> protocolVersion -> kexAlg -> list extension -> Tot (result (namedGroup * option bytes)) = fun cfg pv kex es ->
-      match pv,kex,es with
-      | TLS_1p3, Kex_ECDHE, E_keyShare (ClientKeyShare ((gn,gxb)::_)) :: _ ->
-        Correct (gn,Some gxb)
-      | TLS_1p3,_, h::t -> aux cfg pv kex t
-      | _ -> Error(AD_decode_error, "no supported group or key share extension found")
-    in
-    aux cfg pv kex exts
-    end
+  | None when (pv = TLS_1p3) -> Error(AD_decode_error, "no supported group or key share extension found")
+  | Some exts when (pv = TLS_1p3) ->
+    let rec aux: list extension -> Tot (result (option namedGroup * option bytes)) =
+      function
+      | E_keyShare (ClientKeyShare gl) :: _ ->
+        let inConf (gn, gx) =
+           (((is_SEC gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
+            || ((is_FFDHE gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
+           && List.Tot.mem gn cfg.namedGroups in
+        (match List.Tot.filter inConf gl with
+        | (gn, gx) :: _ -> Correct (Some gn, Some gx)
+        | [] -> Error(AD_decode_error, "no shared group between client and server config"))
+      | _ :: t -> aux t
+      | [] -> Error(AD_decode_error, "no supported group or key share extension found")
+    in aux exts
+  | Some exts when (kex = Kex_ECDHE && List.Tot.existsb is_E_supported_groups exts) ->
+    let Some (E_supported_groups gl) = List.Tot.find is_E_supported_groups exts in
+    let filter x = is_SEC x && List.Tot.mem x cfg.namedGroups in
+    (match List.Tot.filter filter gl with
+    | gn :: _ -> Correct (Some gn, None)
+    | [] -> Error(AD_decode_error, "no shared curve configured"))
+  | _ ->
+    let filter x =
+      (match kex with | Kex_DHE -> is_FFDHE x | Kex_ECDHE -> is_SEC x | _ -> false) in
+    if kex = Kex_DHE || kex = Kex_ECDHE then
+      (match List.Tot.filter filter cfg.namedGroups with
+      | gn :: _ -> Correct (Some gn, None)
+      | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
+    else Correct(None, None)
 
 // Determines if the server random value contains a downgrade flag
 // AND if there has been a downgrade
@@ -189,6 +200,9 @@ let acceptableCipherSuite cfg spv cs =
   List.Tot.existsb (fun x -> x = cs) cfg.ciphersuites &&
   not (isAnonCipherSuite cs) || cfg.allowAnonCipherSuite
 
+// TODO ADL: incorrect as written; CS nego depends on ext nego
+//   (e.g. in TLS 1.2 it's incorrect to select an EC cipher suite if
+//         EC extensions are missing)
 // TODO BD: ignoring extensions for the moment
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
@@ -201,9 +215,6 @@ val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_sui
   match negotiateCipherSuite cfg npv ccs with
     | Error(z) -> Error(z)
     | Correct(kex,sa,ae,cs) ->
-  match negotiateGroupKeyShare cfg npv kex cexts with
-    | Error(z) -> Error(z)
-    | Correct(gn,gxo) ->
   let nego = ne_default in 
   let next = (match cexts with
    | Some cexts -> Correct(List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri false) nego cexts)
@@ -217,24 +228,25 @@ val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_sui
                 in Correct (cre)
              | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))) 
   in
-  match next with
-    | Error(z) -> Error(z)
-    | Correct(next) ->
-  let comp = match comps with
-    | [] -> None
-    | _ -> Some NullCompression in
-  let mode =
-    {sm_protocol_version = npv;
-     sm_kexAlg = kex;
-     sm_aeAlg = ae;
-     sm_sigAlg = sa;
-     sm_cipher_suite = cs;
-     sm_dh_group = Some gn;
-     sm_dh_share = gxo;
-     sm_comp = comp;
-     sm_ext = next;
-    } in
-  Correct (mode))
+  let ng = negotiateGroupKeyShare cfg npv kex cexts in
+  match next, ng with
+    | Error(z), _ | _, Error(z) -> Error(z)
+    | Correct(next), Correct(gn, gxo) ->
+      let comp = match comps with
+                 | [] -> None
+                 | _ -> Some NullCompression in
+      let mode = {
+        sm_protocol_version = npv;
+        sm_kexAlg = kex;
+        sm_aeAlg = ae;
+        sm_sigAlg = sa;
+        sm_cipher_suite = cs;
+        sm_dh_group = gn;
+        sm_dh_share = gxo;
+        sm_comp = comp;
+        sm_ext = next;
+      } in
+      Correct (mode))
 
 val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result clientMode)
 let computeClientMode cfg cext cpv spv sr cs sext comp ri =
