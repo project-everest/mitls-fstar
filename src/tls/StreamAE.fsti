@@ -19,9 +19,9 @@ open FStar.Monotonic.RRef
 
 module HH = FStar.HyperHeap
 
-type id = i:id { pv_of_id i = TLS_1p3 /\ is_AEAD i.aeAlg }
+type id = i:id { pv_of_id i = TLS_1p3 /\ is_AEAD (aeAlg_of_id i) }
 
-let alg (i:id) : CoreCrypto.aead_cipher = AEAD._0 i.aeAlg
+let alg (i:id) : CoreCrypto.aead_cipher = AEAD._0 (aeAlg_of_id i)
 
 let ltag i : nat = CoreCrypto.aeadTagSize (alg i)
 

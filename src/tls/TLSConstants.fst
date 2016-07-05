@@ -116,6 +116,17 @@ let strongAEAlg _ _ = false
 
 assume val strongAuthAE: pv:protocolVersion -> ae:aeAlg -> Lemma(strongAEAlg pv ae ==> strongAuthAlg pv ae)
 
+// -----------------------------------------------------------------------
+// record-layer length constants [5.2.1]
+// note that TLS 1.3 lowers a bit the upper bound of cipher lengths (Ok in principle)
+// but still enables padding beyond plausible plaintext lengths.
+
+// API and protocol-level fragments are in [0..2^14]
+let max_TLSPlaintext_fragment_length = 16384
+let max_TLSCompressed_fragment_length = max_TLSPlaintext_fragment_length + 1024
+let max_TLSCiphertext_fragment_length = max_TLSPlaintext_fragment_length + 2048
+let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 256
+
 //CF we leave these functions abstract for verification purposes
 //CF we may need to be more negative on weak algorithms (so that we don't try to verify their use)
 //CF and more precise/positive on algorithms we implement (so that we reflect lower assumptions)

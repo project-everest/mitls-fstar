@@ -18,9 +18,9 @@ open Range
 open MonotoneSeq
 open FStar.Monotonic.RRef
 
-type id = i:id{ pv_of_id i <> TLS_1p3 /\ is_AEAD i.aeAlg }
+type id = i:id{ is_ID12 i /\ is_AEAD (aeAlg_of_id i) }
 
-let alg (i:id) = AEAD._0 i.aeAlg
+let alg (i:id) = AEAD._0 (aeAlg_of_id i)
 
 type cipher (i:id) = c:bytes{ valid_clen i (length c) }
 

@@ -24,9 +24,9 @@ module StLHAE = StatefulLHAE
 ////////////////////////////////////////////////////////////////////////////////
 //Distinguishing the two multiplexing choices of StAE based on the ids
 ////////////////////////////////////////////////////////////////////////////////
-let is_stream i = pv_of_id i = TLS_1p3 && is_AEAD i.aeAlg
+let is_stream i = is_ID13 i
 
-let is_stlhae i = pv_of_id i <> TLS_1p3 && is_AEAD i.aeAlg
+let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
 
 type id = i:id {is_stream i \/ is_stlhae i}
 
@@ -58,8 +58,8 @@ let aeKeySize (i:id) =
     CoreCrypto.aeadKeySize (Stream.alg i) +
     Stream.iv_length i
   else
-    CoreCrypto.aeadKeySize (AEAD._0 i.aeAlg) +
-    TLSConstants.aeadSaltSize (AEAD._0 i.aeAlg)
+    CoreCrypto.aeadKeySize (AEAD._0 (aeAlg_of_id i)) +
+    TLSConstants.aeadSaltSize (AEAD._0 (aeAlg_of_id i))
 
 type keyBytes (i:id) = lbytes (aeKeySize i)
 

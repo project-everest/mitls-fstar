@@ -461,8 +461,8 @@ let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup
 
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
-val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{is_SEC x \/ is_FFDHE x}) -> connectionInfo -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
-let prepareExtensions pv cs sres sren sigAlgs namedGroups (conn:connectionInfo) ri ks =
+val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{is_SEC x \/ is_FFDHE x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
        match ri with
@@ -699,9 +699,6 @@ let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerify
 
 val hasExtendedMS: negotiatedExtensions -> Tot bool
 let hasExtendedMS extL = extL.ne_extended_ms = true
-
-val hasExtendedPadding: id -> Tot bool
-let hasExtendedPadding id = id.ext.ne_extended_padding = true
 
 // JK : cannot add total effect here because of the exception thrown
 (* TODO *)

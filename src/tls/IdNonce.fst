@@ -10,9 +10,6 @@ module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 
-val nonce_of_id : i:id -> Tot N.random
-let nonce_of_id i = fst (Platform.Bytes.split i.csrConn 32)
-
 //The goal of the rest of the module is to provide id_of_nonce
 //and to prove that the two are mutual inverses
 type n_id (n:random) = i:id{nonce_of_id i = n}
