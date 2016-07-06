@@ -10,9 +10,7 @@
   MITLS_FFI_ENTRY(Config) \
   MITLS_FFI_ENTRY(PrepareClientHello) \
   MITLS_FFI_ENTRY(HandleServerHello) \
-  MITLS_FFI_ENTRY(HandleEncryptedExtensions) \
   MITLS_FFI_ENTRY(HandleCertificateVerify12) \
-  MITLS_FFI_ENTRY(HandleCertificateVerify13) \
   MITLS_FFI_ENTRY(HandleServerKeyExchange) \
   MITLS_FFI_ENTRY(HandleServerHelloDone) \
   MITLS_FFI_ENTRY(PrepareClientKeyExchange) \
@@ -22,6 +20,9 @@
   MITLS_FFI_ENTRY(HandleServerFinished) \
   MITLS_FFI_ENTRY(PrepareSend) \
   MITLS_FFI_ENTRY(HandleReceive) \
+  MITLS_FFI_ENTRY(Connect13) \
+  MITLS_FFI_ENTRY(PrepareSend13) \
+  MITLS_FFI_ENTRY(HandleReceive13) \
 
  
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
@@ -196,24 +197,10 @@ int FFI_mitls_handle_server_hello(/* in out */ size_t *state, char* header, size
     return ret;
 }
 
-int FFI_mitls_handle_encrypted_extensions(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleEncryptedExtensions, state, header, header_size, record, record_size);
-    return ret;
-}
-
 int FFI_mitls_handle_certificate_verify12(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size)
 {
     int ret;
     ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleCertificateVerify12, state, header, header_size, record, record_size);
-    return ret;
-}
-
-int FFI_mitls_handle_certificate_verify13(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleCertificateVerify13, state, header, header_size, record, record_size);
     return ret;
 }
 
@@ -306,6 +293,110 @@ void * FFI_mitls_handle_receive(/* in out */ size_t *state, char* header, size_t
     memcpy(Bp_val(record_value), record, record_size);
     
     result = caml_callback3_exn(*g_mitls_FFI_HandleReceive, state_value, header_value, record_value);
+    if (Is_exception_result(result)) {
+        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        p = NULL;
+    } else {
+        // Return the plaintext data
+        p = copypacket(result, packet_size);
+    }
+    
+    CAMLreturnT(void*, p);
+}
+
+CAMLprim value ocaml_send_tcp(value cookie, value bytes)
+{
+    mlsize_t buffer_size;
+    char *buffer;
+    int retval;
+    size_t c = Long_val(cookie);
+    struct _FFI_mitls_callbacks *callbacks = (struct _FFI_mitls_callbacks *)c;
+    CAMLparam2(cookie, bytes);
+
+    buffer = Bp_val(bytes);
+    buffer_size = caml_string_length(bytes);
+    
+    retval = (*callbacks->send)(callbacks, buffer, buffer_size);
+    
+    return Val_int(retval);
+}
+
+CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
+{
+    mlsize_t buffer_size;
+    char *buffer;
+    ssize_t retval;
+    size_t c = Long_val(cookie);
+    struct _FFI_mitls_callbacks *callbacks = (struct _FFI_mitls_callbacks *)c;
+    CAMLparam2(cookie, bytes);
+    
+    buffer = Bp_val(bytes);
+    buffer_size = caml_string_length(bytes);
+    
+    retval = (*callbacks->recv)(callbacks, buffer, buffer_size);
+    
+    return Val_int(retval);
+}
+
+int FFI_mitls_connect13(struct _FFI_mitls_callbacks *callbacks, /* out */ size_t *state)
+{
+    value* pstate = *(value**)state;
+    value state_value = *pstate;
+    CAMLparam1(state_value);
+    CAMLlocal1(result);
+    int ret;
+    
+    result = caml_callback2_exn(*g_mitls_FFI_Connect13, state_value, Val_long((size_t)callbacks));
+    if (Is_exception_result(result)) {
+        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        ret = 0;
+    } else {
+        *pstate = result;
+        ret = 1;
+        
+    }
+    CAMLreturnT(int, ret);
+}
+
+void * FFI_mitls_prepare_send13(/* in out */ size_t *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size)
+{
+    value* pstate = *(value**)state;
+    value state_value = *pstate;
+    void *p = NULL;
+    CAMLparam1(state_value);
+    CAMLlocal2(buffer_value, result);
+    
+    buffer_value = caml_alloc_string(buffer_size);
+    memcpy(Bp_val(buffer_value), buffer, buffer_size);
+    
+    result = caml_callback2_exn(*g_mitls_FFI_PrepareSend13, state_value, buffer_value);
+    if (Is_exception_result(result)) {
+        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        p = NULL;
+    } else {
+        // The return the plaintext data
+        p = copypacket(result, packet_size);
+    }
+    
+    CAMLreturnT(void*, p);
+    
+}
+
+void * FFI_mitls_handle_receive13(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size)
+{
+    value* pstate = *(value**)state;
+    value state_value = *pstate;
+    void *p = NULL;
+    CAMLparam1(state_value);
+    CAMLlocal3(header_value, record_value, result);
+
+    header_value = caml_alloc_string(header_size);
+    memcpy(Bp_val(header_value), header, header_size);
+    
+    record_value = caml_alloc_string(record_size);
+    memcpy(Bp_val(record_value), record, record_size);
+    
+    result = caml_callback3_exn(*g_mitls_FFI_HandleReceive13, state_value, header_value, record_value);
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         p = NULL;

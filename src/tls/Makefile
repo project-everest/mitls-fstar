@@ -28,7 +28,7 @@ STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
 OPTIONS=--universes --use_native_int --fstar_home $(FSTAR_HOME)
 
-CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
+CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap FFICallbacks
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
@@ -45,13 +45,13 @@ CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection
 
 # The .fst interfaces for the platform and crypto libraries.
-LIBFILES=$(PLATFORM) $(CRYPTO)
+LIBFILES=$(PLATFORM) $(CRYPTO) ../../libs/ml/FFICallbacks.fst
 
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap 
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap  --include ../../libs/ml/
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml)
 
 # ----------------------- NuBuild integration -------------------------
 NUBUILD_HOME=../../.nubuild
@@ -243,15 +243,37 @@ tls-lax: $(LIBFILES) ConcreteFlags $(FSTS)
 wc:
 	wc -l $(LIBFILES) $(FSTS)
 
+# ----------------------- FFI callback library -------------------------
+FFICallbacks.cmi: ../../libs/ml/FFICallbacks.mli
+	cp ../../libs/ml/FFICallbacks.mli .
+	ocamlfind c -package batteries -I $(FSTAR_HOME)/$(CONTRIB)/Platform/ml -I ../../libs -c FFICallbacks.mli
+
+FFICallbacks.cmo: FFICallbacks.cmi
+	
+FFICallbacks.cmx: FFICallbacks.cmi
+    
+FFICallbacks.cmx: ../../libs/ml/FFICallbacks.ml FFI.c FFICallbacks.cmi
+	cp ../../libs/ml/FFICallbacks.ml .
+	ocamlfind opt -package batteries -I $(FSTAR_HOME)/$(CONTRIB)/Platform/ml -I ../../libs  -I ../../libs -c FFICallbacks.ml ffi.c
+    
+OCAMLMKLIB = ocamlfind mklib $(INCLUDE)    
+FFICallbacks.cmxa: FFICallbacks.cmx
+	$(OCAMLMKLIB) -package batteries $(EXTRA_LIBS) -o FFICallbacks FFICallbacks.cmx ffi.o
+
+FFICallbacks.cma: FFICallbacks.cmo    
+	$(OCAMLMKLIB) -package batteries $(EXTRA_LIBS) -o FFICallbacks FFICallbacks.cmo
+    
+ 
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
 # fstarlib-hyperheap has the entire F* standard library.
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa
+  $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa \
+  FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
-TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto)
+TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto FFICallbacks)
 
 OUTPUT_DIR=output
 
@@ -277,7 +299,7 @@ refresh:
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
+tls-gen: $(LIBFILES) ConcreteFlags $(FSTS) FFICallbacks.cmxa
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	$(FSTAR) \
@@ -335,5 +357,5 @@ endif
 #depends on tls-gen
 tls-ffi: libmitls.dll
 
-libmitls.dll: ffi.c mitls.cmxa #tls-gen
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -inline 0 ffi.c -linkall -g -output-obj mitls.cmxa -o libmitls.dll
+libmitls.dll: mitls.cmxa #tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -inline 0 -linkall -g -output-obj mitls.cmxa -o libmitls.dll

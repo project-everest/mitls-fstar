@@ -13,6 +13,7 @@ open TLSInfo
 open StreamAE
 open CoreCrypto
 open KeySchedule
+open FFICallbacks
 
 (* FlexRecord *)
 
@@ -200,7 +201,6 @@ type ffiStateCertificateVerify = {
     cscv_lg: HandshakeLog.log;
     cscv_ch: HandshakeMessages.ch;
     cscv_n:nego;
-    cscv_k: option KeySchedule.recordInstance;
     cscv_sh:HandshakeMessages.sh;
     }
 
@@ -242,8 +242,7 @@ let ffiHandleServerHelloWorker ffiState cheader crecord =
   let pv = config.maxVer in
   let ServerHello(sh),log = recvHSRecord2 header record pv kex log in
   let Correct (n,k) = Handshake.processServerHello config ks lg None ch (ServerHello sh,log) in
-    match k with
-    | None -> let newstate:ffiStateCertificateVerify = {
+  let newstate:ffiStateCertificateVerify = {
         cscv_guard = "CSCV";
         cscv_config=config;
         cscv_ch=ch;
@@ -251,61 +250,15 @@ let ffiHandleServerHelloWorker ffiState cheader crecord =
         cscv_log=log;
         cscv_lg=lg;
         cscv_n=n;
-        cscv_k=None;
         cscv_sh=sh;
-        } in Correct(newstate)
-    | Some kk -> let newstate:ffiStateCertificateVerify = {
-        cscv_guard = "CSCV";
-        cscv_config=config;
-        cscv_ch=ch;
-        cscv_ks=ks;
-        cscv_log=log;
-        cscv_lg=lg;
-        cscv_n=n;
-        cscv_k=Some kk;
-        cscv_sh=sh;
-        } in Correct(newstate)
+    } in Correct(newstate)
   
   val ffiHandleServerHello: ffiState:ffiStateServerHello -> header:cbytes -> record:cbytes -> ffiStateCertificateVerify
   let ffiHandleServerHello ffiState cheader crecord =
     match ffiHandleServerHelloWorker ffiState cheader crecord with
     | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
     | Correct (x) -> x
-  
-(*****************************************************************************************)
-let handleEncHSRecord header record pv kex log rd = 
-match check_read header record pv with
-  | Error z -> Error z
-  | Correct(Content.Application_data,_,cipher) -> 
-      let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
-                    Handshake.parseHandshakeMessages (Some pv) (Some kex) payload
-
-val ffiHandleEncryptedExtensionsWorker: ffiState:ffiStateCertificateVerify -> header:bytes -> record:bytes -> (result (ffiStateCertificateVerify))
-let ffiHandleEncryptedExtensionsWorker ffiState header record =
-  let _ = (if not (ffiState.cscv_guard = "CSCV") then IO.print_string ("Incorrect cssh_guard "^ffiState.cscv_guard^"\n")) in
-  let config = ffiState.cscv_config in
-  let log = ffiState.cscv_log in
-  let lg = ffiState.cscv_lg in
-  let ks = ffiState.cscv_ks in
-  let kex = TLSConstants.Kex_ECDHE in
-  let sh = ffiState.cscv_sh in
-  let pv = sh.sh_protocol_version in
-  match ffiState.cscv_k with
-  | k -> Error(AD_illegal_parameter,  "k must be not None here")
-  | Some k -> let KeySchedule.StAEInstance rd wr = k in
-      (match handleEncHSRecord header record pv kex log rd with
-        | Error z -> Error z
-        | Correct (rem,[(hs_msg,to_log)]) -> Correct(ffiState) (* bugbug: confirm this is an EncryptedExtensions(ee),log *)
-        | Correct (rem, hsm) -> Error (AD_illegal_parameter,  "Unexpected handleEncHSRecord rem hsm"))
-
-val ffiHandleEncryptedExtensions:  ffiState:ffiStateCertificateVerify -> header:cbytes -> record:cbytes -> ffiStateCertificateVerify
-let ffiHandleEncryptedExtensions ffiState header record =
-  let h = abytes header in
-  let r = abytes record in
-  match ffiHandleEncryptedExtensionsWorker ffiState h r with
-  | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
-  | Correct (x) -> x
-    
+     
 (*****************************************************************************************)
 type ffiStateKeyExchange = {
     cske_guard: string;
@@ -359,35 +312,6 @@ let ffiHandleCertificateVerify12 ffiState header record =
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
   | Correct (x) -> x
     
-(*****************************************************************************************)
-val ffiHandleCertificateVerifyWorker13: ffiState:ffiStateCertificateVerify -> header:bytes -> record:bytes -> (result (ffiStateCertificateVerify))
-let ffiHandleCertificateVerifyWorker13 ffiState header record =
-  let _ = (if not (ffiState.cscv_guard = "CSCV") then IO.print_string ("Incorrect cssh_guard "^ffiState.cscv_guard^"\n")) in
-  let config = ffiState.cscv_config in
-  let log = ffiState.cscv_log in
-  let sh = ffiState.cscv_sh in
-  let n = ffiState.cscv_n in
-  let pv = n.n_protocol_version in
-  let cs = n.n_cipher_suite in
-  let CipherSuite kex sa ae = cs in
-  match pv with
-    | TLS_1p3 -> (match ffiState.cscv_k with
-                       | k -> Error(AD_illegal_parameter,  "k must be not None here")
-                       | Some k -> let KeySchedule.StAEInstance rd wr = k in
-                                   (match handleEncHSRecord header record pv kex log rd with
-                                          | Error z -> Error z
-                                          | Correct (rem,[(hs_msg,to_log)]) -> Correct(ffiState) (* bugbug: confirm this is a Certificate(sc),log *)
-                                          | Correct (rem, hsm) -> Error (AD_illegal_parameter,  "Unexpected handleEncHSRecord rem hsm")))
-    | _ -> Error(AD_illegal_parameter,  "Unsupported sh_protocol_version")
-  
-  
-val ffiHandleCertificateVerify13:  ffiState:ffiStateCertificateVerify -> header:cbytes -> record:cbytes -> ffiStateCertificateVerify
-let ffiHandleCertificateVerify13 ffiState header record =
-  let h = abytes header in
-  let r = abytes record in
-  match ffiHandleCertificateVerifyWorker13 ffiState h r with
-  | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
-  | Correct (x) -> x
     
 (*****************************************************************************************)
 type ffiStateServerHelloDone = {
@@ -693,6 +617,193 @@ let ffiHandleReceive ffiState header record =
   match ffiHandleReceiveWorker ffiState h r with
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
   | Correct (x) -> get_cbytes x 
+
+(*****************************************************************************************)
+
+type cookie = FFICallbacks.cookie
+
+val sendTcpPacket: cookie:cookie -> buf:bytes -> (result (bytes))
+let sendTcpPacket cookie buf = 
+  let result = FFICallbacks.ocaml_send_tcp cookie (get_cbytes buf) in
+  if result < 0 then
+    Error (AD_internal_error, "socket send failure")
+  else
+    Correct buf
+
+val recvTcpPacket: cookie:cookie -> maxlen:Prims.int -> (result (bytes))    
+let recvTcpPacket cookie maxlen =
+  let str = String.make maxlen 0z in
+  let recvlen = FFICallbacks.ocaml_recv_tcp cookie str  in
+  if recvlen < 0 then
+    Error (AD_internal_error, "socket receive failure")
+  else
+    let b = String.substring str 0 recvlen in
+    let ab = abytes b in
+    Correct ab
+  
+private val really_read_rec: b:bytes -> cookie -> l:nat -> (result (lbytes (l+length b)))
+
+let rec really_read_rec prev cookie len = 
+    if len = 0 
+    then Correct prev
+    else 
+      match recvTcpPacket cookie len with
+      | Correct b -> 
+            let lb = length b in
+      	    if lb = len then Correct(prev @| b)
+      	    else really_read_rec (prev @| b) cookie (len - lb)
+      | Error e -> Error e
+
+private let really_read = really_read_rec empty_bytes
+
+val read: cookie -> protocolVersion -> 
+  (result (Content.contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
+let read cookie pv =
+  match really_read cookie 5 with 
+  | Correct header -> (
+      match Record.parseHeader header with  
+      | Correct (ct,pv,len) -> (
+         match really_read cookie len with
+         | Correct payload  -> Correct (ct,pv,payload)
+         | Error e          -> Error e )
+      | Error e             -> Error e )
+  | Error e                 -> Error e
+
+  
+let recvHSRecordCallback cookie pv kex log = 
+  let Correct(Content.Handshake,rpv,pl) = read cookie pv in
+  match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
+  | Correct (rem,[(hs_msg,to_log)]) -> 
+     	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
+	     (hs_msg,log @| to_log))
+  | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
+  
+ let recvEncHSRecordCallback cookie pv kex log rd = 
+  let Correct(Content.Application_data,_,cipher) = read cookie pv in
+  let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
+  let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in 
+  let [(hs_msg,to_log)] = hsm in
+  IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
+  hs_msg, log @| to_log	      
+
+let sendRecordCallback cookie pv ct msg str = 
+  let r = Record.makePacket ct pv msg in
+  let Correct _ = sendTcpPacket cookie r in
+  IO.print_string ("Sending "^Content.ctToString ct^"Data("^str^")\n")
+
+let sendHSRecordCallback cookie pv hs_msg log = 
+  let (str,hs,log) = makeHSRecord pv hs_msg log in
+  sendRecordCallback cookie pv Content.Handshake hs str;
+  log
+
+type ffiStateClient13 = {
+    cscl_guard: string;
+    cscl_config: config;
+    cscl_pv: protocolVersion;
+    cscl_dwr: (StreamAE.writer TestClient.id);
+    cscl_drd: (StreamAE.reader TestClient.id);
+}
+  
+val ffiConnect13: ffiState:ffiStateClientHello -> cookie:cookie -> ffiStateClient13
+let ffiConnect13 ffiState cookie =
+  let _ = (if not (ffiState.csch_guard = "CSCH") then IO.print_string ("Incorrect csch_guard "^ffiState.csch_guard^"\n")) in
+  let config = ffiState.csch_config in
+  let log = empty_bytes in
+  let rid = new_region root in
+  let ks, cr = KeySchedule.create #rid Client in
+  let lg = HandshakeLog.create #rid in
+
+  // This will call KS.ks_client_13_init_1rtt
+  let (ClientHello ch,chb) = Handshake.prepareClientHello config ks lg None None in
+  let pv = ch.ch_protocol_version in
+  let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in
+  let kex = TLSConstants.Kex_ECDHE in
+  let log = sendHSRecordCallback cookie pv (ClientHello ch) log in
+
+  let ServerHello(sh),log = recvHSRecordCallback cookie pv kex log in
+  let Correct (n,Some k) = Handshake.processServerHello config ks lg None ch (ServerHello sh,log) in
+  let pv = sh.sh_protocol_version in
+  let cs = sh.sh_cipher_suite in
+  let CipherSuite kex sa ae = cs in
+  let KeySchedule.StAEInstance rd wr = k in
+
+  let sal = n.n_extensions.ne_signature_algorithms in
+  let EncryptedExtensions(ee),log = recvEncHSRecordCallback cookie pv kex log rd in
+  let Certificate(sc),log = recvEncHSRecordCallback cookie pv kex log rd in
+  IO.print_string ("Certificate validation status = " ^
+    (if Cert.validate_chain sc.crt_chain true (config.peer_name) config.ca_file then
+      "OK" else "FAIL")^"\n");
+  let cv_log = hash log in
+
+  let CertificateVerify(cv),log = recvEncHSRecordCallback cookie pv kex log rd in
+
+  //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
+  let Some ((sa,h), sigv) = Handshake.sigHashAlg_of_ske cv.cv_sig in
+  let a = Signature.Use (fun _ -> True) sa [h] false false in
+  let tbs = Handshake.to_be_signed pv Server None cv_log in
+  let Some pk = Signature.get_chain_public_key #a sc.crt_chain in
+
+  IO.print_string ("Signature validation status = " ^
+    (if Signature.verify h pk tbs sigv then "OK" else "FAIL") ^ "\n");
+
+  let svd = KeySchedule.ks_client_13_1rtt_server_finished ks (hash log) in
+  let Finished({fin_vd = sfin}),log = recvEncHSRecordCallback cookie pv kex log rd in
+
+  (if equalBytes sfin svd then
+    IO.print_string ("Server finished OK:"^(print_bytes svd)^"\n")
+  else
+    failwith "Failed to verify server finished");
+
+  let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_client_13_1rtt_client_finished ks (hash log) in
+  let cfin = {fin_vd = cvd} in
+  let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
+  IO.print_string "before encrypt \n";
+  let efinb = encryptRecord_TLS13_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
+  sendRecordCallback cookie pv Content.Application_data efinb str;
+  let newstate:ffiStateClient13 = {
+    cscl_guard="CSCL";
+    cscl_config=config;
+    cscl_pv=pv;
+    cscl_dwr = dwr;
+    cscl_drd = drd;
+  } in
+  newstate
+
+
+val ffiPrepareSend13:  ffiState:ffiStateClient13 -> cbytes -> cbytes
+let ffiPrepareSend13 ffiState payload =
+  let _ = (if not (ffiState.cscl_guard = "CSCL") then IO.print_string ("Incorrect cscl_guard "^ffiState.cscl_guard^"\n")) in
+  let _ = (if not (ffiState.cscl_pv = TLS_1p3) then IO.print_string ("This call is for TLS 1.3 only\n")) in
+  let pv = ffiState.cscl_pv in
+  let dwr = ffiState.cscl_dwr in
+  let msg = encryptRecord_TLS13_AES_GCM_128_SHA256 dwr Content.Application_data (utf8 payload) in
+  let r = sendRecord2 pv Content.Application_data msg "Send" in
+  get_cbytes r
+
+  
+val ffiHandleReceiveWorker13: ffiState:ffiStateClient13 -> header:bytes -> record:bytes -> (result (bytes))
+let ffiHandleReceiveWorker13 ffiState header record =
+  let _ = (if not (ffiState.cscl_guard = "CSCL") then IO.print_string ("Incorrect cscl_guard "^ffiState.cscl_guard^"\n")) in
+  let _ = (if not (ffiState.cscl_pv = TLS_1p3) then IO.print_string ("This call is for TLS 1.3 only\n")) in
+  let config = ffiState.cscl_config in
+  let pv = ffiState.cscl_pv in
+  let drd = ffiState.cscl_drd in
+  let c = check_read header record pv in
+  match c with
+  | Error (x,z) -> IO.print_string (z^"\n"); Error (x,z)
+  | Correct(Content.Application_data,_,cipher) -> 
+      let cleartext = decryptRecord_TLS13_AES_GCM_128_SHA256 drd Content.Application_data cipher in
+      Correct (cleartext)
+  
+val ffiHandleReceive13:  ffiState:ffiStateClient13 -> header:cbytes -> record:cbytes -> cbytes
+let ffiHandleReceive13 ffiState header record =
+  let h = abytes header in
+  let r = abytes record in
+  match ffiHandleReceiveWorker13 ffiState h r with
+  | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
+  | Correct (x) -> get_cbytes x 
+  
+
   
 (*****************************************************************************************)
   let main config host port =
