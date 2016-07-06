@@ -27,8 +27,8 @@ open Range
    check its usage restrictions *)
 
 
-type id = i:id { is_MtE i.aeAlg } 
-let alg (i:id) = MtE._0 i.aeAlg
+type id = i:id { is_MtE (aeAlg_of_id i) } 
+let alg (i:id) = MtE._0 (aeAlg_of_id i)
 
 type idB = i:id { is_Block (alg i) }
 
@@ -289,7 +289,7 @@ private val dec_int: i:id -> s: decryptor i -> c:cipher
     (*@length c >= minTlen i /\ *)
     length c <= max_TLSCiphertext_fragment_length 
     (*@/\ 
-    (!enc,mac. i.aeAlg = MtE(CBC_Stale(enc),mac) \/ i.aeAlg = MtE(CBC_Fresh(enc),mac) => Length(c)>=BlockSize(enc)) *)
+    (!enc,mac. (aeAlg_of_id i) = MtE(CBC_Stale(enc),mac) \/ (aeAlg_of_id i) = MtE(CBC_Fresh(enc),mac) => Length(c)>=BlockSize(enc)) *)
     } -> 
     decryptor i *
     bytes 

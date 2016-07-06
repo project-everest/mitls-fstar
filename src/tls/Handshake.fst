@@ -46,9 +46,8 @@ let prepareClientHello cfg ks log ri sido =
       	 let _ = KeySchedule.ks_client_12_init ks in 
 	 None) in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
-  let ci = initConnection Client cr in
   let co = prepareClientOffer cfg in
-  let ext = prepareExtensions co.co_protocol_version co.co_cipher_suites co.co_safe_resumption co.co_safe_renegotiation co.co_sigAlgs co.co_namedGroups ci ri kp in
+  let ext = prepareExtensions co.co_protocol_version co.co_cipher_suites co.co_safe_resumption co.co_safe_renegotiation co.co_sigAlgs co.co_namedGroups ri kp in
   let ch = 
   {ch_protocol_version = co.co_protocol_version;
    ch_client_random = cr;
@@ -1132,7 +1131,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then i = noId else let e = Seq.index es j in i = handshakeId e.h)   
+    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = handshakeId e.h)   
   ))
   (ensures (next_fragment_ensures s))
 let rec next_fragment i hs = 

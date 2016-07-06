@@ -64,7 +64,7 @@ type id = StreamAE.id
 type r_conn (nonce:random) = c:connection{c.hs.nonce = nonce}
 
 //The connection associated with an id
-type i_conn (i:id) = r_conn (I.nonce_of_id i)
+type i_conn (i:id) = r_conn (nonce_of_id i)
 
 (* -------------------------------------------------------------------------------- 
    The nonce to connection table, defined in a few steps: 
@@ -129,7 +129,7 @@ let ms_conn_inv (ms:ms_t)
 	(authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h) /\
 	//main application invariant:
 	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is either still unused; or
-	             (let copt = MM.sel conn (I.nonce_of_id i) in
+	             (let copt = MM.sel conn (nonce_of_id i) in
   		      is_Some copt /\ registered i w (Some.v copt) h)))            //it's been registered with the connection associated with its nonce
 
 //The main invariant, for all AE.ids
@@ -217,7 +217,7 @@ let try_ms_derive (epoch_region:rgn) (i:AE.id)
   : ST (AE.writer i)
        (requires (fun h ->
        	   HH.disjoint epoch_region tls_region /\
-	   N.registered (I.nonce_of_id i) epoch_region /\
+	   N.registered (nonce_of_id i) epoch_region /\
 	   is_epoch_rgn epoch_region /\
 	   authId i /\
 	   mc_inv h))
@@ -235,20 +235,20 @@ let try_ms_derive (epoch_region:rgn) (i:AE.id)
 (* Some simply sanity checks on the association between connections, ids, nonces, writers regions *)
 let all_epoch_writers_share_conn_nonce (c:connection) (i:AE.id) (wi:AE.writer i) (h:HH.t)
     : Lemma (requires (registered i wi c h))
-            (ensures (I.nonce_of_id i = c.hs.nonce))
+            (ensures (nonce_of_id i = c.hs.nonce))
     = ()
 
 let writer_registered_to_at_most_one_connection
     (n1:random) (c1:r_conn n1)
     (n2:random) (c2:r_conn n2{n1 <> n2})
-    (i:AE.id {I.nonce_of_id i = n1}) (w:AE.writer i) (h:HH.t)
+    (i:AE.id {nonce_of_id i = n1}) (w:AE.writer i) (h:HH.t)
     : Lemma (requires (registered i w c1 h))
 	    (ensures (~ (registered i w c2 h)))
     = ()
 
 let writer_region_within_connection
     (n:random) (c:r_conn n)
-    (i:AE.id {I.nonce_of_id i = n}) (w:AE.writer i) (h:HH.t)
+    (i:AE.id {nonce_of_id i = n}) (w:AE.writer i) (h:HH.t)
     : Lemma (requires (registered i w c h))
 	    (ensures (HH.includes (C.region c) (StreamAE.State.region w)))
     = reveal_epoch_region_inv_all ()
@@ -267,7 +267,7 @@ let lemma_mem_snoc (s:FStar.Seq.seq 'a) (x:'a)
       -- so, we're in the "not yet used" case ... so, the epoch's writer is in its initial state and we can return it (our goal is to return a fresh epoch)
 *)
 val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{authId i}
-		-> c:r_conn (I.nonce_of_id i) -> e:epoch (HS.region c.hs) (I.nonce_of_id i)
+		-> c:r_conn (nonce_of_id i) -> e:epoch (HS.region c.hs) (nonce_of_id i)
   -> Lemma (requires
             (let ctab = MR.m_sel h0 conn_tab in
 	     let mstab = MR.m_sel h0 MS.ms_tab in
@@ -281,12 +281,12 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	     i=handshakeId (Epoch.h e) /\ //the epoch has id i
 	     (let w = StAE.stream_state #i (Epoch.w e) in //the epoch writer
 	      let epochs = epochs c h0 in
-              N.registered (I.nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\  //the writer's parent region is registered in the nonce table
+              N.registered (nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\  //the writer's parent region is registered in the nonce table
 	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
 	      MR.witnessed (MR.rid_exists (StreamAE.State.region w)) /\                //technical: ... needed just for well-formedness of the rest of the formula
 	      (forall e. SeqProperties.mem e epochs ==> handshakeId (Epoch.h e) <> i) /\            //i is fresh for c
  	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
-	      MM.sel ctab (I.nonce_of_id i) = Some c /\ //we found the connection in the conn_table
+	      MM.sel ctab (nonce_of_id i) = Some c /\ //we found the connection in the conn_table
       	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
 	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (MR.as_rref (Epochs.es c.hs.log))} h0 h1 /\ //and within it, just the epochs log
 	      new_hs_log = SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
@@ -306,7 +306,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let new_conn = MR.m_sel h1 conn_tab in
       let old_hs_log = epochs c h0 in
       let wi = StAE.stream_state #i (Epoch.w e) in //the epoch writer
-      let nonce = I.nonce_of_id i in
+      let nonce = nonce_of_id i in
       lemma_mem_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms = new_ms);
       assert (old_conn = new_conn);
@@ -326,7 +326,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       	     then () //if the log remains empty, it's easy
       	     else if wj=wi
 	     then () //if j is in fact the same as i, then i gets registered at the end, so that's easy too
-	     else let nonce_j = I.nonce_of_id j in
+	     else let nonce_j = nonce_of_id j in
 		  if nonce_j = nonce
 		  then assert (registered j wj c h0) //if j and i share the same nonce, then j is registered to c and c's registered writers only grows
 		  else (match MM.sel old_conn nonce_j with
@@ -343,12 +343,12 @@ let register_writer_in_epoch_ok h0 h1 i c e =
     Basically, we have enough framing to know that nothing else changed if just the log changed.
     And since the log is registered, it is allowed to change, and it remains registered
 *)
-val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:MS.writer i -> c:r_conn (I.nonce_of_id i) -> Lemma
+val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:MS.writer i -> c:r_conn (nonce_of_id i) -> Lemma
     (requires (mc_inv h0 /\                                       //initially in the invariant
 	       HH.modifies_one (StreamAE.State.region w) h0 h1 /\ //we modified at most the writer's region
 	       registered i w c h0 /\                             //the writer is registered in c
 	       MM.sel (MR.m_sel h0 MS.ms_tab) i = Some w   /\     //the writer is logged in the ms_tab
-	       MM.sel (MR.m_sel h0 conn_tab) (I.nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
+	       MM.sel (MR.m_sel h0 conn_tab) (nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1)) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
 let mutate_registered_writer_ok h0 h1 i w c = (* () *)
@@ -385,7 +385,7 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	     conn_hs_region_exists c h0 /\ //we need to know that c is well-formed
 	     (let old_conn = MR.m_sel h0 conn_tab in
     	      let new_conn = MR.m_sel h1 conn_tab in
-	      let nonce = I.nonce_of_id i in
+	      let nonce = nonce_of_id i in
 	      MM.sel old_conn nonce = None /\        //c wasn't in the table initially
 	      new_conn = MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))

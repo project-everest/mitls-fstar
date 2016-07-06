@@ -39,7 +39,7 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   | Epoch: h:handshake -> 
     	   #i: id ->
            r: reader (peerId i) ->
-           w: writer i {epoch_region_inv' hs_rgn r w /\ I.nonce_of_id i = n} 
+           w: writer i {epoch_region_inv' hs_rgn r w /\ nonce_of_id i = n} 
 	   -> epoch hs_rgn n
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions

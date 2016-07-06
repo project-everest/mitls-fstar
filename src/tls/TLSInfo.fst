@@ -400,7 +400,7 @@ assume val strongAESI: sessionInfo -> Tot bool
 
 // -------------------------------------------------------------------
 // Indexing instances of derived keys for AE etc. 
-
+//
 // Index type definitions [1.3]:
 //
 //  -----<----- rmsId   exportId
@@ -419,24 +419,50 @@ assume val strongAESI: sessionInfo -> Tot bool
 //
 // type id = PlaintextID | ID12 msId | ID13 keyId
 
-
 // Info type carried by hashed log
 // The actual log is ghost but the info is carried in the index
-type logInfo = {
-  aeAlg: aeAlg;
-  cr: crand;
-  sr: option srand;
-  serverCert: option Cert.chain;
-  clientCert: option Cert.chain;
+
+// logInfo_CH is ONLY used with 0-RTT
+// for the soundness of the *_of_id functions it can only
+// be extracted from a log with EarlyDataIndication
+type logInfo_CH = {
+  li_ch_cr: crand;
+  li_ch_psk: PSK.pskInfo;
 }
+
+type logInfo_SH = {
+  li_sh_cr: crand;
+  li_sh_sr: srand;
+  li_sh_ae: aeAlg;
+}
+
+type logInfo_SF = logInfo_SH
+
+type logInfo_CF = logInfo_SF
+
+type logInfo =
+| LogInfoCH of logInfo_CH
+| LogInfoSH of logInfo_SH
+| LogInfoSF of logInfo_SF
+| LogInfoCF of logInfo_CF
+
+let logInfo_ae = function
+| LogInfoCH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
+| LogInfoSH x
+| LogInfoSF x
+| LogInfoCF x -> x.li_sh_ae
+
+let logInfo_nonce (rw:role) = function
+| LogInfoCH x -> x.li_ch_cr
+| LogInfoSH x
+| LogInfoSF x
+| LogInfoCF x -> if rw = Client then x.li_sh_cr else x.li_sh_sr
 
 // Extensional equality of logInfo
 // (we may want to use e.g. equalBytes on some fields)
 // injectivity 
 let eq_logInfo la lb : Tot bool =
-  la.aeAlg = lb.aeAlg
-  && la.serverCert = lb.serverCert
-  && la.clientCert = lb.clientCert
+  la = lb // TODO extensionality!
 
 // Length constraint is enfoced in the 2nd definition step after valid
 type hashed_log = bytes
@@ -462,13 +488,13 @@ type injective (#a:Type) (#b:Type)
 // A predicate on info-carrying logs
 // The function f is defined much later in HandshakeLog
 // and folds the perfect hashing assumption and log projection
-type log_info (h:hashed_log) (li:logInfo) =
+type log_info (li:logInfo) (h:hashed_log) =
   exists (f: hashed_log -> Tot logInfo).{:pattern (f h)}
   injective #hashed_log #logInfo #equalBytes #eq_logInfo f /\ f h = li
 
 type pre_esId : Type0 =
-  | ApplicationPSK: i:PSK.psk_identifier -> h:CoreCrypto.hash_alg -> pre_esId
-  | ResumptionPSK: pre_rmsId -> pre_esId
+  | ApplicationPSK: info:PSK.pskInfo -> i:PSK.psk_identifier -> pre_esId
+  | ResumptionPSK: info:PSK.pskInfo -> i:pre_rmsId -> pre_esId
 
 and pre_hsId =
   | HSID_PSK: pre_esId -> pre_hsId
@@ -522,9 +548,8 @@ val keyId_hash: pre_keyId -> Tot CoreCrypto.hash_alg
 val finishedId_hash: pre_finishedId -> Tot CoreCrypto.hash_alg
 
 let rec esId_hash = function
-//  | ApplicationPSK i -> let c = app_psk_context i in c.early_hash
-  | ApplicationPSK i h -> h
-  | ResumptionPSK rmsId -> rmsId_hash rmsId
+  | ApplicationPSK ctx _ -> PSK.pskInfo_hash ctx
+  | ResumptionPSK _ rmsId -> rmsId_hash rmsId
 
 and hsId_hash = function
   | HSID_PSK i -> esId_hash i
@@ -567,9 +592,10 @@ val valid_keyId: pre_keyId -> GTot Type0
 val valid_finishedId: pre_finishedId -> GTot Type0
 
 let rec valid_esId = function
-  | ApplicationPSK i h ->
-     MR.witnessed (PSK.registered_app_psk i) /\ MR.witnessed (PSK.app_psk_hash i h)
-  | ResumptionPSK i -> valid_rmsId i /\ True
+  | ApplicationPSK ctx i ->
+     MR.witnessed (PSK.valid_app_psk ctx i)
+  | ResumptionPSK ctx i ->
+     valid_rmsId i // /\ (MR.witnessed (valid_res_psk ctx i))
 
 and valid_hsId = function
   | HSID_PSK i | HSID_PSK_DHE i _ _ -> valid_esId i
@@ -581,17 +607,17 @@ and valid_asId = function
 and valid_rmsId = function
   | RMSID i li log -> valid_asId i
       /\ valid_hlen log (asId_hash i)
-      /\ log_info log li
+      /\ log_info li log
 
 and valid_exportId = function
   | ExportID i li log -> valid_asId i
       /\ valid_hlen log (asId_hash i)
-      /\ log_info log li
+      /\ log_info li log
 
 and valid_rekeyId = function
   | RekeyID i li log _ -> valid_asId i
       /\ valid_hlen log (asId_hash i)
-      /\ log_info log li
+      /\ log_info li log
 
 and valid_expandId = function
   | EarlySecretID i -> valid_esId i
@@ -603,13 +629,13 @@ and valid_keyId = function
   | KeyID i tag rw li log ->
       ((tag = EarlyTrafficKey \/ tag = EarlyApplicationDataKey) ==> rw = Client)
       /\ valid_hlen log (expandId_hash i)
-      /\ log_info log li
+      /\ log_info li log
 
 and valid_finishedId = function
   | FinishedID i tag rw li log ->
       ((tag = EarlyFinished \/ tag = LateFinished) ==> rw = Client)
       /\ valid_hlen log (expandId_hash i)
-      /\ log_info log li
+      /\ log_info li log
 
 type esId = i:pre_esId{valid_esId i}
 type hsId = i:pre_hsId{valid_hsId i}
@@ -648,7 +674,7 @@ let pv_of_id (i:id{~(is_PlaintextID i)}) = match i with
 let nonce_of_id = function
   | PlaintextID r -> r
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
-  | ID13 (KeyID _ _ rw li _) -> li.cr
+  | ID13 (KeyID _ _ rw li _) -> logInfo_nonce rw li
 
 val macAlg_of_id: i:id { is_ID12 i /\ ~(is_AEAD (ID12.aeAlg i)) } -> Tot macAlg
 let macAlg_of_id = function
@@ -658,9 +684,9 @@ val encAlg_of_id: i:id { is_ID12 i /\ is_MtE (ID12.aeAlg i) } -> Tot (encAlg * i
 let encAlg_of_id = function
   | ID12 pv _ _ ae _ _ _ -> encAlg_of_aeAlg pv ae
 
-val aeAlg_of_id: i:id { is_ID13 i \/ (is_ID12 i /\ is_AEAD (ID12.aeAlg i)) } -> Tot aeAlg
+val aeAlg_of_id: i:id { ~ (is_PlaintextID i) } -> Tot aeAlg
 let aeAlg_of_id = function
-  | ID13 (KeyID _ _ _ li _) -> li.aeAlg
+  | ID13 (KeyID _ _ _ li _) -> logInfo_ae li
   | ID12 pv _ _ ae _ _ _ -> ae
 
 // Pretty printing

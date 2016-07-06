@@ -38,11 +38,11 @@ let secretLabel = function
 *)
 
 let keyLabel = function
-  | EarlyTrafficKey _ _ -> "early traffic key expansion"
-  | EarlyApplicationDataKey _ _ -> "early application data key expansion"
-  | HandshakeKey _ _ _ -> "handshake key expansion"
-  | ApplicationDataKey _ _ _ -> "application data key expansion"
-  | ApplicationRekey _ _ -> "application data key expansion"
+  | EarlyTrafficKey -> "early traffic key expansion"
+  | EarlyApplicationDataKey -> "early application data key expansion"
+  | HandshakeKey -> "handshake key expansion"
+  | ApplicationDataKey -> "application data key expansion"
+  | ApplicationRekey -> "application data key expansion"
 
 (***********************************************************
      Internal (resumption) PSKs, indexed by rmsId
@@ -89,18 +89,17 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 abstract let psk (i:esId) =
   b:bytes{length b = CoreCrypto.hashSize (esId_hash i)}
 
-// Total by construction
-let get_psk_context (i:esId) =
+let get_psk_info (i:esId) =
   match i with
-//  | ResumptionPSK i -> res_psk_context i
-  | ApplicationPSK pskid _ -> app_psk_context pskid
+  | ResumptionPSK c _ -> c
+  | ApplicationPSK c _ -> c
      
 
 // Total by construction
 private let get_psk (i:esId) =
   match i with
 //  | ResumptionPSK i -> res_psk_value i
-  | ApplicationPSK pskid _ ->
+  | ApplicationPSK _ pskid ->
      let p : psk i = app_psk_value pskid in p
 
 // Agile "0" hash
@@ -114,7 +113,8 @@ let esId_rc (i:esId) =
   match i with
 //  | ResumptionPSK i ->
 //    let (_, rc, _, _) = Some.v (MM.sel res_psk_table i) in rc
-  | ApplicationPSK pskid h -> zH h //(esId_hash i)
+  | ApplicationPSK _ _ -> zH (esId_hash i)
+
 
 let hsId_rc = function
   | HSID_DHE h _ _ -> zH h
@@ -146,6 +146,9 @@ abstract type fink (i:finishedId) =
 abstract type ams (i:asId) =
   b:bytes{length b = CoreCrypto.hashSize (asId_hash i)}
 
+abstract type expander (i:expandId) =
+  b:bytes{length b = CoreCrypto.hashSize (expandId_hash i)}
+
 abstract type rekey_secret (i:rekeyId) =
   b:bytes{length b = CoreCrypto.hashSize (rekeyId_hash i)}
 
@@ -174,26 +177,6 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
            r:recordInstance hs_rgn n ->
            epich hs_rgn n
 *)
-
-// Placeholder until new indexes are propagated outside KS
-let badid ae h writer : TLSInfo.id = {
-    msId = noMsId;
-    kdfAlg = PRF_SSL3_nested;
-    pv = TLS_1p3;
-    aeAlg = (AEAD ae h);
-    csrConn = bytes_of_hex "";
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None
-    };
-    writer = writer
-  }
 
 // Note from old miTLS (in TLSInfo.fst)
 // type id = {
@@ -227,7 +210,7 @@ type ks_server_state =
 | S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:CommonDH.key -> ks_server_state
 | S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
-| S_13_wait_SH: alpha:ks_alpha13 -> es:option (| i:esId & es i|) -> cfk0:option (| i:finishedId & fink i |) -> hs:(| i:hsId & hs i |) -> ks_server_state
+| S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:option (| i:esId & es i|) -> cfk0:option (| i:finishedId & fink i |) -> hs:(| i:hsId & hs i |) -> ks_server_state
 | S_13_wait_SF: alpha:ks_alpha13 -> (| i:finishedId & cfk:fink i |) -> (| i:finishedId & sfk:fink i |) -> (| i:asId & ams:ams i |) -> ks_server_state
 | S_13_wait_CF: alpha:ks_alpha13 -> (| i:finishedId & cfk:fink i |) -> (| i:asId & ams i |) -> (| i:rekeyId & rekey_secret i |) -> (| i:finishedId & latecfk:fink i |) -> ks_server_state
 | S_13_postHS: alpha:ks_alpha13 -> (| i:finishedId & fink i |) -> (| i:rekeyId & rekey_secret i |) -> (| i:rmsId & rms i |) -> (| i:exportId & ems i |) -> ks_server_state
@@ -363,31 +346,36 @@ let ks_client_13_0rtt_ch ks esId
   let KS #rid st hsl = ks in
   let C (C_13_wait_CH cr esId gs) = !st in
   let psk = get_psk esId in
-  let c = get_psk_context esId in
+  let c = get_psk_info esId in
   let h, ae = c.early_hash, c.early_ae in
+
+  let expandId = EarlySecretID esId in
+  let loginfo = LogInfoCH ({li_ch_cr = cr; li_ch_psk = c}) in
+  let hashed_log = HandshakeLog.getHash hsl h in
+  // TODO verify log_info loginfo hashed_log
 
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es : es esId = HKDF.hkdf_extract h zeroes psk in
-  let sh_rctx = (HandshakeLog.getHash hsl h) @| (esId_rc esId) in
+  let sh_rctx = hashed_log @| (esId_rc esId) in
   let es_derived = HKDF.hkdf_expand_label h es "early traffic secret" sh_rctx hL in
 
   // Expand all keys from the derived early secret
   let (ck,civ, _, _) = keygen_13 h es_derived "early traffic key expansion" ae in
   let (ck',civ', _, _) = keygen_13 h es_derived "early application data key expansion" ae in
 
-  let efId = EarlyFinished esId (HandshakeLog.getHash hsl h) in
+  let efId = FinishedID expandId EarlyFinished Client loginfo hashed_log in
   let (cfk0, _) = finished_13 h es_derived in
   let cfk0 : fink efId = cfk0 in
 
-  let id = badid ae h Client in
+  let id = ID13 (KeyID expandId EarlyTrafficKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
   let r = StreamAE.genReader HyperHeap.root rw in
   let early_hs = StAEInstance r rw in
 
-  let id = badid ae h Client in
+  let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
   let civ: StreamAE.iv id  = civ' in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
@@ -473,31 +461,36 @@ val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:esId -> cs:cipherSuite -> gn
 let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let KS #region st hsl = ks in
   let S (S_Init sr) = !st in
-
   let psk = get_psk esId in
-  let c = get_psk_context esId in
+  let c = get_psk_info esId in
   let h, ae = c.early_hash, c.early_ae in
+
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-
   let es : es esId = HKDF.hkdf_extract h zeroes psk in
-  let sh_rctx = (HandshakeLog.getHash hsl h) @| (esId_rc esId) in
+
+  let expandId = EarlySecretID esId in
+  let loginfo = LogInfoCH ({li_ch_cr = cr; li_ch_psk = c}) in
+  let hashed_log = HandshakeLog.getHash hsl h in
+  // TODO verify log_info loginfo hashed_log
+
+  let sh_rctx = hashed_log @| (esId_rc esId) in
   let es_derived = HKDF.hkdf_expand_label h es "early traffic secret" sh_rctx hL in
   let (ck,civ, _, _) = keygen_13 h es_derived "early traffic key expansion" ae in
   let (ck',civ', _, _) = keygen_13 h es_derived "early application data key expansion" ae in
 
-  let efId = EarlyFinished esId (HandshakeLog.getHash hsl h) in
+  let efId = FinishedID expandId EarlyFinished Client loginfo hashed_log in
   let (cfk0, _) = finished_13 h es_derived in
   let cfk0 : fink efId = cfk0 in
 
-  let id = badid ae h Server in
+  let id = ID13 (KeyID expandId EarlyTrafficKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
   let r = StreamAE.genReader HyperHeap.root rw in
   let early_hs = StAEInstance r rw in
 
-  let id = badid ae h Server in
+  let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
   let civ: StreamAE.iv id  = civ' in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
@@ -507,7 +500,7 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let our_share, peer_share, gxy = s13_dh gn gxb in
   let hsId = HSID_PSK_DHE esId (CommonDH.share_of_key peer_share) (CommonDH.share_of_key our_share) in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
-  st := S (S_13_wait_SH (ae, h) (Some (| esId, es |)) (Some (| efId, cfk0 |)) (| hsId, hs |));
+  st := S (S_13_wait_SH (ae, h) cr sr (Some (| esId, es |)) (Some (| efId, cfk0 |)) (| hsId, hs |));
   let ourshare = CommonDH.serialize_raw our_share in
   early_hs, early_d, ourshare
 
@@ -545,7 +538,7 @@ let ks_server_13_1rtt_init ks cr cs gn gxb =
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es = HKDF.hkdf_extract h zeroes zeroes in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
-  st := S (S_13_wait_SH (ae, h) None None (| hsId, hs |));
+  st := S (S_13_wait_SH (ae, h) cr sr None None (| hsId, hs |));
   CommonDH.serialize_raw our_share
 
 val ks_server_13_sh: ks:ks -> ST recordInstance
@@ -559,29 +552,36 @@ val ks_server_13_sh: ks:ks -> ST recordInstance
 
 let ks_server_13_sh ks =
   let KS #region st hsl = ks in
-  let S (S_13_wait_SH (ae, h) _ _ (| hsId, hs |)) = !st in
+  let S (S_13_wait_SH (ae, h) cr sr _ _ (| hsId, hs |)) = !st in
+  let expandId = HandshakeSecretID hsId in
+  let loginfo = LogInfoSH ({
+    li_sh_cr = cr;
+    li_sh_sr = sr;
+    li_sh_ae = AEAD ae h;
+  }) in
+  let hashed_log = HandshakeLog.getHash hsl h in
+  // TODO log_info loginfo hashed_log
 
   // Derived handshake secret
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-  let sh_rctx = (HandshakeLog.getHash hsl h) @| (hsId_rc hsId) in
+  let sh_rctx = hashed_log @| (hsId_rc hsId) in
   let hs_derived = HKDF.hkdf_expand_label h hs "handshake traffic secret" sh_rctx hL in
   let (ck,civ,sk,siv) = keygen_13 h hs_derived "handshake key expansion" ae in
 
   // Handshake traffic keys
-  let id = badid ae h Server in
+  let id = ID13 (KeyID expandId HandshakeKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let skv: StreamAE.key id = sk in
-  let siv: StreamAE.iv id  = siv in
+  let skv: StreamAE.key (peerId id) = sk in
+  let siv: StreamAE.iv (peerId id)  = siv in
   let w = StreamAE.coerce HyperHeap.root id skv siv in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
   let r = StreamAE.genReader HyperHeap.root rw in
 
   // Finished keys
-  let ghost_log = HandshakeLog.getHash hsl h in
-  let cfkId = HandshakeFinished hsId ghost_log Client in
-  let sfkId = HandshakeFinished hsId ghost_log Server in
+  let cfkId = FinishedID expandId HandshakeFinished Client loginfo hashed_log in
+  let sfkId = FinishedID expandId HandshakeFinished Server loginfo hashed_log in
   let (cfk1, sfk1) = finished_13 h hs_derived in
   let cfk1 : fink cfkId = cfk1 in
   let sfk1 : fink sfkId = sfk1 in
@@ -611,8 +611,7 @@ let ks_server_12_cke_dh ks gxb =
   let (pv, cs, ems) = alpha in
   let pmsb = CommonDH.dh_initiator our_share gx in
 
-  let pms = PMS.DHPMS(dhp, our_share, gx, PMS.ConcreteDHPMS(pmsb)) in
-  let pmsId = TLSInfo.SomePmsId(pms) in
+  let pmsId = PMS.DHPMS(dhp, (CommonDH.share_of_key our_share), (CommonDH.share_of_key gx), PMS. ConcreteDHPMS(pmsb)) in
   let kef = kefAlg pv cs ems in
   let msId, ms =
     if ems then
@@ -660,7 +659,7 @@ val ks_client_13_sh: ks:ks -> cs:cipherSuite -> gy:(namedGroup * bytes) -> accep
      match ei with | None -> True | Some (| id, _ |) ->
        let CipherSuite _ _ (AEAD ae h) = cs in
 // TODO lift app_psk_hash, app_psk_ae to resumption PSK
-//       let ctxt = get_psk_context id in
+//       let ctxt = get_psk_info id in
 //       accept_early_data ==> ctxt.early_ae = ae /\ ctxt.early_hash = h
      True))
   (ensures fun h0 r h1 ->
@@ -676,6 +675,9 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
   let Some gy = CommonDH.parse (CommonDH.key_params gx) gyb in
   let gxy = CommonDH.dh_initiator gx gy in
   let CipherSuite _ _ (AEAD ae h) = cs in
+
+  let loginfo = LogInfoSH ({li_sh_cr = cr; li_sh_sr = cr; li_sh_ae = AEAD ae h;}) in // TODO
+  let hashed_log = HandshakeLog.getHash hsl h in
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
 
@@ -694,16 +696,16 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
     | None -> HSID_DHE h is rs
     | Some (| esId, _ |) -> HSID_PSK_DHE esId is rs in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
+  let expandId = HandshakeSecretID hsId in
 
   // Derived handshake secret
-  let sh_rctx = (HandshakeLog.getHash hsl h) @| (hsId_rc hsId) in
+  let sh_rctx = hashed_log @| (hsId_rc hsId) in
   let hs_derived = HKDF.hkdf_expand_label h hs "handshake traffic secret" sh_rctx hL in
   let (ck,civ,sk,siv) = keygen_13 h hs_derived "handshake key expansion" ae in
 
   // Finished MAC keys (TODO coerce from HMAC)
-  let ghost_log = HandshakeLog.getHash hsl h in
-  let cfkId = HandshakeFinished hsId ghost_log Client in
-  let sfkId = HandshakeFinished hsId ghost_log Server in
+  let cfkId = FinishedID expandId HandshakeFinished Client loginfo hashed_log in
+  let sfkId = FinishedID expandId HandshakeFinished Server loginfo hashed_log in
   let (cfk, sfk) = finished_13 h hs_derived in
   let cfk1 : fink cfkId = cfk in
   let sfk1 : fink sfkId = sfk in
@@ -712,13 +714,11 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
   let asId = ASID hsId in
   let ams : ams asId = HKDF.hkdf_extract h hs zeroes in
 
-  let id = badid ae h Client in
-  assume (~ (authId id));
-
+  let id = ID13 (KeyID expandId HandshakeKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let skv: StreamAE.key id = sk in
-  let siv: StreamAE.iv id  = siv in
+  let skv: StreamAE.key (peerId id) = sk in
+  let siv: StreamAE.iv (peerId id)  = siv in
   let w = StreamAE.coerce HyperHeap.root id ckv civ in
   let rw = StreamAE.coerce HyperHeap.root id skv siv in
   let r = StreamAE.genReader HyperHeap.root rw in
@@ -785,29 +785,33 @@ let ks_client_13_sf ks
   let KS #region st hsl = ks in
   let C (C_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
   let (ae, h) = alpha in
+  let (| FinishedID _ _ _ loginfo _, _ |) = cfk in // TODO loginfo
+
+  let expandId = ApplicationSecretID asId in
+  let hashed_log = HandshakeLog.getHash hsl h in
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
 
   // Derived applcation master secret
-  let sh_rctx = (HandshakeLog.getHash hsl h) @| (asId_rc asId) in
+  let sh_rctx = hashed_log @| (asId_rc asId) in
   let ams_derived = HKDF.hkdf_expand_label h ams "application traffic secret" sh_rctx hL in
   let (ck,civ,sk,siv) = keygen_13 h ams_derived "application data key expansion" ae in
 
   // Post-handshake finished key
-  let cfkId = LateFinished asId (HandshakeLog.getHash hsl h) in
+  let cfkId = FinishedID expandId LateFinished Client loginfo hashed_log in
   let (late_cfk, _) = finished_13 h ams_derived in
   let late_cfk: fink cfkId = late_cfk in
 
   // Rekeying secret
-  let ri = RekeyID asId (HandshakeLog.getHash hsl h) 1 in
+  let ri = RekeyID asId loginfo hashed_log 1 in
   let rk1 : rekey_secret ri = HKDF.hkdf_expand_label h ams_derived "application traffic secret" empty_bytes hL in
 
-  let id = badid ae h Client in
+  let id = ID13 (KeyID expandId ApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
   let w = StreamAE.coerce HyperHeap.root id ckv civ in
-  let skv: StreamAE.key id = sk in
-  let siv: StreamAE.iv id  = siv in
+  let skv: StreamAE.key (peerId id) = sk in
+  let siv: StreamAE.iv (peerId id)  = siv in
   let rw = StreamAE.coerce HyperHeap.root id skv siv in
   let r = StreamAE.genReader HyperHeap.root rw in
 
@@ -826,30 +830,34 @@ let ks_server_13_sf ks
   =
   let KS #region st hsl = ks in
   let S (S_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
+  let (| FinishedID _ _ _ loginfo _, _ |) = cfk in // TODO loginfo
   let (ae, h) = alpha in
+
+  let expandId = ApplicationSecretID asId in
+  let hashed_log = HandshakeLog.getHash hsl h in
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
 
   // Derived applcation master secret
-  let sh_rctx = (HandshakeLog.getHash hsl h) @| (asId_rc asId) in
+  let sh_rctx = hashed_log @| (asId_rc asId) in
   let ams_derived = HKDF.hkdf_expand_label h ams "application traffic secret" sh_rctx hL in
   let (ck,civ,sk,siv) = keygen_13 h ams_derived "application data key expansion" ae in
 
   // Post-handshake finished key
-  let cfkId = LateFinished asId (HandshakeLog.getHash hsl h) in
+  let cfkId = FinishedID expandId LateFinished Client loginfo hashed_log in
   let (late_cfk, _) = finished_13 h ams_derived in
   let late_cfk: fink cfkId = late_cfk in
 
   // Rekeying secret
-  let ri = RekeyID asId (HandshakeLog.getHash hsl h) 1 in
+  let ri = RekeyID asId loginfo hashed_log 1 in
   let rk1 : rekey_secret ri = HKDF.hkdf_expand_label h ams_derived "application traffic secret" empty_bytes hL in
 
-  let id = badid ae h Server in
+  let id = ID13 (KeyID expandId ApplicationDataKey Server loginfo hashed_log) in
   let skv: StreamAE.key id = sk in
   let siv: StreamAE.iv id  = siv in
   let w = StreamAE.coerce HyperHeap.root id skv siv in
-  let ckv: StreamAE.key id = ck in
-  let civ: StreamAE.iv id  = civ in
+  let ckv: StreamAE.key (peerId id) = ck in
+  let civ: StreamAE.iv (peerId id)  = civ in
   let rw = StreamAE.coerce HyperHeap.root id ckv civ in
   let r = StreamAE.genReader HyperHeap.root rw in
 
@@ -868,17 +876,19 @@ let ks_client_13_cf ks
     /\ modifies_rref rid !{as_ref st} h0 h1)
   =
   let KS #region st hsl = ks in
-  let C (C_13_wait_CF alpha _ (| asId, ams |) rekey_info latefin_info) = !st in
+  let C (C_13_wait_CF alpha cfk (| asId, ams |) rekey_info latefin_info) = !st in
   let (ae, h) = alpha in
+  let (| FinishedID _ _ _ loginfo _, _ |) = cfk in // TODO loginfo
+  let hashed_log = HandshakeLog.getHash hsl h in
   let hL = CoreCrypto.hashSize h in
-  let sh_rctx = (HandshakeLog.getHash hsl h) @| (asId_rc asId) in
+  let sh_rctx = hashed_log @| (asId_rc asId) in
 
   // Resumption Master Secret
-  let rmsId = RMSID asId (HandshakeLog.getHash hsl h) in
+  let rmsId = RMSID asId loginfo hashed_log in
   let rms : rms rmsId = HKDF.hkdf_expand_label h ams "resumption master secret" sh_rctx hL in
 
   // Exporter Master Secret (returned to Handshake)
-  let exportId = ExportID asId (HandshakeLog.getHash hsl h) in
+  let exportId = ExportID asId loginfo hashed_log in
   let ems : ems exportId = HKDF.hkdf_expand_label h ams "resumption master secret" sh_rctx hL in
   st := C (C_13_postHS alpha latefin_info rekey_info (| rmsId, rms |) (| exportId, ems |));
   (| exportId, ems |)
@@ -906,8 +916,7 @@ let ks_client_12_full_dh ks sr pv cs ems peer_share =
   let alpha = (pv, cs, ems) in
   let our_share, pmsb = CommonDH.dh_responder peer_share in
   let dhp = CommonDH.key_params peer_share in
-  let dhpms = PMS.DHPMS(dhp, our_share, peer_share, PMS.ConcreteDHPMS(pmsb)) in
-  let dhpmsId = TLSInfo.SomePmsId(dhpms) in
+  let dhpmsId = PMS.DHPMS(dhp, (CommonDH.share_of_key our_share), (CommonDH.share_of_key peer_share), PMS.ConcreteDHPMS(pmsb)) in
   let ns = 
     if ems then
       C_12_wait_MS csr alpha dhpmsId pmsb
@@ -939,7 +948,7 @@ let ks_client_12_full_rsa ks sr pv cs ems pk =
   let rsapms = PMS.genRSA pk pv in
   let pmsb = PMS.leakRSA pk pv rsapms in
   let encrypted = CoreCrypto.rsa_encrypt (RSAKey.repr_of_rsapkey pk) CoreCrypto.Pad_PKCS1 pmsb in
-  let rsapmsId = TLSInfo.SomePmsId(PMS.RSAPMS(pk, pv, rsapms)) in
+  let rsapmsId = PMS.RSAPMS(pk, pv, rsapms) in
   let ns =
     if ems then
       C_12_wait_MS csr alpha rsapmsId pmsb
@@ -996,16 +1005,10 @@ val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
     | S (S_12_has_MS csr alpha msId ms) -> Server, csr, alpha, msId, ms in
   let cr, sr = split csr 32 in
   let (pv, cs, ems) = alpha in
-  let ae_id = {
-    msId = msId;
-    kdfAlg = kdfAlg pv cs;
-    pv = pv;
-    aeAlg = get_aeAlg cs;
-    csrConn = csr;
-    ext = TLSInfo.ne_default; // TODO FIXME we don't have full NE anymore
-    writer = role
-  } in
-  let expand = TLSPRF.kdf ae_id.kdfAlg ms (sr @| cr) 40 in
+  let kdf = kdfAlg pv cs in
+  let ae = get_aeAlg cs in
+  let id = ID12 pv msId kdf ae cr sr role in
+  let expand = TLSPRF.kdf kdf ms (sr @| cr) 40 in
   let k1, expand = split expand 16 in
   let k2, expand = split expand 16 in
   let iv1, iv2 = split expand 4 in
