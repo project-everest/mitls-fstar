@@ -676,6 +676,10 @@ let nonce_of_id = function
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
   | ID13 (KeyID _ _ rw li _) -> logInfo_nonce rw li
 
+val kdfAlg_of_id: i:id { is_ID12 i } -> Tot kdfAlg_t
+let kdfAlg_of_id = function
+  | ID12 pv _ kdf _ _ _ _ -> kdf
+
 val macAlg_of_id: i:id { is_ID12 i /\ ~(is_AEAD (ID12.aeAlg i)) } -> Tot macAlg
 let macAlg_of_id = function
   | ID12 pv _ _ ae _ _ _ -> macAlg_of_aeAlg pv ae

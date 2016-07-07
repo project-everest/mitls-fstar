@@ -11,27 +11,20 @@ open StatefulLHAE
 
 
 let r = HyperHeap.root
+let mk_id pv aeAlg =
+  let er = createBytes 32 (Char.char_of_int 0) in
+  let kdf = match pv with
+  | TLS_1p0 -> PRF_SSL3_concat
+  | TLS_1p1 -> PRF_TLS_1p01 kdf_label
+  | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
+  let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
+  let g = CommonDH.key_params gx in
+  let gy, gxy = CommonDH.dh_responder gx in
+  let msid = StandardMS (PMS.DHPMS(g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy))) (er @| er) kdf in
+  ID12 pv msid kdf aeAlg er er Client
 
 let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string): bytes =
-  // AEAD_GCM.gid -> LHAEPlain.id -> TLSInfo.id
-  let id = {
-    msId = noMsId;
-    kdfAlg = PRF_SSL3_nested;
-    pv = pv;
-    aeAlg = aeAlg; // <- that's the relevant bit! the rest is dummy values 
-    csrConn = bytes_of_hex "";
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None;
-    };
-    writer = Client
-  } in
+  let id = mk_id pv aeAlg in
 
   // StatefulLHAE.writer -> StatefulLHAE.state
   let w: writer id =
@@ -65,25 +58,7 @@ let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
   StatefulLHAE.encrypt #id w ad rg f
 
 let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
-  // TLSInfo.id
-  let id = {
-    msId = noMsId;
-    kdfAlg = PRF_SSL3_nested;
-    pv = pv;
-    aeAlg = aeAlg; // <- that's the relevant bit! the rest is dummy values 
-    csrConn = bytes_of_hex "";
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None
-    };
-    writer = Client
-  } in
+  let id = mk_id pv aeAlg in
 
   // ENC.encryptor -> ENC.state
   let w: ENC.encryptor id =

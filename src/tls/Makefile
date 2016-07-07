@@ -101,15 +101,12 @@ MAC.fst \
 Encode.fst \
 StatefulLHAE.fst \
 ENC.fst \
-MAC_SHA256.fst \
-MAC_SHA1.fst \
 HandshakeMessages.fst \
 StAE.fst \
 StreamDeltas.fst \
 Record.fst \
 HKDF.fst \
 TLSPRF.fst \
-PRF.fst \
 HandshakeLog.fst \
 Negotiation.fst \
 Epochs.fst \

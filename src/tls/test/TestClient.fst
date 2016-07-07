@@ -15,24 +15,14 @@ open HandshakeLog
 open Handshake
 (* FlexRecord *)
 
-let id = {
-    msId = noMsId;
-    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
-    pv = TLS_1p2;
-    aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
-    csrConn = bytes_of_hex "";
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None
-    };
-    writer = Client
-  }
+let id =
+  let er = createBytes 32 (Char.char_of_int 0) in
+  let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
+  let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
+  let g = CommonDH.key_params gx in
+  let gy, gxy = CommonDH.dh_responder gx in
+  let msid = StandardMS (PMS.DHPMS(g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy))) (er @| er) kdf in
+  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256) er er Client
 
 let encryptor_TLS12_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in

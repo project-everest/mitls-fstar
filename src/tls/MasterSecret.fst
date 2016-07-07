@@ -3,6 +3,7 @@ module MasterSecret (* : ST _ _ _ *)
 open FStar.HyperHeap
 open TLSConstants
 open StreamAE
+open TLSInfo
 module AE = StreamAE
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
@@ -14,7 +15,7 @@ module I = IdNonce
 //such that, w's region is known to be a child region of the 
 //region associated with i's nonce
 let writer (i:AE.id) = w:AE.writer i{
-  N.registered (I.nonce_of_id i) (HH.parent w.region) /\ 
+  N.registered (nonce_of_id i) (HH.parent w.region) /\ 
   HH.disjoint (HH.parent w.region) tls_region /\
   MR.witnessed (MR.rid_exists w.region) /\
   is_epoch_rgn w.region /\
@@ -63,11 +64,11 @@ let derive (r:rgn) (i:AE.id)
        (requires (fun h -> 
 	   HH.disjoint r tls_region /\
 	   is_epoch_rgn r /\
-	   N.registered (I.nonce_of_id i) r))
+	   N.registered (nonce_of_id i) r))
        (ensures (fun h0 w h1 -> 
        	   HH.disjoint r tls_region 
 	   /\ is_epoch_rgn r
-	   /\ N.registered (I.nonce_of_id i) r
+	   /\ N.registered (nonce_of_id i) r
 	   /\ HH.parent w.region = r
 	   /\ is_epoch_rgn w.region
 	   /\ modifies (Set.singleton tls_tables_region) h0 h1 //modifies at most the tls_tables region
@@ -89,6 +90,6 @@ let derive (r:rgn) (i:AE.id)
       MM.extend ms_tab i w;
       w
     | Some w -> 
-      N.testify (I.nonce_of_id i) r;   // n i -> r
-      N.testify (I.nonce_of_id i) (HH.parent w.region); //n i -> HH.parent w.region ==> r=w.region; 
+      N.testify (nonce_of_id i) r;   // n i -> r
+      N.testify (nonce_of_id i) (HH.parent w.region); //n i -> HH.parent w.region ==> r=w.region; 
       w

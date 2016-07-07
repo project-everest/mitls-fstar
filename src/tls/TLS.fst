@@ -59,7 +59,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then i = noId else let e = Seq.index es j in i = handshakeId e.h)   
+    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = handshakeId e.h)   
   ))
   (ensures (fun h0 result h1 -> 
     next_fragment_ensures s h0 result h1 /\
@@ -286,7 +286,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     let es = epochs c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
     st_inv c h /\
-    (if j < 0 then i == noId else
+    (if j < 0 then is_PlaintextID i else
        let e = Seq.index es j in
        i = handshakeId e.h /\
        incrementable (writer_epoch e) h)))
@@ -296,7 +296,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     st_inv c h0 /\
     st_inv c h1 /\
     op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
-    (if j < 0 then i == noId /\ h0 == h1 else 
+    (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
        let e = Seq.index es j in   
        i = handshakeId e.h /\ (
        let wr: writer i = writer_epoch e in
@@ -326,7 +326,7 @@ let send_payload c i f =
 // used e.g. for writing while reading
 let currentId (c:connection) (rw:rw) : id = 
   let j = Handshake.i c.hs rw in 
-  if j<0 then noId 
+  if j<0 then PlaintextID (c_nonce c)
   else 
     let es = MR.m_read (Epochs.es c.hs.log) in
     let e = Seq.index es j in
@@ -343,7 +343,7 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
     st_inv c h /\
     st <> Close /\
     st <> Half Reader /\
-    (j < 0 ==> i = noId) /\
+    (j < 0 ==> is_PlaintextID i) /\
     (j >= 0 ==> (
        let e = Seq.index es j in
        let wr = writer_epoch e in 
@@ -361,7 +361,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\ // should follow from the modifies clause
-    (if j < 0 then i == noId /\ h0 = h1 else
+    (if j < 0 then is_PlaintextID i /\ h0 = h1 else
        let e = Seq.index es j in
        i = handshakeId e.h /\ (
        let wr: writer i = writer_epoch e in
@@ -473,7 +473,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
      st_inv c h 
   /\ (match wo with 
-     | None    -> i = noId
+     | None    -> is_PlaintextID i
      | Some wr ->  Map.contains h (StAE.region wr)
 	       /\ Map.contains h (StAE.log_region wr))
 
@@ -509,7 +509,7 @@ let sendFragment c #i wo f =
            match wo with
 	   | None    -> Content.repr i f //16-05-20 don't understand error.
 	   | Some wr -> StAE.encrypt wr f in 
-       let pv = outerPV c in //16-05-20  compare with i.pv?; Needs hs_inv
+       let pv = outerPV c in //16-05-20  compare with (pv_of_id i)?; Needs hs_inv
        let ct, rg = Content.ct_rg i f in
        lemma_repr_bytes_values (length payload);
        let record = Record.makePacket ct pv payload in
@@ -525,7 +525,7 @@ val current_writer : //A slightly exotic style here, because we can; using a loc
 	let hs = c.hs in 
 	let ix = iT hs Writer h in
 	if ix < 0
-	then b2t (i = noId)
+	then b2t (is_PlaintextID i)
 	else let epoch_i = eT hs Writer h in 
    	     b2t (i=handshakeId (Epoch.h epoch_i)) in
      c:connection -> i:id -> ST (option (cwriter i c))
@@ -534,9 +534,9 @@ val current_writer : //A slightly exotic style here, because we can; using a loc
 	       current_writer_pre c i h1
 	       /\ h0=h1
 	       /\ (match wo with 
-		  | None -> i=noId
+		  | None -> is_PlaintextID i
 		  | Some w -> 
-		    i<>noId //needed for well-formedness of eT
+		    ~ (is_PlaintextID i) //needed for well-formedness of eT
 		    /\ (let epoch_i = eT c.hs Writer h1 in 
 	               let w_i = Epoch.w epoch_i in
 		       trigger_peer (Epoch.r epoch_i) /\
@@ -740,7 +740,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*     st_inv c h0 /\ *)
 (*     st_inv c h1 /\ *)
 (*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
-(*     (if j < 0 then i == noId /\ h0 = h1 else *)
+(*     (if j < 0 then is_PlaintextID i /\ h0 = h1 else *)
 (*        let e = Seq.index es j in *)
 (*        i == handshakeId e.h /\ ( *)
 (*        let wr:writer i = writer_epoch e in *)
@@ -890,8 +890,6 @@ let writeClose c =
 (*** incoming (implicitly writing) ***)
 
 // By default, all i:id are reader identifiers, i.e. peerId (handshakeId (reader_epoch.h)
-// Tricky for noId?       
-
 // FIXME: Put the following definitions close to range and delta, and use them
 
 type query = Cert.chain
@@ -969,7 +967,7 @@ let sel_reader h c =
 type delta h c = 
   (match sel_reader h c with 
   | Some (| i , _ |) -> DataStream.delta i
-  | None             -> DataStream.delta noId)
+  | None             -> DataStream.delta (PlaintextID (c_nonce c)))
 
 
 // frequent error handler; note that i is the (unused) reader index
@@ -987,7 +985,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     let es = epochs c h0 in 
     let j = iT c.hs Reader h0 in 
     st_inv c h0 /\
-    (if j < 0 then i == noId else 
+    (if j < 0 then is_PlaintextID i else 
       let e = Seq.index es j in
       i = peerId (handshakeId e.h) /\
       incrementable (reader_epoch e) h0)))
@@ -997,7 +995,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Reader h1 /\
-    (if j < 0 then i == noId /\ h0 == h1 else 
+    (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
       let e = Seq.index es j in
       i = peerId (handshakeId e.h) /\
       (let rd: reader i = reader_epoch e in 
@@ -1015,7 +1013,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
 
 let readFragment c i = 
   assume false; // 16-05-19 can't prove POST.
-  match Record.read c.tcp i.pv with 
+  match Record.read c.tcp (pv_of_id i) with 
   | Error e -> Error e
   | Correct(ct,pv,payload) -> 
     let es = MR.m_read (Epochs.es c.hs.log) in 
