@@ -1,45 +1,47 @@
 #ifndef HEADER_MITLS_FFI_H
 #define HEADER_MITLS_FFI_H
 
+typedef struct mitls_state mitls_state;
+
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success
+
+// Perform one-time initialization
 extern int  FFI_mitls_init(void);
+
+// Perform one-team termination
 extern void FFI_mitls_cleanup(void);
-extern void FFI_mitls_config(size_t *stateptr, const char *tls_version, const char *host_name, 
-                             /* out */ char **outmsg, /* out */ char **errmsg);
-extern void FFI_mitls_release_value(size_t *value);
-extern void FFI_mitls_free_packet(void *packet);
-extern void FFI_mitls_free_msg(char *msg);
-extern void * FFI_mitls_prepare_client_hello(/* in out */ size_t *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
-extern int FFI_mitls_handle_server_hello(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern int FFI_mitls_handle_encrypted_extensions(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern int FFI_mitls_handle_certificate_verify12(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern int FFI_mitls_handle_server_key_exchange(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern int FFI_mitls_handle_server_hello_done(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern void * FFI_mitls_prepare_client_key_exchange(/* in out */ size_t *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
-extern void * FFI_mitls_prepare_change_cipher_spec(/* in out */ size_t *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern void * FFI_mitls_prepare_handshake(/* in out */ size_t *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern int FFI_mitls_handle_change_cipher_spec(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg);
-extern int FFI_mitls_handle_server_finished(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg);
 
-extern void * FFI_mitls_prepare_send(/* in out */ size_t *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
-extern void * FFI_mitls_handle_receive(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg);     // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
+// Configure miTLS ahead of connecting
+extern int   FFI_mitls_configure(/* out */ mitls_state **state, const char *tls_version, const char *host_name, /* out */ char **outmsg, /* out */ char **errmsg);
 
+// Close a miTLS session - either after configure or connect
+extern void FFI_mitls_close(/* in */ mitls_state *state);
+
+// Callbacks from miTLS to the host application, to send and receive TCP, invoked within FFI_mitls_connect() only
 struct _FFI_mitls_callbacks;
 typedef int (*pfn_FFI_send)(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
 typedef int (*pfn_FFI_recv)(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
-
 struct _FFI_mitls_callbacks {
     pfn_FFI_send send;
     pfn_FFI_recv recv;
 };
 
-extern int FFI_mitls_connect13(struct _FFI_mitls_callbacks *callbacks, /* out */ size_t *stateptr, 
-                               /* out */ char **outmsg, /* out */ char **errmsg);
-extern void * FFI_mitls_prepare_send13(/* in out */ size_t *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size, 
-                                       /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
-extern void * FFI_mitls_handle_receive13(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size, 
-                                         /* out */ char **outmsg, /* out */ char **errmsg);     // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
+// Connect to a TLS server
+extern int   FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 
+// Prepare a plaintext packet for send over a TLS session
+extern void *FFI_mitls_prepare_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size, 
+                                    /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
+                                    
+// Decrypt a packet received over a TLS session
+extern void *FFI_mitls_handle_receive(/* in */ mitls_state *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size, 
+                                      /* out */ char **outmsg, /* out */ char **errmsg);     // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
+
+// Free a packet returned from FFI_mitls_prepare_send() or FFI_mitls_handle_receive();
+extern void FFI_mitls_free_packet(void* packet);
+
+// Free an outmsg or errmsg
+extern void FFI_mitls_free_msg(char *msg);
 
 #endif // HEADER_MITLS_FFI_H

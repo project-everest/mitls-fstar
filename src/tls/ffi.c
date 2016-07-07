@@ -9,29 +9,24 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
-  MITLS_FFI_ENTRY(PrepareClientHello) \
-  MITLS_FFI_ENTRY(HandleServerHello) \
-  MITLS_FFI_ENTRY(HandleCertificateVerify12) \
-  MITLS_FFI_ENTRY(HandleServerKeyExchange) \
-  MITLS_FFI_ENTRY(HandleServerHelloDone) \
-  MITLS_FFI_ENTRY(PrepareClientKeyExchange) \
-  MITLS_FFI_ENTRY(PrepareChangeCipherSpec) \
-  MITLS_FFI_ENTRY(PrepareHandshake) \
-  MITLS_FFI_ENTRY(HandleChangeCipherSpec) \
-  MITLS_FFI_ENTRY(HandleServerFinished) \
-  MITLS_FFI_ENTRY(PrepareSend) \
-  MITLS_FFI_ENTRY(HandleReceive) \
+  MITLS_FFI_ENTRY(Connect12) \
+  MITLS_FFI_ENTRY(PrepareSend12) \
+  MITLS_FFI_ENTRY(HandleReceive12) \
   MITLS_FFI_ENTRY(Connect13) \
   MITLS_FFI_ENTRY(PrepareSend13) \
   MITLS_FFI_ENTRY(HandleReceive13) \
-
  
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
 MITLS_FFI_LIST
 #undef MITLS_FFI_ENTRY
 
-int FFI_mitls_handle_simple(value* f, /* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, char **outmsg, char **errmsg);
+typedef struct mitls_state {
+    value fstar_state;    // a GC root representing an F*-side state object
+    value *connect_callback;
+    value *prepare_send_callback;
+    value *handle_receive_callback;
+} mitls_state;
 
 typedef struct {
     char *out_name;
@@ -218,11 +213,14 @@ void redirect_stdio(/* out */ mitls_redirect *r)
 #define C_ASSERT(e) typedef char __C_ASSERT__[(e)?1:-1]
 C_ASSERT(sizeof(size_t) == sizeof(value));
 
-void FFI_mitls_config(size_t *configptr, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
+// Called by the host app to configure miTLS ahead of creating a connection
+int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
+    int ret = 0;
     CAMLlocal3(config, version, host);
     mitls_redirect r;
 
+    *state = NULL;
     *outmsg = NULL;
     *errmsg = NULL;
     redirect_stdio(&r);
@@ -232,35 +230,52 @@ void FFI_mitls_config(size_t *configptr, const char *tls_version, const char *ho
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(config)));
-        *configptr = 0;
     } else {
-        value * heapconfig;
+        mitls_state * s;
         
         // Allocate space on the heap, to store an OCaml value
-        heapconfig = (value*)malloc(sizeof(value));
-        if (heapconfig == NULL) {
-            *configptr = 0;
-        } else {
+        s = (mitls_state*)malloc(sizeof(mitls_state));
+        if (s) {
             // Tell the OCaml GC about the heap address, so it is treated
             // as a GC root, keeping the config object live.
-            *heapconfig = config; 
-            caml_register_generational_global_root(heapconfig);
-            *configptr = (size_t)heapconfig;
+            s->fstar_state = config; 
+            caml_register_generational_global_root(&s->fstar_state);
+            if (strcmp(tls_version, "1.3") == 0) {
+                s->connect_callback = g_mitls_FFI_Connect13;
+                s->prepare_send_callback = g_mitls_FFI_PrepareSend13;
+                s->handle_receive_callback = g_mitls_FFI_HandleReceive13;
+            } else {
+                s->connect_callback = g_mitls_FFI_Connect12;
+                s->prepare_send_callback = g_mitls_FFI_PrepareSend12;
+                s->handle_receive_callback = g_mitls_FFI_HandleReceive12;
+            }
+            *state = s;
+            ret = 1;
         }
     }
     
     restore_stdio(&r, outmsg, errmsg);
+    return ret;
 }
 
-void FFI_mitls_release_value(size_t *v)
+// Called by the host app to free a mitls_state allocated by FFI_mitls_configure()
+void FFI_mitls_close(mitls_state *state)
 {
-    if (v && *v) {
-        value* pv = *(value**)v;
-        // Remove the root from the OCaml GC tracker, so the object can be collected.
-        caml_remove_generational_global_root(pv);
-        free(pv);
-        *v = 0;
+    if (state) {
+        caml_remove_generational_global_root(&state->fstar_state);
+        state->fstar_state = 0;
+        free(state);
     }
+}
+
+void FFI_mitls_free_msg(char *msg)
+{
+    free(msg);
+}
+
+void FFI_mitls_free_packet(void *packet)
+{
+    free(packet);
 }
 
 void * copypacket(value packet, /* out */ size_t *packet_size)
@@ -277,210 +292,7 @@ void * copypacket(value packet, /* out */ size_t *packet_size)
     return p;
 }
 
-void FFI_mitls_free_packet(void *packet)
-{
-    free(packet);
-}
-
-void FFI_mitls_free_msg(char *msg)
-{
-    free(msg);
-}
-
-void * FFI_mitls_prepare_simple(value *f, /* in out */ size_t *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
-{
-    value* pstate = *(value**)state;
-    value state_value = *pstate;
-    void *p = NULL;
-    CAMLparam1(state_value);
-    CAMLlocal1(ret);
-    mitls_redirect r;
-
-    *outmsg = NULL;
-    *errmsg = NULL;
-    redirect_stdio(&r);
-  
-    ret = caml_callback_exn(*f, state_value);
-    if (Is_exception_result(ret)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(ret)));
-        p = NULL;
-    } else {
-        // The return value is a tuple containing the packet and the new config object
-        *pstate = Field(ret, 1);
-        p = copypacket(Field(ret, 0), packet_size);
-    }
-    restore_stdio(&r, outmsg, errmsg);
-    
-    CAMLreturnT(void*,p);
-}
-
-void * FFI_mitls_prepare_client_hello(/* in out */ size_t *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
-{
-    void *p;
-    p = FFI_mitls_prepare_simple(g_mitls_FFI_PrepareClientHello, state, packet_size, outmsg, errmsg);
-    return p;
-}
-
-int FFI_mitls_handle_simple(value* f, /* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ char **outmsg, /* out */ char **errmsg)
-{
-    value* pstate = *(value**)state;
-    value state_value = *pstate;
-    int ret = 0;
-    CAMLparam1(state_value);
-    CAMLlocal3(header_value, record_value, result);
-    mitls_redirect r;
-
-    *outmsg = NULL;
-    *errmsg = NULL;
-    redirect_stdio(&r);
-
-    header_value = caml_alloc_string(header_size);
-    memcpy(Bp_val(header_value), header, header_size);
-    
-    record_value = caml_alloc_string(record_size);
-    memcpy(Bp_val(record_value), record, record_size);
-    
-    result = caml_callback3_exn(*f, state_value, header_value, record_value);
-    if (Is_exception_result(result)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
-        ret = 0;
-    } else {
-        // The return is a just the updated state
-        *pstate = result;
-        ret = 1;
-    }
-    restore_stdio(&r, outmsg, errmsg);
-    
-    CAMLreturnT(int, ret);
-}
-
-
-int FFI_mitls_handle_server_hello(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, char **outmsg, char **errmsg)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleServerHello, state, header, header_size, record, record_size, outmsg, errmsg);
-    return ret;
-}
-
-int FFI_mitls_handle_certificate_verify12(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, char **outmsg, char **errmsg)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleCertificateVerify12, state, header, header_size, record, record_size, outmsg, errmsg);
-    return ret;
-}
-
-int FFI_mitls_handle_server_key_exchange(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, char **outmsg, char **errmsg)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleServerKeyExchange, state, header, header_size, record, record_size, outmsg, errmsg);
-    return ret;
-}
-
-int FFI_mitls_handle_server_hello_done(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, char **outmsg, char **errmsg)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleServerHelloDone, state, header, header_size, record, record_size, outmsg, errmsg);
-    return ret;
-}
-
-void * FFI_mitls_prepare_client_key_exchange(/* in out */ size_t *state, /* out */ size_t *packet_size, char **outmsg, char **errmsg)
-{
-    void *p;
-    p = FFI_mitls_prepare_simple(g_mitls_FFI_PrepareClientKeyExchange, state, packet_size, outmsg, errmsg);
-    return p;
-}
-
-void * FFI_mitls_prepare_change_cipher_spec(/* in out */ size_t *state, /* out */ size_t *packet_size, char **outmsg, char **errmsg)
-{
-    void *p;
-    p = FFI_mitls_prepare_simple(g_mitls_FFI_PrepareChangeCipherSpec, state, packet_size, outmsg, errmsg);
-    return p;
-}
-
-void * FFI_mitls_prepare_handshake(/* in out */ size_t *state, /* out */ size_t *packet_size, char **outmsg, char **errmsg)
-{
-    void *p;
-    p = FFI_mitls_prepare_simple(g_mitls_FFI_PrepareHandshake, state, packet_size, outmsg, errmsg);
-    return p;
-}
-
-int FFI_mitls_handle_change_cipher_spec(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, char **outmsg, char **errmsg)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleChangeCipherSpec, state, header, header_size, record, record_size, outmsg, errmsg);
-    return ret;
-}
-
-int FFI_mitls_handle_server_finished(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, char **outmsg, char **errmsg)
-{
-    int ret;
-    ret = FFI_mitls_handle_simple(g_mitls_FFI_HandleServerFinished, state, header, header_size, record, record_size, outmsg, errmsg);
-    return ret;
-}
-
-
-void * FFI_mitls_prepare_send(/* in out */ size_t *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size, char **outmsg, char **errmsg)
-{
-    value* pstate = *(value**)state;
-    value state_value = *pstate;
-    void *p = NULL;
-    CAMLparam1(state_value);
-    CAMLlocal2(buffer_value, result);
-    mitls_redirect r;
-
-    *outmsg = NULL;
-    *errmsg = NULL;
-    redirect_stdio(&r);
-    
-    buffer_value = caml_alloc_string(buffer_size);
-    memcpy(Bp_val(buffer_value), buffer, buffer_size);
-    
-    result = caml_callback2_exn(*g_mitls_FFI_PrepareSend, state_value, buffer_value);
-    if (Is_exception_result(result)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
-        p = NULL;
-    } else {
-        // The return the plaintext data
-        p = copypacket(result, packet_size);
-    }
-    
-    restore_stdio(&r, outmsg, errmsg);
-    CAMLreturnT(void*, p);
-    
-}
-
-void * FFI_mitls_handle_receive(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size, char **outmsg, char **errmsg)
-{
-    value* pstate = *(value**)state;
-    value state_value = *pstate;
-    void *p = NULL;
-    CAMLparam1(state_value);
-    CAMLlocal3(header_value, record_value, result);
-    mitls_redirect r;
-
-    *outmsg = NULL;
-    *errmsg = NULL;
-    redirect_stdio(&r);
-
-    header_value = caml_alloc_string(header_size);
-    memcpy(Bp_val(header_value), header, header_size);
-    
-    record_value = caml_alloc_string(record_size);
-    memcpy(Bp_val(record_value), record, record_size);
-    
-    result = caml_callback3_exn(*g_mitls_FFI_HandleReceive, state_value, header_value, record_value);
-    if (Is_exception_result(result)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
-        p = NULL;
-    } else {
-        // Return the plaintext data
-        p = copypacket(result, packet_size);
-    }
-    
-    restore_stdio(&r, outmsg, errmsg);
-    CAMLreturnT(void*, p);
-}
-
+// Called from FStar code to send via TCP
 CAMLprim value ocaml_send_tcp(value cookie, value bytes)
 {
     mlsize_t buffer_size;
@@ -498,6 +310,7 @@ CAMLprim value ocaml_send_tcp(value cookie, value bytes)
     return Val_int(retval);
 }
 
+// Called from FStar code to receive via TCP
 CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
 {
     mlsize_t buffer_size;
@@ -515,11 +328,9 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     return Val_int(retval);
 }
 
-int FFI_mitls_connect13(struct _FFI_mitls_callbacks *callbacks, /* out */ size_t *state, /* out */ char **outmsg, /* out */ char **errmsg)
+// Called by the host app to create a TLS connection.
+int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
-    value* pstate = *(value**)state;
-    value state_value = *pstate;
-    CAMLparam1(state_value);
     CAMLlocal1(result);
     int ret;
     mitls_redirect r;
@@ -528,25 +339,23 @@ int FFI_mitls_connect13(struct _FFI_mitls_callbacks *callbacks, /* out */ size_t
     *errmsg = NULL;
     redirect_stdio(&r);
     
-    result = caml_callback2_exn(*g_mitls_FFI_Connect13, state_value, Val_long((size_t)callbacks));
+    result = caml_callback2_exn(*state->connect_callback, state->fstar_state, Val_long((size_t)callbacks));
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         ret = 0;
     } else {
-        *pstate = result;
+        state->fstar_state = result;
         ret = 1;
         
     }
     restore_stdio(&r, outmsg, errmsg);
-    CAMLreturnT(int, ret);
+    return ret;
 }
 
-void * FFI_mitls_prepare_send13(/* in out */ size_t *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+// Called by the host app to encode a cleartext packet for transmission
+void * FFI_mitls_prepare_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
-    value* pstate = *(value**)state;
-    value state_value = *pstate;
     void *p = NULL;
-    CAMLparam1(state_value);
     CAMLlocal2(buffer_value, result);
     mitls_redirect r;
 
@@ -557,7 +366,7 @@ void * FFI_mitls_prepare_send13(/* in out */ size_t *state, const void* buffer, 
     buffer_value = caml_alloc_string(buffer_size);
     memcpy(Bp_val(buffer_value), buffer, buffer_size);
     
-    result = caml_callback2_exn(*g_mitls_FFI_PrepareSend13, state_value, buffer_value);
+    result = caml_callback2_exn(*state->prepare_send_callback, state->fstar_state, buffer_value);
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         p = NULL;
@@ -567,15 +376,13 @@ void * FFI_mitls_prepare_send13(/* in out */ size_t *state, const void* buffer, 
     }
     
     restore_stdio(&r, outmsg, errmsg);
-    CAMLreturnT(void*, p);    
+    return p;
 }
 
-void * FFI_mitls_handle_receive13(/* in out */ size_t *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+// Called by the host app to decode a packet into cleartext
+void * FFI_mitls_handle_receive(/* in */ mitls_state *state, char* header, size_t header_size, char *record, size_t record_size, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
-    value* pstate = *(value**)state;
-    value state_value = *pstate;
     void *p = NULL;
-    CAMLparam1(state_value);
     CAMLlocal3(header_value, record_value, result);
     mitls_redirect r;
 
@@ -589,7 +396,7 @@ void * FFI_mitls_handle_receive13(/* in out */ size_t *state, char* header, size
     record_value = caml_alloc_string(record_size);
     memcpy(Bp_val(record_value), record, record_size);
     
-    result = caml_callback3_exn(*g_mitls_FFI_HandleReceive13, state_value, header_value, record_value);
+    result = caml_callback3_exn(*state->handle_receive_callback, state->fstar_state, header_value, record_value);
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         p = NULL;
@@ -599,5 +406,6 @@ void * FFI_mitls_handle_receive13(/* in out */ size_t *state, char* header, size
     }
     
     restore_stdio(&r, outmsg, errmsg);
-    CAMLreturnT(void*, p);
+    return p;
 }
+
