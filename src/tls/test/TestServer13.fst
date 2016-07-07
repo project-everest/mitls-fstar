@@ -12,6 +12,7 @@ open TLSConstants
 open TLSInfo
 open StreamAE
 open CoreCrypto
+open HandshakeLog
 
 (* FlexRecord *)
 
@@ -19,12 +20,9 @@ open CoreCrypto
 
 val encryptRecord_TLS13_AES_GCM_128_SHA256: #id:id -> writer id -> Content.contentType -> bytes -> bytes
 let encryptRecord_TLS13_AES_GCM_128_SHA256 #id w ct plain = 
-  // let pv = TLS_1p3 in
   let text = plain in
-  // Range.frange -> Range.range
   let len = length text in
   let rg: Range.frange id = 0, len in
-
   let f = Content.mk_fragment id ct rg plain in 
   StreamAE.encrypt w (len+1) f // the extra byte is for CT with no padding
 
@@ -34,7 +32,6 @@ let decryptRecord_TLS13_AES_GCM_128_SHA256 #id rd ct cipher =
   let (Some d) = StreamAE.decrypt #id rd (length cipher - (StreamAE.ltag id)) cipher in
   Content.repr id d
 
-// ADL 05/05: tried the top-level but still fails
 let sendRecord tcp pv ct msg str = 
   let r = Record.makePacket ct pv msg in
   let Correct _ = Platform.Tcp.send tcp r in
@@ -62,27 +59,25 @@ let recvRecord tcp pv =
          match really_read tcp len  with
          | Correct payload -> (ct,pv,payload)
 
-let makeHSRecord pv hs_msg log =
+let makeHSRecord pv hs_msg =
   let hs = HandshakeMessages.handshakeMessageBytes (Some pv) hs_msg in
-  (string_of_handshakeMessage hs_msg,hs,log@|hs)
+  (string_of_handshakeMessage hs_msg,hs)
 
-let sendHSRecord tcp pv hs_msg log = 
-  let (str,hs,log) = makeHSRecord pv hs_msg log in
-  sendRecord tcp pv Content.Handshake hs str;
-  log
+let sendHSRecord tcp pv hs_msg = 
+  let (str,hs) = makeHSRecord pv hs_msg in
+  sendRecord tcp pv Content.Handshake hs str
 
-let sendEncHSRecord tcp pv hs_msg log wr =
-  let (str,hs,log) = makeHSRecord pv hs_msg log in
+let sendEncHSRecord tcp pv hs_msg wr =
+  let (str,hs) = makeHSRecord pv hs_msg in
   let er = encryptRecord_TLS13_AES_GCM_128_SHA256 wr Content.Handshake hs in
-  sendRecord tcp pv Content.Application_data er str;
-  log
+  sendRecord tcp pv Content.Application_data er str
 
-let recvHSRecord tcp pv kex log = 
+let recvHSRecord tcp pv kex = 
   let (Content.Handshake,rpv,pl) = recvRecord tcp pv in
   match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
   | Correct (rem,[(hs_msg,to_log)]) -> 
-     	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-	     (hs_msg,to_log,log @| to_log))
+     	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^") INJECTIVE="^(if equalBytes to_log (HandshakeMessages.handshakeMessageBytes None hs_msg) then "YES" else "NO")^"\n");
+	     (hs_msg,to_log))
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
 
 let recvCCSRecord tcp pv = 
@@ -90,13 +85,13 @@ let recvCCSRecord tcp pv =
   IO.print_string "Received CCS\n";
   ccs
 
-let recvEncHSRecord tcp pv kex log rd = 
+let recvEncHSRecord tcp pv kex rd = 
   let (Content.Application_data,_,cipher) = recvRecord tcp pv in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in 
   let [(hs_msg,to_log)] = hsm in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
-  hs_msg, log @| to_log	      
+  hs_msg, to_log
 
 let recvEncAppDataRecord tcp pv rd = 
   let (Content.Application_data,_,cipher) = recvRecord tcp pv in
@@ -105,32 +100,19 @@ let recvEncAppDataRecord tcp pv rd =
   IO.print_string ((iutf8 payload)^"\n");
   payload
 
-let rec negoKS =
-  function
-  | (SEC ecc, gx) :: _  -> Some (SEC ecc, gx)
-  | _ :: t -> negoKS t
-  | [] -> None
-
-let rec get_keyshare el =
-  match el with
-  | (TLSExtensions.E_keyShare (ClientKeyShare ksl))::_ -> negoKS ksl
-  | _::t -> get_keyshare t
-  | [] -> None
-
 let rec aux config sock =
   let tcp = Platform.Tcp.accept sock in
   let rid = new_region root in
-  let log = empty_bytes in //HandshakeLog.init TLS_1p3 rid in
+  let lg = HandshakeLog.create #rid in
+  let ks, sr = KeySchedule.create #rid Server lg in
+
   let kex = TLSConstants.Kex_ECDHE in
   let pv = TLS_1p3 in
   let h = CoreCrypto.SHA256 in
   let sa = CoreCrypto.RSASIG in
   let cs = CipherSuite kex (Some sa) (AEAD AES_128_GCM h) in
-  let ks, sr = KeySchedule.create #rid Server in
-  let lg = HandshakeLog.create #rid in
-  let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in // (HandshakeLog.getBytes x) in
 
-  let ClientHello(ch), chb, log = recvHSRecord tcp pv kex log in
+  let ClientHello(ch), chb = recvHSRecord tcp pv kex in
 
   let (cr, sid, csl, ext) = (match ch with
     | {ch_protocol_version = TLS_1p3;
@@ -140,36 +122,40 @@ let rec aux config sock =
        ch_extensions = Some ext} -> (cr, sid, csl, ext)
     | _ -> failwith "Bad client hello (probably not 1.3)") in
 
-  // ADL need to change the ks argument of prepareServerHello
-  // Handshake calls KS.ks_server_13_1rtt_init to generate gy
-  let (nego,Some keys,(ServerHello sh,shb)) = (match Handshake.prepareServerHello config ks lg None (ClientHello ch,chb) with
-                    | Correct z -> z 
-                    | Error (x,z) -> failwith z) in
-  let log = sendHSRecord tcp pv (ServerHello sh) log in
+  let (nego, Some keys, (ServerHello sh, shb)) =
+  (match Handshake.prepareServerHello config ks lg None (ClientHello ch, chb) with
+     | Correct z -> z 
+     | Error (x,z) -> failwith z) in
 
-  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_server_13_get_htk ks (hash log) in
-  //FIXME: should use the keys from prepareServerHello, but they're incorrect
-  //let KeySchedule.StAEInstance rd wr = keys in
+  sendHSRecord tcp pv (ServerHello sh);
+  let KeySchedule.StAEInstance rd wr = keys in
 
   let Correct chain = Cert.lookup_chain config.cert_chain_file in
   let crt = {crt_chain = chain} in
-  let log = sendEncHSRecord tcp pv (EncryptedExtensions ({ee_extensions=[]})) log wr in
-  let log = sendEncHSRecord tcp pv (Certificate crt) log wr in
+  sendEncHSRecord tcp pv (EncryptedExtensions ({ee_extensions=[]})) wr;
+  sendEncHSRecord tcp pv (Certificate crt) wr;
 
-  let tbs = Handshake.to_be_signed pv Server None (hash log) in
+  let _ = lg @@ (EncryptedExtensions ({ee_extensions=[]})) in
+  let _ = lg @@ (Certificate crt) in
+
+  let tbs = Handshake.to_be_signed pv Server None (HandshakeLog.getHash lg h) in
   let ha = Hash CoreCrypto.SHA256 in
   let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
   let a = Signature.Use (fun _ -> True) sa [ha] false false in
   let Some csk = Signature.lookup_key #a config.private_key_file in
   let sigv = Signature.sign ha csk tbs in
   let signature = (hab @| sab @| (vlbytes 2 sigv)) in
-  let log = sendEncHSRecord tcp pv (CertificateVerify ({cv_sig = signature})) log wr in
+  sendEncHSRecord tcp pv (CertificateVerify ({cv_sig = signature})) wr;
+  let _ = lg @@ (CertificateVerify ({cv_sig = signature})) in
 
-  let svd = KeySchedule.ks_server_13_server_finished ks (hash log) in
-  let log = sendEncHSRecord tcp pv (Finished ({fin_vd = svd})) log wr in
+  let svd = KeySchedule.ks_server_13_server_finished ks in
+  sendEncHSRecord tcp pv (Finished ({fin_vd = svd})) wr;
+  let _ = lg @@ (Finished ({fin_vd = svd})) in
+  let KeySchedule.StAEInstance drd dwr = KeySchedule.ks_server_13_sf ks in
 
-  let cvd, (KeySchedule.StAEInstance drd dwr) = KeySchedule.ks_server_13_client_finished ks (hash log) in
-  let Finished({fin_vd = cfin}),log = recvEncHSRecord tcp pv kex log rd in
+  let cvd = KeySchedule.ks_server_13_client_finished ks in
+  let Finished({fin_vd = cfin}), _ = recvEncHSRecord tcp pv kex rd in
+  let _ = lg @@ (Finished ({fin_vd = cfin})) in
 
   (if equalBytes cfin cvd then
     IO.print_string ("Server finished OK:"^(print_bytes svd)^"\n")

@@ -17,6 +17,8 @@ open TLSInfo
 
 open Range
 open StAE
+open Negotiation
+open Epochs
 open Handshake
 open Connection
 
@@ -57,7 +59,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then i = noId else let e = Seq.index es j in i = hsId e.h)   
+    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = handshakeId e.h)   
   ))
   (ensures (fun h0 result h1 -> 
     next_fragment_ensures s h0 result h1 /\
@@ -66,7 +68,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
      w0 >= 0 ==> Seq.index (logT s h0) w0 = Seq.index (logT s h1) w0))) 
 let next_fragment i s =  
   let h0 = ST.get() in 
-  let ilog = HS.log s in 
+  let ilog = Epochs.es (HS.log s) in 
   let w0 = Handshake.i s Writer in 
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (Seq.index (MS.i_sel h0 ilog) w0) ilog;
@@ -95,7 +97,7 @@ let rec unexpected #a s = unexpected s
 
 //16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
 
-let id = i:id{ is_stream_ae i }
+let id = i:id{ is_stream i }
  
 let outerPV c : ST protocolVersion
   (requires (hs_inv c.hs))
@@ -216,7 +218,7 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
     )))
 
 let no_seqn_overflow c rw =
-  let es = MS.i_read c.hs.log in //MR.m_read c.hs.log in
+  let es = MS.i_read (Epochs.es c.hs.log) in //MR.m_read c.hs.log in
   let j = Handshake.i c.hs rw in
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ... 
     true
@@ -284,9 +286,9 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     let es = epochs c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
     st_inv c h /\
-    (if j < 0 then i == noId else
+    (if j < 0 then is_PlaintextID i else
        let e = Seq.index es j in
-       i = hsId e.h /\
+       i = handshakeId e.h /\
        incrementable (writer_epoch e) h)))
   (ensures (fun h0 payload h1 ->
     let es = epochs c h0 in
@@ -294,9 +296,9 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     st_inv c h0 /\
     st_inv c h1 /\
     op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
-    (if j < 0 then i == noId /\ h0 == h1 else 
+    (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
        let e = Seq.index es j in   
-       i = hsId e.h /\ (
+       i = handshakeId e.h /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
@@ -310,7 +312,7 @@ let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j<0 
     then Content.repr i f
-    else let es = MS.i_read c.hs.log in
+    else let es = MS.i_read (Epochs.es c.hs.log) in
 	 let e = Seq.index es j in 
 	 (* let _ = reveal_epoch_region_inv e in *)
 	 StAE.encrypt (writer_epoch e) f
@@ -324,11 +326,11 @@ let send_payload c i f =
 // used e.g. for writing while reading
 let currentId (c:connection) (rw:rw) : id = 
   let j = Handshake.i c.hs rw in 
-  if j<0 then noId 
+  if j<0 then PlaintextID (c_nonce c)
   else 
-    let es = MR.m_read c.hs.log in
+    let es = MR.m_read (Epochs.es c.hs.log) in
     let e = Seq.index es j in
-    let id = hsId e.h in
+    let id = handshakeId e.h in
     if rw = Writer then id else peerId id
 
 
@@ -341,13 +343,13 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
     st_inv c h /\
     st <> Close /\
     st <> Half Reader /\
-    (j < 0 ==> i = noId) /\
+    (j < 0 ==> is_PlaintextID i) /\
     (j >= 0 ==> (
        let e = Seq.index es j in
        let wr = writer_epoch e in 
        Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
        Map.contains h (StAE.log_region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
-       i = hsId e.h /\
+       i = handshakeId e.h /\
        incrementable (writer_epoch e) h))
        
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
@@ -359,9 +361,9 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\ // should follow from the modifies clause
-    (if j < 0 then i == noId /\ h0 = h1 else
+    (if j < 0 then is_PlaintextID i /\ h0 = h1 else
        let e = Seq.index es j in
-       i = hsId e.h /\ (
+       i = handshakeId e.h /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
@@ -471,7 +473,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
      st_inv c h 
   /\ (match wo with 
-     | None    -> i = noId
+     | None    -> is_PlaintextID i
      | Some wr ->  Map.contains h (StAE.region wr)
 	       /\ Map.contains h (StAE.log_region wr))
 
@@ -507,7 +509,7 @@ let sendFragment c #i wo f =
            match wo with
 	   | None    -> Content.repr i f //16-05-20 don't understand error.
 	   | Some wr -> StAE.encrypt wr f in 
-       let pv = outerPV c in //16-05-20  compare with i.pv?; Needs hs_inv
+       let pv = outerPV c in //16-05-20  compare with (pv_of_id i)?; Needs hs_inv
        let ct, rg = Content.ct_rg i f in
        lemma_repr_bytes_values (length payload);
        let record = Record.makePacket ct pv payload in
@@ -523,18 +525,18 @@ val current_writer : //A slightly exotic style here, because we can; using a loc
 	let hs = c.hs in 
 	let ix = iT hs Writer h in
 	if ix < 0
-	then b2t (i = noId)
+	then b2t (is_PlaintextID i)
 	else let epoch_i = eT hs Writer h in 
-   	     b2t (i=hsId (Epoch.h epoch_i)) in
+   	     b2t (i=handshakeId (Epoch.h epoch_i)) in
      c:connection -> i:id -> ST (option (cwriter i c))
        (requires (current_writer_pre c i))
        (ensures (fun h0 wo h1 -> 
 	       current_writer_pre c i h1
 	       /\ h0=h1
 	       /\ (match wo with 
-		  | None -> i=noId
+		  | None -> is_PlaintextID i
 		  | Some w -> 
-		    i<>noId //needed for well-formedness of eT
+		    ~ (is_PlaintextID i) //needed for well-formedness of eT
 		    /\ (let epoch_i = eT c.hs Writer h1 in 
 	               let w_i = Epoch.w epoch_i in
 		       trigger_peer (Epoch.r epoch_i) /\
@@ -543,7 +545,7 @@ let current_writer c i =
   let ix = Handshake.i c.hs Writer in 
   if ix < 0
   then None
-  else let epochs = MS.i_read (HS.log c.hs) in
+  else let epochs = MS.i_read (Epochs.es c.hs.log) in
        let e = Seq.index epochs ix in
        let _ = cut (trigger_peer (Epoch.r e)) in
        Some (Epoch.w e)
@@ -738,9 +740,9 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*     st_inv c h0 /\ *)
 (*     st_inv c h1 /\ *)
 (*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
-(*     (if j < 0 then i == noId /\ h0 = h1 else *)
+(*     (if j < 0 then is_PlaintextID i /\ h0 = h1 else *)
 (*        let e = Seq.index es j in *)
-(*        i == hsId e.h /\ ( *)
+(*        i == handshakeId e.h /\ ( *)
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C.region c)) h0 h1 *)
 (* )))) *)
@@ -887,9 +889,7 @@ let writeClose c =
 
 (*** incoming (implicitly writing) ***)
 
-// By default, all i:id are reader identifiers, i.e. peerId (hsId (reader_epoch.h)
-// Tricky for noId?       
-
+// By default, all i:id are reader identifiers, i.e. peerId (handshakeId (reader_epoch.h)
 // FIXME: Put the following definitions close to range and delta, and use them
 
 type query = Cert.chain
@@ -959,15 +959,15 @@ let sel_reader h c =
   let j = iT c.hs Reader h in
   (if j < 0 then None else 
   let e = Seq.index es j in 
-  let i = peerId (hsId e.h) in
-  assume(is_stream_ae i);
+  let i = peerId (handshakeId e.h) in
+  assume(is_stream i);
   Some (| i, reader_epoch e|))
   // todo: add other cases depending on dispatch state
 
 type delta h c = 
   (match sel_reader h c with 
   | Some (| i , _ |) -> DataStream.delta i
-  | None             -> DataStream.delta noId)
+  | None             -> DataStream.delta (PlaintextID (c_nonce c)))
 
 
 // frequent error handler; note that i is the (unused) reader index
@@ -985,9 +985,9 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     let es = epochs c h0 in 
     let j = iT c.hs Reader h0 in 
     st_inv c h0 /\
-    (if j < 0 then i == noId else 
+    (if j < 0 then is_PlaintextID i else 
       let e = Seq.index es j in
-      i = peerId (hsId e.h) /\
+      i = peerId (handshakeId e.h) /\
       incrementable (reader_epoch e) h0)))
   (ensures (fun h0 r h1 -> 
     let es = epochs c h0 in 
@@ -995,9 +995,9 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Reader h1 /\
-    (if j < 0 then i == noId /\ h0 == h1 else 
+    (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
       let e = Seq.index es j in
-      i = peerId (hsId e.h) /\
+      i = peerId (handshakeId e.h) /\
       (let rd: reader i = reader_epoch e in 
       modifies (Set.singleton (region rd)) h0 h1 /\
       (match r with 
@@ -1013,10 +1013,10 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
 
 let readFragment c i = 
   assume false; // 16-05-19 can't prove POST.
-  match Record.read c.tcp i.pv with 
+  match Record.read c.tcp (pv_of_id i) with 
   | Error e -> Error e
   | Correct(ct,pv,payload) -> 
-    let es = MR.m_read c.hs.log in 
+    let es = MR.m_read (Epochs.es c.hs.log) in 
     let j : logIndex es = Handshake.i c.hs Reader in 
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in 
@@ -1024,7 +1024,7 @@ let readFragment c i =
     else
       // payload decryption
       let e = Seq.index es j in 
-      match StAE.decrypt (reader_epoch e) payload with 
+      match StAE.decrypt (reader_epoch e) (ct,payload) with
       | Some f -> Correct f
       | None   -> Error(AD_internal_error,"") //16-05-19 adjust! 
 

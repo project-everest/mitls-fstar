@@ -20,7 +20,7 @@ open Range
 
 // for now, we *exclude* MACOnly
 
-type id = i:id { is_MtE i.aeAlg /\ pv_of_id i <> TLS_1p3 } 
+type id = i:id { is_ID12 i /\ is_MtE (aeAlg_of_id i) } 
 
 // tmp
 type tagt (i:id) = MAC.tag i
@@ -33,7 +33,7 @@ private type plain (i:id) (ad: LHAEPlain.adata i) (rg:range) = | Plain:
   tag: tagt i ->
 
   // did decoding succeed? stateful? always true with RC4.
-  ok : bool { is_MACOnly i.aeAlg \/ (encAlg_of_id i = (Stream CoreCrypto.RC4_128, Fresh) ==> ok = true) } -> 
+  ok : bool { is_MACOnly (aeAlg_of_id i) \/ (encAlg_of_id i = (Stream CoreCrypto.RC4_128, Fresh) ==> ok = true) } -> 
   plain i ad rg 
 
 // should we index just by plaintext lengths, rather than ad & range?
@@ -96,7 +96,7 @@ type maconly_entry =
      payload:bytes * text:bytes * p:LHAEPlain.plain i ad rg * MAC.tag
   { authId i /\ //
     tlen <= max_TLSCiphertext_fragment_length /\ tlen = targetLength i rg /\ //
-    is_MACOnly i.aeAlg /\ //
+    is_MACOnly (aeAlg_of_id i) /\ //
     MAC.Msg(i,text) /\ //
     text = MACPlain i rg ad p /\ //
     payload = LHAEPlain.Payload i ad rg p
@@ -104,7 +104,7 @@ type maconly_entry =
 
 private val maconly_log: maconly_entry list ref
 private val maconly_mem:
-	i:id{AuthId(i) /\ (?mac. i.aeAlg = MACOnly(mac))} ->
+	i:id{AuthId(i) /\ (?mac. (aeAlg_of_id i) = MACOnly(mac))} ->
 	ad:(;i)LHAEPlain.adata -> tlen:nat{tlen <= max_TLSCiphertext_fragment_length} ->
 	pl:bytes -> t:bytes{B(t) = B(ad) @| VLBytes(2,B(pl)) /\
 		(?rg,p. B(pl) = LHAEPlain.Payload(i,B(ad),rg,p) )} ->
@@ -131,7 +131,7 @@ let mac i k ad rg plain =
 //#if ideal
     (* For MACOnly ciphersuites where AuthId holds, we store the plain and
      * the tag in the MACOnly log *)
-    let e_aealg = i.aeAlg in
+    let e_aealg = (aeAlg_of_id i) in
     let auth = authId i in
     if auth = true then
       (match (e_aealg) with
@@ -228,7 +228,7 @@ val encode:
 let encode i ad rg pl tag =
     let tlen = targetLength i rg in
     let b = payload i rg ad pl in
-    match i.aeAlg with
+    match (aeAlg_of_id i) with
     // no padding
     | MACOnly(mac)
     | MtE (Stream CoreCrypto.RC4_128) mac ->
@@ -272,7 +272,7 @@ let decode i ad tlen payload =
  
     let rg : frange i = cipherRangeClass i tlen in
     assume(StatefulPlain.wf_ad_rg i (LHAEPlain.parseAD ad) rg);
-    match i.aeAlg with
+    match (aeAlg_of_id i) with
     // no padding: we expect l = lf + lt
     | MACOnly hashAlg
     | MtE (Stream CoreCrypto.RC4_128) hashAlg ->
@@ -352,7 +352,7 @@ let decode i ad tlen payload =
 
 // minimal cipher length for MEE
 let minTlen (i:id) =
-  match i.aeAlg with
+  match (aeAlg_of_id i) with
   | MACOnly hashAlg
   | MtE (Stream CoreCrypto.RC4_128) hashAlg -> macSize (macAlg_of_id i)
   | MtE (Block encAlg) hashAlg -> ivSize i + macSize (macAlg_of_id i) + fixedPadSize i
@@ -363,7 +363,7 @@ let minTlen (i:id) =
 let test1 _ = assert (forall e h. blockSize e <= macSize h)
 
 let test2 _ = assert (forall (i:id) enc mac.
-    i.aeAlg = MtE (Block enc) mac ==> minTlen i >= blockSize enc)
+    (aeAlg_of_id i) = MtE (Block enc) mac ==> minTlen i >= blockSize enc)
 *)
 
 val mk_plain:

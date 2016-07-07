@@ -26,7 +26,7 @@ FSTAR_HOME?=../../.fstar
 # .fst files in [lib/ml] that are realized in stdlib-hyperheap.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
-OPTIONS=--universes --use_native_int --fstar_home $(FSTAR_HOME)
+OPTIONS=--use_native_int --fstar_home $(FSTAR_HOME)
 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap FFICallbacks
 
@@ -42,7 +42,8 @@ CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection
+HINTS_ENABLED?=--use_hints
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO) ../../libs/ml/FFICallbacks.fst
@@ -81,6 +82,7 @@ HASH.fst \
 HMAC.fst \
 Cert.fst \
 Signature.fst \
+PSK.fst \
 TLSInfo.fst \
 IdNonce.fst \
 TLSExtensions.fst \
@@ -99,16 +101,15 @@ MAC.fst \
 Encode.fst \
 StatefulLHAE.fst \
 ENC.fst \
-MAC_SHA256.fst \
-MAC_SHA1.fst \
 HandshakeMessages.fst \
 StAE.fst \
 StreamDeltas.fst \
 Record.fst \
-HSCrypto.fst \
+HKDF.fst \
 TLSPRF.fst \
-PRF.fst \
 HandshakeLog.fst \
+Negotiation.fst \
+Epochs.fst \
 KeySchedule.fst \
 Handshake.fst \
 Connection.fst \
@@ -126,7 +127,7 @@ TLS.fst #the preceding space is significant!
 # should be added here.
 #
 # Missing modules from FSTS:
-# TLSExtensions, Encode, ENC, HandshakeMessages, Record, HSCrypto,
+# TLSExtensions, Encode, ENC, HandshakeMessages,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
 VERIFY= \
@@ -160,10 +161,12 @@ LHAEPlain \
 AEAD_GCM \
 MAC \
 StatefulLHAE \
+Record \
 MAC_SHA256 \
 MAC_SHA1 \
 StAE \
 StreamDeltas \
+HKDF \
 Connection \
 ConnInvariant \
 TLS 
@@ -205,14 +208,12 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 
 # Targets to get F* arguments in interactive mode
 %.fst-in: IdealFlags
-	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
 	$(basename $@).fst
 
 %.fsti-in: IdealFlags
-	$(MAKE) refresh > /dev/null
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $@) \
@@ -222,7 +223,7 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 tls-ver: IdealFlags $(LIBFILES) $(FSTS)
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) \
+	$(FSTAR_INCLUDE_PATHS) $(addprefix --verify_module , $(VERIFY)) \
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
@@ -319,13 +320,25 @@ tls-gen: $(LIBFILES) ConcreteFlags $(FSTS) FFICallbacks.cmxa
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
 	# Then our test executable
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa \
-	         -I test/ test/parsing_test.ml test/test_main.ml -o test.out
-	# Run the test
+	         -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+	# Run the tests
 	$(EXTRA_PATH) ./test.out
 
 mitls.exe: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
+
+rpc.ml:
+	$(FSTAR) \
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
+	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
+	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	  $(FSTAR_INCLUDE_PATHS) \
+	  test/Formatting.fst test/RPC.fst
+
+rpc.exe:
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+		-I output/ output/Formatting.ml output/RPC.ml test/rpc_test.ml -o rpc.exe
 
 # depends on tls-gen
 tls-client:

@@ -10,44 +10,35 @@ open TLSInfo
 open TLSConstants
 open TLSInfo
 open StatefulLHAE
+open Negotiation
 open HandshakeLog
 open Handshake
 (* FlexRecord *)
 
-let id = {
-    msId = noMsId;
-    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
-    pv = TLS_1p2;
-    aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
-    csrConn = bytes_of_hex "";
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None
-    };
-    writer = Client
-  }
+let id =
+  let er = createBytes 32 (Char.char_of_int 0) in
+  let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
+  let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
+  let g = CommonDH.key_params gx in
+  let gy, gxy = CommonDH.dh_responder gx in
+  let msid = StandardMS (PMS.DHPMS(g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy))) (er @| er) kdf in
+  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256) er er Client
 
 let encryptor_TLS12_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let w: writer id =
-    let log: st_log_t r id = ralloc r Seq.createEmpty in
+    assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Writer =
+    let st: AEAD_GCM.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
+      AEAD_GCM.State key iv () counter
     in
-    State r log seqn key
+    st
   in
   // StatefulLHAE.writer -> StatefulLHAE.state
   w
@@ -55,18 +46,18 @@ let encryptor_TLS12_AES_GCM_128_SHA256 key iv =
 let decryptor_TLS12_AES_GCM_128_SHA256 key iv = 
   let r = HyperHeap.root in
   let r: reader id =
-    let log: st_log_t r id = ralloc r Seq.createEmpty in
+    assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Reader =
+    let st: AEAD_GCM.state id Reader =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
+      AEAD_GCM.State key iv () counter
     in
-    State r log seqn key
+    st
   in
   // StatefulLHAE.reader -> StatefulLHAE.state
   r
@@ -85,11 +76,11 @@ let encryptRecord_TLS12_AES_GCM_128_SHA256 w ct plain =
   let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in
   // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
   // FIXME: without the three additional #-arguments below, extraction crashes
-  StatefulLHAE.encrypt #id #ad #rg w f
+  StatefulLHAE.encrypt #id w ad rg f
 
 let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher = 
   let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
-  let (Some d) = StatefulLHAE.decrypt #id #ad rd cipher in
+  let (Some d) = StatefulLHAE.decrypt #id rd ad cipher in
   Content.repr id d
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
@@ -174,14 +165,13 @@ let recvEncAppDataRecord tcp pv rd =
 
 (* Flex Handshake *)
 
-
 let main config host port =
   IO.print_string "===============================================\n Starting test TLS client...\n";
   let tcp = Platform.Tcp.connect host port in
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
 
-  let ks, cr = KeySchedule.create #rid Client in
+  let ks, cr = KeySchedule.create #rid Client log in
   let (ClientHello ch,chb) = Handshake.prepareClientHello config ks log None None in
   let pv = ch.ch_protocol_version in 
   let kex = TLSConstants.Kex_ECDHE in
@@ -220,7 +210,6 @@ let main config host port =
 
   sendHSRecord tcp pv (ClientKeyExchange cke,ckeb);
 
-  let lb = HandshakeLog.getBytes log in
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
 //  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
   let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
@@ -258,8 +247,3 @@ let main config host port =
 //  let ad = recvEncAppDataRecord tcp pv rd in
 //  let ad = recvEncAppDataRecord tcp pv rd in
   ()
-
-  
-
-
-

@@ -13,7 +13,6 @@ open Range
 open Content
 
 
-
 // Consider merging some of this module with Content?
 
 // ------------------------outer packet format -------------------------------
@@ -57,7 +56,7 @@ assume val is_Null: id -> Tot bool
 // hopefully we only care about the writer, not the cn state
 // the postcondition is of the form
 //   authId i ==> f is added to the writer log
-let recordPacketOut (i: AEAD_GCM.gid) (wr:StatefulLHAE.writer i) (pv: protocolVersion) f =
+let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocolVersion) f =
     let ct, rg = Content.ct_rg i f in
     let payload =
       if is_Null i
@@ -65,7 +64,7 @@ let recordPacketOut (i: AEAD_GCM.gid) (wr:StatefulLHAE.writer i) (pv: protocolVe
       else
         let ad = StatefulPlain.makeAD i ct in
         let f = StatefulPlain.assert_is_plain i ad rg f in
-        StatefulLHAE.encrypt #i #ad #rg wr f
+        StatefulLHAE.encrypt #i wr ad rg f
     in
     makePacket ct pv payload
 
@@ -76,9 +75,8 @@ effect EXT (a:Type) = ST a
   (requires (fun _ -> True)) 
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
-//16-05-19  to be patched in ulib
 val tcp_recv: Platform.Tcp.networkStream -> max:nat -> EXT (optResult string (b:bytes {length b <= max}))
-let tcp_recv = assume false; Platform.Tcp.recv
+let tcp_recv = Platform.Tcp.recv
 
 
 private val really_read_rec: b:bytes -> Platform.Tcp.networkStream -> l:nat -> EXT (result (lbytes (l+length b)))
