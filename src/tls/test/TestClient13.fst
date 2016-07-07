@@ -86,12 +86,9 @@ let replace_keyshare ksl e =
 
   
 (*****************************************************************************************)
-type ffiStateClientHello = {
-    csch_guard: string;
-    csch_config: config;
-    csch_ks: ks;
-    csch_log: bytes;
-    csch_lg: HandshakeLog.log;
+type ffiStateConfigured = {
+    cscf_guard: string;
+    cscf_config: config;
     }
 
 let newconfig pv peername =
@@ -121,40 +118,33 @@ let newconfig pv peername =
          peer_name = Some peername;
          })
          
-val ffiConfig: string -> string -> ffiStateClientHello  
+val ffiConfig: string -> string -> ffiStateConfigured  
 let ffiConfig tlsversion hostname =
   let config = newconfig tlsversion hostname in
-  let rid=new_region root in
-  let ks, cr = KeySchedule.create #rid Client in
-  let lg = HandshakeLog.create #rid in
-  let log = empty_bytes in
-  let state:ffiStateClientHello =
+  let state:ffiStateConfigured =
   {
-    csch_guard = "CSCH";
-    csch_config = config;
-    csch_ks = ks;
-    csch_log = log;
-    csch_lg = lg;
+    cscf_guard = "CSCF";
+    cscf_config = config;
   } in
   state
 
     
 (*****************************************************************************************)
 
-type cookie = FFICallbacks.cookie
+type callbacks = FFICallbacks.callbacks
 
-val sendTcpPacket: cookie:cookie -> buf:bytes -> (result (bytes))
-let sendTcpPacket cookie buf = 
-  let result = FFICallbacks.ocaml_send_tcp cookie (get_cbytes buf) in
+val sendTcpPacket: callbacks:callbacks -> buf:bytes -> (result (bytes))
+let sendTcpPacket callbacks buf = 
+  let result = FFICallbacks.ocaml_send_tcp callbacks (get_cbytes buf) in
   if result < 0 then
     Error (AD_internal_error, "socket send failure")
   else
     Correct buf
 
-val recvTcpPacket: cookie:cookie -> maxlen:Prims.int -> (result (bytes))    
-let recvTcpPacket cookie maxlen =
+val recvTcpPacket: callbacks:callbacks -> maxlen:Prims.int -> (result (bytes))    
+let recvTcpPacket callbacks maxlen =
   let str = String.make maxlen 0z in
-  let recvlen = FFICallbacks.ocaml_recv_tcp cookie str  in
+  let recvlen = FFICallbacks.ocaml_recv_tcp callbacks str  in
   if recvlen < 0 then
     Error (AD_internal_error, "socket receive failure")
   else
@@ -162,29 +152,29 @@ let recvTcpPacket cookie maxlen =
     let ab = abytes b in
     Correct ab
   
-private val really_read_rec: b:bytes -> cookie -> l:nat -> (result (lbytes (l+length b)))
+private val really_read_rec: b:bytes -> callbacks -> l:nat -> (result (lbytes (l+length b)))
 
-let rec really_read_rec prev cookie len = 
+let rec really_read_rec prev callbacks len = 
     if len = 0 
     then Correct prev
     else 
-      match recvTcpPacket cookie len with
+      match recvTcpPacket callbacks len with
       | Correct b -> 
             let lb = length b in
       	    if lb = len then Correct(prev @| b)
-      	    else really_read_rec (prev @| b) cookie (len - lb)
+      	    else really_read_rec (prev @| b) callbacks (len - lb)
       | Error e -> Error e
 
 private let really_read = really_read_rec empty_bytes
 
-val recvRecordCallback: cookie -> protocolVersion -> 
+val recvRecordCallback: callbacks -> protocolVersion -> 
   (result (Content.contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
-let recvRecordCallback cookie pv =
-  match really_read cookie 5 with 
+let recvRecordCallback callbacks pv =
+  match really_read callbacks 5 with 
   | Correct header -> (
       match Record.parseHeader header with  
       | Correct (ct,pv,len) -> (
-         match really_read cookie len with
+         match really_read callbacks len with
          | Correct payload  -> Correct (ct,pv,payload)
          | Error e          -> Error e )
       | Error e             -> Error e )
@@ -192,10 +182,10 @@ let recvRecordCallback cookie pv =
 
 let hsbuf = alloc ([] <: list (hs_msg * bytes))
 
-let recvHSRecordCallback12 cookie pv kex log = 
+let recvHSRecordCallback12 callbacks pv kex log = 
   let (hs_msg, to_log) = match !hsbuf with
     | [] -> 
-      let Correct(ct,rpv,pl) = recvRecordCallback cookie pv in
+      let Correct(ct,rpv,pl) = recvRecordCallback callbacks pv in
       let hsml = match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
       	         | Correct(_,hsml) -> hsml | Error (y,z) -> IO.print_string(z); failwith "parseHSM failed" in
       let (hs_msg, to_log)::r = hsml in
@@ -207,24 +197,24 @@ let recvHSRecordCallback12 cookie pv kex log =
   if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
   (hs_msg,to_log)
   
-let recvHSRecordCallback cookie pv kex log = 
-  let Correct(Content.Handshake,rpv,pl) = recvRecordCallback cookie pv in
+let recvHSRecordCallback callbacks pv kex log = 
+  let Correct(Content.Handshake,rpv,pl) = recvRecordCallback callbacks pv in
   match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
   | Correct (rem,[(hs_msg,to_log)]) -> 
      	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
 	     (hs_msg,log @| to_log))
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
   
- let recvEncHSRecordCallback cookie pv kex log rd = 
-  let Correct(Content.Application_data,_,cipher) = recvRecordCallback cookie pv in
+ let recvEncHSRecordCallback callbacks pv kex log rd = 
+  let Correct(Content.Application_data,_,cipher) = recvRecordCallback callbacks pv in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in 
   let [(hs_msg,to_log)] = hsm in
   IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
   hs_msg, log @| to_log	      
   
-let recvEncHSRecordCallback12 cookie pv kex log rd = 
-  let Correct(Content.Handshake,_,cipher) = recvRecordCallback cookie pv in
+let recvEncHSRecordCallback12 callbacks pv kex log rd = 
+  let Correct(Content.Handshake,_,cipher) = recvRecordCallback callbacks pv in
   let payload = TestClient.decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
   let [(hs_msg,to_log)] = hsm in
@@ -234,18 +224,18 @@ let recvEncHSRecordCallback12 cookie pv kex log rd =
   if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
   hs_msg,to_log  
 
-let sendRecordCallback cookie pv ct msg str = 
+let sendRecordCallback callbacks pv ct msg str = 
   let r = Record.makePacket ct pv msg in
-  let Correct _ = sendTcpPacket cookie r in
+  let Correct _ = sendTcpPacket callbacks r in
   IO.print_string ("Sending "^Content.ctToString ct^"Data("^str^")\n")
 
-let sendHSRecordCallback12 cookie pv (m,b) = 
+let sendHSRecordCallback12 callbacks pv (m,b) = 
   let str = string_of_handshakeMessage m in
-  sendRecordCallback cookie pv Content.Handshake b str
+  sendRecordCallback callbacks pv Content.Handshake b str
 
-let sendHSRecordCallback cookie pv hs_msg log = 
+let sendHSRecordCallback callbacks pv hs_msg log = 
   let (str,hs,log) = makeHSRecord pv hs_msg log in
-  sendRecordCallback cookie pv Content.Handshake hs str;
+  sendRecordCallback callbacks pv Content.Handshake hs str;
   log
     
 let makePacket pv ct msg str = 
@@ -278,21 +268,20 @@ let check_read header record pv =
 
 type ffiStateClient12 = {
     cscc_guard: string;
-    cscc_config: config;
     cscc_pv: protocolVersion;
     cscc_wr: (StatefulLHAE.writer TestClient.id);
     cscc_rd: (StatefulLHAE.reader TestClient.id);
 }
 
-let recvCCSRecordCallback cookie pv = 
-  let Correct(Content.Change_cipher_spec,_,ccs) = recvRecordCallback cookie pv in
+let recvCCSRecordCallback callbacks pv = 
+  let Correct(Content.Change_cipher_spec,_,ccs) = recvRecordCallback callbacks pv in
   IO.print_string "Received CCS\n";
   ccs
 
-val ffiConnect12: ffiState:ffiStateClientHello -> cookie:cookie -> ffiStateClient12
-let ffiConnect12 ffiState cookie =
-  let _ = (if not (ffiState.csch_guard = "CSCH") then IO.print_string ("Incorrect csch_guard "^ffiState.csch_guard^"\n")) in
-  let config = ffiState.csch_config in
+val ffiConnect12: ffiState:ffiStateConfigured -> callbacks:callbacks -> ffiStateClient12
+let ffiConnect12 ffiState callbacks =
+  let _ = (if not (ffiState.cscf_guard = "CSCF") then IO.print_string ("Incorrect cscf_guard "^ffiState.cscf_guard^"\n")) in
+  let config = ffiState.cscf_config in
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
 
@@ -301,9 +290,9 @@ let ffiConnect12 ffiState cookie =
   let pv = ch.ch_protocol_version in 
   let kex = TLSConstants.Kex_ECDHE in
 
-  sendHSRecordCallback12 cookie pv (ClientHello ch,chb);
+  sendHSRecordCallback12 callbacks pv (ClientHello ch,chb);
 
-  let (ServerHello(sh),shb) = recvHSRecordCallback12 cookie pv kex log in
+  let (ServerHello(sh),shb) = recvHSRecordCallback12 callbacks pv kex log in
   
   let Correct (n,None) = Handshake.processServerHello config ks log None ch (ServerHello(sh),shb) in
 
@@ -313,13 +302,13 @@ let ffiConnect12 ffiState cookie =
   let ems = n.n_extensions.ne_extended_ms in
   let sal = n.n_extensions.ne_signature_algorithms in
 
-  let (Certificate(sc),scb) = recvHSRecordCallback12 cookie pv kex log in
+  let (Certificate(sc),scb) = recvHSRecordCallback12 callbacks pv kex log in
   IO.print_string ("Certificate validation status = " ^
     (if Cert.validate_chain sc.crt_chain true config.peer_name config.ca_file then
       "OK" else "FAIL")^"\n");
 
-  let (ServerKeyExchange(ske),skeb) = recvHSRecordCallback12 cookie pv kex log in
-  let (ServerHelloDone,shdb) = recvHSRecordCallback12 cookie pv kex log in
+  let (ServerKeyExchange(ske),skeb) = recvHSRecordCallback12 callbacks pv kex log in
+  let (ServerHelloDone,shdb) = recvHSRecordCallback12 callbacks pv kex log in
 
   let tbs = kex_s_to_bytes ske.ske_kex_s in
   let sigv = ske.ske_sig in
@@ -333,7 +322,7 @@ let ffiConnect12 ffiState cookie =
      | Correct [x] -> x 
      | Error (y,z) -> failwith (z ^ "\n") in
 
-  sendHSRecordCallback12 cookie pv (ClientKeyExchange cke,ckeb);
+  sendHSRecordCallback12 callbacks pv (ClientKeyExchange cke,ckeb);
 
   let lb = HandshakeLog.getBytes log in
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
@@ -350,11 +339,11 @@ let ffiConnect12 ffiState cookie =
   let str = string_of_handshakeMessage (Finished cfin) in 
   let efinb = TestClient.encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
 
-  sendRecordCallback cookie pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
-  sendRecordCallback cookie pv Content.Handshake efinb str;
+  sendRecordCallback callbacks pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
+  sendRecordCallback callbacks pv Content.Handshake efinb str;
 
-  let _ = recvCCSRecordCallback cookie pv in
-  let (Finished(sfin),sfinb) = recvEncHSRecordCallback12 cookie pv kex log rd in
+  let _ = recvCCSRecordCallback callbacks pv in
+  let (Finished(sfin),sfinb) = recvEncHSRecordCallback12 callbacks pv kex log rd in
   let Correct svd = Handshake.processServerFinished ks log (Finished sfin, sfinb) in
 
 
@@ -362,7 +351,6 @@ let ffiConnect12 ffiState cookie =
   if (Platform.Bytes.equalBytes sfin.fin_vd svd) then IO.print_string "yes\n" else IO.print_string "no\n";
   let newstate:ffiStateClient12 = {
     cscc_guard="CSCC";
-    cscc_config=config;
     cscc_pv=pv;
     cscc_wr = wr;
     cscc_rd = rd;
@@ -384,7 +372,6 @@ val ffiHandleReceiveWorker12: ffiState:ffiStateClient12 -> header:bytes -> recor
 let ffiHandleReceiveWorker12 ffiState header record =
   let _ = (if not (ffiState.cscc_guard = "CSCC") then IO.print_string ("Incorrect cscc_guard "^ffiState.cscc_guard^"\n")) in
   let _ = (if not (ffiState.cscc_pv = TLS_1p2) then IO.print_string ("This call is for TLS 1.2 only\n")) in
-  let config = ffiState.cscc_config in
   let pv = ffiState.cscc_pv in
   let rd = ffiState.cscc_rd in
   let c = check_read header record pv in
@@ -407,16 +394,15 @@ let ffiHandleReceive12 ffiState header record =
 
 type ffiStateClient13 = {
     cscl_guard: string;
-    cscl_config: config;
     cscl_pv: protocolVersion;
     cscl_dwr: (StreamAE.writer TestClient.id);
     cscl_drd: (StreamAE.reader TestClient.id);
 }
   
-val ffiConnect13: ffiState:ffiStateClientHello -> cookie:cookie -> ffiStateClient13
-let ffiConnect13 ffiState cookie =
-  let _ = (if not (ffiState.csch_guard = "CSCH") then IO.print_string ("Incorrect csch_guard "^ffiState.csch_guard^"\n")) in
-  let config = ffiState.csch_config in
+val ffiConnect13: ffiState:ffiStateConfigured -> callbacks:callbacks -> ffiStateClient13
+let ffiConnect13 ffiState callbacks =
+  let _ = (if not (ffiState.cscf_guard = "CSCF") then IO.print_string ("Incorrect cscf_guard "^ffiState.cscf_guard^"\n")) in
+  let config = ffiState.cscf_config in
   let log = empty_bytes in
   let rid = new_region root in
   let ks, cr = KeySchedule.create #rid Client in
@@ -427,9 +413,9 @@ let ffiConnect13 ffiState cookie =
   let pv = ch.ch_protocol_version in
   let hash x = CoreCrypto.hash CoreCrypto.SHA256 x in
   let kex = TLSConstants.Kex_ECDHE in
-  let log = sendHSRecordCallback cookie pv (ClientHello ch) log in
+  let log = sendHSRecordCallback callbacks pv (ClientHello ch) log in
 
-  let ServerHello(sh),log = recvHSRecordCallback cookie pv kex log in
+  let ServerHello(sh),log = recvHSRecordCallback callbacks pv kex log in
   let Correct (n,Some k) = Handshake.processServerHello config ks lg None ch (ServerHello sh,log) in
   let pv = sh.sh_protocol_version in
   let cs = sh.sh_cipher_suite in
@@ -437,14 +423,14 @@ let ffiConnect13 ffiState cookie =
   let KeySchedule.StAEInstance rd wr = k in
 
   let sal = n.n_extensions.ne_signature_algorithms in
-  let EncryptedExtensions(ee),log = recvEncHSRecordCallback cookie pv kex log rd in
-  let Certificate(sc),log = recvEncHSRecordCallback cookie pv kex log rd in
+  let EncryptedExtensions(ee),log = recvEncHSRecordCallback callbacks pv kex log rd in
+  let Certificate(sc),log = recvEncHSRecordCallback callbacks pv kex log rd in
   IO.print_string ("Certificate validation status = " ^
     (if Cert.validate_chain sc.crt_chain true (config.peer_name) config.ca_file then
       "OK" else "FAIL")^"\n");
   let cv_log = hash log in
 
-  let CertificateVerify(cv),log = recvEncHSRecordCallback cookie pv kex log rd in
+  let CertificateVerify(cv),log = recvEncHSRecordCallback callbacks pv kex log rd in
 
   //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
   let Some ((sa,h), sigv) = Handshake.sigHashAlg_of_ske cv.cv_sig in
@@ -456,7 +442,7 @@ let ffiConnect13 ffiState cookie =
     (if Signature.verify h pk tbs sigv then "OK" else "FAIL") ^ "\n");
 
   let svd = KeySchedule.ks_client_13_1rtt_server_finished ks (hash log) in
-  let Finished({fin_vd = sfin}),log = recvEncHSRecordCallback cookie pv kex log rd in
+  let Finished({fin_vd = sfin}),log = recvEncHSRecordCallback callbacks pv kex log rd in
 
   (if equalBytes sfin svd then
     IO.print_string ("Server finished OK:"^(print_bytes svd)^"\n")
@@ -468,10 +454,9 @@ let ffiConnect13 ffiState cookie =
   let (str,cfinb,log) = makeHSRecord pv (Finished cfin) log in
   IO.print_string "before encrypt \n";
   let efinb = encryptRecord_TLS13_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
-  sendRecordCallback cookie pv Content.Application_data efinb str;
+  sendRecordCallback callbacks pv Content.Application_data efinb str;
   let newstate:ffiStateClient13 = {
     cscl_guard="CSCL";
-    cscl_config=config;
     cscl_pv=pv;
     cscl_dwr = dwr;
     cscl_drd = drd;
@@ -494,7 +479,6 @@ val ffiHandleReceiveWorker13: ffiState:ffiStateClient13 -> header:bytes -> recor
 let ffiHandleReceiveWorker13 ffiState header record =
   let _ = (if not (ffiState.cscl_guard = "CSCL") then IO.print_string ("Incorrect cscl_guard "^ffiState.cscl_guard^"\n")) in
   let _ = (if not (ffiState.cscl_pv = TLS_1p3) then IO.print_string ("This call is for TLS 1.3 only\n")) in
-  let config = ffiState.cscl_config in
   let pv = ffiState.cscl_pv in
   let drd = ffiState.cscl_drd in
   let c = check_read header record pv in

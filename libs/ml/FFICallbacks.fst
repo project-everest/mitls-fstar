@@ -2,7 +2,7 @@ module FFICallbacks
 
 open Platform.Bytes
 
-type cookie = Prims.int
+type callbacks = Prims.int
 
-assume val ocaml_send_tcp: cookie -> cbytes -> Tot int
-assume val ocaml_recv_tcp: cookie -> cbytes -> Tot int
+assume val ocaml_send_tcp: callbacks -> cbytes -> Tot int
+assume val ocaml_recv_tcp: callbacks -> cbytes -> Tot int
