@@ -149,7 +149,7 @@ let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
   let output = hex_of_bytes output in
   if output <> cipher then begin
     IO.print_string ("Unexpected output: iv = " ^ iv ^ ", key = " ^ key ^
-        ", plain = " ^ plain ^ ", output = " ^ output ^ ", expected = " ^ cipher ^
+        ", plain = " ^ plain ^ "\n output   = " ^ output ^ "\n expected = " ^ cipher ^
         "\n");
     failwith "Error!"
   end else begin
