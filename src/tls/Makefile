@@ -113,6 +113,8 @@ Epochs.fst \
 KeySchedule.fst \
 Handshake.fst \
 Connection.fst \
+TLSClient.fst \
+TLSClient13.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 test/TestClient.fst \
