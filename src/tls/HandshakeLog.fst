@@ -87,6 +87,46 @@ let getHash (LOG #reg lref) h =
     let b = print_log hsl in
     CoreCrypto.hash h lb
 
+type validLog_CH (l:hs_log) =
+  (match l with
+  | [ClientHello _] -> True
+  | _ -> False)
+
+let projectLog_CH (l:hs_log{validLog_CH l}) : LogInfoCH =
+  match l with
+  | [ClientHello ({
+      ch_client_random = cr;
+      ch_sessionID = sid;
+      ch_extensions = Some el
+    })] -> LogInfoCH ({
+      li_ch_cr = cr;
+      li_ch_psk = ({PSK.time_createx = 0;
+        PSK.allow_early_data = false;
+        PSK.allow_dhe_resumption = false;
+        PSK.allow_psk_resumption = false;
+        PSK.early_ae = AES_GCM_128;
+        PSK.early_hash = CoreCrypto.SHA256;
+        PSK.identities = (empty_bytes, empty_bytes);});
+    })
+
+let getHash_CH (LOG #reg lref) (h:CoreCrypto.hash_alg)
+  : ST (| li:loginfo{is_LogInfoCH i} & hash:bytes{length hash = CoreCrypto.HashSize h} |)
+  (requires (fun h0 ->
+    let (| _, hsl, _ |) = sel h0 lref in validLog_CH hsl))
+  (ensures (fun h0 (| li, hash |) h1 ->
+    h1 = h0 /\ log_info li hash))
+  =
+  let (| _, hsl, lb |) = !lref in
+  let loginfo = projectLog_CH hsl in
+  (| LogInfo loginfo, CoreCrypto.hash h lb |)
+
+type validLog_SH (l:hs_log) =
+  (match l with
+  | (ClientHello _) :: r ->
+    (match r with
+    | _ -> False)
+  | _ -> False)
+
 assume val checkLogSessionHash: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
 assume val checkLogClientFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
 assume val checkLogServerFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
