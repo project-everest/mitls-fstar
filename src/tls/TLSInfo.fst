@@ -654,7 +654,10 @@ type id =
 
 let peerId = function
 | PlaintextID r -> PlaintextID r
-| ID13 (KeyID i tag rw li log) -> ID13 (KeyID i tag (dualRole rw) li log)
+| ID13 (KeyID i tag rw li log) -> 
+  let kid = KeyID i tag (dualRole rw) li log in 
+  assume (valid_keyId kid);
+  ID13 kid
 | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
 
 val siId: si:sessionInfo{ 
@@ -682,7 +685,9 @@ let kdfAlg_of_id = function
 
 val macAlg_of_id: i:id { is_ID12 i /\ ~(is_AEAD (ID12.aeAlg i)) } -> Tot macAlg
 let macAlg_of_id = function
-  | ID12 pv _ _ ae _ _ _ -> macAlg_of_aeAlg pv ae
+  | ID12 pv _ _ ae _ _ _ -> 
+    assume (pv <> TLS_1p3);
+    macAlg_of_aeAlg pv ae
 
 val encAlg_of_id: i:id { is_ID12 i /\ is_MtE (ID12.aeAlg i) } -> Tot (encAlg * ivMode)
 let encAlg_of_id = function
