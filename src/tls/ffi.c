@@ -10,11 +10,7 @@
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
   MITLS_FFI_ENTRY(Connect12) \
-  MITLS_FFI_ENTRY(PrepareSend12) \
-  MITLS_FFI_ENTRY(HandleReceive12) \
   MITLS_FFI_ENTRY(Connect13) \
-  MITLS_FFI_ENTRY(PrepareSend13) \
-  MITLS_FFI_ENTRY(HandleReceive13) \
  
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -24,8 +20,6 @@ MITLS_FFI_LIST
 typedef struct mitls_state {
     value fstar_state;    // a GC root representing an F*-side state object
     value *connect_callback;
-    value *prepare_send_callback;
-    value *handle_receive_callback;
 } mitls_state;
 
 typedef struct {
@@ -242,12 +236,8 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
             caml_register_generational_global_root(&s->fstar_state);
             if (strcmp(tls_version, "1.3") == 0) {
                 s->connect_callback = g_mitls_FFI_Connect13;
-                s->prepare_send_callback = g_mitls_FFI_PrepareSend13;
-                s->handle_receive_callback = g_mitls_FFI_HandleReceive13;
             } else {
                 s->connect_callback = g_mitls_FFI_Connect12;
-                s->prepare_send_callback = g_mitls_FFI_PrepareSend12;
-                s->handle_receive_callback = g_mitls_FFI_HandleReceive12;
             }
             *state = s;
             ret = 1;
@@ -334,7 +324,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
     CAMLlocal1(result);
     int ret;
     mitls_redirect r;
-
+    
     *outmsg = NULL;
     *errmsg = NULL;
     redirect_stdio(&r);
@@ -344,6 +334,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         ret = 0;
     } else {
+        // The result is a closure, usable to encrypt and decrypt packets
         state->fstar_state = result;
         ret = 1;
         
@@ -366,12 +357,12 @@ void * FFI_mitls_prepare_send(/* in */ mitls_state *state, const void* buffer, s
     buffer_value = caml_alloc_string(buffer_size);
     memcpy(Bp_val(buffer_value), buffer, buffer_size);
     
-    result = caml_callback2_exn(*state->prepare_send_callback, state->fstar_state, buffer_value);
+    result = caml_callback3_exn(state->fstar_state, Val_int(0), buffer_value, Val_unit);
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         p = NULL;
     } else {
-        // The return the plaintext data
+        // Return the encrypted data
         p = copypacket(result, packet_size);
     }
     
@@ -396,7 +387,7 @@ void * FFI_mitls_handle_receive(/* in */ mitls_state *state, char* header, size_
     record_value = caml_alloc_string(record_size);
     memcpy(Bp_val(record_value), record, record_size);
     
-    result = caml_callback3_exn(*state->handle_receive_callback, state->fstar_state, header_value, record_value);
+    result = caml_callback3_exn(state->fstar_state, Val_int(1), header_value, record_value);
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         p = NULL;
