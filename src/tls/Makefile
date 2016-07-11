@@ -190,33 +190,33 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 %.fst-lax: ConcreteFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 # Verifying one file at a time
 %.fst-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
 %.fst-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
 # Verifying everything stable
