@@ -4,6 +4,7 @@
 open TLSConstants
 open TLSInfo
 
+let tlsapi = ref false
 let args = ref []
 let role = ref Client
 let config = ref {defaultConfig with
@@ -79,6 +80,7 @@ let _ =
   Arg.parse [
           ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v; maxVer = v;}), " sets minimum and maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3>");
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
+    ("-tlsapi", Arg.Unit (fun () -> tlsapi := true), "run through TLS API instead of scripted test file");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2");
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
@@ -97,7 +99,7 @@ let _ =
     | _ -> (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443 in
 
   match !role, !config.maxVer with
-  | Client, TLS_1p3 ->  TestClient13.main !config host port
+  | Client, TLS_1p3 ->  if !tlsapi then TestAPI.main !config host port else TestClient13.main !config host port
   | Client, _ -> TestClient.main !config host port
   | Server, TLS_1p3 -> TestServer13.main !config host port
   | Server, _ -> TestServer.main !config host port

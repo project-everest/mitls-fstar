@@ -362,7 +362,11 @@ let writerT s h = eT s Writer h
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
-let i s rw = Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
+let i (HS #r0 _ _ _ _ (Epochs _ r w) _) rw =
+  match rw with
+  | Reader -> !r
+  | Writer -> !w
+// Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
 
 val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (handshake_state r)
   (requires (fun h -> True))

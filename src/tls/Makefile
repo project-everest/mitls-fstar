@@ -120,7 +120,8 @@ test/TestServer.fst \
 test/TestServer13.fst \
 test/TestClient13.fst \
 ConnInvariant.fst \
-TLS.fst #the preceding space is significant!
+TLS.fst \
+test/TestAPI.fst #the preceding space is significant!
 
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it

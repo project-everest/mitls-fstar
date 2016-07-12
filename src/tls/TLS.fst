@@ -468,7 +468,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 	      /\ (b <==> (match wopt with 
 		        | None -> True
 			| Some w -> incrementable w h1))))
-  = admit()//TODO
+  = assume(False); true // admit()
 
 let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
      st_inv c h 
