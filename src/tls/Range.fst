@@ -11,6 +11,8 @@ open CoreCrypto
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
+// Rule out plaintext indexes in this module
+private type id = i:id {~ (is_PlaintextID i) }
 type id2 = i:id { is_ID12 i } // gradually adding TLS 1.3... 
 
 (* ranges *)
