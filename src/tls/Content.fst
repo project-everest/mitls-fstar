@@ -17,6 +17,8 @@ open TLSInfo
 open Range
 open DataStream
 
+private type id = i:id{~ (is_PlaintextID i)}
+
 // this description is detailed enough to compute the size of the plaintext and ciphertext
 type fragment (i:id) =
   | CT_Alert    : rg:frange i {wider rg (point 2)} -> alertDescription -> fragment i
