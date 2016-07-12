@@ -38,7 +38,7 @@ let sendHSRecord tcp pv hs_msg =
   sendRecord tcp pv Content.Handshake hs str
 
 let recvHSRecord tcp pv kex = 
-  let Correct(Content.Handshake,rpv,pl) = Record.read tcp pv in
+  let Correct(Content.Handshake,rpv,pl) = Record.read tcp in
   match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
   | Correct (rem,[(hs_msg,to_log)]) -> 
      	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
@@ -46,12 +46,12 @@ let recvHSRecord tcp pv kex =
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
 
 let recvCCSRecord tcp pv = 
-  let Correct(Content.Change_cipher_spec,_,ccs) = Record.read tcp pv in
+  let Correct(Content.Change_cipher_spec,_,ccs) = Record.read tcp in
   IO.print_string "Received CCS\n";
   ccs
 
 let recvEncHSRecord tcp pv kex rd = 
-  let Correct(Content.Application_data,_,cipher) = Record.read tcp pv in
+  let Correct(Content.Application_data,_,cipher) = Record.read tcp in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in 
   let [(hs_msg,to_log)] = hsm in
@@ -59,7 +59,7 @@ let recvEncHSRecord tcp pv kex rd =
   hs_msg, to_log
 
 let recvEncAppDataRecord tcp pv rd = 
-  let Correct(Content.Application_data,_,cipher) = Record.read tcp pv in
+  let Correct(Content.Application_data,_,cipher) = Record.read tcp in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Application_data cipher in
   IO.print_string "Received Data:\n";
   IO.print_string ((iutf8 payload)^"\n");
