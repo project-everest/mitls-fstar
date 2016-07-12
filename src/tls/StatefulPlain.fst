@@ -17,7 +17,7 @@ open Content
 
 // This module is used only up to TLS 1.2
 
-type id = i:id { pv_of_id i <> TLS_1p3 }  
+type id = i:id { is_ID12 i }  
 
 
 (*** additional data:  ad := ct @| pv ***)

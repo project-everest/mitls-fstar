@@ -16,7 +16,7 @@ open Content
 
 // This module is used only for TLS 1.3.
 
-type id = i:id { pv_of_id i = TLS_1p3 }  
+type id = i:id { is_ID13 i }  
 
 
 (*** plain := fragment | CT | 0*  ***)
