@@ -350,7 +350,7 @@ let ks_client_13_0rtt_ch ks esId
   let h, ae = c.early_hash, c.early_ae in
 
   let expandId = EarlySecretID esId in
-  let loginfo = LogInfoCH ({li_ch_cr = cr; li_ch_psk = c}) in
+  let loginfo = LogInfo_CH ({li_ch_cr = cr; li_ch_psk = c}) in
   let hashed_log = HandshakeLog.getHash hsl h in
   // TODO verify log_info loginfo hashed_log
 
@@ -470,7 +470,7 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let es : es esId = HKDF.hkdf_extract h zeroes psk in
 
   let expandId = EarlySecretID esId in
-  let loginfo = LogInfoCH ({li_ch_cr = cr; li_ch_psk = c}) in
+  let loginfo = LogInfo_CH ({li_ch_cr = cr; li_ch_psk = c}) in
   let hashed_log = HandshakeLog.getHash hsl h in
   // TODO verify log_info loginfo hashed_log
 
@@ -554,7 +554,7 @@ let ks_server_13_sh ks =
   let KS #region st hsl = ks in
   let S (S_13_wait_SH (ae, h) cr sr _ _ (| hsId, hs |)) = !st in
   let expandId = HandshakeSecretID hsId in
-  let loginfo = LogInfoSH ({
+  let loginfo = LogInfo_SH ({
     li_sh_cr = cr;
     li_sh_sr = sr;
     li_sh_ae = AEAD ae h;
@@ -676,7 +676,7 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
   let gxy = CommonDH.dh_initiator gx gy in
   let CipherSuite _ _ (AEAD ae h) = cs in
 
-  let loginfo = LogInfoSH ({li_sh_cr = cr; li_sh_sr = cr; li_sh_ae = AEAD ae h;}) in // TODO
+  let loginfo = LogInfo_SH ({li_sh_cr = cr; li_sh_sr = cr; li_sh_ae = AEAD ae h;}) in // TODO
   let hashed_log = HandshakeLog.getHash hsl h in
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in

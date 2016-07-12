@@ -32,7 +32,7 @@ let mk_id13 aeAlg =
   let expandId = ApplicationSecretID asId in
   let cr = CoreCrypto.random 32 in
   let sr = CoreCrypto.random 32 in
-  let logInfo = LogInfoSH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg }) in
+  let logInfo = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg }) in
   let hashed_log = CoreCrypto.random 32 in
   let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
   ID13 keyId
