@@ -1159,8 +1159,8 @@ let rec next_fragment i hs =
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) -> server_send_server_hello_done hs; next_fragment i hs
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) -> server_send_server_finished_res hs; next_fragment i hs
        | S (S_HelloSent n) when (is_Some pv && pv = Some TLS_1p3) -> server_send_server_finished_13 hs; next_fragment i hs
-       | S (S_OutCCS n) -> server_send_server_finished hs; Outgoing None true true false)
-
+       | S (S_OutCCS n) -> server_send_server_finished hs; Outgoing None true true false
+       | _ -> Outgoing None false false false) 
 
 (*** Incoming (main) ***)
 

@@ -1013,7 +1013,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
 
 let readFragment c i = 
   assume false; // 16-05-19 can't prove POST.
-  match Record.read c.tcp (pv_of_id i) with 
+  match Record.read c.tcp with 
   | Error e -> Error e
   | Correct(ct,pv,payload) -> 
     let es = MR.m_read (Epochs.es c.hs.log) in 
