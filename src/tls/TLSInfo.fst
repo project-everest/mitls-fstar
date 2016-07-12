@@ -650,7 +650,7 @@ type finishedId = i:pre_finishedId{valid_finishedId i}
 type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
 | ID13: keyId:keyId -> id
-| ID12: pv:protocolVersion -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
+| ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
 
 let peerId = function
 | PlaintextID r -> PlaintextID r
@@ -686,7 +686,6 @@ let kdfAlg_of_id = function
 val macAlg_of_id: i:id { is_ID12 i /\ ~(is_AEAD (ID12.aeAlg i)) } -> Tot macAlg
 let macAlg_of_id = function
   | ID12 pv _ _ ae _ _ _ -> 
-    assume (pv <> TLS_1p3);
     macAlg_of_aeAlg pv ae
 
 val encAlg_of_id: i:id { is_ID12 i /\ is_MtE (ID12.aeAlg i) } -> Tot (encAlg * ivMode)

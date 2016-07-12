@@ -100,17 +100,18 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : LogInfoCH =
       ch_extensions = Some el
     })] -> LogInfoCH ({
       li_ch_cr = cr;
-      li_ch_psk = ({PSK.time_createx = 0;
+      li_ch_psk = ({
+        PSK.time_created = 0;
         PSK.allow_early_data = false;
         PSK.allow_dhe_resumption = false;
         PSK.allow_psk_resumption = false;
-        PSK.early_ae = AES_GCM_128;
+        PSK.early_ae = CoreCrypto.AES_128_GCM;
         PSK.early_hash = CoreCrypto.SHA256;
         PSK.identities = (empty_bytes, empty_bytes);});
     })
 
 let getHash_CH (LOG #reg lref) (h:CoreCrypto.hash_alg)
-  : ST (| li:loginfo{is_LogInfoCH i} & hash:bytes{length hash = CoreCrypto.HashSize h} |)
+  : ST (| li:logInfo{is_LogInfoCH i} & hash:bytes{length hash = CoreCrypto.HashSize h} |)
   (requires (fun h0 ->
     let (| _, hsl, _ |) = sel h0 lref in validLog_CH hsl))
   (ensures (fun h0 (| li, hash |) h1 ->
