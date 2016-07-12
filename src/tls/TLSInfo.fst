@@ -461,7 +461,7 @@ let logInfo_nonce (rw:role) = function
 // Extensional equality of logInfo
 // (we may want to use e.g. equalBytes on some fields)
 // injectivity 
-let eq_logInfo la lb : Tot bool =
+let eq_logInfo (la:logInfo) (lb:logInfo) : Tot bool =
   la = lb // TODO extensionality!
 
 // Length constraint is enfoced in the 2nd definition step after valid
@@ -492,7 +492,7 @@ type log_info (li:logInfo) (h:hashed_log) =
   exists (f: hashed_log -> Tot logInfo).{:pattern (f h)}
   injective #hashed_log #logInfo #equalBytes #eq_logInfo f /\ f h = li
 
-type pre_esId : Type0 =
+noeq type pre_esId : Type0 =
   | ApplicationPSK: info:PSK.pskInfo -> i:PSK.psk_identifier -> pre_esId
   | ResumptionPSK: info:PSK.pskInfo -> i:pre_rmsId -> pre_esId
 
@@ -627,13 +627,13 @@ and valid_expandId = function
 
 and valid_keyId = function
   | KeyID i tag rw li log ->
-      ((tag = EarlyTrafficKey \/ tag = EarlyApplicationDataKey) ==> rw = Client)
+      ((tag == EarlyTrafficKey \/ tag == EarlyApplicationDataKey) ==> rw == Client)
       /\ valid_hlen log (expandId_hash i)
       /\ log_info li log
 
 and valid_finishedId = function
   | FinishedID i tag rw li log ->
-      ((tag = EarlyFinished \/ tag = LateFinished) ==> rw = Client)
+      ((tag == EarlyFinished \/ tag == LateFinished) ==> rw == Client)
       /\ valid_hlen log (expandId_hash i)
       /\ log_info li log
 
@@ -647,7 +647,7 @@ type expandId = i:pre_expandId{valid_expandId i}
 type keyId = i:pre_keyId{valid_keyId i}
 type finishedId = i:pre_finishedId{valid_finishedId i}
 
-type id =
+noeq type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
 | ID13: keyId:keyId -> id
 | ID12: pv:protocolVersion -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 

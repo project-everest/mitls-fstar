@@ -94,18 +94,6 @@ type writer i = s:state i Writer
 type reader i = s:state i Reader
 
 
-<<<<<<< HEAD
-let genPost (#i:id) parent h0 (w:writer i) h1 = 
-               modifies Set.empty h0 h1 /\
-               HH.parent w.region = parent /\
-               fresh_region w.region h0 h1 /\
-	       color w.region = color parent /\
-	       (authId i ==>
-  		      (m_contains (ilog w.log) h1 /\
-		       m_sel h1 (ilog w.log) == createEmpty)) /\
-	       m_contains (ctr w.counter) h1 /\
-	       m_sel h1 (ctr w.counter) = 0
-=======
 // We generate first the writer, then the reader (possibly several of them)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
@@ -117,7 +105,6 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
        m_sel h1 (ilog w.log) = createEmpty)) /\
   m_contains (ctr w.counter) h1 /\
   m_sel h1 (ctr w.counter) == 0
->>>>>>> master
 //16-04-30 how to share the whole ST ... instead of genPost?
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
@@ -162,21 +149,12 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
                  m_contains (ctr e.counter) h1 /\
                  m_sel h1 (ctr e.counter) == m_sel h0 (ctr e.counter) + 1 /\
 	         (authId i ==> 
-<<<<<<< HEAD
-			    (let log = ilog e.log in
- 			     let ent = Entry l c p in
-			     let n = Seq.length (m_sel h0 log) in
-			      m_contains log h1 /\
-   			      witnessed (MonotoneSeq.at_least n ent log) /\
-                              m_sel h1 log == snoc (m_sel h0 log) ent))))
-=======
 		   (let log = ilog e.log in
 		    let ent = Entry l c p in
 		    let n = Seq.length (m_sel h0 log) in
 		    m_contains log h1 /\
 		    witnessed (MonotoneSeq.at_least n ent log) /\
 		    m_sel h1 log = snoc (m_sel h0 log) ent))))
->>>>>>> master
 
 
 let matches #i l (c:cipher i l) (Entry l' c' _) = l = l' && c = c'
