@@ -108,13 +108,14 @@ private let zH h =
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   CoreCrypto.hash h zeroes
 
+#set-options "--lax"
+
 // Resumption context
 let esId_rc (i:esId) =
   match i with
 //  | ResumptionPSK i ->
 //    let (_, rc, _, _) = Some.v (MM.sel res_psk_table i) in rc
   | ApplicationPSK _ _ -> zH (esId_hash i)
-
 
 let hsId_rc = function
   | HSID_DHE h _ _ -> zH h
@@ -162,8 +163,7 @@ type ems (i:exportId) =
 // but I'm waiting for it to be tester to switch over
 // TODO use the newer index types
 type recordInstance =
-| StAEInstance: #id:StreamAE.id -> StreamAE.reader id -> StreamAE.writer id -> recordInstance
-| StLHAEInstance: #id:StatefulLHAE.id -> StatefulLHAE.reader id -> StatefulLHAE.writer id -> recordInstance
+  | StAEInstance: #id:StAE.id -> StAE.reader id -> StAE.writer id -> recordInstance
 
 (* 2 choices - I prefer the second:
    (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
@@ -371,15 +371,15 @@ let ks_client_13_0rtt_ch ks esId
   let id = ID13 (KeyID expandId EarlyTrafficKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_hs = StAEInstance r rw in
 
   let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
   let civ: StreamAE.iv id  = civ' in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
 
   st := C (C_13_wait_SH cr (Some (| esId, es |)) (Some (| efId, cfk0 |)) gs);
@@ -486,15 +486,15 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let id = ID13 (KeyID expandId EarlyTrafficKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_hs = StAEInstance r rw in
 
   let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
   let civ: StreamAE.iv id  = civ' in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
 
   let our_share, peer_share, gxy = s13_dh gn gxb in
@@ -575,9 +575,9 @@ let ks_server_13_sh ks =
   let civ: StreamAE.iv id  = civ in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StreamAE.coerce HyperHeap.root id skv siv in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce HyperHeap.root id (skv @| siv) in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
 
   // Finished keys
   let cfkId = FinishedID expandId HandshakeFinished Client loginfo hashed_log in
@@ -719,9 +719,9 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
   let civ: StreamAE.iv id  = civ in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StreamAE.coerce HyperHeap.root id ckv civ in
-  let rw = StreamAE.coerce HyperHeap.root id skv siv in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
+  let r = StAE.genReader HyperHeap.root rw in
   st := C (C_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |));
   StAEInstance r w
 
@@ -809,11 +809,11 @@ let ks_client_13_sf ks
   let id = ID13 (KeyID expandId ApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let w = StreamAE.coerce HyperHeap.root id ckv civ in
+  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let rw = StreamAE.coerce HyperHeap.root id skv siv in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
+  let r = StAE.genReader HyperHeap.root rw in
 
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| ri, rk1 |) (| cfkId, late_cfk |));
   StAEInstance r w
@@ -855,11 +855,11 @@ let ks_server_13_sf ks
   let id = ID13 (KeyID expandId ApplicationDataKey Server loginfo hashed_log) in
   let skv: StreamAE.key id = sk in
   let siv: StreamAE.iv id  = siv in
-  let w = StreamAE.coerce HyperHeap.root id skv siv in
+  let w = StAE.coerce HyperHeap.root id (skv @| siv) in
   let ckv: StreamAE.key (peerId id) = ck in
   let civ: StreamAE.iv (peerId id)  = civ in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
 
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| ri, rk1 |) (| cfkId, late_cfk |));
   StAEInstance r w
@@ -1090,20 +1090,13 @@ let ks_client_12_server_finished ks
   TLSPRF.verifyData (pv,cs) ms Server log
 
 val getId: recordInstance -> GTot id
-let getId k = 
-    match k with
-    | StAEInstance #i rd wr -> i
-    | StLHAEInstance #i rd wr -> i
-
-#set-options "--lax"
+let getId (StAEInstance #i rd wr) = i
 
 val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random -> 
     			   h:handshake ->
 			   ks:recordInstance -> Tot (epoch r n)
-let recordInstanceToEpoch #hs_rgn #n hs ri = 
-    match ri with
-    | StAEInstance #i rd wr -> Epoch hs (StAE.Stream () rd) (StAE.Stream () wr)
-    | StLHAEInstance #i rd wr -> Epoch hs (StAE.StLHAE () rd) (StAE.StLHAE () wr)
+let recordInstanceToEpoch #hs_rgn #n hs (StAEInstance #i rd wr) =
+  Epoch hs rd wr
 
 
 (*

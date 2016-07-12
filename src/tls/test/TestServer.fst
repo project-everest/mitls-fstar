@@ -79,11 +79,7 @@ let sendRecord tcp pv ct msg str =
   let r = Record.makePacket ct pv msg in
 //  IO.print_string ((Platform.Bytes.print_bytes r) ^ "\n\n");
   let Correct _ = Platform.Tcp.send tcp r in
-  match ct with
-  | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
-  | Content.Handshake ->   IO.print_string ("Sending HS("^str^")\n")
-  | Content.Change_cipher_spec ->   IO.print_string ("Sending CCS\n")
-  | Content.Alert ->   IO.print_string ("Sending Alert("^str^")\n")
+  IO.print_string ("Sending " ^ Content.ctToString ct ^ "Data(" ^ str ^ ")\n")
 
 val really_read_rec: bytes -> Platform.Tcp.networkStream -> nat -> optResult string bytes
 let rec really_read_rec prev tcp len = 

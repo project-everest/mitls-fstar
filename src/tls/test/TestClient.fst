@@ -221,7 +221,6 @@ let main config host port =
   let (Finished(sfin),sfinb) = recvEncHSRecord tcp pv kex log rd in
   let Correct svd = Handshake.processServerFinished ks log (Finished sfin, sfinb) in
 
-
   IO.print_string ("Recd fin = expected fin? ");
   if (Platform.Bytes.equalBytes sfin.fin_vd svd) then IO.print_string "yes\n" else IO.print_string "no\n";
 
@@ -231,9 +230,4 @@ let main config host port =
 
   sendRecord tcp pv Content.Application_data get "GET /";
   let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
   ()
