@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # Check for regressions & comment about them!
-all: tls-ver tls-sanity tls-lax tls-gen
+all: all-ver tls-sanity tls-lax tls-gen
 
 CONTRIB=ucontrib
 LIB=ulib
@@ -217,12 +217,6 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--verify_module $(basename $(notdir $@))
-
-# Verifying everything stable
-tls-ver: IdealFlags $(LIBFILES) $(FSTS)
-	$(MAKE) refresh
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) $(addprefix --verify_module , $(VERIFY)) \
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
