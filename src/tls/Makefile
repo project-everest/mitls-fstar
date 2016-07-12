@@ -210,14 +210,12 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 %.fst-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $(notdir $@)) \
-	$(basename $@).fst
+	--verify_module $(basename $(notdir $@))
 
 %.fsti-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $(notdir $@)) \
-	$(basename $@).fsti
+	--verify_module $(basename $(notdir $@))
 
 # Verifying everything stable
 tls-ver: IdealFlags $(LIBFILES) $(FSTS)
