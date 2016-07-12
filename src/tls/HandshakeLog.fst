@@ -92,13 +92,13 @@ type validLog_CH (l:hs_log) =
   | [ClientHello _] -> True
   | _ -> False)
 
-let projectLog_CH (l:hs_log{validLog_CH l}) : LogInfoCH =
+let projectLog_CH (l:hs_log{validLog_CH l}) : logInfo_CH =
   match l with
   | [ClientHello ({
       ch_client_random = cr;
       ch_sessionID = sid;
       ch_extensions = Some el
-    })] -> LogInfoCH ({
+    })] -> ({
       li_ch_cr = cr;
       li_ch_psk = ({
         PSK.time_created = 0;
@@ -111,7 +111,7 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : LogInfoCH =
     })
 
 let getHash_CH (LOG #reg lref) (h:CoreCrypto.hash_alg)
-  : ST (| li:logInfo{is_LogInfoCH i} & hash:bytes{length hash = CoreCrypto.HashSize h} |)
+  : ST (| li:logInfo{is_LogInfo_CH li} & hash:bytes{length hash = CoreCrypto.hashSize h} |)
   (requires (fun h0 ->
     let (| _, hsl, _ |) = sel h0 lref in validLog_CH hsl))
   (ensures (fun h0 (| li, hash |) h1 ->
@@ -119,7 +119,7 @@ let getHash_CH (LOG #reg lref) (h:CoreCrypto.hash_alg)
   =
   let (| _, hsl, lb |) = !lref in
   let loginfo = projectLog_CH hsl in
-  (| LogInfo loginfo, CoreCrypto.hash h lb |)
+  (| LogInfo_CH loginfo, CoreCrypto.hash h lb |)
 
 type validLog_SH (l:hs_log) =
   (match l with

@@ -441,22 +441,22 @@ type logInfo_SF = logInfo_SH
 type logInfo_CF = logInfo_SF
 
 type logInfo =
-| LogInfoCH of logInfo_CH
-| LogInfoSH of logInfo_SH
-| LogInfoSF of logInfo_SF
-| LogInfoCF of logInfo_CF
+| LogInfo_CH of logInfo_CH
+| LogInfo_SH of logInfo_SH
+| LogInfo_SF of logInfo_SF
+| LogInfo_CF of logInfo_CF
 
 let logInfo_ae : logInfo -> Tot (a:aeAlg{is_AEAD a}) = function
-| LogInfoCH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
-| LogInfoSH x
-| LogInfoSF x
-| LogInfoCF x -> x.li_sh_ae
+| LogInfo_CH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
+| LogInfo_SH x
+| LogInfo_SF x
+| LogInfo_CF x -> x.li_sh_ae
 
 let logInfo_nonce (rw:role) = function
-| LogInfoCH x -> x.li_ch_cr
-| LogInfoSH x
-| LogInfoSF x
-| LogInfoCF x -> if rw = Client then x.li_sh_cr else x.li_sh_sr
+| LogInfo_CH x -> x.li_ch_cr
+| LogInfo_SH x
+| LogInfo_SF x
+| LogInfo_CF x -> if rw = Client then x.li_sh_cr else x.li_sh_sr
 
 // Extensional equality of logInfo
 // (we may want to use e.g. equalBytes on some fields)
