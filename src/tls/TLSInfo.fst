@@ -433,7 +433,7 @@ type logInfo_CH = {
 type logInfo_SH = {
   li_sh_cr: crand;
   li_sh_sr: srand;
-  li_sh_ae: aeAlg;
+  li_sh_ae: a:aeAlg{is_AEAD a};
 }
 
 type logInfo_SF = logInfo_SH
@@ -446,7 +446,7 @@ type logInfo =
 | LogInfoSF of logInfo_SF
 | LogInfoCF of logInfo_CF
 
-let logInfo_ae = function
+let logInfo_ae : logInfo -> Tot (a:aeAlg{is_AEAD a}) = function
 | LogInfoCH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
 | LogInfoSH x
 | LogInfoSF x
@@ -697,6 +697,14 @@ val aeAlg_of_id: i:id { ~ (is_PlaintextID i) } -> Tot aeAlg
 let aeAlg_of_id = function
   | ID13 (KeyID _ _ _ li _) -> logInfo_ae li
   | ID12 pv _ _ ae _ _ _ -> ae
+
+let lemma_MtE (i:id{~(is_PlaintextID i)})
+  : Lemma (is_MtE (aeAlg_of_id i) ==> is_ID12 i)
+  = ()
+
+let lemma_ID12 (i:id{~(is_PlaintextID i)})
+  : Lemma (is_ID12 i ==> pv_of_id i <> TLS_1p3)
+  = ()
 
 // Pretty printing
 let sinfo_to_string (si:sessionInfo) = "TODO"

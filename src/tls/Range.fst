@@ -54,6 +54,7 @@ let maxPadSize i =
         match authEnc with
         | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
         | MtE (Block alg) _ ->
+            lemma_MtE i; lemma_ID12 i;
             match (pv_of_id i) with
             | SSL_3p0 -> blockSize alg
             | TLS_1p0 | TLS_1p1 | TLS_1p2 -> 256
@@ -254,7 +255,7 @@ val targetLength_converges: i:id2
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
 #reset-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 let targetLength_converges i r =
-  cut (is_ID13 i)
+  lemma_MtE i; lemma_ID12 i
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> r':range
