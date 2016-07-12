@@ -61,7 +61,7 @@ noeq type dhpms =
   | ConcreteDHPMS of dhrepr
 
 //#if ideal
-let honestDHPMS (p:bytes) (g:bytes) (gx:CommonDH.share) (gy:CommonDH.share) pms = 
+let honestDHPMS (p:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) pms = 
   match pms with 
   | IdealDHPMS(s)    -> true
   | ConcreteDHPMS(s) -> false 
@@ -82,4 +82,8 @@ let coerceDH (dhp:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) b =
 
 noeq type pms = 
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
-  | DHPMS of CommonDH.params * CommonDH.key * CommonDH.key * dhpms
+  | DHPMS of CommonDH.params * CommonDH.share * CommonDH.share * dhpms
+
+let honestPMS = function
+  | RSAPMS (pk, pv, pms) -> honestRSAPMS pk pv pms
+  | DHPMS (p, gx, gy, pms) -> honestDHPMS p gx gy pms

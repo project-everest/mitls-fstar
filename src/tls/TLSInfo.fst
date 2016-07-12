@@ -15,6 +15,11 @@ open TLSConstants
 //open PMS
 open Cert
 
+module MM = MonotoneMap
+module MR = FStar.Monotonic.RRef
+module HH = FStar.HyperHeap
+
+
 (**************** SPECIFYING SAFETY (GENERAL COMMENTS) **************
   In the code of ideal implementations only,
   we use F# functions that characterize the Safe and Auth predicates.
@@ -235,52 +240,9 @@ let ne_default =
 // -------------------------------------------------------------------
 // Pre Master Secret indexes
 
-noeq type pmsId = (* we use pmsId as an opaque index to pms *)
-  | NoPmsId
-  | SomePmsId of PMS.pms
-
-let mk_pmsId (pms:PMS.pms) = SomePmsId(pms)
-
-(* MK:
-We could and probably should have:
-
-    type pms' = i:index * (;i)pms
-
-For example 'type index=int'.
-
-When we generate a pms we choose a unique index i. Then pmsId could be defined as:
-
-    type pmsId =
-        | NoPmsId
-        | SomePmsId of index
-
-    let pmsId (i,pms) = SomePmsId(i)
-
-What we have below is only possible because F7 allows comparison of
-values with an abstract type because of an implementation error.
-*)
-
-// ``this pms is honestly generated and used only for extraction''
-val honestPMS: pmsId -> Tot bool
-let honestPMS = function
-  | NoPmsId -> false
-  | SomePmsId(PMS.RSAPMS(pk, cv, rsapms))   -> PMS.honestRSAPMS pk cv rsapms
-  | SomePmsId(PMS.DHPMS(pg, gx, gy, dhpms)) -> false
-                                               // todo, once we fix CommonDH vs DHGroup
-                                               // PMS.honestDHPMS pg gx gy dhpms
-
-val noPmsId: i:pmsId { not(honestPMS i) }
-let noPmsId = NoPmsId
-
-// Strengths of Handshake algorithms defined on pmsId
-// Here we consider the strength of the parameters in pmsId
+// Placeholder for overhaul of 1.2 indexes
+type pmsId = PMS.pms
 assume val strongKEX: pmsId -> Tot bool
-(* todo, once we fix CommonDH vs DHGroup:
-let strongKEX = function
-  | NoPmsId -> false
-  | SomePmsId(PMS.RSAPMS(pk,cv,rsapms))     -> RSAKey.strong cv
-  | SomePmsId(PMS.DHPMS(pg, gx, gy, dhpms)) -> DHGroup.goodPP pg
- *)
 
 // -------------------------------------------------------------------
 // Master Secret indexes and their properties
@@ -317,6 +279,12 @@ noeq type sessionInfo = {
     serverSigAlg: sigHashAlg;
     sessionID: sessionID;
     }
+
+type abbrInfo =
+    {abbr_crand: crand;
+     abbr_srand: srand;
+     abbr_session_hash: sessionHash;
+     abbr_vd: option (cVerifyData * sVerifyData) }
 
 // for sessionID. we treat empty bytes as the absence of identifier,
 // i.e. the session is not resumable.
@@ -362,16 +330,20 @@ noeq type msId = // We record the parameters used to derive the master secret;
 
 // ``the MS at this index is abstractly generated and used within PRF''
 let honestMS = function
-  | StandardMS pmsId csr ka -> honestPMS pmsId && strongKEF ka
-  | ExtendedMS pmsId  sh ka -> honestPMS pmsId && strongKEF ka
+  | StandardMS pmsId csr ka -> PMS.honestPMS pmsId && strongKEF ka
+  | ExtendedMS pmsId  sh ka -> PMS.honestPMS pmsId && strongKEF ka
+
+
+// ADL Keeping these comments from 0.9 temporarily
+// We don't rely on noPmsId and noMsId anymore; plaintext
+// epochs use a special case in the id type
 
 //CF are we missing a correlation with csr?
 //MK we don't allow leak, so every MS derived from an
 //MK HonestPMS with strong KEF algorithms is honest?
 //MK More uniformally this would go through a definition of SafeCRE.
-
-val noMsId: i:msId { not (honestMS i) }
-let noMsId = StandardMS noPmsId noCsr PRF_SSL3_nested
+//val noMsId: i:msId { not (honestMS i) }
+//let noMsId = StandardMS noPmsId noCsr PRF_SSL3_nested
 
 // Getting master-secret indexes out of sessionInfo
 
@@ -427,131 +399,266 @@ let strongAuthSI si = true //TODO: fix
 assume val strongAESI: sessionInfo -> Tot bool
 
 // -------------------------------------------------------------------
-// Epoch descriptors (public immutable data)
-
-type abbrInfo =
-    {abbr_crand: crand;
-     abbr_srand: srand;
-     abbr_session_hash: sessionHash;
-     abbr_vd: option (cVerifyData * sVerifyData) }
-
-noeq type preEpoch =
-    | InitEpoch of role
-    | FullEpoch : sessionInfo  -> preEpoch -> preEpoch
-    | AbbrEpoch : ai:abbrInfo -> resumed:preEpoch -> pred:preEpoch -> preEpoch
-
-(* previously the last two cases were
-    | SuccEpoch of crand * srand * si:sessionInfo * pred:preEpoch
- *)
-
-(* we enforce a well-formed invariant to ensure the functions below
-   are total; we could also restructure epoch.*)
-
-val validEpoch: preEpoch -> Tot bool
-let rec validEpoch = function
-  | InitEpoch _ -> true
-  | FullEpoch _ pred -> validEpoch pred
-  | AbbrEpoch _ (FullEpoch si pred0) pred -> validEpoch pred0 && validEpoch pred
-  | AbbrEpoch _ _ _           -> false
-type epoch = e:preEpoch { validEpoch e }
-
-//$ removed isInitEpoch etc.
-let is_SuccEpoch e = is_FullEpoch e || is_AbbrEpoch e
-type succEpoch = e:epoch { is_SuccEpoch e }
-
-//$ also replaces function val Pred
-val predEpoch: e: succEpoch -> Tot epoch
-let predEpoch = function
-  | FullEpoch _ pe
-  | AbbrEpoch _ _ pe -> pe
-
-//type openEpoch = epoch
-
-// val peer: e:epoch -> Pure epoch (requires true) (ensures (fun r -> is_FullEpoch e ==> is_FullEpoch r))
-val peer: e:epoch -> Tot (r:epoch {is_FullEpoch e ==> is_FullEpoch r})
-let rec peer = function
-  | InitEpoch r      -> InitEpoch (dualRole r)
-  | FullEpoch si p   -> FullEpoch si (peer p)
-  | AbbrEpoch ai r p -> AbbrEpoch ai (peer r) (peer p)
-
-val epochSI: succEpoch -> Tot sessionInfo
-let epochSI = function
-  | FullEpoch si pe -> si
-  | AbbrEpoch ai (FullEpoch si pe1) pe2 -> si
-
-val epochAI: e:epoch { is_AbbrEpoch e } -> Tot abbrInfo
-let epochAI e = AbbrEpoch.ai e
-
-val epochSRand: succEpoch -> Tot srand
-let epochSRand = function
-  | FullEpoch si pe      -> si.init_srand
-  | AbbrEpoch ri pe1 pe2 -> ri.abbr_srand
-
-val epochCRand: succEpoch -> Tot crand
-let epochCRand = function
-  | FullEpoch si pe      -> si.init_crand
-  | AbbrEpoch ai pe1 pe2 -> ai.abbr_crand
-
-val epochCSRands: preEpoch -> Tot bytes
-let epochCSRands e =
-  let e' : succEpoch = unsafe_coerce e in //TODO: THIS FAILS CURRENTLY! FIXME
-  epochCRand e' @| epochSRand e'
-
-noeq type pre_connectionInfo = {
-    role: role;      // cached, could be retrieved from id_out
-    id_rand: random; // our random
-    id_in: epoch;
-    id_out: epoch}
-type connectionInfo = pre_connectionInfo
-
-//$ inline
-let connectionRole ci = ci.role
-
-val initConnection: role -> random -> Tot connectionInfo
-let initConnection role rand =
-    let ctos = InitEpoch Client in
-    let stoc = InitEpoch Server in
-    match role with
-    | Client -> {role = Client; id_rand = rand; id_in = stoc; id_out = ctos}
-    | Server -> {role = Server; id_rand = rand; id_in = ctos; id_out = stoc}
-
-let fullEpoch epoch si = FullEpoch si epoch
-let abbrEpoch epoch1 ai si epoch2 = AbbrEpoch ai (FullEpoch si epoch2) epoch1
-
-val epochWriter: epoch -> Tot role
-let rec epochWriter (e:epoch) =
-    match e with
-    | InitEpoch r     -> r
-    | FullEpoch _ e   -> epochWriter e
-    | AbbrEpoch _ _ e -> epochWriter e
-
-let strongAuth e = strongAuthSI (epochSI e)
-let strongAE e = strongAESI (epochSI e)
-
-
-// -------------------------------------------------------------------
 // Indexing instances of derived keys for AE etc. 
 //
-// Intuitively, this is an abstract parameter for StatefulLHAE and
-// StreamAE, used to control their idealization. 
-// To this end, the index value should determine the concrete 
-// initial state (key, IV) of the keyed functionality.
+// Index type definitions [1.3]:
+//
+//  -----<----- rmsId   exportId
+// |              |    /
+// |  keyId <- expandId  => finishedId
+// V   ||     /   |   \
+// |  ID13   /    |    \
+// |        /     |     \
+//  --->  esId -> hsId -> asId
+//          \
+//           --<-- psk_identifier
+//
+// Index type definitions [1.2]:
+//
+//    pmsId -> msId -> ID12
+//
+// type id = PlaintextID | ID12 msId | ID13 keyId
 
-noeq type id = {
-  // indexes and algorithms of the session used in the key derivation
-  msId   : msId;            // the index of the master secret used for key derivation
-  kdfAlg : kdfAlg_t;          // the KDF algorithm used for key derivation
-  pv     : protocolVersion; // should be part of aeAlg
-  aeAlg  : aeAlg;           // the authenticated-encryption algorithms
-  // epoch-specific parameters
-  csrConn: csRands;         // the client-server random of the connection
-  ext: negotiatedExtensions;// the extensions negotiated for the current session
-  writer : role             // the role of the writer
-  }
+// Info type carried by hashed log
+// The actual log is ghost but the info is carried in the index
 
-let peerId (i:id) = { i with writer = dualRole i.writer }
+// logInfo_CH is ONLY used with 0-RTT
+// for the soundness of the *_of_id functions it can only
+// be extracted from a log with EarlyDataIndication
+type logInfo_CH = {
+  li_ch_cr: crand;
+  li_ch_psk: PSK.pskInfo;
+}
 
-//16-05-12 deprecated: let swap = peerId
+type logInfo_SH = {
+  li_sh_cr: crand;
+  li_sh_sr: srand;
+  li_sh_ae: aeAlg;
+}
+
+type logInfo_SF = logInfo_SH
+
+type logInfo_CF = logInfo_SF
+
+type logInfo =
+| LogInfoCH of logInfo_CH
+| LogInfoSH of logInfo_SH
+| LogInfoSF of logInfo_SF
+| LogInfoCF of logInfo_CF
+
+let logInfo_ae = function
+| LogInfoCH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
+| LogInfoSH x
+| LogInfoSF x
+| LogInfoCF x -> x.li_sh_ae
+
+let logInfo_nonce (rw:role) = function
+| LogInfoCH x -> x.li_ch_cr
+| LogInfoSH x
+| LogInfoSF x
+| LogInfoCF x -> if rw = Client then x.li_sh_cr else x.li_sh_sr
+
+// Extensional equality of logInfo
+// (we may want to use e.g. equalBytes on some fields)
+// injectivity 
+let eq_logInfo la lb : Tot bool =
+  la = lb // TODO extensionality!
+
+// Length constraint is enfoced in the 2nd definition step after valid
+type hashed_log = bytes
+
+// injective functions with extensional equality
+type injective (#a:Type) (#b:Type)
+  (#eqA:a -> a -> Tot bool) (#eqB:b -> b -> Tot bool)
+  (f:a -> Tot b)
+  =
+  forall (x:a) (y:a).{:pattern (f x); (f y)}
+  eqB (f x) (f y) ==> eqA x y
+
+// -------------------------------------------------------------------
+// Log <=> logInfo relation works through the following
+// commutative diagram:
+//
+// list hs_msg --serialize--> bytes --hash--> hashed_log
+//      |                                          |
+//    project                                      |
+//      v                                          |
+//   logInfo  <-------------------f----------------/
+
+// A predicate on info-carrying logs
+// The function f is defined much later in HandshakeLog
+// and folds the perfect hashing assumption and log projection
+type log_info (li:logInfo) (h:hashed_log) =
+  exists (f: hashed_log -> Tot logInfo).{:pattern (f h)}
+  injective #hashed_log #logInfo #equalBytes #eq_logInfo f /\ f h = li
+
+type pre_esId : Type0 =
+  | ApplicationPSK: info:PSK.pskInfo -> i:PSK.psk_identifier -> pre_esId
+  | ResumptionPSK: info:PSK.pskInfo -> i:pre_rmsId -> pre_esId
+
+and pre_hsId =
+  | HSID_PSK: pre_esId -> pre_hsId
+  | HSID_PSK_DHE: pre_esId -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
+  | HSID_DHE: CoreCrypto.hash_alg -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
+
+and pre_asId =
+  | ASID: pre_hsId -> pre_asId
+
+and pre_rmsId =
+  | RMSID: pre_asId -> logInfo -> hashed_log -> pre_rmsId
+
+and pre_exportId =
+  | ExportID: pre_asId -> logInfo -> hashed_log -> pre_exportId
+
+and pre_rekeyId =
+  | RekeyID: pre_asId -> logInfo -> hashed_log -> nat -> pre_rekeyId
+
+and pre_expandId =
+  | EarlySecretID: pre_esId -> pre_expandId
+  | HandshakeSecretID: pre_hsId -> pre_expandId
+  | ApplicationSecretID: pre_asId -> pre_expandId
+  | RekeySecretID: pre_rekeyId -> pre_expandId
+
+and keyTag =
+  | EarlyTrafficKey
+  | EarlyApplicationDataKey
+  | HandshakeKey
+  | ApplicationDataKey
+  | ApplicationRekey
+
+and pre_keyId =
+  | KeyID: pre_expandId -> keyTag -> role -> logInfo -> hashed_log -> pre_keyId
+
+and finishedTag =
+  | EarlyFinished
+  | HandshakeFinished
+  | LateFinished
+
+and pre_finishedId =
+  | FinishedID: pre_expandId -> finishedTag -> role -> logInfo -> hashed_log -> pre_finishedId
+
+val esId_hash: pre_esId -> Tot CoreCrypto.hash_alg
+val hsId_hash: pre_hsId -> Tot CoreCrypto.hash_alg
+val asId_hash: pre_asId -> Tot CoreCrypto.hash_alg
+val rmsId_hash: pre_rmsId -> Tot CoreCrypto.hash_alg
+val exportId_hash: pre_exportId -> Tot CoreCrypto.hash_alg
+val rekeyId_hash: pre_rekeyId -> Tot CoreCrypto.hash_alg
+val expandId_hash: pre_expandId -> Tot CoreCrypto.hash_alg
+val keyId_hash: pre_keyId -> Tot CoreCrypto.hash_alg
+val finishedId_hash: pre_finishedId -> Tot CoreCrypto.hash_alg
+
+let rec esId_hash = function
+  | ApplicationPSK ctx _ -> PSK.pskInfo_hash ctx
+  | ResumptionPSK _ rmsId -> rmsId_hash rmsId
+
+and hsId_hash = function
+  | HSID_PSK i -> esId_hash i
+  | HSID_DHE h _ _ -> h
+  | HSID_PSK_DHE i _ _ -> esId_hash i
+
+and asId_hash = function
+  | ASID i -> hsId_hash i
+
+and rmsId_hash = function
+  | RMSID asId _ _ -> asId_hash asId
+
+and exportId_hash = function
+  | ExportID asId _ _ -> asId_hash asId
+
+and rekeyId_hash = function
+  | RekeyID i _ _ _ -> asId_hash i
+
+and expandId_hash = function
+  | EarlySecretID es -> esId_hash es
+  | HandshakeSecretID hs -> hsId_hash hs
+  | ApplicationSecretID asId -> asId_hash asId
+  | RekeySecretID (RekeyID asId _ _ _) -> asId_hash asId
+
+and keyId_hash (KeyID i _ _ _ _) = expandId_hash i
+
+and finishedId_hash (FinishedID i _ _ _ _) = expandId_hash i
+
+type valid_hlen (b:bytes) (h:CoreCrypto.hash_alg) =
+  length b = CoreCrypto.hashSize h
+
+val valid_esId: pre_esId -> GTot Type0
+val valid_hsId: pre_hsId -> GTot Type0
+val valid_asId: pre_asId -> GTot Type0
+val valid_rmsId: pre_rmsId -> GTot Type0
+val valid_exportId: pre_exportId -> GTot Type0
+val valid_rekeyId: pre_rekeyId -> GTot Type0
+val valid_expandId: pre_expandId -> GTot Type0
+val valid_keyId: pre_keyId -> GTot Type0
+val valid_finishedId: pre_finishedId -> GTot Type0
+
+let rec valid_esId = function
+  | ApplicationPSK ctx i ->
+     MR.witnessed (PSK.valid_app_psk ctx i)
+  | ResumptionPSK ctx i ->
+     valid_rmsId i // /\ (MR.witnessed (valid_res_psk ctx i))
+
+and valid_hsId = function
+  | HSID_PSK i | HSID_PSK_DHE i _ _ -> valid_esId i
+  | HSID_DHE _ _ _ -> True
+
+and valid_asId = function
+  | ASID i -> valid_hsId i
+
+and valid_rmsId = function
+  | RMSID i li log -> valid_asId i
+      /\ valid_hlen log (asId_hash i)
+      /\ log_info li log
+
+and valid_exportId = function
+  | ExportID i li log -> valid_asId i
+      /\ valid_hlen log (asId_hash i)
+      /\ log_info li log
+
+and valid_rekeyId = function
+  | RekeyID i li log _ -> valid_asId i
+      /\ valid_hlen log (asId_hash i)
+      /\ log_info li log
+
+and valid_expandId = function
+  | EarlySecretID i -> valid_esId i
+  | HandshakeSecretID i -> valid_hsId i
+  | ApplicationSecretID i -> valid_asId i
+  | RekeySecretID i -> valid_rekeyId i
+
+and valid_keyId = function
+  | KeyID i tag rw li log ->
+      ((tag = EarlyTrafficKey \/ tag = EarlyApplicationDataKey) ==> rw = Client)
+      /\ valid_hlen log (expandId_hash i)
+      /\ log_info li log
+
+and valid_finishedId = function
+  | FinishedID i tag rw li log ->
+      ((tag = EarlyFinished \/ tag = LateFinished) ==> rw = Client)
+      /\ valid_hlen log (expandId_hash i)
+      /\ log_info li log
+
+type esId = i:pre_esId{valid_esId i}
+type hsId = i:pre_hsId{valid_hsId i}
+type asId = i:pre_asId{valid_asId i}
+type rmsId = i:pre_rmsId{valid_rmsId i}
+type exportId = i:pre_exportId{valid_exportId i}
+type rekeyId = i:pre_rekeyId{valid_rekeyId i}
+type expandId = i:pre_expandId{valid_expandId i}
+type keyId = i:pre_keyId{valid_keyId i}
+type finishedId = i:pre_finishedId{valid_finishedId i}
+
+type id =
+| PlaintextID: our_rand:random -> id // For IdNonce
+| ID13: keyId:keyId -> id
+| ID12: pv:protocolVersion -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
+
+let peerId = function
+| PlaintextID r -> PlaintextID r
+| ID13 (KeyID i tag rw li log) -> 
+  let kid = KeyID i tag (dualRole rw) li log in 
+  assume (valid_keyId kid);
+  ID13 kid
+| ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
 
 val siId: si:sessionInfo{ 
   is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 
@@ -559,85 +666,46 @@ val siId: si:sessionInfo{
   pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
 
 let siId si r =
-  { msId    = msid si;
-    kdfAlg  = kdfAlg si.protocol_version si.cipher_suite;
-    pv      = si.protocol_version; // for agility, consider together with aeAlg
-    aeAlg   = siAuthEncAlg si;
-    csrConn = csrands si;
-    ext     = si.extensions;
-    writer  = r;  }
+  let cr, sr = split (csrands si) 32 in
+  ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
 
- let unAuthIdInv (i:id):epoch = //NS: Remove this use of the pre-processor, please
- (*#if verify
-     failwith "only creates epochs for bad ids"
- #else*)
-     InitEpoch (i.writer)
- (*##endif*)
+let pv_of_id (i:id{~(is_PlaintextID i)}) = match i with
+  | ID13 _ -> TLS_1p3
+  | ID12 pv _ _ _ _ _ _ -> pv
 
-let pv_of_id (i:id) = i.pv //TODO MK fix
+// Returns the local nonce
+let nonce_of_id = function
+  | PlaintextID r -> r
+  | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
+  | ID13 (KeyID _ _ rw li _) -> logInfo_nonce rw li
 
-//$ also replacing MacAlg, EncAlg, PvOfId
-val macAlg_of_id: i:id { pv_of_id i <> TLS_1p3 /\ ~(is_AEAD i.aeAlg) } -> Tot macAlg
-let macAlg_of_id i = macAlg_of_aeAlg i.pv i.aeAlg
+val kdfAlg_of_id: i:id { is_ID12 i } -> Tot kdfAlg_t
+let kdfAlg_of_id = function
+  | ID12 pv _ kdf _ _ _ _ -> kdf
 
-val encAlg_of_id: i:id { is_MtE i.aeAlg } -> Tot (encAlg * ivMode)
-let encAlg_of_id i = encAlg_of_aeAlg i.pv i.aeAlg
+val macAlg_of_id: i:id { is_ID12 i /\ ~(is_AEAD (ID12.aeAlg i)) } -> Tot macAlg
+let macAlg_of_id = function
+  | ID12 pv _ _ ae _ _ _ -> 
+    assume (pv <> TLS_1p3);
+    macAlg_of_aeAlg pv ae
 
-let kdfAlg_of_id (i:id) = i.kdfAlg
+val encAlg_of_id: i:id { is_ID12 i /\ is_MtE (ID12.aeAlg i) } -> Tot (encAlg * ivMode)
+let encAlg_of_id = function
+  | ID12 pv _ _ ae _ _ _ -> encAlg_of_aeAlg pv ae
+
+val aeAlg_of_id: i:id { ~ (is_PlaintextID i) } -> Tot aeAlg
+let aeAlg_of_id = function
+  | ID13 (KeyID _ _ _ li _) -> logInfo_ae li
+  | ID12 pv _ _ ae _ _ _ -> ae
 
 // Pretty printing
-let sinfo_to_string (si:sessionInfo) = ""
-(*
-#if 1 //TODO: This should be verify
-#else
-    let sb = new System.Text.StringBuilder() in
-    let sb = sb.AppendLine("Session Information:") in
-    let sb = sb.AppendLine(Printf.sprintf "Protocol Version: %A" si.protocol_version) in
-    let sb = sb.AppendLine(Printf.sprintf "Ciphersuite: %A" (
-                            match name_of_cipherSuite si.cipher_suite with
-                            | Platform.Error.Error(_) -> failwith "Unknown ciphersuite"
-                            | Platform.Error.Correct(c) -> c)) in
-    let sb = sb.AppendLine(Printf.sprintf "Session ID: %s" (hexString si.sessionID)) in
-    let sb = sb.AppendLine(Printf.sprintf "Session Hash: %s" (hexString si.session_hash)) in
-    let sb = sb.AppendLine(Printf.sprintf "Server Identity: %s" (
-                            match Cert.get_hint si.serverID with
-                            | None -> "None"
-                            | Some(c) -> c)) in
-    let sb = sb.AppendLine(Printf.sprintf "Client Identity: %s" (
-                            match Cert.get_hint si.clientID with
-                            | None -> "None"
-                            | Some(c) -> c)) in
-    let sb = sb.AppendLine(Printf.sprintf "Extensions: %A" si.extensions) in
-    sb.ToString()
-##endif
- *)
-
-
-// -----------------------------------------------------------------------
-// record-layer length constants [5.2.1]
-// note that TLS 1.3 lowers a bit the upper bound of cipher lengths (Ok in principle)
-// but still enables padding beyond plausible plaintext lengths.
-
-// API and protocol-level fragments are in [0..2^14]
-let max_TLSPlaintext_fragment_length = 16384 
-
-// the rest should be internal
-
-// In TLS 1.2, compression and encryption may add stuff
-let max_TLSCompressed_fragment_length = max_TLSPlaintext_fragment_length + 1024
-let max_TLSCiphertext_fragment_length = max_TLSPlaintext_fragment_length + 2048
-
-// The length of what's AE'ed, after adding the CT byte and padding
-// in TLS 1.3, CT adds 1 byte, and AE adds up to 255 bytes
-let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 256
-
-val cipher_repr: n:nat -> Lemma( n <= max_TLSCiphertext_fragment_length ==> repr_bytes n <= 2 )
-let cipher_repr n = lemma_repr_bytes_values n
+let sinfo_to_string (si:sessionInfo) = "TODO"
 
 // -----------------------------------------------------------------------
 // Safety of key derivation depends on matching algorithms (see PRF)
 
-//$ could be turnd into stateful logs; see F7 assumptions we made about them
+
+(* ADL commenting until 1.2 stateful idealization is restored
 
 assume logic type keyCommit   : csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
 assume logic type keyGenClient: csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
@@ -649,147 +717,27 @@ type matches_id (i:id) =
     keyCommit i.csrConn i.pv i.aeAlg i.ext
     /\ keyGenClient i.csrConn i.pv i.aeAlg i.ext
 
-//$ recode?
 // This index is safe for MS-based key derivation
 val safeKDF: i:id -> Tot (b:bool { b=true <==> ((honestMS i.msId && strongKDF i.kdfAlg) /\ matches_id i) })
 //defining this as true makes the context inconsitent!
 let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 
-// Needed for typechecking of PRF
-// ask !i1,i2. i2 = Swap(i1) /\ not(SafeKDF(i1)) => not(SafeKDF(i2))
-
-// HonestMS(msi) conditions both idealizations in PRF.
-// ask !si:sessionInfo. not HonestMS(MsI(si)) => not SafeVD(si)
-// ask !i:id. not HonestMS(i.msId) => not SafeKDF(i)
+*)
 
 // -----------------------------------------------------------------------
 // The two main safety properties for the record layer
 
-let strongAuthId i = strongAuthAlg i.pv i.aeAlg
-let strongAEId i   = strongAEAlg   i.pv i.aeAlg
+//let strongAuthId i = strongAuthAlg i.pv i.aeAlg
+//let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 
 // ``We are idealizing integrity/confidentiality for this id''
-let authId (i:id) = safeKDF i && strongAuthId i
-let safeId (i:id) = safeKDF i && strongAEId i
+let authId = function
+  | PlaintextID _ -> false
+  | ID13 ki -> false // TODO
+  | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAuthAlg pv ae
 
-(* // ask !i.     SafeId(i) => AuthId(i) *)
-(* // ask !i,mac. i.aeAlg  = MACOnly(mac) => not SafeId(i) *)
-(* // ask !i:id. AuthId(i) => matches_id(i) // sanity check; just by definition *)
-(* // ask !i:id. AuthId(i) => SafeKDF(i) *)
-(* // ask !i:id. AuthId(i) => StrongAuthId(i) *)
-(* // ask !i:id. AuthId(i) => INT_CMA_M(MacAlg(i)) *)
-(* // ask !si,r:Role. StrongAuthSI(si) => StrongAuthId(siId si r) *)
-(* // ask !i:id,e,m. StrongAuthId(i) => INT_CMA_M(MacAlg(i)) *)
+let safeId = function
+  | PlaintextID _ -> false
+  | ID13 ki -> false // TODO
+  | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAEAlg pv ae
 
-// -------------------------------------------------------------------------
-// Re-indexing from epochs to ids
-
-val noId: i:id { ~(authId i) /\ ~(safeId i) }
-let noId = {
-  msId    = noMsId;
-  kdfAlg  = PRF_SSL3_nested;
-  pv      = SSL_3p0;
-  aeAlg   = null_aeAlg;
-  csrConn = noCsr;
-  ext     = ne_default;
-  writer  = Client }
-
-
-val mk_id: e:epoch{ (not (is_InitEpoch e)) ==> is_CipherSuite ((epochSI e).cipher_suite) } -> Tot id
-let mk_id e =
-  if is_InitEpoch e then noId
-  else
-    let si     = epochSI e in
-    let cs     = si.cipher_suite in
-    { msId     = msid si;
-      kdfAlg   = kdfAlg si.protocol_version si.cipher_suite;
-      pv       = si.protocol_version;
-      aeAlg    = get_aeAlg cs;
-      csrConn  = epochCSRands e ;
-      ext      = si.extensions;
-      writer   = epochWriter e }
-
-//ask !e. IsInitEpoch(e) => Id(e) = noId
-//ask !e. IsInitEpoch(e) => not AuthId(Id(e))
-
-// KB maybe we don't need this, but it helps in AppFragment for now
-// val unAuthIdInv: i:id{not (authId i)} -> e:epoch {Id e = i}
-
-// -------------------------------------------------------------------------
-// Global safety properties
-
-// Safety for handshakes depends on having an 'idealized' mastersecret,
-// and performing both strong session key generation & finished message verification
-
-// Safe handshake for this sessioninfo
-let si_safeHS (si:sessionInfo) = 
-  is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) /\ 
-  si.protocol_version = TLS_1p2 /\
-  pvcs si.protocol_version si.cipher_suite /\ 
-  honestPMS si.pmsId /\
-  strongHS si /\ 
-  (exists r. matches_id (siId si r))
-
-// Safety for epochs relies only on sessionInfo.
-// This would change if we introduced a finer model of compromise
-// e.g. if we allowed the attacker to compromise specific epochs
-
-let epoch_safeHS (e:epoch) = is_SuccEpoch e /\ si_safeHS (epochSI e)
-assume val safeHS: e:epoch -> b:bool { b = true <==> epoch_safeHS e }
-
-// Predicates specifying the security of TLS connections
-
-// ``The handshake is complete''
-let epoch_open (e:epoch) = exists (r:role).
-  (is_FullEpoch e /\ sentCCS r     (epochSI e) /\ sentCCS    (dualRole r) (epochSI e)) \/
-  (is_AbbrEpoch e /\ sentCCSAbbr r (epochAI e) /\ sentCCSAbbr(dualRole r) (epochAI e))
-
-let epoch_open_state (e:epoch) = exists (r:role).
-  (((is_FullEpoch e /\ is_Some (prfMacAlg_of_ciphersuite_aux (epochSI e).cipher_suite) /\  sentCCS r     (epochSI e) /\ safeVD (epochSI e)) ==> sentCCS    (dualRole r) (epochSI e))) \/
-  (((is_AbbrEpoch e /\ sentCCSAbbr r (epochAI e) /\ safeVD (epochSI e)) ==> sentCCSAbbr(dualRole r) (epochAI e)))
-
-// The epoch parameters yield privacy & integrity
-let epoch_safe (e:epoch) =  (not (is_InitEpoch e)) ==> is_CipherSuite ((epochSI e).cipher_suite) /\ safeId (mk_id e) /\ epoch_open_state e
-assume val safe: e:epoch -> b:bool { b = true <==> epoch_safe e }
-
-// The epoch parameters yield integrity (not necessarily privacy)
-let epoch_auth (e:epoch) = (not (is_InitEpoch e)) ==> is_CipherSuite ((epochSI e).cipher_suite) /\ ((is_MtE (mk_id e).aeAlg) \/ (is_MACOnly (mk_id e).aeAlg /\ is_SSL_3p0 ((mk_id e).pv))) /\ authId (mk_id e) /\ epoch_open_state e
-assume val auth: e:epoch -> b:bool { b = true <==> epoch_auth e }
-
-//ask !e. Safe(e) => Auth(e)
-//ask !e. not(Auth(e)) => not(Safe(e))
-
-// so that TLS can exchange any traffic on the initial null connection
-//ask !e. IsInitEpoch(e) => not Auth(e)
-
-//ask !e. epoch_open_state(e) => (AuthId(Id(e)) => Auth(e))
-//ask !e. epoch_open_state(e) => (SafeId(Id(e)) => Safe(e))
-//ask !e. Auth(e) => epoch_open_state(e)
-
-
-(*
-  KB The following is only true with Reneg indication, but is difficult to remove.
-  KB It is an artifact of the way we treat epochs that we cannot just authenticate the current epoch, we need to always authenticate the full chain
-  KB Maybe a refactor for v2 would be to separate our the current epoch and an optional predecessor
-  KB Also this needs to account for sentCCSResume
-  
-private theorem !r,r',e,e'. sentCCS(r,EpochSI(e)) /\
-	                    sentCCS(r',EpochSI(e')) /\
-  			    Id(e) = Id(e') => e = e'
-theorem !e,e'. epoch_open_state(e) /\ epoch_open_state(e') /\ Id(e) = Id(e') => e = e'
- *)
-
-(*
-#if ideal
-// These functions are used only for specifying ideal implementations
-let safeHS (e:epoch) = failwith "spec only": bool
-let safeHS_SI (e:sessionInfo) = failwith "spec only": bool
-let safeCRE (e:sessionInfo) = failwith "spec only": bool
-let safeVD (e:sessionInfo) = failwith "spec only": bool
-let auth (e:epoch) = failwith "spec only": bool
-let safe (e:epoch) = failwith "spec only" : bool //CF Define in terms of strength and honesty
-let safeKDF (i:id) = failwith "spec only": bool
-let authId (i:id) = failwith "spec only":bool
-let safeId  (i:id) = failwith "spec only":bool
-##endif
-*)

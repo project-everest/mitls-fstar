@@ -461,8 +461,8 @@ let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup
 
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
-val prepareExtensions: config -> connectionInfo -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
-let prepareExtensions (cfg:config) (conn:connectionInfo) ri ks =
+val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{is_SEC x \/ is_FFDHE x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
        match ri with
@@ -470,18 +470,18 @@ let prepareExtensions (cfg:config) (conn:connectionInfo) ri ks =
        | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
     let res = [E_renegotiation_info(cri)] in
     let res = 
-       match cfg.maxVer,ks with
+       match pv, ks with
        | TLS_1p3,Some ks -> (E_keyShare ks)::res
        | _,_ -> res in
-    let res = if cfg.safe_resumption then E_extended_ms :: res else res in
+    let res = if sres then E_extended_ms :: res else res in
 //No extended padding for now
 //    let res = E_extended_padding :: res in
-    let res = (E_signatureAlgorithms cfg.signatureAlgorithms) :: res in
+    let res = (E_signatureAlgorithms sigAlgs) :: res in
     let res =
-        if List.Tot.existsb (fun x -> isECDHECipherSuite x) (list_valid_cs_is_list_cs cfg.ciphersuites) then
-          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups)) :: res
+        if List.Tot.existsb (fun x -> isECDHECipherSuite x) (list_valid_cs_is_list_cs cs) then
+          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: (E_supported_groups (list_valid_ng_is_list_ng namedGroups)) :: res
         else
-          let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) (list_valid_ng_is_list_ng cfg.namedGroups) in
+          let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) (list_valid_ng_is_list_ng namedGroups) in
           if g = [] then res
           else (E_supported_groups g) :: res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
@@ -611,8 +611,8 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) 
     | _ -> None    
 
 val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
-let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
-    match cExt with
+let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
+  match cExt with
     | E_renegotiation_info (cri) ->
         let rs = 
            match cri, ri with
@@ -652,22 +652,23 @@ let clientToNegotiatedExtension (cfg:config) cs ri (resuming:bool) neg cExt =
         else {neg with ne_signature_algorithms = Some (sha)}
     | _ -> neg // JK : handle remaining cases
 
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension) * negotiatedExtensions))
+val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension)))
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->
       let server = List.Tot.choose (clientToServerExtension cfg cs ri ks resuming) cExtL in
-      let negi = ne_default in
-      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
-      Correct (Some server, nego)
+      Correct (Some server)
+//      let negi = ne_default in
+//      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
+//      Correct (Some server, nego)
    | None -> 
        (match pv with
        | SSL_3p0 ->
           let cre =
               if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs csl) then
-                 Some [E_renegotiation_info (FirstConnection)], {ne_default with ne_secure_renegotiation = RI_Valid}
-              else None, ne_default in
-          Correct cre
+                 Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
+              else None //, ne_default in
+          in Correct cre
        | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))
 
 val isClientRenegotiationInfo: extension -> Tot (option cVerifyData)
@@ -698,9 +699,6 @@ let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerify
 
 val hasExtendedMS: negotiatedExtensions -> Tot bool
 let hasExtendedMS extL = extL.ne_extended_ms = true
-
-val hasExtendedPadding: id -> Tot bool
-let hasExtendedPadding id = id.ext.ne_extended_padding = true
 
 // JK : cannot add total effect here because of the exception thrown
 (* TODO *)

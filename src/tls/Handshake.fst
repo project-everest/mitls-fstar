@@ -15,12 +15,13 @@ open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages
-open HSCrypto
 open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less
 open TLSExtensions 
 open CoreCrypto
+open Negotiation
+open Epochs
 open HandshakeLog
 
 
@@ -28,56 +29,7 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
 
-// represents the outcome of a successful handshake, 
-// providing context for the derived epoch
-type handshake = 
-  | Fresh of sessionInfo
-  | Resumed of abbrInfo * sessionInfo //changed: was hs * seq epoch (creating cycle)
-// We use SessionInfo as unique session indexes.
-// We tried using instead hs, but this creates circularities
-// We'll probably need a global log to reason about them.
-// We should probably do the same in the session store.
-
-// extracts a transport key identifier from a handshake record
-val hsId: handshake -> Tot id 
-//16-05-31 TODO breaking TC in TLS; was (i:id { is_stream_ae i }) //16-05-19 focus on TLS 1.3
-
-let hsId h = noId // Placeholder 
-
 //<expose for TestClient>
-(* Negotiation: HELLO sub-module *)
-private type ri = cVerifyData * sVerifyData 
-
-type b_log = bytes
-
-type eph_s = option kex_s_priv
-type eph_c = list kex_s_priv
-
-type nego = {
-     n_resume: bool;
-     n_client_random: TLSInfo.random;
-     n_server_random: TLSInfo.random;
-     n_sessionID: option sessionID;
-     n_protocol_version: protocolVersion;
-     n_kexAlg: TLSConstants.kexAlg;
-     n_aeAlg: TLSConstants.aeAlg;
-     n_sigAlg: option TLSConstants.sigAlg;
-     n_cipher_suite: cipherSuite;
-     n_dh_group: option namedGroup;
-     n_compression: option compression;
-     n_extensions: negotiatedExtensions;
-     n_scsv: list scsv_suite;
-}                 
-
-type hs_id = {
-     id_cert: Cert.chain;
-     id_sigalg: option sigHashAlg;
-}
-
-type session = {
-     session_nego: nego;
-}     
-
 #set-options "--lax"
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
@@ -88,21 +40,21 @@ let prepareClientHello cfg ks log ri sido =
   let kp = 
      (match cfg.maxVer with
       | TLS_1p3 -> 
-         let gxl = KeySchedule.ks_client_13_init_1rtt ks cfg.namedGroups in 
+         let gxl = KeySchedule.ks_client_13_1rtt_init ks cfg.namedGroups in 
 	 Some (ClientKeyShare gxl)
       | _ -> 
-      	 let _ = KeySchedule.ks_client_init_12 ks in 
+      	 let _ = KeySchedule.ks_client_12_init ks in 
 	 None) in
   let sid = (match sido with | None -> empty_bytes | Some x -> x) in
-  let ci = initConnection Client cr in
-  let ext = prepareExtensions cfg ci ri kp in
+  let co = prepareClientOffer cfg in
+  let ext = prepareExtensions co.co_protocol_version co.co_cipher_suites co.co_safe_resumption co.co_safe_renegotiation co.co_sigAlgs co.co_namedGroups ri kp in
   let ch = 
-  {ch_protocol_version = cfg.maxVer;
+  {ch_protocol_version = co.co_protocol_version;
    ch_client_random = cr;
    ch_sessionID = sid;
-   ch_cipher_suites = cfg.ciphersuites;
+   ch_cipher_suites = co.co_cipher_suites;
    ch_raw_cipher_suites = None;
-   ch_compressions = [NullCompression];
+   ch_compressions = co.co_compressions;
    ch_extensions = Some ext;} in
   let chb = log @@ (ClientHello ch) in
   (ClientHello ch, chb)
@@ -129,49 +81,12 @@ let gte_pv_geqPV pv1 pv2 = ()
 
 (* Returns [c] if [c] is within the range of acceptable versions for [cfg],
  * [Error] otherwise. *)
-val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
-let negotiateVersion cfg c =
-  if geqPV c cfg.minVer && geqPV cfg.maxVer c then Correct c
-  else if geqPV c cfg.maxVer then Correct cfg.maxVer
-  else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
-
-val negotiate:l1:list valid_cipher_suite -> list valid_cipher_suite -> Tot (option (c:valid_cipher_suite{is_CipherSuite c && List.Tot.mem c l1}))
-let negotiate l1 l2 =
-  List.Tot.find #valid_cipher_suite (fun s -> is_CipherSuite s && List.Tot.mem s l1) l2
-
-val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> c:valid_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
-let negotiateCipherSuite cfg pv c =
-  match negotiate c cfg.ciphersuites with
-  | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
-  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
 // TODO : IMPLEMENT
 val getCachedSession: cfg:config -> ch:ch -> ST (option session)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let getCachedSession cfg cg = None
-
-// FIXME: no FFDHE, doesn't check cfg.namedGroups
-val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (namedGroup * option bytes))
-let rec negotiateGroupKeyShare cfg pv kex exts =
-  match exts with
-  | None ->
-    begin
-    match pv,kex with
-    | TLS_1p2, Kex_ECDHE -> Correct (SEC ECC_P256, None)
-    | _ -> Error(AD_decode_error, "no supported group or key share extension found")
-    end
-  | Some exts ->
-    begin
-    let rec aux: config -> protocolVersion -> kexAlg -> list extension -> Tot (result (namedGroup * option bytes)) = fun cfg pv kex es ->
-      match pv,kex,es with
-      | TLS_1p3, Kex_ECDHE, E_keyShare (ClientKeyShare ((gn,gxb)::_)) :: _ ->
-	Correct (gn,Some gxb)
-      | TLS_1p3,_, h::t -> aux cfg pv kex t
-      | _ -> Error(AD_decode_error, "no supported group or key share extension found")
-    in
-    aux cfg pv kex exts
-    end
 
 #set-options "--lax"
 
@@ -180,93 +95,52 @@ val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option r
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ks log ri (ClientHello ch,_) =
-  match negotiateVersion cfg ch.ch_protocol_version with
-    | Error(z) -> Error(z)
-    | Correct(pv) ->
-  match negotiateCipherSuite cfg pv ch.ch_cipher_suites with
-    | Error(z) -> Error(z)
-    | Correct(kex,sa,ae,cs) ->
-  match negotiateGroupKeyShare cfg pv kex ch.ch_extensions with
-    | Error(z) -> Error(z)
-    | Correct(gn,gxo) ->
+ let mode = computeServerMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in  
+  match mode with
+   | Error(z) -> Error(z)
+   | Correct(mode) ->
   let srand = KeySchedule.ks_server_random ks in
   let ksl = 
-    (match pv,gxo with
-     | TLS_1p3,Some gxb -> 
-       let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random cs gn gxb in
+    (match mode.sm_protocol_version, mode.sm_dh_group, mode.sm_dh_share with
+     | TLS_1p3, Some gn, Some gxb -> 
+       let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.sm_cipher_suite gn gxb in
        (Some (ServerKeyShare (gn,gyb)))
-    | _ -> None) in
-  match negotiateServerExtensions pv ch.ch_extensions ch.ch_cipher_suites cfg cs ri ksl false with
-    | Error(z) -> Error(z)
-    | Correct(sext,next) ->
-    let sid = CoreCrypto.random 32 in
-    let comp = match ch.ch_compressions with
-      | [] -> None
-      | _ -> Some NullCompression in
-    let sh = 
-      {sh_protocol_version = pv;
-       sh_sessionID = Some sid;
-       sh_server_random = srand;
-       sh_cipher_suite = cs;
-       sh_compression = comp;
-       sh_extensions = sext} in
-    let nego = 
-      {n_client_random = ch.ch_client_random;
-       n_server_random = srand;
-       n_sessionID = Some sid;
-       n_protocol_version = pv;
-       n_kexAlg = kex;
-       n_sigAlg = sa;
-       n_aeAlg  = ae;
-       n_cipher_suite = cs;
-       n_compression = comp;
-       n_dh_group = Some gn;
-       n_scsv = [];
-       n_extensions = next;
-       (* [getCachedSession] returned [None], so no session resumption *)
-       n_resume = false} in
-    let _ = log @@ (ClientHello ch) in
-    let shb = log @@ (ServerHello sh) in
-    let lb = HandshakeLog.getHash log in
-    let keys = (match pv with
+     | _ -> None) in
+  match negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
+  | Error(z) -> Error(z)
+  | Correct(sext) ->
+  let sid = CoreCrypto.random 32 in
+  let sh = 
+   {sh_protocol_version = mode.sm_protocol_version;
+    sh_sessionID = Some sid;
+    sh_server_random = srand;
+    sh_cipher_suite = mode.sm_cipher_suite;
+    sh_compression = mode.sm_comp;
+    sh_extensions = sext} in
+  let nego = 
+   {n_client_random = ch.ch_client_random;
+    n_server_random = srand;
+    n_sessionID = Some sid;
+    n_protocol_version = mode.sm_protocol_version;
+    n_kexAlg = mode.sm_kexAlg;
+    n_sigAlg = mode.sm_sigAlg;
+    n_aeAlg  = mode.sm_aeAlg;
+    n_cipher_suite = mode.sm_cipher_suite;
+    n_compression = mode.sm_comp;
+    n_dh_group = mode.sm_dh_group;
+    n_scsv = [];
+    n_extensions = mode.sm_ext;
+    (* [getCachedSession] returned [None], so no session resumption *)
+    n_resume = false} in
+  let _ = log @@ (ClientHello ch) in
+  let shb = log @@ (ServerHello sh) in
+  let keys = (match mode.sm_protocol_version with
     	     | TLS_1p3 -> 
-	       let keys = KeySchedule.ks_server_13_get_htk ks lb  in
+	       let keys = KeySchedule.ks_server_13_sh ks in
 	       Some keys
 	     | _ -> None) in
     Correct (nego,keys,(ServerHello sh,shb))
 
-(* Is this one of the special random values indicated by the RFC (6.3.1.1)? *)
-val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
-let isSentinelRandomValue c_pv s_pv s_random =
-  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
-  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
-
-(* If [true], then:
-  - both the client and server versions are within the range specified by [cfg]
-  - the server is not newer than the client
-  - there is no undesired downgrade (as indicated by the special random values).
-*)
-val acceptableVersion: config -> ch -> protocolVersion -> TLSInfo.random -> Tot bool
-let acceptableVersion cfg ch s_pv s_random =
-  match negotiateVersion cfg ch.ch_protocol_version with
-  | Correct c_pv -> 
-    geqPV c_pv s_pv && geqPV s_pv cfg.minVer &&
-    not (isSentinelRandomValue c_pv s_pv s_random)
-  | Error _ ->
-    false
-
-(* If [true], then:
-  - [s_cs] is has been offered previously;
-  - [s_cs] is consistent with the [config];
-  - TODO: [s_cs] is supported by the protocol version (e.g. no GCM with
-    TLS<1.2).
-*)
-val acceptableCipherSuite: config -> ch -> protocolVersion -> valid_cipher_suite -> Tot bool
-let acceptableCipherSuite cfg ch s_pv s_cs =
-  // JP: I would think the first line implies the second one?
-  List.Tot.existsb (fun x -> x = s_cs) ch.ch_cipher_suites &&
-  List.Tot.existsb (fun x -> x = s_cs) cfg.ciphersuites &&
-  not (isAnonCipherSuite s_cs) || cfg.allowAnonCipherSuite
   
 val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> ch -> (hs_msg * bytes) ->
   ST (result (nego * option KeySchedule.recordInstance))
@@ -274,45 +148,35 @@ val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option
      (ensures (fun h0 i h1 -> True))
 let processServerHello cfg ks log ri ch (ServerHello sh,_) =
   let _ = log @@ (ServerHello sh) in
-  // Assuming no resumption; TODO: add it 
-  if not (acceptableVersion cfg ch sh.sh_protocol_version sh.sh_server_random) then
-    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
-  else  if not (acceptableCipherSuite cfg ch sh.sh_protocol_version sh.sh_cipher_suite) then
-    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-  else
-  let resume = false in
-  match negotiateClientExtensions sh.sh_protocol_version cfg ch.ch_extensions sh.sh_extensions sh.sh_cipher_suite ri resume with
-    | Error z -> Error z
-    | Correct next -> 
-        match sh.sh_cipher_suite with
-	| CipherSuite kex sa ae ->
-        let o_nego = 
-          {n_client_random = ch.ch_client_random;
-           n_server_random = sh.sh_server_random;
-           n_sessionID = sh.sh_sessionID;
-           n_protocol_version = sh.sh_protocol_version;
-           n_kexAlg = kex;
-           n_aeAlg = ae;
-	   n_sigAlg = sa;
-           n_cipher_suite = sh.sh_cipher_suite;
-	   n_dh_group = None;
-           n_compression = sh.sh_compression;
-	   n_scsv = [];
-           n_extensions = next;
-           n_resume = false } in
-	   (match sh.sh_protocol_version, kex, next.ne_keyShare with
-	    | TLS_1p3, Kex_DHE, Some (gn,gyb) 
-	    | TLS_1p3, Kex_ECDHE, Some (gn,gyb) -> 
-	      	   let lb = HandshakeLog.getHash log in
-	           let keys = KeySchedule.ks_client_13_1rtt ks o_nego.n_cipher_suite (gn, gyb) lb in
-	      	   Correct (o_nego,Some keys)
-            | _ -> Correct (o_nego,None))
-	| _ -> Error (AD_decode_error, "ServerHello CipherSuite not a real ciphersuite")
-
+  let mode = computeClientMode cfg ch.ch_extensions ch.ch_protocol_version sh.sh_protocol_version sh.sh_server_random sh.sh_cipher_suite sh.sh_extensions sh.sh_compression ri in
+   match mode with
+    | Error(z) -> Error(z)
+    | Correct(mode) ->  
+   let o_nego = 
+    {n_client_random = ch.ch_client_random;
+     n_server_random = sh.sh_server_random;
+     n_sessionID = sh.sh_sessionID;
+     n_protocol_version = mode.cm_protocol_version;
+     n_kexAlg = mode.cm_kexAlg;
+     n_aeAlg = mode.cm_aeAlg;
+     n_sigAlg = mode.cm_sigAlg;
+     n_cipher_suite = mode.cm_cipher_suite;
+     n_dh_group = mode.cm_dh_group;
+     n_compression = sh.sh_compression;
+     n_scsv = [];
+     n_extensions = mode.cm_ext;
+     n_resume = false } in
+    (match o_nego.n_protocol_version, o_nego.n_kexAlg, mode.cm_dh_group, mode.cm_dh_share with
+     | TLS_1p3, Kex_DHE, Some gn, Some gyb 
+     | TLS_1p3, Kex_ECDHE, Some gn, Some gyb -> 
+           let keys = KeySchedule.ks_client_13_sh ks o_nego.n_cipher_suite (gn, gyb) false in
+      	   Correct (o_nego,Some keys)
+     | _ -> Correct (o_nego,None))
+    
 #reset-options
 
 (* Handshake API: TYPES, taken from FSTI *)
-
+ 
 type clientState = 
   | C_Idle:                  option ri -> clientState
   | C_HelloSent:        option ri -> ch -> clientState
@@ -376,172 +240,10 @@ type handshake_state (r:role) =
 
 
 //</expose for TestClient>
-
-// relocate?
-type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
-
-type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
-  disjoint hs_rgn (region w)                  /\
-  parent (region w) <> FStar.HyperHeap.root    /\
-  parent (region r) <> FStar.HyperHeap.root    /\
-  parent hs_rgn = parent (parent (region w))  /\ //Grandparent of each writer is a sibling of the handshake
-  disjoint (region w) (region r)              /\
-  is_epoch_rgn (region w)                     /\ //they're all colored as epoch regions
-  is_epoch_rgn (region r)                     /\
-  is_epoch_rgn (parent (region w))            /\
-  is_epoch_rgn (parent (region r))            /\
-  is_hs_rgn hs_rgn                              //except for the hs_rgn, of course
-
-abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
-  epoch_region_inv hs_rgn r w
-  
-module I = IdNonce
-
-type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
-  | Epoch: h: handshake ->
-           r: reader (peerId (hsId h)) ->
-           w: writer (hsId h) {epoch_region_inv' hs_rgn r w /\ I.nonce_of_id (hsId h) = n} 
-	   -> epoch hs_rgn n
-  // we would extend/adapt it for TLS 1.3,
-  // e.g. to notify 0RTT/forwad-privacy transitions
-  // for now epoch completion is a total function on handshake --- should be stateful
-
-
-val getId: KeySchedule.recordInstance -> GTot id
-let getId k = 
-    match k with
-    | KeySchedule.StAEInstance #i rd wr -> i
-    | KeySchedule.StLHAEInstance #i rd wr -> i
-
-#set-options "--lax"
-
-val recordInstanceToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> ks:KeySchedule.recordInstance -> epoch hs_rgn n
-let recordInstanceToEpoch #hs_rgn #n hs ri = 
-    match ri with
-    | KeySchedule.StAEInstance #i rd wr -> Epoch hs (StAE.Stream () rd) (StAE.Stream () wr)
-    | KeySchedule.StLHAEInstance #i rd wr -> Epoch hs (StAE.StLHAE () rd) (StAE.StLHAE () wr)
-
-(* 16-06-02 unmerged variant:
-val recordInstanceToEpoch: h:handshake -> ks:KeySchedule.recordInstance -> (StAE.reader (peerId (hsId h)) * StAE.writer (hsId h))
-let recordInstanceToEpoch hs ri = 
-    match ri with
-    | KeySchedule.StAEInstance #i rd wr -> (StAE.Stream () rd),(StAE.Stream () wr)
-    | KeySchedule.StLHAEInstance #i rd wr -> (StAE.StLHAE () rd),(StAE.StLHAE () wr)
-*)
-
-let id_TLS12_AES_GCM_128_SHA256  = {
-    msId = noMsId;
-    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
-    pv = TLS_1p2;
-    aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
-    csrConn = createBytes 64 0x00z;
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None;
-    };
-    writer = Client
-  }
-
-val encryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> StAE.writer (hsId hs)
-let encryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = hsId hs in
-  let r = HyperHeap.root in
-  let w: StatefulLHAE.writer id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Writer =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.writer -> StatefulLHAE.state
-  StAE.StLHAE () w
-
-val decryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> StAE.reader (peerId (hsId hs))
-let decryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = peerId (hsId hs) in
-  let r = HyperHeap.root in
-  let r: StatefulLHAE.reader id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Reader =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.reader -> StatefulLHAE.state
-  StAE.StLHAE () r
-
-val recordKeysToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> (bytes * bytes * bytes * bytes) -> epoch hs_rgn n
-let recordKeysToEpoch #hs_rgn #n h (ck,civ,sk,siv) = 
-  let wr: StAE.writer (hsId h) = encryptor_TLS12_AES_GCM_128_SHA256 h ck civ in
-  let rd: StAE.reader (peerId (hsId h)) = decryptor_TLS12_AES_GCM_128_SHA256 h sk siv in
-  Epoch h rd wr
-
-let reveal_epoch_region_inv_all (u:unit)
-  : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}
-	   epoch_region_inv' #i hs_rgn r w
-	   <==>
-   	   epoch_region_inv #i hs_rgn r w)
-  = ()	   
-
-let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Lemma (let r = Epoch.r e in 
-	   let w = Epoch.w e in 
-	   epoch_region_inv hs_rgn r w)
-  = ()
-
-let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (w:writer (hsId (e.h)) {epoch_region_inv hs_rgn (Epoch.r e) w})
-  = Epoch.w e
-
-let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (r:reader (peerId (hsId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
-  = match e with | Epoch h r w -> r //16-05-20 Epoch.r e failed.
-
-(* The footprint just includes the writer regions *)
-abstract let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
-  forall (i:nat { i < Seq.length es })
-    (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
-    let ei = Seq.index es i in
-    let ej = Seq.index es j in
-    parent (region ei.w) = parent (region ej.w) /\  //they all descend from a common epochs sub-region of the connection
-    disjoint (region ei.w) (region ej.w)           //each epoch writer lives in a region disjoint from the others
-
-abstract let epochs_inv' (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) = epochs_inv es
-
-let epochs (r:rgn) (n:TLSInfo.random) = es: seq (epoch r n) { epochs_inv' es }
-
-let reveal_epochs_inv' (u:unit)
-  : Lemma (forall (r:rgn) (#n:TLSInfo.random) (es:seq (epoch r n)). {:pattern (epochs_inv' es)}
-	     epochs_inv' es
-	     <==>
-	     epochs_inv es)
-  = ()
-
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
 
 type resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
-
 
 type hs =
   | HS: #region: rgn { is_hs_rgn region } ->
@@ -549,7 +251,7 @@ type hs =
          resume: resume_id r ->
             cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-            log: MS.i_seq region (epoch region nonce) epochs_inv ->  // append-only, monotonic log of epochs
+            log: epochs region nonce ->
           state: rref region (handshake_state r)  ->       // opaque, subject to invariant
              hs
 
@@ -557,9 +259,9 @@ type hs =
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-let logT (s:hs) (h:HyperHeap.t) = MS.i_sel h s.log
+let logT (s:hs) (h:HyperHeap.t) = Epochs.epochsT s.log h
 
-let stateType (s:hs) = epochs s.region s.nonce * handshake_state (HS.r s)
+let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS.r s)
 
 let stateT (s:hs) (h:HyperHeap.t) : stateType s = (logT s h, sel h s.state)
 
@@ -570,13 +272,6 @@ let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
 let forall_epochs (hs:hs) h (p:(epoch hs.region hs.nonce -> Type)) = 
   (let es = logT hs h in
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
-     
-(* //vs modifies clauses? *)
-(* let unmodified_epochs s h0 h1 =  *)
-(*   forall_epochs s h0 (fun e ->  *)
-(*     let rs = regions e in  *)
-(*     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r)) *)
-
 //epochs in h1 extends epochs in h0 by one 
 let fresh_epoch h0 s h1 =
   let es0 = logT s h0 in 
@@ -587,6 +282,14 @@ let fresh_epoch h0 s h1 =
 let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
  let es = logT s h in
  Seq.index es (Seq.length es - 1)
+
+
+     
+(* vs modifies clauses? *)
+(* let unmodified_epochs s h0 h1 =  *)
+(*   forall_epochs s h0 (fun e ->  *)
+(*     let rs = regions e in  *)
+(*     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r)) *)
 
 // separation policy: the handshake mutates its private state, 
 // only depends on it, and only extends the log with fresh epochs.
@@ -616,17 +319,14 @@ assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_st
 
 let hs_inv (s:hs) (h: HyperHeap.t) = 
   hs_invT s (logT s h) (sel h (HS.state s))  //An abstract invariant of HS-internal state
-  /\ MS.i_contains s.log h                    //Nothing deep about these next two, since they can always 
+  /\ Epochs.containsT s.log h                //Nothing deep about these next two, since they can always 
   /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 
-//to match the external interface
-//let handshake_state (r:role) = handshake_state' r
-val iT0: s:hs -> rw:rw -> st:stateType s -> Tot (logIndex (fst st))
-let iT0 s rw st = -1 //TODO:Implement!
-// returns the current index in the log for reading or writing, or -1 if there is none.
-// depends only on the internal state of the handshake
-let iT s rw h = iT0 s rw (stateT s h) 
+let iT (s:hs) rw (h:HyperHeap.t) = 
+    match rw with
+    | Reader -> Epochs.readerT s.log h
+    | Writer -> Epochs.writerT s.log h
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) 
@@ -668,9 +368,10 @@ val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (h
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let handshake_state_init cfg (r:role) (reg:rid) =
-   let ks, nonce = KeySchedule.create #reg r in
+   let log = HandshakeLog.create #reg in
+   let ks, nonce = KeySchedule.create #reg r log in
    {hs_nego = None;
-    hs_log = HandshakeLog.create #reg;
+    hs_log = log;
     hs_ks  = ks;
     hs_reader = -1;
     hs_writer = -1;
@@ -828,8 +529,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
 	             let _ = log @@ ServerKeyExchange(ske) in
 	             let _ = log @@ ServerHelloDone in
 	             let b = log @@ ClientKeyExchange cke in
-	             let lb = HandshakeLog.getBytes log in
-	             if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
+	             if ems then KeySchedule.ks_client_12_set_session_hash ks;
 	             Correct [(ClientKeyExchange cke,b)]
                    | [(CertificateRequest(cr),_)] ->
 		     begin
@@ -840,8 +540,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
 		     let _ = log @@ ServerHelloDone in
 		     let b1 = log @@ Certificate(cc) in
 		     let b2 = log @@ ClientKeyExchange cke in
-		     let lb = HandshakeLog.getBytes log in
-		     if ems then KeySchedule.ks_client_12_set_session_hash ks lb;
+		     if ems then KeySchedule.ks_client_12_set_session_hash ks;
       		     Correct [(Certificate cc,b1); (ClientKeyExchange cke,b2)]
 		     end
 		   | _ ->
@@ -888,8 +587,7 @@ val prepareClientFinished: KeySchedule.ks -> HandshakeLog.log -> ST (hs_msg * by
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareClientFinished ks log = 
-    let lb = HandshakeLog.getBytes log in
-    let fin = {fin_vd = KeySchedule.ks_client_12_client_verify_data ks lb} in
+    let fin = {fin_vd = KeySchedule.ks_client_12_client_finished ks} in
     let finb = log @@ (Finished fin) in
     (Finished fin, finb)
 
@@ -923,8 +621,7 @@ val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes
 let processServerFinished ks log (m,l) =
    match m with
    | Finished(f) ->
-     let lb = HandshakeLog.getBytes log in
-     let svd = KeySchedule.ks_client_12_server_verify_data ks lb in
+     let svd = KeySchedule.ks_client_12_server_finished ks in
      if (equalBytes svd f.fin_vd) then 
      	let _ = log @@ (Finished(f)) in
 	Correct svd
@@ -964,7 +661,8 @@ let processServerFinished_13 cfg n ks log msgs =
      when (is_Some n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
      if (not cfg.check_peer_certificate) || Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file then
        let _ = log @@ Certificate(c) in
-       let lb = HandshakeLog.getHash log in
+       let h = verifyDataHashAlg_of_ciphersuite n.n_cipher_suite in
+       let lb = HandshakeLog.getHash log h in
        let Some cs_sigalg = n.n_sigAlg in
        let Some algs = n.n_extensions.ne_signature_algorithms in
        //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
@@ -982,20 +680,21 @@ let processServerFinished_13 cfg n ks log msgs =
              let _ = IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n") in
              if valid then
                let _ = log @@ CertificateVerify(cv) in
-               let lb = HandshakeLog.getHash log in
-               let svd = KeySchedule.ks_client_13_1rtt_server_finished ks lb in
+               let svd = KeySchedule.ks_client_13_server_finished ks in
                if (equalBytes svd f.fin_vd) then
 		 let _ = log @@ (Finished(f)) in
-        	 let lb = HandshakeLog.getHash log in
-        	 let (cvd,keys) = KeySchedule.ks_client_13_1rtt_client_finished ks lb in
+                 let keys = KeySchedule.ks_client_13_sf ks in
+        	 let cvd = KeySchedule.ks_client_13_client_finished ks in
         	 let cfin = {fin_vd = cvd} in
         	 if creq then
         	   let cc = {crt_chain = []} in
         	   let ccb = log @@ Certificate(cc) in
         	   let finb = log @@ Finished(cfin) in
+                   let ems = KeySchedule.ks_client_13_cf ks in
         	   Correct ([(Certificate(cc),ccb);(Finished(cfin),finb)],svd,keys)
         	 else
         	   let finb = log @@ Finished(cfin) in
+                   let ems = KeySchedule.ks_client_13_cf ks in
         	   Correct ([(Finished(cfin),finb)],svd,keys)
                else Error (AD_decode_error, "Finished MAC did not verify")
              else Error (AD_decode_error, "Certificate signature did not verify")
@@ -1016,11 +715,19 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
    (match processServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log msgs with
     | Error z -> InError z
     | Correct ([(Finished(f),fb)],svd,keys) -> 
+       let h = Negotiation.Fresh ({session_nego = n}) in
+       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+       Epochs.add_epoch lgref ep;
+       Epochs.set_reader lgref 1;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
        InAck false false
     | Correct ([(Certificate c,cb);(Finished f,fb)],svd,keys) -> 
+       let h = Negotiation.Fresh ({session_nego = n}) in
+       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+       Epochs.add_epoch lgref ep;
+       Epochs.set_reader lgref 1;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = cb @| fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
@@ -1038,6 +745,13 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
     (match (prepareServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri (ClientHello ch,l)) with
      | Error z -> InError z
      | Correct (n,keys,(sh,shb)) ->
+       (match keys with
+        | Some ri ->      
+	  let h = Negotiation.Fresh ({session_nego = n}) in
+	  let ep = KeySchedule.recordInstanceToEpoch #r0 #id h ri in
+	  Epochs.add_epoch lgref ep;
+	  Epochs.set_reader lgref 0
+	| None -> ());
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;
@@ -1133,11 +847,10 @@ let processClientCCS n ks log msgs opt_msgs =
     | Correct [(ClientKeyExchange cke,_)] ->
       let ems = n.n_extensions.ne_extended_ms in
       let _ = log @@ ClientKeyExchange(cke) in
-      let lb = HandshakeLog.getBytes log in
       (match cke.cke_kex_c with 
        | KEX_C_DHE b 
        | KEX_C_ECDHE b -> 
-             (KeySchedule.ks_server_12_cke_dh ks b lb;
+             (KeySchedule.ks_server_12_cke_dh ks b;
 	      Correct ())
        | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE"))
     | Error z -> Error z
@@ -1162,14 +875,14 @@ let server_handle_client_ccs (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
 let processClientFinished n ks log msgs =   
     match msgs with
     | [(Finished f,_)] ->
-      let lb = HandshakeLog.getBytes log in
-      let cvd = KeySchedule.ks_server_12_client_verify_data ks lb in
-      let _ = log @@ Finished(f) in
-      let lb = HandshakeLog.getBytes log in
-      let svd = KeySchedule.ks_server_12_server_verify_data ks lb in
-      let fin = Finished ({fin_vd = svd}) in
-      let finb = log @@ fin in
-      Correct [(fin,finb)]
+      let cvd = KeySchedule.ks_server_12_client_finished ks in
+      if (equalBytes cvd f.fin_vd) then
+        let _ = log @@ Finished(f) in
+        let svd = KeySchedule.ks_server_12_server_finished ks in
+        let fin = Finished ({fin_vd = svd}) in
+        let finb = log @@ fin in
+        Correct [(fin,finb)]
+      else Error (AD_decode_error, "Finished MAC did not verify")
    | _ -> Error (AD_unexpected_message, perror __SOURCE_FILE__ __LINE__ "ClientFinished expected")
 
 val server_handle_client_finished: hs -> list (hs_msg * bytes) -> ST incoming
@@ -1240,10 +953,11 @@ let prepareServerFinished_13 cfg n ks log =
 	let signature = (hab @| sab @| (vlbytes 2 sigv)) in
         let scv = {cv_sig = signature} in
         let scvb = log @@ CertificateVerify(scv) in
-	let svd = KeySchedule.ks_server_13_server_finished ks finv in
+	let svd = KeySchedule.ks_server_13_server_finished ks in
 	let fin = {fin_vd = svd} in
 	let finb = log @@ Finished(fin) in
-	Correct [(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(fin),finb)]
+        let keys = KeySchedule.ks_server_13_sf ks in
+	Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(fin),finb)], keys)
       | None -> Error (AD_internal_error, perror __SOURCE_FILE__ __LINE__ "could not load signing key")
       end
     | Error z -> Error z
@@ -1259,8 +973,14 @@ let server_send_server_finished_13 (HS #r0 r res cfg id lgref hsref) =
     when (n.n_protocol_version = TLS_1p3 &&
 	 (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
     (match prepareServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log with
-     | Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(f),sfinb)]) ->    
+     | Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(f),sfinb)], keys) ->    
             let nl = eeb @| cb @| scvb @| sfinb in
+            let h = Negotiation.Fresh ({session_nego = n}) in
+            let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+
+            // Switch to ATK on write channel
+            Epochs.add_epoch lgref ep;
+            Epochs.incr_writer lgref;
 	    hsref := {!hsref with
 		 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = nl};
 		 hs_state = S(S_FinishedSent n)}
@@ -1269,7 +989,7 @@ let server_send_server_finished_13 (HS #r0 r res cfg id lgref hsref) =
 
 
 val processClientFinished_13: KeySchedule.ks -> HandshakeLog.log -> list (hs_msg * bytes) -> list (hs_msg * bytes) ->
-    			      ST (result (bytes * KeySchedule.recordInstance))
+    			      ST (result (bytes))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let processClientFinished_13 ks log msgs opt_msgs =
@@ -1282,11 +1002,10 @@ let processClientFinished_13 ks log msgs opt_msgs =
    | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected Certificate only before CKE") in
    match rem with
    | Correct ([(Finished(f),finb)]) ->
-     let lb = HandshakeLog.getHash log in
-     let (cvd,keys) = KeySchedule.ks_server_13_client_finished ks lb in
+     let cvd = KeySchedule.ks_server_13_client_finished ks in
      if (equalBytes cvd f.fin_vd) then 
      	let _ = log @@ (Finished(f)) in
-	Correct (cvd,keys)
+	Correct cvd
      else Error (AD_decode_error, "Finished MAC did not verify")
    | _ -> Error (AD_decode_error, "Unexpected state")
 
@@ -1298,7 +1017,9 @@ let server_handle_client_finished_13 (HS #r0 r res cfg id lgref hsref) msgs opt_
   match (!hsref).hs_state with
   | S(S_FinishedSent n) -> 
     (match processClientFinished_13 (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
-     | Correct svd ->
+     | Correct cvd ->
+       // Switch to ATK on read channel
+       Epochs.incr_reader lgref;
        (hsref := {!hsref with
   	           hs_state = S(S_Idle None)};
         InAck false false)
@@ -1352,7 +1073,7 @@ val init: r0:rid -> r: role -> cfg:config -> resume: resume_id r ->
     logT s h1 = Seq.createEmpty ))
 let init r0 r cfg res = 
     let id = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-    let lgref = MS.alloc_mref_seq r0 Seq.createEmpty in
+    let lgref = Epochs.epochs_init r0 id in
     let hs = handshake_state_init cfg r r0 in
     let hsref = ralloc r0 hs in
     HS #r0 r res cfg id lgref hsref
@@ -1410,7 +1131,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then i = noId else let e = Seq.index es j in i = hsId e.h)   
+    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = handshakeId e.h)   
   ))
   (ensures (next_fragment_ensures s))
 let rec next_fragment i hs = 

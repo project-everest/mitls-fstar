@@ -1,0 +1,87 @@
+[
+  "»¢™mP/\u0006Å\u001c\u000f>JÆ\tˆÈ",
+  [
+    [
+      0,
+      1,
+      [
+        "@query_8916", "disc_equation_PMS.IdealRSAPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8909"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8925", "disc_equation_PMS.ConcreteRSAPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8918"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8926", "disc_equation_PMS.ConcreteRSAPMS",
+        "disc_equation_PMS.IdealRSAPMS",
+        "fuel_guarded_inversion_PMS.rsapms_8885"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_8931" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_8987", "disc_equation_PMS.IdealDHPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8980"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8996", "disc_equation_PMS.ConcreteDHPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8989"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_8997", "disc_equation_PMS.ConcreteDHPMS",
+        "disc_equation_PMS.IdealDHPMS",
+        "fuel_guarded_inversion_PMS.dhpms_8956"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_9002" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_9041", "disc_equation_PMS.RSAPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_9034"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_9050", "disc_equation_PMS.DHPMS",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_9043"
+      ],
+      0
+    ]
+  ]
+]

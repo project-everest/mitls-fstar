@@ -23,7 +23,7 @@ let leak (i:msId) ms = ms.bytes
 
 let keyExtensionLength i =
     let op_Star x y = op_Multiply x y in
-    match i.aeAlg with
+    match (aeAlg_of_id i) with
         | MtE _ _  ->
             let alg,ivm = encAlg_of_id i in
             let esize = encKeySize alg in
@@ -49,7 +49,7 @@ let deriveRawKeys (i:id) (ms:ms)  =
     // we swap the CR and SR for this derivation
     let crand, srand = split i.csrConn 32 in
     let data = srand @| crand in
-    let ae = i.aeAlg in
+    let ae = (aeAlg_of_id i) in
     let len = keyExtensionLength i in
     let b = TLSPRF.kdf i.kdfAlg ms.bytes data len in
     match ae with

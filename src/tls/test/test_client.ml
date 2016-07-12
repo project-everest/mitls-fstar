@@ -13,6 +13,9 @@ let config pv =
          minVer = TLS_1p3;
          maxVer = TLS_1p3;
          ciphersuites = csn;
+         namedGroups = [SEC CoreCrypto.ECC_P256; SEC CoreCrypto.ECC_P384];
+         check_peer_certificate = false;
+         ca_file = "../../data/CAFile.pem";
          })
   else
     let l = [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
@@ -34,4 +37,4 @@ let _ =
      if (Sys.argv.(1) = "1.3") then
         TestClient13.main (config "1.3") Sys.argv.(2) (int_of_string Sys.argv.(3))
      else 
-        TestClient.main (config "1.2") Sys.argv.(2) (int_of_string Sys.argv.(3))
+        TestClient.main () () () () () () (config "1.2") Sys.argv.(2) (int_of_string Sys.argv.(3))

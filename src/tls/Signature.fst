@@ -25,9 +25,6 @@ type signed (a:alg) = t:text{a.info t}
 // Could be finer, but we lack lengths in CoreCrypto signature functions
 type sigv (a:alg) = bytes
 
-// controls idealization of Sig
-let ideal = IdealFlags.ideal_Sig
-
 // Encodes agile INT-CMA assumption
 assume type int_cma: a:alg -> h:hashAlg{List.Tot.mem h a.digest} -> Tot bool
 
@@ -164,10 +161,10 @@ val sign: #a:alg
   -> s:skey a
   -> t:signed a
   -> ST (sigv a)
-    (requires (fun h -> True))
+    (requires (fun h0 -> True))
     (ensures  (fun h0 _ h1 ->
-      if ideal then
-        let (pk,sk) = s in
+      let pk,sk = s in
+      if int_cma a h then
         let log = PK.log pk in
         modifies_one keyRegion h0 h1 /\
         modifies_rref keyRegion !{as_ref (as_rref log)} h0 h1 /\
@@ -175,21 +172,18 @@ val sign: #a:alg
       else modifies Set.empty h0 h1))
 
 let sign #a h s t =
-  let (pk,sk) = s in
+  let pk,sk = s in
   begin
-  if ideal then
+  if int_cma a h then
     let log = PK.log pk in
     let s0 = m_read log in
     m_write log (st_update s0 t)
   end;
   let ho,t' = sig_digest h t in
-  let signature =
-    match sk with
-    | SK_RSA k   -> rsa_sign ho k t'
-    | SK_DSA k   -> dsa_sign ho k t'
-    | SK_ECDSA k -> ecdsa_sign ho k t'
-  in
-  signature
+  match sk with
+  | SK_RSA k   -> rsa_sign ho k t'
+  | SK_DSA k   -> dsa_sign ho k t'
+  | SK_ECDSA k -> ecdsa_sign ho k t'
 
 
 (* ------------------------------------------------------------------------ *)
@@ -205,11 +199,10 @@ val verify: #a:alg
   -> t:text
   -> sigv a
   -> ST bool
-    (requires (fun h -> True))
+    (requires (fun h0 -> True))
     (ensures  (fun h0 b h1 ->
          modifies Set.empty h0 h1
-       /\ ((b /\ ideal /\ List.Tot.mem (|a,pk|) (m_sel h0 rkeys)
-           /\ int_cma a h
+       /\ ((b /\ int_cma a h /\ generated (|a,pk|) h0
 	   /\ is_Signed (m_sel h0 (PK.log pk))) ==> a.info t)))
 
 let verify #a h pk t s =
@@ -220,20 +213,14 @@ let verify #a h pk t s =
     | PK_DSA k   -> dsa_verify ho k t' s
     | PK_ECDSA k -> ecdsa_verify ho k t' s
   in
-  if ideal then
-    let signed =
-      let log = m_read (PK.log pk) in
-      match log with
-      | Signed ts -> is_Some (SeqProperties.seq_find (fun (t':signed a) -> t = t') (Signed.log log))
-      | Corrupt   -> true
-    in
-    let honest =
-      let kset = m_read rkeys in
-      List.Tot.mem (|a,pk|)  kset
-    in
-    verified && (signed || not (honest && int_cma a h))
-  else
-    verified
+  if int_cma a h then
+    match m_read (PK.log pk) with
+    | Signed ts ->
+      let signed = is_Some (SeqProperties.seq_find (fun (t':signed a) -> t = t') ts) in
+      let honest = List.Tot.mem (|a,pk|) (m_read rkeys) in
+      verified && (signed || not honest)
+    | Corrupt -> verified
+  else verified
 
 
 (* ------------------------------------------------------------------------ *)
@@ -241,11 +228,12 @@ val genrepr: a:alg
   -> All (public_repr * secret_repr)
     (requires (fun h -> True))
     (ensures  (fun h0 k h1 ->
-      	is_V k ==>
-	(let (pk,sk) = V.v k in
+      is_V k ==>
+      (let (pk,sk) = V.v k in
         modifies Set.empty h0 h1
 	/\ sigAlg_of_public_repr pk = sigAlg_of_secret_repr sk
 	/\ sigAlg_of_public_repr pk = a.core)))
+
 let genrepr a =
   match a.core with
   | RSASIG -> let k = rsa_gen_key 2048 in (PK_RSA k, SK_RSA k)
@@ -260,7 +248,8 @@ val gen: a:alg -> All (skey a)
                /\ modifies_rref keyRegion !{as_ref (as_rref rkeys)} h0 h1
                /\ m_contains rkeys h1
 	       /\ (is_V s ==>   witnessed (generated (|a, fst (V.v s) |))
-			     /\ m_fresh (PK.log (fst (V.v s))) h0 h1 )))
+			     /\ m_fresh (PK.log (fst (V.v s))) h0 h1
+			     /\ is_Signed (m_sel h1 (PK.log (fst (V.v s)))))))
 
 let rec gen a =
   let pkr,skr = genrepr a in // Could be inlined
