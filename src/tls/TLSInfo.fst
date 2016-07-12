@@ -701,7 +701,11 @@ let lemma_MtE (i:id{~(is_PlaintextID i)})
   : Lemma (is_MtE (aeAlg_of_id i) ==> is_ID12 i)
   = ()
 
-let lemma_ID12 (i:id{~(is_PlaintextID i)})
+let lemma_ID13 (i:id)
+  : Lemma (is_ID13 i ==> is_AEAD (aeAlg_of_id i))
+  = ()
+
+let lemma_ID12 (i:id)
   : Lemma (is_ID12 i ==> pv_of_id i <> TLS_1p3)
   = ()
 
