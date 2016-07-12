@@ -36,7 +36,7 @@ let encryptor_TLS12_AES_GCM_128_SHA256 key iv =
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv () counter
+      AEAD_GCM.State #id #Writer #r #r key iv () counter
     in
     st
   in
@@ -55,7 +55,7 @@ let decryptor_TLS12_AES_GCM_128_SHA256 key iv =
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv () counter
+      AEAD_GCM.State #id #Reader #r #r key iv () counter
     in
     st
   in
@@ -234,8 +234,7 @@ let rec aux config sock =
   let gx = (match cke.cke_kex_c with
     | KEX_C_ECDHE u -> u
     | _ -> failwith "Bad CKE type") in
-    admit ()
-    (*
+
   IO.print_string ("client share:"^(Platform.Bytes.print_bytes gx)^"\n");
 
   let _ = log @@ ClientKeyExchange(cke) in
@@ -249,7 +248,7 @@ let rec aux config sock =
   let Finished(cfin) = recvEncHSRecord tcp pv kex rd in
   let _ = log @@ Finished(cfin) in
   let lb = HandshakeLog.getBytes log in
-  let svd = KeySchedule.ks_server_12_server_verify_data ks lb in
+  let svd = KeySchedule.ks_server_12_server_finished ks in
   let sfin = {fin_vd = svd} in
   let sfinb = log @@ Finished(sfin) in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake sfinb in
@@ -269,7 +268,7 @@ let rec aux config sock =
   IO.print_string "Closing connection...\n";
 
   aux config sock
-*)
+
 let main config host port =
  IO.print_string "===============================================\n Starting test TLS server...\n";
  let sock = Platform.Tcp.listen host port in
