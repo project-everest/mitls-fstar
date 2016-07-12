@@ -1357,3 +1357,5 @@ val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit autho
   (ensures (fun h0 result h1 ->
     (is_InAck result \/ is_InError result) /\ recv_ensures s h0 result h1 ))
 let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"
+
+

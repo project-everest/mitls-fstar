@@ -1,4 +1,4 @@
-module TestClient
+module TLSClient
 
 open FStar.Seq
 open FStar.HyperHeap
@@ -13,6 +13,7 @@ open StatefulLHAE
 open Negotiation
 open HandshakeLog
 open Handshake
+open FFICallbacks
 
 (* FlexRecord *)
 
@@ -85,52 +86,63 @@ let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher =
   let (Some d) = StatefulLHAE.decrypt #id rd ad cipher in
   Content.repr id d
 
-(* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
-(* Even better, we should move to TLS.send *)
-
-let sendRecord tcp pv ct msg str = 
-  let r = Record.makePacket ct pv msg in
-  let Correct _ = Platform.Tcp.send tcp r in
-  match ct with
-  | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
-  | Content.Handshake ->   IO.print_string ("Sending HS("^str^")\n")
-  | Content.Change_cipher_spec ->   IO.print_string ("Sending CCS\n")
-  | Content.Alert ->   IO.print_string ("Sending Alert("^str^")\n")
-
-val really_read_rec: bytes -> Platform.Tcp.networkStream -> nat -> optResult string bytes
-let rec really_read_rec prev tcp len = 
-    if (len <= 0) 
-    then Correct(prev)
-    else 
-      match Platform.Tcp.recv tcp len with
-      | Correct b -> 
-            let lb = length b in
-      	    if (lb >= len) then Correct(prev @| b)
-      	    else really_read_rec (prev @| b) tcp (len - lb)
-      | e -> e
-      
-let really_read = really_read_rec empty_bytes
-
-let recvRecord tcp pv = 
-  match really_read tcp 5 with 
-  | Correct header ->
-//      IO.print_string ("GOT HEADER "^(Platform.Bytes.print_bytes header)^"\n");
-      match Record.parseHeader header with  
-      | Correct (ct,pv,len)  ->
-         match really_read tcp len  with
-         | Correct payload -> (ct,pv,payload)
-
-let sendHSRecord tcp pv (m,b) = 
-  let str = string_of_handshakeMessage m in
-  sendRecord tcp pv Content.Handshake b str
-
-
 let hsbuf = alloc ([] <: list (hs_msg * bytes))
 
-let recvHSRecord tcp pv kex log = 
+type callbacks = FFICallbacks.callbacks
+
+val sendTcpPacket: callbacks:callbacks -> buf:bytes -> (result (bytes))
+let sendTcpPacket callbacks buf = 
+  let result = FFICallbacks.ocaml_send_tcp callbacks (get_cbytes buf) in
+  if result < 0 then
+    Error (AD_internal_error, "socket send failure")
+  else
+    Correct buf
+
+val recvTcpPacket: callbacks:callbacks -> maxlen:Prims.int -> (result (bytes))    
+let recvTcpPacket callbacks maxlen =
+  let str = String.make maxlen 0z in
+  let recvlen = FFICallbacks.ocaml_recv_tcp callbacks str  in
+  if recvlen < 0 then
+    Error (AD_internal_error, "socket receive failure")
+  else
+    let b = String.substring str 0 recvlen in
+    let ab = abytes b in
+    Correct ab
+  
+private val really_read_rec_callback: b:bytes -> callbacks -> l:nat -> (result (lbytes (l+length b)))
+
+let rec really_read_rec_callback prev callbacks len = 
+    if len = 0 
+    then Correct prev
+    else 
+      match recvTcpPacket callbacks len with
+      | Correct b -> 
+            let lb = length b in
+      	    if lb = len then Correct(prev @| b)
+      	    else really_read_rec_callback (prev @| b) callbacks (len - lb)
+      | Error e -> Error e
+
+private let really_read_callback = really_read_rec_callback empty_bytes
+
+val recvRecordCallback: callbacks -> protocolVersion -> 
+  (result (Content.contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
+let recvRecordCallback callbacks pv =
+  match really_read_callback callbacks 5 with 
+  | Correct header -> (
+      match Record.parseHeader header with  
+      | Correct (ct,pv,len) -> (
+         match really_read_callback callbacks len with
+         | Correct payload  -> Correct (ct,pv,payload)
+         | Error e          -> Error e )
+      | Error e             -> Error e )
+  | Error e                 -> Error e
+
+(*let hsbuf = alloc ([] <: list (hs_msg * bytes)) *)
+
+let recvHSRecordCallback12 callbacks pv kex log = 
   let (hs_msg, to_log) = match !hsbuf with
     | [] -> 
-      let (ct,rpv,pl) = recvRecord tcp pv in
+      let Correct(ct,rpv,pl) = recvRecordCallback callbacks pv in
       let hsml = match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
       	         | Correct(_,hsml) -> hsml | Error (y,z) -> IO.print_string(z); failwith "parseHSM failed" in
       let (hs_msg, to_log)::r = hsml in
@@ -141,14 +153,17 @@ let recvHSRecord tcp pv kex log =
   IO.print_string ("Logged message = Parsed message? ");
   if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
   (hs_msg,to_log)
-
-let recvCCSRecord tcp pv = 
-  let (Content.Change_cipher_spec,_,ccs) = recvRecord tcp pv in
-  IO.print_string "Received CCS\n";
-  ccs
-
-let recvEncHSRecord tcp pv kex log rd = 
-  let (Content.Handshake,_,cipher) = recvRecord tcp pv in
+  
+let recvHSRecordCallback callbacks pv kex =
+  let Correct(Content.Handshake,rpv,pl) = recvRecordCallback callbacks pv in
+  match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
+  | Correct (rem,[(hs_msg,to_log)]) -> 
+     	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
+	     (hs_msg, to_log))
+  | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
+  
+let recvEncHSRecordCallback callbacks pv kex log rd = 
+  let Correct(Content.Handshake,_,cipher) = recvRecordCallback callbacks pv in
   let payload = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
   let [(hs_msg,to_log)] = hsm in
@@ -156,20 +171,50 @@ let recvEncHSRecord tcp pv kex log rd =
   let logged = handshakeMessageBytes (Some pv) hs_msg in
   IO.print_string ("Logged message = Parsed message? ");
   if (Platform.Bytes.equalBytes logged to_log) then IO.print_string "yes\n" else IO.print_string "no\n";
-  hs_msg,to_log
+  hs_msg,to_log 
 
-let recvEncAppDataRecord tcp pv rd = 
-  let (Content.Application_data,_,cipher) = recvRecord tcp pv in
-  let payload = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Application_data cipher in
-  IO.print_string "Received Data:\n";
-  IO.print_string ((iutf8 payload)^"\n");
-  payload  
+let sendRecordCallback callbacks pv ct msg str = 
+  let r = Record.makePacket ct pv msg in
+  let Correct _ = sendTcpPacket callbacks r in
+  IO.print_string ("Sending "^Content.ctToString ct^"Data("^str^")\n")
+
+let sendHSRecordCallback12 callbacks pv (m,b) = 
+  let str = string_of_handshakeMessage m in
+  sendRecordCallback callbacks pv Content.Handshake b str
+
+    
+let makePacket pv ct msg str = 
+  let r = Record.makePacket ct pv msg in
+  (*let _ = (match ct with
+  | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
+  | Content.Handshake ->   IO.print_string ("Sending HS("^str^")\n")
+  | Content.Change_cipher_spec ->   IO.print_string ("Sending CCS\n")
+  | Content.Alert ->   IO.print_string ("Sending Alert("^str^")\n")) in  *)
+  r
   
-(* Flex Handshake *)
+let rec really_check buf len = 
+    let lb = length buf in
+    if len = 0 then Correct buf
+    else if len = lb then Correct buf
+    else Error(AD_illegal_parameter,  "Unexpected buffer length")
+  
+let check_read header record pv =
+  match really_check header 5 with 
+  | Correct header -> (
+      match Record.parseHeader header with  (* contenType protocolVersion length *)
+      | Correct (ct,pv,len) -> (
+         match really_check record len with
+         | Correct payload  -> Correct (ct,pv,payload)
+         | Error e          -> Error e )
+      | Error e             -> Error e )
+  | Error e                 -> Error e
 
-let main config host port =
-  IO.print_string "===============================================\n Starting test TLS client...\n";
-  let tcp = Platform.Tcp.connect host port in
+let recvCCSRecordCallback callbacks pv = 
+  let Correct(Content.Change_cipher_spec,_,ccs) = recvRecordCallback callbacks pv in
+  IO.print_string "Received CCS\n";
+  ccs
+  
+let connect config callbacks =
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
 
@@ -178,9 +223,9 @@ let main config host port =
   let pv = ch.ch_protocol_version in 
   let kex = TLSConstants.Kex_ECDHE in
 
-  sendHSRecord tcp pv (ClientHello ch,chb);
+  sendHSRecordCallback12 callbacks pv (ClientHello ch,chb);
 
-  let (ServerHello(sh),shb) = recvHSRecord tcp pv kex log in
+  let (ServerHello(sh),shb) = recvHSRecordCallback12 callbacks pv kex log in
   
   let Correct (n,None) = Handshake.processServerHello config ks log None ch (ServerHello(sh),shb) in
 
@@ -190,13 +235,13 @@ let main config host port =
   let ems = n.n_extensions.ne_extended_ms in
   let sal = n.n_extensions.ne_signature_algorithms in
 
-  let (Certificate(sc),scb) = recvHSRecord tcp pv kex log in
+  let (Certificate(sc),scb) = recvHSRecordCallback12 callbacks pv kex log in
   IO.print_string ("Certificate validation status = " ^
-    (if Cert.validate_chain sc.crt_chain true (Some host) config.ca_file then
+    (if Cert.validate_chain sc.crt_chain true (config.peer_name) config.ca_file then
       "OK" else "FAIL")^"\n");
 
-  let (ServerKeyExchange(ske),skeb) = recvHSRecord tcp pv kex log in
-  let (ServerHelloDone,shdb) = recvHSRecord tcp pv kex log in
+  let (ServerKeyExchange(ske),skeb) = recvHSRecordCallback12 callbacks pv kex log in
+  let (ServerHelloDone,shdb) = recvHSRecordCallback12 callbacks pv kex log in
 
   let tbs = kex_s_to_bytes ske.ske_kex_s in
   let sigv = ske.ske_sig in
@@ -210,7 +255,7 @@ let main config host port =
      | Correct [x] -> x 
      | Error (y,z) -> failwith (z ^ "\n") in
 
-  sendHSRecord tcp pv (ClientKeyExchange cke,ckeb);
+  sendHSRecordCallback12 callbacks pv (ClientKeyExchange cke,ckeb);
 
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
 //  IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
@@ -226,26 +271,28 @@ let main config host port =
   let str = string_of_handshakeMessage (Finished cfin) in 
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake cfinb in
 
-  sendRecord tcp pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
-  sendRecord tcp pv Content.Handshake efinb str;
+  sendRecordCallback callbacks pv Content.Change_cipher_spec HandshakeMessages.ccsBytes "Client";
+  sendRecordCallback callbacks pv Content.Handshake efinb str;
 
-  let _ = recvCCSRecord tcp pv in
-  let (Finished(sfin),sfinb) = recvEncHSRecord tcp pv kex log rd in
+  let _ = recvCCSRecordCallback callbacks pv in
+  let (Finished(sfin),sfinb) = recvEncHSRecordCallback callbacks pv kex log rd in
   let Correct svd = Handshake.processServerFinished ks log (Finished sfin, sfinb) in
-
 
   IO.print_string ("Recd fin = expected fin? ");
   if (Platform.Bytes.equalBytes sfin.fin_vd svd) then IO.print_string "yes\n" else IO.print_string "no\n";
-
-
-  let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
-  let get = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 payload) in
-
-  sendRecord tcp pv Content.Application_data get "GET /";
-  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-  ()
+ 
+  let sendrecv what v1 v2 = (
+  match what with
+  | 0 -> (
+    let payload = v1 in
+    let msg = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Application_data (utf8 payload) in
+    let r = makePacket pv Content.Application_data msg "Send" in
+    get_cbytes r)
+  | 1 -> (
+    let aheader = abytes v1 in
+    let arecord = abytes v2 in
+    let Correct(Content.Application_data,_,cipher) = check_read aheader arecord pv in
+    let p = decryptRecord_TLS12_AES_GCM_128_SHA256 rd Content.Application_data cipher in
+    get_cbytes p)
+  ) in
+  sendrecv

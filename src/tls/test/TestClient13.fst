@@ -14,6 +14,7 @@ open TLSConstants
 open TLSInfo
 open StreamAE
 open CoreCrypto
+open KeySchedule
 
 (* FlexRecord *)
 
@@ -73,6 +74,12 @@ let recvEncAppDataRecord tcp pv rd =
   IO.print_string ((iutf8 payload)^"\n");
   payload
 
+// Workaround until KeySchedule is merged in Handshake
+let replace_keyshare ksl e =
+  match e with
+  | TLSExtensions.E_keyShare _ -> TLSExtensions.E_keyShare (ClientKeyShare ksl)
+  | x -> x 
+  
 let main config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
   let tcp = Platform.Tcp.connect host port in
@@ -142,4 +149,3 @@ let main config host port =
   sendRecord tcp pv Content.Application_data get "GET /";
   let ad = recvEncAppDataRecord tcp pv drd in
   ()
-
