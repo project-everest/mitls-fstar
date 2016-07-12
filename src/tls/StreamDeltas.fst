@@ -19,12 +19,13 @@ let singleton (x:'a) : Tot (Seq.seq 'a) = Seq.create 1 x
 
 #reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
+private type id = StAE.id
+
 val project_one_frag: #i:id -> f:C.fragment i -> Tot (Seq.seq (DS.delta i))
 let project_one_frag #i = function
     | C.CT_Data rg d -> 
       let d : DS.pre_fragment i = d in //A widening coercion as a proof hint, unpacking (d:fragment i (frange i)) to a pre_fr
       singleton (DataStream.Data d)
-    
     | C.CT_Alert _ ad -> singleton (DataStream.Alert ad)
     | _ -> Seq.createEmpty                 // other fragments are internal to TLS
 
