@@ -24,11 +24,14 @@ let epoch_regions_exist (s:hs) (h0:HH.t) =
   /\ (forall (k:nat{k < Seq.length epochs}).{:pattern (Seq.index epochs k)}
       let wr = writer_epoch (Seq.index epochs k) in
       Map.contains h0 (StAE.region wr))
-      
+
+let indexable (#a:Type) (s:Seq.seq a) (j:int) = 0 <= j /\ j < Seq.length s
+
+#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t -> 
   Lemma (requires (let j = iT s Writer h0 in 
 		   let epochs = logT s h0 in 
-		     j >= 0 
+		     indexable epochs j
 		   /\ epoch_regions_exist s h0 
 		   /\ (let e_j = Seq.index epochs j in
 		      HH.modifies_one (StAE.region (writer_epoch e_j)) h0 h1)))
@@ -39,7 +42,7 @@ val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t ->
 		  /\(forall (k:nat{k < Seq.length epochs0 /\ j<>k}). 
 		      let wr = writer_epoch (Seq.index epochs0 k) in
 		      HH.equal_on (Set.singleton (StAE.region wr)) h0 h1)))
-#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+
 let frame_epoch_writer s h0 h1 = 
   let epochs = logT s h0 in 
   let j = iT s Writer h0 in 
@@ -57,6 +60,7 @@ let frame_epoch_writer s h0 h1 =
 ////////////////////////////////////////////////////////////////////////////////
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
+//BIG TODO: Need to generalize this to all TLSInfo.id, or at least StAE.stae_id
 type id = StreamAE.id
 //The type of connection with a particular nonce
 //   `r_conn n` should never really have more than 1 inhabitant, 

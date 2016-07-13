@@ -163,7 +163,7 @@ type ems (i:exportId) =
 // but I'm waiting for it to be tester to switch over
 // TODO use the newer index types
 type recordInstance =
-  | StAEInstance: #id:StAE.id -> StAE.reader id -> StAE.writer id -> recordInstance
+  | StAEInstance: #id:TLSInfo.id -> StAE.reader id -> StAE.writer id -> recordInstance
 
 (* 2 choices - I prefer the second:
    (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id

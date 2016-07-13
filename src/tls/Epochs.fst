@@ -68,7 +68,7 @@ let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
   = match e with | Epoch hs #i r w -> r //16-05-20 Epoch.r e failed.
 
 (* The footprint just includes the writer regions *)
-abstract let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
+let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
   forall (i:nat { i < Seq.length es })
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
