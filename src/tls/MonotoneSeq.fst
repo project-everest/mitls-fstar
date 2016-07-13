@@ -427,7 +427,7 @@ let collect_has_at_index_stable (#a:Type) (#b:Type) (#i:rid)
 ////////////////////////////////////////////////////////////////////////////////
 type log_t (i:rid) (a:Type) = m_rref i (seq a) grows
 
-let increases (x:nat) (y:nat) = b2t (x <= y)
+let increases (x:int) (y:int) = b2t (x <= y)
 
 let at_most_log_len (#l:rid) (#a:Type) (x:nat) (log:log_t l a) 
     : HyperHeap.t -> GTot Type0 
@@ -445,7 +445,7 @@ type counter (#l:rid) (#a:Type) (i:rid) (log:log_t l a) (repr_max:nat) =
 	 increases //increasing
 
 let monotonic_increases (x:unit)
-  : Lemma (monotonic nat increases)
+  : Lemma (monotonic int increases)
   = ()
 
 let at_most_log_len_stable (#l:rid) (#a:Type) (x:nat) (l:log_t l a)

@@ -18,9 +18,6 @@ open Negotiation
 
 module HH = FStar.HyperHeap
 
-// No plaintext epoch
-private type id = StAE.id
-
 // relocate?
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
 
@@ -42,10 +39,10 @@ abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:wr
 module I = IdNonce
 
 type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
-  | Epoch: h:handshake -> 
-    	   #i: id ->
+  | Epoch: #i:id{nonce_of_id i = n} ->
+           h:handshake{handshakeId h = i} -> 
            r: reader (peerId i) ->
-           w: writer i {epoch_region_inv' hs_rgn r w /\ nonce_of_id i = n} 
+           w: writer i {epoch_region_inv' hs_rgn r w}
 	   -> epoch hs_rgn n
   // we would extend/adapt it for TLS 1.3,
   // e.g. to notify 0RTT/forwad-privacy transitions
@@ -71,7 +68,7 @@ let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
 
 let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
   : Tot (r:reader (peerId (handshakeId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
-  = match e with | Epoch hs #i r w -> r //16-05-20 Epoch.r e failed.
+  = Epoch.r e // match e with | Epoch hs #i r w -> r //16-05-20 Epoch.r e failed.
 
 (* The footprint just includes the writer regions *)
 let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
@@ -91,8 +88,11 @@ let reveal_epochs_inv' (u:unit)
 	     epochs_inv es)
   = ()
 
+let indexable #r #a #p (x:int) (es:MonotoneSeq.i_seq r a p) (h:HH.t) =
+  b2t (x < Seq.length (m_sel h es))
+
 type epoch_ctr_inv (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a p) =
-  x:int{-1 <= x /\ witnessed (fun h -> x < Seq.length (m_sel h es))}
+  x:int{-1 <= x /\ witnessed (indexable x es)}
 
 // Epoch counters i must satisfy -1 <= i < length !es
 type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a p) = 
@@ -112,12 +112,13 @@ val epochs_init: r:rgn -> n:TLSInfo.random -> ST (epochs r n)
        (ensures (fun h0 x h1 -> True))
 let epochs_init (r:rgn) (n:TLSInfo.random) = 
     let esref = MonotoneSeq.alloc_mref_seq r Seq.createEmpty in
-    witness esref (fun h -> -1 <= -1 /\ -1 < Seq.length (m_sel h esref));
-    let (x:int{witnessed (fun h -> -1 <= x /\ x < Seq.length (m_sel h esref))}) = -1 in
+    m_recall esref;
+    witness esref (fun h -> -1 < Seq.length (m_sel h esref));
+    let x : epoch_ctr_inv r esref = -1 in
     let mr = m_alloc r x in
     let mw = m_alloc r x in
     Epochs esref mr mw
-(*
+
 val add_epoch: #r:rgn -> #n:TLSInfo.random -> 
     	       es:epochs r n -> e: epoch r n -> ST unit
        (requires (fun h -> True))
@@ -140,9 +141,9 @@ val incr_reader: #r:rgn -> #n:TLSInfo.random ->
          /\ newr = oldr + 1
          /\ witnessed (fun h -> -1 <= newr /\ newr < Seq.length (m_sel h mes))))
 let incr_reader #r #n (Epochs es mr _) =
-  m_recall mr;
+  m_recall mr; m_recall es;
   let cur = m_read mr in
-  witness es (fun h -> -1 <= cur+1 /\ cur+1 < Seq.length (m_sel h es));
+  witness es (indexable (cur+1) es);
   m_write mr (cur + 1)
 
 val incr_writer: #r:rgn -> #n:TLSInfo.random ->
@@ -160,9 +161,9 @@ val incr_writer: #r:rgn -> #n:TLSInfo.random ->
          /\ neww = oldw + 1
          /\ witnessed (fun h -> -1 <= neww /\ neww < Seq.length (m_sel h mes))))
 let incr_writer #r #n (Epochs es _ mw) =
-  m_recall mw;
+  m_recall mw; m_recall es;
   let cur = m_read mw in
-  witness es (fun h -> -1 <= cur+1 /\ cur+1 < Seq.length (m_sel h es));
+  witness es (indexable (cur+1) es);
   m_write mw (cur + 1)
 
 let get_epochs (Epochs es r w) = es 
@@ -173,4 +174,3 @@ let readerT (Epochs es r w) (h:HyperHeap.t) = m_sel h r
 
 let writerT (Epochs es r w) (h:HyperHeap.t) = m_sel h w
 
-*)
