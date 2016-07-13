@@ -98,12 +98,12 @@ type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a
   m_rref r (epoch_ctr_inv r es) increases
 
 type epochs (r:rgn) (n:TLSInfo.random) = 
-  | Epochs: es: MonotoneSeq.i_seq r (epoch r n) (epochs_inv #r #n) ->
+  | MkEpochs: es: MonotoneSeq.i_seq r (epoch r n) (epochs_inv #r #n) ->
     	    read: epoch_ctr r es -> 
 	    write: epoch_ctr r es -> //NS: probably need some anti-aliasing invariant of these three references
 	    epochs r n  
 
-let containsT (Epochs es r w) (h:HyperHeap.t) =
+let containsT (MkEpochs es r w) (h:HyperHeap.t) =
     MonotoneSeq.i_contains es h 
 
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid -> 
@@ -147,14 +147,14 @@ val epochs_init: r:rgn -> n:TLSInfo.random -> ST (epochs r n)
        (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ modifies_rref r !{} h0 h1))
 let epochs_init (r:rgn) (n:TLSInfo.random) =
   let (| esref, c1, c2 |) = alloc_log_and_ctrs #(epoch r n) #(epochs_inv #r #n) r in
-  Epochs esref c1 c2
+  MkEpochs esref c1 c2
 
-inline let incr_pre #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (Epochs.es es)))) h : GTot Type0 = 
+inline let incr_pre #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs.es es)))) h : GTot Type0 = 
   let ctr = proj es in 
   let cur = m_sel h ctr in
-  cur + 1 < Seq.length (i_sel h (Epochs.es es))
+  cur + 1 < Seq.length (i_sel h (MkEpochs.es es))
 
-inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (Epochs.es es)))) h0 (_:unit) h1 : GTot Type0 = 
+inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs.es es)))) h0 (_:unit) h1 : GTot Type0 = 
   let ctr = proj es in 
   let oldr = m_sel h0 ctr in
   let newr = m_sel h1 ctr in
@@ -162,22 +162,29 @@ inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
   /\ HH.modifies_rref r !{HH.as_ref (as_rref ctr)} h0 h1
   /\ newr = oldr + 1
 
+val add_epoch: #r:rgn -> #n:TLSInfo.random ->
+               es:epochs r n -> e: epoch r n -> ST unit
+       (requires (fun h -> True))
+       (ensures (fun h0 x h1 -> True)) //TODO: needs a better spec!
+let add_epoch #rg #n (MkEpochs es _ _) e =
+    MonotoneSeq.i_write_at_end #rg es e
+
 let incr_reader #r #n (es:epochs r n) : ST unit
-    (requires (incr_pre es Epochs.read))
-    (ensures (incr_post es Epochs.read))
-    = incr_epoch_ctr (Epochs.read es)
+    (requires (incr_pre es MkEpochs.read))
+    (ensures (incr_post es MkEpochs.read))
+    = incr_epoch_ctr (MkEpochs.read es)
 
 let incr_writer #r #n (es:epochs r n) : ST unit
-    (requires (incr_pre es Epochs.write))
-    (ensures (incr_post es Epochs.write))
-    = incr_epoch_ctr (Epochs.write es)
+    (requires (incr_pre es MkEpochs.write))
+    (ensures (incr_post es MkEpochs.write))
+    = incr_epoch_ctr (MkEpochs.write es)
 
-let get_epochs (Epochs es r w) = es
+let get_epochs (MkEpochs es r w) = es
 
-let epochsT (Epochs es r w) (h:HyperHeap.t) = MonotoneSeq.i_sel h es
+let epochsT (MkEpochs es r w) (h:HyperHeap.t) = MonotoneSeq.i_sel h es
 
 val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HyperHeap.t -> GTot (epoch_ctr_inv rid (get_epochs e))
-let readerT #rid #n (Epochs es r w) (h:HyperHeap.t) = m_sel h r
+let readerT #rid #n (MkEpochs es r w) (h:HyperHeap.t) = m_sel h r
 
 val writerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HyperHeap.t -> GTot (epoch_ctr_inv rid (get_epochs e))
-let writerT #rid #n (Epochs es r w) (h:HyperHeap.t) = m_sel h w
+let writerT #rid #n (MkEpochs es r w) (h:HyperHeap.t) = m_sel h w

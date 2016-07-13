@@ -361,7 +361,7 @@ let writerT s h = eT s Writer h
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
-let i (HS #r0 _ _ _ _ (Epochs _ r w) _) rw =
+let i (HS #r0 _ _ _ _ (MkEpochs _ r w) _) rw = //NS: bad style?; the pattern matching on MkEpochs breaks its abstraction
   match rw with
   | Reader -> FStar.Monotonic.RRef.m_read r
   | Writer -> FStar.Monotonic.RRef.m_read w

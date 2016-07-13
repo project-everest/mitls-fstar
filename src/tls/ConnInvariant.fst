@@ -116,7 +116,7 @@ let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:
   (exists e. SeqProperties.mem e  (epochs c h) /\               //one of c's epochs, e
       (let i' = Negotiation.handshakeId (Epochs.Epoch.h e) in   //has an id corresponding to i
         i=i' /\ StAE.stream_state #i e.w == w))               //and holds w as as its writer
-  /\ MonSeq.i_contains (Epochs.es c.hs.log) h                         //technical: the heap contains c's handshake log
+  /\ MonSeq.i_contains (MkEpochs.es c.hs.log) h                         //technical: the heap contains c's handshake log
 	
 //The main invariant, relating an ms_tab and a conn_tab at index i, in state h
 let ms_conn_inv (ms:ms_t)
@@ -280,8 +280,8 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	     let rgn = HS.region c.hs in
 	     let _ = reveal_epoch_region_inv_all () in
 	     mc_inv h0 /\ //we're initially in the invariant
-	     MonSeq.i_contains (Epochs.es c.hs.log) h0 /\
-	     MonSeq.i_contains (Epochs.es c.hs.log) h1 /\
+	     MonSeq.i_contains (MkEpochs.es c.hs.log) h0 /\
+	     MonSeq.i_contains (MkEpochs.es c.hs.log) h1 /\
 	     i=handshakeId (Epoch.h e) /\ //the epoch has id i
 	     (let w = StAE.stream_state #i (Epoch.w e) in //the epoch writer
 	      let epochs = epochs c h0 in
@@ -292,7 +292,7 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
  	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (nonce_of_id i) = Some c /\ //we found the connection in the conn_table
       	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
-	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (MR.as_rref (Epochs.es c.hs.log))} h0 h1 /\ //and within it, just the epochs log
+	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (MR.as_rref (MkEpochs.es c.hs.log))} h0 h1 /\ //and within it, just the epochs log
 	      new_hs_log = SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
 let register_writer_in_epoch_ok h0 h1 i c e =
