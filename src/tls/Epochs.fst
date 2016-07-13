@@ -162,10 +162,16 @@ inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
   /\ HH.modifies_rref r !{HH.as_ref (as_rref ctr)} h0 h1
   /\ newr = oldr + 1
 
+module SeqP = FStar.SeqProperties
+
 val add_epoch: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> e: epoch r n -> ST unit
        (requires (fun h -> True))
-       (ensures (fun h0 x h1 -> True)) //TODO: needs a better spec!
+       (ensures (fun h0 x h1 -> 
+		   let es = MkEpochs.es es in
+		   modifies_one r h0 h1 
+		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
+		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
 let add_epoch #rg #n (MkEpochs es _ _) e =
     MonotoneSeq.i_write_at_end #rg es e
 
