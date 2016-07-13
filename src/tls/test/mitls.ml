@@ -100,7 +100,6 @@ let _ =
 
   match !role, !config.maxVer with
   | Client, TLS_1p3 ->  if !tlsapi then TestAPI.main !config host port else TestClient13.main !config host port
-  | Client, _ -> TestClient.main !config host port
+  | Client, _ -> Test12.client !config host port
   | Server, TLS_1p3 -> TestServer13.main !config host port
-  | Server, _ -> TestServer.main !config host port
- 
+  | Server, _ -> Test12.server !config host port
