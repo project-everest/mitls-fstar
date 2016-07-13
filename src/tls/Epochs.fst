@@ -2,8 +2,9 @@ module Epochs
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
-open FStar.Set  
+open FStar.SeqProperties
+open FStar.Monotonic.RRef
+open MonotoneSeq
 open Platform.Error
 open Platform.Bytes
 
@@ -14,6 +15,11 @@ open Range
 open HandshakeMessages
 open StAE
 open Negotiation
+
+module HH = FStar.HyperHeap
+
+// No plaintext epoch
+private type id = StAE.id
 
 // relocate?
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
@@ -85,13 +91,18 @@ let reveal_epochs_inv' (u:unit)
 	     epochs_inv es)
   = ()
 
+type epoch_ctr_inv (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a p) =
+  x:int{-1 <= x /\ witnessed (fun h -> x < Seq.length (m_sel h es))}
+
+// Epoch counters i must satisfy -1 <= i < length !es
+type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a p) = 
+  m_rref r (epoch_ctr_inv r es) increases
 
 type epochs (r:rgn) (n:TLSInfo.random) = 
   | Epochs: es: MonotoneSeq.i_seq r (epoch r n) epochs_inv -> 
-    	    read: rref r int -> 
-	    write: rref r int ->
+    	    read: epoch_ctr r es -> 
+	    write: epoch_ctr r es ->
 	    epochs r n  
-// idx must be between -1 and Seq.length (!es) -1 (inclusive)
 
 let containsT (Epochs es r w) (h:HyperHeap.t) =
     MonotoneSeq.i_contains es h 
@@ -101,10 +112,12 @@ val epochs_init: r:rgn -> n:TLSInfo.random -> ST (epochs r n)
        (ensures (fun h0 x h1 -> True))
 let epochs_init (r:rgn) (n:TLSInfo.random) = 
     let esref = MonotoneSeq.alloc_mref_seq r Seq.createEmpty in
-    let rref = ralloc r (-1) in
-    let wref = ralloc r (-1) in
-    Epochs esref rref wref
-
+    witness esref (fun h -> -1 <= -1 /\ -1 < Seq.length (m_sel h esref));
+    let (x:int{witnessed (fun h -> -1 <= x /\ x < Seq.length (m_sel h esref))}) = -1 in
+    let mr = m_alloc r x in
+    let mw = m_alloc r x in
+    Epochs esref mr mw
+(*
 val add_epoch: #r:rgn -> #n:TLSInfo.random -> 
     	       es:epochs r n -> e: epoch r n -> ST unit
        (requires (fun h -> True))
@@ -112,36 +125,52 @@ val add_epoch: #r:rgn -> #n:TLSInfo.random ->
 let add_epoch #rg #n (Epochs es r w) e = 
     MonotoneSeq.i_write_at_end #rg es e
 
-val set_reader: #r:rgn -> #n:TLSInfo.random -> 
-    	       es:epochs r n -> i:nat -> ST unit
-       (requires (fun h -> True))
-       (ensures (fun h0 x h1 -> True))
-let set_reader #r #n (Epochs es r w) i' = r := i'
-
 val incr_reader: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> ST unit
-       (requires (fun h -> True))
-       (ensures (fun h0 x h1 -> True))
-let incr_reader #r #n (Epochs es r w) = r := !r + 1
-
-val set_writer: #r:rgn -> #n:TLSInfo.random -> 
-    	       es:epochs r n -> i:nat -> ST unit
-       (requires (fun h -> True))
-       (ensures (fun h0 x h1 -> True))
-let set_writer #r #n (Epochs es r w) i' = w := i'
+       (requires (fun h ->
+         let Epochs mes mr _ = es in
+         let cur = m_sel h mr in
+         cur + 1 < Seq.length (m_sel h mes)))
+       (ensures (fun h0 () h1 ->
+         let Epochs mes mr _ = es in
+         let oldr = m_sel h0 mr in
+         let newr = m_sel h1 mr in
+         modifies (Set.singleton r) h0 h1
+         /\ HH.modifies_rref r !{HH.as_ref (as_rref mr)} h0 h1
+         /\ newr = oldr + 1
+         /\ witnessed (fun h -> -1 <= newr /\ newr < Seq.length (m_sel h mes))))
+let incr_reader #r #n (Epochs es mr _) =
+  m_recall mr;
+  let cur = m_read mr in
+  witness es (fun h -> -1 <= cur+1 /\ cur+1 < Seq.length (m_sel h es));
+  m_write mr (cur + 1)
 
 val incr_writer: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> ST unit
-       (requires (fun h -> True))
-       (ensures (fun h0 x h1 -> True))
-let incr_writer #r #n (Epochs es r w) = w := !w + 1
+       (requires (fun h ->
+         let Epochs mes _ mw = es in
+         let cur = m_sel h mw in
+         cur + 1 < Seq.length (m_sel h mes)))
+       (ensures (fun h0 () h1 ->
+         let Epochs mes _ mw= es in
+         let oldw = m_sel h0 mw in
+         let neww = m_sel h1 mw in
+         modifies (Set.singleton r) h0 h1
+         /\ HH.modifies_rref r !{HH.as_ref (as_rref mw)} h0 h1
+         /\ neww = oldw + 1
+         /\ witnessed (fun h -> -1 <= neww /\ neww < Seq.length (m_sel h mes))))
+let incr_writer #r #n (Epochs es _ mw) =
+  m_recall mw;
+  let cur = m_read mw in
+  witness es (fun h -> -1 <= cur+1 /\ cur+1 < Seq.length (m_sel h es));
+  m_write mw (cur + 1)
 
 let get_epochs (Epochs es r w) = es 
 
 let epochsT (Epochs es r w) (h:HyperHeap.t) = MonotoneSeq.i_sel h es
 
-let readerT (Epochs es r w) (h:HyperHeap.t) = sel h r
+let readerT (Epochs es r w) (h:HyperHeap.t) = m_sel h r
 
-let writerT (Epochs es r w) (h:HyperHeap.t) = sel h w
+let writerT (Epochs es r w) (h:HyperHeap.t) = m_sel h w
 
-
+*)

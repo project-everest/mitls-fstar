@@ -722,7 +722,7 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
        let h = Negotiation.Fresh ({session_nego = n}) in
        let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
-       Epochs.set_reader lgref 1;
+       Epochs.incr_reader lgref;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
@@ -731,7 +731,7 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
        let h = Negotiation.Fresh ({session_nego = n}) in
        let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
-       Epochs.set_reader lgref 1;
+       Epochs.incr_reader lgref;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = cb @| fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
@@ -754,7 +754,7 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
 	  let h = Negotiation.Fresh ({session_nego = n}) in
 	  let ep = KeySchedule.recordInstanceToEpoch #r0 #id h ri in
 	  Epochs.add_epoch lgref ep;
-	  Epochs.set_reader lgref 0
+	  Epochs.incr_reader lgref
 	| None -> ());
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
