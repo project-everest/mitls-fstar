@@ -17,7 +17,7 @@ open TLSError
 let a = HMAC CoreCrypto.SHA1
 
 
-type id = i:id { i.pv <> TLS_1p3 /\ (is_MACOnly i.aeAlg \/ is_MtE i.aeAlg) }
+type id = i:id { is_ID12 i /\ ~(is_AEAD (aeAlg_of_id i)) }
 
 type text = bytes
 type tag (i:id) = bytes

@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # Check for regressions & comment about them!
-all: tls-ver tls-sanity tls-lax tls-gen
+all: all-ver tls-sanity tls-lax tls-gen
 
 CONTRIB=ucontrib
 LIB=ulib
@@ -120,7 +120,8 @@ test/TestServer.fst \
 test/TestServer13.fst \
 test/TestClient13.fst \
 ConnInvariant.fst \
-TLS.fst #the preceding space is significant!
+TLS.fst \
+test/TestAPI.fst #the preceding space is significant!
 
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it
@@ -210,20 +211,12 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 %.fst-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $(notdir $@)) \
-	$(basename $@).fst
+	--verify_module $(basename $(notdir $@))
 
 %.fsti-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $(notdir $@)) \
-	$(basename $@).fsti
-
-# Verifying everything stable
-tls-ver: IdealFlags $(LIBFILES) $(FSTS)
-	$(MAKE) refresh
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) $(addprefix --verify_module , $(VERIFY)) \
+	--verify_module $(basename $(notdir $@))
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check

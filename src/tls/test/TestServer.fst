@@ -9,11 +9,10 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open TLSInfo
-open StatefulLHAE
+open StAE
 open Negotiation
 open HandshakeLog
 
-(* FlexRecord *)
 
 let id =
   let er = createBytes 32 (Char.char_of_int 0) in
@@ -29,18 +28,17 @@ let encryptor_TLS12_AES_GCM_128_SHA256 key iv =
   let w: writer id =
     assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let st: AEAD_GCM.state id Writer =
+    let st: StAE.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv () counter
+      StLHAE () (AEAD_GCM.State #id #Writer #r #r key iv () counter)
     in
     st
   in
-  // StatefulLHAE.writer -> StatefulLHAE.state
   w
 
 let decryptor_TLS12_AES_GCM_128_SHA256 key iv = 
@@ -48,39 +46,30 @@ let decryptor_TLS12_AES_GCM_128_SHA256 key iv =
   let r: reader id =
     assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let st: AEAD_GCM.state id Reader =
+    let st: StAE.state id Reader =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv () counter
+      StLHAE () (AEAD_GCM.State #id #Reader #r #r key iv () counter)
     in
     st
   in
-  // StatefulLHAE.reader -> StatefulLHAE.state
   r
 
-let encryptRecord_TLS12_AES_GCM_128_SHA256 w ct plain = 
+let encryptRecord_TLS12_AES_GCM_128_SHA256 w ct plain : bytes =
   let pv = TLS_1p2 in
   let text = plain in
-  // StatefulPlain.adata id -> bytes
-  let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
-  // Range.frange -> Range.range
   let rg: Range.frange id = 0, length text in
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
-  // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
-  //NS: Not sure about the unsafe_coerce: but, it's presence clearly means that #id cannot be inferred
-  let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in
-  // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
-  // FIXME: without the three additional #-arguments below, extraction crashes
-  StatefulLHAE.encrypt #id w ad rg f
+  let f: Content.fragment id = Content.mk_fragment id ct rg f in
+  StAE.encrypt #id w f
 
-let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher = 
-  let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
-  let (Some d) = StatefulLHAE.decrypt #id rd ad cipher in
+let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher =
+  let Some d = StAE.decrypt #id rd (ct,cipher) in
   Content.repr id d
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
@@ -90,11 +79,7 @@ let sendRecord tcp pv ct msg str =
   let r = Record.makePacket ct pv msg in
 //  IO.print_string ((Platform.Bytes.print_bytes r) ^ "\n\n");
   let Correct _ = Platform.Tcp.send tcp r in
-  match ct with
-  | Content.Application_data ->   IO.print_string ("Sending Data("^str^")\n")
-  | Content.Handshake ->   IO.print_string ("Sending HS("^str^")\n")
-  | Content.Change_cipher_spec ->   IO.print_string ("Sending CCS\n")
-  | Content.Alert ->   IO.print_string ("Sending Alert("^str^")\n")
+  IO.print_string ("Sending " ^ Content.ctToString ct ^ "Data(" ^ str ^ ")\n")
 
 val really_read_rec: bytes -> Platform.Tcp.networkStream -> nat -> optResult string bytes
 let rec really_read_rec prev tcp len = 
@@ -234,8 +219,7 @@ let rec aux config sock =
   let gx = (match cke.cke_kex_c with
     | KEX_C_ECDHE u -> u
     | _ -> failwith "Bad CKE type") in
-    admit ()
-    (*
+
   IO.print_string ("client share:"^(Platform.Bytes.print_bytes gx)^"\n");
 
   let _ = log @@ ClientKeyExchange(cke) in
@@ -249,7 +233,7 @@ let rec aux config sock =
   let Finished(cfin) = recvEncHSRecord tcp pv kex rd in
   let _ = log @@ Finished(cfin) in
   let lb = HandshakeLog.getBytes log in
-  let svd = KeySchedule.ks_server_12_server_verify_data ks lb in
+  let svd = KeySchedule.ks_server_12_server_finished ks in
   let sfin = {fin_vd = svd} in
   let sfinb = log @@ Finished(sfin) in
   let efinb = encryptRecord_TLS12_AES_GCM_128_SHA256 wr Content.Handshake sfinb in
@@ -269,7 +253,7 @@ let rec aux config sock =
   IO.print_string "Closing connection...\n";
 
   aux config sock
-*)
+
 let main config host port =
  IO.print_string "===============================================\n Starting test TLS server...\n";
  let sock = Platform.Tcp.listen host port in

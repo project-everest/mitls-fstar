@@ -9,11 +9,11 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open TLSInfo
-open StatefulLHAE
+open StAE
 open Negotiation
 open HandshakeLog
 open Handshake
-(* FlexRecord *)
+
 
 let id =
   let er = createBytes 32 (Char.char_of_int 0) in
@@ -24,63 +24,53 @@ let id =
   let msid = StandardMS (PMS.DHPMS(g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy))) (er @| er) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256) er er Client
 
-let encryptor_TLS12_AES_GCM_128_SHA256 key iv = 
+let encryptor_TLS12_AES_GCM_128_SHA256 key iv =
   let r = HyperHeap.root in
   let w: writer id =
     assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let st: AEAD_GCM.state id Writer =
+    let st: StAE.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv () counter
+      StLHAE () (AEAD_GCM.State #id #Writer #r #r key iv () counter)
     in
     st
   in
-  // StatefulLHAE.writer -> StatefulLHAE.state
   w
 
-let decryptor_TLS12_AES_GCM_128_SHA256 key iv = 
+let decryptor_TLS12_AES_GCM_128_SHA256 key iv =
   let r = HyperHeap.root in
   let r: reader id =
     assume (~(authId id));
     let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let st: AEAD_GCM.state id Reader =
+    let st: StAE.state id Reader =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
       let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv () counter
+      StLHAE () (AEAD_GCM.State #id #Reader #r #r key iv () counter)
     in
     st
   in
-  // StatefulLHAE.reader -> StatefulLHAE.state
   r
 
-let encryptRecord_TLS12_AES_GCM_128_SHA256 w ct plain = 
+let encryptRecord_TLS12_AES_GCM_128_SHA256 w ct plain : bytes =
   let pv = TLS_1p2 in
   let text = plain in
-  // StatefulPlain.adata id -> bytes
-  let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
-  // Range.frange -> Range.range
   let rg: Range.frange id = 0, length text in
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
   let f: DataStream.fragment id rg = text |> unsafe_coerce in
-  // LHAEPlain.plain -> StatefulPlain.plain -> Content.fragment
-  //NS: Not sure about the unsafe_coerce: but, it's presence clearly means that #id cannot be inferred
-  let f: LHAEPlain.plain id ad rg = Content.CT_Data #id rg f |> unsafe_coerce in
-  // StatefulLHAE.cipher -> StatefulPlain.cipher -> bytes
-  // FIXME: without the three additional #-arguments below, extraction crashes
-  StatefulLHAE.encrypt #id w ad rg f
+  let f: Content.fragment id = Content.mk_fragment id ct rg f in
+  StAE.encrypt #id w f
 
-let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher = 
-  let ad: StatefulPlain.adata id = StatefulPlain.makeAD id ct in
-  let (Some d) = StatefulLHAE.decrypt #id rd ad cipher in
+let decryptRecord_TLS12_AES_GCM_128_SHA256 rd ct cipher =
+  let Some d = StAE.decrypt #id rd (ct,cipher) in
   Content.repr id d
 
 (* We should use Content.mk_fragment |> Content.repr, not Record.makePacket *)
@@ -231,7 +221,6 @@ let main config host port =
   let (Finished(sfin),sfinb) = recvEncHSRecord tcp pv kex log rd in
   let Correct svd = Handshake.processServerFinished ks log (Finished sfin, sfinb) in
 
-
   IO.print_string ("Recd fin = expected fin? ");
   if (Platform.Bytes.equalBytes sfin.fin_vd svd) then IO.print_string "yes\n" else IO.print_string "no\n";
 
@@ -241,9 +230,4 @@ let main config host port =
 
   sendRecord tcp pv Content.Application_data get "GET /";
   let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
-//  let ad = recvEncAppDataRecord tcp pv rd in
   ()

@@ -94,7 +94,7 @@ let rec really_read_rec prev tcp len =
 
 private let really_read = really_read_rec empty_bytes
 
-val read: Platform.Tcp.networkStream -> protocolVersion -> 
+val read: Platform.Tcp.networkStream -> 
   EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
 
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
@@ -102,7 +102,7 @@ val read: Platform.Tcp.networkStream -> protocolVersion ->
 // our client never checks the consistency of the server's record pv.
 // (see earlier versions for the checks we used to perform)
 
-let read tcp pv =
+let read tcp =
   match really_read tcp 5 with 
   | Correct header -> (
       match parseHeader header with  

@@ -433,7 +433,7 @@ type logInfo_CH = {
 type logInfo_SH = {
   li_sh_cr: crand;
   li_sh_sr: srand;
-  li_sh_ae: aeAlg;
+  li_sh_ae: a:aeAlg{is_AEAD a};
 }
 
 type logInfo_SF = logInfo_SH
@@ -441,22 +441,22 @@ type logInfo_SF = logInfo_SH
 type logInfo_CF = logInfo_SF
 
 type logInfo =
-| LogInfoCH of logInfo_CH
-| LogInfoSH of logInfo_SH
-| LogInfoSF of logInfo_SF
-| LogInfoCF of logInfo_CF
+| LogInfo_CH of logInfo_CH
+| LogInfo_SH of logInfo_SH
+| LogInfo_SF of logInfo_SF
+| LogInfo_CF of logInfo_CF
 
-let logInfo_ae = function
-| LogInfoCH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
-| LogInfoSH x
-| LogInfoSF x
-| LogInfoCF x -> x.li_sh_ae
+let logInfo_ae : logInfo -> Tot (a:aeAlg{is_AEAD a}) = function
+| LogInfo_CH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
+| LogInfo_SH x
+| LogInfo_SF x
+| LogInfo_CF x -> x.li_sh_ae
 
 let logInfo_nonce (rw:role) = function
-| LogInfoCH x -> x.li_ch_cr
-| LogInfoSH x
-| LogInfoSF x
-| LogInfoCF x -> if rw = Client then x.li_sh_cr else x.li_sh_sr
+| LogInfo_CH x -> x.li_ch_cr
+| LogInfo_SH x
+| LogInfo_SF x
+| LogInfo_CF x -> if rw = Client then x.li_sh_cr else x.li_sh_sr
 
 // Extensional equality of logInfo
 // (we may want to use e.g. equalBytes on some fields)
@@ -650,7 +650,7 @@ type finishedId = i:pre_finishedId{valid_finishedId i}
 noeq type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
 | ID13: keyId:keyId -> id
-| ID12: pv:protocolVersion -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
+| ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
 
 let peerId = function
 | PlaintextID r -> PlaintextID r
@@ -686,7 +686,6 @@ let kdfAlg_of_id = function
 val macAlg_of_id: i:id { is_ID12 i /\ ~(is_AEAD (ID12.aeAlg i)) } -> Tot macAlg
 let macAlg_of_id = function
   | ID12 pv _ _ ae _ _ _ -> 
-    assume (pv <> TLS_1p3);
     macAlg_of_aeAlg pv ae
 
 val encAlg_of_id: i:id { is_ID12 i /\ is_MtE (ID12.aeAlg i) } -> Tot (encAlg * ivMode)
@@ -697,6 +696,18 @@ val aeAlg_of_id: i:id { ~ (is_PlaintextID i) } -> Tot aeAlg
 let aeAlg_of_id = function
   | ID13 (KeyID _ _ _ li _) -> logInfo_ae li
   | ID12 pv _ _ ae _ _ _ -> ae
+
+let lemma_MtE (i:id{~(is_PlaintextID i)})
+  : Lemma (is_MtE (aeAlg_of_id i) ==> is_ID12 i)
+  = ()
+
+let lemma_ID13 (i:id)
+  : Lemma (is_ID13 i ==> is_AEAD (aeAlg_of_id i))
+  = ()
+
+let lemma_ID12 (i:id)
+  : Lemma (is_ID12 i ==> pv_of_id i <> TLS_1p3)
+  = ()
 
 // Pretty printing
 let sinfo_to_string (si:sessionInfo) = "TODO"

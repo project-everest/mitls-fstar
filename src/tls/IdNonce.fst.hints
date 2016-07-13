@@ -1,31 +1,14 @@
 [
-  "ìˆ\"πü‘§/!7\u0007\u0014\u0013ÅÛ•",
+  "Ömá}`†sÏ ‰\u0017£ß;\u0006x",
   [
+    [ 0, 1, [ "@query_12424" ], 0 ],
+    [ 0, 1, [ "@query_12457" ], 0 ],
+    [ 0, 1, [ "@query_12482", "equation_IdNonce.id_of_nonce" ], 0 ],
     [
       0,
       1,
       [
-        "@query_11212", "data_elim_TLSInfo.Mkid", "equation_FStar.Char.char",
-        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
-        "equation_TLSInfo.csRands",
-        "fuel_guarded_inversion_TLSInfo.id_11079",
-        "proj_equation_TLSInfo.Mkid_csrConn",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_11211",
-        "refinement_interpretation_Tm_refine_3044"
-      ],
-      0
-    ],
-    [ 0, 1, [ "@query_11217" ], 0 ],
-    [ 0, 1, [ "@query_11218", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_11253" ], 0 ],
-    [ 0, 1, [ "@query_11278", "equation_IdNonce.id_of_nonce" ], 0 ],
-    [
-      0,
-      1,
-      [
-        "@pretyping__117", "@query_11291", "disc_equation_Prims.None",
+        "@pretyping__117", "@query_12495", "disc_equation_Prims.None",
         "disc_equation_Prims.Some", "equality_tok_Prims.T@tok",
         "fuel_guarded_inversion_Prims.option_426", "typing_tok_Prims.T@tok"
       ],
@@ -35,33 +18,19 @@
       0,
       1,
       [
-        "@query_11300", "disc_equation_Prims.Some",
+        "@query_12504", "disc_equation_Prims.Some",
         "equation_IdNonce.id_of_nonce",
         "fuel_guarded_inversion_Prims.option_426",
         "proj_equation_Prims.Some_v", "projection_inverse_BoxBool_proj_0"
       ],
       0
     ],
+    [ 0, 1, [ "@query_12507" ], 0 ],
     [
       0,
       1,
       [
-        "@query_11304", "equation_IdNonce.nonce_of_id",
-        "equation_Nonce.random", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.lbytes", "equation_TLSInfo.random",
-        "fuel_guarded_inversion_TLSInfo.id_11079",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_3044",
-        "typing_IdNonce.nonce_of_id"
-      ],
-      0
-    ],
-    [ 0, 1, [ "@query_11309" ], 0 ],
-    [
-      0,
-      1,
-      [
-        "@query_11325", "equation_IdNonce.id_of_nonce",
+        "@query_12519", "equation_IdNonce.id_of_nonce",
         "equation_MonotoneMap.contains",
         "equation_TLSConstants.tls_tables_region", "equation_TLSInfo.random"
       ],

@@ -362,7 +362,11 @@ let writerT s h = eT s Writer h
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
-let i s rw = Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
+let i (HS #r0 _ _ _ _ (Epochs _ r w) _) rw =
+  match rw with
+  | Reader -> !r
+  | Writer -> !w
+// Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
 
 val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (handshake_state r)
   (requires (fun h -> True))
@@ -1155,8 +1159,8 @@ let rec next_fragment i hs =
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) -> server_send_server_hello_done hs; next_fragment i hs
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) -> server_send_server_finished_res hs; next_fragment i hs
        | S (S_HelloSent n) when (is_Some pv && pv = Some TLS_1p3) -> server_send_server_finished_13 hs; next_fragment i hs
-       | S (S_OutCCS n) -> server_send_server_finished hs; Outgoing None true true false)
-
+       | S (S_OutCCS n) -> server_send_server_finished hs; Outgoing None true true false
+       | _ -> Outgoing None false false false) 
 
 (*** Incoming (main) ***)
 

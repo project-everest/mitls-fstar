@@ -12,30 +12,22 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open TLSInfo
-open StreamAE
+open StAE
 open CoreCrypto
 
-(* FlexRecord *)
+let encryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.id) (wr:writer id) ct plain : bytes =
+  let rg: Range.frange id = (0, length plain) |> unsafe_coerce in
+  let f: (b:Range.rbytes rg{Content.fragmentRepr ct rg b}) = plain |> unsafe_coerce in let f: Content.fragment id = Content.mk_fragment id ct rg f in
+  StAE.encrypt #id wr f
 
-val encryptRecord_TLS13_AES_GCM_128_SHA256: #id:id -> writer id -> Content.contentType -> bytes -> bytes
-let encryptRecord_TLS13_AES_GCM_128_SHA256 #id w ct plain = 
-  let text = plain in
-  let len = length text in
-  let rg: Range.frange id = 0, len in
-  let f = Content.mk_fragment id ct rg plain in 
-  StreamAE.encrypt w (len+1) f // the extra byte is for CT with no padding
-
-val decryptRecord_TLS13_AES_GCM_128_SHA256: #id:id -> reader id -> Content.contentType -> bytes -> bytes
-let decryptRecord_TLS13_AES_GCM_128_SHA256 #id rd ct cipher = 
-//  IO.print_string ("cipher:"^(Platform.Bytes.print_bytes cipher)^"\n");
-  let (Some d) = StreamAE.decrypt #id rd (length cipher - (StreamAE.ltag id)) cipher in
+let decryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.id) (rd:reader id) ct cipher : bytes =
+  let Some d = StAE.decrypt #id rd (ct,cipher) in
   Content.repr id d
 
-let sendRecord tcp pv ct msg str = 
+let sendRecord tcp pv ct msg str =
   let r = Record.makePacket ct pv msg in
   let Correct _ = Platform.Tcp.send tcp r in
-  IO.print_string ("Sending "^Content.ctToString ct^"Data("^str^")\n");
-  IO.print_string (print_bytes r)
+  IO.print_string ("Sending " ^ Content.ctToString ct ^ "Data(" ^ str ^ ")\n")
 
 let makeHSRecord pv hs_msg =
   let hs = HandshakeMessages.handshakeMessageBytes (Some pv) hs_msg in
@@ -46,7 +38,7 @@ let sendHSRecord tcp pv hs_msg =
   sendRecord tcp pv Content.Handshake hs str
 
 let recvHSRecord tcp pv kex = 
-  let Correct(Content.Handshake,rpv,pl) = Record.read tcp pv in
+  let Correct(Content.Handshake,rpv,pl) = Record.read tcp in
   match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
   | Correct (rem,[(hs_msg,to_log)]) -> 
      	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
@@ -54,12 +46,12 @@ let recvHSRecord tcp pv kex =
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
 
 let recvCCSRecord tcp pv = 
-  let Correct(Content.Change_cipher_spec,_,ccs) = Record.read tcp pv in
+  let Correct(Content.Change_cipher_spec,_,ccs) = Record.read tcp in
   IO.print_string "Received CCS\n";
   ccs
 
 let recvEncHSRecord tcp pv kex rd = 
-  let Correct(Content.Application_data,_,cipher) = Record.read tcp pv in
+  let Correct(Content.Application_data,_,cipher) = Record.read tcp in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in 
   let [(hs_msg,to_log)] = hsm in
@@ -67,7 +59,7 @@ let recvEncHSRecord tcp pv kex rd =
   hs_msg, to_log
 
 let recvEncAppDataRecord tcp pv rd = 
-  let Correct(Content.Application_data,_,cipher) = Record.read tcp pv in
+  let Correct(Content.Application_data,_,cipher) = Record.read tcp in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Application_data cipher in
   IO.print_string "Received Data:\n";
   IO.print_string ((iutf8 payload)^"\n");
