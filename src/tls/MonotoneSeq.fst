@@ -162,6 +162,12 @@ let i_at_least_is_stable (#r:rid) (#a:Type) (#p:seq a -> Type) (n:nat) (x:a) (m:
        fun h0 h1 -> forall_intro_2 (lemma_mem_append #a) in
     forall_intro_2 at_least_is_stable_aux
 
+let int_at_most #r #a #p (x:int) (is:i_seq r a p) (h:HH.t) =
+  b2t (x < Seq.length (m_sel h is))
+
+let int_at_most_is_stable (#r:rid) (#a:Type) (#p:seq a -> Type) (is:i_seq r a p) (k:int)
+  : Lemma (ensures stable_on_t is (int_at_most k is))
+  = ()
 
 let i_sel (#r:rid) (#a:Type) (#p:seq a -> Type) (h:HH.t) (m:i_seq r a p)
   : GTot (s:seq a{p s})
@@ -197,7 +203,6 @@ let i_write_at_end (#rgn:rid) (#a:Type) (#p:seq a -> Type) (r:i_seq rgn a p) (x:
 ////////////////////////////////////////////////////////////////////////////////
 //Testing invariant sequences
 ////////////////////////////////////////////////////////////////////////////////
-
 let invariant (s:seq nat) = 
   forall (i:nat) (j:nat). i < Seq.length s /\ j < Seq.length s /\ i<>j 
 		 ==> Seq.index s i <> Seq.index s j
@@ -217,6 +222,11 @@ let itest r a k =
   let h0 = ST.get() in
   i_at_least_is_stable k (Seq.index (i_sel h0 a) k) a;
   MR.witness a (i_at_least k (Seq.index (i_sel h0 a) k) a)
+
+let test_alloc (#a:Type) (p:seq a -> Type) (r:FStar.HyperHeap.rid) (init:seq a{p init}) = 
+  let is = alloc_mref_iseq p r init in
+  let h = get () in 
+  assert (i_sel h is = init)
 
 ////////////////////////////////////////////////////////////////////////////////
 //Mapping functions over monotone sequences
