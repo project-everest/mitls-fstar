@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/cdefs.h>
+#include <sys/errno.h>
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
