@@ -73,7 +73,7 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 (*** networking (floating) ***)
 
 effect EXT (a:Type) = ST a
-  (requires (fun _ -> True)) <
+  (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
 val read: TCP.networkStream -> EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
