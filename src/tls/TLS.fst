@@ -9,7 +9,7 @@ open FStar.Set
 open Platform
 open Platform.Bytes
 open Platform.Error
-open Platform.Tcp
+open TCP //was: Platform.Tcp
 
 open TLSError
 open TLSConstants
@@ -324,6 +324,7 @@ let send_payload c i f =
 (*     st_inv c h0 ==> st_inv c h1 /\ op_Equality #int (iT c.hs Writer h0) (iT c.hs Writer h1)) *)
 
 // used e.g. for writing while reading
+// we miss some precise spec
 let currentId (c:connection) (rw:rw) : id = 
   let j = Handshake.i c.hs rw in 
   if j<0 then PlaintextID (c_nonce c)

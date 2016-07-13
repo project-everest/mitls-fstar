@@ -12,6 +12,7 @@ open TLSConstants
 open Range
 open Content
 
+open TCP 
 
 // Consider merging some of this module with Content?
 
@@ -72,30 +73,10 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 (*** networking (floating) ***)
 
 effect EXT (a:Type) = ST a
-  (requires (fun _ -> True)) 
+  (requires (fun _ -> True)) <
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
-val tcp_recv: Platform.Tcp.networkStream -> max:nat -> EXT (optResult string (b:bytes {length b <= max}))
-let tcp_recv = Platform.Tcp.recv
-
-
-private val really_read_rec: b:bytes -> Platform.Tcp.networkStream -> l:nat -> EXT (result (lbytes (l+length b)))
-
-let rec really_read_rec prev tcp len = 
-    if len = 0 
-    then Correct prev
-    else 
-      match Platform.Tcp.recv tcp len with
-      | Correct b -> 
-            let lb = length b in
-      	    if lb = len then Correct(prev @| b)
-      	    else really_read_rec (prev @| b) tcp (len - lb)
-      | Error e -> Error(AD_internal_error,e)
-
-private let really_read = really_read_rec empty_bytes
-
-val read: Platform.Tcp.networkStream -> 
-  EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
+val read: TCP.networkStream -> EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
 
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;
@@ -103,7 +84,7 @@ val read: Platform.Tcp.networkStream ->
 // (see earlier versions for the checks we used to perform)
 
 let read tcp =
-  match really_read tcp 5 with 
+  match TCP.really_read tcp 5 with 
   | Correct header -> (
       match parseHeader header with  
       | Correct (ct,pv,len) -> (
@@ -128,8 +109,6 @@ let recordPacketIn i (rd:StatefulLHAE.reader i) ct payload =
       | Some f -> Correct f
       | None   -> Error("bad decryption")
 *)
-
-
 
 
 (*
