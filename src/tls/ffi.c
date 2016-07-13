@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <memory.h>
+#include <unistd.h>
 #include <sys/stat.h>
+#include <sys/cdefs.h>
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
@@ -17,11 +19,19 @@
 MITLS_FFI_LIST
 #undef MITLS_FFI_ENTRY
 
+// Pass a C pointer into F* and recover it back.  OCaml limits integers to 2^30/2^62
+// so shift right by 1 before conversion to OCaml.  The low bit must be 0 in order to
+// meet structure alignment rules, so this is not lossy.
+_Static_assert(sizeof(size_t) <= sizeof(value), "OCaml value isn't large enough to hold a C pointer");
+#define PtrToValue(p) Val_long(((size_t)p)>>1)
+#define ValueToPtr(v) ((void*)((Long_val(v)<<1)))
+
 typedef struct mitls_state {
     value fstar_state;    // a GC root representing an F*-side state object
     value *connect_callback;
 } mitls_state;
 
+// Support temporary redirection of stdout and stderr
 typedef struct {
     char *out_name;
     char *err_name;
@@ -40,9 +50,7 @@ typedef struct {
 //
 int  FFI_mitls_init(void)
 {
-    char*Argv[2];
-    value str;
-    value ret;
+    char *Argv[2];
     
     // Build a stub argv[] to satisfy caml_Startup()
     Argv[0] = "";
@@ -204,9 +212,6 @@ void redirect_stdio(/* out */ mitls_redirect *r)
     dup2(fderr, STDERR_FILENO);
 }
 
-#define C_ASSERT(e) typedef char __C_ASSERT__[(e)?1:-1]
-C_ASSERT(sizeof(size_t) == sizeof(value));
-
 // Called by the host app to configure miTLS ahead of creating a connection
 int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
@@ -288,9 +293,7 @@ CAMLprim value ocaml_send_tcp(value cookie, value bytes)
     mlsize_t buffer_size;
     char *buffer;
     int retval;
-    size_t c = Long_val(cookie);
-    struct _FFI_mitls_callbacks *callbacks = (struct _FFI_mitls_callbacks *)c;
-    CAMLparam2(cookie, bytes);
+    struct _FFI_mitls_callbacks *callbacks = ValueToPtr(cookie);
 
     buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
@@ -306,9 +309,7 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     mlsize_t buffer_size;
     char *buffer;
     ssize_t retval;
-    size_t c = Long_val(cookie);
-    struct _FFI_mitls_callbacks *callbacks = (struct _FFI_mitls_callbacks *)c;
-    CAMLparam2(cookie, bytes);
+    struct _FFI_mitls_callbacks *callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
     
     buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
@@ -329,7 +330,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
     *errmsg = NULL;
     redirect_stdio(&r);
     
-    result = caml_callback2_exn(*state->connect_callback, state->fstar_state, Val_long((size_t)callbacks));
+    result = caml_callback2_exn(*state->connect_callback, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         ret = 0;

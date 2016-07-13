@@ -9,7 +9,7 @@ typedef struct mitls_state mitls_state;
 // Perform one-time initialization
 extern int  FFI_mitls_init(void);
 
-// Perform one-team termination
+// Perform one-time termination
 extern void FFI_mitls_cleanup(void);
 
 // Configure miTLS ahead of connecting
