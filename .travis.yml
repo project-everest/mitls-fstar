@@ -23,7 +23,7 @@ install:
 script:
   - ./scripts/travis.sh
   - make -C .fstar/src/ocaml-output
-  - make -C src/tls all-ver
+  - make -C src/tls -k all-ver
   - make -C src/tls tls-gen
 
 notifications:
