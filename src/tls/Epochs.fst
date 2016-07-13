@@ -99,13 +99,15 @@ type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a
   m_rref r (epoch_ctr_inv r es) increases
 
 type epochs (r:rgn) (n:TLSInfo.random) = 
-  | Epochs: es: MonotoneSeq.i_seq r (epoch r n) epochs_inv -> 
+  | Epochs: es: MonotoneSeq.i_seq r (epoch r n) (fun s -> epochs_inv s) ->
     	    read: epoch_ctr r es -> 
 	    write: epoch_ctr r es ->
 	    epochs r n  
 
 let containsT (Epochs es r w) (h:HyperHeap.t) =
     MonotoneSeq.i_contains es h 
+
+#set-options "--lax"
 
 val epochs_init: r:rgn -> n:TLSInfo.random -> ST (epochs r n)
        (requires (fun h -> True))
@@ -114,7 +116,7 @@ let epochs_init (r:rgn) (n:TLSInfo.random) =
     let esref = MonotoneSeq.alloc_mref_seq r Seq.createEmpty in
     m_recall esref;
     witness esref (fun h -> -1 < Seq.length (m_sel h esref));
-    let x : epoch_ctr_inv r esref = -1 in
+    let x : epoch_ctr_inv #_ #(fun s -> epochs_inv s) r esref = -1 in
     let mr = m_alloc r x in
     let mw = m_alloc r x in
     Epochs esref mr mw
@@ -166,11 +168,14 @@ let incr_writer #r #n (Epochs es _ mw) =
   witness es (indexable (cur+1) es);
   m_write mw (cur + 1)
 
+#reset-options
+
 let get_epochs (Epochs es r w) = es 
 
 let epochsT (Epochs es r w) (h:HyperHeap.t) = MonotoneSeq.i_sel h es
 
-let readerT (Epochs es r w) (h:HyperHeap.t) = m_sel h r
+val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HyperHeap.t -> GTot (epoch_ctr_inv rid (get_epochs e))
+let readerT #rid #n (Epochs es r w) (h:HyperHeap.t) = m_sel h r
 
-let writerT (Epochs es r w) (h:HyperHeap.t) = m_sel h w
-
+val writerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HyperHeap.t -> GTot (epoch_ctr_inv rid (get_epochs e))
+let writerT #rid #n (Epochs es r w) (h:HyperHeap.t) = m_sel h w
