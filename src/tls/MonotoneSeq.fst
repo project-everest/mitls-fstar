@@ -228,7 +228,7 @@ let itest r a k =
 let test_alloc (#a:Type) (p:seq a -> Type) (r:FStar.HyperHeap.rid) (init:seq a{p init}) = 
   let is = alloc_mref_iseq p r init in
   let h = get () in 
-  assert (i_sel h is = init)
+  assert (i_sel h is == init)
 
 ////////////////////////////////////////////////////////////////////////////////
 //Mapping functions over monotone sequences
