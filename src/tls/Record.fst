@@ -12,7 +12,6 @@ open TLSConstants
 open Range
 open Content
 
-open TCP 
 
 // Consider merging some of this module with Content?
 
@@ -94,47 +93,3 @@ let read tcp =
       | Error e             -> Error e )
   | Error e                 -> Error e
 
-
-(* TODO
-let recordPacketIn i (rd:StatefulLHAE.reader i) ct payload =
-    if is_Null i
-    then
-      let rg = Range.point (length payload) in
-      let msg = Content.mk_fragment i ct rg payload in
-      Correct (rg,msg)
-    else
-      let ad = StatefulPlain.makeAD i ct in
-      let r = StatefulLHAE.decrypt #i #ad rd payload in
-      match r with
-      | Some f -> Correct f
-      | None   -> Error("bad decryption")
-*)
-
-
-(*
-// replaced by StatefulLHAE's state?
-type ConnectionState =
-    | NullState
-    | SomeState of TLSFragment.history * StatefulLHAE.state
-
-let someState (e:epoch) (rw:rw) h s = SomeState(h,s)
-
-type sendState = ConnectionState
-type recvState = ConnectionState
-
-let initConnState (e:epoch) (rw:rw) s =
-  let i = mk_id e in
-  let h = TLSFragment.emptyHistory e in
-  someState e rw h s
-
-let nullConnState (e:epoch) (rw:rw) = NullState
-*)
-
-(*
-let history (e:epoch) (rw:rw) s =
-    match s with
-    | NullState ->
-        let i = mk_id e in
-        TLSFragment.emptyHistory e
-    | SomeState(h,_) -> h
-*)
