@@ -12,13 +12,14 @@ open TLSConstants
 open Range
 open Content
 
-
 // Consider merging some of this module with Content?
 
 // ------------------------outer packet format -------------------------------
 
 // the "outer" header has the same format for all versions of TLS
 // but TLS 1.3 fakes its content type and protocol version.
+
+let x = Transport.recv
 
 type header = b:lbytes 5 // for all TLS versions
 
@@ -75,7 +76,7 @@ effect EXT (a:Type) = ST a
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
-val read: TCP.networkStream -> EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
+val read: Transport.networkStream -> EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
 
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;
@@ -83,11 +84,11 @@ val read: TCP.networkStream -> EXT (result (contentType * protocolVersion * b:by
 // (see earlier versions for the checks we used to perform)
 
 let read tcp =
-  match TCP.really_read tcp 5 with 
+  match Transport.really_read tcp 5 with 
   | Correct header -> (
       match parseHeader header with  
       | Correct (ct,pv,len) -> (
-         match really_read tcp len with
+         match Transport.really_read tcp len with
          | Correct payload  -> Correct (ct,pv,payload)
          | Error e          -> Error e )
       | Error e             -> Error e )

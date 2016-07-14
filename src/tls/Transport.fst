@@ -1,6 +1,6 @@
-module TCP
+module Transport
 
-// adding an indirection for applications that prefer to take control of their IOs.
+// adding an indirection to TCP for applications that prefer to take control of their IOs.
 
 open Platform.Tcp 
 open Platform.Bytes

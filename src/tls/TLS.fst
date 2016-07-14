@@ -9,7 +9,7 @@ open FStar.Set
 open Platform
 open Platform.Bytes
 open Platform.Error
-open TCP //was: Platform.Tcp
+open Transport //was: Platform.Tcp
 
 open TLSError
 open TLSConstants
