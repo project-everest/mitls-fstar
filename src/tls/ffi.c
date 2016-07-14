@@ -3,7 +3,11 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/cdefs.h>
-#include <sys/errno.h>
+#if __APPLE__ 
+#include <sys/errno.h> // OS/X only provides include/sys/errno.h
+#else
+#include <errno.h> // MinGW only provides include/errno.h
+#endif
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
