@@ -113,13 +113,11 @@ Epochs.fst \
 KeySchedule.fst \
 Handshake.fst \
 Connection.fst \
-test/TestRecord.fst \
-test/TestDH.fst \
-test/Test12.fst \
-test/TestServer13.fst \
-test/TestClient13.fst \
 ConnInvariant.fst \
 TLS.fst \
+test/TestRecord.fst \
+test/TestDH.fst \
+test/TestHandshake.fst \
 test/TestAPI.fst #the preceding space is significant!
 
 # --------------------------------------------------------------------
