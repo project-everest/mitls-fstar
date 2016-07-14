@@ -322,7 +322,6 @@ let hs_inv (s:hs) (h: HyperHeap.t) =
   /\ Epochs.containsT s.log h                //Nothing deep about these next two, since they can always 
   /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
-
 let iT (s:hs) rw (h:HyperHeap.t) = 
     match rw with
     | Reader -> Epochs.readerT s.log h
@@ -351,7 +350,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) (mods:Set.set rid)
 		   /\ iT s rw h0 = iT s rw h1)
   = frame_stateT s rw h0 h1 mods;
     frame_iT_trivial s rw h0 h1
-    
+
 // returns the epoch for reading or writing
 let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (logT s h) (iT s rw h)
 
@@ -362,10 +361,10 @@ let writerT s h = eT s Writer h
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
-let i (HS #r0 _ _ _ _ (Epochs _ r w) _) rw =
+let i (HS #r0 _ _ _ _ (MkEpochs _ r w) _) rw = //NS: bad style?; the pattern matching on MkEpochs breaks its abstraction
   match rw with
-  | Reader -> !r
-  | Writer -> !w
+  | Reader -> FStar.Monotonic.RRef.m_read r
+  | Writer -> FStar.Monotonic.RRef.m_read w
 // Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
 
 val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (handshake_state r)
@@ -722,7 +721,7 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
        let h = Negotiation.Fresh ({session_nego = n}) in
        let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
-       Epochs.set_reader lgref 1;
+       Epochs.incr_reader lgref;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
@@ -731,7 +730,7 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
        let h = Negotiation.Fresh ({session_nego = n}) in
        let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
-       Epochs.set_reader lgref 1;
+       Epochs.incr_reader lgref;
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = cb @| fb};
   		 hs_state = C(C_Idle (Some (vd,svd)))};
@@ -754,7 +753,7 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
 	  let h = Negotiation.Fresh ({session_nego = n}) in
 	  let ep = KeySchedule.recordInstanceToEpoch #r0 #id h ri in
 	  Epochs.add_epoch lgref ep;
-	  Epochs.set_reader lgref 0
+	  Epochs.incr_reader lgref
 	| None -> ());
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};

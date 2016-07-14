@@ -115,8 +115,7 @@ Handshake.fst \
 Connection.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
-test/TestClient.fst \
-test/TestServer.fst \
+test/Test12.fst \
 test/TestServer13.fst \
 test/TestClient13.fst \
 ConnInvariant.fst \

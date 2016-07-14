@@ -28,7 +28,7 @@ let is_stream i = is_ID13 i
 
 let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
 
-type id = i:id {is_stream i \/ is_stlhae i}
+// type id = i:id {is_stream i \/ is_stlhae i}
 
 // PLAINTEXTS are defined in Content.fragment i
 //16-06-08 see also StreamPlain and StatefulPlain. 
@@ -42,20 +42,22 @@ type id = i:id {is_stream i \/ is_stlhae i}
 let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
   snd (C.rg i f) + 1
 
-val cipherLen: i:id -> C.fragment i -> Tot (l:nat{Range.valid_clen i l})
-let cipherLen (i:id) (f:C.fragment i) : nat =
+type stae_id = i:id {is_stream i \/ is_stlhae i}
+
+val cipherLen: i:stae_id -> C.fragment i -> Tot (l:nat{Range.valid_clen i l})
+let cipherLen (i:stae_id) (f:C.fragment i) : nat =
   if is_stream i then
     StreamAE.cipherLen i (frag_plain_len #i f)
   else
     let r = C.rg i f in
     Range.targetLength i r
 
-type encrypted (#i:id) (f:C.fragment i) = lbytes (cipherLen i f)
-type decrypted (i:id) = C.contentType * (b:bytes { Range.valid_clen i (length b) })
+type encrypted (#i:stae_id) (f:C.fragment i) = lbytes (cipherLen i f)
+type decrypted (i:stae_id) = C.contentType * (b:bytes { Range.valid_clen i (length b) })
 
 // CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
-let aeKeySize (i:id) = 
+let aeKeySize (i:stae_id) =
   if is_stream i
   then
     CoreCrypto.aeadKeySize (Stream.alg i) +
@@ -64,7 +66,7 @@ let aeKeySize (i:id) =
     CoreCrypto.aeadKeySize (AEAD._0 (aeAlg_of_id i)) +
     TLSConstants.aeadSaltSize (AEAD._0 (aeAlg_of_id i))
 
-type keyBytes (i:id) = lbytes (aeKeySize i)
+type keyBytes (i:stae_id) = lbytes (aeKeySize i)
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -106,18 +108,26 @@ type writer i = state i Writer
 //Logs of fragments, defined as projections on the underlying entry logs
 ////////////////////////////////////////////////////////////////////////////////
 // TODO: consider adding constraint on terminator fragments
-type frags (i:id) = Seq.seq (C.fragment i)
+type frags (i:id{~ (is_PlaintextID i)}) = Seq.seq (C.fragment i)
 
 let ideal_log (r:rid) (i:id) =
-  (if is_stream i then Stream.ideal_log r i else AEAD_GCM.ideal_log r i)
+  if is_stream i then
+    Stream.ideal_log r i
+  else if is_stlhae i then
+    AEAD_GCM.ideal_log r i
+  else False
 
 let ilog (#i:id) (#rw:rw) (s:state i rw{authId i}): Tot (ideal_log (log_region s) i) =
   match s with
   | Stream u s -> Stream.ilog (Stream.State.log s)
   | StLHAE u s -> AEAD_GCM.ilog (AEAD_GCM.State.log s)
 
-type entry (i:id) =
-  (if is_stream i then Stream.entry i else AEAD_GCM.entry i)
+let entry (i:id) =
+   if is_stream i then
+     Stream.entry i
+   else if is_stlhae i then
+     AEAD_GCM.entry i
+   else False
 
 let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
   if is_stream i then
@@ -247,7 +257,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 
 
 // Generate a fresh instance with index i in a fresh sub-region 
-val gen: parent:rid -> i:id -> ST (writer i)
+val gen: parent:rid -> i:stae_id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
@@ -281,7 +291,7 @@ let genReader parent #i w =
 
 // Coerce a writer with index i in a fresh subregion of parent
 // (coerced readers can then be obtained by calling genReader)
-val coerce: parent:rid -> i:id{~(authId i)} -> keyBytes i -> ST (writer i)
+val coerce: parent:rid -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 let coerce parent i kiv =
@@ -292,8 +302,8 @@ let coerce parent i kiv =
     let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
     StLHAE () (StLHAE.coerce parent i kv iv)
 
-
-val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (keyBytes i)
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2"
+val leak: #i:id{~(authId i)} -> #role:rw -> s:state i role -> ST (keyBytes i) //with 2 units of i_fuel, we can invert s and prove that i must be an stae_id
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 let leak #i #role s =  

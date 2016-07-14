@@ -1,149 +1,55 @@
 [
-  "‹ˆLã†Ðÿ—\u001cUÅ\t\u001f™-,",
+  "¦ÞÖóòÊMº\u0017\u00023S¦TS–",
   [
-    [ 0, 1, [ "@query_15574" ], 0 ],
-    [ 0, 1, [ "@query_15577", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_15592" ], 0 ],
+    [ 0, 1, [ "@query_15595", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 1, 1, [ "@query_15601" ], 0 ],
     [
       1,
       1,
       [
-        "@query_15582", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15584", "data_elim_Content.CT_Data", "equation_Content.id",
-        "equation_DataStream.fragment", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_Range.fragment_range",
-        "equation_Range.frange", "equation_Range.range",
-        "equation_Range.wider", "equation_Range.within",
-        "refinement_interpretation_Tm_refine_12380",
-        "refinement_interpretation_Tm_refine_12547",
+        "@query_15603", "equation_DataStream.fragment",
+        "equation_Platform.Bytes.length", "equation_Prims.nat",
+        "equation_Range.fragment_range", "equation_Range.frange",
+        "equation_Range.range", "equation_Range.wider",
+        "equation_Range.within", "refinement_interpretation_Tm_refine_12547",
         "refinement_interpretation_Tm_refine_12726"
       ],
       0
     ],
+    [ 1, 1, [ "@query_15604" ], 0 ],
+    [ 1, 1, [ "@query_15605" ], 0 ],
+    [ 1, 1, [ "@query_15607" ], 0 ],
+    [ 1, 1, [ "@query_15609" ], 0 ],
+    [ 1, 1, [ "@query_15610" ], 0 ],
     [
       1,
       1,
       [
-        "@query_15585", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
+        "@query_15615", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_12380"
       ],
       0
     ],
-    [
-      1,
-      1,
-      [
-        "@query_15586", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15588", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15590", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15591", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15596", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [ 1, 1, [ "@query_15597" ], 0 ],
-    [
-      1,
-      1,
-      [
-        "@query_15598", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15599", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15610", "disc_equation_TLSInfo.PlaintextID",
-        "equation_TLSInfo.authId", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_15489"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15612", "disc_equation_TLSInfo.PlaintextID",
-        "equation_TLSInfo.authId", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_15489"
-      ],
-      0
-    ],
+    [ 1, 1, [ "@query_15616" ], 0 ],
+    [ 1, 1, [ "@query_15617" ], 0 ],
+    [ 1, 1, [ "@query_15618" ], 0 ],
+    [ 1, 1, [ "@query_15629" ], 0 ],
     [ 1, 1, [ "@query_15631" ], 0 ],
     [
       1,
       1,
       [
-        "@query_15664", "equation_MonotoneSeq.map_prefix",
+        "@query_15651", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_12380"
+      ],
+      0
+    ],
+    [
+      1,
+      1,
+      [
+        "@query_15684", "equation_MonotoneSeq.map_prefix",
         "equation_StAE.entry", "equation_StAE.fragments",
         "equation_StAE.fragments_prefix", "equation_StAE.ilog",
         "equation_StAE.log_region", "equation_StreamDeltas.deltas_prefix",
@@ -151,26 +57,8 @@
       ],
       0
     ],
-    [
-      1,
-      1,
-      [
-        "@query_15666", "disc_equation_TLSInfo.PlaintextID",
-        "equation_TLSInfo.authId", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_15489"
-      ],
-      0
-    ],
-    [
-      1,
-      1,
-      [
-        "@query_15668", "disc_equation_TLSInfo.PlaintextID",
-        "equation_TLSInfo.authId", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_15489"
-      ],
-      0
-    ],
-    [ 1, 1, [ "@query_15679" ], 0 ]
+    [ 1, 1, [ "@query_15686" ], 0 ],
+    [ 1, 1, [ "@query_15688" ], 0 ],
+    [ 1, 1, [ "@query_15699" ], 0 ]
   ]
 ]
