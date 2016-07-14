@@ -1,4 +1,4 @@
-module Test12
+module TestHandshake
 
 open FStar.Seq
 open FStar.HyperHeap
