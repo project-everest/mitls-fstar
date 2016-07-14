@@ -53,7 +53,7 @@
       0,
       1,
       [
-        "@pretyping__2447", "@query_8391",
+        "@pretyping__2447", "@pretyping__430", "@query_8391",
         "assumption_FStar.Heap.DomContains_2520",
         "assumption_FStar.Heap.DomRestrict_2517",
         "assumption_FStar.Heap.Equals_2513",
@@ -127,7 +127,6 @@
         "refinement_interpretation_Tm_refine_4363",
         "refinement_interpretation_Tm_refine_6619",
         "refinement_interpretation_Tm_refine_6625",
-        "refinement_kinding_Tm_refine_4363",
         "token_correspondence_Nonce.injective",
         "token_correspondence_Nonce.n_rid", "typing_FStar.Heap.concat",
         "typing_FStar.Heap.contains", "typing_FStar.Heap.domain",

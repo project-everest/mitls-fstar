@@ -15,12 +15,12 @@ open CoreCrypto
 open HandshakeLog
 
 
-let encryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.id) (wr:writer id) ct plain : bytes =
+let encryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.stae_id) (wr:writer id) ct plain : bytes =
   let rg: Range.frange id = (0, length plain) |> unsafe_coerce in
   let f: (b:Range.rbytes rg{Content.fragmentRepr ct rg b}) = plain |> unsafe_coerce in let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
 
-let decryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.id) (rd:reader id) ct cipher : bytes =
+let decryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.stae_id) (rd:reader id) ct cipher : bytes =
   let Some d = StAE.decrypt #id rd (ct,cipher) in
   Content.repr id d
 
@@ -79,7 +79,7 @@ let recvCCSRecord tcp pv =
   ccs
 
 let recvEncHSRecord tcp pv kex rd = 
-  let (Content.Application_data,_,cipher) = recvRecord tcp pv in
+  let (_,_,cipher) = recvRecord tcp pv in
   let payload = decryptRecord_TLS13_AES_GCM_128_SHA256 rd Content.Handshake cipher in
   let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in 
   let [(hs_msg,to_log)] = hsm in

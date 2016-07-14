@@ -47,7 +47,8 @@
       0,
       1,
       [
-        "@query_12562", "constructor_distinct_Platform.Error.Correct",
+        "@pretyping__302", "@query_12562",
+        "constructor_distinct_Platform.Error.Correct",
         "constructor_distinct_Platform.Error.Error",
         "constructor_distinct_Prims.Mktuple2",
         "constructor_distinct_TLSError.AD_access_denied",
@@ -137,8 +138,7 @@
         "refinement_interpretation_Tm_refine_1273",
         "refinement_interpretation_Tm_refine_1301",
         "refinement_interpretation_Tm_refine_1355",
-        "refinement_interpretation_Tm_refine_3044",
-        "typing_FStar.Seq.create", "typing_FStar.Seq.length"
+        "refinement_interpretation_Tm_refine_3044", "typing_FStar.Seq.create"
       ],
       0
     ]

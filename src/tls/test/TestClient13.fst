@@ -15,12 +15,12 @@ open TLSInfo
 open StAE
 open CoreCrypto
 
-let encryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.id) (wr:writer id) ct plain : bytes =
+let encryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.stae_id) (wr:writer id) ct plain : bytes =
   let rg: Range.frange id = (0, length plain) |> unsafe_coerce in
   let f: (b:Range.rbytes rg{Content.fragmentRepr ct rg b}) = plain |> unsafe_coerce in let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
 
-let decryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.id) (rd:reader id) ct cipher : bytes =
+let decryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.stae_id) (rd:reader id) ct cipher : bytes =
   let Some d = StAE.decrypt #id rd (ct,cipher) in
   Content.repr id d
 
@@ -40,7 +40,7 @@ let sendHSRecord tcp pv hs_msg =
 let recvHSRecord tcp pv kex = 
   let Correct(Content.Handshake,rpv,pl) = Record.read tcp in
   match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
-  | Correct (rem,[(hs_msg,to_log)]) -> 
+  | Correct (_,[(hs_msg,to_log)]) ->
      	    (IO.print_string ("Received HS("^(string_of_handshakeMessage hs_msg)^")\n");
 	     (hs_msg, to_log))
   | Error (x,z) -> IO.print_string (z^"\n"); failwith "error"
@@ -134,4 +134,3 @@ let main config host port =
   sendRecord tcp pv Content.Application_data get "GET /";
   let ad = recvEncAppDataRecord tcp pv drd in
   ()
-

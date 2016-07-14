@@ -68,7 +68,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
      w0 >= 0 ==> Seq.index (logT s h0) w0 = Seq.index (logT s h1) w0))) 
 let next_fragment i s =  
   let h0 = ST.get() in 
-  let ilog = Epochs.es (HS.log s) in 
+  let ilog = MkEpochs.es (HS.log s) in 
   let w0 = Handshake.i s Writer in 
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (Seq.index (MS.i_sel h0 ilog) w0) ilog;
@@ -218,7 +218,7 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
     )))
 
 let no_seqn_overflow c rw =
-  let es = MS.i_read (Epochs.es c.hs.log) in //MR.m_read c.hs.log in
+  let es = MS.i_read (MkEpochs.es c.hs.log) in //MR.m_read c.hs.log in
   let j = Handshake.i c.hs rw in
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ... 
     true
@@ -312,7 +312,7 @@ let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j<0 
     then Content.repr i f
-    else let es = MS.i_read (Epochs.es c.hs.log) in
+    else let es = MS.i_read (MkEpochs.es c.hs.log) in
 	 let e = Seq.index es j in 
 	 (* let _ = reveal_epoch_region_inv e in *)
 	 StAE.encrypt (writer_epoch e) f
@@ -328,7 +328,7 @@ let currentId (c:connection) (rw:rw) : id =
   let j = Handshake.i c.hs rw in 
   if j<0 then PlaintextID (c_nonce c)
   else 
-    let es = MR.m_read (Epochs.es c.hs.log) in
+    let es = MR.m_read (MkEpochs.es c.hs.log) in
     let e = Seq.index es j in
     let id = handshakeId e.h in
     if rw = Writer then id else peerId id
@@ -545,7 +545,7 @@ let current_writer c i =
   let ix = Handshake.i c.hs Writer in 
   if ix < 0
   then None
-  else let epochs = MS.i_read (Epochs.es c.hs.log) in
+  else let epochs = MS.i_read (MkEpochs.es c.hs.log) in
        let e = Seq.index epochs ix in
        let _ = cut (trigger_peer (Epoch.r e)) in
        Some (Epoch.w e)
@@ -1016,7 +1016,7 @@ let readFragment c i =
   match Record.read c.tcp with 
   | Error e -> Error e
   | Correct(ct,pv,payload) -> 
-    let es = MR.m_read (Epochs.es c.hs.log) in 
+    let es = MR.m_read (MkEpochs.es c.hs.log) in 
     let j : logIndex es = Handshake.i c.hs Reader in 
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in 

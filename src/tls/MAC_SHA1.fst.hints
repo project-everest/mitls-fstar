@@ -36,10 +36,10 @@
       0,
       1,
       [
-        "@pretyping__1271", "@pretyping__2447", "@query_12608",
+        "@pretyping__2447", "@query_12608",
         "assumption_FStar.Heap.SelUpd1_2509",
         "assumption_FStar.HyperHeap.Mod_set_def_2829", "bool_inversion",
-        "bool_typing", "constructor_distinct_TLSConstants.HMAC",
+        "constructor_distinct_TLSConstants.HMAC",
         "disc_equation_TLSConstants.AEAD", "disc_equation_TLSInfo.ID12",
         "equality_tok_CoreCrypto.SHA1@tok",
         "equality_tok_TLSConstants.Writer@tok",
@@ -90,7 +90,7 @@
       0,
       1,
       [
-        "@query_12632", "bool_typing",
+        "@pretyping__140", "@query_12632", "bool_typing",
         "constructor_distinct_TLSConstants.HMAC", "data_elim_MAC_SHA1.Entry",
         "data_elim_Prims.Some", "disc_equation_Prims.Some",
         "equality_tok_CoreCrypto.SHA1@tok",
