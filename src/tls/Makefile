@@ -137,6 +137,7 @@ MonotoneSeq \
 MonotoneMap \
 TLSError \
 TLSConstants \
+Transport \
 Nonce \
 RSAKey \
 DHGroup \
@@ -170,7 +171,8 @@ StreamDeltas \
 HKDF \
 Connection \
 ConnInvariant \
-TLS 
+TLS \
+FFI 
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
