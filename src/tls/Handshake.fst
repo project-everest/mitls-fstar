@@ -361,11 +361,10 @@ let writerT s h = eT s Writer h
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
-let i (HS #r0 _ _ _ _ (MkEpochs _ r w) _) rw = //NS: bad style?; the pattern matching on MkEpochs breaks its abstraction
+let i (HS #r0 _ _ _ _ epochs _) rw =
   match rw with
-  | Reader -> FStar.Monotonic.RRef.m_read r
-  | Writer -> FStar.Monotonic.RRef.m_read w
-// Platform.Error.unexpected "i: not yet implemented" //TODO:Implement
+  | Reader -> Epochs.get_reader epochs
+  | Writer -> Epochs.get_writer epochs
 
 val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (handshake_state r)
   (requires (fun h -> True))
@@ -432,16 +431,24 @@ let client_send_client_hello (HS #r0 r res cfg id lgref hsref) =
 val client_handle_server_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let client_handle_server_hello (HS #r0 r res cfg id lgref hsref) msgs =
+let client_handle_server_hello (HS #r0 r res cfg nonce lgref hsref) msgs =
   match (!hsref).hs_state, msgs with
   | C(C_HelloSent ri ch),[(ServerHello(sh),l)] ->
    (match (processServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri ch (ServerHello sh,l)) with
     | Error z -> InError z
-    | Correct (n,k) -> 
+    | Correct (n,keys) ->
+      // If a handshake encryption key is returned install the epoch and increment the reader
+      (match keys with
+      | Some keys -> 
+        let h = Negotiation.Fresh ({session_nego = n}) in
+        let ep = KeySchedule.recordInstanceToEpoch #r0 #nonce h keys in
+        Epochs.add_epoch lgref ep;
+        Epochs.incr_reader lgref
+      | None -> ());
       hsref := {!hsref with
 	       hs_nego = Some n;
 	       hs_state = C(C_HelloReceived n)};
-      InAck false false)
+      InAck (is_Some keys) false)
 
 
 let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result hashAlg) =
@@ -714,30 +721,22 @@ val client_handle_server_finished_13: hs -> list (hs_msg * bytes) -> ST incoming
   (ensures (fun h0 i h1 -> True))
 let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
   match (!hsref).hs_state with
-  | C(C_CCSReceived n vd) ->
+  | C(C_HelloReceived n) ->
    (match processServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log msgs with
     | Error z -> InError z
-    | Correct ([(Finished(f),fb)],svd,keys) -> 
+    | Correct (hsl,svd,keys) -> 
        let h = Negotiation.Fresh ({session_nego = n}) in
        let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
        Epochs.incr_reader lgref;
+       Epochs.incr_writer lgref; // Write client finished with HSK epoch
+       let (fb, cvd) = (match hsl with
+         | [(Certificate c,cb);(Finished ({fin_vd = cvd}),fb)] -> ((cb @| fb), cvd)
+         | [(Finished ({fin_vd = cvd}),fb)] -> (fb, cvd)) in
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = fb};
-  		 hs_state = C(C_Idle (Some (vd,svd)))};
-       InAck false false
-    | Correct ([(Certificate c,cb);(Finished f,fb)],svd,keys) -> 
-       let h = Negotiation.Fresh ({session_nego = n}) in
-       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
-       Epochs.add_epoch lgref ep;
-       Epochs.incr_reader lgref;
-       hsref := {!hsref with
-                 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = cb @| fb};
-  		 hs_state = C(C_Idle (Some (vd,svd)))};
-       InAck false false)
-    
-
-
+  		 hs_state = C(C_Idle (Some (cvd,svd)))};
+       InAck true true)
 
 val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
@@ -1190,6 +1189,11 @@ let recv_ensures (s:hs) (h0:HyperHeap.t) (result:incoming) (h1:HyperHeap.t) =
     r1 == (if in_next_keys result then r0 + 1 else r0) /\
     (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))
 
+let print_hsl hsl : Tot bool =
+    let sl = List.Tot.map (fun (x,_) -> HandshakeMessages.string_of_handshakeMessage x) hsl in
+    let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
+    IO.debug_print_string("Recv_fragment buffer: " ^ s ^ "\n")
+
 //16-06-01 handshake state-machine transitions; could separate between C and S.
 val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
   (requires (hs_inv s))
@@ -1205,8 +1209,10 @@ let recv_fragment hs #i f =
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
     match parseHandshakeMessages pv kex b with
     | Error z -> InError z
-    | Correct(r,hsl) -> 
+    | Correct(r,hsl) ->
+       let hsl = List.Tot.append (!hsref).hs_buffers.hs_incoming_parsed hsl in
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
+      let b = print_hsl hsl in
       (match (!hsref).hs_state,hsl with 
        | C (C_Idle ri), _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
        | C (C_HelloSent ri ch), (ServerHello(sh),l)::hsl 

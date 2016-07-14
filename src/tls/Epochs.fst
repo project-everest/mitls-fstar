@@ -41,7 +41,7 @@ module I = IdNonce
 
 type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
   | Epoch: #i:id{nonce_of_id i = n} ->
-           h:handshake{handshakeId h = i} -> 
+           h:handshake -> 
            r: reader (peerId i) ->
            w: writer i {epoch_region_inv' hs_rgn r w}
 	   -> epoch hs_rgn n
@@ -49,6 +49,7 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
+let epoch_id #r #n (e:epoch r n) = Epoch.i e
 
 let reveal_epoch_region_inv_all (u:unit)
   : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}
@@ -64,11 +65,11 @@ let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
   = ()
 
 let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (w:writer (handshakeId (e.h)) {epoch_region_inv hs_rgn (Epoch.r e) w})
+  : Tot (w:writer (e.i) {epoch_region_inv hs_rgn (Epoch.r e) w})
   = Epoch.w e
 
 let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (r:reader (peerId (handshakeId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
+  : Tot (r:reader (peerId e.i) {epoch_region_inv hs_rgn r (Epoch.w e)})
   = Epoch.r e
 
 (* The footprint just includes the writer regions *)
@@ -187,6 +188,9 @@ let incr_writer #r #n (es:epochs r n) : ST unit
     = incr_epoch_ctr (MkEpochs.write es)
 
 let get_epochs (MkEpochs es r w) = es
+
+let get_reader #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.read es)
+let get_writer #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.write es)
 
 let epochsT (MkEpochs es r w) (h:HH.t) = MS.i_sel h es
 

@@ -330,8 +330,7 @@ let currentId (c:connection) (rw:rw) : id =
   else 
     let es = MR.m_read (MkEpochs.es c.hs.log) in
     let e = Seq.index es j in
-    let id = handshakeId e.h in
-    if rw = Writer then id else peerId id
+    epoch_id e
 
 
 // check vs record
@@ -502,6 +501,8 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
 
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
+  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
+  let b = IO.debug_print_string ("Using index type "^idt^"\n") in
   if not (check_incrementable wo)
   then ad_overflow
   else begin
@@ -583,7 +584,8 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
   : ST (result unit)
        (requires (fun h -> sendFragment_requires wopt h))
        (ensures (fun h0 r h1 -> modifies_just (regions wopt) h0 h1))
-  =  let result0 = // first try to send handshake fragment, if any
+  =  let b = IO.debug_print_string "CALL sendHandshake\n" in
+     let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in 
@@ -691,6 +693,7 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 let rec writeHandshake (c:connection) (newWriter:bool) : St ioresult_w =
   let i = currentId c Writer in 
   let wopt = current_writer c i in
+  let b = IO.debug_print_string "CALL writeHandshake\n" in
   match next_fragment i c.hs with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason 
   | Handshake.Outgoing om send_ccs next_keys complete ->
@@ -1018,14 +1021,16 @@ let readFragment c i =
   | Correct(ct,pv,payload) -> 
     let es = MR.m_read (MkEpochs.es c.hs.log) in 
     let j : logIndex es = Handshake.i c.hs Reader in 
+    let b = IO.debug_print_string ("Epoch index: "^(string_of_int j)^"\n") in
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in 
       Correct(Content.mk_fragment i ct rg payload)
     else
       // payload decryption
-      let e = Seq.index es j in 
+      let e = Seq.index es j in
+      let Epoch #r #n #i hs rd wr = e in
       match StAE.decrypt (reader_epoch e) (ct,payload) with
-      | Some f -> Correct f
+      | Some f -> let b = IO.debug_print_string "StAE decrypt correct.\n" in Correct f
       | None   -> Error(AD_internal_error,"") //16-05-19 adjust! 
 
 // We receive, decrypt, parse a record (ct,f); what to do with it?
@@ -1058,7 +1063,7 @@ let readOne c i =
 
   | Correct(Content.CT_Handshake rg f) -> 
       begin
-        IO.print_string "readOne: CT_Handshake, calling recv_fragment...\n";
+        let b = IO.debug_print_string "readOne: CT_Handshake, calling recv_fragment...\n" in
         match recv_fragment c.hs (| rg, f |) with
         | InError (x,y) -> alertFlush c i x y
         | InQuery q a   -> CertQuery q a
@@ -1083,6 +1088,7 @@ let readOne c i =
       end
   | Correct(Content.CT_Data rg f) ->
       begin
+        let b = IO.debug_print_string "readOne: CT_Data\n" in
         match !c.state with
         | AD | Half Reader        -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _                       -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
@@ -1101,6 +1107,7 @@ let rec read c i =
     | WriteError x y             -> ReadError x y           // TODO review errors; check this is not ambiguous
     | WriteClose                  -> unexpected "Sent Close" // can't happen while sending?
     | WrittenHS newWriter complete -> 
+        let b = IO.debug_print_string ("read: WrittenHS, "^(if newWriter then "newWriter" else "oldWriter")^" \n") in
         if complete then Complete // return at once, so that the app can authorize and use new indexes.
         // else ... then                // return at once, signalling falsestart
         else
