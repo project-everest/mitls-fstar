@@ -50,7 +50,7 @@ LIBFILES=$(PLATFORM) $(CRYPTO) ../../libs/ml/FFICallbacks.fst
 
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap  --include ../../libs/ml/
 
-OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -ccopt -Wall -ccopt -L.
+OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread
 OCAML=ocamlfind ocamlopt
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml)
 
@@ -255,7 +255,7 @@ FFICallbacks.cmo: FFICallbacks.cmi
 	
 FFICallbacks.cmx: FFICallbacks.cmi
     
-FFICallbacks.cmx: ../../libs/ml/FFICallbacks.ml FFI.c FFICallbacks.cmi
+FFICallbacks.cmx: ../../libs/ml/FFICallbacks.ml ffi.c FFICallbacks.cmi
 	cp ../../libs/ml/FFICallbacks.ml .
 	ocamlfind opt -package batteries -I $(FSTAR_HOME)/$(CONTRIB)/Platform/ml -I ../../libs  -I ../../libs -c FFICallbacks.ml ffi.c
     
