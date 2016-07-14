@@ -7,7 +7,7 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 
-type networkStream = 
+type t = 
   { snd: bytes -> EXT (optResult string unit);
     rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); } 
 
@@ -15,7 +15,7 @@ let callbacks send recv = { snd = send; rcv = recv }
 
 // platform implementation
 
-private let wrap tcp: networkStream = callbacks (send tcp) (recv tcp)
+private let wrap tcp: t = callbacks (send tcp) (recv tcp)
 type tcpListener = tcpListener
 
 let listen domain port : tcpListener = listen domain port
@@ -31,7 +31,7 @@ let recv tcp len = tcp.rcv len
 
 // reading till we get enough bytes
 
-private val really_read_rec: b:bytes -> networkStream -> l:nat -> EXT (result (lbytes (l+length b)))
+private val really_read_rec: b:bytes -> t -> l:nat -> EXT (result (lbytes (l+length b)))
 
 let rec really_read_rec prev tcp len = 
     if len = 0 

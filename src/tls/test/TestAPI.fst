@@ -18,7 +18,7 @@ module CC = CoreCrypto
 
 let main config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
-  let tcp = Platform.Tcp.connect host port in
+  let tcp = Transport.connect host port in
   let rid = new_region root in
   let con = TLS.connect rid tcp config in
 

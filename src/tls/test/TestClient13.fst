@@ -26,7 +26,7 @@ let decryptRecord_TLS13_AES_GCM_128_SHA256 (#id:StAE.stae_id) (rd:reader id) ct 
 
 let sendRecord tcp pv ct msg str =
   let r = Record.makePacket ct pv msg in
-  let Correct _ = Platform.Tcp.send tcp r in
+  let Correct _ = Transport.send tcp r in
   IO.print_string ("Sending " ^ Content.ctToString ct ^ "Data(" ^ str ^ ")\n")
 
 let makeHSRecord pv hs_msg =
@@ -67,7 +67,7 @@ let recvEncAppDataRecord tcp pv rd =
 
 let main config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
-  let tcp = Platform.Tcp.connect host port in
+  let tcp = Transport.connect host port in
   let rid = new_region root in
   let lg = HandshakeLog.create #rid in
   let ks, cr = KeySchedule.create #rid Client lg in

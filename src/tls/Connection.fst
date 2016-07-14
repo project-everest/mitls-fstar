@@ -40,7 +40,7 @@ type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region 
 type connection = | C:
   #region: c_rgn ->
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
-  tcp:     Transport.networkStream ->
+  tcp:     Transport.t ->
   state:   rref region tlsState -> 
   connection
 

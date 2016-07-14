@@ -9,7 +9,7 @@ open FStar.Set
 open Platform
 open Platform.Bytes
 open Platform.Error
-open Transport //was: Platform.Tcp
+//open Transport //was: Platform.Tcp
 
 open TLSError
 open TLSConstants
@@ -110,7 +110,7 @@ let outerPV c : ST protocolVersion
 (*** control API ***)
 
 // was connect, resume, accept_connected, ...
-val create: r0:c_rgn -> tcp:networkStream -> r:role -> cfg:config -> resume: resume_id r -> ST connection
+val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resume_id r -> ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
@@ -135,7 +135,7 @@ let create parent tcp role cfg resume =
 
 
 //TODO upgrade commented-out types imported from TLS.fsti
-// type initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
+// type initial (role: role) (ns:Transport.t) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
 //     extends (c_rid cn) root /\ // we allocate a fresh, opaque region for the connection
 //     c_role cn   = role /\
 //     c_tcp cn    = ns /\
@@ -147,7 +147,7 @@ let create parent tcp role cfg resume =
 // painful to specify?
 //* should we still return ConnectionInfo ?
 //* merging connect and resume with an optional sessionID
-//val connect: ns:Tcp.networkStream -> c:config -> resume: option sessionID -> ST connection
+//val connect: ns:Transport.t -> c:config -> resume: option sessionID -> ST connection
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 cn h1 ->
 //    modifies Set.empty h0 h1 /\
@@ -156,7 +156,7 @@ let create parent tcp role cfg resume =
 //  ))
 let connect m0 tcp cfg        = create m0 tcp Client cfg None
 let resume  m0 tcp cfg sid    = create m0 tcp Client cfg (Some sid)
-//val accept_connected: ns:Tcp.networkStream -> c:config -> ST connection
+//val accept_connected: ns:Transport.t -> c:config -> ST connection
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 cn h1 ->
 //    modifies Set.empty h0 h1 /\
@@ -172,7 +172,7 @@ let accept_connected m0 tcp cfg = create m0 tcp Server cfg None
 //    (exists ns. initial Server ns c None cn h1)
 //  ))
 let accept m0 listener cfg =
-    let tcp = Platform.Tcp.accept listener in
+    let tcp = Transport.accept listener in
     accept_connected m0 tcp cfg
 
 //val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
@@ -379,7 +379,7 @@ let send c #i f =
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
   let record = Record.makePacket ct pv payload in
-  let r  = Platform.Tcp.send (C.tcp c) record in
+  let r  = Transport.send (C.tcp c) record in
   (* let h1 = ST.get() in *)
   (* cut (trigger_frame h1); *)
   match r with
@@ -514,7 +514,7 @@ let sendFragment c #i wo f =
        let ct, rg = Content.ct_rg i f in
        lemma_repr_bytes_values (length payload);
        let record = Record.makePacket ct pv payload in
-       let r  = Platform.Tcp.send (c.tcp) record in
+       let r  = Transport.send (c.tcp) record in
        match r with
        | Error(x)  -> Error(AD_internal_error,x)
        | Correct _ -> Correct()

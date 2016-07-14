@@ -52,9 +52,10 @@ private let errno description txt =
   | None    -> -1 
 
  
-let connect tcp config_1 : int = 
+let connect send recv config_1 : int = 
   // we assume the configuration specifies the target SNI; 
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
+  let tcp = Transport.callbacks send recv in
   let here = new_region HyperHeap.root in 
   let c = TLS.connect here tcp config_1 in 
   let i_0 = currentId c Reader in 
