@@ -114,7 +114,7 @@ module MonSeq = MonotoneSeq
 //w is registered with c, in state h
 let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) =
   (exists e. SeqProperties.mem e  (epochs c h) /\               //one of c's epochs, e
-      (let i' = Negotiation.handshakeId (Epochs.Epoch.h e) in   //has an id corresponding to i
+      (let i' = Epochs.epoch_id e in   //has an id corresponding to i
         i=i' /\ StAE.stream_state #i e.w == w))               //and holds w as as its writer
   /\ MonSeq.i_contains (MkEpochs.es c.hs.log) h                         //technical: the heap contains c's handshake log
 	
@@ -282,13 +282,13 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	     mc_inv h0 /\ //we're initially in the invariant
 	     MonSeq.i_contains (MkEpochs.es c.hs.log) h0 /\
 	     MonSeq.i_contains (MkEpochs.es c.hs.log) h1 /\
-	     i=handshakeId (Epoch.h e) /\ //the epoch has id i
+	     i = Epochs.epoch_id e /\ //the epoch has id i
 	     (let w = StAE.stream_state #i (Epoch.w e) in //the epoch writer
 	      let epochs = epochs c h0 in
               N.registered (nonce_of_id i) (HH.parent (StreamAE.State.region w)) /\  //the writer's parent region is registered in the nonce table
 	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
 	      MR.witnessed (MR.rid_exists (StreamAE.State.region w)) /\                //technical: ... needed just for well-formedness of the rest of the formula
-	      (forall e. SeqProperties.mem e epochs ==> handshakeId (Epoch.h e) <> i) /\            //i is fresh for c
+	      (forall e. SeqProperties.mem e epochs ==> Epochs.epoch_id e <> i) /\            //i is fresh for c
  	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (nonce_of_id i) = Some c /\ //we found the connection in the conn_table
       	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region

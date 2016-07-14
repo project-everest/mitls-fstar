@@ -99,7 +99,11 @@ let _ =
     | _ -> (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443 in
 
   match !role, !config.maxVer with
-  | Client, TLS_1p3 ->  if !tlsapi then TestAPI.main !config host port else TestClient13.main !config host port
+  | Client, TLS_1p3 ->
+     if !tlsapi then TestAPI.client !config host port
+     else TestClient13.main !config host port
   | Client, _ -> Test12.client !config host port
-  | Server, TLS_1p3 -> TestServer13.main !config host port
+  | Server, TLS_1p3 ->
+     if !tlsapi then TestAPI.server !config host port
+     else TestServer13.main !config host port
   | Server, _ -> Test12.server !config host port
