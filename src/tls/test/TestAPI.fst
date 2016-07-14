@@ -31,7 +31,8 @@ let main config host port =
     | _ -> IO.print_string "unexpected ioresult_i read\n" in
 
   let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
+  ()
 //  let get = encryptRecord_TLS13_AES_GCM_128_SHA256 dwr Content.Application_data (utf8 payload) in
 //  sendRecord tcp pv Content.Application_data get "GET /";
 //  let ad = recvEncAppDataRecord tcp pv drd in
-  disconnect con
+//  disconnect con

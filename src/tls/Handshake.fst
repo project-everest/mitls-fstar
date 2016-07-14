@@ -1110,7 +1110,9 @@ let request s c = Platform.Error.unexpected "request: not yet implemented"
 val invalidateSession: s:hs -> ST unit
   (requires (hs_inv s))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
-let invalidateSession hs = Platform.Error.unexpected "invalidateSession: not yet implemented"
+let invalidateSession hs = ()
+// ADL: disabling this for top-level API testing purposes
+// Platform.Error.unexpected "invalidateSession: not yet implemented"
 
 
 (*** Outgoing (main) ***)

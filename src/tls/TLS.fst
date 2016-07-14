@@ -1058,6 +1058,7 @@ let readOne c i =
 
   | Correct(Content.CT_Handshake rg f) -> 
       begin
+        IO.print_string "readOne: CT_Handshake, calling recv_fragment...\n";
         match recv_fragment c.hs (| rg, f |) with
         | InError (x,y) -> alertFlush c i x y
         | InQuery q a   -> CertQuery q a
