@@ -179,12 +179,14 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
  
 type clientState = 
   | C_Idle:                  option ri -> clientState
-  | C_HelloSent:        option ri -> ch -> clientState
+  | C_HelloSent:       option ri -> ch -> clientState
   | C_HelloReceived:              nego -> clientState
   | C_OutCCS:                     nego -> clientState
-  | C_FinishedSent: nego -> cVerifyData -> clientState
-  | C_CCSReceived:  nego -> cVerifyData -> clientState
+  | C_FinishedSent:nego -> cVerifyData -> clientState
+  | C_FinishedReceived:     nego -> ri -> clientState
+  | C_CCSReceived: nego -> cVerifyData -> clientState
   | C_Error:                     error -> clientState
+  | C_PostHS:                             clientState
 
 type serverState = 
   | S_Idle:                  option ri -> serverState
@@ -196,6 +198,7 @@ type serverState =
   | S_ResumeFinishedSent :        nego -> serverState
   | S_ZeroRTTReceived :           nego -> serverState
   | S_Error:                     error -> serverState
+  | S_PostHS:                             serverState
 
 type role_state = 
     | C of clientState
@@ -729,14 +732,14 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
        let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
        Epochs.incr_reader lgref;
-       Epochs.incr_writer lgref; // Write client finished with HSK epoch
+       Epochs.incr_writer lgref; // TODO update writer key properly
        let (fb, cvd) = (match hsl with
          | [(Certificate c,cb);(Finished ({fin_vd = cvd}),fb)] -> ((cb @| fb), cvd)
          | [(Finished ({fin_vd = cvd}),fb)] -> (fb, cvd)) in
        hsref := {!hsref with
                  hs_buffers = {(!hsref).hs_buffers with hs_outgoing = fb};
-  		 hs_state = C(C_Idle (Some (cvd,svd)))};
-       InAck true true)
+  		 hs_state = C(C_FinishedReceived n (cvd,svd))};
+       InAck true false)
 
 val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
@@ -746,19 +749,20 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
   | S(S_Idle ri),[(ClientHello(ch),l)] ->
     (match (prepareServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri (ClientHello ch,l)) with
      | Error z -> InError z
-     | Correct (n,keys,(sh,shb)) ->
+     | Correct (n, keys, (sh,shb)) ->
        (match keys with
         | Some ri ->      
 	  let h = Negotiation.Fresh ({session_nego = n}) in
 	  let ep = KeySchedule.recordInstanceToEpoch #r0 #id h ri in
 	  Epochs.add_epoch lgref ep;
-	  Epochs.incr_reader lgref
+          Epochs.incr_reader lgref; // TODO do it at the right place
+	  Epochs.incr_writer lgref
 	| None -> ());
        hsref := {!hsref with
                hs_buffers = {(!hsref).hs_buffers with hs_outgoing = shb};
 	       hs_nego = Some n;
 	       hs_state = S(S_HelloSent n)};
-       InAck false false)
+       InAck true false)
     
 
 let prepareServerHelloDone cfg n ks log = 
@@ -1023,8 +1027,8 @@ let server_handle_client_finished_13 (HS #r0 r res cfg id lgref hsref) msgs opt_
        // Switch to ATK on read channel
        Epochs.incr_reader lgref;
        (hsref := {!hsref with
-  	           hs_state = S(S_Idle None)};
-        InAck false false)
+  	           hs_state = S(S_PostHS)};
+        InAck true false)
      | Error z -> InError z)
 
 
@@ -1156,6 +1160,10 @@ let rec next_fragment i hs =
        | S (S_Error e) -> OutError e
        | C (C_Idle ri) -> (client_send_client_hello hs; next_fragment i hs)
        | C (C_OutCCS n) -> (client_send_client_finished hs; Outgoing None true true false)
+       | C (C_FinishedReceived n (cvd,svd)) ->
+          hsref := {!hsref with hs_state = C (C_PostHS)};
+          Epochs.incr_writer lgref; // Switch to ATK writer
+          Outgoing None false true true
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) -> server_send_server_hello_done hs; next_fragment i hs
        | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) -> server_send_server_finished_res hs; next_fragment i hs
        | S (S_HelloSent n) when (is_Some pv && pv = Some TLS_1p3) -> server_send_server_finished_13 hs; next_fragment i hs

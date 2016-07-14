@@ -697,7 +697,7 @@ let rec writeHandshake (c:connection) (newWriter:bool) : St ioresult_w =
   match next_fragment i c.hs with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason 
   | Handshake.Outgoing om send_ccs next_keys complete ->
-	    
+      let b = IO.debug_print_string ("Complete ="^(if complete then "yes\n" else "no\n")) in
       // we send handshake & CCS messages, and process key changes
       match sendHandshake wopt om send_ccs with 
       | Error (ad,reason) -> sendAlert c ad reason 
