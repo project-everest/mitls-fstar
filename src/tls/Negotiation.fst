@@ -89,12 +89,6 @@ type handshake =
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
 
-// extracts a transport key identifier from a handshake record
-val handshakeId: handshake -> Tot id 
-//16-05-31 TODO breaking TC in TLS; was (i:id { is_stream_ae i }) //16-05-19 focus on TLS 1.3
-
-let handshakeId h = PlaintextID (bytes_of_int 32 0) // Placeholder 
-
 val prepareClientOffer: cfg:config -> Tot clientOffer
 let prepareClientOffer cfg =
   let co = 
