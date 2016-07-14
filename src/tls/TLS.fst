@@ -59,7 +59,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = handshakeId e.h)   
+    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = epoch_id e)   
   ))
   (ensures (fun h0 result h1 -> 
     next_fragment_ensures s h0 result h1 /\
@@ -288,7 +288,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     st_inv c h /\
     (if j < 0 then is_PlaintextID i else
        let e = Seq.index es j in
-       i = handshakeId e.h /\
+       i = epoch_id e /\
        incrementable (writer_epoch e) h)))
   (ensures (fun h0 payload h1 ->
     let es = epochs c h0 in
@@ -298,7 +298,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
     (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
        let e = Seq.index es j in   
-       i = handshakeId e.h /\ (
+       i = epoch_id e /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
@@ -331,8 +331,7 @@ let currentId (c:connection) (rw:rw) : id =
   else 
     let es = MR.m_read (MkEpochs.es c.hs.log) in
     let e = Seq.index es j in
-    let id = handshakeId e.h in
-    if rw = Writer then id else peerId id
+    epoch_id e
 
 
 // check vs record
@@ -350,7 +349,7 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
        let wr = writer_epoch e in 
        Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
        Map.contains h (StAE.log_region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
-       i = handshakeId e.h /\
+       i = epoch_id e /\
        incrementable (writer_epoch e) h))
        
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
@@ -364,7 +363,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     j == iT c.hs Writer h1 /\ // should follow from the modifies clause
     (if j < 0 then is_PlaintextID i /\ h0 = h1 else
        let e = Seq.index es j in
-       i = handshakeId e.h /\ (
+       i = epoch_id e /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
@@ -503,6 +502,8 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
 
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
+  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
+  let b = IO.debug_print_string ("Using index type "^idt^"\n") in
   if not (check_incrementable wo)
   then ad_overflow
   else begin
@@ -528,7 +529,7 @@ val current_writer : //A slightly exotic style here, because we can; using a loc
 	if ix < 0
 	then b2t (is_PlaintextID i)
 	else let epoch_i = eT hs Writer h in 
-   	     b2t (i=handshakeId (Epoch.h epoch_i)) in
+   	     b2t (i = epoch_id epoch_i) in
      c:connection -> i:id -> ST (option (cwriter i c))
        (requires (current_writer_pre c i))
        (ensures (fun h0 wo h1 -> 
@@ -584,7 +585,8 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
   : ST (result unit)
        (requires (fun h -> sendFragment_requires wopt h))
        (ensures (fun h0 r h1 -> modifies_just (regions wopt) h0 h1))
-  =  let result0 = // first try to send handshake fragment, if any
+  =  let b = IO.debug_print_string "CALL sendHandshake\n" in
+     let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in 
@@ -692,10 +694,11 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 let rec writeHandshake (c:connection) (newWriter:bool) : St ioresult_w =
   let i = currentId c Writer in 
   let wopt = current_writer c i in
+  let b = IO.debug_print_string "CALL writeHandshake\n" in
   match next_fragment i c.hs with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason 
   | Handshake.Outgoing om send_ccs next_keys complete ->
-	    
+      let b = IO.debug_print_string ("Complete ="^(if complete then "yes\n" else "no\n")) in
       // we send handshake & CCS messages, and process key changes
       match sendHandshake wopt om send_ccs with 
       | Error (ad,reason) -> sendAlert c ad reason 
@@ -743,7 +746,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
 (*     (if j < 0 then is_PlaintextID i /\ h0 = h1 else *)
 (*        let e = Seq.index es j in *)
-(*        i == handshakeId e.h /\ ( *)
+(*        i == epoch_id e /\ ( *)
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C.region c)) h0 h1 *)
 (* )))) *)
@@ -960,7 +963,7 @@ let sel_reader h c =
   let j = iT c.hs Reader h in
   (if j < 0 then None else 
   let e = Seq.index es j in 
-  let i = peerId (handshakeId e.h) in
+  let i = peerId (epoch_id e) in
   assume(is_stream i);
   Some (| i, reader_epoch e|))
   // todo: add other cases depending on dispatch state
@@ -988,7 +991,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     st_inv c h0 /\
     (if j < 0 then is_PlaintextID i else 
       let e = Seq.index es j in
-      i = peerId (handshakeId e.h) /\
+      i = peerId (epoch_id e) /\
       incrementable (reader_epoch e) h0)))
   (ensures (fun h0 r h1 -> 
     let es = epochs c h0 in 
@@ -998,7 +1001,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     j == iT c.hs Reader h1 /\
     (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
       let e = Seq.index es j in
-      i = peerId (handshakeId e.h) /\
+      i = peerId (epoch_id e) /\
       (let rd: reader i = reader_epoch e in 
       modifies (Set.singleton (region rd)) h0 h1 /\
       (match r with 
@@ -1019,14 +1022,16 @@ let readFragment c i =
   | Correct(ct,pv,payload) -> 
     let es = MR.m_read (MkEpochs.es c.hs.log) in 
     let j : logIndex es = Handshake.i c.hs Reader in 
+    let b = IO.debug_print_string ("Epoch index: "^(string_of_int j)^"\n") in
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in 
       Correct(Content.mk_fragment i ct rg payload)
     else
       // payload decryption
-      let e = Seq.index es j in 
+      let e = Seq.index es j in
+      let Epoch #r #n #i hs rd wr = e in
       match StAE.decrypt (reader_epoch e) (ct,payload) with
-      | Some f -> Correct f
+      | Some f -> let b = IO.debug_print_string "StAE decrypt correct.\n" in Correct f
       | None   -> Error(AD_internal_error,"") //16-05-19 adjust! 
 
 // We receive, decrypt, parse a record (ct,f); what to do with it?
@@ -1059,6 +1064,7 @@ let readOne c i =
 
   | Correct(Content.CT_Handshake rg f) -> 
       begin
+        let b = IO.debug_print_string "readOne: CT_Handshake, calling recv_fragment...\n" in
         match recv_fragment c.hs (| rg, f |) with
         | InError (x,y) -> alertFlush c i x y
         | InQuery q a   -> CertQuery q a
@@ -1083,6 +1089,7 @@ let readOne c i =
       end
   | Correct(Content.CT_Data rg f) ->
       begin
+        let b = IO.debug_print_string "readOne: CT_Data\n" in
         match !c.state with
         | AD | Half Reader        -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _                       -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
@@ -1101,6 +1108,7 @@ let rec read c i =
     | WriteError x y             -> ReadError x y           // TODO review errors; check this is not ambiguous
     | WriteClose                  -> unexpected "Sent Close" // can't happen while sending?
     | WrittenHS newWriter complete -> 
+        let b = IO.debug_print_string ("read: WrittenHS, "^(if newWriter then "newWriter" else "oldWriter")^" \n") in
         if complete then Complete // return at once, so that the app can authorize and use new indexes.
         // else ... then                // return at once, signalling falsestart
         else

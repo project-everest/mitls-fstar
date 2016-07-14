@@ -2,7 +2,6 @@ module Epochs
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties
 open FStar.Monotonic.RRef
 open MonotoneSeq
 open Platform.Error
@@ -17,14 +16,16 @@ open StAE
 open Negotiation
 
 module HH = FStar.HyperHeap
+module MS = MonotoneSeq
+module SeqP = FStar.SeqProperties
 
 // relocate?
 type fresh_subregion r0 r h0 h1 = fresh_region r h0 h1 /\ extends r r0
 
 type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
   disjoint hs_rgn (region w)                  /\
-  parent (region w) <> FStar.HyperHeap.root    /\
-  parent (region r) <> FStar.HyperHeap.root    /\
+  parent (region w) <> HH.root    /\
+  parent (region r) <> HH.root    /\
   parent hs_rgn = parent (parent (region w))  /\ //Grandparent of each writer is a sibling of the handshake
   disjoint (region w) (region r)              /\
   is_epoch_rgn (region w)                     /\ //they're all colored as epoch regions
@@ -40,7 +41,7 @@ module I = IdNonce
 
 type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
   | Epoch: #i:id{nonce_of_id i = n} ->
-           h:handshake{handshakeId h = i} -> 
+           h:handshake -> 
            r: reader (peerId i) ->
            w: writer i {epoch_region_inv' hs_rgn r w}
 	   -> epoch hs_rgn n
@@ -48,6 +49,7 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
+let epoch_id #r #n (e:epoch r n) = Epoch.i e
 
 let reveal_epoch_region_inv_all (u:unit)
   : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}
@@ -63,12 +65,12 @@ let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
   = ()
 
 let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (w:writer (handshakeId (e.h)) {epoch_region_inv hs_rgn (Epoch.r e) w})
+  : Tot (w:writer (e.i) {epoch_region_inv hs_rgn (Epoch.r e) w})
   = Epoch.w e
 
 let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Tot (r:reader (peerId (handshakeId (e.h))) {epoch_region_inv hs_rgn r (Epoch.w e)})
-  = Epoch.r e // match e with | Epoch hs #i r w -> r //16-05-20 Epoch.r e failed.
+  : Tot (r:reader (peerId e.i) {epoch_region_inv hs_rgn r (Epoch.w e)})
+  = Epoch.r e
 
 (* The footprint just includes the writer regions *)
 let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
@@ -76,10 +78,13 @@ let epochs_inv (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
     (j:nat { j < Seq.length es /\ i <> j}).{:pattern (Seq.index es i); (Seq.index es j)}
     let ei = Seq.index es i in
     let ej = Seq.index es j in
-    parent (region ei.w) = parent (region ej.w) /\  //they all descend from a common epochs sub-region of the connection
-    disjoint (region ei.w) (region ej.w)           //each epoch writer lives in a region disjoint from the others
+    // they all descend from a common epochs sub-region of the connection
+    parent (region ei.w) = parent (region ej.w) /\
+    // each epoch writer lives in a region disjoint from the others
+    disjoint (region ei.w) (region ej.w)
 
-abstract let epochs_inv' (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) = epochs_inv es
+abstract let epochs_inv' (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
+  epochs_inv es
 
 let reveal_epochs_inv' (u:unit)
   : Lemma (forall (r:rgn) (#n:TLSInfo.random) (es:seq (epoch r n)). {:pattern (epochs_inv' es)}
@@ -88,23 +93,22 @@ let reveal_epochs_inv' (u:unit)
 	     epochs_inv es)
   = ()
 
-module MS = MonotoneSeq
-
 // Epoch counters i must satisfy -1 <= i < length !es
-type epoch_ctr_inv (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a p) =
+type epoch_ctr_inv (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
   x:int{-1 <= x /\ witnessed (MS.int_at_most x es)}
 
-type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MonotoneSeq.i_seq r a p) = 
+type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) = 
   m_rref r (epoch_ctr_inv r es) increases
 
+//NS: probably need some anti-aliasing invariant of these three references
 type epochs (r:rgn) (n:TLSInfo.random) = 
-  | MkEpochs: es: MonotoneSeq.i_seq r (epoch r n) (epochs_inv #r #n) ->
+  | MkEpochs: es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
     	    read: epoch_ctr r es -> 
-	    write: epoch_ctr r es -> //NS: probably need some anti-aliasing invariant of these three references
+	    write: epoch_ctr r es ->
 	    epochs r n  
 
-let containsT (MkEpochs es r w) (h:HyperHeap.t) =
-    MonotoneSeq.i_contains es h 
+let containsT (MkEpochs es r w) (h:HH.t) =
+    MS.i_contains es h 
 
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid -> 
   ST (is:MS.i_seq r a p &
@@ -130,7 +134,7 @@ let alloc_log_and_ctrs #a #p r =
 val incr_epoch_ctr: #a:Type0 -> #p:(seq a -> Type0) -> #r:HH.rid -> #is:MS.i_seq r a p
 		  -> ctr:epoch_ctr r is
 		  -> ST unit 
-   (requires (fun h -> m_sel h ctr + 1 < Seq.length (i_sel h is)))
+   (requires (fun h -> 1 + m_sel h ctr < Seq.length (i_sel h is)))
    (ensures (fun h0 _ h1 -> 
 		  modifies_one r h0 h1
 		  /\ modifies_rref r !{as_ref (as_rref ctr)} h0 h1
@@ -162,8 +166,6 @@ inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
   /\ HH.modifies_rref r !{HH.as_ref (as_rref ctr)} h0 h1
   /\ newr = oldr + 1
 
-module SeqP = FStar.SeqProperties
-
 val add_epoch: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> e: epoch r n -> ST unit
        (requires (fun h -> True))
@@ -173,7 +175,7 @@ val add_epoch: #r:rgn -> #n:TLSInfo.random ->
 		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
 		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
 let add_epoch #rg #n (MkEpochs es _ _) e =
-    MonotoneSeq.i_write_at_end #rg es e
+    MS.i_write_at_end #rg es e
 
 let incr_reader #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs.read))
@@ -187,10 +189,13 @@ let incr_writer #r #n (es:epochs r n) : ST unit
 
 let get_epochs (MkEpochs es r w) = es
 
-let epochsT (MkEpochs es r w) (h:HyperHeap.t) = MonotoneSeq.i_sel h es
+let get_reader #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.read es)
+let get_writer #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.write es)
 
-val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HyperHeap.t -> GTot (epoch_ctr_inv rid (get_epochs e))
-let readerT #rid #n (MkEpochs es r w) (h:HyperHeap.t) = m_sel h r
+let epochsT (MkEpochs es r w) (h:HH.t) = MS.i_sel h es
 
-val writerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HyperHeap.t -> GTot (epoch_ctr_inv rid (get_epochs e))
-let writerT #rid #n (MkEpochs es r w) (h:HyperHeap.t) = m_sel h w
+val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HH.t -> GTot (epoch_ctr_inv rid (get_epochs e))
+let readerT #rid #n (MkEpochs es r w) (h:HH.t) = m_sel h r
+
+val writerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HH.t -> GTot (epoch_ctr_inv rid (get_epochs e))
+let writerT #rid #n (MkEpochs es r w) (h:HH.t) = m_sel h w
