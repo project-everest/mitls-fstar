@@ -167,6 +167,7 @@ MAC_SHA1 \
 StAE \
 StreamDeltas \
 HKDF \
+Epochs \
 Connection \
 ConnInvariant \
 TLS 
