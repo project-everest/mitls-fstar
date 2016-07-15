@@ -1125,6 +1125,7 @@ let rec read c i =
     | ReadError x y         -> ReadError x y
     | CertQuery q adv       -> CertQuery q adv
     | Read delta            -> Read delta
+    | Complete              -> Complete // In TLS 1.2 client and TLS 1.3 server it makes sense to complete upon reading (e.g. reading ServerFinished in 1.2) instead of going through another roundtrip with the handshake with an extra state to Complete in writeHandshake
     )
 
 

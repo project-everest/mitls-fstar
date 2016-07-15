@@ -587,6 +587,10 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
      (match processServerHelloDone cfg n (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
       | Correct [(ClientKeyExchange(cke),b1)] ->
+             let keys = KeySchedule.ks_12_get_keys (!hsref).hs_ks in
+             let h = Negotiation.Fresh ({session_nego = n}) in
+             let ep = KeySchedule.recordInstanceToEpoch h keys in
+             Epochs.add_epoch lgref ep;
              hsref := {!hsref with 
                 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = b1};
                 hs_state = C(C_OutCCS n)};
@@ -624,12 +628,18 @@ val client_handle_server_ccs: hs -> list (hs_msg * bytes) -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
-  match (!hsref).hs_state, msgs with
-  | C(C_FinishedSent n vd),[(SessionTicket(stick),l)] ->
-      let _ = (!hsref).hs_log @@ SessionTicket(stick) in
-      hsref := {!hsref with
-	       hs_state = C(C_CCSReceived n vd)};
-      InAck false false
+  match (!hsref).hs_state with
+  | C(C_FinishedSent n vd) ->
+    begin
+      (match msgs with
+      | [(SessionTicket(stick),l)] ->
+        // ADL TODO implement session ticket processing
+        let _ = (!hsref).hs_log @@ SessionTicket(stick) in ()
+      | [] -> ());
+      hsref := {!hsref with hs_state = C(C_CCSReceived n vd)};
+      Epochs.incr_reader lgref;
+      InAck true false
+    end
 
 val processServerFinished: KeySchedule.ks -> HandshakeLog.log -> (hs_msg * bytes) -> ST (result bytes)
   (requires (fun h -> True))
@@ -654,8 +664,8 @@ let client_handle_server_finished (HS #r0 r res cfg id lgref hsref) msgs =
     | Error z -> InError z
     | Correct svd -> 
        hsref := {!hsref with
-  		 hs_state = C(C_Idle (Some (vd,svd)))};
-       InAck false false)
+  		 hs_state = C(C_PostHS)}; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
+       InAck false true)
     
 
 val processServerFinished_13: cfg:config -> n:nego -> ks:KeySchedule.ks -> log:HandshakeLog.log ->
@@ -1166,7 +1176,10 @@ let rec next_fragment i hs =
        | C (C_Error e) -> OutError e
        | S (S_Error e) -> OutError e
        | C (C_Idle ri) -> (client_send_client_hello hs; next_fragment i hs)
-       | C (C_OutCCS n) -> (client_send_client_finished hs; Outgoing None true true false)
+       | C (C_OutCCS n) -> 
+          client_send_client_finished hs;
+          Epochs.incr_writer lgref;
+          Outgoing None true true false
        | C (C_FinishedReceived n (cvd,svd)) ->
           hsref := {!hsref with hs_state = C (C_PostHS)};
           Epochs.incr_writer lgref; // Switch to ATK writer
@@ -1339,13 +1352,17 @@ val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge 
     recv_ensures s h0 result h1 /\
     (is_InError result \/ result = InAck true false)
     ))
-let recv_ccs hs = 
+let recv_ccs hs =
+    let b = IO.debug_print_string ("CALL recv_ccs\n") in
     let (HS #r0 r res cfg id lgref hsref) = hs in
     let pv,kex = 
       (match (!hsref).hs_nego with 
        | None -> None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg) in
-    (match ((!hsref).hs_state,(!hsref).hs_buffers.hs_incoming_parsed) with 
+    (match ((!hsref).hs_state,(!hsref).hs_buffers.hs_incoming_parsed) with
+    | C (C_FinishedSent n cv), [] ->
+       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
+       client_handle_server_ccs hs []
     | C (C_FinishedSent n cv), 
       (SessionTicket(st),l)::[] ->
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
