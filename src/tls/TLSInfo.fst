@@ -321,7 +321,7 @@ val siAuthEncAlg: si:sessionInfo { si.protocol_version = TLS_1p2 &&
                               pvcs si.protocol_version si.cipher_suite } -> Tot aeAlg
 let siAuthEncAlg si = get_aeAlg si.cipher_suite
 
-noeq type msId = // We record the parameters used to derive the master secret;
+type msId = // We record the parameters used to derive the master secret;
   | StandardMS : pmsId -> csRands -> kefAlg_t -> msId
             // the pms index, the nonces, and the PMS-PRF algorithm
   | ExtendedMS : pmsId -> sessionHash -> kefAlg_t -> msId
@@ -492,7 +492,7 @@ type log_info (li:logInfo) (h:hashed_log) =
   exists (f: hashed_log -> Tot logInfo).{:pattern (f h)}
   injective #hashed_log #logInfo #equalBytes #eq_logInfo f /\ f h = li
 
-noeq type pre_esId : Type0 =
+type pre_esId : Type0 =
   | ApplicationPSK: info:PSK.pskInfo -> i:PSK.psk_identifier -> pre_esId
   | ResumptionPSK: info:PSK.pskInfo -> i:pre_rmsId -> pre_esId
 
@@ -647,7 +647,7 @@ type expandId = i:pre_expandId{valid_expandId i}
 type keyId = i:pre_keyId{valid_keyId i}
 type finishedId = i:pre_finishedId{valid_finishedId i}
 
-noeq type id =
+type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
 | ID13: keyId:keyId -> id
 | ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 

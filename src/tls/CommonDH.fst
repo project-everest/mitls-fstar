@@ -17,7 +17,7 @@ type key =
   | FFKey of DHGroup.key
   | ECKey of ECGroup.key
 
-noeq type share =
+type share =
   | FFShare of DHGroup.group * DHGroup.share
   | ECShare of ECGroup.group * ECGroup.share
 

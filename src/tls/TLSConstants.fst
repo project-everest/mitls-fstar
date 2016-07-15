@@ -680,7 +680,7 @@ let extract_label          = utf8 "master secret"
 let extended_extract_label = utf8 "extended master secret"
 let kdf_label              = utf8 "key expansion"
 
-noeq type prePrfAlg =
+type prePrfAlg =
   | PRF_SSL3_nested         // MD5(SHA1(...)) for extraction and keygen
   | PRF_SSL3_concat         // MD5 @| SHA1    for VerifyData tags
   | PRF_TLS_1p01 of prflabel                       // MD5 xor SHA1

@@ -80,7 +80,7 @@ let sampleDH dhp (gx:CommonDH.share) (gy:CommonDH.share) =
 let coerceDH (dhp:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) b = 
   ConcreteDHPMS(b) 
 
-noeq type pms = 
+type pms = 
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
   | DHPMS of CommonDH.params * CommonDH.share * CommonDH.share * dhpms
 

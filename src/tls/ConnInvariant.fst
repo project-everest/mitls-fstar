@@ -185,7 +185,7 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_tables_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
 		 (old_ms == new_ms //either ms_tab didn't change at all  (because we found w in the table already)
-		  \/ (MM.sel old_ms i = None /\ //or, we had to generate a fresh writer w
+		  \/ (MM.sel old_ms i == None /\ //or, we had to generate a fresh writer w
 		     new_ms == MM.upd old_ms i w /\ //and we just added w to the table
 	   	     (TLSInfo.authId i ==>  //and if we're idealizing i
 		         HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1 /\  //the log exists in h1
@@ -211,7 +211,7 @@ let ms_derive_is_ok h0 h1 i w =
            | Some ww ->
       	     if i=j 
       	     then ()
-      	     else assert (Some ww=MM.sel old_ms j)
+      	     else assert (Some ww==MM.sel old_ms j)
       else () in
   qintro aux
 
@@ -390,7 +390,7 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	     (let old_conn = MR.m_sel h0 conn_tab in
     	      let new_conn = MR.m_sel h1 conn_tab in
 	      let nonce = nonce_of_id i in
-	      MM.sel old_conn nonce = None /\        //c wasn't in the table initially
+	      MM.sel old_conn nonce == None /\        //c wasn't in the table initially
 	      new_conn == MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" //NS: this one seems to require an inversion somewhere, but not sure exactly where

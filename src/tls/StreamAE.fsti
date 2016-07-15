@@ -104,7 +104,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
       (m_contains (ilog w.log) h1 /\
        m_sel h1 (ilog w.log) == createEmpty)) /\
   m_contains (ctr w.counter) h1 /\
-  m_sel h1 (ctr w.counter) == 0
+  m_sel h1 (ctr w.counter) === 0
 //16-04-30 how to share the whole ST ... instead of genPost?
 
 // Generate a fresh instance with index i in a fresh sub-region of r0
@@ -124,7 +124,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                fresh_region r.region h0 h1 /\
                op_Equality #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
-	       m_sel h1 (ctr r.counter) == 0))
+	       m_sel h1 (ctr r.counter) === 0))
 // encryption (on concrete bytes), returns (cipher @| tag)
 // Keeps seqn and nonce implicit; requires the counter not to overflow
 // encryption of plaintexts; safe instances are idealized
@@ -147,14 +147,14 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (ensures  (fun h0 c h1 ->
                  modifies_one e.region h0 h1 /\
                  m_contains (ctr e.counter) h1 /\
-                 m_sel h1 (ctr e.counter) == m_sel h0 (ctr e.counter) + 1 /\
+                 m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1 /\
 	         (authId i ==>
 		   (let log = ilog e.log in
 		    let ent = Entry l c p in
 		    let n = Seq.length (m_sel h0 log) in
 		    m_contains log h1 /\
 		    witnessed (MonotoneSeq.at_least n ent log) /\
-		    m_sel h1 log = snoc (m_sel h0 log) ent))))
+		    m_sel h1 log == snoc (m_sel h0 log) ent))))
 
 
 let matches #i l (c:cipher i l) (Entry l' c' _) = l = l' && c = c'
@@ -174,4 +174,4 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
        | None -> modifies Set.empty h0 h1
        | _  ->   modifies_one d.region h0 h1
               /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
-	      /\ m_sel h1 (ctr d.counter) == j + 1)))
+	      /\ m_sel h1 (ctr d.counter) === j + 1)))
