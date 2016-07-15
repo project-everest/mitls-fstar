@@ -1,6 +1,4 @@
 (* Main driver for interop tests *)
-
-
 open TLSConstants
 open TLSInfo
 
@@ -101,9 +99,9 @@ let _ =
   match !role, !config.maxVer with
   | Client, TLS_1p3 ->
      if !tlsapi then TestAPI.client !config host port
-     else TestClient13.main !config host port
-  | Client, _ -> Test12.client !config host port
+     else TestHandshake.client_13 !config host port
+  | Client, _ -> TestHandshake.client_12 !config host port
   | Server, TLS_1p3 ->
      if !tlsapi then TestAPI.server !config host port
-     else TestServer13.main !config host port
-  | Server, _ -> Test12.server !config host port
+     else TestHandshake.server_13 !config host port
+  | Server, _ -> TestHandshake.server_12 !config host port
