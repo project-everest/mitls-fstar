@@ -73,6 +73,8 @@ let next_fragment i s =
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (Seq.index (MS.i_sel h0 ilog) w0) ilog;
 	         MR.witness ilog (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog)) in
+  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
+  let b = IO.debug_print_string ("nextFragment index type "^idt^"\n") in
   let res = Handshake.next_fragment i s in
   let _ = if w0 >= 0
 	  then MR.testify (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog) in
@@ -503,7 +505,7 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
-  let b = IO.debug_print_string ("Using index type "^idt^"\n") in
+  let b = IO.debug_print_string ("sendFragment index type "^idt^"\n") in
   if not (check_incrementable wo)
   then ad_overflow
   else begin
@@ -694,16 +696,16 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 let rec writeHandshake (c:connection) (newWriter:bool) : St ioresult_w =
   let i = currentId c Writer in 
   let wopt = current_writer c i in
-  let b = IO.debug_print_string "CALL writeHandshake\n" in
+  let b = IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") in
   match next_fragment i c.hs with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason 
   | Handshake.Outgoing om send_ccs next_keys complete ->
-      let b = IO.debug_print_string ("Complete ="^(if complete then "yes\n" else "no\n")) in
+      let b = IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) in
       // we send handshake & CCS messages, and process key changes
       match sendHandshake wopt om send_ccs with 
       | Error (ad,reason) -> sendAlert c ad reason 
       | _   -> 
-        if next_keys           then c.state := BC; // much happening ghostly
+        if next_keys then c.state := BC; // much happening ghostly
         let st = !c.state in
         let newWriter = newWriter || next_keys in 
         if complete && st = BC then c.state := AD; // much happening ghostly too
