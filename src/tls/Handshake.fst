@@ -215,12 +215,14 @@ type hs_msg_bufs = {
      hs_incoming: bytes;                         // incomplete message received earlier
      hs_outgoing: bytes;                         // messages to be sent in current epoch
      hs_outgoing_epochchange: option rw;         // Whether to increment the reader or writer epoch after sending the messages in the current epoch
+     hs_outgoing_ccs: bool;                      // Whether a CCS signal is buffered for the local writer
 }
 let hs_msg_bufs_init() = {
      hs_incoming_parsed = [];
      hs_incoming = empty_bytes;
      hs_outgoing = empty_bytes;
      hs_outgoing_epochchange = None;
+     hs_outgoing_ccs = false;
 }
 
 
@@ -885,10 +887,15 @@ let server_handle_client_ccs (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
      (n.n_protocol_version <> TLS_1p3 && 
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
      (match processClientCCS n (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
-      | Correct () ->       
+      | Correct () ->
+        let keys = KeySchedule.ks_12_get_keys (!hsref).hs_ks in
+        let h = Negotiation.Fresh ({session_nego = n}) in
+        let ep = KeySchedule.recordInstanceToEpoch h keys in
+        Epochs.add_epoch lgref ep;
+        Epochs.incr_reader lgref;
         (hsref := {!hsref with
 	       hs_state = S(S_CCSReceived n)};
-         InAck false false)
+         InAck true false)
       | Error z -> InError z)
   
 
@@ -915,7 +922,10 @@ let server_handle_client_finished (HS #r0 r res cfg id lgref hsref) msgs =
     match processClientFinished n (!hsref).hs_ks (!hsref).hs_log msgs with
     | Correct [(Finished(f),finb)] -> 
         (hsref := {!hsref with
-	       	   hs_buffers = {(!hsref).hs_buffers with hs_outgoing = finb};
+	       	   hs_buffers = {(!hsref).hs_buffers with
+                   hs_outgoing_ccs = true; // Because of the current constraints of the Record/HS interface the sendCCS flag is only available on writing
+                   // therefore, I am forced to "buffer" the fact a CCS will need to be sent before the ServerFinished
+                   hs_outgoing = finb};
 	           hs_state = S(S_OutCCS n)};
          InAck false false)
     | Error e -> InError e
@@ -1159,7 +1169,13 @@ let rec next_fragment i hs =
 
     //16-06-01 TODO: handle fragmentation; return fragment + flags set in some cases
     let l = length b in
-    if (l > 0) then (
+    if (!hsref).hs_buffers.hs_outgoing_ccs then (
+       hsref := {!hsref with
+         hs_buffers = {(!hsref).hs_buffers with
+           hs_outgoing_ccs = false }};
+       Epochs.incr_writer lgref;
+       Outgoing None true true false
+    ) else if (l > 0) then (
        let keychange =
           match (!hsref).hs_buffers.hs_outgoing_epochchange with
           | None -> false
@@ -1197,7 +1213,9 @@ let rec next_fragment i hs =
           Epochs.incr_reader lgref; // Switch to ATK reader
           hsref := {!hsref with hs_state = S(S_PostHS)};
           Outgoing None false true true
-       | S (S_OutCCS n) -> server_send_server_finished hs; Outgoing None true true false
+       | S (S_OutCCS n) ->
+          server_send_server_finished hs;
+          Outgoing None false false true
        | _ -> Outgoing None false false false) 
 
 (*** Incoming (main) ***)
