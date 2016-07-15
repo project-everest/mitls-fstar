@@ -76,7 +76,7 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log)
   c
 
 // kept concrete for log and counter, but the key and iv should be private.
-type state (i:id) (rw:rw) = 
+noeq type state (i:id) (rw:rw) = 
   | State: #region: rgn
          -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
          -> key: key i
@@ -102,7 +102,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   color w.region = color parent /\
   (authId i ==>
       (m_contains (ilog w.log) h1 /\
-       m_sel h1 (ilog w.log) = createEmpty)) /\
+       m_sel h1 (ilog w.log) == createEmpty)) /\
   m_contains (ctr w.counter) h1 /\
   m_sel h1 (ctr w.counter) == 0
 //16-04-30 how to share the whole ST ... instead of genPost?
@@ -148,7 +148,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
                  modifies_one e.region h0 h1 /\
                  m_contains (ctr e.counter) h1 /\
                  m_sel h1 (ctr e.counter) == m_sel h0 (ctr e.counter) + 1 /\
-	         (authId i ==> 
+	         (authId i ==>
 		   (let log = ilog e.log in
 		    let ent = Entry l c p in
 		    let n = Seq.length (m_sel h0 log) in
@@ -160,7 +160,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 let matches #i l (c:cipher i l) (Entry l' c' _) = l = l' && c = c'
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
-val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l 
+val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
   (requires (fun h0 -> is_seqn (m_sel h0 (ctr d.counter) + 1)))
   (ensures  (fun h0 res h1 ->
