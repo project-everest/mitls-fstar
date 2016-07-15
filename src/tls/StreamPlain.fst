@@ -69,6 +69,7 @@ private inline let min (a:nat) (b:nat): nat = if a < b then a else b
 // the padding and compute a value of type `plain` with a public range.
 // The representation of the result is the original
 // AE-decrypted plaintext truncated to max_TLSPlaintext_fragment_length + 1.
+#set-options "--z3timeout 30"
 val scan: i:id { ~ (authId i) } -> bs:plainRepr -> 
   j:nat { j < length bs 
 	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } ->
@@ -139,6 +140,7 @@ let rec scan i bs j =
       lemma_eq_intro bs' (pad payload Application_data len);
       Correct f
   | _   -> Error (AD_decode_error, "Unknown ContentType")
+#reset-options
 
 val scan_pad_correct: i:id {~ (authId i)} -> payload:bytes -> ct:contentType
   -> len:plainLen { length payload < len /\ length payload <= max_TLSPlaintext_fragment_length }
