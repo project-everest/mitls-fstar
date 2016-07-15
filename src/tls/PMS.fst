@@ -11,10 +11,10 @@ let ideal = IdealFlags.ideal_PMS // controls idealization of PMS.
 
 type rsarepr = bytes
 (*private*) 
-noeq type rsaseed = {seed: rsarepr}
+type rsaseed = {seed: rsarepr}
 
 // To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type. 
-noeq type rsapms = 
+type rsapms = 
 //#if ideal 
   | IdealRSAPMS of rsaseed 
 //#endif
@@ -51,10 +51,10 @@ let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms =
 //open CoreCrypto.Keys
 
 type dhrepr = bytes
-(*private*) noeq type dhseed = {seed: dhrepr}
+(*private*) type dhseed = {seed: dhrepr}
 
 // To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type.
-noeq type dhpms = 
+type dhpms = 
 //#if ideal 
   | IdealDHPMS of dhseed 
 //#endif
