@@ -87,11 +87,19 @@ let recvCCSRecord tcp =
   IO.print_string "Received CCS\n";
   ccs
 
+let enc_hsbuf = alloc #(list (hs_msg * bytes)) []
+
 let recvEncHSRecord tcp pv kex rd =
-  let Correct(_,_,cipher) = Record.read tcp in
-  let payload = decryptRecord rd Content.Handshake cipher in
-  let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
-  let [(hs_msg,to_log)] = hsm in
+  let (hs_msg, to_log) =
+    match !enc_hsbuf with
+    | [] ->
+      let Correct(_,_,cipher) = Record.read tcp in
+      let payload = decryptRecord rd Content.Handshake cipher in
+      let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
+      let h :: rem = hsm in
+      enc_hsbuf := rem; h
+    | h::rem -> enc_hsbuf := rem; h
+    in
   IO.print_string ("Received HS(" ^ (string_of_handshakeMessage hs_msg) ^ ")\n");
   let logged = handshakeMessageBytes (Some pv) hs_msg in
   IO.print_string ("Logged message = Parsed message? ");
