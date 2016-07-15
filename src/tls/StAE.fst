@@ -138,9 +138,9 @@ let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:HH.t): GTot (frags i)
 val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}
   -> h0:HH.t -> h1:HH.t -> e:entry i
   -> Lemma (let log = ilog w in
-           MR.m_sel #(log_region w) #_ #MS.grows h1 log =
+           MR.m_sel #(log_region w) #_ #MS.grows h1 log ==
 	   SeqP.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e ==>
-	   fragments w h1 = SeqP.snoc (fragments w h0) (ptext e))
+	   fragments w h1 == SeqP.snoc (fragments w h0) (ptext e))
 let lemma_fragments_snoc_commutes #i w h0 h1 e =
   let log = ilog w in
   MS.map_snoc ptext (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e
@@ -248,7 +248,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   HH.fresh_region r h0 h1 /\
   color r = color parent /\
   seqnT #i #Writer w h1 = 0 /\
-  (authId i ==> fragments #i #Writer w h1 = Seq.createEmpty) // we need to re-apply #i knowning authId
+  (authId i ==> fragments #i #Writer w h1 == Seq.createEmpty) // we need to re-apply #i knowning authId
 
 // Generate a fresh instance with index i in a fresh sub-region 
 val gen: parent:rid -> i:stae_id -> ST (writer i)
@@ -317,7 +317,7 @@ val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (encrypted f)
 	       /\ seqnT e h1 = seqnT e h0 + 1
 	       /\ frame_f (seqnT e) h1 (Set.singleton (log_region e))
 	       /\ (authId i ==>
-		  fragments e h1 = SeqP.snoc (fragments e h0) f
+		  fragments e h1 == SeqP.snoc (fragments e h0) f
 		  /\ frame_f (fragments e) h1 (Set.singleton (log_region e))
 		  /\ MR.witnessed (fragments_prefix e (fragments e h1)))))
 let encrypt #i e f =

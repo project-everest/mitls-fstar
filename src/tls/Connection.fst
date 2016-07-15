@@ -66,7 +66,7 @@ type st_inv c h = hs_inv (C.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
-  Epochs.epochs_inv es /\ es = logT c.hs h
+  Epochs.epochs_inv es /\ es == logT c.hs h
 })
 let epochs c h = logT c.hs h
 

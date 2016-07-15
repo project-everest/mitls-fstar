@@ -59,13 +59,13 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = epoch_id e)   
+    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i == epoch_id e)   
   ))
   (ensures (fun h0 result h1 -> 
     next_fragment_ensures s h0 result h1 /\
     (let w0 = iT s Writer h0 in   //Augmenting the post-condition of Handhshake.next_fragment 
      let es = logT s h0 in        //with this monotonicity propery
-     w0 >= 0 ==> Seq.index (logT s h0) w0 = Seq.index (logT s h1) w0))) 
+     w0 >= 0 ==> Seq.index (logT s h0) w0 == Seq.index (logT s h1) w0))) 
 let next_fragment i s =  
   let h0 = ST.get() in 
   let ilog = MkEpochs.es (HS.log s) in 
@@ -82,7 +82,7 @@ let next_fragment i s =
 // temporary scaffolding
 assume val frame_admit: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires True)
-  (ensures epochs c h0 = epochs c h1)
+  (ensures epochs c h0 == epochs c h1)
 
 // too convenient; use sparingly. Should move to a library
 // JP: isn't failwith sufficient enough? CF: this one works in ST. 
@@ -101,7 +101,7 @@ let id = i:id{ is_stream i }
  
 let outerPV c : ST protocolVersion
   (requires (hs_inv c.hs))
-  (ensures (fun h0 pv h1 -> h0 = h1)) =
+  (ensures (fun h0 pv h1 -> h0 == h1)) =
   match Handshake.version c.hs with
   | TLS_1p3 -> TLS_1p0
   | pv      -> pv
@@ -119,11 +119,11 @@ val create: r0:c_rgn -> tcp:networkStream -> r:role -> cfg:config -> resume: res
     Map.contains h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
     st_inv c h1 /\
     c_role c = r /\
-    c_cfg c = cfg /\
+    c_cfg c == cfg /\
     c_resume c = resume /\
-    c.tcp = tcp  /\
+    c.tcp == tcp  /\
     (r = Server ==> resume = None) /\ //16-05-28 style: replacing a refinement under the option
-    epochs c h1 = Seq.createEmpty /\ // we probably don't care---but we should say nothing written yet
+    epochs c h1 == Seq.createEmpty /\ // we probably don't care---but we should say nothing written yet
     sel h1 c.state = BC 
     ))
 
@@ -288,7 +288,7 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     st_inv c h /\
     (if j < 0 then is_PlaintextID i else
        let e = Seq.index es j in
-       i = epoch_id e /\
+       i == epoch_id e /\
        incrementable (writer_epoch e) h)))
   (ensures (fun h0 payload h1 ->
     let es = epochs c h0 in
@@ -298,11 +298,11 @@ val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted
     op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
     (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
        let e = Seq.index es j in   
-       i = epoch_id e /\ (
+       i == epoch_id e /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f)
+       (authId i ==> StAE.fragments #i wr h1 == snoc (StAE.fragments #i wr h0) f)
 //		     /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
        )) /\
     True ))
@@ -348,7 +348,7 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
        let wr = writer_epoch e in 
        Map.contains h (StAE.region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
        Map.contains h (StAE.log_region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
-       i = epoch_id e /\
+       i == epoch_id e /\
        incrementable (writer_epoch e) h))
        
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
@@ -360,13 +360,13 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\ // should follow from the modifies clause
-    (if j < 0 then is_PlaintextID i /\ h0 = h1 else
+    (if j < 0 then is_PlaintextID i /\ h0 == h1 else
        let e = Seq.index es j in
-       i = epoch_id e /\ (
+       i == epoch_id e /\ (
        let wr: writer i = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
-       seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.fragments #i wr h1 = snoc (StAE.fragments #i wr h0) f )))))
+       seqnT wr h1 == seqnT wr h0 + 1 /\
+       (authId i ==> StAE.fragments #i wr h1 == snoc (StAE.fragments #i wr h0) f )))))
 
 
 //16-05-29 timing out?
@@ -990,7 +990,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     st_inv c h0 /\
     (if j < 0 then is_PlaintextID i else 
       let e = Seq.index es j in
-      i = peerId (epoch_id e) /\
+      i == peerId (epoch_id e) /\
       incrementable (reader_epoch e) h0)))
   (ensures (fun h0 r h1 -> 
     let es = epochs c h0 in 
@@ -1000,7 +1000,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     j == iT c.hs Reader h1 /\
     (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
       let e = Seq.index es j in
-      i = peerId (epoch_id e) /\
+      i == peerId (epoch_id e) /\
       (let rd: reader i = reader_epoch e in 
       modifies (Set.singleton (region rd)) h0 h1 /\
       (match r with 

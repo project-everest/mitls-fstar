@@ -39,7 +39,7 @@ abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:wr
 
 module I = IdNonce
 
-type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
+noeq type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
   | Epoch: #i:id{nonce_of_id i = n} ->
            h:handshake -> 
            r: reader (peerId i) ->
@@ -101,7 +101,7 @@ type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
   m_rref r (epoch_ctr_inv r es) increases
 
 //NS: probably need some anti-aliasing invariant of these three references
-type epochs (r:rgn) (n:TLSInfo.random) = 
+noeq type epochs (r:rgn) (n:TLSInfo.random) = 
   | MkEpochs: es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
     	    read: epoch_ctr r es -> 
 	    write: epoch_ctr r es ->
@@ -122,7 +122,7 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid ->
 	  i_contains is h1
 	  /\ m_contains c1 h1
 	  /\ m_contains c2 h1
-	  /\ i_sel h1 is = Seq.createEmpty)))
+	  /\ i_sel h1 is == Seq.createEmpty)))
 let alloc_log_and_ctrs #a #p r = 
   let init = Seq.createEmpty in 
   let is = alloc_mref_iseq p r init in 
@@ -173,7 +173,7 @@ val add_epoch: #r:rgn -> #n:TLSInfo.random ->
 		   let es = MkEpochs.es es in
 		   modifies_one r h0 h1 
 		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
-		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
+		   /\ i_sel h1 es == SeqP.snoc (i_sel h0 es) e))
 let add_epoch #rg #n (MkEpochs es _ _) e =
     MS.i_write_at_end #rg es e
 

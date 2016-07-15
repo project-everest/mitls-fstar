@@ -38,7 +38,7 @@ val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t ->
 	(ensures (let epochs0 = logT s h0 in 
 		  let epochs1 = logT s h1 in 
 		  let j = iT s Writer h0 in 
-		  epochs0 = epochs1
+		  epochs0 == epochs1
 		  /\(forall (k:nat{k < Seq.length epochs0 /\ j<>k}). 
 		      let wr = writer_epoch (Seq.index epochs0 k) in
 		      HH.equal_on (Set.singleton (StAE.region wr)) h0 h1)))
@@ -132,7 +132,7 @@ let ms_conn_inv (ms:ms_t)
 	//technical: for framing; need to know that when idealized, the log also exists 
 	(authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h) /\
 	//main application invariant:
-	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is either still unused; or
+	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) == Seq.createEmpty  \/   //the writer is either still unused; or
 	             (let copt = MM.sel conn (nonce_of_id i) in
   		      is_Some copt /\ registered i w (Some.v copt) h)))            //it's been registered with the connection associated with its nonce
 
@@ -184,12 +184,12 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 is_epoch_rgn (HH.parent (StreamAE.State.region w)) /\ //and it's parent is as well (needed for the ms_tab invariant)
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_tables_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
-		 (old_ms = new_ms //either ms_tab didn't change at all  (because we found w in the table already)
+		 (old_ms == new_ms //either ms_tab didn't change at all  (because we found w in the table already)
 		  \/ (MM.sel old_ms i = None /\ //or, we had to generate a fresh writer w
-		     new_ms = MM.upd old_ms i w /\ //and we just added w to the table
+		     new_ms == MM.upd old_ms i w /\ //and we just added w to the table
 	   	     (TLSInfo.authId i ==>  //and if we're idealizing i
 		         HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1 /\  //the log exists in h1
-			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty)))))       //and w is as yet unused
+			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) == Seq.createEmpty)))))       //and w is as yet unused
 	 (ensures (mc_inv h1))
 val invertOption : a:Type -> Lemma 
   (requires True)
@@ -258,7 +258,7 @@ let writer_region_within_connection
     = reveal_epoch_region_inv_all ()
 
 //A wrapper around a Sequence lemma ... should move it
-let lemma_mem_snoc (s:FStar.Seq.seq 'a) (x:'a)
+let lemma_mem_snoc (#a:eqtype) (s:FStar.Seq.seq a) (x:a)
   : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
       SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
   = SeqProperties.lemma_mem_snoc s x
@@ -391,7 +391,7 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
     	      let new_conn = MR.m_sel h1 conn_tab in
 	      let nonce = nonce_of_id i in
 	      MM.sel old_conn nonce = None /\        //c wasn't in the table initially
-	      new_conn = MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
+	      new_conn == MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" //NS: this one seems to require an inversion somewhere, but not sure exactly where
 let add_connection_ok h0 h1 i c =
