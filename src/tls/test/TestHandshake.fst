@@ -11,8 +11,6 @@ open HandshakeMessages
 open HandshakeLog
 open Negotiation
 
-module TCP = Platform.Tcp
-
 
 let pre_id (role:role) =
   let cr  = createBytes 32 0z in
@@ -52,7 +50,7 @@ let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : bytes =
 
 let sendRecord tcp pv ct msg =
   let r = Record.makePacket ct pv msg in
-  match TCP.send tcp r with
+  match Transport.send tcp r with
   | Error z -> failwith z
   | Correct _ -> ()
 
@@ -111,7 +109,8 @@ let recvEncAppDataRecord tcp pv rd =
 (*-----------------------------------------------------------------------------*)
 // TLS 1.2 Server
 let rec server_loop_12 config sock =
-  let tcp = TCP.accept sock in
+  let raw_tcp = Platform.Tcp.accept sock in
+  let tcp = Transport.wrap raw_tcp in 
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
   let ks, sr = KeySchedule.create #rid Server log in
@@ -213,13 +212,13 @@ let rec server_loop_12 config sock =
   let _ = sendRecord tcp pv Content.Application_data payload in
 
   // Close connection and restart
-  TCP.close tcp;
+  Platform.Tcp.close raw_tcp;
   IO.print_string "Closing connection...\n";
   server_loop_12 config sock
 
 let server_12 config host port =
   IO.print_string "===============================================\n Starting test TLS 1.2 server...\n";
-  let sock = TCP.listen host port in
+  let sock = Transport.listen host port in
   server_loop_12 config sock
 
 
@@ -227,7 +226,7 @@ let server_12 config host port =
 // TLS 1.2 Client
 let client_12 config host port =
   IO.print_string "===============================================\n Starting test TLS 1.2 client...\n";
-  let tcp = TCP.connect host port in
+  let tcp = Transport.connect host port in
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
   let ks, cr = KeySchedule.create #rid Client log in
@@ -308,7 +307,7 @@ let client_12 config host port =
 // TLS 1.3 Client
 let client_13 config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
-  let tcp = TCP.connect host port in
+  let tcp = Transport.connect host port in
   let rid = new_region root in
   let lg = HandshakeLog.create #rid in
   let ks, cr = KeySchedule.create #rid Client lg in
@@ -384,7 +383,8 @@ let sendEncHSRecord tcp pv msg wr =
 (*-----------------------------------------------------------------------------*)
 // TLS 1.3 Server
 let rec server_loop_13 config sock =
-  let tcp = Platform.Tcp.accept sock in
+  let raw_tcp = Platform.Tcp.accept sock in
+  let tcp = Transport.wrap raw_tcp in 
   let rid = new_region root in
   let lg = HandshakeLog.create #rid in
   let ks, sr = KeySchedule.create #rid Server lg in
@@ -452,7 +452,7 @@ let rec server_loop_13 config sock =
   let res = encryptRecord dwr Content.Application_data (utf8 payload) in
   sendRecord tcp pv Content.Application_data res;
 
-  Platform.Tcp.close tcp;
+  Platform.Tcp.close raw_tcp;
   IO.print_string "Closing connection...\n";
 
   server_loop_13 config sock

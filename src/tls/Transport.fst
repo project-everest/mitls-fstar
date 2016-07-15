@@ -7,21 +7,23 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 
+// make this type abstract? 
 type t = 
   { snd: bytes -> EXT (optResult string unit);
-    rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); } 
+    rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); 
+    } 
 
 let callbacks send recv = { snd = send; rcv = recv } 
 
 // platform implementation
 
-private let wrap tcp: t = callbacks (send tcp) (recv tcp)
+let wrap tcp: t = callbacks (send tcp) (recv tcp)
 type tcpListener = tcpListener
 
 let listen domain port : tcpListener = listen domain port
 let accept listener = wrap (accept listener)
 let connect domain port = wrap (connect domain port)
-
+let close = close
 
 // following the indirection 
 
