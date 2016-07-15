@@ -23,20 +23,6 @@ let pre_id (role:role) =
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256) cr sr role
 
-val encryptor_12: r:role -> StAE.keyBytes (pre_id r) -> StAE.writer (pre_id r)
-let encryptor_12 r key =
-  let id = pre_id r in
-  assume (~(authId id));
-  StAE.coerce HyperHeap.root id key
-
-val decryptor_12: r:role -> StAE.keyBytes (pre_id r) -> StAE.reader (pre_id r)
-let decryptor_12 r key =
-  let wr = encryptor_12 r key in
-  let id = pre_id r in
-  let rgn = new_region (parent (StAE.region #id #Writer wr)) in
-  assume (rgn <> (StAE.region #id #Writer wr));
-  StAE.genReader rgn #id wr
-
 let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
   let rg: Range.frange id = (0, length plain) in
   let f: DataStream.fragment id rg = plain in
@@ -191,9 +177,7 @@ let rec server_loop_12 config sock =
   // Derive keys
   let _ = log @@ ClientKeyExchange(cke) in
   KeySchedule.ks_server_12_cke_dh ks gx;
-  let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
-  let wr = encryptor_12 Server (ck @| civ) in
-  let rd = decryptor_12 Server (sk @| siv) in
+  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_12_get_keys ks in
 
   // Receive CCS and ClientFinished
   let _ = recvCCSRecord tcp in
@@ -279,13 +263,7 @@ let client_12 config host port =
   //IO.print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n");
 
   // Derive keys
-  let (ck, civ, sk, siv) = KeySchedule.ks_12_get_keys ks in
-  IO.print_string ("client AES_GCM write key:"^(Platform.Bytes.print_bytes ck)^"\n");
-  IO.print_string ("client AES_GCM salt: iv:"^(Platform.Bytes.print_bytes civ)^"\n");
-  IO.print_string ("server AES_GCM write key:"^(Platform.Bytes.print_bytes sk)^"\n");
-  IO.print_string ("server AES_GCM salt:"^(Platform.Bytes.print_bytes siv)^"\n");
-  let wr = encryptor_12 Client (ck @| civ) in
-  let rd = decryptor_12 Client (sk @| siv) in
+  let KeySchedule.StAEInstance rd wr = KeySchedule.ks_12_get_keys ks in
 
   // Send CCS and ClientFinished
   let Finished cfin, cfinb = Handshake.prepareClientFinished ks log in

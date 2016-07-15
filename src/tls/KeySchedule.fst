@@ -988,7 +988,7 @@ let ks_client_12_set_session_hash ks =
 // Will become private; public API will have
 // ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
 // ks_server_12_keygen: ...
-val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
+val ks_12_get_keys: ks:ks -> ST (writer:recordInstance)
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     match st with
@@ -1016,7 +1016,10 @@ val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
     match role with
     | Client -> k1, iv1, k2, iv2
     | Server -> k2, iv2, k1, iv1 in
-  (wk, wiv, rk, riv)
+  let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
+  let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
+  let r = StAE.genReader HyperHeap.root rw in
+  StAEInstance r w
 
 (******************************************************************)
 (******************************************************************)
@@ -1098,79 +1101,3 @@ val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random ->
 let recordInstanceToEpoch #hs_rgn #n hs (StAEInstance #i rd wr) =
   Epoch hs rd wr
 
-
-(*
-let id_TLS12_AES_GCM_128_SHA256  = {
-    msId = noMsId;
-    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
-    pv = TLS_1p2;
-    aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
-    csrConn = createBytes 64 0x00z;
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None;
-    };
-    writer = Client
-  }
-
-val encryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> ST (StAE.writer (hsId hs))
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let encryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = hsId hs in
-  let r = HyperHeap.root in
-  let w: StatefulLHAE.writer id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Writer =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.writer -> StatefulLHAE.state
-  StAE.StLHAE () w
-
-val decryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> ST (StAE.reader (peerId (hsId hs)))
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let decryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = peerId (hsId hs) in
-  let r = HyperHeap.root in
-  let r: StatefulLHAE.reader id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Reader =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.reader -> StatefulLHAE.state
-  StAE.StLHAE () r
-
-val recordKeysToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> (bytes * bytes * bytes * bytes) -> ST (epoch hs_rgn n)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let recordKeysToEpoch #hs_rgn #n h (ck,civ,sk,siv) = 
-  let wr: StAE.writer (hsId h) = encryptor_TLS12_AES_GCM_128_SHA256 h ck civ in
-  let rd: StAE.reader (peerId (hsId h)) = decryptor_TLS12_AES_GCM_128_SHA256 h sk siv in
-  Epoch h rd wr
-
-*)
