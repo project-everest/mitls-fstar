@@ -694,16 +694,20 @@ let processServerFinished_13 cfg n ks log msgs =
        //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
        begin
        match sigHashAlg_of_ske cv.cv_sig with
-       | Some ((sa,h), sigv) ->
-         if List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = h))
+       | Some ((sa,ha), sigv) ->
+         if List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = ha))
              (list_sigHashAlg_is_list_tuple_sig_hash algs) then
            begin
-           let lb = HandshakeLog.getHash log (Hash._0 h) in
-           let a = Signature.Use (fun _ -> True) sa [h] false false in
+           let Hash sh_alg = sessionHashAlg n.n_protocol_version n.n_cipher_suite in
+           let hL = CoreCrypto.hashSize sh_alg in
+           let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+           let rc = CoreCrypto.hash sh_alg zeroes in
+           let lb = (HandshakeLog.getHash log sh_alg) @| rc in
+           let a = Signature.Use (fun _ -> True) sa [ha] false false in
            let tbs = to_be_signed n.n_protocol_version Server None lb in
            match Signature.get_chain_public_key #a c.crt_chain with
            | Some pk ->
-             let valid = Signature.verify h pk tbs sigv in
+             let valid = Signature.verify ha pk tbs sigv in
              let _ = IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n") in
              if valid then
                let _ = log @@ CertificateVerify(cv) in
@@ -954,26 +958,32 @@ let prepareServerFinished_13 cfg n ks log =
       let cb = log @@ Certificate(c) in
       let pv = n.n_protocol_version in 
       let cs = n.n_cipher_suite in
+      let sh_alg = sessionHashAlg pv cs in
 
       // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
+      // If no signature nego took place we use the SA and KDF hash from the CS
       let Some sa = n.n_sigAlg in
       let algs =
 	match n.n_extensions.ne_signature_algorithms with
         | Some l -> l
-        | None -> [sa, Hash CoreCrypto.SHA256]
+        | None -> [sa, sh_alg]
       in
       let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
       let sa, ha =
 	match algs with
 	| ha::_ -> ha
-	| [] -> (sa, Hash CoreCrypto.SHA256) in
-      let Hash h = ha in
+	| [] -> (sa, sh_alg) in
       let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
       let a = Signature.Use (fun _ -> True) sa [ha] false false in
       begin
       match Signature.lookup_key #a cfg.private_key_file with
       | Some csk ->
-        let tbs = to_be_signed pv Server None (HandshakeLog.getHash log h) in
+        let Hash sh_alg = sh_alg in
+        let hL = CoreCrypto.hashSize sh_alg in
+        let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+        let rc = CoreCrypto.hash sh_alg zeroes in
+        let lb = (HandshakeLog.getHash log sh_alg) @| rc in
+        let tbs = to_be_signed pv Server None lb in
         let sigv = Signature.sign ha csk tbs in
 	let signature = (hab @| sab @| (vlbytes 2 sigv)) in
         let scv = {cv_sig = signature} in
