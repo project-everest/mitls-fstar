@@ -406,9 +406,9 @@ let add_connection_ok h0 h1 i c =
 	 | Some v -> conn_hs_region_exists v h1) =
       fun n -> match MM.sel new_conn n with
     	    | None -> ()
-    	    | Some c' -> if c = c' then ()
-    		        else match MM.sel old_conn n with
-			     | None -> ()
-			     | Some c'' -> cut (c' = c'') in// Some.v (MM.sel old_conn n)) in
+    	    | Some c' ->
+	      assert (c =!= c' ==> (match MM.sel old_conn n with
+                                     | None -> True
+                                     | Some c'' -> c' == c'')) in
     qintro hs_region_exists;
     cut (handshake_regions_exists new_conn h1)
