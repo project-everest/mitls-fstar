@@ -1,6 +1,4 @@
 (* Main driver for interop tests *)
-
-
 open TLSConstants
 open TLSInfo
 
@@ -12,7 +10,7 @@ let config = ref {defaultConfig with
   maxVer = TLS_1p3;
   check_peer_certificate = false;
   cert_chain_file = "../../data/test_chain.pem";
-  private_key_file = "../../data/test_chain.key";
+  private_key_file = "../../data/server.key";
   ca_file = "../../data/CAFile.pem";
   safe_resumption = true;
   ciphersuites = cipherSuites_of_nameList [TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256];
@@ -98,12 +96,10 @@ let _ =
     | host :: _ -> host, 443
     | _ -> (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443 in
 
-  match !role, !config.maxVer with
-  | Client, TLS_1p3 ->
-     if !tlsapi then TestAPI.client !config host port
-     else TestClient13.main !config host port
-  | Client, _ -> Test12.client !config host port
-  | Server, TLS_1p3 ->
-     if !tlsapi then TestAPI.server !config host port
-     else TestServer13.main !config host port
-  | Server, _ -> Test12.server !config host port
+  match !role, !config.maxVer, !tlsapi with
+  | Client, _, true -> TestAPI.client !config host port
+  | Server, _, true -> TestAPI.server !config host port
+  | Client, TLS_1p3, false -> TestHandshake.client_13 !config host port
+  | Client, _, false -> TestHandshake.client_12 !config host port
+  | Server, TLS_1p3, false -> TestHandshake.server_13 !config host port
+  | Server, _, false -> TestHandshake.server_12 !config host port

@@ -9,7 +9,7 @@ open FStar.Set
 open Platform
 open Platform.Bytes
 open Platform.Error
-open Platform.Tcp
+//open Transport //was: Platform.Tcp
 
 open TLSError
 open TLSConstants
@@ -73,6 +73,8 @@ let next_fragment i s =
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (Seq.index (MS.i_sel h0 ilog) w0) ilog;
 	         MR.witness ilog (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog)) in
+  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
+  let b = IO.debug_print_string ("nextFragment index type "^idt^"\n") in
   let res = Handshake.next_fragment i s in
   let _ = if w0 >= 0
 	  then MR.testify (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog) in
@@ -110,7 +112,7 @@ let outerPV c : ST protocolVersion
 (*** control API ***)
 
 // was connect, resume, accept_connected, ...
-val create: r0:c_rgn -> tcp:networkStream -> r:role -> cfg:config -> resume: resume_id r -> ST connection
+val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resume_id r -> ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
@@ -135,7 +137,7 @@ let create parent tcp role cfg resume =
 
 
 //TODO upgrade commented-out types imported from TLS.fsti
-// type initial (role: role) (ns:Tcp.networkStream) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
+// type initial (role: role) (ns:Transport.t) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
 //     extends (c_rid cn) root /\ // we allocate a fresh, opaque region for the connection
 //     c_role cn   = role /\
 //     c_tcp cn    = ns /\
@@ -147,7 +149,7 @@ let create parent tcp role cfg resume =
 // painful to specify?
 //* should we still return ConnectionInfo ?
 //* merging connect and resume with an optional sessionID
-//val connect: ns:Tcp.networkStream -> c:config -> resume: option sessionID -> ST connection
+//val connect: ns:Transport.t -> c:config -> resume: option sessionID -> ST connection
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 cn h1 ->
 //    modifies Set.empty h0 h1 /\
@@ -156,7 +158,7 @@ let create parent tcp role cfg resume =
 //  ))
 let connect m0 tcp cfg        = create m0 tcp Client cfg None
 let resume  m0 tcp cfg sid    = create m0 tcp Client cfg (Some sid)
-//val accept_connected: ns:Tcp.networkStream -> c:config -> ST connection
+//val accept_connected: ns:Transport.t -> c:config -> ST connection
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 cn h1 ->
 //    modifies Set.empty h0 h1 /\
@@ -172,7 +174,7 @@ let accept_connected m0 tcp cfg = create m0 tcp Server cfg None
 //    (exists ns. initial Server ns c None cn h1)
 //  ))
 let accept m0 listener cfg =
-    let tcp = Platform.Tcp.accept listener in
+    let tcp = Transport.accept listener in
     accept_connected m0 tcp cfg
 
 //val rehandshake: cn:connection { c_role cn = Client } -> c:config -> ST unit
@@ -324,6 +326,7 @@ let send_payload c i f =
 (*     st_inv c h0 ==> st_inv c h1 /\ op_Equality #int (iT c.hs Writer h0) (iT c.hs Writer h1)) *)
 
 // used e.g. for writing while reading
+// we miss some precise spec
 let currentId (c:connection) (rw:rw) : id = 
   let j = Handshake.i c.hs rw in 
   if j<0 then PlaintextID (c_nonce c)
@@ -377,7 +380,7 @@ let send c #i f =
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
   let record = Record.makePacket ct pv payload in
-  let r  = Platform.Tcp.send (C.tcp c) record in
+  let r  = Transport.send (C.tcp c) record in
   (* let h1 = ST.get() in *)
   (* cut (trigger_frame h1); *)
   match r with
@@ -502,7 +505,7 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
-  let b = IO.debug_print_string ("Using index type "^idt^"\n") in
+  let b = IO.debug_print_string ("sendFragment index type "^idt^"\n") in
   if not (check_incrementable wo)
   then ad_overflow
   else begin
@@ -514,7 +517,7 @@ let sendFragment c #i wo f =
        let ct, rg = Content.ct_rg i f in
        lemma_repr_bytes_values (length payload);
        let record = Record.makePacket ct pv payload in
-       let r  = Platform.Tcp.send (c.tcp) record in
+       let r  = Transport.send (c.tcp) record in
        match r with
        | Error(x)  -> Error(AD_internal_error,x)
        | Correct _ -> Correct()
@@ -693,16 +696,16 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 let rec writeHandshake (c:connection) (newWriter:bool) : St ioresult_w =
   let i = currentId c Writer in 
   let wopt = current_writer c i in
-  let b = IO.debug_print_string "CALL writeHandshake\n" in
+  let b = IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") in
   match next_fragment i c.hs with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason 
   | Handshake.Outgoing om send_ccs next_keys complete ->
-      let b = IO.debug_print_string ("Complete ="^(if complete then "yes\n" else "no\n")) in
+      let b = IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) in
       // we send handshake & CCS messages, and process key changes
       match sendHandshake wopt om send_ccs with 
       | Error (ad,reason) -> sendAlert c ad reason 
       | _   -> 
-        if next_keys           then c.state := BC; // much happening ghostly
+        if next_keys then c.state := BC; // much happening ghostly
         let st = !c.state in
         let newWriter = newWriter || next_keys in 
         if complete && st = BC then c.state := AD; // much happening ghostly too
@@ -1122,6 +1125,7 @@ let rec read c i =
     | ReadError x y         -> ReadError x y
     | CertQuery q adv       -> CertQuery q adv
     | Read delta            -> Read delta
+    | Complete              -> Complete // In TLS 1.2 client and TLS 1.3 server it makes sense to complete upon reading (e.g. reading ServerFinished in 1.2) instead of going through another roundtrip with the handshake with an extra state to Complete in writeHandshake
     )
 
 

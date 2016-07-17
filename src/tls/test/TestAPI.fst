@@ -18,7 +18,7 @@ module CC = CoreCrypto
 
 let client config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
-  let tcp = Platform.Tcp.connect host port in
+  let tcp = Transport.connect host port in
   let rid = new_region root in
   let con = TLS.connect rid tcp config in
 
@@ -37,8 +37,11 @@ let client config host port =
          | Read (DataStream.Data d) ->
            let db = DataStream.appBytes d in
            IO.print_string ("Received data: "^(iutf8 db));
-           (match TLS.writeCloseNotify con with
-           | _ -> ()))
+           let _ = TLS.writeCloseNotify con in
+           IO.print_string "Closing connection.\n")
+//           (match TLS.read con id with
+//           | Read DataStream.Close -> IO.print_string "Received close_notify! Closing socket.\n"
+//           | _ -> IO.print_string "improperly closed connection\n"))
        | WriteError _ t -> IO.print_string ("Write error:"^t^"\n")
        | _ -> IO.print_string "unexpted ioresult_w\n")
     | _ -> IO.print_string "unexpected ioresult_i read\n"
@@ -48,7 +51,7 @@ let rec aux_server config sock =
   let con = TLS.accept rid sock config in
   let id = TLS.currentId con Reader in
 
-  match TLS.read con id with
+  let () = match TLS.read con id with
   | Complete ->
    begin
     let id = TLS.currentId con Reader in
@@ -70,7 +73,7 @@ let rec aux_server config sock =
        begin
         let id = TLS.currentId con Reader in
         match TLS.read con id with
-        | Read DataStream.Close -> ()
+        | Read DataStream.Close -> IO.print_string "Received close_notify! Closing socket.\n"
         | _ -> IO.print_string "improperly closed connection\n"
        end
       | _ -> IO.print_string "failed to write HTTP response\n"
@@ -78,6 +81,7 @@ let rec aux_server config sock =
     | _ -> IO.print_string "unexpted ioresult_w\n"
    end
   | _ -> IO.print_string "unexpected ioresult_i read\n"
+  in aux_server config sock
 
 let server config host port =
  IO.print_string "===============================================\n Starting test TLS 1.3 server...\n";

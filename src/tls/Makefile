@@ -72,6 +72,7 @@ MonotoneSeq.fst \
 MonotoneMap.fst \
 TLSError.fst \
 TLSConstants.fst \
+Transport.fst \
 Nonce.fst \
 RSAKey.fst \
 DHGroup.fst \
@@ -113,13 +114,11 @@ Epochs.fst \
 KeySchedule.fst \
 Handshake.fst \
 Connection.fst \
-test/TestRecord.fst \
-test/TestDH.fst \
-test/Test12.fst \
-test/TestServer13.fst \
-test/TestClient13.fst \
 ConnInvariant.fst \
 TLS.fst \
+test/TestRecord.fst \
+test/TestDH.fst \
+test/TestHandshake.fst \
 test/TestAPI.fst #the preceding space is significant!
 
 # --------------------------------------------------------------------
@@ -136,6 +135,7 @@ MonotoneSeq \
 MonotoneMap \
 TLSError \
 TLSConstants \
+Transport \
 Nonce \
 RSAKey \
 DHGroup \
@@ -171,7 +171,8 @@ HKDF \
 Epochs \
 Connection \
 ConnInvariant \
-TLS 
+TLS \
+FFI 
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend

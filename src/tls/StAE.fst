@@ -28,6 +28,11 @@ let is_stream i = is_ID13 i
 
 let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
 
+// type id = i:id {is_stream i \/ is_stlhae i}
+
+// PLAINTEXTS are defined in Content.fragment i
+//16-06-08 see also StreamPlain and StatefulPlain. 
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //Various utilities related to lengths of ciphers and fragments

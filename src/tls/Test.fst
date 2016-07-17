@@ -32,11 +32,17 @@ let rec write_all' c i buffer sent =
 
 let write_all c i b = write_all' c i b 0
 
+// This sample code is currently full of partial pattern matching
+// aka we don't handle any unexpected result or error. 
+
+#set-options "--lax" 
+ 
 let client (here:Connection.c_rgn) tcp config_1 (request:bytes) =
   let c = connect here tcp config_1 in
+  let i_0 = currentId c Reader in 
   // nothing sent yet, except possibly for TCP
   // we write in cleartext until we have the 0RTT index.
-  match read c noId with
+  match read c i_0 with
   //    ClientHello
   //      + KeyShare             -------->
   //                                                  ServerHello
@@ -77,24 +83,86 @@ let client (here:Connection.c_rgn) tcp config_1 (request:bytes) =
 
 let server (here:Connection.c_rgn) tcp config_1 (respond: (bytes -> bytes)) =
   let c = accept here tcp config_1 in
-  match read c noId with
-  | Complete i ->
+  let i_0 = currentId c Reader in (
+  match read c i_0 with
+  | Complete ->
   let i = currentId c Reader in 
   match read c i with 
-  | Read (Data f0) -> 
-  let response = fragment_1 i (respond (appBytes f0)) in
+  | Read (Data f0) ->
+  let data = respond (appBytes f0) in
+  let response = fragment_1 i data in
   match write c response with
   | Written  -> 
   match read c i with 
-  | Read Close -> ()
+  | Read Close -> ())
   // At this point, if authId i, I know that 
   // (1) my peer's writer view is exactly ( Data f0 ; Close )
   // but not what my peer has read, unless the app semantics says so.
 
 
+let mkConfig cs pvs = // from test_client.ml and test_server.ml
+  let l = [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 ] in
+  let pv = match pvs with 
+    | "1.3" -> TLS_1p3 
+    | _     -> TLS_1p2 in
+  let sigPref = [CoreCrypto.RSASIG] in
+  let hashPref = [Hash CoreCrypto.SHA256] in
+  let sigAlgPrefs = sigAlgPref sigPref hashPref in
+  let cfg = ({TLSInfo.defaultConfig with
+        minVer = pv;
+        maxVer = pv;
+        ciphersuites =   cipherSuites_of_nameList l; }) in 
+
+  match cs, pv with
+  | Client, TLS_1p3 -> { cfg with 
+        namedGroups = [SEC CoreCrypto.ECC_P256; SEC CoreCrypto.ECC_P384];
+        check_peer_certificate = false;
+        ca_file = "../../data/CAFile.pem";
+        }
+  | Client, TLS_1p2 -> { cfg with 
+         safe_resumption = true;
+         signatureAlgorithms = [(CoreCrypto.RSASIG, Hash CoreCrypto.SHA512); 
+                                (CoreCrypto.RSASIG, Hash CoreCrypto.SHA384);
+                                (CoreCrypto.RSASIG, Hash CoreCrypto.SHA256)];
+         check_peer_certificate = false;
+         ca_file = "../../data/CAFile.pem";
+        }
+  | Server, _ -> { cfg with
+         signatureAlgorithms = sigAlgPrefs;
+         ca_file = "";
+         cert_chain_file = "../../data/test_chain.pem";
+         private_key_file = "../../data/test_chain.key";
+         }
+
+
+let main cs pv host port = 
+  let config = mkConfig cs pv in 
+  match cs with 
+  | Client -> ( 
+    IO.print_string "===============================================\n Starting test TLS client...\n";
+    let tcp = Platform.Tcp.connect host port in
+    let here = new_region root in 
+    client here tcp config
+
+  | Server -> (
+    IO.print_string "===============================================\n Starting test TLS server...\n";
+    let tcp = Platform.Tcp.connect host port in
+    let here = new_region root in 
+    client here tcp config pv)
+  
+  let _ =
+    if (Array.length Sys.argv <> 4) then
+      print_string "Usage: ./client.out <1.2|1.3> <host> <port>\n"
+      else
+      if (Sys.argv.(1) = "1.3") then
+         TestClient13.main (config "1.3") Sys.argv.(2) (int_of_string Sys.argv.(3))
+         else
+         TestClient.main () () () () () () (config "1.2") Sys.argv.(2) (int_of_string Sys.argv.(3))
+  
+
 (* Notes towards a second example: RPC *)
 
 let N = 100000
 
-type request = rbytes (0,N)
+type request = rbytes (0,N-1)
 
