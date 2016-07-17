@@ -8,7 +8,7 @@ open Platform.Error
 open TLSError
 
 // make this type abstract? 
-type t = 
+noeq type t = 
   { snd: bytes -> EXT (optResult string unit);
     rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); 
     } 
