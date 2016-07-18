@@ -34,11 +34,12 @@ let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : bytes =
   let Some d = StAE.decrypt #id rd ctxt in
   Content.repr id d
 
-let sendRecord tcp pv ct msg =
-  let r = Record.makePacket ct pv msg in
+let sendRecordE encrypted tcp pv ct msg =
+  let r = Record.makePacket ct encrypted pv msg in
   match Transport.send tcp r with
   | Error z -> failwith z
   | Correct _ -> ()
+let rendRecord = sendRecordE false
 
 let sendHSRecord tcp pv msg =
   sendRecord tcp pv Content.Handshake msg
@@ -357,7 +358,7 @@ let client_13 config host port =
 
   IO.print_string "before encrypt \n";
   let efinb = encryptRecord wr Content.Handshake cfinb in
-  sendRecord tcp pv Content.Application_data efinb;
+  sendRecordE true tcp pv Content.Application_data efinb;
 
   let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
   let get = encryptRecord dwr Content.Application_data (utf8 payload) in
@@ -368,7 +369,7 @@ let client_13 config host port =
 let sendEncHSRecord tcp pv msg wr =
   let hs = HandshakeMessages.handshakeMessageBytes (Some pv) msg in
   let er = encryptRecord wr Content.Handshake hs in
-  sendRecord tcp pv Content.Application_data er
+  sendRecordE true tcp pv Content.Application_data er
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.3 Server
