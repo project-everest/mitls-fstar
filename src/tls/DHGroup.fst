@@ -100,10 +100,14 @@ let serialize dhp dh_Y =
   let pkb = vlbytes 2 dh_Y in
   pb @| gb @| pkb
 
-val serialize_public: share -> Tot bytes
-let serialize_public dh_Y =
+val serialize_public: s:share -> n:nat{length s <= n} -> Tot (lbytes n)
+let serialize_public dh_Y l =
   lemma_repr_bytes_values (length dh_Y);
-  vlbytes 2 dh_Y
+  let rec pad (x:bytes{length x <= l}) : Tot (lbytes l) =
+    if (length x < l) then pad ((abyte 0z) @| x)
+    else x in
+//  vlbytes 2
+  (pad dh_Y)
 
 val parse_public: p:bytes{2 <= length p} -> Tot (result share)
 let parse_public p =
