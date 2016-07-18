@@ -39,7 +39,7 @@ let sendRecordE encrypted tcp pv ct msg =
   match Transport.send tcp r with
   | Error z -> failwith z
   | Correct _ -> ()
-let rendRecord = sendRecordE false
+let sendRecord = sendRecordE false
 
 let sendHSRecord tcp pv msg =
   sendRecord tcp pv Content.Handshake msg
