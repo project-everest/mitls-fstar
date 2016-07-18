@@ -56,6 +56,7 @@ type handshakeType =
   | HT_client_key_exchange
   | HT_server_configuration
   | HT_finished
+  | HT_key_update
   | HT_next_protocol
 
 val htBytes: handshakeType -> Tot (lbytes 1)
@@ -75,6 +76,7 @@ let htBytes t =
   | HT_client_key_exchange  -> abyte 16z
   | HT_server_configuration -> abyte 17z
   | HT_finished             -> abyte 20z
+  | HT_key_update           -> abyte 24z
   | HT_next_protocol        -> abyte 67z
 
 val htBytes_is_injective: ht1:handshakeType -> ht2:handshakeType -> Lemma (requires (True)) (ensures (htBytes ht1 = htBytes ht2 ==> ht1 = ht2))

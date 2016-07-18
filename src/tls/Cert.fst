@@ -53,6 +53,11 @@ let rec certificateListBytes_is_injective c1 c2 =
     lemma_vlbytes_len 3 hd
     end
 
+let endpoint_keytype (c:chain) : Tot (option CoreCrypto.key) =
+  match c with
+  | [] -> None
+  | h::_ -> CoreCrypto.get_key_from_cert h
+
 abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
 let rec parseCertificateList b =
   if length b >= 3 then
