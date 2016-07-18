@@ -1,48 +1,4 @@
-(*--build-config
-    options: --z3timeout 100 --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --admit_fsi FStar.Seq --admit_fsi Fstar.Set --admit_fsi FStar.IO --admit_fsi CoreCrypto --verify_module TestGCM;
-
-    variables: CONTRIB=../../../FStar/contrib;
-    
-    other-files: FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst 
-      FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst stHyperHeap.fst allHyperHeap.fst
-      FStar.String.fst FStar.List.fst seq.fsi FStar.SeqProperties.fst FStar.IO.fsti
-      $CONTRIB/Platform/fst/Bytes.fst $CONTRIB/Platform/fst/Date.fst 
-      $CONTRIB/Platform/fst/Error.fst $CONTRIB/Platform/fst/Tcp.fst
-      $CONTRIB/CoreCrypto/fst/CoreCrypto.fst 
-      $CONTRIB/CoreCrypto/fst/DHDB.fst 
-      TLSError.fst Nonce.fst TLSConstants.fst RSAKey.fst DHGroup.p.fst 
-      ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst 
-      UntrustedCert.fst Cert.fst TLSInfo.fst Range.p.fst DataStream.fst Alert.fst 
-      Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst 
---*)
 module TestGCM
-
-(*
-Code generation:
-
-../../../FStar/bin/fstar.exe FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst stHyperHeap.fst allHyperHeap.fst FStar.String.fst FStar.List.fst FStar.Seq.fst FStar.SeqProperties.fst FStar.IO.fsti --admit_fsi Fstar.Set --admit_fsi FStar.IO --admit_fsi CoreCrypto --include ../../../FStar/contrib/Platform/fst/ --include ../../../FStar/contrib/CoreCrypto/fst Bytes.fst Date.fst Error.fst Tcp.fst CoreCrypto.fst DHDB.fst TLSError.fst Nonce.fst TLSConstants.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fst Cert.fst TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst TestGCM.fst --codegen OCaml --codegen-lib CoreCrypto --codegen-lib Platform --lax --trace_error --use_native_int
-
-Workarounds:
-
-In DHGroup.ml:
-- add type annotation: 
-  let goodPP_log = (FStar_ST.alloc ([]:CoreCrypto.dh_params list))
-
-In TLSInfo.ml:
-- drop extracted assumed logic types
-- Redefine safeKDF: let safeKDF = (fun i -> false)
-
-Compilation (Mac OS X): 
-
-Use the current implementation of DHDB (requires packages sqlite3 and fileutils)
-
-ocamlfind ocamlopt -I ../../../FStar/lib/ml/hyperheap -I ../../../FStar/lib/ml/native_int -I ../../../FStar/lib/ml -I ../../../FStar/contrib/CoreCrypto/ml -I ../../../FStar/contrib/CoreCrypto/ml/db -I ../../../FStar/contrib/Platform/ml ../../../FStar/lib/ml/native_int/prims.ml ../../../FStar/contrib/Platform/ml/platform.ml ../../../FStar/contrib/CoreCrypto/ml/db/DB.ml ../../../FStar/contrib/CoreCrypto/ml/DHDB.ml ../../../FStar/contrib/CoreCrypto/ml/CoreCrypto.ml ../../../FStar/lib/ml/FStar_All.ml FStar_FunctionalExtensionality.ml FStar_Classical.ml ../../../FStar/lib/ml/FStar_Set.ml FStar_Map.ml ../../../FStar/lib/ml/FStar_List.ml ../../../FStar/lib/ml/hyperheap/FStar_ST.ml ../../../FStar/lib/ml/hyperheap/FStar_HyperHeap.ml FStar_Seq.ml FStar_SeqProperties.ml ../../../FStar/lib/ml/FStar_IO.ml TLSError.ml Nonce.ml TLSConstants.ml RSAKey.ml HASH.ml HMAC.ml ECGroup.ml DHGroup.ml CommonDH.ml Sig.ml UntrustedCert.ml Cert.ml PMS.ml TLSInfo.ml Range.ml DataStream.ml Content.ml StatefulPlain.ml LHAEPlain.ml AEAD_GCM.ml StatefulLHAE.ml TestGCM.ml -cc "gcc-5" -cclib -L../../../FStar/3rdparty/osx -cclib -lopenssl_wrap -cclib ../../../FStar/3rdparty/osx/libcrypto.a -package batteries -package sqlite3 -package fileutils -linkpkg -g -thread -o sample.exe
-
-Or replace DHDB with dummy implementation DHDB.ml:
-
-ocamlfind ocamlopt -I ../../../FStar/lib/ml/hyperheap -I ../../../FStar/lib/ml/native_int -I ../../../FStar/lib/ml -I ../../../FStar/contrib/CoreCrypto/ml -I ../../../FStar/contrib/Platform/ml ../../../FStar/lib/ml/native_int/prims.ml ../../../FStar/contrib/Platform/ml/platform.ml ../../../FStar/contrib/CoreCrypto/ml/db/DB.ml DHDB.ml ../../../FStar/contrib/CoreCrypto/ml/CoreCrypto.ml ../../../FStar/lib/ml/FStar_All.ml FStar_FunctionalExtensionality.ml FStar_Classical.ml ../../../FStar/lib/ml/FStar_Set.ml FStar_Map.ml ../../../FStar/lib/ml/FStar_List.ml ../../../FStar/lib/ml/hyperheap/FStar_ST.ml ../../../FStar/lib/ml/hyperheap/FStar_HyperHeap.ml FStar_Seq.ml FStar_SeqProperties.ml ../../../FStar/lib/ml/FStar_IO.ml TLSError.ml Nonce.ml TLSConstants.ml RSAKey.ml HASH.ml HMAC.ml ECGroup.ml DHGroup.ml CommonDH.ml Sig.ml UntrustedCert.ml Cert.ml PMS.ml TLSInfo.ml Range.ml DataStream.ml Content.ml StatefulPlain.ml LHAEPlain.ml AEAD_GCM.ml StatefulLHAE.ml TestGCM.ml -cc "gcc-5" -cclib -L../../../FStar/3rdparty/osx -cclib -lopenssl_wrap -cclib ../../../FStar/3rdparty/osx/libcrypto.a -package batteries -linkpkg -g -thread -o sample.exe
-*)
-
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -57,46 +13,57 @@ open Range
 open StatefulPlain
 open AEAD_GCM
 open StatefulLHAE
+open StAE
 
 
-let i = {noId with aeAlg = AEAD CoreCrypto.AES_256_GCM CoreCrypto.SHA256}
+let pre_id (role:role) =
+  let cr  = createBytes 32 0z in
+  let sr  = createBytes 32 0z in
+  let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
+  let gx  = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
+  let g   = CommonDH.key_params gx in
+  let gy, gxy = CommonDH.dh_responder gx in
+  let pms = PMS.DHPMS (g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy)) in
+  let msid = StandardMS pms (cr @| sr) kdf in
+  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM CoreCrypto.SHA256) cr sr role
 
-val ad: adata i
-let ad = makeAD i Application_data
+let id = pre_id Client
 
-val clen: n:nat { valid_clen i n  }
-let clen = 34
+#set-options "--lax"
 
-val rg: frange i
-let rg = Range.cipherRangeClass i clen // point (clen - 8 - 16) = (10,10)
+let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
+  let rg: Range.frange id = (0, length plain) in
+  let f: DataStream.fragment id rg = plain in
+  let f: Content.fragment id = Content.mk_fragment id ct rg f in
+  StAE.encrypt #id wr f
 
-val text: rbytes rg
-let text = Platform.Bytes.createBytes 10 70uy
-//let text = Platform.Bytes.utf8 "Top secret"
+let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : option bytes =
+  let ctxt: StAE.decrypted id = (ct, cipher) in
+  match StAE.decrypt #id rd ctxt with
+  | Some d -> Some (Content.repr id d)
+  | _ -> None
 
-val p: plain i ad rg
-let p =
-  assume (~(authId i)); 
-  mk_plain i ad rg text
+let text = Platform.Bytes.utf8 "Top secret"
 
-let both = gen FStar.HyperHeap.root i
-
-val rd: reader i
-let rd = fst both
-
-val wr: writer i
-let wr = snd both
-
-let main =
-  admit (); // TODO: prove invariants
-  let c = encrypt #i #ad #rg wr p in
-  print_string "Encrypted: "; 
-  print_string (Platform.Bytes.iutf8 c);
-  print_string "\n";
-  let d = decrypt #i #ad rd c in
+let main () =
+  //let wr = StAE.gen root id in
+  let key = bytes_of_hex "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308" in
+  let wr = StAE.coerce root id key in
+  let rd = StAE.genReader root #id wr in
+  let ct = Content.Application_data in
+  let c = encryptRecord #id wr ct text in
+  //print_string ("Encrypted: " ^ (iutf8 c) ^ "\n");
+  let d = decryptRecord #id rd ct c in
   match d with
-  | Some p' -> 
-    print_string "Decrypted: "; 
-    print_string (Platform.Bytes.iutf8 (repr i ad rg p'));
-    print_string "\n"
-  | None -> failwith "Failure"
+  | Some text' ->
+    if text' <> text then
+      begin
+      IO.print_string ("GCM test: FAIL\n");
+      IO.print_string ("Unexpected output: " ^ (iutf8 text') ^ ",\nexpected = " ^ (iutf8 text) ^ "\n");
+      failwith "Error!"
+      end
+    else
+      IO.print_string ("GCM test: OK\n")
+  | None ->
+    IO.print_string ("GCM test: FAIL\n");
+    failwith "Error!"

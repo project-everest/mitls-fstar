@@ -5,4 +5,5 @@ let _ =
   TestRecord.main () () () ();
   TestDH.main ();
   Test_hkdf.main ();
+  TestGCM.main ();
   ()
