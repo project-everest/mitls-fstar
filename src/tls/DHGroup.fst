@@ -100,14 +100,15 @@ let serialize dhp dh_Y =
   let pkb = vlbytes 2 dh_Y in
   pb @| gb @| pkb
 
-val serialize_public: s:share -> n:nat{length s <= n} -> Tot (lbytes n)
-let serialize_public dh_Y l =
-  lemma_repr_bytes_values (length dh_Y);
-  let rec pad (x:bytes{length x <= l}) : Tot (lbytes l) =
-    if (length x < l) then pad ((abyte 0z) @| x)
-    else x in
-//  vlbytes 2
-  (pad dh_Y)
+val serialize_public: s:share -> len:nat{len < 65536 /\ length s <= len}
+  //-> Tot (lbytes (2 + len))
+  -> Tot (lbytes len)
+let serialize_public dh_Y len =
+  let padded_dh_Y = createBytes (len - length dh_Y) 0z @| dh_Y in
+  lemma_repr_bytes_values len;
+  //assume (repr_bytes (length padded_dh_Y) <= 2);
+  //vlbytes 2 padded_dh_Y
+  padded_dh_Y
 
 val parse_public: p:bytes{2 <= length p} -> Tot (result share)
 let parse_public p =
