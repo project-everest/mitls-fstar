@@ -116,6 +116,7 @@ Handshake.fst \
 Connection.fst \
 ConnInvariant.fst \
 TLS.fst \
+FFI.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 test/TestHandshake.fst \
@@ -250,7 +251,7 @@ FFICallbacks.cmx: FFICallbacks.cmi
     
 FFICallbacks.cmx: ../../libs/ml/FFICallbacks.ml ffi.c FFICallbacks.cmi
 	cp ../../libs/ml/FFICallbacks.ml .
-	ocamlfind opt -package batteries -I $(FSTAR_HOME)/$(CONTRIB)/Platform/ml -I ../../libs  -I ../../libs -c FFICallbacks.ml ffi.c
+	ocamlfind opt -package batteries $(OCAML_INCLUDE_PATHS) -c FFICallbacks.ml ffi.c
     
 OCAMLMKLIB = ocamlfind mklib $(INCLUDE)    
 FFICallbacks.cmxa: FFICallbacks.cmx
@@ -285,7 +286,7 @@ TLSML := \
   $(TLSML)
 # Last step: prefix with the output directory.
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
-TLSML := $(TLSML) ../../libs/ml/FFI.ml
+TLSML := $(TLSML) FFIRegister.ml
 
 refresh:
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)

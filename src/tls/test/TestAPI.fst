@@ -14,8 +14,30 @@ open TLSInfo
 open TLSConstants
 open TLS
 open FFICallbacks
+open FFI
 
 module CC = CoreCrypto
+
+/////////////////////////////////////////////////////////////////////////
+let s2pv = function
+  | "1.2" -> TLS_1p2
+  | "1.3" -> TLS_1p3
+  | "1.1" -> TLS_1p1
+  | "1.0" -> TLS_1p0
+  | s -> failwith ("Invalid protocol version specified: "^s)
+
+let ffiConfig version host =
+  let v = s2pv version in 
+  {defaultConfig with
+    minVer = v;
+    maxVer = v;
+    check_peer_certificate = false;
+    cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
+    private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
+    ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
+    safe_resumption = true;
+    ciphersuites = cipherSuites_of_nameList [TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256];
+  }
 
 type callbacks = FFICallbacks.callbacks
 
@@ -26,26 +48,19 @@ let sendTcpPacket callbacks buf =
     Platform.Error.Error ("socket send failure") 
   else 
     Platform.Error.Correct () 
+    
+val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Error.optResult string (b:bytes {length b <= max}))
+let recvTcpPacket callbacks max =
+  let (result,str) = FFICallbacks.recv callbacks max in
+  if (result <= 0) then
+    Platform.Error.Error ("socket recv failure")
+  else
+    Platform.Error.Correct(str)
+  
+val ffiConnect: config:config -> callbacks:callbacks -> int
+let ffiConnect config cb =
+  connect (sendTcpPacket cb) (recvTcpPacket cb) config
 
- let ffiConnect config cb =
-  let tcp = Transport.callbacks (sendTcpPacket cb) (FFICallbacks.recv cb) in
-  let rid = new_region root in
-  let con = TLS.connect rid tcp config in
-  let id = TLS.currentId con Reader in
-  match TLS.read con id with
-    | Complete -> let send payload = (
-        let id = TLS.currentId con Writer in
-        let rg : Range.frange id = Range.point (length payload) in
-        let f = DataStream.appFragment id rg payload in
-        Written = TLS.write con f
-      ) in let recv = (
-        let id = TLS.currentId con Reader in
-        let Read (DataStream.Data d) = TLS.read con id in
-        let db = DataStream.appBytes d in
-        get_cbytes db
-      )
-      in (send, recv)
-    | _ -> _
 
 let client config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
