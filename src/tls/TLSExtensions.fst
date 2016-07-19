@@ -64,6 +64,7 @@ and extension =
   | E_earlyData of earlyDataIndication 
   | E_preSharedKey of preSharedKey 
   | E_keyShare of keyShare 
+  | E_draftVersion of bytes
   // Common extension types
   | E_signatureAlgorithms of (list sigHashAlg) 
   // Previous extension types
@@ -77,6 +78,7 @@ and extension =
 
 let sameExt a b =
   match a, b with
+  | E_draftVersion _, E_draftVersion _ -> true
   | E_earlyData _, E_earlyData _ -> true
   | E_preSharedKey _, E_preSharedKey _ -> true
   | E_keyShare _, E_keyShare _ -> true
@@ -94,6 +96,7 @@ let sameExt a b =
 val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
   match ext with
+  | E_draftVersion _        -> abyte2 (0xFFz, 0x02z)
   | E_keyShare _            -> abyte2 (0x00z, 0x28z) // KB: used Ekr's values
   | E_preSharedKey _        -> abyte2 (0x00z, 0x29z) // KB: used Ekr's values
   | E_earlyData _           -> abyte2 (0x00z, 0x2az) // KB: used Ekr's values
@@ -288,6 +291,7 @@ let rec earlyDataIndicationBytes edi =
       cid_bytes @| cs_bytes @| ext_bytes @| context_bytes //@| edt_bytes
 and extensionPayloadBytes role ext =
   match ext with
+  | E_draftVersion b          -> b
   | E_earlyData edt           -> earlyDataIndicationBytes edt
   | E_preSharedKey psk        -> preSharedKeyBytes psk
   | E_keyShare ks             -> keyShareBytes ks
@@ -333,6 +337,9 @@ let rec parseExtension role b =
     match vlparse 2 payload with
     | Correct (data) ->
 	(match cbyte2 head with
+        | (0xffz, 0x02z) -> // TLS 1.3 draft version
+          if length data = 2 then Correct (E_draftVersion data)
+          else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate draft 1.3 version")
 	| (0x00z, 0x0Dz) -> // sigalgs
 	  if length data >= 2 && length data < 65538 then (
 	  (match parseSigHashAlgs (data) with
@@ -469,6 +476,7 @@ let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
        | None -> FirstConnection
        | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
     let res = [E_renegotiation_info(cri)] in
+    let res = [E_draftVersion (abyte2 (0z, 13z))] in
     let res = 
        match pv, ks with
        | TLS_1p3,Some ks -> (E_keyShare ks)::res
@@ -574,12 +582,12 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message")
      end
 
-val clientToServerExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
-let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
+val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
+let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
     match cExt with
     | E_earlyData b -> None    // JK : TODO
     | E_preSharedKey b -> None // JK : TODO
-    | E_keyShare b -> 
+    | E_keyShare b ->
         (match ks with
  	| Some k -> Some (E_keyShare k)     
 	| None -> None)
@@ -588,17 +596,19 @@ let clientToServerExtension (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) 
            match ri with
            | Some t -> ServerRenegotiationInfo t
            | None -> FirstConnection in
-        Some (E_renegotiation_info ric)
+        (match pv with
+        | TLS_1p3 -> None
+        | _ -> Some (E_renegotiation_info ric))
     | E_server_name l -> 
         (match List.Tot.tryFind (fun x->match x with | SNI_DNS _ -> true | _ -> false) l with
-        | Some _ -> Some(E_server_name [])
-        | _ -> None)    
+        | Some _ when (pv <> TLS_1p3) -> Some(E_server_name []) // TODO EncryptedExtensions
+        | _ -> None)
     | E_ec_point_format(l) ->
-        if resuming then None
+        if resuming || pv = TLS_1p3 then None
         else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
     | E_supported_groups(l) -> None
     | E_extended_ms -> 
-        if cfg.safe_resumption then Some(E_extended_ms)
+        if pv <> TLS_1p3 && cfg.safe_resumption then Some(E_extended_ms)
         else None
     | E_extended_padding ->
         if resuming then
@@ -656,7 +666,7 @@ val negotiateServerExtensions: protocolVersion -> option (list extension) -> val
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->
-      let server = List.Tot.choose (clientToServerExtension cfg cs ri ks resuming) cExtL in
+      let server = List.Tot.choose (clientToServerExtension pv cfg cs ri ks resuming) cExtL in
       Correct (Some server)
 //      let negi = ne_default in
 //      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in

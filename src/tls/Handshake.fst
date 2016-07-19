@@ -1275,7 +1275,8 @@ let recv_fragment hs #i f =
        | None -> None, None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
     match parseHandshakeMessages pv kex b with
-    | Error z -> InError z
+    | Error (ad, s) ->
+      let _ = IO.debug_print_string ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n") in InError (ad,s)
     | Correct(r,hsl) ->
        let hsl = List.Tot.append (!hsref).hs_buffers.hs_incoming_parsed hsl in
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
@@ -1283,7 +1284,8 @@ let recv_fragment hs #i f =
       (match (!hsref).hs_state,hsl with 
        | C (C_Idle ri), _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
        | C (C_HelloSent ri ch), (ServerHello(sh),l)::hsl 
-	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) -> 
+	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) ->
+           let _ = IO.debug_print_string "Processing client hello...\n" in
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 	   client_handle_server_hello hs [(ServerHello(sh),l)]
        | C (C_HelloReceived n), (Certificate(c),l)::

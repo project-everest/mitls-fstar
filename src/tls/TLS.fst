@@ -375,11 +375,11 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
 //16-05-29 timing out?
 #set-options "--lax" 
 let send c #i f =
-  let pv = outerPV c in
+  let pv = Handshake.version c.hs in // let Record replace TLS 1.3
   let ct, rg = Content.ct_rg i f in
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
-  let record = Record.makePacket ct pv payload in
+  let record = Record.makePacket ct (is_PlaintextID i) pv payload in
   let r  = Transport.send (C.tcp c) record in
   (* let h1 = ST.get() in *)
   (* cut (trigger_frame h1); *)
@@ -513,10 +513,10 @@ let sendFragment c #i wo f =
            match wo with
 	   | None    -> Content.repr i f //16-05-20 don't understand error.
 	   | Some wr -> StAE.encrypt wr f in 
-       let pv = outerPV c in //16-05-20  compare with (pv_of_id i)?; Needs hs_inv
+       let pv = Handshake.version c.hs in
        let ct, rg = Content.ct_rg i f in
        lemma_repr_bytes_values (length payload);
-       let record = Record.makePacket ct pv payload in
+       let record = Record.makePacket ct (is_PlaintextID i) pv payload in
        let r  = Transport.send (c.tcp) record in
        match r with
        | Error(x)  -> Error(AD_internal_error,x)
