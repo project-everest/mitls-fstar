@@ -354,10 +354,8 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
             printf("FFI_mitls_connect failed with miTLS error %d\n", ret);
             ret = 0;
         }
-        
-        // The result is a set containing two closures, one for send and one for receive
-        state->fstar_state = result;
-        ret = 1;
+        // The result is an integer.  How to deduce the value of 'c' needed for
+        // subsequent FFI.read and FFI.write is TBD.
         
     }
     restore_stdio(&r, outmsg, errmsg);
