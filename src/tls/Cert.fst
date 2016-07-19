@@ -12,9 +12,6 @@ type chain = list cert
 
 (* ------------------------------------------------------------------------ *)
 
-(* TODO: AR *)
-assume HasEq_bytes: hasEq bytes
-
 abstract val certificateListBytes: chain -> Tot bytes
 let rec certificateListBytes l =
   match l with

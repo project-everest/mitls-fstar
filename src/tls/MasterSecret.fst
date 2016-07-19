@@ -58,9 +58,6 @@ let all_ms_tab_regions_exists () =
   let tok : squash (id_rgns_witnessed m0) = () in   
   MR.testify_forall tok
 
-(* TODO: AR *)
-assume HasEq_AE_id: hasEq (AE.id)
-
 let derive (r:rgn) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 

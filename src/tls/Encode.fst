@@ -9,8 +9,6 @@ module Encode
    16-01-04 verifies with temporary assumptions; TBC
  *)
 
-(* TODO: AR: Failed to verify implicits errors, 4 *)
-
 open FStar.Seq
 open Platform
 open Platform.Bytes

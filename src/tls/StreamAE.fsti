@@ -1,7 +1,5 @@
 module StreamAE
 
-(* TODO: AR: I get many errors of same kind, a match (..) type is expected, found int *)
-
 // Authenticated encryption for a stream of variable-length plaintexts.
 // Concretely, we use AES_GCM but any other algorithm would do.
 

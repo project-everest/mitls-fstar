@@ -12,8 +12,6 @@ open TLSInfo
 open Range
 open CommonDH
 
-(* TODO: AR: unknown assertion failures *)
-
 //#set-options "--lax"
 
 (* JK: for verification purposes the "--lax" flag is set throughout the file in order to

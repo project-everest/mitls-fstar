@@ -199,8 +199,6 @@ let cbcenc = CoreCrypto.block_encrypt
 
 (* Parametric enc/dec functions *)
 
-(* TODO: AR: 220 ? *)
-
 val enc_int: i:id -> e: encryptor i -> tlen:nat -> bytes -> CoreCrypto.EXT bytes // (cipher i)
 let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
     let StateB k s _ = e in  

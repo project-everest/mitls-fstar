@@ -168,16 +168,6 @@ inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
 
 val add_epoch: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> e: epoch r n -> ST unit
-<<<<<<< HEAD
-       (requires (fun h -> True))
-       (ensures (fun h0 x h1 ->
-		   let es = MkEpochs.es es in
-		   modifies_one r h0 h1
-		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
-		   /\ i_sel h1 es == SeqP.snoc (i_sel h0 es) e))
-let add_epoch #rg #n (MkEpochs es _ _) e =
-    MS.i_write_at_end #rg es e
-=======
        (requires (fun h -> 
 	   let is = MkEpochs.es es in
 	   epochs_inv #r #n (SeqP.snoc (i_sel h is) e)))
@@ -188,7 +178,6 @@ let add_epoch #rg #n (MkEpochs es _ _) e =
  		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
 let add_epoch #r #n (MkEpochs es _ _) e = 
     MS.i_write_at_end es e
->>>>>>> master
 
 let incr_reader #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs.read))

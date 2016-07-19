@@ -462,8 +462,6 @@ let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
 
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
-  (* TODO: AR *)
-  admit ();
   match cbyte2 b with
   | ( 0x00z, 0x00z ) -> Correct(NullCipherSuite)
 

@@ -15,12 +15,6 @@ open CoreCrypto
 private type id = i:id {~ (is_PlaintextID i) }
 type id2 = i:id { is_ID12 i } // gradually adding TLS 1.3... 
 
-(*
- * AR: All errors in this file seem to be because of the precondition
- * in TLSInfo:aeAlg_of_id, at uses of that in this file, the
- * precondition seems to be not there.
- *)
-
 (* ranges *)
 type range = r:(nat * nat) { fst r <= snd r }
 type within (n:nat) (r:range) = fst r <= n /\ n <= snd r

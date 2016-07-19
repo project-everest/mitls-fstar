@@ -92,7 +92,7 @@ assume val keyRegion: rid
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
-noeq type pubkey (a:alg) =
+type pubkey (a:alg) =
   | PK: log:log_t a -> repr:public_repr{sigAlg_of_public_repr repr = a.core} -> pubkey a
 
 type pkey = (a:alg & pubkey a)
@@ -128,7 +128,7 @@ let alloc_pubkey #a s r =
 
   We maintain this property as a stateful invariaint in rkeys *)
 
-(* TODO: AR *)
+(* AR: this needs to be fixed *)
 assume HasEq_pkey: hasEq pkey
 
 type kset = s:list pkey{ forall x y. (List.Tot.mem x s /\ List.Tot.mem y s /\ pkey_repr x = pkey_repr y) ==> x = y }
@@ -187,11 +187,6 @@ let sign #a h s t =
 
 
 (* ------------------------------------------------------------------------ *)
-
-(* TODO: AR *)
-assume HasEq_alg: hasEq alg
-assume HasEq_text: hasEq text
-assume HasEq_pubkey: forall a. hasEq (pubkey a)
 
 val verify: #a:alg
   -> h:hashAlg{List.Tot.mem h (a.digest)}
@@ -290,6 +285,10 @@ let coerce #a pkr skr =
 
 
 (* ------------------------------------------------------------------------ *)
+
+(* AR: this needs to be fixed, alg should not have hasEq because of info *)
+assume HasEq_alg: hasEq alg
+
 val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST pkey
   (requires (fun _ -> True))
   (ensures  (fun h0 k h1 ->
