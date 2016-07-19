@@ -107,8 +107,8 @@ type epochs (r:rgn) (n:TLSInfo.random) =
 	    write: epoch_ctr r es ->
 	    epochs r n  
 
-let containsT (MkEpochs es r w) (h:HH.t) =
-    MS.i_contains es h 
+let containsT (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (h:HH.t) =
+    MS.i_contains (MkEpochs.es es) h 
 
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid -> 
   ST (is:MS.i_seq r a p &
@@ -168,14 +168,16 @@ inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
 
 val add_epoch: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> e: epoch r n -> ST unit
-       (requires (fun h -> True))
+       (requires (fun h -> 
+	   let is = MkEpochs.es es in
+	   epochs_inv #r #n (SeqP.snoc (i_sel h is) e)))
        (ensures (fun h0 x h1 -> 
-		   let es = MkEpochs.es es in
-		   modifies_one r h0 h1 
-		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
-		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
-let add_epoch #rg #n (MkEpochs es _ _) e =
-    MS.i_write_at_end #rg es e
+		   let es = MkEpochs.es es in 
+ 		   modifies_one r h0 h1  
+ 		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
+ 		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
+let add_epoch #r #n (MkEpochs es _ _) e = 
+    MS.i_write_at_end es e
 
 let incr_reader #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs.read))
@@ -187,12 +189,12 @@ let incr_writer #r #n (es:epochs r n) : ST unit
     (ensures (incr_post es MkEpochs.write))
     = incr_epoch_ctr (MkEpochs.write es)
 
-let get_epochs (MkEpochs es r w) = es
+let get_epochs #r #n (es:epochs r n) = MkEpochs.es es
 
 let get_reader #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.read es)
 let get_writer #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.write es)
 
-let epochsT (MkEpochs es r w) (h:HH.t) = MS.i_sel h es
+let epochsT #r #n (es:epochs r n) (h:HH.t) = MS.i_sel h (MkEpochs.es es)
 
 val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HH.t -> GTot (epoch_ctr_inv rid (get_epochs e))
 let readerT #rid #n (MkEpochs es r w) (h:HH.t) = m_sel h r

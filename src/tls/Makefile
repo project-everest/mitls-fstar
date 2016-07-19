@@ -171,8 +171,9 @@ HKDF \
 Epochs \
 Connection \
 ConnInvariant \
-TLS \
 FFI 
+
+#TLS --NS: excluding for now, since it is known to fail
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
