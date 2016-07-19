@@ -27,6 +27,7 @@ open Range
 
 // this style enables structural subtyping on range indexes
 // JP, NS: XXX temporarily removing the abstraction for the sake of extraction
+private type id = i:id{~ (is_PlaintextID i)}
 type pre_fragment (i:id) = bytes
 val ghost_repr: #i:id -> pre_fragment i -> GTot bytes
 let ghost_repr #i f = f

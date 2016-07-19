@@ -108,13 +108,14 @@ private let zH h =
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   CoreCrypto.hash h zeroes
 
+#set-options "--lax"
+
 // Resumption context
 let esId_rc (i:esId) =
   match i with
 //  | ResumptionPSK i ->
 //    let (_, rc, _, _) = Some.v (MM.sel res_psk_table i) in rc
   | ApplicationPSK _ _ -> zH (esId_hash i)
-
 
 let hsId_rc = function
   | HSID_DHE h _ _ -> zH h
@@ -162,8 +163,7 @@ type ems (i:exportId) =
 // but I'm waiting for it to be tester to switch over
 // TODO use the newer index types
 type recordInstance =
-| StAEInstance: #id:StreamAE.id -> StreamAE.reader id -> StreamAE.writer id -> recordInstance
-| StLHAEInstance: #id:StatefulLHAE.id -> StatefulLHAE.reader id -> StatefulLHAE.writer id -> recordInstance
+  | StAEInstance: #id:TLSInfo.id -> StAE.reader id -> StAE.writer id -> recordInstance
 
 (* 2 choices - I prefer the second:
    (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
@@ -350,7 +350,7 @@ let ks_client_13_0rtt_ch ks esId
   let h, ae = c.early_hash, c.early_ae in
 
   let expandId = EarlySecretID esId in
-  let loginfo = LogInfoCH ({li_ch_cr = cr; li_ch_psk = c}) in
+  let loginfo = LogInfo_CH ({li_ch_cr = cr; li_ch_psk = c}) in
   let hashed_log = HandshakeLog.getHash hsl h in
   // TODO verify log_info loginfo hashed_log
 
@@ -371,15 +371,15 @@ let ks_client_13_0rtt_ch ks esId
   let id = ID13 (KeyID expandId EarlyTrafficKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_hs = StAEInstance r rw in
 
   let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
   let civ: StreamAE.iv id  = civ' in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
 
   st := C (C_13_wait_SH cr (Some (| esId, es |)) (Some (| efId, cfk0 |)) gs);
@@ -470,7 +470,7 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let es : es esId = HKDF.hkdf_extract h zeroes psk in
 
   let expandId = EarlySecretID esId in
-  let loginfo = LogInfoCH ({li_ch_cr = cr; li_ch_psk = c}) in
+  let loginfo = LogInfo_CH ({li_ch_cr = cr; li_ch_psk = c}) in
   let hashed_log = HandshakeLog.getHash hsl h in
   // TODO verify log_info loginfo hashed_log
 
@@ -486,15 +486,15 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let id = ID13 (KeyID expandId EarlyTrafficKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_hs = StAEInstance r rw in
 
   let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
   let civ: StreamAE.iv id  = civ' in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
 
   let our_share, peer_share, gxy = s13_dh gn gxb in
@@ -554,7 +554,7 @@ let ks_server_13_sh ks =
   let KS #region st hsl = ks in
   let S (S_13_wait_SH (ae, h) cr sr _ _ (| hsId, hs |)) = !st in
   let expandId = HandshakeSecretID hsId in
-  let loginfo = LogInfoSH ({
+  let loginfo = LogInfo_SH ({
     li_sh_cr = cr;
     li_sh_sr = sr;
     li_sh_ae = AEAD ae h;
@@ -575,9 +575,9 @@ let ks_server_13_sh ks =
   let civ: StreamAE.iv id  = civ in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StreamAE.coerce HyperHeap.root id skv siv in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce HyperHeap.root id (skv @| siv) in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
 
   // Finished keys
   let cfkId = FinishedID expandId HandshakeFinished Client loginfo hashed_log in
@@ -676,7 +676,7 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
   let gxy = CommonDH.dh_initiator gx gy in
   let CipherSuite _ _ (AEAD ae h) = cs in
 
-  let loginfo = LogInfoSH ({li_sh_cr = cr; li_sh_sr = cr; li_sh_ae = AEAD ae h;}) in // TODO
+  let loginfo = LogInfo_SH ({li_sh_cr = cr; li_sh_sr = cr; li_sh_ae = AEAD ae h;}) in // TODO
   let hashed_log = HandshakeLog.getHash hsl h in
   let hL = CoreCrypto.hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
@@ -719,9 +719,9 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
   let civ: StreamAE.iv id  = civ in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StreamAE.coerce HyperHeap.root id ckv civ in
-  let rw = StreamAE.coerce HyperHeap.root id skv siv in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
+  let r = StAE.genReader HyperHeap.root rw in
   st := C (C_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |));
   StAEInstance r w
 
@@ -809,11 +809,11 @@ let ks_client_13_sf ks
   let id = ID13 (KeyID expandId ApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let w = StreamAE.coerce HyperHeap.root id ckv civ in
+  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let rw = StreamAE.coerce HyperHeap.root id skv siv in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
+  let r = StAE.genReader HyperHeap.root rw in
 
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| ri, rk1 |) (| cfkId, late_cfk |));
   StAEInstance r w
@@ -855,11 +855,11 @@ let ks_server_13_sf ks
   let id = ID13 (KeyID expandId ApplicationDataKey Server loginfo hashed_log) in
   let skv: StreamAE.key id = sk in
   let siv: StreamAE.iv id  = siv in
-  let w = StreamAE.coerce HyperHeap.root id skv siv in
+  let w = StAE.coerce HyperHeap.root id (skv @| siv) in
   let ckv: StreamAE.key (peerId id) = ck in
   let civ: StreamAE.iv (peerId id)  = civ in
-  let rw = StreamAE.coerce HyperHeap.root id ckv civ in
-  let r = StreamAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let r = StAE.genReader HyperHeap.root rw in
 
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| ri, rk1 |) (| cfkId, late_cfk |));
   StAEInstance r w
@@ -988,7 +988,7 @@ let ks_client_12_set_session_hash ks =
 // Will become private; public API will have
 // ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
 // ks_server_12_keygen: ...
-val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
+val ks_12_get_keys: ks:ks -> ST (writer:recordInstance)
   (requires fun h0 ->
     let st = sel h0 (KS.state ks) in
     match st with
@@ -1016,7 +1016,10 @@ val ks_12_get_keys: ks:ks -> ST (wk:bytes * wiv:bytes * rk:bytes * riv:bytes)
     match role with
     | Client -> k1, iv1, k2, iv2
     | Server -> k2, iv2, k1, iv1 in
-  (wk, wiv, rk, riv)
+  let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
+  let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
+  let r = StAE.genReader HyperHeap.root rw in
+  StAEInstance r w
 
 (******************************************************************)
 (******************************************************************)
@@ -1090,94 +1093,11 @@ let ks_client_12_server_finished ks
   TLSPRF.verifyData (pv,cs) ms Server log
 
 val getId: recordInstance -> GTot id
-let getId k = 
-    match k with
-    | StAEInstance #i rd wr -> i
-    | StLHAEInstance #i rd wr -> i
-
-#set-options "--lax"
+let getId (StAEInstance #i rd wr) = i
 
 val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random -> 
     			   h:handshake ->
 			   ks:recordInstance -> Tot (epoch r n)
-let recordInstanceToEpoch #hs_rgn #n hs ri = 
-    match ri with
-    | StAEInstance #i rd wr -> Epoch hs (StAE.Stream () rd) (StAE.Stream () wr)
-    | StLHAEInstance #i rd wr -> Epoch hs (StAE.StLHAE () rd) (StAE.StLHAE () wr)
+let recordInstanceToEpoch #hs_rgn #n hs (StAEInstance #i rd wr) =
+  Epoch hs rd wr
 
-
-(*
-let id_TLS12_AES_GCM_128_SHA256  = {
-    msId = noMsId;
-    kdfAlg = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256);
-    pv = TLS_1p2;
-    aeAlg = (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256);
-    csrConn = createBytes 64 0x00z;
-    ext = {
-      ne_extended_ms = false;
-      ne_extended_padding = false;
-      ne_secure_renegotiation = RI_Unsupported;
-      ne_supported_groups = None;
-      ne_supported_point_formats = None;
-      ne_server_names = None;
-      ne_signature_algorithms = None;
-      ne_keyShare = None;
-    };
-    writer = Client
-  }
-
-val encryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> ST (StAE.writer (hsId hs))
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let encryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = hsId hs in
-  let r = HyperHeap.root in
-  let w: StatefulLHAE.writer id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Writer =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.writer -> StatefulLHAE.state
-  StAE.StLHAE () w
-
-val decryptor_TLS12_AES_GCM_128_SHA256: hs:handshake -> bytes -> bytes -> ST (StAE.reader (peerId (hsId hs)))
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let decryptor_TLS12_AES_GCM_128_SHA256 hs key iv = 
-  let id = peerId (hsId hs) in
-  let r = HyperHeap.root in
-  let r: StatefulLHAE.reader id =
-    let log: StatefulLHAE.st_log_t r id = ralloc r Seq.createEmpty in
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 0 in
-    let key: AEAD_GCM.state id Reader =
-      // The calls to [unsafe_coerce] are here because we're breaking
-      // abstraction, as both [key] and [iv] are declared as private types.
-      let key: AEAD_GCM.key id = key |> unsafe_coerce in
-      let iv: AEAD_GCM.iv id = iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
-      let counter = ralloc r 0 in
-      AEAD_GCM.State r key iv log counter
-    in
-    StatefulLHAE.State r log seqn key
-  in
-  // StatefulLHAE.reader -> StatefulLHAE.state
-  StAE.StLHAE () r
-
-val recordKeysToEpoch: #hs_rgn:rgn -> #n:TLSInfo.random -> h:handshake -> (bytes * bytes * bytes * bytes) -> ST (epoch hs_rgn n)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let recordKeysToEpoch #hs_rgn #n h (ck,civ,sk,siv) = 
-  let wr: StAE.writer (hsId h) = encryptor_TLS12_AES_GCM_128_SHA256 h ck civ in
-  let rd: StAE.reader (peerId (hsId h)) = decryptor_TLS12_AES_GCM_128_SHA256 h sk siv in
-  Epoch h rd wr
-
-*)

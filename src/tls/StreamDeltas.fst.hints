@@ -1,41 +1,64 @@
 [
-  "Q”7âvÅK\u0004lt\be|\u0017ƒ~",
+  "¶ﬁ÷ÛÚ M∫\u0017\u00023S¶TSñ",
   [
-    [ 0, 1, [ "@query_14532" ], 0 ],
-    [ 0, 1, [ "@query_14535", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_15592" ], 0 ],
+    [ 0, 1, [ "@query_15595", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 1, 1, [ "@query_15601" ], 0 ],
     [
       1,
       1,
       [
-        "@query_14541", "equation_DataStream.fragment",
+        "@query_15603", "equation_DataStream.fragment",
         "equation_Platform.Bytes.length", "equation_Prims.nat",
         "equation_Range.fragment_range", "equation_Range.frange",
         "equation_Range.range", "equation_Range.wider",
-        "equation_Range.within", "refinement_interpretation_Tm_refine_11339",
-        "refinement_interpretation_Tm_refine_11516"
+        "equation_Range.within", "refinement_interpretation_Tm_refine_12547",
+        "refinement_interpretation_Tm_refine_12726"
       ],
       0
     ],
-    [ 1, 1, [ "@query_14546" ], 0 ],
-    [ 1, 1, [ "@query_14556" ], 0 ],
-    [ 1, 1, [ "@query_14575" ], 0 ],
+    [ 1, 1, [ "@query_15604" ], 0 ],
+    [ 1, 1, [ "@query_15605" ], 0 ],
+    [ 1, 1, [ "@query_15607" ], 0 ],
+    [ 1, 1, [ "@query_15609" ], 0 ],
+    [ 1, 1, [ "@query_15610" ], 0 ],
     [
       1,
       1,
       [
-        "@pretyping__127", "@pretyping__1271", "@query_14608",
-        "constructor_distinct_FStar.Seq.seq",
-        "constructor_distinct_Prims.unit", "equation_FStar.HyperHeap.test0",
-        "equation_MonotoneSeq.map_prefix", "equation_StAE.fragments",
-        "equation_StAE.fragments_prefix", "equation_StAE.frags",
-        "equation_StAE.ilog", "equation_StAE.stream_ae",
-        "equation_StreamDeltas.deltas_prefix",
-        "equation_StreamDeltas.project_deltas",
-        "fuel_guarded_inversion_TLSInfo.id_11079",
-        "function_token_typing_FStar.HyperHeap.test0", "unit_inversion"
+        "@query_15615", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_12380"
       ],
       0
     ],
-    [ 1, 1, [ "@query_14619" ], 0 ]
+    [ 1, 1, [ "@query_15616" ], 0 ],
+    [ 1, 1, [ "@query_15617" ], 0 ],
+    [ 1, 1, [ "@query_15618" ], 0 ],
+    [ 1, 1, [ "@query_15629" ], 0 ],
+    [ 1, 1, [ "@query_15631" ], 0 ],
+    [
+      1,
+      1,
+      [
+        "@query_15651", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_12380"
+      ],
+      0
+    ],
+    [
+      1,
+      1,
+      [
+        "@query_15684", "equation_MonotoneSeq.map_prefix",
+        "equation_StAE.entry", "equation_StAE.fragments",
+        "equation_StAE.fragments_prefix", "equation_StAE.ilog",
+        "equation_StAE.log_region", "equation_StreamDeltas.deltas_prefix",
+        "equation_StreamDeltas.project_deltas"
+      ],
+      0
+    ],
+    [ 1, 1, [ "@query_15686" ], 0 ],
+    [ 1, 1, [ "@query_15688" ], 0 ],
+    [ 1, 1, [ "@query_15699" ], 0 ]
   ]
 ]

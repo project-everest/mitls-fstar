@@ -11,6 +11,8 @@ open CoreCrypto
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
+// Rule out plaintext indexes in this module
+private type id = i:id {~ (is_PlaintextID i) }
 type id2 = i:id { is_ID12 i } // gradually adding TLS 1.3... 
 
 (* ranges *)
@@ -52,6 +54,7 @@ let maxPadSize i =
         match authEnc with
         | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
         | MtE (Block alg) _ ->
+            lemma_MtE i; lemma_ID12 i;
             match (pv_of_id i) with
             | SSL_3p0 -> blockSize alg
             | TLS_1p0 | TLS_1p1 | TLS_1p2 -> 256
@@ -80,20 +83,22 @@ let minMaxPad i = (fixedPadSize i, maxPadSize i)
 #set-options "--initial_ifuel 1"
 
 // Shared between StreamAE and StatefulLHAE
-type valid_clen (i:id) (clen:nat) = (
-  if is_PlaintextID i then // (aeAlg_of_id i) = MACOnly MD5
-    0 <= clen - hashSize MD5 /\ clen - hashSize MD5 <= max_TLSPlaintext_fragment_length
-  else 
-  if is_ID13 i then
-    let tlen = 16 (* FIXME CoreCrypto.aeadTagSize (aeAlg i) *) in
+type valid_clen (i:id) (clen:nat) =
+  (if is_ID13 i then begin
+    lemma_ID13 i;
+    let tlen = aeadTagSize (aeAlg i) in
     tlen < clen /\ clen <= tlen + max_TLSCiphertext_fragment_length_13
-  else
+  end else begin
     if is_AEAD (aeAlg_of_id i) then
       0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
       clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
-    else 
+    else if is_MtE (aeAlg_of_id i) then
       0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\ 
-      clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length)
+      clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+    else // MACOnly
+      let MACOnly h = aeAlg_of_id i in
+      0 <= clen - hashSize h /\ clen - hashSize h <= max_TLSPlaintext_fragment_length
+  end)
 
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
@@ -101,9 +106,10 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (requires valid_clen i clen)
   (ensures fun (r:range) ->
        (is_AEAD (aeAlg_of_id i) ==> (
-         let a = aeAlg i in 
-         let min = clen - aeadRecordIVSize a - aeadTagSize a - fixedPadSize i in
-         let max = clen - aeadRecordIVSize a - aeadTagSize a - maxPadSize i in
+         let a = aeAlg i in
+         // Currently maxPadSize i = 0 in all cases therefore min == max 
+         let max = clen - aeadRecordIVSize a - aeadTagSize a - fixedPadSize i in
+         let min = clen - aeadRecordIVSize a - aeadTagSize a - maxPadSize i in
          0 <= max 
          /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max) 
             \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
@@ -250,11 +256,13 @@ val targetLength_converges: i:id2
           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
       /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
-#reset-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
+#set-options "--z3timeout 60"
+//without hints, the next query also takes several seconds on a powerful desktop
 let targetLength_converges i r =
-  cut (is_ID13 i)
+  lemma_MtE i; lemma_ID12 i
 
-#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> r':range
   { snd r <= max_TLSPlaintext_fragment_length
     /\ ((~(is_AEAD (aeAlg_of_id i))

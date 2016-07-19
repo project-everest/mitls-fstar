@@ -10,7 +10,6 @@ open FStar.Set
  
 open Platform.Bytes
 open Platform.Error
-open Platform.Tcp
 
 open TLSError
 open TLSConstants
@@ -41,7 +40,7 @@ type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region 
 type connection = | C:
   #region: c_rgn ->
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
-  tcp:     networkStream ->
+  tcp:     Transport.t ->
   state:   rref region tlsState -> 
   connection
 

@@ -1,2 +1,0 @@
-all:
-	fstar sig.fst

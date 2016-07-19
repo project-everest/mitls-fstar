@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # Check for regressions & comment about them!
-all: tls-ver tls-sanity tls-lax tls-gen
+all: all-ver tls-sanity tls-lax tls-gen
 
 CONTRIB=ucontrib
 LIB=ulib
@@ -50,7 +50,7 @@ LIBFILES=$(PLATFORM) $(CRYPTO) ../../libs/ml/FFICallbacks.fst
 
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap  --include ../../libs/ml/
 
-OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread
+OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml)
 
@@ -72,6 +72,7 @@ MonotoneSeq.fst \
 MonotoneMap.fst \
 TLSError.fst \
 TLSConstants.fst \
+Transport.fst \
 Nonce.fst \
 RSAKey.fst \
 DHGroup.fst \
@@ -113,16 +114,12 @@ Epochs.fst \
 KeySchedule.fst \
 Handshake.fst \
 Connection.fst \
-TLSClient.fst \
-TLSClient13.fst \
+ConnInvariant.fst \
+TLS.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
-test/TestClient.fst \
-test/TestServer.fst \
-test/TestServer13.fst \
-test/TestClient13.fst \
-ConnInvariant.fst \
-TLS.fst #the preceding space is significant!
+test/TestHandshake.fst \
+test/TestAPI.fst #the preceding space is significant!
 
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it
@@ -138,6 +135,7 @@ MonotoneSeq \
 MonotoneMap \
 TLSError \
 TLSConstants \
+Transport \
 Nonce \
 RSAKey \
 DHGroup \
@@ -167,11 +165,14 @@ Record \
 MAC_SHA256 \
 MAC_SHA1 \
 StAE \
+KeySchedule \
 StreamDeltas \
 HKDF \
+Epochs \
 Connection \
 ConnInvariant \
-TLS 
+TLS \
+FFI 
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
@@ -192,40 +193,32 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 %.fst-lax: ConcreteFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 # Verifying one file at a time
 %.fst-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
+	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
 %.fst-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
-	$(basename $@).fst
+	--verify_module $(basename $(notdir $@))
 
 %.fsti-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $@) \
-	$(basename $@).fsti
-
-# Verifying everything stable
-tls-ver: IdealFlags $(LIBFILES) $(FSTS)
-	$(MAKE) refresh
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
-	$(FSTAR_INCLUDE_PATHS) $(addprefix --verify_module , $(VERIFY)) \
+	--verify_module $(basename $(notdir $@))
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check

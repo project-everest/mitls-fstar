@@ -1,13 +1,13 @@
 [
   ":$îzZÜ7”Ì6«`ZÒ™Ë",
   [
-    [ 0, 1, [ "@query_8249", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_8250", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_8281", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_8282", "projection_inverse_BoxInt_proj_0" ], 0 ],
     [
       0,
       1,
       [
-        "@query_8253", "equation_FStar.HyperHeap.modifies",
+        "@query_8285", "equation_FStar.HyperHeap.modifies",
         "equation_FStar.HyperHeap.t", "equation_FStar.ST.modifies",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
@@ -22,7 +22,7 @@
       0,
       1,
       [
-        "@pretyping__117", "@query_8256", "equality_tok_Prims.T@tok",
+        "@pretyping__117", "@query_8288", "equality_tok_Prims.T@tok",
         "typing_tok_Prims.T@tok"
       ],
       0
@@ -31,7 +31,7 @@
       0,
       1,
       [
-        "@query_8261", "constructor_distinct_Prims.None",
+        "@query_8293", "constructor_distinct_Prims.None",
         "equation_FStar.Monotonic.RRef.ex_rid",
         "equation_MonotoneMap.empty_map", "equation_MonotoneMap.sel",
         "equation_Nonce.ex_rid", "equation_Nonce.injective",
@@ -44,16 +44,16 @@
       ],
       0
     ],
-    [ 0, 1, [ "@query_8268" ], 0 ],
-    [ 0, 1, [ "@query_8281" ], 0 ],
-    [ 0, 1, [ "@query_8293" ], 0 ],
-    [ 0, 1, [ "@query_8313", "equation_Nonce.registered" ], 0 ],
-    [ 0, 1, [ "@query_8330" ], 0 ],
+    [ 0, 1, [ "@query_8300" ], 0 ],
+    [ 0, 1, [ "@query_8313" ], 0 ],
+    [ 0, 1, [ "@query_8325" ], 0 ],
+    [ 0, 1, [ "@query_8345", "equation_Nonce.registered" ], 0 ],
+    [ 0, 1, [ "@query_8362" ], 0 ],
     [
       0,
       1,
       [
-        "@pretyping__2447", "@query_8359",
+        "@pretyping__2447", "@pretyping__430", "@query_8391",
         "assumption_FStar.Heap.DomContains_2520",
         "assumption_FStar.Heap.DomRestrict_2517",
         "assumption_FStar.Heap.Equals_2513",
@@ -85,7 +85,6 @@
         "equation_TLSConstants.tls_region", "equation_TLSConstants.tls_rgn",
         "equation_TLSConstants.tls_tables_region",
         "fuel_guarded_inversion_Prims.option_426",
-        "fuel_guarded_inversion_TLSConstants.role_6632",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
@@ -99,7 +98,7 @@
         "function_token_typing_TLSConstants.tls_tables_region",
         "interpretation_Exp_abs_4371", "interpretation_Tm_arrow_4218",
         "interpretation_Tm_arrow_4352", "interpretation_Tm_arrow_4383",
-        "interpretation_Tm_arrow_8258", "kinding_FStar.Char.char_@tok",
+        "interpretation_Tm_arrow_8290", "kinding_FStar.Char.char_@tok",
         "kinding_FStar.Heap.aref@tok",
         "lemma_FStar.HyperHeap.lemma_extends_includes",
         "lemma_FStar.HyperHeap.lemma_extends_parent",
@@ -126,9 +125,8 @@
         "refinement_interpretation_Tm_refine_3044",
         "refinement_interpretation_Tm_refine_4259",
         "refinement_interpretation_Tm_refine_4363",
-        "refinement_interpretation_Tm_refine_6603",
-        "refinement_interpretation_Tm_refine_6609",
-        "refinement_kinding_Tm_refine_4363",
+        "refinement_interpretation_Tm_refine_6619",
+        "refinement_interpretation_Tm_refine_6625",
         "token_correspondence_Nonce.injective",
         "token_correspondence_Nonce.n_rid", "typing_FStar.Heap.concat",
         "typing_FStar.Heap.contains", "typing_FStar.Heap.domain",
@@ -149,7 +147,7 @@
       0,
       1,
       [
-        "@query_8360", "disc_equation_Prims.None",
+        "@query_8392", "disc_equation_Prims.None",
         "disc_equation_Prims.Some", "equation_FStar.Monotonic.RRef.ex_rid",
         "equation_Nonce.ex_rid", "fuel_guarded_inversion_Prims.option_426"
       ],
@@ -159,20 +157,14 @@
       0,
       1,
       [
-        "@query_8365", "bool_inversion", "data_elim_Prims.Some",
-        "disc_equation_Prims.Some", "equation_FStar.Monotonic.RRef.ex_rid",
-        "equation_Nonce.ex_rid", "equation_Nonce.fresh",
-        "equation_Nonce.n_rid", "equation_Nonce.registered",
-        "equation_Nonce.role_nonce", "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.rgn", "equation_TLSConstants.tls_region",
-        "equation_TLSConstants.tls_rgn",
+        "@query_8397", "data_elim_Prims.Some", "disc_equation_Prims.Some",
+        "equation_FStar.Monotonic.RRef.ex_rid", "equation_Nonce.ex_rid",
+        "equation_Nonce.fresh", "equation_Nonce.n_rid",
+        "equation_Nonce.registered", "equation_Nonce.role_nonce",
         "fuel_guarded_inversion_Prims.option_426",
-        "function_token_typing_TLSConstants.tls_region",
         "primitive_Prims.op_Equality", "proj_equation_Prims.Some_v",
-        "refinement_interpretation_Tm_refine_2795",
-        "refinement_interpretation_Tm_refine_4259",
-        "refinement_interpretation_Tm_refine_6603",
-        "typing_TLSConstants.is_tls_rgn"
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_4259"
       ],
       0
     ],
@@ -180,8 +172,8 @@
       0,
       1,
       [
-        "@query_8371", "equation_Nonce.random",
-        "refinement_interpretation_Tm_refine_8367"
+        "@query_8403", "equation_Nonce.random",
+        "refinement_interpretation_Tm_refine_8399"
       ],
       0
     ],
@@ -189,7 +181,7 @@
       0,
       1,
       [
-        "@pretyping__2447", "@query_8383", "b2t_def", "bool_inversion",
+        "@pretyping__2447", "@query_8415", "b2t_def", "bool_inversion",
         "constructor_distinct_Prims.Some", "data_elim_Prims.Some",
         "disc_equation_Prims.Some", "equation_FStar.HyperHeap.contains_ref",
         "equation_FStar.HyperHeap.fresh_region",
@@ -221,9 +213,9 @@
         "refinement_interpretation_Tm_refine_2795",
         "refinement_interpretation_Tm_refine_4259",
         "refinement_interpretation_Tm_refine_4363",
-        "refinement_interpretation_Tm_refine_6603",
-        "refinement_interpretation_Tm_refine_6609",
-        "refinement_interpretation_Tm_refine_8375",
+        "refinement_interpretation_Tm_refine_6619",
+        "refinement_interpretation_Tm_refine_6625",
+        "refinement_interpretation_Tm_refine_8407",
         "token_correspondence_Nonce.n_rid",
         "typing_FStar.HyperHeap.includes", "typing_FStar.Map.contains",
         "typing_MonotoneMap.sel"
@@ -234,11 +226,11 @@
       0,
       1,
       [
-        "@query_8386", "equation_Nonce.random",
-        "refinement_interpretation_Tm_refine_8375"
+        "@query_8418", "equation_Nonce.random",
+        "refinement_interpretation_Tm_refine_8407"
       ],
       0
     ],
-    [ 0, 1, [ "@query_8387", "projection_inverse_BoxInt_proj_0" ], 0 ]
+    [ 0, 1, [ "@query_8419", "projection_inverse_BoxInt_proj_0" ], 0 ]
   ]
 ]

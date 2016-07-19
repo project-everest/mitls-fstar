@@ -12,13 +12,14 @@ open TLSConstants
 open Range
 open Content
 
-
 // Consider merging some of this module with Content?
 
 // ------------------------outer packet format -------------------------------
 
 // the "outer" header has the same format for all versions of TLS
 // but TLS 1.3 fakes its content type and protocol version.
+
+let x = Transport.recv
 
 type header = b:lbytes 5 // for all TLS versions
 
@@ -72,90 +73,24 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 (*** networking (floating) ***)
 
 effect EXT (a:Type) = ST a
-  (requires (fun _ -> True)) 
+  (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
-val tcp_recv: Platform.Tcp.networkStream -> max:nat -> EXT (optResult string (b:bytes {length b <= max}))
-let tcp_recv = Platform.Tcp.recv
-
-
-private val really_read_rec: b:bytes -> Platform.Tcp.networkStream -> l:nat -> EXT (result (lbytes (l+length b)))
-
-let rec really_read_rec prev tcp len = 
-    if len = 0 
-    then Correct prev
-    else 
-      match Platform.Tcp.recv tcp len with
-      | Correct b -> 
-            let lb = length b in
-      	    if lb = len then Correct(prev @| b)
-      	    else really_read_rec (prev @| b) tcp (len - lb)
-      | Error e -> Error(AD_internal_error,e)
-
-private let really_read = really_read_rec empty_bytes
-
-val read: Platform.Tcp.networkStream -> protocolVersion -> 
-  EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
+val read: Transport.t -> EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
 
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;
 // our client never checks the consistency of the server's record pv.
 // (see earlier versions for the checks we used to perform)
 
-let read tcp pv =
-  match really_read tcp 5 with 
+let read tcp =
+  match Transport.really_read tcp 5 with 
   | Correct header -> (
       match parseHeader header with  
       | Correct (ct,pv,len) -> (
-         match really_read tcp len with
+         match Transport.really_read tcp len with
          | Correct payload  -> Correct (ct,pv,payload)
          | Error e          -> Error e )
       | Error e             -> Error e )
   | Error e                 -> Error e
 
-
-(* TODO
-let recordPacketIn i (rd:StatefulLHAE.reader i) ct payload =
-    if is_Null i
-    then
-      let rg = Range.point (length payload) in
-      let msg = Content.mk_fragment i ct rg payload in
-      Correct (rg,msg)
-    else
-      let ad = StatefulPlain.makeAD i ct in
-      let r = StatefulLHAE.decrypt #i #ad rd payload in
-      match r with
-      | Some f -> Correct f
-      | None   -> Error("bad decryption")
-*)
-
-
-
-
-(*
-// replaced by StatefulLHAE's state?
-type ConnectionState =
-    | NullState
-    | SomeState of TLSFragment.history * StatefulLHAE.state
-
-let someState (e:epoch) (rw:rw) h s = SomeState(h,s)
-
-type sendState = ConnectionState
-type recvState = ConnectionState
-
-let initConnState (e:epoch) (rw:rw) s =
-  let i = mk_id e in
-  let h = TLSFragment.emptyHistory e in
-  someState e rw h s
-
-let nullConnState (e:epoch) (rw:rw) = NullState
-*)
-
-(*
-let history (e:epoch) (rw:rw) s =
-    match s with
-    | NullState ->
-        let i = mk_id e in
-        TLSFragment.emptyHistory e
-    | SomeState(h,_) -> h
-*)
