@@ -107,8 +107,8 @@ type epochs (r:rgn) (n:TLSInfo.random) =
 	    write: epoch_ctr r es ->
 	    epochs r n  
 
-let containsT (MkEpochs es r w) (h:HH.t) =
-    MS.i_contains es h 
+let containsT (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (h:HH.t) =
+    MS.i_contains (MkEpochs.es es) h 
 
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid -> 
   ST (is:MS.i_seq r a p &
@@ -189,12 +189,12 @@ let incr_writer #r #n (es:epochs r n) : ST unit
     (ensures (incr_post es MkEpochs.write))
     = incr_epoch_ctr (MkEpochs.write es)
 
-let get_epochs (MkEpochs es r w) = es
+let get_epochs #r #n (es:epochs r n) = MkEpochs.es es
 
 let get_reader #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.read es)
 let get_writer #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.write es)
 
-let epochsT (MkEpochs es r w) (h:HH.t) = MS.i_sel h es
+let epochsT #r #n (es:epochs r n) (h:HH.t) = MS.i_sel h (MkEpochs.es es)
 
 val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HH.t -> GTot (epoch_ctr_inv rid (get_epochs e))
 let readerT #rid #n (MkEpochs es r w) (h:HH.t) = m_sel h r

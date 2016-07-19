@@ -154,8 +154,10 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 		    witnessed (MonotoneSeq.at_least n ent log) /\
 		    m_sel h1 log = snoc (m_sel h0 log) ent))))
 
-
-let matches #i l (c:cipher i l) (Entry l' c' _) = l = l' && c = c'
+(* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
+let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool = 
+  let Entry l' c' _ = e in
+  l = l' && c = c'
 
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l 
