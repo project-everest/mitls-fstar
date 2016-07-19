@@ -109,13 +109,6 @@ let parse p x =
     if length x = length p.dh_p then
       Some (FFKey ({dh_params = p; dh_public = x; dh_private = None;}))
     else None
-//    if length x < 2 then None
-//    else
-//      begin
-//      match DHGroup.parse_public x with
-//      | Correct r -> Some (FFKey ({dh_params = p; dh_public = r; dh_private = None;}))
-//      | _ -> None
-//      end
 
 val key_params: key -> Tot params
 let key_params k =

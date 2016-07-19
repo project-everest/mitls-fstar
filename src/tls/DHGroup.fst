@@ -14,7 +14,7 @@ type share = b:bytes{length b < 65536}
 type key = k:CoreCrypto.dh_key{
   let dhp = k.dh_params in 
   length dhp.dh_p < 65536 && length dhp.dh_g < 65536 /\
-  length k.dh_public < 65536}
+  length k.dh_public <= length dhp.dh_p}
 
 type group =
   | Named    of ffdhe
@@ -130,12 +130,13 @@ let parse_partial payload =
               match vlsplit 2 payload with
               | Error(z) -> Error(z)
               | Correct(gy, rem) ->
-		let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
-		let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
-		lemma_repr_bytes_values (length p);
-		lemma_repr_bytes_values (length g);
-		lemma_repr_bytes_values (length gy);
-		Correct (dhk,rem)
+                if length gy <= length p then
+                  let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
+                  let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
+                  lemma_repr_bytes_values (length p);
+                  lemma_repr_bytes_values (length g);
+                  Correct (dhk,rem)
+                else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
             else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
