@@ -175,7 +175,7 @@ val add_epoch: #r:rgn -> #n:TLSInfo.random ->
 		   let es = MkEpochs.es es in 
  		   modifies_one r h0 h1  
  		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
- 		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
+ 		   /\ i_sel h1 es == SeqP.snoc (i_sel h0 es) e))
 let add_epoch #r #n (MkEpochs es _ _) e = 
     MS.i_write_at_end es e
 
