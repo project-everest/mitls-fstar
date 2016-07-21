@@ -118,6 +118,7 @@ ConnInvariant.fst \
 TLS.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
+test/TestGCM.fst \
 test/TestHandshake.fst \
 test/TestAPI.fst #the preceding space is significant!
 
