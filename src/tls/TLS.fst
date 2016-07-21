@@ -65,7 +65,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     next_fragment_ensures s h0 result h1 /\
     (let w0 = iT s Writer h0 in   //Augmenting the post-condition of Handhshake.next_fragment 
      let es = logT s h0 in        //with this monotonicity propery
-     w0 >= 0 ==> Seq.index (logT s h0) w0 == Seq.index (logT s h1) w0))) 
+     indexable (logT s h0) w0 ==> Seq.index (logT s h0) w0 == Seq.index (logT s h1) w0))) 
 let next_fragment i s =  
   let h0 = ST.get() in 
   let ilog = MkEpochs.es (HS.log s) in 

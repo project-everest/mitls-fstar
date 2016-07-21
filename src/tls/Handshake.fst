@@ -1159,7 +1159,7 @@ let next_fragment_ensures (#i:id) (s:hs) h0 (result:outgoing i) h1 =
     r1 == r0 /\
 //  w1 == (match result with | Outgoing _ _ true _ -> w0 + 1 | _ -> w0 ) /\
     w1 == (if out_next_keys result then  w0 + 1 else w0 ) /\
-    (b2t (out_complete result) ==> w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)) 
+    (b2t (out_complete result) ==> w1 >= 0 /\ r1 = w1 /\ indexable (logT s h1) (iT s Writer h1) /\ completed (eT s Writer h1)) 
 
 val next_fragment: i:id -> s:hs -> ST (outgoing i)
   (requires (fun h0 -> 

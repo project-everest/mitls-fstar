@@ -13,7 +13,7 @@ module MS = MasterSecret
 module N  = Nonce
 module I  = IdNonce
 module AE = StreamAE
-
+module SeqP = FStar.SeqProperties
 
 ////////////////////////////////////////////////////////////////////////////////
 //Framing writes to an epoch
@@ -25,13 +25,11 @@ let epoch_regions_exist (s:hs) (h0:HH.t) =
       let wr = writer_epoch (Seq.index epochs k) in
       Map.contains h0 (StAE.region wr))
 
-let indexable (#a:Type) (s:Seq.seq a) (j:int) = 0 <= j /\ j < Seq.length s
-
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t -> 
   Lemma (requires (let j = iT s Writer h0 in 
 		   let epochs = logT s h0 in 
-		     indexable epochs j
+		     SeqP.indexable epochs j
 		   /\ epoch_regions_exist s h0 
 		   /\ (let e_j = Seq.index epochs j in
 		      HH.modifies_one (StAE.region (writer_epoch e_j)) h0 h1)))
