@@ -368,7 +368,9 @@ let writerT s h = eT s Writer h
 // this function increases (how to specify it once for all?)
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
+  (ensures (fun h0 i h1 -> h0 = h1 
+		      /\ i = iT s rw h1
+		      /\ Epochs.get_ctr_post (HS.log s) h0 i h1))
 let i (HS #r0 _ _ _ _ epochs _) rw =
   match rw with
   | Reader -> Epochs.get_reader epochs
@@ -1159,7 +1161,8 @@ let next_fragment_ensures (#i:id) (s:hs) h0 (result:outgoing i) h1 =
     r1 == r0 /\
 //  w1 == (match result with | Outgoing _ _ true _ -> w0 + 1 | _ -> w0 ) /\
     w1 == (if out_next_keys result then  w0 + 1 else w0 ) /\
-    (b2t (out_complete result) ==> w1 >= 0 /\ r1 = w1 /\ indexable (logT s h1) (iT s Writer h1) /\ completed (eT s Writer h1)) 
+    Seq.length (logT s h1) >= Seq.length (logT s h0) /\
+    (b2t (out_complete result) ==> r1 = w1 /\ indexable (logT s h1) w1 /\ completed (eT s Writer h1)) 
 
 val next_fragment: i:id -> s:hs -> ST (outgoing i)
   (requires (fun h0 -> 

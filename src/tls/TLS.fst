@@ -59,6 +59,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
+    indexable es j /\
     (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i == epoch_id e)   
   ))
   (ensures (fun h0 result h1 -> 
@@ -73,7 +74,7 @@ let next_fragment i s =
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (Seq.index (MS.i_sel h0 ilog) w0) ilog;
 	         MR.witness ilog (MS.i_at_least w0 (Seq.index (i_sel h0 ilog) w0) ilog)) in
-  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
+  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintextID") in
   let b = IO.debug_print_string ("nextFragment index type "^idt^"\n") in
   let res = Handshake.next_fragment i s in
   let _ = if w0 >= 0
@@ -96,11 +97,6 @@ let rec unexpected #a s = unexpected s
 
 
 (*** misc ***) 
-
-//16-05-10 TEMPORARY disable StatefulLHAE.fst to experiment with StreamAE.
-
-let id = i:id{ is_stream i }
- 
 let outerPV c : ST protocolVersion
   (requires (hs_inv c.hs))
   (ensures (fun h0 pv h1 -> h0 == h1)) =
@@ -221,10 +217,10 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
 
 let no_seqn_overflow c rw =
   let es = MS.i_read (MkEpochs.es c.hs.log) in //MR.m_read c.hs.log in
-  let j = Handshake.i c.hs rw in
+  let j = Handshake.i c.hs rw in // -1 <= j < length es
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ... 
     true
-  else (
+  else ( //indexable es j
     let e = Seq.index es j in 
     let h = ST.get() in 
     let _ = match rw with 
@@ -283,38 +279,42 @@ let unrecoverable c reason : ioresult_w =
     WriteError None reason
 
 
-val send_payload: c:connection -> i:id -> f: Content.fragment i -> ST (encrypted f)
+val send_payload: c:connection -> i:StAE.stae_id -> f: Content.fragment i -> ST (encrypted f)
   (requires (fun h ->
     let es = epochs c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
     st_inv c h /\
-    (if j < 0 then is_PlaintextID i else
-       let e = Seq.index es j in
-       i == epoch_id e /\
-       incrementable (writer_epoch e) h)))
+    (if j < 0 then ~ (safeId i)
+     else indexable es j /\
+	 (let e = Seq.index es j in
+	  i == epoch_id e /\
+	  incrementable (writer_epoch e) h))))
   (ensures (fun h0 payload h1 ->
     let es = epochs c h0 in
     let j = iT c.hs Writer h0 in
     st_inv c h0 /\
     st_inv c h1 /\
-    op_Equality #int j (iT c.hs Writer h1) /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
-    (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
-       let e = Seq.index es j in   
-       i == epoch_id e /\ (
-       let wr: writer i = writer_epoch e in
-       modifies (Set.singleton (region wr)) h0 h1 /\
-       seqnT wr h1 = seqnT wr h0 + 1 /\
-       (authId i ==> StAE.fragments #i wr h1 == snoc (StAE.fragments #i wr h0) f)
+    (if j < 0 
+     then h0 == h1
+     else (indexable es j /\
+	  j = iT c.hs Writer h1 /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
+	  (let e = Seq.index es j in   
+	   i == epoch_id e /\ (
+	   let wr: writer i = writer_epoch e in
+	   modifies (Set.singleton (region wr)) h0 h1 /\
+	   seqnT wr h1 = seqnT wr h0 + 1 /\
+	   (authId i ==> StAE.fragments #i wr h1 == snoc (StAE.fragments #i wr h0) f)
 //		     /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
        )) /\
-    True ))
+    True ))))
 
 (* #reset-options "--log_queries --initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0" *)
-let send_payload c i f =
+let send_payload c i f = 
     let j = Handshake.i c.hs Writer in
     if j<0 
-    then Content.repr i f
-    else let es = MS.i_read (MkEpochs.es c.hs.log) in
+    then (let b = Content.repr i f in admit(); b)
+    else     
+         let es = MS.i_read (MkEpochs.es c.hs.log) in
 	 let e = Seq.index es j in 
 	 (* let _ = reveal_epoch_region_inv e in *)
 	 StAE.encrypt (writer_epoch e) f
@@ -335,13 +335,14 @@ let currentId (c:connection) (rw:rw) : id =
     let e = Seq.index es j in
     epoch_id e
 
+let maybe_indexable (es:seq 'a) (i:int) = i=(-1) \/ indexable es i
 
 // check vs record
 let send_requires (c:connection) (i:id) (h:HH.t) = 
     let st = sel h c.state in
     let es = epochs c h in 
     let j = iT c.hs Writer h in
-    // j < Seq.length es /\
+    maybe_indexable es j /\
     st_inv c h /\
     st <> Close /\
     st <> Half Reader /\
@@ -353,13 +354,15 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
        Map.contains h (StAE.log_region wr) /\ //NS: Needed to add this explicitly here. TODO: Soon, we will get this by just requiring mc_inv h, which includes this property
        i == epoch_id e /\
        incrementable (writer_epoch e) h))
-       
-val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
+
+
+val send: c:connection -> #i:StAE.stae_id -> f: Content.fragment i -> ST (result unit)
   (requires (send_requires c i))
   (ensures (fun h0 _ h1 ->
     let es = epochs c h0 in
     let j = iT c.hs Writer h0  in
     let st = sel h0 c.state in
+    maybe_indexable es j /\
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\ // should follow from the modifies clause
@@ -373,7 +376,6 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
 
 
 //16-05-29 timing out?
-#set-options "--lax" 
 let send c #i f =
   let pv = Handshake.version c.hs in // let Record replace TLS 1.3
   let ct, rg = Content.ct_rg i f in
@@ -396,11 +398,11 @@ assume val admit_st_inv: c: connection -> ST unit
 
 
 // auxiliary functions for projections; floating.
-let appfragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : Content.fragment i =
+let appfragment (i:id{~ (is_PlaintextID i)}) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : Content.fragment i =
   match o with
   | Some (| rg, f |) -> Content.CT_Data rg f
 
-let datafragment (i:id) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : DataStream.delta i =
+let datafragment (i:id{~ (is_PlaintextID i)}) (o: option (rg:frange i & DataStream.fragment i rg) { is_Some o }) : DataStream.delta i =
   match o with
   | Some (| rg, f |) -> let f: DataStream.pre_fragment i = f in //16-05-16 unclear why we now need this step
                        DataStream.Data f
@@ -466,7 +468,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
   : ST bool
     (requires (fun h -> True))
     (ensures (fun h0 b h1 -> 
-	      h0 = h1 
+	      h0 == h1 
 	      /\ (b <==> (match wopt with 
 		        | None -> True
 			| Some w -> incrementable w h1))))

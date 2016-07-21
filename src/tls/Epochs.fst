@@ -191,8 +191,27 @@ let incr_writer #r #n (es:epochs r n) : ST unit
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs.es es
 
-let get_reader #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.read es)
-let get_writer #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.write es)
+inline let get_ctr_post (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) h0 i h1 = 
+  let es = MkEpochs.es es in
+  h0 == h1
+  /\ -1 <= i
+  /\ MS.int_at_most i es h1
+
+let get_reader (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) 
+  : ST int (requires (fun h -> True))
+         (ensures (get_ctr_post es))
+  = let epochs = MkEpochs.es es in 
+    let n = m_read (MkEpochs.read es) in
+    testify (MS.int_at_most n epochs);
+    n
+
+let get_writer (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) 
+  : ST int (requires (fun h -> True))
+         (ensures (get_ctr_post es))
+  = let epochs = MkEpochs.es es in 
+    let n = m_read (MkEpochs.write es) in
+    testify (MS.int_at_most n epochs);
+    n
 
 let epochsT #r #n (es:epochs r n) (h:HH.t) = MS.i_sel h (MkEpochs.es es)
 
