@@ -11,6 +11,7 @@ type cert = b:bytes {length b <= 16777215}
 type chain = list cert
 
 (* ------------------------------------------------------------------------ *)
+
 abstract val certificateListBytes: chain -> Tot bytes
 let rec certificateListBytes l =
   match l with
@@ -20,7 +21,7 @@ let rec certificateListBytes l =
     (vlbytes 3 c) @| (certificateListBytes r)
 
 val certificateListBytes_is_injective: c1:chain -> c2:chain ->
-  Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 = c2)
+  Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
 let rec certificateListBytes_is_injective c1 c2 =
   match c1, c2 with
   | [], [] -> ()

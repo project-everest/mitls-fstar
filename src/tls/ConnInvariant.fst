@@ -38,7 +38,7 @@ val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t ->
 	(ensures (let epochs0 = logT s h0 in 
 		  let epochs1 = logT s h1 in 
 		  let j = iT s Writer h0 in 
-		  epochs0 = epochs1
+		  epochs0 == epochs1
 		  /\(forall (k:nat{k < Seq.length epochs0 /\ j<>k}). 
 		      let wr = writer_epoch (Seq.index epochs0 k) in
 		      HH.equal_on (Set.singleton (StAE.region wr)) h0 h1)))
@@ -132,7 +132,7 @@ let ms_conn_inv (ms:ms_t)
 	//technical: for framing; need to know that when idealized, the log also exists 
 	(authId i ==> HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h) /\
 	//main application invariant:
-	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) = Seq.createEmpty  \/   //the writer is either still unused; or
+	(MR.m_sel h (StreamAE.ilog (StreamAE.State.log w)) == Seq.createEmpty  \/   //the writer is either still unused; or
 	             (let copt = MM.sel conn (nonce_of_id i) in
   		      is_Some copt /\ registered i w (Some.v copt) h)))            //it's been registered with the connection associated with its nonce
 
@@ -153,7 +153,7 @@ let handshake_regions_exists (conn:c_t) (h:HH.t) =
 
 //Finally packaging it up as the main invariant:
 let mc_inv (h:HyperHeap.t) = 
-    HH.as_ref (MR.as_rref conn_tab) =!= HH.as_ref (MR.as_rref MS.ms_tab)     //Technical:the conn_tab and ms_tab are not aliased
+    (~ (eq3 (HH.as_ref (MR.as_rref conn_tab)) (HH.as_ref (MR.as_rref MS.ms_tab))))     //Technical:the conn_tab and ms_tab are not aliased
     /\ HH.contains_ref (MR.as_rref conn_tab) h                                //Technical:the heap contains the ms_tab
     /\ HH.contains_ref (MR.as_rref MS.ms_tab) h                               //Technical:the heap contains the conn_tab
     /\ handshake_regions_exists (MR.m_sel h conn_tab) h                       //Technical:every logged connection's handshake exists
@@ -184,12 +184,12 @@ val ms_derive_is_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id -> w:MS.writer 
 		 is_epoch_rgn (HH.parent (StreamAE.State.region w)) /\ //and it's parent is as well (needed for the ms_tab invariant)
 		 HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_tables_region
 		 HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref MS.ms_tab)} h0 h1 /\ //and within it, at most the ms_tab
-		 (old_ms = new_ms //either ms_tab didn't change at all  (because we found w in the table already)
-		  \/ (MM.sel old_ms i = None /\ //or, we had to generate a fresh writer w
-		     new_ms = MM.upd old_ms i w /\ //and we just added w to the table
+		 (old_ms == new_ms //either ms_tab didn't change at all  (because we found w in the table already)
+		  \/ (MM.sel old_ms i == None /\ //or, we had to generate a fresh writer w
+		     new_ms == MM.upd old_ms i w /\ //and we just added w to the table
 	   	     (TLSInfo.authId i ==>  //and if we're idealizing i
 		         HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1 /\  //the log exists in h1
-			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) = Seq.createEmpty)))))       //and w is as yet unused
+			 MR.m_sel h1 (AE.ilog (StreamAE.State.log w)) == Seq.createEmpty)))))       //and w is as yet unused
 	 (ensures (mc_inv h1))
 val invertOption : a:Type -> Lemma 
   (requires True)
@@ -211,7 +211,7 @@ let ms_derive_is_ok h0 h1 i w =
            | Some ww ->
       	     if i=j 
       	     then ()
-      	     else assert (Some ww=MM.sel old_ms j)
+      	     else assert (Some ww==MM.sel old_ms j)
       else () in
   qintro aux
 
@@ -258,7 +258,7 @@ let writer_region_within_connection
     = reveal_epoch_region_inv_all ()
 
 //A wrapper around a Sequence lemma ... should move it
-let lemma_mem_snoc (s:FStar.Seq.seq 'a) (x:'a)
+let lemma_mem_snoc (#a:eqtype) (s:FStar.Seq.seq a) (x:a)
   : Lemma (ensures (forall y.{:pattern (SeqProperties.mem y (SeqProperties.snoc s x))}
       SeqProperties.mem y (SeqProperties.snoc s x) <==> SeqProperties.mem y s \/ x=y))
   = SeqProperties.lemma_mem_snoc s x
@@ -390,8 +390,8 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	     (let old_conn = MR.m_sel h0 conn_tab in
     	      let new_conn = MR.m_sel h1 conn_tab in
 	      let nonce = nonce_of_id i in
-	      MM.sel old_conn nonce = None /\        //c wasn't in the table initially
-	      new_conn = MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
+	      MM.sel old_conn nonce == None /\        //c wasn't in the table initially
+	      new_conn == MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" //NS: this one seems to require an inversion somewhere, but not sure exactly where
 let add_connection_ok h0 h1 i c =
@@ -406,9 +406,9 @@ let add_connection_ok h0 h1 i c =
 	 | Some v -> conn_hs_region_exists v h1) =
       fun n -> match MM.sel new_conn n with
     	    | None -> ()
-    	    | Some c' -> if c = c' then ()
-    		        else match MM.sel old_conn n with
-			     | None -> ()
-			     | Some c'' -> cut (c' = c'') in// Some.v (MM.sel old_conn n)) in
+    	    | Some c' ->
+	      assert (c =!= c' ==> (match MM.sel old_conn n with
+                                     | None -> True
+                                     | Some c'' -> c' == c'')) in
     qintro hs_region_exists;
     cut (handshake_regions_exists new_conn h1)

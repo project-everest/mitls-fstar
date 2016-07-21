@@ -27,7 +27,7 @@ let getLogVersion hsl =
     | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
     | _ -> None
 
-type log =
+noeq type log =
   | LOG: #region:rid -> 
          logref:rref region (|
               pv: option protocolVersion

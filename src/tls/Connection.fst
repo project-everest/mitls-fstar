@@ -37,7 +37,7 @@ type tlsState =
 
 type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region } 
 
-type connection = | C:
+noeq type connection = | C:
   #region: c_rgn ->
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
   tcp:     Transport.t ->
@@ -56,16 +56,16 @@ let c_log c    = c.hs.log
 (* val writer_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h)) *)
 (* let writer_epoch #region #peer e = Handshake.writer_epoch e *)
 
-(*** 
+(***
      WE WILL FOCUS VERIFICATION ON StreamAE and TLS-1.3 FOR NOW.
      Ignores StatefulLHAE, which needs to be upgraded
  ***)
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-type st_inv c h = hs_inv (C.hs c) h 
+type st_inv c h = hs_inv (C.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
 val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
-  Epochs.epochs_inv es /\ es = logT c.hs h
+  Epochs.epochs_inv es /\ es == logT c.hs h
 })
 let epochs c h = logT c.hs h
 
@@ -74,7 +74,7 @@ let epochs c h = logT c.hs h
 val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
   (requires (Map.contains h0 (HS.region c.hs)
              /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
-  (ensures (epochs c h0 = epochs c h1))
+  (ensures (epochs c h0 == epochs c h1))
 let frame_epochs c h0 h1 = ()
 
 let epoch_i c h i = Seq.index (epochs c h) i
