@@ -27,7 +27,6 @@ let getLogVersion hsl =
     | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
     | _ -> None
 
-
 (* TODO: maybe hsl an erased bytes, see ulib/FStar.Ghost.fst *)
 (* Here's a very rough sketch *)
 (* er h = erased (b:bytes{h = hash b})) *)
@@ -36,7 +35,7 @@ let getLogVersion hsl =
 (*   let (|h, eb|) = !r in *)
 (*   let next = update_hash h eb b in *)
 
-type log =
+noeq type log =
   | LOG: #region:rid -> 
          logref:rref region (|
               pv: option protocolVersion

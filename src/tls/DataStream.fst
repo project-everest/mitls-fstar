@@ -92,7 +92,7 @@ type stream (i:id) = s: list (delta i) { wellformed i s }
 //* not much point sharing the two? is it re-implementing AppData?
 //* maybe the state is just an rref?
 
-type state (i:id) =
+noeq type state (i:id) =
   | State: #region:rid ->
            log: option (rref region (stream i)) { is_Some log <==> authId i } ->
            ctr: rref region nat ->

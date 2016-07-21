@@ -145,7 +145,7 @@ type sigAlg = CoreCrypto.sig_alg
 type pinverse_t (#a:Type) (#b:Type) ($f:(a -> Tot b)) = b -> Tot (result a)
 
 inline type lemma_inverse_g_f (#a:Type) (#b:Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (x:a) =
-  g (f x) = Correct x
+  g (f x) == Correct x
 
 inline type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (y:b) =
   is_Correct (g y) ==> r (f (Correct._0 (g y))) y
@@ -984,7 +984,7 @@ val lemma_vlbytes_inj : i:nat
   -> b:bytes{repr_bytes (length b) <= i}
   -> b':bytes{repr_bytes (length b') <= i}
   -> Lemma (requires (Seq.equal (vlbytes i b) (vlbytes i b')))
-          (ensures (b = b'))
+          (ensures (b == b'))
 let lemma_vlbytes_inj i b b' =
   let l = bytes_of_int i (length b) in
   SeqProperties.lemma_append_inj l b l b'
@@ -1022,7 +1022,7 @@ let vlparse lSize vlb =
 
 val vlparse_vlbytes: lSize:nat{lSize <= 4} -> vlb:bytes{repr_bytes (length vlb) <= lSize} -> Lemma 
   (requires (True))
-  (ensures (vlparse lSize (vlbytes lSize vlb) = Correct vlb))
+  (ensures (vlparse lSize (vlbytes lSize vlb) == Correct vlb))
   [SMTPat (vlparse lSize (vlbytes lSize vlb))]
 let vlparse_vlbytes lSize vlb =
   let vl,b = split (vlbytes lSize vlb) lSize in
@@ -1344,7 +1344,7 @@ val pinverse_earlyDataType: x:_ -> Lemma
 let pinverse_earlyDataType x = ()
 
 // TODO : replace with more precise types when available
-type configurationExtension =
+noeq type configurationExtension =
   | UnknownConfigurationExtension:
       typ:lbytes 2 -> payload: bytes { repr_bytes (length payload) <= 2 } -> configurationExtension
 
@@ -1484,7 +1484,7 @@ type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
 
 type serverKeyShare = keyShareEntry
 
-type keyShare =
+noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
 
@@ -1660,7 +1660,7 @@ type clientPreSharedKey = l:list pskIdentity{List.Tot.length l >= 1 /\ List.Tot.
 
 type serverPreSharedKey = pskIdentity
 
-type preSharedKey =
+noeq type preSharedKey =
   | ClientPreSharedKey of clientPreSharedKey
   | ServerPreSharedKey of serverPreSharedKey
 

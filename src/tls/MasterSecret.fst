@@ -26,7 +26,7 @@ let writer (i:AE.id) = w:AE.writer i{
 // if it maps distinct ids to writers with distinct regions
 let region_injective (m:MM.map' AE.id writer) = 
   forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)} 
-       i1<>i2 ==> (match MM.sel m i1, MM.sel m i2 with
+       i1=!=i2 ==> (match MM.sel m i1, MM.sel m i2 with
 			  | Some w1, Some w2 -> w1.region <> w2.region
 			  | _ -> True)
 
@@ -58,7 +58,6 @@ let all_ms_tab_regions_exists () =
   let tok : squash (id_rgns_witnessed m0) = () in   
   MR.testify_forall tok
 
-
 let derive (r:rgn) (i:AE.id) 
   : ST (AE.writer i)
        (requires (fun h -> 
@@ -77,10 +76,10 @@ let derive (r:rgn) (i:AE.id)
 	   /\ MR.witnessed (MM.contains ms_tab i w) //and the writer is witnessed to be in ms_tab
 	   /\ (let old_ms = MR.m_sel h0 ms_tab in
 	      let new_ms = MR.m_sel h1 ms_tab in
- 	       old_ms = new_ms //either ms_tab didn't change at all
-	       \/ (MM.sel old_ms i = None
-		  /\ new_ms = MM.upd old_ms i w //or we just added w to it
-	   	  /\ (TLSInfo.authId i ==> MR.m_sel h1 (AE.ilog w.log) = Seq.createEmpty))))) //and it is a fresh log
+ 	       old_ms == new_ms //either ms_tab didn't change at all
+	       \/ (MM.sel old_ms i == None
+		  /\ new_ms == MM.upd old_ms i w //or we just added w to it
+	   	  /\ (TLSInfo.authId i ==> MR.m_sel h1 (AE.ilog w.log) == Seq.createEmpty))))) //and it is a fresh log
   = MR.m_recall ms_tab;
     match MM.lookup ms_tab i with
     | None -> 

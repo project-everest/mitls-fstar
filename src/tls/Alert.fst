@@ -54,7 +54,7 @@ let alertBytes ad =
     | AD_unsupported_extension ->              abyte2 (2z, 110z)
 
 val parse: b:lbytes 2 -> Tot 
-  (r: result alertDescription { forall ad. (r = Correct ad ==> b = alertBytes ad) })
+  (r: result alertDescription { forall ad. (r = Correct ad ==> b == alertBytes ad) })
 let parse b =
     let b1,b2 = cbyte2 b in
     Seq.lemma_eq_intro b (abyte2 (b1,b2));

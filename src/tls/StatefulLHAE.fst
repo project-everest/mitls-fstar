@@ -61,9 +61,9 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                extends r.region parent /\
 	       color r.region = color parent /\
                fresh_region r.region h0 h1 /\
-               op_Equality #(log_ref w.region i) w.log r.log /\
+               eq2 #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
-	       m_sel h1 (ctr r.counter) == 0))
+	       m_sel h1 (ctr r.counter) === 0))
 let genReader parent #i w =
   AEAD_GCM.genReader parent #i w
 
@@ -96,7 +96,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
        (ensures  (fun h0 c h1 ->
            modifies_one e.region h0 h1
  	 /\ m_contains (ctr e.counter) h1
-	 /\ m_sel h1 (ctr e.counter) == m_sel h0 (ctr e.counter) + 1
+	 /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
 	 /\ length c = Range.targetLength i r
 	 /\ (authId i ==>
 	     (let log = ilog e.log in
@@ -107,7 +107,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 	      let n   = Seq.length ilog in
 	        m_contains log h1
               /\ witnessed (at_least n ent log)
-	      /\ m_sel h1 log = snoc ilog ent))))
+	      /\ m_sel h1 log == snoc ilog ent))))
 let encrypt #i e ad r p =
   let seqn = m_read (ctr e.counter) in
   let ad' = LHAEPlain.makeAD i seqn ad in
@@ -131,7 +131,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
                 /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
-	        /\ m_sel h1 (ctr d.counter) == j + 1)))
+	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 let decrypt #i d ad c =
   let seqn = m_read (ctr d.counter) in
   let ad' = LHAEPlain.makeAD i seqn ad in
