@@ -742,13 +742,25 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 //let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 
 // ``We are idealizing integrity/confidentiality for this id''
-let authId = function
+abstract let authId = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
   | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAuthAlg pv ae
 
-let safeId = function
+abstract let safeId = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
   | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAEAlg pv ae
+
+let plainText_is_not_auth (i:id)
+  : Lemma (requires (is_PlaintextID i))
+          (ensures (not (authId i)))
+	  [SMTPat (is_PlaintextID i)]
+  = ()	  
+
+let safe_implies_auth (i:id)
+  : Lemma (requires (safeId i))
+          (ensures (authId i))
+	  [SMTPat (authId i)]
+  = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg
 

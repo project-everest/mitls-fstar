@@ -28,7 +28,7 @@ let epoch_regions_exist (s:hs) (h0:HH.t) =
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 val frame_epoch_writer: s:hs -> h0:HH.t -> h1:HH.t -> 
   Lemma (requires (let j = iT s Writer h0 in 
-		   let epochs = logT s h0 in 
+		   let epochs = logT s h0 in
 		     SeqP.indexable epochs j
 		   /\ epoch_regions_exist s h0 
 		   /\ (let e_j = Seq.index epochs j in
@@ -287,11 +287,11 @@ val register_writer_in_epoch_ok: h0:HyperHeap.t -> h1:HyperHeap.t -> i:AE.id{aut
 	      HH.disjoint (HH.parent (StreamAE.State.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
 	      MR.witnessed (MR.rid_exists (StreamAE.State.region w)) /\                //technical: ... needed just for well-formedness of the rest of the formula
 	      (forall e. SeqProperties.mem e epochs ==> Epochs.epoch_id e <> i) /\            //i is fresh for c
- 	      MM.sel mstab i = Some w /\ //we found the writer in the ms_tab
-	      MM.sel ctab (nonce_of_id i) = Some c /\ //we found the connection in the conn_table
+ 	      MM.sel mstab i == Some w /\ //we found the writer in the ms_tab
+	      MM.sel ctab (nonce_of_id i) == Some c /\ //we found the connection in the conn_table
       	      HH.modifies_one (HS.region c.hs) h0 h1 /\ //we just modified this connection's handshake region
 	      HH.modifies_rref (HS.region c.hs) !{HH.as_ref (MR.as_rref (MkEpochs.es c.hs.log))} h0 h1 /\ //and within it, just the epochs log
-	      new_hs_log = SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
+	      new_hs_log == SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
 let register_writer_in_epoch_ok h0 h1 i c e =
   (* This proof can be simplified a lot.
@@ -310,8 +310,8 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let wi = StAE.stream_state #i (Epoch.w e) in //the epoch writer
       let nonce = nonce_of_id i in
       lemma_mem_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
-      assert (old_ms = new_ms);
-      assert (old_conn = new_conn);
+      assert (old_ms == new_ms);
+      assert (old_conn == new_conn);
       cut (is_Some (MM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier
       if (authId j && StAE.is_stream j)
       then match MM.sel new_ms j with
@@ -323,20 +323,18 @@ let register_writer_in_epoch_ok h0 h1 i c e =
 	     assert (is_epoch_rgn (StreamAE.State.region wj));    //from the separation clause in ms_con_inv
       	     let log0 = MR.m_sel h0 log_ref in
       	     let log1 = MR.m_sel h1 log_ref in
-      	     assert (log0 = log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
-      	     if log0 = Seq.createEmpty
-      	     then () //if the log remains empty, it's easy
-      	     else if wj=wi
-	     then () //if j is in fact the same as i, then i gets registered at the end, so that's easy too
-	     else let nonce_j = nonce_of_id j in
-		  if nonce_j = nonce
-		  then assert (registered j wj c h0) //if j and i share the same nonce, then j is registered to c and c's registered writers only grows
-		  else (match MM.sel old_conn nonce_j with
-		        | None -> assert false //we've already established that the log is non-empty; so j must be registered and this case says that it is not
-			| Some c' ->
-			  assert (registered j wj c' h0); //it's registered initially
-			  assert (HH.disjoint (C.region c) (C.region c')); //c's region is disjoint from c'; since the conn_tab is pairwise_disjoint
-			  assert (registered j wj c' h1)) //so it remains registered
+      	     assert (log0 == log1); //the properties in the three asserts above are needed to show that j's log didn't change just by registering i
+	     assert (~(log0 == Seq.createEmpty //if the log remains empty, it's easy
+		       \/ wj==wi) //if j is in fact the same as i, then i gets registered at the end, so that's easy too
+		     ==> (let nonce_j = nonce_of_id j in
+		          if nonce_j = nonce
+			  then registered j wj c h0 //if j and i share the same nonce, then j is registered to c and c's registered writers only grows
+			  else (match MM.sel old_conn nonce_j with
+		                | None -> False //we've already established that the log is non-empty; so j must be registered and this case says that it is not
+				| Some c' ->
+				  (registered j wj c' h0) //it's registered initially
+				  /\ (HH.disjoint (C.region c) (C.region c')) //c's region is disjoint from c'; since the conn_tab is pairwise_disjoint
+				  /\ (registered j wj c' h1)))) //so it remains registered
       else () (* not ideal; nothing much to say *) in
   qintro aux
 
@@ -349,8 +347,8 @@ val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:M
     (requires (mc_inv h0 /\                                       //initially in the invariant
 	       HH.modifies_one (StreamAE.State.region w) h0 h1 /\ //we modified at most the writer's region
 	       registered i w c h0 /\                             //the writer is registered in c
-	       MM.sel (MR.m_sel h0 MS.ms_tab) i = Some w   /\     //the writer is logged in the ms_tab
-	       MM.sel (MR.m_sel h0 conn_tab) (nonce_of_id i) = Some c /\ //the connection is logged in the conn_table
+	       MM.sel (MR.m_sel h0 MS.ms_tab) i == Some w   /\     //the writer is logged in the ms_tab
+	       MM.sel (MR.m_sel h0 conn_tab) (nonce_of_id i) == Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1)) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
 let mutate_registered_writer_ok h0 h1 i w c = (* () *)
@@ -391,7 +389,7 @@ val add_connection_ok: h0:HH.t -> h1:HH.t -> i:id -> c:i_conn i -> Lemma
 	      MM.sel old_conn nonce == None /\        //c wasn't in the table initially
 	      new_conn == MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" //NS: this one seems to require an inversion somewhere, but not sure exactly where
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --z3timeout 100" //NS: this one seems to require an inversion somewhere, but not sure exactly where
 let add_connection_ok h0 h1 i c =
     cut (HH.contains_ref (MR.as_rref conn_tab) h1);
     let old_ms = MR.m_sel h0 MS.ms_tab in
