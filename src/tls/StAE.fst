@@ -33,27 +33,14 @@ let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
 // PLAINTEXTS are defined in Content.fragment i
 //16-06-08 see also StreamPlain and StatefulPlain. 
 
+type stae_id = i:id {is_stream i \/ is_stlhae i}
 
 ////////////////////////////////////////////////////////////////////////////////
 //Various utilities related to lengths of ciphers and fragments
 ////////////////////////////////////////////////////////////////////////////////
 
-// sufficient to ensure the cipher can be processed without length errors
 let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
   snd (C.rg i f) + 1
-
-type stae_id = i:id {is_stream i \/ is_stlhae i}
-
-val cipherLen: i:stae_id -> C.fragment i -> Tot (l:nat{Range.valid_clen i l})
-let cipherLen (i:stae_id) (f:C.fragment i) : nat =
-  if is_stream i then
-    StreamAE.cipherLen i (frag_plain_len #i f)
-  else
-    let r = C.rg i f in
-    Range.targetLength i r
-
-type encrypted (#i:stae_id) (f:C.fragment i) = lbytes (cipherLen i f)
-type decrypted (i:stae_id) = C.contentType * (b:bytes { Range.valid_clen i (length b) })
 
 // CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
@@ -315,7 +302,7 @@ let leak #i #role s =
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (encrypted f)
+val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
                modifies_one (region e) h0 h1
@@ -375,7 +362,7 @@ let fragment_at_j_stable (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:C.
   = MS.map_has_at_index_stable #_ #_ #(log_region s) (ilog s) ptext n f
 
 
-val decrypt: #i:id -> d:reader i -> c:decrypted i
+val decrypt: #i:id -> d:reader i -> c:C.decrypted i
   -> ST (option (f:C.fragment i))
     (requires (fun h0 -> incrementable d h0))
     (ensures  (fun h0 res h1 ->
@@ -386,7 +373,7 @@ val decrypt: #i:id -> d:reader i -> c:decrypted i
 		  let j = seqnT d h0 in
   		  seqnT d h1 = j + 1 /\
     	          (if is_stream i then
-		    frag_plain_len #i f <= cipherLen i f
+		    frag_plain_len #i f <= C.cipherLen i f
 		  else
 		    ct = fst c /\
 		    Range.wider (Range.cipherRangeClass i (length (snd c))) rg) /\

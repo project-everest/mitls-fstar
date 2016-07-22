@@ -101,13 +101,10 @@ let serialize dhp dh_Y =
   pb @| gb @| pkb
 
 val serialize_public: s:share -> len:nat{len < 65536 /\ length s <= len}
-  //-> Tot (lbytes (2 + len))
   -> Tot (lbytes len)
 let serialize_public dh_Y len =
   let padded_dh_Y = createBytes (len - length dh_Y) 0z @| dh_Y in
   lemma_repr_bytes_values len;
-  //assume (repr_bytes (length padded_dh_Y) <= 2);
-  //vlbytes 2 padded_dh_Y
   padded_dh_Y
 
 val parse_public: p:bytes{2 <= length p} -> Tot (result share)
@@ -118,25 +115,25 @@ let parse_public p =
 
 val parse_partial: bytes -> Tot (result (key * bytes))
 let parse_partial payload = 
-    if length payload >= 2 then
-      match vlsplit 2 payload with
-      | Error(z) -> Error(z)
-      | Correct(p, payload) ->
-        if length payload >= 2 then
-          match vlsplit 2 payload with
-          | Error(z) -> Error(z)
-          | Correct(g, payload) ->
-            if length payload >= 2 then
-              match vlsplit 2 payload with
-              | Error(z) -> Error(z)
-              | Correct(gy, rem) ->
-                if length gy <= length p then
-                  let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
-                  let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
-                  lemma_repr_bytes_values (length p);
-                  lemma_repr_bytes_values (length g);
-                  Correct (dhk,rem)
-                else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  if length payload >= 2 then
+    match vlsplit 2 payload with
+    | Error(z) -> Error(z)
+    | Correct(p, payload) ->
+      if length payload >= 2 then
+        match vlsplit 2 payload with
+        | Error(z) -> Error(z)
+        | Correct(g, payload) ->
+          if length payload >= 2 then
+            match vlsplit 2 payload with
+            | Error(z) -> Error(z)
+            | Correct(gy, rem) ->
+              if length gy <= length p then
+                let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
+                let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
+                lemma_repr_bytes_values (length p);
+                lemma_repr_bytes_values (length g);
+                Correct (dhk,rem)
+              else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+          else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

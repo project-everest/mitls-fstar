@@ -279,7 +279,7 @@ let unrecoverable c reason : ioresult_w =
     WriteError None reason
 
 
-val send_payload: c:connection -> i:StAE.stae_id -> f: Content.fragment i -> ST (encrypted f)
+val send_payload: c:connection -> i:id -> f:Content.fragment i -> ST (Content.encrypted f)
   (requires (fun h ->
     let es = epochs c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
@@ -511,7 +511,7 @@ let sendFragment c #i wo f =
   if not (check_incrementable wo)
   then ad_overflow
   else begin
-       let payload: encrypted f = 
+       let payload: Content.encrypted f =
            match wo with
 	   | None    -> Content.repr i f //16-05-20 don't understand error.
 	   | Some wr -> StAE.encrypt wr f in 
