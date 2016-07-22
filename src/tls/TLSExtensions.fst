@@ -124,54 +124,68 @@ let compile_sni_list l =
 
 val parse_sni_list: r:role -> b:bytes -> Tot (result (list serverName))
 let parse_sni_list r b  =
-    let rec aux:b:bytes -> Tot (canFail (serverName)) (decreases (length b)) = fun b ->
-        if equalBytes b empty_bytes then ExOK([])
-        else
-	  if length b >= 3 then
-            let (ty,v) = split b 1 in
-            (match vlsplit 2 v with
-            | Error(x,y) -> ExFail(x,"Failed to parse SNI length: "^(Platform.Bytes.print_bytes b))
-            | Correct(cur, next) ->
-                (match aux next with
-                | ExFail(x,y) -> ExFail(x,y)
-                | ExOK(l) ->
-		    admit();
-                    let cur =
-                        (match cbyte ty with
-                        | 0z -> SNI_DNS(cur)
-                        | v -> SNI_UNKNOWN(int_of_bytes ty, cur))
-                    in let (snidup:serverName -> Tot bool) = fun x ->
-                        (match (x,cur) with
-                        | SNI_DNS _, SNI_DNS _ -> true
-                        | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a=b
-                        | _ -> false)
-		       in if List.Tot.existsb snidup l then ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
-                    else ExOK(cur :: l)))
-          else ExFail(AD_decode_error,"Failed to parse SNI")
+  let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
+    if equalBytes b empty_bytes then ExOK []
+    else if length b >= 3 then
+      let ty,v = split b 1 in
+      begin
+      match vlsplit 2 v with
+      | Error(x,y) ->
+	ExFail(x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
+      | Correct(cur, next) ->
+	begin
+	match aux next with
+	| ExFail(x,y) -> ExFail(x,y)
+	| ExOK l ->
+	  let cur =
+	    begin
+	    match cbyte ty with
+	    | 0z -> SNI_DNS(cur)
+	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
+	    end
+	  in
+	  let snidup: serverName -> Tot bool = fun x ->
+	    begin
+	    match x,cur with
+	    | SNI_DNS _, SNI_DNS _ -> true
+	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
+	    | _ -> false
+	    end
+	  in
+	  if List.Tot.existsb snidup l then
+	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
+	  else ExOK(cur :: l)
+	end
+      end
+    else ExFail(AD_decode_error, "Failed to parse SNI")
     in 
     match r with 
-    | Server -> if length b = 0 then correct [] else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list: should be empty in ServerHello, has size "^string_of_int (length b)) 
+    | Server ->
+      if length b = 0 then correct []
+      else
+	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b))
     | Client -> 
-      if length b >= 2 then (
+      if length b >= 2 then
+	begin
 	match vlparse 2 b with
-	| Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
-	| Correct (b) -> 
+	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+	| Correct b ->
 	match aux b with
 	| ExFail(x,y) -> Error(x,y)
-	| ExOK([]) -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
-	| ExOK(l) -> correct (l)
-	)
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
+	| ExOK l -> correct l
+	end
+      else
+	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
 
-let rec (compile_curve_list_aux:list ECGroup.ec_all_curve -> Tot bytes) =
-        function
-        | [] -> empty_bytes
-        | ECGroup.EC_CORE c :: r ->
-            let cid = ECGroup.curve_id (ECGroup.params_of_group c) in
-            cid @| compile_curve_list_aux r
-        | ECGroup.EC_EXPLICIT_PRIME :: r -> abyte2 (255z, 01z) @| compile_curve_list_aux r
-        | ECGroup.EC_EXPLICIT_BINARY :: r -> abyte2 (255z, 02z) @| compile_curve_list_aux r
-        | ECGroup.EC_UNKNOWN(x) :: r -> bytes_of_int 2 x @| compile_curve_list_aux r
+let rec (compile_curve_list_aux:list ECGroup.ec_all_curve -> Tot bytes) = function
+  | [] -> empty_bytes
+  | ECGroup.EC_CORE c :: r ->
+    let cid = ECGroup.curve_id (ECGroup.params_of_group c) in
+    cid @| compile_curve_list_aux r
+  | ECGroup.EC_EXPLICIT_PRIME :: r -> abyte2 (255z, 01z) @| compile_curve_list_aux r
+  | ECGroup.EC_EXPLICIT_BINARY :: r -> abyte2 (255z, 02z) @| compile_curve_list_aux r
+  | ECGroup.EC_UNKNOWN(x) :: r -> bytes_of_int 2 x @| compile_curve_list_aux r
 
 val compile_curve_list: l:list ECGroup.ec_all_curve{length (compile_curve_list_aux l) < 65536} -> Tot bytes
 let compile_curve_list l =
