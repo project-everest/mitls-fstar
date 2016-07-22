@@ -1250,8 +1250,7 @@ let parseServerKeyExchange kex payload : result ske =
     | Kex_DHE -> 
        (match CommonDH.parse_partial payload false with
 	| Correct (k,sign) -> 
-	  if length sign < 65536 then // JK: TODO propagate from the DH parsing if possible to 
-				      // avoid unnecessary length checks
+	  if length sign < 65536 then
           Correct ({ske_kex_s = KEX_S_DHE k;
                     ske_sig = sign})
 	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
@@ -1259,7 +1258,7 @@ let parseServerKeyExchange kex payload : result ske =
     | Kex_ECDHE -> 
        (match CommonDH.parse_partial payload true with
 	| Correct (k,sign) ->
-	  if length sign < 65536 then // JK: idem
+	  if length sign < 65536 then
           Correct ({ske_kex_s = KEX_S_DHE k;
                     ske_sig = sign})
 	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
