@@ -5,11 +5,7 @@
       0,
       1,
       [
-        "@query_14382", "constructor_distinct_TLSError.AD_missing_extension",
-        "constructor_distinct_TLSError.AD_no_renegotiation",
-        "constructor_distinct_TLSError.AD_unrecognized_name",
-        "constructor_distinct_TLSError.AD_unsupported_extension",
-        "disc_equation_TLSError.AD_access_denied",
+        "@query_14390", "disc_equation_TLSError.AD_access_denied",
         "disc_equation_TLSError.AD_bad_certificate_fatal",
         "disc_equation_TLSError.AD_bad_certificate_warning",
         "disc_equation_TLSError.AD_bad_record_mac",
@@ -50,7 +46,7 @@
       0,
       1,
       [
-        "@pretyping__5373", "@query_14385",
+        "@pretyping__5373", "@query_14393",
         "assumption_Platform.Error.optResult_haseq_4989",
         "assumption_Prims.HasEq_string_334",
         "assumption_Prims.HasEq_tuple2_647",
@@ -62,12 +58,12 @@
       ],
       0
     ],
-    [ 0, 1, [ "@query_14386", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_14394", "projection_inverse_BoxInt_proj_0" ], 0 ],
     [
       0,
       1,
       [
-        "@query_14395", "constructor_distinct_Platform.Error.Correct",
+        "@query_14403", "constructor_distinct_Platform.Error.Correct",
         "constructor_distinct_Platform.Error.Error",
         "constructor_distinct_Prims.Mktuple2",
         "constructor_distinct_TLSError.AD_access_denied",
