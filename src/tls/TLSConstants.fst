@@ -206,7 +206,8 @@ let parseHashAlg b =
   | 4z -> Correct (Hash SHA256)
   | 5z -> Correct (Hash SHA384)
   | 6z -> Correct (Hash SHA512)
-  | 7z -> Correct (NULL)
+  | 7z -> admit();  //TODO: FIXME!!!!
+         Correct (NULL)
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_hashAlg: x:_ -> Lemma

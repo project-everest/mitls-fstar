@@ -1,13 +1,13 @@
 [
-  "⁄\u001cyvWb›ÖEÇ\u0006˛\u001eûêz",
+  "qﬁÂKqBœêÔ‡'™o5bE",
   [
     [
       3,
       1,
       [
-        "@query_9934", "binder_s__2156", "disc_equation_Prims.Cons",
+        "@query_11372", "binder_s__2156", "disc_equation_Prims.Cons",
         "disc_equation_Prims.Nil", "equation_TLSConstants.sigAlg",
-        "fuel_guarded_inversion_Prims.list_323",
+        "fuel_guarded_inversion_Prims.list_339",
         "projection_inverse_Prims.Cons_tl", "subterm_ordering_Prims.Cons"
       ],
       0
@@ -16,12 +16,13 @@
       3,
       1,
       [
-        "@query_9966", "binder_ecl__3207", "binder_ffl__3208",
+        "@query_11404", "binder_ecl__3191", "binder_ffl__3192",
+        "constructor_distinct_Prims.Cons",
         "constructor_distinct_TLSConstants.FFDHE",
         "constructor_distinct_TLSConstants.SEC", "disc_equation_Prims.Cons",
         "disc_equation_Prims.Nil", "disc_equation_TLSConstants.FFDHE",
         "disc_equation_TLSConstants.SEC", "equality_tok_Prims.LexTop@tok",
-        "fuel_guarded_inversion_Prims.list_323",
+        "fuel_guarded_inversion_Prims.list_339",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSConstants.FFDHE__0",
         "projection_inverse_TLSConstants.SEC__0",
@@ -33,11 +34,13 @@
       10,
       1,
       [
-        "@pretyping__7074", "@query_9980", "constructor_distinct_Prims.Cons",
+        "@query_11418", "constructor_distinct_Prims.Cons",
         "constructor_distinct_Prims.Nil",
         "constructor_distinct_TLSConstants.Hash",
         "constructor_distinct_TLSConstants.MD5SHA1",
         "constructor_distinct_TLSConstants.NULL",
+        "equality_tok_CoreCrypto.ECC_P384@tok",
+        "equality_tok_CoreCrypto.ECDSA@tok",
         "equality_tok_CoreCrypto.SHA1@tok",
         "equality_tok_CoreCrypto.SHA256@tok",
         "equality_tok_CoreCrypto.SHA384@tok",
@@ -52,42 +55,57 @@
         "equality_tok_TLSConstants.TLS_RSA_WITH_3DES_EDE_CBC_SHA@tok",
         "equality_tok_TLSConstants.TLS_RSA_WITH_AES_128_CBC_SHA@tok",
         "equality_tok_TLSConstants.TLS_RSA_WITH_AES_128_GCM_SHA256@tok",
-        "equation_Prims.nat",
-        "equation_with_fuel_FStar.List.Tot.length__2043",
-        "fuel_correspondence_FStar.List.Tot.length__2043",
-        "fuel_irrelevance_FStar.List.Tot.length__2043", "int_inversion",
-        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
+        "equation_Prims.nat", "equation_TLSConstants.sigAlg",
+        "equation_with_fuel_FStar.List.Tot.length__2236",
+        "fuel_correspondence_FStar.List.Tot.length__2236",
+        "fuel_irrelevance_FStar.List.Tot.length__2236", "int_inversion",
+        "int_typing", "primitive_Prims.op_Addition",
+        "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl", "projection_inverse_Prims.Nil_a",
-        "refinement_interpretation_Tm_refine_1013",
-        "typing_tok_TLSConstants.NullCompression@tok"
+        "refinement_interpretation_Tm_refine_1040"
       ],
       0
     ],
-    [ 0, 1, [ "@query_9986", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_9987", "projection_inverse_BoxInt_proj_0" ], 0 ],
-    [ 0, 1, [ "@query_9995" ], 0 ],
-    [ 0, 1, [ "@query_9998" ], 0 ],
-    [ 0, 1, [ "@query_10037" ], 0 ],
+    [ 0, 1, [ "@query_11424", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_11425", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_11433" ], 0 ],
+    [ 0, 1, [ "@query_11436" ], 0 ],
+    [ 0, 1, [ "@query_11475" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10051", "disc_equation_TLSInfo.SNI_DNS",
+        "@query_11482", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_Prims.HasEq_int_319",
+        "assumption_Prims.HasEq_tuple2_647", "equation_Platform.Bytes.bytes",
+        "equation_Prims.nat", "equation_TLSConstants.pskIdentity",
+        "function_token_typing_TLSConstants.pskIdentity",
+        "haseqTm_refine_1040", "haseqTm_refine_9148", "haseqTm_refine_9747",
+        "refinement_kinding_Tm_refine_9747"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_11522" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_11536", "disc_equation_TLSInfo.SNI_DNS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10039"
+        "refinement_interpretation_Tm_refine_11524"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10056" ], 0 ],
+    [ 0, 1, [ "@query_11541" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10075", "disc_equation_TLSInfo.SNI_UNKNOWN",
+        "@query_11560", "disc_equation_TLSInfo.SNI_UNKNOWN",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10058"
+        "refinement_interpretation_Tm_refine_11543"
       ],
       0
     ],
@@ -95,7 +113,52 @@
       0,
       1,
       [
-        "@query_10227", "equation_FStar.Char.char",
+        "@query_11611", "assumption_CoreCrypto.sig_alg_haseq_4159",
+        "assumption_ECGroup.point_format_haseq_9755",
+        "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_Prims.HasEq_bool_155", "assumption_Prims.HasEq_list_375",
+        "assumption_Prims.HasEq_option_473",
+        "assumption_Prims.HasEq_tuple2_647",
+        "assumption_TLSConstants.hashAlg_haseq_7926",
+        "assumption_TLSConstants.namedGroup_haseq_8971",
+        "assumption_TLSInfo.ri_status_haseq_11589",
+        "assumption_TLSInfo.serverName_haseq_11512",
+        "equation_Platform.Bytes.bytes", "equation_TLSConstants.hashAlg_",
+        "equation_TLSConstants.keyShareEntry",
+        "equation_TLSConstants.pskIdentity",
+        "equation_TLSConstants.serverKeyShare",
+        "equation_TLSConstants.sigAlg", "equation_TLSConstants.sigHashAlg",
+        "function_token_typing_TLSConstants.keyShareEntry",
+        "function_token_typing_TLSConstants.pskIdentity",
+        "function_token_typing_TLSConstants.sigHashAlg",
+        "haseqTm_refine_8080", "haseqTm_refine_9148",
+        "kinding_CoreCrypto.sig_alg@tok", "kinding_ECGroup.point_format@tok",
+        "kinding_Prims.list@tok", "kinding_TLSConstants.namedGroup@tok",
+        "kinding_TLSInfo.serverName@tok", "refinement_kinding_Tm_refine_8080"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_11730", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_Prims.HasEq_option_473",
+        "assumption_Prims.HasEq_tuple2_647", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.lbytes", "equation_TLSInfo.cVerifyData",
+        "equation_TLSInfo.crand", "equation_TLSInfo.random",
+        "equation_TLSInfo.sVerifyData", "equation_TLSInfo.sessionHash",
+        "equation_TLSInfo.srand",
+        "function_token_typing_TLSInfo.cVerifyData", "haseqTm_refine_11427",
+        "haseqTm_refine_3259", "kinding_Prims.tuple2@tok"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_11757", "equation_FStar.Char.char",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_TLSInfo.crand",
@@ -105,18 +168,27 @@
         "proj_equation_TLSInfo.MksessionInfo_init_crand",
         "proj_equation_TLSInfo.MksessionInfo_init_srand",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_3044",
+        "refinement_interpretation_Tm_refine_3259",
         "typing_TLSInfo.MksessionInfo.init_crand",
         "typing_TLSInfo.MksessionInfo.init_srand"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10230" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10233", "constructor_distinct_TLSConstants.TLS_1p3",
+        "@query_11760", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_11761" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_11764", "constructor_distinct_TLSConstants.SSL_3p0",
+        "constructor_distinct_TLSConstants.TLS_1p0",
         "disc_equation_TLSConstants.SSL_3p0",
         "disc_equation_TLSConstants.TLS_1p0",
         "disc_equation_TLSConstants.TLS_1p1",
@@ -126,35 +198,51 @@
         "equality_tok_TLSConstants.PRF_TLS_1p3@tok",
         "equation_TLSConstants.extended_extract_label",
         "equation_TLSConstants.extract_label",
-        "fuel_guarded_inversion_TLSConstants.protocolVersion_6670",
-        "refinement_interpretation_Tm_refine_10232"
+        "fuel_guarded_inversion_TLSConstants.protocolVersion_7783",
+        "refinement_interpretation_Tm_refine_11763"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10242" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10244", "disc_equation_TLSConstants.SSL_3p0",
+        "@query_11773", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_11774" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_11776", "disc_equation_TLSConstants.SSL_3p0",
         "disc_equation_TLSConstants.TLS_1p0",
         "disc_equation_TLSConstants.TLS_1p1",
         "disc_equation_TLSConstants.TLS_1p2",
         "disc_equation_TLSConstants.TLS_1p3",
         "equality_tok_TLSConstants.PRF_SSL3_nested@tok",
         "equality_tok_TLSConstants.PRF_TLS_1p3@tok",
-        "fuel_guarded_inversion_TLSConstants.protocolVersion_6670",
-        "refinement_interpretation_Tm_refine_10235"
+        "fuel_guarded_inversion_TLSConstants.protocolVersion_7783",
+        "refinement_interpretation_Tm_refine_11766"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10252" ], 0 ],
-    [ 0, 1, [ "@query_10257" ], 0 ],
+    [ 0, 1, [ "@query_11784" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10260", "constructor_distinct_Prims.None",
+        "@query_11789", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_11790" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_11793", "bool_inversion", "constructor_distinct_Prims.None",
         "constructor_distinct_TLSConstants.TLS_1p2",
         "disc_equation_Prims.Some", "disc_equation_TLSConstants.CipherSuite",
         "equality_tok_TLSConstants.TLS_1p2@tok",
@@ -162,7 +250,10 @@
         "equation_TLSConstants.pvcs", "primitive_Prims.op_Equality",
         "proj_equation_TLSInfo.MksessionInfo_cipher_suite",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10259"
+        "refinement_interpretation_Tm_refine_11792",
+        "typing_TLSConstants.pvcs",
+        "typing_TLSInfo.MksessionInfo.cipher_suite",
+        "typing_TLSInfo.MksessionInfo.protocol_version"
       ],
       0
     ],
@@ -170,9 +261,23 @@
       0,
       1,
       [
-        "@query_10301", "disc_equation_TLSInfo.StandardMS",
+        "@query_11820", "assumption_PMS.pms_haseq_11176",
+        "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_TLSConstants.prePrfAlg_haseq_8441",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSConstants.kefAlg_t", "equation_TLSInfo.csRands",
+        "equation_TLSInfo.pmsId", "equation_TLSInfo.sessionHash",
+        "haseqTm_refine_3259"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_11854", "disc_equation_TLSInfo.StandardMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10294"
+        "refinement_interpretation_Tm_refine_11847"
       ],
       0
     ],
@@ -180,9 +285,9 @@
       0,
       1,
       [
-        "@query_10307", "disc_equation_TLSInfo.StandardMS",
+        "@query_11860", "disc_equation_TLSInfo.StandardMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10294"
+        "refinement_interpretation_Tm_refine_11847"
       ],
       0
     ],
@@ -190,9 +295,9 @@
       0,
       1,
       [
-        "@query_10313", "disc_equation_TLSInfo.StandardMS",
+        "@query_11866", "disc_equation_TLSInfo.StandardMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10294"
+        "refinement_interpretation_Tm_refine_11847"
       ],
       0
     ],
@@ -200,9 +305,9 @@
       0,
       1,
       [
-        "@query_10322", "disc_equation_TLSInfo.ExtendedMS",
+        "@query_11875", "disc_equation_TLSInfo.ExtendedMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10315"
+        "refinement_interpretation_Tm_refine_11868"
       ],
       0
     ],
@@ -210,9 +315,9 @@
       0,
       1,
       [
-        "@query_10328", "disc_equation_TLSInfo.ExtendedMS",
+        "@query_11881", "disc_equation_TLSInfo.ExtendedMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10315"
+        "refinement_interpretation_Tm_refine_11868"
       ],
       0
     ],
@@ -220,9 +325,9 @@
       0,
       1,
       [
-        "@query_10334", "disc_equation_TLSInfo.ExtendedMS",
+        "@query_11887", "disc_equation_TLSInfo.ExtendedMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10315"
+        "refinement_interpretation_Tm_refine_11868"
       ],
       0
     ],
@@ -230,9 +335,9 @@
       0,
       1,
       [
-        "@query_10335", "disc_equation_TLSInfo.ExtendedMS",
+        "@query_11888", "disc_equation_TLSInfo.ExtendedMS",
         "disc_equation_TLSInfo.StandardMS",
-        "fuel_guarded_inversion_TLSInfo.msId_10272"
+        "fuel_guarded_inversion_TLSInfo.msId_11824"
       ],
       0
     ],
@@ -240,48 +345,59 @@
       0,
       1,
       [
-        "@query_10340", "constructor_distinct_Prims.None",
+        "@query_11893", "constructor_distinct_Prims.None",
         "disc_equation_Prims.Some",
         "disc_equation_TLSConstants.NullCipherSuite",
         "disc_equation_TLSConstants.SCSV",
         "equation_TLSConstants.prfMacAlg_of_ciphersuite_aux",
+        "proj_equation_TLSInfo.MksessionInfo_cipher_suite",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10339"
+        "refinement_interpretation_Tm_refine_11892"
       ],
-      0
-    ],
-    [ 0, 1, [ "@query_10351" ], 0 ],
-    [
-      0,
-      1,
-      [ "@query_10354", "refinement_interpretation_Tm_refine_10353" ],
       0
     ],
     [
       0,
       1,
       [
-        "@query_10363", "constructor_distinct_Prims.None",
+        "@query_11904", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_11905" ], 0 ],
+    [
+      0,
+      1,
+      [ "@query_11908", "refinement_interpretation_Tm_refine_11907" ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_11917", "constructor_distinct_Prims.None",
         "disc_equation_Prims.Some",
         "disc_equation_TLSConstants.NullCipherSuite",
         "disc_equation_TLSConstants.SCSV",
         "equation_TLSConstants.prfMacAlg_of_ciphersuite_aux",
-        "fuel_guarded_inversion_TLSInfo.sessionInfo_10154",
+        "fuel_guarded_inversion_TLSInfo.sessionInfo_11669",
         "primitive_Prims.op_AmpAmp",
         "proj_equation_TLSInfo.MksessionInfo_cipher_suite",
         "projection_inverse_BoxBool_proj_0"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10367" ], 0 ],
-    [ 0, 1, [ "@query_10376" ], 0 ],
+    [ 0, 1, [ "@query_11921" ], 0 ],
+    [ 0, 1, [ "@query_11930" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10485", "disc_equation_TLSInfo.LogInfo_CH",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10478"
+        "@query_11955", "assumption_PSK.pskInfo_haseq_10607",
+        "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSInfo.crand", "equation_TLSInfo.random",
+        "haseqTm_refine_3259"
       ],
       0
     ],
@@ -289,9 +405,12 @@
       0,
       1,
       [
-        "@query_10494", "disc_equation_TLSInfo.LogInfo_SH",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10487"
+        "@query_11996", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_TLSConstants.aeAlg_haseq_8007",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSInfo.crand", "equation_TLSInfo.random",
+        "equation_TLSInfo.srand", "haseqTm_refine_3259",
+        "haseqTm_refine_8037"
       ],
       0
     ],
@@ -299,9 +418,9 @@
       0,
       1,
       [
-        "@query_10503", "disc_equation_TLSInfo.LogInfo_SF",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10496"
+        "@query_12056", "assumption_TLSInfo.logInfo_CH_haseq_11969",
+        "assumption_TLSInfo.logInfo_SH_haseq_12013",
+        "equation_TLSInfo.logInfo_CF", "equation_TLSInfo.logInfo_SF"
       ],
       0
     ],
@@ -309,9 +428,9 @@
       0,
       1,
       [
-        "@query_10512", "disc_equation_TLSInfo.LogInfo_CF",
+        "@query_12106", "disc_equation_TLSInfo.LogInfo_CH",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10505"
+        "refinement_interpretation_Tm_refine_12099"
       ],
       0
     ],
@@ -319,13 +438,43 @@
       0,
       1,
       [
-        "@query_10515", "constructor_distinct_TLSConstants.AEAD",
+        "@query_12115", "disc_equation_TLSInfo.LogInfo_SH",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_12108"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_12124", "disc_equation_TLSInfo.LogInfo_SF",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_12117"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_12133", "disc_equation_TLSInfo.LogInfo_CF",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_12126"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_12136", "constructor_distinct_TLSConstants.AEAD",
         "disc_equation_TLSConstants.AEAD",
         "disc_equation_TLSInfo.LogInfo_CF",
         "disc_equation_TLSInfo.LogInfo_CH",
         "disc_equation_TLSInfo.LogInfo_SF",
         "disc_equation_TLSInfo.LogInfo_SH",
-        "fuel_guarded_inversion_TLSInfo.logInfo_10440",
+        "fuel_guarded_inversion_TLSInfo.logInfo_12060",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSConstants.AEAD__0",
         "projection_inverse_TLSConstants.AEAD__1"
@@ -336,23 +485,48 @@
       0,
       1,
       [
-        "@query_10522", "disc_equation_TLSInfo.LogInfo_CF",
+        "@query_12143", "disc_equation_TLSInfo.LogInfo_CF",
         "disc_equation_TLSInfo.LogInfo_CH",
         "disc_equation_TLSInfo.LogInfo_SF",
         "disc_equation_TLSInfo.LogInfo_SH",
-        "fuel_guarded_inversion_TLSInfo.logInfo_10440"
+        "fuel_guarded_inversion_TLSInfo.logInfo_12060"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10531" ], 0 ],
-    [ 0, 1, [ "@query_10554" ], 0 ],
+    [
+      0,
+      1,
+      [ "@query_12144", "assumption_TLSConstants.role_haseq_7769" ],
+      0
+    ],
+    [ 0, 1, [ "@query_12149" ], 0 ],
+    [ 0, 1, [ "@query_12150", "assumption_TLSInfo.logInfo_haseq_12087" ], 0 ],
+    [ 0, 1, [ "@query_12169" ], 0 ],
+    [ 0, 1, [ "@query_12171", "assumption_TLSInfo.logInfo_haseq_12087" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10804", "disc_equation_TLSInfo.ApplicationPSK",
+        "@query_12365", "assumption_CommonDH.share_haseq_10444",
+        "assumption_CoreCrypto.hash_alg_haseq_4128",
+        "assumption_PSK.pskInfo_haseq_10607",
+        "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_Prims.HasEq_int_319",
+        "assumption_TLSConstants.role_haseq_7769",
+        "assumption_TLSInfo.logInfo_haseq_12087",
+        "equation_PSK.psk_identifier", "equation_Platform.Bytes.bytes",
+        "equation_Prims.nat", "equation_TLSInfo.hashed_log",
+        "haseqTm_refine_1040", "haseqTm_refine_9945"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_12617", "disc_equation_TLSInfo.ApplicationPSK",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10797"
+        "refinement_interpretation_Tm_refine_12610"
       ],
       0
     ],
@@ -360,9 +534,9 @@
       0,
       1,
       [
-        "@query_10812", "disc_equation_TLSInfo.ApplicationPSK",
+        "@query_12625", "disc_equation_TLSInfo.ApplicationPSK",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10797"
+        "refinement_interpretation_Tm_refine_12610"
       ],
       0
     ],
@@ -370,9 +544,9 @@
       0,
       1,
       [
-        "@query_10821", "disc_equation_TLSInfo.ResumptionPSK",
+        "@query_12634", "disc_equation_TLSInfo.ResumptionPSK",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10814"
+        "refinement_interpretation_Tm_refine_12627"
       ],
       0
     ],
@@ -380,9 +554,9 @@
       0,
       1,
       [
-        "@query_10829", "disc_equation_TLSInfo.ResumptionPSK",
+        "@query_12642", "disc_equation_TLSInfo.ResumptionPSK",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10814"
+        "refinement_interpretation_Tm_refine_12627"
       ],
       0
     ],
@@ -390,9 +564,9 @@
       0,
       1,
       [
-        "@query_10838", "disc_equation_TLSInfo.HSID_PSK",
+        "@query_12651", "disc_equation_TLSInfo.HSID_PSK",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10831"
+        "refinement_interpretation_Tm_refine_12644"
       ],
       0
     ],
@@ -400,9 +574,9 @@
       0,
       1,
       [
-        "@query_10847", "disc_equation_TLSInfo.HSID_PSK_DHE",
+        "@query_12660", "disc_equation_TLSInfo.HSID_PSK_DHE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10840"
+        "refinement_interpretation_Tm_refine_12653"
       ],
       0
     ],
@@ -410,9 +584,9 @@
       0,
       1,
       [
-        "@query_10855", "disc_equation_TLSInfo.HSID_PSK_DHE",
+        "@query_12668", "disc_equation_TLSInfo.HSID_PSK_DHE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10840"
+        "refinement_interpretation_Tm_refine_12653"
       ],
       0
     ],
@@ -420,9 +594,9 @@
       0,
       1,
       [
-        "@query_10861", "disc_equation_TLSInfo.HSID_PSK_DHE",
+        "@query_12674", "disc_equation_TLSInfo.HSID_PSK_DHE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10840"
+        "refinement_interpretation_Tm_refine_12653"
       ],
       0
     ],
@@ -430,9 +604,9 @@
       0,
       1,
       [
-        "@query_10870", "disc_equation_TLSInfo.HSID_DHE",
+        "@query_12683", "disc_equation_TLSInfo.HSID_DHE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10863"
+        "refinement_interpretation_Tm_refine_12676"
       ],
       0
     ],
@@ -440,9 +614,9 @@
       0,
       1,
       [
-        "@query_10878", "disc_equation_TLSInfo.HSID_DHE",
+        "@query_12691", "disc_equation_TLSInfo.HSID_DHE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10863"
+        "refinement_interpretation_Tm_refine_12676"
       ],
       0
     ],
@@ -450,30 +624,30 @@
       0,
       1,
       [
-        "@query_10884", "disc_equation_TLSInfo.HSID_DHE",
+        "@query_12697", "disc_equation_TLSInfo.HSID_DHE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10863"
+        "refinement_interpretation_Tm_refine_12676"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10889" ], 0 ],
-    [ 2, 2, [ "@query_10894" ], 0 ],
-    [ 0, 1, [ "@query_10899" ], 0 ],
-    [ 0, 1, [ "@query_10904" ], 0 ],
-    [ 2, 2, [ "@query_10909" ], 0 ],
-    [ 0, 1, [ "@query_10914" ], 0 ],
-    [ 0, 1, [ "@query_10919" ], 0 ],
-    [ 0, 1, [ "@query_10924" ], 0 ],
-    [ 0, 1, [ "@query_10929" ], 0 ],
-    [ 2, 2, [ "@query_10934" ], 0 ],
-    [ 0, 1, [ "@query_10937" ], 0 ],
+    [ 0, 1, [ "@query_12702" ], 0 ],
+    [ 0, 1, [ "@query_12707" ], 0 ],
+    [ 0, 1, [ "@query_12712" ], 0 ],
+    [ 0, 1, [ "@query_12717" ], 0 ],
+    [ 0, 1, [ "@query_12722" ], 0 ],
+    [ 0, 1, [ "@query_12727" ], 0 ],
+    [ 0, 1, [ "@query_12732" ], 0 ],
+    [ 0, 1, [ "@query_12737" ], 0 ],
+    [ 0, 1, [ "@query_12742" ], 0 ],
+    [ 0, 1, [ "@query_12747" ], 0 ],
+    [ 0, 1, [ "@query_12750" ], 0 ],
     [
       0,
       1,
       [
-        "@query_10946", "disc_equation_TLSInfo.EarlySecretID",
+        "@query_12759", "disc_equation_TLSInfo.EarlySecretID",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10939"
+        "refinement_interpretation_Tm_refine_12752"
       ],
       0
     ],
@@ -481,9 +655,9 @@
       0,
       1,
       [
-        "@query_10955", "disc_equation_TLSInfo.HandshakeSecretID",
+        "@query_12768", "disc_equation_TLSInfo.HandshakeSecretID",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10948"
+        "refinement_interpretation_Tm_refine_12761"
       ],
       0
     ],
@@ -491,9 +665,9 @@
       0,
       1,
       [
-        "@query_10964", "disc_equation_TLSInfo.ApplicationSecretID",
+        "@query_12777", "disc_equation_TLSInfo.ApplicationSecretID",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10957"
+        "refinement_interpretation_Tm_refine_12770"
       ],
       0
     ],
@@ -501,30 +675,30 @@
       0,
       1,
       [
-        "@query_10973", "disc_equation_TLSInfo.RekeySecretID",
+        "@query_12786", "disc_equation_TLSInfo.RekeySecretID",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_10966"
+        "refinement_interpretation_Tm_refine_12779"
       ],
       0
     ],
-    [ 0, 1, [ "@query_10978" ], 0 ],
-    [ 0, 1, [ "@query_10983" ], 0 ],
-    [ 0, 1, [ "@query_10988" ], 0 ],
-    [ 0, 1, [ "@query_10993" ], 0 ],
-    [ 0, 1, [ "@query_10998" ], 0 ],
-    [ 0, 1, [ "@query_11003" ], 0 ],
-    [ 0, 2, [ "@query_11008" ], 0 ],
-    [ 0, 1, [ "@query_11013" ], 0 ],
-    [ 0, 1, [ "@query_11018" ], 0 ],
-    [ 0, 1, [ "@query_11023" ], 0 ],
+    [ 0, 1, [ "@query_12791" ], 0 ],
+    [ 0, 1, [ "@query_12796" ], 0 ],
+    [ 0, 1, [ "@query_12801" ], 0 ],
+    [ 0, 1, [ "@query_12806" ], 0 ],
+    [ 0, 1, [ "@query_12811" ], 0 ],
+    [ 0, 1, [ "@query_12816" ], 0 ],
+    [ 0, 1, [ "@query_12821" ], 0 ],
+    [ 0, 1, [ "@query_12826" ], 0 ],
+    [ 0, 1, [ "@query_12831" ], 0 ],
+    [ 0, 1, [ "@query_12836" ], 0 ],
     [
       0,
       1,
       [
-        "@query_11087", "binder_uu___116__23299",
+        "@query_12900", "binder_uu___118__35176",
         "disc_equation_TLSInfo.ApplicationPSK",
         "disc_equation_TLSInfo.ResumptionPSK",
-        "fuel_guarded_inversion_TLSInfo.pre_esId_10567",
+        "fuel_guarded_inversion_TLSInfo.pre_esId_12369",
         "subterm_ordering_TLSInfo.ResumptionPSK"
       ],
       0
@@ -533,10 +707,10 @@
       0,
       1,
       [
-        "@query_11151", "binder_uu___117__24244",
+        "@query_12964", "binder_uu___119__36109",
         "disc_equation_TLSInfo.HSID_DHE", "disc_equation_TLSInfo.HSID_PSK",
         "disc_equation_TLSInfo.HSID_PSK_DHE",
-        "fuel_guarded_inversion_TLSInfo.pre_hsId_10575",
+        "fuel_guarded_inversion_TLSInfo.pre_hsId_12377",
         "subterm_ordering_TLSInfo.HSID_PSK",
         "subterm_ordering_TLSInfo.HSID_PSK_DHE"
       ],
@@ -546,7 +720,7 @@
       0,
       1,
       [
-        "@query_11215", "binder_uu___118__25306",
+        "@query_13028", "binder_uu___120__37153",
         "subterm_ordering_TLSInfo.ASID"
       ],
       0
@@ -555,7 +729,7 @@
       0,
       1,
       [
-        "@query_11279", "binder_uu___119__26088",
+        "@query_13092", "binder_uu___121__37935",
         "subterm_ordering_TLSInfo.RMSID"
       ],
       0
@@ -564,7 +738,7 @@
       0,
       1,
       [
-        "@query_11343", "binder_uu___120__26909",
+        "@query_13156", "binder_uu___122__38756",
         "subterm_ordering_TLSInfo.ExportID"
       ],
       0
@@ -573,7 +747,7 @@
       0,
       1,
       [
-        "@query_11407", "binder_uu___121__27730",
+        "@query_13220", "binder_uu___123__39577",
         "subterm_ordering_TLSInfo.RekeyID"
       ],
       0
@@ -582,14 +756,13 @@
       0,
       2,
       [
-        "@query_11471", "binder_uu___122__28575",
+        "@query_13284", "binder_uu___124__40422",
         "data_elim_TLSInfo.RekeySecretID",
         "disc_equation_TLSInfo.ApplicationSecretID",
         "disc_equation_TLSInfo.EarlySecretID",
         "disc_equation_TLSInfo.HandshakeSecretID",
         "disc_equation_TLSInfo.RekeySecretID",
-        "fuel_guarded_inversion_TLSInfo.pre_expandId_10611",
-        "projection_inverse_BoxBool_proj_0",
+        "fuel_guarded_inversion_TLSInfo.pre_expandId_12413",
         "subterm_ordering_TLSInfo.ApplicationSecretID",
         "subterm_ordering_TLSInfo.EarlySecretID",
         "subterm_ordering_TLSInfo.HandshakeSecretID",
@@ -602,7 +775,7 @@
       0,
       1,
       [
-        "@query_11535", "binder_uu_____29751",
+        "@query_13348", "binder_uu_____41574",
         "subterm_ordering_TLSInfo.KeyID"
       ],
       0
@@ -611,20 +784,21 @@
       0,
       1,
       [
-        "@query_11599", "binder_uu_____30623",
+        "@query_13412", "binder_uu_____42446",
         "subterm_ordering_TLSInfo.FinishedID"
       ],
       0
     ],
-    [ 0, 1, [ "@query_11655" ], 0 ],
+    [ 0, 1, [ "@query_13468" ], 0 ],
+    [ 0, 1, [ "@query_13469", "assumption_Prims.HasEq_int_319" ], 0 ],
     [
       0,
       1,
       [
-        "@query_11725", "binder_uu___123__32065",
+        "@query_13539", "binder_uu___125__43912",
         "disc_equation_TLSInfo.ApplicationPSK",
         "disc_equation_TLSInfo.ResumptionPSK",
-        "fuel_guarded_inversion_TLSInfo.pre_esId_10567",
+        "fuel_guarded_inversion_TLSInfo.pre_esId_12369",
         "subterm_ordering_TLSInfo.ResumptionPSK"
       ],
       0
@@ -633,12 +807,12 @@
       0,
       1,
       [
-        "@pretyping__117", "@query_11789", "binder_uu___124__33042",
+        "@query_13603", "binder_uu___126__44877",
         "disc_equation_TLSInfo.HSID_DHE", "disc_equation_TLSInfo.HSID_PSK",
-        "disc_equation_TLSInfo.HSID_PSK_DHE", "equality_tok_Prims.T@tok",
-        "fuel_guarded_inversion_TLSInfo.pre_hsId_10575",
+        "disc_equation_TLSInfo.HSID_PSK_DHE", "equation_Prims.l_True",
+        "fuel_guarded_inversion_TLSInfo.pre_hsId_12377",
         "subterm_ordering_TLSInfo.HSID_PSK",
-        "subterm_ordering_TLSInfo.HSID_PSK_DHE", "typing_tok_Prims.T@tok"
+        "subterm_ordering_TLSInfo.HSID_PSK_DHE"
       ],
       0
     ],
@@ -646,7 +820,7 @@
       0,
       1,
       [
-        "@query_11853", "binder_uu___125__34072",
+        "@query_13667", "binder_uu___127__45889",
         "subterm_ordering_TLSInfo.ASID"
       ],
       0
@@ -655,7 +829,7 @@
       0,
       1,
       [
-        "@query_11917", "binder_uu___126__34854",
+        "@query_13731", "binder_uu___128__46671",
         "subterm_ordering_TLSInfo.RMSID"
       ],
       0
@@ -664,7 +838,7 @@
       0,
       1,
       [
-        "@query_11981", "binder_uu___127__35805",
+        "@query_13795", "binder_uu___129__47622",
         "subterm_ordering_TLSInfo.ExportID"
       ],
       0
@@ -673,7 +847,7 @@
       0,
       1,
       [
-        "@query_12045", "binder_uu___128__36756",
+        "@query_13859", "binder_uu___130__48573",
         "subterm_ordering_TLSInfo.RekeyID"
       ],
       0
@@ -682,13 +856,12 @@
       0,
       1,
       [
-        "@query_12109", "binder_uu___129__37744",
+        "@query_13923", "binder_uu___131__49561",
         "disc_equation_TLSInfo.ApplicationSecretID",
         "disc_equation_TLSInfo.EarlySecretID",
         "disc_equation_TLSInfo.HandshakeSecretID",
         "disc_equation_TLSInfo.RekeySecretID",
-        "fuel_guarded_inversion_TLSInfo.pre_expandId_10611",
-        "projection_inverse_TLSInfo.RekeySecretID__0",
+        "fuel_guarded_inversion_TLSInfo.pre_expandId_12413",
         "subterm_ordering_TLSInfo.ApplicationSecretID",
         "subterm_ordering_TLSInfo.EarlySecretID",
         "subterm_ordering_TLSInfo.HandshakeSecretID",
@@ -696,16 +869,22 @@
       ],
       0
     ],
-    [ 0, 1, [ "@query_12173" ], 0 ],
-    [ 0, 1, [ "@query_12237" ], 0 ],
-    [ 0, 1, [ "@query_12315" ], 0 ],
+    [ 0, 1, [ "@query_13987" ], 0 ],
+    [ 0, 1, [ "@query_14051" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12360", "disc_equation_TLSInfo.PlaintextID",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12353"
+        "@query_14127", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_14130" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_14160", "assumption_TLSConstants.protocolVersion_haseq_7798"
       ],
       0
     ],
@@ -713,30 +892,18 @@
       0,
       1,
       [
-        "@query_12369", "disc_equation_TLSInfo.ID13",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12362"
-      ],
-      0
-    ],
-    [ 0, 1, [ "@query_12372" ], 0 ],
-    [
-      0,
-      1,
-      [
-        "@query_12386", "disc_equation_TLSInfo.ID12",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
-      ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@query_12395", "disc_equation_TLSInfo.ID12",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
+        "@query_14163", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_TLSConstants.aeAlg_haseq_8007",
+        "assumption_TLSConstants.prePrfAlg_haseq_8441",
+        "assumption_TLSConstants.protocolVersion_haseq_7798",
+        "assumption_TLSConstants.role_haseq_7769",
+        "assumption_TLSInfo.msId_haseq_11839",
+        "assumption_TLSInfo.pre_keyId_haseq_12562",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSConstants.kdfAlg_t", "equation_TLSInfo.crand",
+        "equation_TLSInfo.keyId", "equation_TLSInfo.random",
+        "equation_TLSInfo.srand", "haseqTm_refine_14124",
+        "haseqTm_refine_14151", "haseqTm_refine_3259"
       ],
       0
     ],
@@ -744,9 +911,9 @@
       0,
       1,
       [
-        "@query_12404", "disc_equation_TLSInfo.ID12",
+        "@query_14209", "disc_equation_TLSInfo.PlaintextID",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
+        "refinement_interpretation_Tm_refine_14202"
       ],
       0
     ],
@@ -754,9 +921,9 @@
       0,
       1,
       [
-        "@query_12413", "disc_equation_TLSInfo.ID12",
+        "@query_14218", "disc_equation_TLSInfo.ID13",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
+        "refinement_interpretation_Tm_refine_14211"
       ],
       0
     ],
@@ -764,9 +931,18 @@
       0,
       1,
       [
-        "@query_12420", "disc_equation_TLSInfo.ID12",
+        "@query_14221", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_14224" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_14238", "disc_equation_TLSInfo.ID12",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
+        "refinement_interpretation_Tm_refine_14226"
       ],
       0
     ],
@@ -774,9 +950,9 @@
       0,
       1,
       [
-        "@query_12427", "disc_equation_TLSInfo.ID12",
+        "@query_14247", "disc_equation_TLSInfo.ID12",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
+        "refinement_interpretation_Tm_refine_14226"
       ],
       0
     ],
@@ -784,9 +960,9 @@
       0,
       1,
       [
-        "@query_12436", "disc_equation_TLSInfo.ID12",
+        "@query_14256", "disc_equation_TLSInfo.ID12",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
+        "refinement_interpretation_Tm_refine_14226"
       ],
       0
     ],
@@ -794,18 +970,66 @@
       0,
       1,
       [
-        "@query_12438", "disc_equation_TLSInfo.ID12",
+        "@query_14265", "disc_equation_TLSInfo.ID12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_14226"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_14272", "disc_equation_TLSInfo.ID12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_14226"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_14279", "disc_equation_TLSInfo.ID12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_14226"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_14288", "disc_equation_TLSInfo.ID12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_14226"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_14290", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "fuel_guarded_inversion_TLSInfo.id_12319"
+        "fuel_guarded_inversion_TLSInfo.id_14167"
       ],
       0
     ],
-    [ 0, 1, [ "@query_12443" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12448", "constructor_distinct_Prims.None",
+        "@query_14295", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_14296" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_14301", "constructor_distinct_Prims.None",
         "constructor_distinct_TLSConstants.TLS_1p2",
         "constructor_distinct_TLSConstants.TLS_1p3",
         "disc_equation_Prims.Some",
@@ -813,12 +1037,13 @@
         "disc_equation_TLSConstants.SCSV",
         "equality_tok_TLSConstants.TLS_1p2@tok",
         "equality_tok_TLSConstants.TLS_1p3@tok", "equation_FStar.Char.char",
-        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
+        "equation_FStar.SeqProperties.split", "equation_Platform.Bytes.byte",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_Platform.Bytes.length", "equation_Platform.Bytes.split",
         "equation_Prims.fst", "equation_Prims.snd",
         "equation_TLSConstants.prfMacAlg_of_ciphersuite_aux",
         "equation_TLSInfo.csRands", "equation_TLSInfo.csrands",
-        "fuel_guarded_inversion_TLSInfo.sessionInfo_10154",
+        "fuel_guarded_inversion_TLSInfo.sessionInfo_11669",
         "primitive_Prims.op_Equality", "primitive_Prims.op_Subtraction",
         "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
         "proj_equation_TLSInfo.MksessionInfo_cipher_suite",
@@ -826,9 +1051,9 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
-        "refinement_interpretation_Tm_refine_12445",
-        "refinement_interpretation_Tm_refine_12447",
-        "refinement_interpretation_Tm_refine_3044", "typing_TLSInfo.csrands"
+        "refinement_interpretation_Tm_refine_14298",
+        "refinement_interpretation_Tm_refine_14300",
+        "refinement_interpretation_Tm_refine_3259", "typing_TLSInfo.csrands"
       ],
       0
     ],
@@ -836,12 +1061,12 @@
       0,
       1,
       [
-        "@query_12460", "disc_equation_TLSInfo.ID12",
+        "@query_14313", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
         "equality_tok_TLSConstants.TLS_1p3@tok",
-        "fuel_guarded_inversion_TLSInfo.id_12319",
+        "fuel_guarded_inversion_TLSInfo.id_14167",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12458"
+        "refinement_interpretation_Tm_refine_14311"
       ],
       0
     ],
@@ -849,46 +1074,52 @@
       0,
       1,
       [
-        "@query_12470", "disc_equation_TLSInfo.ID12",
+        "@query_14323", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "fuel_guarded_inversion_TLSInfo.id_12319"
+        "fuel_guarded_inversion_TLSInfo.id_14167"
       ],
       0
     ],
     [
       0,
       1,
+      [ "@query_14325", "assumption_TLSConstants.role_haseq_7769" ],
+      0
+    ],
+    [
+      0,
+      1,
       [
-        "@query_12475", "disc_equation_TLSInfo.ID12",
+        "@query_14330", "disc_equation_TLSInfo.ID12",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12374"
+        "refinement_interpretation_Tm_refine_14226"
       ],
       0
     ],
-    [ 0, 1, [ "@query_12481" ], 0 ],
+    [ 0, 1, [ "@query_14336" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12485", "disc_equation_TLSInfo.ID12",
-        "proj_equation_TLSInfo.ID12_aeAlg",
+        "@query_14340", "disc_equation_TLSConstants.AEAD",
+        "disc_equation_TLSInfo.ID12", "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSInfo.ID12_aeAlg",
-        "refinement_interpretation_Tm_refine_12336",
-        "refinement_interpretation_Tm_refine_12483"
+        "refinement_interpretation_Tm_refine_14184",
+        "refinement_interpretation_Tm_refine_14338"
       ],
       0
     ],
-    [ 0, 1, [ "@query_12494" ], 0 ],
+    [ 0, 1, [ "@query_14349" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12498", "disc_equation_TLSInfo.ID12",
-        "proj_equation_TLSInfo.ID12_aeAlg",
+        "@query_14353", "disc_equation_TLSConstants.MtE",
+        "disc_equation_TLSInfo.ID12", "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSInfo.ID12_aeAlg",
-        "refinement_interpretation_Tm_refine_12496"
+        "refinement_interpretation_Tm_refine_14351"
       ],
       0
     ],
@@ -896,11 +1127,11 @@
       0,
       1,
       [
-        "@query_12510", "disc_equation_TLSInfo.ID12",
+        "@query_14365", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "fuel_guarded_inversion_TLSInfo.id_12319",
+        "fuel_guarded_inversion_TLSInfo.id_14167",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12462"
+        "refinement_interpretation_Tm_refine_14315"
       ],
       0
     ],
@@ -908,18 +1139,18 @@
       0,
       2,
       [
-        "@pretyping__10444", "@query_12519", "data_elim_TLSInfo.ID13",
+        "@pretyping__12064", "@query_14374", "data_elim_TLSInfo.ID13",
         "data_elim_TLSInfo.KeyID", "disc_equation_TLSConstants.AEAD",
         "disc_equation_TLSConstants.MtE", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.PlaintextID",
         "equation_FStar.HyperHeap.test0", "equation_TLSInfo.aeAlg_of_id",
-        "equation_TLSInfo.keyId", "fuel_guarded_inversion_TLSInfo.id_12319",
-        "fuel_guarded_inversion_TLSInfo.pre_keyId_10627",
+        "equation_TLSInfo.keyId", "fuel_guarded_inversion_TLSInfo.id_14167",
+        "fuel_guarded_inversion_TLSInfo.pre_keyId_12429",
         "function_token_typing_FStar.HyperHeap.test0",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12310",
-        "refinement_interpretation_Tm_refine_12462",
-        "refinement_interpretation_Tm_refine_6917",
+        "refinement_interpretation_Tm_refine_14124",
+        "refinement_interpretation_Tm_refine_14315",
+        "refinement_interpretation_Tm_refine_8037",
         "typing_TLSInfo.logInfo_ae", "unit_inversion"
       ],
       0
@@ -928,16 +1159,16 @@
       0,
       2,
       [
-        "@pretyping__10444", "@query_12520", "data_elim_TLSInfo.ID13",
-        "data_elim_TLSInfo.KeyID", "disc_equation_TLSInfo.ID13",
-        "disc_equation_TLSInfo.PlaintextID",
+        "@pretyping__12064", "@query_14375", "data_elim_TLSInfo.ID13",
+        "data_elim_TLSInfo.KeyID", "disc_equation_TLSConstants.AEAD",
+        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
         "equation_FStar.HyperHeap.test0", "equation_TLSInfo.aeAlg_of_id",
         "equation_TLSInfo.keyId",
-        "fuel_guarded_inversion_TLSInfo.pre_keyId_10627",
+        "fuel_guarded_inversion_TLSInfo.pre_keyId_12429",
         "function_token_typing_FStar.HyperHeap.test0",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12310",
-        "refinement_interpretation_Tm_refine_6917",
+        "refinement_interpretation_Tm_refine_14124",
+        "refinement_interpretation_Tm_refine_8037",
         "typing_TLSInfo.logInfo_ae", "unit_inversion"
       ],
       0
@@ -946,12 +1177,13 @@
       0,
       1,
       [
-        "@query_12521", "data_elim_TLSInfo.ID12",
+        "@query_14376", "data_elim_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
         "equation_FStar.HyperHeap.test0", "equation_TLSInfo.pv_of_id",
+        "fuel_guarded_inversion_TLSInfo.id_14167",
         "function_token_typing_FStar.HyperHeap.test0",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12336", "unit_inversion"
+        "refinement_interpretation_Tm_refine_14184", "unit_inversion"
       ],
       0
     ],
@@ -959,9 +1191,7 @@
       0,
       1,
       [
-        "@query_12526", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "fuel_guarded_inversion_TLSInfo.id_12319"
+        "@query_14377", "assumption_TLSConstants.protocolVersion_haseq_7798"
       ],
       0
     ],
@@ -969,9 +1199,27 @@
       0,
       1,
       [
-        "@query_12530", "disc_equation_TLSInfo.ID12",
+        "@query_14378", "assumption_TLSConstants.protocolVersion_haseq_7798"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_14383", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "fuel_guarded_inversion_TLSInfo.id_12319"
+        "fuel_guarded_inversion_TLSInfo.id_14167"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_14387", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
+        "fuel_guarded_inversion_TLSInfo.id_14167"
       ],
       0
     ]

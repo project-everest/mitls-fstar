@@ -1,75 +1,122 @@
 [
-  "zùÕ°,ºÑ»\u0003Oõh“\u000fÂ’",
+  "’œ\u001d3†O\"¾\u0010Äb\n@Ñ¦Œ",
   [
-    [ 0, 1, [ "@query_12557" ], 0 ],
-    [ 0, 1, [ "@query_12565" ], 0 ],
-    [ 0, 1, [ "@query_12568", "equation_DataStream.ghost_repr" ], 0 ],
-    [ 0, 1, [ "@query_12583" ], 0 ],
-    [ 0, 1, [ "@query_12586", "equation_DataStream.ghost_repr" ], 0 ],
-    [ 0, 1, [ "@query_12598" ], 0 ],
-    [ 0, 1, [ "@query_12599" ], 0 ],
-    [ 0, 1, [ "@query_12600", "equation_DataStream.ghost_repr" ], 0 ],
-    [ 0, 1, [ "@query_12605", "equation_DataStream.ghost_repr" ], 0 ],
-    [ 0, 1, [ "@query_12645" ], 0 ],
+    [ 0, 1, [ "@query_14389" ], 0 ],
     [
       0,
       1,
-      [
-        "@query_12654", "disc_equation_DataStream.Data",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12647"
-      ],
+      [ "@query_14396", "assumption_Platform.Bytes.HasEq_bytes_3247" ],
       0
     ],
-    [ 0, 1, [ "@query_12655" ], 0 ],
+    [ 0, 1, [ "@query_14400" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12664", "disc_equation_DataStream.Alert",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_12657"
+        "@query_14403", "equation_DataStream.fragment",
+        "equation_DataStream.ghost_repr",
+        "refinement_interpretation_Tm_refine_14393"
       ],
       0
     ],
     [
       0,
       1,
+      [ "@query_14417", "assumption_Platform.Bytes.HasEq_bytes_3247" ],
+      0
+    ],
+    [ 0, 1, [ "@query_14421" ], 0 ],
+    [
+      0,
+      1,
       [
-        "@query_12665", "disc_equation_DataStream.Alert",
+        "@query_14424", "equation_DataStream.ghost_repr",
+        "equation_Platform.Bytes.bytes", "equation_Range.rbytes",
+        "refinement_interpretation_Tm_refine_14331"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_14436" ], 0 ],
+    [ 0, 1, [ "@query_14437" ], 0 ],
+    [ 0, 1, [ "@query_14438", "equation_DataStream.ghost_repr" ], 0 ],
+    [ 0, 1, [ "@query_14443", "equation_DataStream.ghost_repr" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_14475", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "assumption_TLSError.alertDescription_haseq_5440",
+        "equation_DataStream.fragment", "equation_DataStream.pre_fragment",
+        "equation_Range.fragment_range", "haseqTm_refine_14393"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_14512" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_14521", "disc_equation_DataStream.Data",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_14514"
+      ],
+      0
+    ],
+    [ 0, 1, [ "@query_14522" ], 0 ],
+    [
+      0,
+      1,
+      [
+        "@query_14531", "disc_equation_DataStream.Alert",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_14524"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_14532", "disc_equation_DataStream.Alert",
         "disc_equation_DataStream.Close", "disc_equation_DataStream.Data",
-        "fuel_guarded_inversion_DataStream.delta_12614"
+        "fuel_guarded_inversion_DataStream.delta_14480"
       ],
       0
     ],
-    [ 0, 1, [ "@query_12677" ], 0 ],
+    [ 0, 1, [ "@query_14544" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12695", "binder_s__3158", "disc_equation_Prims.Cons",
-        "disc_equation_Prims.Nil", "fuel_guarded_inversion_Prims.list_323"
+        "@query_14562", "binder_s__3499", "disc_equation_Prims.Cons",
+        "disc_equation_Prims.Nil", "fuel_guarded_inversion_Prims.list_339"
       ],
       0
     ],
-    [ 0, 1, [ "@query_12723" ], 0 ],
-    [ 0, 1, [ "@query_12729" ], 0 ],
-    [ 0, 1, [ "@query_12730" ], 0 ],
+    [ 0, 1, [ "@query_14590" ], 0 ],
+    [ 0, 1, [ "@query_14596" ], 0 ],
+    [ 0, 1, [ "@query_14597" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12741", "proj_equation_DataStream.State_region",
-        "projection_inverse_DataStream.State_region"
+        "@query_14608", "bool_inversion", "bool_typing",
+        "data_elim_DataStream.State", "disc_equation_Prims.Some",
+        "fuel_guarded_inversion_DataStream.state_14576",
+        "proj_equation_DataStream.State_region",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_DataStream.State_log",
+        "projection_inverse_DataStream.State_region",
+        "refinement_interpretation_Tm_refine_14582"
       ],
       0
     ],
-    [ 2, 2, [ "@query_12742" ], 0 ],
+    [ 0, 1, [ "@query_14609" ], 0 ],
     [
       0,
       1,
       [
-        "@query_12748", "proj_equation_DataStream.State_region",
+        "@query_14615", "proj_equation_DataStream.State_region",
         "projection_inverse_DataStream.State_region"
       ],
       0
@@ -78,11 +125,11 @@
       2,
       2,
       [
-        "@query_12749", "bool_inversion", "constructor_distinct_Prims.Nil",
+        "@query_14616", "bool_inversion", "constructor_distinct_Prims.Nil",
         "constructor_distinct_Prims.None", "constructor_distinct_Prims.Some",
         "disc_equation_Prims.Some",
-        "equation_with_fuel_DataStream.wellformed__12699",
-        "fuel_correspondence_DataStream.wellformed__12699",
+        "equation_with_fuel_DataStream.wellformed__14566",
+        "fuel_correspondence_DataStream.wellformed__14566",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Nil_a", "projection_inverse_Prims.Some_a",
         "projection_inverse_Prims.Some_v"
@@ -93,8 +140,8 @@
       0,
       1,
       [
-        "@query_12750", "equation_Prims.nat", "int_inversion",
-        "refinement_interpretation_Tm_refine_1013"
+        "@query_14617", "equation_Prims.nat", "int_inversion",
+        "refinement_interpretation_Tm_refine_1040"
       ],
       0
     ]

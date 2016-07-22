@@ -601,7 +601,10 @@ let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:boo
         | _ -> Some (E_renegotiation_info ric))
     | E_server_name l -> 
         (match List.Tot.tryFind (fun x->match x with | SNI_DNS _ -> true | _ -> false) l with
-        | Some _ when (pv <> TLS_1p3) -> Some(E_server_name []) // TODO EncryptedExtensions
+        | Some _ -> 
+	  if pv <> TLS_1p3
+	  then Some(E_server_name []) // TODO EncryptedExtensions
+	  else None
         | _ -> None)
     | E_ec_point_format(l) ->
         if resuming || pv = TLS_1p3 then None
