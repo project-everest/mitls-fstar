@@ -206,8 +206,8 @@ let acceptableCipherSuite cfg spv cs =
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
-val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result serverMode)
- let computeServerMode cfg cpv ccs cexts comps ri = 
+irreducible val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result serverMode)
+let computeServerMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 
     | Error(z) -> Error(z)
     | Correct(npv) ->
@@ -263,7 +263,7 @@ val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_sui
       } in
       Correct (mode))
 
-val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result clientMode)
+irreducible val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result clientMode)
 let computeClientMode cfg cext cpv spv sr cs sext comp ri =
   if not (acceptableVersion cfg cpv spv sr) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
