@@ -30,7 +30,7 @@ let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
   StAE.encrypt #id wr f
 
 let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : bytes =
-  let ctxt: StAE.decrypted id = (ct, cipher) in
+  let ctxt: Content.decrypted id = (ct, cipher) in
   let Some d = StAE.decrypt #id rd ctxt in
   Content.repr id d
 

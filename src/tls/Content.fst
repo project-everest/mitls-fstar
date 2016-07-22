@@ -17,7 +17,6 @@ open TLSInfo
 open Range
 open DataStream
 
-private type id = i:id{~ (is_PlaintextID i)}
 
 // this description is detailed enough to compute the size of the plaintext and ciphertext
 type fragment (i:id) =
@@ -127,6 +126,28 @@ let ct i = function
   | CT_Alert _ _     -> Alert
 
 let ct_rg i f = ct i f, rg i f
+
+let is_stream i = is_ID13 i
+
+let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
+
+val cipherLen: i:id -> fragment i -> Tot (l:nat{Range.valid_clen i l})
+let cipherLen i f =
+  let r = rg i f in
+  if is_PlaintextID i then
+    fst r
+  else if is_stream i then
+    // sufficient to ensure the cipher can be processed without length errors
+    let alg  = AEAD._0 (aeAlg_of_id i) in
+    let ltag = CoreCrypto.aeadTagSize alg in
+    snd r + 1 + ltag
+  else if is_stlhae i then
+    Range.targetLength i r
+  else
+    admit () // FIXME: after generalizing StLHAE beyond AEAD ciphers
+
+type encrypted (#i:id) (f:fragment i) = lbytes (cipherLen i f)
+type decrypted (i:id) = contentType * (b:bytes{ Range.valid_clen i (length b) })
 
 let ccsBytes = abyte 1z
 
