@@ -506,8 +506,12 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
 
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
-  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintetxtID") in
-  let b = IO.debug_print_string ("sendFragment index type "^idt^"\n") in
+  let ct, rg = Content.ct_rg i f in
+
+  let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintextID") in
+  let b = IO.debug_print_string 
+    ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n") in
+
   if not (check_incrementable wo)
   then ad_overflow
   else begin
@@ -516,10 +520,9 @@ let sendFragment c #i wo f =
 	   | None    -> Content.repr i f //16-05-20 don't understand error.
 	   | Some wr -> StAE.encrypt wr f in 
        let pv = Handshake.version c.hs in
-       let ct, rg = Content.ct_rg i f in
        lemma_repr_bytes_values (length payload);
        let record = Record.makePacket ct (is_PlaintextID i) pv payload in
-       let r  = Transport.send (c.tcp) record in
+       let r  = Transport.send c.tcp record in
        match r with
        | Error(x)  -> Error(AD_internal_error,x)
        | Correct _ -> Correct()
@@ -882,6 +885,7 @@ END OLDER VARIANT *)
 // We notify, and hope to get back the peer's notify.
 
 let writeCloseNotify c =
+  let b = IO.debug_print_string "writeCloseNotify\n" in 
   sendAlert c AD_close_notify "full shutdown"
 
 // We notify and don't wait for confirmation.

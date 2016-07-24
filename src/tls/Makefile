@@ -116,10 +116,12 @@ Handshake.fst \
 Connection.fst \
 ConnInvariant.fst \
 TLS.fst \
+FFI.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 test/TestGCM.fst \
 test/TestHandshake.fst \
+test/TestFFI.fst \
 test/TestAPI.fst #the preceding space is significant!
 
 # --------------------------------------------------------------------

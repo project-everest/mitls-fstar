@@ -5,6 +5,7 @@ open TLSInfo
 let tlsapi = ref false
 let args = ref []
 let role = ref Client
+let ffi  = ref false                
 let config = ref {defaultConfig with
   minVer = TLS_1p3;
   maxVer = TLS_1p3;
@@ -80,6 +81,7 @@ let _ =
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
     ("-tlsapi", Arg.Unit (fun () -> tlsapi := true), "run through TLS API instead of scripted test file");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
+    ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
     ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2");
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
@@ -96,10 +98,13 @@ let _ =
     | host :: _ -> host, 443
     | _ -> (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443 in
 
-  match !role, !config.maxVer, !tlsapi with
-  | Client, _, true -> TestAPI.client !config host port
-  | Server, _, true -> TestAPI.server !config host port
-  | Client, TLS_1p3, false -> TestHandshake.client_13 !config host port
-  | Client, _, false -> TestHandshake.client_12 !config host port
-  | Server, TLS_1p3, false -> TestHandshake.server_13 !config host port
-  | Server, _, false -> TestHandshake.server_12 !config host port
+  
+  match !role, !config.maxVer with
+  | Client, _ when !ffi    -> TestFFI.client !config host port
+  | Server, _ when !ffi    -> failwith "server FFI to be completed"
+  | Client, _ when !tlsapi -> TestAPI.client !config host port
+  | Server, _ when !tlsapi -> TestAPI.server !config host port
+  | Client, TLS_1p3        -> TestHandshake.client_13 !config host port
+  | Client, _              -> TestHandshake.client_12 !config host port
+  | Server, TLS_1p3        -> TestHandshake.server_13 !config host port
+  | Server, _              -> TestHandshake.server_12 !config host port
