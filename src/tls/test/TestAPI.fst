@@ -49,18 +49,28 @@ let sendTcpPacket callbacks buf =
   else 
     Platform.Error.Correct () 
     
-val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Error.optResult string (b:bytes {length b <= max}))
+val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Error.optResult string (b:bytes{length b <= max}))
 let recvTcpPacket callbacks max =
-  let (result,str) = FFICallbacks.recv callbacks max in
+  let (result,str) = FFICallbacks.recvcb callbacks max in
   if (result <= 0) then
     Platform.Error.Error ("socket recv failure")
   else
-    Platform.Error.Correct(str)
+    Platform.Error.Correct(abytes str)
   
-val ffiConnect: config:config -> callbacks:callbacks -> int
+val ffiConnect: config:config -> callbacks:callbacks -> Connection.connection * int 
 let ffiConnect config cb =
   connect (sendTcpPacket cb) (recvTcpPacket cb) config
-
+  
+val ffiRecv: Connection.connection -> cbytes  
+let ffiRecv c =
+  match read c with
+    | Received response -> get_cbytes response
+    | Errno _ -> get_cbytes empty_bytes
+  
+val ffiSend: Connection.connection -> cbytes -> int
+let ffiSend c b =
+  let msg = abytes b in
+  write c msg
 
 let client config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";

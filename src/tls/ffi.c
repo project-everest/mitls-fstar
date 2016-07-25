@@ -14,11 +14,13 @@
 #include <caml/printexc.h>
 #include "mitlsffi.h"
 
-#define REDIRECT_STDIO 0
+#define REDIRECT_STDIO 1
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
   MITLS_FFI_ENTRY(Connect) \
+  MITLS_FFI_ENTRY(Send) \
+  MITLS_FFI_ENTRY(Recv)
  
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -346,8 +348,11 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         ret = 0;
     } else {
-        ret = Val_int(result);
+        // Connect returns back (Connection.connection * int)
+        value connection = Field(result,0);
+        ret = Int_val(Field(result,1));
         if (ret == 0) {
+            state->fstar_state = connection;
             printf("Success - FFI_mitls_connect\n");
             ret = 1;
         } else {
@@ -366,7 +371,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
 int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret = 0;
-    CAMLlocal3(buffer_value, result, send);
+    CAMLlocal2(buffer_value, result);
     mitls_redirect r;
 
     *outmsg = NULL;
@@ -375,9 +380,8 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     
     buffer_value = caml_alloc_string(buffer_size);
     memcpy(Bp_val(buffer_value), buffer, buffer_size);
-    send = Field(state->fstar_state, 0); // send closure is the first field returned from Connect
     
-    result = caml_callback_exn(send, buffer_value);
+    result = caml_callback2_exn(*g_mitls_FFI_Send, state->fstar_state, buffer_value);
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         ret = 0;
@@ -393,16 +397,14 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
 void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     void *p = NULL;
-    CAMLlocal2(result, recv);
+    CAMLlocal1(result);
     mitls_redirect r;
 
     *outmsg = NULL;
     *errmsg = NULL;
     redirect_stdio(&r);
 
-    recv = Field(state->fstar_state, 1); // recv closure is the second field returned from Connect
-    
-    result = caml_callback_exn(recv, Val_unit);
+    result = caml_callback_exn(*g_mitls_FFI_Recv, state->fstar_state);
     if (Is_exception_result(result)) {
         printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         p = NULL;

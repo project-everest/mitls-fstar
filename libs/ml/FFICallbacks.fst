@@ -13,4 +13,4 @@ assume val ocaml_recv_tcp: callbacks -> cbytes -> Tot int
    The F* compiler does not know that.  So implement FFI recv in ML to avoid
    exposing the String.Substring call to effects checking.  Same as
    Platform.Tcp.recv *)
-assume val recv: callbacks -> max:nat -> EXT (result:int * b:bytes {length b <= max})
+assume val recvcb: callbacks -> max:nat -> EXT (result:nat * b:cbytes (*{length b <= max} *))
