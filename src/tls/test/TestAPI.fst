@@ -117,6 +117,7 @@ let rec aux_server config sock =
       match TLS.write con f with
       | Written  ->
        begin
+        IO.print_string "Reading again\n";
         let id = TLS.currentId con Reader in
         match TLS.read con id with
         | Read DataStream.Close -> IO.print_string "Received close_notify! Closing socket.\n"
@@ -124,7 +125,7 @@ let rec aux_server config sock =
        end
       | _ -> IO.print_string "failed to write HTTP response\n"
      end
-    | _ -> IO.print_string "unexpted ioresult_w\n"
+    | _ -> IO.print_string "unexpected ioresult_w\n"
    end
   | _ -> IO.print_string "unexpected ioresult_i read\n"
   in aux_server config sock

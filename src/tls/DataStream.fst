@@ -27,14 +27,16 @@ open Range
 
 // this style enables structural subtyping on range indexes
 // JP, NS: XXX temporarily removing the abstraction for the sake of extraction
-private type id = i:id{~ (is_PlaintextID i)}
+//private type id = i:id{~ (is_PlaintextID i)}
+
 type pre_fragment (i:id) = bytes
+
 val ghost_repr: #i:id -> pre_fragment i -> GTot bytes
 let ghost_repr #i f = f
 
 type fragment (i:id) (rg:range) = f:pre_fragment i { within (length (ghost_repr f)) rg}
 
-val repr:       #i:id { ~(safeId i)} -> rg:frange i -> p:fragment i rg -> Tot (b:rbytes rg {b = ghost_repr #i p})
+val repr: #i:id { ~(safeId i)} -> rg:frange i -> p:fragment i rg -> Tot (b:rbytes rg {b = ghost_repr #i p})
 let repr #i rg f = f
 
 val mk_fragment: #i:id { ~(authId i)} -> rg:frange i -> b:rbytes rg -> Tot (p:fragment i rg {b = ghost_repr #i p})
@@ -92,7 +94,7 @@ type stream (i:id) = s: list (delta i) { wellformed i s }
 //* not much point sharing the two? is it re-implementing AppData?
 //* maybe the state is just an rref?
 
-type state (i:id) =
+noeq type state (i:id) =
   | State: #region:rid ->
            log: option (rref region (stream i)) { is_Some log <==> authId i } ->
            ctr: rref region nat ->

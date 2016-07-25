@@ -20,6 +20,8 @@ open Range
 open DataStream
 open TLS
 
+#set-options "--lax"
+
 private let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length }) : fragment i (point (length b)) = 
   let rg : frange i = point(length b) in 
   appFragment i rg b 
@@ -46,22 +48,30 @@ private let write_all c i b = write_all' c i b 0
 
 // an integer carrying the fatal alert descriptor
 // we could also write txt into the application error log 
-private let errno description txt = 
+private let errno description txt : int = 
+  let txt0 = 
+    match description with 
+    | Some ad -> TLSError.string_of_ad ad
+    | None    -> "(None)" in (
+  IO.print_string ("returning error: "^txt0^" "^txt^"\n"); (
   match description with 
   | Some ad -> Char.int_of_char (snd (cbyte2 (Alert.alertBytes ad)))
-  | None    -> -1 
+  | None    -> -1 ))
 
  
-let connect send recv config_1 : int = 
+let connect send recv config_1 : Connection.connection * int = 
   // we assume the configuration specifies the target SNI; 
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
   let here = new_region HyperHeap.root in 
   let c = TLS.connect here tcp config_1 in 
   let i_0 = currentId c Reader in 
-  match read c i_0 with 
-  | Complete -> 0
-  | ReadError description txt -> errno description txt
+  let firstResult = 
+    match read c i_0 with 
+    | Complete -> 0
+    | ReadError description txt -> errno description txt in
+  c, firstResult
+
 
 type read_result = // is it convenient?
   | Received of bytes 
@@ -72,6 +82,7 @@ let read c =
   match read c i with
   | Read (Data d)             -> Received (appBytes d)
   | Read Close                -> Errno 0 
+  | Read (Alert a)            -> Errno(errno (Some a) "alert") 
   | ReadError description txt -> Errno(errno description txt) 
   | _                         -> failwith "unexpected FFI read result"
 
@@ -85,5 +96,15 @@ let write c msg : int =
 // sending "CLOSE_NOTIFY"; should be followed by a read to wait for
 // the full shutdown (but many servers don't acknowledge).
 
-let close c = writeCloseNotify c
+let close c : int = 
+  let b = IO.debug_print_string "FFI close\n" in 
+  match writeCloseNotify c with 
+  | WriteClose                 -> 0
+  | WriteError description txt -> errno description txt
+  | _                          -> -1 
 
+let close_extraction_bug c : int = 
+  match writeCloseNotify c with 
+  | writeClose                 -> 0
+  | WriteError description txt -> errno description txt
+  | _                          -> -1 

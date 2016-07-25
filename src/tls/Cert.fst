@@ -11,6 +11,7 @@ type cert = b:bytes {length b <= 16777215}
 type chain = list cert
 
 (* ------------------------------------------------------------------------ *)
+
 abstract val certificateListBytes: chain -> Tot bytes
 let rec certificateListBytes l =
   match l with
@@ -20,7 +21,7 @@ let rec certificateListBytes l =
     (vlbytes 3 c) @| (certificateListBytes r)
 
 val certificateListBytes_is_injective: c1:chain -> c2:chain ->
-  Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 = c2)
+  Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
 let rec certificateListBytes_is_injective c1 c2 =
   match c1, c2 with
   | [], [] -> ()
@@ -52,6 +53,11 @@ let rec certificateListBytes_is_injective c1 c2 =
     cut (Seq.equal (certificateListBytes c1) ((vlbytes 3 hd) @| (certificateListBytes tl)));
     lemma_vlbytes_len 3 hd
     end
+
+let endpoint_keytype (c:chain) : Tot (option CoreCrypto.key) =
+  match c with
+  | [] -> None
+  | h::_ -> CoreCrypto.get_key_from_cert h
 
 abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
 let rec parseCertificateList b =

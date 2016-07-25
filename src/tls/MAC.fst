@@ -33,7 +33,7 @@ abstract type entry (i:id) (good: bytes -> Type) =
 
 // readers and writers share the same private state: a log of MACed messages
 // TODO make it abstract
-type key (i:id) (good: bytes -> Type) = 
+noeq type key (i:id) (good: bytes -> Type) = 
   | Key: #region : rid -> // intuitively, the writer's region
          kv      : keyrepr i ->
          log     : rref region (seq (entry i good)) -> key i good
@@ -91,7 +91,7 @@ let matches #i #good p (Entry _ p') = p = p'
 
 val verify: #i:id -> #good:(bytes -> Type) -> k:key i good{HMAC.is_tls_mac (alg i)} -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True)) 
-  (ensures (fun h0 b h1 -> h0 = h1 /\ (b /\ authId i ==> good p)))
+  (ensures (fun h0 b h1 -> h0 == h1 /\ (b /\ authId i ==> good p)))
 
 // We use the log to correct any verification errors
 let verify #i #good k p t =

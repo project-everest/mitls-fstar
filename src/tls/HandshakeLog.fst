@@ -27,7 +27,15 @@ let getLogVersion hsl =
     | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
     | _ -> None
 
-type log =
+(* TODO: maybe hsl an erased bytes, see ulib/FStar.Ghost.fst *)
+(* Here's a very rough sketch *)
+(* er h = erased (b:bytes{h = hash b})) *)
+(* update_hash (h:hash) (e:er h) (b:bytes) : (h':hash & er h') = *)
+(*    (| upd_hb h b, elift1 (fun (bold:bytes) -> concat bold b) e |) *)
+(*   let (|h, eb|) = !r in *)
+(*   let next = update_hash h eb b in *)
+
+noeq type log =
   | LOG: #region:rid -> 
          logref:rref region (|
               pv: option protocolVersion
@@ -128,7 +136,7 @@ type validLog_SH (l:hs_log) =
     | _ -> False)
   | _ -> False)
 
-assume val checkLogSessionHash: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
-assume val checkLogClientFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
-assume val checkLogServerFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> bool
+assume val checkLogSessionHash: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
+assume val checkLogClientFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
+assume val checkLogServerFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
     

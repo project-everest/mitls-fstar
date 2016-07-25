@@ -12,7 +12,7 @@ open Cert
 (* ------------------------------------------------------------------------ *)
 type text = bytes
 
-type alg =
+noeq type alg =
   | Use: info:(text -> Type0)
        -> core: sigAlg
        -> digest: list hashAlg
@@ -59,7 +59,7 @@ let sig_digest h t =
 
 
 (* ------------------------------------------------------------------------ *)
-type state (a:alg) =
+noeq type state (a:alg) =
   | Signed: log:Seq.seq (signed a) -> state a
   | Corrupt
 
@@ -128,6 +128,9 @@ let alloc_pubkey #a s r =
 
   We maintain this property as a stateful invariaint in rkeys *)
 
+(* AR: this needs to be fixed *)
+assume HasEq_pkey: hasEq pkey
+
 type kset = s:list pkey{ forall x y. (List.Tot.mem x s /\ List.Tot.mem y s /\ pkey_repr x = pkey_repr y) ==> x = y }
 
 val find_key: r:public_repr -> ks: kset
@@ -184,6 +187,7 @@ let sign #a h s t =
 
 
 (* ------------------------------------------------------------------------ *)
+
 val verify: #a:alg
   -> h:hashAlg{List.Tot.mem h (a.digest)}
   -> pk:pubkey a
@@ -281,12 +285,16 @@ let coerce #a pkr skr =
 
 
 (* ------------------------------------------------------------------------ *)
+
+(* AR: this needs to be fixed, alg should not have hasEq because of info *)
+assume HasEq_alg: hasEq alg
+
 val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST pkey
   (requires (fun _ -> True))
   (ensures  (fun h0 k h1 ->
-	     pkey_alg k = a
+	     pkey_alg k == a
 	     /\ pkey_repr k = pkr
-             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' = a ==> k = k')))
+             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> k = k')))
 let endorse #a pkr =
   let keys = m_read rkeys in
   match find_key pkr keys with

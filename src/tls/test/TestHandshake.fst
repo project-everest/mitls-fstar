@@ -30,15 +30,16 @@ let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
   StAE.encrypt #id wr f
 
 let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : bytes =
-  let ctxt: StAE.decrypted id = (ct, cipher) in
+  let ctxt: Content.decrypted id = (ct, cipher) in
   let Some d = StAE.decrypt #id rd ctxt in
   Content.repr id d
 
-let sendRecord tcp pv ct msg =
-  let r = Record.makePacket ct pv msg in
+let sendRecordE encrypted tcp pv ct msg =
+  let r = Record.makePacket ct encrypted pv msg in
   match Transport.send tcp r with
   | Error z -> failwith z
   | Correct _ -> ()
+let sendRecord = sendRecordE false
 
 let sendHSRecord tcp pv msg =
   sendRecord tcp pv Content.Handshake msg
@@ -322,7 +323,11 @@ let client_13 config host port =
   IO.print_string ("Certificate validation status = " ^
     (if Cert.validate_chain sc.crt_chain true (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
-  let cv_log = HandshakeLog.getHash lg h in
+
+  let hL = CoreCrypto.hashSize h in
+  let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+  let rc = CoreCrypto.hash h zeroes in
+  let cv_log = (HandshakeLog.getHash lg h) @| rc in
 
   let CertificateVerify(cv),_ = recvEncHSRecord tcp pv kex rd in
   let _ = lg @@ CertificateVerify(cv) in
@@ -353,7 +358,7 @@ let client_13 config host port =
 
   IO.print_string "before encrypt \n";
   let efinb = encryptRecord wr Content.Handshake cfinb in
-  sendRecord tcp pv Content.Application_data efinb;
+  sendRecordE true tcp pv Content.Application_data efinb;
 
   let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
   let get = encryptRecord dwr Content.Application_data (utf8 payload) in
@@ -364,7 +369,7 @@ let client_13 config host port =
 let sendEncHSRecord tcp pv msg wr =
   let hs = HandshakeMessages.handshakeMessageBytes (Some pv) msg in
   let er = encryptRecord wr Content.Handshake hs in
-  sendRecord tcp pv Content.Application_data er
+  sendRecordE true tcp pv Content.Application_data er
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.3 Server
@@ -407,8 +412,13 @@ let rec server_loop_13 config sock =
   let _ = lg @@ (EncryptedExtensions ({ee_extensions=[]})) in
   let _ = lg @@ (Certificate crt) in
 
-  let tbs = Handshake.to_be_signed pv Server None (HandshakeLog.getHash lg h) in
-  let ha = Hash CoreCrypto.SHA256 in
+  let hL = CoreCrypto.hashSize h in
+  let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+  let rc = CoreCrypto.hash h zeroes in
+  let cv_log = (HandshakeLog.getHash lg h) @| rc in
+
+  let tbs = Handshake.to_be_signed pv Server None cv_log in
+  let ha = Hash h in
   let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
   let a = Signature.Use (fun _ -> True) sa [ha] false false in
   let Some csk = Signature.lookup_key #a config.private_key_file in

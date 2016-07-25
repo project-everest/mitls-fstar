@@ -14,7 +14,7 @@ type share = b:bytes{length b < 65536}
 type key = k:CoreCrypto.dh_key{
   let dhp = k.dh_params in 
   length dhp.dh_p < 65536 && length dhp.dh_g < 65536 /\
-  length k.dh_public < 65536}
+  length k.dh_public <= length dhp.dh_p}
 
 type group =
   | Named    of ffdhe
@@ -100,10 +100,12 @@ let serialize dhp dh_Y =
   let pkb = vlbytes 2 dh_Y in
   pb @| gb @| pkb
 
-val serialize_public: share -> Tot bytes
-let serialize_public dh_Y =
-  lemma_repr_bytes_values (length dh_Y);
-  vlbytes 2 dh_Y
+val serialize_public: s:share -> len:nat{len < 65536 /\ length s <= len}
+  -> Tot (lbytes len)
+let serialize_public dh_Y len =
+  let padded_dh_Y = createBytes (len - length dh_Y) 0z @| dh_Y in
+  lemma_repr_bytes_values len;
+  padded_dh_Y
 
 val parse_public: p:bytes{2 <= length p} -> Tot (result share)
 let parse_public p =
@@ -113,24 +115,25 @@ let parse_public p =
 
 val parse_partial: bytes -> Tot (result (key * bytes))
 let parse_partial payload = 
-    if length payload >= 2 then
-      match vlsplit 2 payload with
-      | Error(z) -> Error(z)
-      | Correct(p, payload) ->
-        if length payload >= 2 then
-          match vlsplit 2 payload with
-          | Error(z) -> Error(z)
-          | Correct(g, payload) ->
-            if length payload >= 2 then
-              match vlsplit 2 payload with
-              | Error(z) -> Error(z)
-              | Correct(gy, rem) ->
-		let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
-		let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
-		lemma_repr_bytes_values (length p);
-		lemma_repr_bytes_values (length g);
-		lemma_repr_bytes_values (length gy);
-		Correct (dhk,rem)
-            else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  if length payload >= 2 then
+    match vlsplit 2 payload with
+    | Error(z) -> Error(z)
+    | Correct(p, payload) ->
+      if length payload >= 2 then
+        match vlsplit 2 payload with
+        | Error(z) -> Error(z)
+        | Correct(g, payload) ->
+          if length payload >= 2 then
+            match vlsplit 2 payload with
+            | Error(z) -> Error(z)
+            | Correct(gy, rem) ->
+              if length gy <= length p then
+                let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
+                let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
+                lemma_repr_bytes_values (length p);
+                lemma_repr_bytes_values (length g);
+                Correct (dhk,rem)
+              else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+          else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

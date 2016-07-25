@@ -33,27 +33,14 @@ let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
 // PLAINTEXTS are defined in Content.fragment i
 //16-06-08 see also StreamPlain and StatefulPlain. 
 
+type stae_id = i:id {is_stream i \/ is_stlhae i}
 
 ////////////////////////////////////////////////////////////////////////////////
 //Various utilities related to lengths of ciphers and fragments
 ////////////////////////////////////////////////////////////////////////////////
 
-// sufficient to ensure the cipher can be processed without length errors
 let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
   snd (C.rg i f) + 1
-
-type stae_id = i:id {is_stream i \/ is_stlhae i}
-
-val cipherLen: i:stae_id -> C.fragment i -> Tot (l:nat{Range.valid_clen i l})
-let cipherLen (i:stae_id) (f:C.fragment i) : nat =
-  if is_stream i then
-    StreamAE.cipherLen i (frag_plain_len #i f)
-  else
-    let r = C.rg i f in
-    Range.targetLength i r
-
-type encrypted (#i:stae_id) (f:C.fragment i) = lbytes (cipherLen i f)
-type decrypted (i:stae_id) = C.contentType * (b:bytes { Range.valid_clen i (length b) })
 
 // CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
@@ -143,9 +130,9 @@ let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:HH.t): GTot (frags i)
 val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}
   -> h0:HH.t -> h1:HH.t -> e:entry i
   -> Lemma (let log = ilog w in
-           MR.m_sel #(log_region w) #_ #MS.grows h1 log =
+           MR.m_sel #(log_region w) #_ #MS.grows h1 log ==
 	   SeqP.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e ==>
-	   fragments w h1 = SeqP.snoc (fragments w h0) (ptext e))
+	   fragments w h1 == SeqP.snoc (fragments w h0) (ptext e))
 let lemma_fragments_snoc_commutes #i w h0 h1 e =
   let log = ilog w in
   MS.map_snoc ptext (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e
@@ -197,7 +184,7 @@ val frame_fragments : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> 
     (requires HH.modifies_just s h0 h1
 	      /\ Map.contains h0 (log_region st)
 	      /\ not (Set.mem (log_region st) s))
-    (ensures authId i ==> fragments st h0 = fragments st h1)
+    (ensures authId i ==> fragments st h0 == fragments st h1)
 let frame_fragments #i #rw st h0 h1 s = ()
 
 val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:HH.t -> h1:HH.t -> s:Set.set rid 
@@ -213,7 +200,7 @@ let trigger_frame (h:HH.t) = True
 let frame_f (#a:Type) (f:HH.t -> GTot a) (h0:HH.t) (s:Set.set rid) =
   forall h1.{:pattern trigger_frame h1} 
         trigger_frame h1
-        /\ (HH.equal_on s h0 h1 ==> f h0 = f h1)
+        /\ (HH.equal_on s h0 h1 ==> f h0 == f h1)
 
 val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:HH.t -> h1:HH.t -> 
   Lemma (requires   HH.equal_on (Set.singleton (region s)) h0 h1 
@@ -227,7 +214,7 @@ let frame_seqT_auto i rw s h0 h1 = ()
 val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:HH.t -> h1:HH.t -> 
   Lemma (requires    HH.equal_on (Set.singleton (log_region s)) h0 h1 
 		  /\ Map.contains h0 (log_region s))
-        (ensures fragments s h0 = fragments s h1)
+        (ensures fragments s h0 == fragments s h1)
 	[SMTPat (fragments s h0); 
 	 SMTPat (fragments s h1)] 
 	 (* SMTPatT (trigger_frame h1)] *)
@@ -239,7 +226,7 @@ let frame_fragments_auto i rw s h0 h1 = ()
 ////////////////////////////////////////////////////////////////////////////////
 let reads (s:Set.set rid) (a:Type) = 
     f: (h:HH.t -> GTot a){forall h1 h2. (HH.equal_on s h1 h2 /\ Set.subset s (Map.domain h1))
-				  ==> f h1 = f h2}
+				  ==> f h1 == f h2}
 
 val fragments' : #i:id -> #rw:rw -> s:state i rw{ authId i } -> Tot (reads (Set.singleton (log_region s)) (frags i))
 let fragments' #i #rw s = fragments s
@@ -253,8 +240,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   HH.fresh_region r h0 h1 /\
   color r = color parent /\
   seqnT #i #Writer w h1 = 0 /\
-  (authId i ==> fragments #i #Writer w h1 = Seq.createEmpty) // we need to re-apply #i knowning authId
-
+  (authId i ==> fragments #i #Writer w h1 == Seq.createEmpty) // we need to re-apply #i knowning authId
 
 // Generate a fresh instance with index i in a fresh sub-region 
 val gen: parent:rid -> i:stae_id -> ST (writer i)
@@ -316,14 +302,14 @@ let leak #i #role s =
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (encrypted f)
+val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
                modifies_one (region e) h0 h1
 	       /\ seqnT e h1 = seqnT e h0 + 1
 	       /\ frame_f (seqnT e) h1 (Set.singleton (log_region e))
 	       /\ (authId i ==>
-		  fragments e h1 = SeqP.snoc (fragments e h0) f
+		  fragments e h1 == SeqP.snoc (fragments e h0) f
 		  /\ frame_f (fragments e) h1 (Set.singleton (log_region e))
 		  /\ MR.witnessed (fragments_prefix e (fragments e h1)))))
 let encrypt #i e f =
@@ -376,7 +362,7 @@ let fragment_at_j_stable (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:C.
   = MS.map_has_at_index_stable #_ #_ #(log_region s) (ilog s) ptext n f
 
 
-val decrypt: #i:id -> d:reader i -> c:decrypted i
+val decrypt: #i:id -> d:reader i -> c:C.decrypted i
   -> ST (option (f:C.fragment i))
     (requires (fun h0 -> incrementable d h0))
     (ensures  (fun h0 res h1 ->
@@ -387,7 +373,7 @@ val decrypt: #i:id -> d:reader i -> c:decrypted i
 		  let j = seqnT d h0 in
   		  seqnT d h1 = j + 1 /\
     	          (if is_stream i then
-		    frag_plain_len #i f <= cipherLen i f
+		    frag_plain_len #i f <= C.cipherLen i f
 		  else
 		    ct = fst c /\
 		    Range.wider (Range.cipherRangeClass i (length (snd c))) rg) /\

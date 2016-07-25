@@ -77,7 +77,7 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 *) 
 
 
-type config = {
+noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     minVer: protocolVersion;
     maxVer: protocolVersion;
@@ -263,7 +263,7 @@ type sessionID = b:bytes { length b <= 32 }
 // ``An arbitrary byte sequence chosen by the server
 // to identify an active or resumable session state.''
 
-type sessionInfo = {
+noeq type sessionInfo = {
     init_crand: crand;
     init_srand: srand;
     protocol_version: p:protocolVersion; // { p <> TLS_1p3 };
@@ -461,7 +461,7 @@ let logInfo_nonce (rw:role) = function
 // Extensional equality of logInfo
 // (we may want to use e.g. equalBytes on some fields)
 // injectivity 
-let eq_logInfo la lb : Tot bool =
+let eq_logInfo (la:logInfo) (lb:logInfo) : Tot bool =
   la = lb // TODO extensionality!
 
 // Length constraint is enfoced in the 2nd definition step after valid
@@ -627,13 +627,13 @@ and valid_expandId = function
 
 and valid_keyId = function
   | KeyID i tag rw li log ->
-      ((tag = EarlyTrafficKey \/ tag = EarlyApplicationDataKey) ==> rw = Client)
+      ((tag == EarlyTrafficKey \/ tag == EarlyApplicationDataKey) ==> rw == Client)
       /\ valid_hlen log (expandId_hash i)
       /\ log_info li log
 
 and valid_finishedId = function
   | FinishedID i tag rw li log ->
-      ((tag = EarlyFinished \/ tag = LateFinished) ==> rw = Client)
+      ((tag == EarlyFinished \/ tag == LateFinished) ==> rw == Client)
       /\ valid_hlen log (expandId_hash i)
       /\ log_info li log
 
@@ -742,13 +742,25 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 //let strongAEId i   = strongAEAlg   i.pv i.aeAlg
 
 // ``We are idealizing integrity/confidentiality for this id''
-let authId = function
+abstract let authId = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
   | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAuthAlg pv ae
 
-let safeId = function
+abstract let safeId = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
   | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAEAlg pv ae
+
+let plainText_is_not_auth (i:id)
+  : Lemma (requires (is_PlaintextID i))
+          (ensures (not (authId i)))
+	  [SMTPat (is_PlaintextID i)]
+  = ()	  
+
+let safe_implies_auth (i:id)
+  : Lemma (requires (safeId i))
+          (ensures (authId i))
+	  [SMTPat (authId i)]
+  = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg
 

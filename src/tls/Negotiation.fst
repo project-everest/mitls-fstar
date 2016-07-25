@@ -197,15 +197,36 @@ let acceptableCipherSuite cfg spv cs =
 // TODO ADL: incorrect as written; CS nego depends on ext nego
 //   (e.g. in TLS 1.2 it's incorrect to select an EC cipher suite if
 //         EC extensions are missing)
+// FIXME ADL
+// I have hacked nego to at least not pick a bad CS for the server's cert keytype
+// but this REALLY needs to be rewritten properly from scratch by someone who has
+// read all TLS RFCs
+// FIXME ADL: grossly inefficient; we need to cache the server keytype at startup
 // TODO BD: ignoring extensions for the moment
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
-val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result serverMode)
- let computeServerMode cfg cpv ccs cexts comps ri = 
+irreducible val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result serverMode)
+let computeServerMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 
     | Error(z) -> Error(z)
-    | Correct(npv) -> 
+    | Correct(npv) ->
+  let nosa = fun (CipherSuite _ sa _) -> is_None sa in
+  let sigfilter = match Cert.lookup_chain cfg.cert_chain_file with
+    | Correct(c) when (is_Some (Cert.endpoint_keytype c)) ->
+      let kt = Cert.endpoint_keytype c in
+      (fun (CipherSuite _ sa _) ->
+        match sa,kt with
+        | Some sa, Some kt ->
+          (match sa, kt with
+          | RSASIG, KeyRSA _ | RSAPSS, KeyRSA _
+          | ECDSA, KeyECDSA _ | DSA, KeyDSA _ -> true
+          | _ -> false)
+        | _ -> false)
+    | _ ->
+       let _ = IO.debug_print_string "WARNING cannot load server cert; restricting to anonymous CS...\n" in
+       nosa in
+  let ccs = List.Tot.filter sigfilter ccs in
   match negotiateCipherSuite cfg npv ccs with
     | Error(z) -> Error(z)
     | Correct(kex,sa,ae,cs) ->
@@ -242,7 +263,7 @@ val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_sui
       } in
       Correct (mode))
 
-val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result clientMode)
+irreducible val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result clientMode)
 let computeClientMode cfg cext cpv spv sr cs sext comp ri =
   if not (acceptableVersion cfg cpv spv sr) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")

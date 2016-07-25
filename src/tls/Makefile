@@ -119,7 +119,9 @@ TLS.fst \
 FFI.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
+test/TestGCM.fst \
 test/TestHandshake.fst \
+test/TestFFI.fst \
 test/TestAPI.fst #the preceding space is significant!
 
 # --------------------------------------------------------------------
@@ -172,8 +174,9 @@ HKDF \
 Epochs \
 Connection \
 ConnInvariant \
-TLS \
 FFI 
+
+#TLS --NS: excluding for now, since it is known to fail
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend

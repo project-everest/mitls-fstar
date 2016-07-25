@@ -94,7 +94,7 @@ let parse_partial p ec =
 val serialize_raw: key -> Tot bytes
 let serialize_raw = function
   | ECKey k -> ECGroup.serialize_point k.ec_params k.ec_point
-  | FFKey k -> DHGroup.serialize_public k.dh_public
+  | FFKey k -> DHGroup.serialize_public k.dh_public (length k.dh_params.dh_p)
 
 val parse: params -> bytes -> Tot (option key)
 let parse p x =
@@ -106,13 +106,9 @@ let parse p x =
     | None -> None
     end
   | FFP p ->
-    if length x < 2 then None
-    else
-      begin
-      match DHGroup.parse_public x with
-      | Correct r -> Some (FFKey ({dh_params = p; dh_public = r; dh_private = None;}))
-      | _ -> None
-      end
+    if length x = length p.dh_p then
+      Some (FFKey ({dh_params = p; dh_public = x; dh_private = None;}))
+    else None
 
 val key_params: key -> Tot params
 let key_params k =

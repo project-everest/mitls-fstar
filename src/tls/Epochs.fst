@@ -39,9 +39,9 @@ abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:wr
 
 module I = IdNonce
 
-type epoch (hs_rgn:rgn) (n:TLSInfo.random) = 
+type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   | Epoch: #i:id{nonce_of_id i = n} ->
-           h:handshake -> 
+           h:handshake ->
            r: reader (peerId i) ->
            w: writer i {epoch_region_inv' hs_rgn r w}
 	   -> epoch hs_rgn n
@@ -56,19 +56,19 @@ let reveal_epoch_region_inv_all (u:unit)
 	   epoch_region_inv' #i hs_rgn r w
 	   <==>
    	   epoch_region_inv #i hs_rgn r w)
-  = ()	   
+  = ()
 
-let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
-  : Lemma (let r = Epoch.r e in 
-	   let w = Epoch.w e in 
+let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
+  : Lemma (let r = Epoch.r e in
+	   let w = Epoch.w e in
 	   epoch_region_inv hs_rgn r w)
   = ()
 
-let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
+let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
   : Tot (w:writer (e.i) {epoch_region_inv hs_rgn (Epoch.r e) w})
   = Epoch.w e
 
-let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n) 
+let reader_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
   : Tot (r:reader (peerId e.i) {epoch_region_inv hs_rgn r (Epoch.w e)})
   = Epoch.r e
 
@@ -97,51 +97,51 @@ let reveal_epochs_inv' (u:unit)
 type epoch_ctr_inv (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
   x:int{-1 <= x /\ witnessed (MS.int_at_most x es)}
 
-type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) = 
+type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
   m_rref r (epoch_ctr_inv r es) increases
 
 //NS: probably need some anti-aliasing invariant of these three references
-type epochs (r:rgn) (n:TLSInfo.random) = 
+noeq type epochs (r:rgn) (n:TLSInfo.random) =
   | MkEpochs: es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
-    	    read: epoch_ctr r es -> 
+    	    read: epoch_ctr r es ->
 	    write: epoch_ctr r es ->
-	    epochs r n  
+	    epochs r n
 
-let containsT (MkEpochs es r w) (h:HH.t) =
-    MS.i_contains es h 
+let containsT (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (h:HH.t) =
+    MS.i_contains (MkEpochs.es es) h 
 
-val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid -> 
+val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid ->
   ST (is:MS.i_seq r a p &
       c1:epoch_ctr r is &
       c2:epoch_ctr r is)
      (requires (fun h -> p Seq.createEmpty))
-     (ensures (fun h0 x h1 -> 
+     (ensures (fun h0 x h1 ->
        modifies_one r h0 h1
        /\ modifies_rref r !{} h0 h1
-       /\ (let (|is, c1, c2|) = x in 
+       /\ (let (|is, c1, c2|) = x in
 	  i_contains is h1
 	  /\ m_contains c1 h1
 	  /\ m_contains c2 h1
-	  /\ i_sel h1 is = Seq.createEmpty)))
-let alloc_log_and_ctrs #a #p r = 
-  let init = Seq.createEmpty in 
-  let is = alloc_mref_iseq p r init in 
-  witness is (int_at_most (-1) is); 
+	  /\ i_sel h1 is == Seq.createEmpty)))
+let alloc_log_and_ctrs #a #p r =
+  let init = Seq.createEmpty in
+  let is = alloc_mref_iseq p r init in
+  witness is (int_at_most (-1) is);
   let c1 : epoch_ctr #a #p r is = m_alloc r (-1) in
   let c2 : epoch_ctr #a #p r is = m_alloc r (-1) in
   (| is, c1, c2 |)
 
 val incr_epoch_ctr: #a:Type0 -> #p:(seq a -> Type0) -> #r:HH.rid -> #is:MS.i_seq r a p
 		  -> ctr:epoch_ctr r is
-		  -> ST unit 
+		  -> ST unit
    (requires (fun h -> 1 + m_sel h ctr < Seq.length (i_sel h is)))
-   (ensures (fun h0 _ h1 -> 
+   (ensures (fun h0 _ h1 ->
 		  modifies_one r h0 h1
 		  /\ modifies_rref r !{as_ref (as_rref ctr)} h0 h1
 		  /\ m_sel h1 ctr = m_sel h0 ctr + 1))
-let incr_epoch_ctr #a #p #r #is ctr = 
+let incr_epoch_ctr #a #p #r #is ctr =
   m_recall ctr;
-  let cur = m_read ctr in 
+  let cur = m_read ctr in
   MS.int_at_most_is_stable is (cur + 1);
   witness is (int_at_most (cur + 1) is);
   m_write ctr (cur + 1)
@@ -153,13 +153,13 @@ let epochs_init (r:rgn) (n:TLSInfo.random) =
   let (| esref, c1, c2 |) = alloc_log_and_ctrs #(epoch r n) #(epochs_inv #r #n) r in
   MkEpochs esref c1 c2
 
-inline let incr_pre #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs.es es)))) h : GTot Type0 = 
-  let ctr = proj es in 
+inline let incr_pre #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs.es es)))) h : GTot Type0 =
+  let ctr = proj es in
   let cur = m_sel h ctr in
   cur + 1 < Seq.length (i_sel h (MkEpochs.es es))
 
-inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs.es es)))) h0 (_:unit) h1 : GTot Type0 = 
-  let ctr = proj es in 
+inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs.es es)))) h0 (_:unit) h1 : GTot Type0 =
+  let ctr = proj es in
   let oldr = m_sel h0 ctr in
   let newr = m_sel h1 ctr in
   modifies_one r h0 h1
@@ -168,14 +168,16 @@ inline let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
 
 val add_epoch: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> e: epoch r n -> ST unit
-       (requires (fun h -> True))
+       (requires (fun h -> 
+	   let is = MkEpochs.es es in
+	   epochs_inv #r #n (SeqP.snoc (i_sel h is) e)))
        (ensures (fun h0 x h1 -> 
-		   let es = MkEpochs.es es in
-		   modifies_one r h0 h1 
-		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
-		   /\ i_sel h1 es = SeqP.snoc (i_sel h0 es) e))
-let add_epoch #rg #n (MkEpochs es _ _) e =
-    MS.i_write_at_end #rg es e
+		   let es = MkEpochs.es es in 
+ 		   modifies_one r h0 h1  
+ 		   /\ modifies_rref r !{as_ref (as_rref es)} h0 h1
+ 		   /\ i_sel h1 es == SeqP.snoc (i_sel h0 es) e))
+let add_epoch #r #n (MkEpochs es _ _) e = 
+    MS.i_write_at_end es e
 
 let incr_reader #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs.read))
@@ -187,12 +189,31 @@ let incr_writer #r #n (es:epochs r n) : ST unit
     (ensures (incr_post es MkEpochs.write))
     = incr_epoch_ctr (MkEpochs.write es)
 
-let get_epochs (MkEpochs es r w) = es
+let get_epochs #r #n (es:epochs r n) = MkEpochs.es es
 
-let get_reader #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.read es)
-let get_writer #r #n (es:epochs r n) : epoch_ctr_inv r (MkEpochs.es es) = m_read (MkEpochs.write es)
+inline let get_ctr_post (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) h0 i h1 = 
+  let es = MkEpochs.es es in
+  h0 == h1
+  /\ -1 <= i
+  /\ MS.int_at_most i es h1
 
-let epochsT (MkEpochs es r w) (h:HH.t) = MS.i_sel h es
+let get_reader (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) 
+  : ST int (requires (fun h -> True))
+         (ensures (get_ctr_post es))
+  = let epochs = MkEpochs.es es in 
+    let n = m_read (MkEpochs.read es) in
+    testify (MS.int_at_most n epochs);
+    n
+
+let get_writer (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) 
+  : ST int (requires (fun h -> True))
+         (ensures (get_ctr_post es))
+  = let epochs = MkEpochs.es es in 
+    let n = m_read (MkEpochs.write es) in
+    testify (MS.int_at_most n epochs);
+    n
+
+let epochsT #r #n (es:epochs r n) (h:HH.t) = MS.i_sel h (MkEpochs.es es)
 
 val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HH.t -> GTot (epoch_ctr_inv rid (get_epochs e))
 let readerT #rid #n (MkEpochs es r w) (h:HH.t) = m_sel h r

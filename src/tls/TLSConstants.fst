@@ -145,7 +145,7 @@ type sigAlg = CoreCrypto.sig_alg
 type pinverse_t (#a:Type) (#b:Type) ($f:(a -> Tot b)) = b -> Tot (result a)
 
 inline type lemma_inverse_g_f (#a:Type) (#b:Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (x:a) =
-  g (f x) = Correct x
+  g (f x) == Correct x
 
 inline type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (y:b) =
   is_Correct (g y) ==> r (f (Correct._0 (g y))) y
@@ -158,7 +158,7 @@ let sigAlgBytes sa =
   | CoreCrypto.RSASIG -> abyte 1z
   | CoreCrypto.DSA    -> abyte 2z
   | CoreCrypto.ECDSA  -> abyte 3z
-  | CoreCrypto.RSAPSS -> abyte 4z
+  | CoreCrypto.RSAPSS -> abyte 0z // TODO fix me!
 
 (* Parsing function associated to sigAlgBytes *)
 val parseSigAlg: pinverse_t sigAlgBytes
@@ -167,7 +167,7 @@ let parseSigAlg b =
   | 1z -> Correct CoreCrypto.RSASIG
   | 2z -> Correct CoreCrypto.DSA
   | 3z -> Correct CoreCrypto.ECDSA
-  | 4z -> Correct CoreCrypto.RSAPSS
+  | 0z -> Correct CoreCrypto.RSAPSS
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_sigAlg: x:_ -> Lemma
@@ -195,6 +195,7 @@ let hashAlgBytes ha =
   | Hash SHA256  -> abyte 4z
   | Hash SHA384  -> abyte 5z
   | Hash SHA512  -> abyte 6z
+  | NULL -> abyte 7z // FIXME!!
 
 val parseHashAlg: pinverse_t hashAlgBytes
 let parseHashAlg b =
@@ -205,6 +206,8 @@ let parseHashAlg b =
   | 4z -> Correct (Hash SHA256)
   | 5z -> Correct (Hash SHA384)
   | 6z -> Correct (Hash SHA512)
+  | 7z -> admit();  //TODO: FIXME!!!!
+         Correct (NULL)
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_hashAlg: x:_ -> Lemma
@@ -413,7 +416,9 @@ let cipherSuiteBytesOpt cs =
     | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384)  -> abyte2 ( 0xc0z, 0x28z )
 
     | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256) -> abyte2 ( 0xc0z, 0x2fz )
+    | CipherSuite Kex_ECDHE (Some ECDSA)  (AEAD AES_128_GCM SHA256) -> abyte2 ( 0xc0z, 0x2bz )
     | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384) -> abyte2 ( 0xc0z, 0x30z )
+    | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_256_GCM SHA384) -> abyte2 ( 0xc0z, 0x2cz )
 
     (**************************************************************************)
     | CipherSuite Kex_PSK_DHE None (AEAD AES_128_GCM SHA256) -> abyte2 ( 0x00z, 0xaaz )
@@ -507,8 +512,12 @@ let parseCipherSuiteAux b =
   | ( 0xc0z, 0x27z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_128_CBC) SHA256))
   | ( 0xc0z, 0x28z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384))
 
+  (**************************************************************************)
+  | ( 0xc0z, 0x2bz ) -> Correct(CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_128_GCM SHA256))
   | ( 0xc0z, 0x2fz ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256))
+  | ( 0xc0z, 0x2cz ) -> Correct(CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_256_GCM SHA384))
   | ( 0xc0z, 0x30z ) -> Correct(CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384))
+
   (**************************************************************************)
   | ( 0xd0z, 0x01z ) -> Correct(CipherSuite Kex_PSK_ECDHE None (AEAD AES_128_GCM SHA256))
   | ( 0xd0z, 0x02z ) -> Correct(CipherSuite Kex_PSK_ECDHE None (AEAD AES_256_GCM SHA384))
@@ -787,7 +796,9 @@ type cipherSuiteName =
   | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
   | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
 
+  | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
   | TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+  | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
   | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
 
   | TLS_DH_anon_WITH_RC4_128_MD5
@@ -845,7 +856,9 @@ let cipherSuite_of_name = function
   | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA     -> CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA1)
   | TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384  -> CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384)
 
+  | TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 -> CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_128_GCM SHA256)
   | TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256  -> CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256)
+  | TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 -> CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_256_GCM SHA384)
   | TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384  -> CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384)
 
   | TLS_DH_anon_WITH_RC4_128_MD5           -> CipherSuite Kex_DHE None (MtE (Stream RC4_128) MD5)
@@ -909,7 +922,9 @@ let name_of_cipherSuite cs =
   | CipherSuite Kex_ECDHE (Some RSASIG) (MtE (Block AES_256_CBC) SHA384) -> Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
 
   | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_128_GCM SHA256)        -> Correct TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_128_GCM SHA256)        -> Correct TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
   | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD AES_256_GCM SHA384)        -> Correct TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD AES_256_GCM SHA384)        -> Correct TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
 
   | CipherSuite Kex_DHE None (MtE (Stream RC4_128) MD5)                  -> Correct TLS_DH_anon_WITH_RC4_128_MD5
   | CipherSuite Kex_DHE None (MtE (Block TDES_EDE_CBC) SHA1)             -> Correct TLS_DH_anon_WITH_3DES_EDE_CBC_SHA
@@ -970,7 +985,7 @@ val lemma_vlbytes_inj : i:nat
   -> b:bytes{repr_bytes (length b) <= i}
   -> b':bytes{repr_bytes (length b') <= i}
   -> Lemma (requires (Seq.equal (vlbytes i b) (vlbytes i b')))
-          (ensures (b = b'))
+          (ensures (b == b'))
 let lemma_vlbytes_inj i b b' =
   let l = bytes_of_int i (length b) in
   SeqProperties.lemma_append_inj l b l b'
@@ -1008,7 +1023,7 @@ let vlparse lSize vlb =
 
 val vlparse_vlbytes: lSize:nat{lSize <= 4} -> vlb:bytes{repr_bytes (length vlb) <= lSize} -> Lemma 
   (requires (True))
-  (ensures (vlparse lSize (vlbytes lSize vlb) = Correct vlb))
+  (ensures (vlparse lSize (vlbytes lSize vlb) == Correct vlb))
   [SMTPat (vlparse lSize (vlbytes lSize vlb))]
 let vlparse_vlbytes lSize vlb =
   let vl,b = split (vlbytes lSize vlb) lSize in
@@ -1330,7 +1345,7 @@ val pinverse_earlyDataType: x:_ -> Lemma
 let pinverse_earlyDataType x = ()
 
 // TODO : replace with more precise types when available
-type configurationExtension =
+noeq type configurationExtension =
   | UnknownConfigurationExtension:
       typ:lbytes 2 -> payload: bytes { repr_bytes (length payload) <= 2 } -> configurationExtension
 
@@ -1470,7 +1485,7 @@ type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
 
 type serverKeyShare = keyShareEntry
 
-type keyShare =
+noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
 
@@ -1646,7 +1661,7 @@ type clientPreSharedKey = l:list pskIdentity{List.Tot.length l >= 1 /\ List.Tot.
 
 type serverPreSharedKey = pskIdentity
 
-type preSharedKey =
+noeq type preSharedKey =
   | ClientPreSharedKey of clientPreSharedKey
   | ServerPreSharedKey of serverPreSharedKey
 

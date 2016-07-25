@@ -11,9 +11,7 @@ open CoreCrypto
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
-// Rule out plaintext indexes in this module
-private type id = i:id {~ (is_PlaintextID i) }
-type id2 = i:id { is_ID12 i } // gradually adding TLS 1.3... 
+type id2 = i:id { is_ID12 i } // gradually adding TLS 1.3...
 
 (* ranges *)
 type range = r:(nat * nat) { fst r <= snd r }
@@ -27,49 +25,53 @@ let zero = point 0
 val sum: range -> range -> Tot range
 let sum (l0,h0) (l1,h1) = (l0 + l1, h0 + h1)
 
-let aeAlg (i:id{is_AEAD (aeAlg_of_id i)}) = AEAD._0 (aeAlg_of_id i)
+let aeAlg (i:id{~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i)}) =
+  AEAD._0 (aeAlg_of_id i)
 
 (* Length of IV for a non-AEAD cipher *)
-val ivSize: i:id{~(is_AEAD (aeAlg_of_id i))} -> Tot nat
+val ivSize: i:id{~(is_PlaintextID i) /\ ~(is_AEAD (aeAlg_of_id i))} -> Tot nat
 let ivSize i =
-    let authEnc = aeAlg_of_id i in
-    match authEnc with
-    | MACOnly _ | MtE (Stream _) _ -> 0
-    | MtE (Block alg) _ -> blockSize alg
+  let authEnc = aeAlg_of_id i in
+  match authEnc with
+  | MACOnly _ | MtE (Stream _) _ -> 0
+  | MtE (Block alg) _ -> blockSize alg
 
 (* Mandatory fixed padding for a cipher *)
 val fixedPadSize: id -> Tot nat
 let fixedPadSize i =
-        let authEnc = aeAlg_of_id i in
-        match authEnc with
-        | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
-        | MtE (Block _) _ -> 1 // 1 byte for GenericBlockCipher.padding_length
+  if is_PlaintextID i then 0
+  else
+    let authEnc = aeAlg_of_id i in
+    match authEnc with
+    | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
+    | MtE (Block _) _ -> 1 // 1 byte for GenericBlockCipher.padding_length
 
 (* Maximal padding length for a cipher *)
 // Note that the 1-byte padding length is included here, i.e. block ciphers can
 // use at most 255 bytes of padding, plus 1 byte to encode the length
 val maxPadSize: id2 -> Tot nat
 let maxPadSize i =
-        let authEnc = aeAlg_of_id i in
-        match authEnc with
-        | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
-        | MtE (Block alg) _ ->
-            lemma_MtE i; lemma_ID12 i;
-            match (pv_of_id i) with
-            | SSL_3p0 -> blockSize alg
-            | TLS_1p0 | TLS_1p1 | TLS_1p2 -> 256
-
+  let authEnc = aeAlg_of_id i in
+  match authEnc with
+  | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
+  | MtE (Block alg) _ ->
+    lemma_MtE i; lemma_ID12 i;
+    match pv_of_id i with
+    | SSL_3p0 -> blockSize alg
+    | TLS_1p0 | TLS_1p1 | TLS_1p2 -> 256
 
 (* Minimal padding length for a given plaintext length (in bytes) *)
 val minimalPadding: id -> nat -> Tot nat
 let minimalPadding i len =
+  if is_PlaintextID i then 0
+  else
     let authEnc = aeAlg_of_id i in
     match authEnc with
     | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> fixedPadSize i
     | MtE (Block alg) _ ->
-        let bs = blockSize alg in
-        let lp = len % bs in
-        bs - lp
+      let bs = blockSize alg in
+      let lp = len % bs in
+      bs - lp
 
 (* Sanity check *)
 #set-options "--initial_ifuel 2"
@@ -82,13 +84,17 @@ val minMaxPad: id2 -> Tot range
 let minMaxPad i = (fixedPadSize i, maxPadSize i)
 #set-options "--initial_ifuel 1"
 
-// Shared between StreamAE and StatefulLHAE
 type valid_clen (i:id) (clen:nat) =
-  (if is_ID13 i then begin
+ (if is_PlaintextID i then
+    0 <= clen /\ clen <= max_TLSPlaintext_fragment_length
+  else if is_ID13 i then
+    begin
     lemma_ID13 i;
     let tlen = aeadTagSize (aeAlg i) in
     tlen < clen /\ clen <= tlen + max_TLSCiphertext_fragment_length_13
-  end else begin
+    end
+  else // is_ID12 i
+    begin
     if is_AEAD (aeAlg_of_id i) then
       0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
       clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
@@ -98,7 +104,7 @@ type valid_clen (i:id) (clen:nat) =
     else // MACOnly
       let MACOnly h = aeAlg_of_id i in
       0 <= clen - hashSize h /\ clen - hashSize h <= max_TLSPlaintext_fragment_length
-  end)
+    end)
 
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
@@ -128,34 +134,34 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
 )
 
 let cipherRangeClass i clen =
-    let authEnc = aeAlg_of_id i in
-    match authEnc with
-    | MACOnly _
-    | MtE (Stream _) _
-    | MtE (Block _ ) _ ->
-        let ivL = ivSize i in
-        let macLen = macSize (macAlg_of_id i) in
-        let minPad, maxPad = minMaxPad i in
-        let max = clen - ivL - macLen - minPad in
-        let min = clen - ivL - macLen - maxPad in
-	if min < 0 then
-	  (0,max)
-	else
-	  if max < max_TLSPlaintext_fragment_length then
-	    (min,max)
-	  else
-	    (min,max_TLSPlaintext_fragment_length)
-    | AEAD aeadAlg _ ->
-        let ivL = aeadRecordIVSize aeadAlg in
-        let tagL = aeadTagSize aeadAlg in
-        let minPad, maxPad = minMaxPad i in
-        let max = clen - ivL - tagL - minPad in
-        let min = clen - ivL - tagL - maxPad in
-        min, max
+  let authEnc = aeAlg_of_id i in
+  match authEnc with
+  | MACOnly _
+  | MtE (Stream _) _
+  | MtE (Block _ ) _ ->
+    let ivL = ivSize i in
+    let macLen = macSize (macAlg_of_id i) in
+    let minPad, maxPad = minMaxPad i in
+    let max = clen - ivL - macLen - minPad in
+    let min = clen - ivL - macLen - maxPad in
+    if min < 0 then
+      (0,max)
+    else
+      if max < max_TLSPlaintext_fragment_length then
+	(min,max)
+      else
+	(min,max_TLSPlaintext_fragment_length)
+  | AEAD aeadAlg _ ->
+    let ivL = aeadRecordIVSize aeadAlg in
+    let tagL = aeadTagSize aeadAlg in
+    let minPad, maxPad = minMaxPad i in
+    let max = clen - ivL - tagL - minPad in
+    let min = clen - ivL - tagL - maxPad in
+    min, max
 
 val cipherRangeClass_width: i:id2 ->
-     clen:nat{valid_clen i clen} ->
-     Lemma (snd (cipherRangeClass i clen) - fst (cipherRangeClass i clen) <= maxPadSize i - fixedPadSize i)
+  clen:nat{valid_clen i clen} ->
+  Lemma (snd (cipherRangeClass i clen) - fst (cipherRangeClass i clen) <= maxPadSize i - fixedPadSize i)
 #set-options "--initial_ifuel 2"
 let cipherRangeClass_width i clen = ()
 
@@ -173,24 +179,24 @@ val targetLength : i:id2 -> r:range -> Pure nat
     /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r))
   (ensures (fun clen -> valid_clen i clen /\ wider (cipherRangeClass i clen) r))
 let targetLength i r =
-    let l,h = r in
-    let authEnc = aeAlg_of_id i in
-    match authEnc with
-    | MACOnly _
-    | MtE (Stream _) _
-    | MtE (Block _) _ ->
-        let ivL = ivSize i in
-        let macLen = macSize (macAlg_of_id i) in
-        let prePad = h + macLen in
-        let padLen = minimalPadding i prePad in
-        let clen = ivL + prePad + padLen in
-        clen
-    | AEAD aeadAlg _ ->
-        let ivL = aeadRecordIVSize aeadAlg in
-        let tagL = aeadTagSize aeadAlg in
-        let fp = fixedPadSize i in
-        let clen = ivL + h + fp + tagL in
-        clen
+  let l,h = r in
+  let authEnc = aeAlg_of_id i in
+  match authEnc with
+  | MACOnly _
+  | MtE (Stream _) _
+  | MtE (Block _) _ ->
+    let ivL = ivSize i in
+    let macLen = macSize (macAlg_of_id i) in
+    let prePad = h + macLen in
+    let padLen = minimalPadding i prePad in
+    let clen = ivL + prePad + padLen in
+    clen
+  | AEAD aeadAlg _ ->
+    let ivL = aeadRecordIVSize aeadAlg in
+    let tagL = aeadTagSize aeadAlg in
+    let fp = fixedPadSize i in
+    let clen = ivL + h + fp + tagL in
+    clen
 
 (* This is the high-level spec for targetLength (for non-AEAD ciphers):
 
@@ -301,7 +307,12 @@ let fragment_range: range = (0,max_TLSPlaintext_fragment_length)
 
 // for writers, we keep track of actual ranges
 // and we require point ranges when padding is not available.
-type frange (i:id) = rg:range { wider fragment_range rg /\ (lhae (aeAlg_of_id i) || pv_of_id i = TLS_1p3 || fst rg = snd rg) }
+type frange (i:id) = rg:range{
+  wider fragment_range rg /\
+  ((is_ID12 i /\ lhae (aeAlg_of_id i))
+  \/ is_ID13 i
+  \/ fst rg = snd rg)
+}
 
 // we don't need the index for point ranges (e.g. non-appdata traffic)
 type frange_any = rg:range { wider fragment_range rg /\ fst rg = snd rg }

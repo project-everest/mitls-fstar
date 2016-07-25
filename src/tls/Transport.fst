@@ -8,7 +8,7 @@ open Platform.Error
 open TLSError
 
 // make this type abstract? 
-type t = 
+noeq type t = 
   { snd: bytes -> EXT (optResult string unit);
     rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); 
     } 
@@ -43,7 +43,8 @@ let rec really_read_rec prev tcp len =
       | Correct b -> 
             let lb = length b in
       	    if lb = len then Correct(prev @| b)
-      	    else really_read_rec (prev @| b) tcp (len - lb)
+      	    else if lb = 0 then Error(AD_internal_error,"TCP close") //16-07-24 otherwise we loop...
+            else really_read_rec (prev @| b) tcp (len - lb)
       | Error e -> Error(AD_internal_error,e)
 
 let really_read = really_read_rec empty_bytes

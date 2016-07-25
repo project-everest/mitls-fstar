@@ -368,7 +368,9 @@ let writerT s h = eT s Writer h
 // this function increases (how to specify it once for all?)
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> h0 = h1 /\ i = iT s rw h1))
+  (ensures (fun h0 i h1 -> h0 = h1 
+		      /\ i = iT s rw h1
+		      /\ Epochs.get_ctr_post (HS.log s) h0 i h1))
 let i (HS #r0 _ _ _ _ epochs _) rw =
   match rw with
   | Reader -> Epochs.get_reader epochs
@@ -694,16 +696,20 @@ let processServerFinished_13 cfg n ks log msgs =
        //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
        begin
        match sigHashAlg_of_ske cv.cv_sig with
-       | Some ((sa,h), sigv) ->
-         if List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = h))
+       | Some ((sa,ha), sigv) ->
+         if List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = ha))
              (list_sigHashAlg_is_list_tuple_sig_hash algs) then
            begin
-           let lb = HandshakeLog.getHash log (Hash._0 h) in
-           let a = Signature.Use (fun _ -> True) sa [h] false false in
+           let Hash sh_alg = sessionHashAlg n.n_protocol_version n.n_cipher_suite in
+           let hL = CoreCrypto.hashSize sh_alg in
+           let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+           let rc = CoreCrypto.hash sh_alg zeroes in
+           let lb = (HandshakeLog.getHash log sh_alg) @| rc in
+           let a = Signature.Use (fun _ -> True) sa [ha] false false in
            let tbs = to_be_signed n.n_protocol_version Server None lb in
            match Signature.get_chain_public_key #a c.crt_chain with
            | Some pk ->
-             let valid = Signature.verify h pk tbs sigv in
+             let valid = Signature.verify ha pk tbs sigv in
              let _ = IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n") in
              if valid then
                let _ = log @@ CertificateVerify(cv) in
@@ -954,26 +960,32 @@ let prepareServerFinished_13 cfg n ks log =
       let cb = log @@ Certificate(c) in
       let pv = n.n_protocol_version in 
       let cs = n.n_cipher_suite in
+      let sh_alg = sessionHashAlg pv cs in
 
       // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
+      // If no signature nego took place we use the SA and KDF hash from the CS
       let Some sa = n.n_sigAlg in
       let algs =
 	match n.n_extensions.ne_signature_algorithms with
         | Some l -> l
-        | None -> [sa, Hash CoreCrypto.SHA256]
+        | None -> [sa, sh_alg]
       in
       let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
       let sa, ha =
 	match algs with
 	| ha::_ -> ha
-	| [] -> (sa, Hash CoreCrypto.SHA256) in
-      let Hash h = ha in
+	| [] -> (sa, sh_alg) in
       let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
       let a = Signature.Use (fun _ -> True) sa [ha] false false in
       begin
       match Signature.lookup_key #a cfg.private_key_file with
       | Some csk ->
-        let tbs = to_be_signed pv Server None (HandshakeLog.getHash log h) in
+        let Hash sh_alg = sh_alg in
+        let hL = CoreCrypto.hashSize sh_alg in
+        let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+        let rc = CoreCrypto.hash sh_alg zeroes in
+        let lb = (HandshakeLog.getHash log sh_alg) @| rc in
+        let tbs = to_be_signed pv Server None lb in
         let sigv = Signature.sign ha csk tbs in
 	let signature = (hab @| sab @| (vlbytes 2 sigv)) in
         let scv = {cv_sig = signature} in
@@ -1149,7 +1161,8 @@ let next_fragment_ensures (#i:id) (s:hs) h0 (result:outgoing i) h1 =
     r1 == r0 /\
 //  w1 == (match result with | Outgoing _ _ true _ -> w0 + 1 | _ -> w0 ) /\
     w1 == (if out_next_keys result then  w0 + 1 else w0 ) /\
-    (b2t (out_complete result) ==> w1 >= 0 /\ r1 = w1 /\ iT s Writer h1 >= 0 /\ completed (eT s Writer h1)) 
+    Seq.length (logT s h1) >= Seq.length (logT s h0) /\
+    (b2t (out_complete result) ==> r1 = w1 /\ indexable (logT s h1) w1 /\ completed (eT s Writer h1)) 
 
 val next_fragment: i:id -> s:hs -> ST (outgoing i)
   (requires (fun h0 -> 
@@ -1265,7 +1278,8 @@ let recv_fragment hs #i f =
        | None -> None, None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
     match parseHandshakeMessages pv kex b with
-    | Error z -> InError z
+    | Error (ad, s) ->
+      let _ = IO.debug_print_string ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n") in InError (ad,s)
     | Correct(r,hsl) ->
        let hsl = List.Tot.append (!hsref).hs_buffers.hs_incoming_parsed hsl in
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
@@ -1273,7 +1287,8 @@ let recv_fragment hs #i f =
       (match (!hsref).hs_state,hsl with 
        | C (C_Idle ri), _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
        | C (C_HelloSent ri ch), (ServerHello(sh),l)::hsl 
-	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) -> 
+	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) ->
+           let _ = IO.debug_print_string "Processing client hello...\n" in
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 	   client_handle_server_hello hs [(ServerHello(sh),l)]
        | C (C_HelloReceived n), (Certificate(c),l)::
