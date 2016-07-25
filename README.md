@@ -11,20 +11,21 @@ More information on miTLS can be found at www.mitls.org
 
 More information on F\* can be found at www.fstar-lang.org
 
-### Table of content
+### Table of contents
 
   * [Building](#building)
   * [Directory structure](#directory-structure)
   	* [Legacy, imported from mitls-f7](#legacy-imported-from-mitls-f7)
   * [Configuring Emacs and Atom F* modes](#configuring-emacs-and-atom-f-modes)
 
-###Building
+### Building
 
-Check that you have the necessary dependencies.
-First, check that you have the F\* compiler set up and running in .fstar (`git submodule init` && `git submodule update` if you need to), following the instructions in https://github.com/FStarLang/FStar
+There are numerous dependencies. Follow the instructions at https://github.com/protz/ocaml-installer/wiki to have a working Cygwin and OCaml setup. In addition to `ocamlfind`, `batteries`, `stdint`, and `zarith`, you will also need to install the `sqlite3` package (hint: `opam install sqlite3`). To build CoreCrypto, you will need to install `libssl-dev`. On Windows, you can use `opam depext ssl` to install the appropriate Cygwin packages.
+
+
+Once this is done, check that you have the F\* compiler set up and running in .fstar (`git submodule init` && `git submodule update` if you need to), following the instructions in https://github.com/FStarLang/FStar
 You also need to setup OCaml and OPAM, following the instructions in https://github.com/FStarLang/FStar/blob/master/INSTALL.md
-In addition to `ocamlfind`, `batteries`, `stdint`, and `zarith`, you will also need to install the `sqlite3` package.
-To build CoreCrypto, you will need to install `libssl-dev`. On Windows, you can use `opam depext ssl` to install the appropriate Cygwin packages.
+
 
 To verify the current miTLS:
 ```
@@ -41,7 +42,7 @@ make mitls.exe
 ./mitls.exe 127.0.0.1 4443
 ```
 
-###Directory structure
+### Directory structure
 
 - `src/`
 
@@ -57,7 +58,7 @@ make mitls.exe
 
   - `flex/` WIP port of flexTLS to F*
 
-####Legacy, imported from mitls-f7
+#### Legacy, imported from mitls-f7
 
 - `apps/` Sample apps built on top of miTLS --- not ported yet.
 
@@ -75,7 +76,7 @@ make mitls.exe
 - `VS/` miTLS Visual Studio solution, for browsing/building the old F# files in `src/tls-fs` --- used to build as reference; currently broken.
 
 
-###Configuring Emacs mode
+### Configuring Emacs mode
 
 The Makefile in `src/tls` has the following targets:
 
