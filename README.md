@@ -22,10 +22,9 @@ More information on F\* can be found at www.fstar-lang.org
 
 There are numerous dependencies. Follow the instructions at https://github.com/protz/ocaml-installer/wiki to have a working Cygwin and OCaml setup. In addition to `ocamlfind`, `batteries`, `stdint`, and `zarith`, you will also need to install the `sqlite3` package (hint: `opam install sqlite3`). To build CoreCrypto, you will need to install `libssl-dev`. On Windows, you can use `opam depext ssl` to install the appropriate Cygwin packages.
 
+Once this is done, head over to https://github.com/mitls/mitls-fstar/wiki/Development-environment for some tips on our development environment, including how to attain happiness with Cygwin & Git on Windows (hopefully).
 
-Once this is done, check that you have the F\* compiler set up and running in .fstar (`git submodule init` && `git submodule update` if you need to), following the instructions in https://github.com/FStarLang/FStar
-You also need to setup OCaml and OPAM, following the instructions in https://github.com/FStarLang/FStar/blob/master/INSTALL.md
-
+After the setup is done, check that you have the F\* compiler set up and running in `.fstar` (`git submodule update --init` if you need to). Note: we do not support the F\# build of F\*; please use the OCaml build of F\* (i.e. `make -C .fstar/src/ocaml-output`).
 
 To verify the current miTLS:
 ```
@@ -41,6 +40,10 @@ make mitls.exe
 ./mitls.exe -s 0.0.0.0 4443 &
 ./mitls.exe 127.0.0.1 4443
 ```
+
+**Caveats:**
+
+There is a script that detects if the `fstar` module has changed since the last build, and rebuilds it. If you get strange errors, the script may have failed to reubild `fstar` properly, and the main `Makefile` keeps attempting to extract/verify using an outdated version of F\*. In that case, it's a good idea to run `make -C .fstar/src/ocaml-output clean all`.
 
 ### Directory structure
 
