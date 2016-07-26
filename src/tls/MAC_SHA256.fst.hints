@@ -5,7 +5,7 @@
       0,
       1,
       [
-        "@query_14352", "disc_equation_TLSInfo.ID12",
+        "@query_14498", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.PlaintextID",
         "projection_inverse_BoxBool_proj_0"
       ],
@@ -15,44 +15,44 @@
       0,
       1,
       [
-        "@query_14383", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "@query_14529", "assumption_Platform.Bytes.HasEq_bytes_3309",
         "equation_MAC_SHA256.tag", "equation_Platform.Bytes.bytes",
-        "haseqTm_refine_14373"
+        "haseqTm_refine_14519"
       ],
       0
     ],
-    [ 0, 1, [ "@query_14403" ], 0 ],
-    [ 0, 1, [ "@query_14409" ], 0 ],
-    [ 0, 1, [ "@query_14410" ], 0 ],
-    [ 0, 1, [ "@query_14420" ], 0 ],
-    [ 0, 1, [ "@query_14435" ], 0 ],
-    [ 0, 1, [ "@query_14440" ], 0 ],
-    [ 0, 1, [ "@query_14441" ], 0 ],
-    [ 0, 1, [ "@query_14446" ], 0 ],
-    [ 0, 1, [ "@query_14447" ], 0 ],
+    [ 0, 1, [ "@query_14549" ], 0 ],
+    [ 0, 1, [ "@query_14555" ], 0 ],
+    [ 0, 1, [ "@query_14556" ], 0 ],
+    [ 0, 1, [ "@query_14567" ], 0 ],
+    [ 0, 1, [ "@query_14582" ], 0 ],
+    [ 0, 1, [ "@query_14587" ], 0 ],
+    [ 0, 1, [ "@query_14588" ], 0 ],
+    [ 0, 1, [ "@query_14593" ], 0 ],
+    [ 0, 1, [ "@query_14594" ], 0 ],
     [
       0,
       1,
       [
-        "@query_14452", "proj_equation_MAC_SHA256.State_region",
+        "@query_14599", "proj_equation_MAC_SHA256.State_region",
         "projection_inverse_MAC_SHA256.State_region"
       ],
       0
     ],
-    [ 0, 1, [ "@query_14453" ], 0 ],
-    [ 0, 1, [ "@query_14456" ], 0 ],
+    [ 0, 1, [ "@query_14600" ], 0 ],
+    [ 0, 1, [ "@query_14603" ], 0 ],
     [
       0,
       1,
-      [ "@query_14460", "assumption_FStar.HyperHeap.HasEq_rid_2989" ],
+      [ "@query_14607", "assumption_FStar.HyperHeap.HasEq_rid_2989" ],
       0
     ],
-    [ 0, 1, [ "@query_14462" ], 0 ],
+    [ 0, 1, [ "@query_14617" ], 0 ],
     [
       0,
       1,
       [
-        "@pretyping__1413", "@pretyping__2658", "@query_14464",
+        "@pretyping__1413", "@pretyping__2658", "@query_14620",
         "assumption_FStar.Heap.SelUpd1_2722",
         "assumption_FStar.HyperHeap.HasEq_rid_2989",
         "assumption_FStar.HyperHeap.Mod_set_def_3042", "bool_inversion",
@@ -66,7 +66,7 @@
         "equation_MAC_SHA256.a", "equation_MAC_SHA256.id",
         "equation_MAC_SHA256.tag", "equation_MAC_SHA256.writer",
         "equation_Prims.eqtype", "equation_TLSInfo.aeAlg_of_id",
-        "fuel_guarded_inversion_MAC_SHA256.state_14425",
+        "fuel_guarded_inversion_MAC_SHA256.state_14572",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
@@ -75,7 +75,6 @@
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
-        "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
         "lemma_FStar.Map.lemma_SelConcat1",
         "lemma_FStar.Map.lemma_SelConcat2",
         "lemma_FStar.Map.lemma_SelRestrict", "lemma_FStar.Map.lemma_SelUpd1",
@@ -91,7 +90,7 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSConstants.HMAC__0",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_14354", "typing_FStar.Heap.upd",
+        "refinement_interpretation_Tm_refine_14500", "typing_FStar.Heap.upd",
         "typing_FStar.HyperHeap.as_ref", "typing_FStar.HyperHeap.mod_set",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
@@ -103,24 +102,23 @@
       ],
       0
     ],
-    [ 0, 1, [ "@query_14466" ], 0 ],
+    [ 0, 1, [ "@query_14623" ], 0 ],
     [
       0,
       1,
-      [ "@query_14468", "assumption_Platform.Bytes.HasEq_bytes_3247" ],
+      [ "@query_14625", "assumption_Platform.Bytes.HasEq_bytes_3309" ],
       0
     ],
-    [ 0, 1, [ "@query_14473" ], 0 ],
+    [ 0, 1, [ "@query_14637" ], 0 ],
     [
       0,
       1,
       [
-        "@query_14490", "bool_typing",
-        "constructor_distinct_TLSConstants.HMAC",
+        "@query_14653", "constructor_distinct_TLSConstants.HMAC",
         "equality_tok_CoreCrypto.SHA256@tok", "equality_tok_Prims.T@tok",
         "equation_HMAC.is_tls_mac", "equation_MAC_SHA256.a",
         "equation_MAC_SHA256.good", "equation_Prims.l_True",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSConstants.HMAC__0", "typing_tok_Prims.T@tok"
       ],
       0

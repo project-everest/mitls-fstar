@@ -5,7 +5,10 @@
       0,
       1,
       [
-        "@query_2803", "disc_equation_TLSError.AD_access_denied",
+        "@query_2865", "constructor_distinct_TLSError.AD_missing_extension",
+        "constructor_distinct_TLSError.AD_no_renegotiation",
+        "constructor_distinct_TLSError.AD_unsupported_extension",
+        "disc_equation_TLSError.AD_access_denied",
         "disc_equation_TLSError.AD_bad_certificate_fatal",
         "disc_equation_TLSError.AD_bad_certificate_warning",
         "disc_equation_TLSError.AD_bad_record_mac",
@@ -38,18 +41,18 @@
         "disc_equation_TLSError.AD_unsupported_extension",
         "disc_equation_TLSError.AD_user_cancelled_fatal",
         "disc_equation_TLSError.AD_user_cancelled_warning",
-        "fuel_guarded_inversion_TLSError.alertDescription_2630"
+        "fuel_guarded_inversion_TLSError.alertDescription_2692"
       ],
       0
     ],
-    [ 0, 1, [ "@query_2839" ], 0 ],
+    [ 0, 1, [ "@query_2901" ], 0 ],
     [
       0,
       1,
       [
-        "@query_2846", "disc_equation_Platform.Error.Correct",
+        "@query_2908", "disc_equation_Platform.Error.Correct",
         "equation_TLSError.error", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2845"
+        "refinement_interpretation_Tm_refine_2907"
       ],
       0
     ],
@@ -57,10 +60,10 @@
       0,
       1,
       [
-        "@query_2856", "disc_equation_Platform.Error.Correct",
+        "@query_2918", "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2509"
+        "fuel_guarded_inversion_Platform.Error.optResult_2571"
       ],
       0
     ],
@@ -68,10 +71,10 @@
       0,
       1,
       [
-        "@query_2867", "disc_equation_Platform.Error.Correct",
+        "@query_2929", "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2509"
+        "fuel_guarded_inversion_Platform.Error.optResult_2571"
       ],
       0
     ],
@@ -79,10 +82,10 @@
       0,
       1,
       [
-        "@query_2878", "disc_equation_Platform.Error.Correct",
+        "@query_2940", "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2509"
+        "fuel_guarded_inversion_Platform.Error.optResult_2571"
       ],
       0
     ],
@@ -90,10 +93,10 @@
       0,
       1,
       [
-        "@query_2887", "disc_equation_Platform.Error.Correct",
+        "@query_2949", "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2509"
+        "fuel_guarded_inversion_Platform.Error.optResult_2571"
       ],
       0
     ]
