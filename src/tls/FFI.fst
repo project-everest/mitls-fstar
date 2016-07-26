@@ -19,6 +19,7 @@ open TLSInfo
 open Range
 open DataStream
 open TLS
+open FFICallbacks
 
 #set-options "--lax"
 
@@ -108,3 +109,59 @@ let close_extraction_bug c : int =
   | writeClose                 -> 0
   | WriteError description txt -> errno description txt
   | _                          -> -1 
+
+  
+(* ************** Native FFI support  ************** *)
+
+let s2pv = function
+  | "1.2" -> TLS_1p2
+  | "1.3" -> TLS_1p3
+  | "1.1" -> TLS_1p1
+  | "1.0" -> TLS_1p0
+  | s -> failwith ("Invalid protocol version specified: "^s)
+
+let ffiConfig version host =
+  let v = s2pv version in 
+  {defaultConfig with
+    minVer = v;
+    maxVer = v;
+    check_peer_certificate = false;
+    cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
+    private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
+    ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
+    safe_resumption = true;
+    ciphersuites = cipherSuites_of_nameList [TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256];
+  }
+
+type callbacks = FFICallbacks.callbacks
+
+val sendTcpPacket: callbacks:callbacks -> buf:bytes -> Platform.Tcp.EXT (Platform.Error.optResult string unit) 
+let sendTcpPacket callbacks buf =  
+  let result = FFICallbacks.ocaml_send_tcp callbacks (get_cbytes buf) in 
+  if result < 0 then 
+    Platform.Error.Error ("socket send failure") 
+  else 
+    Platform.Error.Correct () 
+    
+val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Error.optResult string (b:bytes{length b <= max}))
+let recvTcpPacket callbacks max =
+  let (result,str) = FFICallbacks.recvcb callbacks max in
+  if (result <= 0) then
+    Platform.Error.Error ("socket recv failure")
+  else
+    Platform.Error.Correct(abytes str)
+  
+val ffiConnect: config:config -> callbacks:callbacks -> Connection.connection * int 
+let ffiConnect config cb =
+  connect (sendTcpPacket cb) (recvTcpPacket cb) config
+  
+val ffiRecv: Connection.connection -> cbytes  
+let ffiRecv c =
+  match read c with
+    | Received response -> get_cbytes response
+    | Errno _ -> get_cbytes empty_bytes
+  
+val ffiSend: Connection.connection -> cbytes -> int
+let ffiSend c b =
+  let msg = abytes b in
+  write c msg
