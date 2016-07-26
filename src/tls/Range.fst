@@ -265,6 +265,7 @@ val targetLength_converges: i:id2
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 #set-options "--z3timeout 60"
 //without hints, the next query also takes several seconds on a powerful desktop
+//NS: THIS ONE SEEMS TO FAIL WITH HINTS; it required ~30seconds to work without hints on my machine
 let targetLength_converges i r =
   lemma_MtE i; lemma_ID12 i
 

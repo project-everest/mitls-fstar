@@ -1,32 +1,32 @@
 [
   "íR/ª\u001dÓp„DÂéú4\u0015‡œ",
   [
-    [ 0, 1, [ "@query_14256" ], 0 ],
+    [ 0, 1, [ "@query_14402" ], 0 ],
     [
       0,
       1,
       [
-        "@query_14257", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "@query_14403", "assumption_Platform.Bytes.HasEq_bytes_3309",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random", "haseqTm_refine_3259"
+        "equation_TLSInfo.random", "haseqTm_refine_3321"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_14272", "assumption_FStar.HyperHeap.HasEq_rid_2989" ],
+      [ "@query_14418", "assumption_FStar.HyperHeap.HasEq_rid_2989" ],
       0
     ],
-    [ 0, 1, [ "@query_14289" ], 0 ],
-    [ 0, 1, [ "@query_14314", "equation_IdNonce.id_of_nonce" ], 0 ],
+    [ 0, 1, [ "@query_14454" ], 0 ],
+    [ 0, 1, [ "@query_14479", "equation_IdNonce.id_of_nonce" ], 0 ],
     [
       0,
       1,
       [
-        "@query_14315", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "@query_14480", "assumption_Platform.Bytes.HasEq_bytes_3309",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random", "haseqTm_refine_3259"
+        "equation_TLSInfo.random", "haseqTm_refine_3321"
       ],
       0
     ],
@@ -34,7 +34,7 @@
       0,
       1,
       [
-        "@query_14326", "disc_equation_Prims.None",
+        "@query_14504", "disc_equation_Prims.None",
         "disc_equation_Prims.Some", "equation_Prims.l_True",
         "fuel_guarded_inversion_Prims.option_443"
       ],
@@ -44,7 +44,7 @@
       0,
       1,
       [
-        "@query_14335", "disc_equation_Prims.Some",
+        "@query_14513", "disc_equation_Prims.Some",
         "equation_IdNonce.id_of_nonce",
         "fuel_guarded_inversion_Prims.option_443",
         "proj_equation_Prims.Some_v", "projection_inverse_BoxBool_proj_0"
@@ -55,9 +55,9 @@
       0,
       1,
       [
-        "@query_14336", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "@query_14514", "assumption_Platform.Bytes.HasEq_bytes_3309",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random", "haseqTm_refine_3259"
+        "equation_TLSInfo.random", "haseqTm_refine_3321"
       ],
       0
     ],
@@ -65,18 +65,18 @@
       0,
       1,
       [
-        "@query_14337", "assumption_Platform.Bytes.HasEq_bytes_3247",
+        "@query_14515", "assumption_Platform.Bytes.HasEq_bytes_3309",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random", "haseqTm_refine_3259"
+        "equation_TLSInfo.random", "haseqTm_refine_3321"
       ],
       0
     ],
-    [ 0, 1, [ "@query_14340" ], 0 ],
+    [ 0, 1, [ "@query_14531" ], 0 ],
     [
       0,
       1,
       [
-        "@query_14349", "equation_IdNonce.id_of_nonce",
+        "@query_14540", "equation_IdNonce.id_of_nonce",
         "equation_MonotoneMap.contains",
         "equation_TLSConstants.tls_tables_region", "equation_TLSInfo.random"
       ],

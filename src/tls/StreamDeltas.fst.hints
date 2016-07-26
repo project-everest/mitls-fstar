@@ -1,18 +1,18 @@
 [
   "¶ﬁ÷ÛÚ M∫\u0017\u00023S¶TSñ",
   [
-    [ 0, 1, [ "@query_17627" ], 0 ],
-    [ 0, 1, [ "@query_17630", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_17793" ], 0 ],
+    [ 0, 1, [ "@query_17796", "projection_inverse_BoxInt_proj_0" ], 0 ],
     [
       1,
       1,
       [
-        "@query_17637", "equation_DataStream.fragment",
+        "@query_17805", "equation_DataStream.fragment",
         "equation_Platform.Bytes.length", "equation_Prims.nat",
         "equation_Range.fragment_range", "equation_Range.frange",
         "equation_Range.range", "equation_Range.wider",
-        "equation_Range.within", "refinement_interpretation_Tm_refine_14387",
-        "refinement_interpretation_Tm_refine_14592"
+        "equation_Range.within", "refinement_interpretation_Tm_refine_14533",
+        "refinement_interpretation_Tm_refine_14738"
       ],
       0
     ],
@@ -20,19 +20,19 @@
       1,
       1,
       [
-        "@query_17642", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_14212"
+        "@query_17810", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_14358"
       ],
       0
     ],
-    [ 1, 1, [ "@query_17643" ], 0 ],
-    [ 1, 1, [ "@query_17653" ], 0 ],
+    [ 1, 1, [ "@query_17816" ], 0 ],
+    [ 1, 1, [ "@query_17827" ], 0 ],
     [
       1,
       1,
       [
-        "@query_17673", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_14212"
+        "@query_17851", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_14358"
       ],
       0
     ],
@@ -40,7 +40,7 @@
       1,
       1,
       [
-        "@query_17706", "equation_MonotoneSeq.map_prefix",
+        "@query_17905", "equation_MonotoneSeq.map_prefix",
         "equation_StAE.entry", "equation_StAE.fragments",
         "equation_StAE.fragments_prefix", "equation_StAE.ilog",
         "equation_StAE.log_region", "equation_StreamDeltas.deltas_prefix",
@@ -48,6 +48,6 @@
       ],
       0
     ],
-    [ 1, 1, [ "@query_17717" ], 0 ]
+    [ 1, 1, [ "@query_17918" ], 0 ]
   ]
 ]
