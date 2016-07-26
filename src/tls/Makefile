@@ -289,7 +289,7 @@ TLSML := \
   $(TLSML)
 # Last step: prefix with the output directory.
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
-TLSML := $(TLSML) FFIRegister.ml
+TLSML := $(TLSML) test/FFIRegister.ml
 
 refresh:
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
