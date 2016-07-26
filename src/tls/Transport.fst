@@ -30,6 +30,13 @@ let close = close
 let send tcp data = tcp.snd data
 let recv tcp len = tcp.rcv len
 
+val test: t -> bytes -> unit
+let test (tcp:t) (data:bytes) = 
+  let h0 = get() in 
+  let _ = tcp.snd data in
+  let h1 = get() in 
+  assert (h0==h1)
+  
 
 // reading till we get enough bytes
 

@@ -77,11 +77,7 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 
 (*** networking (floating) ***)
 
-effect EXT (a:Type) = ST a
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
-
-val read: Transport.t -> EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
+val read: Transport.t -> Platform.Tcp.EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
 
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;

@@ -49,7 +49,7 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   // e.g. to notify 0RTT/forwad-privacy transitions
   // for now epoch completion is a total function on handshake --- should be stateful
 
-let epoch_id #r #n (e:epoch r n) = Epoch.i e
+let epoch_id #r #n (e:epoch r n) : StAE.stae_id = Epoch.i e
 
 let reveal_epoch_region_inv_all (u:unit)
   : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}

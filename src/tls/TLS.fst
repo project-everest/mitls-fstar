@@ -284,10 +284,10 @@ val send_payload: c:connection -> i:id -> f:Content.fragment i -> ST (Content.en
     let es = epochs c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
     st_inv c h /\
-    (if j < 0 then ~ (safeId i)
+    (if j < 0 then is_PlaintextID i
      else indexable es j /\
 	 (let e = Seq.index es j in
-	  i == epoch_id e /\
+	  i === epoch_id e /\
 	  incrementable (writer_epoch e) h))))
   (ensures (fun h0 payload h1 ->
     let es = epochs c h0 in
@@ -299,11 +299,12 @@ val send_payload: c:connection -> i:id -> f:Content.fragment i -> ST (Content.en
      else (indexable es j /\
 	  j = iT c.hs Writer h1 /\  //16-05-16 would be nice to write just j = iT c.hs Writer h1
 	  (let e = Seq.index es j in   
-	   i == epoch_id e /\ (
-	   let wr: writer i = writer_epoch e in
+	   i === epoch_id e /\ (
+	   let j : StAE.stae_id = i in //this is provable from the equality on i; using j below for better implicit args
+	   let wr: writer j = writer_epoch e in
 	   modifies (Set.singleton (region wr)) h0 h1 /\
 	   seqnT wr h1 = seqnT wr h0 + 1 /\
-	   (authId i ==> StAE.fragments #i wr h1 == snoc (StAE.fragments #i wr h0) f)
+	   (authId j ==> StAE.fragments #j wr h1 == snoc (StAE.fragments #j wr h0) f)
 //		     /\ StAE.frame_f (StAE.fragments #i wr) h1 (Set.singleton (StAE.log_region wr)))
        )) /\
     True ))))
@@ -312,11 +313,9 @@ val send_payload: c:connection -> i:id -> f:Content.fragment i -> ST (Content.en
 let send_payload c i f = 
     let j = Handshake.i c.hs Writer in
     if j<0 
-    then (let b = Content.repr i f in admit(); b)
-    else     
-         let es = MS.i_read (MkEpochs.es c.hs.log) in
+    then Content.repr i f
+    else let es = MS.i_read (MkEpochs.es c.hs.log) in
 	 let e = Seq.index es j in 
-	 (* let _ = reveal_epoch_region_inv e in *)
 	 StAE.encrypt (writer_epoch e) f
  
 
@@ -356,7 +355,7 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
        incrementable (writer_epoch e) h))
 
 
-val send: c:connection -> #i:StAE.stae_id -> f: Content.fragment i -> ST (result unit)
+val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
   (requires (send_requires c i))
   (ensures (fun h0 _ h1 ->
     let es = epochs c h0 in
@@ -369,22 +368,26 @@ val send: c:connection -> #i:StAE.stae_id -> f: Content.fragment i -> ST (result
     (if j < 0 then is_PlaintextID i /\ h0 == h1 else
        let e = Seq.index es j in
        i == epoch_id e /\ (
-       let wr: writer i = writer_epoch e in
+       let j : StAE.stae_id = i in
+       let wr: writer j = writer_epoch e in
        modifies (Set.singleton (region wr)) h0 h1 /\
        seqnT wr h1 == seqnT wr h0 + 1 /\
-       (authId i ==> StAE.fragments #i wr h1 == snoc (StAE.fragments #i wr h0) f )))))
-
-
-//16-05-29 timing out?
+       (authId i ==> StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f )))))
+open Transport
 let send c #i f =
   let pv = Handshake.version c.hs in // let Record replace TLS 1.3
   let ct, rg = Content.ct_rg i f in
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
+  assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
   let record = Record.makePacket ct (is_PlaintextID i) pv payload in
-  let r  = Transport.send (C.tcp c) record in
-  (* let h1 = ST.get() in *)
-  (* cut (trigger_frame h1); *)
+  let h0 = get() in
+  let r  = (C.tcp c).snd record in
+  let h1 = get () in 
+  assert (h0==h1);
+  admit();
+  Correct ()
+  
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()
