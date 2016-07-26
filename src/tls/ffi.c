@@ -233,8 +233,9 @@ void redirect_stdio(/* out */ mitls_redirect *r)
 // Called by the host app to configure miTLS ahead of creating a connection
 int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
-    int ret = 0;
+    CAMLparam0();
     CAMLlocal3(config, version, host);
+    int ret = 0;
     mitls_redirect r;
 
     *state = NULL;
@@ -261,9 +262,9 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
             ret = 1;
         }
     }
-    
     restore_stdio(&r, outmsg, errmsg);
-    return ret;
+    
+    CAMLreturnT(int,ret);
 }
 
 // Called by the host app to free a mitls_state allocated by FFI_mitls_configure()
@@ -306,14 +307,17 @@ CAMLprim value ocaml_send_tcp(value cookie, value bytes)
     mlsize_t buffer_size;
     char *buffer;
     int retval;
-    struct _FFI_mitls_callbacks *callbacks = ValueToPtr(cookie);
+    struct _FFI_mitls_callbacks *callbacks;
 
+    CAMLparam2(cookie, bytes);
+    
+    callbacks = ValueToPtr(cookie);
     buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
     
     retval = (*callbacks->send)(callbacks, buffer, buffer_size);
     
-    return Val_int(retval);
+    CAMLreturn(Val_int(retval));
 }
 
 // Called from FStar code to receive via TCP
@@ -322,19 +326,23 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     mlsize_t buffer_size;
     char *buffer;
     ssize_t retval;
-    struct _FFI_mitls_callbacks *callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
+    struct _FFI_mitls_callbacks *callbacks;
     
+    CAMLparam2(cookie, bytes);
+    
+    callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
     buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
     
     retval = (*callbacks->recv)(callbacks, buffer, buffer_size);
     
-    return Val_int(retval);
+    CAMLreturn(Val_int(retval));
 }
 
 // Called by the host app to create a TLS connection.
 int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
+    CAMLparam0();
     CAMLlocal1(result);
     int ret;
     mitls_redirect r;
@@ -352,8 +360,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         value connection = Field(result,0);
         ret = Int_val(Field(result,1));
         if (ret == 0) {
-            state->fstar_state = connection;
-            printf("Success - FFI_mitls_connect\n");
+            caml_modify_generational_global_root(&state->fstar_state, connection);
             ret = 1;
         } else {
             printf("FFI_mitls_connect failed with miTLS error %d\n", ret);
@@ -364,14 +371,15 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         
     }
     restore_stdio(&r, outmsg, errmsg);
-    return ret;
+    CAMLreturnT(int,ret);
 }
 
 // Called by the host app transmit a packet
 int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
-    int ret = 0;
+    CAMLparam0();
     CAMLlocal2(buffer_value, result);
+    int ret = 0;
     mitls_redirect r;
 
     *outmsg = NULL;
@@ -390,14 +398,15 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     }
     
     restore_stdio(&r, outmsg, errmsg);
-    return ret;
+    CAMLreturnT(int,ret);
 }
 
 // Called by the host app to receive a packet
 void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
-    void *p = NULL;
+    CAMLparam0();
     CAMLlocal1(result);
+    void *p = NULL;
     mitls_redirect r;
 
     *outmsg = NULL;
@@ -414,6 +423,6 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
     }
     
     restore_stdio(&r, outmsg, errmsg);
-    return p;
+    CAMLreturnT(void*,p);
 }
 
