@@ -1,7 +1,6 @@
 module FFICallbacks
 
 open Platform.Bytes
-open Platform.Tcp
 
 type callbacks = Prims.int
 
@@ -13,4 +12,4 @@ assume val ocaml_recv_tcp: callbacks -> cbytes -> Tot int
    The F* compiler does not know that.  So implement FFI recv in ML to avoid
    exposing the String.Substring call to effects checking.  Same as
    Platform.Tcp.recv *)
-assume val recvcb: callbacks -> max:nat -> EXT (result:nat * b:cbytes (*{length b <= max} *))
+assume val recvcb: callbacks -> max:nat -> Platform.Tcp.EXT (result:nat * b:cbytes {length (abytes b) <= max})
