@@ -29,8 +29,9 @@ After the setup is done, check that you have the F\* compiler set up and running
 To verify the current miTLS:
 ```
 cd src/tls
-make tls-ver
+make all-ver -j N
 ```
+where N is the number of parallel jobs to use.
 
 To build the mitls.exe command line tool:
 ```
