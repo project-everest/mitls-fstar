@@ -4,7 +4,6 @@ open FStar.Seq
 open FStar.HyperHeap
 open Platform.Bytes
 open Platform.Error
-open Platform.Tcp
 open HandshakeMessages
 open HandshakeLog
 open Negotiation
@@ -13,7 +12,6 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open TLS
-open FFI
 
 module CC = CoreCrypto
 
