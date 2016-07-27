@@ -48,29 +48,19 @@ let deltas_prefix (#i:id) (#rw:rw) (s:S.state i rw{authId i}) (ds:deltas i) (h:H
 val project_fragment_deltas: #i:id -> #rw:rw -> s:S.state i rw -> fs:S.frags i
 		  -> Lemma (authId i /\ MR.witnessed (S.fragments_prefix s fs)
 			   ==> MR.witnessed (deltas_prefix s (project_deltas fs)))
-
 let project_fragment_deltas #i #rw s fs =
   if authId i 
-  then let j : i:id{authId i} = i in
+  then let j : i:id{authId i} = i in //re-label for better implicit arg inference below
        let s  : S.state j rw = s in
        let fs : S.frags j = fs in
        let aux : h:HH.t -> Lemma (S.fragments_prefix s fs h
 			    ==> deltas_prefix s (project_deltas fs) h) =
 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in
        let _ = qintro aux in
-       weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
+       MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
   else ()
-  
-(*   else () *)
 
-
-(* val project_fragment_deltas: #i:id -> #rw:rw -> s:S.state i rw{authId i} -> fs:S.frags i *)
-(* 		  -> Lemma (requires (MR.witnessed (S.fragments_prefix s fs))) *)
-(* 		          (ensures (MR.witnessed (deltas_prefix s (project_deltas fs)))) *)
-(* let project_fragment_deltas #i #rw s fs = *)
-(*   let aux : h:HH.t -> Lemma (S.fragments_prefix s fs h *)
-(* 			    ==> deltas_prefix s (project_deltas fs) h) = *)
-(* 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in *)
-(*   qintro aux; *)
-(*   MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs)) *)
-
+let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:HH.t) (h1:HH.t) (f:Content.fragment i)
+  : Lemma (authId i /\ StAE.fragments s h1 == SeqP.snoc (StAE.fragments s h0) f
+	   ==> stream_deltas s h1 == Seq.append (stream_deltas s h0) (project_one_frag f))
+  = if authId i then stream_deltas_snoc i (StAE.fragments s h0) f else ()

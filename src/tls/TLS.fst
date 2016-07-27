@@ -484,10 +484,6 @@ let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
-
-val deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> HH.t -> GTot (Seq.seq (DS.delta i))
-let deltas #i #rw s h = StreamDeltas.project_deltas (StAE.fragments s h)
-
 module SD = StreamDeltas
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_requires wo))
@@ -498,9 +494,13 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
 	(let wr = Some.v wo in
  	   modifies_one (region wr) h0 h1 
         /\ seqnT wr h1 = seqnT wr h0 + 1 
-        /\ (authId i ==> StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f //fragment was definitely snoc'd
-		      /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) 
-							     (SD.project_one_frag f)))))) //delta was maybe snoc'd, if f is not a handshake fragment
+        /\ (authId i ==>
+	    ( //fragment was definitely snoc'd
+	     StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f 
+     	     //delta was maybe snoc'd, if f is not a handshake fragment
+	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)))))))
+	     (* //and the deltas associated with wr will forever more contain deltas1 as a prefix *)
+             (* /\ MR.witnessed (SD.deltas_prefix wr (SD.project_deltas (StAE.fragments wr h1))))))))) *)
 
 //let frags0 = StAE.fragments wr h0 in
 //let frags1 = StAE.fragments wr h1 in
@@ -511,14 +511,19 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
 //Get : witnessed (deltas_prefix wr d1)
 //where d1 = concat d0 (project_one_fragment f)
 
-module SeqP = FStar.SeqProperties
+(* val stream_deltas_snoc : i:id{~(is_PlaintextID i)} -> frags:StAE.frags i -> f:Content.fragment i -> *)
+(*     Lemma (requires True) *)
+(* 	  (ensures (SD.project_deltas (snoc frags f) == Seq.append (SD.project_deltas frags) (SD.project_one_frag f))) *)
+(* //	  [SMTPat (SD.project_deltas (snoc frags f))] *)
+(* let stream_deltas_snoc i frags f = MS.collect_snoc SD.project_one_frag frags f *)
 
-val stream_deltas_snoc : i:id{~(is_PlaintextID i)} -> frags:StAE.frags i -> f:Content.fragment i ->
-    Lemma (requires True)
-	  (ensures (SD.project_deltas (SeqP.snoc frags f) == Seq.append (SD.project_deltas frags) (SD.project_one_frag f)))
-	  [SMTPat (SD.project_deltas (SeqP.snoc frags f))]
-let stream_deltas_snoc i frags f = MS.collect_snoc SD.project_one_frag frags f
-#set-options "--z3timeout 60"
+(* assume val project_fragment_deltas: #i:id -> #rw:rw -> s:StAE.state i rw -> fs:StAE.frags i *)
+(* 		  -> Lemma (requires True) *)
+(* 			  (ensures (authId i /\ MR.witnessed (StAE.fragments_prefix s fs) *)
+(* 			   ==> MR.witnessed (SD.deltas_prefix s (SD.project_deltas fs)))) *)
+
+
+#reset-options "--z3timeout 60 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let ct, rg = Content.ct_rg i f in
@@ -528,7 +533,7 @@ let sendFragment c #i wo f =
     ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n") in
 
   if not (check_incrementable wo)
-  then ad_overflow
+  then ad_overflow 
   else begin
        let payload: Content.encrypted f =
            match wo with
@@ -536,7 +541,13 @@ let sendFragment c #i wo f =
 	     assert (is_PlaintextID i);
 	     Content.repr i f //16-05-20 don't understand error. NS: terrible error location; should have been at makePacket
 	   | Some wr -> 
-	     StAE.encrypt wr f in 
+	     assert (~ (is_PlaintextID i));
+	     let h0 = get () in 
+	     let res = StAE.encrypt wr f in 
+	     let h1 = get () in
+	     SD.stream_deltas_snoc2 wr h0 h1 f;
+	     res 
+       in
        let pv = Handshake.version c.hs in
        lemma_repr_bytes_values (length payload);
        assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
@@ -608,7 +619,7 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
           end
 	  
 //turn verification back on
-#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
+#reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1 --z3timeout 60"  
 let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) = 
   match wopt with 
   | None -> Set.empty
