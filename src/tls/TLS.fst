@@ -28,6 +28,7 @@ open FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = MonotoneSeq
+module DS = DataStream
 
 // using also DataStream, Content, Record
 
@@ -483,6 +484,11 @@ let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
+
+val deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> HH.t -> GTot (Seq.seq (DS.delta i))
+let deltas #i #rw s h = StreamDeltas.project_deltas (StAE.fragments s h)
+
+module SD = StreamDeltas
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_requires wo))
   (ensures (fun h0 r h1 -> 
@@ -492,14 +498,27 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
 	(let wr = Some.v wo in
  	   modifies_one (region wr) h0 h1 
         /\ seqnT wr h1 = seqnT wr h0 + 1 
-        /\ (authId i ==> StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f)))))
+        /\ (authId i ==> StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f //fragment was definitely snoc'd
+		      /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) 
+							     (SD.project_one_frag f)))))) //delta was maybe snoc'd, if f is not a handshake fragment
 
-let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) = 
-  match wopt with 
-  | None -> Set.empty
-  | Some wr -> Set.singleton (region wr)
+//let frags0 = StAE.fragments wr h0 in
+//let frags1 = StAE.fragments wr h1 in
+//let d0 = project_deltas frags0 in
+//let d1 = project_deltas frags1 in
+//Have: witnesses (fragments_prefix wr frags1)
+//From lemma project_fragments_deltas
+//Get : witnessed (deltas_prefix wr d1)
+//where d1 = concat d0 (project_one_fragment f)
 
+module SeqP = FStar.SeqProperties
 
+val stream_deltas_snoc : i:id{~(is_PlaintextID i)} -> frags:StAE.frags i -> f:Content.fragment i ->
+    Lemma (requires True)
+	  (ensures (SD.project_deltas (SeqP.snoc frags f) == Seq.append (SD.project_deltas frags) (SD.project_one_frag f)))
+	  [SMTPat (SD.project_deltas (SeqP.snoc frags f))]
+let stream_deltas_snoc i frags f = MS.collect_snoc SD.project_one_frag frags f
+#set-options "--z3timeout 60"
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let ct, rg = Content.ct_rg i f in
@@ -516,7 +535,8 @@ let sendFragment c #i wo f =
 	   | None    -> 
 	     assert (is_PlaintextID i);
 	     Content.repr i f //16-05-20 don't understand error. NS: terrible error location; should have been at makePacket
-	   | Some wr -> StAE.encrypt wr f in 
+	   | Some wr -> 
+	     StAE.encrypt wr f in 
        let pv = Handshake.version c.hs in
        lemma_repr_bytes_values (length payload);
        assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
@@ -589,6 +609,11 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 	  
 //turn verification back on
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
+let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) = 
+  match wopt with 
+  | None -> Set.empty
+  | Some wr -> Set.singleton (region wr)
+
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
        (requires (fun h -> sendFragment_requires wopt h))
