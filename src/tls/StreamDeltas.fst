@@ -64,3 +64,26 @@ let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:HH.t) (h1:HH.t)
   : Lemma (authId i /\ StAE.fragments s h1 == SeqP.snoc (StAE.fragments s h0) f
 	   ==> stream_deltas s h1 == Seq.append (stream_deltas s h0) (project_one_frag f))
   = if authId i then stream_deltas_snoc i (StAE.fragments s h0) f else ()
+
+(********************************************************************************)
+(* A wrapper for StAE, providing a view in terms of both fragments and deltas   *)
+(********************************************************************************)
+val encrypt: #i:id -> wr:StAE.writer i -> f:Content.fragment i -> ST (Content.encrypted f)
+  (requires (fun h -> StAE.incrementable wr h))
+  (ensures (fun h0 c h1 -> 
+	      modifies_one (StAE.region wr) h0 h1
+	      /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1
+	      /\ (authId i ==>
+	 	  StAE.fragments wr h1 == SeqP.snoc (StAE.fragments wr h0) f
+		  /\ MR.witnessed (StAE.fragments_prefix wr (StAE.fragments wr h1))
+		  /\ stream_deltas wr h1 == Seq.append (stream_deltas wr h0) (project_one_frag f)
+ 		  /\ MR.witnessed (deltas_prefix wr (stream_deltas wr h1)))))
+let encrypt #i wr f = 
+  let h0 = get () in
+  let res = StAE.encrypt wr f in 
+  let h1 = get () in
+  stream_deltas_snoc2 wr h0 h1 f;
+  if authId i
+  then project_fragment_deltas wr (StAE.fragments wr h1);
+  res
+

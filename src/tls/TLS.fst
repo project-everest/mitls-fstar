@@ -498,30 +498,9 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
 	    ( //fragment was definitely snoc'd
 	     StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f 
      	     //delta was maybe snoc'd, if f is not a handshake fragment
-	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)))))))
-	     (* //and the deltas associated with wr will forever more contain deltas1 as a prefix *)
-             (* /\ MR.witnessed (SD.deltas_prefix wr (SD.project_deltas (StAE.fragments wr h1))))))))) *)
-
-//let frags0 = StAE.fragments wr h0 in
-//let frags1 = StAE.fragments wr h1 in
-//let d0 = project_deltas frags0 in
-//let d1 = project_deltas frags1 in
-//Have: witnesses (fragments_prefix wr frags1)
-//From lemma project_fragments_deltas
-//Get : witnessed (deltas_prefix wr d1)
-//where d1 = concat d0 (project_one_fragment f)
-
-(* val stream_deltas_snoc : i:id{~(is_PlaintextID i)} -> frags:StAE.frags i -> f:Content.fragment i -> *)
-(*     Lemma (requires True) *)
-(* 	  (ensures (SD.project_deltas (snoc frags f) == Seq.append (SD.project_deltas frags) (SD.project_one_frag f))) *)
-(* //	  [SMTPat (SD.project_deltas (snoc frags f))] *)
-(* let stream_deltas_snoc i frags f = MS.collect_snoc SD.project_one_frag frags f *)
-
-(* assume val project_fragment_deltas: #i:id -> #rw:rw -> s:StAE.state i rw -> fs:StAE.frags i *)
-(* 		  -> Lemma (requires True) *)
-(* 			  (ensures (authId i /\ MR.witnessed (StAE.fragments_prefix s fs) *)
-(* 			   ==> MR.witnessed (SD.deltas_prefix s (SD.project_deltas fs)))) *)
-
+	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
+	     //and the deltas associated with wr will forever more contain deltas1 as a prefix
+             /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))))))
 
 #reset-options "--z3timeout 60 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let sendFragment c #i wo f =
@@ -541,12 +520,7 @@ let sendFragment c #i wo f =
 	     assert (is_PlaintextID i);
 	     Content.repr i f //16-05-20 don't understand error. NS: terrible error location; should have been at makePacket
 	   | Some wr -> 
-	     assert (~ (is_PlaintextID i));
-	     let h0 = get () in 
-	     let res = StAE.encrypt wr f in 
-	     let h1 = get () in
-	     SD.stream_deltas_snoc2 wr h0 h1 f;
-	     res 
+	     SD.encrypt wr f 
        in
        let pv = Handshake.version c.hs in
        lemma_repr_bytes_values (length payload);
