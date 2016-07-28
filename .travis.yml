@@ -2,14 +2,20 @@ sudo: false
 dist: trusty
 language: csharp
 
-before_install:
-  - sudo add-apt-repository --yes ppa:avsm/ppa
-  - sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test
-  - sudo add-apt-repository --yes ppa:0k53d-karl-f830m/openssl
-  - sudo apt-get -qq update
+addons: 
+  apt: 
+    sources: 
+    - avsm/ppa
+    - ubuntu-toolchain-r/test
+    - 0k53d-karl-f830m/openssl
+    packages:
+    - libssl-dev
+    - opam
+    - libsqlite3-dev
+    - libgmp-dev
+
 
 install:
-  - sudo apt-get install --yes libssl-dev opam libsqlite3-dev libgmp-dev
   - export OPAMYES=true
   - opam init
   - eval $(opam config env)
