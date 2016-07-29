@@ -36,6 +36,7 @@ FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
 
 PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
 PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
+FFI_HOME=../../libs/ml
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
@@ -46,7 +47,7 @@ HINTS_ENABLED?=--use_hints
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
 
 # The .fst interfaces for the platform and crypto libraries.
-LIBFILES=$(PLATFORM) $(CRYPTO) ../../libs/ml/FFICallbacks.fst
+LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap  --include ../../libs/ml/
 
@@ -244,16 +245,16 @@ wc:
 	wc -l $(LIBFILES) $(FSTS)
 
 # ----------------------- FFI callback library -------------------------
-FFICallbacks.cmi: ../../libs/ml/FFICallbacks.mli
-	cp ../../libs/ml/FFICallbacks.mli .
+FFICallbacks.cmi: $(FFI_HOME)/FFICallbacks.mli
+	cp $(FFI_HOME)/FFICallbacks.mli .
 	ocamlfind c -package batteries -I $(FSTAR_HOME)/$(CONTRIB)/Platform/ml -I ../../libs -c FFICallbacks.mli
 
 FFICallbacks.cmo: FFICallbacks.cmi
 	
 FFICallbacks.cmx: FFICallbacks.cmi
     
-FFICallbacks.cmx: ../../libs/ml/FFICallbacks.ml ffi.c FFICallbacks.cmi
-	cp ../../libs/ml/FFICallbacks.ml .
+FFICallbacks.cmx: $(FFI_HOME)/FFICallbacks.ml ffi.c FFICallbacks.cmi
+	cp $(FFI_HOME)/FFICallbacks.ml .
 	ocamlfind opt -package batteries $(OCAML_INCLUDE_PATHS) -c FFICallbacks.ml ffi.c
     
 OCAMLMKLIB = ocamlfind mklib $(INCLUDE)    
@@ -368,5 +369,5 @@ endif
 # FFI support - calling from C into miTLS
 tls-ffi: libmitls.dll
 
-libmitls.dll: mitls.cmxa tls-gen
+libmitls.dll: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g -output-obj mitls.cmxa -o libmitls.dll
