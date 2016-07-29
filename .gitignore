@@ -26,9 +26,16 @@ _build/
 *~
 
 src/tls/libmitls.dll
-libs/ml/FFI.cmi
-libs/ml/FFI.cmx
-libs/ml/FFI.o
-src/tls/dllFFICallbacks.dll
+libs/ffi/FFI.o
+libs/ffi/dllFFICallbacks.dll
+libs/ffi/FFICallbacks.a
+libs/ffi/FFICallbacks.cmi
+libs/ffi/FFICallbacks.cmx
+libs/ffi/FFICallbacks.cmxa
+libs/ffi/FFICallbacks.o
+libs/ffi/FFIRegister.cmi
+libs/ffi/FFIRegister.cmx
+libs/ffi/FFIRegister.o
+libs/ffi/libFFIcallbacks.a
 src/tls/server13.exe
 src/tls/client13.exe
