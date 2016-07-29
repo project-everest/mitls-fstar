@@ -279,7 +279,8 @@ let unrecoverable c reason : ioresult_w =
     disconnect c;
     WriteError None reason
 
-
+(* THIS IS ONLY CALLED BY send, WHICH IS NOT USED ANYMORE, EXCEPT IN TEST (possibly) 
+   SHOULD REMOVE IT *)
 val send_payload: c:connection -> i:id -> f:Content.fragment i -> ST (Content.encrypted f)
   (requires (fun h ->
     let es = epochs c h in // implying epochs_inv es
@@ -355,7 +356,8 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
        i == epoch_id e /\
        incrementable (writer_epoch e) h))
 
-
+(* THIS IS NOT USED ANYMORE, EXCEPT IN TEST (possibly) 
+   SHOULD REMOVE IT *)
 val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
   (requires (send_requires c i))
   (ensures (fun h0 _ h1 ->

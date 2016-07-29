@@ -151,7 +151,7 @@ let handshake_regions_exists (conn:c_t) (h:HH.t) =
 
 //Finally packaging it up as the main invariant:
 let mc_inv (h:HyperHeap.t) = 
-    (~ (eq3 (HH.as_ref (MR.as_rref conn_tab)) (HH.as_ref (MR.as_rref MS.ms_tab))))     //Technical:the conn_tab and ms_tab are not aliased
+    ~ (HH.as_ref (MR.as_rref conn_tab)===HH.as_ref (MR.as_rref MS.ms_tab))   //Technical:the conn_tab and ms_tab are not aliased
     /\ HH.contains_ref (MR.as_rref conn_tab) h                                //Technical:the heap contains the ms_tab
     /\ HH.contains_ref (MR.as_rref MS.ms_tab) h                               //Technical:the heap contains the conn_tab
     /\ handshake_regions_exists (MR.m_sel h conn_tab) h                       //Technical:every logged connection's handshake exists
