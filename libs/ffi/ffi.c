@@ -187,7 +187,10 @@ void redirect_stdio(/* out */ mitls_redirect *r)
     if (!tmp) {
         tmp = getenv("TEMP");
         if (!tmp) {
-            tmp = ".";
+            tmp = getenv("TMPDIR");
+            if (!tmp) {
+                tmp = ".";
+            }
         }
     }
     
