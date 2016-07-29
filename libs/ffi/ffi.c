@@ -93,6 +93,7 @@ char * read_stdio_file(int fd)
 {
     struct stat st;
     char *data;
+    ssize_t result;
     
     fstat(fd, &st);
     // If no data was written, or a huge amount of data was written, ignore the file.
@@ -105,7 +106,11 @@ char * read_stdio_file(int fd)
     if (!data) {
         return NULL;
     }
-    read(fd, data, st.st_size);
+    result = read(fd, data, st.st_size);
+    if (result == -1) {
+        free(data);
+        return NULL;
+    }
     data[st.st_size] = '\0'; // Null-terminate into a C string
     
     return data;

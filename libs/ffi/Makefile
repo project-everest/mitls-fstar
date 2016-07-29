@@ -7,7 +7,7 @@ FFICallbacks.cmo FFICallbacks.cmi: FFICallbacks.mli
 	ocamlfind c -package batteries -c FFICallbacks.mli
 
 ffi.o FFICallbacks.cmx: FFICallbacks.ml ffi.c FFICallbacks.cmi
-	ocamlfind opt -package batteries -c FFICallbacks.ml -ccopt -Wall ffi.c
+	ocamlfind opt -package batteries -c FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
     
 FFICallbacks.cmxa: FFICallbacks.cmx ffi.o
 	ocamlfind mklib -package batteries -o FFICallbacks FFICallbacks.cmx ffi.o
