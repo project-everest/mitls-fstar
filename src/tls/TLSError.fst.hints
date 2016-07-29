@@ -5,8 +5,7 @@
       0,
       1,
       [
-        "@query_2865", "constructor_distinct_TLSError.AD_missing_extension",
-        "constructor_distinct_TLSError.AD_no_renegotiation",
+        "@query_2873", "constructor_distinct_TLSError.AD_unrecognized_name",
         "constructor_distinct_TLSError.AD_unsupported_extension",
         "disc_equation_TLSError.AD_access_denied",
         "disc_equation_TLSError.AD_bad_certificate_fatal",
@@ -41,18 +40,18 @@
         "disc_equation_TLSError.AD_unsupported_extension",
         "disc_equation_TLSError.AD_user_cancelled_fatal",
         "disc_equation_TLSError.AD_user_cancelled_warning",
-        "fuel_guarded_inversion_TLSError.alertDescription_2692"
+        "fuel_guarded_inversion_TLSError.alertDescription_2700"
       ],
       0
     ],
-    [ 0, 1, [ "@query_2901" ], 0 ],
+    [ 0, 1, [ "@query_2909" ], 0 ],
     [
       0,
       1,
       [
-        "@query_2908", "disc_equation_Platform.Error.Correct",
+        "@query_2916", "disc_equation_Platform.Error.Correct",
         "equation_TLSError.error", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2907"
+        "refinement_interpretation_Tm_refine_2915"
       ],
       0
     ],
@@ -60,10 +59,10 @@
       0,
       1,
       [
-        "@query_2918", "disc_equation_Platform.Error.Correct",
-        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2571"
+        "@query_2926", "bool_inversion", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_Platform.Error.invertOptResult",
+        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
       ],
       0
     ],
@@ -71,10 +70,10 @@
       0,
       1,
       [
-        "@query_2929", "disc_equation_Platform.Error.Correct",
-        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2571"
+        "@query_2937", "bool_inversion", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_Platform.Error.invertOptResult",
+        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
       ],
       0
     ],
@@ -82,10 +81,10 @@
       0,
       1,
       [
-        "@query_2940", "disc_equation_Platform.Error.Correct",
-        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2571"
+        "@query_2948", "bool_inversion", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_Platform.Error.invertOptResult",
+        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
       ],
       0
     ],
@@ -93,10 +92,10 @@
       0,
       1,
       [
-        "@query_2949", "disc_equation_Platform.Error.Correct",
-        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_2571"
+        "@query_2957", "bool_inversion", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_Platform.Error.invertOptResult",
+        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
       ],
       0
     ]

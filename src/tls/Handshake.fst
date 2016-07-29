@@ -370,7 +370,7 @@ val i: s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 = h1 
 		      /\ i = iT s rw h1
-		      /\ Epochs.get_ctr_post (HS.log s) h0 i h1))
+		      /\ Epochs.get_ctr_post (HS.log s) rw h0 i h1))
 let i (HS #r0 _ _ _ _ epochs _) rw =
   match rw with
   | Reader -> Epochs.get_reader epochs

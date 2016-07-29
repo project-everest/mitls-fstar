@@ -191,32 +191,45 @@ let incr_writer #r #n (es:epochs r n) : ST unit
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs.es es
 
-inline let get_ctr_post (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) h0 i h1 = 
-  let es = MkEpochs.es es in
-  h0 == h1
-  /\ -1 <= i
-  /\ MS.int_at_most i es h1
-
-let get_reader (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) 
-  : ST int (requires (fun h -> True))
-         (ensures (get_ctr_post es))
-  = let epochs = MkEpochs.es es in 
-    let n = m_read (MkEpochs.read es) in
-    testify (MS.int_at_most n epochs);
-    n
-
-let get_writer (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) 
-  : ST int (requires (fun h -> True))
-         (ensures (get_ctr_post es))
-  = let epochs = MkEpochs.es es in 
-    let n = m_read (MkEpochs.write es) in
-    testify (MS.int_at_most n epochs);
-    n
-
-let epochsT #r #n (es:epochs r n) (h:HH.t) = MS.i_sel h (MkEpochs.es es)
+let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with 
+  | Reader -> e.read
+  | Writer -> e.write
 
 val readerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HH.t -> GTot (epoch_ctr_inv rid (get_epochs e))
 let readerT #rid #n (MkEpochs es r w) (h:HH.t) = m_sel h r
 
 val writerT: #rid:rgn -> #n:TLSInfo.random -> e:epochs rid n -> HH.t -> GTot (epoch_ctr_inv rid (get_epochs e))
 let writerT #rid #n (MkEpochs es r w) (h:HH.t) = m_sel h w
+
+inline let get_ctr_post (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (rw:rw) h0 (i:int) h1 = 
+  let epochs = MkEpochs.es es in
+  h0 == h1
+  /\ i = m_sel h1 (ctr es rw)
+  /\ -1 <= i
+  /\ MS.int_at_most i epochs h1
+
+let get_ctr (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (rw:rw)
+  : ST int (requires (fun h -> True))
+         (ensures (get_ctr_post es rw))
+  = let epochs = es.es in
+    let n = m_read (ctr es rw) in
+    testify (MS.int_at_most n epochs);
+    n 	 
+
+let get_reader (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) = get_ctr es Reader
+let get_writer (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) = get_ctr es Writer
+
+let epochsT #r #n (es:epochs r n) (h:HH.t) = MS.i_sel h (MkEpochs.es es)
+  
+let get_current_epoch (#r:_) (#n:_) (e:epochs r n) (rw:rw)
+  : ST (epoch r n)
+       (requires (fun h -> 0 <= m_sel h (ctr e rw)))
+       (ensures (fun h0 rd h1 -> 
+		   let j = m_sel h1 (ctr e rw) in
+		   let epochs = MS.i_sel h1 e.es in
+		   h0==h1 /\
+		   SeqProperties.indexable epochs j /\
+		   rd = Seq.index epochs j))
+  = let j = get_ctr e rw in 
+    let epochs = MS.i_read e.es in
+    Seq.index epochs j
