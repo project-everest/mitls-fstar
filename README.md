@@ -20,6 +20,14 @@ More information on F\* can be found at www.fstar-lang.org
 
 ### Building
 
+There are two ways to setup your build environment. 
+  * [Using Docker](#docker)
+  * [Custom setup using Cygwin and OCaml](#cygwin)
+
+#### Using Docker 
+Head over to https://github.com/mitls/mitls-fstar/wiki/Setting-up-a-Docker-based-Development-environment for instructions on setup
+
+#### Custom setup using Cygwin and OCaml
 There are numerous dependencies. Follow the instructions at https://github.com/protz/ocaml-installer/wiki to have a working Cygwin and OCaml setup. In addition to `ocamlfind`, `batteries`, `stdint`, and `zarith`, you will also need to install the `sqlite3` package (hint: `opam install sqlite3`). To build CoreCrypto, you will need to install `libssl-dev`. On Windows, you can use `opam depext ssl` to install the appropriate Cygwin packages.
 
 Once this is done, head over to https://github.com/mitls/mitls-fstar/wiki/Development-environment for some tips on our development environment, including how to attain happiness with Cygwin & Git on Windows (hopefully).
