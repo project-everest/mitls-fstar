@@ -366,8 +366,7 @@ ifeq ($(OS),Windows_NT)
 endif
 
 # FFI support - calling from C into miTLS
-#depends on tls-gen
 tls-ffi: libmitls.dll
 
-libmitls.dll: mitls.cmxa #tls-gen
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -inline 0 -linkall -g -output-obj mitls.cmxa -o libmitls.dll
+libmitls.dll: mitls.cmxa tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g -output-obj mitls.cmxa -o libmitls.dll

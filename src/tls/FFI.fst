@@ -146,10 +146,10 @@ let sendTcpPacket callbacks buf =
 val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Error.optResult string (b:bytes{length b <= max}))
 let recvTcpPacket callbacks max =
   let (result,str) = FFICallbacks.recvcb callbacks max in
-  if (result <= 0) then
-    Platform.Error.Error ("socket recv failure")
-  else
+  if result then
     Platform.Error.Correct(abytes str)
+  else
+    Platform.Error.Error ("socket recv failure")
   
 val ffiConnect: config:config -> callbacks:callbacks -> Connection.connection * int 
 let ffiConnect config cb =

@@ -87,6 +87,8 @@ void FFI_mitls_cleanup(void)
  #undef MITLS_FFI_ENTRY
 }
 
+// Read the contents of a file into memory.  The caller is responsible for freeing
+// the memory via free().
 char * read_stdio_file(int fd)
 {
     struct stat st;
@@ -311,7 +313,7 @@ CAMLprim value ocaml_send_tcp(value cookie, value bytes)
 
     CAMLparam2(cookie, bytes);
     
-    callbacks = ValueToPtr(cookie);
+    callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
     buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
     

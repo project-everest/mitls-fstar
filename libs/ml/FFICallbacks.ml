@@ -7,8 +7,8 @@ external ocaml_recv_tcp: callbacks -> string -> int = "ocaml_recv_tcp"
       let str = Bytes.create maxlen in
       let recvlen = ocaml_recv_tcp sock str in
       if recvlen < 0 then 
-        (0, "")
+        (false, "")
       else
         let str = String.sub str 0 recvlen in
-        (1, str)
+        (true, str)
 (* end *)
