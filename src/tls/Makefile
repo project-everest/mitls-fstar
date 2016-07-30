@@ -4,11 +4,13 @@ all: all-ver tls-sanity tls-lax tls-gen
 
 CONTRIB=ucontrib
 LIB=ulib
+FFI_HOME=../../libs/ffi
 
 clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
+	$(MAKE) -C $(FFI_HOME) clean
 	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
 
 # ------------------ Dependencies on F* & its libraries --------------
@@ -28,7 +30,7 @@ STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
 OPTIONS=--use_native_int --fstar_home $(FSTAR_HOME)
 
-CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
+CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap FFICallbacks
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
@@ -46,13 +48,13 @@ HINTS_ENABLED?=--use_hints
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
 
 # The .fst interfaces for the platform and crypto libraries.
-LIBFILES=$(PLATFORM) $(CRYPTO)
+LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap 
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap  --include ../../libs/ml/ --include $(FFI_HOME)
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db)
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
 
 # ----------------------- NuBuild integration -------------------------
 NUBUILD_HOME=../../.nubuild
@@ -247,10 +249,11 @@ wc:
 # fstarlib-hyperheap has the entire F* standard library.
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa
+  $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa \
+  $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
-TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto)
+TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto FFICallbacks)
 
 OUTPUT_DIR=output
 
@@ -266,6 +269,7 @@ TLSML := \
   $(TLSML)
 # Last step: prefix with the output directory.
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
+TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
 
 refresh:
 	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
@@ -278,6 +282,8 @@ refresh:
 tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
+	# Build $(FFI_HOME)/FFICallbacks.cmxa
+	$(MAKE) -C $(FFI_HOME)
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
@@ -340,3 +346,9 @@ test13:
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
 endif
+
+# FFI support - calling from C into miTLS
+tls-ffi: libmitls.dll
+
+libmitls.dll: tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g -output-obj mitls.cmxa -o libmitls.dll

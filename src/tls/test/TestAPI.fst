@@ -11,7 +11,6 @@ open Handshake
 open TLSError
 open TLSInfo
 open TLSConstants
-open TLSInfo
 open TLS
 
 module CC = CoreCrypto
