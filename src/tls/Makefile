@@ -54,7 +54,14 @@ FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
+OCAMLMKLIB=ocamlfind mklib
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
+
+# Since quite a few people forget to set that in their path... eventually,
+# everyone should have it in their ~/.bashrc
+ifeq ($(OS),Windows_NT)
+  EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
+endif
 
 # ----------------------- NuBuild integration -------------------------
 NUBUILD_HOME=../../.nubuild
@@ -343,22 +350,18 @@ test13:
 	$(EXTRA_PATH) ./client13.exe 1.3 127.0.0.1 4443
 	taskkill /F /IM server13.exe
 
+# FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
-    EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-    SO = dll
-    LIBFLAG = -output-obj
+tls-ffi: tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -g mitls.cmxa -o libmitls.dll
 else
-    SO = so
-    UNAME_S = $(shell uname -s)
-    ifeq ($(UNAME_S),Darwin)
-      LIBFLAG = -ccopt -dynamiclib
-    else
-      LIBFLAG = -output-obj
-    endif
+UNAME_S = $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+tls-ffi: tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -ccopt -dynamiclib -g mitls.cmxa -o libmitls.dylib
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -ccopt -bundle -g mitls.cmxa -o libmitls.bundle
+else
+tls-ffi: tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -ccopt -shared -g mitls.cmxa -o libmitls.so
 endif
-
-# FFI support - calling from C into miTLS
-tls-ffi: libmitls.$(SO)
-
-libmitls.$(SO): tls-gen
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g $(LIBFLAG) mitls.cmxa -o libmitls.$(SO)
+endif
