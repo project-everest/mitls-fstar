@@ -362,6 +362,6 @@ tls-ffi: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -ccopt -bundle -g mitls.cmxa -o libmitls.so
 else
 tls-ffi: tls-gen
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -ccopt -shared -ccopt -fPIC -g mitls.cmxa -o libmitls.so
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -g mitls.cmxa -o libmitls.so
 endif
 endif
