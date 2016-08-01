@@ -24,7 +24,7 @@ script:
   - ./scripts/travis.sh
   - make -C .fstar/src/ocaml-output
   - make -C src/tls -k all-ver
-  - make -C src/tls tls-gen
+  - make -C src/tls tls-ffi
 
 notifications:
   slack:

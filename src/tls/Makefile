@@ -1,6 +1,6 @@
 # These are all the known working targets in this file,
 # Check for regressions & comment about them!
-all: all-ver tls-sanity tls-lax tls-gen
+all: all-ver tls-sanity tls-lax tls-ffi
 
 CONTRIB=ucontrib
 LIB=ulib
@@ -345,10 +345,13 @@ test13:
 
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
+    SO = dll
+else
+    SO = so
 endif
 
 # FFI support - calling from C into miTLS
-tls-ffi: libmitls.dll
+tls-ffi: libmitls.$(SO)
 
-libmitls.dll: tls-gen
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g -output-obj mitls.cmxa -o libmitls.dll
+libmitls.$(SO): tls-gen
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g -output-obj mitls.cmxa -o libmitls.$(SO)
