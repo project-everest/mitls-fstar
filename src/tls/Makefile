@@ -346,12 +346,19 @@ test13:
 ifeq ($(OS),Windows_NT)
     EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
     SO = dll
+    LIBFLAG = -output-obj
 else
     SO = so
+    UNAME_S = $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+      LIBFLAG = -ccopt -dynamiclib
+    else
+      LIBFLAG = -output-obj
+    endif
 endif
 
 # FFI support - calling from C into miTLS
 tls-ffi: libmitls.$(SO)
 
 libmitls.$(SO): tls-gen
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g -output-obj mitls.cmxa -o libmitls.$(SO)
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -g $(LIBFLAG) mitls.cmxa -o libmitls.$(SO)
