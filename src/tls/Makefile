@@ -359,9 +359,9 @@ UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 tls-ffi: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -ccopt -dynamiclib -g mitls.cmxa -o libmitls.dylib
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -ccopt -bundle -g mitls.cmxa -o libmitls.bundle
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -ccopt -bundle -g mitls.cmxa -o libmitls.so
 else
 tls-ffi: tls-gen
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -ccopt -shared -ccopt -fPIC -g mitls.cmxa -o libmitls.so
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -ccopt -shared -ccopt -fPIC -g mitls.cmxa -o libmitls.so
 endif
 endif
