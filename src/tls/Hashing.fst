@@ -2,7 +2,7 @@
 
 #light "off"
 
-module HASH
+module Hashing
 
 open Platform.Bytes
 open CoreCrypto

@@ -54,7 +54,7 @@ private val sig_digest: hashAlg -> bytes -> Tot (option hash_alg * bytes)
 let sig_digest h t =
   match h with
   | NULL    -> None, t
-  | MD5SHA1 -> None, HASH.hash h t
+  | MD5SHA1 -> None, Hashing.hash h t
   | Hash h  -> Some h, t
 
 

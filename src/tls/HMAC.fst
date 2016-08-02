@@ -25,8 +25,8 @@ let sslKeyedHashPads = function
 val sslKeyedHash: sslHashAlg -> bytes -> bytes -> Tot bytes
 let sslKeyedHash (a:sslHashAlg) k p =
     let (pad1, pad2) = sslKeyedHashPads a in
-    let h = HASH.hash a (k @| pad1 @| p) in
-    let h = HASH.hash a (k @| pad2 @| h) in
+    let h = Hashing.hash a (k @| pad1 @| p) in
+    let h = Hashing.hash a (k @| pad2 @| h) in
     h
 
 val sslKeyedHashVerify: sslHashAlg -> bytes -> bytes -> bytes -> Tot bool

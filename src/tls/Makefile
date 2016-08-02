@@ -88,7 +88,7 @@ DHGroup.fst \
 ECGroup.fst \
 CommonDH.fst \
 PMS.fst \
-HASH.fst \
+Hashing.fst \
 HMAC.fst \
 Cert.fst \
 Signature.fst \
@@ -154,7 +154,7 @@ DHGroup \
 ECGroup \
 CommonDH \
 PMS \
-HASH \
+Hashing \
 HMAC \
 Cert \
 Signature \
