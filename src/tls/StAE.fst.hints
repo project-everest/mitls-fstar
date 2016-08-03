@@ -1,12 +1,12 @@
 [
   "Ø¢1ÊF\u000eScê{”9Oøm]",
   [
-    [ 0, 1, [ "@query_17364" ], 0 ],
+    [ 0, 1, [ "@query_17362" ], 0 ],
     [
       0,
       1,
       [
-        "@query_17367", "disc_equation_TLSInfo.ID12",
+        "@query_17365", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.PlaintextID",
         "projection_inverse_BoxBool_proj_0"
       ],
@@ -16,7 +16,7 @@
       0,
       1,
       [
-        "@query_17374", "equation_Content.rg", "equation_Prims.fst",
+        "@query_17372", "equation_Content.rg", "equation_Prims.fst",
         "equation_Prims.nat", "equation_Prims.snd",
         "equation_Range.fragment_range", "equation_Range.frange",
         "equation_Range.range", "equation_Range.wider",
@@ -28,9 +28,9 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
-        "refinement_interpretation_Tm_refine_14479",
-        "refinement_interpretation_Tm_refine_14541",
-        "refinement_interpretation_Tm_refine_17373", "typing_Content.rg"
+        "refinement_interpretation_Tm_refine_14477",
+        "refinement_interpretation_Tm_refine_14539",
+        "refinement_interpretation_Tm_refine_17371", "typing_Content.rg"
       ],
       0
     ],
@@ -38,12 +38,12 @@
       0,
       1,
       [
-        "@query_17385", "bool_inversion", "bool_typing",
+        "@query_17383", "bool_inversion", "bool_typing",
         "disc_equation_TLSConstants.AEAD", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.PlaintextID", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "equation_StAE.stae_id",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17371"
+        "refinement_interpretation_Tm_refine_17369"
       ],
       0
     ],
@@ -51,8 +51,10 @@
       0,
       1,
       [
-        "@query_17388", "data_elim_TLSInfo.ID12",
+        "@query_17386", "bool_inversion", "bool_typing",
+        "constructor_distinct_Tm_unit", "disc_equation_TLSConstants.AEAD",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.ID13",
+        "disc_equation_TLSInfo.PlaintextID",
         "equation_CoreCrypto.aeadKeySize",
         "equation_CoreCrypto.aeadRealIVSize", "equation_StAE.aeKeySize",
         "equation_StAE.is_stlhae", "equation_StAE.is_stream",
@@ -60,16 +62,18 @@
         "equation_StreamAE.id", "equation_StreamAE.iv_length",
         "equation_StreamPlain.id", "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadSaltSize", "equation_TLSInfo.aeAlg_of_id",
-        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4266",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThan", "proj_equation_TLSConstants.AEAD__0",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThan",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_14306",
-        "refinement_interpretation_Tm_refine_17220",
-        "refinement_interpretation_Tm_refine_17371",
-        "refinement_interpretation_Tm_refine_8156", "typing_StreamAE.alg",
-        "typing_TLSConstants.AEAD._0"
+        "refinement_interpretation_Tm_refine_14304",
+        "refinement_interpretation_Tm_refine_14364",
+        "refinement_interpretation_Tm_refine_17218",
+        "refinement_interpretation_Tm_refine_17369",
+        "refinement_interpretation_Tm_refine_8154", "typing_StreamAE.alg",
+        "typing_TLSConstants.AEAD._0", "typing_TLSConstants.aeadSaltSize",
+        "typing_TLSInfo.aeAlg_of_id"
       ],
       0
     ],
@@ -77,9 +81,9 @@
       0,
       1,
       [
-        "@query_17398", "equation_StAE.is_stlhae",
+        "@query_17396", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17396"
+        "refinement_interpretation_Tm_refine_17394"
       ],
       0
     ],
@@ -87,8 +91,8 @@
       0,
       1,
       [
-        "@query_17406", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17404"
+        "@query_17404", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17402"
       ],
       0
     ],
@@ -96,10 +100,10 @@
       0,
       1,
       [
-        "@query_17456", "equation_StAE.is_stlhae", "equation_StAE.is_stream",
+        "@query_17454", "equation_StAE.is_stlhae", "equation_StAE.is_stream",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17418",
-        "refinement_interpretation_Tm_refine_17428"
+        "refinement_interpretation_Tm_refine_17416",
+        "refinement_interpretation_Tm_refine_17426"
       ],
       0
     ],
@@ -107,23 +111,23 @@
       0,
       1,
       [
-        "@query_17461", "disc_equation_TLSInfo.ID12",
+        "@query_17459", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "primitive_Prims.op_AmpAmp",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17418",
-        "refinement_interpretation_Tm_refine_17428"
+        "refinement_interpretation_Tm_refine_17416",
+        "refinement_interpretation_Tm_refine_17426"
       ],
       0
     ],
-    [ 0, 1, [ "@query_17498" ], 0 ],
+    [ 0, 1, [ "@query_17496" ], 0 ],
     [
       0,
       1,
       [
-        "@query_17513", "disc_equation_StAE.Stream",
+        "@query_17511", "disc_equation_StAE.Stream",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17500"
+        "refinement_interpretation_Tm_refine_17498"
       ],
       0
     ],
@@ -131,11 +135,11 @@
       0,
       1,
       [
-        "@pretyping__133", "@query_17515", "data_elim_StAE.Stream",
+        "@pretyping__133", "@query_17513", "data_elim_StAE.Stream",
         "disc_equation_StAE.Stream", "equation_StAE.is_stream",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17500", "unit_typing"
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17498", "unit_typing"
       ],
       0
     ],
@@ -143,20 +147,20 @@
       0,
       1,
       [
-        "@query_17524", "disc_equation_StAE.Stream",
+        "@query_17522", "disc_equation_StAE.Stream",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17500"
+        "refinement_interpretation_Tm_refine_17498"
       ],
       0
     ],
-    [ 0, 1, [ "@query_17525" ], 0 ],
+    [ 0, 1, [ "@query_17523" ], 0 ],
     [
       0,
       1,
       [
-        "@query_17540", "disc_equation_StAE.StLHAE",
+        "@query_17538", "disc_equation_StAE.StLHAE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17527"
+        "refinement_interpretation_Tm_refine_17525"
       ],
       0
     ],
@@ -164,11 +168,11 @@
       0,
       1,
       [
-        "@pretyping__133", "@query_17542", "data_elim_StAE.StLHAE",
+        "@pretyping__133", "@query_17540", "data_elim_StAE.StLHAE",
         "disc_equation_StAE.StLHAE", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483",
-        "refinement_interpretation_Tm_refine_17527", "unit_typing"
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17525", "unit_typing"
       ],
       0
     ],
@@ -176,9 +180,9 @@
       0,
       1,
       [
-        "@query_17551", "disc_equation_StAE.StLHAE",
+        "@query_17549", "disc_equation_StAE.StLHAE",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17527"
+        "refinement_interpretation_Tm_refine_17525"
       ],
       0
     ],
@@ -186,13 +190,13 @@
       0,
       1,
       [
-        "@pretyping__133", "@query_17556", "data_elim_StAE.StLHAE",
+        "@pretyping__133", "@query_17554", "data_elim_StAE.StLHAE",
         "disc_equation_StAE.Stream", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "equation_StAE.is_stlhae",
-        "equation_StAE.is_stream", "fuel_guarded_inversion_StAE.state_17466",
+        "equation_StAE.is_stream", "fuel_guarded_inversion_StAE.state_17464",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17376",
-        "refinement_interpretation_Tm_refine_17483", "unit_typing"
+        "refinement_interpretation_Tm_refine_17374",
+        "refinement_interpretation_Tm_refine_17481", "unit_typing"
       ],
       0
     ],
@@ -200,13 +204,13 @@
       0,
       1,
       [
-        "@pretyping__133", "@query_17569", "data_elim_StAE.Stream",
+        "@pretyping__133", "@query_17567", "data_elim_StAE.Stream",
         "disc_equation_StAE.StLHAE", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "equation_StAE.is_stlhae",
-        "equation_StAE.is_stream", "fuel_guarded_inversion_StAE.state_17466",
+        "equation_StAE.is_stream", "fuel_guarded_inversion_StAE.state_17464",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17565", "unit_typing"
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17563", "unit_typing"
       ],
       0
     ],
@@ -214,9 +218,9 @@
       0,
       1,
       [
-        "@query_17580", "disc_equation_StAE.StLHAE",
+        "@query_17578", "disc_equation_StAE.StLHAE",
         "disc_equation_StAE.Stream",
-        "fuel_guarded_inversion_StAE.state_17466"
+        "fuel_guarded_inversion_StAE.state_17464"
       ],
       0
     ],
@@ -224,8 +228,8 @@
       0,
       1,
       [
-        "@query_17582", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_17580", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -233,9 +237,9 @@
       0,
       1,
       [
-        "@query_17584", "equation_StAE.is_stlhae",
+        "@query_17582", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -243,9 +247,9 @@
       0,
       1,
       [
-        "@query_17593", "disc_equation_StAE.StLHAE",
+        "@query_17591", "disc_equation_StAE.StLHAE",
         "disc_equation_StAE.Stream",
-        "fuel_guarded_inversion_StAE.state_17466"
+        "fuel_guarded_inversion_StAE.state_17464"
       ],
       0
     ],
@@ -253,8 +257,8 @@
       0,
       1,
       [
-        "@query_17595", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_17593", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -262,19 +266,19 @@
       0,
       1,
       [
-        "@query_17597", "equation_StAE.is_stlhae",
+        "@query_17595", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
-    [ 0, 1, [ "@query_17600" ], 0 ],
-    [ 0, 1, [ "@query_17603" ], 0 ],
+    [ 0, 1, [ "@query_17598" ], 0 ],
+    [ 0, 1, [ "@query_17601" ], 0 ],
     [
       0,
       1,
       [
-        "@query_17613", "equation_Prims.l_False", "equation_StAE.is_stlhae",
+        "@query_17611", "equation_Prims.l_False", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "primitive_Prims.op_AmpAmp",
         "projection_inverse_BoxBool_proj_0"
       ],
@@ -284,23 +288,22 @@
       0,
       1,
       [
-        "@pretyping__133", "@query_17626", "bool_inversion",
-        "constructor_distinct_StAE.StLHAE",
+        "@pretyping__133", "@query_17624", "bool_inversion",
         "constructor_distinct_StAE.Stream", "data_elim_StAE.StLHAE",
         "disc_equation_StAE.StLHAE", "disc_equation_StAE.Stream",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.ID13",
         "equation_StAE.ideal_log", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "equation_StAE.log_region",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "fuel_guarded_inversion_StAE.state_17464",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_StAE.StLHAE__1",
         "projection_inverse_StAE.Stream__1",
         "projection_inverse_StAE.Stream_i",
         "projection_inverse_StAE.Stream_rw",
         "projection_inverse_StAE.Stream_u",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483",
-        "refinement_interpretation_Tm_refine_17619", "typing_StAE.is_stlhae",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17617", "typing_StAE.is_stlhae",
         "typing_StAE.is_stream", "unit_typing"
       ],
       0
@@ -309,8 +312,8 @@
       0,
       1,
       [
-        "@query_17630", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_17628", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -318,8 +321,8 @@
       0,
       1,
       [
-        "@query_17635", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_17633", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -327,8 +330,8 @@
       0,
       1,
       [
-        "@query_17639", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_17637", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -336,9 +339,9 @@
       0,
       1,
       [
-        "@query_17643", "equation_StAE.is_stlhae",
+        "@query_17641", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -346,9 +349,9 @@
       0,
       1,
       [
-        "@query_17648", "equation_StAE.is_stlhae",
+        "@query_17646", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -356,9 +359,9 @@
       0,
       1,
       [
-        "@query_17652", "equation_StAE.is_stlhae",
+        "@query_17650", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -366,7 +369,7 @@
       0,
       1,
       [
-        "@query_17661", "equation_Prims.l_False", "equation_StAE.is_stlhae",
+        "@query_17659", "equation_Prims.l_False", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "primitive_Prims.op_AmpAmp",
         "projection_inverse_BoxBool_proj_0"
       ],
@@ -376,7 +379,7 @@
       0,
       1,
       [
-        "@query_17664", "equation_Prims.l_False", "equation_StAE.entry",
+        "@query_17662", "equation_Prims.l_False", "equation_StAE.entry",
         "equation_StAE.is_stlhae", "equation_StAE.is_stream",
         "fuel_guarded_inversion_Prims.c_False_117",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
@@ -387,13 +390,13 @@
       0,
       1,
       [
-        "@query_17687", "equation_AEAD_GCM.ideal_log",
+        "@query_17685", "equation_AEAD_GCM.ideal_log",
         "equation_MonotoneSeq.log_t", "equation_Prims.l_False",
         "equation_StAE.entry", "equation_StAE.ideal_log",
         "equation_StAE.log_region", "equation_StreamAE.ideal_log",
         "fuel_guarded_inversion_Prims.c_False_117",
         "lemma_TLSInfo.plainText_is_not_auth",
-        "refinement_interpretation_Tm_refine_17654"
+        "refinement_interpretation_Tm_refine_17652"
       ],
       0
     ],
@@ -401,8 +404,8 @@
       0,
       1,
       [
-        "@query_17705", "lemma_TLSInfo.plainText_is_not_auth",
-        "refinement_interpretation_Tm_refine_17704"
+        "@query_17703", "lemma_TLSInfo.plainText_is_not_auth",
+        "refinement_interpretation_Tm_refine_17702"
       ],
       0
     ],
@@ -410,12 +413,20 @@
       0,
       1,
       [
-        "@query_17739", "equality_tok_TLSConstants.Writer@tok",
+        "@pretyping__133", "@query_17737", "bool_inversion",
+        "data_elim_StAE.StLHAE", "data_elim_StAE.Stream",
+        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_MonotoneSeq.log_t",
-        "equation_Prims.l_False", "equation_StAE.entry",
-        "equation_StAE.ideal_log", "equation_StAE.log_region",
+        "equation_StAE.entry", "equation_StAE.ideal_log",
+        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
+        "equation_StAE.log_region", "equation_StAE.writer",
         "equation_StreamAE.ideal_log",
-        "fuel_guarded_inversion_Prims.c_False_117"
+        "fuel_guarded_inversion_StAE.state_17464",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17705", "typing_StAE.is_stlhae",
+        "unit_typing"
       ],
       0
     ],
@@ -423,7 +434,7 @@
       0,
       1,
       [
-        "@query_17769", "equality_tok_TLSConstants.Writer@tok",
+        "@query_17767", "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_MonotoneSeq.log_t",
         "equation_Prims.l_False", "equation_StAE.entry",
         "equation_StAE.fragments", "equation_StAE.ideal_log",
@@ -436,13 +447,19 @@
       0,
       1,
       [
-        "@query_17780", "equation_AEAD_GCM.ideal_log",
-        "equation_MonotoneSeq.log_t", "equation_Prims.l_False",
+        "@pretyping__133", "@query_17778", "bool_inversion",
+        "data_elim_StAE.StLHAE", "data_elim_StAE.Stream",
+        "equation_AEAD_GCM.ideal_log", "equation_MonotoneSeq.log_t",
         "equation_StAE.entry", "equation_StAE.ideal_log",
+        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
         "equation_StAE.log_region", "equation_StreamAE.ideal_log",
-        "fuel_guarded_inversion_Prims.c_False_117",
+        "fuel_guarded_inversion_StAE.state_17464",
         "lemma_TLSInfo.plainText_is_not_auth",
-        "refinement_interpretation_Tm_refine_17654"
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17652", "typing_StAE.is_stlhae",
+        "typing_StAE.is_stream", "unit_typing"
       ],
       0
     ],
@@ -450,11 +467,20 @@
       0,
       1,
       [
-        "@query_17818", "equation_AEAD_GCM.ideal_log",
-        "equation_MonotoneSeq.log_t", "equation_Prims.l_False",
+        "@pretyping__133", "@query_17816", "bool_inversion",
+        "data_elim_StAE.StLHAE", "data_elim_StAE.Stream",
+        "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.ID13",
+        "equation_AEAD_GCM.ideal_log", "equation_MonotoneSeq.log_t",
         "equation_StAE.entry", "equation_StAE.ideal_log",
-        "equation_StAE.log_region", "equation_StreamAE.ideal_log",
-        "fuel_guarded_inversion_Prims.c_False_117"
+        "equation_StAE.ilog", "equation_StAE.is_stlhae",
+        "equation_StAE.is_stream", "equation_StAE.log_region",
+        "equation_StreamAE.ideal_log",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17652", "typing_StAE.is_stlhae",
+        "typing_StAE.is_stream", "unit_typing"
       ],
       0
     ],
@@ -462,7 +488,7 @@
       0,
       1,
       [
-        "@query_17841", "equation_AEAD_GCM.ideal_log",
+        "@query_17839", "equation_AEAD_GCM.ideal_log",
         "equation_MonotoneSeq.log_t", "equation_Prims.l_False",
         "equation_StAE.entry", "equation_StAE.fragments_prefix",
         "equation_StAE.ideal_log", "equation_StAE.log_region",
@@ -475,7 +501,7 @@
       0,
       1,
       [
-        "@query_17844", "data_elim_AEAD_GCM.State", "data_elim_StAE.StLHAE",
+        "@query_17842", "data_elim_AEAD_GCM.State", "data_elim_StAE.StLHAE",
         "data_elim_StreamAE.State", "disc_equation_StAE.StLHAE",
         "disc_equation_StAE.Stream", "equation_AEAD_GCM.alg",
         "equation_AEAD_GCM.counter", "equation_AEAD_GCM.id",
@@ -485,10 +511,10 @@
         "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadRecordIVSize",
         "equation_TLSConstants.is_seqn", "equation_TLSConstants.seqn_t",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4266",
-        "fuel_guarded_inversion_StAE.state_17466",
-        "fuel_guarded_inversion_StreamAE.state_17304", "int_inversion",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "fuel_guarded_inversion_StreamAE.state_17302",
         "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
@@ -498,12 +524,11 @@
         "proj_equation_StreamAE.State_log_region",
         "proj_equation_StreamAE.State_region",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
         "projection_inverse_StAE.StLHAE__1",
-        "refinement_interpretation_Tm_refine_16154",
-        "refinement_interpretation_Tm_refine_16335",
-        "refinement_interpretation_Tm_refine_8173", "typing_AEAD_GCM.alg",
-        "typing_StreamAE.alg", "typing_TLSConstants.aeadRecordIVSize"
+        "refinement_interpretation_Tm_refine_16152",
+        "refinement_interpretation_Tm_refine_16333",
+        "refinement_interpretation_Tm_refine_8171", "typing_AEAD_GCM.alg",
+        "typing_StreamAE.alg"
       ],
       0
     ],
@@ -511,16 +536,16 @@
       0,
       1,
       [
-        "@query_17846", "equation_MonotoneSeq.counter_val",
+        "@query_17844", "equation_MonotoneSeq.counter_val",
         "equation_Prims.nat", "equation_StreamAE.alg",
         "equation_TLSConstants.aeadRecordIVSize",
         "equation_TLSConstants.seqn_t",
-        "fuel_guarded_inversion_StreamAE.state_17304",
+        "fuel_guarded_inversion_StreamAE.state_17302",
         "proj_equation_StreamAE.State_log",
         "proj_equation_StreamAE.State_log_region",
         "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_16154",
-        "refinement_interpretation_Tm_refine_8173"
+        "refinement_interpretation_Tm_refine_16152",
+        "refinement_interpretation_Tm_refine_8171"
       ],
       0
     ],
@@ -528,17 +553,25 @@
       0,
       1,
       [
-        "@query_17850", "data_elim_StreamAE.State",
-        "equation_StAE.is_stream", "equation_StreamAE.alg",
-        "equation_StreamAE.id", "equation_StreamAE.ideal_log",
-        "equation_StreamAE.log_ref", "equation_TLSConstants.aeadAlg",
+        "@query_17848", "equation_StAE.is_stream", "equation_StreamAE.alg",
+        "equation_StreamAE.ideal_log", "equation_StreamAE.log_ref",
+        "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadRecordIVSize",
         "equation_TLSConstants.seqn_t",
-        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4266",
-        "fuel_guarded_inversion_StreamAE.state_17304",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
+        "fuel_guarded_inversion_StreamAE.state_17302",
         "proj_equation_StreamAE.State_log_region",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_17473", "typing_StreamAE.alg"
+        "refinement_interpretation_Tm_refine_17471"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_17850", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -547,7 +580,7 @@
       1,
       [
         "@query_17852", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -556,7 +589,7 @@
       1,
       [
         "@query_17854", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -565,7 +598,7 @@
       1,
       [
         "@query_17856", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -573,8 +606,8 @@
       0,
       1,
       [
-        "@query_17858", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_17859", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -583,7 +616,7 @@
       1,
       [
         "@query_17861", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -591,25 +624,16 @@
       0,
       1,
       [
-        "@query_17863", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
-      ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@query_17865", "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
+        "@query_17863", "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
         "equation_MonotoneSeq.counter_val", "equation_Prims.nat",
         "equation_StatefulLHAE.state",
         "equation_TLSConstants.aeadRecordIVSize",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
         "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_16154",
-        "refinement_interpretation_Tm_refine_16335"
+        "refinement_interpretation_Tm_refine_16152",
+        "refinement_interpretation_Tm_refine_16333"
       ],
       0
     ],
@@ -617,19 +641,28 @@
       0,
       1,
       [
-        "@query_17869", "data_elim_AEAD_GCM.State", "equation_AEAD_GCM.alg",
-        "equation_AEAD_GCM.id", "equation_AEAD_GCM.ideal_log",
-        "equation_AEAD_GCM.log_ref", "equation_StAE.is_stlhae",
-        "equation_StatefulLHAE.id", "equation_StatefulLHAE.state",
+        "@query_17867", "equation_AEAD_GCM.alg",
+        "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
+        "equation_StAE.is_stlhae", "equation_StatefulLHAE.state",
         "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadRecordIVSize",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4266",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
         "primitive_Prims.op_AmpAmp",
         "proj_equation_AEAD_GCM.State_log_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_17483", "typing_AEAD_GCM.alg"
+        "refinement_interpretation_Tm_refine_17481"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@query_17869", "equation_StAE.is_stlhae",
+        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -639,7 +672,7 @@
       [
         "@query_17871", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -649,7 +682,7 @@
       [
         "@query_17873", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -659,7 +692,7 @@
       [
         "@query_17875", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -667,9 +700,9 @@
       0,
       1,
       [
-        "@query_17877", "equation_StAE.is_stlhae",
+        "@query_17878", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -679,7 +712,7 @@
       [
         "@query_17880", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -687,63 +720,54 @@
       0,
       1,
       [
-        "@query_17882", "equation_StAE.is_stlhae",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
-      ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@pretyping__316", "@query_17887", "equation_Prims.nat",
+        "@pretyping__316", "@query_17885", "equation_Prims.nat",
         "equation_TLSConstants.seqn_t", "primitive_Prims.op_Addition",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_8173"
+        "refinement_interpretation_Tm_refine_8171"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17890", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17888", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17891", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17889", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@pretyping__133", "@query_17892", "data_elim_StAE.StLHAE",
+        "@pretyping__133", "@query_17890", "data_elim_StAE.StLHAE",
         "data_elim_StAE.Stream", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
         "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "fuel_guarded_inversion_TLSConstants.rw_7858",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483", "unit_typing"
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481", "unit_typing"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17893", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17891", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@pretyping__2658", "@query_17894",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993", "bool_inversion",
+        "@pretyping__2658", "@query_17892",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996", "bool_inversion",
         "equation_FStar.HyperHeap.modifies_just",
         "equation_FStar.HyperHeap.sel", "equation_FStar.HyperHeap.t",
         "equation_FStar.Monotonic.RRef.m_sel", "equation_Prims.eqtype",
@@ -759,7 +783,7 @@
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Negation",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_3012",
+        "refinement_interpretation_Tm_refine_3014",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.restrict", "typing_FStar.Set.complement",
         "typing_FStar.Set.mem", "typing_StAE.log_region", "unit_typing"
@@ -769,43 +793,50 @@
     [
       0,
       1,
-      [ "@query_17895", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17893", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17896", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17894", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@query_17897", "assumption_Prims.HasEq_int_319",
+        "@query_17895", "assumption_Prims.HasEq_int_319",
         "equation_Prims.nat", "equation_TLSConstants.seqn_t",
-        "haseqTm_refine_1040", "haseqTm_refine_8173"
+        "haseqTm_refine_1040", "haseqTm_refine_8171"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17898", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17896", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@pretyping__2658", "@query_17899",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993", "bool_inversion",
+        "@pretyping__133", "@pretyping__2658", "@query_17897",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996", "bool_inversion",
+        "data_elim_StAE.StLHAE", "data_elim_StAE.Stream",
+        "disc_equation_TLSConstants.AEAD", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
         "equation_FStar.HyperHeap.modifies_just",
         "equation_FStar.HyperHeap.sel", "equation_FStar.HyperHeap.t",
         "equation_FStar.Monotonic.RRef.m_sel", "equation_Prims.eqtype",
+        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
         "equation_StAE.region", "equation_StAE.seqnT",
-        "equation_StatefulLHAE.region", "equation_TLSConstants.rgn",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "equation_StatefulLHAE.region", "equation_StatefulLHAE.state",
+        "equation_TLSConstants.rgn",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "fuel_guarded_inversion_TLSInfo.id_14262",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
@@ -817,57 +848,60 @@
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Negation",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_3012",
+        "refinement_interpretation_Tm_refine_14364",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_3014",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
         "typing_FStar.Map.restrict", "typing_FStar.Set.complement",
-        "typing_FStar.Set.mem", "typing_StAE.region", "unit_typing"
+        "typing_FStar.Set.mem", "typing_StAE.is_stlhae",
+        "typing_StAE.region", "typing_TLSConstants.is_AEAD",
+        "typing_TLSInfo.aeAlg_of_id", "unit_typing"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17907", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17905", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17915", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17913", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17916", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17914", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@query_17917", "assumption_Prims.HasEq_int_319",
+        "@query_17915", "assumption_Prims.HasEq_int_319",
         "equation_Prims.nat", "equation_TLSConstants.seqn_t",
-        "haseqTm_refine_1040", "haseqTm_refine_8173"
+        "haseqTm_refine_1040", "haseqTm_refine_8171"
       ],
       0
     ],
-    [ 0, 1, [ "@query_17918" ], 0 ],
+    [ 0, 1, [ "@query_17916" ], 0 ],
     [
       0,
       1,
       [
-        "@pretyping__2658", "@query_17919",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993",
-        "assumption_FStar.HyperHeap.Mod_set_def_3050", "bool_inversion",
-        "data_elim_StAE.StLHAE", "equation_FStar.HyperHeap.equal_on",
-        "equation_FStar.HyperHeap.sel", "equation_FStar.HyperHeap.t",
-        "equation_FStar.Monotonic.RRef.m_sel", "equation_Prims.eqtype",
-        "equation_StAE.region", "equation_StAE.seqnT",
-        "equation_StatefulLHAE.region", "equation_StatefulLHAE.state",
+        "@pretyping__2658", "@query_17917",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996",
+        "assumption_FStar.HyperHeap.Mod_set_def_3052", "bool_inversion",
+        "equation_FStar.HyperHeap.equal_on", "equation_FStar.HyperHeap.sel",
+        "equation_FStar.HyperHeap.t", "equation_FStar.Monotonic.RRef.m_sel",
+        "equation_Prims.eqtype", "equation_StAE.region",
+        "equation_StAE.seqnT", "equation_StatefulLHAE.region",
         "equation_TLSConstants.rgn",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "fuel_guarded_inversion_StAE.state_17464",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
@@ -879,7 +913,7 @@
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_3012",
+        "refinement_interpretation_Tm_refine_3014",
         "typing_FStar.HyperHeap.mod_set", "typing_FStar.Map.concat",
         "typing_FStar.Map.contains", "typing_FStar.Map.restrict",
         "typing_FStar.Set.singleton", "typing_StAE.region", "unit_typing"
@@ -889,21 +923,21 @@
     [
       0,
       1,
-      [ "@query_17922", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17920", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17925", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17923", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@query_17929", "lemma_TLSInfo.plainText_is_not_auth",
-        "refinement_interpretation_Tm_refine_17927"
+        "@query_17927", "lemma_TLSInfo.plainText_is_not_auth",
+        "refinement_interpretation_Tm_refine_17925"
       ],
       0
     ],
@@ -911,8 +945,8 @@
       0,
       1,
       [
-        "@query_17933", "lemma_TLSInfo.plainText_is_not_auth",
-        "refinement_interpretation_Tm_refine_17931"
+        "@query_17931", "lemma_TLSInfo.plainText_is_not_auth",
+        "refinement_interpretation_Tm_refine_17929"
       ],
       0
     ],
@@ -920,24 +954,24 @@
       0,
       1,
       [
-        "@query_17937", "lemma_TLSInfo.plainText_is_not_auth",
-        "refinement_interpretation_Tm_refine_17935"
+        "@query_17935", "lemma_TLSInfo.plainText_is_not_auth",
+        "refinement_interpretation_Tm_refine_17933"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17940", "refinement_interpretation_Tm_refine_17939" ],
+      [ "@query_17938", "refinement_interpretation_Tm_refine_17937" ],
       0
     ],
     [
       0,
       1,
       [
-        "@pretyping__2658", "@query_17943",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993",
-        "assumption_FStar.HyperHeap.Mod_set_def_3050", "bool_inversion",
+        "@pretyping__2658", "@query_17941",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996",
+        "assumption_FStar.HyperHeap.Mod_set_def_3052", "bool_inversion",
         "equation_FStar.HyperHeap.equal_on", "equation_FStar.HyperHeap.sel",
         "equation_FStar.HyperHeap.t", "equation_FStar.Monotonic.RRef.m_sel",
         "equation_Prims.eqtype", "equation_StAE.fragments",
@@ -953,8 +987,8 @@
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_17942",
-        "refinement_interpretation_Tm_refine_3012",
+        "refinement_interpretation_Tm_refine_17940",
+        "refinement_interpretation_Tm_refine_3014",
         "typing_FStar.HyperHeap.mod_set", "typing_FStar.Map.concat",
         "typing_FStar.Map.contains", "typing_FStar.Map.restrict",
         "typing_FStar.Set.singleton", "typing_StAE.log_region", "unit_typing"
@@ -964,33 +998,33 @@
     [
       0,
       1,
-      [ "@query_17953", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17951", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17955", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17953", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17957", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17955", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_17966", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17964", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@query_17973", "lemma_TLSInfo.plainText_is_not_auth",
-        "refinement_interpretation_Tm_refine_17654"
+        "@query_17971", "lemma_TLSInfo.plainText_is_not_auth",
+        "refinement_interpretation_Tm_refine_17652"
       ],
       0
     ],
@@ -998,8 +1032,8 @@
       0,
       1,
       [
-        "@pretyping__2658", "@query_17982",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993",
+        "@pretyping__2658", "@query_17980",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996", "bool_inversion",
         "equation_FStar.HyperHeap.t", "equation_FStar.Set.subset",
         "equation_Prims.eqtype", "equation_StAE.log_region",
         "equation_TLSConstants.rgn", "function_token_typing_FStar.Heap.emp",
@@ -1009,38 +1043,39 @@
         "lemma_StAE.frame_fragments_auto", "primitive_Prims.op_Equality",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_17654",
-        "refinement_interpretation_Tm_refine_17945",
-        "refinement_interpretation_Tm_refine_3012",
-        "token_correspondence_StAE.fragments", "typing_StAE.log_region"
+        "refinement_interpretation_Tm_refine_17652",
+        "refinement_interpretation_Tm_refine_17943",
+        "refinement_interpretation_Tm_refine_3014",
+        "token_correspondence_StAE.fragments", "typing_FStar.Map.domain",
+        "typing_FStar.Set.mem", "typing_StAE.log_region"
       ],
       0
     ],
-    [ 0, 1, [ "@query_17996" ], 0 ],
+    [ 0, 1, [ "@query_17994" ], 0 ],
     [
       0,
       1,
-      [ "@query_17997", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_17995", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
-    [ 0, 1, [ "@query_17998", "assumption_Prims.HasEq_int_319" ], 0 ],
-    [ 0, 1, [ "@query_17999", "assumption_Prims.HasEq_int_319" ], 0 ],
+    [ 0, 1, [ "@query_17996", "assumption_Prims.HasEq_int_319" ], 0 ],
+    [ 0, 1, [ "@query_17997", "assumption_Prims.HasEq_int_319" ], 0 ],
     [
       1,
       1,
       [
-        "@pretyping__1413", "@pretyping__2658", "@pretyping__7864",
-        "@query_18004", "assumption_FStar.HyperHeap.HasEq_rid_2993",
+        "@pretyping__1413", "@pretyping__2658", "@pretyping__7862",
+        "@query_18002", "assumption_FStar.HyperHeap.HasEq_rid_2996",
         "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_StAE.StLHAE",
         "constructor_distinct_StAE.Stream", "data_elim_AEAD_GCM.State",
         "data_elim_StreamAE.State", "data_elim_TLSInfo.ID13",
         "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "eq2-interp",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.ctr",
-        "equation_AEAD_GCM.genPost", "equation_AEAD_GCM.id",
-        "equation_FStar.HyperHeap.modifies", "equation_FStar.HyperHeap.t",
-        "equation_FStar.HyperHeap.test0",
+        "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.ID13",
+        "eq2-interp", "equality_tok_TLSConstants.Writer@tok",
+        "equation_AEAD_GCM.ctr", "equation_AEAD_GCM.genPost",
+        "equation_AEAD_GCM.id", "equation_FStar.HyperHeap.modifies",
+        "equation_FStar.HyperHeap.t", "equation_FStar.HyperHeap.test0",
         "equation_FStar.Monotonic.RRef.m_sel", "equation_Prims.eqtype",
         "equation_Prims.l_and", "equation_Prims.l_imp",
         "equation_StAE.entry", "equation_StAE.fragments",
@@ -1054,19 +1089,20 @@
         "equation_StreamAE.genPost", "equation_StreamAE.writer",
         "equation_TLSConstants.rgn", "equation_TLSInfo.keyId",
         "equation_TLSInfo.valid_hlen",
-        "equation_with_fuel_MonotoneSeq.map__16053",
-        "equation_with_fuel_TLSInfo.valid_keyId__14237",
-        "fuel_correspondence_MonotoneSeq.map__16053",
-        "fuel_correspondence_TLSInfo.valid_keyId__14237",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_StreamAE.state_17304",
-        "fuel_guarded_inversion_TLSInfo.pre_keyId_13770",
+        "equation_with_fuel_MonotoneSeq.map__16051",
+        "equation_with_fuel_TLSInfo.valid_keyId__14235",
+        "fuel_correspondence_MonotoneSeq.map__16051",
+        "fuel_correspondence_TLSInfo.valid_keyId__14235",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "fuel_guarded_inversion_StreamAE.state_17302",
+        "fuel_guarded_inversion_TLSInfo.id_14262",
+        "fuel_guarded_inversion_TLSInfo.pre_keyId_13768",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
         "function_token_typing_FStar.HyperHeap.test0",
-        "kinding_AEAD_GCM.entry@tok", "kinding_Content.fragment@tok",
-        "l_and-interp", "l_imp-interp",
+        "kinding_Content.fragment@tok", "l_and-interp", "l_imp-interp",
         "lemma_FStar.HyperHeap.lemma_extends_parent",
         "lemma_FStar.Map.lemma_equal_elim", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_Equality",
@@ -1079,19 +1115,16 @@
         "proj_equation_StreamAE.State_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_StAE.StLHAE__1",
-        "projection_inverse_StAE.StLHAE_i",
-        "projection_inverse_StAE.StLHAE_rw",
-        "projection_inverse_StAE.StLHAE_u",
         "projection_inverse_StAE.Stream__1",
         "projection_inverse_StAE.Stream_i",
         "projection_inverse_StAE.Stream_rw",
         "projection_inverse_StAE.Stream_u",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_14258",
+        "refinement_interpretation_Tm_refine_14256",
         "refinement_interpretation_Tm_refine_1463",
-        "refinement_interpretation_Tm_refine_16403",
-        "refinement_interpretation_Tm_refine_17371",
-        "refinement_interpretation_Tm_refine_3012",
+        "refinement_interpretation_Tm_refine_16401",
+        "refinement_interpretation_Tm_refine_17369",
+        "refinement_interpretation_Tm_refine_3014",
         "typing_AEAD_GCM.State.region", "typing_FStar.HyperHeap.extends",
         "typing_FStar.HyperHeap.mod_set", "typing_FStar.Map.concat",
         "typing_FStar.Map.restrict", "typing_FStar.Seq.createEmpty",
@@ -1106,33 +1139,34 @@
     [
       1,
       1,
-      [ "@query_18005", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_18003", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       1,
       1,
       [
-        "@query_18006", "assumption_FStar.HyperHeap.HasEq_rid_2993",
-        "equation_TLSConstants.rgn", "haseqTm_refine_3012"
+        "@query_18004", "assumption_FStar.HyperHeap.HasEq_rid_2996",
+        "equation_TLSConstants.rgn", "haseqTm_refine_3014"
       ],
       0
     ],
-    [ 1, 1, [ "@query_18007", "assumption_Prims.HasEq_int_319" ], 0 ],
-    [ 1, 1, [ "@query_18008", "assumption_Prims.HasEq_int_319" ], 0 ],
-    [ 1, 1, [ "@query_18016" ], 0 ],
+    [ 1, 1, [ "@query_18005", "assumption_Prims.HasEq_int_319" ], 0 ],
+    [ 1, 1, [ "@query_18006", "assumption_Prims.HasEq_int_319" ], 0 ],
+    [ 1, 1, [ "@query_18017" ], 0 ],
     [
       1,
       1,
       [
-        "@pretyping__133", "@pretyping__2658", "@query_18019",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993", "bool_inversion",
+        "@pretyping__133", "@pretyping__2658", "@query_18020",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996", "bool_inversion",
         "constructor_distinct_StAE.StLHAE",
         "constructor_distinct_StAE.Stream", "data_elim_AEAD_GCM.State",
         "data_elim_StreamAE.State", "disc_equation_StAE.StLHAE",
         "disc_equation_StAE.Stream", "equality_tok_TLSConstants.Reader@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.ctr",
-        "equation_AEAD_GCM.id", "equation_FStar.HyperHeap.disjoint",
+        "equation_AEAD_GCM.id", "equation_AEAD_GCM.log_ref",
+        "equation_FStar.HyperHeap.disjoint",
         "equation_FStar.HyperHeap.modifies", "equation_FStar.HyperHeap.t",
         "equation_FStar.HyperHeap.test0", "equation_Prims.eqtype",
         "equation_StAE.log_region", "equation_StAE.reader",
@@ -1140,11 +1174,11 @@
         "equation_StAE.writer", "equation_StatefulLHAE.counter",
         "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
         "equation_StatefulLHAE.region", "equation_StatefulLHAE.state",
-        "equation_StreamAE.id", "equation_StreamAE.reader",
-        "equation_TLSConstants.rgn",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_StAE.state_17466",
-        "fuel_guarded_inversion_StreamAE.state_17304",
+        "equation_StreamAE.alg", "equation_StreamAE.id",
+        "equation_StreamAE.reader", "equation_TLSConstants.rgn",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "fuel_guarded_inversion_StreamAE.state_17302",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
@@ -1153,6 +1187,7 @@
         "lemma_FStar.Map.lemma_equal_elim", "primitive_Prims.op_AmpAmp",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_region",
+        "proj_equation_StreamAE.State_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_StAE.StLHAE__1",
         "projection_inverse_StAE.StLHAE_i",
@@ -1163,9 +1198,9 @@
         "projection_inverse_StAE.Stream_rw",
         "projection_inverse_StAE.Stream_u",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483",
-        "refinement_interpretation_Tm_refine_3012",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_3014",
         "typing_AEAD_GCM.State.region", "typing_FStar.HyperHeap.extends",
         "typing_FStar.HyperHeap.mod_set", "typing_FStar.Map.concat",
         "typing_FStar.Map.restrict", "typing_FStar.Set.complement",
@@ -1178,8 +1213,8 @@
       1,
       1,
       [
-        "@query_18021", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18022", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1187,9 +1222,9 @@
       1,
       1,
       [
-        "@query_18023", "equation_StAE.is_stlhae",
+        "@query_18024", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1197,45 +1232,47 @@
       1,
       1,
       [
-        "@pretyping__2658", "@query_18037",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993", "b2t_def",
+        "@pretyping__2658", "@pretyping__7862", "@query_18038",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996", "b2t_def",
         "bool_inversion", "bool_typing", "constructor_distinct_StAE.StLHAE",
-        "constructor_distinct_StAE.Stream", "data_elim_AEAD_GCM.State",
-        "data_elim_StreamAE.State", "data_elim_TLSInfo.ID13",
+        "constructor_distinct_StAE.Stream", "constructor_distinct_Tm_unit",
+        "data_elim_AEAD_GCM.State", "data_elim_TLSInfo.ID13",
+        "data_typing_intro_TLSConstants.Writer@tok",
         "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ctr",
         "equation_AEAD_GCM.genPost", "equation_AEAD_GCM.id",
-        "equation_CoreCrypto.aeadKeySize",
-        "equation_CoreCrypto.aeadRealIVSize", "equation_FStar.Char.char",
-        "equation_FStar.HyperHeap.modifies", "equation_FStar.HyperHeap.t",
-        "equation_FStar.HyperHeap.test0", "equation_Platform.Bytes.byte",
+        "equation_AEAD_GCM.log_ref", "equation_CoreCrypto.aeadKeySize",
+        "equation_FStar.Char.char", "equation_FStar.HyperHeap.modifies",
+        "equation_FStar.HyperHeap.t", "equation_FStar.HyperHeap.test0",
+        "equation_FStar.SeqProperties.split", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_Platform.Bytes.length", "equation_Prims.eqtype",
-        "equation_Prims.fst", "equation_Prims.l_and", "equation_Prims.l_imp",
-        "equation_Prims.snd", "equation_StAE.aeKeySize",
-        "equation_StAE.genPost", "equation_StAE.is_stlhae",
-        "equation_StAE.is_stream", "equation_StAE.keyBytes",
-        "equation_StAE.region", "equation_StAE.seqnT",
-        "equation_StAE.stae_id", "equation_StAE.writer",
-        "equation_StatefulLHAE.alg", "equation_StatefulLHAE.counter",
-        "equation_StatefulLHAE.id", "equation_StatefulLHAE.region",
-        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
-        "equation_StreamAE.genPost", "equation_StreamAE.id",
-        "equation_StreamAE.iv_length", "equation_StreamAE.writer",
+        "equation_Platform.Bytes.length", "equation_Platform.Bytes.split",
+        "equation_Prims.eqtype", "equation_Prims.fst",
+        "equation_Prims.l_and", "equation_Prims.l_imp", "equation_Prims.snd",
+        "equation_StAE.aeKeySize", "equation_StAE.genPost",
+        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
+        "equation_StAE.keyBytes", "equation_StAE.region",
+        "equation_StAE.seqnT", "equation_StAE.stae_id",
+        "equation_StAE.writer", "equation_StatefulLHAE.alg",
+        "equation_StatefulLHAE.counter", "equation_StatefulLHAE.id",
+        "equation_StatefulLHAE.region", "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.writer", "equation_StreamAE.genPost",
+        "equation_StreamAE.id", "equation_StreamAE.iv_length",
+        "equation_StreamAE.writer", "equation_StreamPlain.id",
         "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadSaltSize", "equation_TLSConstants.rgn",
         "equation_TLSInfo.keyId", "equation_TLSInfo.valid_hlen",
-        "equation_with_fuel_TLSInfo.valid_keyId__14237",
-        "fuel_correspondence_TLSInfo.valid_keyId__14237",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4266",
-        "fuel_guarded_inversion_StreamAE.state_17304",
-        "fuel_guarded_inversion_TLSInfo.pre_keyId_13770",
+        "equation_with_fuel_TLSInfo.valid_keyId__14235",
+        "fuel_correspondence_TLSInfo.valid_keyId__14235",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
+        "fuel_guarded_inversion_TLSInfo.pre_keyId_13768",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
         "function_token_typing_FStar.HyperHeap.test0", "int_inversion",
         "l_and-interp", "l_imp-interp",
+        "lemma_FStar.HyperHeap.lemma_extends_only_parent",
         "lemma_FStar.HyperHeap.lemma_extends_parent",
         "lemma_FStar.Map.lemma_equal_elim", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
@@ -1245,8 +1282,6 @@
         "proj_equation_AEAD_GCM.State_log_region",
         "proj_equation_AEAD_GCM.State_region",
         "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
-        "proj_equation_StreamAE.State_counter",
-        "proj_equation_StreamAE.State_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Mktuple2__1",
@@ -1260,37 +1295,42 @@
         "projection_inverse_StAE.Stream_rw",
         "projection_inverse_StAE.Stream_u",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_14258",
-        "refinement_interpretation_Tm_refine_15537",
-        "refinement_interpretation_Tm_refine_17371",
-        "refinement_interpretation_Tm_refine_18028",
-        "refinement_interpretation_Tm_refine_18034",
-        "refinement_interpretation_Tm_refine_3012",
-        "refinement_interpretation_Tm_refine_3329",
-        "typing_AEAD_GCM.State.region", "typing_FStar.HyperHeap.extends",
-        "typing_FStar.HyperHeap.mod_set", "typing_FStar.Map.concat",
-        "typing_FStar.Map.restrict", "typing_FStar.Set.complement",
-        "typing_FStar.Set.empty", "typing_StAE.is_stream",
-        "typing_StreamAE.State.region", "typing_TLSConstants.aeadSaltSize",
-        "typing_TLSInfo.authId", "typing_tok_TLSConstants.Writer@tok",
-        "unit_inversion"
+        "refinement_interpretation_Tm_refine_14256",
+        "refinement_interpretation_Tm_refine_14304",
+        "refinement_interpretation_Tm_refine_15535",
+        "refinement_interpretation_Tm_refine_16401",
+        "refinement_interpretation_Tm_refine_17218",
+        "refinement_interpretation_Tm_refine_17369",
+        "refinement_interpretation_Tm_refine_18029",
+        "refinement_interpretation_Tm_refine_18035",
+        "refinement_interpretation_Tm_refine_3014",
+        "refinement_interpretation_Tm_refine_3022",
+        "refinement_interpretation_Tm_refine_3327",
+        "typing_AEAD_GCM.State.log", "typing_AEAD_GCM.State.region",
+        "typing_FStar.HyperHeap.extends", "typing_FStar.HyperHeap.mod_set",
+        "typing_FStar.Map.concat", "typing_FStar.Map.restrict",
+        "typing_FStar.Set.complement", "typing_FStar.Set.empty",
+        "typing_StAE.is_stream", "typing_StAE.region",
+        "typing_StreamAE.State.region", "typing_StreamAE.iv_length",
+        "typing_TLSConstants.aeadSaltSize", "typing_TLSInfo.authId",
+        "typing_tok_TLSConstants.Writer@tok", "unit_inversion"
       ],
       0
     ],
     [
       0,
       2,
-      [ "@query_18039", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_18040", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       2,
       [
-        "@pretyping__133", "@query_18042", "data_elim_StAE.StLHAE",
-        "data_elim_StAE.Stream", "fuel_guarded_inversion_StAE.state_17466",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483", "unit_typing"
+        "@pretyping__133", "@query_18043", "data_elim_StAE.StLHAE",
+        "data_elim_StAE.Stream", "fuel_guarded_inversion_StAE.state_17464",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481", "unit_typing"
       ],
       0
     ],
@@ -1298,7 +1338,7 @@
       0,
       2,
       [
-        "@pretyping__133", "@query_18046", "bool_inversion",
+        "@pretyping__133", "@query_18047", "bool_inversion",
         "data_elim_Prims.Mktuple2", "data_elim_StAE.StLHAE",
         "disc_equation_StAE.StLHAE", "disc_equation_StAE.Stream",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.ID13",
@@ -1311,13 +1351,13 @@
         "equation_StAE.is_stlhae", "equation_StAE.is_stream",
         "equation_StreamAE.iv", "equation_StreamAE.iv_length",
         "equation_StreamAE.key", "equation_TLSConstants.aeadSaltSize",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "fuel_guarded_inversion_StAE.state_17464",
         "kinding_FStar.Char.char_@tok", "lemma_FStar.Seq.lemma_len_append",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_14759",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483",
-        "refinement_interpretation_Tm_refine_3329", "typing_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_14757",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_3327", "typing_StAE.is_stream",
         "unit_typing"
       ],
       0
@@ -1326,8 +1366,8 @@
       0,
       2,
       [
-        "@query_18049", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18050", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1335,33 +1375,17 @@
       0,
       2,
       [
-        "@query_18052", "equation_StAE.is_stlhae",
+        "@query_18053", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
-    [ 0, 1, [ "@query_18053", "assumption_Prims.HasEq_int_319" ], 0 ],
+    [ 0, 1, [ "@query_18054", "assumption_Prims.HasEq_int_319" ], 0 ],
     [
       0,
       1,
-      [ "@query_18054", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@pretyping__133", "@query_18055", "data_elim_StAE.StLHAE",
-        "data_elim_StAE.Stream", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
-        "equality_tok_TLSConstants.Writer@tok", "equation_StAE.is_stlhae",
-        "equation_StAE.is_stream", "equation_StAE.writer",
-        "fuel_guarded_inversion_StAE.state_17466",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483", "unit_typing"
-      ],
+      [ "@query_18055", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
@@ -1373,30 +1397,45 @@
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
         "equality_tok_TLSConstants.Writer@tok", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "equation_StAE.writer",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "fuel_guarded_inversion_StAE.state_17464",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483", "unit_typing"
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481", "unit_typing"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_18057", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [
+        "@pretyping__133", "@query_18057", "data_elim_StAE.StLHAE",
+        "data_elim_StAE.Stream", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
+        "equality_tok_TLSConstants.Writer@tok", "equation_StAE.is_stlhae",
+        "equation_StAE.is_stream", "equation_StAE.writer",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481", "unit_typing"
+      ],
       0
     ],
-    [ 0, 1, [ "@query_18108" ], 0 ],
+    [
+      0,
+      1,
+      [ "@query_18058", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
+      0
+    ],
+    [ 0, 1, [ "@query_18109" ], 0 ],
     [
       0,
       1,
       [
-        "@pretyping__133", "@pretyping__15174", "@pretyping__15289",
-        "@pretyping__17244", "@pretyping__2658", "@pretyping__7864",
-        "@query_18189", "assumption_FStar.HyperHeap.HasEq_rid_2993",
+        "@pretyping__133", "@pretyping__15172", "@pretyping__15287",
+        "@pretyping__17242", "@pretyping__2658", "@pretyping__7862",
+        "@query_18190", "assumption_FStar.HyperHeap.HasEq_rid_2996",
         "bool_inversion", "constructor_distinct_StAE.StLHAE",
-        "constructor_distinct_StAE.Stream", "constructor_distinct_Tm_unit",
-        "data_elim_AEAD_GCM.State", "data_elim_StAE.StLHAE",
+        "constructor_distinct_StAE.Stream", "data_elim_AEAD_GCM.State",
         "data_elim_StreamAE.State", "data_typing_intro_Content.Alert@tok",
         "data_typing_intro_TLSConstants.Writer@tok",
         "disc_equation_StAE.StLHAE", "disc_equation_StAE.Stream",
@@ -1408,7 +1447,6 @@
         "equation_Content.cipherLen", "equation_Content.ct_rg",
         "equation_Content.encrypted", "equation_Content.is_stlhae",
         "equation_Content.is_stream", "equation_Content.rg",
-        "equation_CoreCrypto.aeadTagSize",
         "equation_FStar.HyperHeap.contains_ref",
         "equation_FStar.HyperHeap.t", "equation_FStar.HyperHeap.test0",
         "equation_FStar.Monotonic.RRef.as_rref",
@@ -1419,8 +1457,7 @@
         "equation_MonotoneSeq.snoc", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.lbytes", "equation_Prims.eqtype",
         "equation_Prims.fst", "equation_Prims.l_True", "equation_Prims.nat",
-        "equation_Prims.snd", "equation_Range.aeAlg",
-        "equation_Range.cipherRangeClass", "equation_Range.fragment_range",
+        "equation_Prims.snd", "equation_Range.fragment_range",
         "equation_Range.frange", "equation_Range.id2",
         "equation_Range.range", "equation_Range.wider",
         "equation_StAE.entry", "equation_StAE.frag_plain_len",
@@ -1437,20 +1474,23 @@
         "equation_StatefulPlain.cipher", "equation_StatefulPlain.id",
         "equation_StatefulPlain.is_plain", "equation_StreamAE.alg",
         "equation_StreamAE.cipher", "equation_StreamAE.cipherLen",
-        "equation_StreamAE.id", "equation_StreamAE.ilog",
-        "equation_StreamAE.ltag", "equation_TLSConstants.aeadAlg",
+        "equation_StreamAE.ctr", "equation_StreamAE.id",
+        "equation_StreamAE.ilog", "equation_StreamAE.ltag",
+        "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadRecordIVSize",
         "equation_TLSConstants.is_seqn", "equation_TLSConstants.lhae",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSConstants.rgn", "equation_TLSConstants.seqn_t",
         "equation_TLSInfo.aeAlg_of_id",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_StAE.state_17466",
-        "fuel_guarded_inversion_StreamAE.state_17304",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
+        "fuel_guarded_inversion_StAE.state_17464",
+        "fuel_guarded_inversion_StreamAE.state_17302",
+        "fuel_guarded_inversion_TLSInfo.id_14262",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
-        "function_token_typing_FStar.HyperHeap.test0", "int_inversion",
+        "function_token_typing_FStar.HyperHeap.test0",
         "lemma_LHAEPlain.lemma_makeAD_parseAD",
         "lemma_StAE.frame_fragments_auto", "lemma_StAE.frame_seqT_auto",
         "lemma_StatefulPlain.lemma_makeAD_parseAD",
@@ -1475,40 +1515,35 @@
         "projection_inverse_StAE.StLHAE__1",
         "projection_inverse_StAE.StLHAE_u",
         "projection_inverse_StAE.Stream__1",
-        "projection_inverse_StAE.Stream_i",
-        "projection_inverse_StAE.Stream_rw",
-        "projection_inverse_StAE.Stream_u",
         "projection_inverse_StreamAE.Entry_p",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_14313",
-        "refinement_interpretation_Tm_refine_14366",
-        "refinement_interpretation_Tm_refine_14531",
-        "refinement_interpretation_Tm_refine_14541",
-        "refinement_interpretation_Tm_refine_15357",
-        "refinement_interpretation_Tm_refine_15490",
-        "refinement_interpretation_Tm_refine_16403",
-        "refinement_interpretation_Tm_refine_16417",
-        "refinement_interpretation_Tm_refine_17323",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483",
-        "refinement_interpretation_Tm_refine_17945",
-        "refinement_interpretation_Tm_refine_3012",
-        "refinement_interpretation_Tm_refine_3329",
-        "refinement_interpretation_Tm_refine_8173",
-        "refinement_interpretation_Tm_refine_8913",
+        "refinement_interpretation_Tm_refine_14311",
+        "refinement_interpretation_Tm_refine_14364",
+        "refinement_interpretation_Tm_refine_14529",
+        "refinement_interpretation_Tm_refine_14539",
+        "refinement_interpretation_Tm_refine_15355",
+        "refinement_interpretation_Tm_refine_15488",
+        "refinement_interpretation_Tm_refine_16401",
+        "refinement_interpretation_Tm_refine_16415",
+        "refinement_interpretation_Tm_refine_17321",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17943",
+        "refinement_interpretation_Tm_refine_3014",
+        "refinement_interpretation_Tm_refine_3327",
+        "refinement_interpretation_Tm_refine_8171",
+        "refinement_interpretation_Tm_refine_8911",
         "token_correspondence_StAE.fragments",
         "token_correspondence_StAE.seqnT",
         "typing_AEAD_GCM.State.log_region", "typing_AEAD_GCM.alg",
-        "typing_Content.ct", "typing_CoreCrypto.aeadTagSize",
+        "typing_Content.ct", "typing_Content.is_stlhae",
         "typing_FStar.Map.contains", "typing_Range.targetLength",
         "typing_StAE.incrementable", "typing_StAE.is_stlhae",
-        "typing_StAE.log_region", "typing_StAE.seqnT",
-        "typing_StreamAE.State.log_region", "typing_StreamAE.State.region",
-        "typing_TLSConstants.aeadRecordIVSize", "typing_TLSConstants.lhae",
+        "typing_StAE.seqnT", "typing_StreamAE.State.log_region",
+        "typing_StreamAE.State.region", "typing_TLSConstants.lhae",
         "typing_TLSInfo.aeAlg_of_id", "typing_TLSInfo.authId",
-        "typing_TLSInfo.is_ID12", "typing_TLSInfo.is_PlaintextID",
-        "typing_tok_Prims.T@tok", "typing_tok_TLSConstants.Writer@tok",
-        "unit_inversion", "unit_typing"
+        "typing_TLSInfo.is_ID13", "typing_tok_Prims.T@tok",
+        "typing_tok_TLSConstants.Writer@tok", "unit_inversion", "unit_typing"
       ],
       0
     ],
@@ -1516,20 +1551,20 @@
       0,
       1,
       [
-        "@pretyping__7864", "@query_18191", "data_elim_AEAD_GCM.State",
+        "@pretyping__7862", "@query_18192", "data_elim_AEAD_GCM.State",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
         "equation_AEAD_GCM.counter", "equation_MonotoneSeq.counter_val",
         "equation_Prims.nat", "equation_StatefulLHAE.state",
         "equation_TLSConstants.aeadRecordIVSize",
         "equation_TLSConstants.rgn",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
         "primitive_Prims.op_Equality", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
         "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_16154",
-        "refinement_interpretation_Tm_refine_16335",
-        "refinement_interpretation_Tm_refine_16403"
+        "refinement_interpretation_Tm_refine_16152",
+        "refinement_interpretation_Tm_refine_16333",
+        "refinement_interpretation_Tm_refine_16401"
       ],
       0
     ],
@@ -1537,18 +1572,18 @@
       0,
       1,
       [
-        "@query_18196", "equality_tok_TLSConstants.Writer@tok",
+        "@query_18197", "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ideal_log",
         "equation_AEAD_GCM.log_ref", "equation_StAE.is_stlhae",
         "equation_StatefulLHAE.state", "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadRecordIVSize",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4266",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
         "primitive_Prims.op_AmpAmp",
         "proj_equation_AEAD_GCM.State_log_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1556,9 +1591,9 @@
       0,
       1,
       [
-        "@query_18198", "equation_StAE.is_stlhae",
+        "@query_18199", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1566,9 +1601,9 @@
       0,
       1,
       [
-        "@query_18200", "equation_StAE.is_stlhae",
+        "@query_18201", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1576,9 +1611,9 @@
       0,
       1,
       [
-        "@query_18202", "equation_StAE.is_stlhae",
+        "@query_18203", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1586,9 +1621,9 @@
       0,
       1,
       [
-        "@query_18204", "equation_StAE.is_stlhae",
+        "@query_18205", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1596,12 +1631,12 @@
       0,
       1,
       [
-        "@pretyping__7864", "@query_18208",
+        "@pretyping__7862", "@query_18209",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1609,9 +1644,9 @@
       0,
       1,
       [
-        "@query_18210", "equation_StAE.is_stlhae",
+        "@query_18211", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1619,9 +1654,9 @@
       0,
       1,
       [
-        "@query_18212", "equation_StAE.is_stlhae",
+        "@query_18213", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1629,9 +1664,9 @@
       0,
       1,
       [
-        "@query_18214", "equation_StAE.is_stlhae",
+        "@query_18215", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1639,9 +1674,9 @@
       0,
       1,
       [
-        "@query_18217", "equation_StAE.is_stlhae",
+        "@query_18218", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1649,9 +1684,9 @@
       0,
       1,
       [
-        "@query_18219", "equation_StAE.is_stlhae",
+        "@query_18220", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1659,9 +1694,9 @@
       0,
       1,
       [
-        "@query_18221", "equation_StAE.is_stlhae",
+        "@query_18222", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1669,12 +1704,12 @@
       0,
       1,
       [
-        "@pretyping__7864", "@query_18225",
+        "@pretyping__7862", "@query_18226",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
@@ -1682,33 +1717,24 @@
       0,
       1,
       [
-        "@query_18227", "equation_StAE.is_stlhae",
+        "@query_18228", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_18229", "refinement_interpretation_Tm_refine_17473" ],
+      [ "@query_18230", "refinement_interpretation_Tm_refine_17471" ],
       0
     ],
     [
       0,
       1,
       [
-        "@query_18231", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
-      ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@query_18233", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18232", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1716,8 +1742,8 @@
       0,
       1,
       [
-        "@query_18236", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18234", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1725,8 +1751,8 @@
       0,
       1,
       [
-        "@query_18238", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18237", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1734,8 +1760,8 @@
       0,
       1,
       [
-        "@query_18240", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18239", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1743,11 +1769,20 @@
       0,
       1,
       [
-        "@pretyping__7864", "@query_18244",
+        "@query_18241", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
+      ],
+      0
+    ],
+    [
+      0,
+      1,
+      [
+        "@pretyping__7862", "@query_18245",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_StAE.is_stream",
         "primitive_Prims.op_Equality",
-        "refinement_interpretation_Tm_refine_17473"
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1755,8 +1790,8 @@
       0,
       1,
       [
-        "@query_18246", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18247", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -1764,7 +1799,7 @@
       0,
       1,
       [
-        "@query_18256", "equation_AEAD_GCM.ideal_log",
+        "@query_18257", "equation_AEAD_GCM.ideal_log",
         "equation_MonotoneSeq.log_t", "equation_Prims.l_False",
         "equation_StAE.entry", "equation_StAE.ideal_log",
         "equation_StAE.log_region", "equation_StreamAE.ideal_log",
@@ -1776,22 +1811,20 @@
       0,
       1,
       [
-        "@pretyping__133", "@query_18337", "bool_inversion",
+        "@pretyping__133", "@query_18338", "bool_inversion",
         "data_elim_StAE.StLHAE", "data_elim_StAE.Stream",
         "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.ID13",
         "equation_AEAD_GCM.ideal_log", "equation_MonotoneSeq.log_t",
-        "equation_Prims.l_False", "equation_Prims.nat",
-        "equation_StAE.entry", "equation_StAE.fragment_at_j",
-        "equation_StAE.ideal_log", "equation_StAE.is_stlhae",
-        "equation_StAE.is_stream", "equation_StAE.log_region",
-        "equation_StreamAE.ideal_log",
-        "fuel_guarded_inversion_Prims.c_False_117",
-        "fuel_guarded_inversion_StAE.state_17466", "int_inversion",
+        "equation_Prims.nat", "equation_StAE.entry",
+        "equation_StAE.fragment_at_j", "equation_StAE.ideal_log",
+        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
+        "equation_StAE.log_region", "equation_StreamAE.ideal_log",
+        "fuel_guarded_inversion_StAE.state_17464", "int_inversion",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483",
-        "refinement_interpretation_Tm_refine_17654", "typing_StAE.is_stlhae",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17652", "typing_StAE.is_stlhae",
         "typing_StAE.is_stream", "unit_typing"
       ],
       0
@@ -1799,65 +1832,64 @@
     [
       0,
       1,
-      [ "@query_18338", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_18339", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
-    [ 0, 1, [ "@query_18339", "assumption_Prims.HasEq_int_319" ], 0 ],
+    [ 0, 1, [ "@query_18340", "assumption_Prims.HasEq_int_319" ], 0 ],
     [
       0,
       1,
-      [ "@query_18340", "assumption_Content.contentType_haseq_15298" ],
+      [ "@query_18341", "assumption_Content.contentType_haseq_15296" ],
       0
     ],
     [
       0,
       1,
-      [ "@query_18341", "assumption_Content.fragment_haseq_15207" ],
+      [ "@query_18342", "assumption_Content.fragment_haseq_15205" ],
       0
     ],
     [
       0,
       1,
       [
-        "@pretyping__133", "@query_18342", "data_elim_StAE.StLHAE",
+        "@pretyping__133", "@query_18343", "data_elim_StAE.StLHAE",
         "data_elim_StAE.Stream", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.ID13", "disc_equation_TLSInfo.PlaintextID",
         "equality_tok_TLSConstants.Reader@tok", "equation_StAE.is_stlhae",
         "equation_StAE.is_stream", "equation_StAE.reader",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "fuel_guarded_inversion_StAE.state_17464",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483", "unit_typing"
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481", "unit_typing"
       ],
       0
     ],
     [
       0,
       1,
-      [ "@query_18343", "assumption_FStar.HyperHeap.HasEq_rid_2993" ],
+      [ "@query_18344", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
       0
     ],
     [
       0,
       1,
       [
-        "@pretyping__133", "@pretyping__15289", "@query_18427",
+        "@pretyping__133", "@pretyping__15287", "@query_18428",
         "bool_inversion", "data_elim_Prims.Mktuple2",
         "data_elim_StAE.StLHAE", "data_elim_StAE.Stream",
         "data_typing_intro_Content.Alert@tok", "disc_equation_Prims.None",
-        "disc_equation_Prims.Some", "disc_equation_TLSInfo.ID12",
-        "equality_tok_TLSConstants.Reader@tok", "equation_Content.decrypted",
-        "equation_Platform.Bytes.bytes", "equation_Prims.snd",
-        "equation_StAE.is_stlhae", "equation_StAE.reader",
-        "fuel_guarded_inversion_Prims.tuple2_629",
-        "fuel_guarded_inversion_StAE.state_17466",
+        "disc_equation_Prims.Some", "equality_tok_TLSConstants.Reader@tok",
+        "equation_Content.decrypted", "equation_Platform.Bytes.bytes",
+        "equation_Prims.snd", "equation_StAE.is_stlhae",
+        "equation_StAE.reader", "fuel_guarded_inversion_Prims.tuple2_629",
+        "fuel_guarded_inversion_StAE.state_17464",
         "kinding_Content.fragment@tok", "lemma_Prims.invertOption",
         "primitive_Prims.op_AmpAmp", "proj_equation_Prims.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_15357",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483", "typing_Prims.is_None",
-        "typing_TLSInfo.is_ID12", "unit_typing"
+        "refinement_interpretation_Tm_refine_15355",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481", "typing_Prims.is_None",
+        "unit_typing"
       ],
       0
     ],
@@ -1865,9 +1897,9 @@
       0,
       1,
       [
-        "@pretyping__133", "@pretyping__15289", "@pretyping__2658",
-        "@pretyping__7864", "@query_18505",
-        "assumption_FStar.HyperHeap.HasEq_rid_2993", "b2t_def",
+        "@pretyping__133", "@pretyping__15287", "@pretyping__2658",
+        "@pretyping__7862", "@query_18506",
+        "assumption_FStar.HyperHeap.HasEq_rid_2996", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_Prims.Mktuple2",
         "constructor_distinct_Prims.None", "constructor_distinct_Prims.Some",
@@ -1875,7 +1907,7 @@
         "constructor_distinct_TLSConstants.Reader",
         "constructor_distinct_TLSConstants.Writer",
         "constructor_distinct_Tm_unit", "data_elim_AEAD_GCM.State",
-        "data_elim_StAE.StLHAE", "data_elim_StreamAE.State",
+        "data_elim_StreamAE.State", "data_elim_TLSConstants.AEAD",
         "data_typing_intro_TLSConstants.Writer@tok",
         "disc_equation_Prims.None", "disc_equation_Prims.Some",
         "disc_equation_StAE.StLHAE", "disc_equation_StAE.Stream",
@@ -1890,6 +1922,7 @@
         "equation_Content.ct_rg", "equation_Content.is_stream",
         "equation_CoreCrypto.aeadTagSize",
         "equation_FStar.HyperHeap.disjoint",
+        "equation_FStar.HyperHeap.modifies",
         "equation_FStar.HyperHeap.modifies_just",
         "equation_FStar.HyperHeap.modifies_one",
         "equation_FStar.HyperHeap.sel", "equation_FStar.HyperHeap.t",
@@ -1905,69 +1938,63 @@
         "equation_Range.frange", "equation_Range.valid_clen",
         "equation_StAE.entry", "equation_StAE.frag_plain_len",
         "equation_StAE.fragment_at_j", "equation_StAE.fragments",
-        "equation_StAE.frame_f", "equation_StAE.ideal_log",
-        "equation_StAE.ilog", "equation_StAE.incrementable",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "equation_StAE.log_region", "equation_StAE.ptext",
-        "equation_StAE.reader", "equation_StAE.region",
-        "equation_StAE.seqnT", "equation_StAE.trigger_frame",
-        "equation_StatefulLHAE.alg", "equation_StatefulLHAE.counter",
-        "equation_StatefulLHAE.dplain", "equation_StatefulLHAE.region",
-        "equation_StatefulLHAE.state", "equation_StatefulPlain.id",
-        "equation_StatefulPlain.is_plain", "equation_StatefulPlain.plain",
-        "equation_StreamAE.alg", "equation_StreamAE.cipherLen",
-        "equation_StreamAE.id", "equation_StreamAE.ideal_log",
-        "equation_StreamAE.ilog", "equation_StreamAE.lenCipher",
-        "equation_StreamAE.log_ref", "equation_StreamAE.ltag",
-        "equation_StreamAE.matches", "equation_StreamPlain.plain",
-        "equation_StreamPlain.plainLen", "equation_StreamPlain.plainLength",
-        "equation_TLSConstants.aeadAlg",
+        "equation_StAE.frame_f", "equation_StAE.ilog",
+        "equation_StAE.incrementable", "equation_StAE.is_stlhae",
+        "equation_StAE.is_stream", "equation_StAE.log_region",
+        "equation_StAE.ptext", "equation_StAE.reader",
+        "equation_StAE.region", "equation_StAE.seqnT",
+        "equation_StAE.trigger_frame", "equation_StatefulLHAE.alg",
+        "equation_StatefulLHAE.counter", "equation_StatefulLHAE.dplain",
+        "equation_StatefulLHAE.region", "equation_StatefulLHAE.state",
+        "equation_StatefulPlain.id", "equation_StatefulPlain.is_plain",
+        "equation_StatefulPlain.plain", "equation_StreamAE.alg",
+        "equation_StreamAE.cipherLen", "equation_StreamAE.id",
+        "equation_StreamAE.ideal_log", "equation_StreamAE.ilog",
+        "equation_StreamAE.lenCipher", "equation_StreamAE.log_ref",
+        "equation_StreamAE.ltag", "equation_StreamPlain.plain",
+        "equation_StreamPlain.plainLength", "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadRecordIVSize",
         "equation_TLSConstants.is_seqn",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length_13",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSConstants.rgn", "equation_TLSConstants.seqn_t",
         "equation_TLSInfo.aeAlg_of_id",
-        "fuel_correspondence_MonotoneSeq.map__16053",
-        "fuel_guarded_inversion_AEAD_GCM.state_16397",
-        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4266",
+        "fuel_correspondence_MonotoneSeq.map__16051",
+        "fuel_guarded_inversion_AEAD_GCM.state_16395",
+        "fuel_guarded_inversion_CoreCrypto.aead_cipher_4264",
         "fuel_guarded_inversion_Prims.option_443",
         "fuel_guarded_inversion_Prims.tuple2_629",
-        "fuel_guarded_inversion_StAE.state_17466",
-        "fuel_guarded_inversion_StreamAE.entry_17241",
-        "fuel_guarded_inversion_StreamAE.state_17304",
+        "fuel_guarded_inversion_StreamAE.state_17302",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
-        "function_token_typing_MonotoneSeq.grows",
         "function_token_typing_StAE.ptext", "int_inversion",
-        "interpretation_Tm_arrow_1503", "interpretation_Tm_arrow_17666",
-        "interpretation_Tm_arrow_17696", "interpretation_Tm_arrow_228",
-        "interpretation_Tm_arrow_4770", "kinding_AEAD_GCM.entry@tok",
-        "kinding_Content.fragment@tok", "kinding_StreamAE.entry@tok",
-        "l_and-interp", "lemma_FStar.HyperHeap.lemma_includes_refl",
+        "interpretation_Tm_arrow_17664", "interpretation_Tm_arrow_17694",
+        "interpretation_Tm_arrow_228", "interpretation_Tm_arrow_4768",
+        "kinding_AEAD_GCM.entry@tok", "kinding_Content.fragment@tok",
+        "kinding_StreamAE.entry@tok", "l_and-interp",
+        "lemma_FStar.HyperHeap.lemma_includes_refl",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomRestrict",
         "lemma_FStar.Map.lemma_SelConcat1",
         "lemma_FStar.Map.lemma_SelRestrict",
         "lemma_FStar.Map.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
         "lemma_FStar.Set.mem_singleton", "lemma_MonotoneSeq.map_index",
-        "lemma_MonotoneSeq.map_length", "lemma_StAE.frame_fragments_auto",
+        "lemma_MonotoneSeq.map_length", "lemma_Prims.invertOption",
+        "lemma_StAE.frame_fragments_auto",
         "lemma_StatefulPlain.lemma_makeAD_parseAD",
-        "lemma_TLSInfo.plainText_is_not_auth", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
+        "primitive_Prims.op_Subtraction",
         "proj_equation_AEAD_GCM.State_counter",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
         "proj_equation_AEAD_GCM.State_region",
         "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
-        "proj_equation_StreamAE.Entry_l",
-        "proj_equation_StreamAE.State_counter",
-        "proj_equation_StreamAE.State_log",
+        "proj_equation_StreamAE.Entry_l", "proj_equation_StreamAE.Entry_p",
         "proj_equation_StreamAE.State_log_region",
-        "proj_equation_StreamAE.State_region",
+        "proj_equation_TLSConstants.AEAD__0",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Mktuple2__1",
@@ -1984,36 +2011,38 @@
         "projection_inverse_StAE.Stream_u",
         "refinement_interpretation_Tm_refine_1040",
         "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_14313",
-        "refinement_interpretation_Tm_refine_14366",
+        "refinement_interpretation_Tm_refine_14311",
+        "refinement_interpretation_Tm_refine_14364",
         "refinement_interpretation_Tm_refine_1443",
-        "refinement_interpretation_Tm_refine_15357",
-        "refinement_interpretation_Tm_refine_15504",
-        "refinement_interpretation_Tm_refine_16417",
-        "refinement_interpretation_Tm_refine_16580",
-        "refinement_interpretation_Tm_refine_17323",
-        "refinement_interpretation_Tm_refine_17473",
-        "refinement_interpretation_Tm_refine_17483",
-        "refinement_interpretation_Tm_refine_17945",
-        "refinement_interpretation_Tm_refine_3012",
-        "refinement_interpretation_Tm_refine_8173",
+        "refinement_interpretation_Tm_refine_15355",
+        "refinement_interpretation_Tm_refine_15502",
+        "refinement_interpretation_Tm_refine_16415",
+        "refinement_interpretation_Tm_refine_16578",
+        "refinement_interpretation_Tm_refine_17321",
+        "refinement_interpretation_Tm_refine_17471",
+        "refinement_interpretation_Tm_refine_17481",
+        "refinement_interpretation_Tm_refine_17943",
+        "refinement_interpretation_Tm_refine_3014",
+        "refinement_interpretation_Tm_refine_8171",
+        "refinement_kinding_Tm_refine_15502",
         "token_correspondence_StAE.fragments",
         "token_correspondence_StAE.ptext", "typing_AEAD_GCM.State.log",
         "typing_AEAD_GCM.State.log_region", "typing_AEAD_GCM.State.region",
-        "typing_AEAD_GCM.alg", "typing_Content.ct_rg",
-        "typing_FStar.HyperHeap.disjoint", "typing_FStar.HyperHeap.includes",
-        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
-        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
-        "typing_FStar.Monotonic.RRef.m_sel", "typing_FStar.Seq.index",
-        "typing_FStar.Seq.seq", "typing_FStar.Set.complement",
+        "typing_Content.ct_rg", "typing_FStar.HyperHeap.includes",
+        "typing_FStar.HyperHeap.mod_set", "typing_FStar.Map.concat",
+        "typing_FStar.Map.contains", "typing_FStar.Map.domain",
+        "typing_FStar.Map.restrict", "typing_FStar.Monotonic.RRef.m_sel",
+        "typing_FStar.Seq.index", "typing_FStar.Seq.seq",
+        "typing_FStar.Set.complement", "typing_FStar.Set.empty",
         "typing_FStar.Set.mem", "typing_FStar.Set.singleton",
         "typing_Platform.Bytes.length", "typing_StAE.entry",
         "typing_StAE.incrementable", "typing_StAE.is_stlhae",
-        "typing_StAE.log_region", "typing_StAE.seqnT",
-        "typing_StreamAE.Entry.p", "typing_StreamAE.State.log",
-        "typing_StreamAE.State.log_region", "typing_StreamAE.State.region",
-        "typing_StreamAE.ltag", "typing_TLSConstants.is_AEAD",
-        "typing_TLSInfo.aeAlg_of_id", "typing_TLSInfo.authId",
+        "typing_StAE.is_stream", "typing_StAE.log_region",
+        "typing_StAE.seqnT", "typing_StreamAE.Entry.p",
+        "typing_StreamAE.State.log", "typing_StreamAE.State.log_region",
+        "typing_StreamAE.State.region", "typing_StreamAE.ltag",
+        "typing_TLSConstants.is_AEAD", "typing_TLSInfo.aeAlg_of_id",
+        "typing_TLSInfo.authId", "typing_TLSInfo.is_PlaintextID",
         "typing_tok_Prims.T@tok", "typing_tok_TLSConstants.Reader@tok",
         "unit_inversion", "unit_typing"
       ],
@@ -2023,8 +2052,8 @@
       0,
       1,
       [
-        "@query_18508", "equation_StAE.is_stream",
-        "refinement_interpretation_Tm_refine_17473"
+        "@query_18509", "equation_StAE.is_stream",
+        "refinement_interpretation_Tm_refine_17471"
       ],
       0
     ],
@@ -2032,9 +2061,9 @@
       0,
       1,
       [
-        "@query_18511", "equation_StAE.is_stlhae",
+        "@query_18512", "equation_StAE.is_stlhae",
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_17483"
+        "refinement_interpretation_Tm_refine_17481"
       ],
       0
     ]

@@ -1,4 +1,4 @@
-﻿module HMAC
+﻿module HashMAC
 
 open Platform.Bytes
 open TLSConstants

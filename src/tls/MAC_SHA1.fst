@@ -54,8 +54,8 @@ val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
     sel h1 wr.log == snoc (sel h0 wr.log) (Entry t p)))
 
 let mac i wr p =
-  assume (HMAC.is_tls_mac (macAlg_of_id i));
-  let t : tag i = HMAC.tls_mac a wr.key p in
+  assume (HashMAC.is_tls_mac (macAlg_of_id i));
+  let t : tag i = HashMAC.tls_mac a wr.key p in
   wr.log := snoc !wr.log (Entry #i t p); // We log every authenticated texts, with their index and resulting tag
   t
 
@@ -69,7 +69,7 @@ val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
     (b ==> good i p)))
 
 let verify i rd p t =
-  let x = HMAC.tls_macVerify a rd.key p t  in
+  let x = HashMAC.tls_macVerify a rd.key p t  in
   let l = !rd.log in
   // We use the log to correct any verification errors
   x &&

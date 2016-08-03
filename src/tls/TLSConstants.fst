@@ -18,9 +18,9 @@ let tls_color = -1
 let epoch_color = 1
 let hs_color = 2
 
-let is_tls_rgn r   = color r = tls_color
-let is_epoch_rgn r = color r = epoch_color
-let is_hs_rgn r    = color r = hs_color
+let is_tls_rgn r   = HH.color r = tls_color
+let is_epoch_rgn r = HH.color r = epoch_color
+let is_hs_rgn r    = HH.color r = hs_color
 
 let rgn       = r:HH.rid{r<>HH.root}
 let tls_rgn   = r:rgn{is_tls_rgn r}

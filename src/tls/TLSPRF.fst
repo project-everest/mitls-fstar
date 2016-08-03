@@ -10,7 +10,7 @@ module TLSPRF
 open Platform.Bytes
 open TLSConstants
 open TLSInfo
-open HMAC
+open HashMAC
 open CoreCrypto
 
 (* SSL3 *)

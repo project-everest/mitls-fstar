@@ -89,7 +89,7 @@ ECGroup.fst \
 CommonDH.fst \
 PMS.fst \
 Hashing.fst \
-HMAC.fst \
+HashMAC.fst \
 Cert.fst \
 Signature.fst \
 PSK.fst \
@@ -155,7 +155,7 @@ ECGroup \
 CommonDH \
 PMS \
 Hashing \
-HMAC \
+HashMAC \
 Cert \
 Signature \
 TLSInfo \

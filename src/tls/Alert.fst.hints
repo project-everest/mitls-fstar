@@ -5,7 +5,10 @@
       0,
       1,
       [
-        "@query_14544", "disc_equation_TLSError.AD_access_denied",
+        "@query_14542", "constructor_distinct_TLSError.AD_access_denied",
+        "constructor_distinct_TLSError.AD_missing_extension",
+        "constructor_distinct_TLSError.AD_unsupported_extension",
+        "disc_equation_TLSError.AD_access_denied",
         "disc_equation_TLSError.AD_bad_certificate_fatal",
         "disc_equation_TLSError.AD_bad_certificate_warning",
         "disc_equation_TLSError.AD_bad_record_mac",
@@ -38,7 +41,7 @@
         "disc_equation_TLSError.AD_unsupported_extension",
         "disc_equation_TLSError.AD_user_cancelled_fatal",
         "disc_equation_TLSError.AD_user_cancelled_warning",
-        "fuel_guarded_inversion_TLSError.alertDescription_5453"
+        "fuel_guarded_inversion_TLSError.alertDescription_5451"
       ],
       0
     ],
@@ -46,11 +49,11 @@
       0,
       1,
       [
-        "@pretyping__5457", "@query_14547",
-        "assumption_Platform.Error.optResult_haseq_5073",
+        "@pretyping__5455", "@query_14545",
+        "assumption_Platform.Error.optResult_haseq_5071",
         "assumption_Prims.HasEq_string_334",
         "assumption_Prims.HasEq_tuple2_647",
-        "assumption_TLSError.alertDescription_haseq_5524",
+        "assumption_TLSError.alertDescription_haseq_5522",
         "equation_TLSError.error", "equation_TLSError.result",
         "function_token_typing_Prims.string",
         "function_token_typing_TLSError.error",
@@ -58,12 +61,12 @@
       ],
       0
     ],
-    [ 0, 1, [ "@query_14553", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ 0, 1, [ "@query_14551", "projection_inverse_BoxInt_proj_0" ], 0 ],
     [
       0,
       1,
       [
-        "@query_14595", "constructor_distinct_Platform.Error.Correct",
+        "@query_14593", "constructor_distinct_Platform.Error.Correct",
         "constructor_distinct_Platform.Error.Error",
         "constructor_distinct_Prims.Mktuple2",
         "constructor_distinct_TLSError.AD_access_denied",
@@ -155,9 +158,9 @@
         "refinement_interpretation_Tm_refine_1040",
         "refinement_interpretation_Tm_refine_1415",
         "refinement_interpretation_Tm_refine_1443",
-        "refinement_interpretation_Tm_refine_14479",
+        "refinement_interpretation_Tm_refine_14477",
         "refinement_interpretation_Tm_refine_1497",
-        "refinement_interpretation_Tm_refine_3329",
+        "refinement_interpretation_Tm_refine_3327",
         "typing_FStar.Seq.create", "typing_FStar.Seq.length",
         "typing_Prims.snd"
       ],
