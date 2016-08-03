@@ -3,7 +3,13 @@ miTLS: A verified reference implementation of TLS
 
 This repository contains the new F* development a port of the stable [F# development](https://github.com/mitls/mitls-flex) to F* 0.9.
 
-[![Build status](https://travis-ci.org/mitls/mitls-fstar.svg?branch=master)](https://travis-ci.org/mitls/mitls-fstar)
+| Build  | Status |
+| ------------- | ------------- |
+| Windows CI  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/12/badge" /> |
+| Windows Nightly  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/14/badge" />  |
+| Linux CI  | [![Build status](https://travis-ci.org/mitls/mitls-fstar.svg?branch=master)](https://travis-ci.org/mitls/mitls-fstar) |
+| Lilnux Nightly  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/15/badge" /> |
+
 
 ### miTLS website
 
