@@ -324,7 +324,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 			| Some w -> StAE.incrementable w h1))))
   = assume(False); true // admit()
 
-let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
+let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
      st_inv c h 
   /\ (match wo with 
      | None    -> is_PlaintextID i
@@ -338,9 +338,10 @@ let sendFragment_requires (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
-  (requires (sendFragment_requires wo))
+  (requires (sendFragment_inv wo))
   (ensures (fun h0 r h1 -> 
-    (r=ad_overflow ==> is_Some wo /\ not(StAE.incrementable (Some.v wo) h1))
+    sendFragment_inv wo h1 //we still have st_inv, etc.
+    /\ (r=ad_overflow ==> is_Some wo /\ not(StAE.incrementable (Some.v wo) h1))
     /\ (is_None wo \/ r=ad_overflow ==> modifies Set.empty h0 h1)
     /\ (is_Some wo /\ r<>ad_overflow ==> 
 	(let wr = Some.v wo in
@@ -422,8 +423,8 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 	(requires (fun h -> 
 	  let i = currentId_T c Writer h in 
 	  current_writer_pre c i h
-	  /\ sendFragment_requires (current_writer_T c i h) h))
-	(ensures (fun h0 r h1 -> True))
+	  /\ sendFragment_inv (current_writer_T c i h) h))
+	(ensures (fun h0 r h1 -> st_inv c h1))
           //16-05-29 TODO: write precise post, adapted from sendFragment, with three cases:
           // | WriteError (Some ad) txt  -> write log += ad; state = Close
           // | WriteClose                 -> write log += closeNotify; state = ...
@@ -432,8 +433,6 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
     let wopt = current_writer c i in 
     let st = !c.state in
     let res = sendFragment c #i wopt (Content.CT_Alert #i (point 2) ad) in
-    let h1 = get () in 
-    assume (st_inv c h1);  //TODO: sendFragment needs to maintain st_inv
     match res with 
     | Error xy -> unrecoverable c (snd xy) // or reason?
     | Correct _   ->
@@ -455,16 +454,14 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
 
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
-       (requires (fun h -> sendFragment_requires wopt h))
-       (ensures (fun h0 r h1 -> modifies_just (regions wopt) h0 h1))
+       (requires (fun h -> sendFragment_inv wopt h))
+       (ensures (fun h0 r h1 -> st_inv c h1 /\ 
+			     modifies_just (regions wopt) h0 h1))
   =  let b = IO.debug_print_string "CALL sendHandshake\n" in
      let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in 
-     reveal_epoch_region_inv_all ();
-     let h1 = ST.get() in 
-     cut (st_inv c h1);
      // then try to send CCS fragment, if requested
      match result0 with
      | Error e -> Error e
