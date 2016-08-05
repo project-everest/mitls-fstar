@@ -313,78 +313,6 @@ let cwriter (i:id) (c:connection) =
   w:StAE.writer i{exists (r:StAE.reader (peerId i)).{:pattern (trigger_peer r)}
 		    epoch_region_inv' (HS.region c.hs) r w}
 
-//16-05-29 duplicating no_seqn_overflow?
-private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i c))
-  : ST bool
-    (requires (fun h -> True))
-    (ensures (fun h0 b h1 -> 
-	      h0 == h1 
-	      /\ (b <==> (match wopt with 
-		        | None -> True
-			| Some w -> StAE.incrementable w h1))))
-  = assume(False); true // admit()
-
-let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
-     st_inv c h 
-  /\ (match wo with 
-     | None    -> is_PlaintextID i
-     | Some wr ->  Map.contains h (StAE.region wr)
-	       /\ Map.contains h (StAE.log_region wr))
-
-#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
-
-//16-05-29 note that AD_record_overflow os for oversized incoming records, not seqn overflows! See slack.
-// let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
-let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
-
-val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
-  (requires (sendFragment_inv wo))
-  (ensures (fun h0 r h1 -> 
-    sendFragment_inv wo h1 //we still have st_inv, etc.
-    /\ (r=ad_overflow ==> is_Some wo /\ not(StAE.incrementable (Some.v wo) h1))
-    /\ (is_None wo \/ r=ad_overflow ==> modifies Set.empty h0 h1)
-    /\ (is_Some wo /\ r<>ad_overflow ==> 
-	(let wr = Some.v wo in
- 	   modifies_one (StAE.region wr) h0 h1 
-        /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1 
-        /\ (authId i ==>
-	    ( //fragment was definitely snoc'd
-	     StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f 
-     	     //delta was maybe snoc'd, if f is not a handshake fragment
-	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
-	     //and the deltas associated with wr will forever more contain deltas1 as a prefix
-             /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))))))
-
-#reset-options "--z3timeout 60 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-let sendFragment c #i wo f =
-  reveal_epoch_region_inv_all ();
-  let ct, rg = Content.ct_rg i f in
-
-  let idt = if is_ID12 i then "ID12" else if is_ID13 i then "ID13" else "PlaintextID" in
-  let b = IO.debug_print_string 
-    ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n") in
-
-  if not (check_incrementable wo)
-  then ad_overflow 
-  else begin
-       let payload: Content.encrypted f =
-           match wo with
-	   | None    -> 
-	     assert (is_PlaintextID i);
-	     Content.repr i f //16-05-20 don't understand error. NS: terrible error location; should have been at makePacket
-	   | Some wr -> 
-	     SD.encrypt wr f 
-       in
-       let pv = Handshake.version c.hs in
-       lemma_repr_bytes_values (length payload);
-       assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
-       let record = Record.makePacket ct (is_PlaintextID i) pv payload in
-       let r  = Transport.send c.tcp record in
-       match r with
-       | Error(x)  -> Error(AD_internal_error,x)
-       | Correct _ -> Correct()
-  end
-
 let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot bool = 
     let hs = c.hs in 
     let ix = iT hs Writer h in
@@ -418,18 +346,148 @@ let current_writer c i =
        let _ = cut (trigger_peer (Epoch.r e)) in
        Some (Epoch.w e)
 
+//16-05-29 duplicating no_seqn_overflow?
+private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i c))
+  : ST bool
+    (requires (fun h -> True))
+    (ensures (fun h0 b h1 -> 
+	      h0 == h1 
+	      /\ (b <==> (match wopt with 
+		        | None -> True
+			| Some w -> StAE.incrementable w h1))))
+  = assume(False); true // admit()
+
+let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
+     st_inv c h 
+  /\ (match wo with 
+     | None    -> is_PlaintextID i
+     | Some wr ->  Map.contains h (StAE.region wr)
+	       /\ Map.contains h (StAE.log_region wr))
+
+#set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
+
+//16-05-29 note that AD_record_overflow os for oversized incoming records, not seqn overflows! See slack.
+// let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
+let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
+
+let sendFragment_success (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) h0 h1 =
+      is_Some wo ==> 
+      (let wr = Some.v wo in
+       modifies_one (StAE.region wr) h0 h1 
+     /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1 
+     /\ (authId i ==>
+	     //fragment was definitely snoc'd
+	     StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f 
+     	     //delta was maybe snoc'd, if f is not a handshake fragment
+	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
+	     //and the deltas associated with wr will forever more contain deltas1 as a prefix
+             /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
+
+
+val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
+  (requires (sendFragment_inv wo))
+  (ensures (fun h0 r h1 -> 
+    //we still have st_inv, etc.
+    sendFragment_inv wo h1 
+    //we didn't advance any epochs
+    /\ (current_writer_pre c i h0 ==> current_writer_pre c i h1
+				   /\ current_writer_T c i h0 = current_writer_T c i h1)
+    /\ (currentId_T c Writer h1 = currentId_T c Writer h0)
+    //behavior in the erroneous cases				   
+    /\ (is_None wo \/ r=ad_overflow ==> modifies Set.empty h0 h1)
+    /\ (r=ad_overflow ==> is_Some wo /\ not(StAE.incrementable (Some.v wo) h1))
+    //correct behavior, including projections suitable for both the handshake (fragments) and the application (deltas)
+    /\ (r<>ad_overflow ==> sendFragment_success c i wo f h0 h1)))
+
+#reset-options "--z3timeout 60 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+let sendFragment c #i wo f =
+  reveal_epoch_region_inv_all ();
+  let ct, rg = Content.ct_rg i f in
+
+  let idt = if is_ID12 i then "ID12" else if is_ID13 i then "ID13" else "PlaintextID" in
+  let b = IO.debug_print_string 
+    ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n") in
+
+  if not (check_incrementable wo)
+  then ad_overflow 
+  else begin
+       let payload: Content.encrypted f =
+           match wo with
+	   | None    -> 
+	     assert (is_PlaintextID i);
+	     Content.repr i f //16-05-20 don't understand error. NS: terrible error location; should have been at makePacket
+	   | Some wr -> 
+	     SD.encrypt wr f 
+       in
+       let pv = Handshake.version c.hs in
+       lemma_repr_bytes_values (length payload);
+       assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
+       let record = Record.makePacket ct (is_PlaintextID i) pv payload in
+       let r  = Transport.send c.tcp record in
+       match r with
+       | Error(x)  -> Error(AD_internal_error,x)
+       | Correct _ -> Correct()
+  end
+
+
+let sendFragment_success_weak (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) h0 h1 =
+      is_Some wo ==> 
+      (let wr = Some.v wo in
+       modifies_just (Set.union (Set.singleton (StAE.region wr)) (Set.singleton (C.region c))) h0 h1 
+     /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1 
+     /\ (authId i ==>
+	     //fragment was definitely snoc'd
+	     StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f
+     	     //delta was maybe snoc'd, if f is not a handshake fragment
+	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
+	     (* and the deltas associated with wr will forever more contain deltas1 as a prefix *)
+             /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
+
+#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
   :  ST ioresult_w
 	(requires (fun h -> 
 	  let i = currentId_T c Writer h in 
 	  current_writer_pre c i h
 	  /\ sendFragment_inv (current_writer_T c i h) h))
-	(ensures (fun h0 r h1 -> st_inv c h1))
-          //16-05-29 TODO: write precise post, adapted from sendFragment, with three cases:
-          // | WriteError (Some ad) txt  -> write log += ad; state = Close
-          // | WriteClose                 -> write log += closeNotify; state = ...
-          // | WriteError None txt       -> no change except state = Close
-  = let i = currentId c Writer in 
+	(ensures (fun h0 r h1 -> 
+	    let i = currentId_T c Writer h1 in 
+    	    current_writer_pre c i h1 /\
+	    st_inv c h1 /\
+	    (match r with 
+	     | WriteError None _ ->
+	       modifies (Set.singleton (C.region c)) h0 h1
+	       //the spec of disconnect is too weak to prove this now
+               (* /\ sel h1 c.state = Close *)
+	       (* /\ StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f *)
+	     | WriteError (Some _) _ ->
+	       modifies (Set.singleton (C.region c)) h0 h1
+	       //the spec of disconnect is too weak to prove this now
+	     | WriteClose -> 
+       	       let j = currentId_T c Writer h0 in
+       	       let i = currentId_T c Writer h1 in
+	       let wopt = current_writer_T c i h1 in
+	       let frag = Content.CT_Alert #i (point 2) ad in
+	       let st = sel h0 c.state in
+	       sendFragment_success_weak c i wopt frag h0 h1
+	       /\ sel h1 c.state = (if st = Half Writer then Close else Half Reader)
+	     | _ -> False)))
+	  (*       (authId i /\ is_Some wopt ==> *)
+	  (* 	  (let wr = Some.v wopt in *)
+
+	  (* 	   StAE.fragments wr h1 == snoc (StAE.fragments wr h0) frag *)
+	  (* 	 /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f) *)
+	  (*    //and the deltas associated with wr will forever more contain deltas1 as a prefix *)
+          (*    /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1)))))))) *)
+	  (*   let i = currentId_T c Writer h1 in  *)
+       	  (*   current_writer_pre c i h1 /\ *)
+	  (*   (r = WriteClose ==> sendFragment_inv (current_writer_T c i h1) h1))) *)
+          (* //16-05-29 TODO: write precise post, adapted from sendFragment, with three cases: *)
+          (* // | WriteError (Some ad) txt  -> write log += ad; state = Close *)
+          (* // | WriteClose                 -> write log += closeNotify; state = ... *)
+          (* // | WriteError None txt       -> no change except state = Close *)
+  = reveal_epoch_region_inv_all ();
+    let i = currentId c Writer in 
     let wopt = current_writer c i in 
     let st = !c.state in
     let res = sendFragment c #i wopt (Content.CT_Alert #i (point 2) ad) in
