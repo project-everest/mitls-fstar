@@ -370,10 +370,10 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
-let sendFragment_success (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) h0 h1 =
+let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) h0 h1 =
       is_Some wo ==> 
       (let wr = Some.v wo in
-       modifies_one (StAE.region wr) h0 h1 
+       modifies_just (Set.union mods (Set.singleton (StAE.region wr))) h0 h1 
      /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1 
      /\ (authId i ==>
 	     //fragment was definitely snoc'd
@@ -382,7 +382,6 @@ let sendFragment_success (c:connection) (i:id) (wo:option (cwriter i c)) (f: Con
 	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
 	     //and the deltas associated with wr will forever more contain deltas1 as a prefix
              /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
-
 
 val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content.fragment i -> ST (result unit)
   (requires (sendFragment_inv wo))
@@ -397,7 +396,7 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
     /\ (is_None wo \/ r=ad_overflow ==> modifies Set.empty h0 h1)
     /\ (r=ad_overflow ==> is_Some wo /\ not(StAE.incrementable (Some.v wo) h1))
     //correct behavior, including projections suitable for both the handshake (fragments) and the application (deltas)
-    /\ (r<>ad_overflow ==> sendFragment_success c i wo f h0 h1)))
+    /\ (r<>ad_overflow ==> sendFragment_success Set.empty c i wo f h0 h1)))
 
 #reset-options "--z3timeout 60 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let sendFragment c #i wo f =
@@ -429,20 +428,6 @@ let sendFragment c #i wo f =
        | Correct _ -> Correct()
   end
 
-
-let sendFragment_success_weak (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) h0 h1 =
-      is_Some wo ==> 
-      (let wr = Some.v wo in
-       modifies_just (Set.union (Set.singleton (StAE.region wr)) (Set.singleton (C.region c))) h0 h1 
-     /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1 
-     /\ (authId i ==>
-	     //fragment was definitely snoc'd
-	     StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f
-     	     //delta was maybe snoc'd, if f is not a handshake fragment
-	     /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f)
-	     (* and the deltas associated with wr will forever more contain deltas1 as a prefix *)
-             /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1))))
-
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
   :  ST ioresult_w
@@ -462,30 +447,14 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 	       (* /\ StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f *)
 	     | WriteError (Some _) _ ->
 	       modifies (Set.singleton (C.region c)) h0 h1
-	       //the spec of disconnect is too weak to prove this now
+	       //the spec of disconnect is too weak to prove more than this now
 	     | WriteClose -> 
-       	       let j = currentId_T c Writer h0 in
-       	       let i = currentId_T c Writer h1 in
 	       let wopt = current_writer_T c i h1 in
 	       let frag = Content.CT_Alert #i (point 2) ad in
 	       let st = sel h0 c.state in
-	       sendFragment_success_weak c i wopt frag h0 h1
+	       sendFragment_success (Set.singleton (C.region c)) c i wopt frag h0 h1
 	       /\ sel h1 c.state = (if st = Half Writer then Close else Half Reader)
 	     | _ -> False)))
-	  (*       (authId i /\ is_Some wopt ==> *)
-	  (* 	  (let wr = Some.v wopt in *)
-
-	  (* 	   StAE.fragments wr h1 == snoc (StAE.fragments wr h0) frag *)
-	  (* 	 /\ SD.stream_deltas wr h1 == Seq.append (SD.stream_deltas wr h0) (SD.project_one_frag f) *)
-	  (*    //and the deltas associated with wr will forever more contain deltas1 as a prefix *)
-          (*    /\ MR.witnessed (SD.deltas_prefix wr (SD.stream_deltas wr h1)))))))) *)
-	  (*   let i = currentId_T c Writer h1 in  *)
-       	  (*   current_writer_pre c i h1 /\ *)
-	  (*   (r = WriteClose ==> sendFragment_inv (current_writer_T c i h1) h1))) *)
-          (* //16-05-29 TODO: write precise post, adapted from sendFragment, with three cases: *)
-          (* // | WriteError (Some ad) txt  -> write log += ad; state = Close *)
-          (* // | WriteClose                 -> write log += closeNotify; state = ... *)
-          (* // | WriteError None txt       -> no change except state = Close *)
   = reveal_epoch_region_inv_all ();
     let i = currentId c Writer in 
     let wopt = current_writer c i in 
