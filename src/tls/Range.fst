@@ -239,10 +239,7 @@ let targetLength i r =
 *)
 
 #reset-options
-//!!!!!!!!!!!!!!!!!
-//DISABLING VERIFICATION FOR THESE NEXT FOUR QUERIES, UNTIL WE CAN STABILIZE IT AGAIN
-//!!!!!!!!!!!!!!!!!
-#set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2 --lax"
+#set-options "--initial_fuel 0 --initial_ifuel 2 --max_fuel 0 --max_ifuel 2"
 
 val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
    -> r:range{
@@ -268,13 +265,9 @@ val targetLength_converges: i:id2
 (* #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1" *)
 #set-options "--z3timeout 60"
 //without hints, the next query also takes several seconds on a powerful desktop
-//NS: THIS ONE SEEMS TO FAIL WITH HINTS; it required ~30seconds to work without hints on my machine
 let targetLength_converges i r =
   lemma_MtE i; lemma_ID12 i
 
-//!!!!!!!!!!!!!!!!!
-//ENABLING VERIFICATION AGAIN
-//!!!!!!!!!!!!!!!!!
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> r':range
   { snd r <= max_TLSPlaintext_fragment_length
