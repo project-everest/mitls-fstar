@@ -2,11 +2,20 @@
   "µï9ÔMë;¿1É#¿î”ì‚",
   [
     [
+      "TLSError.string_of_ad",
+      1,
       0,
       1,
       [
-        "@query_2871",
+        "@query", "constructor_distinct_TLSError.AD_export_restriction",
+        "constructor_distinct_TLSError.AD_insufficient_security",
+        "constructor_distinct_TLSError.AD_internal_error",
+        "constructor_distinct_TLSError.AD_missing_extension",
+        "constructor_distinct_TLSError.AD_protocol_version",
+        "constructor_distinct_TLSError.AD_unrecognized_name",
         "constructor_distinct_TLSError.AD_unsupported_extension",
+        "constructor_distinct_TLSError.AD_user_cancelled_fatal",
+        "constructor_distinct_TLSError.AD_user_cancelled_warning",
         "disc_equation_TLSError.AD_access_denied",
         "disc_equation_TLSError.AD_bad_certificate_fatal",
         "disc_equation_TLSError.AD_bad_certificate_warning",
@@ -40,26 +49,30 @@
         "disc_equation_TLSError.AD_unsupported_extension",
         "disc_equation_TLSError.AD_user_cancelled_fatal",
         "disc_equation_TLSError.AD_user_cancelled_warning",
-        "fuel_guarded_inversion_TLSError.alertDescription_2698"
+        "fuel_guarded_inversion_TLSError.alertDescription"
       ],
       0
     ],
-    [ 0, 1, [ "@query_2907" ], 0 ],
+    [ "TLSError.isFatal", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "TLSError.resT",
+      1,
       0,
       1,
       [
-        "@query_2914", "disc_equation_Platform.Error.Correct",
+        "@query", "disc_equation_Platform.Error.Correct",
         "equation_TLSError.error", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2913"
+        "refinement_interpretation_Tm_refine_603c32701ff5a298f7f82f85d1356168"
       ],
       0
     ],
     [
+      "TLSError.mapResult",
+      1,
       0,
       1,
       [
-        "@query_2924", "bool_inversion", "equation_TLSError.error",
+        "@query", "bool_inversion", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
         "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
@@ -67,10 +80,12 @@
       0
     ],
     [
+      "TLSError.bindResult",
+      1,
       0,
       1,
       [
-        "@query_2935", "bool_inversion", "equation_TLSError.error",
+        "@query", "bool_inversion", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
         "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
@@ -78,10 +93,12 @@
       0
     ],
     [
+      "TLSError.resultMap",
+      1,
       0,
       1,
       [
-        "@query_2946", "bool_inversion", "equation_TLSError.error",
+        "@query", "bool_inversion", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
         "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
@@ -89,10 +106,12 @@
       0
     ],
     [
+      "TLSError.resultBind",
+      1,
       0,
       1,
       [
-        "@query_2955", "bool_inversion", "equation_TLSError.error",
+        "@query", "bool_inversion", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
         "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"

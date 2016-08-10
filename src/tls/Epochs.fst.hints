@@ -1,254 +1,312 @@
 [
   "¹=”ŸgFqrS¡MN´¤À¥",
   [
-    [ 0, 1, [ "@query_22728" ], 0 ],
+    [ "Epochs.fresh_subregion", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "Epochs.epoch_region_inv",
+      1,
       0,
       1,
       [
-        "@query_22739", "equality_tok_TLSConstants.Reader@tok",
+        "@query", "equality_tok_TLSConstants.Reader@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_StAE.reader",
         "equation_StAE.writer", "equation_TLSConstants.rgn",
         "equation_TLSInfo.peerId",
-        "refinement_interpretation_Tm_refine_3014", "typing_StAE.region",
-        "typing_TLSInfo.peerId", "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      0,
-      1,
-      [ "@query_22740", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
-      0
-    ],
-    [
-      0,
-      1,
-      [ "@query_22741", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
-      0
-    ],
-    [
-      0,
-      1,
-      [ "@query_22742", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@query_22751", "assumption_Platform.Bytes.HasEq_bytes_3315",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random", "haseqTm_refine_3327"
-      ],
-      0
-    ],
-    [ 0, 1, [ "@query_22758" ], 0 ],
-    [
-      0,
-      1,
-      [
-        "@query_22814", "assumption_Platform.Bytes.HasEq_bytes_3315",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random", "haseqTm_refine_3327"
-      ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@query_22819", "assumption_Negotiation.handshake_haseq_22642",
-        "assumption_StAE.state_haseq_18929",
-        "assumption_TLSInfo.id_haseq_14287",
-        "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok", "equation_StAE.reader",
-        "equation_StAE.writer", "equation_TLSInfo.peerId",
-        "haseqTm_refine_14425", "haseqTm_refine_22770",
-        "refinement_interpretation_Tm_refine_14425", "typing_TLSInfo.peerId",
+        "refinement_interpretation_Tm_refine_031aa5f46d93e5d19c7d173c1a0a0157",
+        "typing_StAE.region", "typing_TLSInfo.peerId",
         "typing_tok_TLSConstants.Reader@tok",
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0
     ],
     [
-      0,
-      1,
-      [
-        "@query_22842", "assumption_Platform.Bytes.HasEq_bytes_3315",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random", "haseqTm_refine_3327"
-      ],
-      0
-    ],
-    [ 0, 1, [ "@query_22843" ], 0 ],
-    [ 0, 1, [ "@query_22855" ], 0 ],
-    [ 0, 1, [ "@query_22856" ], 0 ],
-    [ 0, 1, [ "@query_22863" ], 0 ],
-    [ 0, 1, [ "@query_22864" ], 0 ],
-    [
-      0,
-      1,
-      [
-        "@query_22871", "proj_equation_Epochs.Epoch_i",
-        "projection_inverse_Epochs.Epoch_i"
-      ],
-      0
-    ],
-    [ 0, 1, [ "@query_22872" ], 0 ],
-    [
-      0,
-      1,
-      [
-        "@query_22885", "proj_equation_Epochs.Epoch_i",
-        "proj_equation_Epochs.Epoch_r", "projection_inverse_Epochs.Epoch_i",
-        "projection_inverse_Epochs.Epoch_r",
-        "refinement_interpretation_Tm_refine_22831"
-      ],
-      0
-    ],
-    [
-      0,
+      "Epochs.epoch_region_inv",
       2,
+      0,
+      1,
+      [ "@query", "assumption_FStar.HyperHeap.HasEq_rid" ],
+      0
+    ],
+    [
+      "Epochs.epoch_region_inv",
+      3,
+      0,
+      1,
+      [ "@query", "assumption_FStar.HyperHeap.HasEq_rid" ],
+      0
+    ],
+    [
+      "Epochs.epoch_region_inv",
+      4,
+      0,
+      1,
+      [ "@query", "assumption_FStar.HyperHeap.HasEq_rid" ],
+      0
+    ],
+    [
+      "Epochs.epoch",
+      1,
+      0,
+      1,
       [
-        "@pretyping__133", "@query_22886", "data_elim_Epochs.Epoch",
-        "data_elim_StAE.StLHAE", "data_elim_StAE.Stream",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
-        "equation_StAE.writer", "fuel_guarded_inversion_Epochs.epoch_22824",
-        "fuel_guarded_inversion_StAE.state_18904",
-        "primitive_Prims.op_AmpAmp", "proj_equation_Epochs.Epoch_i",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_18911",
-        "refinement_interpretation_Tm_refine_18921",
-        "refinement_interpretation_Tm_refine_22831", "unit_typing"
+        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSInfo.random",
+        "haseqTm_refine_810128ef5f4b05b21d8806119a5984f5"
+      ],
+      0
+    ],
+    [ "Epochs.epoch", 2, 0, 1, [ "@query" ], 0 ],
+    [
+      "Epochs.epoch",
+      3,
+      0,
+      1,
+      [
+        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSInfo.random",
+        "haseqTm_refine_810128ef5f4b05b21d8806119a5984f5"
       ],
       0
     ],
     [
-      0,
-      1,
-      [ "@query_22911", "equation_Epochs.epoch_region_inv_", "unit_typing" ],
-      0
-    ],
-    [
+      "Epochs.epoch",
+      4,
       0,
       1,
       [
-        "@query_22914", "data_elim_Epochs.Epoch",
-        "equation_Epochs.epoch_region_inv_",
-        "equation_FStar.HyperHeap.test0",
-        "fuel_guarded_inversion_Epochs.epoch_22824",
-        "function_token_typing_FStar.HyperHeap.test0",
-        "proj_equation_Epochs.Epoch_i", "proj_equation_Epochs.Epoch_r",
-        "proj_equation_Epochs.Epoch_w",
-        "refinement_interpretation_Tm_refine_22831", "unit_inversion"
-      ],
-      0
-    ],
-    [ 0, 1, [ "@query_22915", "equation_Epochs.epoch_region_inv_" ], 0 ],
-    [
-      0,
-      1,
-      [
-        "@query_22923", "equation_Epochs.epoch_region_inv_",
-        "fuel_guarded_inversion_Epochs.epoch_22824",
-        "proj_equation_Epochs.Epoch_i", "proj_equation_Epochs.Epoch_r",
-        "proj_equation_Epochs.Epoch_w",
-        "refinement_interpretation_Tm_refine_22875", "typing_Epochs.Epoch.w"
-      ],
-      0
-    ],
-    [
-      0,
-      1,
-      [
-        "@query_22958", "equality_tok_TLSConstants.Writer@tok",
-        "equation_StAE.writer", "equation_TLSConstants.rgn",
-        "proj_equation_Epochs.Epoch_i", "proj_equation_Epochs.Epoch_w",
-        "refinement_interpretation_Tm_refine_14425",
-        "refinement_interpretation_Tm_refine_22875",
-        "refinement_interpretation_Tm_refine_3014", "typing_Epochs.Epoch.i",
-        "typing_Epochs.Epoch.w", "typing_StAE.region",
+        "@query", "assumption_Negotiation.handshake_haseq",
+        "assumption_StAE.state_haseq", "assumption_TLSInfo.id_haseq",
+        "equality_tok_TLSConstants.Reader@tok",
+        "equality_tok_TLSConstants.Writer@tok", "equation_StAE.reader",
+        "equation_StAE.writer", "equation_TLSInfo.peerId",
+        "haseqTm_refine_0604c7b3ec563d16cdd7ce213c7f43ec",
+        "haseqTm_refine_8094f15cbc49dabee5b79d150340b584",
+        "refinement_interpretation_Tm_refine_0604c7b3ec563d16cdd7ce213c7f43ec",
+        "typing_TLSInfo.peerId", "typing_tok_TLSConstants.Reader@tok",
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0
     ],
     [
+      "Epochs.Epoch.i",
+      1,
       0,
       1,
       [
-        "@query_22961", "assumption_Prims.HasEq_int_319",
-        "equation_Prims.nat", "haseqTm_refine_1040"
+        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSInfo.random",
+        "haseqTm_refine_810128ef5f4b05b21d8806119a5984f5"
+      ],
+      0
+    ],
+    [ "Epochs.Epoch.i", 2, 0, 1, [ "@query" ], 0 ],
+    [ "Epochs.Epoch.i", 3, 0, 1, [ "@query" ], 0 ],
+    [ "Epochs.Epoch.h", 1, 0, 1, [ "@query" ], 0 ],
+    [ "Epochs.Epoch.h", 2, 0, 1, [ "@query" ], 0 ],
+    [ "Epochs.Epoch.r", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Epochs.Epoch.r",
+      2,
+      0,
+      1,
+      [
+        "@query", "proj_equation_Epochs.Epoch_i",
+        "projection_inverse_Epochs.Epoch_i"
+      ],
+      0
+    ],
+    [ "Epochs.Epoch.w", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Epochs.Epoch.w",
+      2,
+      0,
+      1,
+      [
+        "@query", "proj_equation_Epochs.Epoch_i",
+        "proj_equation_Epochs.Epoch_r", "projection_inverse_Epochs.Epoch_i",
+        "projection_inverse_Epochs.Epoch_r",
+        "refinement_interpretation_Tm_refine_8094f15cbc49dabee5b79d150340b584"
       ],
       0
     ],
     [
-      0,
+      "Epochs.epoch_id",
       1,
+      0,
+      2,
       [
-        "@query_22964", "assumption_Prims.HasEq_int_319",
-        "equation_Prims.nat", "haseqTm_refine_1040"
+        "@query", "data_elim_Epochs.Epoch", "data_elim_StAE.StLHAE",
+        "data_elim_StAE.Stream", "disc_equation_TLSInfo.ID13",
+        "equality_tok_TLSConstants.Writer@tok", "equation_StAE.is_stlhae",
+        "equation_StAE.is_stream", "equation_StAE.writer",
+        "fuel_guarded_inversion_Epochs.epoch",
+        "fuel_guarded_inversion_StAE.state",
+        "pretyping_f8666440faa91836cc5a13998af863fc",
+        "primitive_Prims.op_AmpAmp", "proj_equation_Epochs.Epoch_i",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_5581071ef14ffaab0537cb15adce4a4e",
+        "refinement_interpretation_Tm_refine_7d1759a9dff29514b4e6189f6e9df777",
+        "refinement_interpretation_Tm_refine_8094f15cbc49dabee5b79d150340b584",
+        "unit_typing"
       ],
       0
     ],
     [
+      "Epochs.reveal_epoch_region_inv_all",
+      1,
       0,
       1,
-      [ "@query_22969", "assumption_FStar.HyperHeap.HasEq_rid_2996" ],
+      [ "@query", "equation_Epochs.epoch_region_inv_", "unit_typing" ],
       0
     ],
     [
-      0,
+      "Epochs.reveal_epoch_region_inv",
       1,
-      [ "@query_22980", "equation_Epochs.epochs_inv_", "unit_typing" ],
-      0
-    ],
-    [ 0, 1, [ "@query_23031" ], 0 ],
-    [ 0, 1, [ "@query_23052" ], 0 ],
-    [ 0, 1, [ "@query_23053" ], 0 ],
-    [
       0,
       1,
       [
-        "@query_23074", "proj_equation_Epochs.MkEpochs_es",
+        "@query", "data_elim_Epochs.Epoch",
+        "equation_Epochs.epoch_region_inv_",
+        "equation_FStar.HyperHeap.test0",
+        "fuel_guarded_inversion_Epochs.epoch",
+        "function_token_typing_FStar.HyperHeap.test0",
+        "proj_equation_Epochs.Epoch_i", "proj_equation_Epochs.Epoch_r",
+        "proj_equation_Epochs.Epoch_w",
+        "refinement_interpretation_Tm_refine_8094f15cbc49dabee5b79d150340b584",
+        "unit_inversion"
+      ],
+      0
+    ],
+    [
+      "Epochs.writer_epoch",
+      1,
+      0,
+      1,
+      [ "@query", "equation_Epochs.epoch_region_inv_" ],
+      0
+    ],
+    [
+      "Epochs.reader_epoch",
+      1,
+      0,
+      1,
+      [
+        "@query", "equation_Epochs.epoch_region_inv_",
+        "fuel_guarded_inversion_Epochs.epoch",
+        "proj_equation_Epochs.Epoch_i", "proj_equation_Epochs.Epoch_r",
+        "proj_equation_Epochs.Epoch_w",
+        "refinement_interpretation_Tm_refine_b00de9aa18d841890fc7759786ab7f97",
+        "typing_Epochs.Epoch.w"
+      ],
+      0
+    ],
+    [
+      "Epochs.epochs_inv",
+      1,
+      0,
+      1,
+      [
+        "@query", "equality_tok_TLSConstants.Writer@tok",
+        "equation_StAE.writer", "equation_TLSConstants.rgn",
+        "proj_equation_Epochs.Epoch_i", "proj_equation_Epochs.Epoch_w",
+        "refinement_interpretation_Tm_refine_031aa5f46d93e5d19c7d173c1a0a0157",
+        "refinement_interpretation_Tm_refine_0604c7b3ec563d16cdd7ce213c7f43ec",
+        "refinement_interpretation_Tm_refine_b00de9aa18d841890fc7759786ab7f97",
+        "typing_Epochs.Epoch.i", "typing_Epochs.Epoch.w",
+        "typing_StAE.region", "typing_tok_TLSConstants.Writer@tok"
+      ],
+      0
+    ],
+    [
+      "Epochs.epochs_inv",
+      2,
+      0,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqTm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0
+    ],
+    [
+      "Epochs.epochs_inv",
+      3,
+      0,
+      1,
+      [
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqTm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0
+    ],
+    [
+      "Epochs.epochs_inv",
+      4,
+      0,
+      1,
+      [ "@query", "assumption_FStar.HyperHeap.HasEq_rid" ],
+      0
+    ],
+    [
+      "Epochs.reveal_epochs_inv'",
+      1,
+      0,
+      1,
+      [ "@query", "equation_Epochs.epochs_inv_", "unit_typing" ],
+      0
+    ],
+    [ "Epochs.MkEpochs.es", 1, 0, 1, [ "@query" ], 0 ],
+    [ "Epochs.MkEpochs.es", 2, 0, 1, [ "@query" ], 0 ],
+    [ "Epochs.MkEpochs.read", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Epochs.MkEpochs.read",
+      2,
+      0,
+      1,
+      [
+        "@query", "proj_equation_Epochs.MkEpochs_es",
         "projection_inverse_Epochs.MkEpochs_es"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23075" ], 0 ],
+    [ "Epochs.MkEpochs.write", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "Epochs.MkEpochs.write",
+      2,
       0,
       1,
       [
-        "@query_23094", "proj_equation_Epochs.MkEpochs_es",
+        "@query", "proj_equation_Epochs.MkEpochs_es",
         "projection_inverse_Epochs.MkEpochs_es"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23095" ], 0 ],
-    [ 0, 1, [ "@query_23111", "assumption_Prims.HasEq_int_319" ], 0 ],
-    [ 0, 1, [ "@query_23136" ], 0 ],
+    [ "Epochs.containsT", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "Epochs.alloc_log_and_ctrs",
+      1,
+      0,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [ "Epochs.alloc_log_and_ctrs", 2, 0, 1, [ "@query" ], 0 ],
+    [
+      "Epochs.alloc_log_and_ctrs",
+      3,
       0,
       1,
       [
-        "@pretyping__1413", "@pretyping__2658", "@pretyping__2664",
-        "@pretyping__2683", "@pretyping__316", "@query_23174",
-        "assumption_FStar.Heap.DomContains_2733",
-        "assumption_FStar.Heap.DomRestrict_2730",
-        "assumption_FStar.Heap.DomUpd_2729",
-        "assumption_FStar.Heap.Equals_2726",
-        "assumption_FStar.Heap.RestrictSel_2727",
-        "assumption_FStar.Heap.SelConcat_2728",
-        "assumption_FStar.Heap.SelUpd1_2722",
-        "assumption_FStar.Heap.SelUpd2_2723",
-        "assumption_FStar.HyperHeap.HasEq_rid_2996", "b2t_def",
-        "bool_inversion", "bool_typing",
-        "constructor_distinct_FStar.Seq.seq",
-        "constructor_distinct_Prims.int",
-        "data_typing_intro_FStar.Heap.Ref@tok",
+        "@query", "assumption_FStar.Heap.DomContains",
+        "assumption_FStar.Heap.DomRestrict", "assumption_FStar.Heap.DomUpd",
+        "assumption_FStar.Heap.Equals", "assumption_FStar.Heap.RestrictSel",
+        "assumption_FStar.Heap.SelConcat", "assumption_FStar.Heap.SelUpd1",
+        "assumption_FStar.Heap.SelUpd2",
+        "assumption_FStar.HyperHeap.HasEq_rid", "b2t_def", "bool_inversion",
+        "bool_typing", "data_typing_intro_FStar.Heap.Ref@tok",
         "equation_Epochs.epoch_ctr_inv", "equation_FStar.Heap.modifies",
         "equation_FStar.HyperHeap.contains_ref",
         "equation_FStar.HyperHeap.modifies_just",
@@ -265,16 +323,15 @@
         "equation_MonotoneSeq.i_sel", "equation_MonotoneSeq.i_seq",
         "equation_MonotoneSeq.increases", "equation_MonotoneSeq.int_at_most",
         "equation_Prims.eqtype", "equation_Prims.nat",
-        "equation_TLSConstants.tls_color",
-        "fuel_guarded_inversion_FStar.Heap.aref_2680",
-        "fuel_guarded_inversion_Prims.dtuple3_878",
+        "fuel_guarded_inversion_FStar.Heap.aref",
+        "fuel_guarded_inversion_Prims.dtuple3",
         "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
         "function_token_typing_MonotoneSeq.grows",
         "function_token_typing_MonotoneSeq.increases",
-        "function_token_typing_TLSConstants.tls_color",
-        "interpretation_Tm_arrow_1503", "interpretation_Tm_arrow_4768",
+        "interpretation_Tm_arrow_3656e806f7aa711cc9fe4ea9a1af2471",
+        "interpretation_Tm_arrow_76a60dab4e3b3182a3b4dae5a57cfb2d",
         "kinding_FStar.Heap.aref@tok", "l_and-interp", "l_or-interp",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
@@ -288,21 +345,25 @@
         "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
         "lemma_FStar.Set.mem_singleton", "lemma_FStar.Set.mem_union",
         "lemma_FStar.TSet.mem_intersect", "lemma_FStar.TSet.mem_singleton",
-        "lemma_FStar.TSet.mem_union", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "primitive_Prims.op_Negation",
-        "projection_inverse_BoxBool_proj_0",
+        "lemma_FStar.TSet.mem_union",
+        "pretyping_24fcca413a49c3b9891a433ace204782",
+        "pretyping_6c86c071b92797cdf01eb016249a9465",
+        "pretyping_9248629b80e5ece8a5830df634103252",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Minus",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Mkdtuple3__1",
         "projection_inverse_Prims.Mkdtuple3__2",
         "projection_inverse_Prims.Mkdtuple3__3", "ref_injectivity",
-        "ref_inversion", "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_1463",
-        "refinement_interpretation_Tm_refine_17266",
-        "refinement_interpretation_Tm_refine_22991",
-        "refinement_kinding_Tm_refine_17266",
+        "ref_inversion",
+        "refinement_interpretation_Tm_refine_044b88255bf2cc9d0d51c6648b9d09a7",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_697e2d47dae5281337dc0a3b19283a13",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_d293195290016bcf1c5005732c49b7d3",
+        "refinement_kinding_Tm_refine_044b88255bf2cc9d0d51c6648b9d09a7",
         "token_correspondence_MonotoneSeq.increases",
         "typing_Epochs.epoch_ctr_inv", "typing_FStar.Heap.concat",
         "typing_FStar.Heap.domain", "typing_FStar.Heap.restrict",
@@ -314,49 +375,52 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.mem",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union",
         "typing_FStar.TSet.complement", "typing_FStar.TSet.empty",
-        "typing_FStar.TSet.singleton", "typing_MonotoneSeq.i_contains",
-        "typing_MonotoneSeq.i_sel"
+        "typing_FStar.TSet.singleton", "typing_MonotoneSeq.i_contains"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23176", "assumption_Prims.HasEq_int_319" ], 0 ],
-    [ 0, 1, [ "@query_23190" ], 0 ],
     [
+      "Epochs.incr_epoch_ctr",
+      1,
+      0,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [ "Epochs.incr_epoch_ctr", 2, 0, 1, [ "@query" ], 0 ],
+    [
+      "Epochs.incr_epoch_ctr",
+      3,
       0,
       1,
       [
-        "@pretyping__2658", "@pretyping__2664", "@query_23214",
-        "assumption_FStar.Heap.DomContains_2733",
-        "assumption_FStar.Heap.DomRestrict_2730",
-        "assumption_FStar.Heap.DomUpd_2729",
-        "assumption_FStar.Heap.Equals_2726",
-        "assumption_FStar.Heap.RestrictSel_2727",
-        "assumption_FStar.Heap.SelConcat_2728",
-        "assumption_FStar.Heap.SelUpd1_2722",
-        "assumption_FStar.Heap.SelUpd2_2723",
-        "assumption_FStar.HyperHeap.HasEq_rid_2996", "b2t_def",
-        "bool_inversion", "bool_typing",
-        "data_typing_intro_FStar.Heap.Ref@tok", "equation_Epochs.epoch_ctr",
-        "equation_Epochs.epoch_ctr_inv", "equation_FStar.Heap.modifies",
-        "equation_FStar.HyperHeap.contains_ref",
+        "@query", "assumption_FStar.Heap.DomContains",
+        "assumption_FStar.Heap.DomRestrict", "assumption_FStar.Heap.DomUpd",
+        "assumption_FStar.Heap.Equals", "assumption_FStar.Heap.RestrictSel",
+        "assumption_FStar.Heap.SelConcat", "assumption_FStar.Heap.SelUpd1",
+        "assumption_FStar.Heap.SelUpd2",
+        "assumption_FStar.HyperHeap.HasEq_rid", "b2t_def", "bool_inversion",
+        "bool_typing", "data_typing_intro_FStar.Heap.Ref@tok",
+        "equation_Epochs.epoch_ctr", "equation_Epochs.epoch_ctr_inv",
+        "equation_FStar.Heap.modifies",
         "equation_FStar.HyperHeap.modifies_just",
         "equation_FStar.HyperHeap.modifies_one",
         "equation_FStar.HyperHeap.modifies_rref",
         "equation_FStar.HyperHeap.sel", "equation_FStar.HyperHeap.t",
         "equation_FStar.HyperHeap.upd",
         "equation_FStar.Monotonic.RRef.as_rref",
-        "equation_FStar.Monotonic.RRef.m_contains",
         "equation_FStar.Monotonic.RRef.m_sel",
         "equation_FStar.Monotonic.RRef.reln", "equation_FStar.Set.subset",
-        "equation_FStar.TSet.subset", "equation_MonotoneSeq.i_sel",
-        "equation_MonotoneSeq.increases", "equation_MonotoneSeq.int_at_most",
-        "equation_Prims.eqtype", "equation_Prims.l_not",
-        "equation_Prims.nat", "function_token_typing_FStar.Heap.emp",
+        "equation_MonotoneSeq.i_sel", "equation_MonotoneSeq.increases",
+        "equation_MonotoneSeq.int_at_most", "equation_Prims.eqtype",
+        "equation_Prims.l_not", "equation_Prims.nat",
+        "function_token_typing_FStar.Heap.emp",
         "function_token_typing_FStar.Heap.heap",
         "function_token_typing_FStar.HyperHeap.rid",
         "function_token_typing_MonotoneSeq.increases", "int_inversion",
-        "interpretation_Tm_arrow_4768", "kinding_FStar.Heap.aref@tok",
-        "l_and-interp", "l_or-interp", "lemma_FStar.Map.lemma_ContainsDom",
+        "interpretation_Tm_arrow_76a60dab4e3b3182a3b4dae5a57cfb2d",
+        "kinding_FStar.Heap.aref@tok", "l_and-interp", "l_or-interp",
+        "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
         "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
@@ -368,134 +432,191 @@
         "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
         "lemma_FStar.Set.mem_singleton", "lemma_FStar.Set.mem_union",
         "lemma_FStar.TSet.mem_complement", "lemma_FStar.TSet.mem_intersect",
-        "lemma_FStar.TSet.mem_singleton", "lemma_FStar.TSet.mem_union",
+        "lemma_FStar.TSet.mem_singleton", "lemma_FStar.TSet.mem_subset",
+        "lemma_FStar.TSet.mem_union",
+        "pretyping_24fcca413a49c3b9891a433ace204782",
+        "pretyping_6c86c071b92797cdf01eb016249a9465",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
         "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0", "ref_injectivity",
-        "ref_inversion", "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_113",
-        "refinement_interpretation_Tm_refine_17266",
-        "refinement_interpretation_Tm_refine_22991",
+        "ref_inversion",
+        "refinement_interpretation_Tm_refine_044b88255bf2cc9d0d51c6648b9d09a7",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_697e2d47dae5281337dc0a3b19283a13",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_Epochs.epoch_ctr_inv", "typing_FStar.Heap.concat",
         "typing_FStar.Heap.domain", "typing_FStar.Heap.restrict",
         "typing_FStar.Heap.upd", "typing_FStar.HyperHeap.as_ref",
-        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
-        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
-        "typing_FStar.Map.sel", "typing_FStar.Monotonic.RRef.as_rref",
-        "typing_FStar.Seq.length", "typing_FStar.Set.complement",
-        "typing_FStar.Set.mem", "typing_FStar.Set.singleton",
-        "typing_FStar.Set.union", "typing_FStar.TSet.complement",
-        "typing_FStar.TSet.empty", "typing_FStar.TSet.singleton",
-        "typing_FStar.TSet.union", "typing_MonotoneSeq.i_sel"
+        "typing_FStar.Map.concat", "typing_FStar.Map.domain",
+        "typing_FStar.Map.restrict", "typing_FStar.Map.sel",
+        "typing_FStar.Monotonic.RRef.as_rref", "typing_FStar.Seq.length",
+        "typing_FStar.Set.complement", "typing_FStar.Set.mem",
+        "typing_FStar.Set.singleton", "typing_FStar.Set.union",
+        "typing_FStar.TSet.complement", "typing_FStar.TSet.empty",
+        "typing_FStar.TSet.singleton", "typing_FStar.TSet.union",
+        "typing_MonotoneSeq.i_sel"
       ],
       0
     ],
     [
+      "Epochs.epochs_init",
+      1,
       0,
       1,
       [
-        "@query_23267", "equation_Epochs.epochs_inv", "equation_Prims.nat",
+        "@query", "equation_Epochs.epochs_inv", "equation_Prims.nat",
         "kinding_Epochs.epoch@tok",
-        "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_1463",
-        "refinement_interpretation_Tm_refine_22977",
+        "refinement_interpretation_Tm_refine_6b30cc0dc22f1e647eadb3a1daedffab",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_d293195290016bcf1c5005732c49b7d3",
         "typing_FStar.Seq.createEmpty"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23288" ], 0 ],
-    [ 0, 1, [ "@query_23375" ], 0 ],
-    [ 0, 1, [ "@query_23385", "assumption_Prims.HasEq_int_319" ], 0 ],
-    [ 0, 1, [ "@query_23494" ], 0 ],
+    [ "Epochs.incr_pre", 1, 0, 1, [ "@query" ], 0 ],
+    [ "Epochs.incr_post", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "Epochs.incr_post",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [ "Epochs.add_epoch", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Epochs.add_epoch",
+      2,
       0,
       1,
       [
-        "@query_23538", "equation_FStar.HyperHeap.test0",
+        "@query", "equation_FStar.HyperHeap.test0",
         "function_token_typing_FStar.HyperHeap.test0",
         "proj_equation_Epochs.MkEpochs_es",
         "projection_inverse_Epochs.MkEpochs_es", "unit_inversion"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23545", "assumption_Epochs.epoch_haseq_22841" ], 0 ],
     [
+      "Epochs.add_epoch",
+      3,
+      0,
+      1,
+      [ "@query", "assumption_Epochs.epoch_haseq" ],
+      0
+    ],
+    [
+      "Epochs.incr_reader",
+      1,
       0,
       1,
       [
-        "@query_23688", "equation_FStar.Monotonic.RRef.m_sel",
+        "@query", "equation_FStar.Monotonic.RRef.m_sel",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0
     ],
     [
+      "Epochs.incr_writer",
+      1,
       0,
       1,
       [
-        "@query_23831", "equation_FStar.Monotonic.RRef.m_sel",
+        "@query", "equation_FStar.Monotonic.RRef.m_sel",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23832" ], 0 ],
+    [ "Epochs.get_epochs", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "Epochs.ctr",
+      1,
       0,
       1,
       [
-        "@query_23849", "disc_equation_TLSConstants.Reader",
+        "@query", "disc_equation_TLSConstants.Reader",
         "disc_equation_TLSConstants.Writer",
-        "fuel_guarded_inversion_TLSConstants.rw_7858"
+        "fuel_guarded_inversion_TLSConstants.rw"
       ],
       0
     ],
     [
+      "Epochs.readerT",
+      1,
       0,
       1,
       [
-        "@query_23876", "equation_Epochs.get_epochs",
+        "@query", "equation_Epochs.get_epochs",
         "proj_equation_Epochs.MkEpochs_es",
         "projection_inverse_Epochs.MkEpochs_es"
       ],
       0
     ],
     [
+      "Epochs.writerT",
+      1,
       0,
       1,
       [
-        "@query_23905", "equation_Epochs.get_epochs",
+        "@query", "equation_Epochs.get_epochs",
         "proj_equation_Epochs.MkEpochs_es",
         "projection_inverse_Epochs.MkEpochs_es"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23930" ], 0 ],
-    [ 0, 1, [ "@query_23933", "assumption_Prims.HasEq_int_319" ], 0 ],
+    [ "Epochs.get_ctr_post", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "Epochs.get_ctr_post",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "Epochs.get_ctr",
+      1,
       0,
       1,
       [
-        "@query_23972", "equation_Epochs.epoch_ctr_inv",
+        "@query", "equation_Epochs.epoch_ctr_inv",
         "equation_FStar.Monotonic.RRef.m_sel",
-        "fuel_guarded_inversion_Epochs.epochs_23001",
+        "fuel_guarded_inversion_Epochs.epochs",
         "proj_equation_Epochs.MkEpochs_es",
-        "refinement_interpretation_Tm_refine_22991"
+        "refinement_interpretation_Tm_refine_697e2d47dae5281337dc0a3b19283a13"
       ],
       0
     ],
-    [ 0, 1, [ "@query_23975" ], 0 ],
+    [ "Epochs.epochsT", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "Epochs.get_current_epoch",
+      1,
       0,
       1,
       [
-        "@query_24108", "b2t_def", "equation_FStar.SeqProperties.indexable",
+        "@query", "b2t_def", "equation_FStar.SeqProperties.indexable",
         "equation_MonotoneSeq.i_sel", "equation_MonotoneSeq.int_at_most",
         "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0"
       ],
       0
     ],
-    [ 0, 1, [ "@query_24112", "assumption_Epochs.epoch_haseq_22841" ], 0 ],
-    [ 0, 1, [ "@query_24116", "assumption_Epochs.epoch_haseq_22841" ], 0 ]
+    [
+      "Epochs.get_current_epoch",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_Epochs.epoch_haseq" ],
+      0
+    ],
+    [
+      "Epochs.get_current_epoch",
+      3,
+      0,
+      1,
+      [ "@query", "assumption_Epochs.epoch_haseq" ],
+      0
+    ]
   ]
 ]

@@ -2,18 +2,21 @@
   "(VÝ;w_¼ûÐÑ\u0010pFJeÿ",
   [
     [
+      "RSAKey.pred",
+      1,
       0,
       1,
       [
-        "@query_9288", "assumption_CoreCrypto.rsa_key_haseq_4505",
-        "assumption_Prims.HasEq_tuple2_647", "equation_Platform.Bytes.bytes",
+        "@query", "assumption_CoreCrypto.rsa_key_haseq",
+        "assumption_Prims.HasEq_tuple2", "equation_Platform.Bytes.bytes",
         "equation_RSAKey.pk", "equation_RSAKey.sk",
-        "function_token_typing_RSAKey.pk", "haseqTm_refine_9274",
+        "function_token_typing_RSAKey.pk",
+        "haseqTm_refine_91cae5fbff2b17b9fca0db24348d01a5",
         "kinding_CoreCrypto.rsa_key@tok"
       ],
       0
     ],
-    [ 0, 1, [ "@query_9307" ], 0 ],
-    [ 0, 1, [ "@query_9322" ], 0 ]
+    [ "RSAKey.SK_PK._0", 1, 0, 1, [ "@query" ], 0 ],
+    [ "RSAKey.create_rsapkey", 1, 0, 1, [ "@query" ], 0 ]
   ]
 ]

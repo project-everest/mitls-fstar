@@ -1,59 +1,76 @@
 [
   "œvíqŠ9û\u0002™I,š¾É¨}",
   [
-    [ 0, 1, [ "@query_17799" ], 0 ],
-    [ 0, 1, [ "@query_17802", "projection_inverse_BoxInt_proj_0" ], 0 ],
+    [ "StreamDeltas.deltas", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "StreamDeltas.singleton",
+      1,
+      0,
+      1,
+      [ "@query", "projection_inverse_BoxInt_proj_0" ],
+      0
+    ],
+    [
+      "StreamDeltas.project_one_frag",
+      1,
       1,
       1,
       [
-        "@query_17811", "equation_DataStream.fragment",
+        "@query", "equation_DataStream.fragment",
         "equation_Platform.Bytes.length", "equation_Prims.nat",
         "equation_Range.fragment_range", "equation_Range.frange",
         "equation_Range.range", "equation_Range.wider",
-        "equation_Range.within", "refinement_interpretation_Tm_refine_14539",
-        "refinement_interpretation_Tm_refine_14744"
+        "equation_Range.within",
+        "refinement_interpretation_Tm_refine_57bc8c59b50b7a8df03d31ab3a61d59f",
+        "refinement_interpretation_Tm_refine_977063e22be61867cab4fea130513503"
       ],
       0
     ],
     [
+      "StreamDeltas.project_deltas",
+      1,
       1,
       1,
       [
-        "@query_17816", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_14364"
+        "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141"
       ],
       0
     ],
-    [ 1, 1, [ "@query_17822" ], 0 ],
-    [ 1, 1, [ "@query_17833" ], 0 ],
+    [ "StreamDeltas.project_deltas", 2, 1, 1, [ "@query" ], 0 ],
+    [ "StreamDeltas.stream_deltas", 1, 1, 1, [ "@query" ], 0 ],
     [
+      "StreamDeltas.stream_deltas_snoc",
+      1,
       1,
       1,
       [
-        "@pretyping__15172", "@query_17850",
-        "equation_FStar.SeqProperties.snoc", "equation_StreamDeltas.id",
-        "equation_StreamDeltas.project_deltas",
-        "refinement_interpretation_Tm_refine_14364"
+        "@query", "equation_FStar.SeqProperties.snoc",
+        "equation_StreamDeltas.id", "equation_StreamDeltas.project_deltas",
+        "pretyping_6dab7c447a2e7b98f8c4a628d11684fd",
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141"
       ],
       0
     ],
-    [ 1, 1, [ "@query_17853" ], 0 ],
+    [ "StreamDeltas.deltas_prefix", 1, 1, 1, [ "@query" ], 0 ],
     [
+      "StreamDeltas.project_fragment_deltas",
+      1,
       1,
       1,
       [
-        "@query_17881", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_14364"
+        "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141"
       ],
       0
     ],
     [
+      "StreamDeltas.project_fragment_deltas",
+      2,
       1,
       1,
       [
-        "@query_17927", "bool_inversion",
-        "disc_equation_TLSInfo.PlaintextID",
+        "@query", "bool_inversion", "disc_equation_TLSInfo.PlaintextID",
         "equation_FStar.HyperHeap.test0", "equation_MonotoneSeq.map_prefix",
         "equation_StAE.entry", "equation_StAE.fragments",
         "equation_StAE.fragments_prefix", "equation_StAE.ilog",
@@ -61,68 +78,86 @@
         "equation_StreamDeltas.id", "equation_StreamDeltas.project_deltas",
         "function_token_typing_FStar.HyperHeap.test0",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_14364",
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141",
         "typing_TLSInfo.is_PlaintextID", "unit_inversion"
       ],
       0
     ],
     [
+      "StreamDeltas.project_fragment_deltas",
+      3,
       1,
       1,
       [
-        "@query_17939", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_17929"
+        "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_49edabf22ed387b83e79e9af2d6a6391"
       ],
       0
     ],
     [
+      "StreamDeltas.stream_deltas_snoc2",
+      1,
       1,
       1,
       [
-        "@query_17940", "bool_inversion", "equation_FStar.HyperHeap.test0",
+        "@query", "bool_inversion", "equation_FStar.HyperHeap.test0",
         "equation_StreamDeltas.id", "equation_StreamDeltas.stream_deltas",
         "function_token_typing_FStar.HyperHeap.test0",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_14364", "typing_TLSInfo.authId",
-        "unit_inversion"
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141",
+        "typing_TLSInfo.authId", "unit_inversion"
       ],
       0
     ],
     [
+      "StreamDeltas.stream_deltas_snoc2",
+      2,
       1,
       1,
       [
-        "@query_17941", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_14364"
+        "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141"
       ],
       0
     ],
     [
+      "StreamDeltas.stream_deltas_snoc2",
+      3,
       1,
       1,
       [
-        "@query_17942", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_14364"
+        "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141"
       ],
       0
     ],
-    [ 1, 1, [ "@query_17943", "assumption_Prims.HasEq_int_319" ], 0 ],
     [
+      "StreamDeltas.encrypt",
+      1,
+      1,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "StreamDeltas.encrypt",
+      2,
       1,
       1,
       [
-        "@query_17944", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_14364"
+        "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141"
       ],
       0
     ],
-    [ 1, 1, [ "@query_17987" ], 0 ],
+    [ "StreamDeltas.encrypt", 3, 1, 1, [ "@query" ], 0 ],
     [
+      "StreamDeltas.encrypt",
+      4,
       1,
       1,
       [
-        "@query_18002", "bool_inversion",
-        "equality_tok_TLSConstants.Writer@tok",
+        "@query", "bool_inversion", "equality_tok_TLSConstants.Writer@tok",
         "equation_StreamDeltas.stream_deltas",
         "projection_inverse_BoxBool_proj_0", "unit_inversion"
       ],

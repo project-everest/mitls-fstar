@@ -1,31 +1,41 @@
 [
   "È\u0003Ž!=Qéº&\u001f~1Î“E;",
   [
-    [ 0, 1, [ "@query_16714", "projection_inverse_BoxInt_proj_0" ], 0 ],
     [
+      "Record.header",
+      1,
+      0,
+      1,
+      [ "@query", "projection_inverse_BoxInt_proj_0" ],
+      0
+    ],
+    [
+      "Record.makePacket",
+      1,
       0,
       1,
       [
-        "@query_16719", "equation_Platform.Bytes.bytes",
-        "equation_Record.fake", "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_9300"
+        "@query", "equation_Platform.Bytes.bytes", "equation_Record.fake",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_62be46b5d65726c91e550691e3da999b"
       ],
       0
     ],
     [
+      "Record.makePacket",
+      2,
       0,
       1,
-      [
-        "@query_16721", "assumption_TLSConstants.protocolVersion_haseq_7915"
-      ],
+      [ "@query", "assumption_TLSConstants.protocolVersion_haseq" ],
       0
     ],
     [
+      "Record.parseHeader",
+      1,
       0,
       1,
       [
-        "@pretyping__15287", "@query_16767", "bool_inversion",
-        "data_typing_intro_Content.Alert@tok",
+        "@query", "bool_inversion", "data_typing_intro_Content.Alert@tok",
         "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error", "equation_FStar.Char.char",
         "equation_FStar.SeqProperties.split", "equation_Platform.Bytes.byte",
@@ -37,42 +47,45 @@
         "function_token_typing_TLSError.error",
         "kinding_Content.contentType@tok",
         "kinding_TLSConstants.protocolVersion@tok",
-        "lemma_Platform.Error.invertOptResult", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_GreaterThan", "primitive_Prims.op_Subtraction",
-        "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
+        "lemma_Platform.Error.invertOptResult",
+        "pretyping_b030e2c8e211c2e89c8f24e1774b7a05",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_GreaterThan",
+        "primitive_Prims.op_Subtraction", "proj_equation_Prims.Mktuple2__1",
+        "proj_equation_Prims.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
-        "refinement_interpretation_Tm_refine_16732",
-        "refinement_interpretation_Tm_refine_16737",
-        "refinement_interpretation_Tm_refine_3327",
+        "refinement_interpretation_Tm_refine_47b2a08d3c86cb575ca77fbad4ddf953",
+        "refinement_interpretation_Tm_refine_810128ef5f4b05b21d8806119a5984f5",
+        "refinement_interpretation_Tm_refine_adb15cdd4ec3c79c2179d9f0e52b3d9d",
         "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
       ],
       0
     ],
     [
+      "Record.read",
+      1,
       0,
       1,
       [
-        "@query_16819", "bool_inversion", "bool_typing",
-        "disc_equation_Platform.Error.Correct",
+        "@query", "bool_inversion", "disc_equation_Platform.Error.Correct",
         "disc_equation_Platform.Error.Error",
         "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.empty_bytes",
         "equation_Platform.Bytes.lbytes", "equation_Prims.nat",
         "equation_TLSConstants.max_TLSCiphertext_fragment_length",
         "equation_TLSError.error", "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult_5054",
+        "fuel_guarded_inversion_Platform.Error.optResult",
         "function_token_typing_Platform.Bytes.empty_bytes",
         "function_token_typing_TLSError.error", "int_inversion",
         "lemma_Platform.Error.invertOptResult",
-        "primitive_Prims.op_Addition", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_1040",
-        "refinement_interpretation_Tm_refine_16770",
-        "refinement_interpretation_Tm_refine_3327",
-        "typing_Platform.Bytes.lbytes"
+        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2fd2ca5ba5888b39b1231badbe38fb2e",
+        "refinement_interpretation_Tm_refine_810128ef5f4b05b21d8806119a5984f5",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_Platform.Bytes.lbytes", "typing_Platform.Error.is_Correct",
+        "typing_Platform.Error.is_Error"
       ],
       0
     ]
