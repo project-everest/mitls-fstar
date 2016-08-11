@@ -273,6 +273,9 @@ let datafragment (i:id{~ (is_PlaintextID i)}) (o: option (rg:frange i & DataStre
 //* | WriteHSComplete
 //* the state changes accordingly.
 
+////////////////////////////////////////////////////////////////////////////////
+// Current writers
+////////////////////////////////////////////////////////////////////////////////
 let trigger_peer (#a:Type) (x:a) = True
 
 let cwriter (i:id) (c:connection) = 
@@ -295,7 +298,7 @@ let current_writer_T (c:connection) (i:id) (h:HH.t{current_writer_pre c i h})
 	 let _ = cut (trigger_peer (Epoch.r e)) in
 	 Some (Epoch.w e)
     else None
-  
+
 val current_writer : c:connection -> i:id -> ST (option (cwriter i c))
        (requires (fun h -> current_writer_pre c i h))
        (ensures (fun h0 wo h1 -> 
@@ -312,6 +315,23 @@ let current_writer c i =
        let _ = cut (trigger_peer (Epoch.r e)) in
        Some (Epoch.w e)
 
+let recall_current_writer (c:connection) 
+  : ST unit (fun h -> True) (fun h0 _ h1 -> 
+    let i = currentId_T c Writer h0 in
+    let wopt = current_writer_T c i h0 in
+    h0 == h1 
+    /\ (match wopt with
+       | None -> True
+       | Some wr -> Map.contains h0 (StAE.region wr)
+	        /\ Map.contains h0 (StAE.log_region wr)))
+  = let i = currentId c Writer in
+    let wopt = current_writer c i in
+    match wopt with
+    | None -> ()
+    | Some wr -> 
+      recall_region (StAE.region wr);
+      recall_region (StAE.log_region wr)
+
 //16-05-29 duplicating no_seqn_overflow?
 private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i c))
   : ST bool
@@ -322,6 +342,14 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 		        | None -> True
 			| Some w -> StAE.incrementable w h1))))
   = assume(False); true // admit()
+
+////////////////////////////////////////////////////////////////////////////////
+// Sending fragments on a given writer (not necessarily the current one)
+////////////////////////////////////////////////////////////////////////////////
+let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) = 
+  match wopt with 
+  | None -> Set.empty
+  | Some wr -> Set.singleton (StAE.region wr)
 
 let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h = 
      st_inv c h 
@@ -380,7 +408,7 @@ let sendFragment c #i wo f =
            match wo with
 	   | None    -> 
 	     assert (is_PlaintextID i);
-	     Content.repr i f //16-05-20 don't understand error. NS: terrible error location; should have been at makePacket
+	     Content.repr i f
 	   | Some wr -> 
 	     SD.encrypt wr f 
        in
@@ -393,6 +421,16 @@ let sendFragment c #i wo f =
        | Error(x)  -> Error(AD_internal_error,x)
        | Correct _ -> Correct()
   end
+
+////////////////////////////////////////////////////////////////////////////////
+// Sending alerts: this always happens on the current writer
+////////////////////////////////////////////////////////////////////////////////
+//Cedric says on slack:
+//  Functionally, you can only send alerts on the current epoch; so
+//  indeed, it is not necessarily the index known at the TLS API level. We
+//  have to reflect it in the postconditions of TLS read/write, but we
+//  don't have to be fully precise: If we report an error, we can e.g. say
+//  that an alert may have been sent on the current epoch.
 
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
@@ -440,19 +478,12 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
             WriteError (Some ad) reason
           end
 
-let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) = 
-  match wopt with 
-  | None -> Set.empty
-  | Some wr -> Set.singleton (StAE.region wr)
-
-inline let sendHandshake_inv  (#c:connection) (#i:id) (wopt:option (cwriter i c)) h =
-      sendFragment_inv wopt h                //can send more fragments, if needed
-      (* /\ current_writer_pre c i h *)
-      (* /\ currentId_T c Writer h = i *)
-      (* /\ current_writer_T c i h === wopt *)
-
-inline let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool) h0 r h1 = 
-      modifies_just (regions wopt) h0 h1    //didn't modify more than the writer's regions
+////////////////////////////////////////////////////////////////////////////////
+// Sending handshake messages on a given writer
+////////////////////////////////////////////////////////////////////////////////
+let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c)) 
+		       (om:option (message i)) (send_ccs:bool) h0 r h1 = 
+      modifies_just (opt_writer_regions wopt) h0 h1    //didn't modify more than the writer's regions
       /\ (match wopt with
  	 | None -> True
 	 | Some wr ->
@@ -483,9 +514,9 @@ inline let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c)
 
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
-       (requires (sendHandshake_inv wopt))
+       (requires (sendFragment_inv wopt))
        (ensures (fun h0 r h1 -> 
-		sendHandshake_inv wopt h1
+		sendFragment_inv wopt h1
 		/\ sendHandshake_post wopt om send_ccs h0 r h1))
   =  let b = IO.debug_print_string "CALL sendHandshake\n" in
      let result0 = // first try to send handshake fragment, if any
@@ -500,6 +531,9 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
        then result0
        else sendFragment c wopt (Content.CT_CCS #i (point 1)) // Don't pad
 
+////////////////////////////////////////////////////////////////////////////////
+// writeHandshake and helpers: repeatedly sending handshake messages
+////////////////////////////////////////////////////////////////////////////////
 // simplified to loop over Handshake traffic only;
 // called both when writing and reading 
 // returns WriteError or WrittenHandshake
@@ -508,7 +542,14 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
 //TODO: consider inlining sendHandshake to save a spec.
 //TODO: consider immediately sending post-completion traffic (e.g. TLS 1.2 Finished and TLS 1.3 Tickets)
 
-inline let next_fragment_pre (i:id) (c:connection) h0 = 
+//First, a wrapper around Handshake.next_fragment; 
+//using monotonicity to show that the i'th epoch doesn't change
+
+//07.29: should eventually move to Handshake.fst
+//       although that module isn't verified yet 
+//       so moving it there will cause us to lose 
+//       regression testing for this function
+let next_fragment_pre (i:id) (c:connection) h0 = 
     let s = c.hs in
     let es = logT s h0 in
     let j = iT s Writer h0 in 
@@ -517,13 +558,6 @@ inline let next_fragment_pre (i:id) (c:connection) h0 =
     hs_inv s h0 /\
     indexable es j /\
     (if j = -1 then is_PlaintextID i else i == epoch_id es.(j))
-
-//A wrapper around Handshake.next_fragment; using monotonicity to show that 
-//the i'th epoch doesn't change
-//07.29: should eventually move to Handshake.fst
-//       although that module isn't verified yet 
-//       so moving it there will cause us to lose 
-//       regression testing for this function
 val next_fragment: i:id -> c:connection -> ST (outgoing i)
   (requires (next_fragment_pre i c))
   (ensures (fun h0 result h1 -> 
@@ -546,6 +580,7 @@ let next_fragment i c =
 	  then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog) in
   res
 
+#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 val writeHandshake: c:connection -> b:bool -> ST ioresult_w 
   (requires (fun h -> 
   	  let i = currentId_T c Writer h in 
@@ -561,27 +596,6 @@ val writeHandshake: c:connection -> b:bool -> ST ioresult_w
       (* 	 | _ -> *)
       (* 	   let wopt = current_writer_T c i h1 in *)
       (* 	   sendFragment_inv wopt h1))) *)
-
-
-#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-
-let recall_current_writer (c:connection) 
-  : ST unit (fun h -> True) (fun h0 _ h1 -> 
-    let i = currentId_T c Writer h0 in
-    let wopt = current_writer_T c i h0 in
-    h0 == h1 
-    /\ (match wopt with
-       | None -> True
-       | Some wr -> Map.contains h0 (StAE.region wr)
-	        /\ Map.contains h0 (StAE.log_region wr)))
-  = let i = currentId c Writer in
-    let wopt = current_writer c i in
-    match wopt with
-    | None -> ()
-    | Some wr -> 
-      recall_region (StAE.region wr);
-      recall_region (StAE.log_region wr)
-
 let rec writeHandshake c newWriter = 
   let i = currentId c Writer in
   let wopt = current_writer c i in
@@ -595,7 +609,7 @@ let rec writeHandshake c newWriter =
 	recall_current_writer c;
 	sendAlert c ad reason 
       | _   -> 
-	admit();
+	admit(); //TODO: still to verify the rest
         if next_keys then c.state := BC; // much happening ghostly
         let st = !c.state in
         let newWriter = newWriter || next_keys in 
@@ -608,7 +622,10 @@ let rec writeHandshake c newWriter =
           // keep writing until something happens
 	  writeHandshake c newWriter
 
-#set-options "--lax" //NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
+////////////////////////////////////////////////////////////////////////////////
+// NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
+////////////////////////////////////////////////////////////////////////////////
+#set-options "--lax" 
 // (old) outcomes?
 // | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
 // | Written    -> sent application fragment (when is_Some appdata)
