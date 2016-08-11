@@ -480,18 +480,25 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
   | None -> Set.empty
   | Some wr -> Set.singleton (StAE.region wr)
 
-#set-options "--hint_info"
+#set-options "--hint_info --trace_error"
  
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
        (requires (fun h -> sendFragment_inv wopt h))
-       (ensures (fun h0 r h1 -> st_inv c h1
+       (ensures (fun h0 r h1 -> sendFragment_inv wopt h1
 			   /\ modifies_just (regions wopt) h0 h1
 			   /\ (match wopt with 
 				| None -> True
-				| Some wr -> 
+				| Some wr ->
+				  authId i ==> 
+				    (let frags1 = StAE.fragments wr h1 in
+ 				     let frags0 = StAE.fragments wr h0 in
   				  //all the fragments sent are internal to TLS
-				  authId i ==> Seq.equal (SD.stream_deltas wr h1) (SD.stream_deltas wr h0))))
+				    Seq.equal (SD.stream_deltas wr h1) (SD.stream_deltas wr h0)
+				    /\ (send_ccs /\ is_None om /\ r<>ad_overflow ==> 
+					Seq.length frags1 > 0
+					/\ Seq.index frags1 (Seq.length frags1 - 1) = Content.CT_CCS #i (point 1))
+				    ))))
   =  let b = IO.debug_print_string "CALL sendHandshake\n" in
      let result0 = // first try to send handshake fragment, if any
          match om with
