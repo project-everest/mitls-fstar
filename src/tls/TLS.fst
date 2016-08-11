@@ -556,7 +556,7 @@ let next_fragment_pre (i:id) (c:connection) h0 =
     i=currentId_T c Writer h0 /\
     current_writer_pre c i h0 /\
     hs_inv s h0 /\
-    indexable es j /\
+    maybe_indexable es j /\
     (if j = -1 then is_PlaintextID i else i == epoch_id es.(j))
 val next_fragment: i:id -> c:connection -> ST (outgoing i)
   (requires (next_fragment_pre i c))
@@ -587,15 +587,16 @@ val writeHandshake: c:connection -> b:bool -> ST ioresult_w
 	  current_writer_pre c i h
 	  /\ next_fragment_pre i c h
 	  /\ sendFragment_inv (current_writer_T c i h) h))
-  (ensures (fun h0 r h1 -> True))
-      (* let i = currentId_T c Writer h1 in *)
-      (* current_writer_pre c i h1 *)
-      (* /\ (match r with *)
-      (* 	 | WriteError _ _ *)
-      (* 	 | WriteClose -> True *)
-      (* 	 | _ -> *)
-      (* 	   let wopt = current_writer_T c i h1 in *)
-      (* 	   sendFragment_inv wopt h1))) *)
+  (ensures (fun h0 r h1 ->
+      let i = currentId_T c Writer h1 in
+      current_writer_pre c i h1
+      /\ (match r with
+      	 | WriteError _ _
+      	 | WriteClose -> True
+      	 | _ ->
+      	   let wopt = current_writer_T c i h1 in
+      	   sendFragment_inv wopt h1)))
+#reset-options "--z3timeout 200 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let rec writeHandshake c newWriter = 
   let i = currentId c Writer in
   let wopt = current_writer c i in
@@ -609,7 +610,8 @@ let rec writeHandshake c newWriter =
 	recall_current_writer c;
 	sendAlert c ad reason 
       | _   -> 
-	admit(); //TODO: still to verify the rest
+      	recall_current_writer c;
+	let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
         if next_keys then c.state := BC; // much happening ghostly
         let st = !c.state in
         let newWriter = newWriter || next_keys in 
