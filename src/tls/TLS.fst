@@ -495,10 +495,19 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
  				     let frags0 = StAE.fragments wr h0 in
   				  //all the fragments sent are internal to TLS
 				    Seq.equal (SD.stream_deltas wr h1) (SD.stream_deltas wr h0)
-				    /\ (send_ccs /\ is_None om /\ r<>ad_overflow ==> 
-					Seq.length frags1 > 0
-					/\ Seq.index frags1 (Seq.length frags1 - 1) = Content.CT_CCS #i (point 1))
-				    ))))
+				    /\ (match r with 
+				       | Error _ -> True
+				       | _ ->
+					 r<>ad_overflow ==> 
+					   (match om with 
+					    | None -> if send_ccs 
+						     then frags1==snoc frags0 (Content.CT_CCS #i (point 1))
+						     else frags1==frags0
+					    | Some(| rg, f |) -> 
+						     let frags0' = snoc frags0 (Content.CT_Handshake rg f) in
+						     if send_ccs
+						     then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
+						     else frags1==frags0'))))))
   =  let b = IO.debug_print_string "CALL sendHandshake\n" in
      let result0 = // first try to send handshake fragment, if any
          match om with
