@@ -66,6 +66,7 @@ let next_fragment i s =
 	  then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog) in
   res
 
+#set-options "--hint_info"
  
 // too convenient; use sparingly. Should move to a library
 // JP: isn't failwith sufficient enough? CF: this one works in ST. 
@@ -479,11 +480,18 @@ let regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.ri
   | None -> Set.empty
   | Some wr -> Set.singleton (StAE.region wr)
 
+#set-options "--hint_info"
+ 
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
        (requires (fun h -> sendFragment_inv wopt h))
-       (ensures (fun h0 r h1 -> st_inv c h1 /\ 
-			     modifies_just (regions wopt) h0 h1))
+       (ensures (fun h0 r h1 -> st_inv c h1
+			   /\ modifies_just (regions wopt) h0 h1
+			   /\ (match wopt with 
+				| None -> True
+				| Some wr -> 
+  				  //all the fragments sent are internal to TLS
+				  authId i ==> Seq.equal (SD.stream_deltas wr h1) (SD.stream_deltas wr h0))))
   =  let b = IO.debug_print_string "CALL sendHandshake\n" in
      let result0 = // first try to send handshake fragment, if any
          match om with
