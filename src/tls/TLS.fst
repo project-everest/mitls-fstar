@@ -581,48 +581,99 @@ let next_fragment i c =
   res
 
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-val writeHandshake: c:connection -> b:bool -> ST ioresult_w 
+val writeHandshake: h_init:HH.t  //initial heap, for stating an invariant on deltas
+		  -> c:connection
+		  -> new_writer:bool
+		  -> ST ioresult_w 
   (requires (fun h -> 
-  	  let i = currentId_T c Writer h in 
+     	  let i_init = currentId_T c Writer h_init in 
+   	  let i = currentId_T c Writer h in 
 	  current_writer_pre c i h
 	  /\ next_fragment_pre i c h
-	  /\ sendFragment_inv (current_writer_T c i h) h))
+	  /\ (let wopt_init = current_writer_T c i_init h_init in
+	     let wopt = current_writer_T c i h in
+	     sendFragment_inv wopt h
+	     /\ (not new_writer ==> i == i_init /\ wopt == wopt_init) //the flag really indicates a potential change in the writer
+	     /\ (authId i_init /\ authId i //TODO: would be nice to make this condition weaker, i.e., conditioned on each authId separately
+		 ==> (if not new_writer 
+		      then is_Some wopt ==> SD.stream_deltas #i (Some.v wopt) h == SD.stream_deltas #i (Some.v wopt) h_init
+		      else (* (is_Some wopt ==> SD.stream_deltas #i (Some.v wopt) h == Seq.createEmpty) //haven't sent any application data yet on the new write *)
+		        (* /\  *)(is_Some wopt_init ==> SD.stream_deltas #i_init (Some.v wopt_init) h_init == SD.stream_deltas #i_init (Some.v wopt_init) h)))))) //and the old writer's app data hasn't changed
   (ensures (fun h0 r h1 ->
+      let i_init = currentId_T c Writer h_init in
       let i = currentId_T c Writer h1 in
       current_writer_pre c i h1
       /\ (match r with
       	 | WriteError _ _
       	 | WriteClose -> True
+	 | WrittenHS false _ -> //the epoch didn't change
+       	   let wopt_init = current_writer_T c i_init h_init in
+       	   let wopt = current_writer_T c i h1 in
+	   i_init == i
+	   /\ wopt_init == wopt
+	   /\ sendFragment_inv wopt h1
+	   /\ (authId i ==> SD.stream_deltas #i (Some.v wopt) h1 == SD.stream_deltas #i (Some.v wopt) h_init) //and we didn't write any application data
       	 | _ ->
       	   let wopt = current_writer_T c i h1 in
       	   sendFragment_inv wopt h1)))
-#reset-options "--z3timeout 200 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-let rec writeHandshake c newWriter = 
+
+#reset-options "--z3timeout 300 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" 
+let rec writeHandshake h_init c new_writer = 
+  reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
   let wopt = current_writer c i in
-  let _ = IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") in
+  (* let _ = IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") in *)
+  (* let h0 = get() in  *)
   match next_fragment i c with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason
   | Handshake.Outgoing om send_ccs next_keys complete -> 
-      let _ = IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) in
-      match sendHandshake wopt om send_ccs with
+      //From Handshake.next_fragment ensures, we know that if next_keys = false
+      //then current_writer didn't change;
+        (* let h1 = get() in  *)
+	(* assert (authId i ==>  *)
+	(* 	       Seq.equal (SD.stream_deltas #i (Some.v wopt) h0) *)
+  	(* 			 (SD.stream_deltas #i (Some.v wopt) h1)); *)
+        (* admit() *)
+	(* (\* assert (new_writer \/ (authId i ==> //authId i is sufficient to guarantee is_Some wopt *\) *)
+	(* (\*   		     Seq.equal (SD.stream_deltas #i (Some.v wopt) h2) *\) *)
+	(* (\*   			       (SD.stream_deltas #i (Some.v wopt) h1))) *\) *)
+        (* let j = currentId c Writer in *)
+	(* let wopt' = current_writer c j in *)
+	(* assert (b2t next_keys \/ i==j); *)
+	(* assert (b2t next_keys \/ wopt=wopt'); *)
+      //We also know that this only modifies the handshake region, so the delta logs didn't change
+      (* let _ = IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) in *)
+      match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
 	recall_current_writer c;
 	sendAlert c ad reason 
       | _   -> 
       	recall_current_writer c;
+	(* let h2 = get () in *)
 	let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
         if next_keys then c.state := BC; // much happening ghostly
         let st = !c.state in
-        let newWriter = newWriter || next_keys in 
+        let new_writer = new_writer || next_keys in 
+       (* 	let h3 = get () in *)
+       (* 	let _ =  *)
+       (* 	  let i_init = currentId_T c Writer h_init in *)
+       (* 	  let wopt_init = current_writer_T c i_init h_init in  *)
+       (* 	  assert (new_writer \/ (i == i_init /\ i == j)); *)
+       (* 	  assert (new_writer \/ (wopt === wopt_init /\ wopt === wopt')); *)
+       (* 	  assert (authId i ==> //authId i is sufficient to guarantee is_Some wopt *)
+       (* 	  		     Seq.equal (SD.stream_deltas #i (Some.v wopt) h3) *)
+       (* 	  			       (SD.stream_deltas #i (Some.v wopt) h1)) *)
+       (* in *)
+       (* admit() *)
+       (* 	  in *)
         if complete && st = BC then c.state := AD; // much happening ghostly too
         if complete || (is_None om && not send_ccs) 
 	then 
           // done, either to completion or because there is nothing left to do
-          WrittenHS newWriter complete
+          WrittenHS new_writer complete
         else 
           // keep writing until something happens
-	  writeHandshake c newWriter
+	  (admit(); writeHandshake h_init c new_writer)
 
 ////////////////////////////////////////////////////////////////////////////////
 // NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
@@ -707,9 +758,9 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
   end
 
 // then we can use this variant of write, and get rid of the rest below.
-let write c #i #rg data = 
+let write c #i #rg data =
   let wopt = current_writer c i in
-  match writeHandshake c false with 
+  match writeHandshake (get()) c false with 
   | WrittenHS false false -> 
       begin // we attempt to send some application data
         match sendFragment c wopt (Content.CT_Data rg data) with
@@ -1093,7 +1144,7 @@ let readOne c i =
 val read: connection -> i:id -> St (ioresult_i i)
 let rec read c i =
     assume false;//16-05-19 
-    match writeHandshake c false with
+    match writeHandshake (get()) c false with
 
     | WriteError x y             -> ReadError x y           // TODO review errors; check this is not ambiguous
     | WriteClose                  -> unexpected "Sent Close" // can't happen while sending?
