@@ -433,7 +433,7 @@ let sendFragment c #i wo f =
 //  that an alert may have been sent on the current epoch.
 
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
+(* private *) let sendAlert (c:connection) (ad:alertDescription) (reason:string)
   :  ST ioresult_w
 	(requires (fun h -> 
 	  let i = currentId_T c Writer h in 
@@ -512,7 +512,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
 		       else frags1==frags0')))))
 
-private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
+(* private *) let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
        (requires (sendFragment_inv wopt))
        (ensures (fun h0 r h1 -> 
@@ -580,12 +580,9 @@ let next_fragment i c =
 	  then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog) in
   res
 
+
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-val writeHandshake: h_init:HH.t  //initial heap, for stating an invariant on deltas
-		  -> c:connection
-		  -> new_writer:bool
-		  -> ST ioresult_w 
-  (requires (fun h -> 
+inline let writeHandshake_requires h_init c new_writer h = 
      	  let i_init = currentId_T c Writer h_init in 
    	  let i = currentId_T c Writer h in 
 	  current_writer_pre c i h
@@ -597,88 +594,78 @@ val writeHandshake: h_init:HH.t  //initial heap, for stating an invariant on del
 	     /\ (authId i_init /\ authId i //TODO: would be nice to make this condition weaker, i.e., conditioned on each authId separately
 		 ==> (if not new_writer 
 		      then is_Some wopt ==> SD.stream_deltas #i (Some.v wopt) h == SD.stream_deltas #i (Some.v wopt) h_init
-		      else (* (is_Some wopt ==> SD.stream_deltas #i (Some.v wopt) h == Seq.createEmpty) //haven't sent any application data yet on the new write *)
-		        (* /\  *)(is_Some wopt_init ==> SD.stream_deltas #i_init (Some.v wopt_init) h_init == SD.stream_deltas #i_init (Some.v wopt_init) h)))))) //and the old writer's app data hasn't changed
-  (ensures (fun h0 r h1 ->
+		      else True)))(* (is_Some wopt ==> SD.stream_deltas #i (Some.v wopt) h == Seq.createEmpty) //haven't sent any application data yet on the new write *)
+		        (* /\  *)//(is_Some wopt_init ==> SD.stream_deltas #i_init (Some.v wopt_init) h_init == SD.stream_deltas #i_init (Some.v wopt_init) h)))))) //and the old writer's app data hasn't changed
+
+inline let writeHandshake_ensures h_init c new_writer h0 r h1 = 
       let i_init = currentId_T c Writer h_init in
       let i = currentId_T c Writer h1 in
       current_writer_pre c i h1
       /\ (match r with
       	 | WriteError _ _
       	 | WriteClose -> True
-	 | WrittenHS false _ -> //the epoch didn't change
+	 | WrittenHS new_writer' _ -> //the epoch didn't change
        	   let wopt_init = current_writer_T c i_init h_init in
        	   let wopt = current_writer_T c i h1 in
-	   i_init == i
-	   /\ wopt_init == wopt
-	   /\ sendFragment_inv wopt h1
-	   /\ (authId i ==> SD.stream_deltas #i (Some.v wopt) h1 == SD.stream_deltas #i (Some.v wopt) h_init) //and we didn't write any application data
+	   sendFragment_inv wopt h1
+	   /\ (b2t new_writer ==> b2t new_writer')
+	   /\ (not new_writer' ==> 
+	       i_init == i
+	       /\ wopt_init == wopt
+	       /\ sendFragment_inv wopt h1
+	       /\ (authId i ==> SD.stream_deltas #i (Some.v wopt) h1 == SD.stream_deltas #i (Some.v wopt) h_init)) //and we didn't write any application data
       	 | _ ->
       	   let wopt = current_writer_T c i h1 in
-      	   sendFragment_inv wopt h1)))
+      	   sendFragment_inv wopt h1)
 
-#reset-options "--z3timeout 300 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" 
+val writeHandshake: h_init:HH.t  //initial heap, for stating an invariant on deltas
+		  -> c:connection
+		  -> new_writer:bool
+		  -> ST ioresult_w 
+  (requires (writeHandshake_requires h_init c new_writer))
+  (ensures (writeHandshake_ensures h_init c new_writer))
+
+#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" 
 let rec writeHandshake h_init c new_writer = 
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
   let wopt = current_writer c i in
-  (* let _ = IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") in *)
+  let _ = IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") in
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason
   | Handshake.Outgoing om send_ccs next_keys complete -> 
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
-        (* let h1 = get() in  *)
-	(* assert (authId i ==>  *)
-	(* 	       Seq.equal (SD.stream_deltas #i (Some.v wopt) h0) *)
-  	(* 			 (SD.stream_deltas #i (Some.v wopt) h1)); *)
-        (* admit() *)
-	(* (\* assert (new_writer \/ (authId i ==> //authId i is sufficient to guarantee is_Some wopt *\) *)
-	(* (\*   		     Seq.equal (SD.stream_deltas #i (Some.v wopt) h2) *\) *)
-	(* (\*   			       (SD.stream_deltas #i (Some.v wopt) h1))) *\) *)
-        (* let j = currentId c Writer in *)
-	(* let wopt' = current_writer c j in *)
-	(* assert (b2t next_keys \/ i==j); *)
-	(* assert (b2t next_keys \/ wopt=wopt'); *)
       //We also know that this only modifies the handshake region, so the delta logs didn't change
-      (* let _ = IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) in *)
+      let _ = IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) in
       match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
 	recall_current_writer c;
-	sendAlert c ad reason 
+	sendAlert c ad reason
       | _   -> 
       	recall_current_writer c;
-	(* let h2 = get () in *)
 	let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
         if next_keys then c.state := BC; // much happening ghostly
         let st = !c.state in
         let new_writer = new_writer || next_keys in 
-       (* 	let h3 = get () in *)
-       (* 	let _ =  *)
-       (* 	  let i_init = currentId_T c Writer h_init in *)
-       (* 	  let wopt_init = current_writer_T c i_init h_init in  *)
-       (* 	  assert (new_writer \/ (i == i_init /\ i == j)); *)
-       (* 	  assert (new_writer \/ (wopt === wopt_init /\ wopt === wopt')); *)
-       (* 	  assert (authId i ==> //authId i is sufficient to guarantee is_Some wopt *)
-       (* 	  		     Seq.equal (SD.stream_deltas #i (Some.v wopt) h3) *)
-       (* 	  			       (SD.stream_deltas #i (Some.v wopt) h1)) *)
-       (* in *)
-       (* admit() *)
-       (* 	  in *)
         if complete && st = BC then c.state := AD; // much happening ghostly too
         if complete || (is_None om && not send_ccs) 
-	then 
-          // done, either to completion or because there is nothing left to do
-          WrittenHS new_writer complete
-        else 
-          // keep writing until something happens
-	  (admit(); writeHandshake h_init c new_writer)
+	then WrittenHS new_writer complete // done, either to completion or because there is nothing left to do
+        else if new_writer //splitting cases just to narrow in on the assertion failure that prompted the assume
+	then (let h = get () in 
+	      let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
+    	      let _ =
+    		let s = c.hs in
+    		let es = logT s h in
+		assume (j_ < Seq.length es) in  //NS: weird; not sure why this is not provable
+	      writeHandshake h_init c new_writer)
+	else writeHandshake h_init c new_writer
 
 ////////////////////////////////////////////////////////////////////////////////
 // NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
 ////////////////////////////////////////////////////////////////////////////////
-#set-options "--lax" 
+#set-options "--lax"
 // (old) outcomes?
 // | WriteAgain -> sent any higher-priority fragment, same index, same app-level log (except warning)
 // | Written    -> sent application fragment (when is_Some appdata)
@@ -689,41 +676,41 @@ let rec writeHandshake h_init c new_writer =
 // | WriteClose              -> similar
 // | WriteAgainFinishing    -> incremented the writer epoch.
 
-//16-05-27 updated post-condition branches; 
+//16-05-27 updated post-condition branches;
 //         to be share between writing functions (each returning a subset of results); still missing details.
 
 let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStream.fragment i rg)) (r: ioresult_w) h0 h1 =
-  let st0 = h0.[c.state] in 
-  let st1 = h1.[c.state] in 
-  let es0 = epochs c h0 in 
-  let es1 = epochs c h1 in 
+  let st0 = h0.[c.state] in
+  let st1 = h1.[c.state] in
+  let es0 = epochs c h0 in
+  let es1 = epochs c h1 in
   let j = iT c.hs Writer h0 in
   st_inv c h0 /\
   st_inv c h1 /\
   begin
-    match r with     
-    | Written -> // writer view += Data appdata; no other visible effects. 
-        (match appdata with 
+    match r with
+    | Written -> // writer view += Data appdata; no other visible effects.
+        (match appdata with
         | None -> False
         | Some  (| rg, f |) ->
         j >= 0 /\ st0 = AD (* 16-05-27 not typechecking:  /\
-        ( let wr = writer_epoch (Seq.index es0 j) in 
+        ( let wr = writer_epoch (Seq.index es0 j) in
           modifies_one (region wr) h0 h1 /\
           seqnT wr h1 = seqnT wr h0 + 1 /\
           (authId i ==> StAE.fragments wr h1 = snoc (StAE.fragments wr h0) (Content.CT_Data rg f))) *)
           // add something on the projection?
-        )  
+        )
     | WriteClose -> // writer view += Close (so we can't send anymore); only from calling sendAlert.
         st1 <> AD
 
-    | WriteError oad reason -> 
+    | WriteError oad reason ->
         // Something bad happened while writing (underspecified, for convenience)
         // * if appdata = None, then the current writer may have changed.
-        // * current writer view += appdata.value (or not) += oad.value (or not) 
+        // * current writer view += appdata.value (or not) += oad.value (or not)
         st1 = Close /\
-        (match oad with 
-        | Some ad -> True //TBC: writer view += at most appdata.value + ad  
-        | None    -> True //TBC: writer view += at most appdata.value 
+        (match oad with
+        | Some ad -> True //TBC: writer view += at most appdata.value + ad
+        | None    -> True //TBC: writer view += at most appdata.value
         )
         // TBC, describing what may have been added to the projection
 
@@ -743,13 +730,13 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
         is_None appdata
         // only internal changes in HS.
 
-    | WriteAgainFinishing -> 
-        st0 = st1 
+    | WriteAgainFinishing ->
+        st0 = st1
         // we now have a new writer with an empty view; no other visible effects.
         // appdata was not sent, and we can't send AD until completion.
 
     | WriteHSComplete -> // rejoice! the handshake completed
-        st1 = AD /\ 
+        st1 = AD /\
         iT c.hs Writer h1 = iT c.hs Reader h1
         // should also state that the old epoch's log is unchanged, and the new epoch's log is empty.
 
@@ -760,18 +747,18 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 // then we can use this variant of write, and get rid of the rest below.
 let write c #i #rg data =
   let wopt = current_writer c i in
-  match writeHandshake (get()) c false with 
-  | WrittenHS false false -> 
+  match writeHandshake (get()) c false with
+  | WrittenHS false false ->
       begin // we attempt to send some application data
         match sendFragment c wopt (Content.CT_Data rg data) with
 	| Error(ad,reason) -> sendAlert c ad reason
-	| _                -> Written 
+	| _                -> Written
       end
   | r  -> r // we report some handshake action; the user may retry at a different index.
-           // variants may be more convenient, 
+           // variants may be more convenient,
            // e.g WrittenHS true false signals 0.5 writing, and we could then write AD and report completion.
 
-(*16-05-29 BEGIN OLDER VARIANT 
+(*16-05-29 BEGIN OLDER VARIANT
 
 val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
   (requires (fun h ->
@@ -804,19 +791,19 @@ let writeOne c i appdata =
     | Handshake.Outgoing om send_ccs next_keys complete ->
 	    
       // we send handshake & CCS messages, and process key changes (TODO:restore precise checks and error handling)
-      match sendHandshake wopt om send_ccs with 
+      match sendHandshake wopt om send_ccs with
       | Error (_,y) -> unrecoverable c y
-      | _   -> 
+      | _   ->
         if next_keys           then c.state := BC; // much happening ghostly
         let st = !c.state in
         if complete && st = BC then c.state := AD; // much happening ghostly too
-        if complete            
+        if complete
 	then WriteHSComplete
-        else if is_Some om && send_ccs 
+        else if is_Some om && send_ccs
 	then WriteAgain
-        else 
+        else
              // we finally attempt to send some application data; we may statically know that st = AD
-             match st, appdata with 
+             match st, appdata with
 	     | AD, Some (|rg,f|) -> begin
 	       match sendFragment c wopt (Content.CT_Data rg f) with
 	       | Error (_,y) -> unrecoverable c y
@@ -826,12 +813,12 @@ let writeOne c i appdata =
 
 
 
-let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) = 
-  match wopt with 
+let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) =
+  match wopt with
   | None -> True
-  | Some w -> 
+  | Some w ->
     iT c.hs Writer h >= 0
-    /\ (let epoch_i = eT c.hs Writer h in 
+    /\ (let epoch_i = eT c.hs Writer h in
        w == Epoch.w epoch_i)
 
 
@@ -852,7 +839,7 @@ val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
   ))
 
 let rec writeAllFinishing c i =
-    assume false; //16-05-28 
+    assume false; //16-05-28
     if no_seqn_overflow c Writer then
     match writeOne c i None with
     // we disable writing temporarily
@@ -920,7 +907,7 @@ END OLDER VARIANT *)
 // We notify, and hope to get back the peer's notify.
 
 let writeCloseNotify c =
-  let b = IO.debug_print_string "writeCloseNotify\n" in 
+  let b = IO.debug_print_string "writeCloseNotify\n" in
   sendAlert c AD_close_notify "full shutdown"
 
 // We notify and don't wait for confirmation.
@@ -1004,15 +991,15 @@ val sel_reader: h:HyperHeap.t -> connection -> GTot (option (| i:id & StAE.reade
 let sel_reader h c =
   let es = epochs c h in
   let j = iT c.hs Reader h in
-  (if j < 0 then None else 
-  let e = Seq.index es j in 
+  (if j < 0 then None else
+  let e = Seq.index es j in
   let i = peerId (epoch_id e) in
   assume(StAE.is_stream i);
   Some (| i, reader_epoch e|))
   // todo: add other cases depending on dispatch state
 
-type delta h c = 
-  (match sel_reader h c with 
+type delta h c =
+  (match sel_reader h c with
   | Some (| i , _ |) -> DataStream.delta i
   | None             -> DataStream.delta (PlaintextID (c_nonce c)))
 
@@ -1022,50 +1009,50 @@ let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string): ioresu
   let written = sendAlert c ad reason in
   match written with
   | WriteClose      -> Read DataStream.Close // do we need this case?
-  | WriteError x y -> ReadError x y         // how to compose ad reason x y ? 
+  | WriteError x y -> ReadError x y         // how to compose ad reason x y ?
 
 
 val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
   (requires (fun h0 ->
-    let es = epochs c h0 in 
-    let j = iT c.hs Reader h0 in 
+    let es = epochs c h0 in
+    let j = iT c.hs Reader h0 in
     st_inv c h0 /\
-    (if j < 0 then is_PlaintextID i else 
+    (if j < 0 then is_PlaintextID i else
       let e = Seq.index es j in
       i == peerId (epoch_id e) /\
       StAE.incrementable (reader_epoch e) h0)))
-  (ensures (fun h0 r h1 -> 
-    let es = epochs c h0 in 
-    let j = iT c.hs Reader h0 in 
+  (ensures (fun h0 r h1 ->
+    let es = epochs c h0 in
+    let j = iT c.hs Reader h0 in
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Reader h1 /\
-    (if j < 0 then is_PlaintextID i /\ h0 == h1 else 
+    (if j < 0 then is_PlaintextID i /\ h0 == h1 else
       let e = Seq.index es j in
       i == peerId (epoch_id e) /\
-      (let rd: StAE.reader i = reader_epoch e in 
+      (let rd: StAE.reader i = reader_epoch e in
       modifies (Set.singleton (StAE.region rd)) h0 h1 /\
-      (match r with 
+      (match r with
       | Error e -> True // don't know what seqnT is, don't care.
-      | Correct f -> 
+      | Correct f ->
           StAE.seqnT rd h1 = StAE.seqnT rd h0 + 1 /\
           (authId i ==>
             (let frs = StAE.fragments #i rd h0 in
-            let n = StAE.seqnT rd h0 in 
+            let n = StAE.seqnT rd h0 in
             n < Seq.length frs /\
-            f == Seq.index frs n) 
+            f == Seq.index frs n)
   ))))))
 
-let readFragment c i = 
+let readFragment c i =
   assume false; // 16-05-19 can't prove POST.
-  match Record.read c.tcp with 
+  match Record.read c.tcp with
   | Error e -> Error e
-  | Correct(ct,pv,payload) -> 
-    let es = MR.m_read (MkEpochs.es c.hs.log) in 
-    let j : logIndex es = Handshake.i c.hs Reader in 
+  | Correct(ct,pv,payload) ->
+    let es = MR.m_read (MkEpochs.es c.hs.log) in
+    let j : logIndex es = Handshake.i c.hs Reader in
     let b = IO.debug_print_string ("Epoch index: "^(string_of_int j)^"\n") in
     if j < 0 then // payload is in plaintext
-      let rg = Range.point (length payload) in 
+      let rg = Range.point (length payload) in
       Correct(Content.mk_fragment i ct rg payload)
     else
       // payload decryption
@@ -1073,47 +1060,47 @@ let readFragment c i =
       let Epoch #r #n #i hs rd wr = e in
       match StAE.decrypt (reader_epoch e) (ct,payload) with
       | Some f -> let b = IO.debug_print_string "StAE decrypt correct.\n" in Correct f
-      | None   -> Error(AD_internal_error,"") //16-05-19 adjust! 
+      | None   -> Error(AD_internal_error,"") //16-05-19 adjust!
 
 // We receive, decrypt, parse a record (ct,f); what to do with it?
 // i is the presumed reader, threaded from the application.
 
-private val readOne: c:connection -> i:id -> St (ioresult_i i) 
+private val readOne: c:connection -> i:id -> St (ioresult_i i)
 //  (ensures ioresult is not Complete | CompletedSecond | DontWrite)
 
 let readOne c i =
-  assume false; //16-05-19 
-  match readFragment c i with 
+  assume false; //16-05-19
+  match readFragment c i with
   | Error (x,y) -> alertFlush c i x y
   | Correct (Content.CT_Alert rg ad) ->
       begin
-        if ad = AD_close_notify then 
-          if !c.state = Half Reader 
+        if ad = AD_close_notify then
+          if !c.state = Half Reader
           then ( // received a notify response; cleanly close the connection.
-            c.state := Close; 
+            c.state := Close;
             Read (DataStream.Alert ad))
           else ( // received first notification; immediately enqueue notify response [RFC 7.2.1]
-            c.state := Half Writer; 
-            alertFlush c i AD_close_notify "notify response")  // NB we could ignore write errors here. 
-        else (   // 
-          if isFatal ad then disconnect c; 
+            c.state := Half Writer;
+            alertFlush c i AD_close_notify "notify response")  // NB we could ignore write errors here.
+        else (   //
+          if isFatal ad then disconnect c;
           Read (DataStream.Alert ad))
           // else we carry on; the user will know what to do
       end
       // recheck we tolerate alerts in all states; used to be just Init|Open, otherwise:
       // alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 
-  | Correct(Content.CT_Handshake rg f) -> 
+  | Correct(Content.CT_Handshake rg f) ->
       begin
         let b = IO.debug_print_string "readOne: CT_Handshake, calling recv_fragment...\n" in
         match recv_fragment c.hs (| rg, f |) with
         | InError (x,y) -> alertFlush c i x y
         | InQuery q a   -> CertQuery q a
-        | InAck next_keys complete -> 
-            if complete then 
+        | InAck next_keys complete ->
+            if complete then
             ( match !c.state with
             | BC -> // TODO: additional sanity check: in and out epochs should be the same
-                   // if epoch_r c = epoch_w c then 
+                   // if epoch_r c = epoch_w c then
                    (c.state := AD; Complete)
                    // else (disconnect c; ReadError None "Invalid connection state")
                    )
@@ -1143,12 +1130,12 @@ let readOne c i =
 // the write outcomes that matter are: Error, Complete, and Done.
 val read: connection -> i:id -> St (ioresult_i i)
 let rec read c i =
-    assume false;//16-05-19 
+    assume false;//16-05-19
     match writeHandshake (get()) c false with
 
     | WriteError x y             -> ReadError x y           // TODO review errors; check this is not ambiguous
     | WriteClose                  -> unexpected "Sent Close" // can't happen while sending?
-    | WrittenHS newWriter complete -> 
+    | WrittenHS newWriter complete ->
         let b = IO.debug_print_string ("read: WrittenHS, "^(if newWriter then "newWriter" else "oldWriter")^" \n") in
         if complete then Complete // return at once, so that the app can authorize and use new indexes.
         // else ... then                // return at once, signalling falsestart
@@ -1168,25 +1155,25 @@ let rec read c i =
     )
 
 
-(* 16-05-28 WIP 
+(* 16-05-28 WIP
 
-let read_ensures (c:connection) (i:id) (r:ioresult_i i) h0 h1 = 
-  let st0 = sel h0 c.state in 
-  let st1 = sel h1 c.state in 
-  let es0 = epochs c h0 in 
-  let es1 = epochs c h1 in 
+let read_ensures (c:connection) (i:id) (r:ioresult_i i) h0 h1 =
+  let st0 = sel h0 c.state in
+  let st1 = sel h1 c.state in
+  let es0 = epochs c h0 in
+  let es1 = epochs c h1 in
   let j = iT c.hs Reader h0 in
   st_inv c h0 /\
   st_inv c h1 /\
   begin
-    // When authId i, the reader's view is the projected fragment of the peer's writer log up to the reader's seqn 
+    // When authId i, the reader's view is the projected fragment of the peer's writer log up to the reader's seqn
     // (something worth defining, and monotonic).
     // Unless mentioned otherwise, the epoch indexes, the reader view, and the writer view are unchanged.
-    match r with 
-    | ReadError x y -> 
+    match r with
+    | ReadError x y ->
         // Local error; x indicates whether the writer view is extended by a fatal alert or not.
     
-    | Read delta -> True 
+    | Read delta -> True
         // If authId i, then the reader view is extended by delta.
         // If delta is terminal, then the connection is now closed.
         // In particular, if delta is a (first) closeNotify and the writer view was open, it has been extended with a (second) closeNotify.
@@ -1195,13 +1182,13 @@ let read_ensures (c:connection) (i:id) (r:ioresult_i i) h0 h1 =
         // [We get non-alerts only in some states]
 
     | CompletedFist ->
-        // We have new indexes, with empty reader and writer views. 
+        // We have new indexes, with empty reader and writer views.
         // If the prior epoch was honest, their views are synchronized with the peer.
 (*
     // We will need more signals for new keys:
-    | NextWriter -> 
-        // The writer has changed; the new writer view is empty. 
-        // The connection is not writable, except perhaps with FalseStart/0.5RTT, or for alerts. 
+    | NextWriter ->
+        // The writer has changed; the new writer view is empty.
+        // The connection is not writable, except perhaps with FalseStart/0.5RTT, or for alerts.
 *)
 
     | ReadAgain -> True            // nothing changed in views and epochs                      [local to read loop]
