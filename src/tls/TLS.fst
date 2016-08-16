@@ -433,7 +433,7 @@ let sendFragment c #i wo f =
 //  that an alert may have been sent on the current epoch.
 
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-(* private *) let sendAlert (c:connection) (ad:alertDescription) (reason:string)
+private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
   :  ST ioresult_w
 	(requires (fun h -> 
 	  let i = currentId_T c Writer h in 
@@ -512,7 +512,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
 		       else frags1==frags0')))))
 
-(* private *) let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
+private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
        (requires (sendFragment_inv wopt))
        (ensures (fun h0 r h1 -> 
@@ -616,6 +616,7 @@ inline let writeHandshake_ensures h_init c new_writer h0 r h1 =
 	       /\ (authId i ==> SD.stream_deltas #i (Some.v wopt) h1 == SD.stream_deltas #i (Some.v wopt) h_init)) //and we didn't write any application data
       	 | _ ->
       	   let wopt = current_writer_T c i h1 in
+	   r <> Written /\
       	   sendFragment_inv wopt h1)
 
 val writeHandshake: h_init:HH.t  //initial heap, for stating an invariant on deltas
@@ -661,6 +662,42 @@ let rec writeHandshake h_init c new_writer =
 		assume (j_ < Seq.length es) in  //NS: weird; not sure why this is not provable
 	      writeHandshake h_init c new_writer)
 	else writeHandshake h_init c new_writer
+
+
+////////////////////////////////////////////////////////////////////////////////
+#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+val write: c:connection -> #i:id -> #rg:frange i -> data:DataStream.fragment i rg -> ST ioresult_w
+  (requires (fun h -> 
+	       current_writer_pre c i h /\
+	       writeHandshake_requires h c false h))
+  (ensures (fun h0 r h1 -> 
+    current_writer_pre c i h0
+    /\  (let wopt = current_writer_T c i h0 in
+        match r with 
+        | Written -> 
+	 (authId i ==> 
+	    (let d : DataStream.pre_fragment i = data in //A widening coercion as a proof hint, unpacking (d:fragment i rg) to a pre_fr
+	     Seq.equal (SD.stream_deltas #i (Some.v wopt) h1) (snoc (SD.stream_deltas #i (Some.v wopt) h0) (DataStream.Data d))))
+       | _ -> True)))
+
+#reset-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+let write c #i #rg data =
+  reveal_epoch_region_inv_all();
+  let wopt = current_writer c i in
+  let h_init = get () in 
+  match writeHandshake h_init c false with
+  | WrittenHS false false ->
+      //and we didn't write any application data
+      let frag = Content.CT_Data rg data in
+      begin // we attempt to send some application data
+        match sendFragment c #i wopt frag with
+      	| Error(ad,reason) -> sendAlert c ad reason
+      	| _                -> Written
+      end
+  | r -> r 
+// we report some handshake action; the user may retry at a different index.
+// variants may be more convenient,
+// e.g WrittenHS true false signals 0.5 writing, and we could then write AD and report completion.
 
 ////////////////////////////////////////////////////////////////////////////////
 // NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
@@ -743,20 +780,6 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
     | WriteAgainClosing -> False
 *)
   end
-
-// then we can use this variant of write, and get rid of the rest below.
-let write c #i #rg data =
-  let wopt = current_writer c i in
-  match writeHandshake (get()) c false with
-  | WrittenHS false false ->
-      begin // we attempt to send some application data
-        match sendFragment c wopt (Content.CT_Data rg data) with
-	| Error(ad,reason) -> sendAlert c ad reason
-	| _                -> Written
-      end
-  | r  -> r // we report some handshake action; the user may retry at a different index.
-           // variants may be more convenient,
-           // e.g WrittenHS true false signals 0.5 writing, and we could then write AD and report completion.
 
 (*16-05-29 BEGIN OLDER VARIANT
 
