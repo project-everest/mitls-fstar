@@ -7,7 +7,7 @@ This repository contains the new F* development a port of the stable [F# develop
 | ------------- | ------------- |
 | Windows CI  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/12/badge" /> |
 | Windows Nightly  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/14/badge" />  |
-| Linux CI  | [![Build status](https://travis-ci.org/mitls/mitls-fstar.svg?branch=master)](https://travis-ci.org/mitls/mitls-fstar) |
+| Linux CI  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/20/badge" /> |
 | Linux Nightly  | <img src="https://msresearch-ext.visualstudio.com/_apis/public/build/definitions/83f09286-c288-4766-89cd-d267b6d93772/15/badge" /> |
 
 
