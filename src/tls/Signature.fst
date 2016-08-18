@@ -128,8 +128,8 @@ let alloc_pubkey #a s r =
 
   We maintain this property as a stateful invariaint in rkeys *)
 
-(* AR: this needs to be fixed *)
-assume HasEq_pkey: hasEq pkey
+(* AR: this needs to be fixed, alg should not have hasEq because of info *)
+assume HasEq_alg: hasEq alg
 
 type kset = s:list pkey{ forall x y. (List.Tot.mem x s /\ List.Tot.mem y s /\ pkey_repr x = pkey_repr y) ==> x = y }
 
@@ -285,9 +285,6 @@ let coerce #a pkr skr =
 
 
 (* ------------------------------------------------------------------------ *)
-
-(* AR: this needs to be fixed, alg should not have hasEq because of info *)
-assume HasEq_alg: hasEq alg
 
 val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST pkey
   (requires (fun _ -> True))
