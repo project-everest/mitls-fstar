@@ -8,6 +8,7 @@ open Connection
 
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
+module MonSeq = FStar.Monotonic.Seq
 module HH = FStar.HyperHeap
 module MS = MasterSecret
 module N  = Nonce
@@ -107,7 +108,6 @@ type ms_t = MM.map' AE.id MS.writer
 
 //conn_tab is a monotonic reference to a c_t
 type c_t  = MM.map' random r_conn 
-module MonSeq = MonotoneSeq
 
 //w is registered with c, in state h
 let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:HH.t) =

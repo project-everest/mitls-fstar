@@ -77,7 +77,6 @@ endif
 # Files are listed in dependency order
 
 FSTS=IdealFlags.fst \
-MonotoneSeq.fst \
 MonotoneMap.fst \
 TLSError.fst \
 TLSConstants.fst \
@@ -143,7 +142,6 @@ test/TestAPI.fst #the preceding space is significant!
 
 VERIFY= \
 IdealFlags \
-MonotoneSeq \
 MonotoneMap \
 TLSError \
 TLSConstants \

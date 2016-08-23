@@ -15,7 +15,7 @@ open TLSInfo
 open LHAEPlain
 
 open Range
-open MonotoneSeq
+open FStar.Monotonic.Seq
 open FStar.Monotonic.RRef
 
 type id = i:id{ is_ID12 i /\ is_AEAD (aeAlg_of_id i) }
@@ -28,8 +28,12 @@ type cipher (i:id) = c:bytes{ valid_clen i (length c) }
 type key (i:id) = lbytes (aeadKeySize (alg i))
 type iv  (i:id) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
 
+let max_ctr (a:aeadAlg) = 
+  18446744073709551615 // 2^64 -1
+//pow2 (8 * aeadRecordIVSize a) - 1
+
 // this is the same as a sequence number and in bytes, GCMNonce.nonce_explicit[8]
-type counter a = c:nat {repr_bytes c <= aeadRecordIVSize a} 
+type counter a = c:nat {c <= max_ctr a} 
 
 type dplain (i:id) (ad:adata i) (c:cipher i) =
   plain i ad (cipherRangeClass i (length c))
@@ -37,7 +41,7 @@ type dplain (i:id) (ad:adata i) (c:cipher i) =
 type entry (i:id) = // records that c is an encryption of p with ad
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
-let ideal_log (r:rid) (i:id) = MonotoneSeq.log_t r (entry i)
+let ideal_log (r:rid) (i:id) = log_t r (entry i)
 
 let log_ref (r:rid) (i:id) : Tot Type0 =
   if authId i then ideal_log r i else unit
@@ -45,9 +49,9 @@ let log_ref (r:rid) (i:id) : Tot Type0 =
 let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 
+(** we have a counter, that's increasing, at most to the min(length log, 2^64-1) *)
 let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 =
-  MonotoneSeq.counter r log (aeadRecordIVSize (alg i))
-  //we have a counter, that's increasing, at most to the min(length log, 2^64-1)
+  FStar.Monotonic.Seq.counter r log (max_ctr (alg i))
 
 let concrete_ctr (r:rid) (i:id) : Tot Type0 =
   m_rref r (counter (alg i)) increases
@@ -59,7 +63,7 @@ let ctr_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 =
 
 let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   : Tot (m_rref r (if authId i
-		   then counter_val #l #(entry i) r log (aeadRecordIVSize (alg i))
+		   then counter_val #l #(entry i) r log (max_ctr (alg i))
 		   else counter (alg i))
 		increases) =
   c
@@ -109,7 +113,6 @@ let gen parent i =
   let kv = CoreCrypto.random (aeadKeySize (alg i)) in
   let iv = CoreCrypto.random (aeadSaltSize (alg i)) in
   let writer_r = new_region parent in
-  lemma_repr_bytes_values 0;
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
     let ectr: ideal_ctr writer_r i log = new_counter writer_r 0 log in
@@ -117,7 +120,6 @@ let gen parent i =
   else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
     State #i #Writer #writer_r #writer_r kv iv () ectr
-
 
 val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
@@ -132,7 +134,6 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 	       m_sel h1 (ctr r.counter) === 0))
 let genReader parent #i w =
   let reader_r = new_region parent in
-  lemma_repr_bytes_values 0;
   if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_counter reader_r 0 log in
@@ -149,7 +150,6 @@ val coerce: parent:rid -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
   (ensures  (genPost parent))
 let coerce parent i kv iv =
   let writer_r = new_region parent in
-  lemma_repr_bytes_values 0;
   let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
   State #i #Writer #writer_r #writer_r kv iv () ectr
 
@@ -171,48 +171,50 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length} 
   -> p:plain i ad r 
   -> ST (cipher i)
-       (requires (fun h0 -> repr_bytes (m_sel h0 (ctr e.counter) + 1) <= aeadRecordIVSize (alg i)))
+       (requires (fun h0 -> m_sel h0 (ctr e.counter) < max_ctr (alg i)))
        (ensures  (fun h0 c h1 ->
            modifies_one e.region h0 h1
- 	 /\ m_contains (ctr e.counter) h1
+	 /\ m_contains (ctr e.counter) h1
 	 /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
-	 /\ length c = Range.targetLength i r
-	 /\ (authId i ==>
+ 	 /\ length c = Range.targetLength i r
+      	 /\ (authId i ==>
 	     (let log = ilog e.log in
 	      let ilog = m_sel h0 log in
 	      let ent = Entry c ad p in
 	      let n   = Seq.length ilog in
 	        m_contains log h1
               /\ witnessed (at_least n ent log)
-	      /\ m_sel h1 log == snoc ilog ent))))
+	      /\ m_sel h1 log == snoc ilog ent
+  ))))
 let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
   m_recall ctr;
-  let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in
-  let salt = e.iv in
-  let n = m_read ctr in
+  let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in  
+  let salt = e.iv in       
+  let n = m_read ctr in      
+  lemma_repr_bytes_values n;
   let nonce_explicit = bytes_of_seq n in
-  //assert (length nonce_explicit = aeadRecordIVSize (alg i));
-  let iv = salt @| nonce_explicit in
+  //assert (length nonce_explicit = 8);
+  let iv = salt @| nonce_explicit in      
   lemma_repr_bytes_values (length text);
   let ad' = ad @| bytes_of_int 2 (length text) in
-  let tlen = targetLength i rg in
+  let tlen = targetLength i rg in   
   targetLength_converges i rg;
-  //cut (within (length text) (cipherRangeClass i tlen));
+  cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
-  let c = nonce_explicit @| aead_encrypt (alg i) e.key iv ad' text in
-  //cut (length c = targetLength i rg);
+  let c = nonce_explicit @| aead_encrypt (alg i) e.key iv ad' text in  
+  cut (length c = targetLength i rg);
   if authId i then
-    begin
+    begin   
     let ilog = ilog e.log in
     m_recall ilog;
     let ictr: ideal_ctr e.region i ilog = e.counter in
     testify_counter ictr;
-    MonotoneSeq.write_at_end ilog (Entry c ad p);
+    FStar.Monotonic.Seq.write_at_end ilog (Entry c ad p);
     increment_counter ictr;
     m_recall ictr
     end
-  else
+  else     
     m_write ctr (n + 1);
   c
 
@@ -223,7 +225,7 @@ let matches #i c ad (Entry c' ad' _) = c = c' && ad = ad'
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
-  (requires (fun h0 -> repr_bytes (m_sel h0 (ctr d.counter) + 1) <= aeadRecordIVSize (alg i)))
+  (requires (fun h0 -> m_sel h0 (ctr d.counter) + 1 <= max_ctr (alg i)))
   (ensures  (fun h0 res h1 ->
      let j = m_sel h0 (ctr d.counter) in
      (authId i ==>
@@ -280,6 +282,7 @@ let decrypt #i d ad c =
         let plain = mk_plain i ad r text in
         Some plain
 	end
+        
 
 (* TODO
 

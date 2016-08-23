@@ -7,6 +7,9 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
 open FStar.SeqProperties
+open FStar.Monotonic.RRef
+open FStar.Monotonic.Seq
+
 open Platform.Error
 open Platform.Bytes
 
@@ -14,8 +17,6 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open StreamPlain
-open MonotoneSeq
-open FStar.Monotonic.RRef
 
 module HH = FStar.HyperHeap
 
@@ -46,7 +47,7 @@ let iv_length i = max 8 (CoreCrypto.aeadRealIVSize (alg i))
 type key (i:id) = lbytes (CoreCrypto.aeadKeySize (alg i)) 
 type iv  (i:id) = lbytes (iv_length i)
 
-let ideal_log (r:rid) (i:id) = MonotoneSeq.log_t r (entry i)
+let ideal_log (r:rid) (i:id) = log_t r (entry i)
 
 let log_ref (r:rid) (i:id) : Tot Type0 =
   if authId i then ideal_log r i else unit
@@ -54,22 +55,26 @@ let log_ref (r:rid) (i:id) : Tot Type0 =
 let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 
+let max_ctr = 18446744073709551615 // 2^64 -1
+
+type counter = c:nat{c <= max_ctr} 
+
 let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 =
-  MonotoneSeq.counter r log (aeadRecordIVSize (alg i))
+  FStar.Monotonic.Seq.counter r log max_ctr
   // An increasing counter, at most min(length log, 2^64-1)
   
 let concrete_ctr (r:rid) (i:id) : Tot Type0 = 
-  m_rref r seqn_t increases
+  m_rref r counter increases
 
-let seqn_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 = 
+let ctr_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 = 
   if authId i   
   then ideal_ctr r i (log <: ideal_log l i)
-  else m_rref r seqn_t increases
+  else m_rref r counter increases
 
-let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:seqn_ref r i log)
+let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   : Tot (m_rref r (if authId i 
-		   then counter_val #l #(entry i) r log (aeadRecordIVSize (alg i)) 
-		   else seqn_t) 
+		   then counter_val #l #(entry i) r log max_ctr 
+		   else counter) 
 		increases) =
   c
 
@@ -80,7 +85,7 @@ noeq type state (i:id) (rw:rw) =
          -> key: key i
          -> iv: iv i
          -> log: log_ref log_region i // ghost, subject to cryptographic assumption
-         -> counter: seqn_ref region i log // types are sufficient to anti-alias log and counter
+         -> counter: ctr_ref region i log // types are sufficient to anti-alias log and counter
          -> state i rw
 
 // Some invariants:
@@ -141,7 +146,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
 
 
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
-    (requires (fun h0 -> is_seqn (m_sel h0 (ctr e.counter) + 1)))
+    (requires (fun h0 -> m_sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
                  modifies_one e.region h0 h1 /\
                  m_contains (ctr e.counter) h1 /\
@@ -151,7 +156,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
 		    let ent = Entry l c p in
 		    let n = Seq.length (m_sel h0 log) in
 		    m_contains log h1 /\
-		    witnessed (MonotoneSeq.at_least n ent log) /\
+		    witnessed (at_least n ent log) /\
 		    m_sel h1 log == snoc (m_sel h0 log) ent))))
 
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
@@ -162,7 +167,7 @@ let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
-  (requires (fun h0 -> is_seqn (m_sel h0 (ctr d.counter) + 1)))
+  (requires (fun h0 -> m_sel h0 (ctr d.counter) < max_ctr))
   (ensures  (fun h0 res h1 ->
       let j = m_sel h0 (ctr d.counter) in
       (authId i ==>

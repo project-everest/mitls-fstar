@@ -1,12 +1,13 @@
 module Signature
 
-open FStar.Monotonic.RRef
 open FStar.HyperHeap
-open Platform.Bytes
+open FStar.Monotonic.RRef
+open FStar.Monotonic.Seq
 
-open MonotoneSeq
-open TLSConstants
+open Platform.Bytes
 open CoreCrypto
+
+open TLSConstants
 open Cert
 
 (* ------------------------------------------------------------------------ *)

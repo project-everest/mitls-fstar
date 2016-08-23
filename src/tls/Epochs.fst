@@ -3,7 +3,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
 open FStar.Monotonic.RRef
-open MonotoneSeq
+open FStar.Monotonic.Seq
 open Platform.Error
 open Platform.Bytes
 
@@ -16,7 +16,7 @@ open StAE
 open Negotiation
 
 module HH = FStar.HyperHeap
-module MS = MonotoneSeq
+module MS = FStar.Monotonic.Seq
 module SeqP = FStar.SeqProperties
 
 // relocate?

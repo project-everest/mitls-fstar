@@ -8,8 +8,8 @@ open TLSInfo
 
 module HH   = FStar.HyperHeap
 module MR   = FStar.Monotonic.RRef
+module MS   = FStar.Monotonic.Seq
 module S    = StAE
-module MS   = MonotoneSeq
 module C    = Content
 module DS   = DataStream
 module SeqP = FStar.SeqProperties

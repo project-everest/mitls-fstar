@@ -1,0 +1,43 @@
+[
+  "ã4ò\n>œ2Æ|ê“Ê«ºq\u000f",
+  [
+    [
+      "KeySchedule.keyLabel",
+      1,
+      0,
+      1,
+      [
+        "@query", "disc_equation_TLSInfo.ApplicationDataKey",
+        "disc_equation_TLSInfo.ApplicationRekey",
+        "disc_equation_TLSInfo.EarlyApplicationDataKey",
+        "disc_equation_TLSInfo.EarlyTrafficKey",
+        "disc_equation_TLSInfo.HandshakeKey",
+        "fuel_guarded_inversion_TLSInfo.keyTag"
+      ],
+      0
+    ],
+    [ "KeySchedule.psk", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "KeySchedule.psk",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "KeySchedule.get_psk_info",
+      1,
+      0,
+      1,
+      [
+        "@query", "disc_equation_TLSInfo.ApplicationPSK",
+        "disc_equation_TLSInfo.ResumptionPSK", "equation_TLSInfo.esId",
+        "fuel_guarded_inversion_TLSInfo.pre_esId",
+        "refinement_interpretation_Tm_refine_253615345eb73f0c9aad5f062606b249"
+      ],
+      0
+    ],
+    [ "KeySchedule.zH", 1, 0, 1, [ "@query" ], 0 ]
+  ]
+]

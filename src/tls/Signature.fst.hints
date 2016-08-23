@@ -1,5 +1,5 @@
 [
-  "G’è–∞zkí°*;e\u0017\u001f∆J",
+  "êÉ∏ﬂŒ≈™\u0017\u007fπ=\u0015\\Ó°Ï",
   [
     [ "Signature.Use.info", 1, 0, 1, [ "@query" ], 0 ],
     [ "Signature.Use.core", 1, 0, 1, [ "@query" ], 0 ],
@@ -202,10 +202,11 @@
       [
         "@query", "bool_inversion", "constructor_distinct_Signature.Signed",
         "disc_equation_Signature.Corrupt", "disc_equation_Signature.Signed",
-        "equation_FStar.SeqProperties.snoc", "equation_MonotoneSeq.snoc",
-        "equation_Signature.evolves", "equation_Signature.signed",
-        "equation_TLSConstants.is_tls_rgn", "equation_TLSConstants.rgn",
-        "equation_TLSConstants.tls_region", "equation_TLSConstants.tls_rgn",
+        "equation_FStar.Monotonic.Seq.snoc",
+        "equation_FStar.SeqProperties.snoc", "equation_Signature.evolves",
+        "equation_Signature.signed", "equation_TLSConstants.is_tls_rgn",
+        "equation_TLSConstants.rgn", "equation_TLSConstants.tls_region",
+        "equation_TLSConstants.tls_rgn",
         "fuel_guarded_inversion_Signature.state",
         "function_token_typing_TLSConstants.tls_region",
         "proj_equation_Signature.Signed_log",
@@ -351,7 +352,14 @@
       1,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -359,7 +367,14 @@
       2,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -375,7 +390,14 @@
       4,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [ "Signature.kset", 5, 0, 1, [ "@query" ], 0 ],
@@ -392,7 +414,14 @@
       2,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -401,8 +430,13 @@
       0,
       1,
       [
-        "@query", "assumption_Signature.HasEq_pkey",
-        "assumption_Signature.public_repr_haseq"
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq",
+        "assumption_Signature.public_repr_haseq",
+        "data_elim_Prims.Mkdtuple2", "equation_Signature.pkey",
+        "fuel_guarded_inversion_Prims.dtuple2", "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
       ],
       0
     ],
@@ -411,7 +445,14 @@
       4,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -473,8 +514,13 @@
       0,
       1,
       [
-        "@query", "assumption_Signature.HasEq_pkey",
-        "assumption_Signature.public_repr_haseq"
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq",
+        "assumption_Signature.public_repr_haseq",
+        "data_elim_Prims.Mkdtuple2", "equation_Signature.pkey",
+        "fuel_guarded_inversion_Prims.dtuple2", "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
       ],
       0
     ],
@@ -492,8 +538,13 @@
       0,
       1,
       [
-        "@query", "assumption_Signature.HasEq_pkey",
-        "assumption_Signature.public_repr_haseq"
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq",
+        "assumption_Signature.public_repr_haseq",
+        "data_elim_Prims.Mkdtuple2", "equation_Signature.pkey",
+        "fuel_guarded_inversion_Prims.dtuple2", "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
       ],
       0
     ],
@@ -502,7 +553,14 @@
       1,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -550,7 +608,14 @@
       2,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -558,7 +623,14 @@
       3,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -594,7 +666,14 @@
       2,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -797,7 +876,15 @@
       6,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "equation_Signature.pkey",
+        "interpretation_Tm_arrow_e06752ba152f81447b312efcdf8f0e23",
+        "kinding_Signature.alg@tok", "kinding_Signature.pubkey@tok",
+        "pretyping_3d886805643ca274e99b339c6c379199",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [
@@ -1245,7 +1332,15 @@
       4,
       0,
       1,
-      [ "@query", "assumption_Signature.HasEq_pkey" ],
+      [
+        "@query", "assumption_Prims.HasEq_dtuple2",
+        "assumption_Signature.HasEq_alg",
+        "assumption_Signature.pubkey_haseq", "data_elim_Prims.Mkdtuple2",
+        "equation_Signature.pkey", "fuel_guarded_inversion_Prims.dtuple2",
+        "kinding_Signature.alg@tok",
+        "pretyping_3d886805643ca274e99b339c6c379199",
+        "token_correspondence_Signature.pubkey@tok"
+      ],
       0
     ],
     [ "Signature.endorse", 5, 0, 1, [ "@query" ], 0 ],

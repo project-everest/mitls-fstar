@@ -22,7 +22,7 @@ open Connection
 
 module HH   = FStar.HyperHeap
 module MR   = FStar.Monotonic.RRef
-module MS   = MonotoneSeq
+module MS   = FStar.Monotonic.Seq
 module DS   = DataStream
 module SD   = StreamDeltas
 module Conn = Connection

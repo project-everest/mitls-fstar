@@ -27,7 +27,7 @@ open HandshakeLog
 
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
-module MS = MonotoneSeq
+module MS = FStar.Monotonic.Seq
 
 //<expose for TestClient>
 #set-options "--lax"

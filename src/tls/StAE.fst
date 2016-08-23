@@ -12,8 +12,8 @@ open TLSInfo
 
 module HH   = FStar.HyperHeap
 module MR   = FStar.Monotonic.RRef
+module MS   = FStar.Monotonic.Seq
 module SeqP = FStar.SeqProperties
-module MS   = MonotoneSeq
 module C    = Content
 
 module Stream = StreamAE
@@ -159,14 +159,14 @@ let fragments_prefix_stable #i #rw w h =
 //Projecting sequence numbers
 ////////////////////////////////////////////////////////////////////////////////
 
-let seqnT (#i:id) (#rw:rw) (s:state i rw) h : GTot seqn_t =
+let seqnT (#i:id) (#rw:rw) (s:state i rw) h : GTot nat =
   match s with
   | Stream _ s -> MR.m_sel h (Stream.ctr (Stream.State.counter s))
   | StLHAE _ s -> MR.m_sel h (AEAD_GCM.ctr (StLHAE.counter s))
 
 //it's incrementable if it doesn't overflow
 let incrementable (#i:id) (#rw:rw) (s:state i rw) (h:HH.t) =
-  is_seqn (seqnT s h + 1)
+  seqnT s h < 18446744073709551615
 
 // Some invariants:
 // - the writer counter is the length of the log; the reader counter is lower or equal
@@ -324,6 +324,7 @@ let encrypt #i e f =
     let h1 = ST.get() in
     if authId i then
       begin
+      lemma_repr_bytes_values seqn;
       let ad' = LHAEPlain.makeAD i seqn ad in
       let ent = AEAD_GCM.Entry c ad' f in
       lemma_fragments_snoc_commutes e h0 h1 ent;

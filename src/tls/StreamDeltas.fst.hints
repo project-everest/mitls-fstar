@@ -1,5 +1,5 @@
 [
-  "œvíqŠ9û\u0002™I,š¾É¨}",
+  "Z—§Qšã×’P/\u0011¶l|\u0005Ñ",
   [
     [ "StreamDeltas.deltas", 1, 0, 1, [ "@query" ], 0 ],
     [
@@ -71,12 +71,13 @@
       1,
       [
         "@query", "bool_inversion", "disc_equation_TLSInfo.PlaintextID",
-        "equation_FStar.HyperHeap.test0", "equation_MonotoneSeq.map_prefix",
-        "equation_StAE.entry", "equation_StAE.fragments",
-        "equation_StAE.fragments_prefix", "equation_StAE.ilog",
-        "equation_StAE.log_region", "equation_StreamDeltas.deltas_prefix",
-        "equation_StreamDeltas.id", "equation_StreamDeltas.project_deltas",
-        "function_token_typing_FStar.HyperHeap.test0",
+        "equation_FStar.List.Tot.test_sort",
+        "equation_FStar.Monotonic.Seq.map_prefix", "equation_StAE.entry",
+        "equation_StAE.fragments", "equation_StAE.fragments_prefix",
+        "equation_StAE.ilog", "equation_StAE.log_region",
+        "equation_StreamDeltas.deltas_prefix", "equation_StreamDeltas.id",
+        "equation_StreamDeltas.project_deltas",
+        "function_token_typing_FStar.List.Tot.test_sort",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_ec40236fcd8bb18d76e9bc637bddf141",
         "typing_TLSInfo.is_PlaintextID", "unit_inversion"

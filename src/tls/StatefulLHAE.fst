@@ -7,6 +7,9 @@ module StatefulLHAE
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
+open FStar.Monotonic.RRef
+open FStar.Monotonic.Seq
+
 open Platform.Bytes
 
 open TLSConstants
@@ -14,9 +17,6 @@ open TLSInfo
 open Range
 open AEAD_GCM
 open StatefulPlain
-
-open MonotoneSeq
-open FStar.Monotonic.RRef
 
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
@@ -92,7 +92,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
   -> p:plain i ad r
   -> ST (cipher i)
-       (requires (fun h0 -> repr_bytes (m_sel h0 (ctr e.counter) + 1) <= aeadRecordIVSize (alg i)))
+       (requires (fun h0 -> m_sel h0 (ctr e.counter) < max_ctr (alg i)))
        (ensures  (fun h0 c h1 ->
            modifies_one e.region h0 h1
  	 /\ m_contains (ctr e.counter) h1
@@ -102,6 +102,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 	     (let log = ilog e.log in
 	      let ilog = m_sel h0 log in
 	      let seqn = m_sel h0 (ctr e.counter) in
+              lemma_repr_bytes_values seqn;
 	      let ad' = LHAEPlain.makeAD i seqn ad in
 	      let ent = Entry c ad' p in
 	      let n   = Seq.length ilog in
@@ -110,6 +111,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 	      /\ m_sel h1 log == snoc ilog ent))))
 let encrypt #i e ad r p =
   let seqn = m_read (ctr e.counter) in
+  lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.encrypt #i e ad' r p
 
@@ -117,12 +119,13 @@ let encrypt #i e ad r p =
 (*------------------------------------------------------------------*)
 val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
-  (requires (fun h0 -> repr_bytes (m_sel h0 (ctr d.counter) + 1) <= aeadRecordIVSize (alg i)))
+  (requires (fun h0 -> m_sel h0 (ctr d.counter) < max_ctr (alg i)))
   (ensures  (fun h0 res h1 ->
      let j = m_sel h0 (ctr d.counter) in
      (authId i ==>
        (let log = m_sel h0 (ilog d.log) in
 	let seqn = m_sel h0 (ctr d.counter) in
+        lemma_repr_bytes_values seqn;
         let ad' = LHAEPlain.makeAD i seqn ad in
        if j < Seq.length log && matches c ad' (Seq.index log j)
        then res = Some (Entry.p (Seq.index log j))
@@ -134,6 +137,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 let decrypt #i d ad c =
   let seqn = m_read (ctr d.counter) in
+  lemma_repr_bytes_values seqn;
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.decrypt d ad' c
 
