@@ -41,7 +41,7 @@ val unexpected: #a:Type -> v:string -> ST a
 let rec unexpected #a s = unexpected s
 
 
-(*** misc ***) 
+(** misc ***)
 let outerPV (c:connection) : ST protocolVersion
   (requires (hs_inv c.hs))
   (ensures (fun h0 pv h1 -> h0 == h1)) =
@@ -50,7 +50,7 @@ let outerPV (c:connection) : ST protocolVersion
   | pv      -> pv
 
 
-(*** control API ***)
+(** control API ***)
 
 // was connect, resume, accept_connected, ...
 val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resume_id r -> ST connection
@@ -136,7 +136,7 @@ let rekey c ops       = Handshake.rekey       (C.hs c) ops
 let request c ops     = Handshake.request     (C.hs c) ops
 
 
-(*** current epochs ***)
+(** current epochs ***)
 
 // the index of messages depends on the connection state,
 // and may be different for reading and for writing.
@@ -182,7 +182,7 @@ let no_seqn_overflow c rw =
 #set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
 
 
-(*** outgoing ***)
+(** outgoing ***)
 
 type ioresult_w =
     // public results returned by TLS.send
@@ -944,7 +944,7 @@ let writeClose c =
   r
 
 
-(*** incoming (implicitly writing) ***)
+(** incoming (implicitly writing) ***)
 
 // By default, all i:id are reader identifiers, i.e. peerId (handshakeId (reader_epoch.h)
 // FIXME: Put the following definitions close to range and delta, and use them
@@ -1287,5 +1287,3 @@ let refuse c (q:query) =
     abortWithAlert c AD_unknown_ca reason;
     writeClosing c
 *)
-
-
