@@ -62,6 +62,7 @@ let leak #i #role s = State.key s, State.iv s
 // we can reason about sequence-number collisions before applying it.
 let aeIV i (seqn:counter) (staticIV:iv i) : lbytes (iv_length i) =
   lemma_repr_bytes_values seqn;
+  max_ctr_value ();
   let extended = bytes_of_int (iv_length i) seqn in
   xor (iv_length i) extended staticIV
 

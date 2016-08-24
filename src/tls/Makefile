@@ -271,6 +271,7 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 # to our own list.
 TLSML := \
   FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
+  FStar_Monotonic_Seq.ml \
   $(TLSML)
 # Last step: prefix with the output directory.
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))

@@ -55,7 +55,9 @@ let log_ref (r:rid) (i:id) : Tot Type0 =
 let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 
-let max_ctr = 18446744073709551615 // 2^64 -1
+irreducible let max_ctr: nat = pow2 64 - 1
+
+assume val max_ctr_value: unit -> Lemma (max_ctr = 18446744073709551615)
 
 type counter = c:nat{c <= max_ctr} 
 

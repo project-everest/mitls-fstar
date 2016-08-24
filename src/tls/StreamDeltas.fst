@@ -56,7 +56,7 @@ let project_fragment_deltas #i #rw s fs =
        let aux : h:HH.t -> Lemma (S.fragments_prefix s fs h
 			    ==> deltas_prefix s (project_deltas fs) h) =
 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in
-       let _ = qintro aux in
+       let _ = FStar.Classical.forall_intro aux in
        MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
   else ()
 

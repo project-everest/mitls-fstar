@@ -28,8 +28,10 @@ type cipher (i:id) = c:bytes{ valid_clen i (length c) }
 type key (i:id) = lbytes (aeadKeySize (alg i))
 type iv  (i:id) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
 
-let max_ctr (a:aeadAlg) = 18446744073709551615 // 2^64 -1
+irreducible let max_ctr (a:aeadAlg) : Tot nat = pow2 64 - 1
 //pow2 (8 * aeadRecordIVSize a) - 1
+
+assume val max_ctr_value: a:aeadAlg -> Lemma (max_ctr a = 18446744073709551615)
 
 // this is the same as a sequence number and in bytes, GCMNonce.nonce_explicit[8]
 type counter a = c:nat{c <= max_ctr a} 
@@ -186,11 +188,12 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 	   )
   ))
 
-//#set-options "--z3timeout 50 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
+#set-options "--z3timeout 50 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
 
 let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
   m_recall ctr;
+  max_ctr_value (alg i);
   let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in  
   let n = m_read ctr in      
   lemma_repr_bytes_values n;
@@ -206,7 +209,6 @@ let encrypt #i e ad rg p =
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
   let c = nonce_explicit @| aead_encrypt (alg i) e.key iv ad' text in  
   cut (length c = targetLength i rg);
-  assume (authId i);
   if authId i then
     begin
     let log = ilog e.log in

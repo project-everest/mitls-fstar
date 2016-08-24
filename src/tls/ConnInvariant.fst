@@ -54,7 +54,7 @@ let frame_epoch_writer s h0 h1 =
      fun k -> let wk = writer_epoch (Seq.index epochs k) in
 	   reveal_epochs_inv'();
 	   assert (HH.disjoint (StAE.region wk) (StAE.region wj)) in
-  qintro aux
+  FStar.Classical.forall_intro aux
 
 ////////////////////////////////////////////////////////////////////////////////
 #set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
@@ -211,7 +211,7 @@ let ms_derive_is_ok h0 h1 i w =
       	     then ()
       	     else assert (Some ww==MM.sel old_ms j)
       else () in
-  qintro aux
+  FStar.Classical.forall_intro aux
 
 (* Here, we actually call MS.derive and check that its post-condition
    is sufficient to call ms_derive_is_ok and re-establish the invariant *)
@@ -336,7 +336,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
 				  /\ (HH.disjoint (C.region c) (C.region c')) //c's region is disjoint from c'; since the conn_tab is pairwise_disjoint
 				  /\ (registered j wj c' h1)))) //so it remains registered
       else () (* not ideal; nothing much to say *) in
-  qintro aux
+  FStar.Classical.forall_intro aux
 
 (* Case 3:
     Adding to a log registered in a connection: Need to prove that ms_conn_invariant is maintained
@@ -351,6 +351,7 @@ val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:M
 	       MM.sel (MR.m_sel h0 conn_tab) (nonce_of_id i) == Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1)) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
+#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let mutate_registered_writer_ok h0 h1 i w c = (* () *)
 (* a slightly more detailed proof: *)
     let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -362,7 +363,7 @@ let mutate_registered_writer_ok h0 h1 i w c = (* () *)
              | None -> ()
              | Some wj -> () //basically, when i=j, the proof is easy as i remains registered; if i<>j then j didn't change since their regions are distinct
     	else () in
-    qintro aux
+    FStar.Classical.forall_intro aux
 
 (* Case 4:
     Adding a connection (writing to conn table) we note that none of the bad writers can be attributed to this connection
@@ -373,6 +374,7 @@ let mutate_registered_writer_ok h0 h1 i w c = (* () *)
 *)
 
 (* An auxiliary formula, needed as a pre-condition to add a c to conn_tab *)
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 let conn_hs_region_exists (c:connection) (h:HH.t) =
    let hs_rgn = HS.region c.hs in
    Map.contains h hs_rgn /\
@@ -406,5 +408,5 @@ let add_connection_ok h0 h1 i c =
 	      assert (c =!= c' ==> (match MM.sel old_conn n with
                                      | None -> True
                                      | Some c'' -> c' == c'')) in
-    qintro hs_region_exists;
+    FStar.Classical.forall_intro hs_region_exists;
     cut (handshake_regions_exists new_conn h1)
