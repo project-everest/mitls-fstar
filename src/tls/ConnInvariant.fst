@@ -351,7 +351,7 @@ val mutate_registered_writer_ok : h0:HH.t -> h1:HH.t -> i:AE.id{authId i} -> w:M
 	       MM.sel (MR.m_sel h0 conn_tab) (nonce_of_id i) == Some c /\ //the connection is logged in the conn_table
 	       HH.contains_ref (MR.as_rref (StreamAE.ilog (StreamAE.State.log w))) h1)) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
-#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --z3timeout 100"
 let mutate_registered_writer_ok h0 h1 i w c = (* () *)
 (* a slightly more detailed proof: *)
     let new_ms = MR.m_sel h1 MS.ms_tab in

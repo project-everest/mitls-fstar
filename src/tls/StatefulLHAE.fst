@@ -103,6 +103,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 	      let ilog = m_sel h0 log in
 	      let seqn = m_sel h0 (ctr e.counter) in
               lemma_repr_bytes_values seqn;
+	      max_ctr_value (alg i);
 	      let ad' = LHAEPlain.makeAD i seqn ad in
 	      let ent = Entry c ad' p in
 	      let n   = Seq.length ilog in
@@ -112,6 +113,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 let encrypt #i e ad r p =
   let seqn = m_read (ctr e.counter) in
   lemma_repr_bytes_values seqn;
+  max_ctr_value (alg i);
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.encrypt #i e ad' r p
 
@@ -126,6 +128,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        (let log = m_sel h0 (ilog d.log) in
 	let seqn = m_sel h0 (ctr d.counter) in
         lemma_repr_bytes_values seqn;
+	max_ctr_value (alg i);
         let ad' = LHAEPlain.makeAD i seqn ad in
        if j < Seq.length log && matches c ad' (Seq.index log j)
        then res = Some (Entry.p (Seq.index log j))
@@ -138,6 +141,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
 let decrypt #i d ad c =
   let seqn = m_read (ctr d.counter) in
   lemma_repr_bytes_values seqn;
+  max_ctr_value (alg i);
   let ad' = LHAEPlain.makeAD i seqn ad in
   AEAD_GCM.decrypt d ad' c
 
