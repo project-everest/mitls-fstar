@@ -25,7 +25,7 @@ FSTAR_HOME?=../../.fstar
 # the latter form won't work because FSTAR_HOME will incorrectly override
 # values in recursive invocations of $(MAKE)...
 
-# .fst files in [lib/ml] that are realized in stdlib-hyperheap.cmxa
+# .fst files in [ulib/ml] that are realized in fstarlib.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
 OPTIONS=--use_native_int --fstar_home $(FSTAR_HOME)
@@ -50,12 +50,12 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeo
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap  --include ../../libs/ml/ --include $(FFI_HOME)
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/$(LIB)/hyperheap --include ../../libs/ml --include $(FFI_HOME)
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
 OCAMLMKLIB=ocamlfind mklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml/hyperheap $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
 
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
@@ -251,10 +251,10 @@ wc:
 
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
-# fstarlib-hyperheap has the entire F* standard library.
+# fstarlib has the entire F* standard library.
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/$(LIB)/ml/fstarlib-hyperheap.cmxa \
+  $(FSTAR_HOME)/$(LIB)/ml/native_int/fstarlib.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
@@ -298,7 +298,7 @@ tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
 	  $(FSTS)
 
 	# Builds everything against native_int/prims; including native_int/prims.cmx
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml hyperheap PRIMS_DIR=native_int
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml PRIMS_DIR=native_int
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
 	# # All our .cmx files
