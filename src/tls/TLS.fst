@@ -392,7 +392,7 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
     //correct behavior, including projections suitable for both the handshake (fragments) and the application (deltas)
     /\ (r<>ad_overflow ==> sendFragment_success Set.empty c i wo f h0 h1)))
 
-#reset-options "--z3timeout 60 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let ct, rg = Content.ct_rg i f in
@@ -626,7 +626,7 @@ val writeHandshake: h_init:HH.t  //initial heap, for stating an invariant on del
   (requires (writeHandshake_requires h_init c new_writer))
   (ensures (writeHandshake_ensures h_init c new_writer))
 
-#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1" 
+#reset-options "--z3timeout 1000 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let rec writeHandshake h_init c new_writer = 
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
@@ -651,7 +651,7 @@ let rec writeHandshake h_init c new_writer =
         let st = !c.state in
         let new_writer = new_writer || next_keys in 
         if complete && st = BC then c.state := AD; // much happening ghostly too
-        if complete || (is_None om && not send_ccs) 
+        if complete || (is_None om && not send_ccs)
 	then WrittenHS new_writer complete // done, either to completion or because there is nothing left to do
         else if new_writer //splitting cases just to narrow in on the assertion failure that prompted the assume
 	then (let h = get () in 
