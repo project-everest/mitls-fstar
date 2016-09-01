@@ -20,7 +20,6 @@ open Range
 open HandshakeMessages
 open StatefulLHAE
 open HKDF
-open Negotiation // We only depend minimally on Nego
 open Epochs	 // We only depend minimally on Epochs 
 open PSK
 

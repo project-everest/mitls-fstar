@@ -565,36 +565,21 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
         else 
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello") 
 
-val negotiateClientExtensions: protocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
+val negotiateClientExtensions: protocolVersion -> config -> list extension -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
-  match pv with
-  | SSL_3p0 ->
-     begin
-     match sExtL with
-     | None -> Correct ne_default
-     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello")
-     end
-  | _ ->
-     begin
-     match cExtL, sExtL with
-     | Some cExtL, Some sExtL ->
-	begin
-        let nes = ne_default in
-        match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
-        | Error(x,y) -> Error(x,y)
-        | Correct l ->
-          if resuming then correct l
-          else
-	  begin
-	    match List.Tot.tryFind is_E_signatureAlgorithms cExtL with
-	    | Some (E_signatureAlgorithms shal) ->
-	      correct({l with ne_signature_algorithms = Some shal})
-	    | None -> correct l
-	    | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
-	  end
-	end
-     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message")
-     end
+  let nes = ne_default in
+  match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
+  | Error(x,y) -> Error(x,y)
+  | Correct l ->
+    if resuming then correct l
+    else
+      begin
+        match List.Tot.tryFind is_E_signatureAlgorithms cExtL with
+        | Some (E_signatureAlgorithms shal) ->
+          correct({l with ne_signature_algorithms = Some shal})
+        | None -> correct l
+        | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
+      end
 
 val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
 let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
@@ -679,36 +664,21 @@ let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
         else {neg with ne_signature_algorithms = Some (sha)}
     | _ -> neg // JK : handle remaining cases
 
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension)))
+val negotiateServerExtensions: protocolVersion -> list extension -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (list extension)
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
-   match cExtL with
-   | Some cExtL ->
-      let server = List.Tot.choose (clientToServerExtension pv cfg cs ri ks resuming) cExtL in
-      Correct (Some server)
-//      let negi = ne_default in
-//      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
-//      Correct (Some server, nego)
-   | None -> 
-       (match pv with
-       | SSL_3p0 ->
-          let cre =
-              if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs csl) then
-                 Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
-              else None //, ne_default in
-          in Correct cre
-       | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))
+  List.Tot.choose (clientToServerExtension pv cfg cs ri ks resuming) cExtL
 
 val isClientRenegotiationInfo: extension -> Tot (option cVerifyData)
 let isClientRenegotiationInfo e =
-    match e with
-    | E_renegotiation_info(ClientRenegotiationInfo(cvd)) -> Some(cvd)
-    | _ -> None
+  match e with
+  | E_renegotiation_info(ClientRenegotiationInfo(cvd)) -> Some(cvd)
+  | _ -> None
 
 val checkClientRenegotiationInfoExtension: config -> list extension -> cVerifyData -> Tot bool
 let checkClientRenegotiationInfoExtension config (cExtL: list extension) cVerifyData =
-    match List.Tot.tryPick isClientRenegotiationInfo cExtL with
-    | None -> not (config.safe_renegotiation)
-    | Some(payload) -> equalBytes payload cVerifyData
+  match List.Tot.tryPick isClientRenegotiationInfo cExtL with
+  | None -> not (config.safe_renegotiation)
+  | Some(payload) -> equalBytes payload cVerifyData
 
 val isServerRenegotiationInfo: extension -> Tot (option (cVerifyData * sVerifyData))
 let isServerRenegotiationInfo e =

@@ -95,46 +95,44 @@ val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option r
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ks log ri (ClientHello ch,_) =
- let mode = computeServerMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in  
+ let mode = computeMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in  
   match mode with
    | Error(z) -> Error(z)
    | Correct(mode) ->
   let srand = KeySchedule.ks_server_random ks in
   let ksl = 
-    (match mode.sm_protocol_version, mode.sm_dh_group, mode.sm_dh_share with
+    (match mode.m_protocol_version, mode.m_dh_group, mode.m_dh_share with
      | TLS_1p3, Some gn, Some gxb -> 
-       let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.sm_cipher_suite gn gxb in
+       let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.m_cipher_suite gn gxb in
        (Some (ServerKeyShare (gn,gyb)))
      | _ -> None) in
-  match negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
-  | Error(z) -> Error(z)
-  | Correct(sext) ->
+  let sext = negotiateServerExtensions mode.m_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.m_cipher_suite ri ksl false in
   let sid = CoreCrypto.random 32 in
   let sh = 
-   {sh_protocol_version = mode.sm_protocol_version;
+   {sh_protocol_version = mode.m_protocol_version;
     sh_sessionID = Some sid;
     sh_server_random = srand;
-    sh_cipher_suite = mode.sm_cipher_suite;
-    sh_compression = mode.sm_comp;
+    sh_cipher_suite = mode.m_cipher_suite;
+    sh_compression = mode.m_comp;
     sh_extensions = sext} in
   let nego = 
    {n_client_random = ch.ch_client_random;
     n_server_random = srand;
     n_sessionID = Some sid;
-    n_protocol_version = mode.sm_protocol_version;
-    n_kexAlg = mode.sm_kexAlg;
-    n_sigAlg = mode.sm_sigAlg;
-    n_aeAlg  = mode.sm_aeAlg;
-    n_cipher_suite = mode.sm_cipher_suite;
-    n_compression = mode.sm_comp;
-    n_dh_group = mode.sm_dh_group;
+    n_protocol_version = mode.m_protocol_version;
+    n_kexAlg = mode.m_kexAlg;
+    n_sigAlg = mode.m_sigAlg;
+    n_aeAlg  = mode.m_aeAlg;
+    n_cipher_suite = mode.m_cipher_suite;
+    n_compression = mode.m_comp;
+    n_dh_group = mode.m_dh_group;
     n_scsv = [];
-    n_extensions = mode.sm_ext;
+    n_extensions = mode.m_ext;
     (* [getCachedSession] returned [None], so no session resumption *)
     n_resume = false} in
   let _ = log @@ (ClientHello ch) in
   let shb = log @@ (ServerHello sh) in
-  let keys = (match mode.sm_protocol_version with
+  let keys = (match mode.m_protocol_version with
     	     | TLS_1p3 -> 
 	       let keys = KeySchedule.ks_server_13_sh ks in
 	       Some keys
@@ -156,17 +154,17 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
     {n_client_random = ch.ch_client_random;
      n_server_random = sh.sh_server_random;
      n_sessionID = sh.sh_sessionID;
-     n_protocol_version = mode.cm_protocol_version;
-     n_kexAlg = mode.cm_kexAlg;
-     n_aeAlg = mode.cm_aeAlg;
-     n_sigAlg = mode.cm_sigAlg;
-     n_cipher_suite = mode.cm_cipher_suite;
-     n_dh_group = mode.cm_dh_group;
+     n_protocol_version = mode.m_protocol_version;
+     n_kexAlg = mode.m_kexAlg;
+     n_aeAlg = mode.m_aeAlg;
+     n_sigAlg = mode.m_sigAlg;
+     n_cipher_suite = mode.m_cipher_suite;
+     n_dh_group = mode.m_dh_group;
      n_compression = sh.sh_compression;
      n_scsv = [];
-     n_extensions = mode.cm_ext;
+     n_extensions = mode.m_ext;
      n_resume = false } in
-    (match o_nego.n_protocol_version, o_nego.n_kexAlg, mode.cm_dh_group, mode.cm_dh_share with
+    (match o_nego.n_protocol_version, o_nego.n_kexAlg, mode.m_dh_group, mode.m_dh_share with
      | TLS_1p3, Kex_DHE, Some gn, Some gyb 
      | TLS_1p3, Kex_ECDHE, Some gn, Some gyb -> 
            let keys = KeySchedule.ks_client_13_sh ks o_nego.n_cipher_suite (gn, gyb) false in
@@ -450,7 +448,7 @@ let client_handle_server_hello (HS #r0 r res cfg nonce lgref hsref) msgs =
       // If a handshake encryption key is returned install the epoch and increment the reader
       (match keys with
       | Some keys -> 
-        let h = Negotiation.Fresh ({session_nego = n}) in
+        let h = FreshSession ({session_nego = n}) in
         let ep = KeySchedule.recordInstanceToEpoch #r0 #nonce h keys in
         Epochs.add_epoch lgref ep;
         Epochs.incr_reader lgref
@@ -592,7 +590,7 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
      (match processServerHelloDone cfg n (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
       | Correct [(ClientKeyExchange(cke),b1)] ->
              let keys = KeySchedule.ks_12_get_keys (!hsref).hs_ks in
-             let h = Negotiation.Fresh ({session_nego = n}) in
+             let h = FreshSession ({session_nego = n}) in
              let ep = KeySchedule.recordInstanceToEpoch h keys in
              Epochs.add_epoch lgref ep;
              hsref := {!hsref with 
@@ -748,7 +746,7 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
    (match processServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log msgs with
     | Error z -> InError z
     | Correct (hsl,svd,keys) -> 
-       let h = Negotiation.Fresh ({session_nego = n}) in
+       let h = FreshSession ({session_nego = n}) in
        let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
        Epochs.incr_reader lgref;
@@ -772,7 +770,7 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
      | Correct (n, keys, (sh,shb)) ->
        (match keys with
         | Some ri ->      
-	  let h = Negotiation.Fresh ({session_nego = n}) in
+	  let h = FreshSession ({session_nego = n}) in
 	  let ep = KeySchedule.recordInstanceToEpoch #r0 #id h ri in
           // Do not increment writer yet as the SH is sent in plaintext
 	  Epochs.add_epoch lgref ep
@@ -895,7 +893,7 @@ let server_handle_client_ccs (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
      (match processClientCCS n (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
       | Correct () ->
         let keys = KeySchedule.ks_12_get_keys (!hsref).hs_ks in
-        let h = Negotiation.Fresh ({session_nego = n}) in
+        let h = FreshSession ({session_nego = n}) in
         let ep = KeySchedule.recordInstanceToEpoch h keys in
         Epochs.add_epoch lgref ep;
         Epochs.incr_reader lgref;
@@ -1012,7 +1010,7 @@ let server_send_server_finished_13 (HS #r0 r res cfg id lgref hsref) =
     (match prepareServerFinished_13 cfg n (!hsref).hs_ks (!hsref).hs_log with
      | Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(f),sfinb)], keys) ->    
             let nl = eeb @| cb @| scvb @| sfinb in
-            let h = Negotiation.Fresh ({session_nego = n}) in
+            let h = FreshSession ({session_nego = n}) in
             let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
             Epochs.add_epoch lgref ep;
             Epochs.incr_writer lgref; // Switch to ATK after the SF
