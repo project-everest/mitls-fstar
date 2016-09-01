@@ -95,7 +95,7 @@ val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option r
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ks log ri (ClientHello ch,_) =
- let mode = computeServerMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in  
+ let mode = computeMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in  
   match mode with
    | Error(z) -> Error(z)
    | Correct(mode) ->
@@ -106,9 +106,7 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
        let gyb = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.m_cipher_suite gn gxb in
        (Some (ServerKeyShare (gn,gyb)))
      | _ -> None) in
-  match negotiateServerExtensions mode.m_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.m_cipher_suite ri ksl false with
-  | Error(z) -> Error(z)
-  | Correct(sext) ->
+  let sext = negotiateServerExtensions mode.m_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.m_cipher_suite ri ksl false in
   let sid = CoreCrypto.random 32 in
   let sh = 
    {sh_protocol_version = mode.m_protocol_version;
