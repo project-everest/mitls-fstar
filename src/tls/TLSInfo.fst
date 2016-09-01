@@ -652,6 +652,36 @@ type id =
 | ID13: keyId:keyId -> id
 | ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
 
+type nego = {
+  n_resume: bool;
+  n_client_random: random;
+  n_server_random: random;
+  n_sessionID: option sessionID;
+  n_protocol_version: protocolVersion;
+  n_kexAlg: kexAlg;
+  n_aeAlg: aeAlg;
+  n_sigAlg: option sigAlg;
+  n_cipher_suite: cipherSuite;
+  n_dh_group: option namedGroup;
+  n_compression: option compression;
+  n_extensions: negotiatedExtensions;
+  n_scsv: list scsv_suite;
+}
+
+type session = {
+  session_nego: nego;
+}
+
+// represents the outcome of a successful handshake,
+// providing context for the derived epoch
+type handshake =
+  | FreshSession of session // was sessionInfo
+  | ResumedSession of session // was abbrInfo * sessionInfo
+// We use SessionInfo as unique session indexes.
+// We tried using instead hs, but this creates circularities
+// We'll probably need a global log to reason about them.
+// We should probably do the same in the session store.
+
 let peerId = function
 | PlaintextID r -> PlaintextID r
 | ID13 (KeyID i tag rw li log) -> 
