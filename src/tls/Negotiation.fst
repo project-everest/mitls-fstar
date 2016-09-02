@@ -239,7 +239,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
 
 
-val negotiateClientExtensions: protocolVersion -> config -> list extension -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
+val negotiateClientExtensions: protocolVersion -> config -> list extension -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (mode))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   let nes = ne_default in
   match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
@@ -432,16 +432,16 @@ let computeMode cfg cpv ccs cexts comps ri =
       } in
       Correct (mode))
 
-irreducible val verifyMode: cfg:config -> cext:list extension -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:list extension -> comp:option compression -> option ri -> Tot (result mode)
+irreducible val verifyMode: cfg:config -> cext:list extension -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:list extension -> comp:option compression -> rio:option ri -> Tot (result mode)
 
-let verifyMode cfg cext cpv spv sr cs sext comp ri =
+let verifyMode cfg cext cpv spv sr cs sext comp rio =
   if not (acceptableVersion cfg cpv spv sr) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
   else if not (acceptableCipherSuite cfg spv cs) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
   else
    let resume = false in
-   match negotiateClientExtensions spv cfg cext sext cs ri resume with
+   match negotiateClientExtensions spv cfg cext sext cs rio resume with
     | Error(z) -> Error(z)
     | Correct(next) ->
     match cs with

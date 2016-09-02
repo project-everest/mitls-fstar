@@ -153,7 +153,8 @@ val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option
      (ensures (fun h0 i h1 -> True))
 let processServerHello cfg ks log ri ch (ServerHello sh,_) =
   let _ = log @@ (ServerHello sh) in
-  let mode = computeClientMode cfg ch.ch_extensions ch.ch_protocol_version sh.sh_protocol_version sh.sh_server_random sh.sh_cipher_suite sh.sh_extensions sh.sh_compression ri in
+  
+  let mode = verifyMode cfg ch.ch_extensions ch.ch_protocol_version sh.sh_protocol_version sh.sh_server_random sh.sh_cipher_suite sh.sh_extensions sh.sh_compression ri in
    match mode with
     | Error(z) -> Error(z)
     | Correct(mode) -> 
