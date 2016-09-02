@@ -535,8 +535,8 @@ let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerify
         let (cvd,svd) = x in
         equalBytes (cvd @| svd) (cVerifyData @| sVerifyData)
 
-val hasExtendedMS: negotiatedExtensions -> Tot bool
-let hasExtendedMS extL = extL.ne_extended_ms = true
+//val hasExtendedMS: negotiatedExtensions -> Tot bool
+//let hasExtendedMS extL = extL.ne_extended_ms = true
 
 // JK : cannot add total effect here because of the exception thrown
 (* TODO *)

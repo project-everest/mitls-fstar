@@ -22,7 +22,7 @@ type clientOffer = {
   co_namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
   co_sigAlgs: list sigHashAlg;
   co_psk: list PSK.psk_identifier;
-  co_point_format: list ECGroupt.point_format;
+  co_point_format: list ECGroup.point_format;
   co_server_name: list serverName;
   co_extended_ms: bool;
   co_secure_renegotiation: bool;
@@ -50,7 +50,7 @@ let valid_mode (m:pre_mode) =
   match m.m_protocol_version with
   | TLS_1p3 ->
     is_AEAD m.m_aeAlg
-    /\ n_comp = NullCompression
+    /\ m.m_comp = NullCompression
     /\ (*Placeholder: only allow 1.3 cipher suites *) True
     /\ (match m.m_kexAlg with
        | Kex_PSK ->
@@ -76,21 +76,21 @@ let valid_mode (m:pre_mode) =
            /\ b2t (is_SEC (Some.v m.m_dh_group))
            /\ b2t (is_None m.m_psk)
        | _ -> False)
-     /\ m_extended_ms = false
-     /\ m_extended_padding = false
-     /\ m_secure_renegotiation = RI_Unsupported
-     /\ m_point_format = None
+     /\ m.m_extended_ms = false
+     /\ m.m_extended_padding = false
+     /\ m.m_secure_renegotiation = RI_Unsupported
+     /\ m.m_point_format = None
   | _ -> False (* TODO *)
 
 val intersect_lists : l1:list -> l2:list -> result:list {
-  List.for_all (List.mem l1) result /\
-  List.for_all (List.mem l2) result /\
-  List.for_all (fun elem -> List.mem elem l2 ==> List.mem elem result) l1
+  List.Tot.for_all (List.Tot.mem l1) result /\
+  List.Tot.for_all (List.Tot.mem l2) result /\
+  List.Tot.for_all (fun elem -> List.Tot.mem elem l2 ==> List.Tot.mem elem result) l1
 }
 
 let intersect_lists l1 l2 =
   l1
-  |> List.filter (fun elem -> List.mem elem l2)
+  |> List.Tot.filter (fun elem -> List.Tot.mem elem l2)
 
 val filterClientOffer: serverCfg:config -> co:clientOffer -> list valid_mode 
 let filterClientOffer serverCfg co =
@@ -98,15 +98,15 @@ let filterClientOffer serverCfg co =
       co.co_cipher_suites
       |> intersect_lists serverCfg.ciphersuites in
   let filtered_SEC_groups =
-      List.filter is_SEC co.co_namedGroups
+      List.Tot.filter is_SEC co.co_namedGroups
       |> intersect_lists (List.filter is_SEC serverCfg.namedGroups) in
   let filtered_FFDHE_groups =
-      List.filter is_FFDHE co.co_namedGroups
+      List.Tot.filter is_FFDHE co.co_namedGroups
       |> intersect_lists (List.filter is_FFDHE serverCfg.namedGroups) in
   filtered_ciphersuites
-  |> List.concatMap (fun cs -> match cs with //kk: remove this match statement if possible 
+  |> List.Tot.concatMap (fun cs -> match cs with //kk: remove this match statement if possible 
     | CipherSuite suite -> 
-      match suite.kexAlg with
+      match fst suite with
       | Kex_PSK -> [(suite,None)]
       | Kex_PSK_DHE | Kex_DHE -> List.map (fun elem -> (suite,elem)) filtered_FFDHE_groups
       | Kex_PSK_ECDHE | Kex_ECDHE -> List.map (fun elem -> (suite,elem)) filtered_SEC_groups  
@@ -124,6 +124,11 @@ let prepareClientOffer cfg =
    co_sigAlgs = cfg.signatureAlgorithms;
    co_safe_resumption = cfg.safe_resumption;
    co_safe_renegotiation = cfg.safe_renegotiation;
+   co_psk = []; // TODO: Actually get the psk from the config.
+   co_point_format = []; //TODO: Same as co_psk
+   co_server_name = cfg.peer_name;
+   co_extended_ms = false; //TODO: Add to TLSInfo.config and put here.
+   co_secure_renegotiation = cfg.safe_renegotiation; //TODO: Fix name inconsistency.
    } in
   co
 
@@ -186,7 +191,7 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
       | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
     else Correct(None, None)
 
-val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> (result nego) -> extension -> Tot (result (nego))
+val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> (result mode) -> extension -> Tot (result (mode))
 let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
     match res with
     | Error(x,y) -> Error(x,y)
@@ -194,11 +199,11 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
       if List.Tot.existsb (sameExt sExt) cExtL then
             match sExt with
             | E_renegotiation_info (sri) ->
-              (match sri, replace_subtyping ri with
-              | FirstConnection, None -> correct ({l with n_secure_renegotiation = RI_Valid})
+              (match sri, ri with
+              | FirstConnection, None -> correct ({l with m_secure_renegotiation = RI_Valid})
               | ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
                  if equalBytes cvdc cvds && equalBytes svdc svds then
-                    correct ({l with n_secure_renegotiation = RI_Valid})
+                    correct ({l with m_secure_renegotiation = RI_Valid})
                  else
                     Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
               | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
@@ -209,7 +214,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
                 if resuming then
                     correct l
                 else
-                    correct ({l with n_point_format = Some spf})
+                    correct ({l with m_point_format = Some spf})
 (* not allowed for server
             | E_signatureAlgorithms sha ->
                 if resuming then correct l
@@ -219,7 +224,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
                 if resuming then
                     correct(l)
                 else
-                    correct({l with n_extended_ms = true})
+                    correct({l with m_extended_ms = true})
             | E_extended_padding ->
                 if resuming then
                     Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided extended padding in a resuming handshake")
@@ -227,8 +232,8 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
                     if isOnlyMACCipherSuite cs then
                         Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided extended padding for a MAC only ciphersuite")
                     else
-                        correct({l with n_extended_padding = true})
-            | E_keyShare (ServerKeyShare sks) -> correct({l with n_keyShare = Some sks})
+                        correct({l with m_extended_padding = true})
+            | E_keyShare (ServerKeyShare sks) -> correct({l with m_keyShare = Some sks})
             | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
         else
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
@@ -380,7 +385,7 @@ let acceptableCipherSuite cfg spv cs =
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
-irreducible val computeMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:list extension -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result (mode * list extension * list extension)
+irreducible val computeMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:list extension -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result (mode * list extension * list extension))
 
 let computeMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 
