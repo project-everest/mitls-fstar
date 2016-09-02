@@ -518,8 +518,10 @@ let replace_subtyping (o:(option (cVerifyData * sVerifyData))) : Tot (option (by
 // TODO
 // ADL the negotiation of renegotiation indication is incorrect
 // ADL needs to be consistent with clientToNegotiatedExtension
-val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> result negotiatedExtensions -> extension -> Tot (result (negotiatedExtensions))
-let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : result (negotiatedExtensions)=
+
+(** updates negotiatedExtensions, called from negotiateClientExtensions in a fold to process the server extensions list *)
+val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> (result nego) -> extension -> Tot (result (nego))
+let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
     match res with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
@@ -527,10 +529,10 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             match sExt with
             | E_renegotiation_info (sri) ->
               (match sri, replace_subtyping ri with
-              | FirstConnection, None -> correct ({l with ne_secure_renegotiation = RI_Valid})
+              | FirstConnection, None -> correct ({l with n_secure_renegotiation = RI_Valid})
               | ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
                  if equalBytes cvdc cvds && equalBytes svdc svds then
-                    correct ({l with ne_secure_renegotiation = RI_Valid})
+                    correct ({l with n_secure_renegotiation = RI_Valid})
                  else
                     Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
               | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
@@ -541,17 +543,17 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                 if resuming then
                     correct l
                 else
-                    correct ({l with ne_supported_point_formats = Some spf})
+                    correct ({l with n_point_format = Some spf})
 (* not allowed for server
             | E_signatureAlgorithms sha ->
                 if resuming then correct l
-                else correct ({l with ne_signature_algorithms = Some (sha)})
+                else correct ({l with n_signature_algorithms = Some (sha)})
 *)
             | E_extended_ms ->
                 if resuming then
                     correct(l)
                 else
-                    correct({l with ne_extended_ms = true})
+                    correct({l with n_extended_ms = true})
             | E_extended_padding ->
                 if resuming then
                     Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided extended padding in a resuming handshake")
@@ -559,8 +561,8 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                     if isOnlyMACCipherSuite cs then
                         Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided extended padding for a MAC only ciphersuite")
                     else
-                        correct({l with ne_extended_padding = true})
-	    | E_keyShare (ServerKeyShare sks) -> correct({l with ne_keyShare = Some sks})
+                        correct({l with n_extended_padding = true})
+	    | E_keyShare (ServerKeyShare sks) -> correct({l with n_keyShare = Some sks})
 	    | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
         else 
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello") 

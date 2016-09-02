@@ -116,6 +116,7 @@ noeq type config = {
     dhPQMinLength: nat * nat;
     }
 
+
 val sigAlgPref: list sigAlg -> list hashAlg' -> Tot (list sigHashAlg)
 let rec sigAlgPref s h =
     match s with
@@ -260,7 +261,10 @@ noeq type nego = {
   n_client_auth: bool;
   n_clientID: option Cert.chain;
   n_clientSigAlg: option sigHashAlg;
+  n_pmsId: PMS.pms;
 }
+
+type session_info = nego
 
 type abbrInfo =
     {abbr_crand: crand;
@@ -274,8 +278,8 @@ type abbrInfo =
 // for certificates, the empty list represents the absence of identity
 // (possibly refusing to present requested certs)
 
-val csrands: nego -> Tot csRands
-let csrands si = si.init_crand @| si.init_srand
+val csrands: session_info -> Tot csRands
+let csrands si = si.n_client_random @| si.n_server_random
 //CF subsumes mk_csrands
 
 // Getting algorithms from nego
@@ -297,11 +301,11 @@ let kdfAlg pv cs =
   | TLS_1p2           -> PRF_TLS_1p2 kdf_label (prfMacAlg_of_ciphersuite cs)
   | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
-let vdAlg si = si.protocol_version, si.cipher_suite
+let vdAlg si = si.n_protocol_version, si.n_cipher_suite
 
-val siAuthEncAlg: si:nego { si.protocol_version = TLS_1p2 &&
-                              pvcs si.protocol_version si.cipher_suite } -> Tot aeAlg
-let siAuthEncAlg si = get_aeAlg si.cipher_suite
+val siAuthEncAlg: si:nego { si.n_protocol_version = TLS_1p2 &&
+                              pvcs si.n_protocol_version si.n_cipher_suite } -> Tot aeAlg
+let siAuthEncAlg si = get_aeAlg si.n_cipher_suite
 
 type msId = // We record the parameters used to derive the master secret;
   | StandardMS : pmsId -> csRands -> kefAlg_t -> msId
@@ -330,12 +334,12 @@ let honestMS = function
 // Getting master-secret indexes out of nego
 
 //CF subsumes both MsI and mk_msid
-val msid: si:nego { is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
+val msid: si:session_info { is_Some (prfMacAlg_of_ciphersuite_aux (si.n_cipher_suite)) } -> Tot msId
 let msid si =
-  let ems = si.extensions.ne_extended_ms in
-  let kef = kefAlg si.protocol_version si.cipher_suite ems in
-  if ems then ExtendedMS si.pmsId si.session_hash kef
-  else StandardMS si.pmsId    (csrands si) kef
+  let ems = si.n_extended_ms in
+  let kef = kefAlg si.n_protocol_version si.n_cipher_suite ems in
+  if ems then ExtendedMS si.n_pmsId si.n_session_hash kef
+  else StandardMS si.n_pmsId    (csrands si) kef
 
 // Strengths of Handshake algorithms
 
@@ -350,17 +354,17 @@ assume val sigHashAlg_of_ciphersuite: cipherSuite -> Tot sigHashAlg
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF
-val strongPRF: si:nego{si.protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.cipher_suite \/ is_SCSV si.cipher_suite) /\ is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite)} -> Tot bool
-let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && strongVD(vdAlg si)
+val strongPRF: si:nego{si.n_protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.n_cipher_suite \/ is_SCSV si.n_cipher_suite) /\ is_Some (prfMacAlg_of_ciphersuite_aux si.n_cipher_suite)} -> Tot bool
+let strongPRF si = strongKDF(kdfAlg si.n_protocol_version si.n_cipher_suite) && strongVD(vdAlg si)
 // MK I think having this joint strength predicate
 // MK guaranteeing the idealization of the complete module is useful
 
 // Summarizing all assumptions needed for a strong handshake
 // CF derived & to be used in the public API only
 let strongHS si =
-  strongKEX (si.pmsId) &&
-  is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
-  strongKEF (kefAlg si.protocol_version si.cipher_suite si.extensions.ne_extended_ms) && //NS: ... to verify this
+  strongKEX (si.n_pmsId) &&
+  is_Some (prfMacAlg_of_ciphersuite_aux si.n_cipher_suite) && //NS: needed to add this ...
+  strongKEF (kefAlg si.n_protocol_version si.n_cipher_suite si.n_extended_ms) && //NS: ... to verify this
   strongPRF si
   //strongSig si //SZ: need to state the precise agile INT-CMA assumption, with a designated hash algorithm and a set of hash algorithms allowed in signing queries
   //CF * hashAlg for certs?
@@ -634,21 +638,21 @@ type id =
 | ID13: keyId:keyId -> id
 | ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
 
-type nego = {
-  n_resume: bool;
-  n_client_random: random;
-  n_server_random: random;
-  n_sessionID: option sessionID;
-  n_protocol_version: protocolVersion;
-  n_kexAlg: kexAlg;
-  n_aeAlg: aeAlg;
-  n_sigAlg: option sigAlg;
-  n_cipher_suite: cipherSuite;
-  n_dh_group: option namedGroup;
-  n_compression: option compression;
-  n_extensions: negotiatedExtensions;
-  n_scsv: list scsv_suite;
-}
+(* type nego = { *)
+(*   n_resume: bool; *)
+(*   n_client_random: random; *)
+(*   n_server_random: random; *)
+(*   n_sessionID: option sessionID; *)
+(*   n_protocol_version: protocolVersion; *)
+(*   n_kexAlg: kexAlg; *)
+(*   n_aeAlg: aeAlg; *)
+(*   n_sigAlg: option sigAlg; *)
+(*   n_cipher_suite: cipherSuite; *)
+(*   n_dh_group: option namedGroup; *)
+(*   n_compression: option compression; *)
+(*   n_extensions: negotiatedExtensions; *)
+(*   n_scsv: list scsv_suite; *)
+(* } *)
 
 type session = {
   session_nego: nego;
@@ -673,13 +677,13 @@ let peerId = function
 | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
 
 val siId: si:nego{ 
-  is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 
-  si.protocol_version = TLS_1p2 /\
-  pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
+  is_Some (prfMacAlg_of_ciphersuite_aux (si.n_cipher_suite)) /\ 
+  si.n_protocol_version = TLS_1p2 /\
+  pvcs si.n_protocol_version si.n_cipher_suite } -> role -> Tot id
 
 let siId si r =
   let cr, sr = split (csrands si) 32 in
-  ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
+  ID12 si.n_protocol_version (msid si) (kdfAlg si.n_protocol_version si.n_cipher_suite) (siAuthEncAlg si) cr sr r
 
 let pv_of_id (i:id{~(is_PlaintextID i)}) = match i with
   | ID13 _ -> TLS_1p3
