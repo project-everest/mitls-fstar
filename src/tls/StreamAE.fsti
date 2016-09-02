@@ -81,7 +81,7 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   c
 
 // kept concrete for log and counter, but the key and iv should be private.
-noeq type state (i:id) (rw:rw) = 
+type state (i:id) (rw:rw) = 
   | State: #region: rgn
          -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
          -> key: key i

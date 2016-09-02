@@ -21,8 +21,11 @@ type clientOffer = {
   co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
   co_namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
   co_sigAlgs: list sigHashAlg;
-  co_safe_resumption: bool;
-  co_safe_renegotiation: bool;
+  co_psk: list PSK.psk_identifier;
+  co_point_format: list ECGroupt.point_format;
+  co_server_name: list serverName;
+  co_extended_ms: bool;
+  co_secure_renegotiation: bool;
 }
 
 type pre_mode = {
@@ -42,10 +45,10 @@ type pre_mode = {
   m_server_name: option serverName;
 }
 
-type valid_mode (m:pre_mode) =
-  match m_protocol_version with
+let valid_mode (m:pre_mode) = 
+  match m.m_protocol_version with
   | TLS_1p3 ->
-    /\ is_AEAD m.m_aeAlg
+    is_AEAD m.m_aeAlg
     /\ n_comp = NullCompression
     /\ (*Placeholder: only allow 1.3 cipher suites *) True
     /\ (match m.m_kexAlg with
@@ -78,6 +81,36 @@ type valid_mode (m:pre_mode) =
      /\ m_point_format = None
   | _ -> False (* TODO *)
 
+val intersect_lists : l1:list -> l2:list -> result:list {
+  List.for_all (List.mem l1) result /\
+  List.for_all (List.mem l2) result /\
+  List.for_all (fun elem -> List.mem elem l2 ==> List.mem elem result) l1
+}
+
+let intersect_lists l1 l2 =
+  l1
+  |> List.filter (fun elem -> List.mem elem l2)
+
+val filterClientOffer: serverCfg:config -> co:clientOffer -> list valid_mode 
+let filterClientOffer serverCfg co =
+  let filtered_ciphersuites = 
+      co.co_cipher_suites
+      |> intersect_lists serverCfg.ciphersuites in
+  let filtered_SEC_groups =
+      List.filter is_SEC co.co_namedGroups
+      |> intersect_lists (List.filter is_SEC serverCfg.namedGroups) in
+  let filtered_FFDHE_groups =
+      List.filter is_FFDHE co.co_namedGroups
+      |> intersect_lists (List.filter is_FFDHE serverCfg.namedGroups) in
+  filtered_ciphersuites
+  |> List.concatMap (fun cs -> match cs with //kk: remove this match statement if possible 
+    | CipherSuite suite -> 
+      match suite.kexAlg with
+      | Kex_PSK -> [(suite,None)]
+      | Kex_PSK_DHE | Kex_DHE -> List.map (fun elem -> (suite,elem)) filtered_FFDHE_groups
+      | Kex_PSK_ECDHE | Kex_ECDHE -> List.map (fun elem -> (suite,elem)) filtered_SEC_groups  
+      )
+      
 type mode = m:pre_mode{valid_mode m}
 
 val prepareClientOffer: cfg:config -> Tot clientOffer
