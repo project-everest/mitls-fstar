@@ -37,6 +37,7 @@ type pre_mode = {
   m_dh_group: option namedGroup;
   m_dh_share: option bytes;
   m_psk: option PSK.psk_identifier;
+  m_server_cert: option Cert.chain;
   m_comp: compression;
   m_extended_ms: bool;
   m_extended_padding: bool;
@@ -185,6 +186,155 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
       | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
     else Correct(None, None)
 
+val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> (result nego) -> extension -> Tot (result (nego))
+let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt =
+    match res with
+    | Error(x,y) -> Error(x,y)
+    | Correct(l) ->
+      if List.Tot.existsb (sameExt sExt) cExtL then
+            match sExt with
+            | E_renegotiation_info (sri) ->
+              (match sri, replace_subtyping ri with
+              | FirstConnection, None -> correct ({l with n_secure_renegotiation = RI_Valid})
+              | ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
+                 if equalBytes cvdc cvds && equalBytes svdc svds then
+                    correct ({l with n_secure_renegotiation = RI_Valid})
+                 else
+                    Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
+              | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
+            | E_server_name _ ->
+                if List.Tot.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
+                else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
+            | E_ec_point_format(spf) ->
+                if resuming then
+                    correct l
+                else
+                    correct ({l with n_point_format = Some spf})
+(* not allowed for server
+            | E_signatureAlgorithms sha ->
+                if resuming then correct l
+                else correct ({l with n_signature_algorithms = Some (sha)})
+*)
+            | E_extended_ms ->
+                if resuming then
+                    correct(l)
+                else
+                    correct({l with n_extended_ms = true})
+            | E_extended_padding ->
+                if resuming then
+                    Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided extended padding in a resuming handshake")
+                else
+                    if isOnlyMACCipherSuite cs then
+                        Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server provided extended padding for a MAC only ciphersuite")
+                    else
+                        correct({l with n_extended_padding = true})
+            | E_keyShare (ServerKeyShare sks) -> correct({l with n_keyShare = Some sks})
+            | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
+        else
+            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
+
+
+val negotiateClientExtensions: protocolVersion -> config -> list extension -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
+let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
+  let nes = ne_default in
+  match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
+  | Error(x,y) -> Error(x,y)
+  | Correct l ->
+    if resuming then correct l
+    else
+      begin
+        match List.Tot.tryFind is_E_signatureAlgorithms cExtL with
+        | Some (E_signatureAlgorithms shal) ->
+          correct({l with ne_signature_algorithms = Some shal})
+        | None -> correct l
+        | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
+      end
+
+val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
+let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
+  match cExt with
+    | E_renegotiation_info (cri) ->
+        let rs =
+           match cri, ri with
+           | FirstConnection, None -> RI_Valid
+           | ClientRenegotiationInfo(cvdc), Some (cvds, svds) ->
+               if equalBytes cvdc cvds then RI_Valid else RI_Invalid
+           | _ -> RI_Invalid in
+        {neg with ne_secure_renegotiation = rs}
+    | E_supported_groups l ->
+        if resuming then neg
+        else
+            let isOK g = List.Tot.existsb (fun (x:namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.namedGroups) in
+            {neg with ne_supported_groups = Some (List.Tot.filter isOK l)}
+    | E_ec_point_format l ->
+        if resuming then neg
+        else
+            let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
+            {neg with ne_supported_point_formats = Some nl}
+    | E_server_name l ->
+        {neg with ne_server_names = Some l}
+    | E_extended_ms ->
+        if resuming then
+            neg
+        else
+            // If EMS is disabled in config, don't negotiate it
+            {neg with ne_extended_ms = cfg.safe_resumption}
+    | E_extended_padding ->
+        if resuming then
+            neg
+        else
+            if isOnlyMACCipherSuite cs then
+                neg
+            else
+                {neg with ne_extended_padding = true}
+    | E_signatureAlgorithms sha ->
+        if resuming then neg
+        else {neg with ne_signature_algorithms = Some (sha)}
+    | _ -> neg // JK : handle remaining cases
+
+
+val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
+let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
+    match cExt with
+    | E_earlyData b -> None    // JK : TODO
+    | E_preSharedKey b -> None // JK : TODO
+    | E_keyShare b ->
+        (match ks with
+        | Some k -> Some (E_keyShare k)
+        | None -> None)
+    | E_renegotiation_info (_) ->
+        let ric =
+           match ri with
+           | Some t -> ServerRenegotiationInfo t
+           | None -> FirstConnection in
+        (match pv with
+        | TLS_1p3 -> None
+        | _ -> Some (E_renegotiation_info ric))
+    | E_server_name l ->
+        (match List.Tot.tryFind (fun x->match x with | SNI_DNS _ -> true | _ -> false) l with
+        | Some _ ->
+          if pv <> TLS_1p3
+          then Some(E_server_name []) // TODO EncryptedExtensions
+          else None
+        | _ -> None)
+    | E_ec_point_format(l) ->
+        if resuming || pv = TLS_1p3 then None
+        else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
+    | E_supported_groups(l) -> None
+    | E_extended_ms ->
+        if pv <> TLS_1p3 && cfg.safe_resumption then Some(E_extended_ms)
+        else None
+    | E_extended_padding ->
+        if resuming then
+            None
+        else
+            if isOnlyMACCipherSuite cs then
+                None
+            else
+                Some(E_extended_padding)
+    | _ -> None
+
+
 // Determines if the server random value contains a downgrade flag
 // AND if there has been a downgrade
 // The downgrade flag is a random value set by RFC (6.3.1.1)
@@ -230,7 +380,7 @@ let acceptableCipherSuite cfg spv cs =
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
-irreducible val computeMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:list extension -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result mode)
+irreducible val computeMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:list extension -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result (mode * list extension * list extension)
 
 let computeMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 
