@@ -90,7 +90,7 @@ type macAlg =
 type aeAlg =
   | MACOnly: hash_alg -> aeAlg
   | MtE: encAlg -> hash_alg -> aeAlg
-  | AEAD: aeadAlg -> hash_alg -> aeAlg
+  | AEAD: aeadAlg -> hash_alg -> aeAlg  // the hash algorithm is for the ciphersuite; it is not used by the record layer. 
 
 // does this algorithm provide padding support with TLS 1.2? 
 let lhae = function
