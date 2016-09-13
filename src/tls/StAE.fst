@@ -59,7 +59,7 @@ type keyBytes (i:stae_id) = lbytes (aeKeySize i)
 ////////////////////////////////////////////////////////////////////////////////
 //`state i rw`, a sum to cover StreamAE (1.3) and StatefulLHAE (1.2)
 ////////////////////////////////////////////////////////////////////////////////
-type state (i:id) (rw:rw) = 
+noeq type state (i:id) (rw:rw) =
   | Stream: u:unit{is_stream i} -> Stream.state i rw -> state i rw
   | StLHAE: u:unit{is_stlhae i} -> StLHAE.state i rw -> state i rw
 
