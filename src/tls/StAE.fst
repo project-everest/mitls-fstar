@@ -387,6 +387,9 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
   	             f = Seq.index written j /\
   	             frame_f (fragments d) h1 (Set.singleton (log_region d)) /\
   	             MR.witnessed (fragment_at_j d j f)))))
+
+#set-options "--z3timeout 100" 
+
 let decrypt #i d (ct,c) =
   let h0 = ST.get () in
   recall_region (log_region d);
