@@ -68,36 +68,39 @@ type entry (i:id) =
 
 let ideal_log (r:rid) (i:id) = log_t r (entry i)
 
-let log_ref (r:rid) (i:id) : Tot Type0 =
+let maybe_log (r:rid) (i:id) : Tot Type0 =
   if authId i then ideal_log r i else unit
 
-// applied to force the condition within log_ref
-let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) = l
+// applied to force generalization (?)
+let to_maybe_log (#r:rid) (#i:id) (l:ideal_log r i{authId i}) : maybe_log r i = l
+
+// applied to force the condition within maybe_log
+let ilog (#r:rid) (#i:id) (l:maybe_log r i{authId i}) : Tot (ideal_log r i) = l
 
 // 'ctr' here refers to the encryption sequence number---not the internal block counter.
 
-irreducible let max_ctr: nat = pow2 64 - 1
-assume val max_ctr_value: unit -> Lemma (max_ctr = 18446744073709551615)
+irreducible let max_seqn: nat = pow2 64 - 1
+assume val max_seqn_value: unit -> Lemma (max_seqn = 18446744073709551615)
 // how to avoid this?
 
-type seqnum = c:nat{c <= max_ctr} 
+type seqnum = c:nat{c <= max_seqn} 
 
 // a ref to an increasing sequence number,
-// when authId i, the sequence number is at most min(length log, max_ctr)
+// when authId i, the sequence number is at most min(length log, max_seqn)
 
-let concrete_ctr (r:rid) (i:id) : Tot Type0 = m_rref r seqnum increases
+let concrete_seqn (r:rid) (i:id) : Tot Type0 = m_rref r seqnum increases
 
-let ideal_ctr (#rl:rid) (r:rid) (i:id) (log:ideal_log rl i) : Tot Type0 =
-  FStar.Monotonic.Seq.seqn r log max_ctr
+let ideal_seqn (#rl:rid) (r:rid) (i:id) (log:ideal_log rl i) : Tot Type0 =
+  FStar.Monotonic.Seq.seqn r log max_seqn
     
-let ctr_ref (#rl:rid) (r:rid) (i:id) (log:log_ref rl i) : Tot Type0 = 
+let maybe_seqn (#rl:rid) (r:rid) (i:id) (log:maybe_log rl i) : Tot Type0 = 
   if authId i   
-  then ideal_ctr r i (log <: ideal_log rl i)
+  then ideal_seqn r i (log <: ideal_log rl i)
   else m_rref r seqnum increases
 
-let ctr (#rl:rid) (#r:rid) (#i:id) (#log:log_ref rl i) (c:ctr_ref r i log)
+let ctr (#rl:rid) (#r:rid) (#i:id) (#log:maybe_log rl i) (c:maybe_seqn r i log)
   : Tot (m_rref r (if authId i 
-		   then seqn_val #rl #(entry i) #(fun (s:seq (entry i)) -> True) r (ilog log) max_ctr 
+		   then seqn_val #rl #(entry i) #(fun (s:seq (entry i)) -> True) r (ilog log) max_seqn 
 		   else seqnum) 
 		increases) =
   c
@@ -105,7 +108,7 @@ let ctr (#rl:rid) (#r:rid) (#i:id) (#log:log_ref rl i) (c:ctr_ref r i log)
 (*
 // error message: on log:
 exp (FStar.Monotonic.Seq.i_seq rl (StreamAE.entry i) (fun s -> Prims.l_True))
-got (StreamAE.log_ref l i)
+got (StreamAE.maybe_log l i)
   = if authId i then ideal_log rl i else unit
   = log_t rl (entry i) 
   = i_seq rl a (fun (s:seq a) -> True) (fun s -> True)
@@ -118,8 +121,8 @@ noeq type state (i:id) (rw:rw) =
          -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
          -> key: key i
          -> iv: iv i
-         -> log: log_ref log_region i     // ghost, subject to cryptographic assumption
-         -> seqn: ctr_ref region i log // types are sufficient to anti-alias log and seqn
+         -> log: maybe_log log_region i     // ghost, subject to cryptographic assumption
+         -> seqn: maybe_seqn region i log // types are sufficient to anti-alias log and seqn
          -> state i rw
 
 // Some invariants:
@@ -159,7 +162,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                HH.parent r.region = parent /\
 	       color r.region = color parent /\
                fresh_region r.region h0 h1 /\
-               op_Equality #(log_ref w.region i) w.log r.log /\
+               op_Equality #(maybe_log w.region i) w.log r.log /\
 	       m_contains (ctr r.seqn) h1 /\
 	       m_sel h1 (ctr r.seqn) === 0))
 // encryption (on concrete bytes), returns (cipher @| tag)
@@ -173,15 +176,13 @@ val coerce: parent:rid -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 
-
 val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
-
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
-    (requires (fun h0 -> m_sel h0 (ctr e.seqn) < max_ctr))
-    (ensures  (fun h0 c h1 ->
+  (requires (fun h0 -> m_sel h0 (ctr e.seqn) < max_seqn))
+  (ensures  (fun h0 c h1 ->
                  modifies_one e.region h0 h1 /\
                  m_contains (ctr e.seqn) h1 /\
                  m_sel h1 (ctr e.seqn) === m_sel h0 (ctr e.seqn) + 1 /\
@@ -201,7 +202,7 @@ let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
 // decryption, idealized as a lookup at index d.seq# in the log for safe instances
 val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
-  (requires (fun h0 -> m_sel h0 (ctr d.seqn) < max_ctr))
+  (requires (fun h0 -> m_sel h0 (ctr d.seqn) < max_seqn))
   (ensures  (fun h0 res h1 ->
       let j = m_sel h0 (ctr d.seqn) in
       (authId i ==>
