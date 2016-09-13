@@ -232,13 +232,17 @@ let encKeySize = function
   | Block AES_128_CBC   -> 16
   | Block AES_256_CBC   -> 32
 
-let aeadSaltSize = function
-  | AES_128_GCM -> 4
-  | AES_256_GCM -> 4
+let aeadSaltSize = function // TLS 1.3 IV salt. 
+  | AES_128_GCM       -> 4
+  | AES_256_GCM       -> 4
+  | CHACHA20_POLY1305 -> 12 
+  | _                 -> 4 //recheck 
 
-let aeadRecordIVSize = function
-  | AES_128_GCM -> 8
-  | AES_256_GCM -> 8
+let aeadRecordIVSize = function // TLS 1.2 explicit IVs
+  | AES_128_GCM       -> 8
+  | AES_256_GCM       -> 8
+  | CHACHA20_POLY1305 -> 0 
+  | _                 -> 8 //recheck
 
 val hashSize: h:hashAlg{h<>NULL} -> Tot nat
 let hashSize = function
