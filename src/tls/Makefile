@@ -12,6 +12,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	$(MAKE) -C $(FFI_HOME) clean
 	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
+	rm -rf test/*.cm* test/*.o
 
 # ------------------ Dependencies on F* & its libraries --------------
 # When using NuBuild, FStar must be located within the source tree.
@@ -28,7 +29,7 @@ FSTAR_HOME?=../../.fstar
 # .fst files in [ulib/ml] that are realized in fstarlib.cmxa
 STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
 
-OPTIONS=--use_native_int --fstar_home $(FSTAR_HOME)
+OPTIONS=--fstar_home $(FSTAR_HOME)
 
 CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap FFICallbacks
 
@@ -55,7 +56,7 @@ FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FSTAR_HOME)/
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
 OCAMLMKLIB=ocamlfind mklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/native_int $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
 
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
@@ -254,7 +255,7 @@ wc:
 # fstarlib has the entire F* standard library.
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/$(LIB)/ml/native_int/fstarlib.cmxa \
+  $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
@@ -297,8 +298,8 @@ tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
 	  $(FSTAR_INCLUDE_PATHS) \
 	  $(FSTS)
 
-	# Builds everything against native_int/prims; including native_int/prims.cmx
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml PRIMS_DIR=native_int
+	# Builds everything against prims
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml 
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
 	# # All our .cmx files
@@ -315,6 +316,7 @@ mitls.exe: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 
+# Depends on tls-gen
 rpc.ml:
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
@@ -326,28 +328,6 @@ rpc.ml:
 rpc.exe:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I output/ output/Formatting.ml output/RPC.ml test/rpc_test.ml -o rpc.exe
-
-# depends on tls-gen
-tls-client:
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-	         -I test/ -I output/ test/test_client.ml -o client.out
-	$(EXTRA_PATH) ./client.out 1.2 google.com 443
-
-# depends on tls-gen
-tls-server:
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-	         -I test/ -I output/ test/test_server.ml -o server.out
-	$(EXTRA_PATH) ./server.out 1.2 0.0.0.0 4443
-
-# depends on tls-gen
-test13:
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-	         -I test/ -I output/ test/test_client.ml -o client13.exe
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-	         -I test/ -I output/ test/test_server.ml -o server13.exe
-	$(EXTRA_PATH) ./server13.exe 1.3 0.0.0.0 4443 &
-	$(EXTRA_PATH) ./client13.exe 1.3 127.0.0.1 4443
-	taskkill /F /IM server13.exe
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
