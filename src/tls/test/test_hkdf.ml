@@ -28,7 +28,7 @@ module Test
     if (Bytes.hex_of_bytes prk <> v.prk) then
       false
     else
-      let okm = hkdf_expand v.hash prk info v.len in
+      let okm = hkdf_expand v.hash prk info (Z.of_int v.len) in
       Bytes.hex_of_bytes okm = v.okm
 
   let test_vectors = [

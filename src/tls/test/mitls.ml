@@ -100,11 +100,11 @@ let _ =
 
   
   match !role, !config.maxVer with
-  | Client, _ when !ffi    -> TestFFI.client !config host port
+  | Client, _ when !ffi    -> TestFFI.client !config host (Z.of_int port)
   | Server, _ when !ffi    -> failwith "server FFI to be completed"
-  | Client, _ when !tlsapi -> TestAPI.client !config host port
-  | Server, _ when !tlsapi -> TestAPI.server !config host port
-  | Client, TLS_1p3        -> TestHandshake.client_13 !config host port
-  | Client, _              -> TestHandshake.client_12 !config host port
-  | Server, TLS_1p3        -> TestHandshake.server_13 !config host port
-  | Server, _              -> TestHandshake.server_12 !config host port
+  | Client, _ when !tlsapi -> TestAPI.client !config host (Z.of_int port)
+  | Server, _ when !tlsapi -> TestAPI.server !config host (Z.of_int port)
+  | Client, TLS_1p3        -> TestHandshake.client_13 !config host (Z.of_int port)
+  | Client, _              -> TestHandshake.client_12 !config host (Z.of_int port)
+  | Server, TLS_1p3        -> TestHandshake.server_13 !config host (Z.of_int port)
+  | Server, _              -> TestHandshake.server_12 !config host (Z.of_int port)
