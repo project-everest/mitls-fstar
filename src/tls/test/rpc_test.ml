@@ -22,10 +22,10 @@ let _ =
   if !fork then
     let pid = Unix.fork () in
     if pid = 0 then
-      RPC.run Client client host port
+      RPC.run Client client host (Z.of_int port)
     else
-      RPC.run Server server host port
+      RPC.run Server server host (Z.of_int port)
   else
     match !role with
-    | Client -> RPC.run Client client host port
-    | Server -> RPC.run Server server host port
+    | Client -> RPC.run Client client host (Z.of_int port)
+    | Server -> RPC.run Server server host (Z.of_int port)

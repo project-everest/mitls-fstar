@@ -61,8 +61,8 @@ let print_error error =
   (error_type ^ "\n" ^ snd error)
 
 let parse_handshake_message bytes =
-  if length bytes >= 4 then
-    let ht, len, msg = split2 bytes 1 3 in
+  if length bytes >= Z.of_int 4 then
+    let ht, len, msg = split2 bytes (Z.of_int 1) (Z.of_int 3) in
     let len = int_of_bytes len in
     if length msg <> len then print_string "Error: message length did not match bytes length\n"
     else
@@ -73,7 +73,7 @@ let parse_handshake_message bytes =
 	 (match parseClientHello msg with
 	  | Correct(ch) ->
 	     print_string "...OK\n";
-	     let _,ch_bytes = split (clientHelloBytes(ch)) 4 in
+             let _,ch_bytes = split (clientHelloBytes(ch)) (Z.of_int 4) in
 	     if equalBytes ch_bytes msg then (print_string "Serializing client hello...\n...OK\n") else
 	       (print_string "Serializing client hello...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -85,7 +85,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing server hello message...\n";
 	 (match parseServerHello msg with
 	 | Correct(sh) -> print_string "...OK\n";
-	     let _,sh_bytes = split (serverHelloBytes(sh)) 4 in
+             let _,sh_bytes = split (serverHelloBytes(sh)) (Z.of_int 4) in
 	     if equalBytes sh_bytes msg then ((print_string "Serializing server hello...\n...OK\n")) else
 	       (print_string "Serializing server hello...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -97,7 +97,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing session ticket message...\n";
 	 (match parseSessionTicket msg with
 	 | Correct(st) -> print_string "...OK\n";
-	     let _,st_bytes = split (sessionTicketBytes(st)) 4 in
+             let _,st_bytes = split (sessionTicketBytes(st)) (Z.of_int 4) in
 	     if equalBytes st_bytes msg then (print_string "Serializing session ticket...\n...OK\n") else
 	       (print_string "Serializing session ticket...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -110,7 +110,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing hello retry request message...\n";
 	 (match parseHelloRetryRequest msg with
 	 | Correct(ch) -> print_string "...OK\n";
-	     let _,hrr_bytes = split (helloRetryRequestBytes(ch)) 4 in
+             let _,hrr_bytes = split (helloRetryRequestBytes(ch)) (Z.of_int 4) in
 	     if equalBytes hrr_bytes msg then ((print_string "Serializing hello retry request...\n...OK\n")) else
 	       (print_string "Serializing hello retry request...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -121,7 +121,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing encrypted extensions message...\n";
 	 (match parseEncryptedExtensions msg with
 	 | Correct(ch) -> print_string "...OK\n";
-	     let _,ee_bytes = split (encryptedExtensionsBytes(ch)) 4 in
+             let _,ee_bytes = split (encryptedExtensionsBytes(ch)) (Z.of_int 4) in
 	     if equalBytes ee_bytes msg then ((print_string "Serializing encrypted extensions...\n...OK\n")) else
 	       (print_string "Serializing encrypted extensions...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -136,7 +136,7 @@ let parse_handshake_message bytes =
                            let {crt_chain = chain } = ch in
                            let r = Cert.validate_chain chain false None "../../data/CAFile.pem" in
                            print_string (if r then (cert := List.hd chain; "OK\n") else "FAILED\n");
-	     let _,cert_bytes = split (certificateBytes !pv ch) 4 in
+             let _,cert_bytes = split (certificateBytes !pv ch) (Z.of_int 4) in
 	     if equalBytes cert_bytes msg then ()
              else (
               print_string "WARNING: not an inverse of parsing. ";
@@ -148,7 +148,7 @@ let parse_handshake_message bytes =
 	 (match parseServerKeyExchange !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
              
-             let _,ske_bytes = split (serverKeyExchangeBytes(ch)) 4 in
+             let _,ske_bytes = split (serverKeyExchangeBytes(ch)) (Z.of_int 4) in
              print_string "Serializing server key exchange...";
 	     if equalBytes ske_bytes msg then (print_string "OK\n")
              else
@@ -160,7 +160,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing certificate request message...\n";
 	 (match parseCertificateRequest !pv msg with
 	 | Correct(ch) -> print_string "...OK\n";
-	     let _,cr_bytes = split (certificateRequestBytes (ch)) 4 in
+             let _,cr_bytes = split (certificateRequestBytes (ch)) (Z.of_int 4) in
 	     if equalBytes cr_bytes msg then ((print_string "Serializing certificate request...\n...OK\n"))
              else
 	       (print_string "Serializing certificate request...\nWARNING: not an inverse of parsing. ";
@@ -170,13 +170,13 @@ let parse_handshake_message bytes =
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0e' ->
 	 print_string "Parsing server hello done message...\n";
-	 if length msg = 0 then print_string "...OK\n"
+         if length msg = Z.zero then print_string "...OK\n"
 	 else print_string "...FAILED\n"
       | '\x0f' ->
 	 print_string "Parsing certificate verify message...\n";
 	 (match parseCertificateVerify msg with
 	 | Correct(ch) -> print_string "...OK\n";
-	     let _,cv_bytes = split (certificateVerifyBytes(ch)) 4 in
+             let _,cv_bytes = split (certificateVerifyBytes(ch)) (Z.of_int 4) in
 	     if equalBytes cv_bytes msg then ((print_string "Serializing certificate verify...\n...OK\n")) else
 	       (print_string "Serializing certificate verify...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -187,7 +187,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing client key exchange message...\n";
 	 (match parseClientKeyExchange !pv !kex msg with
 	 | Correct(ch) -> print_string "...OK\n";
-	     let _,cke_bytes = split (clientKeyExchangeBytes (!pv) (ch)) 4 in
+             let _,cke_bytes = split (clientKeyExchangeBytes (!pv) (ch)) (Z.of_int 4) in
 	     if equalBytes cke_bytes msg then (print_string "Serializing client key exchange...\n...OK\n") else
 	       (print_string "Serializing client key exchange...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -198,7 +198,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing finished message...\n";
 	 (match parseFinished msg with
 	 | Correct(ch) -> print_string "...OK\n";
-	     let _,fin_bytes =  split (finishedBytes(ch)) 4 in
+             let _,fin_bytes =  split (finishedBytes(ch)) (Z.of_int 4) in
 	     if equalBytes fin_bytes msg then ((print_string "Serializing finished...\n...OK\n")) else
 	       (print_string "Serializing finished...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -210,7 +210,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing next protocol message...\n";
          (match parseNextProtocol msg with
 	  | Correct(np) -> print_string "...OK\n";
-	     let _,np_bytes = split (nextProtocolBytes(np)) 4 in
+             let _,np_bytes = split (nextProtocolBytes(np)) (Z.of_int 4) in
 	     if equalBytes np_bytes msg then ((print_string "Serializing next protocol...\n...OK\n")) else
 	       (print_string "Serializing next protocol...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -222,13 +222,13 @@ let parse_handshake_message bytes =
   else print_string "Error: HS message too small to retrieve handshake type + length from it\n"
 
 let rec parse_handshake bytes =
-  if length bytes >= 4 then
-    let ht, len, data = split2 bytes 1 3 in
-    let len = int_of_bytes len in
-    let (msg, bytes) = split bytes (4+len) in
+  if length bytes >= Z.of_int 4 then
+    let ht, len, data = split2 bytes Z.one (Z.of_int 3) in
+    let len = int_of_bytes len |> Z.to_int in
+    let (msg, bytes) = split bytes (Z.of_int (4+len)) in
     parse_handshake_message msg;
     parse_handshake bytes
-  else if length bytes = 0 then print_string "Parsed all messages\n"
+  else if length bytes = Z.zero then print_string "Parsed all messages\n"
   else print_string ("Error: parsing failed due to length not being appropriate:\n"
 		       ^ (Platform.Bytes.print_bytes bytes))
 
@@ -242,20 +242,20 @@ let parse_ccs_message bytes =
   ()
 
 let rec parse_message bytes =
-  if length bytes >= 2 then
-    let (pv, ct, bytes) = split2 bytes 2 1 in
-    match vlsplit 2 bytes with
+  if length bytes >= Z.of_int 2 then
+    let (pv, ct, bytes) = split2 bytes (Z.of_int 2) Z.one in
+    match vlsplit (Z.of_int 2) bytes with
     | Correct (msg, bytes) ->
-       let (len, msg) = split msg 2 in
+       let (len, msg) = split msg (Z.of_int 2) in
        (match cbyte ct with
-	| '\x14' -> parse_ccs_message msg
+        | '\x14' -> parse_ccs_message msg
 	| '\x15' -> parse_alert_message msg
 	| '\x16' -> parse_handshake_message msg
 	| '\x17' -> parse_application_data_message msg
         | _ -> print_string "Error: wrong content type\n" );
        parse_message bytes
     | Error(z) -> print_string "Error : Failed to parse bytes length of message \n"
-  else if length bytes = 0 then ()
+  else if length bytes = Z.zero then ()
   else print_string "Error : Found some standalone bytes"
 
 let parse_trace_file file =
