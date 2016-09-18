@@ -232,6 +232,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1))
 
+#set-options "--z3timeout 10000"
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)
 // Note that result doesn't include the implicit IV (salt)
@@ -258,9 +259,10 @@ val encrypt: #i:id -> e:writer i -> ad:adata i -> l:plainLen -> p:plain i l -> S
 	   )
   )))
 
+(*
 type (FStar.Monotonic.RRef.m_rref (AEAD0.State.log_region e) (FStar.Seq.seq (AEAD0.entry i (AEAD0.State.key e))) (FStar.Monotonic.Seq.grows ))
 type (AEAD0.ideal_log (AEAD0.State.log_region e) i (AEAD0.State.key e) (AEAD0.State.siv e))
-
+*)
 
 val matches: #i:id -> c:cipher i -> adata i -> entry i -> Tot bool
 let matches #i c ad (Entry c' ad' _) = c = c' && ad = ad'
