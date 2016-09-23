@@ -194,11 +194,11 @@ let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
   m_recall ctr;
   max_ctr_value (alg i);
-  let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in  
-  let n = m_read ctr in      
+  let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in
+  let n = m_read ctr in     
   lemma_repr_bytes_values n;
   let nonce_explicit = bytes_of_seq n in
-  //assert (length nonce_explicit = 8);
+  assert (length nonce_explicit = 8);
   let salt = e.iv in       
   let iv = salt @| nonce_explicit in      
   lemma_repr_bytes_values (length text);
@@ -207,6 +207,7 @@ let encrypt #i e ad rg p =
   targetLength_converges i rg;
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
+  assume (Platform.Bytes.length iv = CoreCrypto.aeadRealIVSize (alg i));
   let c = nonce_explicit @| aead_encrypt (alg i) e.key iv ad' text in  
   cut (length c = targetLength i rg);
   if authId i then
@@ -244,6 +245,8 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
                 /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
+#set-options "--z3timeout 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
+
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
   m_recall ctr;
@@ -267,6 +270,7 @@ let decrypt #i d ad c =
     let len = length c' - aeadTagSize (alg i) in
     lemma_repr_bytes_values len;
     let ad' = ad @| bytes_of_int 2 len in
+    let _ = assume (Platform.Bytes.length iv = CoreCrypto.aeadRealIVSize (alg i)) in
     let p = aead_decrypt (alg i) d.key iv ad' c' in
     match p with
     | None -> None
@@ -284,6 +288,7 @@ let decrypt #i d ad c =
       else
 	begin
 	m_write ctr (j + 1);
+	assume (Range.within (Platform.Bytes.length text) r);
         let plain = mk_plain i ad r text in
         Some plain
 	end

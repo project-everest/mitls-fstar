@@ -101,7 +101,6 @@ DataStream.fst \
 Alert.fst \
 Content.fst \
 StreamPlain.fst \
-StreamAE.fsti \
 StreamAE.fst \
 MasterSecret.fst \
 StatefulPlain.fst \
@@ -266,7 +265,6 @@ OUTPUT_DIR=output
 # All our extracted modules.
 TLSML := $(FSTS:.fst=.ml)
 TLSML := $(subst Handshake.fsti, , $(TLSML))
-TLSML := $(subst StreamAE.fsti, , $(TLSML))
 TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
