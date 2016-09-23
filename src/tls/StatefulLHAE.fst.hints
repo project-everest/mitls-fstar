@@ -1,5 +1,5 @@
 [
-  "ïÖYG`e+àÐ\u001b\"Ìã¯õµ",
+  "{4Ž3¹|H®ô™\u0007\u001f™eh³",
   [
     [ "StatefulLHAE.cipher", 1, 0, 1, [ "@query" ], 0 ],
     [
@@ -65,8 +65,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -84,14 +83,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Reader@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -102,14 +99,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Reader@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -121,8 +116,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -140,14 +134,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Reader@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -224,10 +216,10 @@
         "@query", "data_elim_AEAD_GCM.State",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
-        "equation_AEAD_GCM.counter", "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
-        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
-        "equation_TLSConstants.rgn", "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_AEAD_GCM.counter", "equation_FStar.Monotonic.Seq.seqn_val",
+        "equation_Prims.nat", "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.writer", "equation_TLSConstants.rgn",
+        "fuel_guarded_inversion_AEAD_GCM.state",
         "pretyping_6f101dcc3b0227ea7e555725221d173c",
         "primitive_Prims.op_Equality", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
@@ -245,14 +237,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -265,13 +255,14 @@
         "@query", "data_elim_AEAD_GCM.State",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
-        "equation_AEAD_GCM.counter", "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
-        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
-        "equation_TLSConstants.rgn", "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_AEAD_GCM.counter", "equation_FStar.Monotonic.Seq.seqn_val",
+        "equation_Prims.nat", "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.writer", "equation_TLSConstants.rgn",
+        "fuel_guarded_inversion_AEAD_GCM.state",
         "pretyping_6f101dcc3b0227ea7e555725221d173c",
         "primitive_Prims.op_Equality", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
+        "proj_equation_AEAD_GCM.State_region",
         "refinement_interpretation_Tm_refine_29446774e1869dbf3d1db8900572135f",
         "refinement_interpretation_Tm_refine_6635a5f24cfec4d60e93bf66c4c04cd5",
         "refinement_interpretation_Tm_refine_8a854fb4288a643eb755b79b4f7f4e34",
@@ -286,14 +277,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -304,14 +293,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -324,13 +311,14 @@
         "@query", "data_elim_AEAD_GCM.State",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
-        "equation_AEAD_GCM.counter", "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
-        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
-        "equation_TLSConstants.rgn", "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_AEAD_GCM.counter", "equation_FStar.Monotonic.Seq.seqn_val",
+        "equation_Prims.nat", "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.writer", "equation_TLSConstants.rgn",
+        "fuel_guarded_inversion_AEAD_GCM.state",
         "pretyping_6f101dcc3b0227ea7e555725221d173c",
         "primitive_Prims.op_Equality", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
+        "proj_equation_AEAD_GCM.State_region",
         "refinement_interpretation_Tm_refine_29446774e1869dbf3d1db8900572135f",
         "refinement_interpretation_Tm_refine_6635a5f24cfec4d60e93bf66c4c04cd5",
         "refinement_interpretation_Tm_refine_8a854fb4288a643eb755b79b4f7f4e34",
@@ -345,14 +333,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -365,13 +351,14 @@
         "@query", "data_elim_AEAD_GCM.State",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
-        "equation_AEAD_GCM.counter", "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
-        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
-        "equation_TLSConstants.rgn", "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_AEAD_GCM.counter", "equation_FStar.Monotonic.Seq.seqn_val",
+        "equation_Prims.nat", "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.writer", "equation_TLSConstants.rgn",
+        "fuel_guarded_inversion_AEAD_GCM.state",
         "pretyping_6f101dcc3b0227ea7e555725221d173c",
         "primitive_Prims.op_Equality", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
+        "proj_equation_AEAD_GCM.State_region",
         "refinement_interpretation_Tm_refine_29446774e1869dbf3d1db8900572135f",
         "refinement_interpretation_Tm_refine_6635a5f24cfec4d60e93bf66c4c04cd5",
         "refinement_interpretation_Tm_refine_8a854fb4288a643eb755b79b4f7f4e34",
@@ -386,14 +373,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -416,11 +401,10 @@
       [
         "@query", "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
-        "equation_AEAD_GCM.counter", "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
-        "equation_StatefulLHAE.id", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer", "equation_TLSConstants.rgn",
-        "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_AEAD_GCM.counter", "equation_FStar.Monotonic.Seq.seqn_val",
+        "equation_Prims.nat", "equation_StatefulLHAE.id",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
+        "equation_TLSConstants.rgn", "fuel_guarded_inversion_AEAD_GCM.state",
         "pretyping_6f101dcc3b0227ea7e555725221d173c",
         "primitive_Prims.op_Equality", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
@@ -440,14 +424,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -457,41 +439,32 @@
       0,
       1,
       [
-        "@query", "assumption_AEAD_GCM.entry_haseq",
-        "equation_StatefulLHAE.id"
-      ],
-      0
-    ],
-    [
-      "StatefulLHAE.encrypt",
-      15,
-      0,
-      1,
-      [
         "@query", "bool_inversion", "constructor_distinct_Tm_unit",
         "data_elim_AEAD_GCM.State",
         "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSConstants.AEAD", "disc_equation_TLSInfo.ID12",
+        "disc_equation_TLSConstants.AEAD",
         "disc_equation_TLSInfo.PlaintextID",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
         "equation_AEAD_GCM.counter", "equation_AEAD_GCM.id",
         "equation_CoreCrypto.aeadTagSize",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_LHAEPlain.id",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_LHAEPlain.id",
         "equation_LHAEPlain.seqn", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.length", "equation_Prims.fst",
-        "equation_Prims.nat", "equation_Prims.snd",
-        "equation_Range.cipherRangeClass", "equation_Range.fixedPadSize",
-        "equation_Range.id2", "equation_Range.maxPadSize",
-        "equation_Range.minMaxPad", "equation_Range.range",
-        "equation_Range.targetLength", "equation_StatefulLHAE.alg",
-        "equation_StatefulLHAE.id", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer", "equation_StatefulPlain.adata",
+        "equation_Platform.Bytes.length", "equation_Prims._assert",
+        "equation_Prims.fst", "equation_Prims.nat", "equation_Prims.snd",
+        "equation_Range.aeAlg", "equation_Range.cipherRangeClass",
+        "equation_Range.fixedPadSize", "equation_Range.id2",
+        "equation_Range.maxPadSize", "equation_Range.minMaxPad",
+        "equation_Range.range", "equation_Range.targetLength",
+        "equation_StatefulLHAE.cipher", "equation_StatefulLHAE.id",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
+        "equation_StatefulPlain.adata", "equation_StatefulPlain.cipher",
+        "equation_TLSConstants.aeadAlg",
         "equation_TLSConstants.aeadRecordIVSize",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSConstants.rgn", "equation_TLSInfo.aeAlg_of_id",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "fuel_guarded_inversion_Prims.tuple2",
-        "function_token_typing_Prims.nat", "int_inversion",
+        "function_token_typing_Prims.nat", "int_inversion", "int_typing",
         "lemma_LHAEPlain.lemma_makeAD_parseAD",
         "lemma_TLSInfo.plainText_is_not_auth",
         "pretyping_6f101dcc3b0227ea7e555725221d173c",
@@ -506,33 +479,36 @@
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
         "refinement_interpretation_Tm_refine_0573998514680d77e7bbd41a6f5405fe",
+        "refinement_interpretation_Tm_refine_09ca3975302a8dca67cedeefb22ab80c",
         "refinement_interpretation_Tm_refine_29446774e1869dbf3d1db8900572135f",
         "refinement_interpretation_Tm_refine_6635a5f24cfec4d60e93bf66c4c04cd5",
         "refinement_interpretation_Tm_refine_7025dafecbae0bec53928f291c9a3fe9",
         "refinement_interpretation_Tm_refine_8a854fb4288a643eb755b79b4f7f4e34",
-        "refinement_interpretation_Tm_refine_b7629fb02a2990ce664d48748206689e",
+        "refinement_interpretation_Tm_refine_a4a5e322a6a3d2ca0a5c89d71ce13dc4",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "refinement_interpretation_Tm_refine_cef8db9e51d0cb6e8496091d2325c695",
         "refinement_interpretation_Tm_refine_dcedc8fc7e2151952d52dd61e8f5d73b",
         "refinement_interpretation_Tm_refine_e56e8b8a000c06fc08e23dd3c314ddb5",
         "refinement_interpretation_Tm_refine_e6e35ed3cabb588891553f28f60d9feb",
-        "refinement_interpretation_Tm_refine_fe70d8d5d79b956c3f8db2af0578ee3f",
-        "typing_Prims.snd", "typing_Range.cipherRangeClass",
-        "typing_Range.targetLength", "typing_TLSInfo.authId"
+        "refinement_interpretation_Tm_refine_fd7b342d67b2d5b237f8da312755e138",
+        "typing_AEAD_GCM.alg", "typing_AEAD_GCM.max_ctr",
+        "typing_Platform.Bytes.length", "typing_Prims.snd",
+        "typing_Range.cipherRangeClass", "typing_TLSInfo.authId",
+        "typing_TLSInfo.is_PlaintextID"
       ],
       0
     ],
     [
       "StatefulLHAE.encrypt",
-      16,
+      15,
       0,
       1,
       [
         "@query", "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.cipher",
         "equation_AEAD_GCM.counter", "equation_AEAD_GCM.id",
-        "equation_AEAD_GCM.max_ctr", "equation_FStar.Monotonic.RRef.m_sel",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_LHAEPlain.id",
+        "equation_FStar.Monotonic.RRef.m_sel",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_LHAEPlain.id",
         "equation_LHAEPlain.seqn", "equation_Platform.Bytes.bytes",
         "equation_Prims.nat", "equation_Range.range",
         "equation_StatefulLHAE.alg", "equation_StatefulLHAE.cipher",
@@ -548,30 +524,31 @@
         "proj_equation_AEAD_GCM.State_region",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_0573998514680d77e7bbd41a6f5405fe",
+        "refinement_interpretation_Tm_refine_09ca3975302a8dca67cedeefb22ab80c",
         "refinement_interpretation_Tm_refine_29446774e1869dbf3d1db8900572135f",
         "refinement_interpretation_Tm_refine_6635a5f24cfec4d60e93bf66c4c04cd5",
         "refinement_interpretation_Tm_refine_7025dafecbae0bec53928f291c9a3fe9",
-        "refinement_interpretation_Tm_refine_b7629fb02a2990ce664d48748206689e",
+        "refinement_interpretation_Tm_refine_a4a5e322a6a3d2ca0a5c89d71ce13dc4",
         "refinement_interpretation_Tm_refine_cef8db9e51d0cb6e8496091d2325c695",
         "refinement_interpretation_Tm_refine_d9c481b621cff242f9dacec5d5a1657b",
-        "typing_AEAD_GCM.State.log_region",
-        "typing_tok_TLSConstants.Writer@tok"
+        "typing_AEAD_GCM.State.log_region", "typing_AEAD_GCM.max_ctr",
+        "typing_StatefulLHAE.alg", "typing_tok_TLSConstants.Writer@tok"
       ],
       0
     ],
     [
       "StatefulLHAE.encrypt",
-      17,
+      16,
       0,
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
         "data_typing_intro_TLSConstants.Writer@tok",
         "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
-        "equation_AEAD_GCM.counter", "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
-        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
-        "equation_TLSConstants.rgn", "fuel_guarded_inversion_AEAD_GCM.state",
+        "equation_AEAD_GCM.counter", "equation_FStar.Monotonic.Seq.seqn_val",
+        "equation_Prims.nat", "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.writer", "equation_TLSConstants.rgn",
+        "fuel_guarded_inversion_AEAD_GCM.state",
         "pretyping_6f101dcc3b0227ea7e555725221d173c",
         "primitive_Prims.op_Equality", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
@@ -584,19 +561,17 @@
     ],
     [
       "StatefulLHAE.encrypt",
-      18,
+      17,
       0,
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Writer@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Writer@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.state",
-        "equation_StatefulLHAE.writer",
+        "equation_StatefulLHAE.state", "equation_StatefulLHAE.writer",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -608,7 +583,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -626,14 +601,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Reader@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -645,7 +618,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -663,14 +636,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Reader@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -682,8 +653,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -700,16 +670,13 @@
       0,
       1,
       [
-        "@query", "equality_tok_TLSConstants.Reader@tok",
-        "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ideal_log",
-        "equation_AEAD_GCM.log_ref", "equation_AEAD_GCM.max_ctr",
-        "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state",
+        "@query", "data_elim_AEAD_GCM.State",
+        "equality_tok_TLSConstants.Reader@tok",
+        "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0", "typing_AEAD_GCM.State.log",
-        "typing_tok_TLSConstants.Reader@tok"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ],
@@ -725,7 +692,7 @@
         "equation_StatefulLHAE.dplain", "equation_StatefulLHAE.id",
         "equation_StatefulPlain.plain",
         "haseqTm_refine_db0cbeecb5018b1308e534b950812711",
-        "refinement_interpretation_Tm_refine_b7629fb02a2990ce664d48748206689e",
+        "refinement_interpretation_Tm_refine_a4a5e322a6a3d2ca0a5c89d71ce13dc4",
         "refinement_interpretation_Tm_refine_e6e35ed3cabb588891553f28f60d9feb",
         "typing_StatefulLHAE.dplain"
       ],
@@ -743,7 +710,7 @@
         "equation_StatefulLHAE.dplain", "equation_StatefulLHAE.id",
         "equation_StatefulPlain.plain",
         "haseqTm_refine_db0cbeecb5018b1308e534b950812711",
-        "refinement_interpretation_Tm_refine_b7629fb02a2990ce664d48748206689e",
+        "refinement_interpretation_Tm_refine_a4a5e322a6a3d2ca0a5c89d71ce13dc4",
         "refinement_interpretation_Tm_refine_e6e35ed3cabb588891553f28f60d9feb",
         "typing_StatefulLHAE.dplain"
       ],
@@ -764,15 +731,13 @@
       1,
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
-        "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ideal_log",
-        "equation_AEAD_GCM.log_ref", "equation_AEAD_GCM.max_ctr",
+        "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
         "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
         "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0", "typing_AEAD_GCM.State.log",
-        "typing_tok_TLSConstants.Reader@tok"
+        "typing_AEAD_GCM.State.log", "typing_tok_TLSConstants.Reader@tok"
       ],
       0
     ],
@@ -783,15 +748,13 @@
       1,
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
-        "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ideal_log",
-        "equation_AEAD_GCM.log_ref", "equation_AEAD_GCM.max_ctr",
+        "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
         "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
         "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0", "typing_AEAD_GCM.State.log",
-        "typing_tok_TLSConstants.Reader@tok"
+        "typing_AEAD_GCM.State.log", "typing_tok_TLSConstants.Reader@tok"
       ],
       0
     ],
@@ -803,8 +766,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -822,15 +784,13 @@
       1,
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
-        "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ideal_log",
-        "equation_AEAD_GCM.log_ref", "equation_AEAD_GCM.max_ctr",
+        "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
         "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
         "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0", "typing_AEAD_GCM.State.log",
-        "typing_tok_TLSConstants.Reader@tok"
+        "typing_AEAD_GCM.State.log", "typing_tok_TLSConstants.Reader@tok"
       ],
       0
     ],
@@ -841,15 +801,13 @@
       1,
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
-        "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ideal_log",
-        "equation_AEAD_GCM.log_ref", "equation_AEAD_GCM.max_ctr",
+        "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
         "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
         "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0", "typing_AEAD_GCM.State.log",
-        "typing_tok_TLSConstants.Reader@tok"
+        "typing_AEAD_GCM.State.log", "typing_tok_TLSConstants.Reader@tok"
       ],
       0
     ],
@@ -861,8 +819,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -880,15 +837,13 @@
       1,
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
-        "equation_AEAD_GCM.alg", "equation_AEAD_GCM.ideal_log",
-        "equation_AEAD_GCM.log_ref", "equation_AEAD_GCM.max_ctr",
+        "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
         "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
         "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0", "typing_AEAD_GCM.State.log",
-        "typing_tok_TLSConstants.Reader@tok"
+        "typing_AEAD_GCM.State.log", "typing_tok_TLSConstants.Reader@tok"
       ],
       0
     ],
@@ -901,29 +856,32 @@
         "@query", "bool_inversion", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
         "equation_AEAD_GCM.id", "equation_AEAD_GCM.matches",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_LHAEPlain.id",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_LHAEPlain.id",
         "equation_LHAEPlain.seqn", "equation_Platform.Bytes.bytes",
-        "equation_Prims.nat", "equation_StatefulLHAE.alg",
-        "equation_StatefulLHAE.id", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state", "equation_StatefulPlain.adata",
+        "equation_Prims.nat", "equation_StatefulLHAE.id",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
+        "equation_StatefulPlain.adata", "equation_TLSConstants.aeadAlg",
         "fuel_guarded_inversion_AEAD_GCM.entry",
         "fuel_guarded_inversion_AEAD_GCM.state",
-        "lemma_LHAEPlain.lemma_makeAD_parseAD", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
-        "proj_equation_AEAD_GCM.Entry_ad", "proj_equation_AEAD_GCM.Entry_c",
-        "proj_equation_AEAD_GCM.State_log",
+        "kinding_AEAD_GCM.entry@tok", "lemma_LHAEPlain.lemma_makeAD_parseAD",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_LessThan", "proj_equation_AEAD_GCM.Entry_ad",
+        "proj_equation_AEAD_GCM.Entry_c", "proj_equation_AEAD_GCM.State_log",
         "proj_equation_AEAD_GCM.State_log_region",
         "proj_equation_AEAD_GCM.State_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_0573998514680d77e7bbd41a6f5405fe",
+        "refinement_interpretation_Tm_refine_09ca3975302a8dca67cedeefb22ab80c",
         "refinement_interpretation_Tm_refine_29446774e1869dbf3d1db8900572135f",
         "refinement_interpretation_Tm_refine_6635a5f24cfec4d60e93bf66c4c04cd5",
-        "refinement_interpretation_Tm_refine_b7629fb02a2990ce664d48748206689e",
+        "refinement_interpretation_Tm_refine_a4a5e322a6a3d2ca0a5c89d71ce13dc4",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_c90e16742d2e633e32c657b87c3493b3",
         "refinement_interpretation_Tm_refine_cef8db9e51d0cb6e8496091d2325c695",
         "refinement_interpretation_Tm_refine_e6e35ed3cabb588891553f28f60d9feb",
-        "typing_TLSInfo.authId"
+        "typing_AEAD_GCM.alg", "typing_AEAD_GCM.max_ctr",
+        "typing_FStar.Seq.index", "typing_TLSInfo.authId"
       ],
       0
     ],
@@ -935,9 +893,8 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.counter", "equation_AEAD_GCM.dplain",
-        "equation_AEAD_GCM.id", "equation_AEAD_GCM.max_ctr",
-        "equation_FStar.Monotonic.RRef.m_sel",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_LHAEPlain.id",
+        "equation_AEAD_GCM.id", "equation_FStar.Monotonic.RRef.m_sel",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_LHAEPlain.id",
         "equation_LHAEPlain.plain", "equation_LHAEPlain.seqn",
         "equation_Platform.Bytes.bytes", "equation_Prims.nat",
         "equation_Range.cipherRangeClass", "equation_StatefulLHAE.alg",
@@ -949,10 +906,12 @@
         "proj_equation_AEAD_GCM.State_region",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_0573998514680d77e7bbd41a6f5405fe",
+        "refinement_interpretation_Tm_refine_09ca3975302a8dca67cedeefb22ab80c",
         "refinement_interpretation_Tm_refine_29446774e1869dbf3d1db8900572135f",
         "refinement_interpretation_Tm_refine_6635a5f24cfec4d60e93bf66c4c04cd5",
-        "refinement_interpretation_Tm_refine_b7629fb02a2990ce664d48748206689e",
-        "refinement_interpretation_Tm_refine_cef8db9e51d0cb6e8496091d2325c695"
+        "refinement_interpretation_Tm_refine_a4a5e322a6a3d2ca0a5c89d71ce13dc4",
+        "refinement_interpretation_Tm_refine_cef8db9e51d0cb6e8496091d2325c695",
+        "typing_AEAD_GCM.max_ctr", "typing_StatefulLHAE.alg"
       ],
       0
     ],
@@ -964,7 +923,7 @@
       [
         "@query", "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.alg", "equation_AEAD_GCM.counter",
-        "equation_FStar.Monotonic.Seq.counter_val", "equation_Prims.nat",
+        "equation_FStar.Monotonic.Seq.seqn_val", "equation_Prims.nat",
         "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
@@ -982,14 +941,12 @@
       1,
       [
         "@query", "data_elim_AEAD_GCM.State",
-        "equality_tok_TLSConstants.Reader@tok", "equation_AEAD_GCM.alg",
+        "equality_tok_TLSConstants.Reader@tok",
         "equation_AEAD_GCM.ideal_log", "equation_AEAD_GCM.log_ref",
-        "equation_AEAD_GCM.max_ctr", "equation_StatefulLHAE.reader",
-        "equation_StatefulLHAE.state",
+        "equation_StatefulLHAE.reader", "equation_StatefulLHAE.state",
         "fuel_guarded_inversion_AEAD_GCM.state",
         "proj_equation_AEAD_GCM.State_log",
-        "proj_equation_AEAD_GCM.State_log_region",
-        "projection_inverse_BoxInt_proj_0"
+        "proj_equation_AEAD_GCM.State_log_region"
       ],
       0
     ]
