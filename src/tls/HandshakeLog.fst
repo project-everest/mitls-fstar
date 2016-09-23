@@ -121,13 +121,15 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : logInfo_CH =
         PSK.identities = (empty_bytes, empty_bytes);});
     })
 
-let getHash_CH (LOG #reg lref) (h:CoreCrypto.hash_alg)
-  : ST (| li:logInfo{is_LogInfo_CH li} & hash:bytes{length hash = CoreCrypto.hashSize h} |)
-  (requires (fun h0 ->
-    let (| _, hsl, _ |) = sel h0 lref in validLog_CH hsl))
-  (ensures (fun h0 (| li, hash |) h1 ->
-    h1 = h0 /\ log_info li hash))
-  =
+val getHash_CH : l:log -> h:CoreCrypto.hash_alg -> 
+  ST (| li:logInfo{is_LogInfo_CH li} & hash:bytes{length hash = CoreCrypto.hashSize h} |)
+    (requires (fun h0 ->
+      let lref = l.logref in
+      let (| _, hsl, _ |) = sel h0 lref in validLog_CH hsl))
+    (ensures (fun h0 (| li, hash |) h1 ->
+	h1 = h0 /\ log_info li hash))
+
+let getHash_CH (LOG #reg lref) (h:CoreCrypto.hash_alg) =
   let (| _, hsl, lb |) = !lref in
   let loginfo = projectLog_CH hsl in
   (| LogInfo_CH loginfo, CoreCrypto.hash h lb |)

@@ -12,7 +12,7 @@ open HandshakeLog
 open Negotiation
 
 
-let pre_id (role:role) =
+private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
   let sr  = createBytes 32 0z in
   let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
@@ -23,30 +23,32 @@ let pre_id (role:role) =
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256) cr sr role
 
-let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
+private val encryptRecord : #id:StAE.stae_id -> wr:StAE.writer id -> ct:Content.contentType -> plain:bytes -> bytes
+private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
   let rg: Range.frange id = (0, length plain) in
   let f: DataStream.fragment id rg = plain in
   let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
 
-let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : bytes =
+private val decryptRecord : #id:StAE.stae_id -> rd:StAE.reader id -> ct:Content.contentType -> cipher:bytes -> bytes
+private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : bytes =
   let ctxt: Content.decrypted id = (ct, cipher) in
   let Some d = StAE.decrypt #id rd ctxt in
   Content.repr id d
 
-let sendRecordE encrypted tcp pv ct msg =
+private let sendRecordE encrypted tcp pv ct msg =
   let r = Record.makePacket ct encrypted pv msg in
   match Transport.send tcp r with
   | Error z -> failwith z
   | Correct _ -> ()
-let sendRecord = sendRecordE false
+private let sendRecord = sendRecordE false
 
-let sendHSRecord tcp pv msg =
+private let sendHSRecord tcp pv msg =
   sendRecord tcp pv Content.Handshake msg
 
-let hsbuf = alloc #(list (hs_msg * bytes)) []
+private let hsbuf = alloc #(list (hs_msg * bytes)) []
 
-let recvHSRecord tcp pv kex =
+private let recvHSRecord tcp pv kex =
   let (hs_msg, to_log) =
     match !hsbuf with
     | [] -> 
@@ -69,14 +71,14 @@ let recvHSRecord tcp pv kex =
   else IO.print_string "no\n";
   hs_msg, to_log
 
-let recvCCSRecord tcp =
+private let recvCCSRecord tcp =
   let Correct (Content.Change_cipher_spec,_,ccs) = Record.read tcp in
   IO.print_string "Received CCS\n";
   ccs
 
-let enc_hsbuf = alloc #(list (hs_msg * bytes)) []
+private let enc_hsbuf = alloc #(list (hs_msg * bytes)) []
 
-let recvEncHSRecord tcp pv kex rd =
+private let recvEncHSRecord tcp pv kex rd =
   let (hs_msg, to_log) =
     match !enc_hsbuf with
     | [] ->
@@ -94,7 +96,7 @@ let recvEncHSRecord tcp pv kex rd =
   else IO.print_string "no\n";
   hs_msg, to_log
 
-let recvEncAppDataRecord tcp pv rd =
+private let recvEncAppDataRecord tcp pv rd =
   let Correct (Content.Application_data,_,cipher) = Record.read tcp in
   let payload = decryptRecord rd Content.Application_data cipher in
   IO.print_string ("Received Data:\n" ^ (iutf8 payload) ^ "\n");
@@ -103,7 +105,7 @@ let recvEncAppDataRecord tcp pv rd =
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.2 Server
-let rec server_loop_12 config sock =
+private let rec server_loop_12 config sock =
   let raw_tcp = Platform.Tcp.accept sock in
   let tcp = Transport.wrap raw_tcp in 
   let rid = new_region root in
@@ -217,7 +219,7 @@ let server_12 config host port =
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.2 Client
-let client_12 config host port =
+let client_12 config host port : ML unit =
   IO.print_string "===============================================\n Starting test TLS 1.2 client...\n";
   let tcp = Transport.connect host port in
   let rid = new_region root in
@@ -292,7 +294,7 @@ let client_12 config host port =
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.3 Client
-let client_13 config host port =
+let client_13 config host port : ML unit =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
   let tcp = Transport.connect host port in
   let rid = new_region root in
@@ -366,14 +368,14 @@ let client_13 config host port =
   let ad = recvEncAppDataRecord tcp pv drd in
   ()
 
-let sendEncHSRecord tcp pv msg wr =
+private let sendEncHSRecord tcp pv msg wr =
   let hs = HandshakeMessages.handshakeMessageBytes (Some pv) msg in
   let er = encryptRecord wr Content.Handshake hs in
   sendRecordE true tcp pv Content.Application_data er
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.3 Server
-let rec server_loop_13 config sock =
+private let rec server_loop_13 config sock =
   let raw_tcp = Platform.Tcp.accept sock in
   let tcp = Transport.wrap raw_tcp in 
   let rid = new_region root in
@@ -453,7 +455,7 @@ let rec server_loop_13 config sock =
 
   server_loop_13 config sock
 
-let server_13 config host port =
+let server_13 config host port : ML unit =
  IO.print_string "===============================================\n Starting test TLS 1.3 server...\n";
  let sock = Platform.Tcp.listen host port in
  server_loop_13 config sock
