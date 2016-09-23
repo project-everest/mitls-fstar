@@ -39,7 +39,7 @@ abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:wr
 
 module I = IdNonce
 
-type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
+noeq type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   | Epoch: #i:id{nonce_of_id i = n} ->
            h:handshake ->
            r: reader (peerId i) ->
@@ -229,7 +229,7 @@ let get_current_epoch (#r:_) (#n:_) (e:epochs r n) (rw:rw)
 		   let epochs = MS.i_sel h1 e.es in
 		   h0==h1 /\
 		   SeqProperties.indexable epochs j /\
-		   rd = Seq.index epochs j))
+		   rd == Seq.index epochs j))
   = let j = get_ctr e rw in 
     let epochs = MS.i_read e.es in
     Seq.index epochs j

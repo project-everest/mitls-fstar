@@ -2,7 +2,6 @@ module AEAD_GCM
 
 // AEAD-GCM mode for the TLS record layer, as specified in RFC 5288.
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
-// For TLS 1.2, confusingly, AEAD manages its own internal sequence number. 
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -53,7 +52,7 @@ let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
 
 (** we have a counter, that's increasing, at most to the min(length log, 2^64-1) *)
 let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 =
-  FStar.Monotonic.Seq.counter r log (max_ctr (alg i))
+  FStar.Monotonic.Seq.seqn r log (max_ctr (alg i))
 
 let concrete_ctr (r:rid) (i:id) : Tot Type0 =
   m_rref r (counter (alg i)) increases
@@ -65,7 +64,7 @@ let ctr_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 =
 
 let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
   : Tot (m_rref r (if authId i
-		   then counter_val #l #(entry i) r log (max_ctr (alg i))
+		   then seqn_val #l #(entry i) r log (max_ctr (alg i))
 		   else counter (alg i))
 		increases) =
   c
@@ -117,7 +116,7 @@ let gen parent i =
   let writer_r = new_region parent in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
-    let ectr: ideal_ctr writer_r i log = new_counter writer_r 0 log in
+    let ectr: ideal_ctr writer_r i log = new_seqn writer_r 0 log in
     State #i #Writer #writer_r #writer_r kv iv log ectr
   else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
@@ -138,7 +137,7 @@ let genReader parent #i w =
   let reader_r = new_region parent in
   if authId i then
     let log : ideal_log w.region i = w.log in
-    let dctr: ideal_ctr reader_r i log = new_counter reader_r 0 log in
+    let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
     State #i #Reader #reader_r #w.region w.key w.iv w.log dctr
   else
     let dctr: concrete_ctr reader_r i = m_alloc reader_r 0 in
@@ -215,10 +214,10 @@ let encrypt #i e ad rg p =
     let log = ilog e.log in
     m_recall log;
     let ictr: ideal_ctr e.region i log = e.counter in
-    testify_counter ictr;
+    testify_seqn ictr;
     write_at_end log (Entry c ad p);
     m_recall ictr;
-    increment_counter ictr;
+    increment_seqn ictr;
     m_recall ictr
     end
   else
@@ -253,10 +252,10 @@ let decrypt #i d ad c =
     let ilog = ilog d.log in
     let log = m_read ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
-    let _ = testify_counter ictr in // now we know j <= Seq.length log
+    let _ = testify_seqn ictr in // now we know j <= Seq.length log
     if j < Seq.length log && matches c ad (Seq.index log j) then
       begin
-      increment_counter ictr;
+      increment_seqn ictr;
       m_recall ctr;
       Some (Entry.p (Seq.index log j))
       end

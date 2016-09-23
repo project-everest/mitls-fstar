@@ -13,6 +13,9 @@ open HandshakeMessages
 
 abstract type hs_log = list hs_msg
 
+let reveal_hs_log (hsl:hs_log) : GTot (list hs_msg) = hsl
+let hide_hs_log (l:list hs_msg) : GTot hs_log = l
+
 val validLog: hs_log -> Tot bool
 let validLog hsl = 
     match hsl with
@@ -40,7 +43,7 @@ noeq type log =
          logref:rref region (|
               pv: option protocolVersion
             & (hsl:hs_log{validLog hsl})
-            &   b: bytes {getLogVersion hsl = pv /\ handshakeMessagesBytes pv hsl = b}
+            &   b: bytes {getLogVersion hsl = pv /\ handshakeMessagesBytes pv (reveal_hs_log hsl) = b}
          |) -> log 
 
 val create: #reg:rid -> ST log
@@ -60,7 +63,7 @@ let create #reg =
 val append_log: l:log -> hm:hs_msg -> ST bytes
     (requires (fun h ->
 	       let (|pv,hsl,lb|) = sel h l.logref in
-	       validLog (List.Tot.append hsl [hm])))
+	       validLog (hide_hs_log (List.Tot.append (reveal_hs_log hsl) [hm]))))
     (ensures (fun h0 _ h1 ->
       let LOG #r lr = l in
       modifies (Set.singleton r) h0 h1
@@ -76,7 +79,7 @@ let append_log (LOG #reg lref) hm =
 
 let op_At_At l h = append_log l h
 
-let print_log hs_log =
+let print_log hs_log : Tot bool =
     let sl = List.Tot.map (HandshakeMessages.string_of_handshakeMessage) hs_log in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
     IO.debug_print_string("LOG : " ^ s ^ "\n")
