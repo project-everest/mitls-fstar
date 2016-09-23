@@ -57,9 +57,9 @@ let log_ref (r:rid) (i:id) : Tot Type0 =
 let ilog (#r:rid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 
-irreducible let max_ctr: nat = pow2 64 - 1
-
-assume val max_ctr_value: unit -> Lemma (max_ctr = 18446744073709551615)
+irreducible let max_ctr: n:nat{n = 18446744073709551615} =
+  assert_norm (pow2 64 - 1 = 18446744073709551615);
+  pow2 64 - 1
 
 type counter = c:nat{c <= max_ctr} 
 
@@ -150,8 +150,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 
 let genReader parent #i w =
   let reader_r = new_region parent in
-  if authId i
-  then
+  if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
     State #i #Reader #reader_r #(w.region) w.key w.iv w.log dctr
@@ -188,7 +187,6 @@ let leak #i #role s = State.key s, State.iv s
 // we can reason about sequence-number collisions before applying it.
 private abstract let aeIV i (seqn:counter) (staticIV:iv i) : lbytes (iv_length i) =
   lemma_repr_bytes_values seqn;
-  max_ctr_value ();
   let extended = bytes_of_int (iv_length i) seqn in
   xor (iv_length i) extended staticIV
 
@@ -283,7 +281,7 @@ let decrypt #i d l c =
      | None -> None
      | Some pr ->
        begin
-       assume (Platform.Bytes.length pr = l);
+       assert (Platform.Bytes.length pr = l);
        match mk_plain i l pr with
        | Some p -> (m_write ctr (j + 1); Some p)
        | None   -> None

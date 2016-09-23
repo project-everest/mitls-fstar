@@ -26,7 +26,9 @@ module StLHAE = StatefulLHAE
 ////////////////////////////////////////////////////////////////////////////////
 let is_stream i = is_ID13 i
 
-let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
+let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i) && 
+  (AEAD._0 (aeAlg_of_id i) = CoreCrypto.AES_128_GCM ||
+   AEAD._0 (aeAlg_of_id i) = CoreCrypto.AES_256_GCM)
 
 // type id = i:id {is_stream i \/ is_stlhae i}
 
@@ -316,7 +318,6 @@ let encrypt #i e f =
   match e with
     | StLHAE u s ->
     begin
-    AEAD_GCM.max_ctr_value (AEAD_GCM.alg i);
     let h0 = ST.get() in
     let ct,rg = C.ct_rg i f in
     let ad = StatefulPlain.makeAD i ct in
@@ -337,7 +338,6 @@ let encrypt #i e f =
     end
   | Stream u s ->
     begin
-    Stream.max_ctr_value ();
     let h0 = ST.get() in
     let l = frag_plain_len f in
     let c = Stream.encrypt s l f in
@@ -396,7 +396,6 @@ let decrypt #i d (ct,c) =
   match d with
   | Stream _ s ->
     begin
-    Stream.max_ctr_value ();
     match Stream.decrypt s (Stream.lenCipher i c) c with
     | None -> None
     | Some f ->
@@ -409,7 +408,6 @@ let decrypt #i d (ct,c) =
       Some f
     end
   | StLHAE _ s ->
-    AEAD_GCM.max_ctr_value (AEAD_GCM.alg i);
     let ad = StatefulPlain.makeAD i ct in
     match StLHAE.decrypt s ad c with
     | None -> None

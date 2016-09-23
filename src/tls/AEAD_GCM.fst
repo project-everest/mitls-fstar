@@ -18,7 +18,9 @@ open Range
 open FStar.Monotonic.Seq
 open FStar.Monotonic.RRef
 
-type id = i:id{ is_ID12 i /\ is_AEAD (aeAlg_of_id i) }
+type id = i:id{ is_ID12 i /\ is_AEAD (aeAlg_of_id i) /\
+  (AEAD._0 (aeAlg_of_id i) == AES_128_GCM \/
+   AEAD._0 (aeAlg_of_id i) == AES_256_GCM) }
 
 let alg (i:id) = AEAD._0 (aeAlg_of_id i)
 
@@ -28,17 +30,17 @@ type cipher (i:id) = c:bytes{ valid_clen i (length c) }
 type key (i:id) = lbytes (aeadKeySize (alg i))
 type iv  (i:id) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
 
-irreducible let max_ctr (a:aeadAlg) : Tot nat = pow2 64 - 1
-//pow2 (8 * aeadRecordIVSize a) - 1
-
-assume val max_ctr_value: a:aeadAlg -> Lemma (max_ctr a = 18446744073709551615)
-
+irreducible let max_ctr (a:aeadAlg) : Tot (n:nat{n = 18446744073709551615}) = 
+  assert_norm (pow2 64 - 1 = 18446744073709551615);
+  pow2 64 - 1
+//pow2 (8 * aeadRecordIVSize a) - 1, but not for CHACHA20_POLY1305
+  
 // this is the same as a sequence number and in bytes, GCMNonce.nonce_explicit[8]
 type counter a = c:nat{c <= max_ctr a} 
 
 type dplain (i:id) (ad:adata i) (c:cipher i) =
   plain i ad (cipherRangeClass i (length c))
-
+ 
 type entry (i:id) = // records that c is an encryption of p with ad
   | Entry: c:cipher i -> ad:adata i -> p:dplain i ad c -> entry i
 
@@ -188,17 +190,16 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 	   )
   ))
 
-#set-options "--z3timeout 50 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
+#set-options "--z3timeout 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
 
 let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
   m_recall ctr;
-  max_ctr_value (alg i);
-  let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in
-  let n = m_read ctr in     
+  let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in  
+  let n = m_read ctr in      
   lemma_repr_bytes_values n;
   let nonce_explicit = bytes_of_seq n in
-  assert (length nonce_explicit = 8);
+  //assert (length nonce_explicit = 8);
   let salt = e.iv in       
   let iv = salt @| nonce_explicit in      
   lemma_repr_bytes_values (length text);
@@ -207,9 +208,8 @@ let encrypt #i e ad rg p =
   targetLength_converges i rg;
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
-  assume (Platform.Bytes.length iv = CoreCrypto.aeadRealIVSize (alg i));
   let c = nonce_explicit @| aead_encrypt (alg i) e.key iv ad' text in  
-  cut (length c = targetLength i rg);
+  cut (length c == targetLength i rg); 
   if authId i then
     begin
     let log = ilog e.log in
@@ -245,7 +245,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
                 /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
-#set-options "--z3timeout 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
+#set-options "--z3timeout 100 --max_fuel 0 --initial_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
@@ -270,11 +270,10 @@ let decrypt #i d ad c =
     let len = length c' - aeadTagSize (alg i) in
     lemma_repr_bytes_values len;
     let ad' = ad @| bytes_of_int 2 len in
-    let _ = assume (Platform.Bytes.length iv = CoreCrypto.aeadRealIVSize (alg i)) in
     let p = aead_decrypt (alg i) d.key iv ad' c' in
     match p with
     | None -> None
-    | Some text ->
+    | Some text -> 
       let clen = length c in
       let r = cipherRangeClass i clen in
       cipherRangeClass_width i clen;
@@ -288,11 +287,10 @@ let decrypt #i d ad c =
       else
 	begin
 	m_write ctr (j + 1);
-	assume (Range.within (Platform.Bytes.length text) r);
-        let plain = mk_plain i ad r text in
+	assert (Range.within (Platform.Bytes.length text) r);
+	let plain = mk_plain i ad r text in
         Some plain
 	end
-        
 
 (* TODO
 
