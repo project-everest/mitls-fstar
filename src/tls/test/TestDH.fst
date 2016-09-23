@@ -5,7 +5,7 @@ open CoreCrypto
 open CommonDH
 open TLSConstants
 
-let main () =
+let main () : ML unit =
   let group = default_group in
   let gx = keygen group in
   let gy, gxy = dh_responder gx in

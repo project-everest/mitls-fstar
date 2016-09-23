@@ -9,7 +9,7 @@ open StatefulLHAE
 
 let r = HyperHeap.root
 
-let mk_id pv aeAlg =
+private let mk_id pv aeAlg =
   let er = createBytes 32 (Char.char_of_int 0) in
   let kdf = match pv with
   | TLS_1p0 -> PRF_SSL3_concat
@@ -21,7 +21,7 @@ let mk_id pv aeAlg =
   let msid = StandardMS (PMS.DHPMS(g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy))) (er @| er) kdf in
   ID12 pv msid kdf aeAlg er er Client
 
-let mk_id13 aeAlg =
+private let mk_id13 aeAlg =
   let hash_alg = CoreCrypto.SHA256 in
   let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
   let gy,_ = CommonDH.dh_responder gx in
@@ -37,7 +37,8 @@ let mk_id13 aeAlg =
   let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
   ID13 keyId
 
-let fake_stream (aeAlg:a:aeAlg{is_AEAD a}) (key:string) (iv:string) (plain:string): bytes =
+private val fake_stream: (aeAlg: (a:aeAlg{is_AEAD a})) -> (key:string) -> (iv:string) -> (plain:string) -> bytes
+private let fake_stream (aeAlg: (a:aeAlg{is_AEAD a})) (key:string) (iv:string) (plain:string): bytes =
   let id = mk_id13 aeAlg in
 
   // StreamAE.writer -> StreamAE.state
@@ -63,7 +64,8 @@ let fake_stream (aeAlg:a:aeAlg{is_AEAD a}) (key:string) (iv:string) (plain:strin
   StreamAE.encrypt #id w len f
 
 
-let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string): bytes =
+private val fake_aead: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (key: string) -> (iv: string) -> (plain: string) -> bytes
+private let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string): bytes =
   let id = mk_id pv aeAlg in
 
   // StatefulLHAE.writer -> StatefulLHAE.state
@@ -75,9 +77,9 @@ let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = bytes_of_hex key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = bytes_of_hex iv |> unsafe_coerce in
-      let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
+      (* let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in *)
       let counter = ralloc r 0 in
-      AEAD_GCM.State key iv () counter
+      AEAD_GCM.State #id #Writer #r #r key iv () counter
     in
     st
   in
@@ -97,7 +99,8 @@ let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
   // FIXME: without the three additional #-arguments below, extraction crashes
   StatefulLHAE.encrypt #id w ad rg f
 
-let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
+private val fake_cbc: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (seqn: seqn_t) -> (key: string) -> (iv: string) -> (plain: string) -> (macKey: string) -> bytes
+private let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
   let id = mk_id pv aeAlg in
 
   // ENC.encryptor -> ENC.state
@@ -128,9 +131,10 @@ let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (
   bytes_of_hex iv @| ENC.enc id w ad rg data
 
 
-let test_count = FStar.ST.ralloc r 0
+private let test_count = FStar.ST.ralloc r 0
 
-let test_stream (aeAlg:a:aeAlg{is_AEAD a}) (key:string) (iv:string) (plain:string) (cipher:string) =
+private val test_stream: a:aeAlg{is_AEAD a} -> (key:string) -> (iv:string) -> (plain:string) -> (cipher:string) -> unit
+private let test_stream aeAlg key iv plain cipher =
   let output = fake_stream aeAlg key iv plain in
   let output = hex_of_bytes output in
   if output <> cipher then begin
@@ -144,7 +148,8 @@ let test_stream (aeAlg:a:aeAlg{is_AEAD a}) (key:string) (iv:string) (plain:strin
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
-let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) =
+private val test_aead: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (key: string) -> (iv: string) -> (plain: string) -> (cipher: string) -> unit
+private let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) =
   let output = fake_aead pv aeAlg key iv plain in
   let output = hex_of_bytes output in
   if output <> cipher then begin
@@ -158,7 +163,8 @@ let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (p
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
-let test_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (cipher: string) (macKey: string) =
+private val test_cbc: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (seqn: seqn_t) -> (key: string) -> (iv: string) -> (plain: string) -> (cipher: string) -> (macKey: string) -> unit
+private let test_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (cipher: string) (macKey: string) =
   let output = fake_cbc pv aeAlg seqn key iv plain macKey in
   let output = hex_of_bytes output in
   if output <> cipher then begin
@@ -172,6 +178,7 @@ let test_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
+val main : unit -> unit
 let main () =
   test_stream (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256)
     "152300c2dc44c8f695d4fb1471791659"
