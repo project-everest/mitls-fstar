@@ -304,7 +304,7 @@ val current_writer : c:connection -> i:id -> ST (option (cwriter i c))
        (ensures (fun h0 wo h1 -> 
 	       current_writer_pre c i h1
 	       /\ h0==h1
-	       /\ wo=current_writer_T c i h1
+	       /\ wo==current_writer_T c i h1
 	       /\ (is_None wo <==> is_PlaintextID i)))
 let current_writer c i = 
   let ix = Handshake.i c.hs Writer in 
@@ -384,7 +384,7 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
     sendFragment_inv wo h1 
     //we didn't advance any epochs
     /\ (current_writer_pre c i h0 ==> current_writer_pre c i h1
-				   /\ current_writer_T c i h0 = current_writer_T c i h1)
+				   /\ current_writer_T c i h0 == current_writer_T c i h1)
     /\ (currentId_T c Writer h1 = currentId_T c Writer h0)
     //behavior in the erroneous cases				   
     /\ (is_None wo \/ r=ad_overflow ==> modifies Set.empty h0 h1)
@@ -572,6 +572,7 @@ let next_fragment i c =
   let w0 = Handshake.i s Writer in 
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
+		 FStar.SeqProperties.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
   let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintextID") in
   let b = IO.debug_print_string ("nextFragment index type "^idt^"\n") in
