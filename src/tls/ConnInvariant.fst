@@ -302,6 +302,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let old_hs_log = epochs c h0 in
       let wi = StAE.stream_state #i (Epoch.w e) in //the epoch writer
       let nonce = nonce_of_id i in
+      SeqP.contains_intro (SeqP.snoc old_hs_log e) (Seq.length old_hs_log) e;
       SeqP.contains_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms == new_ms);
       assert (old_conn == new_conn);
