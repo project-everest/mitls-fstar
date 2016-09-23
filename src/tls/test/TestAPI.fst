@@ -45,7 +45,7 @@ let client config host port =
        | _ -> IO.print_string "unexpted ioresult_w\n")
     | _ -> IO.print_string "unexpected ioresult_i read\n"
 
-let rec aux_server config sock =
+private let rec aux_server config sock =
   let rid = new_region root in
   let con = TLS.accept rid sock config in
   let id = TLS.currentId con Reader in

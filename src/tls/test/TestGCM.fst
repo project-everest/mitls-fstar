@@ -16,7 +16,7 @@ open StatefulLHAE
 open StAE
 
 
-let pre_id (role:role) =
+private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
   let sr  = createBytes 32 0z in
   let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
@@ -27,24 +27,25 @@ let pre_id (role:role) =
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM CoreCrypto.SHA256) cr sr role
 
-let id = pre_id Client
+private let id = pre_id Client
 
 #set-options "--lax"
 
-let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
+private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
   let rg: Range.frange id = (0, length plain) in
   let f: DataStream.fragment id rg = plain in
   let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
 
-let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : option bytes =
+private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : option bytes =
   let ctxt: Content.decrypted id = (ct, cipher) in
   match StAE.decrypt #id rd ctxt with
   | Some d -> Some (Content.repr id d)
   | _ -> None
 
-let text = Platform.Bytes.utf8 "Top secret"
+private let text = Platform.Bytes.utf8 "Top secret"
 
+val main : unit -> unit
 let main () =
   //let wr = StAE.gen root id in
   let key = bytes_of_hex "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308" in
