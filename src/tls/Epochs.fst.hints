@@ -1,5 +1,5 @@
 [
-  "0Fr\fKp“`\u0018zY.Ràj-",
+  "‚ú\u00019b&Ô\u0019eD,õ»Ωgz",
   [
     [ "Epochs.fresh_subregion", 1, 0, 1, [ "@query" ], 0 ],
     [
@@ -57,38 +57,6 @@
       0
     ],
     [ "Epochs.epoch", 2, 0, 1, [ "@query" ], 0 ],
-    [
-      "Epochs.epoch",
-      3,
-      0,
-      1,
-      [
-        "@query", "assumption_Platform.Bytes.HasEq_bytes",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
-        "equation_TLSInfo.random",
-        "haseqTm_refine_810128ef5f4b05b21d8806119a5984f5"
-      ],
-      0
-    ],
-    [
-      "Epochs.epoch",
-      4,
-      0,
-      1,
-      [
-        "@query", "assumption_Negotiation.handshake_haseq",
-        "assumption_StAE.state_haseq", "assumption_TLSInfo.id_haseq",
-        "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok", "equation_StAE.reader",
-        "equation_StAE.writer", "equation_TLSInfo.peerId",
-        "haseqTm_refine_0604c7b3ec563d16cdd7ce213c7f43ec",
-        "haseqTm_refine_8094f15cbc49dabee5b79d150340b584",
-        "refinement_interpretation_Tm_refine_0604c7b3ec563d16cdd7ce213c7f43ec",
-        "typing_TLSInfo.peerId", "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
     [
       "Epochs.Epoch.i",
       1,
@@ -502,14 +470,6 @@
       0
     ],
     [
-      "Epochs.add_epoch",
-      3,
-      0,
-      1,
-      [ "@query", "assumption_Epochs.epoch_haseq" ],
-      0
-    ],
-    [
       "Epochs.incr_reader",
       1,
       0,
@@ -603,22 +563,6 @@
         "equation_FStar.SeqProperties.indexable",
         "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0"
       ],
-      0
-    ],
-    [
-      "Epochs.get_current_epoch",
-      2,
-      0,
-      1,
-      [ "@query", "assumption_Epochs.epoch_haseq" ],
-      0
-    ],
-    [
-      "Epochs.get_current_epoch",
-      3,
-      0,
-      1,
-      [ "@query", "assumption_Epochs.epoch_haseq" ],
       0
     ]
   ]
