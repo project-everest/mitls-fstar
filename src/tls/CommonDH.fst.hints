@@ -121,7 +121,7 @@
         "assumption_CoreCrypto.ec_point_haseq",
         "assumption_DHGroup.group_haseq",
         "assumption_Platform.Bytes.HasEq_bytes",
-        "assumption_Prims.HasEq_tuple2", "equation_DHGroup.share",
+        "assumption_Prims.tuple2_haseq", "equation_DHGroup.share",
         "equation_ECGroup.group", "equation_ECGroup.share",
         "equation_Platform.Bytes.bytes",
         "function_token_typing_DHGroup.share",

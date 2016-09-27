@@ -8,7 +8,7 @@
       1,
       [
         "@query", "assumption_Platform.Bytes.HasEq_bytes",
-        "assumption_Prims.HasEq_tuple2", "equation_Platform.Bytes.bytes",
+        "assumption_Prims.tuple2_haseq", "equation_Platform.Bytes.bytes",
         "equation_TLSInfo.cVerifyData", "equation_TLSInfo.sVerifyData",
         "function_token_typing_TLSInfo.cVerifyData",
         "haseqTm_refine_2530c4506d0d90e20a568a20a90aaa71"
@@ -281,8 +281,8 @@
       0,
       1,
       [
-        "@query", "assumption_Prims.HasEq_list",
-        "assumption_Prims.HasEq_string", "assumption_Prims.HasEq_tuple2",
+        "@query", "assumption_Prims.HasEq_string",
+        "assumption_Prims.list_haseq", "assumption_Prims.tuple2_haseq",
         "assumption_TLSError.alertDescription_haseq",
         "function_token_typing_Prims.string",
         "kinding_TLSError.alertDescription@tok"
@@ -621,7 +621,7 @@
         "@query", "assumption_Platform.Bytes.HasEq_bytes",
         "assumption_Prims.HasEq_int", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.empty_bytes",
-        "haseqTm_refine_f31338831e15898b26daa4916912ff86"
+        "haseqTm_refine_1ddf9cf3b79a884b3e5e69d3d167867f"
       ],
       0
     ],
@@ -722,7 +722,7 @@
       0,
       1,
       [
-        "@query", "assumption_Prims.HasEq_list",
+        "@query", "assumption_Prims.list_haseq",
         "assumption_TLSConstants.namedGroup_haseq",
         "kinding_TLSConstants.namedGroup@tok"
       ],

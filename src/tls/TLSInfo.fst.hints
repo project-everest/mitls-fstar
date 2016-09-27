@@ -112,6 +112,25 @@
       ],
       0
     ],
+    [ "TLSInfo.serverName", 5, 0, 1, [ "@query" ], 0 ],
+    [
+      "TLSInfo.serverName",
+      6,
+      0,
+      1,
+      [
+        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "assumption_Prims.HasEq_int", "assumption_Prims.tuple2_haseq",
+        "equation_Platform.Bytes.bytes", "equation_Prims.nat",
+        "equation_TLSConstants.pskIdentity",
+        "function_token_typing_TLSConstants.pskIdentity",
+        "haseqTm_refine_62be46b5d65726c91e550691e3da999b",
+        "haseqTm_refine_b2d096ea0433004efe3e6a6ca8c4a7bf",
+        "haseqTm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_kinding_Tm_refine_b2d096ea0433004efe3e6a6ca8c4a7bf"
+      ],
+      0
+    ],
     [ "TLSInfo.SNI_DNS._0", 1, 0, 1, [ "@query" ], 0 ],
     [
       "TLSInfo.SNI_DNS._0",
@@ -147,8 +166,8 @@
         "@query", "assumption_CoreCrypto.sig_alg_haseq",
         "assumption_ECGroup.point_format_haseq",
         "assumption_Platform.Bytes.HasEq_bytes",
-        "assumption_Prims.HasEq_bool", "assumption_Prims.HasEq_list",
-        "assumption_Prims.HasEq_option", "assumption_Prims.HasEq_tuple2",
+        "assumption_Prims.HasEq_bool", "assumption_Prims.list_haseq",
+        "assumption_Prims.option_haseq", "assumption_Prims.tuple2_haseq",
         "assumption_TLSConstants.hashAlg_haseq",
         "assumption_TLSConstants.namedGroup_haseq",
         "assumption_TLSInfo.ri_status_haseq",
@@ -177,7 +196,7 @@
       1,
       [
         "@query", "assumption_Platform.Bytes.HasEq_bytes",
-        "assumption_Prims.HasEq_option", "assumption_Prims.HasEq_tuple2",
+        "assumption_Prims.option_haseq", "assumption_Prims.tuple2_haseq",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
         "equation_TLSInfo.cVerifyData", "equation_TLSInfo.crand",
         "equation_TLSInfo.random", "equation_TLSInfo.sVerifyData",
@@ -1070,6 +1089,29 @@
     [
       "TLSInfo.id",
       4,
+      0,
+      1,
+      [
+        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "assumption_TLSConstants.aeAlg_haseq",
+        "assumption_TLSConstants.prePrfAlg_haseq",
+        "assumption_TLSConstants.protocolVersion_haseq",
+        "assumption_TLSConstants.role_haseq",
+        "assumption_TLSInfo.msId_haseq",
+        "assumption_TLSInfo.pre_keyId_haseq",
+        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_TLSConstants.kdfAlg_t", "equation_TLSInfo.crand",
+        "equation_TLSInfo.keyId", "equation_TLSInfo.random",
+        "equation_TLSInfo.srand",
+        "haseqTm_refine_810128ef5f4b05b21d8806119a5984f5",
+        "haseqTm_refine_91c6a9143dcad05e415a63ae23543e74",
+        "haseqTm_refine_ab53d50917b3675585471a478b5fcb9b"
+      ],
+      0
+    ],
+    [
+      "TLSInfo.id",
+      5,
       0,
       1,
       [

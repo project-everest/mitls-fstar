@@ -8,7 +8,7 @@
       1,
       [
         "@query", "assumption_CoreCrypto.rsa_key_haseq",
-        "assumption_Prims.HasEq_tuple2", "equation_Platform.Bytes.bytes",
+        "assumption_Prims.tuple2_haseq", "equation_Platform.Bytes.bytes",
         "equation_RSAKey.pk", "equation_RSAKey.sk",
         "function_token_typing_RSAKey.pk",
         "haseqTm_refine_91cae5fbff2b17b9fca0db24348d01a5",
