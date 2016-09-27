@@ -14,7 +14,6 @@ This repository contains the new F* development a port of the stable [F# develop
 ### miTLS website
 
 More information on miTLS can be found at www.mitls.org
-
 More information on F\* can be found at www.fstar-lang.org
 
 ### Table of contents
