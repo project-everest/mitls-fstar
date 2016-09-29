@@ -85,40 +85,47 @@ let valid_mode (m:pre_mode) =
      /\ m.m_point_format = None
   | _ -> False (* TODO *)
 
-val intersect_lists : l1:list -> l2:list -> result:list {
-  List.Tot.for_all (List.Tot.mem l1) result /\
-  List.Tot.for_all (List.Tot.mem l2) result /\
-  List.Tot.for_all (fun elem -> List.Tot.mem elem l2 ==> List.Tot.mem elem result) l1
+
+type mode = m:pre_mode{valid_mode m}
+
+
+val intersect_lists : l1:list 'a -> l2:list 'a -> result:list 'a {
+  List.Tot.for_all (fun a -> List.Tot.mem a l1) result /\
+  List.Tot.for_all (fun a -> List.Tot.mem a l2) result /\
+  List.Tot.for_all (fun a -> not (List.Tot.mem a l2) || List.Tot.mem a result) l1
 }
 
 let intersect_lists l1 l2 =
   l1
   |> List.Tot.filter (fun elem -> List.Tot.mem elem l2)
-
-val filterClientOffer: serverCfg:config -> co:clientOffer -> list valid_mode 
+  
+(** this function computes the full cartesian products of server modes compatible 
+    with a client offer in precedence order
+    *)
+    
+//val filterClientOffer: serverCfg:config -> co:clientOffer -> list mode 
 let filterClientOffer serverCfg co =
   let filtered_ciphersuites = 
-      co.co_cipher_suites
-      |> intersect_lists serverCfg.ciphersuites in
-  let filtered_SEC_groups =
-      List.Tot.filter is_SEC co.co_namedGroups
-      |> intersect_lists (List.filter is_SEC serverCfg.namedGroups) in
+    intersect_lists co.co_cipher_suites serverCfg.ciphersuites in
+
   let filtered_FFDHE_groups =
-      List.Tot.filter is_FFDHE co.co_namedGroups
-      |> intersect_lists (List.filter is_FFDHE serverCfg.namedGroups) in
-  filtered_ciphersuites
-  |> List.Tot.concatMap (fun cs -> match cs with //kk: remove this match statement if possible 
-    | CipherSuite suite -> 
-      match fst suite with
-      | Kex_PSK -> [(suite,None)]
-      | Kex_PSK_DHE | Kex_DHE -> List.map (fun elem -> (suite,elem)) filtered_FFDHE_groups
-      | Kex_PSK_ECDHE | Kex_ECDHE -> List.map (fun elem -> (suite,elem)) filtered_SEC_groups  
-      )
+    intersect_lists (List.Tot.filter is_FFDHE co.co_namedGroups) (List.Tot.filter is_FFDHE serverCfg.namedGroups) in
+
+  let filtered_SEC_groups = List.Tot.filter is_SEC co.co_namedGroups |> intersect_lists (List.Tot.filter is_SEC serverCfg.namedGroups)  in
+         
+  List.Tot.concatMap (fun cs -> match cs with //kk: remove this match statement if possible 
+    | CipherSuite kex sa ae -> 
+      match kex with
+      | Kex_PSK -> [(cs,None)]
+      | Kex_PSK_DHE | Kex_DHE -> List.Tot.map (fun elem -> (cs,Some(elem))) filtered_FFDHE_groups
+      | Kex_PSK_ECDHE | Kex_ECDHE -> List.Tot.map (fun elem -> (cs,Some(elem))) filtered_SEC_groups  
+      ) filtered_ciphersuites
       
-type mode = m:pre_mode{valid_mode m}
 
 val prepareClientOffer: cfg:config -> Tot clientOffer
 let prepareClientOffer cfg =
+  let sni_list = 
+    if is_Some cfg.peerName then [SNI_DNS (utf8 (Some.v cfg.peerName))] else [] in
   let co = 
   {co_protocol_version = cfg.maxVer;
    co_cipher_suites = cfg.ciphersuites;
@@ -127,11 +134,12 @@ let prepareClientOffer cfg =
    co_sigAlgs = cfg.signatureAlgorithms;
    co_psk = []; // TODO: Actually get the psk from the config.
    co_point_format = cfg.pointFormats;
-   co_server_name = [SNI_DNS (utf8 cfg.peerName)];
+   co_server_name = sni_list;
    co_extended_ms = cfg.extendedMasterSecret;
    co_secure_renegotiation = cfg.secureRenegotiation;
    } in
   co
+
 
 // Checks that the protocol version in the CHELO message is
 // within the range of versions supported by the server configuration
@@ -210,9 +218,9 @@ val verifyServerExtension: config -> list extension -> bool -> (result mode) -> 
 let verifyServerExtension cfg cExtL (resuming:bool) res sExt =
     match res with
     | Error(x,y) -> Error(x,y) (* Propagate errors *)
-    | Correct(l) ->
+    | Correct(mode) ->
       (* Ensure that we proposed this extension *)
-      if not List.Tot.existsb (sameExt sExt) cExtL then
+      if not (List.Tot.existsb (sameExt sExt) cExtL) then
         Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
       else match sExt with
         (* Secure Renegotiation Indication *)
@@ -220,7 +228,7 @@ let verifyServerExtension cfg cExtL (resuming:bool) res sExt =
           if mode.m_protocol_version = TLS_1p3 then
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent the secure renegotiation indication in TLS 1.3")
           else
-            {mode with m_secure_renegotiation = true}
+            Correct ({mode with m_secure_renegotiation = true})
         (* SNI, if provided in cleartext *)
         | E_server_name sni ->
           (* In TLS 1.3, SNI must be encrypted *)
@@ -228,24 +236,32 @@ let verifyServerExtension cfg cExtL (resuming:bool) res sExt =
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent a plaintext SNI in TLS 1.3")
           else if sni <> [] then 
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement with a non-empty name list")
-          else correct(l)
+          else Correct mode
         | E_ec_point_format(spf) ->
           if mode.m_protocol_version = TLS_1p3 then
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an EC point format extension in TLS 1.3")
           else if resuming then
-            Correct l
+            Correct mode
           else
-            if List.Tot.existsb (fun x -> ~(List.Tot.mem x cfg.pointFormats)) spf then
+            if List.Tot.existsb (fun x -> not (List.Tot.mem x cfg.pointFormats)) spf then
               Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Server picked a point format that was not offered")
             else
-              Correct ({l with m_point_format = Some spf})
+              Correct ({mode with m_point_format = Some (List.Tot.hd spf)}) //Client proposes only ECGroup.ECP_UNCOMPRESSED.
         | E_signatureAlgorithms _ ->
           Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Server sent a signature algorithm extension")
         | E_extended_ms ->
           if mode.m_protocol_version = TLS_1p3 then
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent the Extended Master Secret extension in TLS 1.3")
-          else correct({l with m_extended_ms = true})
+          else Correct ({mode with m_extended_ms = true})
         | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Received an unexpected extension from the server")
+
+
+private val check_dup: sl:list extension -> Tot bool
+let rec check_dup = function
+  | [] -> true
+  | h :: t ->
+    if List.Tot.existsb (sameExt h) t then false
+    else check_dup t
 
 (**
  Fills in the extension-dependant fields of the mode
@@ -254,13 +270,8 @@ let verifyServerExtension cfg cExtL (resuming:bool) res sExt =
  with the local client configuration.
 *)
 val verifyServerExtensions: mode -> config -> list extension -> list extension -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (mode))
-let verifyServerExtensions mode cfg cExtL sExtL ri (resuming:bool) =
-  let rec check_dup sl : Tot bool = function
-  | [] -> true
-  | h :: t ->
-    if List.Tot.existsb (sameExt h) t then false
-    else check_dup t
-  in match List.Tot.fold_left (verifyServerExtension cfg cExtL ri resuming) (correct mode) sExtL with
+let verifyServerExtensions mode cfg cExtL sExtL ri (resuming:bool) =    
+  match List.Tot.fold_left (verifyServerExtension cfg cExtL resuming) (correct mode) sExtL with
   | Error(x,y) -> Error(x,y)
   | Correct l ->
      if check_dup sExtL then correct l
@@ -269,10 +280,10 @@ let verifyServerExtensions mode cfg cExtL sExtL ri (resuming:bool) =
 (**
  This both computes the mode and the server extensions 
  from the offered client extensions and the local server
- configureation
+ configuration
 *)
-val negotiateExtension: config -> option (cVerifyData * sVerifyData) -> bool -> (list extension * pre_mode) -> extension -> Tot (list extension * pre_mode)
-let negotiateExtension (cfg:config) ri resuming (sExtL, mode) cExt =
+val negotiateExtension: protocolVersion -> config -> option (cVerifyData * sVerifyData) -> bool -> (list extension * pre_mode) -> extension -> Tot (list extension * pre_mode)
+let negotiateExtension pv (cfg:config) ri resuming (sExtL, mode) cExt =
   match cExt with
     | E_renegotiation_info (cri) ->
       if mode.m_protocol_version = TLS_1p3 then
@@ -294,21 +305,29 @@ let negotiateExtension (cfg:config) ri resuming (sExtL, mode) cExt =
       if mode.m_protocol_version = TLS_1p3 then
         (sExtL, mode) (* Ignore SRI in TLS 1.3 *)
       else
-        if resuming then mode
+        if resuming then (sExtL, mode)
         else
           let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
-          {mode with m_point_format = Some nl}
+          ((E_ec_point_format [ECGroup.ECP_UNCOMPRESSED]) :: sExtL, {mode with m_point_format = Some (ECGroup.ECP_UNCOMPRESSED)}) //TODO really pick first?
     | E_server_name l ->
-      {mode with m_server_name = Some l}
+      (match List.Tot.tryFind (fun x->match x with | SNI_DNS _ -> true | _ -> false) l with
+        | Some name ->
+          if pv <> TLS_1p3
+          then ((E_server_name []) :: sExtL, {mode with m_server_name = Some name}) 
+          else (sExtL, mode) // TODO EncryptedExtensions
+        | _ ->  (sExtL, mode))
+
     | E_extended_ms ->
-      if resuming then mode
+      if resuming then (sExtL, mode)
       else
         // If EMS is disabled in config, don't negotiate it
-        {mode with m_extended_ms = cfg.extendedMasterSecret}
+	if pv <> TLS_1p3 && cfg.extendedMasterSecret then ((E_extended_ms) :: sExtL, {mode with m_extended_ms = true}) 
+        else (sExtL, mode)
+        
     | E_signatureAlgorithms sha ->
-      if resuming then mode
-      else {mode with m_sigAlg = Some (sha)}
-    | _ -> mode
+      if resuming then (sExtL, mode)
+      else (sExtL, {mode with m_sigAlg = Some (List.Tot.hd sha)}) //TODO check that there is no server extension
+    | _ -> (sExtL, mode)
 
 
 val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
