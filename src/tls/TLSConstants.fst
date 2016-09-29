@@ -1481,9 +1481,9 @@ let parseSigHashAlgs b =
   | Correct b -> aux b []
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
+inline type rawKeyShare = b:bytes{repr_bytes (length b) <= 2}
 
-// TODO: replace "bytes" by either DH or ECDH parameters
-type keyShareEntry = namedGroup * b:bytes{repr_bytes (length b) <= 2}
+type keyShareEntry = namedGroup * rawKeyShare
 
 type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
 

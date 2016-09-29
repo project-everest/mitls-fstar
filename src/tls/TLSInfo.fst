@@ -76,7 +76,6 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 *) 
 
-
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     minVer: protocolVersion;
@@ -84,26 +83,26 @@ noeq type config = {
     ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
     compressions: l:list compression{ List.Tot.length l <= 1 };
     namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
+    pointFormats: list (pf:ECGroup.point_format{match pf with | ECGroup.ECP_UNKNOWN _ -> False | _ -> True});
     signatureAlgorithms: list sigHashAlg;
 
     (* Handshake specific options *)
 
     (* Client side *)
-    honourHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
+    honorHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
     allowAnonCipherSuite: bool; // a safeguard against proposing ciphersuites (not so useful?)
-    safe_resumption: bool;      // demands this extension when resuming
 
     (* Server side *)
-    request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
-    check_client_versiosi_isi_pms_for_old_tls: bool;
-    cert_chaisi_file: string;    // TEMPORARY until the proper cert logic described above is implemented
-    private_key_file: string;   // TEMPORARY
+    requestClientCertificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
+    certChainFile: string;    // TEMPORARY until the proper cert logic described above is implemented
+    privateKeyFile: string;   // TEMPORARY
 
     (* Common *)
-    safe_renegotiation: bool;   // demands this extension when renegotiating
-    peer_name: option string;   // The expected name to match against the peer certificate
-    check_peer_certificate: bool; // To disable certificate validation
-    ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
+    secureRenegotiation: bool;
+    extendedMasterSecret: bool;
+    peerName: option string;   // The expected name to match against the peer certificate
+    checkPeerCertificate: bool; // To disable certificate validation
+    caFile: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
                       // on Cygwin /etc/ssl/certs/ca-bundle.crt
 
     (* Sessions database *)
@@ -158,21 +157,21 @@ let defaultConfig =
     ciphersuites = csn;
     compressions = [NullCompression];
     namedGroups = groups;
+    pointFormats = [ECGroup.ECP_UNCOMPRESSED];
     signatureAlgorithms = sigAlgPrefs;
 
-    honourHelloReq = true;
+    honorHelloReq = true;
     allowAnonCipherSuite = false;
 
-    request_client_certificate = false;
-    check_client_versiosi_isi_pms_for_old_tls = true;
-    cert_chaisi_file = "server.pem";
-    private_key_file = "server.key";
+    requestClientCertificate = false;
+    certChainFile = "server.pem";
+    privateKeyFile = "server.key";
 
-    safe_renegotiation = true;
-    safe_resumption = true;
-    peer_name = None; // Disables hostname validation
-    check_peer_certificate = true;
-    ca_file = "CAFile.pem";
+    secureRenegotiation = true;
+    extendedMasterSecret = true;
+    peerName = None; // Disables hostname validation
+    checkPeerCertificate = true;
+    caFile = "CAFile.pem";
 
     sessionDBFileName = "sessionDBFile.bin";
     sessionDBExpiry = newTimeSpan 1 0 0 0; (*@ one day, as suggested by the RFC *)

@@ -518,7 +518,7 @@ let isClientRenegotiationInfo e =
 val checkClientRenegotiationInfoExtension: config -> list extension -> cVerifyData -> Tot bool
 let checkClientRenegotiationInfoExtension config (cExtL: list extension) cVerifyData =
   match List.Tot.tryPick isClientRenegotiationInfo cExtL with
-  | None -> not (config.safe_renegotiation)
+  | None -> not (config.secureRenegotiation)
   | Some(payload) -> equalBytes payload cVerifyData
 
 val isServerRenegotiationInfo: extension -> Tot (option (cVerifyData * sVerifyData))
@@ -530,7 +530,7 @@ let isServerRenegotiationInfo e =
 val checkServerRenegotiationInfoExtension: config -> list extension -> cVerifyData -> sVerifyData -> Tot bool
 let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerifyData sVerifyData =
     match List.Tot.tryPick isServerRenegotiationInfo sExtL with
-    | None -> not (config.safe_renegotiation)
+    | None -> not (config.secureRenegotiation)
     | Some(x) ->
         let (cvd,svd) = x in
         equalBytes (cvd @| svd) (cVerifyData @| sVerifyData)
