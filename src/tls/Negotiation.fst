@@ -81,11 +81,9 @@ let valid_mode (m:pre_mode) =
            /\ b2t (is_None m.m_psk)
        | _ -> False)
      /\ m.m_extended_ms = false
-     /\ m.m_secure_renegotiation = RI_Unsupported
+     /\ m.m_secure_renegotiation = false
      /\ m.m_point_format = None
-  | _ ->
-    (is_RI_Valid m.m_secure_renegotiation
-     \/ is_RI_Unsupported m.m_secure_renegotiation) (* TODO *)
+  | _ -> False (* TODO *)
 
 val intersect_lists : l1:list -> l2:list -> result:list {
   List.Tot.for_all (List.Tot.mem l1) result /\
@@ -274,7 +272,7 @@ let verifyServerExtensions mode cfg cExtL sExtL ri (resuming:bool) =
  configureation
 *)
 val negotiateExtension: config -> option (cVerifyData * sVerifyData) -> bool -> (list extension * pre_mode) -> extension -> Tot (list extension * pre_mode)
-let clientToNegotiatedExtension (cfg:config) ri resuming (sExtL, mode) cExt =
+let negotiateExtension (cfg:config) ri resuming (sExtL, mode) cExt =
   match cExt with
     | E_renegotiation_info (cri) ->
       if mode.m_protocol_version = TLS_1p3 then
@@ -301,16 +299,15 @@ let clientToNegotiatedExtension (cfg:config) ri resuming (sExtL, mode) cExt =
           let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
           {mode with m_point_format = Some nl}
     | E_server_name l ->
-        {neg with ne_server_names = Some l}
+      {mode with m_server_name = Some l}
     | E_extended_ms ->
-        if resuming then
-            neg
-        else
-            // If EMS is disabled in config, don't negotiate it
-            {neg with ne_extended_ms = cfg.safe_resumption}
+      if resuming then mode
+      else
+        // If EMS is disabled in config, don't negotiate it
+        {mode with m_extended_ms = cfg.extendedMasterSecret}
     | E_signatureAlgorithms sha ->
-        if resuming then neg
-        else {neg with ne_signature_algorithms = Some (sha)}
+      if resuming then mode
+      else {mode with m_sigAlg = Some (sha)}
     | _ -> mode
 
 
@@ -343,7 +340,7 @@ let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:boo
         else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
     | E_supported_groups(l) -> None
     | E_extended_ms ->
-        if pv <> TLS_1p3 && cfg.safe_resumption then Some(E_extended_ms)
+        if pv <> TLS_1p3 && cfg.extendedMasterSecret then Some(E_extended_ms)
         else None
     | _ -> None
 
@@ -400,7 +397,7 @@ let computeMode cfg cpv ccs cexts comps ri =
     | Error(z) -> Error(z)
     | Correct(npv) ->
   let nosa = fun (CipherSuite _ sa _) -> is_None sa in
-  let sigfilter = match Cert.lookup_chain cfg.cert_chain_file with
+  let sigfilter = match Cert.lookup_chain cfg.certChainFile with
     | Correct(c) when (is_Some (Cert.endpoint_keytype c)) ->
       let kt = Cert.endpoint_keytype c in
       (fun (CipherSuite _ sa _) ->
@@ -418,16 +415,30 @@ let computeMode cfg cpv ccs cexts comps ri =
   match negotiateCipherSuite cfg npv ccs with
     | Error(z) -> Error(z)
     | Correct(kex,sa,ae,cs) ->
-  let nego = ne_default in 
-  let next = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri false) nego cexts in
+      let comp = match comps with
+             | [] -> None
+             | _ -> Some NullCompression in
+      let mode = {
+        m_protocol_version = npv;
+        m_kexAlg = kex;
+        m_aeAlg = ae;
+        m_sigAlg = sa;
+        m_cipher_suite = cs;
+        m_dh_group = None;
+        m_psk = None;
+        m_server_cert = None;
+        m_comp = comp;
+        m_extended_ms = false;
+        m_secure_renegotiation = RI_Unsupported;
+        m_point_format = None;
+        m_server_name = None;
+      } in
+  let mode = List.Tot.fold_left (negotiateExtension cfg cs ri false) mode cexts in
   let ng = negotiateGroupKeyShare cfg npv kex cexts in
   match ng with
     | Error(z), _ | _, Error(z) -> Error(z)
     | Correct(next), Correct(gn, gxo) ->
-      let comp = match comps with
-                 | [] -> None
-                 | _ -> Some NullCompression in
-      let mode = {
+      let mode = { mode with
         m_protocol_version = npv;
         m_kexAlg = kex;
         m_aeAlg = ae;
@@ -469,7 +480,8 @@ let verifyMode cfg cext cpv spv sr cs sext comp rio =
       m_point_format = None;
       m_server_name = None;
     } in
-    let mode = negotiateClientExtensions mode cfg cext sext rio resume in
+    let resume = false in //MK not clear why this is ok
+    let mode = verifyServerExtensions mode cfg cext sext rio resume in
     let mode = match sa with
     | Some sigalg ->
       if not List.Tot.mem sigalg cfg.signatureAlgorithms then
