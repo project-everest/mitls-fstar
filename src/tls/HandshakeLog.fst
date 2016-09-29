@@ -141,7 +141,3 @@ type validLog_SH (l:hs_log) =
     | _ -> False)
   | _ -> False)
 
-assume val checkLogSessionHash: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
-assume val checkLogClientFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
-assume val checkLogServerFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
-    
