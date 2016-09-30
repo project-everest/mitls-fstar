@@ -40,6 +40,7 @@ type pre_mode = {
   m_kexAlg: TLSConstants.kexAlg;
   m_aeAlg: TLSConstants.aeAlg;
   m_sigAlg: option TLSConstants.sigAlg;
+  m_hashAlg: option TLSConstants.hashAlg;
   m_cipher_suite: cipherSuite;
   m_dh_group: option namedGroup;
   m_psk: option PSK.psk_identifier;
@@ -166,7 +167,7 @@ let negotiateCipherSuite cfg pv ccs =
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
-val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> list extension -> Tot (result (option namedGroup * option bytes))
+val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> list extension -> Tot (result (option namedGroup * option rawKeyShare))
 let rec negotiateGroupKeyShare cfg pv kex exts =
   match pv with
   | TLS_1p3 ->
@@ -277,6 +278,17 @@ let verifyServerExtensions mode cfg cExtL sExtL ri (resuming:bool) =
      if check_dup sExtL then correct l
      else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Server sent a duplicated extension")
 
+
+(* TODO move the handshake?
+        let rs =
+           match cri, ri with
+           | FirstConnection, None -> RI_Valid
+           | ClientRenegotiationInfo(cvdc), Some (cvds, svds) ->
+               if equalBytes cvdc cvds then RI_Valid else RI_Invalid
+           | _ -> RI_Invalid in
+*)
+
+
 (**
  This both computes the mode and the server extensions 
  from the offered client extensions and the local server
@@ -289,18 +301,13 @@ let negotiateExtension pv (cfg:config) ri resuming (sExtL, mode) cExt =
       if mode.m_protocol_version = TLS_1p3 then
         (sExtL, mode) (* Ignore SRI in TLS 1.3 *)
       else
-        let rs =
-           match cri, ri with
-           | FirstConnection, None -> RI_Valid
-           | ClientRenegotiationInfo(cvdc), Some (cvds, svds) ->
-               if equalBytes cvdc cvds then RI_Valid else RI_Invalid
-           | _ -> RI_Invalid in
+        
         let ric =
            match ri with
            | Some t -> ServerRenegotiationInfo t
            | None -> FirstConnection in
         ((E_renegotiation_info ric) :: sExtL,
-         {mode with m_secure_renegotiation = rs})
+         {mode with m_secure_renegotiation = true})
     | E_ec_point_format l ->
       if mode.m_protocol_version = TLS_1p3 then
         (sExtL, mode) (* Ignore SRI in TLS 1.3 *)
@@ -326,9 +333,10 @@ let negotiateExtension pv (cfg:config) ri resuming (sExtL, mode) cExt =
         
     | E_signatureAlgorithms sha ->
       if resuming then (sExtL, mode)
-      else (sExtL, {mode with m_sigAlg = Some (List.Tot.hd sha)}) //TODO check that there is no server extension
+      else (sExtL, {mode with m_sigAlg = Some (fst (List.Tot.hd sha)); hashAlg = Some (snd (List.Tot.hd sha))}) //TODO check that there is no server extension
     | _ -> (sExtL, mode)
 
+(** this function is to be deprecated, it turns clientToServerExtensions, we now do this in one pass in negotiateExtension *)
 
 val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
 let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
@@ -409,7 +417,8 @@ let acceptableCipherSuite cfg spv cs =
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
-irreducible val computeMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:list extension -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result (mode * option keyShareBytes * list extension * list extension))
+irreducible val computeMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:list extension -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result (mode * option serverKeyShare * list extension * list extension))
+
 
 let computeMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 
@@ -435,28 +444,29 @@ let computeMode cfg cpv ccs cexts comps ri =
     | Error(z) -> Error(z)
     | Correct(kex,sa,ae,cs) ->
       let comp = match comps with
-             | [] -> None
-             | _ -> Some NullCompression in
+             | [] -> NullCompression //TODO can we exclude this case?
+             | _ -> NullCompression in
       let mode = {
         m_protocol_version = npv;
         m_kexAlg = kex;
         m_aeAlg = ae;
         m_sigAlg = sa;
+	m_hashAlg = None;
         m_cipher_suite = cs;
         m_dh_group = None;
         m_psk = None;
         m_server_cert = None;
         m_comp = comp;
         m_extended_ms = false;
-        m_secure_renegotiation = RI_Unsupported;
+        m_secure_renegotiation = false;
         m_point_format = None;
         m_server_name = None;
       } in
-  let mode = List.Tot.fold_left (negotiateExtension cfg cs ri false) mode cexts in
-  let ng = negotiateGroupKeyShare cfg npv kex cexts in
+  let sexts, mode = List.Tot.fold_left (negotiateExtension npv cfg ri false) ([], mode) cexts in
+  let ng = negotiateGroupKeyShare cfg npv kex cexts in //(result (option namedGroup * option bytes))
   match ng with
-    | Error(z), _ | _, Error(z) -> Error(z)
-    | Correct(next), Correct(gn, gxo) ->
+    | Error(z) -> Error(z)
+    | Correct(gn, gxo) ->
       let mode = { mode with
         m_protocol_version = npv;
         m_kexAlg = kex;
@@ -468,7 +478,9 @@ let computeMode cfg cpv ccs cexts comps ri =
         m_comp = comp;
         m_ext = next;
       } in
-      Correct (mode))
+      Correct (mode , Some (Some.v gn,Some.v gxo) , cexts , sexts))
+
+//(result (mode * option serverKeyShare * list extension * list extension))
 
 irreducible val verifyMode: cfg:config -> cext:list extension -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:list extension -> comp:compression -> rio:option ri -> Tot (result mode)
 
@@ -479,7 +491,7 @@ let verifyMode cfg cext cpv spv sr cs sext comp rio =
   if not (acceptableCipherSuite cfg spv cs) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
   else
-  if not List.Tot.mem comp cfg.compressions then
+  if not (List.Tot.mem comp cfg.compressions) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Server picked an unoffered compression mode")
   else
   match cs with
@@ -489,25 +501,28 @@ let verifyMode cfg cext cpv spv sr cs sext comp rio =
       m_kexAlg = kex;
       m_aeAlg = ae;
       m_sigAlg = sa;
+      m_hashAlg = None;
       m_cipher_suite = cs;
       m_dh_group = None;
       m_psk = None;
       m_server_cert = None;
       m_comp = comp;
       m_extended_ms = false;
-      m_secure_renegotiation = RI_Unsupported;
+      m_secure_renegotiation = false;
       m_point_format = None;
       m_server_name = None;
     } in
     let resume = false in //MK not clear why this is ok
-    let mode = verifyServerExtensions mode cfg cext sext rio resume in
-    let mode = match sa with
-    | Some sigalg ->
-      if not List.Tot.mem sigalg cfg.signatureAlgorithms then
+    match verifyServerExtensions mode cfg cext sext rio resume with
+    | Error(z) -> Error (z)
+    | Correct(mode) ->
+      let mode = match sa with
+      | Some sigalg ->
+        if not (List.Tot.mem (sigalg, Some.v mode.m_hashAlg) cfg.signatureAlgorithms) then
         Error (AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Server picked a ciphersuite using an unoffered signature algorithm")
-      else mode
-    | None -> mode in
-    mode
+        else Correct(mode)
+      | None -> Correct(mode) in
+      mode
   | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
 
 
