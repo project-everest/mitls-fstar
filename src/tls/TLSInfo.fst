@@ -76,7 +76,6 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 *) 
 
-
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     minVer: protocolVersion;
@@ -84,26 +83,26 @@ noeq type config = {
     ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
     compressions: l:list compression{ List.Tot.length l <= 1 };
     namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
+    pointFormats: list (pf:ECGroup.point_format{match pf with | ECGroup.ECP_UNKNOWN _ -> False | _ -> True});
     signatureAlgorithms: list sigHashAlg;
 
     (* Handshake specific options *)
 
     (* Client side *)
-    honourHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
+    honorHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
     allowAnonCipherSuite: bool; // a safeguard against proposing ciphersuites (not so useful?)
-    safe_resumption: bool;      // demands this extension when resuming
 
     (* Server side *)
-    request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
-    check_client_version_in_pms_for_old_tls: bool;
-    cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
-    private_key_file: string;   // TEMPORARY
+    requestClientCertificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
+    certChainFile: string;    // TEMPORARY until the proper cert logic described above is implemented
+    privateKeyFile: string;   // TEMPORARY
 
     (* Common *)
-    safe_renegotiation: bool;   // demands this extension when renegotiating
-    peer_name: option string;   // The expected name to match against the peer certificate
-    check_peer_certificate: bool; // To disable certificate validation
-    ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
+    secureRenegotiation: bool;
+    extendedMasterSecret: bool;
+    peerName: option string;   // The expected name to match against the peer certificate
+    checkPeerCertificate: bool; // To disable certificate validation
+    caFile: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
                       // on Cygwin /etc/ssl/certs/ca-bundle.crt
 
     (* Sessions database *)
@@ -115,6 +114,7 @@ noeq type config = {
     dhDefaultGroupFileName: string;
     dhPQMinLength: nat * nat;
     }
+
 
 val sigAlgPref: list sigAlg -> list hashAlg' -> Tot (list sigHashAlg)
 let rec sigAlgPref s h =
@@ -157,21 +157,21 @@ let defaultConfig =
     ciphersuites = csn;
     compressions = [NullCompression];
     namedGroups = groups;
+    pointFormats = [ECGroup.ECP_UNCOMPRESSED];
     signatureAlgorithms = sigAlgPrefs;
 
-    honourHelloReq = true;
+    honorHelloReq = true;
     allowAnonCipherSuite = false;
 
-    request_client_certificate = false;
-    check_client_version_in_pms_for_old_tls = true;
-    cert_chain_file = "server.pem";
-    private_key_file = "server.key";
+    requestClientCertificate = false;
+    certChainFile = "server.pem";
+    privateKeyFile = "server.key";
 
-    safe_renegotiation = true;
-    safe_resumption = true;
-    peer_name = None; // Disables hostname validation
-    check_peer_certificate = true;
-    ca_file = "CAFile.pem";
+    secureRenegotiation = true;
+    extendedMasterSecret = true;
+    peerName = None; // Disables hostname validation
+    checkPeerCertificate = true;
+    caFile = "CAFile.pem";
 
     sessionDBFileName = "sessionDBFile.bin";
     sessionDBExpiry = newTimeSpan 1 0 0 0; (*@ one day, as suggested by the RFC *)
@@ -212,37 +212,12 @@ type ri_status =
 | RI_Valid
 | RI_Invalid
 
-type negotiatedExtensions = {
-    ne_extended_ms: bool;
-    ne_extended_padding: bool;
-    ne_secure_renegotiation: ri_status;
-
-    //$ Cedric: these extensions were missing in F7.
-    ne_supported_groups: option (list namedGroup);
-    ne_supported_point_formats: option (list ECGroup.point_format);
-    ne_server_names: option (list serverName);
-    ne_signature_algorithms: option (list sigHashAlg);
-    ne_keyShare: option serverKeyShare;
-}
-
-let ne_default =
-{
-    ne_extended_ms = false;
-    ne_extended_padding = false;
-    ne_secure_renegotiation = RI_Unsupported;
-    ne_supported_groups = None;
-    ne_supported_point_formats = None;
-    ne_server_names = None;
-    ne_signature_algorithms = None;
-    ne_keyShare = None;
-}
-
 // -------------------------------------------------------------------
 // Pre Master Secret indexes
 
 // Placeholder for overhaul of 1.2 indexes
 type pmsId = PMS.pms
-assume val strongKEX: pmsId -> Tot bool
+assume val strongKEX: kexAlg -> Tot bool
 
 // -------------------------------------------------------------------
 // Master Secret indexes and their properties
@@ -264,26 +239,33 @@ type sessionID = b:bytes { length b <= 32 }
 // to identify an active or resumable session state.''
 
 noeq type sessionInfo = {
-    init_crand: crand;
-    init_srand: srand;
-    protocol_version: p:protocolVersion; // { p <> TLS_1p3 };
-    cipher_suite: cipherSuite;
-    compression: compression;
-    extensions: negotiatedExtensions;
-    pmsId: pmsId;
-    session_hash: sessionHash;
-    client_auth: bool;
-    clientID: Cert.chain;
-    clientSigAlg: sigHashAlg;
-    serverID: Cert.chain;
-    serverSigAlg: sigHashAlg;
-    sessionID: sessionID;
-    }
+  si_resume: bool;
+  si_client_random: random;
+  si_server_random: random;
+  si_protocol_version: protocolVersion;
+  si_sessionID: sessionID;
+  si_sessiosi_hash: sessionHash;
+  si_kexAlg: kexAlg;
+  si_aeAlg: aeAlg;
+  si_server_cert: option Cert.chain;
+  si_sigAlg: option sigAlg;
+  si_cipher_suite: cipherSuite;
+  si_dh_group: option namedGroup;
+  si_compression: option compression;
+  si_extended_ms: bool;
+  si_extended_padding: bool;
+  si_secure_renegotiation: ri_status;
+  si_point_format: option ECGroup.point_format;
+  si_server_name: option serverName;
+  si_client_auth: bool;
+  si_clientID: option Cert.chain;
+  si_clientSigAlg: option sigHashAlg;
+}
 
 type abbrInfo =
     {abbr_crand: crand;
      abbr_srand: srand;
-     abbr_session_hash: sessionHash;
+     abbr_sessiosi_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
 
 // for sessionID. we treat empty bytes as the absence of identifier,
@@ -293,10 +275,10 @@ type abbrInfo =
 // (possibly refusing to present requested certs)
 
 val csrands: sessionInfo -> Tot csRands
-let csrands si = si.init_crand @| si.init_srand
+let csrands si = si.si_client_random @| si.si_server_random
 //CF subsumes mk_csrands
 
-// Getting algorithms from sessionInfo
+// Getting algorithms from nego
 //CF subsume mk_kefAlg, mk_kefAlgExtended, mk_kdfAlg
 val kefAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs) /\ is_Some (prfMacAlg_of_ciphersuite_aux cs)} -> bool -> Tot kefAlg_t
 let kefAlg pv cs ems =
@@ -315,11 +297,11 @@ let kdfAlg pv cs =
   | TLS_1p2           -> PRF_TLS_1p2 kdf_label (prfMacAlg_of_ciphersuite cs)
   | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
-let vdAlg si = si.protocol_version, si.cipher_suite
+let vdAlg si = si.si_protocol_version, si.si_cipher_suite
 
-val siAuthEncAlg: si:sessionInfo { si.protocol_version = TLS_1p2 &&
-                              pvcs si.protocol_version si.cipher_suite } -> Tot aeAlg
-let siAuthEncAlg si = get_aeAlg si.cipher_suite
+val siAuthEncAlg: si:sessionInfo { si.si_protocol_version = TLS_1p2 &&
+                              pvcs si.si_protocol_version si.si_cipher_suite } -> Tot aeAlg
+let siAuthEncAlg si = get_aeAlg si.si_cipher_suite
 
 type msId = // We record the parameters used to derive the master secret;
   | StandardMS : pmsId -> csRands -> kefAlg_t -> msId
@@ -345,15 +327,17 @@ let honestMS = function
 //val noMsId: i:msId { not (honestMS i) }
 //let noMsId = StandardMS noPmsId noCsr PRF_SSL3_nested
 
-// Getting master-secret indexes out of sessionInfo
+// Getting master-secret indexes out of nego
 
+(*
 //CF subsumes both MsI and mk_msid
-val msid: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
+val msid: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux (si.si_cipher_suite)) } -> Tot msId
 let msid si =
-  let ems = si.extensions.ne_extended_ms in
-  let kef = kefAlg si.protocol_version si.cipher_suite ems in
-  if ems then ExtendedMS si.pmsId si.session_hash kef
-  else StandardMS si.pmsId    (csrands si) kef
+  let ems = si.si_extended_ms in
+  let kef = kefAlg si.si_protocol_version si.si_cipher_suite ems in
+  if ems then ExtendedMS si.si_pmsId si.si_sessiosi_hash kef
+  else StandardMS si.si_pmsId    (csrands si) kef
+*)
 
 // Strengths of Handshake algorithms
 
@@ -368,28 +352,28 @@ assume val sigHashAlg_of_ciphersuite: cipherSuite -> Tot sigHashAlg
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF
-val strongPRF: si:sessionInfo{si.protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.cipher_suite \/ is_SCSV si.cipher_suite) /\ is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite)} -> Tot bool
-let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && strongVD(vdAlg si)
+val strongPRF: si:sessionInfo{si.si_protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.si_cipher_suite \/ is_SCSV si.si_cipher_suite) /\ is_Some (prfMacAlg_of_ciphersuite_aux si.si_cipher_suite)} -> Tot bool
+let strongPRF si = strongKDF(kdfAlg si.si_protocol_version si.si_cipher_suite) && strongVD(vdAlg si)
 // MK I think having this joint strength predicate
 // MK guaranteeing the idealization of the complete module is useful
 
 // Summarizing all assumptions needed for a strong handshake
 // CF derived & to be used in the public API only
 let strongHS si =
-  strongKEX (si.pmsId) &&
-  is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
-  strongKEF (kefAlg si.protocol_version si.cipher_suite si.extensions.ne_extended_ms) && //NS: ... to verify this
+  strongKEX (si.si_kexAlg) &&
+  is_Some (prfMacAlg_of_ciphersuite_aux si.si_cipher_suite) && //NS: needed to add this ...
+  strongKEF (kefAlg si.si_protocol_version si.si_cipher_suite si.si_extended_ms) && //NS: ... to verify this
   strongPRF si
   //strongSig si //SZ: need to state the precise agile INT-CMA assumption, with a designated hash algorithm and a set of hash algorithms allowed in signing queries
   //CF * hashAlg for certs?
 
-// Safety of sessionInfo crypto processing
+// Safety of nego crypto processing
 
 // Safe handshake for PMS-based extraction
-let safeCRE si = honestMS (msid si)
+//let safeCRE si = honestMS (msid si)
 
 // Safe handshake for MS-based VerifyData
-let safeVD si = honestMS (msid si) && strongVD(vdAlg si)
+//let safeVD si = honestMS (msid si) && strongVD(vdAlg si)
 //MK: safeVD is used for idealization even if ciphersuites don't match.
 //MK: this is needed to guarantee security of finished message MACs
 
@@ -652,6 +636,32 @@ type id =
 | ID13: keyId:keyId -> id
 | ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
 
+(* type nego = { *)
+(*   si_resume: bool; *)
+(*   si_client_random: random; *)
+(*   si_server_random: random; *)
+(*   si_sessionID: option sessionID; *)
+(*   si_protocol_version: protocolVersion; *)
+(*   si_kexAlg: kexAlg; *)
+(*   si_aeAlg: aeAlg; *)
+(*   si_sigAlg: option sigAlg; *)
+(*   si_cipher_suite: cipherSuite; *)
+(*   si_dh_group: option namedGroup; *)
+(*   si_compression: option compression; *)
+(*   si_extensions: negotiatedExtensions; *)
+(*   si_scsv: list scsv_suite; *)
+(* } *)
+
+// represents the outcome of a successful handshake,
+// providing context for the derived epoch
+type handshake =
+  | FreshSession of sessionInfo // was nego
+  | ResumedSession of sessionInfo // was abbrInfo * nego
+// We use SessionInfo as unique session indexes.
+// We tried using instead hs, but this creates circularities
+// We'll probably need a global log to reason about them.
+// We should probably do the same in the session store.
+
 let peerId = function
 | PlaintextID r -> PlaintextID r
 | ID13 (KeyID i tag rw li log) -> 
@@ -660,14 +670,16 @@ let peerId = function
   ID13 kid
 | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
 
+(*
 val siId: si:sessionInfo{ 
-  is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 
-  si.protocol_version = TLS_1p2 /\
-  pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
+  is_Some (prfMacAlg_of_ciphersuite_aux (si.si_cipher_suite)) /\ 
+  si.si_protocol_version = TLS_1p2 /\
+  pvcs si.si_protocol_version si.si_cipher_suite } -> role -> Tot id
 
 let siId si r =
   let cr, sr = split (csrands si) 32 in
-  ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
+  ID12 si.si_protocol_version (msid si) (kdfAlg si.si_protocol_version si.si_cipher_suite) (siAuthEncAlg si) cr sr r
+*)
 
 let pv_of_id (i:id{~(is_PlaintextID i)}) = match i with
   | ID13 _ -> TLS_1p3
@@ -720,7 +732,7 @@ let sinfo_to_string (si:sessionInfo) = "TODO"
 
 assume logic type keyCommit   : csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
 assume logic type keyGenClient: csRands -> protocolVersion -> aeAlg -> negotiatedExtensions -> Type
-assume logic type sentCCS     : role -> sessionInfo -> Type
+assume logic type sentCCS     : role -> nego -> Type
 assume logic type sentCCSAbbr : role -> abbrInfo -> Type
 
 // ``the honest participants of handshake with this csr use matching aeAlgs''
