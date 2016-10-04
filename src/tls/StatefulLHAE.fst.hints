@@ -687,7 +687,7 @@
       1,
       [
         "@query", "assumption_Content.fragment_haseq",
-        "assumption_Prims.HasEq_option", "equation_AEAD_GCM.id",
+        "assumption_Prims.option_haseq", "equation_AEAD_GCM.id",
         "equation_LHAEPlain.id", "equation_Range.cipherRangeClass",
         "equation_StatefulLHAE.dplain", "equation_StatefulLHAE.id",
         "equation_StatefulPlain.plain",
@@ -705,7 +705,7 @@
       1,
       [
         "@query", "assumption_Content.fragment_haseq",
-        "assumption_Prims.HasEq_option", "equation_AEAD_GCM.id",
+        "assumption_Prims.option_haseq", "equation_AEAD_GCM.id",
         "equation_LHAEPlain.id", "equation_Range.cipherRangeClass",
         "equation_StatefulLHAE.dplain", "equation_StatefulLHAE.id",
         "equation_StatefulPlain.plain",

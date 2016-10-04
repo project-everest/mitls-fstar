@@ -54,7 +54,7 @@
       1,
       [
         "@query", "assumption_Platform.Error.optResult_haseq",
-        "assumption_Prims.HasEq_string", "assumption_Prims.HasEq_tuple2",
+        "assumption_Prims.HasEq_string", "assumption_Prims.tuple2_haseq",
         "assumption_TLSError.alertDescription_haseq",
         "equation_TLSError.error", "equation_TLSError.result",
         "function_token_typing_Prims.string",
