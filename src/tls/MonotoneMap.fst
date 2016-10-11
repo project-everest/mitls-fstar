@@ -1,7 +1,17 @@
 (* A library for monotonic references to partial, dependent maps, with a whole-map invariant *)
 module MonotoneMap
-open FStar.Monotonic.RRef
+
 open FStar.HyperHeap
+open FStar.HyperStack
+open FStar.HST
+
+open FStar.Monotonic.RRef
+
+module HS = FStar.HyperStack
+module HST = FStar.HST
+module MR = FStar.Monotonic.RRef
+
+type rid = MR.rid
 
 (* Partial, dependent maps *)
 type map' (a:Type) (b:a -> Type) =
@@ -42,12 +52,12 @@ let empty_map a b
   : Tot (map' a b) 
   = fun x -> None
   
-let alloc #r #a #b #inv 
+let alloc (#r:Monotonic.RRef.rid) #a #b #inv 
   : ST (t r a b inv)
        (requires (fun h -> inv (empty_map a b)))
        (ensures (fun h0 x h1 -> 
 		inv (empty_map a b) /\ 
-	 	FStar.ST.ralloc_post r (empty_map a b) h0 (as_rref x) h1))
+	 	ralloc_post r (empty_map a b) h0 (as_reference x) h1))
   = grows_monotone #a #b;
     FStar.Monotonic.RRef.m_alloc r (empty_map a b)
 
@@ -66,33 +76,61 @@ let contains_stable #r #a #b #inv (m:t r a b inv) (x:a) (y:b x)
 
 let extend (#r:rid) (#a:eqtype) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r a b inv) (x:a) (y:b x)
   : ST unit
-      (requires (fun h -> let cur = m_sel h m in inv (upd cur x y) /\ sel cur x == None))
+      (requires (fun h -> let cur = m_sel h.h m in inv (upd cur x y) /\ sel cur x == None))
       (ensures (fun h0 u h1 ->
-		  let cur = m_sel h0 m in
-      		  m_contains m h1
+		  let cur = m_sel h0.h m in
+      		  m_contains m h1.h
       		  /\ modifies (Set.singleton r) h0 h1
-      		  /\ modifies_rref r !{as_ref (as_rref m)} h0 h1
-      		  /\ m_sel h1 m == upd cur x y
+      		  /\ modifies_rref r !{FStar.HyperHeap.as_ref (FStar.Monotonic.RRef.as_rref m)} h0.h h1.h
+      		  /\ m_sel h1.h m == upd cur x y
       		  /\ witnessed (contains m x y)))
   = m_recall m;
     let cur = m_read m in
-    m_write m (upd cur x y);
-    contains_stable m x y;
-    witness m (contains m x y)
 
-let lookup #r #a #b #inv (m:t r a b inv) (x:a)
-  : ST (option (b x))
-       (requires (fun h -> True))
-       (ensures (fun h0 y h1 -> 
-		   h0==h1 /\
-		   y == sel (m_sel h1 m) x /\ 
-		   (is_Some y ==> witnessed (contains m x (Some.v y)))))
-  = let y = sel (m_read m) x in 
-    match y with 
-      | None -> y
-      | Some b -> 
-	contains_stable m x b;
-	witness m (contains m x b);
-	y
+    let h = get () in
+
+    let _ = assert (h `HS.contains` (as_reference m)) in
+
+    let t1 = m_sel h.h m in
+
+    let hsr = as_reference m in
+
+    let _ = assert (cur == HyperStack.sel h hsr) in
+    let _ = assert (cur == HyperHeap.sel h.h hsr.ref) in
+    
+    let _ = assert (hsr.ref == as_rref m) in admit ()
+
+    let _ = assert (cur = HyperHeap.sel h.h (as_rref m)) in admit ()
+
+    let _ = assert (t1 == cur) in admit ()
+    
+    let t2 = upd t1 x y in
+
+    let _ = assert (forall x'. (x' = x ==> sel t2 x == Some y) /\
+                          (x' <> x ==> sel t2 x == sel t1 x)) in
+    admit ()
+
+    (* let _ = assert (grows (m_sel h.h m) (upd cur x y)) in *)
+
+    (* admit () *)
+
+    (* m_write m (upd cur x y); *)
+    (* contains_stable m x y; *)
+    (* witness m (contains m x y) *)
+
+(* let lookup #r #a #b #inv (m:t r a b inv) (x:a) *)
+(*   : ST (option (b x)) *)
+(*        (requires (fun h -> True)) *)
+(*        (ensures (fun h0 y h1 ->  *)
+(* 		   h0==h1 /\ *)
+(* 		   y == sel (m_sel h1 m) x /\  *)
+(* 		   (is_Some y ==> witnessed (contains m x (Some.v y))))) *)
+(*   = let y = sel (m_read m) x in  *)
+(*     match y with  *)
+(*       | None -> y *)
+(*       | Some b ->  *)
+(* 	contains_stable m x b; *)
+(* 	witness m (contains m x b); *)
+(* 	y *)
 
 
