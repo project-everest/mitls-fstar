@@ -4,6 +4,7 @@ open Platform.Bytes
 open Platform.Error
 
 module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 
@@ -13,7 +14,7 @@ let ideal = IdealFlags.ideal_Nonce // controls idealization of random sample: co
 
 val timestamp: unit -> ST (lbytes 4)
   (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
+  (ensures (fun h0 _ h1 -> HS.modifies Set.empty h0 h1))
 let timestamp () = 
   let time = Platform.Date.secondsFromDawn () in
   lemma_repr_bytes_values time;
@@ -47,19 +48,19 @@ let nonce_rid_table : MM.t tls_tables_region random n_rid injective =
   MM.alloc #tls_tables_region #random #n_rid #injective
 
 //A nonce n is fresh in h if the nonce_rid_table doesn't contain it
-let fresh (n:random) (h:HH.t) = MM.sel (MR.m_sel h nonce_rid_table) n = None
+let fresh (n:random) (h:HS.mem) = MM.sel (MR.m_sel h nonce_rid_table) n = None
 
 //A region is fresh if no nonce is associated with it
-let fresh_region (r:ex_rid) (h:HH.t) = 
+let fresh_region (r:ex_rid) (h:HS.mem) =
   forall n. Some r <> MM.sel (MR.m_sel h nonce_rid_table) n 
 
 //A nonce n is registered to region r, if the table contains n -> Some r; 
 //This mapping is stable (that's what the MR.witnessed means)
-let registered (n:random) (r:HH.rid) = 
+let registered (n:random) (r:MR.rid) = 
   MR.witnessed (MR.rid_exists r) /\
   MR.witnessed (MM.contains nonce_rid_table n r)
 
-let testify (n:random) (r:HH.rid) 
+let testify (n:random) (r:MR.rid)
   : ST unit (requires (fun h -> registered n r))
 	    (ensures (fun h0 _ h1 -> 
 		 h0==h1 /\
@@ -76,9 +77,10 @@ abstract let role_nonce (cs:role) (n:random) (r:ex_rid) = registered n r
 
 val mkHelloRandom: cs:role -> r:ex_rid -> ST random
   (requires (fun h -> fresh_region r h))
-  (ensures (fun h0 n h1 -> 
-    HH.modifies (Set.singleton tls_tables_region) h0 h1 /\ //modifies at most the tables region
-    HH.modifies_rref tls_tables_region !{ HH.as_ref (MR.as_rref nonce_rid_table) } h0 h1 /\ //and within it, at most the nonce_rid_table
+  (ensures (fun h0 n h1 ->
+    let nonce_rid_table_as_hsref = MR.as_hsref nonce_rid_table in
+    HS.modifies (Set.singleton tls_tables_region) h0 h1 /\ //modifies at most the tables region
+    HS.modifies_ref tls_tables_region !{ HH.as_ref (HS.MkRef.ref nonce_rid_table_as_hsref) } h0 h1 /\ //and within it, at most the nonce_rid_table
     (ideal ==> fresh n h0  /\        //if we're ideal then the nonce is fresh
     	       registered n r /\     //the nonce n is associated with r
     	       role_nonce cs n r))) //and the triple are associated as well, for ever more
@@ -91,9 +93,13 @@ let rec mkHelloRandom cs r =
       | Some _ -> mkHelloRandom cs r // formally retry to exclude collisions.
   else n
 
+(*
+ * AR: Adding a contains precondition here, figure out a way to not add it.
+ *)
 val lookup: cs:role -> n:random -> ST (option (ex_rid))
-  (requires (fun h -> True))
-  (ensures (fun h0 ropt h1 -> 
+  (requires (fun h -> h `HS.contains` (MR.as_hsref nonce_rid_table)))
+  (ensures (fun h0 ropt h1 ->
+                h0 `HS.contains` (MR.as_hsref nonce_rid_table) /\
 	        h0==h1 /\ 
 	        (match ropt with
 		 | Some r -> registered n r /\ role_nonce cs n r

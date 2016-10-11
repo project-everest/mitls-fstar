@@ -13,6 +13,7 @@ open TLSError
 open CoreCrypto
 
 module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
 
 let tls_color = -1
 let epoch_color = 1
@@ -22,7 +23,10 @@ let is_tls_rgn r   = HH.color r = tls_color
 let is_epoch_rgn r = HH.color r = epoch_color
 let is_hs_rgn r    = HH.color r = hs_color
 
-let rgn       = r:HH.rid{r<>HH.root}
+(*
+ * AR: Adding the eternal region predicate.
+ *)
+let rgn       = r:HH.rid{r<>HH.root /\ HS.is_eternal_region r}
 let tls_rgn   = r:rgn{is_tls_rgn r}
 let epoch_rgn = r:rgn{is_epoch_rgn r}
 let hs_rgn    = r:rgn{is_hs_rgn r}
