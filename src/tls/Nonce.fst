@@ -93,13 +93,9 @@ let rec mkHelloRandom cs r =
       | Some _ -> mkHelloRandom cs r // formally retry to exclude collisions.
   else n
 
-(*
- * AR: Adding a contains precondition here, figure out a way to not add it.
- *)
 val lookup: cs:role -> n:random -> ST (option (ex_rid))
-  (requires (fun h -> h `HS.contains` (MR.as_hsref nonce_rid_table)))
+  (requires (fun h -> True))
   (ensures (fun h0 ropt h1 ->
-                h0 `HS.contains` (MR.as_hsref nonce_rid_table) /\
 	        h0==h1 /\ 
 	        (match ropt with
 		 | Some r -> registered n r /\ role_nonce cs n r
@@ -119,11 +115,11 @@ private let nonce_rids_exists (m:MM.map' random n_rid) =
    underneath quantifiers. So, one should really use this version of new_region 
    for every dynamic region allocation in TLS.
 *)   
-val new_region: parent:HH.rid -> ST ex_rid 
+val new_region: parent:MR.rid -> ST ex_rid 
   (requires (fun h -> True))
   (ensures (fun h0 r h1 -> 
 	      HH.extends r parent /\
-	      HH.fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
+	      ST.stronger_fresh_region r h0 h1 /\ //it's fresh with respect to the current heap
 	      fresh_region r h1)) //and it's not in the nonce table
 let new_region parent = 
   MR.m_recall nonce_rid_table;

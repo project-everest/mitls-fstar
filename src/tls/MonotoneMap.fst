@@ -89,12 +89,9 @@ let extend (#r:rid) (#a:eqtype) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r
     contains_stable m x y;
     witness m (contains m x y)
 
-(*
- * AR: Had to add a precondition for contains, since m_read has it, since ST.op_Bang has it.
- *)
 let lookup #r #a #b #inv (m:t r a b inv) (x:a)
   : ST (option (b x))
-       (requires (fun h -> h `HS.contains` (as_hsref m)))
+       (requires (fun h -> True))
        (ensures (fun h0 y h1 -> 
 		   h0==h1 /\
 		   y == sel (m_sel h1 m) x /\ 
