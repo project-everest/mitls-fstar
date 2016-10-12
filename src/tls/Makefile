@@ -155,34 +155,35 @@ PMS \
 Hashing \
 HashMAC \
 Cert \
-Signature \
-TLSInfo \
-IdNonce \
-TLSExtensions \
-Range \
-DataStream \
-Alert \
-Content \
-StreamPlain \
-StreamAE \
-MasterSecret \
-StatefulPlain \
-LHAEPlain \
-AEAD_GCM \
-MAC \
-StatefulLHAE \
-Record \
-MAC_SHA256 \
-MAC_SHA1 \
-StAE \
-KeySchedule \
-StreamDeltas \
-HKDF \
-Epochs \
-Connection \
-ConnInvariant \
-FFI \
-TLS
+Signature
+
+# TLSInfo \
+# IdNonce \
+# TLSExtensions \
+# Range \
+# DataStream \
+# Alert \
+# Content \
+# StreamPlain \
+# StreamAE \
+# MasterSecret \
+# StatefulPlain \
+# LHAEPlain \
+# AEAD_GCM \
+# MAC \
+# StatefulLHAE \
+# Record \
+# MAC_SHA256 \
+# MAC_SHA1 \
+# StAE \
+# KeySchedule \
+# StreamDeltas \
+# HKDF \
+# Epochs \
+# Connection \
+# ConnInvariant \
+# FFI \
+# TLS
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
