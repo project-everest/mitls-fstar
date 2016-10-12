@@ -155,17 +155,17 @@ PMS \
 Hashing \
 HashMAC \
 Cert \
-Signature
+Signature \
+TLSInfo \
+IdNonce \
+TLSExtensions \
+Range \
+DataStream \
+Alert \
+Content \
+StreamPlain \
+StreamAE
 
-# TLSInfo \
-# IdNonce \
-# TLSExtensions \
-# Range \
-# DataStream \
-# Alert \
-# Content \
-# StreamPlain \
-# StreamAE \
 # MasterSecret \
 # StatefulPlain \
 # LHAEPlain \

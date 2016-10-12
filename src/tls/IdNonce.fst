@@ -9,6 +9,7 @@ module N=Nonce
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
 
 //The goal of the rest of the module is to provide id_of_nonce
 //and to prove that the two are mutual inverses
@@ -23,10 +24,11 @@ let id_of_nonce (n:random) (i:n_id n) = MR.witnessed (MM.contains nonce_id_table
 
 val insert: n:random -> i:n_id n -> ST unit
   (requires (fun h -> MM.sel (MR.m_sel h nonce_id_table) n == None))
-  (ensures (fun h0 _ h1 -> 
-      HH.modifies (Set.singleton tls_tables_region) h0 h1 /\
-      HH.modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref nonce_id_table)} h0 h1 /\
-      id_of_nonce n i))
+  (ensures (fun h0 _ h1 ->
+      let nonce_id_table_as_hsref = MR.as_hsref nonce_id_table in
+      (HS.modifies (Set.singleton tls_tables_region) h0 h1 /\
+       HS.modifies_ref tls_tables_region !{HH.as_ref (HS.MkRef.ref nonce_id_table_as_hsref)} h0 h1 /\
+       id_of_nonce n i)))
 let insert n i = 
   MR.m_recall nonce_id_table;
   MM.extend nonce_id_table n i 

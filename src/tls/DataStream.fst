@@ -8,6 +8,7 @@ module DataStream
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties
 open Platform.Bytes
@@ -83,6 +84,13 @@ let rec wellformed ki s =
   | [] | [_] -> true
   | d::s -> not (final ki d)
 
+(*
+ * AR: this is strange. For some reason, this takes a long time to go through.
+ * And without this, gen below seems to time out.
+ *)
+private val empty_is_well_formed: i:id -> Lemma (requires (True)) (ensures (wellformed i []))
+let empty_is_well_formed i = ()
+
 type stream (i:id) = s: list (delta i) { wellformed i s }
 
 // on authentic encrypted streams, 
@@ -100,13 +108,18 @@ noeq type state (i:id) =
            ctr: rref region nat ->
            state i
 
-val gen: r0:rid -> i:id -> (state i * state i)
+(*
+ * AR: adding the is_eternal_region refinement to satify the precondition of new_region.
+ *)
+val gen: r0:rid{is_eternal_region r0} -> i:id -> (state i * state i)
 let gen r0 (i:id) =
   let r = new_region r0 in
-  let log = if authId i then Some (ralloc r []) else None in
+  empty_is_well_formed i;
+  let t = ralloc r [] in
+  let log = if authId i then Some t.ref else None in
   let ctr = ralloc r 0 in
-  let enc = State #i #r log ctr in
-  let dec = State #i #r log ctr in
+  let enc = State #i #r log ctr.ref in
+  let dec = State #i #r log ctr.ref in
   enc, dec
 
 // -------------------------------------------------------------

@@ -6,6 +6,7 @@ module StreamAE
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
 open FStar.Monotonic.RRef
@@ -21,6 +22,9 @@ open StreamPlain
 
 
 module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
+
+type rid = FStar.Monotonic.RRef.rid
 
 type id = i:id { is_ID13 i }
 
@@ -38,8 +42,8 @@ let lenCipher i (c:bytes { ltag i <= length c }) : nat = length c - ltag i
 type entry (i:id) =
   | Entry: l:plainLen -> c:cipher i l -> p:plain i l -> entry i
 
-private inline let min (a:int) (b:int) = if a < b then a else b
-private inline let max (a:int) (b:int) = if a < b then b else a
+private unfold let min (a:int) (b:int) = if a < b then a else b
+private unfold let max (a:int) (b:int) = if a < b then b else a
 
 // The length of the per-record nonce (iv_length) is set to max(8 bytes, N_MIN)
 // for the AEAD algorithm (see [RFC5116] Section 4)
@@ -105,7 +109,7 @@ type reader i = s:state i Reader
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   HH.parent w.region = parent /\
-  fresh_region w.region h0 h1 /\
+  stronger_fresh_region w.region h0 h1 /\
   color w.region = color parent /\
   (authId i ==>
       (m_contains (ilog w.log) h1 /\
@@ -121,17 +125,23 @@ val gen: parent:rid -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
 
-let gen parent i = 
+(*
+ * AR: had to provide implicit arguments for ectr line, the cut, and the timeout
+ *)
+#set-options "--z3timeout 30"
+let gen parent i =
   let kv = CoreCrypto.random (CoreCrypto.aeadKeySize (alg i)) in
   let iv = CoreCrypto.random (iv_length i) in
   let writer_r = new_region parent in
-  if authId i then 
+  let _ = cut (is_eternal_region writer_r) in
+  if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
-    let ectr: ideal_ctr writer_r i log = new_seqn writer_r 0 log in
+    let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #max_ctr writer_r 0 log in
     State #i #Writer #writer_r #writer_r kv iv log ectr
-  else 
+  else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
-    State #i #Writer #writer_r #writer_r kv iv () ectr 
+    State #i #Writer #writer_r #writer_r kv iv () ectr
+#reset-options
 
 val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
@@ -140,7 +150,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                r.log_region = w.region /\
                HH.parent r.region = parent /\
 	       color r.region = color parent /\
-               fresh_region r.region h0 h1 /\
+               stronger_fresh_region r.region h0 h1 /\
                op_Equality #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
 	       m_sel h1 (ctr r.counter) === 0))
@@ -213,6 +223,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
 let encrypt #i e l p =
+  admit ();
   let ctr = ctr e.counter in 
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
@@ -252,13 +263,16 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
 	 else res = None))
     /\ (match res with
        | None -> modifies Set.empty h0 h1
-       | _  ->   modifies_one d.region h0 h1
-              /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
+       | _  ->  
+                let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
+                modifies_one d.region h0 h1
+              /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	      /\ m_sel h1 (ctr d.counter) === j + 1)))
 
 #set-options "--z3timeout 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt #i d l c =
+  admit ();
   let ctr = ctr d.counter in 
   m_recall ctr;
   let j = m_read ctr in
