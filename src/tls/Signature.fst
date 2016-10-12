@@ -1,6 +1,7 @@
 module Signature
 
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
@@ -89,7 +90,11 @@ let st_update #a st t =
 
 
 (* ------------------------------------------------------------------------ *)
-assume val keyRegion: rid
+
+(*
+ * AR: this was rid, is TLSConstants.rgn ok ?
+ *)
+assume val keyRegion: TLSConstants.rgn
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
@@ -112,7 +117,7 @@ val alloc_pubkey: #a:alg
   -> r:public_repr{sigAlg_of_public_repr r = a.core}
   -> ST (pubkey a)
     (requires (fun h0 -> True))
-    (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 (as_rref (PK.log p)) h1
+    (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 (as_hsref (PK.log p)) h1
                            /\ PK.repr p = r
                            /\ m_fresh (PK.log p) h0 h1))
 let alloc_pubkey #a s r =
@@ -146,17 +151,21 @@ val add_key: ks:kset
   -> Tot kset
 let add_key ks k = k::ks
 
-unfoldable logic type mon_pkey (xs:kset) (xs':kset) =
+logic type mon_pkey (xs:kset) (xs':kset) =
   forall x. List.Tot.mem x xs ==> List.Tot.mem x xs'
 
 // FIXME: top-level effect
 val rkeys: m_rref keyRegion kset (mon_pkey)
 let rkeys = m_alloc keyRegion []
 
-type generated (k:pkey) (h:HyperHeap.t) : Type0 = List.Tot.mem k (m_sel h rkeys)
+type generated (k:pkey) (h:mem) : Type0 = List.Tot.mem k (m_sel h rkeys)
 
 
 (* ------------------------------------------------------------------------ *)
+
+(*
+ * AR: adding m_recall to satify the precondition of m_write.
+ *)
 val sign: #a:alg
   -> h:hashAlg{List.Tot.mem h (a.digest)}
   -> s:skey a
@@ -167,8 +176,9 @@ val sign: #a:alg
       let pk,sk = s in
       if int_cma a h then
         let log = PK.log pk in
+	let log_ashsref = as_hsref log in
         modifies_one keyRegion h0 h1 /\
-        modifies_rref keyRegion !{as_ref (as_rref log)} h0 h1 /\
+        modifies_rref keyRegion !{as_ref log_ashsref} h0.h h1.h /\
         m_sel h1 log == st_update (m_sel h0 log) t
       else modifies Set.empty h0 h1))
 
@@ -178,6 +188,7 @@ let sign #a h s t =
   if int_cma a h then
     let log = PK.log pk in
     let s0 = m_read log in
+    m_recall log;
     m_write log (st_update s0 t)
   end;
   let ho,t' = sig_digest h t in
@@ -241,7 +252,7 @@ val gen: a:alg -> All (skey a)
   (requires (fun h -> m_contains rkeys h))
   (ensures  (fun h0 (s:result (skey a)) h1 ->
 	         modifies_one keyRegion h0 h1
-               /\ modifies_rref keyRegion !{as_ref (as_rref rkeys)} h0 h1
+               /\ modifies_rref keyRegion !{as_ref (as_hsref rkeys)} h0.h h1.h
                /\ m_contains rkeys h1
 	       /\ (is_V s ==>   witnessed (generated (|a, fst (V.v s) |))
 			     /\ m_fresh (PK.log (fst (V.v s))) h0 h1
@@ -262,14 +273,19 @@ let rec gen a =
 
 
 (* ------------------------------------------------------------------------ *)
+
+(*
+ * AR: adding m_recall for log to satisfy the precondition of m_write.
+ *)
 val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
   (requires (fun _ -> True))
   (ensures  (fun h0 r h1 ->
 	      modifies_one keyRegion h0 h1
-	      /\ modifies_rref keyRegion !{as_ref (as_rref (PK.log (fst s)))} h0 h1
+	      /\ modifies_rref keyRegion !{as_ref (as_hsref (PK.log (fst s)))} h0.h h1.h
 	      /\ is_Corrupt (m_sel h1 (PK.log (fst s)))
 	      /\ fst r = PK.repr (fst s)))
 let leak #a (PK log pkr, skr) =
+  m_recall log;
   m_write log Corrupt;
   pkr, skr
 
@@ -326,6 +342,10 @@ let get_chain_public_key #a c =
 
 (* ------------------------------------------------------------------------ *)
 //FIXME: use unique public-key representation
+
+(*
+ * AR: adding recall for rkeys to satisfy the precondition of m_write.
+ *)
 val lookup_key: #a:alg -> string -> St (option (skey a))
 let lookup_key #a keyfile =
   let keys = m_read rkeys in
@@ -346,6 +366,7 @@ let lookup_key #a keyfile =
       let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
       let k = (| a, p |) in
       let keys' = add_key keys k in
+      m_recall rkeys;
       m_write rkeys keys';
       witness rkeys (generated (|a, p|));
       Some (p, skr)
