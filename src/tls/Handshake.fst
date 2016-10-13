@@ -2,7 +2,9 @@
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 //FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
+//AR: Yes ! Totally agree.
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
 open FStar.Set  
@@ -176,7 +178,7 @@ let processServerHello cfg ks log ri ch (ServerHello sh,_) =
 #reset-options
 
 (* Handshake API: TYPES, taken from FSTI *)
- 
+
 type clientState = 
   | C_Idle:                  option ri -> clientState
   | C_HelloSent:       option ri -> ch -> clientState
@@ -260,18 +262,18 @@ type hs =
             cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
             log: epochs region nonce ->
-          state: rref region (handshake_state r)  ->       // opaque, subject to invariant
+          state: ref (handshake_state r){state.id = region}  ->       // opaque, subject to invariant
              hs
 
 
 (* the handshake internally maintains epoch 
    indexes for the current reader and writer *)
 
-let logT (s:hs) (h:HyperHeap.t) = Epochs.epochsT s.log h
+let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.log h
 
 let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS.r s)
 
-let stateT (s:hs) (h:HyperHeap.t) : stateType s = (logT s h, sel h s.state)
+let stateT (s:hs) (h:HyperStack.mem) : stateType s = (logT s h, sel h s.state)
 
 let non_empty h s = Seq.length (logT s h) > 0
 
@@ -325,34 +327,34 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
  
 assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS.r s) -> Type0
 
-let hs_inv (s:hs) (h: HyperHeap.t) = 
+let hs_inv (s:hs) (h: HyperStack.mem) = 
   hs_invT s (logT s h) (sel h (HS.state s))  //An abstract invariant of HS-internal state
   /\ Epochs.containsT s.log h                //Nothing deep about these next two, since they can always 
-  /\ HyperHeap.contains_ref s.state h                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
+  /\ HyperHeap.contains_ref s.state.ref (HyperStack.HS.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
-let iT (s:hs) rw (h:HyperHeap.t) = 
+let iT (s:hs) rw (h:HyperStack.mem) =
     match rw with
     | Reader -> Epochs.readerT s.log h
     | Writer -> Epochs.writerT s.log h
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
-let frame_iT_trivial  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) 
+let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) 
   : Lemma (stateT s h0 = stateT s h1
            ==> iT s rw h0 = iT s rw h1) 
   = ()	                               
 
 //Here's a framing on stateT connecting it to the region discipline
-let frame_stateT  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) (mods:Set.set rid)
-  : Lemma (requires HH.modifies_just mods h0 h1
-		    /\ Map.contains h0 s.region
+let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
+  : Lemma (requires HH.modifies_just mods (HyperStack.HS.h h0) (HyperStack.HS.h h1)
+		    /\ Map.contains (HyperStack.HS.h h0) s.region
 		    /\ not (Set.mem s.region mods))
           (ensures stateT s h0 = stateT s h1)
   = ()	                               
 
 //This is probably the framing lemma that a client of this module will want to use
-let frame_iT  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) (mods:Set.set rid)
-  : Lemma (requires HH.modifies_just mods h0 h1
-		    /\ Map.contains h0 s.region
+let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
+  : Lemma (requires HH.modifies_just mods (HyperStack.HS.h h0) (HyperStack.HS.h h1)
+		    /\ Map.contains (HyperStack.HS.h h0) s.region
 		    /\ not (Set.mem s.region mods))
           (ensures stateT s h0 = stateT s h1
 		   /\ iT s rw h0 = iT s rw h1)
@@ -360,7 +362,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HH.t) (h1:HH.t) (mods:Set.set rid)
     frame_iT_trivial s rw h0 h1
 
 // returns the epoch for reading or writing
-let eT s rw (h:HyperHeap.t { iT s rw h >= 0 }) = Seq.index (logT s h) (iT s rw h)
+let eT s rw (h:HyperStack.mem { iT s rw h >= 0 }) = Seq.index (logT s h) (iT s rw h)
 
 let readerT s h = eT s Reader h 
 let writerT s h = eT s Writer h
@@ -368,7 +370,7 @@ let writerT s h = eT s Writer h
 // this function increases (how to specify it once for all?)
 val i: s:hs -> rw:rw -> ST int 
   (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> h0 = h1 
+  (ensures (fun h0 i h1 -> h0 == h1 
 		      /\ i = iT s rw h1
 		      /\ Epochs.get_ctr_post (HS.log s) rw h0 i h1))
 let i (HS #r0 _ _ _ _ epochs _) rw =
@@ -1114,12 +1116,12 @@ let init r0 r cfg res =
     HS #r0 r res cfg id lgref hsref
 
 let mods s h0 h1 = 
-  HyperHeap.modifies_one s.region h0 h1
+  HyperStack.modifies_one s.region h0 h1
   
 let modifies_internal h0 s h1 =
     hs_inv s h1 /\
     mods s h0 h1 /\ 
-    modifies_rref s.region !{as_ref s.state} h0 h1
+    modifies_rref s.region !{as_ref s.state} (HyperStack.HS.h h0) (HyperStack.HS.h h1)
 
 // Idle client starts a full handshake on the current connection
 val rehandshake: s:hs -> config -> ST bool
@@ -1247,7 +1249,7 @@ let rec parseHandshakeMessages pv kex buf =
        	     | Correct (r,hsl) -> Correct(r,(hsm,to_log)::hsl)))
 
 
-let recv_ensures (s:hs) (h0:HyperHeap.t) (result:incoming) (h1:HyperHeap.t) = 
+let recv_ensures (s:hs) (h0:HyperStack.mem) (result:incoming) (h1:HyperStack.mem) = 
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
     let r0 = iT s Reader h0 in

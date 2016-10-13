@@ -2,6 +2,7 @@ module TLS
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties 
 open FStar.Set
@@ -21,6 +22,7 @@ open Handshake
 open Connection
 
 module HH   = FStar.HyperHeap
+module HST  = FStar.HyperStack
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
 module DS   = DataStream
@@ -28,7 +30,7 @@ module SD   = StreamDeltas
 module Conn = Connection
 module EP   = Epochs
 
-inline let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n
+unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n
 
 // using also DataStream, Content, Record
 #set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
@@ -58,8 +60,8 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
   (ensures (fun h0 c h1 ->
     modifies Set.empty h0 h1 /\
     extends c.region r0 /\ 
-    fresh_region c.region h0 h1 /\
-    Map.contains h1 c.region /\ //NS: may be removeable: we should get it from fresh_region
+    stronger_fresh_region c.region h0 h1 /\
+    Map.contains (HST.HS.h h1) c.region /\ //NS: may be removeable: we should get it from fresh_region
     st_inv c h1 /\
     c_role c = r /\
     c_cfg c == cfg /\
@@ -67,7 +69,7 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
     c.tcp == tcp  /\
     (r = Server ==> resume = None) /\ //16-05-28 style: replacing a refinement under the option
     epochs c h1 == Seq.createEmpty /\ // we probably don't care---but we should say nothing written yet
-    h1.[c.state] = BC 
+    HST.sel h1 c.state = BC 
     ))
 
 let create parent tcp role cfg resume =
@@ -223,7 +225,7 @@ let unrecoverable c reason : ioresult_w =
     disconnect c;
     WriteError None reason
 
-let currentId_T (c:connection) (rw:rw) (h:HH.t) : GTot id 
+let currentId_T (c:connection) (rw:rw) (h:HST.mem) : GTot id 
   =  let j = Handshake.iT c.hs rw h in 
      if j < 0 then PlaintextID (c_nonce c)
      else let e = Handshake.eT c.hs rw h in 
@@ -282,7 +284,7 @@ let cwriter (i:id) (c:connection) =
   w:StAE.writer i{exists (r:StAE.reader (peerId i)).{:pattern (trigger_peer r)}
 		    epoch_region_inv' (HS.region c.hs) r w}
 
-let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot bool = 
+let current_writer_pre (c:connection) (i:id) (h:HST.mem) : GTot bool = 
     let hs = c.hs in 
     let ix = iT hs Writer h in
     if ix < 0
@@ -290,7 +292,7 @@ let current_writer_pre (c:connection) (i:id) (h:HH.t) : GTot bool =
     else let epoch_i = Handshake.eT hs Writer h in 
 	 i = epoch_id epoch_i
 
-let current_writer_T (c:connection) (i:id) (h:HH.t{current_writer_pre c i h})
+let current_writer_T (c:connection) (i:id) (h:HST.mem{current_writer_pre c i h})
   : GTot (option (cwriter i c))
   = let i = Handshake.iT c.hs Writer h in
     if 0 <= i
@@ -322,8 +324,8 @@ let recall_current_writer (c:connection)
     h0 == h1 
     /\ (match wopt with
        | None -> True
-       | Some wr -> Map.contains h0 (StAE.region wr)
-	        /\ Map.contains h0 (StAE.log_region wr)))
+       | Some wr -> Map.contains (HST.HS.h h0) (StAE.region wr)
+	         /\ Map.contains (HST.HS.h h0) (StAE.log_region wr)))
   = let i = currentId c Writer in
     let wopt = current_writer c i in
     match wopt with
@@ -355,8 +357,8 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
      st_inv c h 
   /\ (match wo with 
      | None    -> is_PlaintextID i
-     | Some wr ->  Map.contains h (StAE.region wr)
-	       /\ Map.contains h (StAE.log_region wr))
+     | Some wr ->  Map.contains (HST.HS.h h) (StAE.region wr)
+	        /\ Map.contains (HST.HS.h h) (StAE.log_region wr))
 
 #set-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"  
 
@@ -364,10 +366,10 @@ let sendFragment_inv (#c:connection) (#i:id) (wo:option(cwriter i c)) h =
 // let ad_overflow : result unit = Error (AD_internal_error, "seqn overflow")
 let ad_overflow : result unit = Error (AD_record_overflow, "seqn overflow")
 
-let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) h0 h1 =
+let sendFragment_success (mods:set rid) (c:connection) (i:id) (wo:option (cwriter i c)) (f: Content.fragment i) (h0:HST.mem) (h1:HST.mem) =
       is_Some wo ==> 
       (let wr = Some.v wo in
-       modifies_just (Set.union mods (Set.singleton (StAE.region wr))) h0 h1 
+       modifies_just (Set.union mods (Set.singleton (StAE.region wr))) (HST.HS.h h0) (HST.HS.h h1) 
      /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1 
      /\ (authId i ==>
 	     //fragment was definitely snoc'd
@@ -482,8 +484,8 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 // Sending handshake messages on a given writer
 ////////////////////////////////////////////////////////////////////////////////
 let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c)) 
-		       (om:option (message i)) (send_ccs:bool) h0 r h1 = 
-      modifies_just (opt_writer_regions wopt) h0 h1    //didn't modify more than the writer's regions
+		       (om:option (message i)) (send_ccs:bool) (h0:HST.mem) r (h1:HST.mem) = 
+      modifies_just (opt_writer_regions wopt) (HST.HS.h h0) (HST.HS.h h1)    //didn't modify more than the writer's regions
       /\ (match wopt with
  	 | None -> True
 	 | Some wr ->
@@ -513,7 +515,6 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       else frags1==frags0')))))
 
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
        (requires (sendFragment_inv wopt))
@@ -542,15 +543,15 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
 	     match wopt with
 	     | Some wr -> 
 	       begin
-	       lemma_modifies_just_trans h0 h1 h2
+	       lemma_modifies_just_trans (HST.HS.h h0) (HST.HS.h h1) (HST.HS.h h2)
 	         (Set.singleton (StAE.region wr)) 
 		 (Set.singleton (StAE.region wr));
-	         cut (modifies_just (Set.singleton (StAE.region wr)) h0 h2)
+	         cut (modifies_just (Set.singleton (StAE.region wr)) (HST.HS.h h0) (HST.HS.h h2))
 	       end
 	     | None -> 
 	       begin
-	       lemma_modifies_just_trans h0 h1 h2 Set.empty Set.empty;
-	       cut (modifies_just (Set.empty) h0 h2)
+	       lemma_modifies_just_trans (HST.HS.h h0) (HST.HS.h h1) (HST.HS.h h2) Set.empty Set.empty;
+	       cut (modifies_just (Set.empty) (HST.HS.h h0) (HST.HS.h h2))
 	       end
 	   end;
 	   frags
@@ -608,7 +609,7 @@ let next_fragment i c =
 
 
 #reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-inline let writeHandshake_requires h_init c new_writer h = 
+unfold let writeHandshake_requires h_init c new_writer h = 
      	  let i_init = currentId_T c Writer h_init in 
    	  let i = currentId_T c Writer h in 
 	  current_writer_pre c i h
@@ -623,7 +624,7 @@ inline let writeHandshake_requires h_init c new_writer h =
 		      else True)))(* (is_Some wopt ==> SD.stream_deltas #i (Some.v wopt) h == Seq.createEmpty) //haven't sent any application data yet on the new write *)
 		        (* /\  *)//(is_Some wopt_init ==> SD.stream_deltas #i_init (Some.v wopt_init) h_init == SD.stream_deltas #i_init (Some.v wopt_init) h)))))) //and the old writer's app data hasn't changed
 
-inline let writeHandshake_ensures h_init c new_writer h0 r h1 = 
+unfold let writeHandshake_ensures h_init c new_writer h0 r h1 = 
       let i_init = currentId_T c Writer h_init in
       let i = currentId_T c Writer h1 in
       current_writer_pre c i h1
@@ -645,7 +646,7 @@ inline let writeHandshake_ensures h_init c new_writer h0 r h1 =
 	   r <> Written /\
       	   sendFragment_inv wopt h1)
 
-val writeHandshake: h_init:HH.t  //initial heap, for stating an invariant on deltas
+val writeHandshake: h_init:HST.mem //initial heap, for stating an invariant on deltas
 		  -> c:connection
 		  -> new_writer:bool
 		  -> ST ioresult_w 
@@ -743,8 +744,8 @@ let write c #i #rg data =
 //         to be share between writing functions (each returning a subset of results); still missing details.
 
 let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStream.fragment i rg)) (r: ioresult_w) h0 h1 =
-  let st0 = h0.[c.state] in
-  let st1 = h1.[c.state] in
+  let st0 = HST.sel h0 c.state in
+  let st1 = HST.sel h1 c.state in
   let es0 = epochs c h0 in
   let es1 = epochs c h1 in
   let j = iT c.hs Writer h0 in
@@ -1036,7 +1037,7 @@ let live_i e r = // is the connection still live?
 
 // let's specify reading d off the input DataStream (incrementing the reader pos)
 
-val sel_reader: h:HyperHeap.t -> connection -> GTot (option (| i:id & StAE.reader i |)) // self-specified
+val sel_reader: h:HST.mem -> connection -> GTot (option (| i:id & StAE.reader i |)) // self-specified
 let sel_reader h c =
   let es = epochs c h in
   let j = iT c.hs Reader h in

@@ -4,6 +4,7 @@ module Connection
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
 open FStar.Set
@@ -37,11 +38,14 @@ type tlsState =
 
 type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region } 
 
+(*
+ * AR: changing the type of state from rref to ref, with region captured in the refinement.
+ *)
 noeq type connection = | C:
   #region: c_rgn ->
   hs:      hs {extends (HS.region hs) region /\ is_hs_rgn (HS.region hs)} (* providing role, config, and uid *) ->
   tcp:     Transport.t ->
-  state:   rref region tlsState -> 
+  state:   ref tlsState{state.id = region} -> 
   connection
 
 let c_role c   = c.hs.r
@@ -64,16 +68,16 @@ let c_log c    = c.hs.log
 type st_inv c h = hs_inv (C.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HyperHeap.t -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
+val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (HS.region c.hs) (HS.nonce c.hs)){
   Epochs.epochs_inv es /\ es == logT c.hs h
 })
 let epochs c h = logT c.hs h
 
 
 //16-05-30 unused?
-val frame_epochs: c:connection -> h0:HyperHeap.t -> h1:HyperHeap.t -> Lemma
-  (requires (Map.contains h0 (HS.region c.hs)
-             /\ equal_on (Set.singleton (HS.region c.hs)) h0 h1))
+val frame_epochs: c:connection -> h0:HyperStack.mem -> h1:HyperStack.mem -> Lemma
+  (requires (Map.contains (HyperStack.HS.h h0) (HS.region c.hs)
+             /\ equal_on (Set.singleton (HS.region c.hs)) (HyperStack.HS.h h0) (HyperStack.HS.h h1)))
   (ensures (epochs c h0 == epochs c h1))
 let frame_epochs c h0 h1 = ()
 
@@ -105,6 +109,6 @@ let epoch_i c h i = Seq.index (epochs c h) i
    Later, we generalize over k, using the ghost_lemma combinator to introduce the quantifier.
 *)
 
-val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:t -> h1:t{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 h0 h1)
+val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:HyperStack.mem -> h1:HyperStack.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (HyperStack.HS.h h0) (HyperStack.HS.h h1))
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 

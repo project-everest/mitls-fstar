@@ -177,13 +177,12 @@ MAC_SHA1 \
 StAE \
 KeySchedule \
 StreamDeltas \
-HKDF
-
-# Epochs \
-# Connection \
-# ConnInvariant \
-# FFI \
-# TLS
+HKDF \
+Epochs \
+Connection \
+ConnInvariant \
+FFI \
+TLS
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
