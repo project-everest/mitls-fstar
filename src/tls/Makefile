@@ -175,10 +175,10 @@ Record \
 MAC_SHA256 \
 MAC_SHA1 \
 StAE \
-KeySchedule
+KeySchedule \
+StreamDeltas \
+HKDF
 
-# StreamDeltas \
-# HKDF \
 # Epochs \
 # Connection \
 # ConnInvariant \

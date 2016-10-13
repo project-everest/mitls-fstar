@@ -3,10 +3,12 @@ open Platform.Bytes
 open Platform.Error
 
 open FStar.HyperHeap
+open FStar.HyperStack
 open TLSConstants
 open TLSInfo
 
 module HH   = FStar.HyperHeap
+module HS   = FStar.HyperStack
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
 module S    = StAE
@@ -33,7 +35,7 @@ let project_one_frag #i = function
 val project_deltas: #i:id -> fs:S.frags i -> Tot (deltas i)
 let project_deltas #i fs = MS.collect project_one_frag fs
 
-val stream_deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> HH.t -> GTot (deltas i)
+val stream_deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> mem -> GTot (deltas i)
 let stream_deltas #i #rw s h = project_deltas (StAE.fragments s h)
 
 let stream_deltas_snoc (i:id) (frags:StAE.frags i) (f:Content.fragment i)
@@ -41,7 +43,7 @@ let stream_deltas_snoc (i:id) (frags:StAE.frags i) (f:Content.fragment i)
   = MS.collect_snoc project_one_frag frags f
 
 //A predicate stating the deltas of s always as ds as a prefix
-let deltas_prefix (#i:id) (#rw:rw) (s:S.state i rw{authId i}) (ds:deltas i) (h:HH.t) 
+let deltas_prefix (#i:id) (#rw:rw) (s:S.state i rw{authId i}) (ds:deltas i) (h:mem)
   : GTot Type0 
   = MS.grows ds (project_deltas (S.fragments s h))
 
@@ -53,14 +55,14 @@ let project_fragment_deltas #i #rw s fs =
   then let j : i:id{authId i} = i in //re-label for better implicit arg inference below
        let s  : S.state j rw = s in
        let fs : S.frags j = fs in
-       let aux : h:HH.t -> Lemma (S.fragments_prefix s fs h
+       let aux : h:mem -> Lemma (S.fragments_prefix s fs h
 			    ==> deltas_prefix s (project_deltas fs) h) =
 	  fun h -> MS.collect_grows project_one_frag fs (S.fragments s h) in
        let _ = FStar.Classical.forall_intro aux in
        MR.weaken_witness (S.fragments_prefix s fs) (deltas_prefix s (project_deltas fs))
   else ()
 
-let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:HH.t) (h1:HH.t) (f:Content.fragment i)
+let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:mem) (h1:mem) (f:Content.fragment i)
   : Lemma (authId i /\ StAE.fragments s h1 == SeqP.snoc (StAE.fragments s h0) f
 	   ==> stream_deltas s h1 == Seq.append (stream_deltas s h0) (project_one_frag f))
   = if authId i then stream_deltas_snoc i (StAE.fragments s h0) f else ()

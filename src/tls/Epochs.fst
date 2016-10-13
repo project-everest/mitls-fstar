@@ -114,7 +114,7 @@ noeq type epochs (r:rgn) (n:TLSInfo.random) =
 let containsT (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (h:mem) =
     MS.i_contains (MkEpochs.es es) h 
 
-val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:HH.rid ->
+val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
   ST (is:MS.i_seq r a p &
       c1:epoch_ctr r is &
       c2:epoch_ctr r is)
@@ -135,7 +135,7 @@ let alloc_log_and_ctrs #a #p r =
   let c2 : epoch_ctr #a #p r is = m_alloc r (-1) in
   (| is, c1, c2 |)
 
-val incr_epoch_ctr: #a:Type0 -> #p:(seq a -> Type0) -> #r:HH.rid -> #is:MS.i_seq r a p
+val incr_epoch_ctr: #a:Type0 -> #p:(seq a -> Type0) -> #r:rgn -> #is:MS.i_seq r a p
 		  -> ctr:epoch_ctr r is
 		  -> ST unit
    (requires (fun h -> 1 + m_sel h ctr < Seq.length (i_sel h is)))
