@@ -2,6 +2,7 @@
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
 
@@ -31,10 +32,13 @@ type good (i:id) (b:bytes) = True
 type entry (i:id) = | Entry: t:tag i -> p:bytes { good i p } -> entry i
 
 // readers and writers share the same state: a log of MACed messages
+(*
+ * AR: similar to MAC changes, region is of type rgn and log is a ref.
+ *)
 noeq type state (i:id) (rw:rw) = | State: 
-  #region:rid -> // the region of the *writer*
+  #region:rgn -> // the region of the *writer*
   key: key i ->
-  log: rref region (seq (entry i)) -> 
+  log: ref (seq (entry i)){log.id = region} ->
   state i rw
                              
 private type writer i = s:state i Writer
@@ -53,9 +57,13 @@ val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
     modifies (Set.singleton wr.region) h0 h1 /\ // skipping modifies rref, as the region contains only one ref
     sel h1 wr.log == snoc (sel h0 wr.log) (Entry t p)))
 
+(*
+ * AR: similar to MAC, had to add a recall on wr.log.
+ *)
 let mac i wr p =
   assume (HashMAC.is_tls_mac (macAlg_of_id i));
   let t : tag i = HashMAC.tls_mac a wr.key p in
+  recall wr.log;
   wr.log := snoc !wr.log (Entry #i t p); // We log every authenticated texts, with their index and resulting tag
   t
 

@@ -164,17 +164,17 @@ DataStream \
 Alert \
 Content \
 StreamPlain \
-StreamAE
+StreamAE \
+MasterSecret \
+StatefulPlain \
+LHAEPlain \
+AEAD_GCM \
+MAC \
+StatefulLHAE \
+Record \
+MAC_SHA256 \
+MAC_SHA1
 
-# MasterSecret \
-# StatefulPlain \
-# LHAEPlain \
-# AEAD_GCM \
-# MAC \
-# StatefulLHAE \
-# Record \
-# MAC_SHA256 \
-# MAC_SHA1 \
 # StAE \
 # KeySchedule \
 # StreamDeltas \

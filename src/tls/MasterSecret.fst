@@ -35,7 +35,7 @@ let ms_tab : MM.t tls_tables_region AE.id writer region_injective =
   MM.alloc #TLSConstants.tls_tables_region #AE.id #writer #region_injective
 
 //A region is fresh if no nonce is associated with it
-let fresh_in_ms_tab (r:rgn) (h:HH.t) = 
+let fresh_in_ms_tab (r:rgn) (h:mem) = 
   forall i. match MM.sel (MR.m_sel h ms_tab) i with 
        | Some w -> w.region <> r
        | None -> True
@@ -43,9 +43,9 @@ let fresh_in_ms_tab (r:rgn) (h:HH.t) =
 private let id_rgns_witnessed (m:MM.map' AE.id writer) = 
     forall (i:AE.id{is_Some (MM.sel m i)}). MR.witnessed (MR.rid_exists ((Some.v (MM.sel m i)).region))
 
-private let contains_id_rgns (h:HH.t) = 
+private let contains_id_rgns (h:mem) =
     let m = MR.m_sel h ms_tab in 
-    forall (i:AE.id{is_Some (MM.sel m i)}). Map.contains h ((Some.v (MM.sel m i)).region)
+    forall (i:AE.id{is_Some (MM.sel m i)}). Map.contains h.h ((Some.v (MM.sel m i)).region)
 
 
 (* private val all_ms_tab_regions_exists: unit -> ST unit //would be good to make such stateful lemmas STTot, once we have it; a bit loose for now *)
@@ -65,14 +65,15 @@ let derive (r:rgn) (i:AE.id)
 	   HH.disjoint r tls_region /\
 	   is_epoch_rgn r /\
 	   N.registered (nonce_of_id i) r))
-       (ensures (fun h0 w h1 -> 
+       (ensures (fun h0 w h1 ->
+	   let ms_tab_as_hsref = MR.as_hsref ms_tab in
        	   HH.disjoint r tls_region 
 	   /\ is_epoch_rgn r
 	   /\ N.registered (nonce_of_id i) r
 	   /\ HH.parent w.region = r
 	   /\ is_epoch_rgn w.region
 	   /\ modifies (Set.singleton tls_tables_region) h0 h1 //modifies at most the tls_tables region
-	   /\ modifies_rref tls_tables_region !{HH.as_ref (MR.as_rref ms_tab)} h0 h1 //and within it, at most ms_tab
+	   /\ modifies_rref tls_tables_region !{HH.as_ref ms_tab_as_hsref.ref} h0.h h1.h //and within it, at most ms_tab
 	   /\ MR.witnessed (MR.rid_exists w.region) //and the writer's region is witnessed to exists also
 	   /\ MR.witnessed (MM.contains ms_tab i w) //and the writer is witnessed to be in ms_tab
 	   /\ (let old_ms = MR.m_sel h0 ms_tab in

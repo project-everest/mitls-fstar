@@ -25,8 +25,10 @@ let is_hs_rgn r    = HH.color r = hs_color
 
 (*
  * AR: Adding the eternal region predicate.
+ * Strengthening the predicate because at some places, the code uses HH.parent.
  *)
-let rgn       = r:HH.rid{r<>HH.root /\ HS.is_eternal_region r}
+let rgn       = r:HH.rid{r<>HH.root
+                         /\ (forall (s:HH.rid).{:pattern HS.is_eternal_region s} HS.is_above s r ==> HS.is_eternal_region s)}
 let tls_rgn   = r:rgn{is_tls_rgn r}
 let epoch_rgn = r:rgn{is_epoch_rgn r}
 let hs_rgn    = r:rgn{is_hs_rgn r}

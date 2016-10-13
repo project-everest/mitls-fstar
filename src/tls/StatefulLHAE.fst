@@ -6,6 +6,7 @@ module StatefulLHAE
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
@@ -60,7 +61,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                r.log_region = w.region /\
                extends r.region parent /\
 	       color r.region = color parent /\
-               fresh_region r.region h0 h1 /\
+               stronger_fresh_region r.region h0 h1 /\
                eq2 #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
 	       m_sel h1 (ctr r.counter) === 0))
@@ -130,10 +131,12 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        if j < Seq.length log && matches c ad' (Seq.index log j)
        then res = Some (Entry.p (Seq.index log j))
        else res = None))
-    /\ (match res with
+    /\ (
+       let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
+       match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
+                /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 let decrypt #i d ad c =
   let seqn = m_read (ctr d.counter) in

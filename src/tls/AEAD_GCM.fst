@@ -5,6 +5,7 @@ module AEAD_GCM
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties
 open Platform.Bytes
@@ -99,7 +100,7 @@ type matching (#i:id) (r:reader i) (w:writer i) =
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   extends w.region parent /\
-  fresh_region w.region h0 h1 /\
+  stronger_fresh_region w.region h0 h1 /\
   color w.region = color parent /\
   (authId i ==> (m_contains (ilog w.log) h1 /\ m_sel h1 (ilog w.log) == createEmpty)) /\
   m_contains (ctr w.counter) h1 /\
@@ -112,13 +113,16 @@ val gen: parent:rid -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 
+(*
+ * AR: had to add implicits for etcr.
+ *)
 let gen parent i =
   let kv = CoreCrypto.random (aeadKeySize (alg i)) in
   let iv = CoreCrypto.random (aeadSaltSize (alg i)) in
   let writer_r = new_region parent in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
-    let ectr: ideal_ctr writer_r i log = new_seqn writer_r 0 log in
+    let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #(max_ctr (alg i)) writer_r 0 log in
     State #i #Writer #writer_r #writer_r kv iv log ectr
   else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
@@ -131,7 +135,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
                r.log_region = w.region /\
                extends r.region parent /\
 	       color r.region = color parent /\
-               fresh_region r.region h0 h1 /\
+               stronger_fresh_region r.region h0 h1 /\
                eq2 #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
 	       m_sel h1 (ctr r.counter) === 0))
@@ -233,6 +237,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
   -> ST (option (dplain i ad c))
   (requires (fun h0 -> m_sel h0 (ctr d.counter) + 1 <= max_ctr (alg i)))
   (ensures  (fun h0 res h1 ->
+     let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
      let j = m_sel h0 (ctr d.counter) in
      (authId i ==>
        (let log = m_sel h0 (ilog d.log) in
@@ -242,7 +247,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
     /\ (match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
+                /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
 #set-options "--z3timeout 100 --max_fuel 0 --initial_fuel 0 --initial_ifuel 0 --max_ifuel 0"
