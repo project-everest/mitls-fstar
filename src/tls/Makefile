@@ -173,10 +173,10 @@ MAC \
 StatefulLHAE \
 Record \
 MAC_SHA256 \
-MAC_SHA1
+MAC_SHA1 \
+StAE \
+KeySchedule
 
-# StAE \
-# KeySchedule \
 # StreamDeltas \
 # HKDF \
 # Epochs \

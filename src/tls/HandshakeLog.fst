@@ -1,6 +1,7 @@
 module HandshakeLog
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
 open FStar.Set  
@@ -38,22 +39,25 @@ let getLogVersion hsl =
 (*   let (|h, eb|) = !r in *)
 (*   let next = update_hash h eb b in *)
 
+(*
+ * AR: changing logref from rref to HS.ref, with region captured in the refinement.
+ *)
 noeq type log =
   | LOG: #region:rid -> 
-         logref:rref region (|
+         logref:ref (|
               pv: option protocolVersion
             & (hsl:hs_log{validLog hsl})
             &   b: bytes {getLogVersion hsl = pv /\ handshakeMessagesBytes pv (reveal_hs_log hsl) = b}
-         |) -> log 
+         |){logref.id = region} -> log 
 
 val create: #reg:rid -> ST log
   (requires (fun h -> True))
   (ensures (fun h0 out h1 ->
     let LOG #r lr = out in
-    fresh_region r h0 h1 /\
+    stronger_fresh_region r h0 h1 /\
     extends r reg /\
     modifies (Set.singleton r) h0 h1 /\
-    modifies_rref r !{as_ref lr} h0 h1))
+    modifies_rref r !{as_ref lr} h0.h h1.h))
 let create #reg = 
     let hsl: hs_log = [] in
     let r = new_region reg in
@@ -67,7 +71,7 @@ val append_log: l:log -> hm:hs_msg -> ST bytes
     (ensures (fun h0 _ h1 ->
       let LOG #r lr = l in
       modifies (Set.singleton r) h0 h1
-      /\ modifies_rref r !{as_ref lr} h0 h1))
+      /\ modifies_rref r !{as_ref lr} h0.h h1.h))
 let append_log (LOG #reg lref) hm = 
     let (| pv, hsl, lb |) = !lref in 
     let hsl' = FStar.List.Tot.append hsl [hm] in
