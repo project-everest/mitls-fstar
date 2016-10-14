@@ -1,5 +1,5 @@
 [
-  "ﬁü∂Üÿ&¿Ö˜ŸF√\u0010\u007fòı",
+  "kbâˇûf\u001eeìÏè!àxU\u0017",
   [
     [ "DataStream.fragment", 1, 0, 1, [ "@query" ], 0 ],
     [
@@ -125,6 +125,20 @@
       ],
       0
     ],
+    [
+      "DataStream.empty_is_well_formed",
+      1,
+      2,
+      2,
+      [
+        "@query", "constructor_distinct_Prims.Nil",
+        "equation_with_fuel_DataStream.wellformed.fuel_instrumented",
+        "fuel_correspondence_DataStream.wellformed.fuel_instrumented",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Nil_a", "unit_typing"
+      ],
+      0
+    ],
     [ "DataStream.State.region", 1, 0, 1, [ "@query" ], 0 ],
     [ "DataStream.State.region", 2, 0, 1, [ "@query" ], 0 ],
     [ "DataStream.State.log", 1, 0, 1, [ "@query" ], 0 ],
@@ -196,6 +210,26 @@
         "refinement_interpretation_Tm_refine_cc611665e31a77fd27fb848b12f59009",
         "token_correspondence_TLSConstants.cipherSuite_of_name",
         "typing_DataStream.stream", "typing_FStar.HyperHeap.rref"
+      ],
+      0
+    ],
+    [
+      "DataStream.gen",
+      2,
+      0,
+      1,
+      [
+        "@query", "bool_inversion", "constructor_distinct_Prims.None",
+        "constructor_distinct_Prims.Some", "data_elim_DataStream.State",
+        "disc_equation_Prims.None", "disc_equation_Prims.Some",
+        "equation_FStar.HyperStack.is_eternal_region", "equation_Prims.nat",
+        "lemma_Prims.invertOption",
+        "proj_equation_FStar.HyperStack.MkRef_ref",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_402cc46f1bd4fe2c027942cda472b343",
+        "refinement_interpretation_Tm_refine_5a09de1efe4b8e150cfdaeaf95d864d4",
+        "typing_DataStream.stream", "typing_FStar.HyperHeap.rref",
+        "typing_FStar.HyperStack.is_eternal_region"
       ],
       0
     ],
