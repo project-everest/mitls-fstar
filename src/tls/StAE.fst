@@ -250,18 +250,15 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 val gen: parent:rgn -> i:stae_id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
-#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let gen parent i =
-  (*
-   * AR: the last clause in genPost fails.
-   *)
-  admit ();
   if is_stream i then
     Stream () (Stream.gen parent i)
   else
     StLHAE () (StLHAE.gen parent i)
 
-
+#reset-options
+#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> HyperHeap.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
@@ -288,8 +285,8 @@ let genReader parent #i w =
 val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
+#set-options "--z3timeout 100"
 let coerce parent i kiv =
-  admit ();
   if is_stream i then
     let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
     Stream () (Stream.coerce parent i kv iv)

@@ -181,17 +181,17 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
        (requires (fun h0 -> m_sel h0 (ctr e.counter) < max_ctr (alg i)))
        (ensures  (fun h0 c h1 ->
            modifies_one e.region h0 h1
-	 /\ m_contains (ctr e.counter) h1
-	 /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
- 	 /\ length c = Range.targetLength i r
+  	 /\ m_contains (ctr e.counter) h1
+  	 /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
+  	 /\ length c = Range.targetLength i r
       	 /\ (authId i ==>
-	     (let log = ilog e.log in
-	      let ent = Entry c ad p in
-	      let n   = Seq.length (m_sel h0 log) in
-	      m_contains log h1 /\
+  	     (let log = ilog e.log in
+  	      let ent = Entry c ad p in
+  	      let n   = Seq.length (m_sel h0 log) in
+  	      m_contains log h1 /\
               witnessed (at_least n ent log) /\
-	      m_sel h1 log == snoc (m_sel h0 log) ent)
-	   )
+  	      m_sel h1 log == snoc (m_sel h0 log) ent)
+  	   )
   ))
 
 #set-options "--z3timeout 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"

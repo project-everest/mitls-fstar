@@ -207,7 +207,7 @@ private abstract let noAD = empty_bytes
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 -> m_sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
-                 modifies_one e.region h0 h1 /\
+                 HH.modifies_one e.region h0.h h1.h /\
                  m_contains (ctr e.counter) h1 /\
                  m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1 /\
 	         (authId i ==>
@@ -222,8 +222,8 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
+#set-options "--z3timeout 100"
 let encrypt #i e l p =
-  admit ();
   let ctr = ctr e.counter in 
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
@@ -244,6 +244,7 @@ let encrypt #i e l p =
   else
     m_write ctr (n + 1);
   c
+#reset-options
 
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
 let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool = 
@@ -262,17 +263,16 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
 	 then res = Some (Entry.p (Seq.index log j))
 	 else res = None))
     /\ (match res with
-       | None -> modifies Set.empty h0 h1
+       | None -> HH.modifies Set.empty h0.h h1.h
        | _  ->  
                 let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
-                modifies_one d.region h0 h1
+                HH.modifies_one d.region h0.h h1.h
               /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	      /\ m_sel h1 (ctr d.counter) === j + 1)))
 
 #set-options "--z3timeout 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt #i d l c =
-  admit ();
   let ctr = ctr d.counter in 
   m_recall ctr;
   let j = m_read ctr in
