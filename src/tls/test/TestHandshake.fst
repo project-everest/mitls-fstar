@@ -46,7 +46,7 @@ private let sendRecord = sendRecordE false
 private let sendHSRecord tcp pv msg =
   sendRecord tcp pv Content.Handshake msg
 
-private let hsbuf = alloc #(list (hs_msg * bytes)) []
+private let hsbuf = ralloc #(list (hs_msg * bytes)) root []
 
 private let recvHSRecord tcp pv kex =
   let (hs_msg, to_log) =
@@ -76,7 +76,7 @@ private let recvCCSRecord tcp =
   IO.print_string "Received CCS\n";
   ccs
 
-private let enc_hsbuf = alloc #(list (hs_msg * bytes)) []
+private let enc_hsbuf = ralloc #(list (hs_msg * bytes)) root []
 
 private let recvEncHSRecord tcp pv kex rd =
   let (hs_msg, to_log) =

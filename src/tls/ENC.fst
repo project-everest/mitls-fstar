@@ -11,6 +11,7 @@
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties
 
@@ -89,8 +90,8 @@ noeq type state (i:id) (rw:rw) = | StateB:
   #region: rid ->
   #peer_region: rid { HyperHeap.disjoint region peer_region } -> 
   k: key i -> // only ghost for stream ciphers
-  s: rref region (localState region i) -> 
-  log: rref (if rw = Reader then peer_region else region) (seq (entry i)) -> 
+  s: ref (localState region i){s.id = region} -> 
+  log: ref (seq (entry i)){log.id = (if rw = Reader then peer_region else region)} -> 
   state i rw
                                         
 (* does this guarantee type isolation? *)

@@ -71,13 +71,13 @@ private let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: st
   // StatefulLHAE.writer -> StatefulLHAE.state
   let w: writer id =
     assume (~(authId id));
-    let seqn: HyperHeap.rref r seqn_t = ralloc r 1 in
+    let seqn: HyperStack.ref seqn_t = ralloc r 1 in
     let st: AEAD_GCM.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = bytes_of_hex key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = bytes_of_hex iv |> unsafe_coerce in
-      (* let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in *)
+      (* let log: HyperStack.rref _ = ralloc r Seq.createEmpty in *)
       let counter = ralloc r 0 in
       AEAD_GCM.State #id #Writer #r #r key iv () counter
     in
@@ -106,12 +106,12 @@ private let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: s
   // ENC.encryptor -> ENC.state
   let w: ENC.encryptor id =
     let key: ENC.key id = bytes_of_hex key in
-    let log: HyperHeap.rref r _ = ralloc r Seq.createEmpty in
+    let log: HyperStack.ref _ = ralloc r Seq.createEmpty in
     let state: ENC.localState r id =
       let iv: ENC.iv id = bytes_of_hex iv in
       ENC.OldBlockState id iv
     in
-    let state: HyperHeap.rref r (ENC.localState r id) = ralloc r state in
+    let state: HyperStack.ref (ENC.localState r id) = ralloc r state in
     ENC.StateB #id #Writer #r #r key state log
   in
 
