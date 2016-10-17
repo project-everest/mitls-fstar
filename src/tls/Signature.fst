@@ -76,8 +76,8 @@ abstract let evolves (#a:alg) (s1:state a) (s2:state a) =
   (is_Signed s1 /\ is_Signed s2 /\ grows (Signed.log s1) (Signed.log s2))
 
 let lemma_evolves_monotone (#a:alg): Lemma (monotonic (state a) (evolves #a)) =
-  forall_intro (seq_extension_reflexive #(signed a));
-  forall_intro_3 (grows_transitive #(signed a))
+  FStar.Classical.forall_intro (seq_extension_reflexive #(signed a));
+  FStar.Classical.forall_intro_3 (grows_transitive #(signed a))
 
 private val st_update: #a:alg
   -> s1:state a
