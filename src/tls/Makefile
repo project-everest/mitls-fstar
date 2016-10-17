@@ -12,6 +12,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	$(MAKE) -C $(FFI_HOME) clean
 	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
+	rm -rf ideal-flags concrete-flags
 	rm -rf test/*.cm* test/*.o
 
 # ------------------ Dependencies on F* & its libraries --------------
@@ -132,6 +133,9 @@ test/TestHandshake.fst \
 test/TestFFI.fst \
 test/TestAPI.fst #the preceding space is significant!
 
+CONCRETE_FSTS=$(subst IdealFlags.fst, concrete-flags/IdealFlags.fst, $(FSTS))
+IDEAL_FSTS=$(subst IdealFlags.fst, ideal-flags/IdealFlags.fst, $(FSTS))
+
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it
 # should be added here.
@@ -190,19 +194,22 @@ depend:
 #include .depend
 
 ConcreteFlags: Concrete.fst
-	cp Concrete.fst IdealFlags.fst
+	mkdir -p concrete-flags
+	cp Concrete.fst concrete-flags/IdealFlags.fst
 
 IdealFlags: Ideal.fst
-	cp Ideal.fst IdealFlags.fst
+	mkdir -p ideal-flags
+	cp Ideal.fst ideal-flags/IdealFlags.fst
 
 all-ver: IdealFlags $(addsuffix .fst-ver, $(VERIFY))
 
-all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
+all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(CONCRETE_FSTS)))
 
 # Lax-checking one file at a time
 %.fst-lax: ConcreteFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
+	--include concrete-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
@@ -210,12 +217,14 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 %.fst-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
+	--include ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver: IdealFlags $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
+	--include ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
@@ -223,28 +232,32 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(FSTS)))
 %.fst-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
+	--include ideal-flags \
 	--verify_module $(basename $(notdir $@))
 
 %.fsti-in: IdealFlags
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--verify_module $(basename $(notdir $@))
+	--include ideal-flags \
+	--verify_module $(basename $(notdir $@)) \
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
-tls-sanity: IdealFlags $(LIBFILES) $(FSTS) test/False.fst
+tls-sanity: IdealFlags $(LIBFILES) $(IDEAL_FSTS) test/False.fst
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
+	--include ideal-flags \
         --verify_module False \
-	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
+	$(IDEAL_FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # Lax typecheck all files (with ideal flag off)
-tls-lax: $(LIBFILES) ConcreteFlags $(FSTS)
+tls-lax: $(LIBFILES) ConcreteFlags $(CONCRETE_FSTS)
 	$(MAKE) refresh
 	$(FSTAR) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
-	$(FSTS)
+	--include concrete-flags \
+	$(CONCRETE_FSTS)
 
 wc:
 	wc -l $(LIBFILES) $(FSTS)
@@ -284,7 +297,7 @@ refresh:
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
+tls-gen: $(LIBFILES) ConcreteFlags $(CONCRETE_FSTS)
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
@@ -294,7 +307,8 @@ tls-gen: $(LIBFILES) ConcreteFlags $(FSTS)
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
-	  $(FSTS)
+	  --include concrete-flags \
+	  $(CONCRETE_FSTS)
 
 	# Builds everything against prims
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml 
