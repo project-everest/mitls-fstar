@@ -201,7 +201,7 @@ IdealFlags: Ideal.fst
 	mkdir -p ideal-flags
 	cp Ideal.fst ideal-flags/IdealFlags.fst
 
-all-ver: IdealFlags $(addsuffix .fst-ver, $(VERIFY))
+all-ver: IdealFlags $(addsuffix .fst-ver, $(subst IdealFlags, ideal-flags/IdealFlags, $(VERIFY)))
 
 all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(CONCRETE_FSTS)))
 
