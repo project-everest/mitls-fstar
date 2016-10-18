@@ -297,7 +297,10 @@ refresh:
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen: $(LIBFILES) ConcreteFlags $(CONCRETE_FSTS)
+tls-gen-deps: $(CONCRETE_FSTS)
+
+tls-gen: $(LIBFILES) ConcreteFlags
+	$(MAKE) tls-gen-deps
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
