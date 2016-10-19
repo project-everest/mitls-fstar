@@ -201,7 +201,7 @@ val invertOption : a:Type -> Lemma
   [SMTPatT (option a)]
 let invertOption a = ()  
 	 
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"	 
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0 --z3timeout 100"	 
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
   			  let new_conn = MR.m_sel h1 conn_tab in
