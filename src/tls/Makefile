@@ -317,7 +317,7 @@ tls-gen: $(LIBFILES) ConcreteFlags
 	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
-	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
+	make -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml #NB: this one must be 'make' not $(MAKE) to avoid race conditions
 	# # All our .cmx files
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
 	# A .cmxa with all the .cmx above
