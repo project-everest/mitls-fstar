@@ -79,11 +79,144 @@ let keygen g =
   let params = params_of_group g in
   dh_gen_key params
 
-val dh_responder: key -> Tot (key * secret)
+(*** HACK! TODO: FIXME ***)
+
+(*
+nik [9:47 AM]  
+@santiago: I found the cause of TestDH regression. It's quite interesting
+
+[9:47]  
+looks like on CoreCrypto.fst, we assume the dh_gen_key is a Tot function
+
+[9:48]  
+so, when extracting DHGroup.dh_responder
+
+[9:48]  
+ ```val dh_responder: key -> Tot (key * secret)
 let dh_responder gx =
   let params = gx.dh_params in
   let y = dh_gen_key params in
   let shared = dh_agreement y gx.dh_public in
+  y, shared
+```
+
+[9:48]  
+the let binding for `y` gets inlined (rightfully so from the normalizer's perspective)
+
+santiago [9:48 AM]  
+y is evaluated twice?
+
+nik [9:49 AM]  
+yep
+
+santiago [9:49 AM]  
+Quite interesting.
+
+[9:49]  
+What’s the solution, making it EXT?
+
+nik [9:49 AM]  
+yeah
+
+santiago [9:50 AM]  
+Most other functions are EXT. I wonder why we missed that one
+
+[9:51]  
+We didn’t spot it before because extraction didn’t inline so aggressively?
+
+nik [9:51 AM]  
+yeah
+
+[9:52]  
+it raises a separate point, in that inlining by F* even for Tot terms may produce less efficient code, because of such duplication
+
+[9:53]  
+and I doubt a CSE pass in OCaml will be able to reconstruct the sharing
+
+[9:53]  
+but that's quite orthogonal to this bug
+
+santiago [9:54 AM]  
+Cedric also found a bug coming from an inconsistency between CoreCrypto.ml and CoreCrypto.fst.
+There’re some things that don’t need to be reimplemented in OCaml (e.g. `aeadKeySize`) and should be extracted.
+
+[9:55]  
+I’d expect the OCaml compiler to detect the sharing; why not?
+
+nik [9:55 AM]  
+well, it's going through a bunch of function calls and OCaml doesn't know that those calls are pure
+
+[9:57]  
+So, how about I leave these CoreCrypto issues to you and Cedric, leaving TestDH disabled for the moment at least until this EXT stuff is done
+
+[9:57]  
+i have confirmed that TestDH succeeds in mitls-fstar master if dh_gen_key is not inlined (edited)
+
+santiago [9:58 AM]  
+Just make `dh_gen_key` EXT and re-enable TestDH. We could deal with CoreCrypto properly later
+
+nik [9:58 AM]  
+well, it propagates
+
+[9:58]  
+because dh_responder would then become at least EXT also
+
+santiago [10:00 AM]  
+I see. We’ll have to propagate it. Maybe that’s why it was still Tot
+
+nik [10:00 AM]  
+same thing probably also applies to ECGroup.dh_responder
+
+[10:02]  
+an alternative hacky solution would be for me to implement a temporary flag in F* saying that we should not do any inlining in a particular module, e.g., DHGroup (edited)
+
+[10:04]  
+which is quite awful
+
+santiago [10:05 AM]  
+Let’s not do that
+
+nik [10:05 AM]  
+ok, i have a local hack
+
+[10:05]  
+1 sec
+
+[10:06]  
+ ```let dh_agreement_wrapper k p = 
+  let shared = dh_agreement k p in
+  k, shared
+  
+let dh_responder gx =
+  let params = gx.dh_params in
+  let y = dh_gen_key params in
+  let y, shared = dh_agreement_wrapper y gx.dh_public in
+  y, shared
+```
+
+[10:06]  
+state-passing y locally to effectively disable the normalization here
+
+[10:07]  
+i'll mark it with a big HACK comment
+
+santiago [10:07 AM]  
+Make a note to remove the hack once we make dh_gen_key EXT
+
+[10:07]  
+yes
+
+
+*)
+let dh_agreement_wrapper k p = 
+  let shared = dh_agreement k p in
+  k, shared
+  
+val dh_responder: key -> Tot (key * secret)
+let dh_responder gx =
+  let params = gx.dh_params in
+  let y = dh_gen_key params in
+  let y, shared = dh_agreement_wrapper y gx.dh_public in
   y, shared
 
 val dh_initiator: key -> key -> Tot secret

@@ -7,7 +7,7 @@ LIB=ulib
 FFI_HOME=../../libs/ffi
 
 clean:
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	$(MAKE) -C $(FFI_HOME) clean
@@ -273,7 +273,7 @@ LIB_ML= \
 # .fst files realized elsewhere.
 TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto FFICallbacks)
 
-OUTPUT_DIR=output
+OUTPUT_DIR?=output
 
 # All our extracted modules.
 TLSML := $(FSTS:.fst=.ml)
@@ -313,7 +313,6 @@ tls-gen: $(LIBFILES) ConcreteFlags
 	  $(FSTAR_INCLUDE_PATHS) \
 	  --include concrete-flags \
 	  $(CONCRETE_FSTS)
-
 	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
