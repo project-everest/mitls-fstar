@@ -1013,10 +1013,13 @@ val ks_12_get_keys: ks:ks -> ST (writer:recordInstance)
   let kdf = kdfAlg pv cs in
   let ae = get_aeAlg cs in
   let id = ID12 pv msId kdf ae cr sr role in
-  let expand = TLSPRF.kdf kdf ms (sr @| cr) 40 in
-  let k1, expand = split expand 16 in
-  let k2, expand = split expand 16 in
-  let iv1, iv2 = split expand 4 in
+  let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
+  let klen = CoreCrypto.aeadKeySize alg in
+  let slen = TLSConstants.aeadSaltSize alg in 
+  let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
+  let k1, expand = split expand klen in
+  let k2, expand = split expand klen in
+  let iv1, iv2 = split expand slen in
   let wk, wiv, rk, riv =
     match role with
     | Client -> k1, iv1, k2, iv2

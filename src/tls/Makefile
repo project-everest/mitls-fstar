@@ -327,6 +327,7 @@ tls-gen: $(LIBFILES) ConcreteFlags
 	# Run the tests
 	$(EXTRA_PATH) ./test.out
 
+#16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
 mitls.exe: tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
