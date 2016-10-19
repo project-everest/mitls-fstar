@@ -28,11 +28,11 @@ FSTAR_HOME?=../../.fstar
 # values in recursive invocations of $(MAKE)...
 
 # .fst files in [ulib/ml] that are realized in fstarlib.cmxa
-STDLIB_REALIZED=All List Heap Set ST HyperHeap IO
+STDLIB_REALIZED=All List Heap Set Map ST HyperHeap HyperStack IO
 
 OPTIONS=--fstar_home $(FSTAR_HOME)
 
-CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap FFICallbacks
+CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap HyperStack FFICallbacks
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
@@ -57,7 +57,7 @@ FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FFI_HOME) --
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
 OCAMLMKLIB=ocamlfind mklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_HOME)/$(LIB)/ml/hyperstack $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
 
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
@@ -313,8 +313,8 @@ tls-gen: $(LIBFILES) ConcreteFlags
 	  --include concrete-flags \
 	  $(CONCRETE_FSTS)
 
-	# Builds everything against prims
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml 
+	# Builds everything against prims, setting MEM=HST
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
 	# # All our .cmx files
