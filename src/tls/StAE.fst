@@ -320,7 +320,7 @@ val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
 		  /\ MR.witnessed (fragments_prefix e (fragments e h1)))))
 let encrypt #i e f =
   match e with
-    | StLHAE u s ->
+  | StLHAE u s ->
     begin
     let h0 = ST.get() in
     let ct,rg = C.ct_rg i f in

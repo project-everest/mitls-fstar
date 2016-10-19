@@ -48,7 +48,9 @@ private let text = Platform.Bytes.utf8 "Top secret"
 val main : unit -> unit
 let main () =
   //let wr = StAE.gen root id in
-  let key = bytes_of_hex "feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308" in
+
+  // For TLS 1.2, key materials consist of an AES256 key plus 4 bytes of IV salt.
+  let key = bytes_of_hex ("feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308" ^ "01020304") in
   let wr = StAE.coerce root id key in
   let rd = StAE.genReader root #id wr in
   let ct = Content.Application_data in

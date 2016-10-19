@@ -70,7 +70,9 @@ let connect send recv config_1 : Connection.connection * int =
   let firstResult = 
     match read c i_0 with 
     | Complete -> 0
-    | ReadError description txt -> errno description txt in
+    | ReadError description txt -> errno description txt 
+    | CertQuery _ _ -> failwith "unsupported certificate request from the server"
+    | Read _ -> failwith "unexpected early read" in
   c, firstResult
 
 
