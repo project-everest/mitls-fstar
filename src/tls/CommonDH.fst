@@ -44,12 +44,12 @@ let share_of_key = function
 val default_group: group
 let default_group = FFDH (DHGroup.Named FFDHE2048)
 
-val keygen: group -> Tot key
+val keygen: group -> St key
 let keygen = function
   | FFDH g -> FFKey (DHGroup.keygen g)
   | ECDH g -> ECKey (ECGroup.keygen g)
 
-val dh_responder: key -> Tot (key * secret)
+val dh_responder: key -> St (key * secret)
 let dh_responder = function
   | FFKey gx -> 
     let y, shared = DHGroup.dh_responder gx in
@@ -58,7 +58,7 @@ let dh_responder = function
     let y, shared = ECGroup.dh_responder gx in
     ECKey y, shared
 
-val dh_initiator: key -> key -> Tot secret
+val dh_initiator: key -> key -> St secret
 let dh_initiator x gy =
   match x, gy with
   | FFKey x, FFKey gy -> DHGroup.dh_initiator x gy

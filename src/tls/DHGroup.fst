@@ -74,7 +74,7 @@ let params_of_group = function
   | Named FFDHE8192 -> ffdhe8192
   | Explicit params -> params
 
-val keygen: group -> Tot key
+val keygen: group -> St key
 let keygen g =
   let params = params_of_group g in
   dh_gen_key params
@@ -212,14 +212,14 @@ let dh_agreement_wrapper k p =
   let shared = dh_agreement k p in
   k, shared
   
-val dh_responder: key -> Tot (key * secret)
+val dh_responder: key -> St (key * secret)
 let dh_responder gx =
   let params = gx.dh_params in
   let y = dh_gen_key params in
-  let y, shared = dh_agreement_wrapper y gx.dh_public in
+  let shared = dh_agreement y gx.dh_public in
   y, shared
 
-val dh_initiator: key -> key -> Tot secret
+val dh_initiator: key -> key -> St secret
 let dh_initiator x gy =
   dh_agreement x gy.dh_public
 

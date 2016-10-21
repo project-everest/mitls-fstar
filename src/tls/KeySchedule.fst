@@ -39,6 +39,16 @@ let secretLabel = function
   | ExporterSecret _ _ -> "exporter master secret"
 *)
 
+(* A flag for runtime debugging of computed keys.
+   The F* normalizer will erase debug prints at extraction
+   when this false is set to flag *)
+let ks_debug = false
+
+let print_share k : St bool =
+  let kb = CommonDH.serialize_raw k in
+  let kh = Platform.Bytes.hex_of_bytes kb in
+  IO.debug_print_string ("Share: "^kh^"\n")
+
 let keyLabel = function
   | EarlyTrafficKey -> "early traffic key expansion"
   | EarlyApplicationDataKey -> "early application data key expansion"
@@ -307,13 +317,18 @@ val ks_client_13_1rtt_init: ks:ks -> list (g:namedGroup{is_SEC g \/ is_FFDHE g})
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS.h h0) (HS.HS.h h1))
 
+val map_ST: ('a -> St 'b) -> list 'a -> St (list 'b)
+let rec map_ST f x = match x with
+  | [] -> []
+  | a::tl -> f a :: map_ST f tl
+
 let ks_client_13_1rtt_init ks groups =
   let KS #rid st hsl = ks in
   let C (C_Init cr) = !st in
   let kg x = x, (match x with
     | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
     | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
-  let gs = List.Tot.map kg groups in
+  let gs = map_ST kg groups in
   st := C (C_13_wait_SH cr None None gs);
   let pub (x,y) = x, CommonDH.serialize_raw y in
   List.Tot.map pub gs
@@ -333,7 +348,7 @@ let ks_client_13_0rtt_init ks esId groups =
   let kg x = x, (match x with
     | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
     | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
-  let gs = List.Tot.map kg groups in
+  let gs = map_ST kg groups in
   st := C (C_13_wait_CH cr esId gs);
   let pub (x,y) = x, CommonDH.serialize_raw y in
   List.Tot.map pub gs
@@ -615,7 +630,13 @@ let ks_server_12_cke_dh ks gxb =
   let Some gx = CommonDH.parse dhp gxb in
   let (pv, cs, ems) = alpha in
   let pmsb = CommonDH.dh_initiator our_share gx in
-
+  let () =
+    if ks_debug then
+      let _ = print_share our_share in
+      let _ = print_share gx in
+      let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
+      ()
+    else () in
   let pmsId = PMS.DHPMS(dhp, (CommonDH.share_of_key our_share), (CommonDH.share_of_key gx), PMS. ConcreteDHPMS(pmsb)) in
   let kef = kefAlg pv cs ems in
   let msId, ms =
@@ -629,6 +650,10 @@ let ks_server_12_cke_dh ks gxb =
       let ms = TLSPRF.extract kef pmsb csr 48 in
       let msId = StandardMS pmsId csr kef in
       (msId, ms) in
+   let _ =
+     if ks_debug then
+      IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
+     else false in
    st := S (S_12_has_MS csr alpha msId ms)
 
 // Called after receiving server hello; server accepts resumption proposal
@@ -920,6 +945,13 @@ let ks_client_12_full_dh ks sr pv cs ems peer_share =
   let csr = cr @| sr in
   let alpha = (pv, cs, ems) in
   let our_share, pmsb = CommonDH.dh_responder peer_share in
+  let () =
+    if ks_debug then
+      let _ = print_share our_share in
+      let _ = print_share peer_share in
+      let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
+      ()
+    else () in
   let dhp = CommonDH.key_params peer_share in
   let dhpmsId = PMS.DHPMS(dhp, (CommonDH.share_of_key our_share), (CommonDH.share_of_key peer_share), PMS.ConcreteDHPMS(pmsb)) in
   let ns = 
@@ -928,6 +960,10 @@ let ks_client_12_full_dh ks sr pv cs ems peer_share =
     else
       let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48 in
+      let _ =
+        if ks_debug then
+           IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
+        else false in
       let msId = StandardMS dhpmsId csr kef in
       C_12_has_MS csr alpha msId ms in
   st := C ns; our_share
@@ -981,6 +1017,10 @@ let ks_client_12_set_session_hash ks =
   let h = verifyDataHashAlg_of_ciphersuite cs in
   let log = HandshakeLog.getHash hsl h in
   let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
+  let _ =
+    if ks_debug then
+      IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
+    else false in
   let msId = ExtendedMS pmsId log kef in
   st := C (C_12_has_MS csr alpha msId ms)
 

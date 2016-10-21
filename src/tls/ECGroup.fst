@@ -36,19 +36,19 @@ val share_of_key: key -> Tot (group * share)
 let share_of_key k =
   k.ec_params.curve, k.ec_point
 
-val keygen: group -> Tot key
+val keygen: group -> St key
 let keygen g =
   let params = params_of_group g in
   ec_gen_key params
 
-val dh_responder: ec_key -> Tot (ec_key * secret)
+val dh_responder: ec_key -> St (ec_key * secret)
 let dh_responder gx =
   let params = gx.ec_params in
   let y = ec_gen_key params in
   let shared = ecdh_agreement y gx.ec_point in
   y, shared
 
-val dh_initiator: ec_key -> ec_key -> Tot secret
+val dh_initiator: ec_key -> ec_key -> St secret
 let dh_initiator x gy =
   ecdh_agreement x gy.ec_point
 
