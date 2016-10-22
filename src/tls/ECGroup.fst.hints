@@ -1,5 +1,5 @@
 [
-  "nþtjh\u00059Ð¡ÛÈ“P>:",
+  "F°¶–uÖÊç8ÛÇ¢$æ&þ",
   [
     [ "ECGroup.key", 1, 0, 1, [ "@query", "assumption_Prims.HasEq_int" ], 0 ],
     [ "ECGroup.key", 2, 0, 1, [ "@query", "assumption_Prims.HasEq_int" ], 0 ],
@@ -103,14 +103,35 @@
       0,
       1,
       [
-        "@query", "equation_ECGroup.params",
-        "equation_ECGroup.params_of_group",
-        "refinement_interpretation_Tm_refine_1ef4e3417321a2371dd08a955cbc7b55",
-        "typing_CoreCrypto.ec_gen_key", "typing_ECGroup.params_of_group"
+        "@query", "equation_ECGroup.key", "equation_Platform.Bytes.bytes",
+        "fuel_guarded_inversion_CoreCrypto.ec_key",
+        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "refinement_interpretation_Tm_refine_84c2e93f72770e764003577efd56616e",
+        "refinement_interpretation_Tm_refine_bac29cce89ae7ba639d93dc04ba34a14"
       ],
       0
     ],
-    [ "ECGroup.dh_responder", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "ECGroup.dh_responder",
+      1,
+      0,
+      1,
+      [
+        "@query", "equation_Platform.Bytes.bytes",
+        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "lemma_FStar.HyperStack.lemma_equal_stack_domains_trans",
+        "refinement_interpretation_Tm_refine_dd2cb15c8a53fefb4e020ceb419477c3"
+      ],
+      0
+    ],
+    [
+      "ECGroup.dh_initiator",
+      1,
+      0,
+      1,
+      [ "@query", "equation_ECGroup.secret" ],
+      0
+    ],
     [
       "ECGroup.parse_curve",
       1,
@@ -349,9 +370,9 @@
       [
         "@query", "constructor_distinct_Tm_unit",
         "data_typing_intro_FStar.Char.Char@tok",
-        "equation_CoreCrypto.ec_bytelen", "equation_ECGroup.op_Star",
-        "equation_ECGroup.params", "equation_ECGroup.share",
-        "equation_FStar.Char.char", "equation_FStar.Char.char_code",
+        "equation_CoreCrypto.ec_bytelen", "equation_ECGroup.params",
+        "equation_ECGroup.share", "equation_FStar.Char.char",
+        "equation_FStar.Char.char_code", "equation_FStar.Mul.op_Star",
         "equation_Platform.Bytes.abyte", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
@@ -405,38 +426,36 @@
       0,
       1,
       [
-        "@query", "constructor_distinct_Tm_unit",
-        "data_typing_intro_FStar.Char.Char@tok",
+        "@query", "data_typing_intro_FStar.Char.Char@tok",
         "equation_CoreCrypto.ec_bytelen", "equation_ECGroup.curve_id",
-        "equation_ECGroup.op_Star", "equation_ECGroup.params",
-        "equation_ECGroup.serialize_point", "equation_ECGroup.share",
-        "equation_FStar.Char.char", "equation_FStar.Char.char_code",
+        "equation_ECGroup.params", "equation_ECGroup.serialize_point",
+        "equation_ECGroup.share", "equation_FStar.Char.char",
+        "equation_FStar.Char.char_code", "equation_FStar.Mul.op_Star",
         "equation_Platform.Bytes.abyte", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
         "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
-        "equation_TLSConstants.hs_color",
-        "fuel_guarded_inversion_CoreCrypto.ec_params",
-        "function_token_typing_TLSConstants.hs_color", "int_inversion",
+        "fuel_guarded_inversion_CoreCrypto.ec_curve",
+        "fuel_guarded_inversion_CoreCrypto.ec_params", "int_inversion",
         "int_typing", "kinding_FStar.Char.char_@tok",
         "lemma_FStar.Seq.lemma_create_len",
         "lemma_FStar.Seq.lemma_len_append", "primitive_Prims.op_Addition",
         "primitive_Prims.op_Multiply",
+        "proj_equation_CoreCrypto.Mkec_params_curve",
         "proj_equation_CoreCrypto.Mkec_point_ecx",
         "proj_equation_CoreCrypto.Mkec_point_ecy",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_0e3e560c796fef6df2d948e98bb1d5d6",
         "refinement_interpretation_Tm_refine_525c73e8cba1a82de467dd41a8b2ce79",
         "refinement_interpretation_Tm_refine_810128ef5f4b05b21d8806119a5984f5",
-        "refinement_interpretation_Tm_refine_8eab4e0814fb063e083277301ad5e184",
         "refinement_interpretation_Tm_refine_a50068f014e1e1445aa107ce3bf8ce77",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_baf389714c26585f7825333841cf2c12",
         "typing_CoreCrypto.Mkec_params.curve",
         "typing_CoreCrypto.Mkec_point.ecx",
-        "typing_CoreCrypto.Mkec_point.ecy", "typing_CoreCrypto.ec_bytelen",
-        "typing_ECGroup.curve_id", "typing_ECGroup.op_Star",
+        "typing_CoreCrypto.Mkec_point.ecy", "typing_ECGroup.curve_id",
         "typing_FStar.Seq.length", "typing_Platform.Bytes.abyte",
-        "typing_Platform.Bytes.length", "typing_Platform.Bytes.op_At_Bar"
+        "typing_Platform.Bytes.op_At_Bar"
       ],
       0
     ]

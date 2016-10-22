@@ -36,9 +36,9 @@ type public_repr =
   | PK_ECDSA of ec_key
 
 type secret_repr =
-  | SK_RSA   of rsa_key
-  | SK_DSA   of dsa_key
-  | SK_ECDSA of ec_key
+  | SK_RSA   of k:rsa_key{has_priv (KeyRSA k)}
+  | SK_DSA   of k:dsa_key{has_priv (KeyDSA k)}
+  | SK_ECDSA of k:ec_key{has_priv (KeyECDSA k)}
 
 let sigAlg_of_secret_repr sk =
   match sk with
@@ -221,12 +221,15 @@ let verify #a h pk t s =
     | PK_ECDSA k -> ecdsa_verify ho k t' s
   in
   if int_cma a h then
+    begin
+    assume False;
     match m_read (PK.log pk) with
     | Signed ts ->
       let signed = is_Some (SeqProperties.seq_find (fun (t':signed a) -> t = t') ts) in
       let honest = List.Tot.mem (|a,pk|) (m_read rkeys) in
       verified && (signed || not honest)
     | Corrupt -> verified
+    end
   else verified
 
 
@@ -343,6 +346,9 @@ let get_chain_public_key #a c =
 (* ------------------------------------------------------------------------ *)
 //FIXME: use unique public-key representation
 
+val foo: o:option (k:CoreCrypto.key{has_priv k}) -> Tot (option CoreCrypto.key)
+let foo o = match o with | None -> None | Some k -> Some k
+
 (*
  * AR: adding recall for rkeys to satisfy the precondition of m_write.
  *)
@@ -351,7 +357,7 @@ let lookup_key #a keyfile =
   let keys = m_read rkeys in
   let sa = a.core in
   let key =
-    match sa, CoreCrypto.load_key keyfile with
+    match sa, foo (CoreCrypto.load_key keyfile) with
     | RSASIG, Some (KeyRSA k)   -> Some (PK_RSA k, SK_RSA k)
     | DSA,    Some (KeyDSA k)   -> Some (PK_DSA k, SK_DSA k)
     | ECDSA,  Some (KeyECDSA k) -> Some (PK_ECDSA k, SK_ECDSA k)

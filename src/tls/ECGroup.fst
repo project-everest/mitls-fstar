@@ -41,14 +41,14 @@ let keygen g =
   let params = params_of_group g in
   ec_gen_key params
 
-val dh_responder: ec_key -> St (ec_key * secret)
+val dh_responder: ec_key -> St (key * secret)
 let dh_responder gx =
   let params = gx.ec_params in
   let y = ec_gen_key params in
   let shared = ecdh_agreement y gx.ec_point in
   y, shared
 
-val dh_initiator: ec_key -> ec_key -> St secret
+val dh_initiator: x:ec_key{is_Some x.ec_priv} -> ec_key -> St secret
 let dh_initiator x gy =
   ecdh_agreement x gy.ec_point
 
@@ -100,7 +100,7 @@ let parse_partial payload =
            | Some p -> Correct ({ec_params = ecp; ec_point = p; ec_priv = None},rem)
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
-let op_Star = op_Multiply
+open FStar.Mul
 
 (* Assumes uncompressed point format for now (04||ecx||ecy) *) 
 val serialize_point: p:params 
@@ -121,8 +121,6 @@ let serialize ecp ecdh_Y =
   lemma_repr_bytes_values (length e);
   let ve = vlbytes 1 e in
   ty @| id @| ve
-
-
 
 
 (* KB: older more general code below 

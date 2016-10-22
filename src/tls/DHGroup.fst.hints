@@ -1,5 +1,5 @@
 [
-  "†>›˜•ø ¾Ã\"\u0011°ää÷6",
+  "®'„œUõG_¡/‡dÿ8b¦",
   [
     [
       "DHGroup.group",
@@ -112,22 +112,15 @@
       0,
       1,
       [
-        "@query", "bool_inversion", "equation_DHGroup.params",
-        "equation_DHGroup.params_of_group", "equation_TLSConstants.rgn",
-        "equation_TLSConstants.tls_region", "equation_TLSConstants.tls_rgn",
-        "equation_TLSConstants.tls_tables_region",
-        "function_token_typing_TLSConstants.tls_region",
-        "function_token_typing_TLSConstants.tls_tables_region",
-        "lemma_FStar.HyperHeap.lemma_extends_includes",
-        "lemma_FStar.HyperHeap.lemma_extends_parent",
+        "@query", "equation_DHGroup.key", "equation_DHGroup.params",
+        "equation_Platform.Bytes.bytes",
+        "fuel_guarded_inversion_CoreCrypto.dh_key",
+        "fuel_guarded_inversion_FStar.HyperStack.mem",
         "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_031aa5f46d93e5d19c7d173c1a0a0157",
+        "refinement_interpretation_Tm_refine_0e7d2c1a8523d94f52fa00bcd975ce5a",
+        "refinement_interpretation_Tm_refine_478a0a04a8480a84539d075bfb045876",
         "refinement_interpretation_Tm_refine_7ce2ab2edcf30fe6e35fa968dac3cf08",
-        "refinement_interpretation_Tm_refine_9c089e01a049e74537e294da0303f944",
-        "refinement_interpretation_Tm_refine_ad28dd96578cc7340932338691d549ee",
-        "refinement_interpretation_Tm_refine_cf48a0b0f0401633a2d7556681f50219",
-        "typing_CoreCrypto.dh_gen_key", "typing_DHGroup.params_of_group",
-        "typing_FStar.HyperHeap.includes"
+        "typing_DHGroup.params_of_group"
       ],
       0
     ],
@@ -137,25 +130,20 @@
       0,
       1,
       [
-        "@query", "bool_inversion", "equation_DHGroup.key",
-        "equation_TLSConstants.rgn", "equation_TLSConstants.tls_region",
-        "equation_TLSConstants.tls_rgn",
-        "equation_TLSConstants.tls_tables_region",
-        "function_token_typing_TLSConstants.tls_region",
-        "function_token_typing_TLSConstants.tls_tables_region",
-        "lemma_FStar.HyperHeap.lemma_extends_includes",
-        "lemma_FStar.HyperHeap.lemma_extends_parent",
-        "primitive_Prims.op_LessThan",
-        "proj_equation_CoreCrypto.Mkdh_key_dh_params",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_031aa5f46d93e5d19c7d173c1a0a0157",
+        "@query", "equation_DHGroup.key", "equation_Platform.Bytes.bytes",
+        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "lemma_FStar.HyperStack.lemma_equal_stack_domains_trans",
         "refinement_interpretation_Tm_refine_0e7d2c1a8523d94f52fa00bcd975ce5a",
-        "refinement_interpretation_Tm_refine_9c089e01a049e74537e294da0303f944",
-        "refinement_interpretation_Tm_refine_ad28dd96578cc7340932338691d549ee",
-        "refinement_interpretation_Tm_refine_cf48a0b0f0401633a2d7556681f50219",
-        "typing_CoreCrypto.Mkdh_key.dh_params",
-        "typing_CoreCrypto.dh_gen_key", "typing_FStar.HyperHeap.includes"
+        "refinement_interpretation_Tm_refine_858f4a30cb4ed8ecd3b20e2e4aec705d"
       ],
+      0
+    ],
+    [
+      "DHGroup.dh_initiator",
+      1,
+      0,
+      1,
+      [ "@query", "equation_DHGroup.secret" ],
       0
     ],
     [

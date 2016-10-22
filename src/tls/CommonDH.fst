@@ -58,7 +58,11 @@ let dh_responder = function
     let y, shared = ECGroup.dh_responder gx in
     ECKey y, shared
 
-val dh_initiator: key -> key -> St secret
+let has_priv: key -> Type0 = function
+  | FFKey k -> is_Some k.dh_private
+  | ECKey k -> is_Some k.ec_priv
+
+val dh_initiator: x:key{has_priv x} -> key -> St secret
 let dh_initiator x gy =
   match x, gy with
   | FFKey x, FFKey gy -> DHGroup.dh_initiator x gy

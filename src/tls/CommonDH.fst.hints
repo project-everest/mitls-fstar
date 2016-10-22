@@ -1,5 +1,5 @@
 [
-  "çUúaé´1¾©èð·_`K\u0016",
+  "\\v\u000eÊ:hM'âÎ¤\u001c\u000epß\u0002",
   [
     [
       "CommonDH.group",
@@ -221,11 +221,53 @@
       0
     ],
     [
+      "CommonDH.has_priv",
+      1,
+      0,
+      1,
+      [
+        "@query", "disc_equation_CommonDH.ECKey",
+        "disc_equation_CommonDH.FFKey", "fuel_guarded_inversion_CommonDH.key"
+      ],
+      0
+    ],
+    [
       "CommonDH.dh_initiator",
       1,
       0,
       1,
-      [ "@query", "equation_Platform.Bytes.empty_bytes" ],
+      [
+        "@query", "assumption_FStar.HyperHeap.HasEq_rid", "b2t_def",
+        "constructor_distinct_CommonDH.ECKey",
+        "constructor_distinct_CommonDH.FFKey", "disc_equation_Prims.Some",
+        "equation_CommonDH.has_priv", "equation_CommonDH.secret",
+        "equation_DHGroup.secret", "equation_ECGroup.secret",
+        "equation_FStar.Char.char", "equation_FStar.HyperHeap.t",
+        "equation_FStar.HyperStack.equal_stack_domains",
+        "equation_FStar.HyperStack.hh", "equation_Platform.Bytes.byte",
+        "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.empty_bytes",
+        "equation_Platform.Bytes.lbytes", "equation_Prims.eqtype",
+        "fuel_guarded_inversion_CommonDH.key",
+        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "function_token_typing_FStar.Heap.emp",
+        "function_token_typing_FStar.Heap.heap",
+        "function_token_typing_FStar.HyperHeap.rid",
+        "function_token_typing_Platform.Bytes.empty_bytes",
+        "kinding_FStar.Heap.aref@tok", "lemma_FStar.TSet.lemma_equal_refl",
+        "pretyping_6c86c071b92797cdf01eb016249a9465",
+        "pretyping_dc9a263388841114f2f94bb8442e963e",
+        "proj_equation_FStar.HyperStack.HS_h",
+        "projection_inverse_CommonDH.ECKey__0",
+        "projection_inverse_CommonDH.FFKey__0",
+        "projection_inverse_Prims.Mktuple2__1",
+        "refinement_interpretation_Tm_refine_0dc1829dbc3c1d1c42b7a4e9e5c89884",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_810128ef5f4b05b21d8806119a5984f5",
+        "refinement_interpretation_Tm_refine_92d91b2b1b84451e36c7ac077282f688",
+        "typing_FStar.Heap.domain", "typing_FStar.HyperStack.HS.h",
+        "typing_FStar.Map.sel"
+      ],
       0
     ],
     [
