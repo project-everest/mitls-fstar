@@ -44,4 +44,10 @@ extern void FFI_mitls_free_packet(void* packet);
 // Free an outmsg or errmsg
 extern void FFI_mitls_free_msg(char *msg);
 
+// Register the calling thread, so it can call miTLS.  Returns 1 for success, 0 for error.
+extern int FFI_mitls_thread_register(void);
+
+// Unregister the calling thread, so it can no longer call miTLS.  Returns 1 for success, 0 for error.
+extern int FFI_mitls_thread_unregister(void);
+
 #endif // HEADER_MITLS_FFI_H

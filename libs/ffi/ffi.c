@@ -8,9 +8,11 @@
 #else
 #include <errno.h> // MinGW only provides include/errno.h
 #endif
+#include <malloc.h>
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
+#include <caml/threads.h>
 #include <caml/printexc.h>
 #include "mitlsffi.h"
 
@@ -70,11 +72,16 @@ int  FFI_mitls_init(void)
 #define MITLS_FFI_ENTRY(x) \
     g_mitls_FFI_##x = caml_named_value("MITLS_FFI_" # x); \
     if (!g_mitls_FFI_##x) { \
-        printf("Failed to bind to Caml callback MITLS_FFI_" # x "\n"); \
+        fprintf(stderr, "Failed to bind to Caml callback MITLS_FFI_" # x "\n"); \
         return 0; \
     }
  MITLS_FFI_LIST  
  #undef MITLS_FFI_ENTRY
+ 
+    // On return from caml_startup(), this thread continues to own
+    // the OCaml global runtime lock as if it was running OCaml code.
+    // Release it, so other threads can call into OCaml.
+    caml_release_runtime_system();
     
     return 1; // success
 }
@@ -257,7 +264,7 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
     host = caml_copy_string(host_name);
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(config)));
+        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(config)));
     } else {
         mitls_state * s;
         
@@ -318,14 +325,22 @@ CAMLprim value ocaml_send_tcp(value cookie, value bytes)
     char *buffer;
     int retval;
     struct _FFI_mitls_callbacks *callbacks;
+    char *localbuffer;
 
     CAMLparam2(cookie, bytes);
     
     callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
     buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
+    // Copy the buffer out of the OCaml heap into a local buffer on the stack
+    localbuffer = (char*)alloca(buffer_size);
+    memcpy(localbuffer, buffer, buffer_size);
     
-    retval = (*callbacks->send)(callbacks, buffer, buffer_size);
+    caml_release_runtime_system();
+    // All pointers into the OCaml heap are now off-limits until the
+    // runtime_system lock has been re-aquired.
+    retval = (*callbacks->send)(callbacks, localbuffer, buffer_size);
+    caml_acquire_runtime_system();
     
     CAMLreturn(Val_int(retval));
 }
@@ -337,14 +352,22 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     char *buffer;
     ssize_t retval;
     struct _FFI_mitls_callbacks *callbacks;
+    char *localbuffer;
     
     CAMLparam2(cookie, bytes);
     
     callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
-    buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
+    localbuffer = (char*)alloca(buffer_size);
     
-    retval = (*callbacks->recv)(callbacks, buffer, buffer_size);
+    caml_release_runtime_system();
+    // All pointers into the OCaml heap are now off-limits until the
+    // runtime_system lock has been re-aquired.
+    retval = (*callbacks->recv)(callbacks, localbuffer, buffer_size);
+    caml_acquire_runtime_system();
+    
+    buffer = Bp_val(bytes);
+    memcpy(buffer, localbuffer, buffer_size);
     
     CAMLreturn(Val_int(retval));
 }
@@ -363,7 +386,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
     
     result = caml_callback2_exn(*g_mitls_FFI_Connect, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         ret = 0;
     } else {
         // Connect returns back (Connection.connection * int)
@@ -373,7 +396,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
             caml_modify_generational_global_root(&state->fstar_state, connection);
             ret = 1;
         } else {
-            printf("FFI_mitls_connect failed with miTLS error %d\n", ret);
+            fprintf(stderr, "FFI_mitls_connect failed with miTLS error %d\n", ret);
             ret = 0;
         }
         // The result is an integer.  How to deduce the value of 'c' needed for
@@ -401,7 +424,7 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     
     result = caml_callback2_exn(*g_mitls_FFI_Send, state->fstar_state, buffer_value);
     if (Is_exception_result(result)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         ret = 0;
     } else {
         ret = 1;
@@ -425,7 +448,7 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
 
     result = caml_callback_exn(*g_mitls_FFI_Recv, state->fstar_state);
     if (Is_exception_result(result)) {
-        printf("Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
         p = NULL;
     } else {
         // Return the plaintext data
@@ -436,3 +459,15 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
     CAMLreturnT(void*,p);
 }
 
+
+// Register the calling thread, so it can call miTLS.  Returns 1 for success, 0 for error.
+int FFI_mitls_thread_register(void)
+{
+    return caml_c_thread_register();
+}
+
+// Unregister the calling thread, so it can no longer call miTLS.  Returns 1 for success, 0 for error.
+int FFI_mitls_thread_unregister(void)
+{
+    return caml_c_thread_unregister();
+}
