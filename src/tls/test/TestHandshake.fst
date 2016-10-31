@@ -152,7 +152,7 @@ private let rec server_loop_12 config sock =
   let tbs = Handshake.to_be_signed pv Server (Some csr) sv in
   let sa, ha = alg in
   let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
-  let a = Signature.Use (fun _ -> True) sa [ha] false false in
+  let a = Signature.Use (fun _ -> true) sa [ha] false false in
   let Some csk = Signature.lookup_key #a config.private_key_file in
   let sigv = Signature.sign ha csk tbs in
   let signature = (hab @| sab @| (vlbytes 2 sigv)) in
@@ -336,7 +336,7 @@ let client_13 config host port : ML unit =
 
   //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
   let Some ((sa,h), sigv) = Handshake.sigHashAlg_of_ske cv.cv_sig in
-  let a = Signature.Use (fun _ -> True) sa [h] false false in
+  let a = Signature.Use (fun _ -> true) sa [h] false false in
   let tbs = Handshake.to_be_signed pv Server None cv_log in
   let Some pk = Signature.get_chain_public_key #a sc.crt_chain in
 
@@ -422,7 +422,7 @@ private let rec server_loop_13 config sock =
   let tbs = Handshake.to_be_signed pv Server None cv_log in
   let ha = Hash h in
   let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
-  let a = Signature.Use (fun _ -> True) sa [ha] false false in
+  let a = Signature.Use (fun _ -> true) sa [ha] false false in
   let Some csk = Signature.lookup_key #a config.private_key_file in
   let sigv = Signature.sign ha csk tbs in
   let signature = (hab @| sab @| (vlbytes 2 sigv)) in

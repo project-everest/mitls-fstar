@@ -14,8 +14,11 @@ open Cert
 (* ------------------------------------------------------------------------ *)
 type text = bytes
 
-noeq type alg =
-  | Use: info:(text -> Type0)
+// ADL(31/10/16): changing info from text -> Type0 to text -> GTot bool
+// to ensure that alg is in universe 0
+// (this is needed because ref a now requires a to be in universe 0)
+noeq type alg : Type0 =
+  | Use: info:(text -> GTot bool)
        -> core: sigAlg
        -> digest: list hashAlg
        -> keyEncipher: bool // can encrypt e.g. PMS in TLS_RSA_WITH_...
@@ -134,20 +137,33 @@ let alloc_pubkey #a s r =
 
   We maintain this property as a stateful invariaint in rkeys *)
 
-(* AR: this needs to be fixed, alg should not have hasEq because of info *)
-assume HasEq_alg: hasEq alg
+// ADL(31/10/16): I am a bit concerned by pkey_repr x = pkey_repr y in kset;
+// after extraction this becomes pointer equality on wrapped OpenSSL pointers
+// we should export a normalized, hasEq representation of keys in CoreCrypto.
 
-type kset = s:list pkey{ forall x y. (List.Tot.mem x s /\ List.Tot.mem y s /\ pkey_repr x = pkey_repr y) ==> x = y }
+// AD(31/10/16): Commenting out the hasEq assumption on alg; instead we use memT
+(* AR: this needs to be fixed, alg should not have hasEq because of info *)
+// FIXME in CoreCrypto!
+assume HasEq_public_repr: hasEq public_repr
+
+(** ADL: FIXME XXX relies on StrongExcludedMiddle! *)
+assume val strong_excluded_middle : p:Type0 -> GTot (b:bool{b = true <==> p})
+private let rec memT (#a:Type0) (v:a) (l:list a) : GTot bool =
+  match l with
+  | [] -> false
+  | h::t -> if strong_excluded_middle (h == v) then true else memT v t
+
+type kset = s:list pkey{ forall x y. (memT x s /\ memT y s /\ pkey_repr x = pkey_repr y) ==> x == y }
 
 val find_key: r:public_repr -> ks: kset
-  -> Tot (o:option (k:pkey {pkey_repr k = r && List.Tot.mem k ks})
-        { is_None o ==> (forall k. List.Tot.mem k ks ==> pkey_repr k <> r) })
+  -> Tot (o:option (k:pkey {pkey_repr k = r && memT k ks})
+        { is_None o ==> (forall k. memT k ks ==> pkey_repr k <> r) })
 let rec find_key r ks = match ks with
   | []   -> None
   | k::ks -> if pkey_repr k = r then Some k else find_key r ks
 
 val add_key: ks:kset
-  -> k:pkey { forall k'. List.Tot.mem k' ks ==> pkey_repr k <> pkey_repr k' }
+  -> k:pkey { forall k'. memT k' ks ==> pkey_repr k <> pkey_repr k' }
   -> Tot kset
 let add_key ks k = k::ks
 
@@ -158,7 +174,7 @@ logic type mon_pkey (xs:kset) (xs':kset) =
 val rkeys: m_rref keyRegion kset (mon_pkey)
 let rkeys = m_alloc keyRegion []
 
-type generated (k:pkey) (h:mem) : Type0 = List.Tot.mem k (m_sel h rkeys)
+type generated (k:pkey) (h:mem) : Type0 = memT k (m_sel h rkeys)
 
 
 (* ------------------------------------------------------------------------ *)

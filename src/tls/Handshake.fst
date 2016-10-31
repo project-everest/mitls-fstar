@@ -529,7 +529,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
          if List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = h))
 	      algs then
            begin
-	   let a = Signature.Use (fun _ -> True) sa [h] false false in
+	   let a = Signature.Use (fun _ -> true) sa [h] false false in
            let csr = (n.n_client_random @| n.n_server_random) in
            let ems = n.n_extensions.ne_extended_ms in
            let tbs = to_be_signed n.n_protocol_version Server (Some csr) ske_tbs in
@@ -707,7 +707,7 @@ let processServerFinished_13 cfg n ks log msgs =
            let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
            let rc = CoreCrypto.hash sh_alg zeroes in
            let lb = (HandshakeLog.getHash log sh_alg) @| rc in
-           let a = Signature.Use (fun _ -> True) sa [ha] false false in
+           let a = Signature.Use (fun _ -> true) sa [ha] false false in
            let tbs = to_be_signed n.n_protocol_version Server None lb in
            match Signature.get_chain_public_key #a c.crt_chain with
            | Some pk ->
@@ -823,7 +823,7 @@ let prepareServerHelloDone cfg n ks log =
 	| [] -> (sa, Hash CoreCrypto.SHA1)
       in
       let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
-      let a = Signature.Use (fun _ -> True) sa [ha] false false in
+      let a = Signature.Use (fun _ -> true) sa [ha] false false in
       let tbs = to_be_signed n.n_protocol_version Server (Some csr) sv in
       begin
       match Signature.lookup_key #a cfg.private_key_file with
@@ -978,7 +978,7 @@ let prepareServerFinished_13 cfg n ks log =
 	| ha::_ -> ha
 	| [] -> (sa, sh_alg) in
       let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
-      let a = Signature.Use (fun _ -> True) sa [ha] false false in
+      let a = Signature.Use (fun _ -> true) sa [ha] false false in
       begin
       match Signature.lookup_key #a cfg.private_key_file with
       | Some csk ->
