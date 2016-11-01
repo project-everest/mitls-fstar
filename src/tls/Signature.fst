@@ -168,7 +168,7 @@ val add_key: ks:kset
 let add_key ks k = k::ks
 
 logic type mon_pkey (xs:kset) (xs':kset) =
-  forall x. List.Tot.mem x xs ==> List.Tot.mem x xs'
+  forall x. memT x xs ==> memT x xs'
 
 // FIXME: top-level effect
 val rkeys: m_rref keyRegion kset (mon_pkey)
@@ -176,6 +176,9 @@ let rkeys = m_alloc keyRegion []
 
 type generated (k:pkey) (h:mem) : Type0 = memT k (m_sel h rkeys)
 
+let honestKey (#a:alg) (k:pubkey a) (ks:kset) =
+  let PK _ pk = k in
+  is_Some (find_key pk ks)
 
 (* ------------------------------------------------------------------------ *)
 
@@ -242,7 +245,7 @@ let verify #a h pk t s =
     match m_read (PK.log pk) with
     | Signed ts ->
       let signed = is_Some (SeqProperties.seq_find (fun (t':signed a) -> t = t') ts) in
-      let honest = List.Tot.mem (|a,pk|) (m_read rkeys) in
+      let honest = honestKey pk (m_read rkeys) in
       verified && (signed || not honest)
     | Corrupt -> verified
     end
@@ -321,6 +324,9 @@ let coerce #a pkr skr =
 
 
 (* ------------------------------------------------------------------------ *)
+
+// ADL: FIXME XXX unsound because of info
+assume HasEq_alg_unsound: hasEq alg
 
 val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST pkey
   (requires (fun _ -> True))
