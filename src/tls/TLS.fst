@@ -30,6 +30,11 @@ module SD   = StreamDeltas
 module Conn = Connection
 module EP   = Epochs
 
+(* A flag for runtime debugging of TLS data. 
+   The F* normalizer will erase debug prints at extraction
+   when this false is set to flag *)
+let tls_debug = false
+
 unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n
 
 // using also DataStream, Content, Record
@@ -400,9 +405,11 @@ let sendFragment c #i wo f =
   let ct, rg = Content.ct_rg i f in
 
   let idt = if is_ID12 i then "ID12" else if is_ID13 i then "ID13" else "PlaintextID" in
-  let b = IO.debug_print_string 
-    ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n") in
-
+  let _b = 
+    if tls_debug then 
+      IO.debug_print_string 
+        ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n") 
+    else false in 
   if not (check_incrementable wo)
   then ad_overflow 
   else begin
@@ -522,7 +529,10 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
 		sendFragment_inv wopt h1
 		/\ sendHandshake_post wopt om send_ccs h0 r h1))
   =  let h0 = ST.get() in
-     let b = IO.debug_print_string "CALL sendHandshake\n" in
+     let _b = 
+      if tls_debug then 
+        IO.debug_print_string "CALL sendHandshake\n" 
+      else false in
      let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
@@ -601,7 +611,10 @@ let next_fragment i c =
 		 FStar.SeqProperties.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
   let idt = if is_ID12 i then "ID12" else (if is_ID13 i then "ID13" else "PlaintextID") in
-  let b = IO.debug_print_string ("nextFragment index type "^idt^"\n") in
+  let _b = 
+    if tls_debug then 
+      IO.debug_print_string ("nextFragment index type "^idt^"\n") 
+    else false in
   let res = Handshake.next_fragment i s in
   let _ = if w0 >= 0
 	  then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog) in
@@ -658,7 +671,10 @@ let rec writeHandshake h_init c new_writer =
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
   let wopt = current_writer c i in
-  let _ = IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") in
+  let _ = 
+    if tls_debug then 
+      IO.debug_print_string ("CALL writeHandshake (wopt = "^(if is_None wopt then "None" else "Some")^")\n") 
+    else false in
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Handshake.OutError (ad,reason) -> sendAlert c ad reason
@@ -666,7 +682,10 @@ let rec writeHandshake h_init c new_writer =
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change
-      let _ = IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) in
+      let _ = 
+        if tls_debug then 
+          IO.debug_print_string ("next_fragment: next_keys="^(if next_keys then "yes" else "no")^" complete ="^(if complete then "yes\n" else "no\n")) 
+        else false in
       match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
 	recall_current_writer c;
@@ -957,7 +976,10 @@ END OLDER VARIANT *)
 // We notify, and hope to get back the peer's notify.
 
 let writeCloseNotify c =
-  let b = IO.debug_print_string "writeCloseNotify\n" in
+  let _b = 
+    if tls_debug then 
+      IO.debug_print_string "writeCloseNotify\n"
+    else false in
   sendAlert c AD_close_notify "full shutdown"
 
 // We notify and don't wait for confirmation.
@@ -1100,7 +1122,10 @@ let readFragment c i =
   | Correct(ct,pv,payload) ->
     let es = MR.m_read (MkEpochs.es c.hs.log) in
     let j : logIndex es = Handshake.i c.hs Reader in
-    let b = IO.debug_print_string ("Epoch index: "^(string_of_int j)^"\n") in
+    let _b = 
+      if tls_debug then
+        IO.debug_print_string ("Epoch index: "^(string_of_int j)^"\n") 
+      else false in
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in
       Correct(Content.mk_fragment i ct rg payload)
@@ -1109,7 +1134,11 @@ let readFragment c i =
       let e = Seq.index es j in
       let Epoch #r #n #i hs rd wr = e in
       match StAE.decrypt (reader_epoch e) (ct,payload) with
-      | Some f -> let b = IO.debug_print_string "StAE decrypt correct.\n" in Correct f
+      | Some f -> let b = 
+                    if tls_debug then 
+                      IO.debug_print_string "StAE decrypt correct.\n" 
+                    else false in 
+                    Correct f
       | None   -> Error(AD_internal_error,"") //16-05-19 adjust!
 
 // We receive, decrypt, parse a record (ct,f); what to do with it?
@@ -1142,7 +1171,10 @@ let readOne c i =
 
   | Correct(Content.CT_Handshake rg f) ->
       begin
-        let b = IO.debug_print_string "readOne: CT_Handshake, calling recv_fragment...\n" in
+        let _b = 
+          if tls_debug then 
+            IO.debug_print_string "readOne: CT_Handshake, calling recv_fragment...\n" 
+          else false in
         match recv_fragment c.hs (| rg, f |) with
         | InError (x,y) -> alertFlush c i x y
         | InQuery q a   -> CertQuery q a
@@ -1167,7 +1199,10 @@ let readOne c i =
       end
   | Correct(Content.CT_Data rg f) ->
       begin
-        let b = IO.debug_print_string "readOne: CT_Data\n" in
+        let _b = 
+          if tls_debug then
+            IO.debug_print_string "readOne: CT_Data\n" 
+          else false in
         match !c.state with
         | AD | Half Reader        -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _                       -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
@@ -1186,7 +1221,10 @@ let rec read c i =
     | WriteError x y             -> ReadError x y           // TODO review errors; check this is not ambiguous
     | WriteClose                  -> unexpected "Sent Close" // can't happen while sending?
     | WrittenHS newWriter complete ->
-        let b = IO.debug_print_string ("read: WrittenHS, "^(if newWriter then "newWriter" else "oldWriter")^" \n") in
+        let _b = 
+          if tls_debug then
+            IO.debug_print_string ("read: WrittenHS, "^(if newWriter then "newWriter" else "oldWriter")^" \n") 
+          else false in
         if complete then Complete // return at once, so that the app can authorize and use new indexes.
         // else ... then                // return at once, signalling falsestart
         else
