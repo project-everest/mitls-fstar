@@ -36,7 +36,7 @@ module MS = FStar.Monotonic.Seq
 
 (* A flag for runtime debugging of Handshake data. 
    The F* normalizer will erase debug prints at extraction
-   when this flag is set to false *)
+   when this flag is set to false. *)
 inline_for_extraction let hs_debug = false
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
