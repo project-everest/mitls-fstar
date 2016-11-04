@@ -16,7 +16,7 @@ open Content
 
 (* A flag for runtime debugging of record data.
    The F* normalizer will erase debug prints at extraction
-   when this false is set to flag *)
+   when this flag is set to false. *)
 inline_for_extraction let r_debug = false
 
 // ------------------------outer packet format -------------------------------

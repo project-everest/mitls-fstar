@@ -14,7 +14,7 @@ open HandshakeMessages
 
 (* A flag for runtime debugging of handshakelog data.
    The F* normalizer will erase debug prints at extraction
-   when this false is set to flag *)
+   when this flag is set to false. *)
 inline_for_extraction let hsl_debug = false
 
 abstract type hs_log = list hs_msg
