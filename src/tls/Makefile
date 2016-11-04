@@ -43,6 +43,7 @@ PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
+LDIR=$(FSTAR_HOME)/examples/low-level/crypto
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
@@ -52,7 +53,7 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeo
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LDIR)/real --include $(LDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
@@ -101,11 +102,38 @@ Range.fst \
 DataStream.fst \
 Alert.fst \
 Content.fst \
+Buffer.Utils.fst \
+Crypto.Symmetric.Bytes.fst \
+Crypto.Indexing.fst \
+Flag.fst \
+Crypto.Symmetric.AES.fst \
+Crypto.Symmetric.AES128.fst \
+Crypto.Symmetric.Chacha20.fst \
+Crypto.Symmetric.Cipher.fst \
+Crypto.Symmetric.Poly1305.Bigint.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part1.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part2.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part3.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part4.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part5.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part6.fst \
+Crypto.Symmetric.Poly1305.Bignum.fst \
+Crypto.Symmetric.Poly1305.Spec.fst \
+Crypto.Symmetric.Poly1305.fst \
+Crypto.Symmetric.GF128.Spec.fst \
+Crypto.Symmetric.GF128.fst \
+Crypto.Symmetric.MAC.fst \
+Crypto.Symmetric.UF1CMA.fst \
+Crypto.Plain.fst \
+Crypto.Symmetric.PRF.fst \
+Crypto.AEAD.Encoding.fst \
+Crypto.AEAD.Invariant.fst \
+Crypto.AEAD.fst \
+AEADProvider.fst \
 StreamPlain.fst \
-StreamAE.fst \
-MasterSecret.fst \
 StatefulPlain.fst \
 LHAEPlain.fst \
+StreamAE.fst \
 AEAD_GCM.fst \
 MAC.fst \
 Encode.fst \
@@ -117,6 +145,7 @@ StreamDeltas.fst \
 Record.fst \
 HKDF.fst \
 TLSPRF.fst \
+MasterSecret.fst \
 HandshakeLog.fst \
 Negotiation.fst \
 Epochs.fst \
@@ -276,13 +305,15 @@ TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)
 OUTPUT_DIR?=output
 
 # All our extracted modules.
-TLSML := $(FSTS:.fst=.ml)
+TLSML := $(subst .,_,$(FSTS))
+TLSML := $(subst _fst,.ml,$(TLSML))
 TLSML := $(subst Handshake.fsti, , $(TLSML))
 TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
+  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml \
+  FStar_BitVector.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   FStar_Monotonic_Seq.ml \
   $(TLSML)
 # Last step: prefix with the output directory.
@@ -297,7 +328,10 @@ refresh:
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen-deps: $(CONCRETE_FSTS)
+# ADL: there is a problem with sources in external directories (e.g. low-level)
+# Since this rule does nothing I am commenting it out
+tls-gen-deps:
+#       	$(CONCRETE_FSTS)
 
 
 tls-gen: $(LIBFILES) ConcreteFlags

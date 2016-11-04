@@ -20,7 +20,7 @@ open TLSConstants
 open TLSInfo
 open StreamPlain
 
-
+module AEAD = AEADProvider
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
@@ -28,12 +28,11 @@ type rid = FStar.Monotonic.RRef.rid
 
 type id = i:id { is_ID13 i }
 
-let alg (i:id) : CoreCrypto.aead_cipher = AEAD._0 (aeAlg_of_id i)
+let alg (i:id) =
+  let AEAD ae _ = aeAlg_of_id i in ae
 
 let ltag i : nat = CoreCrypto.aeadTagSize (alg i)
-
 let cipherLen i (l:plainLen) : nat = l + ltag i
-
 type cipher i (l:plainLen) = lbytes (cipherLen i l)
 
 // will require proving before decryption
@@ -45,13 +44,9 @@ type entry (i:id) =
 private unfold let min (a:int) (b:int) = if a < b then a else b
 private unfold let max (a:int) (b:int) = if a < b then b else a
 
-// The length of the per-record nonce (iv_length) is set to max(8 bytes, N_MIN)
-// for the AEAD algorithm (see [RFC5116] Section 4)
-let iv_length i = max 8 (CoreCrypto.aeadRealIVSize (alg i))
-
-// key materials 
-type key (i:id) = lbytes (CoreCrypto.aeadKeySize (alg i)) 
-type iv  (i:id) = lbytes (iv_length i)
+// key materials (from the AEAD provider)
+type key (i:id) = AEAD.key i
+type iv  (i:id) = AEAD.salt i
 
 let ideal_log (r:rid) (i:id) = log_t r (entry i)
 
@@ -90,8 +85,7 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
 noeq type state (i:id) (rw:rw) = 
   | State: #region: rgn
          -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
-         -> key: key i
-         -> iv: iv i
+         -> aead: AEAD.state i rw 
          -> log: log_ref log_region i // ghost, subject to cryptographic assumption
          -> counter: ctr_ref region i log // types are sufficient to anti-alias log and counter
          -> state i rw
@@ -130,17 +124,16 @@ val gen: parent:rid -> i:id -> ST (writer i)
  *)
 #set-options "--z3timeout 30"
 let gen parent i =
-  let kv = CoreCrypto.random (CoreCrypto.aeadKeySize (alg i)) in
-  let iv = CoreCrypto.random (iv_length i) in
   let writer_r = new_region parent in
+  let aead = AEAD.gen i writer_r in
   let _ = cut (is_eternal_region writer_r) in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
     let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #max_ctr writer_r 0 log in
-    State #i #Writer #writer_r #writer_r kv iv log ectr
+    State #i #Writer #writer_r #writer_r aead log ectr
   else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
-    State #i #Writer #writer_r #writer_r kv iv () ectr
+    State #i #Writer #writer_r #writer_r aead () ectr
 #reset-options
 
 val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
@@ -160,12 +153,13 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 
 let genReader parent #i w =
   let reader_r = new_region parent in
+  let raead = AEAD.genReader w.aead in
   if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
-    State #i #Reader #reader_r #(w.region) w.key w.iv w.log dctr
+    State #i #Reader #reader_r #(w.region) raead w.log dctr
   else let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
-    State #i #Reader #reader_r #(w.region) w.key w.iv () dctr
+    State #i #Reader #reader_r #(w.region) raead () dctr
 
 // Coerce a writer with index i in a fresh subregion of parent
 // (coerced readers can then be obtained by calling genReader)
@@ -176,33 +170,20 @@ val coerce: parent:rid -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
 let coerce parent i kv iv =
   let writer_r = new_region parent in
   let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
-  State #i #Writer #writer_r #writer_r kv iv () ectr 
+  let aead = AEAD.coerce i writer_r kv iv in
+  State #i #Writer #writer_r #writer_r aead () ectr 
 
 
 val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
-let leak #i #role s = State.key s, State.iv s
+let leak #i #role s =
+  AEAD.leak (State.aead s)
 
-
-// The per-record nonce for the AEAD construction is formed as follows:
-//
-// 1. The 64-bit record sequence number is padded to the left with zeroes to iv_length.
-//
-// 2. The padded sequence number is XORed with the static client_write_iv or server_write_iv,
-//    depending on the role.
-//
-// The XORing is a fixed, ad hoc, random permutation; not sure what is gained;
-// we can reason about sequence-number collisions before applying it.
-private abstract let aeIV i (seqn:counter) (staticIV:iv i) : lbytes (iv_length i) =
-  lemma_repr_bytes_values seqn;
-  let extended = bytes_of_int (iv_length i) seqn in
-  xor (iv_length i) extended staticIV
 
 // we are not relying on additional data
 private abstract let noAD = empty_bytes
-
 
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 -> m_sel h0 (ctr e.counter) < max_ctr))
@@ -228,8 +209,8 @@ let encrypt #i e l p =
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
   let n = m_read ctr in
-  let iv = aeIV i n e.iv in
-  let c = CoreCrypto.aead_encrypt (alg i) e.key iv noAD text in
+  let iv = AEAD.create_nonce e.aead n in
+  let c = AEAD.encrypt i e.aead iv noAD text in
   if authId i then
     begin
     let ilog = ilog e.log in
@@ -290,8 +271,8 @@ let decrypt #i d l c =
       end
     else None
   else //concrete
-     let iv = aeIV i j d.iv in
-     match CoreCrypto.aead_decrypt (alg i) d.key iv noAD c with
+     let iv = AEAD.create_nonce d.aead j in
+     match AEAD.decrypt i d.aead iv noAD c with
      | None -> None
      | Some pr ->
        begin
@@ -300,7 +281,6 @@ let decrypt #i d l c =
        | Some p -> (m_write ctr (j + 1); Some p)
        | None   -> None
        end
-
 
 (* TODO
 

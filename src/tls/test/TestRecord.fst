@@ -79,7 +79,7 @@ private let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: st
       let iv: AEAD_GCM.iv id = bytes_of_hex iv |> unsafe_coerce in
       (* let log: HyperStack.rref _ = ralloc r Seq.createEmpty in *)
       let counter = ralloc r 0 in
-      AEAD_GCM.State #id #Writer #r #r key iv () counter
+      AEAD_GCM.coerce r id key iv
     in
     st
   in
