@@ -32,8 +32,8 @@ module EP   = Epochs
 
 (* A flag for runtime debugging of TLS data. 
    The F* normalizer will erase debug prints at extraction
-   when this false is set to flag *)
-let tls_debug = false
+   when this flag is set to false *)
+inline_for_extraction let tls_debug = false
 
 unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n
 
