@@ -7,8 +7,8 @@
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h
 #else
 #include <errno.h> // MinGW only provides include/errno.h
-#endif
 #include <malloc.h>
+#endif
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
