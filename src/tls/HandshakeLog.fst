@@ -12,7 +12,7 @@ open TLSConstants
 open TLSInfo
 open HandshakeMessages
 
-(* A flag for runtime debugging of computed keys.
+(* A flag for runtime debugging of handshakelog data.
    The F* normalizer will erase debug prints at extraction
    when this false is set to flag *)
 inline_for_extraction let hsl_debug = false
