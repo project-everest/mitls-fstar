@@ -229,21 +229,21 @@ all-ver: $(addsuffix .fst-ver, $(VERIFY))
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
-tls-sanity: $(LIBFILES) $(IDEAL_FSTS) test/False.fst
+tls-sanity: $(LIBFILES) $(FSTS) test/False.fst
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
         --verify_module False \
-	$(IDEAL_FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
+	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # Lax typecheck all files (with ideal flag off)
-tls-lax: $(LIBFILES) $(CONCRETE_FSTS)
+tls-lax: $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
-	$(CONCRETE_FSTS)
+	$(FSTS)
 
 wc:
 	wc -l $(LIBFILES) $(FSTS)
@@ -283,11 +283,8 @@ refresh:
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-tls-gen-deps: $(CONCRETE_FSTS)
-
 
 tls-gen: $(LIBFILES)
-	$(MAKE) tls-gen-deps
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
@@ -298,7 +295,7 @@ tls-gen: $(LIBFILES)
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
 	  --include concrete-flags \
-	  $(CONCRETE_FSTS)
+	  $(FSTS)
 	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
