@@ -12,6 +12,11 @@ open TLSConstants
 open TLSInfo
 open HandshakeMessages
 
+(* A flag for runtime debugging of computed keys.
+   The F* normalizer will erase debug prints at extraction
+   when this false is set to flag *)
+inline_for_extraction let hsl_debug = false
+
 abstract type hs_log = list hs_msg
 
 let reveal_hs_log (hsl:hs_log) : GTot (list hs_msg) = hsl
@@ -99,7 +104,10 @@ let getBytes (LOG #reg lref) =
 val getHash: log -> h:CoreCrypto.hash_alg -> St (b:bytes{length b = CoreCrypto.hashSize h})
 let getHash (LOG #reg lref) h = 
     let (| pv, hsl, lb|) = !lref in
-    let b = print_log hsl in
+    let b = 
+        if hsl_debug then
+            print_log hsl 
+        else false in
     CoreCrypto.hash h lb
 
 type validLog_CH (l:hs_log) =
