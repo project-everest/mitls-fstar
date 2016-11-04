@@ -22,7 +22,7 @@ open TLSConstants
 open TLSInfo
 // open AEADPlain 
 
-let ideal = IdealFlags.ideal_AEAD
+let ideal = Flags.ideal_AEAD
 
 // floating
 private inline let min (a:int) (b:int) = if a < b then a else b

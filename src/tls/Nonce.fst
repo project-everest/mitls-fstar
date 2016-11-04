@@ -10,7 +10,7 @@ module MR = FStar.Monotonic.RRef
 
 type random = lbytes 32
 
-let ideal = IdealFlags.ideal_Nonce // controls idealization of random sample: collision-avoidance.
+let ideal = Flags.ideal_Nonce // controls idealization of random sample: collision-avoidance.
 
 val timestamp: unit -> ST (lbytes 4)
   (requires (fun h0 -> True))
