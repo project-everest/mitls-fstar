@@ -30,7 +30,7 @@ module SD   = StreamDeltas
 module Conn = Connection
 module EP   = Epochs
 
-(* A flag for runtime debugging of computed keys.
+(* A flag for runtime debugging of TLS data. 
    The F* normalizer will erase debug prints at extraction
    when this false is set to flag *)
 let tls_debug = false

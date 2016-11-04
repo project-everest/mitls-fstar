@@ -34,7 +34,7 @@ module MS = FStar.Monotonic.Seq
 //<expose for TestClient>
 #set-options "--lax"
 
-(* A flag for runtime debugging of computed keys.
+(* A flag for runtime debugging of Handshake data. 
    The F* normalizer will erase debug prints at extraction
    when this false is set to flag *)
 let hs_debug = false
