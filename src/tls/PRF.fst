@@ -19,7 +19,7 @@ let sample (i:msId) = {bytes = Nonce.random 48}
 let coerce (i:msId) b = {bytes = b}
 let leak (i:msId) ms = ms.bytes
 
-(*** Key Derivation ***) 
+(* Key Derivation *) 
 
 let keyExtensionLength i =
     let op_Star x y = op_Multiply x y in
@@ -39,8 +39,8 @@ let keyExtensionLength i =
             2 * msize
         (* AEAD currently not fully implemented or verified *)               
         | AEAD cAlg _  ->
-            let aksize = aeadKeySize cAlg in
-            let ivsize = aeadSaltSize cAlg in
+            let aksize = AEADProvider.key_length i in
+            let ivsize = AEADProvider.salt_length i in
             2 * (aksize + ivsize)
 
 
@@ -82,8 +82,8 @@ let deriveRawKeys (i:id) (ms:ms)  =
             (ck,sk))
     (* AEAD currently not fully implemented or verified *)
     | AEAD encAlg prf ->
-        let aksize = aeadKeySize encAlg in
-        let ivsize = aeadSaltSize encAlg in
+        let aksize = AEADProvider.key_length i in
+        let ivsize = AEADProvider.salt_length i in
         let cekb, b = split b aksize in
         let sekb, b = split b aksize in
         let civb, sivb = split b ivsize in
@@ -225,7 +225,7 @@ let keyGenServer (rdId:id) (wrId:id) ms =
     deriveKeys rdId wrId ms Server
 
 
-(*** VerifyData ***) 
+(* VerifyData *) 
 
 // Before TLS 1.3, the payload of finished messages is a MAC keyed
 // with the master secret, thereby requiring a joint security assumption.

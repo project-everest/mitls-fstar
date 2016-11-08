@@ -98,10 +98,6 @@ PSK.fst \
 TLSInfo.fst \
 IdNonce.fst \
 TLSExtensions.fst \
-Range.fst \
-DataStream.fst \
-Alert.fst \
-Content.fst \
 Buffer.Utils.fst \
 Crypto.Symmetric.Bytes.fst \
 Crypto.Indexing.fst \
@@ -130,6 +126,10 @@ Crypto.AEAD.Encoding.fst \
 Crypto.AEAD.Invariant.fst \
 Crypto.AEAD.fst \
 AEADProvider.fst \
+Range.fst \
+DataStream.fst \
+Alert.fst \
+Content.fst \
 StreamPlain.fst \
 StatefulPlain.fst \
 LHAEPlain.fst \
@@ -362,7 +362,7 @@ tls-gen: $(LIBFILES) ConcreteFlags
 	$(EXTRA_PATH) ./test.out
 
 #16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
-mitls.exe: tls-gen
+mitls.exe:# tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 

@@ -59,7 +59,7 @@ let main () =
   let d = decryptRecord #id rd ct c in
   match d with
   | Some text' ->
-    if text' <> text then
+    if (iutf8 text') <> (iutf8 text) then
       begin
       IO.print_string ("GCM test: FAIL\n");
       IO.print_string ("Unexpected output: " ^ (iutf8 text') ^ ",\nexpected = " ^ (iutf8 text) ^ "\n");

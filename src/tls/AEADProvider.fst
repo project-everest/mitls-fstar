@@ -28,7 +28,7 @@ type provider =
   | LowProvider
 
 let use_provider () : Tot provider =
-  CCProvider
+  LowProvider
 let debug = false
 
 type u32 = FStar.UInt32.t
@@ -74,13 +74,37 @@ let alg i = let AEAD aead _ = aeAlg_of_id i in aead
 let iv_length i = CC.aeadRealIVSize (alg i)
 abstract type iv (i:id) = lbytes (iv_length i)
 
+let key_length i = CC.aeadKeySize (alg i)
+
 // Salt is the static part of IVs
 let salt_length i =
   match pv_of_id i with
   | TLS_1p3 -> iv_length i
-  | _ -> aeadSaltSize (alg i)
+  | _ ->
+    match alg i with
+    | CC.AES_128_GCM       -> 4
+    | CC.AES_128_CCM       -> 4
+    | CC.AES_128_CCM_8     -> 4
+    | CC.AES_256_GCM       -> 4
+    | CC.AES_256_CCM       -> 4
+    | CC.AES_256_CCM_8     -> 4
+    | CC.CHACHA20_POLY1305 -> 12
 
-type key  (i:id) = lbytes (CC.aeadKeySize (alg i))
+// Length of the explicit (sent on wire) IV
+let explicit_iv_length i =
+  match pv_of_id i with
+  | TLS_1p3 -> 0
+  | _ ->
+    match alg i with
+    | CC.AES_128_GCM       -> 8
+    | CC.AES_128_CCM       -> 8
+    | CC.AES_128_CCM_8     -> 8
+    | CC.AES_256_GCM       -> 8
+    | CC.AES_256_CCM       -> 8
+    | CC.AES_256_CCM_8     -> 8
+    | CC.CHACHA20_POLY1305 -> 0
+
+type key  (i:id) = lbytes (key_length i)
 type salt (i:id) = lbytes (salt_length i)
 
 noeq type state (i:id) (r:rw) =
@@ -183,7 +207,7 @@ let encrypt (i:id) (st:state i Writer) (iv:iv i) (ad:bytes) (plain:bytes)
         let adh = hex_of_bytes ad in
         let ph = hex_of_bytes plain in
         let ch = hex_of_bytes cipher in
-        IO.debug_print_string ("ENCRYPT[K="^kh^",IV="^ivh^",AD="^adh^",PLAIN="^ph^"] = "^ch^"\n")
+        IO.debug_print_string ("CCProvider: ENCRYPT[K="^kh^",IV="^ivh^",AD="^adh^",PLAIN="^ph^"] = "^ch^"\n")
       else false in
     if r then cipher else cipher
   | LowProvider ->
@@ -203,7 +227,6 @@ let encrypt (i:id) (st:state i Writer) (iv:iv i) (ad:bytes) (plain:bytes)
     let cipher = Buffer.create 0uy cipherlen in
     AE.encrypt i st iv adlen ad plainlen plain cipher;
     let cipher = to_bytes cipherlen cipher in
-
     cipher
 
 let decrypt (i:id) (st:state i Reader) (iv:iv i) (ad:bytes) (cipher:bytes)
@@ -223,13 +246,12 @@ let decrypt (i:id) (st:state i Reader) (iv:iv i) (ad:bytes) (cipher:bytes)
     let CoreCrypto key _ = st in
     let plain = CC.aead_decrypt (alg i) key iv ad cipher in
     let r =
-      if debug && is_Some plain then
+      if debug then
         let kh = hex_of_bytes key in
         let ivh = hex_of_bytes iv in
         let adh = hex_of_bytes ad in
-        let ph = hex_of_bytes (Some.v plain) in
         let ch = hex_of_bytes cipher in
-        IO.debug_print_string ("DECRYPT[K="^kh^",IV="^ivh^",AD="^adh^",C="^ch^"] = "^ph^"\n")
+        IO.debug_print_string ("CCProvider: DECRYPT[K="^kh^",IV="^ivh^",AD="^adh^",C="^ch^"] = "^(if is_Some plain then hex_of_bytes (Some.v plain) else "FAIL")^"\n")
       else false in
     if r then plain else plain
   | LowProvider ->
@@ -241,14 +263,15 @@ let decrypt (i:id) (st:state i Reader) (iv:iv i) (ad:bytes) (cipher:bytes)
     let cipherlen = uint_to_t (length cipher) in
     let plainlen = uint_to_t (length cipher - CC.aeadTagSize (alg i)) in
     let ad = from_bytes adlen ad in
-    let cipher = from_bytes cipherlen cipher in
+    let cbuf = from_bytes cipherlen cipher in
     let plain = Plain.create i 0uy plainlen in
-    if AE.decrypt i st iv adlen ad plainlen plain cipher then
+    if AE.decrypt i st iv adlen ad plainlen plain cbuf then
       let plain = to_bytes plainlen (Plain.bufferRepr #i plain) in
       let r =
         if debug then
           let ph = hex_of_bytes plain in
-          IO.debug_print_string ("LowProvider: decrypt[] = "^ph^"\n")
+          let ch = hex_of_bytes cipher in
+          IO.debug_print_string ("LowProvider: decrypt[C="^ch^"] = "^ph^"\n")
         else false in
       (if r then Some plain else Some plain) // Outsmarting the Tot inliner
     else None

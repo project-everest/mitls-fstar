@@ -56,7 +56,7 @@ let aeKeySize (i:stae_id) =
     AEADProvider.iv_length i
   else
     CoreCrypto.aeadKeySize (AEAD._0 (aeAlg_of_id i)) +
-    TLSConstants.aeadSaltSize (AEAD._0 (aeAlg_of_id i))
+    AEADProvider.salt_length i
 
 type keyBytes (i:stae_id) = lbytes (aeKeySize i)
 
