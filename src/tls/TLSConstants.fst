@@ -1004,7 +1004,7 @@ let rec names_of_cipherSuites css =
 
 // migrated contentType to Content.fst (this is internal to TLS)
 
-val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot bytes
+val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot (b:bytes{length b <= 8})
 let bytes_of_seq sn = bytes_of_int 8 sn
 
 val seq_of_bytes: b:bytes{ length b <= 8 } -> Tot nat

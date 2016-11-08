@@ -199,9 +199,9 @@ let encrypt #i e ad rg p =
   m_recall ctr;
   let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in  
   let n = m_read ctr in
+  lemma_repr_bytes_values n;
   let nb = bytes_of_seq n in
   let nonce_explicit, _ = split nb (AEAD.explicit_iv_length i) in
-  lemma_repr_bytes_values n;
   let iv = AEAD.create_nonce e.aead n in
   lemma_repr_bytes_values (length text);
   let ad' = ad @| bytes_of_int 2 (length text) in
@@ -252,8 +252,8 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
   m_recall ctr;
-  let j = m_read ctr in
   if authId i then
+    let j = m_read ctr in
     let ilog = ilog d.log in
     let log = m_read ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
@@ -266,11 +266,12 @@ let decrypt #i d ad c =
       end
     else None
   else // Concrete
-    // We trim off the explicit nonce but don't actually use it
-    // (with ChaCha20 we must reply on the implicit sequence number anyway)
-    let nonce_explicit,c' = split c (AEAD.explicit_iv_length i) in
-    let nonce_implicit = bytes_of_seq j in
-    let iv = AEAD.create_nonce d.aead (int_of_bytes nonce_implicit) in
+    // We discard the explicit nonce and use the internal sequence number
+    // (ChaCha20 doesn't use the explicit nonce)
+    let nonce_explicit, c' = split c (AEAD.explicit_iv_length i) in
+    let j : counter (alg i) = m_read ctr in
+    lemma_repr_bytes_values j;
+    let iv = AEAD.create_nonce d.aead j in
     let len = length c' - aeadTagSize (alg i) in
     lemma_repr_bytes_values len;
     let ad' = ad @| bytes_of_int 2 len in

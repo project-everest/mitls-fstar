@@ -112,7 +112,7 @@ noeq type state (i:id) (r:rw) =
 | LowLevel: st:Crypto.AEAD.Invariant.state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
 
 type nonce i =
-  seqn:nat{seqn < pow2 (op_Multiply 8 (salt_length i))}
+  seqn:nat{seqn < 18446744073709551616}
 
 let create_nonce (#i:id) (#rw:rw) (s:state i rw) (n:nonce i) : Tot (iv i) =
   let salt = match s with
@@ -132,7 +132,7 @@ let create_nonce (#i:id) (#rw:rw) (s:state i rw) (n:nonce i) : Tot (iv i) =
 let gen (i:id) (r:rid)
   : ST (state i Writer)
   (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> h1=h0))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
   =
   match use_provider() with
   | CCProvider ->
@@ -147,7 +147,7 @@ let gen (i:id) (r:rid)
 let leak (#i:id{~(authId i)}) (#rw:rw) (st:state i rw)
   : ST (key i * salt i)
   (requires (fun h0 -> ~(authId i)))
-  (ensures (fun h0 _ h1 -> h0=h1))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
   =
   match st with
   | CoreCrypto k s -> (k, s)
@@ -164,7 +164,7 @@ let leak (#i:id{~(authId i)}) (#rw:rw) (st:state i rw)
 let genReader (#i:id) (st:state i Writer)
   : ST (state i Reader)
   (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> h1=h0))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
   =
   match use_provider() with
   | LowProvider ->
@@ -179,7 +179,7 @@ let genReader (#i:id) (st:state i Writer)
 let coerce (i:id) (r:rid) (k:key i) (s:salt i)
   : ST (state i Writer)
   (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> h1=h0))
+  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
   =
   match use_provider() with
   | CCProvider ->
@@ -193,7 +193,7 @@ let encrypt (i:id) (st:state i Writer) (iv:iv i) (ad:bytes) (plain:bytes)
   : ST (cipher:bytes)
   (requires (fun _ ->
     FStar.UInt.size (length ad) 32 /\ FStar.UInt.size (length plain) 32))
-  (ensures (fun h0 cipher h1 -> h0 = h1 /\
+  (ensures (fun h0 cipher h1 -> modifies Set.empty h0 h1 /\
     length cipher = length plain + CC.aeadTagSize (alg i)))
   =
   match use_provider() with
@@ -232,14 +232,13 @@ let encrypt (i:id) (st:state i Writer) (iv:iv i) (ad:bytes) (plain:bytes)
 let decrypt (i:id) (st:state i Reader) (iv:iv i) (ad:bytes) (cipher:bytes)
   : ST (co:option bytes)
   (requires (fun _ -> True))
-  (ensures (fun _ _ _ -> True))
 //  (requires (fun _ ->
 //    FStar.UInt.size (length ad) 32
 //    /\ FStar.UInt.size (length cipher) 32
 //    /\ length cipher >= CC.aeadTagSize (alg i))
-//  (ensures (fun h0 plain h1 -> h0 = h1 /\
-//    is_Some plain ==> length cipher = length (Some.v plain) + CC.aeadTagSize (alg i)
-//  ))
+  (ensures (fun h0 plain h1 -> modifies Set.empty h0 h1 /\
+    is_Some plain ==> length cipher = length (Some.v plain) + CC.aeadTagSize (alg i)
+  ))
   =
   match use_provider() with
   | CCProvider ->
