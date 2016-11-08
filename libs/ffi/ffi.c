@@ -7,8 +7,8 @@
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h
 #else
 #include <errno.h> // MinGW only provides include/errno.h
-#endif
 #include <malloc.h>
+#endif
 #include <caml/callback.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
@@ -262,6 +262,7 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
     
     version = caml_copy_string(tls_version);  
     host = caml_copy_string(host_name);
+    caml_acquire_runtime_system();
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
         fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(config)));
@@ -279,6 +280,7 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
             ret = 1;
         }
     }
+    caml_release_runtime_system();
     restore_stdio(&r, outmsg, errmsg);
     
     CAMLreturnT(int,ret);
@@ -288,7 +290,9 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
 void FFI_mitls_close(mitls_state *state)
 {
     if (state) {
+        caml_acquire_runtime_system();
         caml_remove_generational_global_root(&state->fstar_state);
+        caml_release_runtime_system();
         state->fstar_state = 0;
         free(state);
     }
@@ -384,6 +388,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
     *errmsg = NULL;
     redirect_stdio(&r);
     
+    caml_acquire_runtime_system();
     result = caml_callback2_exn(*g_mitls_FFI_Connect, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
         fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
@@ -403,6 +408,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         // subsequent FFI.read and FFI.write is TBD.
         
     }
+    caml_release_runtime_system();
     restore_stdio(&r, outmsg, errmsg);
     CAMLreturnT(int,ret);
 }
@@ -419,6 +425,7 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     *errmsg = NULL;
     redirect_stdio(&r);
     
+    caml_acquire_runtime_system();
     buffer_value = caml_alloc_string(buffer_size);
     memcpy(Bp_val(buffer_value), buffer, buffer_size);
     
@@ -429,6 +436,7 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     } else {
         ret = 1;
     }
+    caml_release_runtime_system();
     
     restore_stdio(&r, outmsg, errmsg);
     CAMLreturnT(int,ret);
@@ -446,6 +454,7 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
     *errmsg = NULL;
     redirect_stdio(&r);
 
+    caml_acquire_runtime_system();
     result = caml_callback_exn(*g_mitls_FFI_Recv, state->fstar_state);
     if (Is_exception_result(result)) {
         fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
@@ -454,6 +463,7 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
         // Return the plaintext data
         p = copypacket(result, packet_size);
     }
+    caml_release_runtime_system();
     
     restore_stdio(&r, outmsg, errmsg);
     CAMLreturnT(void*,p);

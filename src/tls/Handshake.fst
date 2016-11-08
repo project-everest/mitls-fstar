@@ -34,6 +34,11 @@ module MS = FStar.Monotonic.Seq
 //<expose for TestClient>
 #set-options "--lax"
 
+(* A flag for runtime debugging of Handshake data. 
+   The F* normalizer will erase debug prints at extraction
+   when this flag is set to false. *)
+inline_for_extraction let hs_debug = false
+
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
@@ -537,7 +542,10 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
            | Some pk ->
 	     let valid = Signature.verify #a h pk tbs sigv in
 	     //let _ = IO.debug_print_string("tbs = " ^ (Platform.Bytes.print_bytes tbs) ^ "\n") in
-	     let _ = IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n") in
+	     let _ = 
+        if hs_debug then 
+          IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n") 
+        else false in
 	     if valid then
 	       begin
                match ske.ske_kex_s with
@@ -712,7 +720,10 @@ let processServerFinished_13 cfg n ks log msgs =
            match Signature.get_chain_public_key #a c.crt_chain with
            | Some pk ->
              let valid = Signature.verify ha pk tbs sigv in
-             let _ = IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n") in
+             let _ = 
+              if hs_debug then
+                IO.debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n")
+              else false in
              if valid then
                let _ = log @@ CertificateVerify(cv) in
                let svd = KeySchedule.ks_client_13_server_finished ks in
@@ -1196,7 +1207,10 @@ let rec next_fragment i hs =
           | None -> false
           | Some Reader -> Epochs.incr_reader lgref; true // possibly used by server in 0-RT
           | Some Writer -> Epochs.incr_writer lgref; true in
-       let tbb = IO.debug_print_string (" *** WRITE "^(print_bytes b)^"\n") in
+       let tbb = 
+        if hs_debug then 
+          IO.debug_print_string (" *** WRITE "^(print_bytes b)^"\n")
+        else false in
        hsref := {!hsref with
          hs_buffers = {(!hsref).hs_buffers with
            hs_outgoing = empty_bytes;
@@ -1271,7 +1285,10 @@ val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
   (ensures (recv_ensures s))
 let recv_fragment hs #i f = 
     let (| rg,rb |) = f in
-    let b = IO.debug_print_string ("   ***** RAW "^(print_bytes rb)^"\n") in
+    let b = 
+      if hs_debug then
+        IO.debug_print_string ("   ***** RAW "^(print_bytes rb)^"\n")
+      else false in
     let (HS #r0 r res cfg id lgref hsref) = hs in
     let b = (!hsref).hs_buffers.hs_incoming in
     let b = b @| rb in
@@ -1281,16 +1298,26 @@ let recv_fragment hs #i f =
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
     match parseHandshakeMessages pv kex b with
     | Error (ad, s) ->
-      let _ = IO.debug_print_string ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n") in InError (ad,s)
+      let _ = 
+        if hs_debug then
+          IO.debug_print_string ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n")
+        else false in 
+      InError (ad,s)
     | Correct(r,hsl) ->
        let hsl = List.Tot.append (!hsref).hs_buffers.hs_incoming_parsed hsl in
        hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
-      let b = print_hsl hsl in
+      let b = 
+        if hs_debug then 
+          print_hsl hsl 
+        else false in
       (match (!hsref).hs_state,hsl with 
        | C (C_Idle ri), _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
        | C (C_HelloSent ri ch), (ServerHello(sh),l)::hsl 
 	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) ->
-           let _ = IO.debug_print_string "Processing client hello...\n" in
+           let _ = 
+            if hs_debug then
+              IO.debug_print_string "Processing client hello...\n"
+            else false in
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 	   client_handle_server_hello hs [(ServerHello(sh),l)]
        | C (C_HelloReceived n), (Certificate(c),l)::
@@ -1388,7 +1415,10 @@ val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge 
     (is_InError result \/ result = InAck true false)
     ))
 let recv_ccs hs =
-    let b = IO.debug_print_string ("CALL recv_ccs\n") in
+    let b = 
+      if hs_debug then 
+        IO.debug_print_string ("CALL recv_ccs\n")
+      else false in
     let (HS #r0 r res cfg id lgref hsref) = hs in
     let pv,kex = 
       (match (!hsref).hs_nego with 

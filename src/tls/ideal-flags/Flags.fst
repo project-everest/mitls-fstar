@@ -1,4 +1,4 @@
-module IdealFlags
+module Flags
 
 assume val ideal_Nonce : bool  
 assume val ideal_Sig : bool 

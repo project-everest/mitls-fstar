@@ -12,6 +12,11 @@ open HandshakeMessages
 open TLSExtensions 
 open CoreCrypto
 
+(* A flag for runtime debugging of negotiation data.
+   The F* normalizer will erase debug prints at extraction
+   when this flag is set to false. *)
+inline_for_extraction let n_debug = false
+
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData 
 
@@ -224,7 +229,10 @@ let computeServerMode cfg cpv ccs cexts comps ri =
           | _ -> false)
         | _ -> false)
     | _ ->
-       let _ = IO.debug_print_string "WARNING cannot load server cert; restricting to anonymous CS...\n" in
+       let _ = 
+        if n_debug then 
+          IO.debug_print_string "WARNING cannot load server cert; restricting to anonymous CS...\n"
+        else false in
        nosa in
   let ccs = List.Tot.filter sigfilter ccs in
   match negotiateCipherSuite cfg npv ccs with

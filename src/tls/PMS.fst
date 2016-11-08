@@ -6,7 +6,7 @@ open Platform.Bytes
 open TLSConstants
 open CoreCrypto
 
-let ideal = IdealFlags.ideal_PMS // controls idealization of PMS.
+let ideal = Flags.ideal_PMS // controls idealization of PMS.
 
 
 type rsarepr = bytes

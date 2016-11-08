@@ -11,8 +11,7 @@ clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
 	$(MAKE) -C $(FFI_HOME) clean
-	rm -rf IdealFlags.fst *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
-	rm -rf ideal-flags concrete-flags
+	rm -rf *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
 	rm -rf test/*.cm* test/*.o
 
 # ------------------ Dependencies on F* & its libraries --------------
@@ -79,7 +78,7 @@ endif
 # These files are all extracted via lax type-checking in tls-gen
 # Files are listed in dependency order
 
-FSTS=IdealFlags.fst \
+FSTS=Flags.fst \
 MonotoneMap.fst \
 TLSError.fst \
 TLSConstants.fst \
@@ -162,9 +161,6 @@ test/TestHandshake.fst \
 test/TestFFI.fst \
 test/TestAPI.fst #the preceding space is significant!
 
-CONCRETE_FSTS=$(subst IdealFlags.fst, concrete-flags/IdealFlags.fst, $(FSTS))
-IDEAL_FSTS=$(subst IdealFlags.fst, ideal-flags/IdealFlags.fst, $(FSTS))
-
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it
 # should be added here.
@@ -174,7 +170,7 @@ IDEAL_FSTS=$(subst IdealFlags.fst, ideal-flags/IdealFlags.fst, $(FSTS))
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
 VERIFY= \
-IdealFlags \
+Flags \
 MonotoneMap \
 TLSError \
 TLSConstants \
@@ -222,20 +218,10 @@ depend:
 
 #include .depend
 
-ConcreteFlags: Concrete.fst
-	mkdir -p concrete-flags
-	cp Concrete.fst concrete-flags/IdealFlags.fst
-
-IdealFlags: Ideal.fst
-	mkdir -p ideal-flags
-	cp Ideal.fst ideal-flags/IdealFlags.fst
-
-all-ver: IdealFlags $(addsuffix .fst-ver, $(subst IdealFlags, ideal-flags/IdealFlags, $(VERIFY)))
-
-all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(CONCRETE_FSTS)))
+all-ver: $(addsuffix .fst-ver, $(VERIFY))
 
 # Lax-checking one file at a time
-%.fst-lax: ConcreteFlags $(LIBFILES)
+%.fst-lax: $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
@@ -243,14 +229,14 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(CONCRETE_FSTS)))
 	$(basename $@).fst
 
 # Verifying one file at a time
-%.fst-ver: IdealFlags $(LIBFILES)
+%.fst-ver: $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
-%.fsti-ver: IdealFlags $(LIBFILES)
+%.fsti-ver: $(LIBFILES)
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
@@ -258,13 +244,13 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(CONCRETE_FSTS)))
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
-%.fst-in: IdealFlags
+%.fst-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
 	--verify_module $(basename $(notdir $@))
 
-%.fsti-in: IdealFlags
+%.fsti-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
@@ -272,21 +258,21 @@ all-lax: ConcreteFlags $(addsuffix .fst-lax, $(basename $(CONCRETE_FSTS)))
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
-tls-sanity: IdealFlags $(LIBFILES) $(IDEAL_FSTS) test/False.fst
+tls-sanity: $(LIBFILES) $(FSTS) test/False.fst
 	$(MAKE) refresh
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
         --verify_module False \
-	$(IDEAL_FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
+	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # Lax typecheck all files (with ideal flag off)
-tls-lax: $(LIBFILES) ConcreteFlags $(CONCRETE_FSTS)
+tls-lax: $(LIBFILES)
 	$(MAKE) refresh
 	$(FSTAR) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
-	$(CONCRETE_FSTS)
+	$(FSTS)
 
 wc:
 	wc -l $(LIBFILES) $(FSTS)
@@ -328,14 +314,8 @@ refresh:
 # changed; however, extraction is a global operation that touches every .ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
-# ADL: there is a problem with sources in external directories (e.g. low-level)
-# Since this rule does nothing I am commenting it out
-tls-gen-deps:
-#       	$(CONCRETE_FSTS)
 
-
-tls-gen: $(LIBFILES) ConcreteFlags
-	$(MAKE) tls-gen-deps
+tls-gen: $(LIBFILES)
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
@@ -346,7 +326,7 @@ tls-gen: $(LIBFILES) ConcreteFlags
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
 	  --include concrete-flags \
-	  $(CONCRETE_FSTS)
+	  $(FSTS)
 	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.

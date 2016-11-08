@@ -41,8 +41,8 @@ let secretLabel = function
 
 (* A flag for runtime debugging of computed keys.
    The F* normalizer will erase debug prints at extraction
-   when this false is set to flag *)
-let ks_debug = false
+   when this flag is set to false *)
+inline_for_extraction let ks_debug = false
 
 let print_share k : St bool =
   let kb = CommonDH.serialize_raw k in

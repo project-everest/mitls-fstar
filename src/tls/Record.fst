@@ -14,6 +14,11 @@ open Content
 
 // Consider merging some of this module with Content?
 
+(* A flag for runtime debugging of record data.
+   The F* normalizer will erase debug prints at extraction
+   when this flag is set to false. *)
+inline_for_extraction let r_debug = false
+
 // ------------------------outer packet format -------------------------------
 
 // the "outer" header has the same format for all versions of TLS
@@ -35,7 +40,10 @@ let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
 //      ctBytes ct 
 //   @| versionBytes ver
    @| bytes_of_int 2 (length data) in
-  let _ = IO.debug_print_string (" RECORD HEADERS: "^(print_bytes header)^"\n") in
+  let _ = 
+    if r_debug then
+     IO.debug_print_string (" RECORD HEADERS: "^(print_bytes header)^"\n") 
+    else false in
   header @| data 
 
 
