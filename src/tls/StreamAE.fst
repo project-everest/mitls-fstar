@@ -209,7 +209,8 @@ let encrypt #i e l p =
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
   let n = m_read ctr in
-  let iv = AEAD.create_nonce e.aead n in
+  let nb = bytes_of_int (AEAD.noncelen i) n in
+  let iv = AEAD.create_nonce e.aead nb in
   let c = AEAD.encrypt i e.aead iv noAD text in
   if authId i then
     begin
@@ -271,16 +272,17 @@ let decrypt #i d l c =
       end
     else None
   else //concrete
-     let iv = AEAD.create_nonce d.aead j in
-     match AEAD.decrypt i d.aead iv noAD c with
-     | None -> None
-     | Some pr ->
-       begin
+   let nb = bytes_of_int (AEAD.noncelen i) j in
+   let iv = AEAD.create_nonce d.aead nb in
+   match AEAD.decrypt i d.aead iv noAD c with
+   | None -> None
+   | Some pr ->
+     begin
        assert (Platform.Bytes.length pr = l);
        match mk_plain i l pr with
        | Some p -> (m_write ctr (j + 1); Some p)
        | None   -> None
-       end
+     end
 
 (* TODO
 

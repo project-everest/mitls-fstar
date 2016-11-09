@@ -28,7 +28,7 @@ type provider =
   | LowProvider
 
 let use_provider () : Tot provider =
-  LowProvider
+  CCProvider
 let debug = false
 
 type u32 = FStar.UInt32.t
@@ -111,23 +111,23 @@ noeq type state (i:id) (r:rw) =
 | CoreCrypto: key:key i -> salt:salt i -> state i r
 | LowLevel: st:Crypto.AEAD.Invariant.state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
 
-type nonce i =
-  seqn:nat{seqn < 18446744073709551616}
+let noncelen i =
+  match (pv_of_id i, alg i) with
+  | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
+    iv_length i
+  | _ -> (iv_length i) - (salt_length i)
+
+type nonce i = lbytes (noncelen i)
 
 let create_nonce (#i:id) (#rw:rw) (s:state i rw) (n:nonce i) : Tot (iv i) =
   let salt = match s with
     | CoreCrypto _ s -> s
     | LowLevel _ s -> s in
-  let iv =
-    match (pv_of_id i, alg i) with
-    | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
-      let extended = bytes_of_int (iv_length i) n in
-      xor (iv_length i) extended salt
-    | _ ->
-      let elen = (iv_length i) - (salt_length i) in
-      let explicit = bytes_of_int elen n in
-      salt @| explicit
-  in iv
+  match (pv_of_id i, alg i) with
+  | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
+    xor (iv_length i) n salt
+  | _ ->
+    salt @| n
 
 let gen (i:id) (r:rid)
   : ST (state i Writer)

@@ -15,6 +15,20 @@ open TLS
 
 module CC = CoreCrypto
 
+let rec read_loop con r =
+  match TLS.read con r with
+  | Read (DataStream.Data d) ->
+    let db = DataStream.appBytes d in
+//    IO.print_string ("Received data: "^(iutf8 db));
+    read_loop con r
+  | ReadError _ t ->
+    IO.print_string ("ReadError: "^t^"\n")
+  | Read (DataStream.Alert a)->
+    IO.print_string ("Got alert: "^(string_of_ad a)^"\n");
+    IO.print_string "Closing connection.\n";
+    let _ = TLS.writeCloseNotify con in
+    ()
+
 let client config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
   let tcp = Transport.connect host port in
@@ -25,24 +39,18 @@ let client config host port =
   match TLS.read con id with
     | Complete ->
        IO.print_string "Read OK, sending HTTP request...\n";
-       let payload = utf8 ("GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n") in
+       let payload = utf8 ("GET /r HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n") in
        let id = TLS.currentId con Writer in
        let rg : Range.frange id = Range.point (length payload) in
        let f = DataStream.appFragment id rg payload in
        (match TLS.write con f with
-       | Written -> (
-         let id = TLS.currentId con Reader in
-         match TLS.read con id with
-         | Read (DataStream.Data d) ->
-           let db = DataStream.appBytes d in
-           IO.print_string ("Received data: "^(iutf8 db));
-           let _ = TLS.writeCloseNotify con in
-           IO.print_string "Closing connection.\n")
-//           (match TLS.read con id with
-//           | Read DataStream.Close -> IO.print_string "Received close_notify! Closing socket.\n"
-//           | _ -> IO.print_string "improperly closed connection\n"))
+       | Written ->
+         let r = TLS.currentId con Reader in
+         read_loop con r
        | WriteError _ t -> IO.print_string ("Write error:"^t^"\n")
        | _ -> IO.print_string "unexpted ioresult_w\n")
+    | ReadError o t ->
+      IO.print_string ("ReadError: "^t^"\n")
     | _ -> IO.print_string "unexpected ioresult_i read\n"
 
 private let rec aux_server config sock =
