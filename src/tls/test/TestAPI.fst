@@ -19,10 +19,14 @@ let rec read_loop con r =
   match TLS.read con r with
   | Read (DataStream.Data d) ->
     let db = DataStream.appBytes d in
-//    IO.print_string ("Received data: "^(iutf8 db));
+    IO.print_string ("Received data: "^(iutf8 db));
     read_loop con r
   | ReadError _ t ->
     IO.print_string ("ReadError: "^t^"\n")
+  | Read (DataStream.Close) ->
+    IO.print_string "Got close_notify, closing connection...\n";
+    let _ = TLS.writeCloseNotify con in
+    ()
   | Read (DataStream.Alert a)->
     IO.print_string ("Got alert: "^(string_of_ad a)^"\n");
     IO.print_string "Closing connection.\n";
@@ -39,7 +43,7 @@ let client config host port =
   match TLS.read con id with
     | Complete ->
        IO.print_string "Read OK, sending HTTP request...\n";
-       let payload = utf8 ("GET /r HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n") in
+       let payload = utf8 ("GET / HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
        let id = TLS.currentId con Writer in
        let rg : Range.frange id = Range.point (length payload) in
        let f = DataStream.appFragment id rg payload in

@@ -13,6 +13,7 @@ open FStar.UInt32
 
 module Plain = Crypto.Plain
 module CC = CoreCrypto
+module CAEAD = LowCProvider
 module AE = Crypto.AEAD
 module CB = Crypto.Symmetric.Bytes
 
@@ -26,9 +27,10 @@ module CB = Crypto.Symmetric.Bytes
 type provider =
   | CCProvider
   | LowProvider
+  | LowCProvider
 
 let use_provider () : Tot provider =
-  CCProvider
+  LowCProvider
 let debug = false
 
 type u32 = FStar.UInt32.t
@@ -109,6 +111,7 @@ type salt (i:id) = lbytes (salt_length i)
 
 noeq type state (i:id) (r:rw) =
 | CoreCrypto: key:key i -> salt:salt i -> state i r
+| LowC: st:CAEAD.aead_state -> key:key i -> salt:salt i -> state i r
 | LowLevel: st:Crypto.AEAD.Invariant.state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
 
 let noncelen i =
@@ -122,7 +125,8 @@ type nonce i = lbytes (noncelen i)
 let create_nonce (#i:id) (#rw:rw) (s:state i rw) (n:nonce i) : Tot (iv i) =
   let salt = match s with
     | CoreCrypto _ s -> s
-    | LowLevel _ s -> s in
+    | LowLevel _ s -> s
+    | LowC _ _ s -> s in
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
     xor (iv_length i) n salt
@@ -139,6 +143,11 @@ let gen (i:id) (r:rid)
     let kv : key i = CC.random (CC.aeadKeySize (alg i)) in
     let salt : salt i = CC.random (salt_length i) in
     CoreCrypto kv salt
+  | LowCProvider ->
+    let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
+    let salt: salt i = CC.random (salt_length i) in
+    let st = CAEAD.aead_create (alg i) kv in
+    LowC st kv salt
   | LowProvider ->
     let salt : salt i = CC.random (salt_length i) in
     let st = AE.gen i r in
@@ -151,6 +160,7 @@ let leak (#i:id{~(authId i)}) (#rw:rw) (st:state i rw)
   =
   match st with
   | CoreCrypto k s -> (k, s)
+  | LowC st k s -> (k, s)
   | LowLevel st s ->
     let k = AE.leak st in
     let ks = uint_to_t (CC.aeadKeySize (alg i)) in
@@ -171,6 +181,9 @@ let genReader (#i:id) (st:state i Writer)
     let LowLevel st salt = st in
     let st' : Crypto.AEAD.Invariant.state i Crypto.Indexing.Reader = AE.genReader st in
     LowLevel st' salt
+  | LowCProvider ->
+    let LowC st k s = st in
+    LowC st k s
   | CCProvider ->
     // CoreCrypto state is in an external region
     let CoreCrypto k s = st in
@@ -184,6 +197,9 @@ let coerce (i:id) (r:rid) (k:key i) (s:salt i)
   match use_provider() with
   | CCProvider ->
     CoreCrypto k s
+  | LowCProvider ->
+    let st = CAEAD.aead_create (alg i) k in
+    LowC st k s
   | LowProvider ->
     let ks = uint_to_t (CC.aeadKeySize (alg i)) in
     let st = AE.coerce i r (from_bytes ks k) in
@@ -210,6 +226,9 @@ let encrypt (i:id) (st:state i Writer) (iv:iv i) (ad:bytes) (plain:bytes)
         IO.debug_print_string ("CCProvider: ENCRYPT[K="^kh^",IV="^ivh^",AD="^adh^",PLAIN="^ph^"] = "^ch^"\n")
       else false in
     if r then cipher else cipher
+  | LowCProvider ->
+    let LowC st k s = st in
+     CAEAD.aead_encrypt st iv ad plain
   | LowProvider ->
     let LowLevel st salt = st in
     let ivlen = uint_to_t (iv_length i) in
@@ -253,6 +272,9 @@ let decrypt (i:id) (st:state i Reader) (iv:iv i) (ad:bytes) (cipher:bytes)
         IO.debug_print_string ("CCProvider: DECRYPT[K="^kh^",IV="^ivh^",AD="^adh^",C="^ch^"] = "^(if is_Some plain then hex_of_bytes (Some.v plain) else "FAIL")^"\n")
       else false in
     if r then plain else plain
+  | LowCProvider ->
+    let LowC st _ _ = st in
+    CAEAD.aead_decrypt st iv ad cipher
   | LowProvider ->
     let LowLevel st salt = st in
     let ivlen = uint_to_t (iv_length i) in
