@@ -16,8 +16,6 @@
 #include <caml/printexc.h>
 #include "mitlsffi.h"
 
-#define REDIRECT_STDIO 1
-
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
   MITLS_FFI_ENTRY(Connect) \
@@ -40,16 +38,6 @@ typedef struct mitls_state {
     value fstar_state;    // a GC root representing an F*-side state object
 } mitls_state;
 
-// Support temporary redirection of stdout and stderr
-typedef struct {
-    char *out_name;
-    char *err_name;
-    int fd_out_old;
-    int fd_err_old;
-    int fd_out_new;
-    int fd_err_new;
-} mitls_redirect;
-
 //
 // Initialize miTLS.
 //
@@ -60,7 +48,7 @@ typedef struct {
 int  FFI_mitls_init(void)
 {
     char *Argv[2];
-    
+
     // Build a stub argv[] to satisfy caml_Startup()
     Argv[0] = "";
     Argv[1] = NULL;
@@ -72,7 +60,6 @@ int  FFI_mitls_init(void)
 #define MITLS_FFI_ENTRY(x) \
     g_mitls_FFI_##x = caml_named_value("MITLS_FFI_" # x); \
     if (!g_mitls_FFI_##x) { \
-        fprintf(stderr, "Failed to bind to Caml callback MITLS_FFI_" # x "\n"); \
         return 0; \
     }
  MITLS_FFI_LIST  
@@ -94,178 +81,23 @@ void FFI_mitls_cleanup(void)
  #undef MITLS_FFI_ENTRY
 }
 
-// Read the contents of a file into memory.  The caller is responsible for freeing
-// the memory via free().
-char * read_stdio_file(int fd)
-{
-    struct stat st;
-    char *data;
-    ssize_t result;
-    
-    fstat(fd, &st);
-    // If no data was written, or a huge amount of data was written, ignore the file.
-    if (st.st_size == 0 || st.st_size > 10*1024*1024) {
-        return NULL;
-    }
-    
-    lseek(fd, SEEK_SET, 0);
-    data = malloc(st.st_size + 1); // The +1 is safe from integer overflow due to the above size check
-    if (!data) {
-        return NULL;
-    }
-    result = read(fd, data, st.st_size);
-    if (result == -1) {
-        free(data);
-        return NULL;
-    }
-    data[st.st_size] = '\0'; // Null-terminate into a C string
-    
-    return data;
-}
-
-void restore_stdio(/* in */ mitls_redirect *r, /* out */ char **outmsg, /* out */ char **errmsg)
-{
-#if REDIRECT_STDIO
-    char *msg;
-    int result;
-    
-    *outmsg = NULL;
-    *errmsg = NULL;
- 
-    if (r->fd_out_new == -1) {
-        return;
-    }
-    
-    fflush(stdout);
-    fflush(stderr);
-    
-    // Restore stdout/stderr back to their original files
-    dup2(r->fd_out_old, STDOUT_FILENO);
-    dup2(r->fd_err_old, STDERR_FILENO);
-    
-    msg = read_stdio_file(r->fd_out_new);
-    if (msg) {
-        *outmsg = msg;
-    }
-    close(r->fd_out_new);
-    result = unlink(r->out_name);
-    if (result != 0) {
-        fprintf(stderr, "unlink %s failed errno=%d ", r->out_name, errno); perror("failed");
-    }
-    free(r->out_name);
-    
-    msg = read_stdio_file(r->fd_err_new);
-    if (msg) {
-        *errmsg = msg;
-    }
-    close(r->fd_err_new);
-    result = unlink(r->err_name);
-    if (result != 0) {
-        fprintf(stderr, "unlink %s failed errno=%d ", r->out_name, errno); perror("failed");
-    }
-    free(r->err_name);
-#else
-    r->fd_out_new = -1;
-    *outmsg = NULL;
-    *errmsg = NULL;
-#endif
-}
-
-
-void redirect_stdio(/* out */ mitls_redirect *r)
-{
-#if REDIRECT_STDIO
-    int fdout;
-    int fderr;
-    static const char template[] = "/mitlscurlXXXXXX";
-    char *tmp;
-    char *out_name;
-    char *err_name;
-    size_t tmp_len;
-    
-    // Assume failure
-    r->fd_out_new = -1;
-    r->fd_err_new = -1;
-    
-    fflush(stdout);
-    fflush(stderr);
-    
-    tmp = getenv("TMP");
-    if (!tmp) {
-        tmp = getenv("TEMP");
-        if (!tmp) {
-            tmp = getenv("TMPDIR");
-            if (!tmp) {
-                tmp = ".";
-            }
-        }
-    }
-    
-    tmp_len = strlen(tmp);
-    out_name = (char*)malloc(tmp_len + sizeof(template));
-    if (!out_name) {
-        return;
-    }
-    strcpy(out_name, tmp);
-    strcpy(out_name+tmp_len, template);
-    
-    err_name = strdup(out_name);
-    if (!err_name) {
-        free(out_name);
-        return;
-    }
-
-    // Create temp files
-    fdout = mkstemp(out_name);
-    if (fdout == -1) {
-        free(out_name);
-        free(err_name);
-        return;
-    }
-    fderr = mkstemp(err_name);
-    if (fderr == -1) {
-        close(fdout);
-        free(out_name);
-        free(err_name);
-        return;
-    }
-    r->fd_out_new = fdout;
-    r->fd_err_new = fderr;
-    r->out_name = out_name;
-    r->err_name = err_name;
-    
-    // Capture current stdout/stderr
-    r->fd_out_old = dup(STDOUT_FILENO);
-    r->fd_err_old = dup(STDERR_FILENO);
-    
-    // Redirect stdout and stderr to the temp files
-    dup2(fdout, STDOUT_FILENO);
-    dup2(fderr, STDERR_FILENO);
-#else
-    r->fd_out_new = -1;
-    r->fd_err_new = -1;
-#endif    
-}
-
 // Called by the host app to configure miTLS ahead of creating a connection
 int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
     CAMLparam0();
     CAMLlocal3(config, version, host);
     int ret = 0;
-    mitls_redirect r;
 
     *state = NULL;
     *outmsg = NULL;
     *errmsg = NULL;
-    redirect_stdio(&r);
     
     version = caml_copy_string(tls_version);  
     host = caml_copy_string(host_name);
     caml_acquire_runtime_system();
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
-        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(config)));
+        // call caml_format_exception(Extract_exception(config)) to extract the exception information
     } else {
         mitls_state * s;
         
@@ -281,8 +113,7 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
         }
     }
     caml_release_runtime_system();
-    restore_stdio(&r, outmsg, errmsg);
-    
+
     CAMLreturnT(int,ret);
 }
 
@@ -300,7 +131,7 @@ void FFI_mitls_close(mitls_state *state)
 
 void FFI_mitls_free_msg(char *msg)
 {
-    free(msg);
+
 }
 
 void FFI_mitls_free_packet(void *packet)
@@ -382,16 +213,14 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
     CAMLparam0();
     CAMLlocal1(result);
     int ret;
-    mitls_redirect r;
     
     *outmsg = NULL;
     *errmsg = NULL;
-    redirect_stdio(&r);
     
     caml_acquire_runtime_system();
     result = caml_callback2_exn(*g_mitls_FFI_Connect, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
-        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        // Call caml_format_exception(Extract_exception(result)) to extract the exception text
         ret = 0;
     } else {
         // Connect returns back (Connection.connection * int)
@@ -401,7 +230,6 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
             caml_modify_generational_global_root(&state->fstar_state, connection);
             ret = 1;
         } else {
-            fprintf(stderr, "FFI_mitls_connect failed with miTLS error %d\n", ret);
             ret = 0;
         }
         // The result is an integer.  How to deduce the value of 'c' needed for
@@ -409,7 +237,6 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         
     }
     caml_release_runtime_system();
-    restore_stdio(&r, outmsg, errmsg);
     CAMLreturnT(int,ret);
 }
 
@@ -419,11 +246,9 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     CAMLparam0();
     CAMLlocal2(buffer_value, result);
     int ret = 0;
-    mitls_redirect r;
 
     *outmsg = NULL;
     *errmsg = NULL;
-    redirect_stdio(&r);
     
     caml_acquire_runtime_system();
     buffer_value = caml_alloc_string(buffer_size);
@@ -431,14 +256,13 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     
     result = caml_callback2_exn(*g_mitls_FFI_Send, state->fstar_state, buffer_value);
     if (Is_exception_result(result)) {
-        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        // Call caml_format_exception(Extract_exception(result)) to extract the exception text
         ret = 0;
     } else {
         ret = 1;
     }
     caml_release_runtime_system();
     
-    restore_stdio(&r, outmsg, errmsg);
     CAMLreturnT(int,ret);
 }
 
@@ -448,16 +272,14 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
     CAMLparam0();
     CAMLlocal1(result);
     void *p = NULL;
-    mitls_redirect r;
 
     *outmsg = NULL;
     *errmsg = NULL;
-    redirect_stdio(&r);
 
     caml_acquire_runtime_system();
     result = caml_callback_exn(*g_mitls_FFI_Recv, state->fstar_state);
     if (Is_exception_result(result)) {
-        fprintf(stderr, "Exception!  %s\n", caml_format_exception(Extract_exception(result)));
+        // call caml_format_exception(Extract_exception(result)) to extract the exception text
         p = NULL;
     } else {
         // Return the plaintext data
@@ -465,7 +287,6 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
     }
     caml_release_runtime_system();
     
-    restore_stdio(&r, outmsg, errmsg);
     CAMLreturnT(void*,p);
 }
 
