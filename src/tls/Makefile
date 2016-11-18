@@ -103,6 +103,7 @@ Buffer.Utils.fst \
 Crypto.Symmetric.Bytes.fst \
 Crypto.Indexing.fst \
 Flag.fst \
+Spartan.fst \
 Crypto.Symmetric.AES.fst \
 Crypto.Symmetric.AES128.fst \
 Crypto.Symmetric.Chacha20.fst \
@@ -125,6 +126,10 @@ Crypto.Plain.fst \
 Crypto.Symmetric.PRF.fst \
 Crypto.AEAD.Encoding.fst \
 Crypto.AEAD.Invariant.fst \
+Crypto.AEAD.Lemmas.fst \
+Crypto.AEAD.Lemmas.Part2.fst \
+Crypto.AEAD.Lemmas.Part3.fst \
+Crypto.AEAD.Wrappers.fst \
 Crypto.AEAD.fst \
 AEADProvider.fst \
 Range.fst \
@@ -301,7 +306,7 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml \
+  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml FStar_UInt.ml \
   FStar_BitVector.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   FStar_Monotonic_Seq.ml \
   $(TLSML)

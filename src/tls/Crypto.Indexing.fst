@@ -30,6 +30,10 @@ type cipherAlg =
   | AES256
   | CHACHA20
 
+type aesImpl =
+  | SpartanAES
+  | HaclAES
+
 // References:
 //  - RFC 7539 for the AEAD algorithm
 //  - RFC 7905 for ChaCha20_Poly1305 TLS ciphersuites
@@ -40,6 +44,9 @@ type aeadAlg =
 
 type id =
   i:TLSInfo.id{~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i)}
+
+// ADL: TODO support in TLSInfo.id + mitls.exe
+let aesImpl_of_id (i:id) = SpartanAES
 
 let aeadAlg_of_id i =
   let AEAD aead _ = aeAlg_of_id i in
