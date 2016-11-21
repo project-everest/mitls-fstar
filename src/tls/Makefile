@@ -290,7 +290,7 @@ wc:
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
-  $(LCDIR)/LowCProvider.cmxa \
+  libllcrypto.a lowc_stub.o LowCProvider.cmx \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
@@ -306,8 +306,9 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml FStar_UInt.ml \
-  FStar_BitVector.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
+  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml \
+  FStar_BitVector.ml FStar_UInt.ml \
+  FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   FStar_Monotonic_Seq.ml \
   $(TLSML)
 # Last step: prefix with the output directory.
@@ -351,8 +352,13 @@ tls-gen: $(LIBFILES)
 	# Run the tests
 	$(EXTRA_PATH) ./test.out
 
+test.out:
+	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
+	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+
 #16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
-mitls.exe: tls-gen
+mitls.exe:  #tls-gen
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 
