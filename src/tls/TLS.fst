@@ -1059,7 +1059,7 @@ let live_i e r = // is the connection still live?
 
 // let's specify reading d off the input DataStream (incrementing the reader pos)
 
-val sel_reader: h:HST.mem -> connection -> GTot (option (| i:id & StAE.reader i |)) // self-specified
+val sel_reader: h:HST.mem -> connection -> GTot (option ( i:id & StAE.reader i )) // self-specified
 let sel_reader h c =
   let es = epochs c h in
   let j = iT c.hs Reader h in

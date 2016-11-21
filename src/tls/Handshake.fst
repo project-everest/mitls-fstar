@@ -401,7 +401,7 @@ let handshake_state_init cfg (r:role) (reg:rid) =
     	| Server -> S (S_Idle None)) }
 
 // payload of a handshake fragment, to be made opaque eventually
-type message (i:id) = (| rg: frange i & rbytes rg |)
+type message (i:id) = ( rg: frange i & rbytes rg )
 let out_msg i rg b : message i= (|rg, b|)
 
 // What the HS asks the record layer to do, in that order.
