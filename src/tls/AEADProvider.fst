@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --detail_errors --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module AEADProvider
 
 open FStar.Heap
@@ -16,70 +19,71 @@ module CC = CoreCrypto
 module CAEAD = LowCProvider
 module AE = Crypto.AEAD
 module CB = Crypto.Symmetric.Bytes
+module OAEAD = AEADOpenssl
 
-// The purpose of this module is to provinde a unified interface
-// for the CoreCrypto and low-level implementations of AEAD
-// This file is TLS version-agnostic. To deal with the different
-// treatment of implicit nonces, we provide a version-specific
-// nonce computation function
-
-// For now static flag
 type provider =
-  | CCProvider
+  | OpenSSLProvider
   | LowProvider
   | LowCProvider
 
 let use_provider () : Tot provider =
-  LowCProvider
+  OpenSSLProvider
 let debug = false
+
+let prov() =
+  match use_provider() with
+  | OpenSSLProvider -> "OpenSSLProvider"
+  | LowCProvider -> "LowCProvider"
+  | LowProvider -> "LowProvider"
 
 type u32 = FStar.UInt32.t
 
 (**
 Functions to go back and forth between Platform.Bytes Buffers
 **)
-
-val to_bytes: l:u32 -> buf:CB.lbuffer (v l) -> STL (b:bytes{length b = v l})
+#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+val to_bytes: l:nat -> buf:CB.lbuffer l -> STL (b:bytes{length b = l})
   (requires (fun h0 -> Buffer.live h0 buf))
   (ensures (fun h0 s h1 -> h0 == h1 ))
 let rec to_bytes l buf =
-  if l = 0ul then empty_bytes else
-  let b = UInt8.v (Buffer.index buf 0ul) in
-  let s = abyte (Char.char_of_int b) in
-  let t = to_bytes (l -^ 1ul) (Buffer.sub buf 1ul (l -^ 1ul)) in
-  s @| t
+  if l = 0 then empty_bytes
+  else
+    let b = UInt8.v (Buffer.index buf 0ul) in
+    let s = abyte (Char.char_of_int b) in
+    let t = to_bytes (l - 1) (Buffer.sub buf 1ul (uint_to_t (l-1))) in
+    let r = s @| t in
+    (lemma_len_append s t; r)
 
-val store_bytes: len:u32 -> buf:CB.lbuffer (v len) -> i:u32 {i <=^ len} -> b:bytes{length b = v len} -> STL unit
+#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{length b = len} -> STL unit
   (requires (fun h0 -> Buffer.live h0 buf))
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
-
 let rec store_bytes len buf i s =
-  if i <^ len then (
-  Buffer.upd buf i (UInt8.uint_to_t (Char.int_of_char (index s (v i))));
-  store_bytes len buf (i +^ 1ul) s )
+  if i < len then
+    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (index s i))) in
+    store_bytes len buf (i + 1) s
 
-val from_bytes: len:u32 -> bytes -> StackInline (CB.lbuffer (v len))
+val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))
   (requires (fun h0 -> True))
   (ensures (fun h0 r h1 -> Buffer.modifies_0 h0 h1 /\ Buffer.live h1 r ))
-let from_bytes len b =
-  let buf = Buffer.create 0uy len in
-  (if length b = v len then store_bytes len buf 0ul b);
+let from_bytes b =
+  let buf = Buffer.create 0uy (uint_to_t (length b)) in
+  store_bytes (length b) buf 0 b;
   buf
 
 (***********************************************************************)
 
 type id = i:id{~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i)}
-let alg i = let AEAD aead _ = aeAlg_of_id i in aead
+let alg (i:id) = let AEAD aead _ = aeAlg_of_id i in aead
 
 // Real IVs must be created with the internal
 // salting function below.
 let iv_length i = CC.aeadRealIVSize (alg i)
 abstract type iv (i:id) = lbytes (iv_length i)
-
 let key_length i = CC.aeadKeySize (alg i)
 
 // Salt is the static part of IVs
-let salt_length i =
+let salt_length (i:id) =
   match pv_of_id i with
   | TLS_1p3 -> iv_length i
   | _ ->
@@ -93,7 +97,7 @@ let salt_length i =
     | CC.CHACHA20_POLY1305 -> 12
 
 // Length of the explicit (sent on wire) IV
-let explicit_iv_length i =
+let explicit_iv_length (i:id) =
   match pv_of_id i with
   | TLS_1p3 -> 0
   | _ ->
@@ -110,11 +114,14 @@ type key  (i:id) = lbytes (key_length i)
 type salt (i:id) = lbytes (salt_length i)
 
 noeq type state (i:id) (r:rw) =
-| CoreCrypto: key:key i -> salt:salt i -> state i r
+| OpenSSL: st:OAEAD.state i r -> salt:salt i -> state i r
 | LowC: st:CAEAD.aead_state -> key:key i -> salt:salt i -> state i r
 | LowLevel: st:Crypto.AEAD.Invariant.state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
 
-let noncelen i =
+type writer i = s:state i Writer
+type reader i = s:state i Reader
+
+let noncelen (i:id) =
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
     iv_length i
@@ -122,178 +129,226 @@ let noncelen i =
 
 type nonce i = lbytes (noncelen i)
 
-let create_nonce (#i:id) (#rw:rw) (s:state i rw) (n:nonce i) : Tot (iv i) =
-  let salt = match s with
-    | CoreCrypto _ s -> s
+let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
+  : Tot (i:iv i) =
+  let salt : salt i = match st with
+    | OpenSSL _ s -> s
     | LowLevel _ s -> s
     | LowC _ _ s -> s in
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
     xor (iv_length i) n salt
   | _ ->
-    salt @| n
+    let r = salt @| n in
+    lemma_len_append salt n; r
 
-let gen (i:id) (r:rid)
-  : ST (state i Writer)
+(* Necessary for injectivity of the nonce-to-IV construction in TLS 1.3 *)
+assume val lemma_xor_idempotent: n:nat -> b1:lbytes n -> b2:lbytes n ->
+  Lemma (xor n b2 (xor n b1 b2) = b1)
+
+#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
+  : Lemma (create_nonce st n1 = create_nonce st n2 ==> n1 = n2)
+  =
+  let salt : salt i = match st with
+    | OpenSSL _ s -> s
+    | LowLevel _ s -> s
+    | LowC _ _ s -> s in
+  match (pv_of_id i, alg i) with
+  | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
+    lemma_xor_idempotent (iv_length i) n1 salt;
+    lemma_xor_idempotent (iv_length i) n2 salt
+  | _ ->
+    if (salt @| n1) = (salt @| n2) then
+      lemma_append_inj salt n1 salt n2
+
+type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
+  is_OpenSSL st ==> OAEAD.empty_log (OpenSSL.st st) h
+
+let region (#i:id) (#rw:rw) (st:state i rw) =
+  match st with
+  | OpenSSL st _ -> OAEAD.State.region st
+  | LowC st _ _ -> root
+  | LowLevel st _ -> root
+
+let log_region (#i:id) (#rw:rw) (st:state i rw) =
+  match st with
+  | OpenSSL st _ -> OAEAD.State.log_region st
+  | LowC st _ _ -> root
+  | LowLevel st _ -> root
+
+let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
+  modifies_none h0 h1 /\
+  extends (region w) parent /\
+  stronger_fresh_region (region w) h0 h1 /\
+  color (region w) = color parent /\
+  empty_log w h1
+
+let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
+  (ensures (genPost r))
   =
   match use_provider() with
-  | CCProvider ->
-    let kv : key i = CC.random (CC.aeadKeySize (alg i)) in
+  | OpenSSLProvider ->
     let salt : salt i = CC.random (salt_length i) in
-    CoreCrypto kv salt
+    let st : OAEAD.state i Writer = OAEAD.gen r i in
+    OpenSSL st salt
   | LowCProvider ->
+    assume false; // TODO
     let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
     let salt: salt i = CC.random (salt_length i) in
     let st = CAEAD.aead_create (alg i) kv in
     LowC st kv salt
   | LowProvider ->
+    assume false; // TODO
     let salt : salt i = CC.random (salt_length i) in
     let st = AE.gen i r in
     LowLevel st salt
 
-let leak (#i:id{~(authId i)}) (#rw:rw) (st:state i rw)
+let leak (#i:id{~(Flag.prf i)}) (#rw:rw) (st:state i rw)
   : ST (key i * salt i)
   (requires (fun h0 -> ~(authId i)))
-  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   match st with
-  | CoreCrypto k s -> (k, s)
+  | OpenSSL st s -> (OAEAD.leak st, s)
   | LowC st k s -> (k, s)
   | LowLevel st s ->
+    assume (false);
     let k = AE.leak st in
-    let ks = uint_to_t (CC.aeadKeySize (alg i)) in
-    (to_bytes ks k, s)
+    (to_bytes (key_length i) k, s)
 
 // ADL TODO
 // There is an issue connecting the stateful encryption in miTLS
 // to the low-level crypto which currently shares the region between
 // the reader and writer (this is not sound for some buffers in that
 // region, for instance, the writer may write the the reader's key buffer)
-let genReader (#i:id) (st:state i Writer)
-  : ST (state i Reader)
-  (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
+let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
+  (requires (fun h -> HyperHeap.disjoint parent (region st)))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  match use_provider() with
-  | LowProvider ->
-    let LowLevel st salt = st in
+  match st with
+  | OpenSSL w salt ->
+    // CoreCrypto state is in an external region
+    OpenSSL (OAEAD.genReader parent w) salt
+  | LowLevel st salt ->
+    assume false;
     let st' : Crypto.AEAD.Invariant.state i Crypto.Indexing.Reader = AE.genReader st in
     LowLevel st' salt
-  | LowCProvider ->
-    let LowC st k s = st in
+  | LowC st k s ->
+    assume false;
     LowC st k s
-  | CCProvider ->
-    // CoreCrypto state is in an external region
-    let CoreCrypto k s = st in
-    CoreCrypto k s
 
-let coerce (i:id) (r:rid) (k:key i) (s:salt i)
+
+let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   : ST (state i Writer)
-  (requires (fun h -> True))
-  (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1))
+  (requires (fun h -> ~(authId i)))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  match use_provider() with
-  | CCProvider ->
-    CoreCrypto k s
-  | LowCProvider ->
-    let st = CAEAD.aead_create (alg i) k in
-    LowC st k s
-  | LowProvider ->
-    let ks = uint_to_t (CC.aeadKeySize (alg i)) in
-    let st = AE.coerce i r (from_bytes ks k) in
-    LowLevel st s
+  let w =
+    match use_provider() with
+    | OpenSSLProvider ->
+      OpenSSL (OAEAD.coerce r i k) s
+    | LowCProvider ->
+      let st = CAEAD.aead_create (alg i) k in
+      LowC st k s
+    | LowProvider ->
+      let st = AE.coerce i r (from_bytes k) in
+      LowLevel st s
+    in
+  let r =
+    if debug then
+      IO.debug_print_string ((prov())^": COERCE(K="^(hex_of_bytes k)^")\n")
+    else false in
+  if r then w else w
 
-let encrypt (i:id) (st:state i Writer) (iv:iv i) (ad:bytes) (plain:bytes)
-  : ST (cipher:bytes)
+type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
+(* irreducible *) type plain (i:id) (l:plainlen) = lbytes l
+let repr (#i:id) (#l:plainlen) (p:plain i l) : Tot (lbytes l) = p
+
+let adlen i = match pv_of_id i with
+  | TLS_1p3 -> 0 | _ -> 13
+type adata i = lbytes (adlen i)
+
+let taglen i = CC.aeadTagSize (alg i)
+let cipherlen i (l:plainlen) : n:nat{n >= taglen i} = l + taglen i
+type cipher i (l:plainlen) = lbytes (cipherlen i l)
+
+#set-options "--lax"
+
+let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
+  : ST (cipher:cipher i l)
   (requires (fun _ ->
-    FStar.UInt.size (length ad) 32 /\ FStar.UInt.size (length plain) 32))
-  (ensures (fun h0 cipher h1 -> modifies Set.empty h0 h1 /\
-    length cipher = length plain + CC.aeadTagSize (alg i)))
+    FStar.UInt.size (length ad) 32 /\ FStar.UInt.size l 32))
+  (ensures (fun h0 cipher h1 ->
+    modifies_none h0 h1))
   =
-  match use_provider() with
-  | CCProvider ->
-    let CoreCrypto key _ = st in
-    let cipher = CC.aead_encrypt (alg i) key iv ad plain in
-    let r =
-      if debug then
-        let kh = hex_of_bytes key in
-        let ivh = hex_of_bytes iv in
-        let adh = hex_of_bytes ad in
-        let ph = hex_of_bytes plain in
-        let ch = hex_of_bytes cipher in
-        IO.debug_print_string ("CCProvider: ENCRYPT[K="^kh^",IV="^ivh^",AD="^adh^",PLAIN="^ph^"] = "^ch^"\n")
-      else false in
-    if r then cipher else cipher
-  | LowCProvider ->
-    let LowC st k s = st in
-     CAEAD.aead_encrypt st iv ad plain
-  | LowProvider ->
-    let LowLevel st salt = st in
-    let ivlen = uint_to_t (iv_length i) in
-    let iv = from_bytes ivlen iv in
-    let iv = CB.load_uint128 ivlen iv in
-    let adlen = uint_to_t (length ad) in
-    let plainlen = uint_to_t (length plain) in
-    let cipherlen = uint_to_t (length plain + CC.aeadTagSize (alg i)) in
-    let ad = from_bytes adlen ad in
-    let plainbuf = from_bytes plainlen plain in
-    let plainba = CB.load_bytes plainlen plainbuf in
-    let plainrepr = Plain.make #i (length plain) plainba in
-    let plain = Plain.create i 0uy plainlen in
-    Plain.store plainlen plain plainrepr;
-    let cipher = Buffer.create 0uy cipherlen in
-    AE.encrypt i st iv adlen ad plainlen plain cipher;
-    let cipher = to_bytes cipherlen cipher in
-    cipher
+  let cipher =
+    match w with
+    | OpenSSL st _ -> OAEAD.encrypt st iv ad plain
+    | LowC st _ _ -> CAEAD.aead_encrypt st iv ad plain
+    | LowLevel st _ ->
+      let iv = CB.load_uint128 12ul (from_bytes iv) in
+      let adlen = uint_to_t (length ad) in
+      let ad = from_bytes ad in
+      let plainlen = uint_to_t l in
+      let cipherlen = uint_to_t (cipherlen i l) in
+      let plainbuf = from_bytes plain in
+      let plainba = CB.load_bytes plainlen plainbuf in
+      let plainrepr = Plain.make #i l plainba in
+      let plain = Plain.create i 0uy plainlen in
+      Plain.store plainlen plain plainrepr;
+      let cipher = Buffer.create 0uy cipherlen in
+      AE.encrypt i st iv adlen ad plainlen plain cipher;
+      to_bytes l cipher
+    in
+  let r =
+    if debug then
+      let ivh = hex_of_bytes iv in
+      let adh = hex_of_bytes ad in
+      let ph = hex_of_bytes plain in
+      let ch = hex_of_bytes cipher in
+      IO.debug_print_string ((prov())^": ENC[IV="^ivh^",AD="^adh^",PLAIN="^ph^"] = "^ch^"\n")
+    else false in
+  if r then cipher else cipher
 
-let decrypt (i:id) (st:state i Reader) (iv:iv i) (ad:bytes) (cipher:bytes)
-  : ST (co:option bytes)
+let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:cipher i l)
+  : ST (co:option (plain i l))
   (requires (fun _ -> True))
 //  (requires (fun _ ->
 //    FStar.UInt.size (length ad) 32
 //    /\ FStar.UInt.size (length cipher) 32
 //    /\ length cipher >= CC.aeadTagSize (alg i))
-  (ensures (fun h0 plain h1 -> modifies Set.empty h0 h1 /\
-    is_Some plain ==> length cipher = length (Some.v plain) + CC.aeadTagSize (alg i)
+  (ensures (fun h0 plain h1 ->
+    modifies_none h0 h1
   ))
   =
-  match use_provider() with
-  | CCProvider ->
-    let CoreCrypto key _ = st in
-    let plain = CC.aead_decrypt (alg i) key iv ad cipher in
-    let r =
-      if debug then
-        let kh = hex_of_bytes key in
-        let ivh = hex_of_bytes iv in
-        let adh = hex_of_bytes ad in
-        let ch = hex_of_bytes cipher in
-        IO.debug_print_string ("CCProvider: DECRYPT[K="^kh^",IV="^ivh^",AD="^adh^",C="^ch^"] = "^(if is_Some plain then hex_of_bytes (Some.v plain) else "FAIL")^"\n")
-      else false in
-    if r then plain else plain
-  | LowCProvider ->
-    let LowC st _ _ = st in
-    CAEAD.aead_decrypt st iv ad cipher
-  | LowProvider ->
-    let LowLevel st salt = st in
-    let ivlen = uint_to_t (iv_length i) in
-    let iv = from_bytes ivlen iv in
-    let iv = CB.load_uint128 ivlen iv in 
-    let adlen = uint_to_t (length ad) in
-    let cipherlen = uint_to_t (length cipher) in
-    let plainlen = uint_to_t (length cipher - CC.aeadTagSize (alg i)) in
-    let ad = from_bytes adlen ad in
-    let cbuf = from_bytes cipherlen cipher in
-    let plain = Plain.create i 0uy plainlen in
-    if AE.decrypt i st iv adlen ad plainlen plain cbuf then
-      let plain = to_bytes plainlen (Plain.bufferRepr #i plain) in
-      let r =
-        if debug then
-          let ph = hex_of_bytes plain in
-          let ch = hex_of_bytes cipher in
-          IO.debug_print_string ("LowProvider: decrypt[C="^ch^"] = "^ph^"\n")
-        else false in
-      (if r then Some plain else Some plain) // Outsmarting the Tot inliner
-    else None
-
+  let plain =
+    match st with
+    | OpenSSL st _ -> OAEAD.decrypt st iv ad cipher
+    | LowC st _ _ -> CAEAD.aead_decrypt st iv ad cipher
+    | LowLevel st _->
+      let ivlen = uint_to_t (iv_length i) in
+      let iv = CB.load_uint128 ivlen (from_bytes iv) in
+      let adlen = uint_to_t (length ad) in
+      let ad = from_bytes ad in
+      let plainlen = uint_to_t l in
+      let cbuf = from_bytes cipher in
+      let plain = Plain.create i 0uy plainlen in
+      if AE.decrypt i st iv adlen ad plainlen plain cbuf then
+        Some (to_bytes l (Plain.bufferRepr #i plain))
+      else None
+    in
+  let r =
+    if debug then
+      let ivh = hex_of_bytes iv in
+      let adh = hex_of_bytes ad in
+      let ch = hex_of_bytes cipher in
+      let ph =
+        match plain with
+        | None -> "FAIL"
+        | Some p -> hex_of_bytes p
+        in
+      IO.debug_print_string ((prov())^": DECRYPT[IV="^ivh^",AD="^adh^",C="^ch^"] = "^ph^"\n")
+    else false in
+  if r then plain else plain

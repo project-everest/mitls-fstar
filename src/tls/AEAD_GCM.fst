@@ -136,7 +136,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 	       m_sel h1 (ctr r.counter) === 0))
 let genReader parent #i w =
   let reader_r = new_region parent in
-  let raead = AEAD.genReader w.aead in
+  let raead = AEAD.genReader parent w.aead in
   if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
@@ -197,7 +197,8 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
   m_recall ctr;
-  let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in  
+  let l = fst rg in
+  let text = if safeId i then createBytes l 0z else repr i ad rg p in  
   let n = m_read ctr in
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
@@ -209,7 +210,7 @@ let encrypt #i e ad rg p =
   targetLength_converges i rg;
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
-  let c = nonce_explicit @| AEAD.encrypt i e.aead iv ad' text in  
+  let c = nonce_explicit @| AEAD.encrypt #i #l e.aead iv ad' text in  
   cut (length c == targetLength i rg); 
   if authId i then
     begin
@@ -279,7 +280,7 @@ let decrypt #i d ad c =
     let len = length c' - aeadTagSize (alg i) in
     lemma_repr_bytes_values len;
     let ad' = ad @| bytes_of_int 2 len in
-    let p = AEAD.decrypt i d.aead iv ad' c' in
+    let p = AEAD.decrypt #i #len d.aead iv ad' c' in
     match p with
     | None -> None
     | Some text -> 
