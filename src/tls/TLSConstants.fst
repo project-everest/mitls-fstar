@@ -1,8 +1,13 @@
-(* This file implements type representations and parsing functions
-   for the different values negotiated during the TLS
-   handshake. For instance protocol version, key exchange mechanism,
-   hash algorithm etc. *)
 module TLSConstants
+
+(**
+This file implements type representations and parsing functions
+for the different values negotiated during the TLS
+handshake. For instance protocol version, key exchange mechanism,
+hash algorithm etc.
+
+@summary Module for main constants
+*)
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
@@ -15,6 +20,8 @@ open CoreCrypto
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
+
+(** Regions and colors for objects in memory *)
 let tls_color = -1
 let epoch_color = 1
 let hs_color = 2
@@ -33,27 +40,28 @@ let tls_rgn   = r:rgn{is_tls_rgn r}
 let epoch_rgn = r:rgn{is_epoch_rgn r}
 let hs_rgn    = r:rgn{is_hs_rgn r}
 
-let tls_region : tls_rgn = new_colored_region HH.root tls_color 
-    
-let tls_tables_region : (r:tls_rgn{HH.parent r = tls_region}) = 
+let tls_region : tls_rgn = new_colored_region HH.root tls_color
+
+let tls_tables_region : (r:tls_rgn{HH.parent r = tls_region}) =
     new_region tls_region
 
-// -------------------------------------------------------------------
-// Polarity for reading and writing, e.g. for stateful encryption
 
+(** Polarity for reading and writing *)
 type rw =
   | Reader
   | Writer
 
+(** Role of the library in current execution *)
 type role =
   | Client
   | Server
 
+(** Dual role *)
 let dualRole = function
   | Client -> Server
   | Server -> Client
 
-(* Type representations for TLS negotiated values *)
+(** Protocol version negotiated values *)
 type protocolVersion =
   | SSL_3p0 // supported, with no security guarantees
   | TLS_1p0
@@ -71,42 +79,49 @@ type kexAlg =
   | Kex_DHE
   | Kex_ECDHE
 
-(* We retrieve cryptographic primitives from the CoreCrypto library *)
+(** Aliasing of cryptographic types from the CoreCrypto library *)
 type blockCipher = block_cipher
 type streamCipher = stream_cipher
 type aeadAlg = aead_cipher
 
+(** Modes for the initialization vectors *)
 type ivMode =
   | Fresh
   | Stale
 
+(** Encryption types *)
 type encAlg =
   | Block of blockCipher
   | Stream of streamCipher
 
+(** Hash algorithm types *)
 type hashAlg =
   | NULL
   | MD5SHA1
   | Hash of hash_alg
 
+(** MAC algorithm types *)
 type macAlg =
   | HMAC     of hash_alg
   | SSLKHASH of hash_alg
 
+(** Authenticated Encryption modes *)
 type aeAlg =
   | MACOnly: hash_alg -> aeAlg
   | MtE: encAlg -> hash_alg -> aeAlg
-  | AEAD: aeadAlg -> hash_alg -> aeAlg  // the hash algorithm is for the ciphersuite; it is not used by the record layer. 
+  | AEAD: aeadAlg -> hash_alg -> aeAlg  // the hash algorithm is for the ciphersuite; it is not used by the record layer.
 
-// does this algorithm provide padding support with TLS 1.2? 
+(** Determine if this algorithm provide padding support with TLS 1.2 *)
 let lhae = function
   | MtE (Block _) _                         -> true
-  | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> false 
+  | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> false
 
-// sequence numbers for StreamAE/StatefulLHAE
+(** Sequence numbers for StreamAE/StatefulLHAE *)
 let is_seqn (n:nat) = repr_bytes n <= 8
-type seqn_t = n:nat { is_seqn n } 
+type seqn_t = n:nat { is_seqn n }
 
+
+(** Predicates for Strong Authentication *)
 // MtE: ``The AE algorithms are CPA and INT-CTXT''
 // MtE: ``The MAC algorithm of id is INT-CMA.''
 
@@ -127,7 +142,7 @@ assume val strongAuthAE: pv:protocolVersion -> ae:aeAlg -> Lemma(strongAEAlg pv 
 // note that TLS 1.3 lowers a bit the upper bound of cipher lengths (Ok in principle)
 // but still enables padding beyond plausible plaintext lengths.
 
-// API and protocol-level fragments are in [0..2^14]
+(** Constants for API and protocol-level fragments are in [0..2^14] *)
 let max_TLSPlaintext_fragment_length = 16384
 let max_TLSCompressed_fragment_length = max_TLSPlaintext_fragment_length + 1024
 let max_TLSCiphertext_fragment_length = max_TLSPlaintext_fragment_length + 2048
@@ -137,6 +152,7 @@ let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 25
 //CF we may need to be more negative on weak algorithms (so that we don't try to verify their use)
 //CF and more precise/positive on algorithms we implement (so that we reflect lower assumptions)
 
+(** Signature algorithms *)
 type sigAlg = CoreCrypto.sig_alg
 
 (* This is the old version of the inverse predicate. According to CF,
@@ -157,7 +173,7 @@ unfold type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:a -> T
   is_Correct (g y) ==> r (f (Correct._0 (g y))) y
 
 
-(* Serializing function for signature algorithms *)
+(** Serializing function for signature algorithms *)
 val sigAlgBytes: sigAlg -> Tot (lbytes 1)
 let sigAlgBytes sa =
   match sa with
@@ -166,7 +182,7 @@ let sigAlgBytes sa =
   | CoreCrypto.ECDSA  -> abyte 3z
   | CoreCrypto.RSAPSS -> abyte 0z // TODO fix me!
 
-(* Parsing function associated to sigAlgBytes *)
+(** Parsing function associated to sigAlgBytes *)
 val parseSigAlg: pinverse_t sigAlgBytes
 let parseSigAlg b =
   match cbyte b with
@@ -177,7 +193,7 @@ let parseSigAlg b =
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_sigAlg: x:_ -> Lemma
-  (requires (True)) 
+  (requires (True))
   (ensures lemma_inverse_g_f sigAlgBytes parseSigAlg x)
   [SMTPat (parseSigAlg (sigAlgBytes x))]
 let inverse_sigAlg x = ()
@@ -189,9 +205,13 @@ val pinverse_sigAlg: x:_ -> Lemma
 let pinverse_sigAlg x = ()
 
 
+(** Hash algorithm minimum requirements *)
 type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
 
+
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 2"
+
+(** Serializing of the Hash algorithm *)
 val hashAlgBytes: hashAlg' -> Tot (lbytes 1)
 let hashAlgBytes ha =
   match ha with
@@ -203,6 +223,7 @@ let hashAlgBytes ha =
   | Hash SHA512  -> abyte 6z
   | NULL -> abyte 7z // FIXME!!
 
+(** Parsing of the Hash algorithm *)
 val parseHashAlg: pinverse_t hashAlgBytes
 let parseHashAlg b =
   match cbyte b with
@@ -228,7 +249,7 @@ val pinverse_hashAlg: x:_ -> Lemma
   [SMTPat (hashAlgBytes (Correct._0 (parseHashAlg x)))]
 let pinverse_hashAlg x = ()
 
-
+(** Encryption key sizes *)
 let encKeySize = function
   | Stream RC4_128      -> 16
   | Block TDES_EDE_CBC  -> 24
@@ -238,31 +259,37 @@ let encKeySize = function
   | Block AES_128_CBC   -> 16
   | Block AES_256_CBC   -> 32
 
-let aeadSaltSize = function // TLS 1.3 IV salt. 
+(** AEAD salt sizes *)
+let aeadSaltSize = function // TLS 1.3 IV salt.
   | AES_128_GCM       -> 4
   | AES_256_GCM       -> 4
-  | CHACHA20_POLY1305 -> 12 
-  | _                 -> 4 //recheck 
+  | CHACHA20_POLY1305 -> 12
+  | _                 -> 4 //recheck
 
+(** AEAD *)
 let aeadRecordIVSize = function // TLS 1.2 explicit IVs
   | AES_128_GCM       -> 8
   | AES_256_GCM       -> 8
-  | CHACHA20_POLY1305 -> 0 
+  | CHACHA20_POLY1305 -> 0
   | _                 -> 8 //recheck
 
+(** Hash sizes *)
 val hashSize: h:hashAlg{h<>NULL} -> Tot nat
 let hashSize = function
   | Hash h  -> CoreCrypto.hashSize h
   | MD5SHA1 -> 16 + 20
 
+(** MAC key sizes *)
 let macKeySize = function
   | HMAC alg
   | SSLKHASH alg -> hashSize (Hash alg)
 
+(** MAC sizes *)
 let macSize = function
   | HMAC alg
   | SSLKHASH alg -> hashSize (Hash alg)
 
+(** Ciphersuite for SCSV *)
 type scsv_suite =
   | TLS_EMPTY_RENEGOTIATION_INFO_SCSV
 
@@ -282,18 +309,22 @@ type scsv_suite =
 (* ( 0x00z, 0xA2z );( 0x00z, 0xA3z );( 0x00z, 0xA4z );( 0x00z, 0xA5z ); *)
 (* ( 0x00z, 0xA6z ); ( 0x00z, 0xA7z ); ( 0x00z, 0xFFz )] *)
 
+(** Ciphersuite definition *)
 type cipherSuite =
   | NullCipherSuite: cipherSuite
   | CipherSuite    : kexAlg -> option sig_alg -> aeAlg -> cipherSuite
   | SCSV           : scsv_suite -> cipherSuite
   | UnknownCipherSuite: a:byte -> b:byte(* {not(List.Tot.contains (a,b) known_cs_list)}  *) -> cipherSuite // JK: incomplete spec
 
+(** List of ciphersuite *)
 type cipherSuites = list cipherSuite
 
+(** Compression definition *)
 type compression =
   | NullCompression
   | UnknownCompression of (b:byte{b <> 0z})
 
+(** Serializing function for compression algorithms *)
 val compressionBytes: compression -> Tot (lbytes 1)
 let compressionBytes comp =
   match comp with
@@ -301,6 +332,8 @@ let compressionBytes comp =
   | UnknownCompression b -> abyte b
 
 // Not pinverse_t compressionBytes, because it never fails
+
+(** Parsing function for compression algorithm *)
 val parseCompression: b:lbytes 1
   -> Tot (cm:compression{Seq.equal (compressionBytes cm) b})
 let parseCompression b =
@@ -311,6 +344,8 @@ let parseCompression b =
 // We ignore compression methods we don't understand. This is a departure
 // from usual parsing, where we fail on unknown values, but that's how TLS
 // handles compression method lists.
+
+(** Parsing function for compression algorithm lists *)
 val parseCompressions: b:bytes -> Tot (list compression) (decreases (length b))
 let rec parseCompressions b =
   if length b > 0
@@ -320,7 +355,10 @@ let rec parseCompressions b =
     cm::(parseCompressions b)
   else []
 
+
 #set-options "--max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
+
+(** Serializing function for lists of compression algorithms *)
 val compressionMethodsBytes: cms:list compression
   -> Tot (lbytes (List.Tot.length cms))
 let rec compressionMethodsBytes cms =
@@ -328,7 +366,10 @@ let rec compressionMethodsBytes cms =
   | c::cs -> compressionBytes c @| compressionMethodsBytes cs
   | []   -> empty_bytes
 
+
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
+
+(** Serializing function for the protocol version *)
 val versionBytes: protocolVersion -> Tot (lbytes 2)
 let versionBytes pv =
   match pv with
@@ -338,6 +379,7 @@ let versionBytes pv =
   | TLS_1p2 -> abyte2 ( 3z, 3z )
   | TLS_1p3 -> abyte2 ( 3z, 4z )
 
+(** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
 let parseVersion v =
   match cbyte2 v with
@@ -360,6 +402,7 @@ val pinverse_version: x:_ -> Lemma
   [SMTPat (versionBytes (Correct._0 (parseVersion x)))]
 let pinverse_version x = ()
 
+(** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =
   match a,b with
   | SSL_3p0, _  | _, SSL_3p0 -> SSL_3p0
@@ -464,13 +507,19 @@ let cipherSuiteBytesOpt cs =
     | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00z, 0xFFz )
     | _ -> None
 
+
+(** Determine if a ciphersuite is valid *)
 let validCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
 let valid_cipher_suite = c:cipherSuite{validCipherSuite c}
+
+(** List of valid ciphersuite *)
 let valid_cipher_suites = list valid_cipher_suite
 
+(** Serializing function for a valid ciphersuite *)
 val cipherSuiteBytes: valid_cipher_suite -> Tot (lbytes 2)
 let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
 
+(** Auxillary parsing function for ciphersuites *)
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
   match cbyte2 b with
@@ -566,22 +615,27 @@ let parseCipherSuiteAux b =
   | (b1, b2) -> Correct(UnknownCipherSuite b1 b2)
 // Was:  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed unknown cipher")
 
+(** Parsing function for ciphersuites *)
 val parseCipherSuite: pinverse_t cipherSuiteBytes
 let parseCipherSuite b =
   match parseCipherSuiteAux b with
   | Correct c -> Correct c
   | Error z -> Error z
 
+
 #reset-options "--z3timeout 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
+
+(** Lemma for ciphersuite serializing/parsing inversions *)
 val inverse_cipherSuite: x:cipherSuite -> Lemma
   (requires (~ (is_UnknownCipherSuite x)))
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
-  // must exclude this case... 
+  // must exclude this case...
   (ensures (let y = cipherSuiteBytesOpt x in
 	(is_Some y ==> parseCipherSuiteAux (Some.v y) = Correct x)))
   [SMTPat (parseCipherSuiteAux (Some.v (cipherSuiteBytesOpt x)))]
 let inverse_cipherSuite x = ()
 
+(** Lemma for ciphersuite serializing/parsing inversions *)
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
   (requires (True))
   (ensures (let y = parseCipherSuiteAux x in
@@ -592,18 +646,21 @@ val pinverse_cipherSuite : x:lbytes 2 -> Lemma
   [SMTPat (cipherSuiteBytesOpt (Correct._0 (parseCipherSuiteAux x)))]
 let pinverse_cipherSuite x = ()
 
+
 #reset-options
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 1 --initial_fuel 1"
 
+(** Serializing function for a list of ciphersuite *)
 val cipherSuitesBytes: css:list (c:cipherSuite{validCipherSuite c}) -> Tot (lbytes (op_Multiply 2 (List.Tot.length css)))
 let rec cipherSuitesBytes css =
   match css with
   | [] -> empty_bytes
   | cs::css -> (cipherSuiteBytes cs) @| (cipherSuitesBytes css)
-  
 
-(* Called by the server handshake; *)
-(* ciphersuites that we do not understand are parsed, but ignored *)
+// Called by the server handshake;
+// ciphersuites that we do not understand are parsed, but ignored
+
+(** Parsing function for a list of ciphersuites *)
 val parseCipherSuites: b:bytes -> Tot (result (list (c:cipherSuite{validCipherSuite c}))) (decreases (length b))
 let rec parseCipherSuites b =
   if length b > 1 then
@@ -618,8 +675,11 @@ let rec parseCipherSuites b =
   if length b = 0 then Correct []
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Odd cs bytes number")
 
+
 #reset-options
 #set-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 2 --initial_fuel 2"
+
+(** Lemma for ciphersuite lists serializing/parsing inversions *)
 val inverse_cipherSuites: x:list (c:cipherSuite{validCipherSuite c}) -> Lemma
   (requires (true))
   (ensures (parseCipherSuites (cipherSuitesBytes x) = Correct x))
@@ -635,20 +695,21 @@ let rec inverse_cipherSuites x =
      inverse_cipherSuite cs;
      inverse_cipherSuites css
 
-(* 
-  REMARK: cipherSuitesBytes is not a partial inverse of parseCipherSuites,
-  because parseCipherSuites drops unknown ciphersuites.
-  Alternatively, we could add an UNKNOWN of (lbyte 2) constructor in cipherSuite
-  to make this hold.
+// REMARK: cipherSuitesBytes is not a partial inverse of parseCipherSuites,
+// because parseCipherSuites drops unknown ciphersuites.
+// Alternatively, we could add an UNKNOWN of (lbyte 2) constructor in cipherSuite
+// to make this hold.
+//
+// TODO: We added such constructor, so this is the case now. Prove it.
 
-  TODO: We added such constructor, so this is the case now. Prove it.
-*)
 
+(** Determine if a ciphersuite implies no peer authentication *)
 let isAnonCipherSuite cs =
   match cs with
   | CipherSuite Kex_DHE None _ -> true
   | _ -> false
 
+(** Determine if a ciphersuite implies using (EC)Diffie-Hellman KEX *)
 let isDHECipherSuite cs =
   match cs with
   | CipherSuite Kex_DHE (Some DSA) _      -> true
@@ -657,28 +718,33 @@ let isDHECipherSuite cs =
   | CipherSuite Kex_ECDHE (Some RSASIG) _ -> true
   | _ -> false
 
+(** Determine if a ciphersuite implies using Elliptic Curves Diffie-Hellman KEX *)
 let isECDHECipherSuite cs =
   match cs with
   | CipherSuite Kex_ECDHE (Some ECDSA) _  -> true
   | CipherSuite Kex_ECDHE (Some RSASIG) _ -> true
   | _ -> false
 
+(** Determine if a ciphersuite implies using plain Diffie-Hellman KEX *)
 let isDHCipherSuite cs =
   match cs with
   | CipherSuite Kex_DH (Some DSA) _    -> true
   | CipherSuite Kex_DH (Some RSASIG) _ -> true
   | _ -> false
 
+(** Determine if a ciphersuite implies using an RSA key exchange *)
 let isRSACipherSuite cs =
   match cs with
   | CipherSuite Kex_RSA None _ -> true
   | _ -> false
 
+(** Determine if a ciphersuite implies using MAC only and no encryption *)
 let isOnlyMACCipherSuite cs =
   match cs with
   | CipherSuite _ _ (MACOnly _) -> true
   | _ -> false
 
+(** Determine the signature algorithm associated to a ciphersuite *)
 let sigAlg_of_ciphersuite cs =
   match cs with
   | CipherSuite Kex_RSA None _
@@ -691,12 +757,15 @@ let sigAlg_of_ciphersuite cs =
   | _ -> unexpected "[sigAlg_of_ciphersuite] invoked on a wrong ciphersuite"
 
 
+(** Definition for the PRF label type *)
 type prflabel = bytes
 
+(** Key schedule labels *)
 let extract_label          = utf8 "master secret"
 let extended_extract_label = utf8 "extended master secret"
 let kdf_label              = utf8 "key expansion"
 
+(** PRF definitions based on the protocol version *)
 type prePrfAlg =
   | PRF_SSL3_nested         // MD5(SHA1(...)) for extraction and keygen
   | PRF_SSL3_concat         // MD5 @| SHA1    for VerifyData tags
@@ -704,14 +773,18 @@ type prePrfAlg =
   | PRF_TLS_1p2 : prflabel -> macAlg -> prePrfAlg  // typically SHA256 but may depend on CS
   | PRF_TLS_1p3 // TBC
 
+(** PRF associations *)
+//BB.TODO: Documentation ?
 type kefAlg_t = prePrfAlg
 type kdfAlg_t = prePrfAlg
 type vdAlg_t = protocolVersion * cipherSuite
 
-(* Only to be invoked with TLS 1.2 (hardcoded in previous versions *)
+// Only to be invoked with TLS 1.2 (hardcoded in previous versions
+// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 !
 let verifyDataLen_of_ciphersuite (cs:cipherSuite) = 12
 
-(* Only to be invoked with TLS 1.2 (hardcoded in previous versions *)
+// Only to be invoked with TLS 1.2 (hardcoded in previous versions
+// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 !
 val prfMacAlg_of_ciphersuite_aux: cipherSuite -> Tot (option macAlg)
 let prfMacAlg_of_ciphersuite_aux = function
   | CipherSuite  _ _  (MtE  _ _ )   -> Some (HMAC SHA256)
@@ -719,30 +792,37 @@ let prfMacAlg_of_ciphersuite_aux = function
   | CipherSuite  _ _  (MACOnly _)   -> Some (HMAC SHA256) //MK was (MACOnly hAlg) should it also be be (HMAC hAlg)?
   | _                               -> None
 
+
+(** Determine if the tuple PV and CS is the correct association with PRF *)
 let pvcs (pv:protocolVersion) (cs:cipherSuite) =
   match pv with
   | TLS_1p2 | TLS_1p3 -> is_Some (prfMacAlg_of_ciphersuite_aux cs)
   | _                 -> true
 
-unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) = 
+unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) =
   x:a{is_Some (f x)} -> Tot b
 
 let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
   fun x -> Some.v (prfMacAlg_of_ciphersuite_aux x)
 
-(* PRF and verifyData hash algorithms are potentially independent in TLS 1.2, *)
-(* so we use two distinct functions. However, all currently defined ciphersuites *)
-(* use the same hash algorithm, so the current implementation of the two functions *)
-(* is the same. *)
-(* Only to be invoked with TLS 1.2 (hardcoded in previous versions *)
+// PRF and verifyData hash algorithms are potentially independent in TLS 1.2,
+// so we use two distinct functions. However, all currently defined ciphersuites
+// use the same hash algorithm, so the current implementation of the two functions
+// is the same.
+
+// Only to be invoked with TLS 1.2 (hardcoded in previous versions
+// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 !
 let verifyDataHashAlg_of_ciphersuite_aux = function
   | CipherSuite _ _ (MtE  _ _)    -> Some SHA256
   | CipherSuite _ _ (AEAD _ hAlg) -> Some hAlg
   | CipherSuite _ _ (MACOnly hAlg) -> Some SHA256
   | _                               -> None
+
+// BB.TODO: Documentation ?
 let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphersuite_aux =
   fun x -> Some.v (verifyDataHashAlg_of_ciphersuite_aux x)
 
+(** Determine which session hash algorithm is to be used with the protocol version and ciphersuite *)
 val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
 let sessionHashAlg pv cs =
   match pv with
@@ -752,13 +832,17 @@ let sessionHashAlg pv cs =
 // SZ: Right. The TLS 1.3 draft says "Where HMAC [RFC2104] uses
 // the Hash algorithm for the handshake"
 
+(** Determine the Authenticated Encryption algorithm associated with a ciphersuite *)
 val get_aeAlg: cs:cipherSuite{ is_CipherSuite cs } -> Tot aeAlg
 let get_aeAlg cs =
   match cs with
   | CipherSuite _ _ ae -> ae
 
+(** Define the null authenticated encryption algorithm *)
+// BB: Why does this default to MD5 ?
 let null_aeAlg = MACOnly MD5
 
+(** Determine Encryption type to be used with a chosen PV and AE algorithm *)
 val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { is_MtE a }) -> Tot (encAlg * ivMode)
 let encAlg_of_aeAlg  pv ae =
   match pv,ae with
@@ -766,6 +850,7 @@ let encAlg_of_aeAlg  pv ae =
   | TLS_1p0, MtE (Block e) m -> (Block e),Stale
   | _, MtE e m -> e,Fresh
 
+(** Determine MAC algorithm to be used with a chosen PV and AE algorithm *)
 val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(is_AEAD a) }) -> Tot macAlg
 let macAlg_of_aeAlg pv ae =
   match pv,ae with
@@ -774,6 +859,7 @@ let macAlg_of_aeAlg pv ae =
   | SSL_3p0,MtE _ alg   -> SSLKHASH alg
   | _      ,MtE _ alg   -> HMAC alg
 
+(** Ciphersuite names definition *)
 type cipherSuiteName =
   | TLS_NULL_WITH_NULL_NULL
 
@@ -831,8 +917,11 @@ type cipherSuiteName =
   | TLS_DH_anon_WITH_AES_128_GCM_SHA256
   | TLS_DH_anon_WITH_AES_256_GCM_SHA384
 
+
+(** Definition of a list of ciphersuite *)
 type cipherSuiteNames = list cipherSuiteName
 
+(** Determine the validity of a ciphersuite based on it's name *)
 val cipherSuite_of_name: cipherSuiteName -> Tot valid_cipher_suite
 let cipherSuite_of_name = function
   | TLS_NULL_WITH_NULL_NULL                -> NullCipherSuite
@@ -891,13 +980,16 @@ let cipherSuite_of_name = function
   | TLS_DH_anon_WITH_AES_128_GCM_SHA256    -> CipherSuite Kex_DHE None          (AEAD AES_128_GCM SHA256)
   | TLS_DH_anon_WITH_AES_256_GCM_SHA384    -> CipherSuite Kex_DHE None          (AEAD AES_256_GCM SHA384)
 
-val cipherSuites_of_nameList: l1:list cipherSuiteName 
+
+(** Return valid ciphersuites according to a list of ciphersuite names *)
+val cipherSuites_of_nameList: l1:list cipherSuiteName
   -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
-let cipherSuites_of_nameList nameList = 
+let cipherSuites_of_nameList nameList =
   // REMARK: would trigger automatically if ListProperties is loaded
-  ListProperties.map_lemma cipherSuite_of_name nameList; 
+  ListProperties.map_lemma cipherSuite_of_name nameList;
   List.Tot.map cipherSuite_of_name nameList
 
+(** Determine the name of a ciphersuite based on its construction *)
 let name_of_cipherSuite cs =
   match cs with
   | NullCipherSuite                                                      -> Correct TLS_NULL_WITH_NULL_NULL
@@ -958,8 +1050,10 @@ let name_of_cipherSuite cs =
 
   | _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Invoked on a unknown ciphersuite")
 
+
 #set-options "--max_ifuel 5 --initial_ifuel 5 --max_fuel 1 --initial_fuel 1"
 
+(** Determine the names associated to a list of ciphersuite constructors *)
 val names_of_cipherSuites : cipherSuites -> Tot (result cipherSuiteNames)
 let rec names_of_cipherSuites css =
   match css with
@@ -976,17 +1070,22 @@ let rec names_of_cipherSuites css =
       end
     end
 
-// migrated contentType to Content.fst (this is internal to TLS)
+// Note:
+// Migrated contentType to Content.fst (this is internal to TLS)
 
+(** Transforms a sequence of natural numbers into bytes *)
 val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot bytes
 let bytes_of_seq sn = bytes_of_int 8 sn
 
+(** Transforms bytes into a sequence of natural numbers *)
 val seq_of_bytes: b:bytes{ length b <= 8 } -> Tot nat
 let seq_of_bytes b = int_of_bytes b
 
+(** Transform and concatenate a natural number to bytes *)
 val vlbytes: lSize:nat -> b:bytes{repr_bytes (length b) <= lSize} -> Tot (r:bytes{length r = lSize + length b})
 let vlbytes lSize b = bytes_of_int lSize (length b) @| b
 
+(** Lemmas associated to bytes manipulations *)
 val lemma_vlbytes_len : i:nat -> b:bytes{repr_bytes (length b) <= i}
   -> Lemma (ensures (length (vlbytes i b) = i + length b))
 let lemma_vlbytes_len i b = ()
@@ -1010,7 +1109,10 @@ let vlbytes_length_lemma n a b =
   assert(Seq.equal lenb (bytes_of_int n (length b)));
   int_of_bytes_of_int n (length a); int_of_bytes_of_int n (length b)
 
+
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 0 --initial_fuel 0"   //need to reason about length
+
+
 val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:(bytes * bytes){
@@ -1023,6 +1125,7 @@ let vlsplit lSize vlb =
   then Correct(Platform.Bytes.split b l)
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
+
 val vlparse: lSize:nat{lSize <= 4} -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:bytes{repr_bytes (length b) <= lSize /\ Seq.equal vlb (vlbytes lSize b)}))
 let vlparse lSize vlb =
@@ -1030,6 +1133,7 @@ let vlparse lSize vlb =
   if int_of_bytes vl = length b
   then Correct b
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+
 
 val vlparse_vlbytes: lSize:nat{lSize <= 4} -> vlb:bytes{repr_bytes (length vlb) <= lSize} -> Lemma 
   (requires (True))
@@ -1043,12 +1147,15 @@ let vlparse_vlbytes lSize vlb =
   | Error z   -> ()
   | Correct b -> lemma_vlbytes_inj lSize vlb b
 
+
+(** Certificate type definition *)
 type certType =
   | RSA_sign
   | DSA_sign
   | RSA_fixed_dh
   | DSA_fixed_dh
 
+(** Serializing function for the certificate type *)
 val certTypeBytes: certType -> Tot (lbytes 1)
 let certTypeBytes ct =
   match ct with
@@ -1057,6 +1164,7 @@ let certTypeBytes ct =
   | RSA_fixed_dh -> abyte 3z
   | DSA_fixed_dh -> abyte 4z
 
+(** Parsing function for the certificate type *)
 val parseCertType: pinverse_t certTypeBytes
 let parseCertType b =
   match cbyte b with
@@ -1066,6 +1174,8 @@ let parseCertType b =
   | 4z -> Correct DSA_fixed_dh
   | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
+
+(** Lemmas associated to serializing/parsing of certificate types *)
 val inverse_certType: x:_ -> Lemma
   (requires (True))
   (ensures lemma_inverse_g_f certTypeBytes parseCertType x)
@@ -1078,7 +1188,10 @@ val pinverse_certType: x:_ -> Lemma
   [SMTPat (certTypeBytes (Correct._0 (parseCertType x)))]
 let pinverse_certType x = ()
 
+
 #set-options "--max_fuel 1 --initial_fuel 1"
+
+(** Serializing function for lists of certificate types *)
 val certificateTypeListBytes: ctl:list certType -> Tot (lbytes (List.Tot.length ctl))
 let rec certificateTypeListBytes ctl =
   match ctl with
@@ -1087,6 +1200,7 @@ let rec certificateTypeListBytes ctl =
     let ct = certTypeBytes h in
     ct @| certificateTypeListBytes t
 
+(** Parsing function for lists of certificate types *)
 val parseCertificateTypeList: data:bytes -> Tot (list certType) (decreases (length data))
 let rec parseCertificateTypeList data =
   if length data = 0 then []
@@ -1099,8 +1213,11 @@ let rec parseCertificateTypeList data =
       let rem = parseCertificateTypeList data in
       ct :: rem
 
+
 #set-options "--max_ifuel 4 --initial_ifuel 1 --max_fuel 4 --initial_fuel 1"
 
+
+(** Determine the certificate signature algorithms allowed according to the ciphersuite *)
 val defaultCertTypes: bool -> cipherSuite -> l:list certType{List.Tot.length l <= 1}
 let defaultCertTypes sign cs =
   let alg = sigAlg_of_ciphersuite cs in
@@ -1115,10 +1232,14 @@ let defaultCertTypes sign cs =
       | DSA -> [DSA_fixed_dh]
       | _ -> unexpected "[defaultCertTypes] invoked on an invalid ciphersuite"
 
+
 #set-options "--max_ifuel 2 --initial_ifuel 2 --max_fuel 1 --initial_fuel 1"
 
+
+(** Type definition of the Distinguished Name of a certificate *)
 type dn = s:string{length(utf8 s) <= 256}
 
+(** Serializing function for a list of Distinguished Names of certificates *)
 val distinguishedNameListBytes: names:list dn -> Tot (b:bytes{length b <= op_Multiply 258 (List.Tot.length names)})
 let rec distinguishedNameListBytes names =
   match names with
@@ -1128,6 +1249,7 @@ let rec distinguishedNameListBytes names =
     let name = vlbytes 2 (utf8 h) in
     name @| distinguishedNameListBytes t
 
+(** Parsing function for a list of Distinguished Names of certificates *)
 val parseDistinguishedNameList: data:bytes -> res:list dn -> Tot (result (list dn)) (decreases (length data))
 let rec parseDistinguishedNameList data res =
   if length data = 0 then
@@ -1149,15 +1271,19 @@ let rec parseDistinguishedNameList data res =
 	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
 
+(** Determine if a ciphersuite list contains the SCSV ciphersuite *)
 let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
   List.Tot.mem (SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)) css
 
 
-(* TODO: move all the definitions below to a separate file / figure out whether
- they belong here? *)
-(* TODO: all occurrences of [pinverse] from there on have been replaced by calls
- to [pinverse_t]; we should write corresponding inversion lemmas. *)
+// TODO: move all the definitions below to a separate file / figure out whether
+// they belong here ?
+//
+// TODO: all occurrences of [pinverse] from there on have been replaced by calls
+// to [pinverse_t]; we should write corresponding inversion lemmas.
 
+
+(** Finite Field Diffie-Hellman group definitions *)
 type ffdhe =
   | FFDHE2048
   | FFDHE3072
@@ -1165,16 +1291,18 @@ type ffdhe =
   | FFDHE6144
   | FFDHE8192
 
+// BB.TODO: Document this !
 let _FFz = 0xFFz // Workaround for #514
 
-(* TLS 1.3 constants *)
+(** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
   | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z})
   | FFDHE of ffdhe
   | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = _FFz})
   | ECDHE_PRIVATE_USE of byte
-  
+
+(** Serializing function for (EC)DHE named groups *)
 val namedGroupBytes: namedGroup -> Tot (lbytes 2)
 let namedGroupBytes ng =
   match ng with
@@ -1198,6 +1326,7 @@ let namedGroupBytes ng =
   | FFDHE_PRIVATE_USE b -> abyte2 (0x01z, b)
   | ECDHE_PRIVATE_USE b -> abyte2 (0xFEz, b)
 
+(** Parsing function for (EC)DHE named groups *)
 val parseNamedGroup: pinverse_t namedGroupBytes
 let parseNamedGroup b =
   match cbyte2 b with
@@ -1217,6 +1346,7 @@ let parseNamedGroup b =
   | (0xFEz, b)     -> Correct (ECDHE_PRIVATE_USE b)
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong named group")
 
+(** Lemmas for named groups parsing/serializing inversions *)
 val inverse_namedGroup: x:_ -> Lemma
   (requires (True))
   (ensures lemma_inverse_g_f namedGroupBytes parseNamedGroup x)
@@ -1237,14 +1367,15 @@ let rec namedGroupsBytes0 groups =
   | [] -> empty_bytes
   | g::gs -> namedGroupBytes g @| namedGroupsBytes0 gs
 
+(** Serialization function for a list of named groups *)
 val namedGroupsBytes: groups:list namedGroup{List.Tot.length groups < 65536/2}
   -> Tot (b:bytes { length b = 2 + op_Multiply 2 (List.Tot.length groups)})
 let namedGroupsBytes groups =
   let gs = namedGroupsBytes0 groups in
   lemma_repr_bytes_values (length gs);
   vlbytes 2 gs
-  
-private val parseNamedGroups0: b:bytes -> l:list namedGroup 
+
+private val parseNamedGroups0: b:bytes -> l:list namedGroup
   -> Tot (result (groups:list namedGroup{List.Tot.length groups = List.Tot.length l + length b / 2}))
   (decreases (length b))
 let rec parseNamedGroups0 b groups =
@@ -1263,6 +1394,7 @@ let rec parseNamedGroups0 b groups =
    assume (List.Tot.length grev == List.Tot.length groups);
    Correct grev
 
+(** Parsing function for a list of named groups *)
 val parseNamedGroups: b:bytes { 2 <= length b /\ length b < 65538 }
   -> Tot (result (groups:list namedGroup{List.Tot.length groups = (length b - 2) / 2}))
 let parseNamedGroups b =
@@ -1272,19 +1404,23 @@ let parseNamedGroups b =
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
 
 
+(** Definition of the configuration identifier *)
 type configurationId = b:bytes{0 < length b /\ length b < 65536}
 
+(** Serializing function for the configuration identifier *)
 val configurationIdBytes: configurationId -> Tot (b:bytes{2 < length b /\ length b < 65538})
 let configurationIdBytes cid =
   lemma_repr_bytes_values (length cid);
   vlbytes 2 cid
 
+(** Parsing function for the configuration identifier *)
 val parseConfigurationId: pinverse_t configurationIdBytes
 let parseConfigurationId b =
   match vlparse 2 b with
   | Error z -> Error z
   | Correct b -> Correct b
 
+(** Lemmas for configurationId serializing/parsing inversion *)
 val inverse_configurationId: x:_ -> Lemma
   (requires (True))
   (ensures lemma_inverse_g_f configurationIdBytes parseConfigurationId x)
@@ -1298,6 +1434,10 @@ val pinverse_configurationId: x:_ -> Lemma
   [SMTPat (configurationIdBytes (Correct._0 (parseConfigurationId x)))]
 let pinverse_configurationId x = ()
 
+
+//
+// BB.TODO: Some of the following code should be moved outside TLSConstants !
+//          In particular, the integer definitions can be taken from F* ulib.
 
 type uint32 = b:lbytes 4
 
@@ -1322,11 +1462,14 @@ val pinverse_uint32: x:_ -> Lemma
 let pinverse_uint32 x = ()
 
 
+
+(** EarlyData type definition *)
 type earlyDataType =
   | ClientAuthentication
   | EarlyData
   | ClientAuthenticationAndData
 
+(** Serializing function for Early Data values *)
 val earlyDataTypeBytes: earlyDataType -> Tot (lbytes 1)
 let earlyDataTypeBytes edt =
   match edt with
@@ -1334,6 +1477,7 @@ let earlyDataTypeBytes edt =
   | EarlyData                   -> abyte 2z
   | ClientAuthenticationAndData -> abyte 3z
 
+(** Parsing function for Early Data values *)
 val parseEarlyDataType: pinverse_t earlyDataTypeBytes
 let parseEarlyDataType b =
   match cbyte b with
@@ -1342,6 +1486,8 @@ let parseEarlyDataType b =
   | 3z -> Correct ClientAuthenticationAndData
   | _  -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data type")
 
+
+(** Lemmas for Early Data parsing/serializing inversions *)
 val inverse_earlyDataType: x:_ -> Lemma
   (requires (True))
   (ensures lemma_inverse_g_f earlyDataTypeBytes parseEarlyDataType x)
@@ -1354,17 +1500,21 @@ val pinverse_earlyDataType: x:_ -> Lemma
   [SMTPat (earlyDataTypeBytes (Correct._0 (parseEarlyDataType x)))]
 let pinverse_earlyDataType x = ()
 
-// TODO : replace with more precise types when available
+
+// TODO: replace with more precise types when available
+(** Configuration Extension definition *)
 noeq type configurationExtension =
   | UnknownConfigurationExtension:
       typ:lbytes 2 -> payload: bytes { repr_bytes (length payload) <= 2 } -> configurationExtension
 
-// Should we strengthen the result type to b:bytes{length b >= 4}?
+// TODO: Should we strengthen the result type to b:bytes{length b >= 4}?
+(** Serialization of the configuration extension values *)
 val configurationExtensionBytes: ce:configurationExtension -> Tot bytes
 let configurationExtensionBytes ce =
   match ce with
   | UnknownConfigurationExtension typ payload -> typ @| vlbytes 2 payload
 
+(** Parsing of the configuration extension values *)
 val parseConfigurationExtension: pinverse_t configurationExtensionBytes
 let parseConfigurationExtension b =
   if length b >= 4 then
@@ -1374,13 +1524,15 @@ let parseConfigurationExtension b =
     | Error z -> Error z
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse a configuration extension")
 
+
+(** Lemmas for Configuration Extension parsing/serializing inversions *)
 val inverse_configurationExtension: x:_ -> Lemma
   (requires (True))
   (ensures lemma_inverse_g_f configurationExtensionBytes parseConfigurationExtension x)
   [SMTPat (parseConfigurationExtension (configurationExtensionBytes x))]
 let inverse_configurationExtension x =
   match x with
-  | UnknownConfigurationExtension typ payload -> 
+  | UnknownConfigurationExtension typ payload ->
   let b = typ @| vlbytes 2 payload in
   let b0,b1 = split b 2 in
   let vl,b = split b1 2 in
@@ -1388,14 +1540,16 @@ let inverse_configurationExtension x =
   assert (Seq.equal vl (bytes_of_int 2 (length b)));
   assert (Seq.equal b0 typ);
   assert (Seq.equal b payload)
- 
+
 val pinverse_configurationExtension: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal configurationExtensionBytes parseConfigurationExtension x))
   [SMTPat (configurationExtensionBytes (Correct._0 (parseConfigurationExtension x)))]
 let pinverse_configurationExtension x = ()
 
-// Choice: truncate when maximum length is exceeded
+
+// TODO: Choice, truncate when maximum length is exceeded
+(** Serialization of the configuration extension list of values *)
 val configurationExtensionsBytes: list configurationExtension -> Tot bytes
 let configurationExtensionsBytes ce =
   let rec configurationExtensionsBytes_aux (b:bytes{length b < 65536}) (ces:list configurationExtension): Tot (b:bytes{length b < 65536}) (decreases ces) =
@@ -1410,6 +1564,7 @@ let configurationExtensionsBytes ce =
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
+(** Parsing of the configuration extension list of values *)
 val parseConfigurationExtensions: pinverse_t configurationExtensionsBytes
 let parseConfigurationExtensions b =
   let rec (aux: b:bytes -> list configurationExtension -> Tot (result (list configurationExtension)) (decreases (length b))) =
@@ -1433,14 +1588,17 @@ let parseConfigurationExtensions b =
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
 
 
+(** Tuple Signature Algorithm and Hash Algorithm type definition *)
 type sigHashAlg = sigAlg * hashAlg'
 
+(** Serializing function for the Signature algorithm *)
 val sigHashAlgBytes: sigHashAlg -> Tot (lbytes 2)
 let sigHashAlgBytes sha =
   let sign = sigAlgBytes (fst sha) in
   let hash = hashAlgBytes (snd sha) in
   hash @| sign
 
+(** Parsing function for the Signature algorithm *)
 val parseSigHashAlg: pinverse_t sigHashAlgBytes
 let parseSigHashAlg b =
   let hash,sign = split b 1 in
@@ -1453,9 +1611,10 @@ let parseSigHashAlg b =
     end
   | Error z -> Error z
 
-// Moving this inside sigHashAlgsBytes gives a `Bound term variable not found` error
+// TODO: Moving this inside sigHashAlgsBytes gives a `Bound term variable not found` error
 // See https://github.com/FStarLang/FStar/issues/533
 
+(** Serializing function for a Signature algorithm list *)
 val sigHashAlgsBytes: algs:list sigHashAlg{List.Tot.length algs < 65536/2}
   -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 let sigHashAlgsBytes algs =
@@ -1472,6 +1631,7 @@ let sigHashAlgsBytes algs =
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
+(** Parsing function for a Signature algorithm list *)
 val parseSigHashAlgs: pinverse_t sigHashAlgsBytes
 let parseSigHashAlgs b =
   let rec aux: b:bytes -> algs:list sigHashAlg{length b + op_Multiply 2 (List.Tot.length algs) < 65536} -> Tot (result (l:list sigHashAlg{List.Tot.length l < 65536/2})) (decreases (length b)) = fun b algs ->
@@ -1489,21 +1649,28 @@ let parseSigHashAlgs b =
 
 
 // TODO: replace "bytes" by either DH or ECDH parameters
+(** KeyShare entry definition *)
 type keyShareEntry = namedGroup * b:bytes{repr_bytes (length b) <= 2}
 
+(** ClientKeyShare definition *)
 type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
 
+(** ServerKeyShare definition *)
 type serverKeyShare = keyShareEntry
 
+
+(** KeyShare definition *)
 noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
 
+(** Serializing function for a KeyShareEntry *)
 val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
 let keyShareEntryBytes (ng, b) =
   let ng_bytes = namedGroupBytes ng in
   ng_bytes @| vlbytes 2 b
 
+(** Parsing function for a KeyShareEntry *)
 val parseKeyShareEntry: pinverse_t keyShareEntryBytes
 let parseKeyShareEntry b =
   let ng,key_exchange = split b 2 in
@@ -1516,6 +1683,8 @@ let parseKeyShareEntry b =
     end
   | Error z -> Error z
 
+
+(** Lemmas for KeyShare entries parsing/serializing inversions *)
 val inverse_keyShareEntry: x:_ -> Lemma
   (requires (True))
   (ensures lemma_inverse_g_f keyShareEntryBytes parseKeyShareEntry x)
@@ -1535,7 +1704,9 @@ val pinverse_keyShareEntry: x:_ -> Lemma
   [SMTPat (keyShareEntryBytes (Correct._0 (parseKeyShareEntry x)))]
 let pinverse_keyShareEntry x = ()
 
+
 // Choice: truncate when maximum length is exceeded
+(** Serializing function for a list of KeyShareEntry *)
 val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 let keyShareEntriesBytes kes =
   let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
@@ -1550,7 +1721,8 @@ let keyShareEntriesBytes kes =
   let b = keyShareEntriesBytes_aux empty_bytes kes in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
-  
+
+(** Parsing function for a list KeyShareEntry *)
 val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
 let parseKeyShareEntries b =
   let rec (aux: b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b))) = fun b entries ->
@@ -1571,9 +1743,11 @@ let parseKeyShareEntries b =
   | Correct b -> aux b []
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
 
+(** Serializing function for a ClientKeyShare *)
 val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{ 2 <= length b /\ length b < 65538 })
 let clientKeyShareBytes cks = keyShareEntriesBytes cks
 
+(** Parsing function for a ClientKeyShare *)
 val parseClientKeyShare: b:bytes{ 2 <= length b /\ length b < 65538 }
   -> Tot (result clientKeyShare)
 let parseClientKeyShare b =
@@ -1584,17 +1758,21 @@ let parseClientKeyShare b =
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client key share entries")
   | Error z -> Error z
 
+(** Serializing function for a ServerKeyShare *)
 val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{ 4 <= length b })
 let serverKeyShareBytes sks = keyShareEntryBytes sks
 
+(** Parsing function for a ServerKeyShare *)
 val parseServerKeyShare: pinverse_t serverKeyShareBytes
 let parseServerKeyShare b = parseKeyShareEntry b
 
+(** Serializing function for a KeyShare *)
 val keyShareBytes: keyShare -> Tot bytes
 let keyShareBytes = function
   | ClientKeyShare cks -> clientKeyShareBytes cks
   | ServerKeyShare sks -> serverKeyShareBytes sks
 
+(** Parsing function for a KeyShare *)
 val parseKeyShare: bool -> bytes -> Tot (result keyShare)
 let parseKeyShare is_client b =
   if is_client then
@@ -1616,13 +1794,17 @@ let parseKeyShare is_client b =
       end
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
 
-// TODO : give more precise type
+// TODO: give more precise type
+
+(** PSK Identity definition *)
 type pskIdentity = b:bytes{repr_bytes (length b) <= 2}
 
+(** Serializing function for a PSK Identity *)
 val pskIdentityBytes: pskIdentity -> Tot (b:bytes{length b >= 2})
 let pskIdentityBytes pski =
   vlbytes 2 pski
 
+(** Parsing function for a PSK Identity *)
 val parsePskIdentity: pinverse_t pskIdentityBytes
 let parsePskIdentity b =
   match vlparse 2 b with
@@ -1630,7 +1812,9 @@ let parsePskIdentity b =
   | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk_identity")
 
 
-// Choice: truncate when maximum length is exceeded
+// TODO: Choice, truncate when maximum length is exceeded
+
+(** Serializing function for a list of PSK Identity *)
 val pskIdentitiesBytes: list pskIdentity -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 let pskIdentitiesBytes ids =
   let rec pskIdentitiesBytes_aux (b:bytes{length b < 65536}) (ids:list pskIdentity): Tot (b:bytes{length b < 65536}) (decreases ids) =
@@ -1646,6 +1830,7 @@ let pskIdentitiesBytes ids =
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
+(** Parsing function for a list of PSK Identity *)
 val parsePskIdentities: pinverse_t pskIdentitiesBytes
 let parsePskIdentities b =
   let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b ids ->
@@ -1667,39 +1852,49 @@ let parsePskIdentities b =
   | Correct b -> aux b []
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identities")
 
+
+(** Client list of PSK identities *)
 type clientPreSharedKey = l:list pskIdentity{List.Tot.length l >= 1 /\ List.Tot.length l < 65536/2}
 
+(** Server list of PSK identities *)
 type serverPreSharedKey = pskIdentity
 
+(** PreSharedKey definition *)
 noeq type preSharedKey =
   | ClientPreSharedKey of clientPreSharedKey
   | ServerPreSharedKey of serverPreSharedKey
 
+(** Serializing function for ClientPreSharedKey *)
 val clientPreSharedKeyBytes: clientPreSharedKey -> Tot (b:bytes{ 2 <= length b /\ length b < 65538 })
 let clientPreSharedKeyBytes cpsk = pskIdentitiesBytes cpsk
 
+(** Parsing function for ClientPreSharedKey *)
 val parseClientPreSharedKey: b:bytes{ 2 <= length b /\ length b < 65538 }
   -> Tot (result clientPreSharedKey)
-let parseClientPreSharedKey b = 
+let parseClientPreSharedKey b =
   match parsePskIdentities b with
   | Correct ids ->
     let l = List.Tot.length ids in
-    if 1 <= l && l < 65536/2 
+    if 1 <= l && l < 65536/2
     then Correct ids
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client psk identities")
   | Error z -> Error z
-  
+
+(** Serializing function for ServerPreSharedKey *)
 val serverPreSharedKeyBytes: serverPreSharedKey -> Tot (b:bytes{ 2 <= length b })
 let serverPreSharedKeyBytes cpsk = pskIdentityBytes cpsk
 
+(** Parsing function for ServerPreSharedKey *)
 val parseServerPreSharedKey: pinverse_t serverPreSharedKeyBytes
 let parseServerPreSharedKey b = parsePskIdentity b
 
+(** Serializing function for PreSharedKey *)
 val preSharedKeyBytes: preSharedKey -> Tot (b:bytes{length b >= 2})
 let preSharedKeyBytes = function
   | ClientPreSharedKey cpsk -> clientPreSharedKeyBytes cpsk
   | ServerPreSharedKey spsk -> serverPreSharedKeyBytes spsk
 
+(** Parsing function for PreSharedKey *)
 val parsePreSharedKey: pinverse_t preSharedKeyBytes
 let parsePreSharedKey b =
   match vlparse 2 b with
@@ -1721,6 +1916,6 @@ let parsePreSharedKey b =
 	match parseServerPreSharedKey b with
 	| Correct psk -> Correct (ServerPreSharedKey psk)
 	| Error z -> Error z
-	end 
+	end
     end
   | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse pre shared key")
