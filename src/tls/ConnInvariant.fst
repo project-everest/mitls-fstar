@@ -201,7 +201,7 @@ val invertOption : a:Type -> Lemma
   [SMTPatT (option a)]
 let invertOption a = ()  
 	 
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0 --z3timeout 100"	 
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0 --z3rlimit 100"	 
 let ms_derive_is_ok h0 h1 i w = 
   let aux :  j:id -> Lemma (let new_ms = MR.m_sel h1 MS.ms_tab in
   			  let new_conn = MR.m_sel h1 conn_tab in
@@ -354,7 +354,7 @@ val mutate_registered_writer_ok : h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i} 
 	       (let ilog_log_as_hsref = MR.as_hsref (StreamAE.ilog (StreamAE.State.log w)) in
 	        HH.contains_ref (HST.MkRef.ref ilog_log_as_hsref) (HST.HS.h h1)))) //We say that we changed the w.region; but that doesn't necessarily mean that its log remains
     (ensures (mc_inv h1))
-#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --z3timeout 100"
+#set-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 100"
 let mutate_registered_writer_ok h0 h1 i w c = (* () *)
 (* a slightly more detailed proof: *)
     let new_ms = MR.m_sel h1 MS.ms_tab in
@@ -395,7 +395,7 @@ val add_connection_ok: h0:HST.mem -> h1:HST.mem -> i:id -> c:i_conn i -> Lemma
 	      MM.sel old_conn nonce == None /\        //c wasn't in the table initially
 	      new_conn == MM.upd old_conn nonce c))) //and the conn_tab changed just by adding c
   (ensures (mc_inv h1))
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --z3timeout 100" //NS: this one seems to require an inversion somewhere, but not sure exactly where
+#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 100" //NS: this one seems to require an inversion somewhere, but not sure exactly where
 let add_connection_ok h0 h1 i c =
     cut (let conn_tab_as_hsref = MR.as_hsref conn_tab in
          HH.contains_ref (HST.MkRef.ref conn_tab_as_hsref) (HST.HS.h h1));

@@ -399,7 +399,7 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
     //correct behavior, including projections suitable for both the handshake (fragments) and the application (deltas)
     /\ (r<>ad_overflow ==> sendFragment_success Set.empty c i wo f h0 h1)))
 
-#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let ct, rg = Content.ct_rg i f in
@@ -441,7 +441,7 @@ let sendFragment c #i wo f =
 //  don't have to be fully precise: If we report an error, we can e.g. say
 //  that an alert may have been sent on the current epoch.
 
-#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
   :  ST ioresult_w
 	(requires (fun h -> 
@@ -521,7 +521,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
 		       else frags1==frags0')))))
 
-#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (message i)) (send_ccs:bool)
   : ST (result unit)
        (requires (sendFragment_inv wopt))
@@ -621,7 +621,7 @@ let next_fragment i c =
   res
 
 
-#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 unfold let writeHandshake_requires h_init c new_writer h = 
      	  let i_init = currentId_T c Writer h_init in 
    	  let i = currentId_T c Writer h in 
@@ -666,7 +666,7 @@ val writeHandshake: h_init:HST.mem //initial heap, for stating an invariant on d
   (requires (writeHandshake_requires h_init c new_writer))
   (ensures (writeHandshake_ensures h_init c new_writer))
 
-#reset-options "--z3timeout 1000 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 1000 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let rec writeHandshake h_init c new_writer = 
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
@@ -711,7 +711,7 @@ let rec writeHandshake h_init c new_writer =
 
 
 ////////////////////////////////////////////////////////////////////////////////
-#reset-options "--z3timeout 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 val write: c:connection -> #i:id -> #rg:frange i -> data:DataStream.fragment i rg -> ST ioresult_w
   (requires (fun h -> 
 	       current_writer_pre c i h /\
@@ -726,7 +726,7 @@ val write: c:connection -> #i:id -> #rg:frange i -> data:DataStream.fragment i r
 	     Seq.equal (SD.stream_deltas #i (Some.v wopt) h1) (snoc (SD.stream_deltas #i (Some.v wopt) h0) (DataStream.Data d))))
        | _ -> True)))
 
-#reset-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let write c #i #rg data =
   reveal_epoch_region_inv_all();
   let wopt = current_writer c i in

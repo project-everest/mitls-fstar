@@ -280,7 +280,7 @@ val gen: a:alg -> All (skey a)
 			     /\ m_fresh (PK.log (fst (V.v s))) h0 h1
 			     /\ is_Signed (m_sel h1 (PK.log (fst (V.v s)))))))
 
-#set-options "--z3timeout 40"
+#set-options "--z3rlimit 40"
 
 let rec gen a =
   let pkr,skr = genrepr a in // Could be inlined
@@ -295,7 +295,7 @@ let rec gen a =
     witness rkeys (generated (|a, p|));
     p, skr
 
-#set-options "--z3timeout 20"
+#set-options "--z3rlimit 20"
 
 (* ------------------------------------------------------------------------ *)
 

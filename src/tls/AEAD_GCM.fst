@@ -194,7 +194,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   	   )
   ))
 
-#set-options "--z3timeout 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
+#set-options "--z3rlimit 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
 
 let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
@@ -250,7 +250,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
                 /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
-#set-options "--z3timeout 100 --max_fuel 0 --initial_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+#set-options "--z3rlimit 100 --max_fuel 0 --initial_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 
 let decrypt #i d ad c =
   let ctr = ctr d.counter in

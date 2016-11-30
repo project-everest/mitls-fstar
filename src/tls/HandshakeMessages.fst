@@ -633,7 +633,7 @@ let valid_sh : Type0 = s:sh{
   (s.sh_protocol_version = TLS_1p3 ==> (is_None s.sh_sessionID /\ is_None s.sh_compression)) 
   /\ (s.sh_protocol_version <> TLS_1p3 ==> (is_Some s.sh_sessionID /\ is_Some s.sh_compression)) }
 
-#reset-options "--z3timeout 50"
+#reset-options "--z3rlimit 50"
 //#set-options "--lax"
 
 val serverHelloBytes_is_injective: msg1:valid_sh -> msg2:valid_sh -> 
@@ -1539,7 +1539,7 @@ let splitHandshakeMessage b =
     assert(Seq.equal b (messageBytes ht data));
     (ht, data)
 
-#reset-options "--z3timeout 100"
+#reset-options "--z3rlimit 100"
 //#set-options "--lax"
 
 val handshakeMessageBytes_is_injective: pv:option protocolVersion -> msg1:valid_hs_msg{associated_to_pv pv msg1} -> msg2:valid_hs_msg{associated_to_pv pv msg2} -> 
@@ -1590,7 +1590,7 @@ val lemma_handshakeMessageBytes_aux: pv:option protocolVersion -> msg1:valid_hs_
 		       /\ Seq.equal b1 (Seq.slice b2 0 (length b1))))
 	(ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2)))
 
-#reset-options "--z3timeout 50"
+#reset-options "--z3rlimit 50"
 //#set-options "--lax"
 
 let lemma_handshakeMessageBytes_aux pv msg1 msg2 =

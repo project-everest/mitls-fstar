@@ -250,7 +250,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 val gen: parent:rgn -> i:stae_id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
-#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let gen parent i =
   if is_stream i then
     Stream () (Stream.gen parent i)
@@ -285,7 +285,7 @@ let genReader parent #i w =
 val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
-#set-options "--z3timeout 100"
+#set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
     let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
@@ -392,7 +392,7 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
   	             frame_f (fragments d) h1 (Set.singleton (log_region d)) /\
   	             MR.witnessed (fragment_at_j d j f)))))
 
-#set-options "--z3timeout 100" 
+#set-options "--z3rlimit 100" 
 
 let decrypt #i d (ct,c) =
   let h0 = ST.get () in

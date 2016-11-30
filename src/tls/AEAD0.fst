@@ -232,7 +232,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1))
 
-#set-options "--z3timeout 10000"
+#set-options "--z3rlimit 10000"
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)
 // Note that result doesn't include the implicit IV (salt)

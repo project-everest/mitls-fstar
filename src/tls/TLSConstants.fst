@@ -519,6 +519,8 @@ let valid_cipher_suites = list valid_cipher_suite
 val cipherSuiteBytes: valid_cipher_suite -> Tot (lbytes 2)
 let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
 
+#reset-options "--z3rlimit 60"
+
 (** Auxillary parsing function for ciphersuites *)
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
@@ -623,7 +625,7 @@ let parseCipherSuite b =
   | Error z -> Error z
 
 
-#reset-options "--z3timeout 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
+#reset-options "--z3rlimit 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
 
 (** Lemma for ciphersuite serializing/parsing inversions *)
 val inverse_cipherSuite: x:cipherSuite -> Lemma

@@ -248,7 +248,7 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
            snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
 	   /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
-#set-options "--z3timeout 60"
+#set-options "--z3rlimit 60"
 //without hints, this next query succeeds in around 19s on a powerful desktop; that's too close the default 20s timeout for CI
 //with hints, it takes about 3.5s on the same machine. So, for CI with hints, the 60s timeouts is very generous but harmless
 //At least with the long timeout it should work reliably with or without hints
@@ -263,7 +263,7 @@ val targetLength_converges: i:id2
       /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
 (* #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1" *)
-#set-options "--z3timeout 1000"
+#set-options "--z3rlimit 1000"
 //without hints, the next query also takes several seconds on a powerful desktop
 let targetLength_converges i r =
   lemma_MtE i; lemma_ID12 i
