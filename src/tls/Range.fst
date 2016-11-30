@@ -263,7 +263,7 @@ val targetLength_converges: i:id2
       /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
 (* #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1" *)
-#set-options "--z3timeout 120"
+#set-options "--z3timeout 1000"
 //without hints, the next query also takes several seconds on a powerful desktop
 let targetLength_converges i r =
   lemma_MtE i; lemma_ID12 i
