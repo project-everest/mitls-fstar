@@ -285,6 +285,7 @@ refresh:
 # every single .ml file anyway...
 
 tls-gen: $(LIBFILES)
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
@@ -297,7 +298,6 @@ tls-gen: $(LIBFILES)
 	  --include concrete-flags \
 	  $(FSTS)
 	# Builds everything against prims, setting MEM=HST
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
