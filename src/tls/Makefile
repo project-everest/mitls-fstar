@@ -131,6 +131,7 @@ Crypto.AEAD.Lemmas.Part2.fst \
 Crypto.AEAD.Lemmas.Part3.fst \
 Crypto.AEAD.Wrappers.fst \
 Crypto.AEAD.fst \
+AEADOpenssl.fst \
 AEADProvider.fst \
 Range.fst \
 DataStream.fst \
