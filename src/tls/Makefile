@@ -297,6 +297,7 @@ tls-gen: $(LIBFILES)
 	  --include concrete-flags \
 	  $(FSTS)
 	# Builds everything against prims, setting MEM=HST
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
