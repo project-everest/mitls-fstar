@@ -211,10 +211,10 @@ type ks_client_state =
 | C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
 | C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
 | C_13_wait_CH: cr:random -> i:esId -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
-| C_13_wait_SH: cr:random -> es:option (| i:esId & es i |) -> cfk0:option (| i:finishedId & fink i |) -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
-| C_13_wait_SF: alpha:ks_alpha13 -> (| i:finishedId & cfk:fink i |) -> (| i:finishedId & sfk:fink i |) -> (| i:asId & ams:ams i |) -> ks_client_state
-| C_13_wait_CF: alpha:ks_alpha13 -> (| i:finishedId & cfk:fink i |) -> (| i:asId & ams:ams i |) -> (| i:rekeyId & rekey_secret i |) -> (| i:finishedId & latecfk:fink i |) -> ks_client_state
-| C_13_postHS: alpha:ks_alpha13 -> (| i:finishedId & fink i |) -> (| i:rekeyId & rekey_secret i |) -> (| i:rmsId & rms i |) -> (| i:exportId & ems i |) -> ks_client_state
+| C_13_wait_SH: cr:random -> es:option ( i:esId & es i ) -> cfk0:option ( i:finishedId & fink i ) -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
+| C_13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:finishedId & sfk:fink i ) -> ( i:asId & ams:ams i ) -> ks_client_state
+| C_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams:ams i ) -> ( i:rekeyId & rekey_secret i ) -> ( i:finishedId & latecfk:fink i ) -> ks_client_state
+| C_13_postHS: alpha:ks_alpha13 -> ( i:finishedId & fink i ) -> ( i:rekeyId & rekey_secret i ) -> ( i:rmsId & rms i ) -> ( i:exportId & ems i ) -> ks_client_state
 | C_Done
 
 type ks_server_state =
@@ -222,10 +222,10 @@ type ks_server_state =
 | S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:CommonDH.key -> ks_server_state
 | S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
-| S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:option (| i:esId & es i|) -> cfk0:option (| i:finishedId & fink i |) -> hs:(| i:hsId & hs i |) -> ks_server_state
-| S_13_wait_SF: alpha:ks_alpha13 -> (| i:finishedId & cfk:fink i |) -> (| i:finishedId & sfk:fink i |) -> (| i:asId & ams:ams i |) -> ks_server_state
-| S_13_wait_CF: alpha:ks_alpha13 -> (| i:finishedId & cfk:fink i |) -> (| i:asId & ams i |) -> (| i:rekeyId & rekey_secret i |) -> (| i:finishedId & latecfk:fink i |) -> ks_server_state
-| S_13_postHS: alpha:ks_alpha13 -> (| i:finishedId & fink i |) -> (| i:rekeyId & rekey_secret i |) -> (| i:rmsId & rms i |) -> (| i:exportId & ems i |) -> ks_server_state
+| S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:option ( i:esId & es i ) -> cfk0:option ( i:finishedId & fink i ) -> hs:( i:hsId & hs i ) -> ks_server_state
+| S_13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:finishedId & sfk:fink i ) -> ( i:asId & ams:ams i ) -> ks_server_state
+| S_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams i ) -> ( i:rekeyId & rekey_secret i ) -> ( i:finishedId & latecfk:fink i ) -> ks_server_state
+| S_13_postHS: alpha:ks_alpha13 -> ( i:finishedId & fink i ) -> ( i:rekeyId & rekey_secret i ) -> ( i:rmsId & rms i ) -> ( i:exportId & ems i ) -> ks_server_state
 | S_Done
 
 // Reflecting state separation from HS
@@ -896,7 +896,7 @@ let ks_server_13_sf ks
 
 // Handshake must call this when ClientFinished goes into log
 let ks_client_13_cf ks
-  : ST (| i:exportId & ems i |)
+  : ST ( i:exportId & ems i )
   (requires fun h0 ->
     let kss = sel h0 (KS.state ks) in
     is_C kss /\ is_C_13_wait_CF (C.s kss))
