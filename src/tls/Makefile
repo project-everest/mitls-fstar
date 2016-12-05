@@ -28,7 +28,7 @@ FSTAR_HOME?=../../../FStar
 
 .PHONY: record_fstar_version
 record_fstar_version:
-	fstar --version | grep ^commit | cut -f 2 -d '=' > ../../.fstar_version
+	$(FSTAR_HOME)/bin/fstar.exe --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > ../../.fstar_version
 
 # .fst files in [ulib/ml] that are realized in fstarlib.cmxa
 STDLIB_REALIZED=All List Heap Set Map ST HyperHeap HyperStack IO
