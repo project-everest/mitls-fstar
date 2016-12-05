@@ -193,7 +193,7 @@ depend:
 
 #include .depend
 
-all-ver: $(addsuffix .fst-ver, $(VERIFY)) record_fstar_version
+all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Lax-checking one file at a time
 %.fst-lax: $(LIBFILES)
@@ -233,7 +233,7 @@ all-ver: $(addsuffix .fst-ver, $(VERIFY)) record_fstar_version
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
-tls-sanity: $(LIBFILES) $(FSTS) test/False.fst record_fstar_version
+tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
@@ -241,7 +241,7 @@ tls-sanity: $(LIBFILES) $(FSTS) test/False.fst record_fstar_version
 	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # Lax typecheck all files (with ideal flag off)
-tls-lax: $(LIBFILES) record_fstar_version
+tls-lax: record_fstar_version $(LIBFILES)
 	$(FSTAR) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
@@ -283,7 +283,7 @@ TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 
-tls-gen: $(LIBFILES) record_fstar_version
+tls-gen: record_fstar_version $(LIBFILES)
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
