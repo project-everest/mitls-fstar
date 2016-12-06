@@ -325,22 +325,24 @@ refresh:
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 
-tls-gen: $(LIBFILES)
+tls-gen: tls-gen-hacl
+
+tls-gen-%: $(LIBFILES)
 	$(MAKE) refresh
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
 	$(MAKE) -C $(FFI_HOME)
-	$(FSTAR) \
+	$(FSTAR) --include $(LDIR)/$* \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
 	  --include concrete-flags \
 	  $(FSTS)
-	# Builds everything against prims, setting MEM=HST
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	# Note (JP): the Makefile seems incorrect and we need to run make clean
 	# first
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
+	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
@@ -362,7 +364,7 @@ test.out:
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
 #16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
-mitls.exe:  #tls-gen
+mitls.exe:  tls-gen-spartan
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 
