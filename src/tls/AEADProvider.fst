@@ -163,13 +163,16 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
       lemma_append_inj salt n1 salt n2
 
 type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
-  is_OpenSSL st ==> OAEAD.empty_log (OpenSSL.st st) h
+  (match st with
+  | OpenSSL s _ -> OAEAD.empty_log s h
+  | LowC st _ _ -> True // TODO
+  | LowLevel st _ -> True) // TODO
 
 let region (#i:id) (#rw:rw) (st:state i rw) =
-  match st with
+  (match st with
   | OpenSSL st _ -> OAEAD.State.region st
-  | LowC st _ _ -> root
-  | LowLevel st _ -> root
+  | LowC st _ _ -> tls_region // TODO
+  | LowLevel st _ -> tls_region) // TODO
 
 let log_region (#i:id) (#rw:rw) (st:state i rw) =
   match st with
@@ -274,14 +277,22 @@ let taglen i = CC.aeadTagSize (alg i)
 let cipherlen i (l:plainlen) : n:nat{n >= taglen i} = l + taglen i
 type cipher i (l:plainlen) = lbytes (cipherlen i l)
 
-#set-options "--lax"
+type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
+  (match w with
+  | OpenSSL st _ -> OAEAD.fresh_iv #i st iv h
+  | _ -> True)
+
+let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
+              (ad:adata i) (p:plain i l) (c:cipher i l) h =
+  (match s with
+  | OpenSSL st _ -> OAEAD.logged_iv #i #rw st iv (OAEAD.Entry ad p c) h
+  | _ -> True)
 
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
   : ST (cipher:cipher i l)
   (requires (fun _ ->
     FStar.UInt.size (length ad) 32 /\ FStar.UInt.size l 32))
-  (ensures (fun h0 cipher h1 ->
-    modifies_none h0 h1))
+  (ensures (fun h0 cipher h1 -> True))
   =
   let cipher =
     match w with

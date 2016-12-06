@@ -137,22 +137,22 @@ val leak: #i:id -> #role:rw -> state i role -> ST (key i)
   (ensures  (fun h0 r h1 -> modifies_none h0 h1))
 let leak #i #role s = State.key s
 
-val encrypt:
-  #i:id ->
-  #l:plainlen ->
-  e:writer i ->
-  iv:iv i ->
-  ad:adata i ->
-  p:plain i l ->
-  ST (cipher i l)
-  (requires (fun h0 ->
-    // Do not encrypt twice with the same IV
-    (authId i ==> is_None (MM.sel (MR.m_sel h0 (ilog e.log)) iv))
-  ))
+type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
+  MM.fresh (ilog w.log) iv h
+
+type defined_iv (#i:id{authId i}) (#rw:rw) (s:state i rw) (iv:iv i) h =
+  MM.defined (ilog s.log) iv h
+
+let logged_iv (#i:id{authId i}) (#rw:rw) (s:state i rw) (iv:iv i) (e:entry #i iv) h =
+  MM.contains (ilog s.log) iv e h
+
+val encrypt: #i:id -> #l:plainlen -> e:writer i ->
+             iv:iv i -> ad:adata i -> p:plain i l -> ST (cipher i l)
+  (requires (fun h0 -> authId i ==> fresh_iv #i e iv h0))
   (ensures (fun h0 c h1 ->
     modifies_one e.log_region h0 h1 /\
-    (authId i ==> MR.witnessed (MM.contains (ilog e.log) iv (Entry ad p c)))
-  ))
+    (authId i ==> logged_iv #i #Writer e iv (Entry ad p c) h1) /\
+    (~(authId i) ==> c = aead_encryptT (alg i) (State.key e) iv ad p)))
 
 let encrypt #i #l e iv ad p =
   if authId i then
@@ -164,21 +164,25 @@ let encrypt #i #l e iv ad p =
       c
     end
   else
-    aead_encrypt (alg i) (State.key e) iv ad (repr p)
+    aead_encrypt (alg i) (State.key e) iv ad p
 
-val decrypt:
-  #i:id ->
-  #l:plainlen ->
-  d:reader i ->
-  iv:iv i ->
-  ad:adata i ->
-  c:cipher i l ->
-  ST (option (plain i l))
+type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
+                     (c:cipher i l) (po:option (plain i l)) (h:HyperStack.mem) =
+  (authId i ==>
+    (defined_iv #i r iv h ==>
+      (let Entry ad' p c' = MM.value (ilog r.log) iv h in
+        ((ad'=ad /\ c'=c) ==> po = Some p)))) /\
+  (~(authId i) ==>
+    (forall (p:plain i l).{:pattern (aead_encryptT (alg i) (State.key r) iv ad p)}
+      c = aead_encryptT (alg i) (State.key r) iv ad p ==> po = Some p))
+
+val decrypt: #i:id -> #l:plainlen -> d:reader i ->
+  iv:iv i -> ad:adata i -> c:cipher i l -> ST (option (plain i l))
   (requires (fun h0 -> True))
   (ensures  (fun h0 res h1 ->
-     modifies Set.empty h0 h1 /\
-     ((authId i /\ is_Some res) ==>
-       MR.witnessed (MM.contains (ilog d.log) iv (Entry ad (Some.v res) c)))
+     modifies_none h0 h1 /\
+     ((authId i /\ is_Some res) ==> logged_iv #i #Reader d iv (Entry ad (Some.v res) c) h1) /\
+     correct_decrypt d iv ad c res h1
   ))
 
 let decrypt #i #l d iv ad c =
@@ -187,16 +191,35 @@ let decrypt #i #l d iv ad c =
     let log = ilog d.log in
     MR.m_recall log;
     match MM.lookup log iv with
-    | None -> None
+    | None -> assume false; None
     | Some (Entry ad' p c') ->
       if ad' = ad && c' = c then
        begin
-        cut (MR.witnessed (MM.contains log iv (Entry ad p c)));
         Some p
        end
       else None
    end
   else
     match aead_decrypt (alg i) (State.key d) iv ad c with
-    | Some p -> assert (length p + aeadTagSize (alg i) = length c); Some p
+    | Some p ->
+      cut (length p + taglen i = length c);
+      Some p
     | None -> None
+
+(* Functional correctness test: decrypt iv ad (encrypt iv ad p) = p *)
+(* (regardless of authId i)*)
+assume val i : i:id
+assume val lemma_i: unit -> Lemma(pv_of_id i = TLS_1p3)
+let test_correctness () : St unit =
+  let wr = new_region tls_region in
+  let rr = new_region tls_region in
+  let w = gen wr i in
+  lemma_i ();
+  let l : plainlen = 0 in
+  let ad : adata i = empty_bytes in
+  let plain : plain i l = empty_bytes in
+  let iv : iv i = CoreCrypto.random (ivlen i) in
+  let cipher : cipher i l = encrypt w iv ad plain in
+  let r = genReader rr w in
+  let p' = decrypt r iv ad cipher in
+  assert(p' = Some plain)
