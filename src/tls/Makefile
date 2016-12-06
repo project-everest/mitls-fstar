@@ -18,13 +18,17 @@ clean:
 # When using NuBuild, FStar must be located within the source tree.
 # Now that soft links are available on all platforms, I don't see a
 # reason not to assume a fixed location.
-FSTAR_HOME?=../../.fstar
+FSTAR_HOME?=../../../FStar
 # This location can easily be overridden by doing:
 #   FSTAR_HOME=../../../fstar make tls-gen
 # BUT NOT AS FOLLOWS
 #   make FSTAR_HOME=../../../fstar tls-gen
 # the latter form won't work because FSTAR_HOME will incorrectly override
 # values in recursive invocations of $(MAKE)...
+
+.PHONY: record_fstar_version
+record_fstar_version:
+	$(FSTAR_HOME)/bin/fstar.exe --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > ../../.fstar_version
 
 # .fst files in [ulib/ml] that are realized in fstarlib.cmxa
 STDLIB_REALIZED=All List Heap Set Map ST HyperHeap HyperStack IO
@@ -226,7 +230,7 @@ depend:
 
 #include .depend
 
-all-ver: $(addsuffix .fst-ver, $(VERIFY))
+all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Lax-checking one file at a time
 %.fst-lax: $(LIBFILES)
@@ -266,8 +270,7 @@ all-ver: $(addsuffix .fst-ver, $(VERIFY))
 	$(addsuffix .fst,$(VERIFY))
 
 # Sanity check
-tls-sanity: $(LIBFILES) $(FSTS) test/False.fst
-	$(MAKE) refresh
+tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst
 	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
@@ -275,8 +278,7 @@ tls-sanity: $(LIBFILES) $(FSTS) test/False.fst
 	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
 
 # Lax typecheck all files (with ideal flag off)
-tls-lax: $(LIBFILES)
-	$(MAKE) refresh
+tls-lax: record_fstar_version $(LIBFILES)
 	$(FSTAR) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
@@ -316,9 +318,6 @@ TLSML := \
 TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
 TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
 
-refresh:
-	$(FSTAR_HOME)/src/tools/rebuild_fstar_if $(FSTAR_HOME)
-
 # Note to self: there is little point in breaking down this rule into more
 # atomic ones. One may hope that we can only rebuild the .ml files that have
 # changed; however, extraction is a global operation that touches every .ml
@@ -327,8 +326,7 @@ refresh:
 
 tls-gen: tls-gen-hacl
 
-tls-gen-%: $(LIBFILES)
-	$(MAKE) refresh
+tls-gen-%: record_fstar_version $(LIBFILES)
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
 	$(MAKE) -C $(FFI_HOME)

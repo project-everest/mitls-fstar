@@ -37,7 +37,7 @@ private type plain (i:id) (ad: LHAEPlain.adata i) (rg:range) = | Plain:
   plain i ad rg 
 
 // should we index just by plaintext lengths, rather than ad & range?
-type dplain (i:id) (l:nat{valid_clen i l}) = ( ad:LHAEPlain.adata i &  plain i ad (cipherRangeClass i l) )
+type dplain (i:id) (l:nat {valid_clen i l}) = ( ad:LHAEPlain.adata i &  plain i ad (cipherRangeClass i l) )
 
 val plainLength: i:id -> clen: nat { clen >= ivSize i } -> Tot nat
 let plainLength i clen = clen - ivSize i

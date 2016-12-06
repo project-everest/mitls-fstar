@@ -380,7 +380,7 @@ val invalidateSession: s:hs -> ST unit
 (*** Outgoing ***)
 
 // payload of a handshake fragment, to be made opaque eventually
-type message (i:id) = (| rg: frange i & rbytes rg |)
+type message (i:id) = ( rg: frange i & rbytes rg )
 
 // What the HS asks the record layer to do, in that order.
 type outgoing (i:id) (* initial index *) = 

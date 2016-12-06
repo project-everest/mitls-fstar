@@ -4,7 +4,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties // for e.g. found
-open FStar.Set  
+open FStar.Set
 open Platform.Error
 open Platform.Bytes
 
@@ -23,7 +23,7 @@ let reveal_hs_log (hsl:hs_log) : GTot (list hs_msg) = hsl
 let hide_hs_log (l:list hs_msg) : GTot hs_log = l
 
 val validLog: hs_log -> Tot bool
-let validLog hsl = 
+let validLog hsl =
     match hsl with
     | [] -> true
     | [ClientHello ch] -> true
@@ -48,12 +48,12 @@ let getLogVersion hsl =
  * AR: changing logref from rref to HS?.ref, with region captured in the refinement.
  *)
 noeq type log =
-  | LOG: #region:rid -> 
+  | LOG: #region:rid ->
          logref:ref (
               pv: option protocolVersion
             & (hsl:hs_log{validLog hsl})
             &   b: bytes {getLogVersion hsl = pv /\ handshakeMessagesBytes pv (reveal_hs_log hsl) = b}
-         ){logref.id = region} -> log 
+         ){logref.id = region} -> log
 
 val create: #reg:rid -> ST log
   (requires (fun h -> True))
@@ -63,7 +63,7 @@ val create: #reg:rid -> ST log
     extends r reg /\
     modifies (Set.singleton r) h0 h1 /\
     modifies_rref r !{as_ref lr} h0.h h1.h))
-let create #reg = 
+let create #reg =
     let hsl: hs_log = [] in
     let r = new_region reg in
     let lr = ralloc r (| None, hsl, empty_bytes|) in
@@ -77,8 +77,8 @@ val append_log: l:log -> hm:hs_msg -> ST bytes
       let LOG #r lr = l in
       modifies (Set.singleton r) h0 h1
       /\ modifies_rref r !{as_ref lr} h0.h h1.h))
-let append_log (LOG #reg lref) hm = 
-    let (| pv, hsl, lb |) = !lref in 
+let append_log (LOG #reg lref) hm =
+    let (| pv, hsl, lb |) = !lref in
     let hsl' = FStar.List.Tot.append hsl [hm] in
     let pv = getLogVersion hsl' in
     let mb = handshakeMessageBytes pv hm in
@@ -94,19 +94,19 @@ let print_log hs_log : Tot bool =
     IO.debug_print_string("LOG : " ^ s ^ "\n")
 
 val getMessages: log -> St hs_log
-let getMessages (LOG #reg lref) = 
+let getMessages (LOG #reg lref) =
     let (| pv, hsl, lb |) = !lref in hsl
 
-val getBytes: log -> St bytes 
-let getBytes (LOG #reg lref) = 
+val getBytes: log -> St bytes
+let getBytes (LOG #reg lref) =
     let (| pv, hsl, lb |) = !lref in lb
 
 val getHash: log -> h:CoreCrypto.hash_alg -> St (b:bytes{length b = CoreCrypto.hashSize h})
-let getHash (LOG #reg lref) h = 
+let getHash (LOG #reg lref) h =
     let (| pv, hsl, lb|) = !lref in
-    let b = 
+    let b =
         if hsl_debug then
-            print_log hsl 
+            print_log hsl
         else false in
     CoreCrypto.hash h lb
 
@@ -133,7 +133,7 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : logInfo_CH =
         PSK.identities = (empty_bytes, empty_bytes);});
     })
 
-val getHash_CH : l:log -> h:CoreCrypto.hash_alg -> 
+val getHash_CH : l:log -> h:CoreCrypto.hash_alg ->
   ST ( li:logInfo{LogInfo_CH? li} & hash:bytes{length hash = CoreCrypto.hashSize h} )
     (requires (fun h0 ->
       let lref = l.logref in
@@ -156,4 +156,4 @@ type validLog_SH (l:hs_log) =
 assume val checkLogSessionHash: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
 assume val checkLogClientFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
 assume val checkLogServerFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
-    
+
