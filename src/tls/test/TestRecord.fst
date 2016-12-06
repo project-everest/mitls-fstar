@@ -37,8 +37,8 @@ private let mk_id13 aeAlg =
   let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
   ID13 keyId
 
-private val fake_stream: (aeAlg: (a:aeAlg{is_AEAD a})) -> (key:string) -> (iv:string) -> (plain:string) -> bytes
-private let fake_stream (aeAlg: (a:aeAlg{is_AEAD a})) (key:string) (iv:string) (plain:string): bytes =
+private val fake_stream: (aeAlg: (a:aeAlg{AEAD? a})) -> (key:string) -> (iv:string) -> (plain:string) -> bytes
+private let fake_stream (aeAlg: (a:aeAlg{AEAD? a})) (key:string) (iv:string) (plain:string): bytes =
   let id = mk_id13 aeAlg in
 
   // StreamAE.writer -> StreamAE.state
@@ -133,7 +133,7 @@ private let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: s
 
 private let test_count = FStar.ST.ralloc r 0
 
-private val test_stream: a:aeAlg{is_AEAD a} -> (key:string) -> (iv:string) -> (plain:string) -> (cipher:string) -> unit
+private val test_stream: a:aeAlg{AEAD? a} -> (key:string) -> (iv:string) -> (plain:string) -> (cipher:string) -> unit
 private let test_stream aeAlg key iv plain cipher =
   let output = fake_stream aeAlg key iv plain in
   let output = hex_of_bytes output in

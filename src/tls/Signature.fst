@@ -75,8 +75,8 @@ noeq type state (a:alg) =
   Signed l -> Signed l++l'
 *)
 abstract let evolves (#a:alg) (s1:state a) (s2:state a) =
-  is_Corrupt s2 \/
-  (is_Signed s1 /\ is_Signed s2 /\ grows (Signed.log s1) (Signed.log s2))
+  Corrupt? s2 \/
+  (Signed? s1 /\ Signed? s2 /\ grows (Signed?.log s1) (Signed?.log s2))
 
 let lemma_evolves_monotone (#a:alg): Lemma (monotonic (state a) (evolves #a)) =
   FStar.Classical.forall_intro (seq_extension_reflexive #(signed a));
@@ -107,7 +107,7 @@ type pubkey (a:alg) =
 type pkey = (a:alg & pubkey a)
 
 val pkey_repr: pkey -> Tot public_repr
-let pkey_repr (| a,  p |) = PK.repr p
+let pkey_repr (| a,  p |) = PK?.repr p
 
 val pkey_alg: pkey -> Tot alg
 let pkey_alg (| a,  _ |) = a
@@ -120,9 +120,9 @@ val alloc_pubkey: #a:alg
   -> r:public_repr{sigAlg_of_public_repr r = a.core}
   -> ST (pubkey a)
     (requires (fun h0 -> True))
-    (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 (as_hsref (PK.log p)) h1
-                           /\ PK.repr p = r
-                           /\ m_fresh (PK.log p) h0 h1))
+    (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 (as_hsref (PK?.log p)) h1
+                           /\ PK?.repr p = r
+                           /\ m_fresh (PK?.log p) h0 h1))
 let alloc_pubkey #a s r =
   lemma_evolves_monotone #a;
   let log = m_alloc keyRegion s in
@@ -157,7 +157,7 @@ type kset = s:list pkey{ forall x y. (memT x s /\ memT y s /\ pkey_repr x = pkey
 
 val find_key: r:public_repr -> ks: kset
   -> Tot (o:option (k:pkey {pkey_repr k = r && memT k ks})
-        { is_None o ==> (forall k. memT k ks ==> pkey_repr k <> r) })
+        { None? o ==> (forall k. memT k ks ==> pkey_repr k <> r) })
 let rec find_key r ks = match ks with
   | []   -> None
   | k::ks -> if pkey_repr k = r then Some k else find_key r ks
@@ -178,7 +178,7 @@ type generated (k:pkey) (h:mem) : Type0 = memT k (m_sel h rkeys)
 
 let honestKey (#a:alg) (k:pubkey a) (ks:kset) =
   let PK _ pk = k in
-  is_Some (find_key pk ks)
+  Some? (find_key pk ks)
 
 (* ------------------------------------------------------------------------ *)
 
@@ -194,7 +194,7 @@ val sign: #a:alg
     (ensures  (fun h0 _ h1 ->
       let pk,sk = s in
       if int_cma a h then
-        let log = PK.log pk in
+        let log = PK?.log pk in
 	let log_ashsref = as_hsref log in
         modifies_one keyRegion h0 h1 /\
         modifies_rref keyRegion !{as_ref log_ashsref} h0.h h1.h /\
@@ -205,7 +205,7 @@ let sign #a h s t =
   let pk,sk = s in
   begin
   if int_cma a h then
-    let log = PK.log pk in
+    let log = PK?.log pk in
     let s0 = m_read log in
     m_recall log;
     m_write log (st_update s0 t)
@@ -229,12 +229,12 @@ val verify: #a:alg
     (ensures  (fun h0 b h1 ->
          modifies Set.empty h0 h1
        /\ ((b /\ int_cma a h /\ generated (|a,pk|) h0
-	   /\ is_Signed (m_sel h0 (PK.log pk))) ==> a.info t)))
+	   /\ Signed? (m_sel h0 (PK?.log pk))) ==> a.info t)))
 
 let verify #a h pk t s =
   let verified =
     let ho,t' = sig_digest h t in
-    match PK.repr pk with
+    match PK?.repr pk with
     | PK_RSA k   -> rsa_verify ho k t' s
     | PK_DSA k   -> dsa_verify ho k t' s
     | PK_ECDSA k -> ecdsa_verify ho k t' s
@@ -242,9 +242,9 @@ let verify #a h pk t s =
   if int_cma a h then
     begin
     assume False;
-    match m_read (PK.log pk) with
+    match m_read (PK?.log pk) with
     | Signed ts ->
-      let signed = is_Some (SeqProperties.seq_find (fun (t':signed a) -> t = t') ts) in
+      let signed = Some? (SeqProperties.seq_find (fun (t':signed a) -> t = t') ts) in
       let honest = honestKey pk (m_read rkeys) in
       verified && (signed || not honest)
     | Corrupt -> verified
@@ -257,8 +257,8 @@ val genrepr: a:alg
   -> All (public_repr * secret_repr)
     (requires (fun h -> True))
     (ensures  (fun h0 k h1 ->
-      is_V k ==>
-      (let (pk,sk) = V.v k in
+      V? k ==>
+      (let (pk,sk) = V?.v k in
         modifies Set.empty h0 h1
 	/\ sigAlg_of_public_repr pk = sigAlg_of_secret_repr sk
 	/\ sigAlg_of_public_repr pk = a.core)))
@@ -276,9 +276,9 @@ val gen: a:alg -> All (skey a)
 	         modifies_one keyRegion h0 h1
                /\ modifies_rref keyRegion !{as_ref (as_hsref rkeys)} h0.h h1.h
                /\ m_contains rkeys h1
-	       /\ (is_V s ==>   witnessed (generated (|a, fst (V.v s) |))
-			     /\ m_fresh (PK.log (fst (V.v s))) h0 h1
-			     /\ is_Signed (m_sel h1 (PK.log (fst (V.v s)))))))
+	       /\ (V? s ==>   witnessed (generated (| a, fst (V?.v s) |))
+			     /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1
+			     /\ Signed? (m_sel h1 (PK?.log (fst (V?.v s)))))))
 
 let rec gen a =
   let pkr,skr = genrepr a in // Could be inlined
@@ -290,7 +290,7 @@ let rec gen a =
     let k = (| a, p |) in
     let keys' = add_key keys k in
     m_write rkeys keys';
-    witness rkeys (generated (|a, p|));
+    witness rkeys (generated (| a, p |));
     p, skr
 
 
@@ -303,9 +303,9 @@ val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
   (requires (fun _ -> True))
   (ensures  (fun h0 r h1 ->
 	      modifies_one keyRegion h0 h1
-	      /\ modifies_rref keyRegion !{as_ref (as_hsref (PK.log (fst s)))} h0.h h1.h
-	      /\ is_Corrupt (m_sel h1 (PK.log (fst s)))
-	      /\ fst r = PK.repr (fst s)))
+	      /\ modifies_rref keyRegion !{as_ref (as_hsref (PK?.log (fst s)))} h0.h h1.h
+	      /\ Corrupt? (m_sel h1 (PK?.log (fst s)))
+	      /\ fst r = PK?.repr (fst s)))
 let leak #a (PK log pkr, skr) =
   m_recall log;
   m_write log Corrupt;
@@ -316,8 +316,8 @@ let leak #a (PK log pkr, skr) =
 val coerce: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> skr:secret_repr{sigAlg_of_secret_repr skr = a.core} -> ST (skey a)
   (requires (fun _ -> True))
   (ensures (fun h0 s h1 ->
-           is_Corrupt (m_sel h1 (PK.log (fst s)))
-           /\ PK.repr (fst s) = pkr
+           Corrupt? (m_sel h1 (PK?.log (fst s)))
+           /\ PK?.repr (fst s) = pkr
 	   /\ snd s = skr))
 let coerce #a pkr skr =
   alloc_pubkey Corrupt pkr, skr

@@ -41,7 +41,7 @@ type u32 = FStar.UInt32.t
 (**
 Functions to go back and forth between Platform.Bytes Buffers
 **)
-#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val to_bytes: l:nat -> buf:CB.lbuffer l -> STL (b:bytes{length b = l})
   (requires (fun h0 -> Buffer.live h0 buf))
   (ensures (fun h0 s h1 -> h0 == h1 ))
@@ -54,7 +54,7 @@ let rec to_bytes l buf =
     let r = s @| t in
     (lemma_len_append s t; r)
 
-#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{length b = len} -> STL unit
   (requires (fun h0 -> Buffer.live h0 buf))
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
@@ -73,7 +73,7 @@ let from_bytes b =
 
 (***********************************************************************)
 
-type id = i:id{~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i)}
+type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
 let alg (i:id) = let AEAD aead _ = aeAlg_of_id i in aead
 
 // Real IVs must be created with the internal
@@ -146,7 +146,7 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
 assume val lemma_xor_idempotent: n:nat -> b1:lbytes n -> b2:lbytes n ->
   Lemma (xor n b2 (xor n b1 b2) = b1)
 
-#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   : Lemma (create_nonce st n1 = create_nonce st n2 ==> n1 = n2)
   =
@@ -170,13 +170,13 @@ type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
 
 let region (#i:id) (#rw:rw) (st:state i rw) =
   (match st with
-  | OpenSSL st _ -> OAEAD.State.region st
+  | OpenSSL st _ -> OAEAD.State?.region st
   | LowC st _ _ -> tls_region // TODO
   | LowLevel st _ -> tls_region) // TODO
 
 let log_region (#i:id) (#rw:rw) (st:state i rw) =
   match st with
-  | OpenSSL st _ -> OAEAD.State.log_region st
+  | OpenSSL st _ -> OAEAD.State?.log_region st
   | LowC st _ _ -> root
   | LowLevel st _ -> root
 

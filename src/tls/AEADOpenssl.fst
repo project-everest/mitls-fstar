@@ -17,8 +17,8 @@ open TLSInfo
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 
-type id = i:id{~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i)}
-let alg (i:id) = AEAD._0 (aeAlg_of_id i)
+type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
+let alg (i:id) = AEAD?._0 (aeAlg_of_id i)
 
 let keylen i = aeadKeySize (alg i)
 let taglen i = aeadTagSize (alg i)
@@ -88,7 +88,7 @@ let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   color w.region = color parent /\
   empty_log w h1
 
-#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val gen: parent:rgn -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
@@ -135,7 +135,7 @@ let coerce parent i kv =
 val leak: #i:id -> #role:rw -> state i role -> ST (key i)
   (requires (fun h0 -> ~(authId i)))
   (ensures  (fun h0 r h1 -> modifies_none h0 h1))
-let leak #i #role s = State.key s
+let leak #i #role s = State?.key s
 
 type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   MM.fresh (ilog w.log) iv h
@@ -152,7 +152,7 @@ val encrypt: #i:id -> #l:plainlen -> e:writer i ->
   (ensures (fun h0 c h1 ->
     modifies_one e.log_region h0 h1 /\
     (authId i ==> logged_iv #i #Writer e iv (Entry ad p c) h1) /\
-    (~(authId i) ==> c = aead_encryptT (alg i) (State.key e) iv ad p)))
+    (~(authId i) ==> c = aead_encryptT (alg i) (State?.key e) iv ad p)))
 
 let encrypt #i #l e iv ad p =
   if authId i then
@@ -164,7 +164,7 @@ let encrypt #i #l e iv ad p =
       c
     end
   else
-    aead_encrypt (alg i) (State.key e) iv ad p
+    aead_encrypt (alg i) (State?.key e) iv ad p
 
 type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
                      (c:cipher i l) (po:option (plain i l)) (h:HyperStack.mem) =
@@ -173,15 +173,15 @@ type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
       (let Entry ad' p c' = MM.value (ilog r.log) iv h in
         ((ad'=ad /\ c'=c) ==> po = Some p)))) /\
   (~(authId i) ==>
-    (forall (p:plain i l).{:pattern (aead_encryptT (alg i) (State.key r) iv ad p)}
-      c = aead_encryptT (alg i) (State.key r) iv ad p ==> po = Some p))
+    (forall (p:plain i l).{:pattern (aead_encryptT (alg i) (State?.key r) iv ad p)}
+      c = aead_encryptT (alg i) (State?.key r) iv ad p ==> po = Some p))
 
 val decrypt: #i:id -> #l:plainlen -> d:reader i ->
   iv:iv i -> ad:adata i -> c:cipher i l -> ST (option (plain i l))
   (requires (fun h0 -> True))
   (ensures  (fun h0 res h1 ->
      modifies_none h0 h1 /\
-     ((authId i /\ is_Some res) ==> logged_iv #i #Reader d iv (Entry ad (Some.v res) c) h1) /\
+     ((authId i /\ Some? res) ==> logged_iv #i #Reader d iv (Entry ad (Some?.v res) c) h1) /\
      correct_decrypt d iv ad c res h1
   ))
 
@@ -200,7 +200,7 @@ let decrypt #i #l d iv ad c =
       else None
    end
   else
-    match aead_decrypt (alg i) (State.key d) iv ad c with
+    match aead_decrypt (alg i) (State?.key d) iv ad c with
     | Some p ->
       cut (length p + taglen i = length c);
       Some p

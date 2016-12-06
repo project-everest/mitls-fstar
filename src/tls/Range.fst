@@ -13,7 +13,7 @@ module AE = AEADProvider
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
-type id2 = i:id { is_ID12 i } // gradually adding TLS 1.3...
+type id2 = i:id { ID12? i } // gradually adding TLS 1.3...
 
 (* ranges *)
 type range = r:(nat * nat) { fst r <= snd r }
@@ -27,11 +27,11 @@ let zero = point 0
 val sum: range -> range -> Tot range
 let sum (l0,h0) (l1,h1) = (l0 + l1, h0 + h1)
 
-let aeAlg (i:id{~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i)}) =
-  AEAD._0 (aeAlg_of_id i)
+let aeAlg (i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}) =
+  AEAD?._0 (aeAlg_of_id i)
 
 (* Length of IV for a non-AEAD cipher *)
-val ivSize: i:id{~(is_PlaintextID i) /\ ~(is_AEAD (aeAlg_of_id i))} -> Tot nat
+val ivSize: i:id{~(PlaintextID? i) /\ ~(AEAD? (aeAlg_of_id i))} -> Tot nat
 let ivSize i =
   let authEnc = aeAlg_of_id i in
   match authEnc with
@@ -41,7 +41,7 @@ let ivSize i =
 (* Mandatory fixed padding for a cipher *)
 val fixedPadSize: id -> Tot nat
 let fixedPadSize i =
-  if is_PlaintextID i then 0
+  if PlaintextID? i then 0
   else
     let authEnc = aeAlg_of_id i in
     match authEnc with
@@ -65,7 +65,7 @@ let maxPadSize i =
 (* Minimal padding length for a given plaintext length (in bytes) *)
 val minimalPadding: id -> nat -> Tot nat
 let minimalPadding i len =
-  if is_PlaintextID i then 0
+  if PlaintextID? i then 0
   else
     let authEnc = aeAlg_of_id i in
     match authEnc with
@@ -87,20 +87,20 @@ let minMaxPad i = (fixedPadSize i, maxPadSize i)
 #set-options "--initial_ifuel 1"
 
 type valid_clen (i:id) (clen:nat) =
- (if is_PlaintextID i then
+ (if PlaintextID? i then
     0 <= clen /\ clen <= max_TLSPlaintext_fragment_length
-  else if is_ID13 i then
+  else if ID13? i then
     begin
     lemma_ID13 i;
     let tlen = aeadTagSize (aeAlg i) in
     tlen < clen /\ clen <= tlen + max_TLSCiphertext_fragment_length_13
     end
-  else // is_ID12 i
+  else // ID12? i
     begin
-    if is_AEAD (aeAlg_of_id i) then
+    if AEAD? (aeAlg_of_id i) then
       0 <= clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
       clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
-    else if is_MtE (aeAlg_of_id i) then
+    else if MtE? (aeAlg_of_id i) then
       0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\ 
       clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else // MACOnly
@@ -113,7 +113,7 @@ type valid_clen (i:id) (clen:nat) =
 val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (requires valid_clen i clen)
   (ensures fun (r:range) ->
-       (is_AEAD (aeAlg_of_id i) ==> (
+       (AEAD? (aeAlg_of_id i) ==> (
          let a = aeAlg i in
          // Currently maxPadSize i = 0 in all cases therefore min == max 
          let max = clen - AE.explicit_iv_length i - aeadTagSize a - fixedPadSize i in
@@ -121,7 +121,7 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
          0 <= max 
          /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max) 
             \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
-     /\ (~(is_AEAD (aeAlg_of_id i)) ==> (
+     /\ (~(AEAD? (aeAlg_of_id i)) ==> (
          let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in 
          let min = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
            0 <= max 
@@ -176,9 +176,9 @@ let cipherRangeClass_width i clen = ()
 val targetLength : i:id2 -> r:range -> Pure nat
   (requires
     snd r <= max_TLSPlaintext_fragment_length
-    /\ (~(is_AEAD (aeAlg_of_id i)) ==>
+    /\ (~(AEAD? (aeAlg_of_id i)) ==>
         snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-    /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r))
+    /\ (AEAD? (aeAlg_of_id i) ==> fst r = snd r))
   (ensures (fun clen -> valid_clen i clen /\ wider (cipherRangeClass i clen) r))
 let targetLength i r =
   let l,h = r in
@@ -212,12 +212,12 @@ let targetLength i r =
 *)
 
 (* Sanity check
-  val targetLength_spec_nonAEAD: i:id2{~(is_AEAD (aeAlg_of_id i))}
+  val targetLength_spec_nonAEAD: i:id2{~(AEAD? (aeAlg_of_id i))}
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length
-      /\ (~(is_AEAD (aeAlg_of_id i)) ==>
+      /\ (~(AEAD? (aeAlg_of_id i)) ==>
    	snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-     /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r)}
+     /\ (AEAD? (aeAlg_of_id i) ==> fst r = snd r)}
   -> x:nat{within x r}
   -> Lemma (let clen = targetLength i r in
    	let plen = clen - x - macSize (macAlg_of_id i) - ivSize i in
@@ -229,7 +229,7 @@ let targetLength i r =
 *)
 
 (* Sanity check
-  val targetLength_spec_AEAD: i:id2{is_AEAD (aeAlg_of_id i)}
+  val targetLength_spec_AEAD: i:id2{AEAD? (aeAlg_of_id i)}
   -> r:range{fst r = snd r /\ snd r <= max_TLSPlaintext_fragment_length}
   -> x:nat{within x r} ->
   Lemma (let clen = targetLength i r in
@@ -246,11 +246,11 @@ let targetLength i r =
 val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
    -> r:range{
        snd r <= max_TLSPlaintext_fragment_length
-       /\ (~(is_AEAD (aeAlg_of_id i)) ==>
+       /\ (~(AEAD? (aeAlg_of_id i)) ==>
            snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-	   /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r)}
+	   /\ (AEAD? (aeAlg_of_id i) ==> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
-#set-options "--z3timeout 60"
+#set-options "--z3rlimit 60"
 //without hints, this next query succeeds in around 19s on a powerful desktop; that's too close the default 20s timeout for CI
 //with hints, it takes about 3.5s on the same machine. So, for CI with hints, the 60s timeouts is very generous but harmless
 //At least with the long timeout it should work reliably with or without hints
@@ -260,12 +260,12 @@ let targetLength_at_most_max_TLSCiphertext_fragment_length i r = ()
 val targetLength_converges: i:id2
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length
-      /\ (~(is_AEAD (aeAlg_of_id i)) ==>
+      /\ (~(AEAD? (aeAlg_of_id i)) ==>
           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-      /\ (is_AEAD (aeAlg_of_id i) ==> fst r = snd r)}
+      /\ (AEAD? (aeAlg_of_id i) ==> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
 (* #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1" *)
-#set-options "--z3timeout 120"
+#set-options "--z3rlimit 120"
 //without hints, the next query also takes several seconds on a powerful desktop
 let targetLength_converges i r =
   lemma_MtE i; lemma_ID12 i
@@ -273,17 +273,17 @@ let targetLength_converges i r =
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 val rangeClass: i:id2 -> r:range -> r':range
   { snd r <= max_TLSPlaintext_fragment_length
-    /\ ((~(is_AEAD (aeAlg_of_id i))
+    /\ ((~(AEAD? (aeAlg_of_id i))
        /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-    \/ (is_AEAD (aeAlg_of_id i) /\ fst r = snd r))
+    \/ (AEAD? (aeAlg_of_id i) /\ fst r = snd r))
     /\ r' = cipherRangeClass i (targetLength i r) }
 let rangeClass i (r:range) =
-    if is_MACOnly (aeAlg_of_id i) && not(is_SSL_3p0 (pv_of_id i)) then
+    if MACOnly? (aeAlg_of_id i) && not(SSL_3p0? (pv_of_id i)) then
         Error.unexpected "[rangeClass] given an invalid algorithm identifier"
     else
         if (snd r <= max_TLSPlaintext_fragment_length &&
-            (not(is_AEAD (aeAlg_of_id i)) && snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
-            || (is_AEAD (aeAlg_of_id i) && fst r = snd r)))
+            (not(AEAD? (aeAlg_of_id i)) && snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+            || (AEAD? (aeAlg_of_id i) && fst r = snd r)))
         then
             let tlen = targetLength i r in
             match (aeAlg_of_id i) with
@@ -311,8 +311,8 @@ let fragment_range: range = (0,max_TLSPlaintext_fragment_length)
 // and we require point ranges when padding is not available.
 type frange (i:id) = rg:range{
   wider fragment_range rg /\
-  ((is_ID12 i /\ lhae (aeAlg_of_id i))
-  \/ is_ID13 i
+  ((ID12? i /\ lhae (aeAlg_of_id i))
+  \/ ID13? i
   \/ fst rg = snd rg)
 }
 

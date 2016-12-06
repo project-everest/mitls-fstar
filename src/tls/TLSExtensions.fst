@@ -482,7 +482,7 @@ let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup
 
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
-val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{is_SEC x \/ is_FFDHE x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
 let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
@@ -586,7 +586,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
           if resuming then correct l
           else
 	  begin
-	    match List.Tot.tryFind is_E_signatureAlgorithms cExtL with
+	    match List.Tot.tryFind E_signatureAlgorithms? cExtL with
 	    | Some (E_signatureAlgorithms shal) ->
 	      correct({l with ne_signature_algorithms = Some shal})
 	    | None -> correct l

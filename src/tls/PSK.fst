@@ -64,7 +64,7 @@ let fresh_pskid i h =
   MM.sel (MR.m_sel h app_psk_table) i = None
 
 let registered_app_psk (i:psk_identifier) (h:mem) =
-  b2t (is_Some (MM.sel (MR.m_sel h app_psk_table) i))
+  b2t (Some? (MM.sel (MR.m_sel h app_psk_table) i))
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   match MM.sel (MR.m_sel h app_psk_table) i with
@@ -79,11 +79,11 @@ let fresh_psk psk (h:mem) =
        | None -> True
 
 let app_psk_value (i:ex_app_psk) : St (app_psk i) =
-  let (psk, _, _) = Some.v (MM.lookup app_psk_table i) in psk
+  let (psk, _, _) = Some?.v (MM.lookup app_psk_table i) in psk
 
 // Attacker interface
 //let leak i:ex_app_psk =
-//  let (v, _, l) = Some.v (MM.lookup app_psk_table i) in
+//  let (v, _, l) = Some?.v (MM.lookup app_psk_table i) in
 //  l := true; v
 
 // Generates a fresh PSK identity

@@ -22,9 +22,9 @@ open LHAEPlain
 val snoc : #a:Type -> seq a -> a -> Tot (seq a)
 let snoc s x = Seq.append s (Seq.create 1 x)
 
-type gid = i:id{ is_AEAD i.aeAlg }
+type gid = i:id{ AEAD? i.aeAlg }
 
-let alg (i:gid) = AEAD._0 i.aeAlg
+let alg (i:gid) = AEAD?._0 i.aeAlg
 
 type cipher (i:gid) =
     c:bytes{0 <= length c - aeadRecordIVSize (alg i) - aeadTagSize (alg i) - fixedPadSize i
@@ -74,14 +74,14 @@ val gen: r0:rid -> i:gid -> ST (encryptor i * decryptor i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 (r:encryptor i * decryptor i) h1 ->
            modifies Set.empty h0 h1
-         /\ State.region (fst r) = State.region (snd r)
-         /\ extends (State.region (fst r)) r0
-         /\ fresh_region (State.region (fst r)) h0 h1
-         /\ sel h1 (State.counter (fst r)) = 0
-         /\ sel h1 (State.counter (snd r)) = 0
-         /\ sel h1 (State.log (fst r)) = createEmpty
-         /\ State.counter (fst r) <> State.counter (snd r) // counters are distinct
-         /\ State.log (fst r) = State.log (snd r)))       // logs are shared
+         /\ State?.region (fst r) = State?.region (snd r)
+         /\ extends (State?.region (fst r)) r0
+         /\ fresh_region (State?.region (fst r)) h0 h1
+         /\ sel h1 (State?.counter (fst r)) = 0
+         /\ sel h1 (State?.counter (snd r)) = 0
+         /\ sel h1 (State?.log (fst r)) = createEmpty
+         /\ State?.counter (fst r) <> State?.counter (snd r) // counters are distinct
+         /\ State?.log (fst r) = State?.log (snd r)))       // logs are shared
 
 let gen r0 i =
   let kv   = CoreCrypto.random (aeadKeySize (alg i)) in
@@ -100,8 +100,8 @@ val coerce: r0:rid -> i:gid{~(safeId i)} -> role:rw -> kv:key i -> iv:iv i -> ST
   (requires (fun h0 -> True))
   (ensures  (fun h0 s h1 ->
                 modifies Set.empty h0 h1
-              /\ extends (State.region s) r0
-              /\ fresh_region (State.region s) h0 h1))
+              /\ extends (State?.region s) r0
+              /\ fresh_region (State?.region s) h0 h1))
 
 let coerce r0 i role kv iv =
   let r = new_region r0 in
@@ -114,7 +114,7 @@ val leak: i:gid{~(safeId i)} -> role:rw -> state i role -> ST bytes
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
-let leak i role s = State.key s @| State.iv s
+let leak i role s = State?.key s @| State?.iv s
 
 // Raw encryption (on concrete bytes), returns (nonce_explicit @| cipher @| tag)
 // Requires the counter not to overflow
@@ -125,32 +125,32 @@ val enc:
   -> ST (cipher i)
     (requires (fun h -> True))
     (ensures  (fun h0 c h1 ->
-                 modifies (Set.singleton (State.region e)) h0 h1
-               /\ modifies_rref (State.region e) !{as_ref (State.counter e)} h0 h1
+                 modifies (Set.singleton (State?.region e)) h0 h1
+               /\ modifies_rref (State?.region e) !{as_ref (State?.counter e)} h0 h1
                /\ length c = Range.targetLength i r
-               (* /\ sel h1 (State.counter e) = sel h0 (State.counter e) + 1 *) ))
+               (* /\ sel h1 (State?.counter e) = sel h0 (State?.counter e) + 1 *) ))
 
 let enc i e ad r p =
-  recall (State.counter e);
-  let k = State.key e in
-  let salt = State.iv e in
-  let nonce_explicit = bytes_of_seq !(State.counter e) in
+  recall (State?.counter e);
+  let k = State?.key e in
+  let salt = State?.iv e in
+  let nonce_explicit = bytes_of_seq !(State?.counter e) in
   assert (length nonce_explicit == aeadRecordIVSize (alg i));
   let iv = salt @| nonce_explicit in
   lemma_repr_bytes_values (length p);
   let ad' = ad @| bytes_of_int 2 (length p) in
   let c = aead_encrypt (alg i) k iv ad' p in
-  let n = !(State.counter e) in
+  let n = !(State?.counter e) in
   if n + 1 < max_uint64 then
     begin
       lemma_repr_bytes_values (n + 1);
-      State.counter e := n + 1
+      State?.counter e := n + 1
     end
   else
     begin
       // overflow, we don't care
       lemma_repr_bytes_values 0;
-      State.counter e := 0
+      State?.counter e := 0
     end;
    Range.targetLength_at_most_max_TLSCipher_fragment_length i r;
    nonce_explicit @| c
@@ -163,26 +163,26 @@ val encrypt:
   -> ST (cipher i)
        (requires (fun h0 -> True))
        (ensures  (fun h0 c h1 ->
-                           modifies (Set.singleton (State.region e)) h0 h1
-                         /\ modifies_rref (State.region e)
-                                         !{as_ref (State.counter e), as_ref (State.log e)} h0 h1
+                           modifies (Set.singleton (State?.region e)) h0 h1
+                         /\ modifies_rref (State?.region e)
+                                         !{as_ref (State?.counter e), as_ref (State?.log e)} h0 h1
                          /\ length c = Range.targetLength i r
-                         (* /\ sel h1 (State.counter e) = sel h0 (State.counter e) + 1 *)
-                         /\ sel h1 (State.log e) = snoc (sel h0 (State.log e)) (Entry c ad p)))
+                         (* /\ sel h1 (State?.counter e) = sel h0 (State?.counter e) + 1 *)
+                         /\ sel h1 (State?.log e) = snoc (sel h0 (State?.log e)) (Entry c ad p)))
 
 (* we primarily model the ideal functionality, the concrete code that actually
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
 let encrypt i e ad rg p =
-  recall (State.counter e); recall (State.log e);
+  recall (State?.counter e); recall (State?.log e);
   let tlen = targetLength i rg in
   let text =
     if safeId i then createBytes (fst rg) 0uy
     else repr i ad rg p in
   targetLength_converges i rg;
   let c = enc i e ad (cipherRangeClass i tlen) text in
-  State.log e := snoc !(State.log e) (Entry c ad p);
+  State?.log e := snoc !(State?.log e) (Entry c ad p);
   c
 
 // raw decryption (returning concrete bytes)
@@ -193,8 +193,8 @@ private val dec:
   (ensures  (fun h0 _ h1 -> modifies Set.empty h0 h1))
 
 let dec i (d:decryptor i) (ad:adata i) c =
-  let k = State.key d in
-  let salt = State.iv d in
+  let k = State?.key d in
+  let salt = State?.iv d in
   let nonce_explicit,c' = split c (aeadRecordIVSize (alg i)) in
   let iv = salt @| nonce_explicit in
   let len = length c' - aeadTagSize (alg i) in
@@ -224,20 +224,20 @@ val decrypt:
   (ensures  (fun h0 res h1 ->
                modifies Set.empty h0 h1
              /\ (authId i ==>
-                Let (sel h0 (State.log d))
+                Let (sel h0 (State?.log d))
                    (fun (log:seq (entry i)) ->
-                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
+                       (None? res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
                                             found j /\ ~(matches c ad (Seq.index log j))))
-                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
+                     /\ (Some? res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
                                            found j
                                            /\ matches c ad (Seq.index log j)
-                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
+                                           /\ Entry?.p (Seq.index log j) == Some?.v res))))))
 
 let decrypt i d ad c =
-  recall (State.log d);
-  let log = !(State.log d) in
+  recall (State?.log d);
+  let log = !(State?.log d) in
   if authId i then
     match seq_find (matches c ad) log with
     | None -> None
-    | Some e -> Some (Entry.p e)
+    | Some e -> Some (Entry?.p e)
   else dec i d ad c

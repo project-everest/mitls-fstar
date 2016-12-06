@@ -43,7 +43,7 @@ type aeadAlg =
   | CHACHA20_POLY1305
 
 type id =
-  i:TLSInfo.id{~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i)}
+  i:TLSInfo.id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
 
 // ADL: TODO support in TLSInfo.id + mitls.exe
 let aesImpl_of_id (i:id) = SpartanAES

@@ -83,7 +83,7 @@ noeq type config = {
     maxVer: protocolVersion;
     ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
     compressions: l:list compression{ List.Tot.length l <= 1 };
-    namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
+    namedGroups: list (x:namedGroup{SEC? x \/ FFDHE? x});
     signatureAlgorithms: list sigHashAlg;
 
     (* Handshake specific options *)
@@ -122,7 +122,7 @@ let rec sigAlgPref s h =
     | [] -> []
     | sa :: r -> List.Tot.append (List.Tot.map (fun u -> (sa,u)) h) (sigAlgPref r h)
 
-val ec_ff_to_ng: list CoreCrypto.ec_curve -> list ffdhe -> Tot (list (n:namedGroup{is_SEC n \/ is_FFDHE n}))
+val ec_ff_to_ng: list CoreCrypto.ec_curve -> list ffdhe -> Tot (list (n:namedGroup{SEC? n \/ FFDHE? n}))
 let rec ec_ff_to_ng ecl ffl =
   match ecl with
   | ec::r -> (SEC ec) :: (ec_ff_to_ng r ffl)
@@ -298,7 +298,7 @@ let csrands si = si.init_crand @| si.init_srand
 
 // Getting algorithms from sessionInfo
 //CF subsume mk_kefAlg, mk_kefAlgExtended, mk_kdfAlg
-val kefAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs) /\ is_Some (prfMacAlg_of_ciphersuite_aux cs)} -> bool -> Tot kefAlg_t
+val kefAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(NullCipherSuite? cs \/ SCSV? cs) /\ Some? (prfMacAlg_of_ciphersuite_aux cs)} -> bool -> Tot kefAlg_t
 let kefAlg pv cs ems =
   let label = if ems then extended_extract_label else extract_label in
   match pv with
@@ -307,7 +307,7 @@ let kefAlg pv cs ems =
   | TLS_1p2           -> PRF_TLS_1p2 label (prfMacAlg_of_ciphersuite cs)
   | TLS_1p3           -> PRF_TLS_1p3 //TBC
 
-val kdfAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(is_NullCipherSuite cs \/ is_SCSV cs) /\ is_Some (prfMacAlg_of_ciphersuite_aux cs)} -> Tot kdfAlg_t
+val kdfAlg: pv:protocolVersion -> cs:cipherSuite{pv = TLS_1p2 ==> ~(NullCipherSuite? cs \/ SCSV? cs) /\ Some? (prfMacAlg_of_ciphersuite_aux cs)} -> Tot kdfAlg_t
 let kdfAlg pv cs =
   match pv with
   | SSL_3p0           -> PRF_SSL3_nested
@@ -348,7 +348,7 @@ let honestMS = function
 // Getting master-secret indexes out of sessionInfo
 
 //CF subsumes both MsI and mk_msid
-val msid: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
+val msid: si:sessionInfo { Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
 let msid si =
   let ems = si.extensions.ne_extended_ms in
   let kef = kefAlg si.protocol_version si.cipher_suite ems in
@@ -368,7 +368,7 @@ assume val sigHashAlg_of_ciphersuite: cipherSuite -> Tot sigHashAlg
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF
-val strongPRF: si:sessionInfo{si.protocol_version = TLS_1p2 ==> ~(is_NullCipherSuite si.cipher_suite \/ is_SCSV si.cipher_suite) /\ is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite)} -> Tot bool
+val strongPRF: si:sessionInfo{si.protocol_version = TLS_1p2 ==> ~(NullCipherSuite? si.cipher_suite \/ SCSV? si.cipher_suite) /\ Some? (prfMacAlg_of_ciphersuite_aux si.cipher_suite)} -> Tot bool
 let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && strongVD(vdAlg si)
 // MK I think having this joint strength predicate
 // MK guaranteeing the idealization of the complete module is useful
@@ -377,7 +377,7 @@ let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && stro
 // CF derived & to be used in the public API only
 let strongHS si =
   strongKEX (si.pmsId) &&
-  is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
+  Some? (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
   strongKEF (kefAlg si.protocol_version si.cipher_suite si.extensions.ne_extended_ms) && //NS: ... to verify this
   strongPRF si
   //strongSig si //SZ: need to state the precise agile INT-CMA assumption, with a designated hash algorithm and a set of hash algorithms allowed in signing queries
@@ -433,7 +433,7 @@ type logInfo_CH = {
 type logInfo_SH = {
   li_sh_cr: crand;
   li_sh_sr: srand;
-  li_sh_ae: a:aeAlg{is_AEAD a};
+  li_sh_ae: a:aeAlg{AEAD? a};
 }
 
 type logInfo_SF = logInfo_SH
@@ -446,7 +446,7 @@ type logInfo =
 | LogInfo_SF of logInfo_SF
 | LogInfo_CF of logInfo_CF
 
-let logInfo_ae : logInfo -> Tot (a:aeAlg{is_AEAD a}) = function
+let logInfo_ae : logInfo -> Tot (a:aeAlg{AEAD? a}) = function
 | LogInfo_CH x -> let pski = x.li_ch_psk in AEAD (PSK.pskInfo_ae pski) (PSK.pskInfo_hash pski)
 | LogInfo_SH x
 | LogInfo_SF x
@@ -661,7 +661,7 @@ let peerId = function
 | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
 
 val siId: si:sessionInfo{ 
-  is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 
+  Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 
   si.protocol_version = TLS_1p2 /\
   pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
 
@@ -669,7 +669,7 @@ let siId si r =
   let cr, sr = split (csrands si) 32 in
   ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
 
-let pv_of_id (i:id{~(is_PlaintextID i)}) = match i with
+let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID13 _ -> TLS_1p3
   | ID12 pv _ _ _ _ _ _ -> pv
 
@@ -679,34 +679,34 @@ let nonce_of_id = function
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
   | ID13 (KeyID _ _ rw li _) -> logInfo_nonce rw li
 
-val kdfAlg_of_id: i:id { is_ID12 i } -> Tot kdfAlg_t
+val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
   | ID12 pv _ kdf _ _ _ _ -> kdf
 
-val macAlg_of_id: i:id { is_ID12 i /\ ~(is_AEAD (ID12.aeAlg i)) } -> Tot macAlg
+val macAlg_of_id: i:id { ID12? i /\ ~(AEAD? (ID12?.aeAlg i)) } -> Tot macAlg
 let macAlg_of_id = function
   | ID12 pv _ _ ae _ _ _ -> 
     macAlg_of_aeAlg pv ae
 
-val encAlg_of_id: i:id { is_ID12 i /\ is_MtE (ID12.aeAlg i) } -> Tot (encAlg * ivMode)
+val encAlg_of_id: i:id { ID12? i /\ MtE? (ID12?.aeAlg i) } -> Tot (encAlg * ivMode)
 let encAlg_of_id = function
   | ID12 pv _ _ ae _ _ _ -> encAlg_of_aeAlg pv ae
 
-val aeAlg_of_id: i:id { ~ (is_PlaintextID i) } -> Tot aeAlg
+val aeAlg_of_id: i:id { ~ (PlaintextID? i) } -> Tot aeAlg
 let aeAlg_of_id = function
   | ID13 (KeyID _ _ _ li _) -> logInfo_ae li
   | ID12 pv _ _ ae _ _ _ -> ae
 
-let lemma_MtE (i:id{~(is_PlaintextID i)})
-  : Lemma (is_MtE (aeAlg_of_id i) ==> is_ID12 i)
+let lemma_MtE (i:id{~(PlaintextID? i)})
+  : Lemma (MtE? (aeAlg_of_id i) ==> ID12? i)
   = ()
 
 let lemma_ID13 (i:id)
-  : Lemma (is_ID13 i ==> is_AEAD (aeAlg_of_id i))
+  : Lemma (ID13? i ==> AEAD? (aeAlg_of_id i))
   = ()
 
 let lemma_ID12 (i:id)
-  : Lemma (is_ID12 i ==> pv_of_id i <> TLS_1p3)
+  : Lemma (ID12? i ==> pv_of_id i <> TLS_1p3)
   = ()
 
 // Pretty printing
@@ -753,9 +753,9 @@ abstract let safeId = function
   | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAEAlg pv ae
 
 let plainText_is_not_auth (i:id)
-  : Lemma (requires (is_PlaintextID i))
+  : Lemma (requires (PlaintextID? i))
           (ensures (not (authId i)))
-	  [SMTPat (is_PlaintextID i)]
+	  [SMTPat (PlaintextID? i)]
   = ()	  
 
 let safe_implies_auth (i:id)

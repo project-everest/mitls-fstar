@@ -29,7 +29,7 @@ PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 100
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 100
 
 LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 

@@ -86,7 +86,7 @@ let dh_responder gx =
   let shared = dh_agreement y gx.dh_public in
   y, shared
 
-val dh_initiator: x:key{is_Some x.dh_private} -> key -> St secret
+val dh_initiator: x:key{Some? x.dh_private} -> key -> St secret
 let dh_initiator x gy =
   dh_agreement x gy.dh_public
 

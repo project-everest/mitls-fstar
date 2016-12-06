@@ -5,7 +5,7 @@ open CoreCrypto
 
 open Platform.Bytes
 
-type pk = (k:CoreCrypto.rsa_key{is_None k.rsa_prv_exp})
+type pk = (k:CoreCrypto.rsa_key{None? k.rsa_prv_exp})
 type sk = CoreCrypto.rsa_key
 
 type pred = | SK_PK of sk * pk

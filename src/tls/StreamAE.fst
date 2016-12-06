@@ -26,7 +26,7 @@ module HS = FStar.HyperStack
 
 type rid = FStar.Monotonic.RRef.rid
 
-type id = i:id { is_ID13 i }
+type id = i:id { ID13? i }
 
 let alg (i:id) =
   let AEAD ae _ = aeAlg_of_id i in ae
@@ -122,7 +122,7 @@ val gen: parent:rid -> i:id -> ST (writer i)
 (*
  * AR: had to provide implicit arguments for ectr line, the cut, and the timeout
  *)
-#set-options "--z3timeout 30"
+#set-options "--z3rlimit 30"
 let gen parent i =
   let writer_r = new_region parent in
   let aead = AEAD.gen i writer_r in
@@ -179,7 +179,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
 let leak #i #role s =
-  AEAD.leak (State.aead s)
+  AEAD.leak (State?.aead s)
 
 
 // we are not relying on additional data
@@ -203,7 +203,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
-#set-options "--z3timeout 100"
+#set-options "--z3rlimit 100"
 let encrypt #i e l p =
   let ctr = ctr e.counter in 
   m_recall ctr;
@@ -242,7 +242,7 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
       (authId i ==>
 	(let log = m_sel h0 (ilog d.log) in
 	 if j < Seq.length log && matches l c (Seq.index log j)
-	 then res = Some (Entry.p (Seq.index log j))
+	 then res = Some (Entry?.p (Seq.index log j))
 	 else res = None))
     /\ (match res with
        | None -> HH.modifies Set.empty h0.h h1.h
@@ -252,7 +252,7 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
               /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	      /\ m_sel h1 (ctr d.counter) === j + 1)))
 
-#set-options "--z3timeout 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt #i d l c =
   let ctr = ctr d.counter in 
@@ -268,7 +268,7 @@ let decrypt #i d l c =
       begin
       increment_seqn ictr;
       m_recall ctr;
-      Some (Entry.p (Seq.index log j))
+      Some (Entry?.p (Seq.index log j))
       end
     else None
   else //concrete

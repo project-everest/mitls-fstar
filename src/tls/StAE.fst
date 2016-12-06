@@ -26,11 +26,11 @@ module StLHAE = StatefulLHAE
 ////////////////////////////////////////////////////////////////////////////////
 //Distinguishing the two multiplexing choices of StAE based on the ids
 ////////////////////////////////////////////////////////////////////////////////
-let is_stream i = is_ID13 i
+let is_stream i = ID13? i
 
-let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i) && 
-  (AEAD._0 (aeAlg_of_id i) = CoreCrypto.AES_128_GCM ||
-   AEAD._0 (aeAlg_of_id i) = CoreCrypto.AES_256_GCM)
+let is_stlhae i = ID12? i && AEAD? (aeAlg_of_id i) && 
+  (AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_128_GCM ||
+   AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_256_GCM)
 
 // type id = i:id {is_stream i \/ is_stlhae i}
 
@@ -55,7 +55,7 @@ let aeKeySize (i:stae_id) =
     CoreCrypto.aeadKeySize (Stream.alg i) +
     AEADProvider.iv_length i
   else
-    CoreCrypto.aeadKeySize (AEAD._0 (aeAlg_of_id i)) +
+    CoreCrypto.aeadKeySize (AEAD?._0 (aeAlg_of_id i)) +
     AEADProvider.salt_length i
 
 type keyBytes (i:stae_id) = lbytes (aeKeySize i)
@@ -79,14 +79,14 @@ let stlhae_state (#i:id{is_stlhae i}) (#rw:rw) (s:state i rw)
 val region: #i:id -> #rw:rw -> state i rw -> Tot rgn
 let region (#i:id) (#rw:rw) (s:state i rw): Tot rgn = 
   match s with 
-  | Stream _ x -> Stream.State.region x
+  | Stream _ x -> Stream.State?.region x
   | StLHAE _ x -> StLHAE.region x
 
 val log_region: #i:id -> #rw:rw -> state i rw -> Tot rgn
 let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn = 
   match s with 
-  | Stream _ s -> Stream.State.log_region s
-  | StLHAE _ s -> AEAD_GCM.State.log_region s
+  | Stream _ s -> Stream.State?.log_region s
+  | StLHAE _ s -> AEAD_GCM.State?.log_region s
 
 type reader i = state i Reader
 type writer i = state i Writer
@@ -100,7 +100,7 @@ type writer i = state i Writer
 //Logs of fragments, defined as projections on the underlying entry logs
 ////////////////////////////////////////////////////////////////////////////////
 // TODO: consider adding constraint on terminator fragments
-type frags (i:id{~ (is_PlaintextID i)}) = Seq.seq (C.fragment i)
+type frags (i:id{~ (PlaintextID? i)}) = Seq.seq (C.fragment i)
 
 let ideal_log (r:rgn) (i:id) =
   if is_stream i then
@@ -111,8 +111,8 @@ let ideal_log (r:rgn) (i:id) =
 
 let ilog (#i:id) (#rw:rw) (s:state i rw{authId i}): Tot (ideal_log (log_region s) i) =
   match s with
-  | Stream u s -> Stream.ilog (Stream.State.log s)
-  | StLHAE u s -> AEAD_GCM.ilog (AEAD_GCM.State.log s)
+  | Stream u s -> Stream.ilog (Stream.State?.log s)
+  | StLHAE u s -> AEAD_GCM.ilog (AEAD_GCM.State?.log s)
 
 let entry (i:id) =
    if is_stream i then
@@ -123,9 +123,9 @@ let entry (i:id) =
 
 let ptext (#i:id) (ent:entry i): Tot (C.fragment i) =
   if is_stream i then
-    Stream.Entry.p #i ent
+    Stream.Entry?.p #i ent
   else
-    AEAD_GCM.Entry.p #i ent
+    AEAD_GCM.Entry?.p #i ent
 
 //A projection of fragments from Stream.entries
 let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:mem): GTot (frags i) =
@@ -166,7 +166,7 @@ let fragments_prefix_stable #i #rw w h =
 
 let seqnT (#i:id) (#rw:rw) (s:state i rw) h : GTot nat =
   match s with
-  | Stream _ s -> MR.m_sel h (Stream.ctr (Stream.State.counter s))
+  | Stream _ s -> MR.m_sel h (Stream.ctr (Stream.State?.counter s))
   | StLHAE _ s -> MR.m_sel h (AEAD_GCM.ctr (StLHAE.counter s))
 
 //it's incrementable if it doesn't overflow
@@ -251,7 +251,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 val gen: parent:rgn -> i:stae_id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
-#set-options "--z3timeout 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let gen parent i =
   if is_stream i then
     Stream () (Stream.gen parent i)
@@ -286,7 +286,7 @@ let genReader parent #i w =
 val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
-#set-options "--z3timeout 100"
+#set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
     let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
@@ -336,7 +336,7 @@ let encrypt #i e f =
       let ent = AEAD_GCM.Entry c ad' f in
       lemma_fragments_snoc_commutes e h0 h1 ent;
       fragments_prefix_stable e h1;
-      MR.witness #(log_region e) (AEAD_GCM.ilog (AEAD_GCM.State.log s))
+      MR.witness #(log_region e) (AEAD_GCM.ilog (AEAD_GCM.State?.log s))
 		 (fragments_prefix e (fragments e h1))
       end;
     c
@@ -351,7 +351,7 @@ let encrypt #i e f =
       begin
       lemma_fragments_snoc_commutes e h0 h1 (Stream.Entry l c f);
       fragments_prefix_stable e h1;
-      MR.witness #(log_region e) (Stream.ilog (Stream.State.log s))
+      MR.witness #(log_region e) (Stream.ilog (Stream.State?.log s))
 		 (fragments_prefix e (fragments e h1))
       end;
     c
@@ -393,7 +393,7 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
   	             frame_f (fragments d) h1 (Set.singleton (log_region d)) /\
   	             MR.witnessed (fragment_at_j d j f)))))
 
-#set-options "--z3timeout 100" 
+#set-options "--z3rlimit 100" 
 
 let decrypt #i d (ct,c) =
   let h0 = ST.get () in

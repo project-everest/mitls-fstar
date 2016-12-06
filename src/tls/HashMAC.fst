@@ -36,13 +36,13 @@ let sslKeyedHashVerify a k p t =
 
 (* Parametric keyed hash *)
 
-val hmac: a:hashAlg{is_Hash a} -> bytes -> bytes -> Tot bytes
-let hmac (a:hashAlg {is_Hash a}) k p =
+val hmac: a:hashAlg{Hash? a} -> bytes -> bytes -> Tot bytes
+let hmac (a:hashAlg {Hash? a}) k p =
   match a with | Hash h -> CoreCrypto.hmac h k p
 
 // why do I need this declaration??
-val hmacVerify: a:hashAlg {is_Hash a} -> key -> data -> bytes -> Tot bool
-let hmacVerify (a:hashAlg {is_Hash a}) k p t : bool =
+val hmacVerify: a:hashAlg {Hash? a} -> key -> data -> bytes -> Tot bool
+let hmacVerify (a:hashAlg {Hash? a}) k p t : bool =
     let result = hmac a k p in
     equalBytes result t
 

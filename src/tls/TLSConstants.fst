@@ -154,7 +154,7 @@ unfold type lemma_inverse_g_f (#a:Type) (#b:Type) ($f:a -> Tot b) ($g:b -> Tot (
   g (f x) == Correct x
 
 unfold type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (y:b) =
-  is_Correct (g y) ==> r (f (Correct._0 (g y))) y
+  Correct? (g y) ==> r (f (Correct?._0 (g y))) y
 
 
 (* Serializing function for signature algorithms *)
@@ -185,7 +185,7 @@ let inverse_sigAlg x = ()
 val pinverse_sigAlg: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal sigAlgBytes parseSigAlg x))
-  [SMTPat (sigAlgBytes (Correct._0 (parseSigAlg x)))]
+  [SMTPat (sigAlgBytes (Correct?._0 (parseSigAlg x)))]
 let pinverse_sigAlg x = ()
 
 
@@ -225,7 +225,7 @@ let inverse_hashAlg x = ()
 val pinverse_hashAlg: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal hashAlgBytes parseHashAlg x))
-  [SMTPat (hashAlgBytes (Correct._0 (parseHashAlg x)))]
+  [SMTPat (hashAlgBytes (Correct?._0 (parseHashAlg x)))]
 let pinverse_hashAlg x = ()
 
 
@@ -345,7 +345,7 @@ let inverse_version x = ()
 val pinverse_version: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal versionBytes parseVersion x))
-  [SMTPat (versionBytes (Correct._0 (parseVersion x)))]
+  [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
 let pinverse_version x = ()
 
 let minPV (a:protocolVersion) (b:protocolVersion) =
@@ -460,12 +460,12 @@ let cipherSuiteBytesOpt cs =
     | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)         -> abyte2 ( 0x00z, 0xFFz )
     | _ -> None
 
-let validCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
+let validCipherSuite (c:cipherSuite) = Some? (cipherSuiteBytesOpt c)
 let valid_cipher_suite = c:cipherSuite{validCipherSuite c}
 let valid_cipher_suites = list valid_cipher_suite
 
 val cipherSuiteBytes: valid_cipher_suite -> Tot (lbytes 2)
-let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
+let cipherSuiteBytes c = Some?.v (cipherSuiteBytesOpt c)
 
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
@@ -576,24 +576,24 @@ let parseCipherSuite b =
   | Correct c -> Correct c
   | Error z -> Error z
 
-#reset-options "--z3timeout 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
+#reset-options "--z3rlimit 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
 val inverse_cipherSuite: x:cipherSuite -> Lemma
-  (requires (~ (is_UnknownCipherSuite x)))
+  (requires (~ (UnknownCipherSuite? x)))
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
   // must exclude this case... 
   (ensures (let y = cipherSuiteBytesOpt x in
-	(is_Some y ==> parseCipherSuiteAux (Some.v y) = Correct x)))
-  [SMTPat (parseCipherSuiteAux (Some.v (cipherSuiteBytesOpt x)))]
+	(Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
+  [SMTPat (parseCipherSuiteAux (Some?.v (cipherSuiteBytesOpt x)))]
 let inverse_cipherSuite x = ()
 
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
   (requires (True))
   (ensures (let y = parseCipherSuiteAux x in
-	    (is_Correct y ==>
-              (if is_UnknownCipherSuite (Correct._0 y) then true
-              else is_Some (cipherSuiteBytesOpt (Correct._0 y))
-               /\ Seq.equal x (Some.v (cipherSuiteBytesOpt (Correct._0 y)))))))
-  [SMTPat (cipherSuiteBytesOpt (Correct._0 (parseCipherSuiteAux x)))]
+	    (Correct? y ==>
+              (if UnknownCipherSuite? (Correct?._0 y) then true
+              else Some? (cipherSuiteBytesOpt (Correct?._0 y))
+               /\ Seq.equal x (Some?.v (cipherSuiteBytesOpt (Correct?._0 y)))))))
+  [SMTPat (cipherSuiteBytesOpt (Correct?._0 (parseCipherSuiteAux x)))]
 let pinverse_cipherSuite x = ()
 
 #reset-options
@@ -632,7 +632,7 @@ let rec inverse_cipherSuites x =
   match x with
   | [] -> ()
   | cs::css ->
-     assume (~ (is_UnknownCipherSuite cs)); // TODO enforce it
+     assume (~ (UnknownCipherSuite? cs)); // TODO enforce it
      let b = (cipherSuiteBytes cs) @| (cipherSuitesBytes css) in
      let (b0,b1) = split b 2 in
      lemma_append_inj b0 b1 (cipherSuiteBytes cs) (cipherSuitesBytes css);
@@ -725,14 +725,14 @@ let prfMacAlg_of_ciphersuite_aux = function
 
 let pvcs (pv:protocolVersion) (cs:cipherSuite) =
   match pv with
-  | TLS_1p2 | TLS_1p3 -> is_Some (prfMacAlg_of_ciphersuite_aux cs)
+  | TLS_1p2 | TLS_1p3 -> Some? (prfMacAlg_of_ciphersuite_aux cs)
   | _                 -> true
 
 unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) = 
-  x:a{is_Some (f x)} -> Tot b
+  x:a{Some? (f x)} -> Tot b
 
 let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
-  fun x -> Some.v (prfMacAlg_of_ciphersuite_aux x)
+  fun x -> Some?.v (prfMacAlg_of_ciphersuite_aux x)
 
 (* PRF and verifyData hash algorithms are potentially independent in TLS 1.2, *)
 (* so we use two distinct functions. However, all currently defined ciphersuites *)
@@ -745,7 +745,7 @@ let verifyDataHashAlg_of_ciphersuite_aux = function
   | CipherSuite _ _ (MACOnly hAlg) -> Some SHA256
   | _                               -> None
 let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphersuite_aux =
-  fun x -> Some.v (verifyDataHashAlg_of_ciphersuite_aux x)
+  fun x -> Some?.v (verifyDataHashAlg_of_ciphersuite_aux x)
 
 val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
 let sessionHashAlg pv cs =
@@ -756,21 +756,21 @@ let sessionHashAlg pv cs =
 // SZ: Right. The TLS 1.3 draft says "Where HMAC [RFC2104] uses
 // the Hash algorithm for the handshake"
 
-val get_aeAlg: cs:cipherSuite{ is_CipherSuite cs } -> Tot aeAlg
+val get_aeAlg: cs:cipherSuite{ CipherSuite? cs } -> Tot aeAlg
 let get_aeAlg cs =
   match cs with
   | CipherSuite _ _ ae -> ae
 
 let null_aeAlg = MACOnly MD5
 
-val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { is_MtE a }) -> Tot (encAlg * ivMode)
+val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { MtE? a }) -> Tot (encAlg * ivMode)
 let encAlg_of_aeAlg  pv ae =
   match pv,ae with
   | SSL_3p0, MtE (Block e) m -> (Block e),Stale
   | TLS_1p0, MtE (Block e) m -> (Block e),Stale
   | _, MtE e m -> e,Fresh
 
-val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(is_AEAD a) }) -> Tot macAlg
+val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(AEAD? a) }) -> Tot macAlg
 let macAlg_of_aeAlg pv ae =
   match pv,ae with
   | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
@@ -1101,7 +1101,7 @@ let inverse_certType x = ()
 val pinverse_certType: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal certTypeBytes parseCertType x))
-  [SMTPat (certTypeBytes (Correct._0 (parseCertType x)))]
+  [SMTPat (certTypeBytes (Correct?._0 (parseCertType x)))]
 let pinverse_certType x = ()
 
 #set-options "--max_fuel 1 --initial_fuel 1"
@@ -1252,7 +1252,7 @@ let inverse_namedGroup x = ()
 val pinverse_namedGroup: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal namedGroupBytes parseNamedGroup x))
-  [SMTPat (namedGroupBytes (Correct._0 (parseNamedGroup x)))]
+  [SMTPat (namedGroupBytes (Correct?._0 (parseNamedGroup x)))]
 let pinverse_namedGroup x = ()
 
 
@@ -1321,7 +1321,7 @@ let inverse_configurationId x =
 val pinverse_configurationId: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal configurationIdBytes parseConfigurationId x))
-  [SMTPat (configurationIdBytes (Correct._0 (parseConfigurationId x)))]
+  [SMTPat (configurationIdBytes (Correct?._0 (parseConfigurationId x)))]
 let pinverse_configurationId x = ()
 
 
@@ -1344,7 +1344,7 @@ let inverse_uint32 x = ()
 val pinverse_uint32: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal uint32Bytes parseUint32 x))
-  [SMTPat (uint32Bytes (Correct._0 (parseUint32 x)))]
+  [SMTPat (uint32Bytes (Correct?._0 (parseUint32 x)))]
 let pinverse_uint32 x = ()
 
 
@@ -1377,7 +1377,7 @@ let inverse_earlyDataType x = ()
 val pinverse_earlyDataType: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal earlyDataTypeBytes parseEarlyDataType x))
-  [SMTPat (earlyDataTypeBytes (Correct._0 (parseEarlyDataType x)))]
+  [SMTPat (earlyDataTypeBytes (Correct?._0 (parseEarlyDataType x)))]
 let pinverse_earlyDataType x = ()
 
 // TODO : replace with more precise types when available
@@ -1418,7 +1418,7 @@ let inverse_configurationExtension x =
 val pinverse_configurationExtension: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal configurationExtensionBytes parseConfigurationExtension x))
-  [SMTPat (configurationExtensionBytes (Correct._0 (parseConfigurationExtension x)))]
+  [SMTPat (configurationExtensionBytes (Correct?._0 (parseConfigurationExtension x)))]
 let pinverse_configurationExtension x = ()
 
 // Choice: truncate when maximum length is exceeded
@@ -1558,7 +1558,7 @@ let inverse_keyShareEntry (ng, x) =
 val pinverse_keyShareEntry: x:_ -> Lemma
   (requires (True))
   (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
-  [SMTPat (keyShareEntryBytes (Correct._0 (parseKeyShareEntry x)))]
+  [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
 let pinverse_keyShareEntry x = ()
 
 // Choice: truncate when maximum length is exceeded

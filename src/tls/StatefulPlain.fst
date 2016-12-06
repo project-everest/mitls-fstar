@@ -17,7 +17,7 @@ open Content
 
 // This module is used only up to TLS 1.2
 
-type id = i:id { is_ID12 i }  
+type id = i:id { ID12? i }  
 
 
 (*** additional data:  ad := ct @| pv ***)
@@ -91,7 +91,7 @@ logic type wf_ad_rg i ad rg =
 
 logic type wf_payload_ad_rg i ad rg (b:rbytes rg) =
   (parseAD i ad = Change_cipher_spec ==> b = ccsBytes)
-  /\ (parseAD i ad = Alert ==> length b = 2 /\ is_Correct (Alert.parse b))
+  /\ (parseAD i ad = Alert ==> length b = 2 /\ Correct? (Alert.parse b))
 
 val mk_plain: i:id{ ~(authId i)} -> ad:adata i -> rg:frange i { wf_ad_rg i ad rg } ->
     b:rbytes rg { wf_payload_ad_rg i ad rg b } ->

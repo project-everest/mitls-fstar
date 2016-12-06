@@ -21,7 +21,7 @@ open FStar.Monotonic.RRef
 
 module AEAD = AEADProvider
 
-type id = i:id{ is_ID12 i /\ is_AEAD (aeAlg_of_id i) }
+type id = i:id{ ID12? i /\ AEAD? (aeAlg_of_id i) }
 let alg (i:id) = let AEAD ae _ = aeAlg_of_id i in ae
 
 type cipher (i:id) = c:bytes{ valid_clen i (length c) }
@@ -162,7 +162,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1))
 let leak #i #role s =
-  AEAD.leak (State.aead s)
+  AEAD.leak (State?.aead s)
 
 
 // Encryption of plaintexts; safe instances are idealized
@@ -192,7 +192,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   	   )
   ))
 
-#set-options "--z3timeout 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
+#set-options "--z3rlimit 100 --max_ifuel 0 --initial_ifuel 0 --max_fuel 0 --initial_fuel 0"
 
 let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
@@ -240,7 +240,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
      (authId i ==>
        (let log = m_sel h0 (ilog d.log) in
        if j < Seq.length log && matches c ad (Seq.index log j)
-       then res = Some (Entry.p (Seq.index log j))
+       then res = Some (Entry?.p (Seq.index log j))
        else res = None))
     /\ (match res with
        | None -> modifies Set.empty h0 h1
@@ -248,7 +248,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
                 /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
-#set-options "--z3timeout 100 --max_fuel 0 --initial_fuel 0 --initial_ifuel 0 --max_ifuel 0"
+#set-options "--z3rlimit 100 --max_fuel 0 --initial_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
@@ -263,7 +263,7 @@ let decrypt #i d ad c =
       begin
       increment_seqn ictr;
       m_recall ctr;
-      Some (Entry.p (Seq.index log j))
+      Some (Entry?.p (Seq.index log j))
       end
     else None
   else // Concrete
@@ -292,7 +292,7 @@ let decrypt #i d ad c =
       // TODO: This should be done by StatefulPlain.mk_plain
       if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && text <> Content.ccsBytes then
         None
-      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || Platform.Error.is_Error (Alert.parse text)) then
+      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || Platform.Error.Error? (Alert.parse text)) then
         None
       else
 	begin

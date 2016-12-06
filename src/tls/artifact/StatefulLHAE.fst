@@ -39,7 +39,7 @@ type writer (i:gid) =
       #region:rid
     -> log:  st_log_t region i (* shared ghost spec *)
     -> seqn: rref region seqn  (* concrete, local sequence number *)
-    -> key:  AEAD_GCM.encryptor i{extends (AEAD_GCM.State.region key) region} (* gcm in a distinct sub-region *)
+    -> key:  AEAD_GCM.encryptor i{extends (AEAD_GCM.State?.region key) region} (* gcm in a distinct sub-region *)
     -> writer i
 
 type reader (i:gid) =
@@ -47,14 +47,14 @@ type reader (i:gid) =
       #region:rid
     -> log:  st_log_t region i (* shared ghost spec *)
     -> seqn: rref region seqn  (* concrete, local sequence number *)
-    -> key:  AEAD_GCM.decryptor i{extends (AEAD_GCM.State.region key) region} (* gcm in a distinct sub-region *)
+    -> key:  AEAD_GCM.decryptor i{extends (AEAD_GCM.State?.region key) region} (* gcm in a distinct sub-region *)
     -> reader i
 
 opaque type matching (#i:gid) (r:reader i) (w:writer i) =
     StReader.region r = StWriter.region w
-  /\ AEAD_GCM.State.region (StReader.key r) = AEAD_GCM.State.region (StWriter.key w) // the gcm sub-region is shared
+  /\ AEAD_GCM.State?.region (StReader.key r) = AEAD_GCM.State?.region (StWriter.key w) // the gcm sub-region is shared
   /\ StReader.log r = StWriter.log w //stlogs are equal
-  /\ AEAD_GCM.State.log (StReader.key r) = AEAD_GCM.State.log (StWriter.key w) //gcmlogs are equal
+  /\ AEAD_GCM.State?.log (StReader.key r) = AEAD_GCM.State?.log (StWriter.key w) //gcmlogs are equal
   /\ StReader.seqn r <> StWriter.seqn w //read/write sequence counters are distinct
 
 type both (i:gid) = rw:(reader i * writer i){matching (fst rw) (snd rw)}
@@ -62,7 +62,7 @@ type both (i:gid) = rw:(reader i * writer i){matching (fst rw) (snd rw)}
 type st_inv (#i:gid) (d:reader i) (e:writer i) (h:HyperHeap.t) =
     matching d e
   /\ Map.contains h (StReader.region d)
-  /\ Let (sel h (AEAD_GCM.State.log (StWriter.key e))) (fun aead ->
+  /\ Let (sel h (AEAD_GCM.State?.log (StWriter.key e))) (fun aead ->
     Let (sel h (StWriter.log e)) (fun st ->
     Let (sel h (StReader.seqn d)) (fun r ->
     Let (sel h (StWriter.seqn e)) (fun w ->
@@ -73,8 +73,8 @@ type st_inv (#i:gid) (d:reader i) (e:writer i) (h:HyperHeap.t) =
           Let (Seq.index st j) (fun (st_en:entry i) ->
           repr_bytes j <= 8
           /\ Seq.index aead j
-            == AEAD_GCM.Entry (Entry.c st_en) (LHAEPlain.makeAD i j (Entry.ad st_en))
-                              (Entry.p st_en)))))))
+            == AEAD_GCM.Entry (Entry?.c st_en) (LHAEPlain.makeAD i j (Entry?.ad st_en))
+                              (Entry?.p st_en)))))))
 
 val gen: r0:rid -> i:gid -> ST (both i)
   (requires (fun h -> True))
@@ -112,7 +112,7 @@ val coerce_reader: r0:rid -> i:gid{~(safeId i)} -> kv:key i -> iv:iv i -> ST (re
   (ensures  (fun h0 s h1 ->
       modifies Set.empty h0 h1
     /\ extends (StReader.region s) r0
-    /\ fresh_region (State.region (StReader.key s)) h0 h1
+    /\ fresh_region (State?.region (StReader.key s)) h0 h1
     /\ sel h1 (StReader.log s) = Seq.createEmpty
     /\ sel h1 (StReader.seqn s) = 0))
 
@@ -128,7 +128,7 @@ val coerce_writer: r0:rid -> i:gid{~(safeId i)} -> kv:key i -> iv:iv i -> ST (wr
   (ensures  (fun h0 s h1 ->
       modifies Set.empty h0 h1
     /\ extends (StWriter.region s) r0
-    /\ fresh_region (State.region (StWriter.key s)) h0 h1
+    /\ fresh_region (State?.region (StWriter.key s)) h0 h1
     /\ sel h1 (StWriter.log s) = Seq.createEmpty
     /\ sel h1 (StWriter.seqn s) = 0))
 
@@ -187,20 +187,20 @@ val decrypt: #i:gid -> #ad:adata i -> rd:reader i
                authId i
                ==> st_dec_inv rd h0
                 /\ st_dec_inv rd h1
-                /\ (if is_Some res
+                /\ (if Some? res
                   then
                     (sel h1 (StReader.seqn rd) = rctr + 1
-                     /\ Some.v res == Entry.p (Seq.index log rctr))
+                     /\ Some?.v res == Entry?.p (Seq.index log rctr))
                   else
                       Seq.length log = rctr                 // no more ciphers
-                    \/ c <> Entry.c (Seq.index log rctr)      // wrong cipher
-                    \/ ad =!= Entry.ad (Seq.index log rctr)) // wrong ad
+                    \/ c <> Entry?.c (Seq.index log rctr)      // wrong cipher
+                    \/ ad =!= Entry?.ad (Seq.index log rctr)) // wrong ad
              ))
     ))
 
 let decrypt i ad rd c =
    let StReader log seqn key = rd in
-   recall log; recall seqn; recall (AEAD_GCM.State.log key);
+   recall log; recall seqn; recall (AEAD_GCM.State?.log key);
    let n = !seqn in
    cut (found n);
    let ad' = LHAEPlain.makeAD i n ad in

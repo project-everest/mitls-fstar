@@ -29,8 +29,8 @@ let sel #a #b (m:map' a b) (x:a)
   = m x
 
 abstract let grows #a #b (m1:map' a b) (m2:map' a b) =
-  forall x.{:pattern (is_Some (m1 x))}
-      is_Some (m1 x) ==> is_Some (m2 x) /\ Some.v (m1 x) == Some.v (m2 x)
+  forall x.{:pattern (Some? (m1 x))}
+      Some? (m1 x) ==> Some? (m2 x) /\ Some?.v (m1 x) == Some?.v (m2 x)
 
 let grows_reflexive #a #b (m1:map' a b)
   : Lemma (ensures (grows m1 m1))
@@ -64,23 +64,23 @@ let alloc (#r:rid) #a #b #inv
 
 let defined #r #a #b #inv (m:t r a b inv) (x:a) (h:HS.mem)
   : GTot Type0
-  = is_Some (sel (m_sel h m) x)
+  = Some? (sel (m_sel h m) x)
 
 let contains #r #a #b #inv (m:t r a b inv) (x:a) (y:b x) (h:HS.mem)
   : GTot Type0
-  = is_Some (sel (m_sel h m) x) /\ Some.v (sel (m_sel h m) x) == y
+  = Some? (sel (m_sel h m) x) /\ Some?.v (sel (m_sel h m) x) == y
 
 let value #r #a #b #inv (m:t r a b inv) (x:a) (h:HS.mem{defined m x h})
   : GTot (r:b x{contains m x r h})
-  = Some.v (sel (m_sel h m) x)
+  = Some?.v (sel (m_sel h m) x)
 
 let fresh #r #a #b #inv (m:t r a b inv) (x:a) (h:HS.mem)
   : GTot Type0
-  = is_None (sel (m_sel h m) x)
+  = None? (sel (m_sel h m) x)
 
 let map_contains #a #b (m1:map' a b) (m2:map' a b) (x:a) (y:b x)
   : Lemma (requires (grows m1 m2))
-	  (ensures (is_Some (m1 x) /\ m1 x == Some y ==> m2 x == Some y))
+	  (ensures (Some? (m1 x) /\ m1 x == Some y ==> m2 x == Some y))
   = ()
 
 let contains_stable #r #a #b #inv (m:t r a b inv) (x:a) (y:b x)
@@ -95,7 +95,7 @@ let extend (#r:rid) (#a:eqtype) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r
 		  let hsref = as_hsref m in
       		  m_contains m h1
       		  /\ modifies (Set.singleton r) h0 h1
-      		  /\ modifies_rref r !{HH.as_ref (HS.MkRef.ref hsref)} h0.h h1.h
+      		  /\ modifies_rref r !{HH.as_ref (HS.MkRef?.ref hsref)} h0.h h1.h
       		  /\ m_sel h1 m == upd cur x y
       		  /\ witnessed (contains m x y)))
   = m_recall m;
@@ -110,8 +110,8 @@ let lookup #r #a #b #inv (m:t r a b inv) (x:a)
        (ensures (fun h0 y h1 ->
 		   h0==h1 /\
 		   y == sel (m_sel h1 m) x /\
-       (is_None y ==> fresh m x h1) /\
-		   (is_Some y ==> witnessed (contains m x (Some.v y)))))
+       (None? y ==> fresh m x h1) /\
+		   (Some? y ==> witnessed (contains m x (Some?.v y)))))
   = let y = sel (m_read m) x in
     match y with
       | None -> y
