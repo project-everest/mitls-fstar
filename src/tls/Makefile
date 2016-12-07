@@ -107,6 +107,7 @@ IdNonce.fst \
 TLSExtensions.fst \
 Buffer.Utils.fst \
 Crypto.Symmetric.Bytes.fst \
+Crypto.Config.fst \
 Crypto.Indexing.fst \
 Flag.fst \
 Spartan.fst \
@@ -326,7 +327,7 @@ TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 
-tls-gen: tls-gen-hacl
+tls-gen: tls-gen-spartan
 
 tls-gen-%: record_fstar_version $(LIBFILES)
 	mkdir -p $(OUTPUT_DIR)
