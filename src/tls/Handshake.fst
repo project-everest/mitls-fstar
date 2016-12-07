@@ -1284,7 +1284,7 @@ val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
   (requires (hs_inv s))
   (ensures (recv_ensures s))
 let recv_fragment hs #i f = 
-    let ( rg,rb ) = f in
+    let (| rg,rb |) = f in
     let b = 
       if hs_debug then
         IO.debug_print_string ("   ***** RAW "^(print_bytes rb)^"\n")

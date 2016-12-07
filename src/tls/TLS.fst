@@ -129,18 +129,18 @@ let accept m0 listener cfg =
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
 //  ))
-let rehandshake c ops = Handshake.rehandshake (C.hs c) ops
+let rehandshake c ops = Handshake.rehandshake (C?.hs c) ops
 // the client can ask for rekeying --- no immediate effect
 //val rekey: cn:connection { c_role cn = Client } -> ST unit
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
 //  ))
-let rekey c ops       = Handshake.rekey       (C.hs c) ops
+let rekey c ops       = Handshake.rekey       (C?.hs c) ops
 //val request: cn:connection { c_role cn = Server } -> c:config -> ST unit
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 // no visible change in cn
 //  ))
-let request c ops     = Handshake.request     (C.hs c) ops
+let request c ops     = Handshake.request     (C?.hs c) ops
 
 
 (** current epochs ***)
@@ -219,7 +219,7 @@ type ioresult_o = r:ioresult_w { Written? r \/ WriteError? r }
 // the connection fails now, and should not be resumed.
 val disconnect: c: connection -> ST unit
   (requires (fun h0 -> st_inv c h0))
-  (ensures (fun h0 _ h1 -> st_inv c h1 /\ modifies (Set.singleton (C.region c)) h0 h1))
+  (ensures (fun h0 _ h1 -> st_inv c h1 /\ modifies (Set.singleton (C?.region c)) h0 h1))
 
 let disconnect c =
     invalidateSession c.hs; //changes (HS?.region c.hs)
@@ -258,11 +258,11 @@ assume val admit_st_inv: c: connection -> ST unit
 // auxiliary functions for projections; floating.
 let appfragment (i:id{~ (PlaintextID? i)}) (o: option (rg:frange i & DataStream.fragment i rg) { Some? o }) : Content.fragment i =
   match o with
-  | Some ( rg, f ) -> Content.CT_Data rg f
+  | Some (| rg, f |) -> Content.CT_Data rg f
 
 let datafragment (i:id{~ (PlaintextID? i)}) (o: option (rg:frange i & DataStream.fragment i rg) { Some? o }) : DataStream.delta i =
   match o with
-  | Some ( rg, f ) -> let f: DataStream.pre_fragment i = f in //16-05-16 unclear why we now need this step
+  | Some (| rg, f |) -> let f: DataStream.pre_fragment i = f in //16-05-16 unclear why we now need this step
                        DataStream.Data f
 
 (* which fragment should we send next? *)
@@ -454,18 +454,18 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 	    st_inv c h1 /\
 	    (match r with 
 	     | WriteError None _ ->
-	       modifies (Set.singleton (C.region c)) h0 h1
+	       modifies (Set.singleton (C?.region c)) h0 h1
 	       //the spec of disconnect is too weak to prove this now
                (* /\ sel h1 c.state = Close *)
 	       (* /\ StAE.fragments wr h1 == snoc (StAE.fragments wr h0) f *)
 	     | WriteError (Some _) _ ->
-	       modifies (Set.singleton (C.region c)) h0 h1
+	       modifies (Set.singleton (C?.region c)) h0 h1
 	       //the spec of disconnect is too weak to prove more than this now
 	     | WriteClose -> 
 	       let wopt = current_writer_T c i h1 in
 	       let frag = Content.CT_Alert #i (point 2) ad in
 	       let st = sel h0 c.state in
-	       sendFragment_success (Set.singleton (C.region c)) c i wopt frag h0 h1
+	       sendFragment_success (Set.singleton (C?.region c)) c i wopt frag h0 h1
 	       /\ sel h1 c.state = (if st = Half Writer then Close else Half Reader)
 	     | _ -> False)))
   = reveal_epoch_region_inv_all ();
@@ -515,7 +515,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       if send_ccs 
 		       then frags1==snoc frags0 (Content.CT_CCS #i (point 1))
 		       else frags1==frags0
-		     | Some( rg, f ) -> //we sent the message
+		     | Some(| rg, f |) -> //we sent the message
 		       let frags0' = snoc frags0 (Content.CT_Handshake rg f) in
 		       if send_ccs //and the CCS, if requested
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
@@ -536,7 +536,7 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
      let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
-         | Some ( rg, f ) -> sendFragment c wopt (Content.CT_Handshake rg f) in
+         | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in
      let h1 = ST.get() in
      // then try to send CCS fragment, if requested
      match result0 with
@@ -775,7 +775,7 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
     | Written -> // writer view += Data appdata; no other visible effects.
         (match appdata with
         | None -> False
-        | Some  ( rg, f ) ->
+        | Some  (| rg, f |) ->
         j >= 0 /\ st0 = AD (* 16-05-27 not typechecking:  /\
         ( let wr = writer_epoch (Seq.index es0 j) in
           modifies_one (region wr) h0 h1 /\
@@ -846,7 +846,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*        let e = Seq.index es j in *)
 (*        i == epoch_id e /\ ( *)
 (*        let wr:writer i = writer_epoch e in *)
-(*        modifies (Set.singleton (C.region c)) h0 h1 *)
+(*        modifies (Set.singleton (C?.region c)) h0 h1 *)
 (* )))) *)
 
 
@@ -960,7 +960,7 @@ let rec writeAll c i appdata =
 //Question: NS, BP, JL: Is it possible for write to return WriteAgain or a partially written data?
 // no: we always write the whole fragment or we get a fatal error.
 
-let write c i rg data = writeAll c i (Some ( rg, data ))
+let write c i rg data = writeAll c i (Some (| rg, data |))
 
 END OLDER VARIANT *)
 
@@ -1067,12 +1067,12 @@ let sel_reader h c =
   let e = Seq.index es j in
   let i = peerId (epoch_id e) in
   assume(StAE.is_stream i);
-  Some ( i, reader_epoch e))
+  Some (| i, reader_epoch e |))
   // todo: add other cases depending on dispatch state
 
 type delta h c =
   (match sel_reader h c with
-  | Some ( i , _ ) -> DataStream.delta i
+  | Some (| i , _ |) -> DataStream.delta i
   | None             -> DataStream.delta (PlaintextID (c_nonce c)))
 
 
@@ -1175,7 +1175,7 @@ let readOne c i =
           if tls_debug then 
             IO.debug_print_string "readOne: CT_Handshake, calling recv_fragment...\n" 
           else false in
-        match recv_fragment c.hs ( rg, f ) with
+        match recv_fragment c.hs (| rg, f |) with
         | InError (x,y) -> alertFlush c i x y
         | InQuery q a   -> CertQuery q a
         | InAck next_keys complete ->
@@ -1317,7 +1317,7 @@ let read_ensures (c:connection) (i:id) (r:ioresult_i i) h0 h1 =
 //  (ensures (fun h0 result h1))
 
 let authorize c q =
-    let res = Handshake.authorize (C.hs c) q in
+    let res = Handshake.authorize (C?.hs c) q in
     // AP: BEGIN: Inlined from handleHandshakeOutcome
     match res with
     | Handshake.InAck -> read c

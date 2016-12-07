@@ -65,7 +65,7 @@ let c_log c    = c.hs.log
      Ignores StatefulLHAE, which needs to be upgraded
  ***)
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-type st_inv c h = hs_inv (C.hs c) h
+type st_inv c h = hs_inv (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
 val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (HS?.region c.hs) (HS?.nonce c.hs)){

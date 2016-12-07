@@ -94,7 +94,7 @@ let send c #i f =
   lemma_repr_bytes_values (length payload);
   assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
   let record = Record.makePacket ct (PlaintextID? i) pv payload in
-  let r = Transport.send (C.tcp c) record in
+  let r = Transport.send (C?.tcp c) record in
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()

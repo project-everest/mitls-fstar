@@ -147,7 +147,7 @@ let ms_conn_invariant (ms:ms_t)
 let handshake_regions_exists (conn:c_t) (h:HH.t) = 
   forall n.{:pattern (Some? (MM.sel conn n))}
       Some? (MM.sel conn n) 
-       ==> (let hs_rgn = HS?.region (C.hs (Some?.v (MM.sel conn n))) in 
+       ==> (let hs_rgn = HS?.region (C?.hs (Some?.v (MM.sel conn n))) in 
  	    Map.contains h hs_rgn /\
 	    HH.disjoint hs_rgn tls_tables_region)
 
@@ -258,7 +258,7 @@ let writer_region_within_connection
     (n:random) (c:r_conn n)
     (i:AE.id {nonce_of_id i = n}) (w:AE.writer i) (h:HST.mem)
     : Lemma (requires (registered i w c h))
-	    (ensures (HH.includes (C.region c) (StreamAE.State?.region w)))
+	    (ensures (HH.includes (C?.region c) (StreamAE.State?.region w)))
     = reveal_epoch_region_inv_all ()
 
 (* Case 2:
@@ -335,7 +335,7 @@ let register_writer_in_epoch_ok h0 h1 i c e =
 		                | None -> False //we've already established that the log is non-empty; so j must be registered and this case says that it is not
 				| Some c' ->
 				  (registered j wj c' h0) //it's registered initially
-				  /\ (HH.disjoint (C.region c) (C.region c')) //c's region is disjoint from c'; since the conn_tab is pairwise_disjoint
+				  /\ (HH.disjoint (C?.region c) (C?.region c')) //c's region is disjoint from c'; since the conn_tab is pairwise_disjoint
 				  /\ (registered j wj c' h1)))) //so it remains registered
       else () (* not ideal; nothing much to say *) in
   FStar.Classical.forall_intro aux
