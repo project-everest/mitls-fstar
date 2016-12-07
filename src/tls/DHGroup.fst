@@ -8,14 +8,11 @@ open TLSError
 open TLSConstants
 
 type params = dhp:CoreCrypto.dh_params{length dhp.dh_p < 65536 && length dhp.dh_g < 65536}
-
 type share = b:bytes{length b < 65536}
-
 type key = k:CoreCrypto.dh_key{
   let dhp = k.dh_params in 
   length dhp.dh_p < 65536 && length dhp.dh_g < 65536 /\
   length k.dh_public <= length dhp.dh_p}
-
 type group =
   | Named    of ffdhe
   | Explicit of params
@@ -90,50 +87,3 @@ val dh_initiator: x:key{is_Some x.dh_private} -> key -> St secret
 let dh_initiator x gy =
   dh_agreement x gy.dh_public
 
-val serialize: params -> share -> Tot bytes
-let serialize dhp dh_Y =
-  lemma_repr_bytes_values (length (dhp.dh_p));
-  lemma_repr_bytes_values (length (dhp.dh_g));
-  lemma_repr_bytes_values (length dh_Y);
-  let pb  = vlbytes 2 dhp.dh_p in 
-  let gb  = vlbytes 2 dhp.dh_g in
-  let pkb = vlbytes 2 dh_Y in
-  pb @| gb @| pkb
-
-val serialize_public: s:share -> len:nat{len < 65536 /\ length s <= len}
-  -> Tot (lbytes len)
-let serialize_public dh_Y len =
-  let padded_dh_Y = createBytes (len - length dh_Y) 0z @| dh_Y in
-  lemma_repr_bytes_values len;
-  padded_dh_Y
-
-val parse_public: p:bytes{2 <= length p} -> Tot (result share)
-let parse_public p =
-  match vlparse 2 p with
-  | Correct n -> lemma_repr_bytes_values (length n); Correct n
-  | Error z -> Error z
-
-val parse_partial: bytes -> Tot (result (key * bytes))
-let parse_partial payload = 
-  if length payload >= 2 then
-    match vlsplit 2 payload with
-    | Error(z) -> Error(z)
-    | Correct(p, payload) ->
-      if length payload >= 2 then
-        match vlsplit 2 payload with
-        | Error(z) -> Error(z)
-        | Correct(g, payload) ->
-          if length payload >= 2 then
-            match vlsplit 2 payload with
-            | Error(z) -> Error(z)
-            | Correct(gy, rem) ->
-              if length gy <= length p then
-                let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
-                let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
-                lemma_repr_bytes_values (length p);
-                lemma_repr_bytes_values (length g);
-                Correct (dhk,rem)
-              else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-          else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

@@ -70,50 +70,6 @@ let dh_initiator x gy =
   | _, _ -> empty_bytes (* TODO: add refinement/index to rule out cross cases *)
 
 
-// Serialize in KeyExchange message format
-val serialize: key -> Tot bytes
-let serialize k = 
-  match k with
-  | FFKey k -> DHGroup.serialize k.dh_params k.dh_public
-  | ECKey k -> ECGroup.serialize k.ec_params k.ec_point
-
-val parse_partial: bytes -> bool -> Tot (TLSError.result (key * bytes)) 
-let parse_partial p ec = 
-  if ec then
-    begin
-    match ECGroup.parse_partial p with
-    | Correct(eck,rem) -> Correct (ECKey eck, rem)
-    | Error z -> Error z
-    end
-  else
-    begin
-    match DHGroup.parse_partial p with
-    | Correct(dhk,rem) -> Correct (FFKey dhk, rem)
-    | Error z -> Error z
-    end
-
-        
-  
-// Serialize for keyShare extension
-val serialize_raw: key -> Tot bytes
-let serialize_raw = function
-  | ECKey k -> ECGroup.serialize_point k.ec_params k.ec_point
-  | FFKey k -> DHGroup.serialize_public k.dh_public (length k.dh_params.dh_p)
-
-val parse: params -> bytes -> Tot (option key)
-let parse p x =
-  match p with
-  | ECP p -> 
-    begin
-    match ECGroup.parse_point p x with 
-    | Some eck -> Some (ECKey ({ec_params=p; ec_point=eck; ec_priv=None;})) 
-    | None -> None
-    end
-  | FFP p ->
-    if length x = length p.dh_p then
-      Some (FFKey ({dh_params = p; dh_public = x; dh_private = None;}))
-    else None
-
 val key_params: key -> Tot params
 let key_params k =
   match k with

@@ -66,7 +66,7 @@ and extension =
   | E_keyShare of keyShare 
   | E_draftVersion of bytes
   // Common extension types
-  | E_signatureAlgorithms of (list sigHashAlg) 
+  | E_signatureAlgorithms of (list sigScheem) 
   // Previous extension types
   | E_renegotiation_info of renegotiationInfo
   | E_server_name of list serverName
@@ -309,7 +309,7 @@ and extensionPayloadBytes role ext =
   | E_earlyData edt           -> earlyDataIndicationBytes edt
   | E_preSharedKey psk        -> preSharedKeyBytes psk
   | E_keyShare ks             -> keyShareBytes ks
-  | E_signatureAlgorithms sha -> sigHashAlgsBytes sha
+  | E_signatureAlgorithms sha -> sigSchemesBytes sha
   | E_renegotiation_info(ri)  -> renegotiationInfoBytes ri
   | E_server_name(l)          -> if role = Client then vlbytes 2 (compile_sni_list l) else compile_sni_list l
   | E_extended_ms             -> empty_bytes
@@ -356,8 +356,8 @@ let rec parseExtension role b =
           else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate draft 1.3 version")
 	| (0x00z, 0x0Dz) -> // sigalgs
 	  if length data >= 2 && length data < 65538 then (
-	  (match parseSigHashAlgs (data) with
-	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
+	  (match parseSigSchemes (data) with
+	  | Correct(algs) -> Correct (E_signature_algorithms algs)
 	  | Error(z) -> Error(z))
 	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for signature & hash algorithms")
 	| (0x00z, 0x00z) -> // sni

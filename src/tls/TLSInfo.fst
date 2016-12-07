@@ -273,9 +273,9 @@ noeq type sessionInfo = {
     pmsId: pmsId;
     session_hash: sessionHash;
     client_auth: bool;
-    clientID: Cert.chain;
+    clientID: chain;
     clientSigAlg: sigHashAlg;
-    serverID: Cert.chain;
+    serverID: chain;
     serverSigAlg: sigHashAlg;
     sessionID: sessionID;
     }
