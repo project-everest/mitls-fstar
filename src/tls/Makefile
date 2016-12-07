@@ -85,6 +85,7 @@ FSTS=Flags.fst \
 MonotoneMap.fst \
 TLSError.fst \
 TLSConstants.fst \
+TLSFormats.fst \
 Transport.fst \
 Nonce.fst \
 RSAKey.fst \
