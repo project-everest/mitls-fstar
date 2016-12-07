@@ -247,21 +247,21 @@ let csrands si = si.init_crand @| si.init_srand
 
 // Getting algorithms from sessionInfo
 
-val kefAlg: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg
+val kefAlg: si:sessionInfo { Some? (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg
 let kefAlg si =
   match si.protocol_version with
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extract_label
   | TLS_1p2           -> PRF_TLS_1p2 extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
 
-val kefAlgExtended: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg
+val kefAlgExtended: si:sessionInfo { Some? (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kefAlg
 let kefAlgExtended si =
   match si.protocol_version with
   | SSL_3p0           -> PRF_SSL3_nested
   | TLS_1p0 | TLS_1p1 -> PRF_TLS_1p01 extended_extract_label
   | TLS_1p2           -> PRF_TLS_1p2 extended_extract_label (prfMacAlg_of_ciphersuite si.cipher_suite)
 
-val kdfAlg: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kdfAlg
+val kdfAlg: si:sessionInfo { Some? (prfMacAlg_of_ciphersuite_aux si.cipher_suite) } -> Tot kdfAlg
 let kdfAlg si =
   match si.protocol_version with
   | SSL_3p0           -> PRF_SSL3_nested
@@ -291,7 +291,7 @@ let noMsId = StandardMS noPmsId noCsr PRF_SSL3_nested
 
 // Getting master-secret indexes out of sessionInfo
 
-val msid: si:sessionInfo { is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
+val msid: si:sessionInfo { Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
 let msid si =
   if si.extensions.ne_extended_ms
   then ExtendedMS si.pmsId si.session_hash (kefAlgExtended si)
@@ -357,8 +357,8 @@ let rec validEpoch = function
 type epoch = e:preEpoch { validEpoch e }
 
 //$ removed isInitEpoch etc.
-let is_SuccEpoch e = is_FullEpoch e || is_AbbrEpoch e
-type succEpoch = e:epoch { is_SuccEpoch e }
+let SuccEpoch? e = FullEpoch? e || AbbrEpoch? e
+type succEpoch = e:epoch { SuccEpoch? e }
 
 //$ also replaces function val Pred
 val predEpoch: e: succEpoch -> Tot epoch
@@ -368,8 +368,8 @@ let predEpoch = function
 
 //type openEpoch = epoch
 
-// val peer: e:epoch -> Pure epoch (requires true) (ensures (fun r -> is_FullEpoch e ==> is_FullEpoch r))
-val peer: e:epoch -> Tot (r:epoch {is_FullEpoch e ==> is_FullEpoch r})
+// val peer: e:epoch -> Pure epoch (requires true) (ensures (fun r -> FullEpoch? e ==> FullEpoch? r))
+val peer: e:epoch -> Tot (r:epoch {FullEpoch? e ==> FullEpoch? r})
 let rec peer = function
   | InitEpoch r      -> InitEpoch (dualRole r)
   | FullEpoch si p   -> FullEpoch si (peer p)
@@ -380,8 +380,8 @@ let epochSI = function
   | FullEpoch si pe -> si
   | AbbrEpoch ai (FullEpoch si pe1) pe2 -> si
 
-val epochAI: e:epoch { is_AbbrEpoch e } -> Tot abbrInfo
-let epochAI e = AbbrEpoch.ai e
+val epochAI: e:epoch { AbbrEpoch? e } -> Tot abbrInfo
+let epochAI e = AbbrEpoch?.ai e
 
 val epochSRand: succEpoch -> Tot srand
 let epochSRand = function
@@ -444,7 +444,7 @@ type id = {
 
 let swap (i:id) = { i with writer = dualRole i.writer }
 
-val siId: si:sessionInfo{ is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))
+val siId: si:sessionInfo{ Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))
 			  /\ ((si.protocol_version = TLS_1p2) && (pvcs si.protocol_version si.cipher_suite))} -> role -> Tot id
 let siId si r =
   { msId    = msid si;
@@ -459,10 +459,10 @@ let siId si r =
      InitEpoch (i.writer)
 
 //$ also replacing MacAlg, EncAlg, PvOfId
-val macAlg_of_id: i:id { ~(is_AEAD i.aeAlg) } -> Tot macAlg
+val macAlg_of_id: i:id { ~(AEAD? i.aeAlg) } -> Tot macAlg
 let macAlg_of_id i = macAlg_of_aeAlg i.pv i.aeAlg
 
-val encAlg_of_id: i:id { is_MtE i.aeAlg } -> Tot (encAlg * ivMode)
+val encAlg_of_id: i:id { MtE? i.aeAlg } -> Tot (encAlg * ivMode)
 let encAlg_of_id i = encAlg_of_aeAlg i.pv i.aeAlg
 
 let pv_of_id (i:id) = i.pv
@@ -518,9 +518,9 @@ let noId = {
   ext     = ne_default;
   writer  = Client }
 
-val mk_id: e:epoch{ (not (is_InitEpoch e)) ==> is_CipherSuite ((epochSI e).cipher_suite) } -> Tot id
+val mk_id: e:epoch{ (not (InitEpoch? e)) ==> CipherSuite? ((epochSI e).cipher_suite) } -> Tot id
 let mk_id e =
-  if is_InitEpoch e then noId
+  if InitEpoch? e then noId
   else
     let si     = epochSI e in
     let cs     = si.cipher_suite in
@@ -539,30 +539,30 @@ let mk_id e =
 // and performing both strong session key generation & finished message verification
 
 // Safe handshake for this sessioninfo
-type SafeHS_SI (si:sessionInfo) = ((is_Some (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))) /\ (((si.protocol_version) = TLS_1p2) && (pvcs (si.protocol_version) (si.cipher_suite)))) /\ (honestPMS si.pmsId && strongHS si) /\ (exists r. matches_id(siId si r))
+type SafeHS_SI (si:sessionInfo) = ((Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite))) /\ (((si.protocol_version) = TLS_1p2) && (pvcs (si.protocol_version) (si.cipher_suite)))) /\ (honestPMS si.pmsId && strongHS si) /\ (exists r. matches_id(siId si r))
 
 // Safety for epochs relies only on sessionInfo.
 // This would change if we introduced a finer model of compromise
 // e.g. if we allowed the attacker to compromise specific epochs
 
-type SafeHS (e:epoch) = is_SuccEpoch e /\ SafeHS_SI(epochSI e)
+type SafeHS (e:epoch) = SuccEpoch? e /\ SafeHS_SI(epochSI e)
 assume val safeHS: e:epoch -> b:bool { b = true <==> SafeHS e }
 
 // Predicates specifying the security of TLS connections
 
 // ``The handshake is complete''
 type Open (e:epoch) = ( exists (r:role).
-  (is_FullEpoch e /\ sentCCS r     (epochSI e) /\ sentCCS    (dualRole r) (epochSI e)) \/
-  (is_AbbrEpoch e /\ sentCCSAbbr r (epochAI e) /\ sentCCSAbbr(dualRole r) (epochAI e)))
+  (FullEpoch? e /\ sentCCS r     (epochSI e) /\ sentCCS    (dualRole r) (epochSI e)) \/
+  (AbbrEpoch? e /\ sentCCSAbbr r (epochAI e) /\ sentCCSAbbr(dualRole r) (epochAI e)))
 
 type OpenState (e:epoch) = ( exists (r:role).
-  (((is_FullEpoch e /\ is_Some (prfMacAlg_of_ciphersuite_aux (epochSI e).cipher_suite) /\  sentCCS r     (epochSI e) /\ safeVD (epochSI e)) ==> sentCCS    (dualRole r) (epochSI e))) \/
-  (((is_AbbrEpoch e /\ sentCCSAbbr r (epochAI e) /\ safeVD (epochSI e)) ==> sentCCSAbbr(dualRole r) (epochAI e))))
+  (((FullEpoch? e /\ Some? (prfMacAlg_of_ciphersuite_aux (epochSI e).cipher_suite) /\  sentCCS r     (epochSI e) /\ safeVD (epochSI e)) ==> sentCCS    (dualRole r) (epochSI e))) \/
+  (((AbbrEpoch? e /\ sentCCSAbbr r (epochAI e) /\ safeVD (epochSI e)) ==> sentCCSAbbr(dualRole r) (epochAI e))))
 
 // The epoch parameters yield privacy & integrity
-type Safe (e:epoch) =  (not (is_InitEpoch e)) ==> is_CipherSuite ((epochSI e).cipher_suite) /\ safeId (mk_id e) /\ OpenState e
+type Safe (e:epoch) =  (not (InitEpoch? e)) ==> CipherSuite? ((epochSI e).cipher_suite) /\ safeId (mk_id e) /\ OpenState e
 assume val safe: e:epoch -> b:bool { b = true <==> Safe e }
 
 // The epoch parameters yield integrity (not necessarily privacy)
-type Auth (e:epoch) = (not (is_InitEpoch e)) ==> is_CipherSuite ((epochSI e).cipher_suite) /\ ((is_MtE (mk_id e).aeAlg) \/ (is_MACOnly (mk_id e).aeAlg /\ is_SSL_3p0 ((mk_id e).pv))) /\ authId (mk_id e) /\ OpenState e
+type Auth (e:epoch) = (not (InitEpoch? e)) ==> CipherSuite? ((epochSI e).cipher_suite) /\ ((MtE? (mk_id e).aeAlg) \/ (MACOnly? (mk_id e).aeAlg /\ SSL_3p0? ((mk_id e).pv))) /\ authId (mk_id e) /\ OpenState e
 assume val auth: e:epoch -> b:bool { b = true <==> Auth e }

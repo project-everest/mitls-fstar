@@ -8,7 +8,7 @@ val send_payload: c:connection -> i:id -> f:Content.fragment i -> ST (Content.en
     let es = epochs c h in // implying epochs_inv es
     let j = iT c.hs Writer h in
     st_inv c h /\
-    (if j < 0 then is_PlaintextID i
+    (if j < 0 then PlaintextID? i
      else indexable es j /\
 	 (let e = Seq.index es j in
 	  i === epoch_id e /\
@@ -38,7 +38,7 @@ let send_payload c i f =
     let j = Handshake.i c.hs Writer in
     if j<0
     then Content.repr i f
-    else let es = MS.i_read (MkEpochs.es c.hs.log) in
+    else let es = MS.i_read (MkEpochs?.es c.hs.log) in
 	 let e = Seq.index es j in
 	 StAE.encrypt (writer_epoch e) f
  
@@ -59,7 +59,7 @@ let send_requires (c:connection) (i:id) (h:HH.t) =
     st_inv c h /\
     st <> Close /\
     st <> Half Reader /\
-    (j < 0 ==> is_PlaintextID i) /\
+    (j < 0 ==> PlaintextID? i) /\
     (j >= 0 ==> (
        let e = Seq.index es j in
        let wr = writer_epoch e in 
@@ -78,7 +78,7 @@ val send: c:connection -> #i:id -> f: Content.fragment i -> ST (result unit)
     st_inv c h0 /\
     st_inv c h1 /\
     j == iT c.hs Writer h1 /\ // should follow from the modifies clause
-    (if j < 0 then is_PlaintextID i /\ h0 == h1 else
+    (if j < 0 then PlaintextID? i /\ h0 == h1 else
        let e = Seq.index es j in
        i == epoch_id e /\ (
        let j : StAE.stae_id = i in
@@ -93,8 +93,8 @@ let send c #i f =
   let payload = send_payload c i f in
   lemma_repr_bytes_values (length payload);
   assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
-  let record = Record.makePacket ct (is_PlaintextID i) pv payload in
-  let r = Transport.send (C.tcp c) record in
+  let record = Record.makePacket ct (PlaintextID? i) pv payload in
+  let r = Transport.send (C?.tcp c) record in
   match r with
     | Error(x)  -> Error(AD_internal_error,x)
     | Correct _ -> Correct()

@@ -228,7 +228,7 @@ let decrypt' e key data cipher =
             let rg = cipherRangeClass e cl in
             (match AEAD_GCM.dec e gcmState data rg cipher with
             | Error z -> Error z
-            | Correct plain -> Correct (| rg,plain |)
+            | Correct plain -> Correct ( rg,plain )
 //  | (_,_) -> unexpected "[decrypt'] incompatible ciphersuite-key given."
 
 #if ideal
@@ -264,19 +264,19 @@ val decrypt:
              /\ (authId i ==>
                  Let (sel h0 d.log) // no let, as we still need a type annotation
                    (fun (log:seq (entry i)) ->
-                       (is_None res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
+                       (None? res ==> (forall (j:nat{j < Seq.length log}).{:pattern (found j)}
                                             found j /\ ~(matches c ad (Seq.index log j))))
-                     /\ (is_Some res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
+                     /\ (Some? res ==> (exists (j:nat{j < Seq.length log}).{:pattern (found j)}
                                            found j
                                            /\ matches c ad (Seq.index log j)
-                                           /\ Entry.p (Seq.index log j) == Some.v res))))))
+                                           /\ Entry?.p (Seq.index log j) == Some?.v res))))))
 let decrypt i d ad c =
   let error = Error(AD_bad_record_mac,"") in // fixed
   recall d.log;
   let log = !d.log in
   if authId i then 
     match seq_find (matches c ad) log with
-    | Some e -> Some (Entry.p e)
+    | Some e -> Some (Entry?.p e)
     | None ->  error
   else dec i d ad c
 

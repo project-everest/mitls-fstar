@@ -6,6 +6,7 @@ open Platform.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants
+open TLSFormats
 open HandshakeMessages
 
 //16-05-31 these opens are implementation-only; overall we should open less
@@ -24,8 +25,8 @@ type clientOffer = {
   co_protocol_version:protocolVersion;
   co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
-  co_namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
-  co_sigAlgs: list sigHashAlg;
+  co_namedGroups: list (x:namedGroup{SEC? x \/ FFDHE? x});
+  co_sigAlgs: list sigScheme;
   co_safe_resumption: bool;
   co_safe_renegotiation: bool;
 }
@@ -75,7 +76,7 @@ type nego = {
 }                 
 
 type hs_id = {
-     id_cert: Cert.chain;
+     id_cert: chain;
      id_sigalg: option sigHashAlg;
 }
 
@@ -119,9 +120,9 @@ let negotiateVersion cfg c =
 // For use in negotiating the ciphersuite, takes two lists and
 // outputs the first ciphersuite in list2 that also is in list
 // one and is a valid ciphersuite, or [None]
-val negotiate:l1:list valid_cipher_suite -> list valid_cipher_suite -> Tot (option (c:valid_cipher_suite{is_CipherSuite c && List.Tot.mem c l1}))
+val negotiate:l1:list valid_cipher_suite -> list valid_cipher_suite -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
 let negotiate l1 l2 =
-  List.Tot.find #valid_cipher_suite (fun s -> is_CipherSuite s && List.Tot.mem s l1) l2
+  List.Tot.find #valid_cipher_suite (fun s -> CipherSuite? s && List.Tot.mem s l1) l2
 
 // For use in ensuring the result from negotiate is a Correct
 // ciphersuite with associated kex, sig and ae algorithms,
@@ -141,8 +142,8 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
       function
       | E_keyShare (ClientKeyShare gl) :: _ ->
         let inConf (gn, gx) =
-           (((is_SEC gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
-            || ((is_FFDHE gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
+           (((SEC? gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
+            || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
            && List.Tot.mem gn cfg.namedGroups in
         (match List.Tot.filter inConf gl with
         | (gn, gx) :: _ -> Correct (Some gn, Some gx)
@@ -150,15 +151,15 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
       | _ :: t -> aux t
       | [] -> Error(AD_decode_error, "no supported group or key share extension found")
     in aux exts
-  | Some exts when (kex = Kex_ECDHE && List.Tot.existsb is_E_supported_groups exts) ->
-    let Some (E_supported_groups gl) = List.Tot.find is_E_supported_groups exts in
-    let filter x = is_SEC x && List.Tot.mem x cfg.namedGroups in
+  | Some exts when (kex = Kex_ECDHE && List.Tot.existsb E_supported_groups? exts) ->
+    let Some (E_supported_groups gl) = List.Tot.find E_supported_groups? exts in
+    let filter x = SEC? x && List.Tot.mem x cfg.namedGroups in
     (match List.Tot.filter filter gl with
     | gn :: _ -> Correct (Some gn, None)
     | [] -> Error(AD_decode_error, "no shared curve configured"))
   | _ ->
     let filter x =
-      (match kex with | Kex_DHE -> is_FFDHE x | Kex_ECDHE -> is_SEC x | _ -> false) in
+      (match kex with | Kex_DHE -> FFDHE? x | Kex_ECDHE -> SEC? x | _ -> false) in
     if kex = Kex_DHE || kex = Kex_ECDHE then
       (match List.Tot.filter filter cfg.namedGroups with
       | gn :: _ -> Correct (Some gn, None)
@@ -216,9 +217,9 @@ let computeServerMode cfg cpv ccs cexts comps ri =
   (match (negotiateVersion cfg cpv) with 
     | Error(z) -> Error(z)
     | Correct(npv) ->
-  let nosa = fun (CipherSuite _ sa _) -> is_None sa in
+  let nosa = fun (CipherSuite _ sa _) -> None? sa in
   let sigfilter = match Cert.lookup_chain cfg.cert_chain_file with
-    | Correct(c) when (is_Some (Cert.endpoint_keytype c)) ->
+    | Correct(c) when (Some? (Cert.endpoint_keytype c)) ->
       let kt = Cert.endpoint_keytype c in
       (fun (CipherSuite _ sa _) ->
         match sa,kt with

@@ -2,6 +2,7 @@ module HKDF
 
 open Platform.Bytes
 open TLSConstants
+open TLSFormats
 
 module CC = CoreCrypto
 

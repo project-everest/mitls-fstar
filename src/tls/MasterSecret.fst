@@ -41,11 +41,11 @@ let fresh_in_ms_tab (r:rgn) (h:mem) =
        | None -> True
 
 private let id_rgns_witnessed (m:MM.map' AE.id writer) = 
-    forall (i:AE.id{is_Some (MM.sel m i)}). MR.witnessed (MR.rid_exists ((Some.v (MM.sel m i)).region))
+    forall (i:AE.id{Some? (MM.sel m i)}). MR.witnessed (MR.rid_exists ((Some?.v (MM.sel m i)).region))
 
 private let contains_id_rgns (h:mem) =
     let m = MR.m_sel h ms_tab in 
-    forall (i:AE.id{is_Some (MM.sel m i)}). Map.contains h.h ((Some.v (MM.sel m i)).region)
+    forall (i:AE.id{Some? (MM.sel m i)}). Map.contains h.h ((Some?.v (MM.sel m i)).region)
 
 
 (* private val all_ms_tab_regions_exists: unit -> ST unit //would be good to make such stateful lemmas STTot, once we have it; a bit loose for now *)

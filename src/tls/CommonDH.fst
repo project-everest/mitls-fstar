@@ -59,8 +59,8 @@ let dh_responder = function
     ECKey y, shared
 
 let has_priv: key -> Type0 = function
-  | FFKey k -> is_Some k.dh_private
-  | ECKey k -> is_Some k.ec_priv
+  | FFKey k -> Some? k.dh_private
+  | ECKey k -> Some? k.ec_priv
 
 val dh_initiator: x:key{has_priv x} -> key -> St secret
 let dh_initiator x gy =

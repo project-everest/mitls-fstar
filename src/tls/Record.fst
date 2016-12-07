@@ -9,6 +9,7 @@ open Platform.Error
 open TLSError
 open TLSInfo
 open TLSConstants
+open TLSFormats
 open Range
 open Content
 
@@ -56,7 +57,7 @@ let parseHeader (h5:header) =
     match parseCT ct1 with
     | Error z -> Error z
     | Correct ct ->
-      match TLSConstants.parseVersion pv2 with
+      match parseVersion pv2 with
       | Error z -> Error z
       | Correct pv ->
           let len = int_of_bytes len2 in
@@ -64,23 +65,20 @@ let parseHeader (h5:header) =
           then Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Wrong fragment length")
           else correct(ct,pv,len)
 
-(* TODO, possibly a parameter from dispatch *)
-assume val is_Null: id -> Tot bool
-
 // hopefully we only care about the writer, not the cn state
 // the postcondition is of the form
 //   authId i ==> f is added to the writer log
 let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocolVersion) f =
     let ct, rg = Content.ct_rg i f in
     let payload =
-      if is_Null i
+      if PlaintextID? i
       then Content.repr i f
       else
         let ad = StatefulPlain.makeAD i ct in
         let f = StatefulPlain.assert_is_plain i ad rg f in
         StatefulLHAE.encrypt #i wr ad rg f
     in
-    makePacket ct (is_Null i) pv payload
+    makePacket ct (PlaintextID? i) pv payload
 
 
 (*** networking (floating) ***)

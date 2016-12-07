@@ -109,7 +109,7 @@ type result 'a = Platform.Error.optResult error 'a
 open Platform.Error
 
 
-val resT: r:result 'a { Platform.Error.is_Correct r } -> Tot 'a
+val resT: r:result 'a { Platform.Error.Correct? r } -> Tot 'a
 let resT (Platform.Error.Correct v) = v
 
 val mapResult: ('a -> Tot 'b) -> result 'a -> Tot (result 'b)

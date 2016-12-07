@@ -7,6 +7,7 @@ open Platform.Error
 open TLSError
 open TLSInfo
 open TLSConstants
+open TLSFormats
 open HandshakeMessages
 open HandshakeLog
 open Negotiation

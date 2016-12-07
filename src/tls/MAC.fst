@@ -17,7 +17,7 @@ open TLSError
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
 
-type id = i:id { is_ID12 i /\ (let ae = aeAlg_of_id i in is_MACOnly ae \/ is_MtE ae) }
+type id = i:id { ID12? i /\ (let ae = aeAlg_of_id i in MACOnly? ae \/ MtE? ae) }
 
 let alg (i:id) = macAlg_of_id i
 
@@ -107,4 +107,4 @@ let verify #i #good k p t =
   let x = HashMAC.tls_macVerify (alg i) k.kv p t in
   let log = !k.log in
   x &&
-  ( not(authId i) || is_Some (seq_find (matches p) log))
+  ( not(authId i) || Some? (seq_find (matches p) log))

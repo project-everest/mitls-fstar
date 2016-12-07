@@ -53,7 +53,9 @@ LCDIR=$(LLDIR)/LowCProvider
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
 HINTS_ENABLED?=--use_hints
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
+VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 \
+  --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection \
+  $(HINTS_ENABLED) --include $(LDIR)/hacl
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
@@ -108,6 +110,7 @@ Buffer.Utils.fst \
 Crypto.Symmetric.Bytes.fst \
 Crypto.Indexing.fst \
 Flag.fst \
+Spartan.fst \
 Crypto.Symmetric.AES.fst \
 Crypto.Symmetric.AES128.fst \
 Crypto.Symmetric.Chacha20.fst \
@@ -130,7 +133,12 @@ Crypto.Plain.fst \
 Crypto.Symmetric.PRF.fst \
 Crypto.AEAD.Encoding.fst \
 Crypto.AEAD.Invariant.fst \
+Crypto.AEAD.Lemmas.fst \
+Crypto.AEAD.Lemmas.Part2.fst \
+Crypto.AEAD.Lemmas.Part3.fst \
+Crypto.AEAD.Wrappers.fst \
 Crypto.AEAD.fst \
+AEADOpenssl.fst \
 AEADProvider.fst \
 Range.fst \
 DataStream.fst \
@@ -288,7 +296,7 @@ wc:
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
-  $(LCDIR)/LowCProvider.cmxa \
+  libllcrypto.a lowc_stub.o LowCProvider.cmx \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
@@ -305,7 +313,8 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 # to our own list.
 TLSML := \
   FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml \
-  FStar_BitVector.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
+  FStar_BitVector.ml FStar_UInt.ml \
+  FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   FStar_Monotonic_Seq.ml \
   $(TLSML)
 # Last step: prefix with the output directory.
@@ -318,18 +327,22 @@ TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 
-tls-gen: record_fstar_version $(LIBFILES)
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
+tls-gen: tls-gen-hacl
+
+tls-gen-%: record_fstar_version $(LIBFILES)
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
 	$(MAKE) -C $(FFI_HOME)
-	$(FSTAR) \
+	$(FSTAR) --include $(LDIR)/$* \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
 	  --include concrete-flags \
 	  $(FSTS)
+	# Note (JP): the Makefile seems incorrect and we need to run make clean
+	# first
+	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
@@ -346,8 +359,13 @@ tls-gen: record_fstar_version $(LIBFILES)
 	# Run the tests
 	$(EXTRA_PATH) ./test.out
 
+test.out:
+	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
+	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+
 #16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
-mitls.exe: tls-gen
+mitls.exe:  tls-gen-spartan
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 

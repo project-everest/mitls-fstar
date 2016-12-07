@@ -13,6 +13,7 @@ open Platform.Error
 
 open TLSError
 open TLSConstants
+open TLSFormats
 open TLSInfo
 open Range
 open DataStream
@@ -59,7 +60,7 @@ let rec project i fs =
 // try out a few lemmas
 // we may also need a projection that takes a low-level pos and yields a high-level pos
 
-val project_ignores_Handshake: i:id -> s:seq (fragment i) {Seq.length s > 0 /\ is_CT_Handshake (Seq.index s (Seq.length s - 1))} ->
+val project_ignores_Handshake: i:id -> s:seq (fragment i) {Seq.length s > 0 /\ CT_Handshake? (Seq.index s (Seq.length s - 1))} ->
   Lemma(project i s == project i (Seq.slice s 0 (Seq.length s - 1)))
 let project_ignores_Handshake i s = ()
 
@@ -99,7 +100,7 @@ let inverse_ct x = ()
 val pinverse_ct: x:_ -> Lemma
   (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal ctBytes parseCT x))
-  [SMTPat (ctBytes (Correct._0 (parseCT x)))]
+  [SMTPat (ctBytes (Correct?._0 (parseCT x)))]
 let pinverse_ct x = ()
 
 let ctToString = function
@@ -127,18 +128,18 @@ let ct i = function
 
 let ct_rg i f = ct i f, rg i f
 
-let is_stream i = is_ID13 i
+let is_stream i = ID13? i
 
-let is_stlhae i = is_ID12 i && is_AEAD (aeAlg_of_id i)
+let is_stlhae i = ID12? i && AEAD? (aeAlg_of_id i)
 
 val cipherLen: i:id -> fragment i -> Tot (l:nat{Range.valid_clen i l})
 let cipherLen i f =
   let r = rg i f in
-  if is_PlaintextID i then
+  if PlaintextID? i then
     fst r
   else if is_stream i then
     // sufficient to ensure the cipher can be processed without length errors
-    let alg  = AEAD._0 (aeAlg_of_id i) in
+    let alg  = AEAD?._0 (aeAlg_of_id i) in
     let ltag = CoreCrypto.aeadTagSize alg in
     snd r + 1 + ltag
   else if is_stlhae i then
@@ -172,7 +173,7 @@ let repr i = function
 let fragmentRepr (#i:id) (ct:contentType) (rg:frange i) (b:rbytes rg) = 
   match ct with 
   | Change_cipher_spec -> wider rg (point 1) /\ b = ccsBytes
-  | Alert              -> wider rg (point 2) /\ length b = 2 /\ is_Correct (Alert.parse b)
+  | Alert              -> wider rg (point 2) /\ length b = 2 /\ Correct? (Alert.parse b)
   | _                  -> True
 
 val mk_fragment: i:id{ ~(authId i) } -> ct:contentType -> rg:frange i -> b:rbytes rg { fragmentRepr ct rg b } ->

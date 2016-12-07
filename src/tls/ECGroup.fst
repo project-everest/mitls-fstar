@@ -48,7 +48,7 @@ let dh_responder gx =
   let shared = ecdh_agreement y gx.ec_point in
   y, shared
 
-val dh_initiator: x:ec_key{is_Some x.ec_priv} -> ec_key -> St secret
+val dh_initiator: x:ec_key{Some? x.ec_priv} -> ec_key -> St secret
 let dh_initiator x gy =
   ecdh_agreement x gy.ec_point
 

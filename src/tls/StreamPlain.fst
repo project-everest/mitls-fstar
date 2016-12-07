@@ -16,7 +16,7 @@ open Content
 
 // This module is used only for TLS 1.3.
 
-type id = i:id { is_ID13 i }  
+type id = i:id { ID13? i }  
 
 
 (*** plain := fragment | CT | 0*  ***)
@@ -146,8 +146,8 @@ val scan_pad_correct: i:id {~ (authId i)} -> payload:bytes -> ct:contentType
   -> Lemma (requires (  (ct = Handshake ==> 0 < length payload)
 		     /\ (ct = Change_cipher_spec ==> payload = ccsBytes)
 		     /\ (ct = Alert ==>
-		        length payload = 2 /\ is_Correct (Alert.parse payload))))
-	  (ensures is_Correct (scan i (pad payload ct len) j) )
+		        length payload = 2 /\ Correct? (Alert.parse payload))))
+	  (ensures Correct? (scan i (pad payload ct len) j) )
 
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 0 --max_ifuel 0"
 
@@ -176,14 +176,14 @@ val inverse_scan: i:id{~(authId i)} -> len:plainLen -> f:plain i len ->
 		     (ct = Handshake ==> 0 < length payload)
 		   /\ (ct = Change_cipher_spec ==> payload = ccsBytes)
 		   /\ (ct = Alert ==>
-		      length payload = 2 /\ is_Correct (Alert.parse payload))) )
-	(ensures is_Correct (scan i (ghost_repr #i #len f) (len - 1)) )
+		      length payload = 2 /\ Correct? (Alert.parse payload))) )
+	(ensures Correct? (scan i (ghost_repr #i #len f) (len - 1)) )
 let inverse_scan i len f =
   let ct,_ = ct_rg i f in 
   let payload = Content.ghost_repr #i f in
   scan_pad_correct i payload ct len (len - 1)
 
-type goodrepr i = bs:plainRepr { is_Correct (scan i bs (length bs - 1)) }
+type goodrepr i = bs:plainRepr { Correct? (scan i bs (length bs - 1)) }
 
 val mk_plain: i:id{ ~(authId i) } -> l:plainLen -> pr:lbytes l
   -> Tot (let len = min l (max_TLSPlaintext_fragment_length + 1) in

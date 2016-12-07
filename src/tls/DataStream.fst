@@ -28,7 +28,7 @@ open Range
 
 // this style enables structural subtyping on range indexes
 // JP, NS: XXX temporarily removing the abstraction for the sake of extraction
-//private type id = i:id{~ (is_PlaintextID i)}
+//private type id = i:id{~ (PlaintextID? i)}
 
 type pre_fragment (i:id) = bytes
 
@@ -76,7 +76,7 @@ let final i d =
   | Close   -> true
   | Alert a -> isFatal a
 
-let finalized i s = is_Some (List.Tot.find (final i) s)
+let finalized i s = Some? (List.Tot.find (final i) s)
 
 val wellformed: i:id -> list (delta i) -> Tot bool
 let rec wellformed ki s =
@@ -104,7 +104,7 @@ type stream (i:id) = s: list (delta i) { wellformed i s }
 
 noeq type state (i:id) =
   | State: #region:rid ->
-           log: option (rref region (stream i)) { is_Some log <==> authId i } ->
+           log: option (rref region (stream i)) { Some? log <==> authId i } ->
            ctr: rref region nat ->
            state i
 

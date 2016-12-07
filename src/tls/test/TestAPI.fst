@@ -43,7 +43,7 @@ let client config host port =
   match TLS.read con id with
     | Complete ->
        IO.print_string "Read OK, sending HTTP request...\n";
-       let payload = utf8 ("GET / HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
+       let payload = utf8 ("GET /r HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
        let id = TLS.currentId con Writer in
        let rg : Range.frange id = Range.point (length payload) in
        let f = DataStream.appFragment id rg payload in

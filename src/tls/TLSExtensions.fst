@@ -5,6 +5,7 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
+open TLSFormats
 open TLSInfo
 open CoreCrypto
 
@@ -66,7 +67,7 @@ and extension =
   | E_keyShare of keyShare 
   | E_draftVersion of bytes
   // Common extension types
-  | E_signatureAlgorithms of (list sigScheem) 
+  | E_signatureAlgorithms of (list sigScheme) 
   // Previous extension types
   | E_renegotiation_info of renegotiationInfo
   | E_server_name of list serverName
@@ -181,7 +182,7 @@ let parse_sni_list r b  =
 let rec (compile_curve_list_aux:list ECGroup.ec_all_curve -> Tot bytes) = function
   | [] -> empty_bytes
   | ECGroup.EC_CORE c :: r ->
-    let cid = ECGroup.curve_id (ECGroup.params_of_group c) in
+    let cid = curve_id (ECGroup.params_of_group c) in
     cid @| compile_curve_list_aux r
   | ECGroup.EC_EXPLICIT_PRIME :: r -> abyte2 (255z, 01z) @| compile_curve_list_aux r
   | ECGroup.EC_EXPLICIT_BINARY :: r -> abyte2 (255z, 02z) @| compile_curve_list_aux r
@@ -357,7 +358,7 @@ let rec parseExtension role b =
 	| (0x00z, 0x0Dz) -> // sigalgs
 	  if length data >= 2 && length data < 65538 then (
 	  (match parseSigSchemes (data) with
-	  | Correct(algs) -> Correct (E_signature_algorithms algs)
+	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
 	  | Error(z) -> Error(z))
 	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for signature & hash algorithms")
 	| (0x00z, 0x00z) -> // sni
@@ -482,7 +483,7 @@ let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup
 
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
-val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{is_SEC x \/ is_FFDHE x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigScheme -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
 let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
     let cri =
@@ -586,7 +587,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
           if resuming then correct l
           else
 	  begin
-	    match List.Tot.tryFind is_E_signatureAlgorithms cExtL with
+	    match List.Tot.tryFind E_signatureAlgorithms? cExtL with
 	    | Some (E_signatureAlgorithms shal) ->
 	      correct({l with ne_signature_algorithms = Some shal})
 	    | None -> correct l

@@ -18,7 +18,7 @@ open TLSError
 let a = HMAC CoreCrypto.SHA1
 
 
-type id = i:id { is_ID12 i /\ ~(is_AEAD (aeAlg_of_id i)) }
+type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
 
 type text = bytes
 type tag (i:id) = bytes
@@ -81,4 +81,4 @@ let verify i rd p t =
   let l = !rd.log in
   // We use the log to correct any verification errors
   x &&
-  is_Some (seq_find (matches i p) l)
+  Some? (seq_find (matches i p) l)

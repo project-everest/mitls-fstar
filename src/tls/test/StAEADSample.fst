@@ -1,5 +1,5 @@
 (*--build-config
-    options:--trace_error --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 100 --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Heap --admit_fsi FStar.HyperHeap --admit_fsi FStar.Seq --admit_fsi FStar.Char --admit_fsi FStar.SeqProperties --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi StatefulLHAE --verify_module StAEADSample;
+    options:--trace_error --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 100 --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Heap --admit_fsi FStar.HyperHeap --admit_fsi FStar.Seq --admit_fsi FStar.Char --admit_fsi FStar.SeqProperties --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi StatefulLHAE --verify_module StAEADSample;
 
     variables: CONTRIB=../../FStar/contrib;
     other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.SeqProperties.fst $CONTRIB/Platform/fst/Bytes.fst $CONTRIB/Platform/fst/Date.fst $CONTRIB/Platform/fst/Error.fst $CONTRIB/Platform/fst/Tcp.fst $CONTRIB/CoreCrypto/fst/CoreCrypto.fst $CONTRIB/CoreCrypto/fst/DHDB.fst TLSError.fst Nonce.p.fst TLSConstants.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fst Cert.fst TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst
@@ -68,10 +68,10 @@ let wr = snd both
 let rd = fst both
 
 // Required to avoid unification failure?
-val access: e: entry i { Entry.ad e = ad /\ length (Entry.c e) = clen } ->
+val access: e: entry i { Entry?.ad e = ad /\ length (Entry?.c e) = clen } ->
   Tot (plain i ad rg)
 let access e =
-  Entry.p e
+  Entry?.p e
 
 (* not sure how to specify it...
 val mapST: ('a -> Tot 'b) -> list 'a -> ST (list 'b)
@@ -91,20 +91,20 @@ val protect: (inputs:list (plain i ad rg)) ->
      (requires (fun h ->
          fp_inv h
       /\ writer_in_fp wr h
-//      /\ (exists fpe. List.mem fpe (Heap.sel h fp) /\ FPEntry.i fpe = i /\ FPEntry.w fpe = wr)
+//      /\ (exists fpe. List.mem fpe (Heap.sel h fp) /\ FPEntry?.i fpe = i /\ FPEntry?.w fpe = wr)
       /\ (forall (n:nat) . (n <= Seq.length (sel h (StWriter.log wr)) + List.length inputs ==> is_seqn n))
       ))
      (ensures (fun h0 (cs:list block) h1 ->
         fp_inv h1
       /\ writer_in_fp wr h1
-//      /\ (exists fpe. List.mem fpe (Heap.sel h1 fp) /\ FPEntry.i fpe = i /\ FPEntry.w fpe = wr)
+//      /\ (exists fpe. List.mem fpe (Heap.sel h1 fp) /\ FPEntry?.i fpe = i /\ FPEntry?.w fpe = wr)
       // both still missing type annotations
       // /\ inputs = List.mapT
-      //   #(e: entry i) // { Entry.ad e = ad /\ length (Entry.c e) = clen })
+      //   #(e: entry i) // { Entry?.ad e = ad /\ length (Entry?.c e) = clen })
       //   #(plain i ad rg)
       //   access
       //   (sel h1 (StWriter.log wr))
-      // /\ cs = List.mapT #_ #block (fun e -> Entry.c e) (sel h1 (StWriter.log wr))
+      // /\ cs = List.mapT #_ #block (fun e -> Entry?.c e) (sel h1 (StWriter.log wr))
       /\ modifies (Set.singleton (StWriter.region wr)) h0 h1
       /\ modifies_rref (StWriter.region wr) (refs_in_e wr) h0 h1))
 
@@ -129,7 +129,7 @@ let rec protect (inputs: list (plain i ad rg)) =
   | []         -> []
 
 let refs_in_d (#i:gid) (d:reader i) =
-  !{ as_ref (StReader.seqn d), as_ref (State.counter (StReader.key d)) }
+  !{ as_ref (StReader.seqn d), as_ref (State?.counter (StReader.key d)) }
 
 
 val unprotect: cs:list (c:cipher i{length c = clen }) ->

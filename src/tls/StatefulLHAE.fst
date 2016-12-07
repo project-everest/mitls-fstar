@@ -35,13 +35,13 @@ type dplain (i:id) (ad:adata i) (c:cipher i) =
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
 
-let region = AEAD_GCM.State.region
+let region = AEAD_GCM.State?.region
 
-let log_region = AEAD_GCM.State.log_region
+let log_region = AEAD_GCM.State?.log_region
 
-let log = AEAD_GCM.State.log
+let log = AEAD_GCM.State?.log
 
-let counter = AEAD_GCM.State.counter
+let counter = AEAD_GCM.State?.counter
 
 type reader i = state i Reader
 type writer i = state i Writer
@@ -129,7 +129,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
         lemma_repr_bytes_values seqn;
         let ad' = LHAEPlain.makeAD i seqn ad in
        if j < Seq.length log && matches c ad' (Seq.index log j)
-       then res = Some (Entry.p (Seq.index log j))
+       then res = Some (Entry?.p (Seq.index log j))
        else res = None))
     /\ (
        let ctr_counter_as_hsref = as_hsref (ctr d.counter) in

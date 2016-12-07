@@ -37,7 +37,7 @@ unfold type lemma_inverse_g_f (#a:Type) (#b:Type) ($f:a -> Tot b) ($g:b -> Tot (
   g (f x) == Correct x
 
 unfold type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (y:b) =
-  is_Correct (g y) ==> r (f (Correct._0 (g y))) y
+  Correct? (g y) ==> r (f (Correct?._0 (g y))) y
 
 
 (** Serializing function for signature algorithms *)
@@ -68,7 +68,7 @@ let inverse_sigAlg x = ()
 val pinverse_sigAlg: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal sigAlgBytes parseSigAlg x))
-  [SMTPat (sigAlgBytes (Correct._0 (parseSigAlg x)))]
+  [SMTPat (sigAlgBytes (Correct?._0 (parseSigAlg x)))]
 let pinverse_sigAlg x = ()
 
 
@@ -109,7 +109,7 @@ let inverse_hashAlg x = ()
 val pinverse_hashAlg: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal hashAlgBytes parseHashAlg x))
-  [SMTPat (hashAlgBytes (Correct._0 (parseHashAlg x)))]
+  [SMTPat (hashAlgBytes (Correct?._0 (parseHashAlg x)))]
 let pinverse_hashAlg x = ()
 
 (** Serializing function for compression algorithms *)
@@ -187,7 +187,7 @@ let inverse_version x = ()
 val pinverse_version: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal versionBytes parseVersion x))
-  [SMTPat (versionBytes (Correct._0 (parseVersion x)))]
+  [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
 let pinverse_version x = ()
 
 (* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
@@ -285,7 +285,7 @@ let cipherSuiteBytesOpt cs =
     | _ -> None
 
 (** Determine if a ciphersuite is valid *)
-let validCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
+let validCipherSuite (c:cipherSuite) = Some? (cipherSuiteBytesOpt c)
 let valid_cipher_suite = c:cipherSuite{validCipherSuite c}
 
 (** List of valid ciphersuite *)
@@ -293,7 +293,7 @@ let valid_cipher_suites = list valid_cipher_suite
 
 (** Serializing function for a valid ciphersuite *)
 val cipherSuiteBytes: valid_cipher_suite -> Tot (lbytes 2)
-let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
+let cipherSuiteBytes c = Some?.v (cipherSuiteBytesOpt c)
 
 
 (** Auxillary parsing function for ciphersuites *)
@@ -404,23 +404,23 @@ let parseCipherSuite b =
 
 (** Lemma for ciphersuite serializing/parsing inversions *)
 val inverse_cipherSuite: x:cipherSuite -> Lemma
-  (requires (~ (is_UnknownCipherSuite x)))
+  (requires (~ (UnknownCipherSuite? x)))
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
   // must exclude this case...
   (ensures (let y = cipherSuiteBytesOpt x in
-	(is_Some y ==> parseCipherSuiteAux (Some.v y) = Correct x)))
-  [SMTPat (parseCipherSuiteAux (Some.v (cipherSuiteBytesOpt x)))]
+	(Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
+  [SMTPat (parseCipherSuiteAux (Some?.v (cipherSuiteBytesOpt x)))]
 let inverse_cipherSuite x = ()
 
 (** Lemma for ciphersuite serializing/parsing inversions *)
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
   (requires (True))
   (ensures (let y = parseCipherSuiteAux x in
-	    (is_Correct y ==>
-              (if is_UnknownCipherSuite (Correct._0 y) then true
-              else is_Some (cipherSuiteBytesOpt (Correct._0 y))
-               /\ Seq.equal x (Some.v (cipherSuiteBytesOpt (Correct._0 y)))))))
-  [SMTPat (cipherSuiteBytesOpt (Correct._0 (parseCipherSuiteAux x)))]
+	    (Correct? y ==>
+              (if UnknownCipherSuite? (Correct?._0 y) then true
+              else Some? (cipherSuiteBytesOpt (Correct?._0 y))
+               /\ Seq.equal x (Some?.v (cipherSuiteBytesOpt (Correct?._0 y)))))))
+  [SMTPat (cipherSuiteBytesOpt (Correct?._0 (parseCipherSuiteAux x)))]
 let pinverse_cipherSuite x = ()
 
 
@@ -465,7 +465,7 @@ let rec inverse_cipherSuites x =
   match x with
   | [] -> ()
   | cs::css ->
-     assume (~ (is_UnknownCipherSuite cs)); // TODO enforce it
+     assume (~ (UnknownCipherSuite? cs)); // TODO enforce it
      let b = (cipherSuiteBytes cs) @| (cipherSuitesBytes css) in
      let (b0,b1) = split b 2 in
      lemma_append_inj b0 b1 (cipherSuiteBytes cs) (cipherSuitesBytes css);
@@ -587,7 +587,7 @@ let inverse_certType x = ()
 val pinverse_certType: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal certTypeBytes parseCertType x))
-  [SMTPat (certTypeBytes (Correct._0 (parseCertType x)))]
+  [SMTPat (certTypeBytes (Correct?._0 (parseCertType x)))]
 let pinverse_certType x = ()
 
 
@@ -702,7 +702,7 @@ let inverse_namedGroup x = ()
 val pinverse_namedGroup: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal namedGroupBytes parseNamedGroup x))
-  [SMTPat (namedGroupBytes (Correct._0 (parseNamedGroup x)))]
+  [SMTPat (namedGroupBytes (Correct?._0 (parseNamedGroup x)))]
 let pinverse_namedGroup x = ()
 
 
@@ -774,7 +774,7 @@ let inverse_configurationId x =
 val pinverse_configurationId: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal configurationIdBytes parseConfigurationId x))
-  [SMTPat (configurationIdBytes (Correct._0 (parseConfigurationId x)))]
+  [SMTPat (configurationIdBytes (Correct?._0 (parseConfigurationId x)))]
 let pinverse_configurationId x = ()
 
 
@@ -801,7 +801,7 @@ let inverse_uint32 x = ()
 val pinverse_uint32: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal uint32Bytes parseUint32 x))
-  [SMTPat (uint32Bytes (Correct._0 (parseUint32 x)))]
+  [SMTPat (uint32Bytes (Correct?._0 (parseUint32 x)))]
 let pinverse_uint32 x = ()
 
 
@@ -834,7 +834,7 @@ let inverse_earlyDataType x = ()
 val pinverse_earlyDataType: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal earlyDataTypeBytes parseEarlyDataType x))
-  [SMTPat (earlyDataTypeBytes (Correct._0 (parseEarlyDataType x)))]
+  [SMTPat (earlyDataTypeBytes (Correct?._0 (parseEarlyDataType x)))]
 let pinverse_earlyDataType x = ()
 
 
@@ -875,7 +875,7 @@ let inverse_configurationExtension x =
 val pinverse_configurationExtension: x:_ -> Lemma
   (requires (True))
   (ensures (lemma_pinverse_f_g Seq.equal configurationExtensionBytes parseConfigurationExtension x))
-  [SMTPat (configurationExtensionBytes (Correct._0 (parseConfigurationExtension x)))]
+  [SMTPat (configurationExtensionBytes (Correct?._0 (parseConfigurationExtension x)))]
 let pinverse_configurationExtension x = ()
 
 
@@ -1067,7 +1067,7 @@ let inverse_keyShareEntry (ng, x) =
 val pinverse_keyShareEntry: x:_ -> Lemma
   (requires (True))
   (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
-  [SMTPat (keyShareEntryBytes (Correct._0 (parseKeyShareEntry x)))]
+  [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
 let pinverse_keyShareEntry x = ()
 
 
@@ -1373,7 +1373,7 @@ let parse_ec_partial payload =
 (* Assumes uncompressed point format for now (04||ecx||ecy) *) 
 val serialize_ec_point: p:ECGroup.params 
   -> e:ECGroup.share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
-  -> Tot (b:bytes{length b = FStar.Mul(2 * ec_bytelen p.curve) + 1})
+  -> Tot (b:bytes{length b = FStar.Mul.(2 * ec_bytelen p.curve) + 1})
 let serialize_ec_point p e =
   let pc = abyte 4z in
   let x = pc @| e.ecx @| e.ecy in

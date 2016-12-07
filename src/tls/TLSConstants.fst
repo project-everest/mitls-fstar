@@ -155,7 +155,6 @@ let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 25
 (** Signature algorithms *)
 type sigAlg = CoreCrypto.sig_alg
 
-
 (** Hash algorithm minimum requirements *)
 type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
 
@@ -228,7 +227,6 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
   | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
 
 let geqPV a b = (b = minPV a b)
-
 
 let isAnonCipherSuite cs =
   match cs with
@@ -322,14 +320,14 @@ let prfMacAlg_of_ciphersuite_aux = function
 (** Determine if the tuple PV and CS is the correct association with PRF *)
 let pvcs (pv:protocolVersion) (cs:cipherSuite) =
   match pv with
-  | TLS_1p2 | TLS_1p3 -> is_Some (prfMacAlg_of_ciphersuite_aux cs)
+  | TLS_1p2 | TLS_1p3 -> Some? (prfMacAlg_of_ciphersuite_aux cs)
   | _                 -> true
 
-unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) =
-  x:a{is_Some (f x)} -> Tot b
+unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) = 
+  x:a{Some? (f x)} -> Tot b
 
 let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
-  fun x -> Some.v (prfMacAlg_of_ciphersuite_aux x)
+  fun x -> Some?.v (prfMacAlg_of_ciphersuite_aux x)
 
 // PRF and verifyData hash algorithms are potentially independent in TLS 1.2,
 // so we use two distinct functions. However, all currently defined ciphersuites
@@ -346,7 +344,7 @@ let verifyDataHashAlg_of_ciphersuite_aux = function
 
 // BB.TODO: Documentation ?
 let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphersuite_aux =
-  fun x -> Some.v (verifyDataHashAlg_of_ciphersuite_aux x)
+  fun x -> Some?.v (verifyDataHashAlg_of_ciphersuite_aux x)
 
 (** Determine which session hash algorithm is to be used with the protocol version and ciphersuite *)
 val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
@@ -359,7 +357,7 @@ let sessionHashAlg pv cs =
 // the Hash algorithm for the handshake"
 
 (** Determine the Authenticated Encryption algorithm associated with a ciphersuite *)
-val get_aeAlg: cs:cipherSuite{ is_CipherSuite cs } -> Tot aeAlg
+val get_aeAlg: cs:cipherSuite{ CipherSuite? cs } -> Tot aeAlg
 let get_aeAlg cs =
   match cs with
   | CipherSuite _ _ ae -> ae
@@ -369,15 +367,14 @@ let get_aeAlg cs =
 let null_aeAlg = MACOnly MD5
 
 (** Determine Encryption type to be used with a chosen PV and AE algorithm *)
-val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { is_MtE a }) -> Tot (encAlg * ivMode)
+val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { MtE? a }) -> Tot (encAlg * ivMode)
 let encAlg_of_aeAlg  pv ae =
   match pv,ae with
   | SSL_3p0, MtE (Block e) m -> (Block e),Stale
   | TLS_1p0, MtE (Block e) m -> (Block e),Stale
   | _, MtE e m -> e,Fresh
 
-(** Determine MAC algorithm to be used with a chosen PV and AE algorithm *)
-val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(is_AEAD a) }) -> Tot macAlg
+val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(AEAD? a) }) -> Tot macAlg
 let macAlg_of_aeAlg pv ae =
   match pv,ae with
   | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
@@ -442,7 +439,6 @@ type cipherSuiteName =
   | TLS_DH_DSS_WITH_AES_256_GCM_SHA384
   | TLS_DH_anon_WITH_AES_128_GCM_SHA256
   | TLS_DH_anon_WITH_AES_256_GCM_SHA384
-
   | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
   | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
   | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
@@ -596,7 +592,8 @@ let cipherSuite_of_name = function
   | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256    -> CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)
   | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256      -> CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)
 
-val cipherSuites_of_nameList: l1:list cipherSuiteName 
+(** Return valid ciphersuites according to a list of ciphersuite names *)
+val cipherSuites_of_nameList: l1:list cipherSuiteName
   -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
 let cipherSuites_of_nameList nameList =
   // REMARK: would trigger automatically if ListProperties is loaded
@@ -693,7 +690,6 @@ let rec names_of_cipherSuites css =
 
 type cert = b:bytes {length b <= 16777215}
 type chain = list cert
-
 
 (** Certificate type definition *)
 type certType =
@@ -799,7 +795,6 @@ noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
 
-// TODO: give more precise type
 
 (** PSK Identity definition *)
 type pskIdentity = b:bytes{repr_bytes (length b) <= 2}

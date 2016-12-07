@@ -26,7 +26,7 @@ module HS = FStar.HyperStack
 
 type rid = FStar.Monotonic.RRef.rid
 
-type id = i:id { is_ID13 i }
+type id = i:id { ID13? i }
 
 let alg (i:id) =
   let AEAD ae _ = aeAlg_of_id i in ae
@@ -153,7 +153,7 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 
 let genReader parent #i w =
   let reader_r = new_region parent in
-  let raead = AEAD.genReader w.aead in
+  let raead = AEAD.genReader parent w.aead in
   if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
@@ -179,7 +179,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
 let leak #i #role s =
-  AEAD.leak (State.aead s)
+  AEAD.leak (State?.aead s)
 
 
 // we are not relying on additional data
@@ -211,7 +211,7 @@ let encrypt #i e l p =
   let n = m_read ctr in
   let nb = bytes_of_int (AEAD.noncelen i) n in
   let iv = AEAD.create_nonce e.aead nb in
-  let c = AEAD.encrypt i e.aead iv noAD text in
+  let c = AEAD.encrypt #i #l e.aead iv noAD text in
   if authId i then
     begin
     let ilog = ilog e.log in
@@ -242,7 +242,7 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
       (authId i ==>
 	(let log = m_sel h0 (ilog d.log) in
 	 if j < Seq.length log && matches l c (Seq.index log j)
-	 then res = Some (Entry.p (Seq.index log j))
+	 then res = Some (Entry?.p (Seq.index log j))
 	 else res = None))
     /\ (match res with
        | None -> HH.modifies Set.empty h0.h h1.h
@@ -268,13 +268,13 @@ let decrypt #i d l c =
       begin
       increment_seqn ictr;
       m_recall ctr;
-      Some (Entry.p (Seq.index log j))
+      Some (Entry?.p (Seq.index log j))
       end
     else None
   else //concrete
    let nb = bytes_of_int (AEAD.noncelen i) j in
    let iv = AEAD.create_nonce d.aead nb in
-   match AEAD.decrypt i d.aead iv noAD c with
+   match AEAD.decrypt #i #l d.aead iv noAD c with
    | None -> None
    | Some pr ->
      begin

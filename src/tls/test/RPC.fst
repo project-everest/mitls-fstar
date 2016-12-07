@@ -40,7 +40,7 @@ type state (r:role) =
   | State:
       #region: rid{region <> root /\ region <> keyRegion}
     -> peer_region: rid{peer_region <> root /\ peer_region <> keyRegion /\ disjoint region peer_region}
-    -> key: rref (if is_Client r then peer_region else region) (skey algo)
+    -> key: rref (if Client? r then peer_region else region) (skey algo)
     -> state r
 
 type matching (r:state Client) (w:state Server) =
@@ -58,7 +58,7 @@ val init: client_parent:rid -> server_parent:rid -> All both
       m_contains rkeys h0 /\
       disjoint client_parent server_parent))
   (ensures  (fun h0 (rw:result both) h1 ->
-    is_V rw ==>
+    V? rw ==>
      (let r,w = V.v rw in
        matching r w
      /\ modifies_one keyRegion h0 h1
@@ -116,10 +116,10 @@ val client_recv: networkStream -> client:state Client -> s:string16 -> All strin
     /\ contains_ref client.key h1
     /\ m_contains rkeys h1
     /\ (let pk,_ = sel h0 client.key in
-	 is_V t
+	 V? t
        /\ int_cma algo hashalg
-       /\ generated (|algo,pk|) h0
-       /\ m_sel h0 (PK.log pk) <> Corrupt ==> responded s (V.v t))
+       /\ generated (algo,pk) h0
+       /\ m_sel h0 (PK?.log pk) <> Corrupt ==> responded s (V.v t))
   ))
 let client_recv tcp client s =
   match recv tcp (65535 + siglen) with
@@ -158,10 +158,10 @@ val server_recv: networkStream -> server:state Server -> All string16
     /\ contains_ref server.key h1
     /\ m_contains rkeys h1
     /\ (let pk,_ = sel h0 server.key in
-	 is_V s
+	 V? s
        /\ int_cma algo hashalg
-       /\ generated (|algo,pk|) h0
-       /\ m_sel h0 (PK.log pk) <> Corrupt ==> requested (V.v s))
+       /\ generated (algo,pk) h0
+       /\ m_sel h0 (PK?.log pk) <> Corrupt ==> requested (V.v s))
   ))
 let server_recv tcp server =
   match recv tcp (65535 + siglen) with

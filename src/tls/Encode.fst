@@ -15,12 +15,13 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
+open TLSFormats
 open TLSInfo
 open Range
 
 // for now, we *exclude* MACOnly
 
-type id = i:id { is_ID12 i /\ is_MtE (aeAlg_of_id i) } 
+type id = i:id { ID12? i /\ MtE? (aeAlg_of_id i) } 
 
 // tmp
 type tagt (i:id) = MAC.tag i
@@ -33,7 +34,7 @@ private type plain (i:id) (ad: LHAEPlain.adata i) (rg:range) = | Plain:
   tag: tagt i ->
 
   // did decoding succeed? stateful? always true with RC4.
-  ok : bool { is_MACOnly (aeAlg_of_id i) \/ (encAlg_of_id i = (Stream CoreCrypto.RC4_128, Fresh) ==> ok = true) } -> 
+  ok : bool { MACOnly? (aeAlg_of_id i) \/ (encAlg_of_id i = (Stream CoreCrypto.RC4_128, Fresh) ==> ok = true) } -> 
   plain i ad rg 
 
 // should we index just by plaintext lengths, rather than ad & range?
@@ -96,7 +97,7 @@ type maconly_entry =
      payload:bytes * text:bytes * p:LHAEPlain.plain i ad rg * MAC.tag
   { authId i /\ //
     tlen <= max_TLSCiphertext_fragment_length /\ tlen = targetLength i rg /\ //
-    is_MACOnly (aeAlg_of_id i) /\ //
+    MACOnly? (aeAlg_of_id i) /\ //
     MAC.Msg(i,text) /\ //
     text = MACPlain i rg ad p /\ //
     payload = LHAEPlain.Payload i ad rg p
@@ -147,7 +148,7 @@ let mac i k ad rg plain =
 
 
 // val verify_MACOnly:
-//   e: id{ ~ (safeId e) /\ is_MACOnly e.aeAlg } ->
+//   e: id{ ~ (safeId e) /\ MACOnly? e.aeAlg } ->
 //   k: MAC.key ->
 //   ad: LHAEPlain.adata e ->
 //   rg: range ->
