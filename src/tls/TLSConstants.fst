@@ -229,7 +229,7 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
 
 let geqPV a b = (b = minPV a b)
 
-(** Determine if a ciphersuite implies no peer authentication *)
+
 let isAnonCipherSuite cs =
   match cs with
   | CipherSuite Kex_DHE None _ -> true
@@ -443,6 +443,12 @@ type cipherSuiteName =
   | TLS_DH_anon_WITH_AES_128_GCM_SHA256
   | TLS_DH_anon_WITH_AES_256_GCM_SHA384
 
+  | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+  | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+  | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+  | TLS_PSK_WITH_CHACHA20_POLY1305_SHA256
+  | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256
+  | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256
 
 val known_cipher_suite: cipherSuite -> Tot bool 
 let known_cipher_suite cs =
@@ -511,13 +517,18 @@ let known_cipher_suite cs =
     | CipherSuite Kex_DH (Some DSA)  (AEAD AES_256_GCM SHA384)
     | CipherSuite Kex_DHE None (AEAD AES_128_GCM SHA256)
     | CipherSuite Kex_DHE None (AEAD AES_256_GCM SHA384)
+    | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)
+    | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA256)
+    | CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)
+    | CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA256)
+    | CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)
+    | CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)
     | SCSV (TLS_EMPTY_RENEGOTIATION_INFO_SCSV)        -> true
     | _ -> false
 
 type valid_cipher_suite = c:cipherSuite{known_cipher_suite c}
 type valid_cipher_suites = list valid_cipher_suite
 
-(** Definition of a list of ciphersuite *)
 type cipherSuiteNames = list cipherSuiteName
 
 (** Determine the validity of a ciphersuite based on it's name *)
@@ -578,10 +589,14 @@ let cipherSuite_of_name = function
   | TLS_DH_DSS_WITH_AES_256_GCM_SHA384     -> CipherSuite Kex_DH  (Some DSA)    (AEAD AES_256_GCM SHA384)
   | TLS_DH_anon_WITH_AES_128_GCM_SHA256    -> CipherSuite Kex_DHE None          (AEAD AES_128_GCM SHA256)
   | TLS_DH_anon_WITH_AES_256_GCM_SHA384    -> CipherSuite Kex_DHE None          (AEAD AES_256_GCM SHA384)
+  | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256    -> CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)
+  | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256  -> CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA256)
+  | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256      -> CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)
+  | TLS_PSK_WITH_CHACHA20_POLY1305_SHA256          -> CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA256)
+  | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256    -> CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)
+  | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256      -> CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)
 
-
-(** Return valid ciphersuites according to a list of ciphersuite names *)
-val cipherSuites_of_nameList: l1:list cipherSuiteName
+val cipherSuites_of_nameList: l1:list cipherSuiteName 
   -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
 let cipherSuites_of_nameList nameList =
   // REMARK: would trigger automatically if ListProperties is loaded
@@ -647,6 +662,13 @@ let name_of_cipherSuite cs =
   | CipherSuite Kex_DHE None          (AEAD AES_128_GCM SHA256)          -> Correct TLS_DH_anon_WITH_AES_128_GCM_SHA256
   | CipherSuite Kex_DHE None          (AEAD AES_256_GCM SHA384)          -> Correct TLS_DH_anon_WITH_AES_256_GCM_SHA384
 
+  | CipherSuite Kex_ECDHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)  -> Correct TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_ECDHE (Some ECDSA) (AEAD CHACHA20_POLY1305 SHA256)   -> Correct TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_DHE (Some RSASIG) (AEAD CHACHA20_POLY1305 SHA256)    -> Correct TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_PSK None (AEAD CHACHA20_POLY1305 SHA256)             -> Correct TLS_PSK_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)       -> Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256
+  | CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)         -> Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256
+
   | _ -> Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Invoked on a unknown ciphersuite")
 
 
@@ -668,7 +690,6 @@ let rec names_of_cipherSuites css =
         | Correct rem -> Correct (n::rem)
       end
     end
-
 
 type cert = b:bytes {length b <= 16777215}
 type chain = list cert

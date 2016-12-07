@@ -19,22 +19,19 @@ open Range
 open FStar.Monotonic.Seq
 open FStar.Monotonic.RRef
 
-type id = i:id{ is_ID12 i /\ is_AEAD (aeAlg_of_id i) /\
-  (AEAD._0 (aeAlg_of_id i) == AES_128_GCM \/
-   AEAD._0 (aeAlg_of_id i) == AES_256_GCM) }
+module AEAD = AEADProvider
 
-let alg (i:id) = AEAD._0 (aeAlg_of_id i)
+type id = i:id{ is_ID12 i /\ is_AEAD (aeAlg_of_id i) }
+let alg (i:id) = let AEAD ae _ = aeAlg_of_id i in ae
 
 type cipher (i:id) = c:bytes{ valid_clen i (length c) }
 
-// key materials (TODO: make abstract?)
-type key (i:id) = lbytes (aeadKeySize (alg i))
-type iv  (i:id) = lbytes (aeadSaltSize (alg i)) // GCMNonce.salt[4]
+type key (i:id) = AEAD.key i
+type iv  (i:id) = AEAD.salt i
 
 irreducible let max_ctr (a:aeadAlg) : Tot (n:nat{n = 18446744073709551615}) = 
   assert_norm (pow2 64 - 1 = 18446744073709551615);
   pow2 64 - 1
-//pow2 (8 * aeadRecordIVSize a) - 1, but not for CHACHA20_POLY1305
   
 // this is the same as a sequence number and in bytes, GCMNonce.nonce_explicit[8]
 type counter a = c:nat{c <= max_ctr a} 
@@ -76,8 +73,7 @@ let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
 noeq type state (i:id) (rw:rw) =
   | State: #region: rgn
          -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
-         -> key: key i
-         -> iv: iv i
+         -> aead: AEAD.state i rw
          -> log: log_ref log_region i // ghost subject to cryptographic assumption
          -> counter: ctr_ref region i log // types are sufficient to anti-alias log and counter
          -> state i rw
@@ -117,16 +113,15 @@ val gen: parent:rid -> i:id -> ST (writer i)
  * AR: had to add implicits for etcr.
  *)
 let gen parent i =
-  let kv = CoreCrypto.random (aeadKeySize (alg i)) in
-  let iv = CoreCrypto.random (aeadSaltSize (alg i)) in
   let writer_r = new_region parent in
+  let aead = AEAD.gen i writer_r in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
     let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #(max_ctr (alg i)) writer_r 0 log in
-    State #i #Writer #writer_r #writer_r kv iv log ectr
+    State #i #Writer #writer_r #writer_r aead log ectr
   else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
-    State #i #Writer #writer_r #writer_r kv iv () ectr
+    State #i #Writer #writer_r #writer_r aead () ectr
 
 val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
@@ -141,13 +136,14 @@ val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
 	       m_sel h1 (ctr r.counter) === 0))
 let genReader parent #i w =
   let reader_r = new_region parent in
+  let raead = AEAD.genReader w.aead in
   if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
-    State #i #Reader #reader_r #w.region w.key w.iv w.log dctr
+    State #i #Reader #reader_r #w.region raead w.log dctr
   else
     let dctr: concrete_ctr reader_r i = m_alloc reader_r 0 in
-    State #i #Reader #reader_r #w.region w.key w.iv () dctr
+    State #i #Reader #reader_r #w.region raead () dctr
 
 
 // Coerce an instance with index i in a fresh sub-region of parent
@@ -158,13 +154,15 @@ val coerce: parent:rid -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
 let coerce parent i kv iv =
   let writer_r = new_region parent in
   let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
-  State #i #Writer #writer_r #writer_r kv iv () ectr
+  let aead = AEAD.coerce i writer_r kv iv in
+  State #i #Writer #writer_r #writer_r aead () ectr
 
 
 val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1))
-let leak #i #role s = State.key s, State.iv s
+let leak #i #role s =
+  AEAD.leak (State.aead s)
 
 
 // Encryption of plaintexts; safe instances are idealized
@@ -200,19 +198,18 @@ let encrypt #i e ad rg p =
   let ctr = ctr e.counter in
   m_recall ctr;
   let text = if safeId i then createBytes (fst rg) 0z else repr i ad rg p in  
-  let n = m_read ctr in      
+  let n = m_read ctr in
   lemma_repr_bytes_values n;
-  let nonce_explicit = bytes_of_seq n in
-  //assert (length nonce_explicit = 8);
-  let salt = e.iv in       
-  let iv = salt @| nonce_explicit in      
+  let nb = bytes_of_int (AEAD.noncelen i) n in
+  let nonce_explicit, _ = split nb (AEAD.explicit_iv_length i) in
+  let iv = AEAD.create_nonce e.aead nb in
   lemma_repr_bytes_values (length text);
   let ad' = ad @| bytes_of_int 2 (length text) in
   let tlen = targetLength i rg in   
   targetLength_converges i rg;
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
-  let c = nonce_explicit @| aead_encrypt (alg i) e.key iv ad' text in  
+  let c = nonce_explicit @| AEAD.encrypt i e.aead iv ad' text in  
   cut (length c == targetLength i rg); 
   if authId i then
     begin
@@ -255,8 +252,8 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
   m_recall ctr;
-  let j = m_read ctr in
   if authId i then
+    let j = m_read ctr in
     let ilog = ilog d.log in
     let log = m_read ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
@@ -269,13 +266,20 @@ let decrypt #i d ad c =
       end
     else None
   else // Concrete
-    let salt = d.iv in
-    let nonce_explicit,c' = split c (aeadRecordIVSize (alg i)) in
-    let iv = salt @| nonce_explicit in
+    // We discard the explicit nonce and use the internal sequence number
+    // (ChaCha20 doesn't use the explicit nonce)
+    let nb, c' = split c (AEAD.explicit_iv_length i) in
+    let j : counter (alg i) = m_read ctr in
+    lemma_repr_bytes_values j;
+    let nonce =
+      match AEAD.alg i with
+      | CHACHA20_POLY1305 -> bytes_of_int (AEAD.noncelen i) j
+      | _ -> nb in
+    let iv = AEAD.create_nonce d.aead nonce in
     let len = length c' - aeadTagSize (alg i) in
     lemma_repr_bytes_values len;
     let ad' = ad @| bytes_of_int 2 len in
-    let p = aead_decrypt (alg i) d.key iv ad' c' in
+    let p = AEAD.decrypt i d.aead iv ad' c' in
     match p with
     | None -> None
     | Some text -> 
@@ -298,11 +302,5 @@ let decrypt #i d ad c =
 	end
 
 (* TODO
-
 - Check that decrypt indeed must use authId and not safeId (like in the F7 code)
-
-- TLS 1.3 simplifies AEAD as follows:
-  - the additional data won't include the plaintext length (ad' = ad);
-  - there is no "semi-explicit" nonce anymore: we use ctr instead of e.iv @| ctr
-    and do not communicate ctr.
 *)

@@ -1055,7 +1055,7 @@ val ks_12_get_keys: ks:ks -> ST (writer:recordInstance)
   let id = ID12 pv msId kdf ae cr sr role in
   let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
   let klen = CoreCrypto.aeadKeySize alg in
-  let slen = TLSConstants.aeadSaltSize alg in 
+  let slen = AEADProvider.salt_length id in 
   let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
   let k1, expand = split expand klen in
   let k2, expand = split expand klen in

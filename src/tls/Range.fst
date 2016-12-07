@@ -9,6 +9,8 @@ open TLSConstants
 open TLSInfo
 open CoreCrypto
 
+module AE = AEADProvider
+
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
 type id2 = i:id { is_ID12 i } // gradually adding TLS 1.3...
@@ -96,8 +98,8 @@ type valid_clen (i:id) (clen:nat) =
   else // is_ID12 i
     begin
     if is_AEAD (aeAlg_of_id i) then
-      0 <= clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
-      clen - aeadRecordIVSize (aeAlg i) - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+      0 <= clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
+      clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else if is_MtE (aeAlg_of_id i) then
       0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\ 
       clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
@@ -114,8 +116,8 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
        (is_AEAD (aeAlg_of_id i) ==> (
          let a = aeAlg i in
          // Currently maxPadSize i = 0 in all cases therefore min == max 
-         let max = clen - aeadRecordIVSize a - aeadTagSize a - fixedPadSize i in
-         let min = clen - aeadRecordIVSize a - aeadTagSize a - maxPadSize i in
+         let max = clen - AE.explicit_iv_length i - aeadTagSize a - fixedPadSize i in
+         let min = clen - AE.explicit_iv_length i - aeadTagSize a - maxPadSize i in
          0 <= max 
          /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max) 
             \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
@@ -152,7 +154,7 @@ let cipherRangeClass i clen =
       else
 	(min,max_TLSPlaintext_fragment_length)
   | AEAD aeadAlg _ ->
-    let ivL = aeadRecordIVSize aeadAlg in
+    let ivL = AE.explicit_iv_length i in
     let tagL = aeadTagSize aeadAlg in
     let minPad, maxPad = minMaxPad i in
     let max = clen - ivL - tagL - minPad in
@@ -192,7 +194,7 @@ let targetLength i r =
     let clen = ivL + prePad + padLen in
     clen
   | AEAD aeadAlg _ ->
-    let ivL = aeadRecordIVSize aeadAlg in
+    let ivL = AE.explicit_iv_length i in
     let tagL = aeadTagSize aeadAlg in
     let fp = fixedPadSize i in
     let clen = ivL + h + fp + tagL in
@@ -234,7 +236,7 @@ let targetLength i r =
    	   let plen = fixedPadSize i in
    	   minimalPadding i (x + aeadTagSize (aeAlg i)) <= plen
    	   /\ plen <= maxPadSize i
-   	   /\ clen = aeadRecordIVSize (aeAlg i) + x + aeadTagSize (aeAlg i) + plen)
+   	   /\ clen = AE.explicit_iv_length i + x + aeadTagSize (aeAlg i) + plen)
   let targetLength_spec_AEAD i r x = ()
 *)
 

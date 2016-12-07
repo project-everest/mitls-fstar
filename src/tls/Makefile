@@ -35,7 +35,7 @@ STDLIB_REALIZED=All List Heap Set Map ST HyperHeap HyperStack IO
 
 OPTIONS=--fstar_home $(FSTAR_HOME)
 
-CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap HyperStack FFICallbacks
+CODEGEN_LIBS=CoreCrypto LowCProvider Platform Classical SeqProperties HyperHeap HyperStack FFICallbacks
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
@@ -46,6 +46,9 @@ PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
+LLDIR=$(FSTAR_HOME)/examples/low-level
+LDIR=$(LLDIR)/crypto
+LCDIR=$(LLDIR)/LowCProvider
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
@@ -55,12 +58,12 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimi
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LDIR)/real --include $(LCDIR)/fst --include $(LDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
 OCAMLMKLIB=ocamlfind mklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_HOME)/$(LIB)/ml/hyperstack $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db ../../libs/ml $(FFI_HOME))
+OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_HOME)/$(LIB)/ml/hyperstack $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db $(LCDIR) ../../libs/ml $(FFI_HOME))
 
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
@@ -101,15 +104,42 @@ PSK.fst \
 TLSInfo.fst \
 IdNonce.fst \
 TLSExtensions.fst \
+Buffer.Utils.fst \
+Crypto.Symmetric.Bytes.fst \
+Crypto.Indexing.fst \
+Flag.fst \
+Crypto.Symmetric.AES.fst \
+Crypto.Symmetric.AES128.fst \
+Crypto.Symmetric.Chacha20.fst \
+Crypto.Symmetric.Cipher.fst \
+Crypto.Symmetric.Poly1305.Bigint.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part1.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part2.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part3.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part4.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part5.fst \
+Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part6.fst \
+Crypto.Symmetric.Poly1305.Bignum.fst \
+Crypto.Symmetric.Poly1305.Spec.fst \
+Crypto.Symmetric.Poly1305.fst \
+Crypto.Symmetric.GF128.Spec.fst \
+Crypto.Symmetric.GF128.fst \
+Crypto.Symmetric.MAC.fst \
+Crypto.Symmetric.UF1CMA.fst \
+Crypto.Plain.fst \
+Crypto.Symmetric.PRF.fst \
+Crypto.AEAD.Encoding.fst \
+Crypto.AEAD.Invariant.fst \
+Crypto.AEAD.fst \
+AEADProvider.fst \
 Range.fst \
 DataStream.fst \
 Alert.fst \
 Content.fst \
 StreamPlain.fst \
-StreamAE.fst \
-MasterSecret.fst \
 StatefulPlain.fst \
 LHAEPlain.fst \
+StreamAE.fst \
 AEAD_GCM.fst \
 MAC.fst \
 Encode.fst \
@@ -121,6 +151,7 @@ StreamDeltas.fst \
 Record.fst \
 HKDF.fst \
 TLSPRF.fst \
+MasterSecret.fst \
 HandshakeLog.fst \
 Negotiation.fst \
 Epochs.fst \
@@ -257,21 +288,24 @@ wc:
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
+  $(LCDIR)/LowCProvider.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
-TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto FFICallbacks)
+TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto LowCProvider FFICallbacks)
 
 OUTPUT_DIR?=output
 
 # All our extracted modules.
-TLSML := $(FSTS:.fst=.ml)
+TLSML := $(subst .,_,$(FSTS))
+TLSML := $(subst _fst,.ml,$(TLSML))
 TLSML := $(subst Handshake.fsti, , $(TLSML))
 TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Seq.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
+  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml \
+  FStar_BitVector.ml FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
   FStar_Monotonic_Seq.ml \
   $(TLSML)
 # Last step: prefix with the output directory.
@@ -300,6 +334,8 @@ tls-gen: record_fstar_version $(LIBFILES)
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
 	# Recursively builds everything in platform, etc.
 	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
+	# Low-level C record stack
+	$(MAKE) -C $(LCDIR)
 	# # All our .cmx files
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
 	# A .cmxa with all the .cmx above

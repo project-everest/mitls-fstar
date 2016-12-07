@@ -48,14 +48,15 @@ let frag_plain_len (#i:id{is_stream i}) (f:C.fragment i): StreamPlain.plainLen =
 
 // CONCRETE KEY MATERIALS, for leaking & coercing.
 // (each implementation splits it into encryption keys, IVs, MAC keys, etc)
+// ADL: this can now be factored going through the common AEADProvider interface
 let aeKeySize (i:stae_id) =
   if is_stream i
   then
     CoreCrypto.aeadKeySize (Stream.alg i) +
-    Stream.iv_length i
+    AEADProvider.iv_length i
   else
     CoreCrypto.aeadKeySize (AEAD._0 (aeAlg_of_id i)) +
-    TLSConstants.aeadSaltSize (AEAD._0 (aeAlg_of_id i))
+    AEADProvider.salt_length i
 
 type keyBytes (i:stae_id) = lbytes (aeKeySize i)
 

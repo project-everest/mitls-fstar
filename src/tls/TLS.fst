@@ -1139,7 +1139,7 @@ let readFragment c i =
                       IO.debug_print_string "StAE decrypt correct.\n" 
                     else false in 
                     Correct f
-      | None   -> Error(AD_internal_error,"") //16-05-19 adjust!
+      | None   -> Error(AD_internal_error,"Decryption failure")
 
 // We receive, decrypt, parse a record (ct,f); what to do with it?
 // i is the presumed reader, threaded from the application.
