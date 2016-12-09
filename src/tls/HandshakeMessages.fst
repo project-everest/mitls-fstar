@@ -122,6 +122,7 @@ noeq type ch = {
   ch_client_random:TLSInfo.random;
   ch_sessionID:sessionID;
   ch_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
+  ch_raw_cipher_suites:option bytes;
   ch_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
   ch_extensions:option (ce:list extension{List.Tot.length ce < 256});
 }
