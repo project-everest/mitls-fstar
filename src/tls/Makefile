@@ -296,7 +296,7 @@ wc:
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
-  libllcrypto.a lowc_stub.o LowCProvider.cmx \
+  $(LCDIR)/libllcrypto.a $(LCDIR)/lowc_stub.o $(LCDIR)/LowCProvider.cmx \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
