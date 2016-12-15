@@ -1,6 +1,3 @@
-(*--build-config
-options:--use_hints --fstar_home ../../../FStar --detail_errors --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
---*)
 module AEADProvider
 
 open FStar.Heap
@@ -172,20 +169,31 @@ let region (#i:id) (#rw:rw) (st:state i rw) =
   (match st with
   | OpenSSL st _ -> OAEAD.State?.region st
   | LowC st _ _ -> tls_region // TODO
-  | LowLevel st _ -> tls_region) // TODO
+  | LowLevel st _ -> Crypto.AEAD.Invariant.State?.log_region st) // TODO
 
 let log_region (#i:id) (#rw:rw) (st:state i rw) =
   match st with
   | OpenSSL st _ -> OAEAD.State?.log_region st
-  | LowC st _ _ -> root
-  | LowLevel st _ -> root
+  | LowC st _ _ -> let r:rgn = tls_region in r // TODO
+  | LowLevel st _ ->
+    let r = Crypto.AEAD.Invariant.State?.log_region st in
+    assume(r<>root);
+    assume(forall (s:rid).{:pattern is_eternal_region s} is_above s r ==> is_eternal_region s);
+    r
+
+let st_inv (#i:id) (#rw:rw) (st:state i rw) h =
+  match st with
+  | OpenSSL st _ -> True
+  | LowC st _ _ -> True
+  | LowLevel st _ -> Crypto.AEAD.Invariant.my_inv st h
 
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies_none h0 h1 /\
   extends (region w) parent /\
   stronger_fresh_region (region w) h0 h1 /\
   color (region w) = color parent /\
-  empty_log w h1
+  empty_log w h1 /\
+  st_inv w h1
 
 let gen (i:id) (r:rgn) : ST (state i Writer)
   (requires (fun h -> True))
@@ -208,7 +216,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     let st = AE.gen i r in
     LowLevel st salt
 
-let leak (#i:id{~(Flag.prf i)}) (#rw:rw) (st:state i rw)
+let leak (#i:id) (#rw:rw) (st:state i rw)
   : ST (key i * salt i)
   (requires (fun h0 -> ~(authId i)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -218,7 +226,8 @@ let leak (#i:id{~(Flag.prf i)}) (#rw:rw) (st:state i rw)
   | LowC st k s -> (k, s)
   | LowLevel st s ->
     assume (false);
-    let k = AE.leak st in
+    assume(~(Flag.prf i));
+    let k = AE.leak #i st in
     (to_bytes (key_length i) k, s)
 
 // ADL TODO
@@ -266,7 +275,10 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   if r then w else w
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
-(* irreducible *) type plain (i:id) (l:plainlen) = lbytes l
+(* irreducible *) type plain (i:id) (l:plainlen) = b:lbytes l
+let lemma_plainlen (#i:id) (#l:plainlen) (p:plain i l)
+ : Lemma (l <= Crypto.AEAD.Invariant.maxplain i)
+ = assert_norm (max_TLSPlaintext_fragment_length = Crypto.AEAD.Invariant.maxplain i)
 let repr (#i:id) (#l:plainlen) (p:plain i l) : Tot (lbytes l) = p
 
 let adlen i = match pv_of_id i with
@@ -277,9 +289,21 @@ let taglen i = CC.aeadTagSize (alg i)
 let cipherlen i (l:plainlen) : n:nat{n >= taglen i} = l + taglen i
 type cipher i (l:plainlen) = lbytes (cipherlen i l)
 
+let uint128_of_iv (#i:id) (iv:iv i)
+  : Tot (n:FStar.UInt128.t{FStar.UInt128.v n < pow2 96})
+  =
+  let ivn = int_of_bytes iv in
+  assume(FStar.UInt.size ivn 128); // PROVEME need stronger post-condition on int_of_bytes
+  let iv128 = FStar.UInt128.uint_to_t ivn in
+  assume(FStar.UInt128.v iv128 < pow2 96); // PROVEME
+  iv128
+
 type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   (match w with
   | OpenSSL st _ -> OAEAD.fresh_iv #i st iv h
+  | LowLevel st _ -> (Flag.prf i ==>
+     Crypto.AEAD.Invariant.(Crypto.Symmetric.PRF.(
+        none_above ({iv=(uint128_of_iv iv); ctr=ctr_0 i}) st.prf h)))
   | _ -> True)
 
 let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
@@ -290,29 +314,39 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
 
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
   : ST (cipher:cipher i l)
-  (requires (fun _ ->
+  (requires (fun h ->
+    st_inv w h /\
+    (authId i ==> (Flag.prf i /\ fresh_iv #i w iv h)) /\
     FStar.UInt.size (length ad) 32 /\ FStar.UInt.size l 32))
-  (ensures (fun h0 cipher h1 -> True))
+  (ensures (fun h0 cipher h1 -> modifies_one (log_region w) h0 h1))
   =
+  push_frame();
   let cipher =
     match w with
-    | OpenSSL st _ -> OAEAD.encrypt st iv ad plain
-    | LowC st _ _ -> CAEAD.aead_encrypt st iv ad plain
+    | OpenSSL st _ -> admit () // OAEAD.encrypt st iv ad plain
+    | LowC st _ _ -> admit () //CAEAD.aead_encrypt st iv ad plain
     | LowLevel st _ ->
-      let iv = CB.load_uint128 12ul (from_bytes iv) in
       let adlen = uint_to_t (length ad) in
       let ad = from_bytes ad in
       let plainlen = uint_to_t l in
       let cipherlen = uint_to_t (cipherlen i l) in
+      assume(Crypto.AEAD.Invariant.safelen i (v plainlen) (Crypto.Symmetric.PRF.ctr_0 i +^ 1ul)); // ADL not proving because this will change in PlanA
       let plainbuf = from_bytes plain in
       let plainba = CB.load_bytes plainlen plainbuf in
-      let plainrepr = Plain.make #i l plainba in
       let plain = Plain.create i 0uy plainlen in
-      Plain.store plainlen plain plainrepr;
+      if not (Flag.safeId i) then begin
+        let pb = Plain.make #i l plainba in
+        Plain.store #i plainlen plain pb
+      end;
       let cipher = Buffer.create 0uy cipherlen in
-      AE.encrypt i st iv adlen ad plainlen plain cipher;
+      assume(v cipherlen = v plainlen + 12);
+      AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
       to_bytes l cipher
-    in
+  in
+  pop_frame ();
+  cipher
+
+  (*
   let r =
     if debug then
       let ivh = hex_of_bytes iv in
@@ -322,7 +356,8 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       IO.debug_print_string ((prov())^": ENC[IV="^ivh^",AD="^adh^",PLAIN="^ph^"] = "^ch^"\n")
     else false in
   if r then cipher else cipher
-
+*)
+#set-options "--lax"
 let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:cipher i l)
   : ST (co:option (plain i l))
   (requires (fun _ -> True))
@@ -350,6 +385,9 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
         Some (to_bytes l (Plain.bufferRepr #i plain))
       else None
     in
+  plain
+
+  (*
   let r =
     if debug then
       let ivh = hex_of_bytes iv in
@@ -363,3 +401,4 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
       IO.debug_print_string ((prov())^": DECRYPT[IV="^ivh^",AD="^adh^",C="^ch^"] = "^ph^"\n")
     else false in
   if r then plain else plain
+ *)

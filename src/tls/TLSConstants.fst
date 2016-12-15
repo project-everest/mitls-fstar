@@ -525,7 +525,7 @@ let valid_cipher_suites = list valid_cipher_suite
 val cipherSuiteBytes: valid_cipher_suite -> Tot (lbytes 2)
 let cipherSuiteBytes c = Some?.v (cipherSuiteBytesOpt c)
 
-#reset-options "--z3rlimit 60"
+#reset-options "--z3rlimit 60 --max_fuel 1 --initial_fuel 1 --max_ifuel 2 --initial_ifuel 2"
 
 (** Auxillary parsing function for ciphersuites *)
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
@@ -814,7 +814,7 @@ let pvcs (pv:protocolVersion) (cs:cipherSuite) =
   | TLS_1p2 | TLS_1p3 -> Some? (prfMacAlg_of_ciphersuite_aux cs)
   | _                 -> true
 
-unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) = 
+unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) =
   x:a{Some? (f x)} -> Tot b
 
 let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
@@ -930,6 +930,7 @@ type cipherSuiteName =
   | TLS_DH_DSS_WITH_AES_256_GCM_SHA384
   | TLS_DH_anon_WITH_AES_128_GCM_SHA256
   | TLS_DH_anon_WITH_AES_256_GCM_SHA384
+
   | TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
   | TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
   | TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
@@ -939,6 +940,8 @@ type cipherSuiteName =
 
 (** Definition of a list of ciphersuite *)
 type cipherSuiteNames = list cipherSuiteName
+
+#reset-options "--z3rlimit 60 --max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
 
 (** Determine the validity of a ciphersuite based on it's name *)
 val cipherSuite_of_name: cipherSuiteName -> Tot valid_cipher_suite
@@ -1130,10 +1133,10 @@ let lemma_vlbytes_inj i b b' =
   let l = bytes_of_int i (length b) in
   SeqProperties.lemma_append_inj l b l b'
 
-val vlbytes_length_lemma: n:nat -> a:bytes{repr_bytes (length a) <= n} -> b:bytes{repr_bytes (length b) <= n} -> 
+val vlbytes_length_lemma: n:nat -> a:bytes{repr_bytes (length a) <= n} -> b:bytes{repr_bytes (length b) <= n} ->
   Lemma (requires (Seq.equal (Seq.slice (vlbytes n a) 0 n) (Seq.slice (vlbytes n b) 0 n)))
         (ensures (length a = length b))
-let vlbytes_length_lemma n a b = 
+let vlbytes_length_lemma n a b =
   let lena = Seq.slice (vlbytes n a) 0 n in
   let lenb = Seq.slice (vlbytes n b) 0 n in
   assert(Seq.equal lena (bytes_of_int n (length a)));
@@ -1166,7 +1169,7 @@ let vlparse lSize vlb =
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 
-val vlparse_vlbytes: lSize:nat{lSize <= 4} -> vlb:bytes{repr_bytes (length vlb) <= lSize} -> Lemma 
+val vlparse_vlbytes: lSize:nat{lSize <= 4} -> vlb:bytes{repr_bytes (length vlb) <= lSize} -> Lemma
   (requires (True))
   (ensures (vlparse lSize (vlbytes lSize vlb) == Correct vlb))
   [SMTPat (vlparse lSize (vlbytes lSize vlb))]

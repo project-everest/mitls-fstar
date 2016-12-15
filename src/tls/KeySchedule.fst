@@ -1,7 +1,7 @@
 module KeySchedule
 (*the top level key schedule module, it should not expose secrets to Handshake *)
 
-(* the goal is to keep ephemerals like eph_s and eph_c as currently defined 
+(* the goal is to keep ephemerals like eph_s and eph_c as currently defined
    in Handshake local *)
 
 open FStar.Heap
@@ -9,7 +9,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
 open FStar.SeqProperties
-open FStar.Set  
+open FStar.Set
 
 open Platform.Bytes
 open Platform.Error
@@ -22,7 +22,7 @@ open HandshakeMessages
 open StatefulLHAE
 open HKDF
 open Negotiation // We only depend minimally on Nego
-open Epochs	 // We only depend minimally on Epochs 
+open Epochs	 // We only depend minimally on Epochs
 open PSK
 
 module MM = MonotoneMap
@@ -105,7 +105,7 @@ let get_psk_info (i:esId) =
   match i with
   | ResumptionPSK c _ -> c
   | ApplicationPSK c _ -> c
-     
+
 
 // Total by construction
 private let get_psk (i:esId) =
@@ -139,10 +139,10 @@ let asId_rc = function
 // miTLS 0.9:
 // ==========
 // PRF (type pms) -> TLSInfo (type id) -> KEF (extract pms)
-//                     \ StatefulLHAE (coerce id) / 
+//                     \ StatefulLHAE (coerce id) /
 // TODO rework old 1.2 types
 type ms = bytes
-type pms = bytes 
+type pms = bytes
 
 // Early secret (abstract)
 abstract type es (i:esId) =
@@ -301,7 +301,7 @@ val create: #rid:rid -> role -> hsl:HandshakeLog.log -> ST (ks * random)
 
 let create #rid r hsl =
   ST.recall_region rid;
-  let ks_region = new_region rid in 
+  let ks_region = new_region rid in
   let nonce = Nonce.mkHelloRandom r ks_region in
   let istate = match r with
     | Client -> C (C_Init nonce)
@@ -458,7 +458,7 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
 let ks_server_12_init_dh ks cr pv cs ems group =
   let KS #region st _ = ks in
   let S (S_Init sr) = !st in
-  let group = (match group with 
+  let group = (match group with
       	       | SEC c -> CommonDH.ECDH c
 	       | FFDHE f -> CommonDH.FFDH (DHGroup.Named f)) in
   let CipherSuite kex sa ae = cs in
@@ -683,7 +683,7 @@ let ks_client_12_resume ks sr pv cs =
 val ks_client_13_sh: ks:ks -> cs:cipherSuite -> gy:(namedGroup * bytes) -> accept_early_data:bool -> ST recordInstance
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_13_wait_SH? (C?.s kss) /\ 
+    C? kss /\ C_13_wait_SH? (C?.s kss) /\
     // Ensure consistency of ae/h if 0-RTT data is accepted
     (let C_13_wait_SH _ ei _ _ = C?.s kss in
      match ei with | None -> True | Some (| id, _ |) ->
@@ -954,7 +954,7 @@ let ks_client_12_full_dh ks sr pv cs ems peer_share =
     else () in
   let dhp = CommonDH.key_params peer_share in
   let dhpmsId = PMS.DHPMS(dhp, (CommonDH.share_of_key our_share), (CommonDH.share_of_key peer_share), PMS.ConcreteDHPMS(pmsb)) in
-  let ns = 
+  let ns =
     if ems then
       C_12_wait_MS csr alpha dhpmsId pmsb
     else
@@ -1055,7 +1055,7 @@ val ks_12_get_keys: ks:ks -> ST (writer:recordInstance)
   let id = ID12 pv msId kdf ae cr sr role in
   let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
   let klen = CoreCrypto.aeadKeySize alg in
-  let slen = AEADProvider.salt_length id in 
+  let slen = AEADProvider.salt_length id in
   let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
   let k1, expand = split expand klen in
   let k2, expand = split expand klen in
@@ -1143,9 +1143,8 @@ let ks_client_12_server_finished ks
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i rd wr) = i
 
-val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random -> 
+val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random ->
     			   h:handshake ->
 			   ks:recordInstance -> Tot (epoch r n)
 let recordInstanceToEpoch #hs_rgn #n hs (StAEInstance #i rd wr) =
   Epoch hs rd wr
-

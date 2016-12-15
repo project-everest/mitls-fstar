@@ -69,5 +69,3 @@ let cipherAlg_of_id i =
 // controls abstraction of plaintexts
 // (kept abstract, but requires all the crypto steps above)
 let safeId = TLSInfo.safeId
-
-

@@ -1,6 +1,3 @@
-(*--build-config
-options:--use_hints --fstar_home ../../../FStar --detail_errors --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
---*)
 module AEADOpenssl
 
 open FStar.Heap
@@ -60,15 +57,12 @@ let log_ref (r:rgn) (i:id) : Tot Type0 =
 let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i})
  : Tot (ideal_log r i) = l
 
-type logrgn (r:rgn) (rw:rw) =
-  logr:rgn{
-    if rw = Writer then logr = r
-    else HyperHeap.disjoint r logr}
-
 noeq type state (i:id) (rw:rw) =
   | State:
     #region: rgn ->
-    #log_region: logrgn region rw ->
+    #log_region:rgn{
+       if rw = Writer then region = log_region
+       else HyperHeap.disjoint region log_region} ->
     key: key i ->
     log: log_ref log_region i ->
     state i rw

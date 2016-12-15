@@ -98,10 +98,10 @@ type valid_clen (i:id) (clen:nat) =
   else // ID12? i
     begin
     if AEAD? (aeAlg_of_id i) then
-      0 <= clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - fixedPadSize i /\ 
+      0 <= clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - fixedPadSize i /\
       clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else if MtE? (aeAlg_of_id i) then
-      0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\ 
+      0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\
       clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else // MACOnly
       let MACOnly h = aeAlg_of_id i in
@@ -115,21 +115,21 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (ensures fun (r:range) ->
        (AEAD? (aeAlg_of_id i) ==> (
          let a = aeAlg i in
-         // Currently maxPadSize i = 0 in all cases therefore min == max 
+         // Currently maxPadSize i = 0 in all cases therefore min == max
          let max = clen - AE.explicit_iv_length i - aeadTagSize a - fixedPadSize i in
          let min = clen - AE.explicit_iv_length i - aeadTagSize a - maxPadSize i in
-         0 <= max 
-         /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max) 
+         0 <= max
+         /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max)
             \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
      /\ (~(AEAD? (aeAlg_of_id i)) ==> (
-         let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in 
+         let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in
          let min = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
-           0 <= max 
+           0 <= max
          /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max )
           \/ (0 < min /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max_TLSPlaintext_fragment_length)
           \/ (min <= 0 /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat 0 max)
           \/ (min <= 0 /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat 0 max_TLSPlaintext_fragment_length))
-// needed in Encode: 
+// needed in Encode:
 //         /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
 ))
      /\ snd r <= max_TLSPlaintext_fragment_length

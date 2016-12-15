@@ -22,17 +22,21 @@ type id = i:id { ID12? i }
 
 (*** additional data:  ad := ct @| pv ***)
 
-let ad_Length i = match pv_of_id i with
+let ad_Length i = 3
+(*
+ match pv_of_id i with
     | SSL_3p0 -> 1
     | _       -> 3 // contentType[1] + Version[2]
+*)
 
 val makeAD: i:id -> ct:contentType -> Tot (lbytes (ad_Length i))
 let makeAD i ct =
     let pv   = pv_of_id i in
     let bct  = ctBytes ct in
-      if pv = SSL_3p0
-      then bct
-      else bct @| versionBytes pv
+//      if pv = SSL_3p0
+//      then bct
+//      else
+    bct @| versionBytes pv
 
 // StatefulLHAE should be parametric in this type (or its refinement), but that'd be heavy
 // here, the refinement ensures we never fail parsing indexes to retrieve ct
@@ -45,10 +49,10 @@ let parseAD i ad =
 //    if pv = TLS_1p3 then 
 //      Application_data // fake
 //    else 
-    if pv = SSL_3p0 then
-      match parseCT ad with
-      | Correct ct -> ct
-    else
+//    if pv = SSL_3p0 then
+//      match parseCT ad with
+//      | Correct ct -> ct
+//    else
       let bct, bver = Platform.Bytes.split ad 1 in
       match parseCT bct, parseVersion bver with
       | Correct ct, Correct ver -> assert (ver = pv); ct
