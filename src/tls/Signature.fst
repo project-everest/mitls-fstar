@@ -244,7 +244,7 @@ let verify #a h pk t s =
     assume False;
     match m_read (PK?.log pk) with
     | Signed ts ->
-      let signed = Some? (SeqProperties.seq_find (fun (t':signed a) -> t = t') ts) in
+      let signed = Some? (Seq.seq_find (fun (t':signed a) -> t = t') ts) in
       let honest = honestKey pk (m_read rkeys) in
       verified && (signed || not honest)
     | Corrupt -> verified

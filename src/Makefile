@@ -11,11 +11,11 @@ clean:
 ifndef FSTAR_HOME
 FSTAR_HOME=../../FStar
 endif
-STDLIB_ADMITS=Set Map HyperHeap Seq Char SeqProperties
+STDLIB_ADMITS=Set Map HyperHeap Char Seq
 STDLIB=FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
 stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi \
-FStar.SeqProperties.fst #FStar.Int64.fst
-CODEGEN_LIBS=CoreCrypto Platform Classical SeqProperties HyperHeap
+FStar.Seq.fst #FStar.Int64.fst
+CODEGEN_LIBS=CoreCrypto Platform Classical Seq.Base HyperHeap
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS))
 
 PDIR=$(FSTAR_HOME)/contrib/Platform/fst/

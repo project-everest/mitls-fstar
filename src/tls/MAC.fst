@@ -4,7 +4,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 
 open Platform.Bytes
 open Platform.Error

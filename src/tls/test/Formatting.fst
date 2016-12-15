@@ -2,7 +2,6 @@ module Formatting
 
 open FStar.String
 open FStar.Seq
-open FStar.SeqProperties
 open Platform.Bytes
 
 type message = bytes

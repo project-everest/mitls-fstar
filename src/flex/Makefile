@@ -103,8 +103,9 @@ FStar.Char.fsti \
 FStar.String.fsti \
 FStar.List.fst \
 FStar.ListProperties.fst \
+FStar.Seq.Base.fst \
+FStar.Seq.Properties.fst \
 FStar.Seq.fst \
-FStar.SeqProperties.fst \
 FStar.IO.fsti
 
 # Contrib librairies
@@ -121,7 +122,7 @@ FSTAR_CODEGENLIB= \
 CoreCrypto \
 Platform \
 Classical \
-SeqProperties \
+Seq.Base \
 HyperHeap
 
 # No Extract (--no_extract)

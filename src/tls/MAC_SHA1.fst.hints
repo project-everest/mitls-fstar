@@ -131,7 +131,7 @@
         "refinement_interpretation_Tm_refine_87734c12ad817e0149fd4fc5f0210462",
         "refinement_interpretation_Tm_refine_d023b9461e4d4c2c1260f907a1d7e4a1",
         "refinement_interpretation_Tm_refine_d6fb17fbf40b19e4285d53d5cab914a5",
-        "typing_FStar.HyperStack.HS.tip", "typing_FStar.Seq.seq",
+        "typing_FStar.HyperStack.HS.tip", "typing_FStar.Seq.Base.seq",
         "typing_MAC_SHA1.State.log", "typing_tok_TLSConstants.Writer@tok"
       ],
       0
@@ -166,7 +166,7 @@
         "equation_FStar.HyperStack.ref", "equation_FStar.HyperStack.sel",
         "equation_FStar.HyperStack.weak_contains",
         "equation_FStar.HyperStack.weak_live_region",
-        "equation_FStar.SeqProperties.seq_find",
+        "equation_FStar.Seq.Properties.seq_find",
         "equation_HashMAC.is_tls_mac", "equation_MAC_SHA1.a",
         "equation_MAC_SHA1.id", "equation_MAC_SHA1.matches",
         "equation_MAC_SHA1.reader", "equation_MAC_SHA1.text",
@@ -200,8 +200,8 @@
         "refinement_interpretation_Tm_refine_d6fb17fbf40b19e4285d53d5cab914a5",
         "refinement_interpretation_Tm_refine_e34ef4dd9b24dc6298b99e8066e8e6de",
         "token_correspondence_MAC_SHA1.matches", "typing_FStar.Heap.domain",
-        "typing_FStar.Map.sel", "typing_FStar.Seq.index",
-        "typing_FStar.SeqProperties.seq_find", "typing_MAC_SHA1.State.log",
+        "typing_FStar.Map.sel", "typing_FStar.Seq.Base.index",
+        "typing_FStar.Seq.Properties.seq_find", "typing_MAC_SHA1.State.log",
         "typing_tok_TLSConstants.Reader@tok"
       ],
       0

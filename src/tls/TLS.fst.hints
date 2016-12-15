@@ -1277,7 +1277,7 @@
       0,
       1,
       [
-        "@query", "equation_FStar.SeqProperties.indexable",
+        "@query", "equation_FStar.Seq.Properties.indexable",
         "equation_TLS.maybe_indexable", "primitive_Prims.op_Equality"
       ],
       0
@@ -1304,7 +1304,7 @@
       0,
       1,
       [
-        "@query", "b2t_def", "equation_FStar.SeqProperties.indexable",
+        "@query", "b2t_def", "equation_FStar.Seq.Properties.indexable",
         "equation_Handshake.next_fragment_ensures", "equation_Prims.l_and",
         "l_and-interp", "primitive_Prims.op_GreaterThanOrEqual",
         "projection_inverse_BoxBool_proj_0"
@@ -1325,7 +1325,7 @@
         "equation_FStar.Monotonic.Seq.i_at_least",
         "equation_FStar.Monotonic.Seq.i_sel",
         "equation_FStar.Monotonic.Seq.int_at_most",
-        "equation_FStar.SeqProperties.indexable", "equation_Handshake.eT",
+        "equation_FStar.Seq.Properties.indexable", "equation_Handshake.eT",
         "equation_Handshake.logT", "equation_Prims._assert",
         "equation_Prims.l_and", "equation_TLS.currentId_T",
         "equation_TLS.current_writer_pre", "equation_TLS.maybe_indexable",

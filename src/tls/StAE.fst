@@ -15,7 +15,6 @@ module HH   = FStar.HyperHeap
 module HS   = FStar.HyperStack
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
-module SeqP = FStar.SeqProperties
 module C    = Content
 
 module Stream = StreamAE
@@ -136,8 +135,8 @@ val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}
   -> h0:mem -> h1:mem -> e:entry i
   -> Lemma (let log = ilog w in
            MR.m_sel #(log_region w) #_ #MS.grows h1 log ==
-	   SeqP.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e ==>
-	   fragments w h1 == SeqP.snoc (fragments w h0) (ptext e))
+	   Seq.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e ==>
+	   fragments w h1 == Seq.snoc (fragments w h0) (ptext e))
 let lemma_fragments_snoc_commutes #i w h0 h1 e =
   let log = ilog w in
   MS.map_snoc ptext (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e
@@ -316,7 +315,7 @@ val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
 	       /\ seqnT e h1 = seqnT e h0 + 1
 	       /\ frame_f (seqnT e) h1 (Set.singleton (log_region e))
 	       /\ (authId i ==>
-		  fragments e h1 == SeqP.snoc (fragments e h0) f
+		  fragments e h1 == Seq.snoc (fragments e h0) f
 		  /\ frame_f (fragments e) h1 (Set.singleton (log_region e))
 		  /\ MR.witnessed (fragments_prefix e (fragments e h1)))))
 let encrypt #i e f =

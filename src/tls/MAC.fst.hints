@@ -186,7 +186,7 @@
         "typing_FStar.HyperStack.is_in", "typing_FStar.Map.concat",
         "typing_FStar.Map.contains", "typing_FStar.Map.domain",
         "typing_FStar.Map.restrict", "typing_FStar.Map.sel",
-        "typing_FStar.Map.upd", "typing_FStar.Seq.seq",
+        "typing_FStar.Map.upd", "typing_FStar.Seq.Base.seq",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union"
       ],
@@ -274,7 +274,7 @@
         "typing_FStar.HyperStack.is_in", "typing_FStar.Map.concat",
         "typing_FStar.Map.contains", "typing_FStar.Map.domain",
         "typing_FStar.Map.restrict", "typing_FStar.Map.sel",
-        "typing_FStar.Seq.seq", "typing_FStar.Set.complement",
+        "typing_FStar.Seq.Base.seq", "typing_FStar.Set.complement",
         "typing_FStar.Set.empty", "typing_FStar.Set.mem",
         "typing_FStar.Set.singleton", "typing_FStar.Set.union"
       ],
@@ -305,7 +305,7 @@
       0,
       1,
       [
-        "@query", "constructor_distinct_FStar.Seq.seq",
+        "@query", "constructor_distinct_FStar.Seq.Base.seq",
         "constructor_distinct_Prims.unit",
         "constructor_distinct_TLSConstants.Hash",
         "constructor_distinct_Tm_unit", "data_elim_FStar.HyperStack.HS",
@@ -366,7 +366,7 @@
         "refinement_interpretation_Tm_refine_d023b9461e4d4c2c1260f907a1d7e4a1",
         "refinement_interpretation_Tm_refine_d6fb17fbf40b19e4285d53d5cab914a5",
         "typing_CoreCrypto.hash", "typing_CoreCrypto.hmac",
-        "typing_FStar.Seq.seq", "typing_Hashing.hash", "typing_MAC.Key.kv",
+        "typing_FStar.Seq.Base.seq", "typing_Hashing.hash", "typing_MAC.Key.kv",
         "typing_MAC.Key.log", "typing_MAC.alg",
         "typing_Platform.Bytes.op_At_Bar", "typing_tok_CoreCrypto.MD5@tok",
         "typing_tok_CoreCrypto.SHA1@tok", "unit_inversion"
@@ -400,7 +400,7 @@
         "equation_FStar.HyperStack.ref", "equation_FStar.HyperStack.sel",
         "equation_FStar.HyperStack.weak_contains",
         "equation_FStar.HyperStack.weak_live_region",
-        "equation_FStar.SeqProperties.seq_find", "equation_MAC.id",
+        "equation_FStar.Seq.Properties.seq_find", "equation_MAC.id",
         "equation_MAC.matches", "equation_MAC.text",
         "equation_Platform.Bytes.bytes", "equation_Prims.eqtype",
         "equation_Prims.nat", "fuel_guarded_inversion_FStar.HyperStack.mem",
@@ -431,8 +431,8 @@
         "refinement_interpretation_Tm_refine_c8a63b17ea8137e40d2a818a217266f4",
         "refinement_interpretation_Tm_refine_d6fb17fbf40b19e4285d53d5cab914a5",
         "token_correspondence_MAC.matches", "typing_FStar.Heap.domain",
-        "typing_FStar.Map.sel", "typing_FStar.Seq.index",
-        "typing_FStar.SeqProperties.seq_find", "typing_MAC.Key.log"
+        "typing_FStar.Map.sel", "typing_FStar.Seq.Base.index",
+        "typing_FStar.Seq.Properties.seq_find", "typing_MAC.Key.log"
       ],
       0
     ]

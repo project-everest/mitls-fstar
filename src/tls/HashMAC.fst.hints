@@ -104,7 +104,7 @@
       0,
       1,
       [
-        "@query", "bool_inversion", "constructor_distinct_FStar.Seq.seq",
+        "@query", "bool_inversion", "constructor_distinct_FStar.Seq.Base.seq",
         "constructor_distinct_Prims.unit",
         "constructor_distinct_TLSConstants.HMAC",
         "constructor_distinct_TLSConstants.Hash", "data_elim_Prims.Mktuple2",

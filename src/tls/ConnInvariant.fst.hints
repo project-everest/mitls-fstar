@@ -69,7 +69,7 @@
       5,
       0,
       0,
-      [ "@query", "equation_FStar.SeqProperties.indexable" ],
+      [ "@query", "equation_FStar.Seq.Properties.indexable" ],
       0
     ],
     [
@@ -657,7 +657,7 @@
         "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
         "typing_FStar.Map.sel", "typing_FStar.Monotonic.RRef.as_rref",
         "typing_FStar.Monotonic.RRef.m_sel",
-        "typing_FStar.Monotonic.Seq.i_contains", "typing_FStar.Seq.seq",
+        "typing_FStar.Monotonic.Seq.i_contains", "typing_FStar.Seq.Base.seq",
         "typing_FStar.Set.complement", "typing_FStar.Set.mem",
         "typing_FStar.Set.singleton", "typing_FStar.TSet.complement",
         "typing_FStar.TSet.empty", "typing_FStar.TSet.singleton",

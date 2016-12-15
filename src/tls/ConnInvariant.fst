@@ -15,7 +15,6 @@ module MS = MasterSecret
 module N  = Nonce
 module I  = IdNonce
 module AE = StreamAE
-module SeqP = FStar.SeqProperties
 
 ////////////////////////////////////////////////////////////////////////////////
 //Framing writes to an epoch
@@ -31,7 +30,7 @@ let epoch_regions_exist (s:hs) (h0:HST.mem) =
 val frame_epoch_writer: s:hs -> h0:HST.mem -> h1:HST.mem -> 
   Lemma (requires (let j = iT s Writer h0 in 
 		   let epochs = logT s h0 in
-		     SeqP.indexable epochs j
+		     Seq.indexable epochs j
 		   /\ epoch_regions_exist s h0 
 		   /\ (let e_j = Seq.index epochs j in
 		      HH.modifies_one (StAE.region (writer_epoch e_j)) (HST.HS?.h h0) (HST.HS?.h h1))))
@@ -112,7 +111,7 @@ type c_t  = MM.map' random r_conn
 
 //w is registered with c, in state h
 let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:HST.mem) =
-  (exists e. (epochs c h) `SeqP.contains` e  /\               //one of c's epochs, e
+  (exists e. (epochs c h) `Seq.contains` e  /\               //one of c's epochs, e
       (let i' = Epochs.epoch_id e in   //has an id corresponding to i
         i=i' /\ StAE.stream_state #i e.w == w))               //and holds w as as its writer
   /\ MonSeq.i_contains (MkEpochs?.es c.hs.log) h                         //technical: the heap contains c's handshake log
@@ -264,7 +263,7 @@ let writer_region_within_connection
 (* Case 2:
      Adding a new epoch to a connection c, with a fresh index (hdId i) for c
       -- we found a writer w at (ms i), pre-allocated (we're second) or not (we're first)
-      -- we need to show that the (exists e. SeqProperties.contains ...) is false (because of the fresh index for c)
+      -- we need to show that the (exists e. Seq.contains ...) is false (because of the fresh index for c)
       -- so, we're in the "not yet used" case ... so, the epoch's writer is in its initial state and we can return it (our goal is to return a fresh epoch)
 *)
 val register_writer_in_epoch_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i}
@@ -286,12 +285,12 @@ val register_writer_in_epoch_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i}
               N.registered (nonce_of_id i) (HH.parent (StreamAE.State?.region w)) /\  //the writer's parent region is registered in the nonce table
 	      HH.disjoint (HH.parent (StreamAE.State?.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
 	      MR.witnessed (MR.rid_exists (StreamAE.State?.region w)) /\                //technical: ... needed just for well-formedness of the rest of the formula
-	      (forall e. epochs `SeqP.contains` e ==> Epochs.epoch_id e <> i) /\            //i is fresh for c
+	      (forall e. epochs `Seq.contains` e ==> Epochs.epoch_id e <> i) /\            //i is fresh for c
  	      MM.sel mstab i == Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (nonce_of_id i) == Some c /\ //we found the connection in the conn_table
       	      HH.modifies_one (HS?.region c.hs) (HST.HS?.h h0) (HST.HS?.h h1) /\ //we just modified this connection's handshake region
 	      HH.modifies_rref (HS?.region c.hs) !{HH.as_ref (HST.MkRef?.ref es_log_as_hsref)} (HST.HS?.h h0) (HST.HS?.h h1) /\ //and within it, just the epochs log
-	      new_hs_log == SeqProperties.snoc old_hs_log e))) //and we modified it by adding this epoch to it
+	      new_hs_log == Seq.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
 let register_writer_in_epoch_ok h0 h1 i c e =
   (* This proof can be simplified a lot.
@@ -309,8 +308,8 @@ let register_writer_in_epoch_ok h0 h1 i c e =
       let old_hs_log = epochs c h0 in
       let wi = StAE.stream_state #i (Epoch?.w e) in //the epoch writer
       let nonce = nonce_of_id i in
-      SeqP.contains_intro (SeqP.snoc old_hs_log e) (Seq.length old_hs_log) e;
-      SeqP.contains_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
+      Seq.contains_intro (Seq.snoc old_hs_log e) (Seq.length old_hs_log) e;
+      Seq.contains_snoc old_hs_log e; //this lemma shows that everything that was registered to c remains registered to it
       assert (old_ms == new_ms);
       assert (old_conn == new_conn);
       cut (Some? (MM.sel old_conn nonce)); //this cut is useful for triggering the pairwise_disjointness quantifier

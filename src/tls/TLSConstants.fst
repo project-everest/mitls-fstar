@@ -11,7 +11,7 @@ hash algorithm etc.
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
-open FStar.SeqProperties
+open FStar.Seq
 open Platform.Bytes
 open Platform.Error
 open TLSError
@@ -1128,7 +1128,7 @@ val lemma_vlbytes_inj : i:nat
           (ensures (b == b'))
 let lemma_vlbytes_inj i b b' =
   let l = bytes_of_int i (length b) in
-  SeqProperties.lemma_append_inj l b l b'
+  Seq.lemma_append_inj l b l b'
 
 val vlbytes_length_lemma: n:nat -> a:bytes{repr_bytes (length a) <= n} -> b:bytes{repr_bytes (length b) <= n} -> 
   Lemma (requires (Seq.equal (Seq.slice (vlbytes n a) 0 n) (Seq.slice (vlbytes n b) 0 n)))

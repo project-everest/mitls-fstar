@@ -4,7 +4,6 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties 
 open FStar.Set
 
 open Platform
@@ -608,7 +607,7 @@ let next_fragment i c =
   let w0 = Handshake.i s Writer in 
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
-		 FStar.SeqProperties.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
+		 FStar.Seq.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
   let idt = if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID") in
   let _b = 

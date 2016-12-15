@@ -21,7 +21,6 @@ module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
-module SeqP = FStar.SeqProperties
 
 // relocate?
 type fresh_subregion r0 r h0 h1 = stronger_fresh_region r h0 h1 /\ extends r r0
@@ -176,13 +175,13 @@ val add_epoch: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> e: epoch r n -> ST unit
        (requires (fun h -> 
 	   let is = MkEpochs?.es es in
-	   epochs_inv #r #n (SeqP.snoc (i_sel h is) e)))
+	   epochs_inv #r #n (Seq.snoc (i_sel h is) e)))
        (ensures (fun h0 x h1 -> 
 		   let es = MkEpochs?.es es in
 		   let es_as_hsref = MR.as_hsref es in
  		   modifies_one r h0 h1  
  		   /\ modifies_rref r !{as_ref es_as_hsref} (HS.HS?.h h0) (HS.HS?.h h1)
- 		   /\ i_sel h1 es == SeqP.snoc (i_sel h0 es) e))
+ 		   /\ i_sel h1 es == Seq.snoc (i_sel h0 es) e))
 let add_epoch #r #n (MkEpochs es _ _) e = 
     MS.i_write_at_end es e
 
@@ -235,7 +234,7 @@ let get_current_epoch (#r:_) (#n:_) (e:epochs r n) (rw:rw)
 		   let j = m_sel h1 (ctr e rw) in
 		   let epochs = MS.i_sel h1 e.es in
 		   h0==h1 /\
-		   SeqProperties.indexable epochs j /\
+		   Seq.indexable epochs j /\
 		   rd == Seq.index epochs j))
   = let j = get_ctr e rw in 
     let epochs = MS.i_read e.es in

@@ -6,7 +6,7 @@ open FStar.HyperStack
 //FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
 //AR: Yes ! Totally agree.
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 open FStar.Set  
 
 open Platform.Error
