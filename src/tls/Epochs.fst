@@ -2,8 +2,8 @@ module Epochs
 
 open FStar.Heap
 open FStar.HyperHeap
+open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
 open FStar.HyperStack
-open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 open Platform.Error
