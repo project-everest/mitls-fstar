@@ -293,10 +293,14 @@ wc:
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
 # fstarlib has the entire F* standard library.
+# Warning: remember that ORDER MATTERS for the GNU linker which discards unused
+# symbols... this is why libllcrypto comes AFTER lowc_stub
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
-  $(LCDIR)/libllcrypto.a $(LCDIR)/lowc_stub.o $(LCDIR)/LowCProvider.cmx \
+  $(LCDIR)/lowc_stub.o \
+  $(LCDIR)/libllcrypto.a \
+  $(LCDIR)/LowCProvider.cmx \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
