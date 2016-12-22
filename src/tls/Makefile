@@ -131,8 +131,12 @@ Crypto.Symmetric.MAC.fst \
 Crypto.Symmetric.UF1CMA.fst \
 Crypto.Plain.fst \
 Crypto.Symmetric.PRF.fst \
-Crypto.AEAD.Encoding.fst \
 Crypto.AEAD.Invariant.fst \
+Crypto.AEAD.Wrappers.PRF.fst \
+Crypto.AEAD.EnxorDexor.fst \
+Crypto.AEAD.Encoding.fst \
+Crypto.AEAD.Wrappers.Encoding.fst \
+Crypto.AEAD.Wrappers.CMA.fst \
 Crypto.AEAD.fst \
 Crypto.AEAD.Encrypt.fst \
 Crypto.AEAD.Decrypt.fst \
