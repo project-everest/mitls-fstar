@@ -113,7 +113,7 @@ type salt (i:id) = lbytes (salt_length i)
 noeq type state (i:id) (r:rw) =
 | OpenSSL: st:OAEAD.state i r -> salt:salt i -> state i r
 | LowC: st:CAEAD.aead_state -> key:key i -> salt:salt i -> state i r
-| LowLevel: st:Crypto.AEAD.Invariant.state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
+| LowLevel: st:Crypto.AEAD.Invariant.aead_state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -169,14 +169,14 @@ let region (#i:id) (#rw:rw) (st:state i rw) =
   (match st with
   | OpenSSL st _ -> OAEAD.State?.region st
   | LowC st _ _ -> tls_region // TODO
-  | LowLevel st _ -> Crypto.AEAD.Invariant.State?.log_region st) // TODO
+  | LowLevel st _ -> Crypto.AEAD.Invariant.AEADState?.log_region st) // TODO
 
 let log_region (#i:id) (#rw:rw) (st:state i rw) =
   match st with
   | OpenSSL st _ -> OAEAD.State?.log_region st
   | LowC st _ _ -> let r:rgn = tls_region in r // TODO
   | LowLevel st _ ->
-    let r = Crypto.AEAD.Invariant.State?.log_region st in
+    let r = Crypto.AEAD.Invariant.AEADState?.log_region st in
     assume(r<>root);
     assume(forall (s:rid).{:pattern is_eternal_region s} is_above s r ==> is_eternal_region s);
     r
@@ -185,7 +185,7 @@ let st_inv (#i:id) (#rw:rw) (st:state i rw) h =
   match st with
   | OpenSSL st _ -> True
   | LowC st _ _ -> True
-  | LowLevel st _ -> Crypto.AEAD.Invariant.my_inv st h
+  | LowLevel st _ -> Crypto.AEAD.Invariant.inv st h
 
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies_none h0 h1 /\
@@ -245,7 +245,7 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
     OpenSSL (OAEAD.genReader parent w) salt
   | LowLevel st salt ->
     assume false;
-    let st' : Crypto.AEAD.Invariant.state i Crypto.Indexing.Reader = AE.genReader st in
+    let st' : Crypto.AEAD.Invariant.aead_state i Crypto.Indexing.Reader = AE.genReader st in
     LowLevel st' salt
   | LowC st k s ->
     assume false;
@@ -303,7 +303,7 @@ type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   | OpenSSL st _ -> OAEAD.fresh_iv #i st iv h
   | LowLevel st _ -> (Flag.prf i ==>
      Crypto.AEAD.Invariant.(Crypto.Symmetric.PRF.(
-        none_above ({iv=(uint128_of_iv iv); ctr=ctr_0 i}) st.prf h)))
+        none_above #st.log_region #i ({iv=(uint128_of_iv iv); ctr=ctr_0 i}) st.prf.table)))
   | _ -> True)
 
 let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
@@ -340,7 +340,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       end;
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
-      AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
+      Crypto.AEAD.Encrypt.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
       to_bytes l cipher
   in
   pop_frame ();
@@ -381,7 +381,7 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
       let plainlen = uint_to_t l in
       let cbuf = from_bytes cipher in
       let plain = Plain.create i 0uy plainlen in
-      if AE.decrypt i st iv adlen ad plainlen plain cbuf then
+      if Crypto.AEAD.Decrypt.decrypt i st iv adlen ad plainlen plain cbuf then
         Some (to_bytes l (Plain.bufferRepr #i plain))
       else None
     in

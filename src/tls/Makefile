@@ -133,11 +133,9 @@ Crypto.Plain.fst \
 Crypto.Symmetric.PRF.fst \
 Crypto.AEAD.Encoding.fst \
 Crypto.AEAD.Invariant.fst \
-Crypto.AEAD.Lemmas.fst \
-Crypto.AEAD.Lemmas.Part2.fst \
-Crypto.AEAD.Lemmas.Part3.fst \
-Crypto.AEAD.Wrappers.fst \
 Crypto.AEAD.fst \
+Crypto.AEAD.Encrypt.fst \
+Crypto.AEAD.Decrypt.fst \
 AEADOpenssl.fst \
 AEADProvider.fst \
 Range.fst \
