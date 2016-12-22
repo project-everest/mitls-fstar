@@ -62,7 +62,7 @@ LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LDIR)/real --include $(LCDIR)/fst --include $(LDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
 
-OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
+OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -p -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
 OCAMLMKLIB=ocamlfind mklib
 OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_HOME)/$(LIB)/ml/hyperstack $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db $(LCDIR) ../../libs/ml $(FFI_HOME))

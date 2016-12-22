@@ -237,18 +237,20 @@ let hs_msg_bufs_init() = {
 //16-05-31 this type should be private to HS
 //16-06-01 simplify: use a record of mutable things, subject to monotonicity and region, 
 //16-06-01 rather than a mutable ref to a record
-type handshake_state (r:role) =
+let hsref (region:rgn) 'a = r:ref 'a{r.id = region}
+
+type handshake_state (region:rgn) (r:role) =
      {
-       hs_state: role_state;
-       hs_nego: option nego;
+       hs_state: hsref region role_state;
+       hs_nego: hsref region (option nego);
        hs_log: HandshakeLog.log; // already stateful
        hs_ks: KeySchedule.ks;    // already stateful
 
-       hs_buffers: hs_msg_bufs;
+       hs_buffers: hsref region hs_msg_bufs;
 
        //16-06-01 could use the StreamAE.ideal_ctr pattern; see also logIndex below.
-       hs_reader: int;               
-       hs_writer: int;
+       hs_reader: hsref region int;               
+       hs_writer: hsref region int;
      }
 
 //NS: needed this renaming trick for the .fsti
@@ -268,7 +270,7 @@ type hs =
             cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
             log: epochs region nonce ->
-          state: ref (handshake_state r){state.id = region}  ->       // opaque, subject to invariant
+          state: handshake_state region r  ->       // opaque, subject to invariant
              hs
 
 
@@ -277,9 +279,9 @@ type hs =
 
 let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.log h
 
-let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS?.r s)
+let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state s.region s.r
 
-let stateT (s:hs) (h:HyperStack.mem) : stateType s = (logT s h, sel h s.state)
+let stateT (s:hs) (h:HyperStack.mem) : stateType s = (logT s h, s.state)
 
 let non_empty h s = Seq.length (logT s h) > 0
 
@@ -331,7 +333,7 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
  
-assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS?.r s) -> Type0
+assume val hs_invT : h:HyperStack.mem -> s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state s.region s.r -> Type0
 
 let hs_inv (s:hs) (h: HyperStack.mem) = 
   hs_invT s (logT s h) (sel h (HS?.state s))  //An abstract invariant of HS-internal state
@@ -384,7 +386,7 @@ let i (HS #r0 _ _ _ _ epochs _) rw =
   | Reader -> Epochs.get_reader epochs
   | Writer -> Epochs.get_writer epochs
 
-val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (handshake_state r)
+val handshake_state_init: (cfg:TLSInfo.config) -> (r:role) -> (reg:rid) -> ST (handshake_state reg r)
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let handshake_state_init cfg (r:role) (reg:rid) =
