@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --detail_errors --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module Range
 
 (* This module defines all range computations for the lengths of
@@ -93,73 +96,63 @@ type valid_clen (i:id) (clen:nat) =
     begin
     lemma_ID13 i;
     let tlen = aeadTagSize (aeAlg i) in
-    tlen < clen /\ clen <= tlen + max_TLSCiphertext_fragment_length_13
+    clen - tlen >= 0 /\
+    clen - tlen <= max_TLSCiphertext_fragment_length_13
     end
   else // ID12? i
     begin
     if AEAD? (aeAlg_of_id i) then
-      0 <= clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - fixedPadSize i /\
-      clen - AE.explicit_iv_length i - aeadTagSize (aeAlg i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+      let tlen = aeadTagSize (aeAlg i) in
+      clen - AE.explicit_iv_length i - tlen >= 0 /\
+      clen - AE.explicit_iv_length i - tlen <= max_TLSPlaintext_fragment_length
     else if MtE? (aeAlg_of_id i) then
-      0 <= clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i /\
-      clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+      clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i >= 0 /\
+      clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i <= max_TLSPlaintext_fragment_length
     else // MACOnly
       let MACOnly h = aeAlg_of_id i in
-      0 <= clen - hashSize h /\ clen - hashSize h <= max_TLSPlaintext_fragment_length
+      clen - hashSize h >= 0 /\
+      clen - hashSize h <= max_TLSPlaintext_fragment_length
     end)
+
+let min0 (i:int) : Tot (n:nat) =
+  if i >= 0 then i
+  else 0
 
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
 val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (requires valid_clen i clen)
   (ensures fun (r:range) ->
-       (AEAD? (aeAlg_of_id i) ==> (
-         let a = aeAlg i in
-         // Currently maxPadSize i = 0 in all cases therefore min == max
-         let max = clen - AE.explicit_iv_length i - aeadTagSize a - fixedPadSize i in
-         let min = clen - AE.explicit_iv_length i - aeadTagSize a - maxPadSize i in
-         0 <= max
-         /\ (  (0 < min /\ r == Mktuple2 #nat #nat min max)
-            \/ (min <= 0 /\ r == Mktuple2 #nat #nat 0 max))))
-     /\ (~(AEAD? (aeAlg_of_id i)) ==> (
-         let max = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in
-         let min = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
-           0 <= max
-         /\ ((0 < min /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max )
-          \/ (0 < min /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat min max_TLSPlaintext_fragment_length)
-          \/ (min <= 0 /\ max < max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat 0 max)
-          \/ (min <= 0 /\ max >= max_TLSPlaintext_fragment_length /\ r == Mktuple2 #nat #nat 0 max_TLSPlaintext_fragment_length))
-// needed in Encode:
-//         /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
-))
-     /\ snd r <= max_TLSPlaintext_fragment_length
-)
+    let min, max = match aeAlg_of_id i with
+      | AEAD a _ ->
+        (clen - AE.explicit_iv_length i - aeadTagSize a,
+         clen - AE.explicit_iv_length i - aeadTagSize a)
+      | MtE enc _ ->
+        let m = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
+        (min0 m, clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i)
+      | MACOnly h ->
+        (clen - hashSize h, clen - hashSize h) in
+    min >= 0 /\ min <= max /\ max <= max_TLSPlaintext_fragment_length /\ r = (min, max))
 
 let cipherRangeClass i clen =
   let authEnc = aeAlg_of_id i in
   match authEnc with
-  | MACOnly _
-  | MtE (Stream _) _
-  | MtE (Block _ ) _ ->
+  | MACOnly h ->
+    let hLen = hashSize h in
+    let minmax = clen - hLen in
+    minmax, minmax
+  | MtE _ _ ->
     let ivL = ivSize i in
     let macLen = macSize (macAlg_of_id i) in
     let minPad, maxPad = minMaxPad i in
     let max = clen - ivL - macLen - minPad in
     let min = clen - ivL - macLen - maxPad in
-    if min < 0 then
-      (0,max)
-    else
-      if max < max_TLSPlaintext_fragment_length then
-	(min,max)
-      else
-	(min,max_TLSPlaintext_fragment_length)
+    min0 min, max
   | AEAD aeadAlg _ ->
     let ivL = AE.explicit_iv_length i in
     let tagL = aeadTagSize aeadAlg in
-    let minPad, maxPad = minMaxPad i in
-    let max = clen - ivL - tagL - minPad in
-    let min = clen - ivL - tagL - maxPad in
-    min, max
+    let minmax = clen - ivL - tagL in
+    minmax, minmax
 
 val cipherRangeClass_width: i:id2 ->
   clen:nat{valid_clen i clen} ->
@@ -167,37 +160,63 @@ val cipherRangeClass_width: i:id2 ->
 #set-options "--initial_ifuel 2"
 let cipherRangeClass_width i clen = ()
 
-#reset-options
-#set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0" //very puzzled how the next query could succeed with 0 fuel
-
+#reset-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 4 --max_ifuel 4"
 (* targetLength: given a plaintext range, what would be the length of the ciphertext? *)
 // TLS 1.2 RFC: For CBC, the encrypted data length is one more than the sum of
 // block_length, TLSPlaintext.length, mac_length, and padding_length
 val targetLength : i:id2 -> r:range -> Pure nat
   (requires
-    snd r <= max_TLSPlaintext_fragment_length
-    /\ (~(AEAD? (aeAlg_of_id i)) ==>
-        snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-    /\ (AEAD? (aeAlg_of_id i) ==> fst r = snd r))
-  (ensures (fun clen -> valid_clen i clen /\ wider (cipherRangeClass i clen) r))
-let targetLength i r =
-  let l,h = r in
-  let authEnc = aeAlg_of_id i in
-  match authEnc with
-  | MACOnly _
-  | MtE (Stream _) _
-  | MtE (Block _) _ ->
+    fst r >= 0 /\ snd r <= max_TLSPlaintext_fragment_length /\
+    (match aeAlg_of_id i with
+    | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashSize hash)
+    | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+    | AEAD _ _ -> fst r = snd r))
+  (ensures (fun clen ->
+    valid_clen i clen /\
+    wider (cipherRangeClass i clen) r))
+
+let targetLength i (l,h) =
+  match aeAlg_of_id i with
+  | MACOnly hash ->  //admit() (*)
+    cut(l <= h); cut(l >=0); cut(h >= 0);
+    let hLen = hashSize hash in
+    cut(hLen >= 0);
+    let prePad = h + hLen in
+    cut(prePad >= h); cut(prePad >= 0);
+    let padLen = minimalPadding i prePad in
+    prePad + padLen
+  | MtE _ _ ->
     let ivL = ivSize i in
+    cut(ivL >= 0);
     let macLen = macSize (macAlg_of_id i) in
+    cut(macLen >= 0);
     let prePad = h + macLen in
     let padLen = minimalPadding i prePad in
-    let clen = ivL + prePad + padLen in
+    minimalPadding_at_least_fixedPadSize i prePad;
+    let clen = ivL + macLen + padLen + h in
+    cut(padLen >= fixedPadSize i);
+    cut(padLen <= maxPadSize i);
+    cut(clen - ivL - macLen - padLen = h);
+    cut(h - l <= maxPadSize i - padLen);
+    cut(clen - ivL - macLen - maxPadSize i <= l);
+    cut(h <= max_TLSPlaintext_fragment_length);
+    cut(clen - ivL - macLen - fixedPadSize i >= h);
+    cut(clen - ivL - macLen - fixedPadSize i = h + padLen - fixedPadSize i);
     clen
-  | AEAD aeadAlg _ ->
+  | AEAD aeadAlg _ -> // admit() (*
     let ivL = AE.explicit_iv_length i in
+    cut(ivL >= 0);
+    cut(ID13? i ==> ivL = 0);
     let tagL = aeadTagSize aeadAlg in
+    cut(tagL >= 0);
+    cut(ID13? i ==> tagL <= 16);
     let fp = fixedPadSize i in
+    cut(ID13? i ==> fp = 1);
+    cut(fp >= 0);
     let clen = ivL + h + fp + tagL in
+    cut(ID13? i ==> clen = h + 1 + tagL);
+    cut(ID13? i ==> clen - tagL <= max_TLSCiphertext_fragment_length_13);
+    cut(ID12? i ==> clen - ivL - tagL - fp <= max_TLSPlaintext_fragment_length);
     clen
 
 (* This is the high-level spec for targetLength (for non-AEAD ciphers):

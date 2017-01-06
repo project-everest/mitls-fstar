@@ -97,7 +97,7 @@ let st_update #a st t =
 (*
  * AR: this was rid, is TLSConstants.rgn ok ?
  *)
-assume val keyRegion: TLSConstants.rgn
+let keyRegion:TLSConstants.rgn = new_region TLSConstants.tls_region
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 

@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module AEADProvider
 
 open FStar.Heap
@@ -323,8 +326,10 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
   push_frame();
   let cipher =
     match w with
-    | OpenSSL st _ -> admit () // OAEAD.encrypt st iv ad plain
-    | LowC st _ _ -> admit () //CAEAD.aead_encrypt st iv ad plain
+    | OpenSSL st _ -> OAEAD.encrypt st iv ad plain
+    | LowC st _ _ ->
+      assume(CAEAD.alg st = alg i); // assume val in the .fst
+      CAEAD.aead_encrypt st iv ad plain
     | LowLevel st _ ->
       let adlen = uint_to_t (length ad) in
       let ad = from_bytes ad in

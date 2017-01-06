@@ -202,13 +202,10 @@ let decrypt #i #l d iv ad c =
 
 (* Functional correctness test: decrypt iv ad (encrypt iv ad p) = p *)
 (* (regardless of authId i)*)
-assume val i : i:id
-assume val lemma_i: unit -> Lemma(pv_of_id i = TLS_1p3)
-let test_correctness () : St unit =
+let test_correctness (i:id{pv_of_id i = TLS_1p3}) : St unit =
   let wr = new_region tls_region in
   let rr = new_region tls_region in
   let w = gen wr i in
-  lemma_i ();
   let l : plainlen = 0 in
   let ad : adata i = empty_bytes in
   let plain : plain i l = empty_bytes in
