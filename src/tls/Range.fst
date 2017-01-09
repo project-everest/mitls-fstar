@@ -1,6 +1,3 @@
-(*--build-config
-options:--use_hints --detail_errors --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
---*)
 module Range
 
 (* This module defines all range computations for the lengths of
@@ -89,6 +86,11 @@ val minMaxPad: id2 -> Tot range
 let minMaxPad i = (fixedPadSize i, maxPadSize i)
 #set-options "--initial_ifuel 1"
 
+// ADL: beware of this definition, for MtE padding it only requires
+// clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
+// rather than the expected:
+// clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i <= max_TLSPlaintext_fragment_length
+// valid_clen i c doesn't imply that the plaintext after decrypting c will be shorter than max_TLSPlaintext_fragment_length
 type valid_clen (i:id) (clen:nat) =
  (if PlaintextID? i then
     0 <= clen /\ clen <= max_TLSPlaintext_fragment_length
@@ -107,7 +109,7 @@ type valid_clen (i:id) (clen:nat) =
       clen - AE.explicit_iv_length i - tlen <= max_TLSPlaintext_fragment_length
     else if MtE? (aeAlg_of_id i) then
       clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i >= 0 /\
-      clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i <= max_TLSPlaintext_fragment_length
+      clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else // MACOnly
       let MACOnly h = aeAlg_of_id i in
       clen - hashSize h >= 0 /\
@@ -118,6 +120,11 @@ let min0 (i:int) : Tot (n:nat) =
   if i >= 0 then i
   else 0
 
+let minP (n:int) : Tot (m:int{m <= n /\ m <= max_TLSPlaintext_fragment_length}) =
+  if n >= max_TLSPlaintext_fragment_length then max_TLSPlaintext_fragment_length
+  else n
+
+#reset-options "--z3rlimit 30 --initial_fuel 1 --initial_ifuel 1 --max_fuel 4 --max_ifuel 4"
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
 val cipherRangeClass: i:id2 -> clen:nat -> Pure range
@@ -128,8 +135,9 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
         (clen - AE.explicit_iv_length i - aeadTagSize a,
          clen - AE.explicit_iv_length i - aeadTagSize a)
       | MtE enc _ ->
-        let m = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
-        (min0 m, clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i)
+        let m0 = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
+        let m1 = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in
+        (min0 m0, minP m1)
       | MACOnly h ->
         (clen - hashSize h, clen - hashSize h) in
     min >= 0 /\ min <= max /\ max <= max_TLSPlaintext_fragment_length /\ r = (min, max))
@@ -147,7 +155,7 @@ let cipherRangeClass i clen =
     let minPad, maxPad = minMaxPad i in
     let max = clen - ivL - macLen - minPad in
     let min = clen - ivL - macLen - maxPad in
-    min0 min, max
+    min0 min, minP max
   | AEAD aeadAlg _ ->
     let ivL = AE.explicit_iv_length i in
     let tagL = aeadTagSize aeadAlg in
@@ -160,7 +168,6 @@ val cipherRangeClass_width: i:id2 ->
 #set-options "--initial_ifuel 2"
 let cipherRangeClass_width i clen = ()
 
-#reset-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 4 --max_ifuel 4"
 (* targetLength: given a plaintext range, what would be the length of the ciphertext? *)
 // TLS 1.2 RFC: For CBC, the encrypted data length is one more than the sum of
 // block_length, TLSPlaintext.length, mac_length, and padding_length
@@ -175,10 +182,12 @@ val targetLength : i:id2 -> r:range -> Pure nat
     valid_clen i clen /\
     wider (cipherRangeClass i clen) r))
 
+#reset-options "--z3rlimit 30 --initial_fuel 1 --initial_ifuel 1 --max_fuel 4 --max_ifuel 4"
 let targetLength i (l,h) =
   match aeAlg_of_id i with
-  | MACOnly hash ->  //admit() (*)
-    cut(l <= h); cut(l >=0); cut(h >= 0);
+  | MACOnly hash ->
+    cut(l <= h); cut(l >= 0);
+    cut(h <= max_TLSPlaintext_fragment_length);
     let hLen = hashSize hash in
     cut(hLen >= 0);
     let prePad = h + hLen in
@@ -194,29 +203,26 @@ let targetLength i (l,h) =
     let padLen = minimalPadding i prePad in
     minimalPadding_at_least_fixedPadSize i prePad;
     let clen = ivL + macLen + padLen + h in
-    cut(padLen >= fixedPadSize i);
-    cut(padLen <= maxPadSize i);
-    cut(clen - ivL - macLen - padLen = h);
-    cut(h - l <= maxPadSize i - padLen);
-    cut(clen - ivL - macLen - maxPadSize i <= l);
+    cut(clen - ivL - macLen - maxPadSize i <= h);
     cut(h <= max_TLSPlaintext_fragment_length);
-    cut(clen - ivL - macLen - fixedPadSize i >= h);
-    cut(clen - ivL - macLen - fixedPadSize i = h + padLen - fixedPadSize i);
+    cut(clen - ivL - macLen >= fixedPadSize i + l);
+    cut(l >= 0);
+    cut(clen - ivL - macLen - fixedPadSize i >= 0);
+    cut(valid_clen i clen);
     clen
-  | AEAD aeadAlg _ -> // admit() (*
+  | AEAD aeadAlg _ ->
+    cut(AEAD? (aeAlg_of_id i));
     let ivL = AE.explicit_iv_length i in
     cut(ivL >= 0);
-    cut(ID13? i ==> ivL = 0);
     let tagL = aeadTagSize aeadAlg in
     cut(tagL >= 0);
-    cut(ID13? i ==> tagL <= 16);
     let fp = fixedPadSize i in
-    cut(ID13? i ==> fp = 1);
-    cut(fp >= 0);
+    cut(fp = 0);
     let clen = ivL + h + fp + tagL in
-    cut(ID13? i ==> clen = h + 1 + tagL);
-    cut(ID13? i ==> clen - tagL <= max_TLSCiphertext_fragment_length_13);
-    cut(ID12? i ==> clen - ivL - tagL - fp <= max_TLSPlaintext_fragment_length);
+    cut(clen - ivL - tagL - fp = h);
+    cut(h >= 0);
+    cut(h <= max_TLSPlaintext_fragment_length);
+    cut(clen - ivL - tagL - fp <= max_TLSPlaintext_fragment_length);
     clen
 
 (* This is the high-level spec for targetLength (for non-AEAD ciphers):
@@ -264,10 +270,11 @@ let targetLength i (l,h) =
 
 val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
    -> r:range{
-       snd r <= max_TLSPlaintext_fragment_length
-       /\ (~(AEAD? (aeAlg_of_id i)) ==>
-           snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-	   /\ (AEAD? (aeAlg_of_id i) ==> fst r = snd r)}
+       snd r <= max_TLSPlaintext_fragment_length /\
+       (match aeAlg_of_id i with
+       | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashSize hash)
+       | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+       | AEAD _ _ -> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
 #set-options "--z3rlimit 60"
 //without hints, this next query succeeds in around 19s on a powerful desktop; that's too close the default 20s timeout for CI
@@ -275,16 +282,15 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
 //At least with the long timeout it should work reliably with or without hints
 let targetLength_at_most_max_TLSCiphertext_fragment_length i r = ()
 
-
+#set-options "--z3rlimit 1000 --initial_fuel 1 --initial_ifuel 1 --max_fuel 2 --max_ifuel 2"
 val targetLength_converges: i:id2
   -> r:range{
-      snd r <= max_TLSPlaintext_fragment_length
-      /\ (~(AEAD? (aeAlg_of_id i)) ==>
-          snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
-      /\ (AEAD? (aeAlg_of_id i) ==> fst r = snd r)}
+      snd r <= max_TLSPlaintext_fragment_length /\
+      (match aeAlg_of_id i with
+      | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashSize hash)
+      | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
+      | AEAD _ _ -> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
-(* #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1" *)
-#set-options "--z3rlimit 1000"
 //without hints, the next query also takes several seconds on a powerful desktop
 let targetLength_converges i r =
   lemma_MtE i; lemma_ID12 i
