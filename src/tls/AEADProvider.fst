@@ -129,6 +129,8 @@ let noncelen (i:id) =
 
 type nonce i = lbytes (noncelen i)
 
+let coerce_iv (i:id) (b:lbytes (iv_length i)) : Tot (iv i) = b
+
 let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
   : Tot (i:iv i) =
   let salt : salt i = match st with
@@ -254,7 +256,6 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
     assume false;
     LowC st k s
 
-
 let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   : ST (state i Writer)
   (requires (fun h -> ~(authId i)))
@@ -304,9 +305,9 @@ let uint128_of_iv (#i:id) (iv:iv i)
 type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   (match w with
   | OpenSSL st _ -> OAEAD.fresh_iv #i st iv h
-  | LowLevel st _ -> (Flag.prf i ==>
-     Crypto.AEAD.Invariant.(Crypto.Symmetric.PRF.(
-        none_above #st.log_region #i ({iv=(uint128_of_iv iv); ctr=ctr_0 i}) st.prf.table)))
+  | LowLevel st _ ->
+    let nonce = uint128_of_iv iv in
+    Crypto.AEAD.Invariant.(fresh_nonce_st #i #Crypto.Indexing.Writer nonce st h)
   | _ -> True)
 
 let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
@@ -314,6 +315,9 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
   (match s with
   | OpenSSL st _ -> OAEAD.logged_iv #i #rw st iv (OAEAD.Entry ad p c) h
   | _ -> True)
+
+// ADL Jan 3: PlanA changes TODO
+#set-options "--lax"
 
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
   : ST (cipher:cipher i l)
@@ -362,7 +366,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
     else false in
   if r then cipher else cipher
 *)
-#set-options "--lax"
+
 let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:cipher i l)
   : ST (co:option (plain i l))
   (requires (fun _ -> True))

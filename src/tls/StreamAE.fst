@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module StreamAE
 
 // Provides authenticated encryption for a stream of variable-length
@@ -60,32 +63,32 @@ irreducible let max_ctr: n:nat{n = 18446744073709551615} =
   assert_norm (pow2 64 - 1 = 18446744073709551615);
   pow2 64 - 1
 
-type counter = c:nat{c <= max_ctr} 
+type counter = c:nat{c <= max_ctr}
 
 let ideal_ctr (#l:rid) (r:rid) (i:id) (log:ideal_log l i) : Tot Type0 =
   FStar.Monotonic.Seq.seqn r log max_ctr
   // An increasing counter, at most min(length log, 2^64-1)
-  
-let concrete_ctr (r:rid) (i:id) : Tot Type0 = 
+
+let concrete_ctr (r:rid) (i:id) : Tot Type0 =
   m_rref r counter increases
 
-let ctr_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 = 
-  if authId i   
+let ctr_ref (#l:rid) (r:rid) (i:id) (log:log_ref l i) : Tot Type0 =
+  if authId i
   then ideal_ctr r i (log <: ideal_log l i)
   else m_rref r counter increases
 
 let ctr (#l:rid) (#r:rid) (#i:id) (#log:log_ref l i) (c:ctr_ref r i log)
-  : Tot (m_rref r (if authId i 
-		   then seqn_val #l #(entry i) r log max_ctr 
-		   else counter) 
+  : Tot (m_rref r (if authId i
+		   then seqn_val #l #(entry i) r log max_ctr
+		   else counter)
 		increases) =
   c
 
 // kept concrete for log and counter, but the key and iv should be private.
-noeq type state (i:id) (rw:rw) = 
+noeq type state (i:id) (rw:rw) =
   | State: #region: rgn
          -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
-         -> aead: AEAD.state i rw 
+         -> aead: AEAD.state i rw
          -> log: log_ref log_region i // ghost, subject to cryptographic assumption
          -> counter: ctr_ref region i log // types are sufficient to anti-alias log and counter
          -> state i rw
@@ -171,7 +174,7 @@ let coerce parent i kv iv =
   let writer_r = new_region parent in
   let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
   let aead = AEAD.coerce i writer_r kv iv in
-  State #i #Writer #writer_r #writer_r aead () ectr 
+  State #i #Writer #writer_r #writer_r aead () ectr
 
 
 val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
@@ -205,7 +208,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    i.e. all idealization is turned off *)
 #set-options "--z3rlimit 100"
 let encrypt #i e l p =
-  let ctr = ctr e.counter in 
+  let ctr = ctr e.counter in
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
   let n = m_read ctr in
@@ -229,7 +232,7 @@ let encrypt #i e l p =
 #reset-options
 
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
-let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool = 
+let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
   let Entry l' c' _ = e in
   l = l' && c = c'
 
@@ -246,7 +249,7 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
 	 else res = None))
     /\ (match res with
        | None -> HH.modifies Set.empty h0.h h1.h
-       | _  ->  
+       | _  ->
                 let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
                 HH.modifies_one d.region h0.h h1.h
               /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
@@ -255,11 +258,11 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
 #set-options "--z3rlimit 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 let decrypt #i d l c =
-  let ctr = ctr d.counter in 
+  let ctr = ctr d.counter in
   m_recall ctr;
   let j = m_read ctr in
-  if authId i 
-  then 
+  if authId i
+  then
     let ilog = ilog d.log in
     let log  = m_read ilog in
     let ictr: ideal_ctr d.region i ilog = d.counter in
