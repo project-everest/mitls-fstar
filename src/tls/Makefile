@@ -372,7 +372,7 @@ test.out:
 
 #16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
 mitls.exe:  tls-gen-spartan
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -g mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 
 # Depends on tls-gen
