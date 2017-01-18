@@ -15,9 +15,7 @@ clean:
 	rm -rf test/*.cm* test/*.o
 
 # ------------------ Dependencies on F* & its libraries --------------
-# When using NuBuild, FStar must be located within the source tree.
-# Now that soft links are available on all platforms, I don't see a
-# reason not to assume a fixed location.
+# Default F* location. 
 FSTAR_HOME?=../../../FStar
 # This location can easily be overridden by doing:
 #   FSTAR_HOME=../../../fstar make mitls.exe
@@ -71,15 +69,6 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_H
 # everyone should have it in their ~/.bashrc
 ifeq ($(OS),Windows_NT)
   EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-endif
-
-# ----------------------- NuBuild integration -------------------------
-NUBUILD_HOME=../../.nubuild
-NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
-ifdef USE_NUBUILD
-FSTAR_OR_NUBUILD=$(NUBUILD) $(NUBUILDFLAGS) FStarVerify $(FSTARFLAGS)
-else
-FSTAR_OR_NUBUILD=$(FSTAR)
 endif
 
 # ---------------------------------------------------------------------
@@ -239,7 +228,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Lax-checking one file at a time
 %.fst-lax: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
+	$(FSTAR) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
 	--verify_module $(basename $(notdir $@)) \
@@ -247,14 +236,14 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Verifying one file at a time
 %.fst-ver: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
@@ -276,7 +265,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Sanity check
 tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
         --verify_module False \
