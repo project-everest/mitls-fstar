@@ -359,16 +359,27 @@ tls-gen-%: record_fstar_version $(LIBFILES)
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
 	# A .cmxa with all the .cmx above
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
+	# SI: rm next lines, unless needed by anyone who calls tls-gen-%. 
 	# Then our test executable
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa \
 	         -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 	# Run the tests (currently broken)
 	# $(EXTRA_PATH) ./test.out
 
-test.out:
+test.out:	
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+
+.PHONY: test
+test: test.out
+	# Unit tests from test/test_main.ml
+	$(EXTRA_PATH) ./test.out
+	# Run mitls.exe 1.2
+	./mitls.exe www.google.com 443 -v 1.2
+	# Run mitls.exe 1.3. Broken right now. 
+	# mitls-fstar/src/tls/mitls.exe tls13.crypto.mozilla.org 443
+
 
 #16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
 mitls.exe:  tls-gen-spartan
