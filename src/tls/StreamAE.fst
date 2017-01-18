@@ -108,6 +108,9 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   HH.parent w.region = parent /\
   stronger_fresh_region w.region h0 h1 /\
   color w.region = color parent /\
+  extends (AEAD.region w.aead) parent /\
+  stronger_fresh_region (AEAD.region w.aead) h0 h1 /\
+  color (AEAD.region w.aead) = color parent /\
   (authId i ==>
       (m_contains (ilog w.log) h1 /\
        m_sel h1 (ilog w.log) == createEmpty)) /\
@@ -118,17 +121,15 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
 // Generate a fresh instance with index i in a fresh sub-region of r0
 // (we might drop this spec, since F* will infer something at least as precise,
 // but we keep it for documentation)
-val gen: parent:rid -> i:id -> ST (writer i)
+val gen: parent:rgn -> i:id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
 
-(*
- * AR: had to provide implicit arguments for ectr line, the cut, and the timeout
- *)
-#set-options "--z3rlimit 30"
+#set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let gen parent i =
   let writer_r = new_region parent in
-  let aead = AEAD.gen i writer_r in
+  lemma_ID13 i;
+  let aead = AEAD.gen i parent in
   let _ = cut (is_eternal_region writer_r) in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
@@ -137,65 +138,76 @@ let gen parent i =
   else
     let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
     State #i #Writer #writer_r #writer_r aead () ectr
-#reset-options
 
-val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
+#reset-options
+val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
+  (requires (fun h0 -> HyperHeap.disjoint parent w.region /\
+  HyperHeap.disjoint parent (AEAD.region w.aead))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
-               modifies Set.empty h0 h1 /\
-               r.log_region = w.region /\
-               HH.parent r.region = parent /\
+         modifies Set.empty h0 h1 /\
+         r.log_region = w.region /\
+         HH.parent r.region = parent /\
 	       color r.region = color parent /\
-               stronger_fresh_region r.region h0 h1 /\
-               op_Equality #(log_ref w.region i) w.log r.log /\
+         stronger_fresh_region r.region h0 h1 /\
+         op_Equality #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
 	       m_sel h1 (ctr r.counter) === 0))
 // encryption (on concrete bytes), returns (cipher @| tag)
 // Keeps seqn and nonce implicit; requires the counter not to overflow
 // encryption of plaintexts; safe instances are idealized
 
+#set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 let genReader parent #i w =
   let reader_r = new_region parent in
-  let raead = AEAD.genReader parent w.aead in
+  let writer_r : rgn = w.region in
+  assert(HyperHeap.disjoint writer_r reader_r);
+  lemma_ID13 i;
+  let raead = AEAD.genReader parent #i w.aead in
   if authId i then
     let log : ideal_log w.region i = w.log in
     let dctr: ideal_ctr reader_r i log = new_seqn reader_r 0 log in
-    State #i #Reader #reader_r #(w.region) raead w.log dctr
+    State #i #Reader #reader_r #writer_r raead w.log dctr
   else let dctr : concrete_ctr reader_r i = m_alloc reader_r 0 in
-    State #i #Reader #reader_r #(w.region) raead () dctr
+    State #i #Reader #reader_r #writer_r raead () dctr
 
 // Coerce a writer with index i in a fresh subregion of parent
 // (coerced readers can then be obtained by calling genReader)
-val coerce: parent:rid -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer i)
+val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 
 let coerce parent i kv iv =
+  assume false; // coerce missing post-condition
   let writer_r = new_region parent in
   let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
-  let aead = AEAD.coerce i writer_r kv iv in
+  let aead = AEAD.coerce i parent kv iv in
   State #i #Writer #writer_r #writer_r aead () ectr
-
 
 val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
 
 let leak #i #role s =
-  AEAD.leak (State?.aead s)
+  lemma_ID13 i;
+  AEAD.leak #i #role (State?.aead s)
 
+// ADL WIP Jan. 15 2017
+// Requires the same changes as AEAD_GCM
+#set-options "--lax"
 
 // we are not relying on additional data
 private abstract let noAD = empty_bytes
 
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
-    (requires (fun h0 -> m_sel h0 (ctr e.counter) < max_ctr))
+    (requires (fun h0 ->
+      HyperHeap.disjoint e.region (AEAD.log_region #i e.aead) /\
+      m_sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
-                 HH.modifies_one e.region h0.h h1.h /\
-                 m_contains (ctr e.counter) h1 /\
-                 m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1 /\
-	         (authId i ==>
-		   (let log = ilog e.log in
+      modifies (Set.as_set [e.log_region; AEAD.log_region #i e.aead]) h0 h1 /\
+      m_contains (ctr e.counter) h1 /\
+      m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1 /\
+	    (authId i ==>
+		    (let log = ilog e.log in
 		    let ent = Entry l c p in
 		    let n = Seq.length (m_sel h0 log) in
 		    m_contains log h1 /\
@@ -206,12 +218,13 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    runs on the network is what remains after dead code elimination when
    safeId i is fixed to false and after removal of the cryptographic ghost log,
    i.e. all idealization is turned off *)
-#set-options "--z3rlimit 100"
+#set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 3 --max_fuel 3 --initial_fuel 3"
 let encrypt #i e l p =
   let ctr = ctr e.counter in
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
   let n = m_read ctr in
+  lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
   let iv = AEAD.create_nonce e.aead nb in
   let c = AEAD.encrypt #i #l e.aead iv noAD text in
@@ -229,8 +242,8 @@ let encrypt #i e l p =
   else
     m_write ctr (n + 1);
   c
-#reset-options
 
+#reset-options
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
 let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
   let Entry l' c' _ = e in
@@ -243,17 +256,17 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
   (ensures  (fun h0 res h1 ->
       let j = m_sel h0 (ctr d.counter) in
       (authId i ==>
-	(let log = m_sel h0 (ilog d.log) in
-	 if j < Seq.length log && matches l c (Seq.index log j)
-	 then res = Some (Entry?.p (Seq.index log j))
-	 else res = None))
-    /\ (match res with
-       | None -> HH.modifies Set.empty h0.h h1.h
-       | _  ->
+    	(let log = m_sel h0 (ilog d.log) in
+    	 if j < Seq.length log && matches l c (Seq.index log j)
+    	 then res = Some (Entry?.p (Seq.index log j))
+    	 else res = None))
+       /\ (match res with
+         | None -> HH.modifies Set.empty h0.h h1.h
+         | _  ->
                 let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
-                HH.modifies_one d.region h0.h h1.h
-              /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
-	      /\ m_sel h1 (ctr d.counter) === j + 1)))
+                HH.modifies_one d.region h0.h h1.h /\
+                modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
+	              /\ m_sel h1 (ctr d.counter) === j + 1)))
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances

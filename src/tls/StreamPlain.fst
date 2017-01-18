@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module StreamPlain
 
 open FStar.Seq
@@ -11,12 +14,12 @@ open Range
 open Content
 
 // Defines an abstract "plain i len" plaintext interface from the more
-// concrete & TLS-specific type "Content.fragment i"; 
+// concrete & TLS-specific type "Content.fragment i";
 // "len" is the (public) length after CTing and padding.
 
 // This module is used only for TLS 1.3.
 
-type id = i:id { ID13? i }  
+type id = i:id { ID13? i }
 
 
 (*** plain := fragment | CT | 0*  ***)
@@ -31,30 +34,30 @@ type plainRepr = b:bytes { plainLength (length b) }
 
 type plain (i:id) (len:plainLen) = f:fragment i { len = snd (Content.rg i f) + 1 }
 
-let pad payload ct (len:plainLen { length payload < len /\ length payload <= max_TLSPlaintext_fragment_length }): plainRepr = 
+let pad payload ct (len:plainLen { length payload < len /\ length payload <= max_TLSPlaintext_fragment_length }): plainRepr =
   payload @| ctBytes ct @| createBytes (len - length payload - 1) 0z
 
 (*
-val pad_zeros: payload:bytes 
+val pad_zeros: payload:bytes
   -> ct:contentType
   -> len:plainLen { length payload < len /\ len < max_TLSPlaintext_fragment_length }
   -> j:plainLen {length payload < j /\ j < len}
-  -> Lemma (j < length (pad payload ct len) /\ 
+  -> Lemma (j < length (pad payload ct len) /\
            (forall (k:nat {j < k /\ k < len}).{:pattern (Seq.index (pad payload ct len) k)} Seq.index (pad payload ct len) k = 0z))
 let pad_zeros payload ct len len' = ()
 *)
 
 val ghost_repr: #i:id -> #len: plainLen -> f:plain i len -> GTot (bs:lbytes len)
-let ghost_repr #i #len f = 
-  let ct,_ = ct_rg i f in 
-  let payload = Content.ghost_repr #i f in 
+let ghost_repr #i #len f =
+  let ct,_ = ct_rg i f in
+  let payload = Content.ghost_repr #i f in
   pad payload ct len
 
-// slight code duplication between monads; avoidable? 
+// slight code duplication between monads; avoidable?
 val repr: i:id{ ~(safeId i)} -> len: plainLen -> p:plain i len -> Tot (b:lbytes len {b = ghost_repr #i #len p})
-let repr i len f = 
-  let ct,_ = ct_rg i f in 
-  let payload = Content.repr i f in 
+let repr i len f =
+  let ct,_ = ct_rg i f in
+  let payload = Content.repr i f in
   pad payload ct len
 
 private unfold let min (a:nat) (b:nat): nat = if a < b then a else b
@@ -65,12 +68,12 @@ private unfold let min (a:nat) (b:nat): nat = if a < b then a else b
 // traffic analysis countermeasure.
 
 // Note that zero-padding can go past max_TLSPlaintext_fragment_length.
-// This function scans from right to left the AE-decrypted plaintext to strip 
+// This function scans from right to left the AE-decrypted plaintext to strip
 // the padding and compute a value of type `plain` with a public range.
 // The representation of the result is the original
 // AE-decrypted plaintext truncated to max_TLSPlaintext_fragment_length + 1.
-val scan: i:id { ~ (authId i) } -> bs:plainRepr -> 
-  j:nat { j < length bs 
+val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
+  j:nat { j < length bs
 	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } ->
   Tot (let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
        let bs' = fst (split bs len) in
@@ -128,7 +131,7 @@ let rec scan i bs j =
 	let f = CT_Handshake rg payload in
 	lemma_eq_intro bs' (pad payload Handshake len);
         Correct f
-  | 23z -> 
+  | 23z ->
     if j > max_TLSPlaintext_fragment_length then
       Error (AD_record_overflow, "TLSPlaintext fragment exceeds maximum length")
     else
@@ -179,7 +182,7 @@ val inverse_scan: i:id{~(authId i)} -> len:plainLen -> f:plain i len ->
 		      length payload = 2 /\ Correct? (Alert.parse payload))) )
 	(ensures Correct? (scan i (ghost_repr #i #len f) (len - 1)) )
 let inverse_scan i len f =
-  let ct,_ = ct_rg i f in 
+  let ct,_ = ct_rg i f in
   let payload = Content.ghost_repr #i f in
   scan_pad_correct i payload ct len (len - 1)
 
@@ -189,8 +192,8 @@ val mk_plain: i:id{ ~(authId i) } -> l:plainLen -> pr:lbytes l
   -> Tot (let len = min l (max_TLSPlaintext_fragment_length + 1) in
          let pr' = fst (split pr len) in
          option (p:plain i len {pr' = ghost_repr #i #len p}))
-let mk_plain i l pr = 
-  match scan i pr (length pr - 1) with 
+let mk_plain i l pr =
+  match scan i pr (length pr - 1) with
   | Correct p -> Some p
   | Error _ -> None
 
