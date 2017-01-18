@@ -20,9 +20,9 @@ clean:
 # reason not to assume a fixed location.
 FSTAR_HOME?=../../../FStar
 # This location can easily be overridden by doing:
-#   FSTAR_HOME=../../../fstar make tls-gen
+#   FSTAR_HOME=../../../fstar make mitls.exe
 # BUT NOT AS FOLLOWS
-#   make FSTAR_HOME=../../../fstar tls-gen
+#   make FSTAR_HOME=../../../fstar mitls.exe
 # the latter form won't work because FSTAR_HOME will incorrectly override
 # values in recursive invocations of $(MAKE)...
 
@@ -83,7 +83,7 @@ FSTAR_OR_NUBUILD=$(FSTAR)
 endif
 
 # ---------------------------------------------------------------------
-# These files are all extracted via lax type-checking in tls-gen
+# These files are all extracted via lax type-checking in mitls.cmxa
 # Files are listed in dependency order
 
 FSTS=Flags.fst \
@@ -333,13 +333,11 @@ TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 
-tls-gen: tls-gen-spartan
-
-tls-gen-%: record_fstar_version $(LIBFILES)
+mitls.cmxa: record_fstar_version $(LIBFILES)
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
 	$(MAKE) -C $(FFI_HOME)
-	$(FSTAR) --include $(LDIR)/$* \
+	$(FSTAR) --include $(LDIR)/spartan \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
@@ -348,6 +346,7 @@ tls-gen-%: record_fstar_version $(LIBFILES)
 	  $(FSTS)
 	# Note (JP): the Makefile seems incorrect and we need to run make clean
 	# first
+	# Make OCaml version of F* libs. 
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
@@ -359,20 +358,17 @@ tls-gen-%: record_fstar_version $(LIBFILES)
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
 	# A .cmxa with all the .cmx above
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
-	# SI: rm next lines, unless needed by anyone who calls tls-gen-%. 
-	# Then our test executable
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa \
-	         -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
-	# Run the tests (currently broken)
-	# $(EXTRA_PATH) ./test.out
 
-test.out:	
-	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
-	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
+#16-10-19 beware: failing tests in mitls.cmxa will leave mitls.exe unchanged.
+mitls.exe:  mitls.cmxa 
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -g mitls.cmxa \
+		-I test/ -I output/ test/mitls.ml -o mitls.exe
+
+test.out: mitls.cmxa 
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
 .PHONY: test
-test: test.out
+test: test.out mitls.exe
 	# Unit tests from test/test_main.ml
 	$(EXTRA_PATH) ./test.out
 	# Run mitls.exe 1.2
@@ -380,13 +376,7 @@ test: test.out
 	# Run mitls.exe 1.3. Broken right now. 
 	# mitls-fstar/src/tls/mitls.exe tls13.crypto.mozilla.org 443
 
-
-#16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
-mitls.exe:  tls-gen-spartan
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -g mitls.cmxa \
-		-I test/ -I output/ test/mitls.ml -o mitls.exe
-
-# Depends on tls-gen
+# Depends on mitls.cmxa
 rpc.ml:
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
@@ -401,16 +391,16 @@ rpc.exe:
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
-tls-ffi: tls-gen
+tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -g mitls.cmxa -o libmitls.dll
 else
 UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-tls-ffi: tls-gen
+tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -ccopt -dynamiclib -ccopt -lasmrun -g mitls.cmxa -o libmitls.dylib
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -ccopt -bundle -g mitls.cmxa -o libmitls.so
 else
-tls-ffi: tls-gen
+tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so
 endif
 endif
