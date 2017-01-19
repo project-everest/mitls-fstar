@@ -28,7 +28,9 @@ type id = i:id { ID13? i }
 // similarly, the length accounts for the TLS-specific CT byte.
 // internally, we know len > 0
 
+//ADL is this correct? Why not l <= max_TLSPlaintext_fragment_length ??
 let plainLength (l:int) = 1 <= l /\ l <= max_TLSCiphertext_fragment_length_13
+
 type plainLen = l:int { plainLength l }
 type plainRepr = b:bytes { plainLength (length b) }
 
@@ -46,7 +48,7 @@ val pad_zeros: payload:bytes
            (forall (k:nat {j < k /\ k < len}).{:pattern (Seq.index (pad payload ct len) k)} Seq.index (pad payload ct len) k = 0z))
 let pad_zeros payload ct len len' = ()
 *)
-
+#set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 0 --max_fuel 1 --initial_fuel 0"
 val ghost_repr: #i:id -> #len: plainLen -> f:plain i len -> GTot (bs:lbytes len)
 let ghost_repr #i #len f =
   let ct,_ = ct_rg i f in
@@ -78,6 +80,7 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   Tot (let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
        let bs' = fst (split bs len) in
        result (p:plain i len{ bs' == ghost_repr #i #len p }))
+
 let rec scan i bs j =
   let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
   let bs' = fst (split bs len) in
@@ -170,8 +173,6 @@ let rec scan_pad_correct i payload ct len j =
     end
   else
     scan_pad_correct i payload ct len (j - 1)
-
-#reset-options
 
 val inverse_scan: i:id{~(authId i)} -> len:plainLen -> f:plain i len ->
   Lemma (requires (let ct,_ = ct_rg i f in

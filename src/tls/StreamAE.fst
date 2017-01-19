@@ -193,16 +193,19 @@ let leak #i #role s =
 
 // ADL WIP Jan. 15 2017
 // Requires the same changes as AEAD_GCM
-#set-options "--lax"
+//#set-options "--lax"
 
 // we are not relying on additional data
 private abstract let noAD = empty_bytes
 
 val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
     (requires (fun h0 ->
+      lemma_ID13 i;
       HyperHeap.disjoint e.region (AEAD.log_region #i e.aead) /\
+      l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
       m_sel h0 (ctr e.counter) < max_ctr))
     (ensures  (fun h0 c h1 ->
+      lemma_ID13 i;
       modifies (Set.as_set [e.log_region; AEAD.log_region #i e.aead]) h0 h1 /\
       m_contains (ctr e.counter) h1 /\
       m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1 /\
@@ -220,6 +223,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    i.e. all idealization is turned off *)
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 3 --max_fuel 3 --initial_fuel 3"
 let encrypt #i e l p =
+  let h0 = ST.get() in
   let ctr = ctr e.counter in
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in
@@ -227,6 +231,9 @@ let encrypt #i e l p =
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
   let iv = AEAD.create_nonce e.aead nb in
+  lemma_repr_bytes_values (length text);
+  assume(AEAD.st_inv e.aead h0); // TODO
+  assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h0)); // TODO
   let c = AEAD.encrypt #i #l e.aead iv noAD text in
   if authId i then
     begin
@@ -243,7 +250,6 @@ let encrypt #i e l p =
     m_write ctr (n + 1);
   c
 
-#reset-options
 (* val matches: #i:id -> l:plainLen -> cipher i l -> entry i -> Tot bool *)
 let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
   let Entry l' c' _ = e in
@@ -252,7 +258,9 @@ let matches (#i:id) (l:plainLen) (c:cipher i l) (e:entry i) : Tot bool =
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
 val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
   -> ST (option (plain i (min l (max_TLSPlaintext_fragment_length + 1))))
-  (requires (fun h0 -> m_sel h0 (ctr d.counter) < max_ctr))
+  (requires (fun h0 ->
+     l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
+     m_sel h0 (ctr d.counter) < max_ctr))
   (ensures  (fun h0 res h1 ->
       let j = m_sel h0 (ctr d.counter) in
       (authId i ==>
@@ -288,6 +296,8 @@ let decrypt #i d l c =
       end
     else None
   else //concrete
+   let () = lemma_ID13 i; cut(AEAD.noncelen i = AEAD.iv_length i) in
+   lemma_repr_bytes_values j;
    let nb = bytes_of_int (AEAD.noncelen i) j in
    let iv = AEAD.create_nonce d.aead nb in
    match AEAD.decrypt #i #l d.aead iv noAD c with

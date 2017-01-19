@@ -195,10 +195,11 @@ val frame_fragments : #i:id -> #rw:rw -> st:state i rw -> h0:mem -> h1:mem -> s:
     (ensures authId i ==> fragments st h0 == fragments st h1)
 let frame_fragments #i #rw st h0 h1 s = ()
 
+#set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 3 --max_fuel 3 --initial_fuel 3"
 val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:mem -> h1:mem -> s:Set.set rid
 	       -> Lemma
     (requires modifies s h0 h1
-    	      /\ Map.contains h0.h (region st)
+    	  /\ Map.contains h0.h (region st)
 	      /\ not (Set.mem (region st) s))
     (ensures seqnT st h0 = seqnT st h1)
 let frame_seqnT #i #rw st h0 h1 s = ()
@@ -261,8 +262,7 @@ let gen parent i =
   else
     StLHAE () (StLHAE.gen parent i)
 
-#reset-options
-#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
   (requires (fun h0 -> HyperHeap.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
@@ -276,8 +276,14 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
 // encryption, recorded in the log; safe instances are idealized
 let genReader parent #i w =
   match w with
-  | Stream _ w -> Stream () (Stream.genReader parent w)
-  | StLHAE _ w -> StLHAE () (StLHAE.genReader parent w)
+  | Stream _ w ->
+    lemma_ID13 i;
+    assume(StreamAE.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
+    Stream () (Stream.genReader parent #i w)
+  | StLHAE _ w ->
+    lemma_ID12 i;
+    assume(AEAD_GCM.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
+    StLHAE () (StLHAE.genReader parent #i w)
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -308,10 +314,13 @@ let leak #i #role s =
   | StLHAE _ s -> let kv,iv = StLHAE.leak s in kv @| iv
 
 
+// ADL Jan 19. Made some progress on encrypt but need to merge lowlevel now
+#set-options "--lax"
+
 ////////////////////////////////////////////////////////////////////////////////
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
-#reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
+#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 3 --max_ifuel 3"
 val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
