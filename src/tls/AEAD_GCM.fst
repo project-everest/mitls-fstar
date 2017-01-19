@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module AEAD_GCM
 // AEAD-GCM mode for the TLS record layer, as specified in RFC 5288.
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
@@ -97,7 +100,12 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   modifies Set.empty h0 h1 /\
   extends w.region parent /\
   stronger_fresh_region w.region h0 h1 /\
+  disjoint w.region (AEAD.log_region w.aead) /\
   color w.region = color parent /\
+  extends (AEAD.region w.aead) parent /\
+  stronger_fresh_region (AEAD.region w.aead) h0 h1 /\
+  color (AEAD.region w.aead) = color parent /\
+  AEAD.empty_log w.aead h1 /\
   (authId i ==> (m_contains (ilog w.log) h1 /\ m_sel h1 (ilog w.log) == createEmpty)) /\
   m_contains (ctr w.counter) h1 /\
   m_sel h1 (ctr w.counter) === 0
@@ -114,7 +122,7 @@ val gen: parent:rgn -> i:id -> ST (writer i)
  *)
 let gen parent i =
   let writer_r = new_region parent in
-  let aead = AEAD.gen i writer_r in
+  let aead = AEAD.gen i parent in
   if authId i then
     let log : ideal_log writer_r i = alloc_mref_seq writer_r Seq.createEmpty in
     let ectr: ideal_ctr #writer_r writer_r i log = new_seqn #writer_r #(entry i) #(max_ctr (alg i)) writer_r 0 log in
@@ -124,7 +132,9 @@ let gen parent i =
     State #i #Writer #writer_r #writer_r aead () ectr
 
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 ->
+    HyperHeap.disjoint parent w.region /\
+    HyperHeap.disjoint parent (AEAD.region w.aead)))
   (ensures  (fun h0 (r:reader i) h1 ->
     modifies Set.empty h0 h1 /\
     r.log_region = w.region /\
@@ -138,7 +148,6 @@ let genReader parent #i w =
   let reader_r = new_region parent in
   let wr : rgn = w.region in
   assert(HyperHeap.disjoint wr reader_r);
-  assume(w.region = AEAD.region w.aead);
   let raead = AEAD.genReader parent w.aead in
   if authId i then
     let log : ideal_log w.region i = w.log in
@@ -156,9 +165,10 @@ val coerce: parent:rgn -> i:id{~(authId i)} -> kv:key i -> iv:iv i -> ST (writer
   (requires (fun h0 -> True))
   (ensures  (genPost parent))
 let coerce parent i kv iv =
+  assume false; // coerce missing post-condition
   let writer_r = new_region parent in
   let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
-  let aead = AEAD.coerce i writer_r kv iv in
+  let aead = AEAD.coerce i parent kv iv in
   State #i #Writer #writer_r #writer_r aead () ectr
 
 
@@ -168,6 +178,37 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
 let leak #i #role s =
   AEAD.leak (State?.aead s)
 
+let lemma_12 (i:id) : Lemma (pv_of_id i <> TLS_1p3) = ()
+
+let concrete_encrypt (#i:id) (e:writer i)
+  (n:nat{n <= max_ctr (alg i)}) (ad:adata i)
+  (rg:range{fst rg = snd rg /\ snd rg <= max_TLSPlaintext_fragment_length})
+  (p:plain i ad rg)
+  : ST (cipher i)
+  (requires (fun h0 ->
+    AEAD.st_inv e.aead h0))
+  (ensures (fun h0 c h1 ->
+    length c = Range.targetLength i rg /\
+    modifies_one (AEAD.log_region e.aead) h0 h1))
+  =
+  let h = ST.get() in
+  let l = fst rg in
+  let text = if safeId i then createBytes l 0z else repr i ad rg p in
+  lemma_repr_bytes_values n;
+  let nb = bytes_of_int (AEAD.noncelen i) n in
+  let nonce_explicit, _ = split nb (AEAD.explicit_iv_length i) in
+  let iv = AEAD.create_nonce e.aead nb in
+  assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h)); // TODO
+  lemma_repr_bytes_values (length text);
+  lemma_12 i;
+  assert_norm(length ad = 11);
+  let ad' = ad @| bytes_of_int 2 (length text) in
+  assert(length ad' = 13);
+  let tlen = targetLength i rg in
+  targetLength_converges i rg;
+  cut (within (length text) (cipherRangeClass i tlen));
+  targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
+  nonce_explicit @| AEAD.encrypt #i #l e.aead iv ad' text
 
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)
@@ -181,9 +222,10 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   -> p:plain i ad r
   -> ST (cipher i)
        (requires (fun h0 ->
+         HyperHeap.disjoint e.region (AEAD.log_region e.aead) /\
          m_sel h0 (ctr e.counter) < max_ctr (alg i)))
        (ensures  (fun h0 c h1 ->
-        modifies_one e.region h0 h1
+        modifies (Set.as_set [e.log_region; AEAD.log_region e.aead]) h0 h1
   	 /\ m_contains (ctr e.counter) h1
   	 /\ m_sel h1 (ctr e.counter) === m_sel h0 (ctr e.counter) + 1
   	 /\ length c = Range.targetLength i r
@@ -197,34 +239,14 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
   	   )
   ))
 
-let lemma_12 (i:id) : Lemma (pv_of_id i <> TLS_1p3) = ()
-
-#set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 1 --max_fuel 2 --initial_fuel 2"
-#set-options "--lax" // ADL Dec.15 Giving up for now
+#set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 3 --max_fuel 3 --initial_fuel 3"
 let encrypt #i e ad rg p =
+  let h0 = ST.get () in
   let ctr = ctr e.counter in
   m_recall ctr;
-  let l = fst rg in
-  let text = if safeId i then createBytes l 0z else repr i ad rg p in
   let n = m_read ctr in
-  let h = ST.get() in
-  lemma_repr_bytes_values n;
-  let nb = bytes_of_int (AEAD.noncelen i) n in
-  let nonce_explicit, _ = split nb (AEAD.explicit_iv_length i) in
-  let iv = AEAD.create_nonce e.aead nb in
-  (if authId i then assume(Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h)); // PROVEME
-  lemma_repr_bytes_values (length text);
-  lemma_12 i;
-  assert_norm(length ad = 11);
-  let ad' = ad @| bytes_of_int 2 (length text) in
-  assert(length ad' = 13);
-  let tlen = targetLength i rg in
-  targetLength_converges i rg;
-  cut (within (length text) (cipherRangeClass i tlen));
-  targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
-  assume(AEAD.st_inv e.aead h); // ADL TODO!!
-  let c = nonce_explicit @| AEAD.encrypt #i #l e.aead iv ad' text in
-  cut (length c == targetLength i rg);
+  assume(AEAD.st_inv e.aead h0);
+  let c = concrete_encrypt e n ad rg p in
   if authId i then
     begin
     let log = ilog e.log in
@@ -264,8 +286,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
                 /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
-#set-options "--z3rlimit 100 --max_fuel 0 --initial_fuel 0 --initial_ifuel 0 --max_ifuel 0"
-
+#set-options "--z3rlimit 100 --max_fuel 0 --initial_fuel 1 --initial_ifuel 0 --max_ifuel 1"
 let decrypt #i d ad c =
   let ctr = ctr d.counter in
   m_recall ctr;
@@ -286,16 +307,23 @@ let decrypt #i d ad c =
     // We discard the explicit nonce and use the internal sequence number
     // (ChaCha20 doesn't use the explicit nonce)
     let nb, c' = split c (AEAD.explicit_iv_length i) in
+    cut(length nb = AEAD.explicit_iv_length i);
     let j : counter (alg i) = m_read ctr in
     lemma_repr_bytes_values j;
-    let nonce =
+    let iv =
       match AEAD.alg i with
-      | CHACHA20_POLY1305 -> bytes_of_int (AEAD.noncelen i) j
-      | _ -> nb in
-    let iv = AEAD.create_nonce d.aead nonce in
+      | CHACHA20_POLY1305 ->
+        let nonce = bytes_of_int (AEAD.noncelen i) j in
+        AEAD.create_nonce d.aead nonce
+      | _ ->
+        assume(AEAD.noncelen i = AEAD.explicit_iv_length i); // Should be proved, both = 8
+        AEAD.create_nonce d.aead nb in
     let len = length c' - aeadTagSize (alg i) in
     lemma_repr_bytes_values len;
     let ad' = ad @| bytes_of_int 2 len in
+    assert(length ad' = 13);
+    lemma_ID12 i; // cut(pv_of_id i <> TLS_1p3);
+    let ad' : AEAD.adata i = ad' in
     let p = AEAD.decrypt #i #len d.aead iv ad' c' in
     match p with
     | None -> None

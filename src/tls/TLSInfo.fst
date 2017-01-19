@@ -745,12 +745,12 @@ let safeKDF _ = unsafe_coerce false //TODO: THIS IS A PLACEHOLDER
 abstract let authId = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAuthAlg pv ae
+  | ID12 pv msid kdf ae cr sr rw -> false // TODO
 
 abstract let safeId = function
   | PlaintextID _ -> false
   | ID13 ki -> false // TODO
-  | ID12 pv msid kdf ae cr sr rw -> (* safeKDF i && *) strongAEAlg pv ae
+  | ID12 pv msid kdf ae cr sr rw -> false // TODO
 
 let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))

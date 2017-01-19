@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module StAE
 
 // Authenticated encryptions of streams of TLS fragments (from Content)
@@ -28,14 +31,14 @@ module StLHAE = StatefulLHAE
 ////////////////////////////////////////////////////////////////////////////////
 let is_stream i = ID13? i
 
-let is_stlhae i = ID12? i && AEAD? (aeAlg_of_id i) && 
+let is_stlhae i = ID12? i && AEAD? (aeAlg_of_id i) &&
   (AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_128_GCM ||
    AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_256_GCM)
 
 // type id = i:id {is_stream i \/ is_stlhae i}
 
 // PLAINTEXTS are defined in Content.fragment i
-//16-06-08 see also StreamPlain and StatefulPlain. 
+//16-06-08 see also StreamPlain and StatefulPlain.
 
 type stae_id = i:id {is_stream i \/ is_stlhae i}
 
@@ -77,14 +80,14 @@ let stlhae_state (#i:id{is_stlhae i}) (#rw:rw) (s:state i rw)
   = let StLHAE _ s = s in s
 
 val region: #i:id -> #rw:rw -> state i rw -> Tot rgn
-let region (#i:id) (#rw:rw) (s:state i rw): Tot rgn = 
-  match s with 
+let region (#i:id) (#rw:rw) (s:state i rw): Tot rgn =
+  match s with
   | Stream _ x -> Stream.State?.region x
   | StLHAE _ x -> StLHAE.region x
 
 val log_region: #i:id -> #rw:rw -> state i rw -> Tot rgn
-let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn = 
-  match s with 
+let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn =
+  match s with
   | Stream _ s -> Stream.State?.log_region s
   | StLHAE _ s -> AEAD_GCM.State?.log_region s
 
@@ -192,36 +195,36 @@ val frame_fragments : #i:id -> #rw:rw -> st:state i rw -> h0:mem -> h1:mem -> s:
     (ensures authId i ==> fragments st h0 == fragments st h1)
 let frame_fragments #i #rw st h0 h1 s = ()
 
-val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:mem -> h1:mem -> s:Set.set rid 
-	       -> Lemma 
+val frame_seqnT : #i:id -> #rw:rw -> st:state i rw -> h0:mem -> h1:mem -> s:Set.set rid
+	       -> Lemma
     (requires modifies s h0 h1
     	      /\ Map.contains h0.h (region st)
 	      /\ not (Set.mem (region st) s))
-    (ensures seqnT st h0 = seqnT st h1) 
+    (ensures seqnT st h0 = seqnT st h1)
 let frame_seqnT #i #rw st h0 h1 s = ()
 
 let trigger_frame (h:mem) = True
 
 let frame_f (#a:Type) (f:mem -> GTot a) (h0:mem) (s:Set.set rid) =
-  forall h1.{:pattern trigger_frame h1} 
+  forall h1.{:pattern trigger_frame h1}
         trigger_frame h1
         /\ (HH.equal_on s h0.h h1.h ==> f h0 == f h1)
 
-val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem -> 
+val frame_seqT_auto: i:id -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
   Lemma (requires   HH.equal_on (Set.singleton (region s)) h0.h h1.h
 		  /\ Map.contains h0.h (region s))
         (ensures seqnT s h0 = seqnT s h1)
-	[SMTPat (seqnT s h0); 
+	[SMTPat (seqnT s h0);
 	 SMTPat (seqnT s h1)]
 //	 SMTPatT (trigger_frame h1)]
 let frame_seqT_auto i rw s h0 h1 = ()
 
-val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:mem -> h1:mem -> 
+val frame_fragments_auto: i:id{authId i} -> rw:rw -> s:state i rw -> h0:mem -> h1:mem ->
   Lemma (requires    HH.equal_on (Set.singleton (log_region s)) h0.h h1.h
 		  /\ Map.contains h0.h (log_region s))
         (ensures fragments s h0 == fragments s h1)
-	[SMTPat (fragments s h0); 
-	 SMTPat (fragments s h1)] 
+	[SMTPat (fragments s h0);
+	 SMTPat (fragments s h1)]
 	 (* SMTPatT (trigger_frame h1)] *)
 let frame_fragments_auto i rw s h0 h1 = ()
 
@@ -229,7 +232,7 @@ let frame_fragments_auto i rw s h0 h1 = ()
 ////////////////////////////////////////////////////////////////////////////////
 //Experimenting with reads clauses: probably unnecessary
 ////////////////////////////////////////////////////////////////////////////////
-let reads (s:Set.set rid) (a:Type) = 
+let reads (s:Set.set rid) (a:Type) =
     f: (h:mem -> GTot a){forall h1 h2. (HH.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
 				  ==> f h1 == f h2}
 
@@ -247,7 +250,7 @@ let genPost (#i:id) parent h0 (w:writer i) h1 =
   seqnT #i #Writer w h1 = 0 /\
   (authId i ==> fragments #i #Writer w h1 == Seq.createEmpty) // we need to re-apply #i knowning authId
 
-// Generate a fresh instance with index i in a fresh sub-region 
+// Generate a fresh instance with index i in a fresh sub-region
 val gen: parent:rgn -> i:stae_id -> ST (writer i)
   (requires (fun h0 -> True))
   (ensures (genPost parent))
@@ -299,7 +302,7 @@ let coerce parent i kiv =
 val leak: #i:id{~(authId i)} -> #role:rw -> s:state i role -> ST (keyBytes i) //with 2 units of i_fuel, we can invert s and prove that i must be an stae_id
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1 ))
-let leak #i #role s =  
+let leak #i #role s =
   match s with
   | Stream _ s -> let kv,iv = Stream.leak s in kv @| iv
   | StLHAE _ s -> let kv,iv = StLHAE.leak s in kv @| iv
@@ -393,7 +396,7 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
   	             frame_f (fragments d) h1 (Set.singleton (log_region d)) /\
   	             MR.witnessed (fragment_at_j d j f)))))
 
-#set-options "--z3rlimit 100" 
+#set-options "--z3rlimit 100"
 
 let decrypt #i d (ct,c) =
   let h0 = ST.get () in
