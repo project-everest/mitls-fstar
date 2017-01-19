@@ -320,7 +320,7 @@ let leak #i #role s =
 ////////////////////////////////////////////////////////////////////////////////
 //Encryption
 ////////////////////////////////////////////////////////////////////////////////
-#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 3 --max_ifuel 3"
+#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 3 --max_ifuel 3"
 val encrypt: #i:id -> e:writer i -> f:C.fragment i -> ST (C.encrypted f)
   (requires (fun h0 -> incrementable e h0))
   (ensures  (fun h0 c h1 ->
