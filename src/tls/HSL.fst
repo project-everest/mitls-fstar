@@ -1,22 +1,109 @@
 (** outlining the HS Log API *)
-(* recording semantics, a trade-off to have fewer transitioms. *)
-module HSL  // an outline of lHandshake.Log
+(* recording semantics, a trade-off to have fewer transitions. *)
+module HSL // an outline of Handshake.Log
 
 open Platform.Bytes
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
-open FStar.Ghost // afer HH so as not to shadow reveal :(
+open FStar.Ghost // after HH so as not to shadow reveal :( 
 
-///// From Hash
+/// HASH outlining how to handle incrementality and collision-resistance. No agility yet.
 
-type tag = lbytes 16 // used here both as hash tags and MAC tags 
-type acc = lbytes 16
-assume val hash: bytes -> Tot tag // computed in one step (specification)
-assume val hashA: bytes -> Tot acc   // partial computation (specification) 
-assume val extend: a0:acc -> b:bytes -> Tot (a: acc { forall (b0:bytes). a0 == hashA b0 ==> a == hashA (b0 @| b) })
-assume val finalize: a:acc -> Tot (d:tag { forall (b:bytes). a == hashA b ==> d == hash b})
-//17-01-19  I probably miss patterns
+let blocklen = 16 //unclear when to switch to machine integers
+type block = lbytes blocklen // used here both as hash tags and MAC tags
+type tag = lbytes blocklen
+
+assume val compress: block -> block -> Tot block 
+
+// supposing we add 4 bytes for the length and 1+ bytes for padding
+assume val suffix: len:nat  -> Tot (c:bytes { (len + length c) % blocklen = 0 /\ length c <= 5 /\ length c < blocklen + 5 })
+assume val block0: block 
+
+val hash2: a:block -> b:bytes { length b % blocklen = 0 } -> Tot block (decreases (length b))
+let rec hash2 a b = 
+  if length b = 0 then a 
+  else 
+    let c,b = split b blocklen in 
+    hash2 (compress a c) b 
+
+// computed in one step (specification) 
+val hash: bytes -> Tot tag 
+let hash b = hash2 block0 (b @| suffix (length b)) 
+
+type accv = | Acc: len:nat -> a:block -> b:lbytes (len % blocklen) -> accv 
+
+// partial computation (specification) 
+val hashA: bytes -> Tot accv
+let hashA b = 
+  let pending = length b % blocklen in 
+  let hashed, rest = split b (length b - pending) in
+  Acc (length b) (hash2 block0 hashed) rest
+
+//type acc = content:bytes (* TODO: ghost in real mode *) & v:accv { v = hashA content }
+
+let start = hashA empty_bytes // i.e. block0
+
+// this interface requires that the caller knows what he is hashing, to keep track of computed collisions
+val extend: 
+  content:bytes (* TODO: ghost in real mode *) -> 
+  a:accv { a == hashA content } ->
+  b:bytes ->
+  Tot (a:accv { a == hashA (content @| b) })
+
+assume val hash2_append:
+  a:block -> 
+  b0:bytes { length b0 % blocklen = 0 } -> 
+  b1:bytes { length b1 % blocklen = 0 } -> 
+  Lemma (hash2 a (b0 @| b1) = hash2 (hash2 a b0) b1)
+
+let extend content v b = 
+  let z = v.b @| b in 
+  let pending = length z % blocklen in
+  let hashed, rest = split z (length z - pending) in
+  // proof only: unfolding a == hashA content
+  assert(Seq.equal z (hashed @| rest)); 
+  let b0, c0 = split content (length content - (length content % blocklen)) in 
+  assert(Seq.equal content (b0 @| v.b));
+  assert(v.len = length content);
+  assert(v.a == hash2 block0 b0);
+  hash2_append block0 b0 hashed; 
+  let content' = content @| b in  // unfolding hashA (content @| b) 
+  let b0', c0' = split content' (length content' - (length content' % blocklen)) in 
+  assert(Seq.equal rest c0');
+  assert(Seq.equal content' (b0' @| rest));
+  assert(Seq.equal b0' (b0 @| hashed));
+  assert(pending = length content' % blocklen);
+  assert(v.len + length b = length (content @| b));
+  assert(hash2 v.a hashed = hash2 block0 (b0 @| hashed));
+  Acc (v.len + length b) (hash2 v.a hashed) rest
+
+// witnessing that we hashed this particular content (for collision detection)
+assume val hashed: bytes -> Type
+val finalize: 
+  content:bytes (* TODO: ghost in real mode *) ->
+  a:accv { a = hashA content } -> 
+  ST tag 
+  (requires (fun h0 -> True))
+  (ensures (fun h0 t h1 -> 
+    t = hash content /\ 
+    hashed content /\
+    h0 == h1 
+    // to be adjusted, e.g. 
+    // modifies_one h0 h1 hashTable /\ 
+    //sel h1 hashTable == snoc (sel h0 hashTable) (content, t)
+  ))
+
+let finalize content v = 
+  assume(hashed content); 
+  let b0, rest = split content (length content - length content % blocklen) in 
+  assert(Seq.equal content (b0 @| rest));
+  let b1 = v.b @| suffix v.len in 
+  let b = content @| suffix v.len in 
+  assert(Seq.equal b (b0 @| b1)); 
+  hash2_append block0 b0 b1; 
+  hash2 v.a b1
+
 
 ///// From Handshake.Msg
 
@@ -53,10 +140,17 @@ let rec tags prior incoming =
 
 (* STATE *)
 
-// partial flights
-// type flight (prior:erased (list msg)) = ms:list msg & hs:list tag { hs = tags (reveal prior) ms }
+noeq type state = | State:
+  transcript: erased (list msg) -> // session transcript shared with the HS so far 
+  input_msgs: list msg -> // partial incoming flight, hashed & parsed, with selected intermediate tags
+  input_hashes: list tag { input_hashes == tags (reveal transcript) input_msgs } -> 
+  hash: accv { hash == hashA (transcript_bytes (reveal transcript @ input_msgs)) } -> // current hash state
+  state
+type t = r:ref state // 17-01-19 HS naming!?
 
 (*
+// type flight (prior:erased (list msg)) = ms:list msg & hs:list tag { hs = tags (reveal prior) ms }
+
 // internal state (although we may initially keep it transparent) 
 abstract type plainbytes i = bytes  // a shortcut: HSL merges handshake traffic at different indexes
 abstract type state = State
@@ -66,13 +160,6 @@ abstract type state = State
   input_msgs: flight  // partial incoming flight, hashed & parsed, with selected intermediate tags
   hash: Hash.t { hash = HashA (transcript_bytes (List.Tot.append transcript input_msgs)) } // current hash state
 *)
-noeq type state = | State:
-  transcript: erased (list msg) -> // session transcript shared with the HS so far 
-  input_msgs: list msg -> // partial incoming flight, hashed & parsed, with selected intermediate tags
-  input_hashes: list tag { input_hashes == tags (reveal transcript) input_msgs } -> 
-  hash: acc { hash == hashA (transcript_bytes (reveal transcript @ input_msgs)) } -> // current hash state
-  state
-type t = r:ref state // 17-01-19 HS naming!?
 
 val transcripT: h:mem -> t -> GTot (list msg) // the current transcript shared with the handshake
 let transcripT h (r:t) = 
@@ -82,7 +169,6 @@ let transcripT h (r:t) =
 (*
 We will also need to keep track of lengths in the input/output buffers To separate between Reading and Writing modes, a precondition for sending a message should be that both input_bytes and input_msgs are empty.(unclear who should check for emptyset, and how to react to extra bytes buffered past the input flight)
 *)
-
 
 (* commenting out the rest of the outline not used in the sample code for now: 
 
@@ -125,10 +211,13 @@ let receive r bs =
   | None -> None
   | Some m -> (
       let State transcript ms hs a = !r in
+      let content0 = transcript_bytes (reveal transcript @ ms) in 
       let ms = ms @ [m]  in
-      let a = extend a bs in
+      let content1 = transcript_bytes (reveal transcript @ ms) in 
+      let a = extend content0 a bs in
+      assert(a == hashA content1);
       assert(a == hashA (transcript_bytes ms @| format m));
-      let hs = if tagged m then (hs @ [finalize a]) else hs in
+      let hs = if tagged m then (hs @ [finalize content1 a]) else hs in
       if eoflight m then  
         let transcript = hide (reveal transcript @ ms) in 
         ( r := State transcript [] [] a; 
@@ -136,6 +225,7 @@ let receive r bs =
       else (
         r := State transcript ms hs a;
         None ))
+
 
 (*
 design: ghost log vs forall log?
