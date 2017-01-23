@@ -124,6 +124,10 @@ assume val eoflight: msg -> Tot bool // does this message complete the flight?
 let transcript_bytes ms = List.Tot.fold_left (fun a m -> a @| format m) empty_bytes ms
 // we will need to prove it is injective, we will rely in turn on concrete msg formats
 
+//17-01-23  how to prove this from the definition above??
+assume val transcript_bytes_append: ms0: list msg -> ms1: list msg -> 
+  Lemma (transcript_bytes (ms0 @ ms1) = transcript_bytes ms0 @| transcript_bytes ms1)
+
 // a specification of the hashed-prefix tags required for a given flight 
 val tags: prior: list msg -> incoming: list msg -> Tot (list tag) (decreases incoming) 
 let rec tags prior incoming = 
@@ -137,14 +141,23 @@ let rec tags prior incoming =
       else 
         rest
 
+val tags_nil_nil: prior: list msg -> Lemma (tags prior [] = [])
+let tags_nil_nil prior = ()
+
+//17-01-23 plausible ? 
+assume val tags_append: prior: list msg -> in0: list msg -> in1: list msg -> Lemma(tags prior (in0 @ in1) = tags prior in0 @ tags (prior @ in0) in1)
+
 
 (* STATE *)
 
+//17-01-23 erasing the transcript involved many hide/reveal annotations and restrictions on embedding proofs in
+//17-01-23 stateful code. Besides, we need conditional ghosts... We may try again once the code is more stable.
+
 noeq type state = | State:
-  transcript: erased (list msg) -> // session transcript shared with the HS so far 
+  transcript: (*erased*) list msg -> // session transcript shared with the HS so far 
   input_msgs: list msg -> // partial incoming flight, hashed & parsed, with selected intermediate tags
-  input_hashes: list tag { input_hashes == tags (reveal transcript) input_msgs } -> 
-  hash: accv { hash == hashA (transcript_bytes (reveal transcript @ input_msgs)) } -> // current hash state
+  input_hashes: list tag { input_hashes == tags transcript input_msgs } -> 
+  hash: accv { hash == hashA (transcript_bytes (transcript @ input_msgs)) } -> // current hash state
   state
 type t = r:ref state // 17-01-19 HS naming!?
 
@@ -164,7 +177,7 @@ abstract type state = State
 val transcripT: h:mem -> t -> GTot (list msg) // the current transcript shared with the handshake
 let transcripT h (r:t) = 
   let s = FStar.HyperStack.sel h r in 
-  reveal s.transcript
+  s.transcript
 
 (*
 We will also need to keep track of lengths in the input/output buffers To separate between Reading and Writing modes, a precondition for sending a message should be that both input_bytes and input_msgs are empty.(unclear who should check for emptyset, and how to react to extra bytes buffered past the input flight)
@@ -206,24 +219,34 @@ val receive: r:t -> bytes -> ST (option (list msg * list tag))
     | None -> transcripT h1 r == prior
   ))
 
+//17-01-23 still failing in many ways
 let receive r bs = 
   match parse_msg bs with // assuming bs is a potential whole message
   | None -> None
   | Some m -> (
       let State transcript ms hs a = !r in
-      let content0 = transcript_bytes (reveal transcript @ ms) in 
+      let content0 = transcript_bytes (transcript @ ms) in 
+      let content1 = transcript_bytes ((transcript @ ms) @ [m]) in 
+      transcript_bytes_append (transcript @ ms) [m];
+      assert(hs = tags transcript ms); 
+      tags_append transcript ms [m];
       let ms = ms @ [m]  in
-      let content1 = transcript_bytes (reveal transcript @ ms) in 
+      assert_norm(Seq.equal (transcript_bytes [m]) (format m));
+      assert(Seq.equal content1 (content0 @| format m));
       let a = extend content0 a bs in
       assert(a == hashA content1);
-      assert(a == hashA (transcript_bytes ms @| format m));
-      let hs = if tagged m then (hs @ [finalize content1 a]) else hs in
+      let hs : hs: list tag { hs = tags transcript ms } = 
+        if tagged m 
+          then (hs @ [finalize content1 a]) 
+          else [] in 
       if eoflight m then  
-        let transcript = hide (reveal transcript @ ms) in 
-        ( r := State transcript [] [] a; 
+        let transcript = transcript @ ms in 
+        ( tags_nil_nil transcript; 
+          assert(a == hashA (transcript_bytes transcript));
+          r := State transcript [] [] a; 
           Some (ms,hs) ) 
       else (
-        r := State transcript ms hs a;
+        r := State transcript ms hs a; 
         None ))
 
 
