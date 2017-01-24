@@ -178,6 +178,18 @@ assume val transcript_bytes_append: ms0: list msg -> ms1: list msg ->
 
 
 // full specification of the hashed-prefix tags required for a given flight 
+// switching to a relational style to capture computational-hashed 
+val tags: prior: list msg -> ms: list msg -> hs: list tag -> Tot Type0 (decreases ms)
+let rec tags prior ms hs = 
+  match ms with 
+  | [] -> hs == [] 
+  | m :: ms -> 
+      let prior = prior @ [m] in
+      match tagged m, hs with 
+      | true, h::hs -> let t = transcript_bytes prior in (hashed t /\ h == hash t /\ tags prior ms hs)
+      | false, hs -> tags prior ms hs
+      | _ -> False 
+(* was:
 val tags: prior: list msg -> incoming: list msg -> Tot (list tag) (decreases incoming) 
 let rec tags prior incoming = 
   match incoming with 
@@ -189,13 +201,14 @@ let rec tags prior incoming =
         hash (transcript_bytes prior) :: rest
       else 
         rest
+*) 
 
-val tags_nil_nil: prior: list msg -> Lemma (tags prior [] = [])
+val tags_nil_nil: prior: list msg -> Lemma (tags prior [] [])
 let tags_nil_nil prior = ()
 
 //17-01-23 plausible ? 
-assume val tags_append: prior: list msg -> in0: list msg -> in1: list msg -> 
-  Lemma(tags prior (in0 @ in1) == tags prior in0 @ tags (prior @ in0) in1)
+assume val tags_append: prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list tag -> hs1: list tag -> 
+  Lemma(tags prior (ms0 @ ms1) (hs0 @ hs1) <==> tags prior ms0 hs0 /\ tags (prior @ ms0) ms1 hs1)
 (*
 let rec tags_append prior in0 in1 = 
   match in0 with
@@ -212,7 +225,7 @@ let rec tags_append prior in0 in1 =
 noeq type state = | State:
   transcript: (*erased*) list msg -> // session transcript shared with the HS so far 
   input_msgs: list msg -> // partial incoming flight, hashed & parsed, with selected intermediate tags
-  input_hashes: list tag { input_hashes == tags transcript input_msgs } -> 
+  input_hashes: list tag { tags transcript input_msgs input_hashes } -> 
   hash: accv { hash == hashA (transcript_bytes (transcript @ input_msgs)) } -> // current hash state
   state
 type t = r:ref state // 17-01-19 HS naming!?
@@ -270,13 +283,14 @@ val next_fragment: t -> i:id -> ST (option fragment)
 val receive: r:t -> bytes -> ST (option (list msg * list tag))
   (requires (fun h0 -> True))
   (ensures (fun h0 o h1 -> 
-    let prior = transcripT h0 r in
+    let t0 = transcripT h0 r in
+    let t1 = transcripT h1 r in
     match o with 
-    | Some (ms, hs) -> transcripT h1 r == prior @ ms /\ hs = tags prior ms
-    | None -> transcripT h1 r == prior
+    | Some (ms, hs) -> t1 == t0 @ ms /\ tags t0 ms hs
+    | None -> t1 == t0
   ))
-
-//17-01-23 still failing in many ways
+ 
+//17-01-23 typechecking of this function still failing in many ways
 let receive r bs = 
   match parse_msg bs with // assuming bs is a potential whole message
   | None -> None
@@ -292,13 +306,13 @@ let receive r bs =
       assert(Seq.equal content1 (content0 @| transcript_bytes [m]));
       assert_norm(Seq.equal (transcript_bytes [m]) (format m));
       assert(Seq.equal content1 (content0 @| format m));
-      assert(hs = tags prior ms); 
-      tags_append prior ms [m];
+      assert(tags prior ms hs); 
+      //tags_append prior ms [m] hs 
       let ms = ms @ [m]  in
       assert_norm(Seq.equal (transcript_bytes [m]) (format m));
       let a = extend content0 a bs in
       assert(a == hashA content1);
-      let hs : hs: list tag { hs == tags prior ms } = 
+      let hs : hs: list tag { tags prior ms hs } = 
         if tagged m 
           then (
             hs @ [finalize content1 a]) 
@@ -306,7 +320,8 @@ let receive r bs =
             hs in 
       if eoflight m then  
         let prior1 = prior @ ms in 
-        ( tags_nil_nil prior; 
+        ( tags_nil_nil prior1; 
+          assert(tags prior1 [] []);
           assert(a == hashA (transcript_bytes prior1));
           r := State prior1 [] [] a; 
           Some (ms,hs) ) 
@@ -328,12 +343,16 @@ assume val nego: offer -> GTot offer // the server's choice of parameters
 assume val mac_verify: h:tag -> t:tag -> 
 // in existential style, did not manage to trigger on offer.
 //  Tot (b:bool { b ==> (exists offer.  h = hash(transcript_bytes [ClientHello offer; ServerHello (nego offer)])) })
-  Tot (b:bool { b ==> (forall c s.  h = hash(transcript_bytes [ClientHello c; ServerHello s]) ==> s == nego c) })
+  Tot (b:bool { b ==> (forall c s.  
+    let tr = transcript_bytes [ClientHello c; ServerHello s] in 
+    (hashed tr /\ h = hash tr ==> s == nego c)) })
 
+(*
 let inj_format c0 s0 c1 s1 : Lemma ( 
   hash (transcript_bytes [ClientHello c0; ServerHello s0]) == 
   hash (transcript_bytes [ClientHello c1; ServerHello s1]) ==> c0 == c1 /\ s0 == s1 ) = 
   assume false
+*)
 
 noeq type result 'a = 
   | Result of 'a
@@ -357,6 +376,5 @@ let process log (raw:bytes) client_offer =
       assert(server_offer == nego client_offer);
       Result server_offer 
     )
-    else 
-      Error "bad Mac"
+    else Error "bad Mac"
   | _ -> Error "bad Flight" 
