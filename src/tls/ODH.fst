@@ -66,14 +66,102 @@ let extract k g role ks s n =
 
 (**************************************************************************)
 
-module PRF_ODH
+module KEF
 
 type kefalg
-type group
-val strongKef: a:keflag -> GTot bool
-val strongGroup: g:group -> GTot bool
+val keflen: a:kefalg -> Tot nat
 
-type role = | Initiator | Responder
+type secret_source =
+  | PSK of PSK.pskid
+  | PSK_DHE of PSK.pskid * CommonDH.group
+  | DHE of CommonDH.group
+
+type role =
+  | Initiator
+  | Responder
+
+type id = {
+  alg: kefalg;
+  source: secret_source;
+  role: role;
+  nonce: Nonce.random;
+}
+
+type extracted_secret (i:id) =
+  lbytes (keflen i.alg)
+
+let safeId (i:id) : Tot bool =
+  match i.source with
+  | PSK pski -> PSK.safePSK i
+  | PSK_DHE pski g ->
+    if PSK.safePSK pski then true
+    else CommonDH.safeGroup g
+  | DHE g -> CommonDH.safeGroup g
+
+///////////////////////////////////////////
+
+module KEF_PRF_PSK
+
+type psk_id (i:id) =
+  is_PSK i.source \/ is_PSK_DHE i.source
+type id = i:KEF.id{psk_id i}
+
+let pskid (i:id) =
+  match i.source with
+  | PSK i -> i
+  | PSK_DHE i g -> i
+
+let safeId (i:id) = PSK.safePSK (pskid i)
+
+type log (i:id) (r:rgn) =
+  (if Flags.ideal_kef /\ safeId i then
+    monotone_map #r bytes (extracted_secret i)
+  else
+    unit)
+
+type key (i:id) = PSK.kexlen (pskid i)
+
+type state (i:id) =
+  | State:
+     r:rgn ->
+     key: key i
+     log: log i r ->
+     state i
+
+let create (i:id) (r:rgn) : ST (state i)
+  (requires (fun h0 -> safeId i))
+  (ensures (fun h0 st h1 -> s0 = s1))
+  =
+  let key = Random.bytes (PSK.kexlen (pskid i)) in
+  let log =
+    if Flags.ideal_kef then
+      MM.alloc () // ...
+    else () in
+  State r key log
+
+let coerce (i:id) (r:rgn) (k:key i) : ST (state i)
+  (requires (fun h0 -> ~(safeId i)))
+  (ensures (fun h0 st h1 -> h0 = h1))
+  =
+  State r k ()
+
+let compute (i:id) (st:state i) (ikm:bytes) : ST (extracted_secret i)
+  (requires (fun h0 -> ))
+
+module KEF_PRF_ODH
+
+module PRF_ODH
+
+
+
+val share_table: monotone_map
+
+type
+
+type state (i:id) =
+  | State: unit -> state i
+
+let create (i:id) =
 
 type id = {
   alg: keflag;
