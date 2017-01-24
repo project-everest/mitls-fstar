@@ -8,7 +8,6 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Ghost // after HH so as not to shadow reveal :( 
 
-
 (*-- HASH --*)
 //outlining how to handle incrementality and collision-resistance. No agility yet.
 
@@ -147,8 +146,16 @@ noeq type msg: Type0 = | ClientHello of offer | ServerHello of offer | Finished 
 
 assume val format: msg -> Tot bytes 
 assume val parse_msg: b:bytes -> Tot (option (m:msg {b = format m}))
-assume val tagged: msg -> Tot bool // do we compute a hash of the transcript ending with this message?
-assume val eoflight: msg -> Tot bool // does this message complete the flight? 
+
+val tagged: msg -> Tot bool // do we compute a hash of the transcript ending with this message?
+let tagged = function
+  | ServerHello _ -> true 
+  | _ -> false 
+
+val eoflight: msg -> Tot bool // does this message complete the flight? 
+let eoflight = function
+  | ClientHello _ | Finished _ -> true 
+  | _ -> false 
 
 
 
@@ -307,7 +314,6 @@ let receive r bs =
         r := State prior ms hs a; 
         None ))
 
-
 (*
 design: ghost log vs forall log?
 design: how to return flights with intermediate tags?
@@ -320,30 +326,37 @@ TODO: support multiple epochs?
 
 assume val nego: offer -> GTot offer // the server's choice of parameters
 assume val mac_verify: h:tag -> t:tag -> 
-  Tot (b:bool { b ==> (exists offer.  h = hash (format (ClientHello offer) @| format (ServerHello (nego offer)))) })
+// in existential style, did not manage to trigger on offer.
+//  Tot (b:bool { b ==> (exists offer.  h = hash(transcript_bytes [ClientHello offer; ServerHello (nego offer)])) })
+  Tot (b:bool { b ==> (forall c s.  h = hash(transcript_bytes [ClientHello c; ServerHello s]) ==> s == nego c) })
 
 let inj_format c0 s0 c1 s1 : Lemma ( 
-  hash (format (ClientHello c0) @| format (ServerHello s0)) == 
-  hash (format (ClientHello c1) @| format (ServerHello s1)) ==> c0 == c1 /\ s0 == s1 ) = 
+  hash (transcript_bytes [ClientHello c0; ServerHello s0]) == 
+  hash (transcript_bytes [ClientHello c1; ServerHello s1]) ==> c0 == c1 /\ s0 == s1 ) = 
   assume false
 
+noeq type result 'a = 
+  | Result of 'a
+  | Error of string 
+  | Retry
+
 // the HS handler for receiving the server flight after sending a client offer
-val process: log:t -> bytes -> c:offer -> ST (option offer)
+val process: log:t -> bytes -> c:offer -> ST (result offer)
   (requires (fun h0 -> transcripT h0 log == [ClientHello c]))
-  (ensures (fun h0 o h1 -> 
-    match o with 
-    | Some s -> ( s == nego c /\ (exists tag. transcripT h1 log == [ClientHello c; ServerHello s; Finished tag]))
-    | None -> transcripT h1 log == transcripT h0 log ))
+  (ensures (fun h0 r h1 -> 
+    match r with 
+    | Result s -> ( s == nego c /\ (exists tag. transcripT h1 log == [ClientHello c; ServerHello s; Finished tag]))
+    | Retry -> transcripT h1 log == transcripT h0 log 
+    | Error _ -> True))
 let process log (raw:bytes) client_offer = 
   match receive log raw with 
+  | None -> Retry
   | Some ([ServerHello server_offer; Finished tag], [hash_ch_sh]) -> 
     if mac_verify hash_ch_sh tag then  (
-    assert(hash_ch_sh = hash(transcript_bytes [ ClientHello client_offer; ServerHello server_offer])); 
-    assert(exists offer.  hash_ch_sh == hash(transcript_bytes[ ClientHello offer; ServerHello (nego offer)]));
-    assert(server_offer == nego client_offer);
-    assume false;
-    Some server_offer 
+      assert(hash_ch_sh = hash(transcript_bytes [ClientHello client_offer; ServerHello server_offer])); 
+      assert(server_offer == nego client_offer);
+      Result server_offer 
     )
     else 
-    None
-  | _ -> None
+      Error "bad Mac"
+  | _ -> Error "bad Flight" 
