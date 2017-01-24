@@ -65,16 +65,76 @@ let extract k g role ks s n =
     HKDF.hkdf_extract k n ikm
 
 (**************************************************************************)
+module DH
+
+type group
+val strongGroup: g:group -> GTot bool
+type share (g:group)
+private type exponent (g:group)
+
+(* Global log of honestly generated DH shares *)
+private let dh_region:rgn = new_region tls_tables_region
+private type share_table =
+  if Flags.ideal_kef then
+    monotone_map dh_region (g:group & s:share g) (e:exponent g) grows
+  else
+    ()
+
+abstract let share_log: share_table =
+  if Flags.ideal_kef then
+    MM.alloc #dh_region #(g:group & s:share g) #(e:exponent g) #grows
+  else
+    ()
+
+abstract type honest_share (#g:group) (s:share g) =
+  if Flags.ideal_kef then
+    witnessed (fun h -> Some? (MM.sel (MR.m_sel h share_log) (g,s)))
+  else False
+
+private let share_exp (#g:group) (s:share g) : ST (exponent g)
+  (requires (fun h0 -> honest_share s))
+  (ensures (fun h0 e h1 -> h0 = h1))
+  =
+  MR.m_recall share_log;
+  Some.v (MM.sel (m_read share_log) (g,s))
+
+let gen (g:group) : ST (s:share g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 ks h1 ->
+    honest_share ks /\
+    if Flags.ideal_kef then
+      modifies_one dh_region h0 h1 /\
+      MM.m_sel h1 share_log == MM.upd (m_sel h0 share_log) (g, ks) (share_exp ks))
+    else
+      h0 = h1
+  ))
+  =
+  if Flags.ideal_kef then
+    let exp = Random.bytes (CommonDH.explen g) in
+    let share = CommonDH.exponentiate g exp in
+    m_recall share_log;
+    MM.extend share_log (g,share) exp;
+    witness (is_Some (MM.lookup share_log (g,share)));
+    share
+  else
+    CommonDH.keygen g
+
+let parse (g:group) (b:lbytes (CommonDH.explen g)) : Tot (result (share g)) = ...
 
 module KEF
 
 type kefalg
 val keflen: a:kefalg -> Tot nat
 
-type secret_source =
-  | PSK of PSK.pskid
-  | PSK_DHE of PSK.pskid * CommonDH.group
-  | DHE of CommonDH.group
+type ikmId =
+  | PSK: id:PSK.pskid -> ikm
+  | DHE: g:DH.group -> local_share:DH.keyshare g -> peer_share: DH.share g -> ikm
+  | ZERO: ikm
+
+type saltId =
+  | Null
+  | ExpandedEarlySecret of TLSInfo.esId
+  | ExpandedHandshakeSecret of TLSInfo.hsId
 
 type role =
   | Initiator
@@ -82,9 +142,8 @@ type role =
 
 type id = {
   alg: kefalg;
-  source: secret_source;
-  role: role;
-  nonce: Nonce.random;
+  ikm: ikmId;
+  salt: saltId;
 }
 
 type extracted_secret (i:id) =
@@ -101,17 +160,16 @@ let safeId (i:id) : Tot bool =
 ///////////////////////////////////////////
 
 module KEF_PRF_PSK
+open KEF
 
 type psk_id (i:id) =
   is_PSK i.source \/ is_PSK_DHE i.source
-type id = i:KEF.id{psk_id i}
+type id = i:id{psk_id i}
 
 let pskid (i:id) =
   match i.source with
   | PSK i -> i
   | PSK_DHE i g -> i
-
-let safeId (i:id) = PSK.safePSK (pskid i)
 
 type log (i:id) (r:rgn) =
   (if Flags.ideal_kef /\ safeId i then
@@ -128,14 +186,19 @@ type state (i:id) =
      log: log i r ->
      state i
 
-let create (i:id) (r:rgn) : ST (state i)
+let create (i:id) (parent:rgn) : ST (state i)
   (requires (fun h0 -> safeId i))
-  (ensures (fun h0 st h1 -> s0 = s1))
+  (ensures (fun h0 st h1 ->
+    modifies_none h0 h1 /\
+    extends st.r parent /\
+    stronger_fresh_region st.r h0 h1 /\
+    MM.m_sel h1 st.log == MM.empty_map))
   =
+  let r = new_region parent in
   let key = Random.bytes (PSK.kexlen (pskid i)) in
   let log =
     if Flags.ideal_kef then
-      MM.alloc () // ...
+      MM.alloc #r () // ...
     else () in
   State r key log
 
@@ -145,16 +208,43 @@ let coerce (i:id) (r:rgn) (k:key i) : ST (state i)
   =
   State r k ()
 
+type fresh_input (i:id{safeId i}) (st:state i) (ikm:bytes) (h:mem) =
+  is_None (MM.sel (MR.m_sel h st.log) ikm)
+
 let compute (i:id) (st:state i) (ikm:bytes) : ST (extracted_secret i)
-  (requires (fun h0 -> ))
+  (requires (fun h0 -> safeId i ==> fresh_input i st ikm h0))
+  (ensures (fun h0 s h1 ->
+    if safeId i /\ Flags.ideal_kef then
+      modifies_one st.r h0 h1 /\
+      MM.m_sel h1 st.log == MM.upd (m_sel h0 st.log) ikm s) /\
+      witnessed (MM.contains (m_sel h1 st.log) ikm)
+    else h0 = h1
+  ))
+  =
+  if Flags.ideal_kef && safeId i then
+    let secret = Random.bytes (KEF.keflen i.alg) in
+    m_recall st.log;
+    MM.extend st.log ikm secret;
+    witness (is_Some (MM.lookup st.log ikm));
+    secret
+  else
+    Hacl.KEF.compute (i.alg) ikm (st.key) // e.g. HKDF
 
 module KEF_PRF_ODH
 
-module PRF_ODH
+type odh_id (i:id) =
+  is_DHE i.source \/ is_PSK_DHE i.source
+type id = i:KEF.id{odh_id i}
 
+let group_of_id (i:id) =
+  match i.source with
+  | DHE g -> g
+  | PSK_DHE _ g -> g
 
+let safeId (i:id) =
+  CommonDH.safeGroup (group_of_id i)
 
-val share_table: monotone_map
+val share_table: monotone_map (share i) ()
 
 type
 
@@ -211,6 +301,10 @@ val extract_initiator: k:kefalg -> g:group -> s1:keyshare g -> s2:share g -> n:s
   (ensures (fun h0 r h1 ->
     safeExtract k g ks s n ==>
   ))
+
+  create_initiator: share, list (salt k)
+
+(inititiator_sharer, responder_share, salt) -> (secret)
 
 val extract_responder: k:kefalg -> g:group -> s1:share g -> n:salt k -> ST (share g & i:sid & extracted_secret i)
   (requires (fun h0 -> True)) // Maybe restrict to calling once per role?
