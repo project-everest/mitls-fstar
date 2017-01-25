@@ -372,6 +372,7 @@ let process log (raw:bytes) client_offer =
   | None -> Retry
   | Some ([ServerHello server_offer; Finished tag], [hash_ch_sh]) -> 
     if mac_verify hash_ch_sh tag then  (
+      assert(hashed hash_ch_sh);
       assert(hash_ch_sh = hash(transcript_bytes [ClientHello client_offer; ServerHello server_offer])); 
       assert(server_offer == nego client_offer);
       Result server_offer 
