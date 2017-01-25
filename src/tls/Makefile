@@ -60,7 +60,7 @@ VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 \
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LDIR)/real --include $(LCDIR)/fst --include $(LDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LDIR)/real --include $(LDIR)/hacl --include $(LCDIR)/fst --include $(LDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -p -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
@@ -111,33 +111,6 @@ Crypto.Symmetric.Bytes.fst \
 Crypto.Indexing.fst \
 Flag.fst \
 Spartan.fst \
-Crypto.Symmetric.AES.fst \
-Crypto.Symmetric.AES128.fst \
-Crypto.Symmetric.Chacha20.fst \
-Crypto.Symmetric.Cipher.fst \
-Crypto.Symmetric.Poly1305.Bigint.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part1.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part2.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part3.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part4.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part5.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part6.fst \
-Crypto.Symmetric.Poly1305.Bignum.fst \
-Crypto.Symmetric.Poly1305.Spec.fst \
-Crypto.Symmetric.Poly1305.fst \
-Crypto.Symmetric.GF128.Spec.fst \
-Crypto.Symmetric.GF128.fst \
-Crypto.Symmetric.MAC.fst \
-Crypto.Symmetric.UF1CMA.fst \
-Crypto.Plain.fst \
-Crypto.Symmetric.PRF.fst \
-Crypto.AEAD.Encoding.fst \
-Crypto.AEAD.Invariant.fst \
-Crypto.AEAD.Lemmas.fst \
-Crypto.AEAD.Lemmas.Part2.fst \
-Crypto.AEAD.Lemmas.Part3.fst \
-Crypto.AEAD.Wrappers.fst \
-Crypto.AEAD.fst \
 AEADOpenssl.fst \
 AEADProvider.fst \
 Range.fst \

@@ -590,7 +590,7 @@ let parseClientHello data =
                               ch_client_random = cr;
                               ch_sessionID = sid;
                               ch_cipher_suites = cCS;
-                              ch_raw_cipher_suites = Some clCiphsuitesBytes;
+//                              ch_raw_cipher_suites = Some clCiphsuitesBytes;
                               ch_compressions = cm;
                               ch_extensions = exts;
                           })

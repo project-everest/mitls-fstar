@@ -116,7 +116,7 @@ type salt (i:id) = lbytes (salt_length i)
 noeq type state (i:id) (r:rw) =
 | OpenSSL: st:OAEAD.state i r -> salt:salt i -> state i r
 | LowC: st:CAEAD.aead_state -> key:key i -> salt:salt i -> state i r
-| LowLevel: st:Crypto.AEAD.Invariant.state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
+| LowLevel: st:Crypto.AEAD.Invariant.aead_state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -236,7 +236,7 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
     OpenSSL (OAEAD.genReader parent w) salt
   | LowLevel st salt ->
     assume false;
-    let st' : Crypto.AEAD.Invariant.state i Crypto.Indexing.Reader = AE.genReader st in
+    let st' : Crypto.AEAD.Invariant.aead_state i Crypto.Indexing.Reader = AE.genReader st in
     LowLevel st' salt
   | LowC st k s ->
     assume false;
@@ -310,7 +310,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let plain = Plain.create i 0uy plainlen in
       Plain.store plainlen plain plainrepr;
       let cipher = Buffer.create 0uy cipherlen in
-      AE.encrypt i st iv adlen ad plainlen plain cipher;
+      Crypto.AEAD.Encrypt.encrypt i st iv adlen ad plainlen plain cipher;
       to_bytes l cipher
     in
   let r =
@@ -346,7 +346,7 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
       let plainlen = uint_to_t l in
       let cbuf = from_bytes cipher in
       let plain = Plain.create i 0uy plainlen in
-      if AE.decrypt i st iv adlen ad plainlen plain cbuf then
+      if Crypto.AEAD.Decrypt.decrypt i st iv adlen ad plainlen plain cbuf then
         Some (to_bytes l (Plain.bufferRepr #i plain))
       else None
     in
