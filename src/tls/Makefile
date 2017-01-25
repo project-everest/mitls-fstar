@@ -5,6 +5,7 @@ all: all-ver tls-sanity tls-lax tls-ffi
 CONTRIB=ucontrib
 LIB=ulib
 FFI_HOME=../../libs/ffi
+MARCH?=x86_64
 
 clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean MEM=HST
@@ -68,7 +69,7 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_H
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
 ifeq ($(OS),Windows_NT)
-  EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
+  EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
 endif
 
 # ---------------------------------------------------------------------
