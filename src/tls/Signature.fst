@@ -31,7 +31,12 @@ type signed (a:alg) = t:text{a.info t}
 type sigv (a:alg) = bytes
 
 // Encodes agile INT-CMA assumption
-assume type int_cma: a:alg -> h:hashAlg{List.Tot.mem h a.digest} -> Tot bool
+assume type int_cma_assumption: a:alg -> h:hashAlg{List.Tot.mem h a.digest} -> Tot bool
+
+// Erase CMA assumption at extraction
+inline_for_extraction let int_cma (a:alg) (h:hashAlg{List.Tot.mem h a.digest}) : Tot bool =
+  if Flags.ideal_Sig then int_cma_assumption a h
+  else false
 
 type public_repr =
   | PK_RSA   of rsa_key
@@ -97,7 +102,7 @@ let st_update #a st t =
 (*
  * AR: this was rid, is TLSConstants.rgn ok ?
  *)
-assume val keyRegion: TLSConstants.rgn
+let keyRegion:TLSConstants.rgn = new_region TLSConstants.tls_region
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 

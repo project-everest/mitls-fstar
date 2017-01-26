@@ -5,6 +5,7 @@ all: all-ver tls-sanity tls-lax tls-ffi
 CONTRIB=ucontrib
 LIB=ulib
 FFI_HOME=../../libs/ffi
+MARCH?=x86_64
 
 clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean MEM=HST
@@ -15,14 +16,12 @@ clean:
 	rm -rf test/*.cm* test/*.o
 
 # ------------------ Dependencies on F* & its libraries --------------
-# When using NuBuild, FStar must be located within the source tree.
-# Now that soft links are available on all platforms, I don't see a
-# reason not to assume a fixed location.
+# Default F* location. 
 FSTAR_HOME?=../../../FStar
 # This location can easily be overridden by doing:
-#   FSTAR_HOME=../../../fstar make tls-gen
+#   FSTAR_HOME=../../../fstar make mitls.exe
 # BUT NOT AS FOLLOWS
-#   make FSTAR_HOME=../../../fstar tls-gen
+#   make FSTAR_HOME=../../../fstar mitls.exe
 # the latter form won't work because FSTAR_HOME will incorrectly override
 # values in recursive invocations of $(MAKE)...
 
@@ -70,20 +69,11 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_H
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
 ifeq ($(OS),Windows_NT)
-  EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-endif
-
-# ----------------------- NuBuild integration -------------------------
-NUBUILD_HOME=../../.nubuild
-NUBUILD=$(NUBUILD_HOME)/bin/NuBuild.exe
-ifdef USE_NUBUILD
-FSTAR_OR_NUBUILD=$(NUBUILD) $(NUBUILDFLAGS) FStarVerify $(FSTARFLAGS)
-else
-FSTAR_OR_NUBUILD=$(FSTAR)
+  EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
 endif
 
 # ---------------------------------------------------------------------
-# These files are all extracted via lax type-checking in tls-gen
+# These files are all extracted via lax type-checking in mitls.cmxa
 # Files are listed in dependency order
 
 FSTS=Flags.fst \
@@ -133,11 +123,13 @@ Crypto.Plain.fst \
 Crypto.Symmetric.PRF.fst \
 Crypto.AEAD.Encoding.fst \
 Crypto.AEAD.Invariant.fst \
-Crypto.AEAD.Lemmas.fst \
-Crypto.AEAD.Lemmas.Part2.fst \
-Crypto.AEAD.Lemmas.Part3.fst \
-Crypto.AEAD.Wrappers.fst \
+Crypto.AEAD.Wrappers.PRF.fst \
+Crypto.AEAD.EnxorDexor.fst \
+Crypto.AEAD.Wrappers.Encoding.fst \
+Crypto.AEAD.Wrappers.CMA.fst \
 Crypto.AEAD.fst \
+Crypto.AEAD.Encrypt.fst \
+Crypto.AEAD.Decrypt.fst \
 AEADOpenssl.fst \
 AEADProvider.fst \
 Range.fst \
@@ -237,7 +229,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Lax-checking one file at a time
 %.fst-lax: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) --lax \
+	$(FSTAR) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
 	--verify_module $(basename $(notdir $@)) \
@@ -245,14 +237,14 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Verifying one file at a time
 %.fst-ver: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver: $(LIBFILES)
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
@@ -274,7 +266,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Sanity check
 tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst
-	$(FSTAR_OR_NUBUILD) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
         --verify_module False \
@@ -293,10 +285,14 @@ wc:
 # These are the .cmx files for all ML-implemented F* modules.
 # CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
 # fstarlib has the entire F* standard library.
+# Warning: remember that ORDER MATTERS for the GNU linker which discards unused
+# symbols... this is why libllcrypto comes AFTER lowc_stub
 LIB_ML= \
   $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
   $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
-  $(LCDIR)/libllcrypto.a $(LCDIR)/lowc_stub.o $(LCDIR)/LowCProvider.cmx \
+  $(LCDIR)/lowc_stub.o \
+  $(LCDIR)/libllcrypto.a \
+  $(LCDIR)/LowCProvider.cmx \
   $(FFI_HOME)/FFICallbacks.cmxa
 
 # .fst files realized elsewhere.
@@ -327,13 +323,11 @@ TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
 # file; as make is only aware of mtimes (and not hashsums), we would rebuild
 # every single .ml file anyway...
 
-tls-gen: tls-gen-spartan
-
-tls-gen-%: record_fstar_version $(LIBFILES)
+mitls.cmxa: record_fstar_version $(LIBFILES)
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
 	$(MAKE) -C $(FFI_HOME)
-	$(FSTAR) --include $(LDIR)/$* \
+	$(FSTAR) --include $(LDIR)/spartan \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
@@ -342,6 +336,7 @@ tls-gen-%: record_fstar_version $(LIBFILES)
 	  $(FSTS)
 	# Note (JP): the Makefile seems incorrect and we need to run make clean
 	# first
+	# Make OCaml version of F* libs. 
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
 	# Builds everything against prims, setting MEM=HST
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
@@ -353,23 +348,25 @@ tls-gen-%: record_fstar_version $(LIBFILES)
 	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
 	# A .cmxa with all the .cmx above
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
-	# Then our test executable
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa \
-	         -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
-	# Run the tests
-	$(EXTRA_PATH) ./test.out
 
-test.out:
-	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
-	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
-
-#16-10-19 beware: failing tests in tls-gen will leave mitls.exe unchanged.
-mitls.exe:  tls-gen-spartan
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
+#16-10-19 beware: failing tests in mitls.cmxa will leave mitls.exe unchanged.
+mitls.exe:  mitls.cmxa 
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -g mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 
-# Depends on tls-gen
+test.out: mitls.cmxa 
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+
+.PHONY: test
+test: test.out mitls.exe
+	# Unit tests from test/test_main.ml
+	$(EXTRA_PATH) ./test.out
+	# Run mitls.exe 1.2
+	./mitls.exe www.google.com 443 -v 1.2
+	# Run mitls.exe 1.3. Broken right now. 
+	# mitls-fstar/src/tls/mitls.exe tls13.crypto.mozilla.org 443
+
+# Depends on mitls.cmxa
 rpc.ml:
 	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
@@ -384,16 +381,16 @@ rpc.exe:
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
-tls-ffi: tls-gen
+tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -output-obj -g mitls.cmxa -o libmitls.dll
 else
 UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-tls-ffi: tls-gen
+tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -ccopt -dynamiclib -ccopt -lasmrun -g mitls.cmxa -o libmitls.dylib
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -ccopt -bundle -g mitls.cmxa -o libmitls.so
 else
-tls-ffi: tls-gen
+tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so
 endif
 endif

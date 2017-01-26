@@ -1,6 +1,3 @@
-(*--build-config
-options:--use_hints --fstar_home ../../../FStar --detail_errors --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
---*)
 module AEADOpenssl
 
 open FStar.Heap
@@ -59,15 +56,12 @@ let log_ref (r:rgn) (i:id) : Tot Type0 =
 let ilog (#r:rgn) (#i:id) (l:log_ref r i{authId i})
  : Tot (ideal_log r i) = l
 
-type logrgn (r:rgn) (rw:rw) =
-  logr:rgn{
-    if rw = Writer then logr = r
-    else HyperHeap.disjoint r logr}
-
 noeq type state (i:id) (rw:rw) =
   | State:
     #region: rgn ->
-    #log_region: logrgn region rw ->
+    #log_region:rgn{
+       if rw = Writer then region = log_region
+       else HyperHeap.disjoint region log_region} ->
     key: key i ->
     log: log_ref log_region i ->
     state i rw
@@ -207,13 +201,10 @@ let decrypt #i #l d iv ad c =
 
 (* Functional correctness test: decrypt iv ad (encrypt iv ad p) = p *)
 (* (regardless of authId i)*)
-assume val i : i:id
-assume val lemma_i: unit -> Lemma(pv_of_id i = TLS_1p3)
-let test_correctness () : St unit =
+let test_correctness (i:id{pv_of_id i = TLS_1p3}) : St unit =
   let wr = new_region tls_region in
   let rr = new_region tls_region in
   let w = gen wr i in
-  lemma_i ();
   let l : plainlen = 0 in
   let ad : adata i = empty_bytes in
   let plain : plain i l = empty_bytes in
