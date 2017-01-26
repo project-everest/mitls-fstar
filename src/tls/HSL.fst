@@ -8,141 +8,18 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Ghost // after HH so as not to shadow reveal :( 
 
-(*-- HASH --*)
-//outlining how to handle incrementality and collision-resistance. No agility yet.
-
-let blocklen = 16 // unclear when to switch to machine integers; probably requires library changes.
-type block = lbytes blocklen 
-type tag = lbytes blocklen // possibly truncated; used here both as hash tags and MAC tags
-
-// core algorithm, hashing two blocks into one.
-assume val compress: block -> block -> Tot block 
-
-// injective encoding for variable-length inputs
-// supposing we add 4 bytes for the length and 1+ bytes for padding
-assume val suffix: len:nat  -> Tot (c:bytes { (len + length c) % blocklen = 0 /\ length c <= 5 /\ length c < blocklen + 5 })
-assume val block0: block 
-
-val hash2: a:block -> b:bytes { length b % blocklen = 0 } -> Tot block (decreases (length b))
-let rec hash2 a b = 
-  if length b = 0 then a 
-  else 
-    let c,b = split b blocklen in 
-    hash2 (compress a c) b 
-
-// computed in one step (specification) 
-val hash: bytes -> Tot tag 
-let hash b = hash2 block0 (b @| suffix (length b)) 
-
-type accv = | Acc: len:nat -> a:block -> b:lbytes (len % blocklen) -> accv 
-
-// incremental computation (specification) 
-val hashA: bytes -> Tot accv
-let hashA b = 
-  let pending = length b % blocklen in 
-  let hashed, rest = split b (length b - pending) in
-  Acc (length b) (hash2 block0 hashed) rest
-
-let start = hashA empty_bytes // i.e. block0
-
-// this interface requires that the caller knows what he is hashing, to keep track of computed collisions
-val extend: 
-  content:bytes (* TODO: ghost in real mode *) -> 
-  a:accv { a == hashA content } ->
-  b:bytes ->
-  Tot (a:accv { a == hashA (content @| b) })
-
-assume val split_append: xs:bytes -> ys:bytes -> i:nat { i <= Seq.length xs } -> 
-  Lemma(
-    let c,b = split xs i in (split (xs@|ys) i == (c, (b@|ys))))
-  
-val hash2_append:
-  a:block -> 
-  b0:bytes { length b0 % blocklen = 0 } -> 
-  b1:bytes { length b1 % blocklen = 0 } -> 
-  Lemma (ensures hash2 a (b0 @| b1) == hash2 (hash2 a b0) b1) (decreases (length b0))
-let rec hash2_append a b0 b1 = 
-  if length b0 = 0 then (
-    assert(Seq.equal b0 empty_bytes);
-    assert(Seq.equal (b0 @| b1) b1);
-    assert_norm(hash2 a empty_bytes == a))
-  else 
-    let c,b = split b0 blocklen in
-    split_append b0 b1 blocklen; 
-    hash2_append (compress a c) b b1
-  
-let extend content v b = 
-  let z = v.b @| b in 
-  let pending = length z % blocklen in
-  let hashed, rest = split z (length z - pending) in
-  // proof only: unfolding a == hashA content
-  assert(Seq.equal z (hashed @| rest)); 
-  let b0, c0 = split content (length content - (length content % blocklen)) in 
-  assert(Seq.equal content (b0 @| v.b));
-  assert(v.len = length content);
-  assert(v.a == hash2 block0 b0);
-  hash2_append block0 b0 hashed; 
-  let content' = content @| b in  // unfolding hashA (content @| b) 
-  let b0', c0' = split content' (length content' - (length content' % blocklen)) in 
-  assert(Seq.equal rest c0');
-  assert(Seq.equal content' (b0' @| rest));
-  assert(Seq.equal b0' (b0 @| hashed));
-  assert(pending = length content' % blocklen);
-  assert(v.len + length b = length (content @| b));
-  assert(hash2 v.a hashed = hash2 block0 (b0 @| hashed));
-  Acc (v.len + length b) (hash2 v.a hashed) rest
-
-// witnessing that we hashed this particular content (for collision detection)
-// to be replaced by a witness of inclusion in a global table of all hash computations.
-// (not sure how to manage that table)
-assume val hashed: bytes -> Type 
-
-// Hash.table: strong invariants: hash is injective on its contents.
-// witnessed(fun h -> sel h Hash.table `contains` b)
-
-val finalize: 
-  content:bytes (* TODO: ghost in real mode *) ->
-  a:accv { a = hashA content } -> 
-  ST tag 
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> 
-    t = hash content /\ 
-    hashed content /\
-    h0 == h1 
-    // TBC, e.g. 
-    // modifies_one h0 h1 hashTable /\ sel h1 hashTable == snoc (sel h0 hashTable) (content, t)
-  ))
-
-let finalize content v = 
-  assume(hashed content); 
-  let b0, rest = split content (length content - length content % blocklen) in 
-  assert(Seq.equal content (b0 @| rest));
-  let b1 = v.b @| suffix v.len in 
-  let b = content @| suffix v.len in 
-  assert(Seq.equal b (b0 @| b1)); 
-  hash2_append block0 b0 b1; 
-  hash2 v.a b1
-
-(*
-val collision_resistant: c0: bytes -> c1: bytes { hashed c0 /\ hashed c1 } -> ST unit 
-  (requires (fun h0 -> True))
-  (ensures (hash c0 = hash c1 ==> c0 = c1))
-let collision_resistant c0 c1 =
-  testify(hashed c0);
-  testify(hashed c1);
-  let current = !Hash.table in 
-  ()
-*)
+open Hashing.Spec
+open Hashing
+open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
 
 
-
-(*-- Handshake.Msg --*) 
+(* Handshake.Msg *) 
 // simplified handshake messages; for this outline we show that the client 
 // agrees with the server on the two offers after checking the Finished message
 
 assume type offer: Type0
 // 17-01-19 Still confused about concrete syntax for universes + eqtypes
-noeq type msg: Type0 = | ClientHello of offer | ServerHello of offer | Finished of tag
+noeq type msg: Type0 = | ClientHello of offer | ServerHello of offer | Finished of (tag SHA256)
 
 assume val format: msg -> Tot bytes 
 assume val parse_msg: b:bytes -> Tot (option (m:msg {b = format m}))
@@ -158,12 +35,7 @@ let eoflight = function
   | _ -> false 
 
 
-
-
-
-
-
-///// An outline of HandshakeLog
+(* An outline of Handshake.Log *)
 
 let transcript_bytes ms = List.Tot.fold_left (fun a m -> a @| format m) empty_bytes ms
 // we will need to prove it is injective, we will rely in turn on concrete msg formats
@@ -179,15 +51,15 @@ assume val transcript_bytes_append: ms0: list msg -> ms1: list msg ->
 
 // full specification of the hashed-prefix tags required for a given flight 
 // switching to a relational style to capture computational-hashed 
-val tags: prior: list msg -> ms: list msg -> hs: list tag -> Tot Type0 (decreases ms)
-let rec tags prior ms hs = 
+val tags: a:alg -> prior: list msg -> ms: list msg -> hs: list (tag a) -> Tot Type0 (decreases ms)
+let rec tags a prior ms hs = 
   match ms with 
   | [] -> hs == [] 
   | m :: ms -> 
       let prior = prior @ [m] in
       match tagged m, hs with 
-      | true, h::hs -> let t = transcript_bytes prior in (hashed t /\ h == hash t /\ tags prior ms hs)
-      | false, hs -> tags prior ms hs
+      | true, h::hs -> let t = transcript_bytes prior in (hashed a t /\ h == hash a t /\ tags a prior ms hs)
+      | false, hs -> tags a prior ms hs
       | _ -> False 
 (* was:
 val tags: prior: list msg -> incoming: list msg -> Tot (list tag) (decreases incoming) 
@@ -203,12 +75,12 @@ let rec tags prior incoming =
         rest
 *) 
 
-val tags_nil_nil: prior: list msg -> Lemma (tags prior [] [])
-let tags_nil_nil prior = ()
+val tags_nil_nil: a:alg -> prior: list msg -> Lemma (tags a prior [] [])
+let tags_nil_nil a prior = ()
 
 //17-01-23 plausible ? 
-assume val tags_append: prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list tag -> hs1: list tag -> 
-  Lemma(tags prior (ms0 @ ms1) (hs0 @ hs1) <==> tags prior ms0 hs0 /\ tags (prior @ ms0) ms1 hs1)
+assume val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list (tag a) -> hs1: list (tag a) -> 
+  Lemma(tags a prior (ms0 @ ms1) (hs0 @ hs1) <==> tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1)
 (*
 let rec tags_append prior in0 in1 = 
   match in0 with
@@ -222,16 +94,16 @@ let rec tags_append prior in0 in1 =
 //17-01-23 erasing the transcript involved many hide/reveal annotations and restrictions on embedding proofs in
 //17-01-23 stateful code. Besides, we need conditional ghosts... We may try again once the code is more stable.
 
-noeq type state = | State:
+noeq type state (a:alg) = | State:
   transcript: (*erased*) list msg -> // session transcript shared with the HS so far 
   input_msgs: list msg -> // partial incoming flight, hashed & parsed, with selected intermediate tags
-  input_hashes: list tag { tags transcript input_msgs input_hashes } -> 
-  hash: accv { hash == hashA (transcript_bytes (transcript @ input_msgs)) } -> // current hash state
-  state
-type t = r:ref state // 17-01-19 HS naming!?
+  input_hashes: list (tag a) { tags a transcript input_msgs input_hashes } -> 
+  hash: accv a { content hash = transcript_bytes (transcript @ input_msgs) } -> // current hash state
+  state a
+type t (a:alg) = r:ref (state a) // 17-01-19 HS naming!?
 
-val transcripT: h:mem -> t -> GTot (list msg) // the current transcript shared with the handshake
-let transcripT h (r:t) = (FStar.HyperStack.sel h r).transcript
+val transcripT: h:mem -> #a:alg -> t a -> GTot (list msg) // the current transcript shared with the handshake
+let transcripT h #a r = (FStar.HyperStack.sel h r).transcript
 
 (*
 
@@ -280,22 +152,22 @@ val next_fragment: t -> i:id -> ST (option fragment)
 *)
 
 // We receive messages in whole flights 
-val receive: r:t -> bytes -> ST (option (list msg * list tag))
+val receive: #a:alg -> r:t a -> bytes -> ST (option (list msg * list (tag a)))
   (requires (fun h0 -> True))
   (ensures (fun h0 o h1 -> 
     let t0 = transcripT h0 r in
     let t1 = transcripT h1 r in
     match o with 
-    | Some (ms, hs) -> t1 == t0 @ ms /\ tags t0 ms hs
+    | Some (ms, hs) -> t1 == t0 @ ms /\ tags a t0 ms hs
     | None -> t1 == t0
   ))
  
 //17-01-23 typechecking of this function still failing in many ways
-let receive r bs = 
+let receive #a r bs = 
   match parse_msg bs with // assuming bs is a potential whole message
   | None -> None
   | Some m -> (
-      let State prior ms hs a = !r in
+      let State prior ms hs v = !r in
       let content0 = transcript_bytes (prior @ ms) in 
       let content1 = transcript_bytes (prior @ (ms @ [m])) in 
       //let content1 = transcript_bytes ((transcript @ ms) @ [m]) in 
@@ -306,27 +178,27 @@ let receive r bs =
       assert(Seq.equal content1 (content0 @| transcript_bytes [m]));
       assert_norm(Seq.equal (transcript_bytes [m]) (format m));
       assert(Seq.equal content1 (content0 @| format m));
-      assert(tags prior ms hs); 
+      assert(tags a prior ms hs); 
       //tags_append prior ms [m] hs 
       let ms = ms @ [m]  in
       assert_norm(Seq.equal (transcript_bytes [m]) (format m));
-      let a = extend content0 a bs in
-      assert(a == hashA content1);
-      let hs : hs: list tag { tags prior ms hs } = 
+      let v = extend v bs in
+      assert(content v == content1);
+      let hs : hs: list (tag a) { tags a prior ms hs } = 
         if tagged m 
           then (
-            hs @ [finalize content1 a]) 
+            hs @ [finalize v]) 
           else 
             hs in 
       if eoflight m then  
         let prior1 = prior @ ms in 
-        ( tags_nil_nil prior1; 
-          assert(tags prior1 [] []);
-          assert(a == hashA (transcript_bytes prior1));
-          r := State prior1 [] [] a; 
+        ( tags_nil_nil a prior1; 
+          assert(tags a prior1 [] []);
+          assert(content v == transcript_bytes prior1);
+          r := State prior1 [] [] v; 
           Some (ms,hs) ) 
       else (
-        r := State prior ms hs a; 
+        r := State prior ms hs v; 
         None ))
 
 (*
@@ -340,12 +212,12 @@ TODO: support multiple epochs?
 ////// An outline of Handshake
 
 assume val nego: offer -> GTot offer // the server's choice of parameters
-assume val mac_verify: h:tag -> t:tag -> 
+assume val mac_verify: a:alg -> h:tag a -> t:tag SHA256-> 
 // in existential style, did not manage to trigger on offer.
 //  Tot (b:bool { b ==> (exists offer.  h = hash(transcript_bytes [ClientHello offer; ServerHello (nego offer)])) })
   Tot (b:bool { b ==> (forall c s.  
     let tr = transcript_bytes [ClientHello c; ServerHello s] in 
-    (hashed tr /\ h = hash tr ==> s == nego c)) })
+    (hashed a tr /\ h = hash a tr ==> s == nego c)) })
 
 (*
 let inj_format c0 s0 c1 s1 : Lemma ( 
@@ -360,22 +232,25 @@ noeq type result 'a =
   | Retry
 
 // the HS handler for receiving the server flight after sending a client offer
-val process: log:t -> bytes -> c:offer -> ST (result offer)
-  (requires (fun h0 -> transcripT h0 log == [ClientHello c]))
+val process: a:alg -> log:t a -> bytes -> c:offer -> ST (result offer)
+  (requires (fun h0 -> 
+    transcripT h0 log == [ClientHello c]))
   (ensures (fun h0 r h1 -> 
     match r with 
-    | Result s -> ( s == nego c /\ (exists tag. transcripT h1 log == [ClientHello c; ServerHello s; Finished tag]))
+    | Result s -> ( s == nego c /\ (exists (t:tag SHA256). transcripT h1 log == [ClientHello c; ServerHello s; Finished t]))
     | Retry -> transcripT h1 log == transcripT h0 log 
     | Error _ -> True))
-let process log (raw:bytes) client_offer = 
+let process a log (raw:bytes) c = 
   match receive log raw with 
   | None -> Retry
-  | Some ([ServerHello server_offer; Finished tag], [hash_ch_sh]) -> 
-    if mac_verify hash_ch_sh tag then  (
-      assert(hashed hash_ch_sh);
-      assert(hash_ch_sh = hash(transcript_bytes [ClientHello client_offer; ServerHello server_offer])); 
-      assert(server_offer == nego client_offer);
-      Result server_offer 
+  | Some ([ServerHello s; Finished t], [hash_ch_sh]) -> 
+    if mac_verify a hash_ch_sh t then  (
+      let h1 = ST.get() in 
+      assert(transcripT h1 log == [ClientHello c; ServerHello s; Finished t]);
+      assert(hashed a hash_ch_sh);
+      assert(hash_ch_sh = hash a (transcript_bytes [ClientHello c; ServerHello s])); 
+      assert(s == nego c);
+      Result s
     )
     else Error "bad Mac"
   | _ -> Error "bad Flight" 
