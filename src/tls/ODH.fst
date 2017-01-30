@@ -1,69 +1,3 @@
-module PRF_ODH
-
-val strongKef: a:keflag -> GTot bool
-val strongGroup: g:group -> GTot bool
-
-type share (g:group)
-val hasSecret: #g:group -> share g -> GTot bool
-type keyshare (g:group) = s:share g{hasSecret s}
-val honestShare: share -> GTot bool
-
-val keysharegen: g:group -> ST (s:keyshare g)
-val sharecoerce: g:group -> pub:bytes{length pub = elemlen g} -> ST (s:share g{~(honestShare s)})
-val keysharecoerce: g:group -> priv:bytes{length priv = keylen g} -> ST (s:keyshare g{~(honestShare s)})
-val pubshare: keyshare -> Tot share
-
-type salt (k:kefalg) = b:bytes{length b = saltlen k}
-val honestSalt: #k:kefalg -> salt k -> GTot bool
-val psk_zero_salt: k:kefalg -> Tot (n:salt k{~(honestSalt n)})
-val saltgen: k:kefalg -> ST (n:salt k{n <> psk_zero_salt k})
-val saltcoerce: k:kefalg -> b:bytes{length b = saltlen k} -> ST (n:salt k{~(honestSalt n)})
-
-type extracted_secret (k:kefalg) (g:group)
-type safeExtract (k:kefalg) (g:group) (ks:keyshare g) (s:share g) (n:salt k) =
-  strongKef k /\ ((honestShare ks /\ honestShare s /\ strongGroup g) \/ (honestSalt n))
-
-type dhrole =
-| Initiator
-| Responder
-
-val odh_table : monotone_map (k:kefalg & g:group & s1:share g & s2:share g & n:salt k) (extracted_secret k g)
-
-type registered_secret (k:kefalg) (g:group) (ks:keyshare g) (s:share g) (n:salt k) (h:mem) =
-  is_Some (lookup odh_table (k,g,ks,s,n) h)
-
-type stored_secret (k:kefalg) (g:group) (ks:keyshare g) (s:share g) (n:salt k) (e:extracted_secret k g) (h:mem) =
-  registered_secret k g ks s n /\ lookup odh_table (k,g,ks,s,n) h = Some e
-
-val extract: k:kefalg -> g:group -> role:dhrole -> ks:keyshare g -> s:share g -> n:salt k -> ST (extracted_secret k g)
-  (requires (fun h0 -> True)) // Maybe restrict to calling once per role?
-  (ensures (fun h0 r h1 ->
-    safeExtract k g ks s n ==>
-      let (s1, s2) =
-        match role with
-        | Initiator -> (pubshare ks, s)
-        | Responder -> (s, pubshare ks) in
-      match lookup odh_table (k,g,s1,s2,n) with
-      | None ->
-        m_sel h1 odh_table = update_map (m_sel h0 odh_table) (k,g,s1,s2,n) r
-      | Some r' -> r' = r
-  ))
-
-let extract k g role ks s n =
-  if safeExtract k g ks s n then
-    let (s1, s2) =
-      match role with
-      | Initiator -> (pubshare ks, s)
-      | Responder -> (s, pubshare ks) in
-    (match m_lookup odh_table (k,g,s1,s2,n) with
-    | None ->
-       let r = KDF.gen k in
-       update_map odh_table (k,g,s1,s2,n) r; r
-    | Some r -> r)
-  else
-    let ikm = CommonDH.exponentiate g ks s in
-    HKDF.hkdf_extract k n ikm
-
 (**************************************************************************)
 (** A simple idealization of CommonDH that records honestly generated shares *)
 module DH
@@ -72,9 +6,8 @@ module MS = MonotoneSet
 type group
 val strongGroup: g:group -> GTot bool
 type share (g:group)
-type hasExp (#g:group) (s:share g)
-abstract type exponent (g:group)
-val share_exponent: #g:group -> s:share g{hasExp s} -> Tot (exponent g)
+type keyshare (g:group)
+val pubshare: g:group -> s:keyshare g -> share g
 
 (* Global log of honestly generated DH shares *)
 private let dh_region:rgn = new_region tls_tables_region
@@ -91,35 +24,42 @@ abstract let share_log: share_table =
     ())
 
 abstract type honest_share (#g:group) (s:share g) =
-  (if Flags.ideal_kef then
-    witnessed (MS.contains share_log (g,s))
-  else True)
+  Flags.ideal_kef ==> witnessed (MS.contains share_log (g,s))
 
 let is_honest (#g:group) (s:share g) : ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 b h1 ->
     modifies_none h0 h1 /\
     b <==> honest_share s)) =
-  Some? (MS.lookup share_log (g,s))
+  if Flags.ideal_kef then
+    Some? (MS.lookup share_log (g,s))
+  else None
 
-let keygen (g:group) : ST (s:share g{hasExp s})
+let keygen (g:group) : ST (s:keyshare g)
   (requires (fun h0 -> True))
   (ensures (fun h0 s h1 ->
-    honest_share s /\
     if Flags.ideal_kef then
       modifies_one dh_region h0 h1 /\
-      MR.m_sel h1 share_log == Set.union (MR.m_sel h0 share_log) (Set.singleton (g, s))
-    else
-      h0 = h1
-  ))
+      MR.m_sel h1 share_log == Set.union (MR.m_sel h0 share_log) (Set.singleton (g, pubshare s)) /\
+      witnessed (MS.contains share_log (g, pubshare s))
+    else h0 = h1))
   =
-  let share = CommonDH.keygen g in
-  if Flags.ideal_kef then begin
+  let ks = CommonDH.keygen g in
+  if Flags.ideal_kef then
+   begin
     MR.m_recall share_log;
-    MS.append share_log (g,share);
-    witness share_log (MS.contains share_log (g,share))
-  end;
-  share
+    MS.append share_log (g, pubshare ks);
+    witness share_log (MS.contains share_log (g, pubshare ks))
+   end;
+  ks
+
+let initiator (#g:group) (si:keyshare g) (sr:share g)
+  : St (keyshare g * secret g) =
+  CommonDH.initiator si sr
+
+let responder (#g:group) (si:share g)
+  : St (secret g) =
+  CommonDH.responder si
 
 let coerce (g:group) (b:mlbytes (CommonDH.explen g)) : Tot (s:share g{hasExp s}) =
   CommonDH.exponentiate g (CommonDH.generator g) exp
@@ -140,9 +80,9 @@ type kef_type =
   // PSK extraction, zero salt
   | PSK: pski:PSK.pskid -> ikm
   // DH extraction, constant salt
-  | DH: g:DH.group -> ishare:DH.share g -> sshare: DH.share g -> ikm
+  | DH: g:DH.group -> ishare:DH.share g -> ikm
   // DH extraction, early secret salt
-  | DH_PSK: esId:TLSInfo.esId -> g:DH.group -> ishare:DH.keyshare g -> sshare: DH.share g -> ikm
+  | DH_PSK: esId:TLSInfo.esId -> g:DH.group -> ishare:DH.keyshare g -> ikm
   // Zero extraction, handshake secret salt
   | ZERO: hsId: TLSInfo.hsId -> ikm
 
@@ -159,27 +99,31 @@ type dhrole =
 
 type role (i:id) =
   (match i.kef_type with
-  | DH _ _ _ | DH_PSK _ _ _ _ -> dhrole
+  | DH _ _ | DH_PSK _ _ _ -> dhrole
   | _ -> unit)
-
-// The type of the input key material to extract
-type ikm (i:id) (ir:role i) =
-  (match i.kef_type with
-  | PSK pski -> PSK.psk pski
-  | DH g si sr | DH_PSK _ g si sr ->
-    if ir = Initiator then
-      (si:DH.share g{DH.hasExp si} * sr:DH.share g)
-    else
-      (si:DH.share g * sr:DH.share g{DH.hasExp sr})
-  | ZERO _ -> unit)
 
 type salt (i:id) =
   (match i.kef_type with
-  | PSK _  | DH _ _ _ -> unit
-  | DH_PSK esId _ _ _ ->
+  | PSK _  | DH _ _ -> unit
+  | DH_PSK esId _ _ ->
     expanded_secret (EarlySecretID esId)
   | ZERO hsId ->
     expanded_secret (HandshakeSecretID hsId))
+
+// The type of the input key material to extract
+// For ODH, the responder share is ephemeral and generated as part of extraction
+// (see multi-initiator ODH-extract assumption)
+type ikm (i:id) (ir:role i) =
+  (match i.kef_type with
+  | PSK pski -> PSK.psk pski
+  | DH g si | DH_PSK _ g si ->
+    if ir = Initiator then
+      // The initiator instance is created after the responder share is known
+      (ks:DH.keyshare g{pubshare ks = si})
+    else
+      // The label must be picked at instance creation time for the responder
+      (n:salt i)
+  | ZERO _ -> unit)
 
 type extracted_secret (i:id) =
   lbytes (keflen i.alg)
@@ -362,10 +306,10 @@ module KEF_PRF_ODH
 
 type id = i:KEF.id{DH? i.kef_type \/ DH_PSK? i.kef_type}
 
-let shares_of_id (i:id) =
+let ishare_of_id (i:id) =
   match i.kef_type with
-  | DH g si sr -> (g, si, sr)
-  | DH_PSK _ g si sr -> (g, si, sr)
+  | DH g si -> (g, si)
+  | DH_PSK _ g si -> (g, si)
 
 inline_for_extraction let safeId (i:id) : Tot bool =
   let (g, si, sr) = shares_of_id i in
@@ -373,52 +317,109 @@ inline_for_extraction let safeId (i:id) : Tot bool =
 
 type salt (i:id) =
   (match i.kef_type with
-  | DH _ _ _ ->
-    unit
-  | DH_PSK esId _ _ _ ->
-    expanded_secret (EarlySecretID esId))
+  | DH _ _ _ -> unit
+  | DH_PSK esId _ _ _ -> expanded_secret (EarlySecretID esId))
 
-type odh_extracted (i:id) (s:salt i) = extracted_secret i
+type odh_index (i:id) =
+  (let g, _ = ishare_of_id i in
+  sr:share g * n:salt i)
 
-(* Type of g^xy DH secrets *)
-abstract type odh_key (i:id) =
-  let (g, _, _) = shares_of_id i in
-  b:mlbytes (CommonDH.sharelen g)
+type odh_extracted (i:id) (j:odh_index i) =
+  extracted_secret i
 
 type log (i:id) (r:rgn) =
   (if safeId i then
-    MM.t r (salt i) (odh_extracted i)
+    MM.t r (odh_index i) (odh_extracted i)
   else
     unit)
 
-type state (i:id) =
+type odh_key (i:id) (ir:dhrole) =
+  (let g, si = ishare_of_id i in
+  if ir = Initiator then
+    ks:DH.keyshare g{DH.pubshare ks = si}
+   else
+    sr:DH.keyshare g{honest_share (pubshare ks)} * DH.secret (g,si,pubshare sr) * n:salt i)
+
+type state (i:id) (ir:dhrole) =
   | State:
     r: rgn ->
-    key: odh_key i ->
+    key: odh_key i ir ->
     log: log i r ->
     state i
 
-let create (i:id) (ir:role i) (ikm:ikm i ir) : ST (state i)
+type odh_initiator (i:id) = state i Initiator
+type odh_responder (i:id) = state i Responder
+
+let create (i:id) (ir:role i) (ikm:ikm i ir) : ST (state i ir)
   (requires (fun h0 -> True))
   (ensures (fun h0 st h1 -> True))
   =
   let r = new_region parent in
-  let (g, si, sr) = shares_of_id i in
-  let honest = CommonDH.safeGroup g && CommonDH.is_honest si && CommonDH.is_honest sr in
+  let (g, si) = ishare_of_id i in
   let log =
-    if Flags.ideal_kef && honest then
-      MM.alloc #r #(salt i) #(odh_extracted i) #grows
+    if Flags.ideal_kef && DH.is_honest si then
+      MM.alloc #r #(odh_index i) #(odh_extracted i) #grows
     else () in
   let key = match ir with
-  | Initiator ->
-    let si_secret : (s:DH.share h{DH.hasExp s}) = fst ikm in
-    key = CommonDH.initiator g sr si_secret
-  | Responder ->
-    let si_secret : (s:DH.share h{DH.hasExp s}) = fst ikm in
-    let key = CommonDH.initiator g sr si_secret in
-    CommonDH.responder g si sr_secret in
+    | Initiator -> ikm
+    | Responder ->
+      let n = ikm in
+      let sr, secret = DH.responder g si in
+      (sr, secret, n)
+    in
   State r key log
 
+let extract_responder (i:id) (st:odh_responder i) : ST (extracted_secret i)
+  (requires (fun h0 ->
+    let sr, _, n = st.key in
+    MM.fresh st.log (pubshare sr, n) h0)) // Can only call once
+  (ensures (fun h0 (sr,r) h1 ->
+    let (g, si) = ishare_of_id i in
+    let (sr, _, n) = st.key in
+    if Flags.ideal_kef then
+      DH.honestGroup g /\ DH.honest_share si ==>
+        (modifies_one st.r h0 h1 /\
+        MR.m_sel h1 st.log == MM.upd (MR.m_sel h0 st.log) (pubshare sr, n) r /\
+        witnessed (MM.contains st.log (pubshare sr, n) r))
+    else h0 = h1))
+  =
+  let g, si = ishare_of_id i in
+  let sr, secret, n = st.key in
+  if Flags.ideal_kef && DH.strongGroup g && DH.is_honest si then
+    let r = Bytes.random (keflen i.alg) in
+    m_recall st.log;
+    MM.extend st.log (pubshare sr, n) r;
+    (sr, r)
+  else
+    let concrete_n = match i.kef_type with
+      | DH _ _ _ -> zH (hashalg i)
+      | DH_PSK _ _ _ _ -> n in
+    let r = Hacl.KEF.extract (i.alg) secret concrete_n in
+    (sr, r)
+
+let extract_initiator (i:id) (st:odh_initiator i)
+  (sr:share (fst (ishare_of_id i)) (n:salt i)
+  : ST (extracted_secret i)
+  (requires (fun h0 -> safeId i ==> MM.defined st.log (sr, n)))
+  (ensures (fun h0 r h1 ->
+    let g, si = ishare_of_id i in
+    modifies_none h0 h1 /\
+    (Flags.ideal_kef /\ DH.strongGroup g /\ DH.honest_share si) ==>
+      (r == MM.value st.log (si, n))))
+  =
+  let g, si = ishare_of_id i in
+  let ksi = st.key in
+  let secret = DH.initiator ksi sr in
+  let concrete_n = match i.kef_type with
+    | DH _ _ _ -> zH (hashalg i)
+    | DH_PSK _ _ _ _ -> n in
+  let r = Hacl.KEF.extract (i.alg) secret concrete_n in
+  if Flags.ideal_kef && DH.strongGroup g && DH.is_honest si then
+    (match MM.lookup st.log (sr, n) with
+    | Some r -> r)
+  else r
+
+(*
 let extract (i:id) (st:state i) (ir:role i) (s:salt i)
   : ST (odh_extracted i s)
   (requires (fun h0 -> True))
@@ -441,15 +442,71 @@ let extract (i:id) (st:state i) (ir:role i) (s:salt i)
     match i.kef_type with
     | DH _ _ _ -> zH (hashalg i)
     | DH_PSK _ _ _ _ -> s in
-  let r = Hacl.KEF.extract (i.alg) st.key concrete_s in // e.g. HKDF
-  if Flags.ideal_kef && safeId i then
-    (match MM.lookup st.log v with
-    | Some r -> r
-    | None ->
-      if ir = Initiator then r
-      else begin
-        let r = Bytes.random (keflen i.alg) in
-        m_recall st.log;
-        MM.extend st.log v r; r
-      end)
-  else r
+
+    module PRF_ODH
+
+    val strongKef: a:keflag -> GTot bool
+    val strongGroup: g:group -> GTot bool
+
+    type share (g:group)
+    val hasSecret: #g:group -> share g -> GTot bool
+    type keyshare (g:group) = s:share g{hasSecret s}
+    val honestShare: share -> GTot bool
+
+    val keysharegen: g:group -> ST (s:keyshare g)
+    val sharecoerce: g:group -> pub:bytes{length pub = elemlen g} -> ST (s:share g{~(honestShare s)})
+    val keysharecoerce: g:group -> priv:bytes{length priv = keylen g} -> ST (s:keyshare g{~(honestShare s)})
+    val pubshare: keyshare -> Tot share
+
+    type salt (k:kefalg) = b:bytes{length b = saltlen k}
+    val honestSalt: #k:kefalg -> salt k -> GTot bool
+    val psk_zero_salt: k:kefalg -> Tot (n:salt k{~(honestSalt n)})
+    val saltgen: k:kefalg -> ST (n:salt k{n <> psk_zero_salt k})
+    val saltcoerce: k:kefalg -> b:bytes{length b = saltlen k} -> ST (n:salt k{~(honestSalt n)})
+
+    type extracted_secret (k:kefalg) (g:group)
+    type safeExtract (k:kefalg) (g:group) (ks:keyshare g) (s:share g) (n:salt k) =
+      strongKef k /\ ((honestShare ks /\ honestShare s /\ strongGroup g) \/ (honestSalt n))
+
+    type dhrole =
+    | Initiator
+    | Responder
+
+    val odh_table : monotone_map (k:kefalg & g:group & s1:share g & s2:share g & n:salt k) (extracted_secret k g)
+
+    type registered_secret (k:kefalg) (g:group) (ks:keyshare g) (s:share g) (n:salt k) (h:mem) =
+      is_Some (lookup odh_table (k,g,ks,s,n) h)
+
+    type stored_secret (k:kefalg) (g:group) (ks:keyshare g) (s:share g) (n:salt k) (e:extracted_secret k g) (h:mem) =
+      registered_secret k g ks s n /\ lookup odh_table (k,g,ks,s,n) h = Some e
+
+    val extract: k:kefalg -> g:group -> role:dhrole -> ks:keyshare g -> s:share g -> n:salt k -> ST (extracted_secret k g)
+      (requires (fun h0 -> True)) // Maybe restrict to calling once per role?
+      (ensures (fun h0 r h1 ->
+        safeExtract k g ks s n ==>
+          let (s1, s2) =
+            match role with
+            | Initiator -> (pubshare ks, s)
+            | Responder -> (s, pubshare ks) in
+          match lookup odh_table (k,g,s1,s2,n) with
+          | None ->
+            m_sel h1 odh_table = update_map (m_sel h0 odh_table) (k,g,s1,s2,n) r
+          | Some r' -> r' = r
+      ))
+
+    let extract k g role ks s n =
+      if safeExtract k g ks s n then
+        let (s1, s2) =
+          match role with
+          | Initiator -> (pubshare ks, s)
+          | Responder -> (s, pubshare ks) in
+        (match m_lookup odh_table (k,g,s1,s2,n) with
+        | None ->
+           let r = KDF.gen k in
+           update_map odh_table (k,g,s1,s2,n) r; r
+        | Some r -> r)
+      else
+        let ikm = CommonDH.exponentiate g ks s in
+        HKDF.hkdf_extract k n ikm
+
+*)
