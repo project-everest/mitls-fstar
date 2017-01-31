@@ -308,7 +308,7 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq_Base.ml \
+  FStar_List_Tot_Base.ml FStar_List_Tot_Properties.ml FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq_Base.ml \
   FStar_BitVector.ml FStar_UInt.ml \
   FStar_Seq_Properties.ml FStar_Seq.ml FStar_Monotonic_RRef.ml \
   FStar_Monotonic_Seq.ml \
