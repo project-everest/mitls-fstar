@@ -12,8 +12,8 @@ ifndef FSTAR_HOME
 FSTAR_HOME=../../FStar
 endif
 STDLIB_ADMITS=Set Map HyperHeap Char Seq
-STDLIB=FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.fst FStar.HyperHeap.fsi \
-stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi \
+STDLIB=FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.Base.fst FStar.HyperHeap.fsi \
+stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.Tot.Properties.fst FStar.List.Tot.fst FStar.List.fst seq.fsi \
 FStar.Seq.fst #FStar.Int64.fst
 CODEGEN_LIBS=CoreCrypto Platform Classical Seq.Base HyperHeap
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS))

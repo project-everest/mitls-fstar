@@ -18,8 +18,8 @@ clean:
 
 STDLIB_ADMITS=Char
 
-STDLIB=FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.fst FStar.HyperHeap.fst \
-stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.fst FStar.ListProperties.fst seq.fsi FStar.Seq.Base.fst FStar.Seq.Properties.fst FStar.Seq.fst \
+STDLIB=FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Set.fst FStar.Heap.fst FStar.Map.fst FStar.List.Tot.Base.fst FStar.HyperHeap.fst \
+stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.Tot.Properties.fst FStar.List.Tot.fst FStar.List.fst seq.fsi FStar.Seq.Base.fst FStar.Seq.Properties.fst FStar.Seq.fst \
 
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB)
 

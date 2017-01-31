@@ -94,15 +94,16 @@ FStar.Classical.fst \
 FStar.Set.fst \
 FStar.Heap.fst \
 FStar.Map.fst \
-FStar.List.Tot.fst \
+FStar.List.Tot.Base.fst \
 FStar.HyperHeap.fsti \
 stHyperHeap.fst \
 allHyperHeap.fst \
 FStar.Monotonic.RRef.fst \
 FStar.Char.fsti \
 FStar.String.fsti \
+FStar.List.Tot.Properties.fst \
+FStar.List.Tot.fst \
 FStar.List.fst \
-FStar.ListProperties.fst \
 FStar.Seq.Base.fst \
 FStar.Seq.Properties.fst \
 FStar.Seq.fst \
@@ -128,6 +129,7 @@ HyperHeap
 # No Extract (--no_extract)
 FSTAR_NOEXTRACT= \
 FStar.All \
+FStar.List.Tot \
 FStar.List \
 FStar.Heap \
 FStar.Set \
