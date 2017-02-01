@@ -731,7 +731,7 @@ let hasExtendedMS extL = extL.ne_extended_ms = true
 (* TODO *)
 #set-options "--lax"
 
-val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> (list sigHashAlg)
+val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> ML (list sigHashAlg)
 let default_sigHashAlg_fromSig pv sigAlg=
     match sigAlg with
     | RSASIG ->
@@ -746,7 +746,7 @@ let default_sigHashAlg_fromSig pv sigAlg=
         //| SSL_3p0 -> [(DSA,NULL)]
     | _ -> unexpected "[default_sigHashAlg_fromSig] invoked on an invalid signature algorithm"
 
-val default_sigHashAlg: protocolVersion -> cipherSuite -> l:list sigHashAlg{List.Tot.length l <= 1}
+val default_sigHashAlg: protocolVersion -> cipherSuite -> ML (l:list sigHashAlg{List.Tot.length l <= 1})
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
 
@@ -758,13 +758,13 @@ val sigHashAlg_bySigList: list sigHashAlg -> list sigAlg -> Tot (list sigHashAlg
 let sigHashAlg_bySigList (algList:list sigHashAlg) (sigAlgList:list sigAlg) =
     List.Tot.choose (fun alg -> let (sigA,_) = alg in if (List.Tot.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
 
-val cert_type_to_SigHashAlg: certType -> protocolVersion -> list sigHashAlg
+val cert_type_to_SigHashAlg: certType -> protocolVersion -> ML (list sigHashAlg)
 let cert_type_to_SigHashAlg ct pv =
     match ct with
     | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> default_sigHashAlg_fromSig pv DSA
     | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> default_sigHashAlg_fromSig pv RSASIG
 
-val cert_type_list_to_SigHashAlg: list certType -> protocolVersion -> list sigHashAlg
+val cert_type_list_to_SigHashAlg: list certType -> protocolVersion -> ML (list sigHashAlg)
 let rec cert_type_list_to_SigHashAlg ctl pv =
     // FIXME: Generates a list with duplicates!
     match ctl with
@@ -777,7 +777,7 @@ let cert_type_to_SigAlg ct =
     | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> DSA
     | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> RSASIG
 
-val cert_type_list_to_SigAlg: list certType -> list sigAlg
+val cert_type_list_to_SigAlg: list certType -> ML (list sigAlg)
 let rec cert_type_list_to_SigAlg ctl =
     // FIXME: Generates a list with duplicates!
     match ctl with

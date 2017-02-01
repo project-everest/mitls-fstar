@@ -11,6 +11,8 @@ hash algorithm etc.
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
+open FStar.All
+
 open FStar.Seq
 open Platform.Bytes
 open Platform.Error
@@ -1252,7 +1254,7 @@ let rec parseCertificateTypeList data =
 
 
 (** Determine the certificate signature algorithms allowed according to the ciphersuite *)
-val defaultCertTypes: bool -> cipherSuite -> l:list certType{List.Tot.length l <= 1}
+val defaultCertTypes: bool -> cipherSuite -> ML (l:list certType{List.Tot.length l <= 1})
 let defaultCertTypes sign cs =
   let alg = sigAlg_of_ciphersuite cs in
     if sign then

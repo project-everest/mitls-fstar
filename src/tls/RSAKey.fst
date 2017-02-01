@@ -24,7 +24,7 @@ let strong (pv:TC.protocolVersion): bool = false
 type modulus  = bytes
 type exponent = bytes
 
-let gen () : (pk * sk) =
+let gen () : ML (pk * sk) =
     let sk = CoreCrypto.rsa_gen_key 2048 in
     let pk = {sk with rsa_prv_exp = None} in
     pk, sk
