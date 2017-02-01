@@ -275,6 +275,7 @@ tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst
 # Lax typecheck all files (with ideal flag off)
 tls-lax: record_fstar_version $(LIBFILES)
 	$(FSTAR) --lax \
+	--include $(LDIR)/spartan \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
 	$(FSTS)

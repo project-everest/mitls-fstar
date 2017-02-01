@@ -278,7 +278,7 @@ let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.log h
 
 let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS?.r s)
 
-let stateT (s:hs) (h:HyperStack.mem) : stateType s = (logT s h, sel h s.state)
+let stateT (s:hs) (h:HyperStack.mem) : GTot (stateType s) = (logT s h, sel h s.state)
 
 let non_empty h s = Seq.length (logT s h) > 0
 

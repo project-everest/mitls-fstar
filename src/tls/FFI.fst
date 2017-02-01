@@ -66,7 +66,7 @@ private let errno description txt : int =
   | None    -> -1 ))
 
  
-let connect send recv config_1 : Connection.connection * int = 
+let connect send recv config_1 :ML (Connection.connection * int) = 
   // we assume the configuration specifies the target SNI; 
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
@@ -95,7 +95,7 @@ let read c =
   | ReadError description txt -> Errno(errno description txt) 
   | _                         -> failwith "unexpected FFI read result"
 
-let write c msg : int =
+let write c msg : ML int =
   let i = currentId c Writer in 
   match write_all c i msg with
   | Written                    -> 0 
@@ -105,7 +105,7 @@ let write c msg : int =
 // sending "CLOSE_NOTIFY"; should be followed by a read to wait for
 // the full shutdown (but many servers don't acknowledge).
 
-let close c : int = 
+let close c : ML int = 
   let b = 
     if ffi_debug then
       IO.debug_print_string "FFI close\n" 
@@ -115,7 +115,7 @@ let close c : int =
   | WriteError description txt -> errno description txt
   | _                          -> -1 
 
-let close_extraction_bug c : int = 
+let close_extraction_bug c : ML int = 
   match writeCloseNotify c with 
   | writeClose                 -> 0
   | WriteError description txt -> errno description txt
@@ -162,17 +162,17 @@ let recvTcpPacket callbacks max =
   else
     Platform.Error.Error ("socket recv failure")
   
-val ffiConnect: config:config -> callbacks:callbacks -> Connection.connection * int 
+val ffiConnect: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
 let ffiConnect config cb =
   connect (sendTcpPacket cb) (recvTcpPacket cb) config
   
-val ffiRecv: Connection.connection -> cbytes  
+val ffiRecv: Connection.connection -> ML cbytes  
 let ffiRecv c =
   match read c with
     | Received response -> get_cbytes response
     | Errno _ -> get_cbytes empty_bytes
   
-val ffiSend: Connection.connection -> cbytes -> int
+val ffiSend: Connection.connection -> cbytes -> ML int
 let ffiSend c b =
   let msg = abytes b in
   write c msg

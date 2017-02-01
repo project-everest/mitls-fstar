@@ -296,12 +296,12 @@ let targetLength_converges i r =
   lemma_MtE i; lemma_ID12 i
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
-val rangeClass: i:id2 -> r:range -> r':range
+val rangeClass: i:id2 -> r:range -> ML (r':range
   { snd r <= max_TLSPlaintext_fragment_length
     /\ ((~(AEAD? (aeAlg_of_id i))
        /\ snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i)))
     \/ (AEAD? (aeAlg_of_id i) /\ fst r = snd r))
-    /\ r' = cipherRangeClass i (targetLength i r) }
+    /\ r' = cipherRangeClass i (targetLength i r) })
 let rangeClass i (r:range) =
     if MACOnly? (aeAlg_of_id i) && not(SSL_3p0? (pv_of_id i)) then
         Error.unexpected "[rangeClass] given an invalid algorithm identifier"

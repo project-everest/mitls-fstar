@@ -23,15 +23,15 @@ private let pre_id (role:role) =
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256) cr sr role
 
-private val encryptRecord : #id:StAE.stae_id -> wr:StAE.writer id -> ct:Content.contentType -> plain:bytes -> bytes
-private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
+private val encryptRecord : #id:StAE.stae_id -> wr:StAE.writer id -> ct:Content.contentType -> plain:bytes -> ML bytes
+private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : ML bytes =
   let rg: Range.frange id = (0, length plain) in
   let f: DataStream.fragment id rg = plain in
   let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
 
-private val decryptRecord : #id:StAE.stae_id -> rd:StAE.reader id -> ct:Content.contentType -> cipher:bytes -> bytes
-private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : bytes =
+private val decryptRecord : #id:StAE.stae_id -> rd:StAE.reader id -> ct:Content.contentType -> cipher:bytes -> ML bytes
+private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : ML bytes =
   let ctxt: Content.decrypted id = (ct, cipher) in
   let Some d = StAE.decrypt #id rd ctxt in
   Content.repr id d
@@ -105,7 +105,7 @@ private let recvEncAppDataRecord tcp pv rd =
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.2 Server
-private let rec server_loop_12 config sock =
+private let rec server_loop_12 config sock : ML unit =
   let raw_tcp = Platform.Tcp.accept sock in
   let tcp = Transport.wrap raw_tcp in 
   let rid = new_region root in
@@ -375,7 +375,7 @@ private let sendEncHSRecord tcp pv msg wr =
 
 (*-----------------------------------------------------------------------------*)
 // TLS 1.3 Server
-private let rec server_loop_13 config sock =
+private let rec server_loop_13 config sock : ML unit =
   let raw_tcp = Platform.Tcp.accept sock in
   let tcp = Transport.wrap raw_tcp in 
   let rid = new_region root in

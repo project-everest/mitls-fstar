@@ -225,7 +225,12 @@ let disconnect c =
     c.state := Close
 
 // on some errors, we locally give up the connection
-let unrecoverable c reason : ioresult_w =
+val unrecoverable: c: connection -> r:string -> ST ioresult_w
+  (requires (fun h0 -> st_inv c h0))
+  (ensures (fun h0 i h1 -> st_inv c h1 /\ 
+		        modifies (Set.singleton (C?.region c)) h0 h1 /\
+			i = WriteError None r))
+let unrecoverable c reason =
     disconnect c;
     WriteError None reason
 
@@ -1076,12 +1081,14 @@ type delta h c =
 
 
 // frequent error handler; note that i is the (unused) reader index
-let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string): ioresult_i ri =
+//val alertFlush: TODO: WE REALLY NEED A VAL!
+let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string) =
   let written = sendAlert c ad reason in
-  match written with
-  | WriteClose      -> Read DataStream.Close // do we need this case?
-  | WriteError x y -> ReadError x y         // how to compose ad reason x y ?
-
+  let r : ioresult_i ri = 
+    match written with
+    | WriteClose      -> Read DataStream.Close // do we need this case?
+    | WriteError x y -> ReadError x y in         // how to compose ad reason x y ?
+  r
 
 val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
   (requires (fun h0 ->

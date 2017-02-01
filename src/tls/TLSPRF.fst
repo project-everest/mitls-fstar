@@ -1,7 +1,6 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 (* STATUS : JK : assumed two arrays because, has to be fixed *)
 
-#light "off"
 
 module TLSPRF
 

@@ -122,7 +122,7 @@ let rec maconly_mem i ad cl pl text tag (xs:list<maconly_entry>) =
 //#endif
 *)
 
-val mac: i:id -> k:MAC.key i (fun _ -> True) -> ad:LHAEPlain.adata i -> rg:frange i -> p:LHAEPlain.plain i ad rg -> plain i ad rg
+val mac: i:id -> k:MAC.key i (fun _ -> True) -> ad:LHAEPlain.adata i -> rg:frange i -> p:LHAEPlain.plain i ad rg -> St (plain i ad rg)
 let mac i k ad rg plain =
     let p = LHAEPlain.makeExtPad i ad rg plain in
     let text = macPlain i rg ad p in
@@ -187,7 +187,7 @@ val verify:
   ad: LHAEPlain.adata i ->
   rg: frange i ->
   p: plain i ad rg ->
-  result (LHAEPlain.plain i ad rg)
+  St (result (LHAEPlain.plain i ad rg))
 
 let verify (i:id) k ad rg p =
     let text = macPlain i rg ad p.f in
@@ -257,8 +257,8 @@ val decode:
 //          StatefulPlain.wf_ad_rg i (LHAEPlain.parseAD ad) rg /\
           snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i))) } ->
       payload: lbytes (plainLength i tlen) ->
-      p: plain i ad (cipherRangeClass i tlen)
-      { pv_of_id i <> SSL_3p0 ==> (b2t (p.ok) <==> (payload == encode i ad (cipherRangeClass i tlen) p.f p.tag ))}
+      St (p: plain i ad (cipherRangeClass i tlen)
+	 { pv_of_id i <> SSL_3p0 ==> (b2t (p.ok) <==> (payload == encode i ad (cipherRangeClass i tlen) p.f p.tag ))})
 
 
 assume val lemma_pad: lx: nat { lx < 256 } ->
@@ -388,8 +388,8 @@ val repr:
   rg:range { snd rg <= max_TLSPlaintext_fragment_length /\
              snd rg - fst rg <= maxPadSize i - minimalPadding i (snd rg + macSize (macAlg_of_id i)) } ->
   plain i ad rg ->
-  b: lbytes (plainLength i (targetLength i rg))
-  { targetLength i rg <= max_TLSCiphertext_fragment_length }
+  St (b: lbytes (plainLength i (targetLength i rg))
+	 { targetLength i rg <= max_TLSCiphertext_fragment_length })
   // should that be a property of targetLength?
 
 let repr i ad rg pl =
