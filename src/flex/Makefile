@@ -129,7 +129,7 @@ HyperHeap
 # No Extract (--no_extract)
 FSTAR_NOEXTRACT= \
 FStar.All \
-FStar.List.Tot \
+FStar.List.Tot.Base \
 FStar.List \
 FStar.Heap \
 FStar.Set \
