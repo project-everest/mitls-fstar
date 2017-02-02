@@ -11,6 +11,7 @@ open Platform.Bytes
 open TLSConstants
 open TLSInfo
 open HandshakeMessages
+open Hashing.Spec 
 
 (* A flag for runtime debugging of handshakelog data.
    The F* normalizer will erase debug prints at extraction
@@ -101,14 +102,14 @@ val getBytes: log -> St bytes
 let getBytes (LOG #reg lref) =
     let (| pv, hsl, lb |) = !lref in lb
 
-val getHash: log -> h:CoreCrypto.hash_alg -> St (b:bytes{length b = CoreCrypto.hashSize h})
+val getHash: log -> h:hash_alg -> St (tag h)
 let getHash (LOG #reg lref) h =
     let (| pv, hsl, lb|) = !lref in
     let b =
         if hsl_debug then
             print_log hsl
         else false in
-    CoreCrypto.hash h lb
+    Hashing.compute h lb
 
 type validLog_CH (l:hs_log) =
   (match l with
@@ -129,22 +130,23 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : logInfo_CH =
         PSK.allow_dhe_resumption = false;
         PSK.allow_psk_resumption = false;
         PSK.early_ae = CoreCrypto.AES_128_GCM;
-        PSK.early_hash = CoreCrypto.SHA256;
+        PSK.early_hash = SHA256;
         PSK.identities = (empty_bytes, empty_bytes);});
     })
 
-val getHash_CH : l:log -> h:CoreCrypto.hash_alg ->
-  ST ( li:logInfo{LogInfo_CH? li} & hash:bytes{length hash = CoreCrypto.hashSize h} )
+val getHash_CH : l:log -> h:hash_alg ->
+  ST ( li:logInfo{LogInfo_CH? li} & tag h )
     (requires (fun h0 ->
       let lref = l.logref in
       let (| _, hsl, _ |) = sel h0 lref in validLog_CH hsl))
     (ensures (fun h0 (| li, hash |) h1 ->
 	h1 = h0 /\ log_info li hash))
 
-let getHash_CH (LOG #reg lref) (h:CoreCrypto.hash_alg) =
+let getHash_CH (LOG #reg lref) (h:hash_alg) =
   let (| _, hsl, lb |) = !lref in
   let loginfo = projectLog_CH hsl in
-  (| LogInfo_CH loginfo, CoreCrypto.hash h lb |)
+  let tag = Hashing.compute h lb in
+  (| LogInfo_CH loginfo, tag |)
 
 type validLog_SH (l:hs_log) =
   (match l with

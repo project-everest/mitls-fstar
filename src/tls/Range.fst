@@ -209,7 +209,7 @@ let targetLength i (l,h) =
     cut(AEAD? (aeAlg_of_id i));
     let ivL = AE.explicit_iv_length i in
     cut(ivL >= 0);
-    let tagL = aeadTagSize aeadAlg in
+    let tagL = CoreCrypto.aeadTagSize aeadAlg in
     cut(tagL >= 0);
     let fp = fixedPadSize i in
     cut(fp = 0);

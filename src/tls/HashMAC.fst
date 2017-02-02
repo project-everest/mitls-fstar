@@ -66,10 +66,10 @@ let sslKeyedHashVerify a k p t =
 
 (* Agile MAC function *)
 
-val tls_mac: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> ST bytes
+val tls_mac: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> ST (lbytes (macSize a))
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
-let tls_mac a k d : mac a =
+let tls_mac a k d  =
     match a with
     | HMAC     a -> hmac a  k d  
     | SSLKHASH a -> sslKeyedHash a k d 

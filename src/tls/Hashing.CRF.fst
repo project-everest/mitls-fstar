@@ -77,7 +77,7 @@ let finalize #a v =
 
 
 // sanity check
-private val test: a:alg -> b0:bytes -> b1:bytes -> unit 
+private val test: a:alg -> b0:bytes -> b1:bytes -> St unit 
 let test a b0 b1 = 
   // we need to record *both* computations
   let h = finalize (extend (start a) b0) in 
