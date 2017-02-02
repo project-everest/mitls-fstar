@@ -54,7 +54,7 @@ private let write_all c i b = write_all' c i b 0
 
 // an integer carrying the fatal alert descriptor
 // we could also write txt into the application error log 
-private let errno description txt : int = 
+private let errno description txt : ML int = 
   let txt0 = 
     match description with 
     | Some ad -> TLSError.string_of_ad ad
@@ -66,7 +66,7 @@ private let errno description txt : int =
   | None    -> -1 ))
 
  
-let connect send recv config_1 :ML (Connection.connection * int) = 
+let connect send recv config_1 : ML (Connection.connection * int) = 
   // we assume the configuration specifies the target SNI; 
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
