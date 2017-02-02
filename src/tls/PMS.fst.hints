@@ -1,5 +1,5 @@
 [
-  "\u0019üiıh\u0004ÒC\u001e”ÅEmeñÆ",
+  "Â\tB±€·ñ;˜\u0015£√\u0005—À$",
   [
     [
       "PMS.rsaseed",
@@ -23,27 +23,29 @@
       ],
       0
     ],
+    [ "PMS.uu___is_IdealRSAPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "PMS.IdealRSAPMS._0",
+      "PMS.__proj__IdealRSAPMS__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_PMS.IdealRSAPMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_474746f832d375ff05314f379e60d821"
+        "refinement_interpretation_Tm_refine_4b165c74d9a659bf95c22cc5c0cddc2f"
       ],
       0
     ],
+    [ "PMS.uu___is_ConcreteRSAPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "PMS.ConcreteRSAPMS._0",
+      "PMS.__proj__ConcreteRSAPMS__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_PMS.ConcreteRSAPMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_c8402badf0587ce2611f8f865ebcc749"
+        "refinement_interpretation_Tm_refine_21658e76784ec5e41f1ede63fdf3a3b0"
       ],
       0
     ],
@@ -58,7 +60,22 @@
       ],
       0
     ],
-    [ "PMS.coerceRSA", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "PMS.genRSA",
+      1,
+      0,
+      1,
+      [
+        "@query", "equation_DHGroup.params", "equation_RSAKey.strong",
+        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "function_token_typing_DHGroup.ffdhe2048",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThan",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_6f2b4a64b3ab3857a757176fd8a57fb5"
+      ],
+      0
+    ],
     [
       "PMS.dhseed",
       1,
@@ -81,27 +98,29 @@
       ],
       0
     ],
+    [ "PMS.uu___is_IdealDHPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "PMS.IdealDHPMS._0",
+      "PMS.__proj__IdealDHPMS__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_PMS.IdealDHPMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_38ee435237db4b2ad1af6ec30fd2419b"
+        "refinement_interpretation_Tm_refine_68f56426ab673280a097f887a8d712db"
       ],
       0
     ],
+    [ "PMS.uu___is_ConcreteDHPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "PMS.ConcreteDHPMS._0",
+      "PMS.__proj__ConcreteDHPMS__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_PMS.ConcreteDHPMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_0c0c68839fea17c460de17a43f55c748"
+        "refinement_interpretation_Tm_refine_5e03437877d8157a7d93f8b434a81ef3"
       ],
       0
     ],
@@ -116,7 +135,6 @@
       ],
       0
     ],
-    [ "PMS.coerceDH", 1, 0, 1, [ "@query" ], 0 ],
     [
       "PMS.pms",
       1,
@@ -131,34 +149,36 @@
         "assumption_TLSConstants.protocolVersion_haseq",
         "equation_Platform.Bytes.bytes", "equation_RSAKey.pk",
         "function_token_typing_RSAKey.pk",
-        "haseqTm_refine_91cae5fbff2b17b9fca0db24348d01a5",
+        "haseqTm_refine_3477d359262b20ef2e766e80d669ba1b",
         "kinding_CommonDH.params@tok", "kinding_CommonDH.share@tok",
         "kinding_PMS.dhpms@tok", "kinding_PMS.rsapms@tok",
         "kinding_TLSConstants.protocolVersion@tok"
       ],
       0
     ],
+    [ "PMS.uu___is_RSAPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "PMS.RSAPMS._0",
+      "PMS.__proj__RSAPMS__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_PMS.RSAPMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2c2554ed8cc87acd274bbdc8ca2cbb28"
+        "refinement_interpretation_Tm_refine_ef6fa93ce9da0bc0ec2e9c9a50e6dd43"
       ],
       0
     ],
+    [ "PMS.uu___is_DHPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "PMS.DHPMS._0",
+      "PMS.__proj__DHPMS__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_PMS.DHPMS",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2425af1801083c5e759efe706c6a5cc0"
+        "refinement_interpretation_Tm_refine_a82900f6c5ee138b7d328b3c3765a0f8"
       ],
       0
     ],

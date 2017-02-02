@@ -1,5 +1,5 @@
 [
-  "(V›;w_º˚–—\u0010pFJeˇ",
+  "øù\u0007\u0000ŸÀ\u0018Ån—-Ó¸ÜQñ",
   [
     [
       "RSAKey.pred",
@@ -11,12 +11,27 @@
         "assumption_Prims.tuple2_haseq", "equation_Platform.Bytes.bytes",
         "equation_RSAKey.pk", "equation_RSAKey.sk",
         "function_token_typing_RSAKey.pk",
-        "haseqTm_refine_91cae5fbff2b17b9fca0db24348d01a5",
+        "haseqTm_refine_3477d359262b20ef2e766e80d669ba1b",
         "kinding_CoreCrypto.rsa_key@tok"
       ],
       0
     ],
-    [ "RSAKey.SK_PK._0", 1, 0, 1, [ "@query" ], 0 ],
+    [ "RSAKey.__proj__SK_PK__item___0", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "RSAKey.gen",
+      1,
+      0,
+      1,
+      [
+        "@query", "constructor_distinct_Prims.None",
+        "disc_equation_Prims.None", "equation_Platform.Bytes.bytes",
+        "proj_equation_CoreCrypto.Mkrsa_key_rsa_prv_exp",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CoreCrypto.Mkrsa_key_rsa_prv_exp",
+        "projection_inverse_Prims.None_a"
+      ],
+      0
+    ],
     [ "RSAKey.create_rsapkey", 1, 0, 1, [ "@query" ], 0 ]
   ]
 ]

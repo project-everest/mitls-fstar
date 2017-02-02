@@ -1,5 +1,5 @@
 [
-  "!Ã√Ì≈‘9·\u0002„\u0004ÅÂ—ëC",
+  "ŒW—¯^\u001d\u00111·\u0003ˆ\u0010˘fòô",
   [
     [
       "HashMAC.ssl_pad1_md5",
@@ -49,7 +49,6 @@
       [ "@query", "assumption_TLSConstants.hashAlg_haseq" ],
       0
     ],
-    [ "HashMAC.sslHashAlg", 3, 0, 1, [ "@query" ], 0 ],
     [
       "HashMAC.sslKeyedHashPads",
       1,
@@ -77,7 +76,7 @@
       [
         "@query", "disc_equation_TLSConstants.Hash",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_b3091da8b6d23bb84c568e8f33eeef5a"
+        "refinement_interpretation_Tm_refine_7bcb4926572bd703fda582cbda1f5d74"
       ],
       0
     ],
@@ -104,7 +103,8 @@
       0,
       1,
       [
-        "@query", "bool_inversion", "constructor_distinct_FStar.Seq.Base.seq",
+        "@query", "bool_inversion",
+        "constructor_distinct_FStar.Seq.Base.seq",
         "constructor_distinct_Prims.unit",
         "constructor_distinct_TLSConstants.HMAC",
         "constructor_distinct_TLSConstants.Hash", "data_elim_Prims.Mktuple2",

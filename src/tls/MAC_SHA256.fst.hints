@@ -1,5 +1,5 @@
 [
-  "¨Ýß¨2„54ìÀ¾÷-®S\"",
+  ".Ã×¬‡57¿’\u0013ëŽ=xKr",
   [
     [
       "MAC_SHA256.id",
@@ -25,10 +25,8 @@
       ],
       0
     ],
-    [ "MAC_SHA256.Entry.t", 1, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.Entry.t", 2, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.Entry.p", 1, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.Entry.p", 2, 0, 1, [ "@query" ], 0 ],
+    [ "MAC_SHA256.__proj__Entry__item__t", 1, 0, 1, [ "@query" ], 0 ],
+    [ "MAC_SHA256.__proj__Entry__item__p", 1, 0, 1, [ "@query" ], 0 ],
     [
       "MAC_SHA256.state",
       1,
@@ -37,13 +35,10 @@
       [ "@query", "assumption_FStar.HyperHeap.HasEq_rid" ],
       0
     ],
-    [ "MAC_SHA256.state", 2, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.State.region", 1, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.State.region", 2, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.State.key", 1, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.State.key", 2, 0, 1, [ "@query" ], 0 ],
+    [ "MAC_SHA256.__proj__State__item__region", 1, 0, 1, [ "@query" ], 0 ],
+    [ "MAC_SHA256.__proj__State__item__key", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "MAC_SHA256.State.log",
+      "MAC_SHA256.__proj__State__item__log",
       1,
       0,
       1,
@@ -51,30 +46,17 @@
       0
     ],
     [
-      "MAC_SHA256.State.log",
+      "MAC_SHA256.__proj__State__item__log",
       2,
       0,
       1,
       [
         "@query", "proj_equation_MAC_SHA256.State_region",
-        "projection_inverse_MAC_SHA256.State_region"
-      ],
-      0
-    ],
-    [
-      "MAC_SHA256.State.log",
-      3,
-      0,
-      1,
-      [
-        "@query", "proj_equation_MAC_SHA256.State_region",
         "projection_inverse_MAC_SHA256.State_region",
-        "refinement_interpretation_Tm_refine_af74ef77201f9e4533a5713dcb0952d9"
+        "refinement_interpretation_Tm_refine_c8ae73296acc48cdb554536b57f663a8"
       ],
       0
     ],
-    [ "MAC_SHA256.writer", 1, 0, 1, [ "@query" ], 0 ],
-    [ "MAC_SHA256.reader", 1, 0, 1, [ "@query" ], 0 ],
     [
       "MAC_SHA256.mac",
       1,
@@ -124,12 +106,15 @@
         "projection_inverse_FStar.HyperStack.HS_h",
         "projection_inverse_TLSConstants.HMAC__0",
         "refinement_interpretation_Tm_refine_0dc1829dbc3c1d1c42b7a4e9e5c89884",
-        "refinement_interpretation_Tm_refine_1899c9221f716966ddcc44539769d971",
-        "refinement_interpretation_Tm_refine_6b913a1a3e5dd281b33f524f8f22c780",
-        "refinement_interpretation_Tm_refine_af74ef77201f9e4533a5713dcb0952d9",
+        "refinement_interpretation_Tm_refine_bf2b6d47e2f605e4d8a5f180c69f944d",
+        "refinement_interpretation_Tm_refine_c8ae73296acc48cdb554536b57f663a8",
         "refinement_interpretation_Tm_refine_d023b9461e4d4c2c1260f907a1d7e4a1",
-        "refinement_interpretation_Tm_refine_d6fb17fbf40b19e4285d53d5cab914a5",
-        "typing_FStar.Seq.Base.seq", "typing_MAC_SHA256.State.log",
+        "refinement_interpretation_Tm_refine_de8123dd3e45084cdea7d9d0e7ffb100",
+        "refinement_interpretation_Tm_refine_ef543f06de057671fb803257f0e38d8f",
+        "refinement_interpretation_Tm_refine_f38d46289ad40d7ad5a9da2f43cecefb",
+        "typing_FStar.HyperStack.__proj__HS__item__tip",
+        "typing_FStar.Seq.Base.seq",
+        "typing_MAC_SHA256.__proj__State__item__log",
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0
@@ -143,10 +128,9 @@
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
       0
     ],
-    [ "MAC_SHA256.verify", 1, 0, 1, [ "@query" ], 0 ],
     [
       "MAC_SHA256.verify",
-      2,
+      1,
       0,
       1,
       [
@@ -162,9 +146,9 @@
         "equation_FStar.HyperStack.ref",
         "equation_FStar.HyperStack.weak_contains",
         "equation_FStar.HyperStack.weak_live_region",
-        "equation_HashMAC.is_tls_mac", "equation_MAC_SHA256.a",
-        "equation_MAC_SHA256.good", "equation_MAC_SHA256.reader",
-        "equation_Prims.eqtype",
+        "equation_FStar.Set.eqtype", "equation_HashMAC.is_tls_mac",
+        "equation_MAC_SHA256.a", "equation_MAC_SHA256.good",
+        "equation_MAC_SHA256.reader",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
         "fuel_guarded_inversion_FStar.HyperStack.reference",
         "fuel_guarded_inversion_MAC_SHA256.state",
@@ -181,12 +165,13 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLSConstants.HMAC__0",
         "refinement_interpretation_Tm_refine_0dc1829dbc3c1d1c42b7a4e9e5c89884",
-        "refinement_interpretation_Tm_refine_1899c9221f716966ddcc44539769d971",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_interpretation_Tm_refine_af74ef77201f9e4533a5713dcb0952d9",
-        "refinement_interpretation_Tm_refine_d6fb17fbf40b19e4285d53d5cab914a5",
+        "refinement_interpretation_Tm_refine_bf2b6d47e2f605e4d8a5f180c69f944d",
+        "refinement_interpretation_Tm_refine_c8ae73296acc48cdb554536b57f663a8",
+        "refinement_interpretation_Tm_refine_f38d46289ad40d7ad5a9da2f43cecefb",
         "true_interp", "typing_FStar.Heap.domain", "typing_FStar.Map.sel",
-        "typing_MAC_SHA256.State.log", "typing_tok_TLSConstants.Reader@tok"
+        "typing_MAC_SHA256.__proj__State__item__log",
+        "typing_tok_TLSConstants.Reader@tok"
       ],
       0
     ]
