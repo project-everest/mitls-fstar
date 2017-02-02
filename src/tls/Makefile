@@ -87,7 +87,10 @@ DHGroup.fst \
 ECGroup.fst \
 CommonDH.fst \
 PMS.fst \
+Hashing.Spec.fst \
+Hashing.OpenSSL.fst \
 Hashing.fst \
+Hashing.CRF.fst \
 HashMAC.fst \
 Cert.fst \
 Signature.fst \
@@ -176,12 +179,11 @@ test/TestAPI.fst #the preceding space is significant!
 # TLSExtensions, Encode, ENC, HandshakeMessages,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
-#17-02-02 removed Flags from the list as it was causing an fstar error. TODO
-# Flags
 
 # temporary removals
 
 VERIFY= \
+Flags \
 MonotoneMap \
 TLSError \
 TLSConstants \

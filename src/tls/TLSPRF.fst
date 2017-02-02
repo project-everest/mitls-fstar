@@ -29,7 +29,7 @@ let gen_label (i:int) = String.make (i+1) (Char.char_of_int (Char.int_of_char 'A
 val apply_prf: bytes -> bytes -> int -> bytes -> int -> Tot bytes
 let rec apply_prf secret seed nb res n  =
     if n > nb then
-      let r,_ = split res nb in r
+      let r,_ = split res nb in r 
     else
         let step1 = ssl_prf_int secret (gen_label (n/16)) seed in
         apply_prf secret seed nb (res @| step1) (n+16) 
@@ -83,13 +83,13 @@ let rec p_hash_int alg secret seed len it aPrev acc =
   else
     p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
 
-val p_hash: macAlg -> bytes -> bytes -> int -> Tot bytes
+val p_hash: macAlg -> bytes -> bytes -> int -> St bytes
 let p_hash alg secret seed len =
   let hs = macSize alg in
   let it = (len/hs)+1 in
   p_hash_int alg secret seed len it seed empty_bytes
 
-val tls_prf: bytes -> bytes -> bytes -> int -> Tot bytes
+val tls_prf: bytes -> bytes -> bytes -> int -> St bytes
 let tls_prf secret label seed len =
   let l_s = length secret in
   let l_s1 = (l_s+1)/2 in
@@ -107,7 +107,9 @@ let tls_finished_label =
   | Client -> tls_client_label
   | Server -> tls_server_label
 
-val tls_verifyData: bytes -> role -> bytes -> Tot bytes
+let verifyDataLen = 12  
+
+val tls_verifyData: bytes -> role -> bytes -> St (lbytes verifyDataLen)
 let tls_verifyData ms role data =
   let md5hash  = hash MD5 data in
   let sha1hash = hash SHA1 data in
@@ -115,7 +117,7 @@ let tls_verifyData ms role data =
 
 (* TLS 1.2 *)
 
-val tls12prf: cipherSuite -> bytes -> bytes -> bytes -> len:nat -> Tot (lbytes len)
+val tls12prf: cipherSuite -> bytes -> bytes -> bytes -> len:nat -> St (lbytes len)
 let tls12prf cs ms label data len =
   let prfMacAlg = prfMacAlg_of_ciphersuite cs in
   p_hash prfMacAlg ms (label @| data) len
@@ -123,9 +125,8 @@ let tls12prf cs ms label data len =
 let tls12prf' macAlg ms label data len =
   p_hash macAlg ms (label @| data) len
 
-let verifyDataLen = 12  
 
-val tls12VerifyData: cipherSuite -> bytes -> role -> bytes -> Tot (lbytes verifyDataLen)
+val tls12VerifyData: cipherSuite -> bytes -> role -> bytes -> St (lbytes verifyDataLen)
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
   let hashed = hash verifyDataHashAlg data in
@@ -133,23 +134,23 @@ let tls12VerifyData cs ms role data =
 
 (* Internal agile implementation of PRF *)
 
-val verifyData: (protocolVersion * cipherSuite) -> bytes -> role -> bytes -> Tot bytes
+val verifyData: (protocolVersion * cipherSuite) -> bytes -> role -> bytes -> St bytes
 let verifyData (pv,cs) (secret:bytes) (role:role) (data:bytes) =
   match pv with
-    | SSL_3p0           -> ssl_verifyData     secret role data
+    //| SSL_3p0           -> ssl_verifyData     secret role data
     | TLS_1p0 | TLS_1p1 -> tls_verifyData     secret role data
     | TLS_1p2           -> tls12VerifyData cs secret role data
 
-val prf: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> Tot bytes
+val prf: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> St bytes
 let prf (pv,cs) secret (label:bytes) data len =
   match pv with
-  | SSL_3p0           -> ssl_prf     secret       data len
+  //| SSL_3p0           -> ssl_prf     secret       data len
   | TLS_1p0 | TLS_1p1 -> tls_prf     secret label data len
   | TLS_1p2           -> tls12prf cs secret label data len
 
 // This is for Extended Master Secret
 // The data is hashed using the PV/CS-specific hash function
-val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> Tot bytes
+val prf_hashed: (protocolVersion * cipherSuite) -> bytes -> bytes -> bytes -> int -> St bytes
 let prf_hashed (pv, cs) secret label data len =
   let data = match pv with
     | TLS_1p2 ->
@@ -162,7 +163,7 @@ let prf' a secret data len =
     match a with
     | PRF_TLS_1p2 label macAlg -> tls12prf' macAlg secret label data len  // typically SHA256 but may depend on CS
     | PRF_TLS_1p01 label         -> tls_prf          secret label data len  // MD5 xor SHA1
-    | PRF_SSL3_nested           -> ssl_prf          secret       data len  // MD5(SHA1(...)) for extraction and keygen
+    //| PRF_SSL3_nested           -> ssl_prf          secret       data len  // MD5(SHA1(...)) for extraction and keygen
     | _ -> Platform.Error.unexpected "[prf'] unreachable pattern match"
 
 //let extract a secret data len = prf a secret extract_label data len

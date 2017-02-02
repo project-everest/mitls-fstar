@@ -15,7 +15,7 @@ open TLSError
 // idealizing HMAC 
 // for concreteness; the rest of the module is parametric in a 
 
-let a = HMAC CoreCrypto.SHA1
+let a = HMAC Hashing.Spec.SHA1
 
 
 type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
@@ -61,7 +61,6 @@ val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
  * AR: adding recall for wr.log similar to MAC and MAC_SHA256.
  *)
 let mac i wr p =
-  assume (HashMAC.is_tls_mac (macAlg_of_id i));
   let t : tag i = HashMAC.tls_mac a wr.key p in
   recall wr.log;
   wr.log := snoc !wr.log (Entry #i t p); // We log every authenticated texts, with their index and resulting tag

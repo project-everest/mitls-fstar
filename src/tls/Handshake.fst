@@ -21,7 +21,7 @@ open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less
 open TLSExtensions 
-open CoreCrypto
+//open CoreCrypto
 open Negotiation
 open Epochs
 open HandshakeLog
@@ -30,6 +30,8 @@ open HandshakeLog
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
+
+let hashSize = Hashing.Spec.tagLen
 
 //<expose for TestClient>
 #set-options "--lax"
@@ -262,13 +264,13 @@ type resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
 
 type hs =
   | HS: #region: rgn { is_hs_rgn region } ->
-              r: role ->
-         resume: resume_id r ->
-            cfg: config ->
+          r: role ->
+          resume: resume_id r ->
+          cfg: config ->
           nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant? 
-            log: epochs region nonce ->
+          log: epochs region nonce ->
           state: ref (handshake_state r){state.id = region}  ->       // opaque, subject to invariant
-             hs
+          hs
 
 
 (* the handshake internally maintains epoch 
@@ -529,7 +531,7 @@ let processServerHelloDone cfg n ks log msgs opt_msgs =
          let algs: list sigHashAlg =
            match sigalgs with
            | Some l -> l
-           | None -> [(cs_sigalg, Hash CoreCrypto.SHA1)]
+           | None -> [(cs_sigalg, Hash Hashing.Spec.SHA1)]
          in
          if List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = h))
 	      algs then
@@ -711,9 +713,9 @@ let processServerFinished_13 cfg n ks log msgs =
              (list_sigHashAlg_is_list_tuple_sig_hash algs) then
            begin
            let Hash sh_alg = sessionHashAlg n.n_protocol_version n.n_cipher_suite in
-           let hL = CoreCrypto.hashSize sh_alg in
+           let hL = hashSize sh_alg in
            let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-           let rc = CoreCrypto.hash sh_alg zeroes in
+           let rc = Hashing.compute sh_alg zeroes in
            let lb = (HandshakeLog.getHash log sh_alg) @| rc in
            let a = Signature.Use (fun _ -> true) sa [ha] false false in
            let tbs = to_be_signed n.n_protocol_version Server None lb in
@@ -825,13 +827,13 @@ let prepareServerHelloDone cfg n ks log =
       let algs =
 	match sigalgs with
 	| Some l -> l
-	| None -> [(sa,Hash CoreCrypto.SHA1)]
+	| None -> [(sa,Hash Hashing.Spec.SHA1)]
       in
       let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
       let sa, ha =
 	match algs with
 	| sha::_ -> sha
-	| [] -> (sa, Hash CoreCrypto.SHA1)
+	| [] -> (sa, Hash Hashing.Spec.SHA1)
       in
       let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
       let a = Signature.Use (fun _ -> true) sa [ha] false false in
@@ -994,9 +996,9 @@ let prepareServerFinished_13 cfg n ks log =
       match Signature.lookup_key #a cfg.private_key_file with
       | Some csk ->
         let Hash sh_alg = sh_alg in
-        let hL = CoreCrypto.hashSize sh_alg in
+        let hL = hashSize sh_alg in
         let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-        let rc = CoreCrypto.hash sh_alg zeroes in
+        let rc = Hashing.compute  sh_alg zeroes in
         let lb = (HandshakeLog.getHash log sh_alg) @| rc in
         let tbs = to_be_signed pv Server None lb in
         let sigv = Signature.sign ha csk tbs in

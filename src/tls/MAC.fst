@@ -23,7 +23,7 @@ let alg (i:id) = macAlg_of_id i
 
 type text = bytes
 type tag (i:id) = lbytes (macSize (alg i))
-type keyrepr (i:id) = bytes
+type keyrepr (i:id) = lbytes (macSize (alg i))
 
 
 type fresh_subregion rg parent h0 h1 = stronger_fresh_region rg h0 h1 /\ extends rg parent
@@ -86,20 +86,20 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
  * AR: had to add a recall to satisfy the precondition of k.log write.
  *)
 let mac #i #good k p =
-  assume (HashMAC.is_tls_mac (alg i));
+  //assume (HashMAC.is_tls_mac (alg i));
   let p : p:bytes { authId i ==> good p } = p in
   let t = HashMAC.tls_mac (alg i) k.kv p in
   let e : entry i good = Entry t p in
   recall k.log;
   k.log := snoc !k.log e;
   t
-
+ 
 abstract val matches: #i:id -> #good:(bytes -> Type) -> p:text -> entry i good -> Tot bool 
 let matches #i #good p (Entry _ p') = p = p'
 
-val verify: #i:id -> #good:(bytes -> Type) -> k:key i good{HashMAC.is_tls_mac (alg i)} -> p:bytes -> t:tag i -> ST bool
+val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i -> ST bool
   (requires (fun _ -> True)) 
-  (ensures (fun h0 b h1 -> h0 == h1 /\ (b /\ authId i ==> good p)))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b /\ authId i ==> good p)))
 
 // We use the log to correct any verification errors
 let verify #i #good k p t =
@@ -107,3 +107,4 @@ let verify #i #good k p t =
   let log = !k.log in
   x &&
   ( not(authId i) || Some? (seq_find (matches p) log))
+ 

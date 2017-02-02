@@ -19,13 +19,13 @@ open StAE
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
   let sr  = createBytes 32 0z in
-  let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
+  let kdf = PRF_TLS_1p2 kdf_label (HMAC Hashing.Spec.SHA256) in
   let gx  = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
   let g   = CommonDH.key_params gx in
   let gy, gxy = CommonDH.dh_responder gx in
   let pms = PMS.DHPMS (g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy)) in
   let msid = StandardMS pms (cr @| sr) kdf in
-  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM CoreCrypto.SHA256) cr sr role
+  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role
 
 private let id = pre_id Client
 

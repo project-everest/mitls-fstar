@@ -29,6 +29,8 @@ module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
+let hashSize = Hashing.Spec.tagLen
+
 (*
 let secretLabel = function
   | EarlySecret _ _ -> "early traffic secret"
@@ -98,7 +100,7 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 // Note that application PSK is externally defined but should
 // be idealized together with KS
 abstract let psk (i:esId) =
-  b:bytes{length b = CoreCrypto.hashSize (esId_hash i)}
+  b:bytes{length b = hashSize (esId_hash i)}
 
 let get_psk_info (i:esId) =
   match i with
@@ -114,25 +116,25 @@ private let get_psk (i:esId) =
      let p : psk i = app_psk_value pskid in p
 
 // Agile "0" hash
-private let zH h =
-  let hL = CoreCrypto.hashSize h in
+private let zH h : St (Hashing.Spec.tag h) =
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-  CoreCrypto.hash h zeroes
+  Hashing.compute h zeroes
 
 #set-options "--lax"
 
 // Resumption context
-let esId_rc (i:esId) =
+let esId_rc (i:esId)  =
   match i with
 //  | ResumptionPSK i ->
 //    let (_, rc, _, _) = Some.v (MM.sel res_psk_table i) in rc
   | ApplicationPSK _ _ -> zH (esId_hash i)
 
-let hsId_rc = function
+let hsId_rc : _ -> St bytes  = function
   | HSID_DHE h _ _ -> zH h
   | HSID_PSK i | HSID_PSK_DHE i _ _ -> esId_rc i
 
-let asId_rc = function
+let asId_rc : _ -> St bytes  = function
   | ASID hsId -> hsId_rc hsId
 
 // miTLS 0.9:
@@ -144,31 +146,20 @@ type ms = bytes
 type pms = bytes
 
 // Early secret (abstract)
-abstract type es (i:esId) =
-  b:bytes{length b = CoreCrypto.hashSize (esId_hash i)}
+abstract type es (i:esId) = Hashing.Spec.tag (esId_hash i)
 
 // Handshake secret (abstract)
-abstract type hs (i:hsId) =
-  b:bytes{length b = CoreCrypto.hashSize (hsId_hash i)}
-
-abstract type fink (i:finishedId) =
-  b:bytes{length b = CoreCrypto.hashSize (finishedId_hash i)}
+abstract type hs (i:hsId) = Hashing.Spec.tag (hsId_hash i)
+abstract type fink (i:finishedId) = Hashing.Spec.tag  (finishedId_hash i)
 
 // TLS 1.3 master secret (abstract)
-abstract type ams (i:asId) =
-  b:bytes{length b = CoreCrypto.hashSize (asId_hash i)}
+abstract type ams (i:asId) = Hashing.Spec.tag (asId_hash i)
 
-abstract type expander (i:expandId) =
-  b:bytes{length b = CoreCrypto.hashSize (expandId_hash i)}
+abstract type expander (i:expandId) = Hashing.Spec.tag (expandId_hash i)
+abstract type rekey_secret (i:rekeyId) = Hashing.Spec.tag (rekeyId_hash i)
+abstract type rms (i:rmsId) = Hashing.Spec.tag (rmsId_hash i)
 
-abstract type rekey_secret (i:rekeyId) =
-  b:bytes{length b = CoreCrypto.hashSize (rekeyId_hash i)}
-
-abstract type rms (i:rmsId) =
-  b:bytes{length b = CoreCrypto.hashSize (rmsId_hash i)}
-
-type ems (i:exportId) =
-  b:bytes{length b = CoreCrypto.hashSize (exportId_hash i)}
+type ems (i:exportId) = Hashing.Spec.tag (exportId_hash i)
 
 // TODO this is superseeded by StAE.state i
 // but I'm waiting for it to be tester to switch over
@@ -201,7 +192,7 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
 //  }
 
 type ks_alpha12 = pv:protocolVersion * cs:cipherSuite * ems:bool
-type ks_alpha13 = ae:aeadAlg * h:CoreCrypto.hash_alg
+type ks_alpha13 = ae:aeadAlg * h:hash_alg
 
 type ks_client_state =
 | C_Init: cr:random -> ks_client_state
@@ -240,7 +231,7 @@ type ks =
 | KS: #region:rid -> state:(ref ks_state){HS.MkRef?.id state = region} -> hsl:HandshakeLog.log -> ks
 
 // Extract keys and IVs from a derived 1.3 secret
-private let keygen_13 h secret phase ae : bytes * bytes * bytes * bytes =
+private let keygen_13 h secret phase ae : St (bytes * bytes * bytes * bytes) =
   let kS = CoreCrypto.aeadKeySize ae in
   let iS = CoreCrypto.aeadRealIVSize ae in
   let f x y = HKDF.hkdf_expand_label h secret (phase ^ x) empty_bytes y in
@@ -251,8 +242,8 @@ private let keygen_13 h secret phase ae : bytes * bytes * bytes * bytes =
   (cekb, civb, sekb, sivb)
 
 // Extract finished keys
-private let finished_13 h secret : bytes*bytes =
-  let hL = CoreCrypto.hashSize h in
+private let finished_13 h secret : St (bytes*bytes) =
+  let hL = hashSize h in
   let cfk = HKDF.hkdf_expand_label h secret "client finished" empty_bytes hL in
   let sfk = HKDF.hkdf_expand_label h secret "server finished" empty_bytes hL in
   (cfk, sfk)
@@ -373,7 +364,7 @@ let ks_client_13_0rtt_ch ks esId
   let hashed_log = HandshakeLog.getHash hsl h in
   // TODO verify log_info loginfo hashed_log
 
-  let hL = CoreCrypto.hashSize h in
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es : es esId = HKDF.hkdf_extract h zeroes psk in
   let sh_rctx = hashed_log @| (esId_rc esId) in
@@ -411,11 +402,13 @@ val ks_client_13_0rtt_finished: ks:ks -> ST (cvd:bytes)
   (ensures fun h0 r h1 -> h0 == h1)
 
 // Compute 0-RTT finished
-let ks_client_13_0rtt_finished ks =
+let ks_client_13_0rtt_finished ks : St bytes =
   let KS #rid st hsl = ks in
   let C (C_13_wait_SH cr (Some (| esId, es |)) (Some (| finishedId, cfk |)) gs) = !st in
   let h = esId_hash esId in
-  CoreCrypto.hmac h cfk ((HandshakeLog.getHash hsl h) @| (esId_rc esId))
+  let x = HandshakeLog.getHash hsl h in
+  let y = esId_rc esId in
+  HashMAC.hmac h cfk (x @| y)
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
@@ -482,9 +475,10 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let S (S_Init sr) = !st in
   let psk = get_psk esId in
   let c = get_psk_info esId in
-  let h, ae = c.early_hash, c.early_ae in
+  let h: TLSConstants.hash_alg = c.early_hash in
+  let ae = c.early_ae in
 
-  let hL = CoreCrypto.hashSize h in
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es : es esId = HKDF.hkdf_extract h zeroes psk in
 
@@ -535,6 +529,7 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
+
 val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> ST (our_share:bytes)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
@@ -553,7 +548,7 @@ let ks_server_13_1rtt_init ks cr cs gn gxb =
   let CipherSuite _ _ (AEAD ae h) = cs in
   let our_share, peer_share, gxy = s13_dh gn gxb in
   let hsId = HSID_DHE h (CommonDH.share_of_key peer_share) (CommonDH.share_of_key our_share) in
-  let hL = CoreCrypto.hashSize h in
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es = HKDF.hkdf_extract h zeroes zeroes in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
@@ -582,7 +577,7 @@ let ks_server_13_sh ks =
   // TODO log_info loginfo hashed_log
 
   // Derived handshake secret
-  let hL = CoreCrypto.hashSize h in
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let sh_rctx = hashed_log @| (hsId_rc hsId) in
   let hs_derived = HKDF.hkdf_expand_label h hs "handshake traffic secret" sh_rctx hL in
@@ -707,7 +702,7 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
 
   let loginfo = LogInfo_SH ({li_sh_cr = cr; li_sh_sr = cr; li_sh_ae = AEAD ae h;}) in // TODO
   let hashed_log = HandshakeLog.getHash hsl h in
-  let hL = CoreCrypto.hashSize h in
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
 
   // Early secret: must derive zero here as hash is not known before
@@ -765,7 +760,9 @@ let ks_client_13_server_finished ks
   =
   let KS #region st hsl = ks in
   let C (C_13_wait_SF (_, h) _ (| _, sfk |) (| asId, _ |)) = !st in
-  CoreCrypto.hmac h sfk ((HandshakeLog.getHash hsl h) @| (asId_rc asId))
+  let x = HandshakeLog.getHash hsl h in
+  let y = asId_rc asId in
+  HashMAC.hmac h sfk (x @| y)
 
 let ks_client_13_client_finished ks
   : ST (cvd:bytes)
@@ -776,7 +773,9 @@ let ks_client_13_client_finished ks
   =
   let KS #region st hsl = ks in
   let C (C_13_wait_CF (_, h) (| _, cfk |) (| asId, _ |) _ _) = !st in
-  CoreCrypto.hmac h cfk ((HandshakeLog.getHash hsl h) @| (asId_rc asId))
+  let x = HandshakeLog.getHash hsl h in
+  let y = asId_rc asId in
+  HashMAC.hmac h cfk (x @| y)
 
 let ks_server_13_server_finished ks
   : ST (svd:bytes)
@@ -786,7 +785,9 @@ let ks_server_13_server_finished ks
   (ensures (fun h0 _ h1 -> h0 = h1)) =
   let KS #region st hsl = ks in
   let S (S_13_wait_SF (ae, h) _ (| sfkId, sfk |) (| asId, _ |)) = !st in
-  CoreCrypto.hmac h sfk ((HandshakeLog.getHash hsl h) @| (asId_rc asId))
+  let x = HandshakeLog.getHash hsl h in
+  let y = asId_rc asId in
+  HashMAC.hmac h sfk (x @| y)
 
 let ks_server_13_client_finished ks
   : ST (cvd:bytes)
@@ -796,7 +797,9 @@ let ks_server_13_client_finished ks
   (ensures (fun h0 _ h1 -> h0 = h1)) =
   let KS #region st hsl = ks in
   let S (S_13_wait_CF (ae, h) (| _, cfk |) (| asId, _ |) _ _) = !st in
-  CoreCrypto.hmac h cfk ((HandshakeLog.getHash hsl h) @| (asId_rc asId))
+  let x = HandshakeLog.getHash hsl h in 
+  let y = asId_rc asId in
+  HashMAC.hmac h cfk (x @| y)
 
 (******************************************************************)
 
@@ -818,7 +821,7 @@ let ks_client_13_sf ks
 
   let expandId = ApplicationSecretID asId in
   let hashed_log = HandshakeLog.getHash hsl h in
-  let hL = CoreCrypto.hashSize h in
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
 
   // Derived applcation master secret
@@ -864,7 +867,7 @@ let ks_server_13_sf ks
 
   let expandId = ApplicationSecretID asId in
   let hashed_log = HandshakeLog.getHash hsl h in
-  let hL = CoreCrypto.hashSize h in
+  let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
 
   // Derived applcation master secret
@@ -909,8 +912,8 @@ let ks_client_13_cf ks
   let (ae, h) = alpha in
   let (| FinishedID _ _ _ loginfo _, _ |) = cfk in // TODO loginfo
   let hashed_log = HandshakeLog.getHash hsl h in
-  let hL = CoreCrypto.hashSize h in
-  let sh_rctx = hashed_log @| (asId_rc asId) in
+  let hL = hashSize h in
+  let sh_rctx = hashed_log @| asId_rc asId in
 
   // Resumption Master Secret
   let rmsId = RMSID asId loginfo hashed_log in

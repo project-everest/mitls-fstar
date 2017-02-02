@@ -32,7 +32,7 @@ type pskInfo = {
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag
   early_ae: aeadAlg;
-  early_hash: Hashing.Spec.alg; //CF more specific than CoreCrypto.hash_alg;
+  early_hash: hash_alg;  //CF could be more specific and use Hashing.alg 
   identities: bytes * bytes;
 }
 

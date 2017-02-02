@@ -15,13 +15,13 @@ open Negotiation
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
   let sr  = createBytes 32 0z in
-  let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
+  let kdf = PRF_TLS_1p2 kdf_label (HMAC Hashing.Spec.SHA256) in
   let gx  = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
   let g   = CommonDH.key_params gx in
   let gy, gxy = CommonDH.dh_responder gx in
   let pms = PMS.DHPMS (g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy)) in
   let msid = StandardMS pms (cr @| sr) kdf in
-  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256) cr sr role
+  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM Hashing.Spec.SHA256) cr sr role
 
 private val encryptRecord : #id:StAE.stae_id -> wr:StAE.writer id -> ct:Content.contentType -> plain:bytes -> ML bytes
 private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : ML bytes =
@@ -132,7 +132,7 @@ private let rec server_loop_12 config sock : ML unit =
   let next = match nego with | {Negotiation.n_extensions = n} -> n in
   let cs = sh.sh_cipher_suite in
   let CipherSuite kex (Some sa) ae = cs in
-  let alg = (sa, Hash CoreCrypto.SHA256) in
+  let alg = (sa, Hash Hashing.Spec.SHA256) in
   let ems = next.ne_extended_ms in
 
   // Send ServerCertificate
@@ -326,9 +326,9 @@ let client_13 config host port : ML unit =
     (if Cert.validate_chain sc.crt_chain true (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
 
-  let hL = CoreCrypto.hashSize h in
+  let hL = Hashing.Spec.tagLen h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-  let rc = CoreCrypto.hash h zeroes in
+  let rc = Hashing.compute h zeroes in
   let cv_log = (HandshakeLog.getHash lg h) @| rc in
 
   let CertificateVerify(cv),_ = recvEncHSRecord tcp pv kex rd in
@@ -384,7 +384,7 @@ private let rec server_loop_13 config sock : ML unit =
 
   let kex = TLSConstants.Kex_ECDHE in
   let pv = TLS_1p3 in
-  let h = CoreCrypto.SHA256 in
+  let h = Hashing.Spec.SHA256 in
   let sa = CoreCrypto.RSASIG in
   let cs = CipherSuite kex (Some sa) (AEAD CoreCrypto.AES_128_GCM h) in
 
@@ -414,9 +414,9 @@ private let rec server_loop_13 config sock : ML unit =
   let _ = lg @@ (EncryptedExtensions ({ee_extensions=[]})) in
   let _ = lg @@ (Certificate crt) in
 
-  let hL = CoreCrypto.hashSize h in
+  let hL = Hashing.Spec.tagLen h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-  let rc = CoreCrypto.hash h zeroes in
+  let rc = Hashing.compute h zeroes in
   let cv_log = (HandshakeLog.getHash lg h) @| rc in
 
   let tbs = Handshake.to_be_signed pv Server None cv_log in
