@@ -134,8 +134,7 @@ let rec ec_ff_to_ng ecl ffl =
 val defaultConfig : config
 let defaultConfig =
     let sigPref = [CoreCrypto.ECDSA; CoreCrypto.RSAPSS; CoreCrypto.RSASIG] in
-    let hashPref = [Hash CoreCrypto.SHA512; Hash CoreCrypto.SHA384;
-                    Hash CoreCrypto.SHA256; Hash CoreCrypto.SHA1] in
+    let hashPref = Hashing.Spec.([Hash SHA512; Hash SHA384; Hash SHA256; Hash SHA1]) in
     let sigAlgPrefs = sigAlgPref sigPref hashPref in
     let l =         [ TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
@@ -145,7 +144,7 @@ let defaultConfig =
                       TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
                       TLS_RSA_WITH_3DES_EDE_CBC_SHA;
                     ] in
-    let curves = [CoreCrypto.ECC_P521; CoreCrypto.ECC_P384; CoreCrypto.ECC_P256] in
+    let curves = CoreCrypto.([ECC_P521; ECC_P384; ECC_P256]) in
     let ffdh = [FFDHE4096; FFDHE3072] in
     let groups = ec_ff_to_ng curves ffdh in
 
@@ -499,7 +498,7 @@ type pre_esId : Type0 =
 and pre_hsId =
   | HSID_PSK: pre_esId -> pre_hsId
   | HSID_PSK_DHE: pre_esId -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
-  | HSID_DHE: CoreCrypto.hash_alg -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
+  | HSID_DHE: hash_alg -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
 
 and pre_asId =
   | ASID: pre_hsId -> pre_asId
@@ -537,15 +536,15 @@ and finishedTag =
 and pre_finishedId =
   | FinishedID: pre_expandId -> finishedTag -> role -> logInfo -> hashed_log -> pre_finishedId
 
-val esId_hash: pre_esId -> Tot CoreCrypto.hash_alg
-val hsId_hash: pre_hsId -> Tot CoreCrypto.hash_alg
-val asId_hash: pre_asId -> Tot CoreCrypto.hash_alg
-val rmsId_hash: pre_rmsId -> Tot CoreCrypto.hash_alg
-val exportId_hash: pre_exportId -> Tot CoreCrypto.hash_alg
-val rekeyId_hash: pre_rekeyId -> Tot CoreCrypto.hash_alg
-val expandId_hash: pre_expandId -> Tot CoreCrypto.hash_alg
-val keyId_hash: pre_keyId -> Tot CoreCrypto.hash_alg
-val finishedId_hash: pre_finishedId -> Tot CoreCrypto.hash_alg
+val esId_hash: pre_esId -> Tot hash_alg
+val hsId_hash: pre_hsId -> Tot hash_alg
+val asId_hash: pre_asId -> Tot hash_alg
+val rmsId_hash: pre_rmsId -> Tot hash_alg
+val exportId_hash: pre_exportId -> Tot hash_alg
+val rekeyId_hash: pre_rekeyId -> Tot hash_alg
+val expandId_hash: pre_expandId -> Tot hash_alg
+val keyId_hash: pre_keyId -> Tot hash_alg
+val finishedId_hash: pre_finishedId -> Tot hash_alg
 
 let rec esId_hash = function
   | ApplicationPSK ctx _ -> PSK.pskInfo_hash ctx
@@ -578,8 +577,7 @@ and keyId_hash (KeyID i _ _ _ _) = expandId_hash i
 
 and finishedId_hash (FinishedID i _ _ _ _) = expandId_hash i
 
-type valid_hlen (b:bytes) (h:CoreCrypto.hash_alg) =
-  length b = CoreCrypto.hashSize h
+type valid_hlen (b:bytes) (h:hash_alg) = length b = Hashing.Spec.tagLen h
 
 val valid_esId: pre_esId -> GTot Type0
 val valid_hsId: pre_hsId -> GTot Type0
@@ -592,45 +590,35 @@ val valid_keyId: pre_keyId -> GTot Type0
 val valid_finishedId: pre_finishedId -> GTot Type0
 
 let rec valid_esId = function
-  | ApplicationPSK ctx i ->
-     MR.witnessed (PSK.valid_app_psk ctx i)
-  | ResumptionPSK ctx i ->
-     valid_rmsId i // /\ (MR.witnessed (valid_res_psk ctx i))
-
+  | ApplicationPSK ctx i -> MR.witnessed (PSK.valid_app_psk ctx i)
+  | ResumptionPSK ctx i -> valid_rmsId i // /\ (MR.witnessed (valid_res_psk ctx i))
 and valid_hsId = function
   | HSID_PSK i | HSID_PSK_DHE i _ _ -> valid_esId i
   | HSID_DHE _ _ _ -> True
-
 and valid_asId = function
   | ASID i -> valid_hsId i
-
 and valid_rmsId = function
   | RMSID i li log -> valid_asId i
       /\ valid_hlen log (asId_hash i)
       /\ log_info li log
-
 and valid_exportId = function
   | ExportID i li log -> valid_asId i
       /\ valid_hlen log (asId_hash i)
       /\ log_info li log
-
 and valid_rekeyId = function
   | RekeyID i li log _ -> valid_asId i
       /\ valid_hlen log (asId_hash i)
       /\ log_info li log
-
 and valid_expandId = function
   | EarlySecretID i -> valid_esId i
   | HandshakeSecretID i -> valid_hsId i
   | ApplicationSecretID i -> valid_asId i
   | RekeySecretID i -> valid_rekeyId i
-
 and valid_keyId = function
   | KeyID i tag rw li log ->
       ((tag == EarlyTrafficKey \/ tag == EarlyApplicationDataKey) ==> rw == Client)
       /\ valid_hlen log (expandId_hash i)
       /\ log_info li log
-
 and valid_finishedId = function
   | FinishedID i tag rw li log ->
       ((tag == EarlyFinished \/ tag == LateFinished) ==> rw == Client)
@@ -653,12 +641,12 @@ type id =
 | ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
 
 let peerId = function
-| PlaintextID r -> PlaintextID r
-| ID13 (KeyID i tag rw li log) -> 
-  let kid = KeyID i tag (dualRole rw) li log in 
-  assume (valid_keyId kid);
-  ID13 kid
-| ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
+  | PlaintextID r -> PlaintextID r
+  | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
+  | ID13 (KeyID i tag rw li log) -> 
+      let kid = KeyID i tag (dualRole rw) li log in 
+      assume (valid_keyId kid);
+      ID13 kid
 
 val siId: si:sessionInfo{ 
   Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 

@@ -11,7 +11,7 @@ open Hashing.Spec
 assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real extraction
 
 (* Depending on a single, global idealization function, we keep a global
-    table of all (finalized) hash computations, and we use it to
+    inverse table for all (finalized) hash computations, and we use it to
     detect concrete collisions. Technically, this is modelled as
     non-termination of a stateful, partially-correct finalize filter.
     This may depend on some prior flag to keep the hashed input in the
@@ -57,10 +57,7 @@ private val stop: s:string -> ST 'a
 let rec stop (s:string) = stop s 
 
 open Hashing
-val finalize: 
-  #a:alg -> 
-  v:accv a -> 
-  ST (lbytes (tagLen a))
+val finalize: #a:alg -> v:accv a -> ST (tag a)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> 
     let b = content v in 
@@ -69,10 +66,10 @@ val finalize:
   ))
 
 let finalize #a v = 
-  let b = Hashing.content v in 
   let h = Hashing.finalize v in 
   if crf a then (
     let x = Computed a h in 
+    let b = Hashing.content v in 
     match MM.lookup table x with 
       | None -> MM.extend table x b
       | Some b' -> if b <> b' then stop "hash collision detected");

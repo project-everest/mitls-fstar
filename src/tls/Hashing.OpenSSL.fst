@@ -50,6 +50,10 @@ val finalize: #a:alg -> #r:rgn -> v:hash_ctx a r -> ST (tag a)
     t = hash a (accT v h0))) // not specifying the post accT makes v non-reusable
 *)
 
+val hmac: a:alg -> k:hkey a -> m:bytes -> ST (t:tag a {t == Hashing.Spec.hmac a k m})
+  (requires (fun h0 -> True))
+  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
+
 (* OpenSSL implementation via CoreCrypto *)
 
 let toCC = function 
@@ -60,9 +64,10 @@ let toCC = function
   | SHA384 -> CoreCrypto.SHA384 
   | SHA512 -> CoreCrypto.SHA512
 
-#reset-options "--lax" // assuming CoreCrypto is functionally correct. 
-let compute a b = 
-  CoreCrypto.hash (toCC a) b   // for now claimed to be pure --- fix as we remove an indirection
+// *** by using this file, we assume CoreCrypto is functionally correct and safe ***
+#reset-options "--lax" 
+let compute a b = CoreCrypto.hash (toCC a) b   // for now claimed to be pure --- fix as we remove an indirection
+let hmac a k m = CoreCrypto.hmac (toCC a) k m
 
 (*
 let alloc a parent = CoreCrypto.digest_create (toCC a) 

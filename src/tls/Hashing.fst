@@ -10,8 +10,9 @@ open Hashing.Spec
 (* IMPLEMENTATION PLACEHOLDER, 
     simply buffering the bytes underneath *)
 
-//17-01-26 ??? abstract 
-type accv (a:alg) =  | Inputs: bytes -> accv a
+//17-01-26 still requiring two-step abstraction for datatypes
+private type accv' (a:alg) =  | Inputs: bytes -> accv' a
+abstract type accv (a:alg) = accv' a
 val content: #a:alg -> accv a -> Tot bytes 
 let content #a v = 
   match v with Inputs b -> b
@@ -25,6 +26,11 @@ val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == hash a (content v)})
 let start a = Inputs empty_bytes
 let extend #a (Inputs b0) b1 = Inputs (b0 @| b1)
 let finalize #a (Inputs b) = Hashing.OpenSSL.compute a b
+
+let compute =  Hashing.OpenSSL.compute 
+
+(* older construction, still used in sig *)
+let compute_MD5SHA1 data = compute MD5 data @| compute SHA1 data 
 
 
 (* another PURE, VERIFIED, INCREMENTAL IMPLEMENTATION 

@@ -7,6 +7,7 @@ open FStar.Monotonic.Seq
 
 open Platform.Bytes
 open CoreCrypto
+//open Hashing.Spec // masking CoreCrypto's hashAlg
 
 open TLSConstants
 open Cert
@@ -60,12 +61,14 @@ let sigAlg_of_public_repr pk =
   | PK_DSA k   -> DSA
   | PK_ECDSA k -> ECDSA
 
-private val sig_digest: hashAlg -> bytes -> Tot (option hash_alg * bytes)
+private val sig_digest: hashAlg -> bytes -> ST (option CoreCrypto.hash_alg * bytes)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 let sig_digest h t =
   match h with
   | NULL    -> None, t
-  | MD5SHA1 -> None, Hashing.hash h t
-  | Hash h  -> Some h, t
+  | MD5SHA1 -> None, Hashing.compute_MD5SHA1 t
+  | Hash h  -> Some (Hashing.OpenSSL.toCC h), t  // CF: ugly conversion between hashAlgs. 
 
 
 (* ------------------------------------------------------------------------ *)

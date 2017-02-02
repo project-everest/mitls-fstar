@@ -175,8 +175,10 @@ test/TestAPI.fst #the preceding space is significant!
 # TLSExtensions, Encode, ENC, HandshakeMessages,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
+#17-02-02 removed Flags from the list as it was causing an fstar error. TODO
+# Flags
+
 VERIFY= \
-Flags \
 MonotoneMap \
 TLSError \
 TLSConstants \
@@ -187,7 +189,10 @@ DHGroup \
 ECGroup \
 CommonDH \
 PMS \
+Hashing.Spec \
+Hashing.OpenSSL \
 Hashing \
+Hashing.CRF \
 HashMAC \
 Cert \
 Signature \

@@ -1,11 +1,6 @@
 ﻿(** hash algorithms and providers *)
 module Hashing.Spec
 
-// this file to be split into several once it moves to HACL*
-
-// _____________________________ Hash.Spec _______________________________
-// providing functional specifications and (partial) reference implementations
-
 open Platform.Bytes
 
 type alg = // CoreCrypto.hash_alg
@@ -15,8 +10,7 @@ type alg = // CoreCrypto.hash_alg
   | SHA256
   | SHA384
   | SHA512
-
-// see e.g. https://en.wikipedia.org/wiki/SHA-1 for a global comparison
+// see e.g. https://en.wikipedia.org/wiki/SHA-1 for a global comparison and lengths
 
 // length of the input blocks, in bytes (used for specifying the outer hash loop)
 let blockLen = function 
@@ -80,3 +74,17 @@ let hash a b =
   truncate v
 
 
+// HMAC specification
+// in contrast with RFC 2104 (which take any key length), 
+// in TLS, the HMAC key has the same length as the hash [TLS1.3, 4.4.3]
+type hkey (a:alg) = tag a
+
+val hmac: a:alg -> k:hkey a -> message:bytes -> Tot (tag a)
+
+private let xor #l a b = xor l a b
+
+let hmac a key message = 
+  let xkey = key @| createBytes (blockLen a - tagLen a) 0x0z  in
+  let outer_key_pad = xor xkey (createBytes (blockLen a) 0x5cz) in
+  let inner_key_pad = xor xkey (createBytes (blockLen a) 0x36z) in
+  hash a (outer_key_pad @| hash a (inner_key_pad @| message))
