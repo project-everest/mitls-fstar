@@ -103,7 +103,7 @@ type hashAlg =
   | MD5SHA1
   | Hash of hash_alg
 
-type hash_alg_classic = hash_alg // a:hash_alg {Hashing.Spec.(a = MD5 \/ a = SHA1 \/ a = SHA256)}
+type hash_alg_classic = a:hash_alg {Hashing.Spec.(a = MD5 \/ a = SHA1)}
 
 (** TLS-specific MAC algorithms *)
 type macAlg =
@@ -113,7 +113,7 @@ type macAlg =
 
 (** Authenticated Encryption modes *)
 type aeAlg =
-  | MACOnly: hash_alg_classic -> aeAlg
+  | MACOnly: hash_alg -> aeAlg
   | MtE: encAlg -> hash_alg -> aeAlg
   | AEAD: aeadAlg -> hash_alg -> aeAlg  // the hash algorithm is for the ciphersuite; it is not used by the record layer.
 
@@ -893,7 +893,8 @@ let macAlg_of_aeAlg pv ae =
   // 17-02-02 dropping support for weak ciphersuites. To be discussed!
   //  | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
   //  | SSL_3p0,MtE _ alg   -> SSLKHASH alg
-  | _      ,MACOnly alg -> SSLKHASH alg
+  //  | _      ,MACOnly alg -> SSLKHASH alg
+  | _      ,MACOnly alg 
   | _      ,MtE _ alg   -> HMAC alg
 
 (** Ciphersuite names definition *)

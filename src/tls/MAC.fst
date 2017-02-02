@@ -8,7 +8,7 @@ open FStar.SeqProperties // for e.g. found
 
 open Platform.Bytes
 open Platform.Error
-open CoreCrypto 
+//open CoreCrypto 
 
 open TLSConstants
 open TLSInfo
@@ -39,10 +39,10 @@ abstract type entry (i:id) (good: bytes -> Type) =
  * log is a hyperstack ref with refinement capturing its rid.
  *)
 noeq type key (i:id) (good: bytes -> Type) = 
-  | Key: #region : rgn -> // intuitively, the writer's region
-         kv      : keyrepr i ->
-	 log     : ref (seq (entry i good)){log.id = region}
-	 -> key i good
+  | Key: 
+    #region: rgn -> // intuitively, the writer's region
+    kv: keyrepr i ->
+    log: ref (seq (entry i good)){log.id = region} -> key i good
 
 val region: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot rid
 val keyval: #i:id -> #good:(bytes -> Type) -> k:key i good -> GTot (keyrepr i)
@@ -75,8 +75,7 @@ let leak   #i #good k = k.kv
 
 val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==> good p } -> ST(tag i) 
   (requires (fun _ -> True))
-  (ensures (fun h0 t h1 -> 
-    modifies (Set.singleton (region k)) h0 h1 
+  (ensures (fun h0 t h1 -> modifies (Set.singleton (region k)) h0 h1 
   //  /\ 
   //  sel h1 k.log = snoc (sel h0 k.log) (Entry t p)
   ))

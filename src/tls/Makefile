@@ -178,6 +178,8 @@ test/TestAPI.fst #the preceding space is significant!
 #17-02-02 removed Flags from the list as it was causing an fstar error. TODO
 # Flags
 
+# temporary removals
+
 VERIFY= \
 MonotoneMap \
 TLSError \
