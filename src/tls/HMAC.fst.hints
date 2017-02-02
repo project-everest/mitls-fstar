@@ -66,7 +66,7 @@
       [
         "@pretyping__133", "@pretyping__2857", "@query_9342",
         "bool_inversion", "constructor_distinct_CoreCrypto.MD5",
-        "constructor_distinct_FStar.Seq.seq",
+        "constructor_distinct_FStar.Seq.Base.seq",
         "constructor_distinct_Prims.unit",
         "constructor_distinct_TLSConstants.HMAC",
         "constructor_distinct_TLSConstants.Hash",
@@ -103,7 +103,7 @@
         "refinement_interpretation_Tm_refine_7549",
         "refinement_interpretation_Tm_refine_9299",
         "refinement_interpretation_Tm_refine_9340", "typing_CoreCrypto.hash",
-        "typing_CoreCrypto.hmac", "typing_FStar.Seq.append",
+        "typing_CoreCrypto.hmac", "typing_FStar.Seq.Base.append",
         "typing_HASH.hash", "typing_HMAC.is_tls_mac",
         "typing_Platform.Bytes.op_At_Bar", "typing_TLSConstants.is_tls_rgn",
         "typing_tok_CoreCrypto.MD5@tok", "unit_inversion"

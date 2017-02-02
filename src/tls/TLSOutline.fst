@@ -13,7 +13,7 @@ module TLSOutline
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 open FStar.Monotonic.RRef
 open FStar.Ghost
 
@@ -84,7 +84,7 @@ type c_log_extension (#a:Type) (s0:erased (Seq.seq a)) (s1:erased (Seq.seq a)) :
 //    e.g., when generating new connections we will want to inspect the connection_log 
 assume val connection_log : m_rref tls_region (erased (Seq.seq connection)) c_log_extension
 assume type c_log_inv : hh -> Type
-type is_conn (c:connection) (h:hh) = b2t (SeqProperties.mem c (reveal (sel h connection_log)))
+type is_conn (c:connection) (h:hh) = b2t (Seq.mem c (reveal (sel h connection_log)))
 //A conn is a connection known to be in the connection log
 type conn = c:connection{witnessed (is_conn c)}
 
@@ -274,7 +274,7 @@ assume val write: c:conn -> i:id -> rg:Range.frange i -> data: DataStream.fragme
      (fun (log0:Seq.seq (DataStream.delta i))
         (log1:Seq.seq (DataStream.delta i)) -> 
 	(r = Written ==> (
-	  log1 = SeqProperties.snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId?
+	  log1 = Seq.snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId?
 	  readableT c h1 = readableT c h0 /\ 
 	  readseqT current h1 = readseqT current h0   /\
 	  writableT c h1 = writableT c h0  ))
@@ -282,7 +282,7 @@ assume val write: c:conn -> i:id -> rg:Range.frange i -> data: DataStream.fragme
 	(WriteError? r ==> (
   	  (log1 = (match WriteError.al r with 
 		       | None -> log0
-	               | Some v -> SeqProperties.snoc log0 (DataStream.Alert v))) /\
+	               | Some v -> Seq.snoc log0 (DataStream.Alert v))) /\
 	  ~(readableT c h1) 
 	  /\ readseqT current h1 = readseqT current h0 /\
 	  ~(writableT c h1)

@@ -10,7 +10,6 @@ module AEAD0
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 

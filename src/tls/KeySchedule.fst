@@ -8,8 +8,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties
-open FStar.Set
+open FStar.Set  
 
 open Platform.Bytes
 open Platform.Error

@@ -15,7 +15,7 @@ open TLS
 
 module CC = CoreCrypto
 
-let rec read_loop con r =
+let rec read_loop con r : ML unit =
   match TLS.read con r with
   | Read (DataStream.Data d) ->
     let db = DataStream.appBytes d in
@@ -57,7 +57,7 @@ let client config host port =
       IO.print_string ("ReadError: "^t^"\n")
     | _ -> IO.print_string "unexpected ioresult_i read\n"
 
-private let rec aux_server config sock =
+private let rec aux_server config sock : ML unit =
   let rid = new_region root in
   let con = TLS.accept rid sock config in
   let id = TLS.currentId con Reader in

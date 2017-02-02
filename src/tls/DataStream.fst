@@ -10,7 +10,6 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties
 open Platform.Bytes
 open Platform.Error
 
@@ -111,7 +110,7 @@ noeq type state (i:id) =
 (*
  * AR: adding the is_eternal_region refinement to satify the precondition of new_region.
  *)
-val gen: r0:rid{is_eternal_region r0} -> i:id -> (state i * state i)
+val gen: r0:rid{is_eternal_region r0} -> i:id -> ML (state i * state i)
 let gen r0 (i:id) =
   let r = new_region r0 in
   empty_is_well_formed i;

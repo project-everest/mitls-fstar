@@ -8,7 +8,7 @@ module AEAD_GCM
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 
 open Platform.Bytes
 open CoreCrypto          // for algorithm names, and key, IV, tag lengths
@@ -18,7 +18,7 @@ open TLSInfo
 open Range
 open LHAEPlain
 
-(* Kept local as adding it to SeqProperties has a negative impact on verification performance *)
+(* Kept local as adding it to Seq has a negative impact on verification performance *)
 val snoc : #a:Type -> seq a -> a -> Tot (seq a)
 let snoc s x = Seq.append s (Seq.create 1 x)
 

@@ -5,6 +5,7 @@ all: all-ver tls-sanity tls-lax tls-ffi
 CONTRIB=ucontrib
 LIB=ulib
 FFI_HOME=../../libs/ffi
+MARCH?=x86_64
 
 clean:
 	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean MEM=HST
@@ -29,11 +30,11 @@ record_fstar_version:
 	$(FSTAR_HOME)/bin/fstar.exe --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > ../../.fstar_version
 
 # .fst files in [ulib/ml] that are realized in fstarlib.cmxa
-STDLIB_REALIZED=All List Heap Set Map ST HyperHeap HyperStack IO
+STDLIB_REALIZED=All List.Tot.Base List Heap Set Map ST HyperHeap HyperStack IO
 
 OPTIONS=--fstar_home $(FSTAR_HOME)
 
-CODEGEN_LIBS=CoreCrypto LowCProvider Platform Classical SeqProperties HyperHeap HyperStack FFICallbacks
+CODEGEN_LIBS=CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
@@ -68,7 +69,7 @@ OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_H
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
 ifeq ($(OS),Windows_NT)
-  EXTRA_PATH = PATH="/usr/x86_64-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
+  EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
 endif
 
 # ---------------------------------------------------------------------
@@ -281,6 +282,7 @@ tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst
 # Lax typecheck all files (with ideal flag off)
 tls-lax: record_fstar_version $(LIBFILES)
 	$(FSTAR) --lax \
+	--include $(LDIR)/spartan \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
 	$(FSTS)
@@ -314,9 +316,9 @@ TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
-  FStar_List_Tot.ml FStar_Ghost.ml FStar_Seq.ml \
-  FStar_BitVector.ml FStar_UInt.ml \
-  FStar_SeqProperties.ml FStar_Monotonic_RRef.ml \
+  FStar_Ghost.ml FStar_Seq_Base.ml \
+  FStar_List_Tot_Properties.ml FStar_List_Tot.ml FStar_BitVector.ml FStar_UInt.ml \
+  FStar_Seq_Properties.ml FStar_Seq.ml FStar_Monotonic_RRef.ml \
   FStar_Monotonic_Seq.ml \
   $(TLSML)
 # Last step: prefix with the output directory.

@@ -6,7 +6,6 @@ module Content // was TLSFragment
 
 open FStar
 open FStar.Seq
-open FStar.SeqProperties
 
 open Platform.Bytes
 open Platform.Error

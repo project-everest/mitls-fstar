@@ -11,7 +11,9 @@ hash algorithm etc.
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
-open FStar.SeqProperties
+open FStar.All
+
+open FStar.Seq
 open Platform.Bytes
 open Platform.Error
 open TLSError
@@ -1038,8 +1040,8 @@ let cipherSuite_of_name =
 val cipherSuites_of_nameList: l1:list cipherSuiteName
   -> Tot (l2:valid_cipher_suites{List.Tot.length l2 = List.Tot.length l1})
 let cipherSuites_of_nameList nameList =
-  // REMARK: would trigger automatically if ListProperties is loaded
-  ListProperties.map_lemma cipherSuite_of_name nameList;
+  // REMARK: would trigger automatically if List.Tot.Properties is loaded
+  List.Tot.map_lemma cipherSuite_of_name nameList;
   List.Tot.map cipherSuite_of_name nameList
 
 (** Determine the name of a ciphersuite based on its construction *)
@@ -1158,7 +1160,7 @@ val lemma_vlbytes_inj : i:nat
           (ensures (b == b'))
 let lemma_vlbytes_inj i b b' =
   let l = bytes_of_int i (length b) in
-  SeqProperties.lemma_append_inj l b l b'
+  Seq.lemma_append_inj l b l b'
 
 val vlbytes_length_lemma: n:nat -> a:bytes{repr_bytes (length a) <= n} -> b:bytes{repr_bytes (length b) <= n} ->
   Lemma (requires (Seq.equal (Seq.slice (vlbytes n a) 0 n) (Seq.slice (vlbytes n b) 0 n)))
@@ -1279,7 +1281,7 @@ let rec parseCertificateTypeList data =
 
 
 (** Determine the certificate signature algorithms allowed according to the ciphersuite *)
-val defaultCertTypes: bool -> cipherSuite -> l:list certType{List.Tot.length l <= 1}
+val defaultCertTypes: bool -> cipherSuite -> ML (l:list certType{List.Tot.length l <= 1})
 let defaultCertTypes sign cs =
   let open CoreCrypto in 
   let alg = sigAlg_of_ciphersuite cs in

@@ -4,7 +4,6 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties 
 open FStar.Set
 
 open Platform
@@ -226,7 +225,12 @@ let disconnect c =
     c.state := Close
 
 // on some errors, we locally give up the connection
-let unrecoverable c reason : ioresult_w =
+val unrecoverable: c: connection -> r:string -> ST ioresult_w
+  (requires (fun h0 -> st_inv c h0))
+  (ensures (fun h0 i h1 -> st_inv c h1 /\ 
+		        modifies (Set.singleton (C?.region c)) h0 h1 /\
+			i = WriteError None r))
+let unrecoverable c reason =
     disconnect c;
     WriteError None reason
 
@@ -608,7 +612,7 @@ let next_fragment i c =
   let w0 = Handshake.i s Writer in 
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
-		 FStar.SeqProperties.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
+		 FStar.Seq.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
   let idt = if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID") in
   let _b = 
@@ -1077,12 +1081,14 @@ type delta h c =
 
 
 // frequent error handler; note that i is the (unused) reader index
-let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string): ioresult_i ri =
+//val alertFlush: TODO: WE REALLY NEED A VAL!
+let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string) =
   let written = sendAlert c ad reason in
-  match written with
-  | WriteClose      -> Read DataStream.Close // do we need this case?
-  | WriteError x y -> ReadError x y         // how to compose ad reason x y ?
-
+  let r : ioresult_i ri = 
+    match written with
+    | WriteClose      -> Read DataStream.Close // do we need this case?
+    | WriteError x y -> ReadError x y in         // how to compose ad reason x y ?
+  r
 
 val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
   (requires (fun h0 ->

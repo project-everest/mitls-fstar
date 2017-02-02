@@ -13,7 +13,6 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties
 
 open Platform.Bytes
 open Platform.Error

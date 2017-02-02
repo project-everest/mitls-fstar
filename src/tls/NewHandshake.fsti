@@ -11,7 +11,7 @@ open FStar.Heap
 open FStar.HyperHeap
 //FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 open FStar.Set  
 
 open Platform.Error

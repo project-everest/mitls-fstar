@@ -1,5 +1,5 @@
 [
-  "ฎ'U๕G_ก/dÿ8bฆ",
+  "ุม<\\2\u007f€f\\pþiKcป",
   [
     [
       "DHGroup.group",
@@ -9,31 +9,33 @@
       [
         "@query", "assumption_CoreCrypto.dh_params_haseq",
         "assumption_TLSConstants.ffdhe_haseq", "equation_DHGroup.params",
-        "haseqTm_refine_7ce2ab2edcf30fe6e35fa968dac3cf08"
+        "haseqTm_refine_6f2b4a64b3ab3857a757176fd8a57fb5"
       ],
       0
     ],
+    [ "DHGroup.uu___is_Named", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "DHGroup.Named._0",
+      "DHGroup.__proj__Named__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_DHGroup.Named",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_8929b949648215f9010dc95fd05e40f0"
+        "refinement_interpretation_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94"
       ],
       0
     ],
+    [ "DHGroup.uu___is_Explicit", 1, 0, 1, [ "@query" ], 0 ],
     [
-      "DHGroup.Explicit._0",
+      "DHGroup.__proj__Explicit__item___0",
       1,
       0,
       1,
       [
         "@query", "disc_equation_DHGroup.Explicit",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_440b4c595e09f983ea7cbfdf76968738"
+        "refinement_interpretation_Tm_refine_dc91833cf9fb025d258378587c7faffb"
       ],
       0
     ],
@@ -45,7 +47,7 @@
       [
         "@query", "equation_DHGroup.key", "primitive_Prims.op_LessThan",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_0e7d2c1a8523d94f52fa00bcd975ce5a"
+        "refinement_interpretation_Tm_refine_1afef2a28e9ed31e8e8c879ff78ae8e9"
       ],
       0
     ],
@@ -63,7 +65,8 @@
         "equation_TLSConstants.hs_color",
         "function_token_typing_TLSConstants.epoch_color",
         "function_token_typing_TLSConstants.hs_color",
-        "kinding_FStar.Char.char_@tok", "lemma_FStar.Seq.lemma_create_len",
+        "kinding_FStar.Char.char_@tok",
+        "lemma_FStar.Seq.Base.lemma_create_len",
         "primitive_Prims.op_LessThan",
         "proj_equation_CoreCrypto.Mkdh_params_dh_g",
         "proj_equation_CoreCrypto.Mkdh_params_dh_p",
@@ -101,8 +104,8 @@
         "fuel_guarded_inversion_TLSConstants.ffdhe",
         "proj_equation_DHGroup.Named__0",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_8929b949648215f9010dc95fd05e40f0",
-        "typing_DHGroup.Named._0"
+        "refinement_interpretation_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94",
+        "typing_DHGroup.__proj__Named__item___0"
       ],
       0
     ],
@@ -117,9 +120,9 @@
         "fuel_guarded_inversion_CoreCrypto.dh_key",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
         "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_0e7d2c1a8523d94f52fa00bcd975ce5a",
-        "refinement_interpretation_Tm_refine_478a0a04a8480a84539d075bfb045876",
-        "refinement_interpretation_Tm_refine_7ce2ab2edcf30fe6e35fa968dac3cf08",
+        "refinement_interpretation_Tm_refine_1afef2a28e9ed31e8e8c879ff78ae8e9",
+        "refinement_interpretation_Tm_refine_2a3361ff01a73d50682e1fddd942b4e0",
+        "refinement_interpretation_Tm_refine_6f2b4a64b3ab3857a757176fd8a57fb5",
         "typing_DHGroup.params_of_group"
       ],
       0
@@ -133,8 +136,8 @@
         "@query", "equation_DHGroup.key", "equation_Platform.Bytes.bytes",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
         "lemma_FStar.HyperStack.lemma_equal_stack_domains_trans",
-        "refinement_interpretation_Tm_refine_0e7d2c1a8523d94f52fa00bcd975ce5a",
-        "refinement_interpretation_Tm_refine_858f4a30cb4ed8ecd3b20e2e4aec705d"
+        "refinement_interpretation_Tm_refine_1afef2a28e9ed31e8e8c879ff78ae8e9",
+        "refinement_interpretation_Tm_refine_9df1e3c4b87b4794f8d0fa08e96cff47"
       ],
       0
     ],
@@ -156,7 +159,7 @@
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
         "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_7ce2ab2edcf30fe6e35fa968dac3cf08",
+        "refinement_interpretation_Tm_refine_6f2b4a64b3ab3857a757176fd8a57fb5",
         "refinement_interpretation_Tm_refine_a2c28aa1b78c89ca16223117ea2cb497"
       ],
       0
@@ -172,8 +175,9 @@
         "equation_Platform.Bytes.lbytes", "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
         "int_inversion", "kinding_FStar.Char.char_@tok",
-        "lemma_FStar.Seq.lemma_len_append", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0",
+        "lemma_FStar.Seq.Base.lemma_len_append",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_810128ef5f4b05b21d8806119a5984f5",
         "refinement_interpretation_Tm_refine_a2c28aa1b78c89ca16223117ea2cb497",
         "refinement_interpretation_Tm_refine_b6ff053b4197efeb3cb68dc8ddad1eba",
@@ -188,29 +192,34 @@
       0,
       1,
       [
-        "@query", "bool_inversion", "disc_equation_Platform.Error.Correct",
-        "equation_FStar.Char.char", "equation_Platform.Bytes.byte",
-        "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.length",
-        "equation_Prims.nat", "equation_TLSConstants.rgn",
-        "equation_TLSConstants.tls_region", "equation_TLSConstants.tls_rgn",
-        "equation_TLSConstants.tls_tables_region", "equation_TLSError.error",
-        "equation_TLSError.result",
-        "function_token_typing_TLSConstants.tls_region",
-        "function_token_typing_TLSConstants.tls_tables_region",
-        "function_token_typing_TLSError.error", "int_inversion",
-        "lemma_FStar.HyperHeap.lemma_extends_includes",
-        "lemma_FStar.HyperHeap.lemma_extends_parent",
-        "lemma_Platform.Error.invertOptResult",
+        "@query", "constructor_distinct_Platform.Error.Correct",
+        "constructor_distinct_Platform.Error.Error",
+        "constructor_distinct_Platform.Error.optResult",
+        "constructor_distinct_Prims.unit", "data_elim_Platform.Error.Error",
+        "disc_equation_Platform.Error.Correct",
+        "disc_equation_Platform.Error.Error", "equation_FStar.Char.char",
+        "equation_FStar.Seq.Properties.split",
+        "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.split", "equation_Prims._assert",
+        "equation_Prims.nat", "equation_TLSConstants.vlparse",
+        "equation_TLSError.error", "equation_TLSError.result",
+        "int_inversion", "pretyping_06f569191f9e64658061c3259374faef",
+        "pretyping_f8666440faa91836cc5a13998af863fc",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_031aa5f46d93e5d19c7d173c1a0a0157",
-        "refinement_interpretation_Tm_refine_63928e85f9e0b07c6128b061a7f3df81",
-        "refinement_interpretation_Tm_refine_ad28dd96578cc7340932338691d549ee",
+        "projection_inverse_Platform.Error.Correct__0",
+        "projection_inverse_Platform.Error.Correct__a",
+        "projection_inverse_Platform.Error.Correct__b",
+        "projection_inverse_Platform.Error.Error__0",
+        "projection_inverse_Platform.Error.Error__a",
+        "projection_inverse_Platform.Error.Error__b",
+        "projection_inverse_Prims.Mktuple2__2",
+        "refinement_interpretation_Tm_refine_7960ac6d8ea5e0254c42cabffa8266af",
+        "refinement_interpretation_Tm_refine_85e2a16564d229dbc9675f5ee7b71078",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Tm_refine_cf48a0b0f0401633a2d7556681f50219",
         "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "refinement_kinding_Tm_refine_63928e85f9e0b07c6128b061a7f3df81",
-        "typing_FStar.HyperHeap.includes", "typing_Platform.Bytes.length",
-        "typing_Platform.Bytes.repr_bytes", "typing_Platform.Error.is_Error"
+        "typing_Platform.Bytes.length", "typing_Platform.Bytes.repr_bytes",
+        "unit_typing"
       ],
       0
     ],
@@ -226,16 +235,18 @@
         "disc_equation_Platform.Error.Error", "equation_FStar.Char.char",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.length", "equation_Prims.fst",
-        "equation_Prims.nat", "equation_TLSError.error",
-        "equation_TLSError.result",
-        "fuel_guarded_inversion_Platform.Error.optResult", "int_inversion",
+        "equation_Prims.nat", "equation_TLSConstants.hs_color",
+        "equation_TLSError.error", "equation_TLSError.result",
+        "fuel_guarded_inversion_Platform.Error.optResult",
+        "function_token_typing_TLSConstants.hs_color", "int_inversion",
+        "pretyping_06f569191f9e64658061c3259374faef",
         "primitive_Prims.op_GreaterThanOrEqual",
         "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_CoreCrypto.Mkdh_key_dh_params",
         "proj_equation_CoreCrypto.Mkdh_key_dh_public",
         "proj_equation_CoreCrypto.Mkdh_params_dh_g",
         "proj_equation_CoreCrypto.Mkdh_params_dh_p",
-        "proj_equation_Prims.Mktuple2__1", "proj_equation_Prims.Mktuple2__2",
+        "proj_equation_Prims.Mktuple2__1",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_CoreCrypto.Mkdh_key_dh_params",
@@ -243,12 +254,19 @@
         "projection_inverse_CoreCrypto.Mkdh_params_dh_g",
         "projection_inverse_CoreCrypto.Mkdh_params_dh_p",
         "projection_inverse_Platform.Error.Correct__0",
+        "projection_inverse_Platform.Error.optResult@x1",
         "projection_inverse_Prims.Mktuple2__1",
         "projection_inverse_Prims.Mktuple2__2",
-        "refinement_interpretation_Tm_refine_273c9bab2813f76bb981cea0d841ef0e",
+        "projection_inverse_Prims.Mktuple2__a",
+        "projection_inverse_Prims.Mktuple2__b",
+        "refinement_interpretation_Tm_refine_2d74a34695578d1f40850d3108fa8500",
+        "refinement_interpretation_Tm_refine_a18b256a5ff66e5662b8b8ef9005d754",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_c0d526edec540d484772fe6a68ab7200",
+        "refinement_interpretation_Tm_refine_c13f1f4907bc7281768437bfa9d128cb",
         "refinement_interpretation_Tm_refine_f048236b5f8051f83b495ea5eaa6127b",
-        "typing_Platform.Bytes.length", "typing_Platform.Bytes.repr_bytes"
+        "typing_Platform.Bytes.length", "typing_Platform.Bytes.repr_bytes",
+        "typing_TLSConstants.vlsplit"
       ],
       0
     ]

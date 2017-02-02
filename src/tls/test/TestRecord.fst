@@ -37,8 +37,8 @@ private let mk_id13 aeAlg =
   let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
   ID13 keyId
 
-private val fake_stream: (aeAlg: (a:aeAlg{AEAD? a})) -> (key:string) -> (iv:string) -> (plain:string) -> bytes
-private let fake_stream (aeAlg: (a:aeAlg{AEAD? a})) (key:string) (iv:string) (plain:string): bytes =
+private val fake_stream: (aeAlg: (a:aeAlg{AEAD? a})) -> (key:string) -> (iv:string) -> (plain:string) -> ML bytes
+private let fake_stream aeAlg key iv plain =
   let id = mk_id13 aeAlg in
 
   // StreamAE.writer -> StreamAE.state
@@ -64,8 +64,8 @@ private let fake_stream (aeAlg: (a:aeAlg{AEAD? a})) (key:string) (iv:string) (pl
   StreamAE.encrypt #id w len f
 
 
-private val fake_aead: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (key: string) -> (iv: string) -> (plain: string) -> bytes
-private let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string): bytes =
+private val fake_aead: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (key: string) -> (iv: string) -> (plain: string) -> ML bytes
+private let fake_aead pv aeAlg key iv plain =
   let id = mk_id pv aeAlg in
 
   // StatefulLHAE.writer -> StatefulLHAE.state
@@ -99,8 +99,8 @@ private let fake_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: st
   // FIXME: without the three additional #-arguments below, extraction crashes
   StatefulLHAE.encrypt #id w ad rg f
 
-private val fake_cbc: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (seqn: seqn_t) -> (key: string) -> (iv: string) -> (plain: string) -> (macKey: string) -> bytes
-private let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (macKey: string): bytes =
+private val fake_cbc: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (seqn: seqn_t) -> (key: string) -> (iv: string) -> (plain: string) -> (macKey: string) -> ML bytes
+private let fake_cbc pv aeAlg seqn key iv plain macKey =
   let id = mk_id pv aeAlg in
 
   // ENC.encryptor -> ENC.state
@@ -133,7 +133,7 @@ private let fake_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: s
 
 private let test_count = FStar.ST.ralloc r 0
 
-private val test_stream: a:aeAlg{AEAD? a} -> (key:string) -> (iv:string) -> (plain:string) -> (cipher:string) -> unit
+private val test_stream: a:aeAlg{AEAD? a} -> (key:string) -> (iv:string) -> (plain:string) -> (cipher:string) -> ML unit
 private let test_stream aeAlg key iv plain cipher =
   let output = fake_stream aeAlg key iv plain in
   let output = hex_of_bytes output in
@@ -148,8 +148,8 @@ private let test_stream aeAlg key iv plain cipher =
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
-private val test_aead: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (key: string) -> (iv: string) -> (plain: string) -> (cipher: string) -> unit
-private let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: string) (plain: string) (cipher: string) =
+private val test_aead: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (key: string) -> (iv: string) -> (plain: string) -> (cipher: string) -> ML unit
+private let test_aead pv aeAlg key iv plain cipher =
   let output = fake_aead pv aeAlg key iv plain in
   let output = hex_of_bytes output in
   if output <> cipher then begin
@@ -163,8 +163,8 @@ private let test_aead (pv: protocolVersion) (aeAlg: aeAlg) (key: string) (iv: st
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
-private val test_cbc: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (seqn: seqn_t) -> (key: string) -> (iv: string) -> (plain: string) -> (cipher: string) -> (macKey: string) -> unit
-private let test_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: string) (iv: string) (plain: string) (cipher: string) (macKey: string) =
+private val test_cbc: (pv: protocolVersion) -> (aeAlg: aeAlg) -> (seqn: seqn_t) -> (key: string) -> (iv: string) -> (plain: string) -> (cipher: string) -> (macKey: string) -> ML unit
+private let test_cbc pv aeAlg seqn key iv plain cipher macKey =
   let output = fake_cbc pv aeAlg seqn key iv plain macKey in
   let output = hex_of_bytes output in
   if output <> cipher then begin
@@ -178,7 +178,7 @@ private let test_cbc (pv: protocolVersion) (aeAlg: aeAlg) (seqn: seqn_t) (key: s
     IO.print_string ("Encryption test #" ^ test_count ^ ": OK\n")
   end
 
-val main : unit -> unit
+val main : unit -> ML unit
 let main () =
   test_stream (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256)
     "152300c2dc44c8f695d4fb1471791659"

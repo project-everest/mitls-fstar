@@ -31,13 +31,13 @@ private let id = pre_id Client
 
 #set-options "--lax"
 
-private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : bytes =
+private let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : ML bytes =
   let rg: Range.frange id = (0, length plain) in
   let f: DataStream.fragment id rg = plain in
   let f: Content.fragment id = Content.mk_fragment id ct rg f in
   StAE.encrypt #id wr f
 
-private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : option bytes =
+private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : ML (option bytes) =
   let ctxt: Content.decrypted id = (ct, cipher) in
   match StAE.decrypt #id rd ctxt with
   | Some d -> Some (Content.repr id d)
@@ -45,7 +45,7 @@ private let decryptRecord (#id:StAE.stae_id) (rd:StAE.reader id) ct cipher : opt
 
 private let text = Platform.Bytes.utf8 "Top secret"
 
-val main : unit -> unit
+val main : unit -> ML unit
 let main () =
   //let wr = StAE.gen root id in
 

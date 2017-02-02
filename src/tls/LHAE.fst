@@ -9,7 +9,6 @@ module LHAE
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties
 
 open Platform.Bytes
 open Platform.Error

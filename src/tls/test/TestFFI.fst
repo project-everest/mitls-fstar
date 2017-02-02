@@ -16,7 +16,7 @@ private let pr s = IO.print_string ("FFI: "^s^".\n") // verbose
 // let pr s = ()  // quieter
 
 
-private let rec readAll c = // auxiliary while loop for reading the full response
+private let rec readAll c : ML unit = // auxiliary while loop for reading the full response
   match read c with
   | Received extra -> pr ("Received data:\n"^iutf8 extra); readAll c
   | Errno 0        -> pr "Received close_notify! Socket closed"

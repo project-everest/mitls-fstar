@@ -1,6 +1,109 @@
 [
-  "µï9ÔMë;¿1É#¿î”ì‚",
+  "y*=_ÅÝv’ö´¡¢\u001cg\u0013A",
   [
+    [ "TLSError.uu___is_AD_close_notify", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_unexpected_message", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_bad_record_mac", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_decryption_failed", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_record_overflow", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_decompression_failure", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_handshake_failure", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_no_certificate", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "TLSError.uu___is_AD_bad_certificate_warning",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [ "TLSError.uu___is_AD_bad_certificate_fatal", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "TLSError.uu___is_AD_unsupported_certificate_warning",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSError.uu___is_AD_unsupported_certificate_fatal",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSError.uu___is_AD_certificate_revoked_warning",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSError.uu___is_AD_certificate_revoked_fatal",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSError.uu___is_AD_certificate_expired_warning",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSError.uu___is_AD_certificate_expired_fatal",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSError.uu___is_AD_certificate_unknown_warning",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSError.uu___is_AD_certificate_unknown_fatal",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [ "TLSError.uu___is_AD_illegal_parameter", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_unknown_ca", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_access_denied", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_decode_error", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_decrypt_error", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_export_restriction", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_protocol_version", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_insufficient_security", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_internal_error", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "TLSError.uu___is_AD_user_cancelled_warning",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [ "TLSError.uu___is_AD_user_cancelled_fatal", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_no_renegotiation", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_unrecognized_name", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_missing_extension", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.uu___is_AD_unsupported_extension", 1, 0, 1, [ "@query" ], 0 ],
     [
       "TLSError.string_of_ad",
       1,
@@ -62,7 +165,7 @@
       [
         "@query", "disc_equation_Platform.Error.Correct",
         "equation_TLSError.error", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_603c32701ff5a298f7f82f85d1356168"
+        "refinement_interpretation_Tm_refine_85a9ae5da8b15af9f81a1abeea828107"
       ],
       0
     ],
@@ -75,7 +178,8 @@
         "@query", "bool_inversion", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
-        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
+        "typing_Platform.Error.uu___is_Correct",
+        "typing_Platform.Error.uu___is_Error"
       ],
       0
     ],
@@ -88,7 +192,8 @@
         "@query", "bool_inversion", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
-        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
+        "typing_Platform.Error.uu___is_Correct",
+        "typing_Platform.Error.uu___is_Error"
       ],
       0
     ],
@@ -101,7 +206,8 @@
         "@query", "bool_inversion", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
-        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
+        "typing_Platform.Error.uu___is_Correct",
+        "typing_Platform.Error.uu___is_Error"
       ],
       0
     ],
@@ -111,10 +217,12 @@
       0,
       1,
       [
-        "@query", "bool_inversion", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "@query", "bool_inversion", "disc_equation_Platform.Error.Error",
+        "equation_TLSError.error", "equation_TLSError.result",
+        "function_token_typing_TLSError.error",
         "lemma_Platform.Error.invertOptResult",
-        "typing_Platform.Error.is_Correct", "typing_Platform.Error.is_Error"
+        "projection_inverse_BoxBool_proj_0",
+        "typing_Platform.Error.uu___is_Correct"
       ],
       0
     ]

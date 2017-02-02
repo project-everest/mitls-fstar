@@ -43,7 +43,7 @@ val lemma_makeAD_seqN: i:id -> n:seqn -> ad:StatefulPlain.adata i
                    [SMTPat (makeAD i n ad)]
 
 let lemma_makeAD_seqN i n ad =
-    cut (Seq.equal (fst (SeqProperties.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
+    cut (Seq.equal (fst (Seq.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
     int_of_bytes_of_int (Seq.length (bytes_of_seq n)) n
 
 val lemma_makeAD_parseAD: i:id -> n:seqn -> ad:StatefulPlain.adata i
