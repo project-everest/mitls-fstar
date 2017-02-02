@@ -79,6 +79,7 @@ endif
 FSTS=Flags.fst \
 MonotoneMap.fst \
 TLSError.fst \
+Hashing.Spec.fst \
 TLSConstants.fst \
 Transport.fst \
 Nonce.fst \
@@ -87,7 +88,6 @@ DHGroup.fst \
 ECGroup.fst \
 CommonDH.fst \
 PMS.fst \
-Hashing.Spec.fst \
 Hashing.OpenSSL.fst \
 Hashing.fst \
 Hashing.CRF.fst \

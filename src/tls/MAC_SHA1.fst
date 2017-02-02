@@ -20,9 +20,11 @@ let a = HMAC Hashing.Spec.SHA1
 
 type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
 
+let alg (i:id) = macAlg_of_id i
+
 type text = bytes
-type tag (i:id) = bytes
-type keyrepr (i:id) = bytes
+type tag (i:id) = lbytes (macSize (alg i))
+type keyrepr (i:id) = lbytes (macSize (alg i))
 type key (i:id) = keyrepr i
 
 assume type good (i:id) (b:bytes) : Type0 // TBD in Encode?
@@ -71,9 +73,7 @@ let matches i p (Entry _ p') = p = p'
 
 val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
   (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 -> 
-    h0 == h1 /\ 
-    (b ==> good i p)))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b ==> good i p)))
 
 let verify i rd p t =
   let x = HashMAC.tls_macVerify a rd.key p t  in
