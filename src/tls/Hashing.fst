@@ -6,7 +6,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 
 open Platform.Bytes
-open Hashing.Spec
+include Hashing.Spec
 
 (* IMPLEMENTATION PLACEHOLDER, 
     simply buffering the bytes underneath *)
