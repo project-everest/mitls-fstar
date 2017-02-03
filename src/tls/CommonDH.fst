@@ -7,6 +7,7 @@ open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSConstants
+open TLSError
 
 type group =
   | FFDH of DHGroup.group
@@ -66,50 +67,46 @@ let serialize #g s =
   | FFDH g -> DHGroup.serialize #g s
   | ECDH g -> ECGroup.serialize #g s
 
-val parse_partial: bytes -> bool -> Tot (TLSError.result (key * bytes))
-let parse_partial p ec =
+val parse_partial: bool -> bytes -> Tot (result ((g:group & share g) * bytes))
+let parse_partial ec p =
   if ec then
     begin
     match ECGroup.parse_partial p with
-    | Correct(eck,rem) -> Correct (ECKey eck, rem)
+    | Correct((|g , s|), rem) -> Correct ((| ECDH g, s |), rem)
     | Error z -> Error z
     end
   else
     begin
     match DHGroup.parse_partial p with
-    | Correct(dhk,rem) -> Correct (FFKey dhk, rem)
+    | Correct((|g, s|), rem) -> Correct ((| FFDH g, s |), rem)
     | Error z -> Error z
     end
 
-
-
 // Serialize for keyShare extension
-val serialize_raw: key -> Tot bytes
-let serialize_raw = function
-  | ECKey k -> ECGroup.serialize_point k.ec_params k.ec_point
-  | FFKey k -> DHGroup.serialize_public k.dh_public (length k.dh_params.dh_p)
+val serialize_raw: #g:group -> share g -> Tot bytes
+let serialize_raw #g s =
+  match g with
+  | FFDH g ->
+    let dhp = DHGroup.params_of_group g in
+    DHGroup.serialize_public #g s (length dhp.dh_p)
+  | ECDH g -> ECGroup.serialize_point #g s
 
-val parse: params -> bytes -> Tot (option key)
-let parse p x =
-  match p with
-  | ECP p ->
-    begin
-    match ECGroup.parse_point p x with
-    | Some eck -> Some (ECKey ({ec_params=p; ec_point=eck; ec_priv=None;}))
-    | None -> None
-    end
-  | FFP p ->
-    if length x = length p.dh_p then
-      Some (FFKey ({dh_params = p; dh_public = x; dh_private = None;}))
+val parse: g:group -> bytes -> Tot (option (share g))
+let parse g x =
+  match g with
+  | ECDH g -> ECGroup.parse_point g x
+  | FFDH g ->
+    let dhp = DHGroup.params_of_group g in
+    if length x = length dhp.dh_p then Some x
     else None
 
+(*
 val key_params: key -> Tot params
 let key_params k =
   match k with
   | FFKey k -> FFP k.dh_params
   | ECKey k -> ECP k.ec_params
 
-(*
   let checkParams dhdb minSize (p:parameters) =
     match p with
     | DHP_P(dhp) ->

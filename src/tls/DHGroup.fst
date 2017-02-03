@@ -64,7 +64,9 @@ let params_of_group = function
   | Named FFDHE8192 -> ffdhe8192
   | Explicit params -> params
 
-type share (g:group) = b:bytes{length b < 65536}
+type share (g:group) = b:bytes{
+  length b < 65536 /\
+  (let dhp = params_of_group g in length b <= length dhp.dh_p)}
 
 type keyshare (g:group) = k:CoreCrypto.dh_key{
   let dhp = k.dh_params in
@@ -113,7 +115,11 @@ let serialize_public #g dh_Y len =
 val parse_public: g:group -> p:bytes{2 <= length p} -> Tot (result (share g))
 let parse_public g p =
   match vlparse 2 p with
-  | Correct n -> lemma_repr_bytes_values (length n); Correct n
+  | Correct n ->
+    lemma_repr_bytes_values (length n);
+    let dhp = params_of_group g in
+    if length n <= length dhp.dh_p then Correct n
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "length of public share exceeds length of DH prime")
   | Error z -> Error z
 
 val parse_partial: bytes -> Tot (result ((g:group & share g) * bytes))

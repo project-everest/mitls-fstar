@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module KeySchedule
 (*the top level key schedule module, it should not expose secrets to Handshake *)
 
@@ -8,7 +11,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.Set  
+open FStar.Set
 
 open Platform.Bytes
 open Platform.Error
@@ -797,7 +800,7 @@ let ks_server_13_client_finished ks
   (ensures (fun h0 _ h1 -> h0 = h1)) =
   let KS #region st hsl = ks in
   let S (S_13_wait_CF (ae, h) (| _, cfk |) (| asId, _ |) _ _) = !st in
-  let x = HandshakeLog.getHash hsl h in 
+  let x = HandshakeLog.getHash hsl h in
   let y = asId_rc asId in
   HashMAC.hmac h cfk (x @| y)
 

@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module TLSInfo
 
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
@@ -6,7 +9,7 @@ module TLSInfo
    public datatypes, parameters, and predicates for our TLS API.
 
    Its interface is used by most TLS modules;
-   its implementation is typechecked. 
+   its implementation is typechecked.
 *)
 
 open Platform.Bytes
@@ -44,16 +47,16 @@ module HH = FStar.HyperHeap
 
 (* discussion about IDs and configurations (Cedric, Antoine, Santiago)
 
-Server Certificates? 
+Server Certificates?
 
 - the client initial parameters...
 
 - the server gets a CertSignQuery, picks its certificate chain from
   the ClientHello/ServerHello contents [new in miTLS 1.0]
 
-- the client decides whether that's acceptable. 
+- the client decides whether that's acceptable.
 
-Certificate Request? 
+Certificate Request?
 
 - in its ServerHello flight (or later) the server optionally requests a
   Cert/CertVerify (optionally with a list of CAs). This depends on
@@ -74,7 +77,7 @@ type ServerCertificateRequest // something that determines this Handshake messag
 
 request_client_certificate: single_assign ServerCertificateRequest // uses this one, or asks the server; by default Some None.
 
-*) 
+*)
 
 
 noeq type config = {
@@ -398,7 +401,7 @@ let strongAuthSI si = true //TODO: fix
 assume val strongAESI: sessionInfo -> Tot bool
 
 // -------------------------------------------------------------------
-// Indexing instances of derived keys for AE etc. 
+// Indexing instances of derived keys for AE etc.
 //
 // Index type definitions [1.3]:
 //
@@ -459,7 +462,7 @@ let logInfo_nonce (rw:role) = function
 
 // Extensional equality of logInfo
 // (we may want to use e.g. equalBytes on some fields)
-// injectivity 
+// injectivity
 let eq_logInfo (la:logInfo) (lb:logInfo) : Tot bool =
   la = lb // TODO extensionality!
 
@@ -638,18 +641,18 @@ type finishedId = i:pre_finishedId{valid_finishedId i}
 type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
 | ID13: keyId:keyId -> id
-| ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id 
+| ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id
 
 let peerId = function
   | PlaintextID r -> PlaintextID r
   | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
-  | ID13 (KeyID i tag rw li log) -> 
-      let kid = KeyID i tag (dualRole rw) li log in 
+  | ID13 (KeyID i tag rw li log) ->
+      let kid = KeyID i tag (dualRole rw) li log in
       assume (valid_keyId kid);
       ID13 kid
 
-val siId: si:sessionInfo{ 
-  Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\ 
+val siId: si:sessionInfo{
+  Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\
   si.protocol_version = TLS_1p2 /\
   pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
 
@@ -673,7 +676,7 @@ let kdfAlg_of_id = function
 
 val macAlg_of_id: i:id { ID12? i /\ ~(AEAD? (ID12?.aeAlg i)) } -> Tot macAlg
 let macAlg_of_id = function
-  | ID12 pv _ _ ae _ _ _ -> 
+  | ID12 pv _ _ ae _ _ _ ->
     macAlg_of_aeAlg pv ae
 
 val encAlg_of_id: i:id { ID12? i /\ MtE? (ID12?.aeAlg i) } -> Tot (encAlg * ivMode)
@@ -744,11 +747,10 @@ let plainText_is_not_auth (i:id)
   : Lemma (requires (PlaintextID? i))
           (ensures (not (authId i)))
 	  [SMTPat (PlaintextID? i)]
-  = ()	  
+  = ()
 
 let safe_implies_auth (i:id)
   : Lemma (requires (safeId i))
           (ensures (authId i))
 	  [SMTPat (authId i)]
   = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg
-
