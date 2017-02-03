@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 ﻿module ECGroup
 
 open FStar.HyperHeap
@@ -7,17 +10,19 @@ open CoreCrypto
 open TLSError
 open TLSConstants
 
+type group = CoreCrypto.ec_curve
 type params = CoreCrypto.ec_params
 
-type key = k:CoreCrypto.ec_key
-  {length k.ec_point.ecx = ec_bytelen k.ec_params.curve /\
-   length k.ec_point.ecy = ec_bytelen k.ec_params.curve}
+type keyshare (g:group) = k:CoreCrypto.ec_key {
+   Some? k.ec_priv /\ k.ec_params.curve = g /\
+   length k.ec_point.ecx = ec_bytelen g /\
+   length k.ec_point.ecy = ec_bytelen g}
 
-type share = CoreCrypto.ec_point
+type share (g:group) =
+  p:CoreCrypto.ec_point{
+    length p.ecx = ec_bytelen g /\ length p.ecy = ec_bytelen g}
 
-type group = CoreCrypto.ec_curve
-
-type secret = bytes
+type secret (g:group) = bytes
 
 type ec_all_curve =
   | EC_CORE of ec_curve
@@ -29,64 +34,62 @@ type point_format =
   | ECP_UNCOMPRESSED
   | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
 
-val params_of_group: group -> Tot params 
-let params_of_group c = {curve = c; point_compression = false}
+val params_of_group: group -> bool -> Tot params
+let params_of_group c compression = {curve = c; point_compression = compression}
 
-val share_of_key: key -> Tot (group * share)
-let share_of_key k =
-  k.ec_params.curve, k.ec_point
+val pubshare: #g:group -> keyshare g -> Tot (share g)
+let pubshare #g k = k.ec_point
 
-val keygen: group -> St key
+val keygen: g:group -> St (keyshare g)
 let keygen g =
-  let params = params_of_group g in
+  let params = params_of_group g false in
   ec_gen_key params
 
-val dh_responder: ec_key -> St (key * secret)
-let dh_responder gx =
-  let params = gx.ec_params in
-  let y = ec_gen_key params in
-  let shared = ecdh_agreement y gx.ec_point in
-  y, shared
+val dh_responder: #g:group -> s:share g -> St (keyshare g * secret g)
+let dh_responder #g gx =
+  let gy = keygen g in
+  let shared = ecdh_agreement gy gx in
+  gy, shared
 
-val dh_initiator: x:ec_key{Some? x.ec_priv} -> ec_key -> St secret
-let dh_initiator x gy =
-  ecdh_agreement x gy.ec_point
+val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> St (secret g)
+let dh_initiator #g gx gy =
+  ecdh_agreement gx gy
 
-val parse_curve: bytes -> Tot (option params)
+val parse_curve: bytes -> Tot (option group)
 let parse_curve b =
   if length b = 3 then
     let (ty, id) = split b 1 in
     if cbyte ty = 3z then
       match cbyte2 id with
-      | (0z, 23z) -> Some (params_of_group ECC_P256)
-      | (0z, 24z) -> Some (params_of_group ECC_P384)
-      | (0z, 25z) -> Some (params_of_group ECC_P521)
+      | (0z, 23z) -> Some (ECC_P256)
+      | (0z, 24z) -> Some (ECC_P384)
+      | (0z, 25z) -> Some (ECC_P521)
       | _ -> None
     else None
   else None
 
-val curve_id: params -> Tot (lbytes 2)
-let curve_id p =
-  abyte2 (match p.curve with
+val curve_id: group -> Tot (lbytes 2)
+let curve_id g =
+  abyte2 (match g with
   | ECC_P256 -> (0z, 23z)
   | ECC_P384 -> (0z, 24z)
   | ECC_P521 -> (0z, 25z))
 
-val parse_point: params -> bytes -> Tot (option share)
-let parse_point p b =
-  let clen = ec_bytelen p.curve in 
+val parse_point: g:group -> bytes -> Tot (option (share g))
+let parse_point g b =
+  let clen = ec_bytelen g in
   if length b = (op_Multiply 2 clen) + 1 then
     let (et, ecxy) = split b 1 in
     match cbyte et with
     | 4z ->
       let (x,y) = split ecxy clen in
-      let e = {ecx = x; ecy = y;} in
-      if CoreCrypto.ec_is_on_curve p e then Some e else None
+      let e : share g = {ecx = x; ecy = y;} in
+      if CoreCrypto.ec_is_on_curve (params_of_group g false) e then Some e else None
     |_ -> None
   else None
 
-val parse_partial: bytes -> Tot (TLSError.result ( key * bytes ))
-let parse_partial payload = 
+val parse_partial: bytes -> Tot (result ((g:group & share g) * bytes))
+let parse_partial payload =
     if length payload >= 7 then
       let (curve, point) = split payload 3 in
       match parse_curve curve with
@@ -97,34 +100,30 @@ let parse_partial payload =
         | Correct(rawpoint, rem) ->
            match parse_point ecp rawpoint with
            | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Invalid EC point received:"^(Platform.Bytes.print_bytes rawpoint)))
-           | Some p -> Correct ({ec_params = ecp; ec_point = p; ec_priv = None},rem)
+           | Some p -> Correct ((| ecp, p |),rem)
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 open FStar.Mul
 
-(* Assumes uncompressed point format for now (04||ecx||ecy) *) 
-val serialize_point: p:params 
-  -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
-  -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 1})
-let serialize_point p e =
+(* Assumes uncompressed point format for now (04||ecx||ecy) *)
+val serialize_point: #g:group -> e:share g -> Tot (b:bytes{length b = 2*ec_bytelen g + 1})
+let serialize_point #g e =
   let pc = abyte 4z in
   let x = pc @| e.ecx @| e.ecy in
   x
 
-val serialize: p:params
-  -> e:share{length e.ecx = ec_bytelen p.curve /\ length e.ecy = ec_bytelen p.curve}
-  -> Tot (b:bytes{length b = 2*ec_bytelen p.curve + 5})
-let serialize ecp ecdh_Y =
+val serialize: #g:group -> e:share g -> Tot (b:bytes{length b = 2*ec_bytelen g + 5})
+let serialize #g ecdh_Y =
   let ty = abyte 3z in
-  let id = curve_id ecp in
-  let e = serialize_point ecp ecdh_Y in
+  let id = curve_id g in
+  let e = serialize_point ecdh_Y in
   lemma_repr_bytes_values (length e);
   let ve = vlbytes 1 e in
   ty @| id @| ve
 
 
-(* KB: older more general code below 
-let getParams (c : ec_curve) : ec_params = 
+(* KB: older more general code below
+let getParams (c : ec_curve) : ec_params =
     let rawcurve : ec_prime = match c with
     | ECC_P256 ->
         {

@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 ﻿module CommonDH
 
 open Platform.Bytes
@@ -9,76 +12,62 @@ type group =
   | FFDH of DHGroup.group
   | ECDH of ECGroup.group
 
-type params =
-  | FFP of DHGroup.params
-  | ECP of ECGroup.params
+type keyshare (g:group) =
+  (match g with
+  | FFDH dhg -> DHGroup.keyshare dhg
+  | ECDH ecg -> ECGroup.keyshare ecg)
 
-type key = 
-  | FFKey of DHGroup.key
-  | ECKey of ECGroup.key
+type share (g:group) =
+  (match g with
+  | FFDH dhg -> DHGroup.share dhg
+  | ECDH ecg -> ECGroup.share ecg)
 
-type share =
-  | FFShare of DHGroup.group * DHGroup.share
-  | ECShare of ECGroup.group * ECGroup.share
-
-type secret = bytes
+type secret (g:group) =
+  (match g with
+  | FFDH dhg -> DHGroup.secret dhg
+  | ECDH ecg -> ECGroup.secret ecg)
 
 val group_of_namedGroup: namedGroup -> Tot (option group)
 let group_of_namedGroup g =
   match g with
-  | SEC ec    -> Some (ECDH ec) 
+  | SEC ec    -> Some (ECDH ec)
   | FFDHE dhe -> Some (FFDH (DHGroup.Named dhe))
   | _ -> None
 
-val same_group: share -> share -> Tot bool
-let same_group a b = match a, b with
-  | FFShare (g1, _), FFShare(g2, _) -> g1=g2
-  | ECShare (g1, _), ECShare(g2, _) -> g1=g2
-  | _ -> false
-
-val share_of_key: key -> Tot share
-let share_of_key = function
-  | ECKey k -> let (g,s) = ECGroup.share_of_key k in ECShare(g,s)
-  | FFKey k -> let (g,s) = DHGroup.share_of_key k in FFShare(g,s)
+val pubshare: #g:group -> keyshare g -> Tot (share g)
+let pubshare #g ks =
+  match g with
+  | FFDH dhg -> DHGroup.pubshare #dhg ks
+  | ECDH ecg -> ECGroup.pubshare #ecg ks
 
 val default_group: group
-let default_group = FFDH (DHGroup.Named FFDHE2048)
+let default_group = ECDH (CoreCrypto.ECC_P256)
 
-val keygen: group -> St key
+val keygen: g:group -> St (keyshare g)
 let keygen = function
-  | FFDH g -> FFKey (DHGroup.keygen g)
-  | ECDH g -> ECKey (ECGroup.keygen g)
+  | FFDH g -> DHGroup.keygen g
+  | ECDH g -> ECGroup.keygen g
 
-val dh_responder: key -> St (key * secret)
-let dh_responder = function
-  | FFKey gx -> 
-    let y, shared = DHGroup.dh_responder gx in
-    FFKey y, shared
-  | ECKey gx -> 
-    let y, shared = ECGroup.dh_responder gx in
-    ECKey y, shared
+val dh_responder: #g:group -> share g -> St (keyshare g * secret g)
+let dh_responder #g gx = match g with
+  | FFDH g -> DHGroup.dh_responder #g gx
+  | ECDH g -> ECGroup.dh_responder #g gx
 
-let has_priv: key -> Type0 = function
-  | FFKey k -> Some? k.dh_private
-  | ECKey k -> Some? k.ec_priv
-
-val dh_initiator: x:key{has_priv x} -> key -> St secret
-let dh_initiator x gy =
-  match x, gy with
-  | FFKey x, FFKey gy -> DHGroup.dh_initiator x gy
-  | ECKey x, ECKey gy -> ECGroup.dh_initiator x gy
-  | _, _ -> empty_bytes (* TODO: add refinement/index to rule out cross cases *)
-
+val dh_initiator: #g:group -> keyshare g -> share g -> St (secret g)
+let dh_initiator #g gx gy =
+  match g with
+  | FFDH g -> DHGroup.dh_initiator #g gx gy
+  | ECDH g -> ECGroup.dh_initiator #g gx gy
 
 // Serialize in KeyExchange message format
-val serialize: key -> Tot bytes
-let serialize k = 
-  match k with
-  | FFKey k -> DHGroup.serialize k.dh_params k.dh_public
-  | ECKey k -> ECGroup.serialize k.ec_params k.ec_point
+val serialize: #g:group -> share g -> Tot bytes
+let serialize #g s =
+  match g with
+  | FFDH g -> DHGroup.serialize #g s
+  | ECDH g -> ECGroup.serialize #g s
 
-val parse_partial: bytes -> bool -> Tot (TLSError.result (key * bytes)) 
-let parse_partial p ec = 
+val parse_partial: bytes -> bool -> Tot (TLSError.result (key * bytes))
+let parse_partial p ec =
   if ec then
     begin
     match ECGroup.parse_partial p with
@@ -92,8 +81,8 @@ let parse_partial p ec =
     | Error z -> Error z
     end
 
-        
-  
+
+
 // Serialize for keyShare extension
 val serialize_raw: key -> Tot bytes
 let serialize_raw = function
@@ -103,10 +92,10 @@ let serialize_raw = function
 val parse: params -> bytes -> Tot (option key)
 let parse p x =
   match p with
-  | ECP p -> 
+  | ECP p ->
     begin
-    match ECGroup.parse_point p x with 
-    | Some eck -> Some (ECKey ({ec_params=p; ec_point=eck; ec_priv=None;})) 
+    match ECGroup.parse_point p x with
+    | Some eck -> Some (ECKey ({ec_params=p; ec_point=eck; ec_priv=None;}))
     | None -> None
     end
   | FFP p ->
@@ -121,12 +110,12 @@ let key_params k =
   | ECKey k -> ECP k.ec_params
 
 (*
-let checkParams dhdb minSize (p:parameters) =
+  let checkParams dhdb minSize (p:parameters) =
     match p with
     | DHP_P(dhp) ->
       begin match dhdb with
         | None -> Error (TLSError.AD_internal_error, "Not possible")
-        | Some db -> 
+        | Some db ->
             (match DHGroup.checkParams db minSize dhp.dh_p dhp.dh_g with
             | Error(x) -> Error(x)
             | Correct(db, dhp) -> Correct(Some db, p))
