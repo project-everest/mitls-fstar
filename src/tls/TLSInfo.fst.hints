@@ -1,5 +1,5 @@
 [
-  "(ä®H¯¬ùÖ5\u0007\u0015ˆ≠¨8ø",
+  "Û∫y«mÈÒâ€ˇ7∫Üò·æ",
   [
     [
       "TLSInfo.__proj__Mkconfig__item__compressions",
@@ -626,13 +626,12 @@
       1,
       [
         "@query", "assumption_CommonDH.share_haseq",
-        "assumption_CoreCrypto.hash_alg_haseq",
-        "assumption_PSK.pskInfo_haseq",
+        "assumption_Hashing.Spec.alg_haseq", "assumption_PSK.pskInfo_haseq",
         "assumption_Platform.Bytes.HasEq_bytes",
         "assumption_Prims.HasEq_int", "assumption_TLSConstants.role_haseq",
         "assumption_TLSInfo.logInfo_haseq", "equation_PSK.psk_identifier",
         "equation_Platform.Bytes.bytes", "equation_Prims.nat",
-        "equation_TLSInfo.hashed_log",
+        "equation_TLSConstants.hash_alg", "equation_TLSInfo.hashed_log",
         "haseqTm_refine_a2c28aa1b78c89ca16223117ea2cb497",
         "haseqTm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],

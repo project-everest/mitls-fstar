@@ -161,53 +161,48 @@ val receive: #a:alg -> r:t a -> bytes -> ST (option (list msg * list (tag a)))
     | Some (ms, hs) -> t1 == t0 @ ms /\ tags a t0 ms hs
     | None -> t1 == t0
   ))
- 
-//17-01-23 typechecking of this function still failing in many ways
+
 let receive #a r bs = 
   match parse_msg bs with // assuming bs is a potential whole message
   | None -> None
   | Some m -> (
-      let State prior ms hs v = !r in
-      let content0 = transcript_bytes (prior @ ms) in 
-      let content1 = transcript_bytes (prior @ (ms @ [m])) in 
-      //let content1 = transcript_bytes ((transcript @ ms) @ [m]) in 
-      assume((prior @ ms) @ [m] == prior @ (ms @ [m])); //17-01-24 dubious
-      transcript_bytes_append prior ms;
-      transcript_bytes_append prior (ms@[m]);
-      transcript_bytes_append (prior@ms) [m];
-      assert(Seq.equal content1 (content0 @| transcript_bytes [m]));
+      let State prior ms_0 hs_0 v_0 = !r in
+      let ms_1 = ms_0 @ [m]  in
+      let content_0 = transcript_bytes (prior @ ms_0) in 
+      let content_1 = transcript_bytes (prior @ ms_1) in 
+      FStar.List.Tot.Properties.append_assoc prior ms_0 [m];
+
+      transcript_bytes_append (prior@ms_0) [m];
       assert_norm(Seq.equal (transcript_bytes [m]) (format m));
-      assert(Seq.equal content1 (content0 @| format m));
-      assert(tags a prior ms hs); 
-      //tags_append prior ms [m] hs 
-      let ms = ms @ [m]  in
-      assert_norm(Seq.equal (transcript_bytes [m]) (format m));
-      let v = extend v bs in
-      assert(content v == content1);
-      let hs : hs: list (tag a) { tags a prior ms hs } = 
-        if tagged m 
-          then (
-            hs @ [finalize v]) 
-          else 
-            hs in 
+      let v_1 = extend v_0 bs in
+      // assert(content v_1 == content_1);
+
+      let hs' = if tagged m then [finalize v_1] else [] in
+      assert(tags a (prior@ms_0) [m] hs');
+      assert(tags a prior ms_0 hs_0); 
+      tags_append a prior ms_0 [m] hs_0 hs';
+      let hs_1 = hs_0 @ hs' in
+      // assert(tags a prior ms_1 hs_1);
+
+      ST.recall r;
       if eoflight m then  
-        let prior1 = prior @ ms in 
-        ( tags_nil_nil a prior1; 
-          assert(tags a prior1 [] []);
-          assert(content v == transcript_bytes prior1);
-          r := State prior1 [] [] v; 
-          Some (ms,hs) ) 
+        let prior_1 = prior @ ms_1 in 
+        ( tags_nil_nil a prior_1; 
+          FStar.List.Tot.Properties.append_l_nil prior_1; // seems necessary...
+          // assert(prior_1 @ [] == prior @ ms_1);
+          // assert(content v_1 == transcript_bytes (prior_1 @ []));
+          r := State prior_1 [] [] v_1; 
+          Some (ms_1,hs_1) ) 
       else (
-        r := State prior ms hs v; 
+        r := State prior ms_1 hs_1 v_1; 
         None ))
+
 
 (*
 design: ghost log vs forall log?
 design: how to return flights with intermediate tags?
 TODO: support multiple epochs? 
 *)
-
-
 
 ////// An outline of Handshake
 
@@ -244,13 +239,15 @@ let process a log (raw:bytes) c =
   match receive log raw with 
   | None -> Retry
   | Some ([ServerHello s; Finished t], [hash_ch_sh]) -> 
-    if mac_verify a hash_ch_sh t then  (
-      let h1 = ST.get() in 
-      assert(transcripT h1 log == [ClientHello c; ServerHello s; Finished t]);
-      assert(hashed a hash_ch_sh);
-      assert(hash_ch_sh = hash a (transcript_bytes [ClientHello c; ServerHello s])); 
-      assert(s == nego c);
-      Result s
-    )
+    if mac_verify a hash_ch_sh t then Result s
+      //17-02-05 full automation!
+      //let h1 = ST.get() in 
+      //assert_norm([ClientHello c] @ [ServerHello s; Finished t] == [ClientHello c; ServerHello s; Finished t]);
+      //assert(transcripT h1 log == [ClientHello c] @ [ServerHello s; Finished t]);
+      //assert(tags a [ClientHello c] [ServerHello s; Finished t] [hash_ch_sh]);
+      //assert(hashed a (transcript_bytes [ClientHello c; ServerHello s]));
+      //assert(hash_ch_sh = hash a (transcript_bytes [ClientHello c; ServerHello s])); 
+      //assert(hash_ch_sh = hash a (transcript_bytes ([ClientHello c]@[ServerHello s]))); 
+      //assert(s == nego c);
     else Error "bad Mac"
   | _ -> Error "bad Flight" 

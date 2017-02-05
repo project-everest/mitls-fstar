@@ -1588,11 +1588,13 @@
         "@query", "bool_inversion", "data_elim_Handshake.HS",
         "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_FStar.HyperStack.ref", "equation_TLSConstants.hs_color",
+        "equation_FStar.HyperStack.ref", "equation_Prims.l_True",
+        "equation_TLS.current_writer_pre", "equation_TLSConstants.hs_color",
         "equation_TLSConstants.is_hs_rgn", "equation_TLSConstants.rgn",
         "fuel_guarded_inversion_Connection.connection",
-        "fuel_guarded_inversion_Handshake.hs", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThanOrEqual",
+        "fuel_guarded_inversion_Handshake.hs",
+        "lemma_TLSInfo.plainText_is_not_auth", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_Connection.C_hs", "proj_equation_Handshake.HS_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
@@ -1603,7 +1605,8 @@
         "refinement_interpretation_Tm_refine_f38d46289ad40d7ad5a9da2f43cecefb",
         "typing_Connection.__proj__C__item__hs",
         "typing_FStar.HyperStack.is_eternal_region",
-        "typing_Handshake.__proj__HS__item__region"
+        "typing_Handshake.__proj__HS__item__region",
+        "typing_TLS.current_writer_pre"
       ],
       0
     ],

@@ -22,7 +22,7 @@ module MM = MonotoneMap
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> tag a -> range
-private type domain = fun (Computed a t) -> Tot(b:bytes { Seq.equal (hash a b) t })
+private type domain = fun (Computed a t) -> b:bytes { Seq.equal (hash a b) t }
 
 private let inv (f:MM.map' range domain) = True // a bit overkill? 
 private let table = MM.alloc #TLSConstants.tls_tables_region #range #domain #inv
@@ -61,7 +61,7 @@ val finalize: #a:alg -> v:accv a -> ST (tag a)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> 
     let b = content v in 
-    modifies (Set.as_set [tls_tables_region]) h0 h1 /\ // precise enough? 
+    modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\ // precise enough? unclear where it goes in hacl*
     t = hash a b /\ hashed a b 
   ))
 
@@ -75,7 +75,7 @@ let finalize #a v =
       | Some b' -> if b <> b' then stop "hash collision detected");
   h
 
-
+#set-options "--z3rlimit 100"
 // sanity check
 private val test: a:alg -> b0:bytes -> b1:bytes -> St unit 
 let test a b0 b1 = 
@@ -91,8 +91,8 @@ let test a b0 b1 =
 
   // ...and to apply a stateful lemma
   crf_injective a b0 (b1 @| b1);
-  if h = h' then assert(crf a ==> b0 = b1 @| b1)
+  if h = h' then assert(crf a ==> Seq.equal b0 (b1 @| b1))
   
-
+//17-02-05 why is it now failing?
   
   
