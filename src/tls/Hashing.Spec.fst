@@ -33,7 +33,7 @@ type tag (a:alg) = lbytes (tagLen a)
 assume type acc (a:alg)
 assume val acc0: a:alg -> Tot (acc a)
 assume val compress: #a:alg -> acc a -> lbytes (blockLen a) -> Tot (acc a)
-assume val truncate: #a:alg -> acc a -> Tot (tag a)
+assume val truncate: #a:alg -> acc a -> Tot (tag a) // just keeping the first tagLen bytes
 (*
 let acc0 = function 
   | MD5 ->  [0x67452301; 0xefcdab89; 0x98badcfe; 0x10325476] // A, B, C, D

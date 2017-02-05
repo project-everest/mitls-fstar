@@ -22,7 +22,7 @@ module MM = MonotoneMap
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> tag a -> range
-private type domain = fun (Computed a t) -> b:bytes { Seq.equal (hash a b) t }
+private type domain = fun (Computed a t) -> Tot(b:bytes { Seq.equal (hash a b) t })
 
 private let inv (f:MM.map' range domain) = True // a bit overkill? 
 private let table = MM.alloc #TLSConstants.tls_tables_region #range #domain #inv
@@ -38,9 +38,9 @@ abstract type hashed (a:alg) (b:bytes) =
     let b: domain (Computed a h) = b in 
     MR.witnessed (MM.contains table (Computed a h) b))
 
-val crf_injective (a:alg) (b0:bytes) (b1:bytes): ST unit 
+val crf_injective (a:alg) (b0:bytes) (b1:bytes): ST unit  // should be STTot
   (requires (fun h0 -> hashed a b0 /\ hashed a b1 ))
-  (ensures (fun h0 _ h1 -> crf a /\ hash a b0 =  hash a b1 ==> Seq.equal b0 b1))
+  (ensures (fun h0 _ h1 -> h0 == h1 /\ crf a /\ hash a b0 =  hash a b1 ==> Seq.equal b0 b1))
 let crf_injective a b0 b1 =
   if crf a then (
     MR.m_recall table;
@@ -61,7 +61,7 @@ val finalize: #a:alg -> v:accv a -> ST (tag a)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> 
     let b = content v in 
-    modifies (Set.singleton TLSConstants.tls_tables_region) h0 h1 /\ // precise enough? 
+    modifies (Set.as_set [tls_tables_region]) h0 h1 /\ // precise enough? 
     t = hash a b /\ hashed a b 
   ))
 

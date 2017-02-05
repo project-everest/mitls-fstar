@@ -8,7 +8,6 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Ghost // after HH so as not to shadow reveal :( 
 
-open Hashing.Spec
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
 
@@ -39,6 +38,7 @@ let eoflight = function
 
 let transcript_bytes ms = List.Tot.fold_left (fun a m -> a @| format m) empty_bytes ms
 // we will need to prove it is injective, we will rely in turn on concrete msg formats
+// should use a named lambda
 
 // formatting of the whole transcript is injective (what about binders?)
 assume val transcript_format_injective: ms0:list msg -> ms1:list msg -> 
