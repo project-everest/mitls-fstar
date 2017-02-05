@@ -79,6 +79,7 @@ endif
 FSTS=Flags.fst \
 MonotoneMap.fst \
 TLSError.fst \
+Hashing.Spec.fst \
 TLSConstants.fst \
 Transport.fst \
 Nonce.fst \
@@ -87,7 +88,9 @@ DHGroup.fst \
 ECGroup.fst \
 CommonDH.fst \
 PMS.fst \
+Hashing.OpenSSL.fst \
 Hashing.fst \
+Hashing.CRF.fst \
 HashMAC.fst \
 Cert.fst \
 Signature.fst \
@@ -176,6 +179,9 @@ test/TestAPI.fst #the preceding space is significant!
 # TLSExtensions, Encode, ENC, HandshakeMessages,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
+
+# temporary removals
+
 VERIFY= \
 Flags \
 MonotoneMap \
@@ -188,7 +194,10 @@ DHGroup \
 ECGroup \
 CommonDH \
 PMS \
+Hashing.Spec \
+Hashing.OpenSSL \
 Hashing \
+Hashing.CRF \
 HashMAC \
 Cert \
 Signature \

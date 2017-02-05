@@ -6,7 +6,7 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open TLSInfo
-open CoreCrypto
+//open CoreCrypto
 
 let op_At = FStar.List.Tot.append
 
@@ -733,7 +733,9 @@ let hasExtendedMS extL = extL.ne_extended_ms = true
 
 val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> ML (list sigHashAlg)
 let default_sigHashAlg_fromSig pv sigAlg=
-    match sigAlg with
+  let open CoreCrypto in 
+  let open Hashing.Spec in 
+  match sigAlg with
     | RSASIG ->
         (match pv with
         | TLS_1p2 -> [(RSASIG, Hash SHA1)]
@@ -761,8 +763,8 @@ let sigHashAlg_bySigList (algList:list sigHashAlg) (sigAlgList:list sigAlg) =
 val cert_type_to_SigHashAlg: certType -> protocolVersion -> ML (list sigHashAlg)
 let cert_type_to_SigHashAlg ct pv =
     match ct with
-    | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> default_sigHashAlg_fromSig pv DSA
-    | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> default_sigHashAlg_fromSig pv RSASIG
+    | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> default_sigHashAlg_fromSig pv CoreCrypto.DSA
+    | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> default_sigHashAlg_fromSig pv CoreCrypto.RSASIG
 
 val cert_type_list_to_SigHashAlg: list certType -> protocolVersion -> ML (list sigHashAlg)
 let rec cert_type_list_to_SigHashAlg ctl pv =
@@ -774,8 +776,8 @@ let rec cert_type_list_to_SigHashAlg ctl pv =
 val cert_type_to_SigAlg: certType -> Tot sigAlg
 let cert_type_to_SigAlg ct =
     match ct with
-    | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> DSA
-    | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> RSASIG
+    | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> CoreCrypto.DSA
+    | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> CoreCrypto.RSASIG
 
 val cert_type_list_to_SigAlg: list certType -> ML (list sigAlg)
 let rec cert_type_list_to_SigAlg ctl =

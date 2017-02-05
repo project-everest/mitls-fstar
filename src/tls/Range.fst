@@ -7,9 +7,10 @@ open Platform
 open Platform.Bytes
 open TLSConstants
 open TLSInfo
-open CoreCrypto
 
 module AE = AEADProvider
+
+let hashLen = Hashing.Spec.tagLen 
 
 #reset-options "--initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 2"
 
@@ -26,9 +27,7 @@ let zero = point 0
 
 val sum: range -> range -> Tot range
 let sum (l0,h0) (l1,h1) = (l0 + l1, h0 + h1)
-
-let aeAlg (i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}) =
-  AEAD?._0 (aeAlg_of_id i)
+let aeAlg (i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}) = AEAD?._0 (aeAlg_of_id i)
 
 (* Length of IV for a non-AEAD cipher *)
 val ivSize: i:id{~(PlaintextID? i) /\ ~(AEAD? (aeAlg_of_id i))} -> Tot nat
@@ -36,7 +35,7 @@ let ivSize i =
   let authEnc = aeAlg_of_id i in
   match authEnc with
   | MACOnly _ | MtE (Stream _) _ -> 0
-  | MtE (Block alg) _ -> blockSize alg
+  | MtE (Block alg) _ -> CoreCrypto.blockSize alg
 
 (* Mandatory fixed padding for a cipher *)
 val fixedPadSize: id -> Tot nat
@@ -55,12 +54,12 @@ val maxPadSize: id2 -> Tot nat
 let maxPadSize i =
   let authEnc = aeAlg_of_id i in
   match authEnc with
-  | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
-  | MtE (Block alg) _ ->
-    lemma_MtE i; lemma_ID12 i;
-    match pv_of_id i with
-    | SSL_3p0 -> blockSize alg
-    | TLS_1p0 | TLS_1p1 | TLS_1p2 -> 256
+    | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> 0
+    | MtE (Block alg) _ ->
+        lemma_MtE i; lemma_ID12 i;
+        match pv_of_id i with
+          | SSL_3p0 -> CoreCrypto.blockSize alg
+          | TLS_1p0 | TLS_1p1 | TLS_1p2 -> 256
 
 (* Minimal padding length for a given plaintext length (in bytes) *)
 val minimalPadding: id -> nat -> Tot nat
@@ -71,7 +70,7 @@ let minimalPadding i len =
     match authEnc with
     | MACOnly _ | AEAD _ _ | MtE (Stream _) _ -> fixedPadSize i
     | MtE (Block alg) _ ->
-      let bs = blockSize alg in
+      let bs = CoreCrypto.blockSize alg in
       let lp = len % bs in
       bs - lp
 
@@ -97,14 +96,14 @@ type valid_clen (i:id) (clen:nat) =
   else if ID13? i then
     begin
     lemma_ID13 i;
-    let tlen = aeadTagSize (aeAlg i) in
+    let tlen = CoreCrypto.aeadTagSize (aeAlg i) in
     clen - tlen >= 0 /\
     clen - tlen <= max_TLSCiphertext_fragment_length_13
     end
   else // ID12? i
     begin
     if AEAD? (aeAlg_of_id i) then
-      let tlen = aeadTagSize (aeAlg i) in
+      let tlen = CoreCrypto.aeadTagSize (aeAlg i) in
       clen - AE.explicit_iv_length i - tlen >= 0 /\
       clen - AE.explicit_iv_length i - tlen <= max_TLSPlaintext_fragment_length
     else if MtE? (aeAlg_of_id i) then
@@ -112,14 +111,11 @@ type valid_clen (i:id) (clen:nat) =
       clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else // MACOnly
       let MACOnly h = aeAlg_of_id i in
-      clen - hashSize h >= 0 /\
-      clen - hashSize h <= max_TLSPlaintext_fragment_length
+      clen - hashLen h >= 0 /\
+      clen - hashLen h <= max_TLSPlaintext_fragment_length
     end)
 
-let min0 (i:int) : Tot (n:nat) =
-  if i >= 0 then i
-  else 0
-
+let min0 (i:int) : Tot (n:nat) = if i >= 0 then i else 0
 let minP (n:int) : Tot (m:int{m <= n /\ m <= max_TLSPlaintext_fragment_length}) =
   if n >= max_TLSPlaintext_fragment_length then max_TLSPlaintext_fragment_length
   else n
@@ -132,21 +128,20 @@ val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (ensures fun (r:range) ->
     let min, max = match aeAlg_of_id i with
       | AEAD a _ ->
-        (clen - AE.explicit_iv_length i - aeadTagSize a,
-         clen - AE.explicit_iv_length i - aeadTagSize a)
+          let x = clen - AE.explicit_iv_length i - CoreCrypto.aeadTagSize a in (x,x)
       | MtE enc _ ->
         let m0 = clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i in
         let m1 = clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i in
         (min0 m0, minP m1)
       | MACOnly h ->
-        (clen - hashSize h, clen - hashSize h) in
+          let x = clen - hashLen h in (x,x) in
     min >= 0 /\ min <= max /\ max <= max_TLSPlaintext_fragment_length /\ r = (min, max))
 
 let cipherRangeClass i clen =
   let authEnc = aeAlg_of_id i in
   match authEnc with
   | MACOnly h ->
-    let hLen = hashSize h in
+    let hLen = hashLen h in
     let minmax = clen - hLen in
     minmax, minmax
   | MtE _ _ ->
@@ -158,7 +153,7 @@ let cipherRangeClass i clen =
     min0 min, minP max
   | AEAD aeadAlg _ ->
     let ivL = AE.explicit_iv_length i in
-    let tagL = aeadTagSize aeadAlg in
+    let tagL = CoreCrypto.aeadTagSize aeadAlg in
     let minmax = clen - ivL - tagL in
     minmax, minmax
 
@@ -175,7 +170,7 @@ val targetLength : i:id2 -> r:range -> Pure nat
   (requires
     fst r >= 0 /\ snd r <= max_TLSPlaintext_fragment_length /\
     (match aeAlg_of_id i with
-    | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashSize hash)
+    | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashLen hash)
     | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
     | AEAD _ _ -> fst r = snd r))
   (ensures (fun clen ->
@@ -188,7 +183,7 @@ let targetLength i (l,h) =
   | MACOnly hash ->
     cut(l <= h); cut(l >= 0);
     cut(h <= max_TLSPlaintext_fragment_length);
-    let hLen = hashSize hash in
+    let hLen = hashLen hash in
     cut(hLen >= 0);
     let prePad = h + hLen in
     cut(prePad >= h); cut(prePad >= 0);
@@ -214,7 +209,7 @@ let targetLength i (l,h) =
     cut(AEAD? (aeAlg_of_id i));
     let ivL = AE.explicit_iv_length i in
     cut(ivL >= 0);
-    let tagL = aeadTagSize aeadAlg in
+    let tagL = CoreCrypto.aeadTagSize aeadAlg in
     cut(tagL >= 0);
     let fp = fixedPadSize i in
     cut(fp = 0);
@@ -272,7 +267,7 @@ val targetLength_at_most_max_TLSCiphertext_fragment_length: i:id2
    -> r:range{
        snd r <= max_TLSPlaintext_fragment_length /\
        (match aeAlg_of_id i with
-       | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashSize hash)
+       | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashLen hash)
        | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
        | AEAD _ _ -> fst r = snd r)}
    -> Lemma (targetLength i r <= max_TLSCiphertext_fragment_length)
@@ -287,7 +282,7 @@ val targetLength_converges: i:id2
   -> r:range{
       snd r <= max_TLSPlaintext_fragment_length /\
       (match aeAlg_of_id i with
-      | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashSize hash)
+      | MACOnly hash -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + hashLen hash)
       | MtE a _ -> snd r - fst r <= maxPadSize i - minimalPadding i (snd r + macSize (macAlg_of_id i))
       | AEAD _ _ -> fst r = snd r)}
   -> Lemma (targetLength i r = targetLength i (cipherRangeClass i (targetLength i r)))
