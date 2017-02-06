@@ -3,22 +3,22 @@
 module HSL // an outline of Handshake.Log
 
 open Platform.Bytes
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
 open FStar.Ghost // after HH so as not to shadow reveal :( 
 
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
 
+module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
 
 (* Handshake.Msg *) 
+
 // simplified handshake messages; for this outline we show that the client 
 // agrees with the server on the two offers after checking the Finished message
 
 assume type offer: Type0
-// 17-01-19 Still confused about concrete syntax for universes + eqtypes
 noeq type msg: Type0 = | ClientHello of offer | ServerHello of offer | Finished of (tag SHA256)
+// 17-01-19 Still confused about concrete syntax for universes + eqtypes
 
 assume val format: msg -> Tot bytes 
 assume val parse_msg: b:bytes -> Tot (option (m:msg {b = format m}))
@@ -94,16 +94,17 @@ let rec tags_append prior in0 in1 =
 //17-01-23 erasing the transcript involved many hide/reveal annotations and restrictions on embedding proofs in
 //17-01-23 stateful code. Besides, we need conditional ghosts... We may try again once the code is more stable.
 
+//17-02-06 TODO add some region discipline and the corresponding framing conditions
 noeq type state (a:alg) = | State:
   transcript: (*erased*) list msg -> // session transcript shared with the HS so far 
   input_msgs: list msg -> // partial incoming flight, hashed & parsed, with selected intermediate tags
   input_hashes: list (tag a) { tags a transcript input_msgs input_hashes } -> 
   hash: accv a { content hash = transcript_bytes (transcript @ input_msgs) } -> // current hash state
   state a
-type t (a:alg) = r:ref (state a) // 17-01-19 HS naming!?
+type t (a:alg) = r:HS.ref (state a) // 17-01-19 HS naming!?
 
-val transcripT: h:mem -> #a:alg -> t a -> GTot (list msg) // the current transcript shared with the handshake
-let transcripT h #a r = (FStar.HyperStack.sel h r).transcript
+val transcriptT: h:HS.mem -> #a:alg -> t a -> GTot (list msg) // the current transcript shared with the handshake
+let transcriptT h #a r = (HS.sel h r).transcript
 
 (*
 
@@ -131,21 +132,38 @@ type t  // a stateful instance of HS log, including I/O buffers
 
 val writing: mem -> t -> GTot bool // can we currently send a HS message? 
 
-val create: r:region -> ST t 
-  (requires (fun h0 -> True))
-  (ensures (fun h0 r h1 -> "allocated in r" /\ writing h1 r /\ transcript h1 r = Seq.createEmpty
-
 // Flights are delimited by changes either of epoch or direction.
+*)
 
-// We send one message at a time (or in two steps for CH)
+val create: a:alg -> ST (t a) 
+  (requires (fun h0 -> True))
+  (ensures (fun h0 r h1 -> // "allocated in r" /\ writing h1 r /\ 
+    transcriptT h1 r == []))
+let create a = 
+  let v = Hashing.start a in 
+  ST.ralloc HH.root (State [] [] [] v)
+  
+// We send one message at a time (or in two steps for CH); for simplicity we distinguish between tagged and untagged.
 
-val send: t -> i:id -> msg:Msg.t -> ST (if tagged msg then tag else unit)
-  (requires (fun h0 -> writing h0 t)) 
-  (ensures (fun h0 r h1 -> 
-    transcript h1 t = snoc (transcript h0 t) msg /\
-    if tagged msg then Hash.hashed r (transcript h1 t) // we need to witness the hash computation, not just t = H (transcript h1 t)
+val send: #a:alg -> r:t a -> m:msg {~(tagged m)} -> ST unit 
+  (requires (fun h0 -> 
+    True //writing h0 t
+  )) 
+  (ensures (fun h0 _ h1 -> 
+    transcriptT h1 r == transcriptT h0 r @ [m] 
   ))
+(* // we need writing to ensure ms_0 is empty; otherwise the hash computation is messed up
+let send #a r m = 
+  let State prior_0 ms_0 hs_0 v_0 = !r in
+  let bs = format m in
+  let v_1 = extend v_0 bs in 
+  let prior_1 = prior_0 @ [m] in 
+  let hs_1 = hs_0 @ [] in
+  r := State prior ms_1 hs_1 v_1
+*)
+  
 
+(*
 // For the record layer (no effect on the abstract HS state)
 val next_fragment: t -> i:id -> ST (option fragment)
   (ensures (fun h0 r h1 -> transcript h0 t = transcript h1 t)) 
@@ -155,8 +173,8 @@ val next_fragment: t -> i:id -> ST (option fragment)
 val receive: #a:alg -> r:t a -> bytes -> ST (option (list msg * list (tag a)))
   (requires (fun h0 -> True))
   (ensures (fun h0 o h1 -> 
-    let t0 = transcripT h0 r in
-    let t1 = transcripT h1 r in
+    let t0 = transcriptT h0 r in
+    let t1 = transcriptT h1 r in
     match o with 
     | Some (ms, hs) -> t1 == t0 @ ms /\ tags a t0 ms hs
     | None -> t1 == t0
@@ -229,11 +247,11 @@ noeq type result 'a =
 // the HS handler for receiving the server flight after sending a client offer
 val process: a:alg -> log:t a -> bytes -> c:offer -> ST (result offer)
   (requires (fun h0 -> 
-    transcripT h0 log == [ClientHello c]))
+    transcriptT h0 log == [ClientHello c]))
   (ensures (fun h0 r h1 -> 
     match r with 
-    | Result s -> ( s == nego c /\ (exists (t:tag SHA256). transcripT h1 log == [ClientHello c; ServerHello s; Finished t]))
-    | Retry -> transcripT h1 log == transcripT h0 log 
+    | Result s -> ( s == nego c /\ (exists (t:tag SHA256). transcriptT h1 log == [ClientHello c; ServerHello s; Finished t]))
+    | Retry -> transcriptT h1 log == transcriptT h0 log 
     | Error _ -> True))
 let process a log (raw:bytes) c = 
   match receive log raw with 
@@ -243,7 +261,7 @@ let process a log (raw:bytes) c =
       //17-02-05 full automation!
       //let h1 = ST.get() in 
       //assert_norm([ClientHello c] @ [ServerHello s; Finished t] == [ClientHello c; ServerHello s; Finished t]);
-      //assert(transcripT h1 log == [ClientHello c] @ [ServerHello s; Finished t]);
+      //assert(transcriptT h1 log == [ClientHello c] @ [ServerHello s; Finished t]);
       //assert(tags a [ClientHello c] [ServerHello s; Finished t] [hash_ch_sh]);
       //assert(hashed a (transcript_bytes [ClientHello c; ServerHello s]));
       //assert(hash_ch_sh = hash a (transcript_bytes [ClientHello c; ServerHello s])); 
