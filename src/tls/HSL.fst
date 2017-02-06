@@ -52,8 +52,18 @@ assume val transcript_format_injective: ms0:list msg -> ms1:list msg ->
   Lemma(Seq.equal (transcript_bytes ms0) (transcript_bytes ms1) ==> ms0 == ms1)
 
 //17-01-23  how to prove this from the definition above??
-assume val transcript_bytes_append: ms0: list msg -> ms1: list msg -> 
+val transcript_bytes_append: ms0: list msg -> ms1: list msg -> 
   Lemma (transcript_bytes (ms0 @ ms1) = transcript_bytes ms0 @| transcript_bytes ms1)
+let transcript_bytes_append ms0 ms1 =
+  let lemma0 l : Lemma (ensures transcript_bytes l == List.Tot.fold_left (fun a fm -> a @| fm) empty_bytes (List.Tot.map format l)) = List.Tot.fold_left_map (fun a m -> a @| format m) format (fun a fm -> a @| fm) l in
+  lemma0 (ms0 @ ms1);
+  List.Tot.map_append format ms0 ms1;
+  FStar.Classical.forall_intro append_empty_bytes_l;
+  FStar.Classical.forall_intro append_empty_bytes_r;
+  FStar.Classical.forall_intro_3 append_assoc;
+  List.Tot.fold_left_append_monoid (fun a fm -> a @| fm) empty_bytes (List.Tot.map format ms0) (List.Tot.map format ms1);
+  lemma0 ms0;
+  lemma0 ms1
 
 // full specification of the hashed-prefix tags required for a given flight 
 // (in relational style to capture computational-hashed)
