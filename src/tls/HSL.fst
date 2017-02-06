@@ -235,47 +235,90 @@ assume val injective_format (c0:offer) (c1:offer) (s0:offer) (s1:offer) : Lemma
   (transcript_bytes [ClientHello c0; ServerHello s0]  == transcript_bytes [ClientHello c1; ServerHello s1] 
     ==> c0 == c1 /\ s0 == s1)
 
-let lemma_authentic (a:alg) (c:offer) (h:tag a) (c':offer) (s':offer): ST unit 
-    (requires (fun _ -> 
-      let bs = transcript_bytes [ClientHello c; ServerHello (nego c)]  in 
-      let bs' = transcript_bytes [ClientHello c'; ServerHello s']  in 
+let pre_lemma_authentic (a:alg) (c:offer) (h:tag a) (c':offer) (s':offer): ST unit
+    (requires (fun _ ->
+      let bs = transcript_bytes [ClientHello c; ServerHello (nego c)]  in
+      let bs' = transcript_bytes [ClientHello c'; ServerHello s']  in
       hashed a bs /\ h = hash a bs /\ hashed a bs' /\ h = hash a bs'
       ))
-    (ensures (fun _ _ _ -> 
-      authentic a h c' s')) = 
-    let bs = transcript_bytes [ClientHello c; ServerHello (nego c)]  in 
-    let bs' = transcript_bytes [ClientHello c'; ServerHello s']  in 
+    (ensures (fun h0 _ h1 ->
+      h0 == h1 /\
+      authentic a h c' s')) =
+    let bs = transcript_bytes [ClientHello c; ServerHello (nego c)]  in
+    let bs' = transcript_bytes [ClientHello c'; ServerHello s']  in
     Hashing.CRF.crf_injective a bs bs';
     injective_format c c' (nego c) s'
 
+//st_forall_intro: this is the analog of FStar.Classical.forall_intro for total, stateful functions
+//NS: This is an infrastructural lemma that we could prove by reifying and then applying lemmas like FStar.Classical.forall_intro
+//NS: However, this strategy may be at odds with using monotonic state
+//NS: In particular, our usage of this lemma is for pre_lemma_authentic above, which crucially relies on
+//NS: witness/testify in Hashing.CRF.crf_injective. So, the particular usage of this lemma **will not work** in the long run
+//NS: We still need to investigate a different style,
+//NS: e.g., maybe pre_lemma_authentic should be of the form
+//             a -> c -> h -> ST (h0:mem & c' -> s' -> Lemma (... authentic a h' c' s'))
+//				 (requires _)
+//				 (ensures (fun h0' r h1' -> h0' = h1' /\ h0' && fst r))
+let st_forall_intro (#a:Type0) (#b:(a -> Type0))
+		    (#pre:(a -> st_pre))
+		    (#post:(x:a -> FStar.HyperStack.mem -> st_post (b x)))
+		    ($f: (x:a -> ST (b x)  //this should really be StTot
+				   (pre x)
+				   (post x)))
+		    : Lemma (forall x h0. pre x h0 ==> (exists y h1. post x h0 y h1))
+		    = admit() //TODO: prove with reification
+
+//st_forall_intro_2: arity 2 version, provable from the one above
+let st_forall_intro_2 (#a:Type0) (#b:(a -> Type0)) (#c:(x:a -> b x -> Type0))
+		     (#pre:(x:a -> y:b x -> st_pre))
+		     (#post:(x:a -> y:b x -> FStar.HyperStack.mem -> st_post (c x y)))
+		     ($f: (x:a -> y:b x -> ST (c x y)  //this should really be StTot
+					    (pre x y)
+					    (post x y)))
+   : Lemma (forall x y h0. pre x y h0 ==> (exists z h1. post x y h0 z h1))
+   = let lem (x:a) : Lemma (forall (y:b x) h0. pre x y h0 ==> (exists (z:c x y) h1. post x y h0 z h1)) =
+	 st_forall_intro #_ #_ #_ #(post x) (f x) in //NS: not sure why we need the explicit instantiation of post
+     FStar.Classical.forall_intro lem
+
+//FStar.HyperStack should prove that mem is inhabited to eliminate one of the quantifiers below
+assume val some_mem : FStar.HyperStack.mem
+
+//This is a lifting of pre_lemma_authentic from an ST function to quantified Lemma
+let st_lemma_authentic (a:alg) (c:offer) (h:tag a) : Lemma
+  (forall (c':offer) (s':offer).{:pattern (authentic a h c' s')}
+      let bs = transcript_bytes [ClientHello c; ServerHello (nego c)]  in
+      let bs' = transcript_bytes [ClientHello c'; ServerHello s']  in
+      hashed a bs /\ h = hash a bs /\ hashed a bs' /\ h = hash a bs'
+      ==> authentic a h c' s')
+  = st_forall_intro_2 (pre_lemma_authentic a c h)
+
 // NB these calls are total; otherwise framing is required below.
 assume val mac_verify: a:alg -> h:tag a -> t:tag SHA256->  Tot (b:bool {b ==> (forall c s. authentic a h c s)})
-assume val mac_compute: a:alg -> h:tag a {forall c s. authentic a h c s} -> Tot (t:tag SHA256) 
+assume val mac_compute: a:alg -> h:tag a {forall c s. authentic a h c s} -> Tot (t:tag SHA256)
 
-noeq type result 'a = 
+noeq type result 'a =
   | Result of 'a
-  | Error of string 
+  | Error of string
   | Retry
 
-val server_process: #a:alg -> log: t a -> bytes -> ST (result (offer * offer * tag SHA256)) 
-  (requires (fun h0 -> 
+val server_process: #a:alg -> log: t a -> bytes -> ST (result (offer * offer * tag SHA256))
+  (requires (fun h0 ->
     transcriptT h0 log == []))
-  (ensures (fun h0 r h1 -> 
-    match r with 
-    | Result (c,s,t) -> 
-        //(exists (c:offer) (t:tag SHA256). s == nego c /\ transcriptT h1 log == [ClientHello c; ServerHello s; Finished t])
-        s == nego c /\ transcriptT h1 log == [ClientHello c; ServerHello s; Finished t]
-    | Retry -> transcriptT h1 log == transcriptT h0 log 
+  (ensures (fun h0 r h1 ->
+    match r with
+    | Result (c,s,t) ->
+	//(exists (c:offer) (t:tag SHA256). s == nego c /\ transcriptT h1 log == [ClientHello c; ServerHello s; Finished t])
+	s == nego c /\ transcriptT h1 log == [ClientHello c; ServerHello s; Finished t]
+    | Retry -> transcriptT h1 log == transcriptT h0 log
     | Error _ -> True))
-#reset-options "--z3rlimit 100"
-let server_process #a log (raw:bytes) = 
-  match receive log raw with 
+let server_process #a log (raw:bytes) =
+  match receive log raw with
   | None -> Retry
   | Some ([ClientHello c], []) -> (
       let s = nego c in
       let h = send_tag log (ServerHello s) in
-      //lemma_authentic a c h;
-      let t = mac_compute a (assume false; h) in
+      st_lemma_authentic a c h;
+      let t = mac_compute a h in
       assert_norm([]@[ClientHello c]@[ServerHello s]@[Finished t] == [ClientHello c; ServerHello s; Finished t]);
       send log (Finished t);
       Result (c,s,t))
