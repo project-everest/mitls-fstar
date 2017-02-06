@@ -40,7 +40,7 @@ abstract type hashed (a:alg) (b:bytes) =
 
 val crf_injective (a:alg) (b0:bytes) (b1:bytes): ST unit  // should be STTot
   (requires (fun h0 -> hashed a b0 /\ hashed a b1 ))
-  (ensures (fun h0 _ h1 -> h0 == h1 /\ crf a /\ hash a b0 =  hash a b1 ==> Seq.equal b0 b1))
+  (ensures (fun h0 _ h1 -> h0 == h1 /\ (crf a /\ hash a b0 =  hash a b1 ==> Seq.equal b0 b1)))
 let crf_injective a b0 b1 =
   if crf a then (
     MR.m_recall table;
@@ -92,7 +92,4 @@ let test a b0 b1 =
   // ...and to apply a stateful lemma
   crf_injective a b0 (b1 @| b1);
   if h = h' then assert(crf a ==> Seq.equal b0 (b1 @| b1))
-  
-//17-02-05 why is it now failing?
-  
   

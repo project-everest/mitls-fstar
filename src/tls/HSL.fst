@@ -219,27 +219,38 @@ let receive #a r bs =
         None ))
 #reset-options ""
 
-(* An outline of Handshake, to check usability *) 
+(* An outline of MAC and Handshake, to check usability *) 
 
 assume val nego: offer -> Tot offer // the server's choice of parameters
-assume val mac_verify: a:alg -> h:tag a -> t:tag SHA256-> 
+
 // in existential style, did not manage to trigger on offer.
 //  Tot (b:bool { b ==> (exists offer.  h = hash(transcript_bytes [ClientHello offer; ServerHello (nego offer)])) })
-  Tot (b:bool { b ==> (forall c s.  
+let authentic (a:alg) (h:tag a) (c:offer) (s:offer)
+  //{hashed a (transcript_bytes [ClientHello c; ServerHello s])}
+=  
     let tr = transcript_bytes [ClientHello c; ServerHello s] in 
-    (hashed a tr /\ h = hash a tr ==> s == nego c)) })
+    (Hashing.CRF.crf a /\ hashed a tr /\ h = hash a tr ==> s == nego c)
 
-assume val mac_compute: a:alg -> h:tag a -> Tot (t:tag SHA256
-  { forall c s.  
-    let tr = transcript_bytes [ClientHello c; ServerHello s] in 
-    (hashed a tr /\ h = hash a tr ==> s == nego c) })
+assume val injective_format (c0:offer) (c1:offer) (s0:offer) (s1:offer) : Lemma
+  (transcript_bytes [ClientHello c0; ServerHello s0]  == transcript_bytes [ClientHello c1; ServerHello s1] 
+    ==> c0 == c1 /\ s0 == s1)
 
-(*
-let inj_format c0 s0 c1 s1 : Lemma ( 
-  hash (transcript_bytes [ClientHello c0; ServerHello s0]) == 
-  hash (transcript_bytes [ClientHello c1; ServerHello s1]) ==> c0 == c1 /\ s0 == s1 ) = 
-  assume false
-*)
+let lemma_authentic (a:alg) (c:offer) (h:tag a) (c':offer) (s':offer): ST unit 
+    (requires (fun _ -> 
+      let bs = transcript_bytes [ClientHello c; ServerHello (nego c)]  in 
+      let bs' = transcript_bytes [ClientHello c'; ServerHello s']  in 
+      hashed a bs /\ h = hash a bs /\ hashed a bs' /\ h = hash a bs'
+      ))
+    (ensures (fun _ _ _ -> 
+      authentic a h c' s')) = 
+    let bs = transcript_bytes [ClientHello c; ServerHello (nego c)]  in 
+    let bs' = transcript_bytes [ClientHello c'; ServerHello s']  in 
+    Hashing.CRF.crf_injective a bs bs';
+    injective_format c c' (nego c) s'
+
+// NB these calls are total; otherwise framing is required below.
+assume val mac_verify: a:alg -> h:tag a -> t:tag SHA256->  Tot (b:bool {b ==> (forall c s. authentic a h c s)})
+assume val mac_compute: a:alg -> h:tag a {forall c s. authentic a h c s} -> Tot (t:tag SHA256) 
 
 noeq type result 'a = 
   | Result of 'a
@@ -263,8 +274,9 @@ let server_process #a log (raw:bytes) =
   | Some ([ClientHello c], []) -> (
       let s = nego c in
       let h = send_tag log (ServerHello s) in
-      let t = mac_compute a h in
-      //assert_norm([]@[ClientHello c]@[ServerHello s]@[Finished t] == [ClientHello c; ServerHello s; Finished t]);
+      //lemma_authentic a c h;
+      let t = mac_compute a (assume false; h) in
+      assert_norm([]@[ClientHello c]@[ServerHello s]@[Finished t] == [ClientHello c; ServerHello s; Finished t]);
       send log (Finished t);
       Result (c,s,t))
   | _ -> Error "bad Flight"
@@ -275,15 +287,20 @@ val client_process: #a:alg -> log:t a -> bytes -> c:offer -> ST (result offer)
     transcriptT h0 log == [ClientHello c]))
   (ensures (fun h0 r h1 -> 
     match r with 
-    | Result s -> ( s == nego c /\ (exists (t:tag SHA256). transcriptT h1 log == [ClientHello c; ServerHello s; Finished t]))
+    | Result s -> ( 
+        (Hashing.CRF.crf a ==> s == nego c) /\ 
+        (exists (t:tag SHA256). transcriptT h1 log == [ClientHello c; ServerHello s; Finished t]))
     | Retry -> transcriptT h1 log == transcriptT h0 log 
-    | Error _ -> True))
+    | Error _ -> True)
+    )
 let client_process #a log (raw:bytes) c = 
   match receive log raw with 
   | None -> Retry
   | Some ([ServerHello s; Finished t], [hash_ch_sh]) -> 
-    if mac_verify a hash_ch_sh t then Result s
-      //17-02-05 full automation!
+    if mac_verify a hash_ch_sh t then 
+    ( assert(authentic a hash_ch_sh c s); 
+      Result s)
+      //17-02-05 nearly full automation!
       //let h1 = ST.get() in 
       //assert_norm([ClientHello c] @ [ServerHello s; Finished t] == [ClientHello c; ServerHello s; Finished t]);
       //assert(transcriptT h1 log == [ClientHello c] @ [ServerHello s; Finished t]);
