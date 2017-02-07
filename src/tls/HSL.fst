@@ -83,9 +83,40 @@ let rec tags a prior ms hs =
 private val tags_nil_nil: a:alg -> prior: list msg -> Lemma (tags a prior [] [])
 let tags_nil_nil a prior = ()
 
-//17-01-23 plausible ? 
-assume val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list (tag a) -> hs1: list (tag a) -> 
+private val tags_append_aux: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list (tag a) -> hs1: list (tag a) ->
+  Lemma
+  (requires (tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1))
+  (ensures (tags a prior (ms0 @ ms1) (hs0 @ hs1)))
+  (decreases ms0)
+let rec tags_append_aux a prior ms0 ms1 hs0 hs1 =
+  match ms0 with
+  | [] ->
+      let rw : (rw: unit { prior @ ms0 == prior } ) =
+        List.Tot.append_l_nil prior
+      in ()
+  | m :: ms0' ->
+    let prior' = prior @ [m] in
+    let rw: (rw: unit { prior @ ms0 == prior' @ ms0' } ) =
+      List.Tot.append_l_cons m ms0' prior
+    in
+    match tagged m, hs0 with
+    | true, h::hs0' ->
+      let u: (u: unit { tags a prior' (ms0' @ ms1) (hs0' @ hs1) } ) =
+        tags_append_aux a prior' ms0' ms1 hs0' hs1
+      in ()
+    | false, hs0' ->
+      let u: (u: unit { tags a prior' (ms0' @ ms1) (hs0 @ hs1) } ) =
+        tags_append_aux a prior' ms0' ms1 hs0 hs1
+      in ()
+    | _ -> ()
+
+val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list (tag a) -> hs1: list (tag a) ->
   Lemma (tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
+let tags_append a prior ms0 ms1 hs0 =
+  FStar.Classical.move_requires (tags_append_aux a prior ms0 ms1 hs0)
+
+    (*
+*)      
 (*
 let rec tags_append prior in0 in1 = 
   match in0 with
