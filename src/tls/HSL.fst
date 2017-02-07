@@ -51,11 +51,13 @@ let transcript_bytes ms = List.Tot.fold_left (fun a m -> a @| format m) empty_by
 assume val transcript_format_injective: ms0:list msg -> ms1:list msg -> 
   Lemma(Seq.equal (transcript_bytes ms0) (transcript_bytes ms1) ==> ms0 == ms1)
 
-//17-01-23  how to prove this from the definition above??
 val transcript_bytes_append: ms0: list msg -> ms1: list msg -> 
   Lemma (transcript_bytes (ms0 @ ms1) = transcript_bytes ms0 @| transcript_bytes ms1)
 let transcript_bytes_append ms0 ms1 =
-  let lemma0 l : Lemma (ensures transcript_bytes l == List.Tot.fold_left (fun a fm -> a @| fm) empty_bytes (List.Tot.map format l)) = List.Tot.fold_left_map (fun a m -> a @| format m) format (fun a fm -> a @| fm) l in
+  let lemma0 l : Lemma (ensures 
+    transcript_bytes l == List.Tot.fold_left (fun a fm -> a @| fm) empty_bytes (List.Tot.map format l)) 
+      = 
+      List.Tot.fold_left_map (fun a m -> a @| format m) format (fun a fm -> a @| fm) l in
   lemma0 (ms0 @ ms1);
   List.Tot.map_append format ms0 ms1;
   FStar.Classical.forall_intro append_empty_bytes_l;
@@ -83,7 +85,7 @@ let tags_nil_nil a prior = ()
 
 //17-01-23 plausible ? 
 assume val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list (tag a) -> hs1: list (tag a) -> 
-  Lemma(tags a prior (ms0 @ ms1) (hs0 @ hs1) <==> tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1)
+  Lemma (tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
 (*
 let rec tags_append prior in0 in1 = 
   match in0 with
