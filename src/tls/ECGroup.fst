@@ -3,12 +3,13 @@ options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontri
 --*)
 ﻿module ECGroup
 
-open FStar.HyperHeap
+open FStar.HyperStack
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError
 open TLSConstants
+open FStar.ST
 
 type group = CoreCrypto.ec_curve
 type params = CoreCrypto.ec_params
@@ -40,18 +41,24 @@ let params_of_group c compression = {curve = c; point_compression = compression}
 val pubshare: #g:group -> keyshare g -> Tot (share g)
 let pubshare #g k = k.ec_point
 
-val keygen: g:group -> St (keyshare g)
+val keygen: g:group -> ST (keyshare g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let keygen g =
   let params = params_of_group g false in
   ec_gen_key params
 
-val dh_responder: #g:group -> s:share g -> St (keyshare g * secret g)
+val dh_responder: #g:group -> s:share g -> ST (keyshare g * secret g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_responder #g gx =
   let gy = keygen g in
   let shared = ecdh_agreement gy gx in
   gy, shared
 
-val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> St (secret g)
+val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> ST (secret g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_initiator #g gx gy =
   ecdh_agreement gx gy
 

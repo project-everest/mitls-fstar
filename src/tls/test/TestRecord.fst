@@ -15,19 +15,18 @@ private let mk_id pv aeAlg =
   | TLS_1p0 -> PRF_SSL3_concat
   | TLS_1p1 -> PRF_TLS_1p01 kdf_label
   | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMAC Hashing.Spec.SHA256) in
-  let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
-  let g = CommonDH.key_params gx in
-  let gy, gxy = CommonDH.dh_responder gx in
-  let msid = StandardMS (PMS.DHPMS(g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy))) (er @| er) kdf in
+  let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
+  let gx = CommonDH.keygen g in
+  let gy, gxy = CommonDH.dh_responder #g gx in
+  let msid = StandardMS (PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy)) (er @| er) kdf in
   ID12 pv msid kdf aeAlg er er Client
 
 private let mk_id13 aeAlg =
   let hash_alg = Hashing.Spec.SHA256 in
-  let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
-  let gy,_ = CommonDH.dh_responder gx in
-  let initiator = CommonDH.share_of_key gx in
-  let responder = CommonDH.share_of_key gy in
-  let hsId = HSID_DHE hash_alg initiator responder in
+  let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
+  let gx = CommonDH.keygen g in
+  let gy, gxy = CommonDH.dh_responder #g gx in
+  let hsId = HSID_DHE hash_alg g (CommonDH.pubshare gx) gy in
   let asId = ASID hsId in
   let expandId = ApplicationSecretID asId in
   let cr = CoreCrypto.random 32 in
@@ -119,7 +118,7 @@ private let fake_cbc pv aeAlg seqn key iv plain macKey =
   // StatefulPlain.adata id -> bytes
   let ad: StatefulPlain.adata id = StatefulPlain.makeAD id Content.Application_data in
   // Prepends sequence number
-  let ad = LHAEPlain.makeAD id seqn ad in 
+  let ad = LHAEPlain.makeAD id seqn ad in
   // Range.frange -> Range.range
   let rg: Range.frange id = 0, length text in
   // DataStream.fragment -> DataStream.pre_fragment -> bytes

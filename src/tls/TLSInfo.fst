@@ -500,8 +500,8 @@ type pre_esId : Type0 =
 
 and pre_hsId =
   | HSID_PSK: pre_esId -> pre_hsId
-  | HSID_PSK_DHE: pre_esId -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
-  | HSID_DHE: hash_alg -> initiator:CommonDH.share -> responder:CommonDH.share -> pre_hsId
+  | HSID_PSK_DHE: pre_esId -> g:CommonDH.group -> initiator:CommonDH.share g -> responder:CommonDH.share g -> pre_hsId
+  | HSID_DHE: hash_alg -> g:CommonDH.group -> initiator:CommonDH.share g -> responder:CommonDH.share g -> pre_hsId
 
 and pre_asId =
   | ASID: pre_hsId -> pre_asId
@@ -555,8 +555,8 @@ let rec esId_hash = function
 
 and hsId_hash = function
   | HSID_PSK i -> esId_hash i
-  | HSID_DHE h _ _ -> h
-  | HSID_PSK_DHE i _ _ -> esId_hash i
+  | HSID_DHE h _ _ _ -> h
+  | HSID_PSK_DHE i _ _ _ -> esId_hash i
 
 and asId_hash = function
   | ASID i -> hsId_hash i
@@ -596,8 +596,9 @@ let rec valid_esId = function
   | ApplicationPSK ctx i -> MR.witnessed (PSK.valid_app_psk ctx i)
   | ResumptionPSK ctx i -> valid_rmsId i // /\ (MR.witnessed (valid_res_psk ctx i))
 and valid_hsId = function
-  | HSID_PSK i | HSID_PSK_DHE i _ _ -> valid_esId i
-  | HSID_DHE _ _ _ -> True
+  | HSID_PSK i -> valid_esId i
+  | HSID_PSK_DHE i _ _ _ -> valid_esId i
+  | HSID_DHE _ _ _ _ -> True
 and valid_asId = function
   | ASID i -> valid_hsId i
 and valid_rmsId = function

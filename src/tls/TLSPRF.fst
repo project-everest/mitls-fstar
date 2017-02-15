@@ -5,7 +5,7 @@ module TLSPRF
 (* Low-level (bytes -> byte) PRF implementations for TLS *)
 
 open Platform.Bytes
-open Hashing.Spec 
+open Hashing.Spec
 open TLSConstants
 open TLSInfo
 //open HashMAC
@@ -13,7 +13,7 @@ open TLSInfo
 
 
 (* SSL3 *)
-(* 17-02-02 deprecated, and not quite typechecking... 
+(* 17-02-02 deprecated, and not quite typechecking...
 
 val ssl_prf_int: bytes -> string -> bytes -> Tot bytes
 let ssl_prf_int secret label seed =
@@ -24,18 +24,18 @@ let ssl_prf_int secret label seed =
 
 
 val gen_label: int -> Tot string
-let gen_label (i:int) = String.make (i+1) (Char.char_of_int (Char.int_of_char 'A' + i)) 
+let gen_label (i:int) = String.make (i+1) (Char.char_of_int (Char.int_of_char 'A' + i))
 
 val apply_prf: bytes -> bytes -> int -> bytes -> int -> Tot bytes
 let rec apply_prf secret seed nb res n  =
     if n > nb then
-      let r,_ = split res nb in r 
+      let r,_ = split res nb in r
     else
         let step1 = ssl_prf_int secret (gen_label (n/16)) seed in
-        apply_prf secret seed nb (res @| step1) (n+16) 
+        apply_prf secret seed nb (res @| step1) (n+16)
 
 val ssl_prf: bytes -> bytes -> int -> Tot bytes
-let ssl_prf secret seed nb = apply_prf secret seed nb empty_bytes  0 
+let ssl_prf secret seed nb = apply_prf secret seed nb empty_bytes  0
 
 // ADL: string escape probably doesnt work in current F*
 let ssl_sender_client = abytes "\x43\x4C\x4E\x54"
@@ -97,7 +97,7 @@ let tls_prf secret label seed len =
   let newseed = label @| seed in
   let hmd5  = p_hash (HMAC MD5) secret1 newseed len in
   let hsha1 = p_hash (HMAC SHA1) secret2 newseed len in
-  xor len hmd5 hsha1 
+  xor len hmd5 hsha1
 
 val tls_finished_label: role -> Tot bytes
 let tls_finished_label =
@@ -107,12 +107,12 @@ let tls_finished_label =
   | Client -> tls_client_label
   | Server -> tls_server_label
 
-let verifyDataLen = 12  
+let verifyDataLen = 12
 
 val tls_verifyData: bytes -> role -> bytes -> St (lbytes verifyDataLen)
 let tls_verifyData ms role data =
-  let md5hash  = hash MD5 data in
-  let sha1hash = hash SHA1 data in
+  let md5hash  = Hashing.OpenSSL.compute MD5 data in
+  let sha1hash = Hashing.OpenSSL.compute SHA1 data in
   tls_prf ms (tls_finished_label role) (md5hash @| sha1hash) 12
 
 (* TLS 1.2 *)
@@ -129,7 +129,7 @@ let tls12prf' macAlg ms label data len =
 val tls12VerifyData: cipherSuite -> bytes -> role -> bytes -> St (lbytes verifyDataLen)
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
-  let hashed = hash verifyDataHashAlg data in
+  let hashed = Hashing.OpenSSL.compute verifyDataHashAlg data in
   tls12prf cs ms (tls_finished_label role) hashed verifyDataLen
 
 (* Internal agile implementation of PRF *)
@@ -155,7 +155,7 @@ let prf_hashed (pv, cs) secret label data len =
   let data = match pv with
     | TLS_1p2 ->
       let sessionHashAlg = verifyDataHashAlg_of_ciphersuite cs in
-      hash sessionHashAlg data
+      Hashing.OpenSSL.compute sessionHashAlg data
     | _ -> data in
   prf (pv, cs) secret label data len
 

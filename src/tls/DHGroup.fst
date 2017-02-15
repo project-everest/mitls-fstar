@@ -3,12 +3,13 @@ options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontri
 --*)
 ﻿module DHGroup
 
-open FStar.HyperHeap
+open FStar.HyperStack
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError
 open TLSConstants
+open FStar.ST
 
 type params = dhp:CoreCrypto.dh_params{length dhp.dh_p < 65536 && length dhp.dh_g < 65536}
 
@@ -79,18 +80,24 @@ type secret (g:group) = bytes
 val pubshare: #g:group -> keyshare g -> Tot (share g)
 let pubshare #g k = k.dh_public
 
-val keygen: g:group -> St (keyshare g)
+val keygen: g:group -> ST (keyshare g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let keygen g =
   let params = params_of_group g in
   dh_gen_key params
 
-val dh_responder: #g:group -> share g -> St (keyshare g * secret g)
+val dh_responder: #g:group -> share g -> ST (keyshare g * secret g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_responder #g gx =
   let y = keygen g in
   let shared = dh_agreement y gx in
   y, shared
 
-val dh_initiator: #g:group -> keyshare g -> share g -> St (secret g)
+val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_initiator #g x gy =
   dh_agreement x gy
 

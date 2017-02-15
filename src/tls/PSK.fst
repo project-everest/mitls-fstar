@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module PSK
 
 open FStar.Heap
@@ -32,7 +35,7 @@ type pskInfo = {
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag
   early_ae: aeadAlg;
-  early_hash: hash_alg;  //CF could be more specific and use Hashing.alg 
+  early_hash: hash_alg;  //CF could be more specific and use Hashing.alg
   identities: bytes * bytes;
 }
 
@@ -43,28 +46,27 @@ type psk_identifier = identifier:bytes{length identifier < 65536}
 
 // We rule out all PSK that do not have at least one non-null byte
 // thus avoiding possible confusion with non-PSK for all possible hash algs
-let app_psk (i:psk_identifier) =
+type app_psk (i:psk_identifier) =
   b:bytes{exists i.{:pattern index b i} index b i <> 0z}
 
 type app_psk_entry (i:psk_identifier) =
-  (app_psk i) * pskInfo * leaked:(rref tls_tables_region bool)
+  (app_psk i) * pskInfo * bool
 
+// Global invariant on the PSK idealization table
+// No longer necessary now that MonotoneMap uses eqtype
+//type app_psk_injective (m:MM.map' psk_identifier app_psk_entry) =
+//  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
+//      Seq.equal i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with
+//                  | Some (psk1, pski1, h1), Some (psk2, pski2, h2) -> Seq.equal psk1 psk2 /\ h1 == h2
+//                  | _ -> True)
+type psk_table_invariant (m:MM.map' psk_identifier app_psk_entry) = True
 
-// ADL: not sure why b2t is required there
-let app_psk_injective (m:MM.map' psk_identifier app_psk_entry) =
-  forall i1 i2.{:pattern (MM.sel m i1); (MM.sel m i2)}
-      Seq.equal i1 i2 <==> (match MM.sel m i1, MM.sel m i2 with
-                  | Some (psk1, _, _), Some (psk2, _, _) -> Seq.equal psk1 psk2
-                  | _ -> True)
+private let psk_region:rgn = new_region tls_tables_region
+private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_table_invariant =
+  MM.alloc #psk_region #psk_identifier #app_psk_entry #psk_table_invariant
 
-private let app_psk_table : MM.t tls_tables_region psk_identifier app_psk_entry app_psk_injective =
-  MM.alloc #TLSConstants.tls_tables_region #psk_identifier #app_psk_entry #app_psk_injective
-
-let fresh_pskid i h =
-  MM.sel (MR.m_sel h app_psk_table) i = None
-
-let registered_app_psk (i:psk_identifier) (h:mem) =
-  b2t (Some? (MM.sel (MR.m_sel h app_psk_table) i))
+type registered_psk (i:psk_identifier) =
+  MR.witnessed (MM.defined app_psk_table i)
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   match MM.sel (MR.m_sel h app_psk_table) i with
@@ -122,5 +124,3 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   let leaked = ralloc tls_tables_region false in
   let add : app_psk_entry i = (psk, ctx, (__temp_ref_to_rref leaked tls_tables_region)) in
   MM.extend app_psk_table i add
-
-

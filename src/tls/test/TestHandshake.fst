@@ -16,10 +16,10 @@ private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
   let sr  = createBytes 32 0z in
   let kdf = PRF_TLS_1p2 kdf_label (HMAC Hashing.Spec.SHA256) in
-  let gx  = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
-  let g   = CommonDH.key_params gx in
-  let gy, gxy = CommonDH.dh_responder gx in
-  let pms = PMS.DHPMS (g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy)) in
+  let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
+  let gx  = CommonDH.keygen g in
+  let gy, gxy = CommonDH.dh_responder #g gx in
+  let pms = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy) in
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_128_GCM Hashing.Spec.SHA256) cr sr role
 
@@ -51,7 +51,7 @@ private let hsbuf = ralloc #(list (hs_msg * bytes)) root []
 private let recvHSRecord tcp pv kex =
   let (hs_msg, to_log) =
     match !hsbuf with
-    | [] -> 
+    | [] ->
       let Correct (ct,rpv,pl) = Record.read tcp in
       let hsml =
 	match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
@@ -107,7 +107,7 @@ private let recvEncAppDataRecord tcp pv rd =
 // TLS 1.2 Server
 private let rec server_loop_12 config sock : ML unit =
   let raw_tcp = Platform.Tcp.accept sock in
-  let tcp = Transport.wrap raw_tcp in 
+  let tcp = Transport.wrap raw_tcp in
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
   let ks, sr = KeySchedule.create #rid Server log in
@@ -143,8 +143,9 @@ private let rec server_loop_12 config sock : ML unit =
 
   // Send ServerKeyExchange
   let gn = match nego with | {Negotiation.n_dh_group = Some n} -> n in
-  let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs ems gn in
-  let kex_s = KEX_S_DHE gy in
+  let Some g = CommonDH.group_of_namedGroup gn in
+  let gy = KeySchedule.ks_server_12_init_dh ks ch.ch_client_random pv cs ems g in
+  let kex_s = KEX_S_DHE (| g, gy |) in
   let sv = kex_s_to_bytes kex_s in
   let cr = ch.ch_client_random in
   let sr = sh.sh_server_random in
@@ -171,7 +172,10 @@ private let rec server_loop_12 config sock : ML unit =
   let gx =
     begin
     match cke.cke_kex_c with
-    | KEX_C_ECDHE u -> u
+    | KEX_C_ECDHE u ->
+      (match CommonDH.parse g u with
+      | Some gx -> gx
+      | None -> failwith "invalid share")
     | _ -> failwith "Bad CKE type"
     end
   in
@@ -179,7 +183,7 @@ private let rec server_loop_12 config sock : ML unit =
 
   // Derive keys
   let _ = log @@ ClientKeyExchange(cke) in
-  KeySchedule.ks_server_12_cke_dh ks gx;
+  KeySchedule.ks_server_12_cke_dh ks g gx;
   let KeySchedule.StAEInstance rd wr = KeySchedule.ks_12_get_keys ks in
 
   // Receive CCS and ClientFinished
@@ -253,10 +257,10 @@ let client_12 config host port : ML unit =
   let sigv = ske.ske_sig in
   let cr = ch.ch_client_random in
   let sr = sh.sh_server_random in
-  let (ClientKeyExchange cke,ckeb) = 
+  let (ClientKeyExchange cke,ckeb) =
     match Handshake.processServerHelloDone config n ks log
       	    [(Certificate sc,scb);(ServerKeyExchange ske, skeb);(ServerHelloDone,shdb)] [] with
-     | Correct [x] -> x 
+     | Correct [x] -> x
      | Error (_,z) -> failwith (z ^ "\n") in
 
   // Send ClientKeyExchange
@@ -377,7 +381,7 @@ private let sendEncHSRecord tcp pv msg wr =
 // TLS 1.3 Server
 private let rec server_loop_13 config sock : ML unit =
   let raw_tcp = Platform.Tcp.accept sock in
-  let tcp = Transport.wrap raw_tcp in 
+  let tcp = Transport.wrap raw_tcp in
   let rid = new_region root in
   let lg = HandshakeLog.create #rid in
   let ks, sr = KeySchedule.create #rid Server lg in

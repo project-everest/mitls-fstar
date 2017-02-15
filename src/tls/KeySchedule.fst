@@ -48,8 +48,11 @@ let secretLabel = function
    when this flag is set to false *)
 inline_for_extraction let ks_debug = false
 
-let print_share k : St bool =
-  let kb = CommonDH.serialize_raw k in
+let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+  =
+  let kb = CommonDH.serialize_raw #g s in
   let kh = Platform.Bytes.hex_of_bytes kb in
   IO.debug_print_string ("Share: "^kh^"\n")
 
@@ -134,8 +137,9 @@ let esId_rc (i:esId)  =
   | ApplicationPSK _ _ -> zH (esId_hash i)
 
 let hsId_rc : _ -> St bytes  = function
-  | HSID_DHE h _ _ -> zH h
-  | HSID_PSK i | HSID_PSK_DHE i _ _ -> esId_rc i
+  | HSID_DHE h _ _ _ -> zH h
+  | HSID_PSK i -> esId_rc i
+  | HSID_PSK_DHE i _ _ _ -> esId_rc i
 
 let asId_rc : _ -> St bytes  = function
   | ASID hsId -> hsId_rc hsId
@@ -203,8 +207,8 @@ type ks_client_state =
 | C_12_Full_CH: cr:random -> ks_client_state
 | C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
 | C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
-| C_13_wait_CH: cr:random -> i:esId -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
-| C_13_wait_SH: cr:random -> es:option ( i:esId & es i ) -> cfk0:option ( i:finishedId & fink i ) -> gs:list (namedGroup * CommonDH.key) -> ks_client_state
+| C_13_wait_CH: cr:random -> i:esId -> gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
+| C_13_wait_SH: cr:random -> es:option ( i:esId & es i ) -> cfk0:option ( i:finishedId & fink i ) -> gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
 | C_13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:finishedId & sfk:fink i ) -> ( i:asId & ams:ams i ) -> ks_client_state
 | C_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams:ams i ) -> ( i:rekeyId & rekey_secret i ) -> ( i:finishedId & latecfk:fink i ) -> ks_client_state
 | C_13_postHS: alpha:ks_alpha13 -> ( i:finishedId & fink i ) -> ( i:rekeyId & rekey_secret i ) -> ( i:rmsId & rms i ) -> ( i:exportId & ems i ) -> ks_client_state
@@ -212,7 +216,7 @@ type ks_client_state =
 
 type ks_server_state =
 | S_Init: sr:random -> ks_server_state
-| S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:CommonDH.key -> ks_server_state
+| S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:(g:CommonDH.group & CommonDH.keyshare g) -> ks_server_state
 | S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
 | S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:option ( i:esId & es i ) -> cfk0:option ( i:finishedId & fink i ) -> hs:( i:hsId & hs i ) -> ks_server_state
@@ -250,18 +254,6 @@ private let finished_13 h secret : St (bytes*bytes) =
   let cfk = HKDF.hkdf_expand_label h secret "client finished" empty_bytes hL in
   let sfk = HKDF.hkdf_expand_label h secret "server finished" empty_bytes hL in
   (cfk, sfk)
-
-// Diffie-Hellman computation
-private let s13_dh gn gxb =
-  let gx = match gn with
-    | SEC ec ->
-      let g = CommonDH.ECP (ECGroup.params_of_group ec) in
-      let Some gx = CommonDH.parse g gxb in gx
-    | FFDHE ff ->
-      let g = CommonDH.FFP (DHGroup.params_of_group (DHGroup.Named ff)) in
-      let Some gx =  CommonDH.parse g gxb in gx
-  in let gy, gxy = CommonDH.dh_responder gx in
-  (gy, gx, gxy)
 
 val ks_client_random: ks:ks -> ST random
   (requires fun h0 ->
@@ -301,14 +293,24 @@ let create #rid r hsl =
     | Server -> S (S_Init nonce) in
   (KS #ks_region (ralloc ks_region istate) hsl), nonce
 
-val ks_client_13_1rtt_init: ks:ks -> list (g:namedGroup{SEC? g \/ FFDHE? g}) -> ST (list (namedGroup * bytes))
+let rec group_list_to_share_list (gl:list CommonDH.group) (gxl:list (g:CommonDH.group & CommonDH.share g)) : Tot bool =
+  match (gl, gxl) with
+  | ([], []) -> true
+  | ((g::glr), (gx::gxlr)) ->
+    let gx : (g:CommonDH.group & CommonDH.share g) = gx in
+    let (| g', _ |) = gx in
+    g = g' && group_list_to_share_list glr gxlr
+  | _ -> false
+
+val ks_client_13_1rtt_init: ks:ks -> gl:list CommonDH.group -> ST (list (g:CommonDH.group & CommonDH.share g))
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    group_list_to_share_list gl r /\
+    modifies (Set.singleton rid) h0 h1 /\
+    modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
 val map_ST: ('a -> St 'b) -> list 'a -> St (list 'b)
 let rec map_ST f x = match x with
@@ -318,32 +320,39 @@ let rec map_ST f x = match x with
 let ks_client_13_1rtt_init ks groups =
   let KS #rid st hsl = ks in
   let C (C_Init cr) = !st in
-  let kg x = x, (match x with
-    | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
-    | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
-  let gs = map_ST kg groups in
+  let keygen (g:CommonDH.group)
+    : St (g:CommonDH.group & CommonDH.keyshare g)
+    = (| g, CommonDH.keygen g |) in
+  let gs = map_ST keygen groups in
   st := C (C_13_wait_SH cr None None gs);
-  let pub (x,y) = x, CommonDH.serialize_raw y in
+  let pub (gx : (g:CommonDH.group & CommonDH.keyshare g))
+    : Tot (g:CommonDH.group & CommonDH.share g)
+    = let (| g, gx |) = gx in
+    (| g, CommonDH.pubshare gx |) in
   List.Tot.map pub gs
 
-val ks_client_13_0rtt_init: ks:ks -> i:esId -> list (g:namedGroup{SEC? g \/ FFDHE? g}) -> ST (list (namedGroup * bytes))
+val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list CommonDH.group -> ST (list (g:CommonDH.group & CommonDH.share g))
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    group_list_to_share_list gl r /\
+    modifies (Set.singleton rid) h0 h1 /\
+    modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_13_0rtt_init ks esId groups =
   let KS #rid st hsl = ks in
   let C (C_Init cr) = !st in
-  let kg x = x, (match x with
-    | SEC ecg -> CommonDH.keygen (CommonDH.ECDH ecg)
-    | FFDHE g -> CommonDH.keygen (CommonDH.FFDH (DHGroup.Named g))) in
-  let gs = map_ST kg groups in
+  let keygen (g:CommonDH.group)
+    : St (g:CommonDH.group & CommonDH.keyshare g)
+    = (| g, CommonDH.keygen g |) in
+  let gs = map_ST keygen groups in
   st := C (C_13_wait_CH cr esId gs);
-  let pub (x,y) = x, CommonDH.serialize_raw y in
+  let pub (gx : (g:CommonDH.group & CommonDH.keyshare g))
+    : Tot (g:CommonDH.group & CommonDH.share g)
+    = let (| g, gx |) = gx in
+    (| g, CommonDH.pubshare gx |) in
   List.Tot.map pub gs
 
 // Derive the early keys from the early secret
@@ -438,7 +447,7 @@ let ks_client_12_init ks =
   (KS?.state ks) := ns;
   osi
 
-val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> group:namedGroup -> ST CommonDH.key
+val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> ST (CommonDH.share g)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -450,19 +459,16 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_server_12_init_dh ks cr pv cs ems group =
+let ks_server_12_init_dh ks cr pv cs ems g =
   let KS #region st _ = ks in
   let S (S_Init sr) = !st in
-  let group = (match group with
-      	       | SEC c -> CommonDH.ECDH c
-	       | FFDHE f -> CommonDH.FFDH (DHGroup.Named f)) in
   let CipherSuite kex sa ae = cs in
-  let our_share = CommonDH.keygen group in
+  let our_share = CommonDH.keygen g in
   let csr = cr @| sr in
-  st := S (S_12_wait_CKE_DH csr (pv, cs, ems) our_share);
-  our_share
+  st := S (S_12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |));
+  CommonDH.pubshare our_share
 
-val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:esId -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> ST (recordInstance * recordInstance * our_share:bytes)
+val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:esId -> cs:cipherSuite -> g:CommonDH.group -> gx:CommonDH.share g -> ST (recordInstance * recordInstance * our_share:CommonDH.share g)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -473,7 +479,7 @@ val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:esId -> cs:cipherSuite -> gn
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_server_13_0rtt_init ks cr esId cs gn gxb =
+let ks_server_13_0rtt_init ks cr esId cs g gx =
   let KS #region st hsl = ks in
   let S (S_Init sr) = !st in
   let psk = get_psk esId in
@@ -513,12 +519,11 @@ let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
 
-  let our_share, peer_share, gxy = s13_dh gn gxb in
-  let hsId = HSID_PSK_DHE esId (CommonDH.share_of_key peer_share) (CommonDH.share_of_key our_share) in
+  let gy, gxy = CommonDH.dh_responder gx in
+  let hsId = HSID_PSK_DHE esId g gx gy in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   st := S (S_13_wait_SH (ae, h) cr sr (Some (| esId, es |)) (Some (| efId, cfk0 |)) (| hsId, hs |));
-  let ourshare = CommonDH.serialize_raw our_share in
-  early_hs, early_d, ourshare
+  early_hs, early_d, gy
 
 val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
   (requires fun h0 ->
@@ -532,8 +537,7 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-
-val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> ST (our_share:bytes)
+val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> g:CommonDH.group -> gx:CommonDH.share g -> ST (CommonDH.share g)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -545,18 +549,18 @@ val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGrou
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_server_13_1rtt_init ks cr cs gn gxb =
+let ks_server_13_1rtt_init ks cr cs g gx =
   let KS #region st _ = ks in
   let S (S_Init sr) = !st in
   let CipherSuite _ _ (AEAD ae h) = cs in
-  let our_share, peer_share, gxy = s13_dh gn gxb in
-  let hsId = HSID_DHE h (CommonDH.share_of_key peer_share) (CommonDH.share_of_key our_share) in
+  let gy, gxy = CommonDH.dh_responder gx in
+  let hsId = HSID_DHE h g gx gy in
   let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es = HKDF.hkdf_extract h zeroes zeroes in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   st := S (S_13_wait_SH (ae, h) cr sr None None (| hsId, hs |));
-  CommonDH.serialize_raw our_share
+  gy
 
 val ks_server_13_sh: ks:ks -> ST recordInstance
   (requires fun h0 ->
@@ -611,30 +615,30 @@ let ks_server_13_sh ks =
   StAEInstance r w
 
 // log is the raw HS log, used for EMS derivation
-val ks_server_12_cke_dh: ks:ks -> peer_share:bytes -> ST unit
+val ks_server_12_cke_dh: ks:ks -> g:CommonDH.group -> gy:CommonDH.share g -> ST unit
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S_12_wait_CKE_DH? (S?.s kss))
+    S? kss /\ S_12_wait_CKE_DH? (S?.s kss) /\
+    (let S (S_12_wait_CKE_DH _ _ (| g', _ |)) = kss in
+    g = g')) // Responder share must be over the same group as initiator's
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_server_12_cke_dh ks gxb =
+let ks_server_12_cke_dh ks g gy =
   let KS #region st hsl = ks in
-  let S (S_12_wait_CKE_DH csr alpha our_share) = !st in
-  let dhp = CommonDH.key_params our_share in
-  let Some gx = CommonDH.parse dhp gxb in
+  let S (S_12_wait_CKE_DH csr alpha (| g, gx |)) = !st in
   let (pv, cs, ems) = alpha in
-  let pmsb = CommonDH.dh_initiator our_share gx in
+  let pmsb = CommonDH.dh_initiator #g gx gy in
   let () =
     if ks_debug then
-      let _ = print_share our_share in
-      let _ = print_share gx in
+      let _ = print_share (CommonDH.pubshare gx) in
+      let _ = print_share gy in
       let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
       ()
     else () in
-  let pmsId = PMS.DHPMS(dhp, (CommonDH.share_of_key our_share), (CommonDH.share_of_key gx), PMS. ConcreteDHPMS(pmsb)) in
+  let pmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
   let kef = kefAlg pv cs ems in
   let msId, ms =
     if ems then
@@ -677,31 +681,33 @@ let ks_client_12_resume ks sr pv cs =
 //   2. they use different return types
 //   3. they are called at different locations
 
-val ks_client_13_sh: ks:ks -> cs:cipherSuite -> gy:(namedGroup * bytes) -> accept_early_data:bool -> ST recordInstance
+val ks_client_13_sh: ks:ks -> cs:cipherSuite -> g:CommonDH.group -> gy:CommonDH.share g -> accept_early_data:bool -> ST recordInstance
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SH? (C?.s kss) /\
     // Ensure consistency of ae/h if 0-RTT data is accepted
-    (let C_13_wait_SH _ ei _ _ = C?.s kss in
-     match ei with | None -> True | Some (| id, _ |) ->
+    (let C_13_wait_SH _ ei _ gc = C?.s kss in
+     (List.Tot.existsb (fun gx -> g = dfst gx) gc) /\
+     (match ei with | None -> True | Some (| id, _ |) ->
        let CipherSuite _ _ (AEAD ae h) = cs in
 // TODO lift app_psk_hash, app_psk_ae to resumption PSK
 //       let ctxt = get_psk_info id in
 //       accept_early_data ==> ctxt.early_ae = ae /\ ctxt.early_hash = h
-     True))
+     True)))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
 // ServerHello log breakpoint (client)
-let ks_client_13_sh ks cs (gs, gyb) accept_ed =
+let ks_client_13_sh ks cs g gy accept_ed =
   let KS #region st hsl = ks in
   let C (C_13_wait_SH cr early_info early_fin gc) = !st in
-  let Some (_, gx) = List.Tot.find (fun (gc,_) -> gc = gs) gc in
-  let Some gy = CommonDH.parse (CommonDH.key_params gx) gyb in
-  let gxy = CommonDH.dh_initiator gx gy in
+  let Some gx = List.Tot.find (fun (gx:(x:CommonDH.group & CommonDH.share g)) -> let (| g', _ |) = gx in g = g') gc in
+  let (| g, gx |) = gx in
+  let gxy = CommonDH.dh_initiator #g gx gy in
   let CipherSuite _ _ (AEAD ae h) = cs in
+  let gx = CommonDH.pubshare gx in // Forget the private exponent
 
   let loginfo = LogInfo_SH ({li_sh_cr = cr; li_sh_sr = cr; li_sh_ae = AEAD ae h;}) in // TODO
   let hashed_log = HandshakeLog.getHash hsl h in
@@ -715,13 +721,9 @@ let ks_client_13_sh ks cs (gs, gyb) accept_ed =
     | _ -> HKDF.hkdf_extract h zeroes zeroes
   in
 
-  // Convert keys to share for public index
-  let is = CommonDH.share_of_key gx in
-  let rs = CommonDH.share_of_key gy in
-
   let hsId = match early_info with
-    | None -> HSID_DHE h is rs
-    | Some (| esId, _ |) -> HSID_PSK_DHE esId is rs in
+    | None -> HSID_DHE h g gx gy
+    | Some (| esId, _ |) -> HSID_PSK_DHE esId g gx gy in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   let expandId = HandshakeSecretID hsId in
 
@@ -931,7 +933,7 @@ let ks_client_13_cf ks
 (******************************************************************)
 
 // Called by Hanshake when DH key echange is negotiated
-val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> peer_share:CommonDH.key -> ST CommonDH.key
+val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> gx:CommonDH.share g -> ST (CommonDH.share g)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
     C? st /\
@@ -941,7 +943,7 @@ val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherS
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_client_12_full_dh ks sr pv cs ems peer_share =
+let ks_client_12_full_dh ks sr pv cs ems g gx =
   let KS #region st _ = ks in
   let cr = match !st with
     | C (C_12_Full_CH cr) -> cr
@@ -949,16 +951,15 @@ let ks_client_12_full_dh ks sr pv cs ems peer_share =
     | C (C_13_wait_SH cr _ _ _ ) -> cr in
   let csr = cr @| sr in
   let alpha = (pv, cs, ems) in
-  let our_share, pmsb = CommonDH.dh_responder peer_share in
+  let gy, pmsb = CommonDH.dh_responder #g gx in
   let () =
     if ks_debug then
-      let _ = print_share our_share in
-      let _ = print_share peer_share in
+      let _ = print_share gx in
+      let _ = print_share (CommonDH.pubshare gy) in
       let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
       ()
     else () in
-  let dhp = CommonDH.key_params peer_share in
-  let dhpmsId = PMS.DHPMS(dhp, (CommonDH.share_of_key our_share), (CommonDH.share_of_key peer_share), PMS.ConcreteDHPMS(pmsb)) in
+  let dhpmsId = PMS.DHPMS g gx (CommonDH.pubshare gy) (PMS.ConcreteDHPMS pmsb) in
   let ns =
     if ems then
       C_12_wait_MS csr alpha dhpmsId pmsb
@@ -971,7 +972,7 @@ let ks_client_12_full_dh ks sr pv cs ems peer_share =
         else false in
       let msId = StandardMS dhpmsId csr kef in
       C_12_has_MS csr alpha msId ms in
-  st := C ns; our_share
+  st := C ns; CommonDH.pubshare gy
 
 // Called by Handshake after server hello when a full RSA key exchange is negotiated
 val ks_client_12_full_rsa: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> RSAKey.pk -> ST bytes

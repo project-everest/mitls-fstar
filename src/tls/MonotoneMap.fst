@@ -97,11 +97,13 @@ let extend (#r:rid) (#a:eqtype) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r
       		  /\ modifies (Set.singleton r) h0 h1
       		  /\ modifies_rref r !{HH.as_ref (HS.MkRef?.ref hsref)} h0.h h1.h
       		  /\ m_sel h1 m == upd cur x y
+            /\ witnessed (defined m x)
       		  /\ witnessed (contains m x y)))
   = m_recall m;
     let cur = m_read m in
     m_write m (upd cur x y);
     contains_stable m x y;
+    witness m (defined m x);
     witness m (contains m x y)
 
 let lookup #r #a #b #inv (m:t r a b inv) (x:a)
@@ -111,11 +113,16 @@ let lookup #r #a #b #inv (m:t r a b inv) (x:a)
 		   h0==h1 /\
 		   y == sel (m_sel h1 m) x /\
        (None? y ==> fresh m x h1) /\
-		   (Some? y ==> witnessed (contains m x (Some?.v y)))))
+		   (Some? y ==>
+         defined m x h1 /\
+         contains m x (Some?.v y) h1 /\
+         witnessed (defined m x) /\
+         witnessed (contains m x (Some?.v y)))))
   = let y = sel (m_read m) x in
     match y with
       | None -> y
       | Some b ->
 	contains_stable m x b;
+  witness m (defined m x);
 	witness m (contains m x b);
 	y

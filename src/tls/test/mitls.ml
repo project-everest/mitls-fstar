@@ -5,7 +5,7 @@ open TLSInfo
 let tlsapi = ref false
 let args = ref []
 let role = ref Client
-let ffi  = ref false                
+let ffi  = ref false
 let config = ref {defaultConfig with
   minVer = TLS_1p3;
   maxVer = TLS_1p3;
@@ -34,14 +34,14 @@ let css = [
 ]
 
 let sas = [
-  ("RSA+SHA512", (CoreCrypto.RSASIG, Hash CoreCrypto.SHA512));
-  ("RSA+SHA384", (CoreCrypto.RSASIG, Hash CoreCrypto.SHA384));
-  ("RSA+SHA256", (CoreCrypto.RSASIG, Hash CoreCrypto.SHA256));
-  ("RSA+SHA1", (CoreCrypto.RSASIG, Hash CoreCrypto.SHA1));
-  ("ECDSA+SHA512", (CoreCrypto.ECDSA, Hash CoreCrypto.SHA512));
-  ("ECDSA+SHA384", (CoreCrypto.ECDSA, Hash CoreCrypto.SHA384));
-  ("ECDSA+SHA256", (CoreCrypto.ECDSA, Hash CoreCrypto.SHA256));
-  ("ECDSA+SHA1", (CoreCrypto.ECDSA, Hash CoreCrypto.SHA1));
+  ("RSA+SHA512", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA512));
+  ("RSA+SHA384", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA384));
+  ("RSA+SHA256", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA256));
+  ("RSA+SHA1", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA1));
+  ("ECDSA+SHA512", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA512));
+  ("ECDSA+SHA384", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA384));
+  ("ECDSA+SHA256", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA256));
+  ("ECDSA+SHA1", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA1));
 ]
 
 let ngs = [
@@ -100,7 +100,7 @@ let _ =
     | host :: _ -> host, 443
     | _ -> (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443 in
 
-  
+
   match !role, !config.maxVer with
   | Client, _ when !ffi    -> TestFFI.client !config host (Z.of_int port)
   | Server, _ when !ffi    -> failwith "server FFI to be completed"
