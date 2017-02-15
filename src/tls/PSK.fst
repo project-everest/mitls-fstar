@@ -73,15 +73,13 @@ let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   | Some (_, c, _) -> b2t (c = ctx)
   | _ -> False
 
-type ex_app_psk = i:psk_identifier{MR.witnessed (registered_app_psk i)}
+type pskid = i:psk_identifier{registered_psk i}
 
-let fresh_psk psk (h:mem) =
-  forall i. match MM.sel (MR.m_sel h app_psk_table) i with
-       | Some (psk', _, _) -> ~ (Seq.equal psk psk')
-       | None -> True
-
-let app_psk_value (i:ex_app_psk) : St (app_psk i) =
-  let (psk, _, _) = Some?.v (MM.lookup app_psk_table i) in psk
+let psk_value (i:pskid) : St (app_psk i) =
+  MR.m_recall app_psk_table;
+  MR.testify (MM.defined app_psk_table i);
+  match MM.lookup app_psk_table i with
+  | Some (psk, _, _) -> psk
 
 // Attacker interface
 //let leak i:ex_app_psk =
@@ -92,7 +90,8 @@ let app_psk_value (i:ex_app_psk) : St (app_psk i) =
 val fresh_psk_id: unit -> ST psk_identifier
   (requires (fun h -> True))
   (ensures (fun h0 i h1 ->
-    h1 = h0 /\ fresh_pskid i h1))
+    modifies_none h0 h1 /\
+    MM.fresh app_psk_table i h1))
 let rec fresh_psk_id () =
   let id = CoreCrypto.random 8 in
   match MM.lookup app_psk_table id with
@@ -101,26 +100,15 @@ let rec fresh_psk_id () =
 
 // "Application PSK" generator (enforces empty session context)
 // Usual caveat of random producing pairwise distinct keys (TODO)
-
-(*
- * AR: hack. In lax mode, F* cannot prove that in gen_psk, leaked.ref has id = tls_tables_region.
- * In the hyperheap model, the id in rref is part of the type itself, here it requires Z3 reasoning.
- * Adding this function below to get around.
- *)
-private val __temp_ref_to_rref: #a:Type -> r:reference a -> id:HH.rid{r.id = id} -> Tot (rref id a)
-let  __temp_ref_to_rref #a r id = r.ref
-
 let gen_psk (i:psk_identifier) (ctx:pskInfo)
   : ST unit
-  (requires (fun h -> fresh_pskid i h))
+  (requires (fun h -> MM.fresh app_psk_table i h))
   (ensures (fun h0 r h1 ->
-    let app_psk_table_as_hsref = MR.as_hsref app_psk_table in
-    modifies (Set.singleton tls_tables_region) h0 h1
-    /\ modifies_rref tls_tables_region !{HH.as_ref app_psk_table_as_hsref.ref} h0.h h1.h
-    /\ registered_app_psk i h1))
+    modifies_one psk_region h0 h1 /\
+    registered_psk i))
   =
   MR.m_recall app_psk_table;
-  let psk : app_psk i = CoreCrypto.random 32 in
-  let leaked = ralloc tls_tables_region false in
-  let add : app_psk_entry i = (psk, ctx, (__temp_ref_to_rref leaked tls_tables_region)) in
+  let psk = (abyte 1z) @| CoreCrypto.random 32 in
+  assume(index psk 0 = 1z);
+  let add : app_psk_entry i = (psk, ctx, true) in
   MM.extend app_psk_table i add

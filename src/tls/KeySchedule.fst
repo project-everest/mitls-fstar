@@ -119,7 +119,7 @@ private let get_psk (i:esId) =
   match i with
 //  | ResumptionPSK i -> res_psk_value i
   | ApplicationPSK _ pskid ->
-     let p : psk i = app_psk_value pskid in p
+     let p : psk i = psk_value pskid in p
 
 // Agile "0" hash
 private let zH h : St (Hashing.Spec.tag h) =
