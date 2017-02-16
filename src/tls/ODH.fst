@@ -66,18 +66,12 @@ type salt (i:id) =
     expanded_secret (HandshakeSecretID hsId))
 
 // The type of the input key material to extract
-// For ODH, the responder share is ephemeral and generated as part of extraction
-// (see multi-initiator ODH-extract assumption)
 type ikm (i:id) (ir:role i) =
   (match i.kef_type with
   | PSK pski -> PSK.psk pski
   | DH g si | DH_PSK _ g si ->
-    if ir = Initiator then
-      // The initiator instance is created after the responder share is known
-      (ks:DH.keyshare g{pubshare ks = si})
-    else
-      // The label must be picked at instance creation time for the responder
-      (n:salt i)
+    if ir = Initiator then CommonDH.secret g
+    else unit
   | ZERO _ -> unit)
 
 type extracted_secret (i:id) =
@@ -92,64 +86,6 @@ type extractor_instance (i:id) =
       KEF_PRF.state i
     else
       KEF_PRF_ODH.state i)
-
-(* Global table of extractor instances indexed by id *)
-let kef_region:rgn = new_region tls_tables_region
-type kef_table =
-  (if Flags.ideal_kef then
-    MM.t kef_region id extractor_instance grows
-  else
-    ())
-
-let kef_instances : kef_table =
-  (if Flags.ideal_kef then
-    MM.alloc #kef_region #id #extractor_instance #grows
-  else
-    ())
-
-let lookup_instance (i:id) : ST (option (extractor_instance i))
-  (requires (fun h0 -> True))
-  (ensures (fun h0 sto h1 ->
-    modifies_none h0 h1 /\
-    if Flags.ideal_kef then
-      Some? sto ==> witnessed (MM.contains kef_instances i (Some?.v sto))
-    else
-      sto == None))
-  =
-  if Flags.ideal_kef then
-    MM.lookup kef_instances i
-  else
-    None
-
-let extract_instance (#i:id) (st:extractor_instance i)
-  (ir:role) (ikm:ikm i ir) (salt:salt i) : ST (extracted_secret i)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 r h1 ->
-    modifies_none h0 h1))
-  =
-  (match i.kef_type with
-  | PSK _ | ZERO _ -> KEF_PRF.extract i st ir ikm salt
-  | DH _ _ _ -> KEF_PRF_ODH.extract i st ir ikm salt
-  | DH_PSK esId _ _ _ ->
-    if honest_esId esId then
-      KEF_PRF.extract i st ir ikm salt
-    else
-      KEF_PRF_ODH.extract i st ir ikm salt)
-
-let extract (i:id) (ir:role i) (ikm:ikm i ir) (salt:salt i)
-  : ST (extracted_secret i)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 s h1 -> h0=h1))
-  =
-  let st =
-    match lookup_instance i with
-    | Some st -> st
-    | None ->
-      (match i.kef_type with
-      | PSK pskid -> KEF_PRF.create
-        )
-  | Some (st:extractor_instance i) =
-
 
 ///////////////////////////////////////////
 
@@ -195,6 +131,9 @@ let create (i:id) (parent:rgn) (key:prf_key i) : ST (state i)
       True))
   =
   let r = new_region parent in
+  let key =
+    if is_safe i then Random.bytes (prf_keylen i)
+    else key in
   let log =
     if is_safe i then
       MM.alloc #r #(prf_domain i) #(prf_range i) #grows
@@ -240,11 +179,6 @@ let ishare_of_id (i:id) =
   | DH g si -> (| g, si |)
   | DH_PSK _ g si -> (| g, si |)
 
-type salt (i:id) =
-  (match i.kef_type with
-  | DH _ _ _ -> unit
-  | DH_PSK esId _ _ _ -> expanded_secret (EarlySecretID esId))
-
 type odh_index (i:id) =
   (let g, _ = ishare_of_id i in
   sr:share g * n:salt i)
@@ -252,7 +186,7 @@ type odh_index (i:id) =
 type odh_extracted (i:id) (j:odh_index i) =
   extracted_secret i
 
-type log (i:id) (r:rgn) =
+type odh_log (i:id) (r:rgn) =
   (if safeId i then
     MM.t r (odh_index i) (odh_extracted i)
   else
@@ -262,7 +196,7 @@ type state (i:id) (ir:dhrole) =
   | State:
     r: rgn ->
     key: ikm i ir -> // initiator keyshare or responder salt
-    log: log i r -> // Map of responder share and salt to extracted secrets
+    log: odh_log i r -> // Map of responder share and salt to extracted secrets
     // The responder share used by the initiator.
     initiator_responder: rref r (o:option (odh_index i){is_Some o ==> MR.witnessed (MM.defined log (Some.v o))}) ->
     state i
@@ -304,9 +238,32 @@ let fresh_sharegen: i:id -> log:log -> n:salt i -> ST (rshare i * rsecret i)
     | Some _ -> fresh_sharegen i log n
   else sr, gxy
 
+(* Global table of extractor instances indexed by id *)
+let odh_region:rgn = new_region tls_tables_region
+type kef_prf_table =
+  (if Flags.ideal_kef then
+    MM.t odh_region id  grows
+  else
+    ())
+
+let kef_prf_instances : kef_table =
+  (if Flags.ideal_kef then
+    MM.alloc #odh_region #id #KEF_PRF.state #(fun _ -> True)
+  else
+    ())
+
+// Memoizing wrapper to KEF_PRF instances
+// Note that the behavior is always concrete if the extraction is pure ODH
 let prf (i:id) (gxy:extracted_secret i) (n:salt i) =
-  if DH_PSK? i.kef_type then
-    let st = KEF_PRF.create i n in // TODO memoize
+  if DH_PSK? i.kef_type && Flags.ideal_kef then
+    let st : KEF_PRF.state i =
+      match MM.lookup kef_prf_instances i with
+      | Some st -> st
+      | None ->
+        let st = KEF_PRF.create i n in
+        MR.m_recall kef_prf_instances;
+        MM.extend kef_prf_instances i st; st
+      in
     KEF_PRF.extract i st gxy
   else
     let concrete_n = match i.kef_type with
