@@ -1,21 +1,19 @@
 (*--build-config
 options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
 --*)
+(**
+ This module gathers the definitions of shared datatypes, parameters, and predicates for our TLS API.
+ Its interface is used by most TLS modules; its implementation is typechecked.
+*)
 module TLSInfo
 
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
 
-(* This module gathers the definitions of
-   public datatypes, parameters, and predicates for our TLS API.
-
-   Its interface is used by most TLS modules;
-   its implementation is typechecked.
-*)
-
+open FStar.HyperStack
 open Platform.Bytes
 open Platform.Date
 open TLSConstants
-//open PMS
+open FStar.ST
 open Cert
 
 module MM = MonotoneMap
@@ -24,22 +22,25 @@ module HH = FStar.HyperHeap
 
 
 (**************** SPECIFYING SAFETY (GENERAL COMMENTS) **************
-  In the code of ideal implementations only,
-  we use F# functions that characterize the Safe and Auth predicates.
+  The definition of safety has changed substantially from miTLS 0.9.
+  We record safety of various secret and key indexes in this module
+  as witnesses of being recorded in the monotonic safety table.
 
-  We need to typecheck ideal code,
-  so we write their modules in the style
+  Safety of all indexes is bootstrapped from the safety of Diffie-Hellman
+  shares, as defined in CommonDH, and pre-shared keys, as defined in PSK.
+  Thus, we enforce by typing that honest derived indexes require that the
+  source index of the derivation is also honest. This is possible because the
+  index structure is fully defined in this module.
 
-  #if ideal
-    if safe...(...)
-      ... GEN ...
-    else
-  ##endif
-  .... COERCE ...
+  Conversly, the honesty of derived indexes is not fixed by the the honety
+  of the source key material's index: during the derivation, the attacker may
+  request the derived index to be compromised.
 
-  This requires concrete safe/auth/strong/honest functions,
-  used solely for controlling idealization.                        *)
-
+  Therefore, the state defined in this module in shared by the idealizations
+  of all modules in the key schedule stack and should not be directly accessible
+  to the adversary, even though there is no such access control in this module
+  because each KEF and KDF module will need access to the safety table.
+*)
 
 // -------------------------------------------------------------------
 // Application configuration
@@ -78,7 +79,6 @@ type ServerCertificateRequest // something that determines this Handshake messag
 request_client_certificate: single_assign ServerCertificateRequest // uses this one, or asks the server; by default Some None.
 
 *)
-
 
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
@@ -240,21 +240,20 @@ let ne_default =
 }
 
 // -------------------------------------------------------------------
-// Pre Master Secret indexes
+//         TLS 1.2 indexing and safety predicates
+// -------------------------------------------------------------------
 
-// Placeholder for overhaul of 1.2 indexes
+// Pre Master Secret indexes
 type pmsId = PMS.pms
 assume val strongKEX: pmsId -> Tot bool
 
 // -------------------------------------------------------------------
 // Master Secret indexes and their properties
-
 // CF postv1, move strength predicates --> TLSConstants
 // ``kefAlg is a strong randomness extractor, despite all other kefAlgs'', guarding idealization in KEF
 
-assume val strongKEF: kefAlg_t -> Tot bool
-
 // guarding idealizations for KDF and VerifyData (see PRF.fs)
+assume val strongKEF: kefAlg_t -> Tot bool
 assume val strongKDF: kdfAlg_t -> Tot bool
 assume val strongVD: vdAlg_t -> Tot bool
 
@@ -323,6 +322,7 @@ val siAuthEncAlg: si:sessionInfo { si.protocol_version = TLS_1p2 &&
                               pvcs si.protocol_version si.cipher_suite } -> Tot aeAlg
 let siAuthEncAlg si = get_aeAlg si.cipher_suite
 
+// Master sectet index
 type msId = // We record the parameters used to derive the master secret;
   | StandardMS : pmsId -> csRands -> kefAlg_t -> msId
             // the pms index, the nonces, and the PMS-PRF algorithm
@@ -334,11 +334,6 @@ type msId = // We record the parameters used to derive the master secret;
 let honestMS = function
   | StandardMS pmsId csr ka -> PMS.honestPMS pmsId && strongKEF ka
   | ExtendedMS pmsId  sh ka -> PMS.honestPMS pmsId && strongKEF ka
-
-
-// ADL Keeping these comments from 0.9 temporarily
-// We don't rely on noPmsId and noMsId anymore; plaintext
-// epochs use a special case in the id type
 
 //CF are we missing a correlation with csr?
 //MK we don't allow leak, so every MS derived from an
@@ -412,14 +407,13 @@ assume val strongAESI: sessionInfo -> Tot bool
 // |  ID13   /    |    \
 // |        /     |     \
 //  --->  esId -> hsId -> asId
-//          \
-//           --<-- psk_identifier
+//          \      \
+//           \      --<-- CommonDH.share
+//            \
+//             -<-- PSK.pskid
 //
 // Index type definitions [1.2]:
-//
 //    pmsId -> msId -> ID12
-//
-// type id = PlaintextID | ID12 msId | ID13 keyId
 
 // Info type carried by hashed log
 // The actual log is ghost but the info is carried in the index
@@ -495,16 +489,25 @@ type log_info (li:logInfo) (h:hashed_log) =
   injective #hashed_log #logInfo #equalBytes #eq_logInfo f /\ f h = li
 
 type pre_esId : Type0 =
-  | ApplicationPSK: info:PSK.pskInfo -> i:PSK.psk_identifier -> pre_esId
-  | ResumptionPSK: info:PSK.pskInfo -> i:pre_rmsId -> pre_esId
+  | ApplicationPSK: i:PSK.pskid -> ha:hash_alg{PSK.compatible_hash i ha} -> pre_esId
+  | ResumptionPSK: i:pre_rmsId -> pre_esId
+  | NoPSK: ha:hash_alg -> pre_esId
 
 and pre_hsId =
-  | HSID_PSK: pre_esId -> pre_hsId
-  | HSID_PSK_DHE: pre_esId -> g:CommonDH.group -> initiator:CommonDH.share g -> responder:CommonDH.share g -> pre_hsId
-  | HSID_DHE: hash_alg -> g:CommonDH.group -> initiator:CommonDH.share g -> responder:CommonDH.share g -> pre_hsId
+  | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
+  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
 
 and pre_asId =
-  | ASID: pre_hsId -> pre_asId
+  | ASID: pre_saltId -> pre_asId
+
+and pre_saltId =
+  | EarlySalt: pre_esId -> pre_saltId
+  | HandshakeSalt: pre_hsId -> pre_saltId
+
+and pre_secretId =
+  | EarlySecretID: pre_esId -> pre_secretId
+  | HandshakeSecretID: pre_hsId -> pre_secretId
+  | ApplicationSecretID: pre_asId -> pre_secretId
 
 and pre_rmsId =
   | RMSID: pre_asId -> logInfo -> hashed_log -> pre_rmsId
@@ -512,17 +515,16 @@ and pre_rmsId =
 and pre_exportId =
   | ExportID: pre_asId -> logInfo -> hashed_log -> pre_exportId
 
-and pre_rekeyId =
-  | RekeyID: pre_asId -> logInfo -> hashed_log -> nat -> pre_rekeyId
+and expandTag =
+  | EarlyTrafficSecret
+  | HandshakeTrafficSecret
+  | ApplicationTrafficSecret
+  | TrafficSecret
 
 and pre_expandId =
-  | EarlySecretID: pre_esId -> pre_expandId
-  | HandshakeSecretID: pre_hsId -> pre_expandId
-  | ApplicationSecretID: pre_asId -> pre_expandId
-  | RekeySecretID: pre_rekeyId -> pre_expandId
+  | ExpandedSecret: pre_secretId -> expandTag -> logInfo -> hashed_log -> pre_expandId
 
 and keyTag =
-  | EarlyTrafficKey
   | EarlyApplicationDataKey
   | HandshakeKey
   | ApplicationDataKey
@@ -542,24 +544,34 @@ and pre_finishedId =
 val esId_hash: pre_esId -> Tot hash_alg
 val hsId_hash: pre_hsId -> Tot hash_alg
 val asId_hash: pre_asId -> Tot hash_alg
+val saltId_hash: pre_saltId -> Tot hash_alg
+val secretId_hash: pre_secretId -> Tot hash_alg
 val rmsId_hash: pre_rmsId -> Tot hash_alg
 val exportId_hash: pre_exportId -> Tot hash_alg
-val rekeyId_hash: pre_rekeyId -> Tot hash_alg
 val expandId_hash: pre_expandId -> Tot hash_alg
 val keyId_hash: pre_keyId -> Tot hash_alg
 val finishedId_hash: pre_finishedId -> Tot hash_alg
 
 let rec esId_hash = function
-  | ApplicationPSK ctx _ -> PSK.pskInfo_hash ctx
-  | ResumptionPSK _ rmsId -> rmsId_hash rmsId
+  | ApplicationPSK pskid h -> h
+  | ResumptionPSK i -> rmsId_hash i
+  | NoPSK h -> h
 
 and hsId_hash = function
-  | HSID_PSK i -> esId_hash i
-  | HSID_DHE h _ _ _ -> h
-  | HSID_PSK_DHE i _ _ _ -> esId_hash i
+  | HSID_PSK i -> saltId_hash i
+  | HSID_DHE i _ _ _ -> saltId_hash i
 
 and asId_hash = function
-  | ASID i -> hsId_hash i
+  | ASID i -> saltId_hash i
+
+and saltId_hash = function
+  | EarlySalt i -> esId_hash i
+  | HandshakeSalt i -> hsId_hash i
+
+and secretId_hash = function
+  | EarlySecretID i -> esId_hash i
+  | HandshakeSecretID i -> hsId_hash i
+  | ApplicationSecretID i -> asId_hash i
 
 and rmsId_hash = function
   | RMSID asId _ _ -> asId_hash asId
@@ -567,20 +579,33 @@ and rmsId_hash = function
 and exportId_hash = function
   | ExportID asId _ _ -> asId_hash asId
 
-and rekeyId_hash = function
-  | RekeyID i _ _ _ -> asId_hash i
-
 and expandId_hash = function
-  | EarlySecretID es -> esId_hash es
-  | HandshakeSecretID hs -> hsId_hash hs
-  | ApplicationSecretID asId -> asId_hash asId
-  | RekeySecretID (RekeyID asId _ _ _) -> asId_hash asId
+  | ExpandedSecret i _ _ _ -> secretId_hash i
 
-and keyId_hash (KeyID i _ _ _ _) = expandId_hash i
+and keyId_hash = function
+  | KeyID i _ _ _ _ -> expandId_hash i
 
-and finishedId_hash (FinishedID i _ _ _ _) = expandId_hash i
+and finishedId_hash = function
+  | FinishedID i _ _ _ _ -> expandId_hash i
 
-type valid_hlen (b:bytes) (h:hash_alg) = length b = Hashing.Spec.tagLen h
+type valid_hlen (b:bytes) (h:hash_alg) =
+  length b = Hashing.Spec.tagLen h
+
+let safe_region:rgn = new_region tls_tables_region
+type safety (a:Type0) (x:a) = bool
+private type ideal_safety_log (a:Type0) = MM.t safe_region a (safety a) (fun _ -> True)
+private type s_table (a:Type0) = (if Flags.ideal_KEF then ideal_safety_log a else unit)
+
+let safety_table (a:Type0) : St (s_table a) =
+  (if Flags.ideal_KEF then
+    let _ = assume false in
+    MM.alloc #safe_region #a #(safety a) #(fun _ -> True)
+  else unit)
+
+type registered (a:Type0) (i:a) =
+  (if Flags.ideal_KEF then
+    MR.witnessed (MM.defined (safety_table a) i)
+  else True)
 
 val valid_esId: pre_esId -> GTot Type0
 val valid_hsId: pre_hsId -> GTot Type0

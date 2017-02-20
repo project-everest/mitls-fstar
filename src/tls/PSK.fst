@@ -35,7 +35,7 @@ type pskInfo = {
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag
   early_ae: aeadAlg;
-  early_hash: hash_alg;  //CF could be more specific and use Hashing.alg
+  early_hash: Hashing.Spec.alg;  //CF could be more specific and use Hashing.alg
   identities: bytes * bytes;
 }
 
@@ -75,16 +75,29 @@ let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
 
 type pskid = i:psk_identifier{registered_psk i}
 
-let psk_value (i:pskid) : St (app_psk i) =
+let psk_value (i:pskid) : ST (app_psk i)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+  =
   MR.m_recall app_psk_table;
   MR.testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some (psk, _, _) -> psk
 
-// Attacker interface
-//let leak i:ex_app_psk =
-//  let (v, _, l) = Some?.v (MM.lookup app_psk_table i) in
-//  l := true; v
+let psk_info (i:pskid) : ST (pskInfo)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+  =
+  MR.m_recall app_psk_table;
+  MR.testify (MM.defined app_psk_table i);
+  match MM.lookup app_psk_table i with
+  | Some (_, ctx, _) -> ctx
+
+type honest_st (i:pskid) (h:mem) =
+  (MM.defined app_psk_table i h /\
+  (let (_,_,b) = MM.value app_psk_table i h in b = true))
+
+type honest_psk (i:pskid) = MR.witnessed (honest_st i)
 
 // Generates a fresh PSK identity
 val fresh_psk_id: unit -> ST psk_identifier
@@ -105,10 +118,61 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   (requires (fun h -> MM.fresh app_psk_table i h))
   (ensures (fun h0 r h1 ->
     modifies_one psk_region h0 h1 /\
-    registered_psk i))
+    registered_psk i /\
+    honest_psk i))
   =
   MR.m_recall app_psk_table;
   let psk = (abyte 1z) @| CoreCrypto.random 32 in
   assume(index psk 0 = 1z);
   let add : app_psk_entry i = (psk, ctx, true) in
-  MM.extend app_psk_table i add
+  MM.extend app_psk_table i add;
+  MM.contains_stable app_psk_table i add;
+  let h = ST.get () in
+  cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
+  assume(MR.stable_on_t app_psk_table (honest_st i));
+  MR.witness app_psk_table (honest_st i)
+
+let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
+  : ST unit
+  (requires (fun h -> MM.fresh app_psk_table i h))
+  (ensures (fun h0 _ h1 ->
+    modifies_one psk_region h0 h1 /\
+    registered_psk i /\
+    ~(honest_psk i)))
+  =
+  MR.m_recall app_psk_table;
+  let add : app_psk_entry i = (k, ctx, false) in
+  MM.extend app_psk_table i add;
+  MM.contains_stable app_psk_table i add;
+  let h = ST.get () in
+  cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
+  admit()
+
+let compatible_hash_st (i:pskid) (a:hash_alg) (h:mem) =
+  (MM.defined app_psk_table i h /\
+  (let (_,ctx,_) = MM.value app_psk_table i h in a = pskInfo_hash ctx))
+
+let compatible_hash (i:pskid) (a:hash_alg) =
+  MR.witnessed (compatible_hash_st i a)
+
+let verify_hash (i:pskid) (a:hash_alg) : ST bool
+  (requires (fun h0 -> True))
+  (ensures (fun h0 b h1 ->
+    b ==> compatible_hash i a))
+  =
+  MR.m_recall app_psk_table;
+  MR.testify (MM.defined app_psk_table i);
+  match MM.lookup app_psk_table i with
+  | Some x ->
+    let h = ST.get() in
+    cut(MM.contains app_psk_table i x h);
+    cut(MM.value app_psk_table i h = x);
+    let (_, ctx, _) = x in
+    if pskInfo_hash ctx = a then
+     begin
+      cut(compatible_hash_st i a h);
+      assume(MR.stable_on_t app_psk_table (compatible_hash_st i a));
+      MR.witness app_psk_table (compatible_hash_st i a);
+      true
+     end
+    else false
