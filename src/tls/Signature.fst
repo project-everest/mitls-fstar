@@ -7,7 +7,7 @@ open FStar.Monotonic.Seq
 
 open Platform.Bytes
 open CoreCrypto
-//open Hashing.Spec // masking CoreCrypto's hashAlg
+open Hashing.Spec // masking CoreCrypto's hashAlg
 
 open TLSConstants
 open Cert
@@ -15,15 +15,15 @@ open Cert
 (* ------------------------------------------------------------------------ *)
 type text = bytes
 
-// ADL(31/10/16): changing info from text -> Type0 to text -> GTot bool
-// to ensure that alg is in universe 0
-// (this is needed because ref a now requires a to be in universe 0)
-noeq type alg : Type0 =
+(** REMARK: this needs to be in Type0 because `ref a : Type0` and we build a ref to
+    a set of `pkey a = (a:alg & pubkey a)`
+*)
+noeq type alg: Type0 =
   | Use: info:(text -> GTot bool)
        -> core: sigAlg
        -> digest: list hashAlg
        -> keyEncipher: bool // can encrypt e.g. PMS in TLS_RSA_WITH_...
-       -> keyExchange: bool // can be used to establish a Diffie-Hellman secret e.g. in TLS_DH_... SZ: Do we care about static (EC)DH?
+       -> keyExchange: bool // can be used to establish a DH secret e.g. in TLS_DH_...
        -> alg
 
 type signed (a:alg) = t:text{a.info t}
@@ -51,8 +51,8 @@ type secret_repr =
 
 let sigAlg_of_secret_repr sk =
   match sk with
-  | SK_RSA k -> RSASIG // Ignore RSA-PSS
-  | SK_DSA k -> DSA
+  | SK_RSA k   -> RSASIG // Ignore RSA-PSS
+  | SK_DSA k   -> DSA
   | SK_ECDSA k -> ECDSA
 
 let sigAlg_of_public_repr pk =
@@ -76,7 +76,7 @@ noeq type state (a:alg) =
   | Signed: log:Seq.seq (signed a) -> state a
   | Corrupt
 
-(*
+(**
   Allowed state transitions:
   Corrupt  -> Corrupt
   Signed l -> Corrupt
@@ -102,34 +102,34 @@ let st_update #a st t =
 
 (* ------------------------------------------------------------------------ *)
 
-(*
- * AR: this was rid, is TLSConstants.rgn ok ?
- *)
+(* TODO: this region should be created in TLSConstants *)
 let keyRegion:TLSConstants.rgn = new_region TLSConstants.tls_region
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
 type pubkey (a:alg) =
-  | PK: log:log_t a -> repr:public_repr{sigAlg_of_public_repr repr = a.core} -> pubkey a
+  | PK: log:log_t a
+      -> repr:public_repr{sigAlg_of_public_repr repr == a.core}
+      -> pubkey a
 
 type pkey = (a:alg & pubkey a)
 
 val pkey_repr: pkey -> Tot public_repr
-let pkey_repr (| a,  p |) = PK?.repr p
+let pkey_repr (|a,p|) = PK?.repr p
 
 val pkey_alg: pkey -> Tot alg
-let pkey_alg (| a,  _ |) = a
+let pkey_alg (|a,_|) = a
 
 type skey (a:alg) =
-  k:(pubkey a * secret_repr){let _,sk = k in sigAlg_of_secret_repr sk = a.core}
+  k:(pubkey a * secret_repr){let _,sk = k in sigAlg_of_secret_repr sk == a.core}
 
 val alloc_pubkey: #a:alg
   -> s:state a
-  -> r:public_repr{sigAlg_of_public_repr r = a.core}
+  -> r:public_repr{sigAlg_of_public_repr r == a.core}
   -> ST (pubkey a)
     (requires (fun h0 -> True))
     (ensures  (fun h0 p h1 -> ralloc_post keyRegion s h0 (as_hsref (PK?.log p)) h1
-                           /\ PK?.repr p = r
+                           /\ PK?.repr p == r
                            /\ m_fresh (PK?.log p) h0 h1))
 let alloc_pubkey #a s r =
   lemma_evolves_monotone #a;
@@ -145,54 +145,36 @@ let alloc_pubkey #a s r =
 
   We maintain this property as a stateful invariaint in rkeys *)
 
-// ADL(31/10/16): I am a bit concerned by pkey_repr x = pkey_repr y in kset;
-// after extraction this becomes pointer equality on wrapped OpenSSL pointers
-// we should export a normalized, hasEq representation of keys in CoreCrypto.
+type kset =
+  s:list pkey{ forall x y. (List.Tot.memP x s /\ List.Tot.memP y s /\ pkey_repr x == pkey_repr y) ==> x == y }
 
-// AD(31/10/16): Commenting out the hasEq assumption on alg; instead we use memT
-(* AR: this needs to be fixed, alg should not have hasEq because of info *)
-// FIXME in CoreCrypto!
-assume HasEq_public_repr: hasEq public_repr
-
-(** ADL: FIXME XXX relies on StrongExcludedMiddle! *)
-assume val strong_excluded_middle : p:Type0 -> GTot (b:bool{b = true <==> p})
-private let rec memT (#a:Type0) (v:a) (l:list a) : GTot bool =
-  match l with
-  | [] -> false
-  | h::t -> if strong_excluded_middle (h == v) then true else memT v t
-
-type kset = s:list pkey{ forall x y. (memT x s /\ memT y s /\ pkey_repr x = pkey_repr y) ==> x == y }
-
-val find_key: r:public_repr -> ks: kset
-  -> Tot (o:option (k:pkey {pkey_repr k = r && memT k ks})
-        { None? o ==> (forall k. memT k ks ==> pkey_repr k <> r) })
+val find_key: r:public_repr -> ks:kset
+  -> Tot (o:option pkey{
+         match o with
+         | None   -> forall k. List.Tot.memP k ks ==> ~(pkey_repr k == r)
+         | Some k -> pkey_repr k == r /\ List.Tot.memP k ks})
 let rec find_key r ks = match ks with
   | []   -> None
   | k::ks -> if pkey_repr k = r then Some k else find_key r ks
 
-val add_key: ks:kset
-  -> k:pkey { forall k'. memT k' ks ==> pkey_repr k <> pkey_repr k' }
-  -> Tot kset
-let add_key ks k = k::ks
 
 logic type mon_pkey (xs:kset) (xs':kset) =
-  forall x. memT x xs ==> memT x xs'
+  forall x. List.Tot.memP x xs ==> List.Tot.memP x xs'
+
+val add_key: ks:kset
+  -> k:pkey { forall k'. List.Tot.memP k' ks ==> ~(pkey_repr k == pkey_repr k') }
+  -> Tot (ks':kset{ks' == k::ks /\ ks `mon_pkey` ks' /\ List.Tot.memP k ks'})
+let add_key ks k = k::ks
 
 // FIXME: top-level effect
 val rkeys: m_rref keyRegion kset (mon_pkey)
 let rkeys = m_alloc keyRegion []
 
-type generated (k:pkey) (h:mem) : Type0 = memT k (m_sel h rkeys)
+type generated (k:pkey) (h:mem) : Type0 = List.Tot.memP k (m_sel h rkeys)
 
-let honestKey (#a:alg) (k:pubkey a) (ks:kset) =
-  let PK _ pk = k in
-  Some? (find_key pk ks)
 
 (* ------------------------------------------------------------------------ *)
 
-(*
- * AR: adding m_recall to satify the precondition of m_write.
- *)
 val sign: #a:alg
   -> h:hashAlg{List.Tot.mem h (a.digest)}
   -> s:skey a
@@ -226,7 +208,6 @@ let sign #a h s t =
 
 
 (* ------------------------------------------------------------------------ *)
-
 val verify: #a:alg
   -> h:hashAlg{List.Tot.mem h (a.digest)}
   -> pk:pubkey a
@@ -237,9 +218,12 @@ val verify: #a:alg
     (ensures  (fun h0 b h1 ->
          modifies Set.empty h0 h1
        /\ ((b /\ int_cma a h /\ generated (|a,pk|) h0
-	   /\ Signed? (m_sel h0 (PK?.log pk))) ==> a.info t)))
+       /\ Signed? (m_sel h0 (PK?.log pk))) ==> a.info t)))
 
 let verify #a h pk t s =
+  let h0 = ST.get() in
+  let log = PK?.log pk in
+  m_recall log;
   let verified =
     let ho,t' = sig_digest h t in
     match PK?.repr pk with
@@ -247,14 +231,23 @@ let verify #a h pk t s =
     | PK_DSA k   -> dsa_verify ho k t' s
     | PK_ECDSA k -> ecdsa_verify ho k t' s
   in
+  let h1 = ST.get() in
   if int_cma a h then
     begin
-    assume False;
     match m_read (PK?.log pk) with
     | Signed ts ->
+      begin
+      let keys = m_read rkeys in
       let signed = Some? (Seq.seq_find (fun (t':signed a) -> t = t') ts) in
-      let honest = honestKey pk (m_read rkeys) in
-      verified && (signed || not honest)
+      let honest = List.Tot.existsb (fun pk' -> pkey_repr pk' = PK?.repr pk) keys in
+      if honest then verified && signed
+      else
+        begin
+        List.Tot.memP_existsb (fun pk' -> pkey_repr pk' = PK?.repr pk) keys;
+        assert (~(List.Tot.memP (|a,pk|) keys));
+        verified
+        end
+      end
     | Corrupt -> verified
     end
   else verified
@@ -268,8 +261,8 @@ val genrepr: a:alg
       V? k ==>
       (let (pk,sk) = V?.v k in
         modifies Set.empty h0 h1
-	/\ sigAlg_of_public_repr pk = sigAlg_of_secret_repr sk
-	/\ sigAlg_of_public_repr pk = a.core)))
+	/\ sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
+	/\ sigAlg_of_public_repr pk == a.core)))
 
 let genrepr a =
   match a.core with
@@ -285,8 +278,8 @@ val gen: a:alg -> All (skey a)
                /\ modifies_rref keyRegion !{as_ref (as_hsref rkeys)} h0.h h1.h
                /\ m_contains rkeys h1
 	       /\ (V? s ==>   witnessed (generated (| a, fst (V?.v s) |))
-			     /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1
-			     /\ Signed? (m_sel h1 (PK?.log (fst (V?.v s)))))))
+			   /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1
+			   /\ Signed? (m_sel h1 (PK?.log (fst (V?.v s)))))))
 
 #set-options "--z3rlimit 40"
 
@@ -305,18 +298,15 @@ let rec gen a =
 
 #set-options "--z3rlimit 20"
 
-(* ------------------------------------------------------------------------ *)
 
-(*
- * AR: adding m_recall for log to satisfy the precondition of m_write.
- *)
+(* ------------------------------------------------------------------------ *)
 val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
   (requires (fun _ -> True))
   (ensures  (fun h0 r h1 ->
 	      modifies_one keyRegion h0 h1
 	      /\ modifies_rref keyRegion !{as_ref (as_hsref (PK?.log (fst s)))} h0.h h1.h
 	      /\ Corrupt? (m_sel h1 (PK?.log (fst s)))
-	      /\ fst r = PK?.repr (fst s)))
+	      /\ fst r == PK?.repr (fst s)))
 let leak #a (PK log pkr, skr) =
   m_recall log;
   m_write log Corrupt;
@@ -324,27 +314,26 @@ let leak #a (PK log pkr, skr) =
 
 
 (* ------------------------------------------------------------------------ *)
-val coerce: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> skr:secret_repr{sigAlg_of_secret_repr skr = a.core} -> ST (skey a)
+val coerce: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr == a.core} -> skr:secret_repr{sigAlg_of_secret_repr skr == a.core} -> ST (skey a)
   (requires (fun _ -> True))
   (ensures (fun h0 s h1 ->
            Corrupt? (m_sel h1 (PK?.log (fst s)))
-           /\ PK?.repr (fst s) = pkr
-	   /\ snd s = skr))
+           /\ PK?.repr (fst s) == pkr
+	   /\ snd s == skr))
 let coerce #a pkr skr =
   alloc_pubkey Corrupt pkr, skr
 
 
 (* ------------------------------------------------------------------------ *)
-
-// ADL: FIXME XXX unsound because of info
+(** TODO: Remove this by comparing/setting only `a.core` in `endorse` and `lookup_key` *)
 assume HasEq_alg_unsound: hasEq alg
 
-val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST pkey
+val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr == a.core} -> ST pkey
   (requires (fun _ -> True))
   (ensures  (fun h0 k h1 ->
 	     pkey_alg k == a
 	     /\ pkey_repr k = pkr
-             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> k = k')))
+             /\ (forall k'. generated k' h1 /\ pkey_repr k' == pkr /\ pkey_alg k' == a ==> k == k')))
 let endorse #a pkr =
   let keys = m_read rkeys in
   match find_key pkr keys with
@@ -377,15 +366,20 @@ let get_chain_public_key #a c =
 
 
 (* ------------------------------------------------------------------------ *)
-//FIXME: use unique public-key representation
+// FIXME: use unique public-key representation
 
-val foo: o:option (k:CoreCrypto.key{has_priv k}) -> Tot (option CoreCrypto.key)
+private val foo: o:option (k:CoreCrypto.key{has_priv k}) -> Tot (option CoreCrypto.key)
 let foo o = match o with | None -> None | Some k -> Some k
 
-(*
- * AR: adding recall for rkeys to satisfy the precondition of m_write.
- *)
-val lookup_key: #a:alg -> string -> St (option (skey a))
+val lookup_key: #a:alg -> string -> ST (option (skey a))
+  (requires (fun _ -> True))
+  (ensures  (fun h0 o h1 ->
+    match o with
+    | Some (p, skr) ->
+      modifies_one keyRegion h0 h1 /\
+      modifies_rref keyRegion !{as_ref (as_hsref rkeys)} h0.h h1.h /\
+      witnessed (generated (|a,p|))
+    | None -> h0 == h1))
 let lookup_key #a keyfile =
   let keys = m_read rkeys in
   let sa = a.core in
@@ -400,27 +394,35 @@ let lookup_key #a keyfile =
   | Some (pkr, skr) ->
     begin
     match find_key pkr keys with
-    | Some (| a', p |) -> if a' = a then Some (p, skr) else None
+    | Some (| a', p |) -> if a' = a then
+      begin
+        witness rkeys (generated (|a,p|));
+        Some (p, skr)
+      end
+      else
+        None
     | None ->
+      begin
       let p = alloc_pubkey (Signed Seq.createEmpty) pkr in
       let k = (| a, p |) in
       let keys' = add_key keys k in
       m_recall rkeys;
       m_write rkeys keys';
-      witness rkeys (generated (|a, p|));
+      witness rkeys (generated k);
       Some (p, skr)
+      end
     end
   | None -> None
 
-(*
+
 #reset-options
 #set-options "--initial_fuel 2 --max_fuel 2 --detail_errors"
 
 val test: bytes -> bytes -> All unit
-      (requires (fun h -> m_contains rkeys h))
-      (ensures (fun h0 _ h1 -> modifies (Set.singleton keyRegion) h0 h1))
+  (requires (fun h -> m_contains rkeys h))
+  (ensures  (fun h0 _ h1 -> modifies_one keyRegion h0 h1))
 let test t0 t1 =
-  let a = Use (fun t -> True)
+  let a = Use (fun t -> true)
 	      RSASIG
               [Hash SHA256; Hash SHA384]
               false
@@ -430,10 +432,9 @@ let test t0 t1 =
               [Hash SHA256]
               false
               false in
-  let s = gen a in
+  let s  = gen a in
   let s' = gen a' in
   let sigv0 = sign (Hash SHA256) s t0 in
   let sigv1 = sign (Hash SHA256) s t1 in
   //let sigv2 = sign (Hash SHA256) s' t0 in // should fail, can only sign t1
   ()
-*)
