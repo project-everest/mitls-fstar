@@ -29,6 +29,7 @@ let rec read_loop con r : ML unit =
     let _ = TLS.writeCloseNotify con in
     ()
 
+private
 let client config host port =
   IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
   let tcp = Transport.connect host port in

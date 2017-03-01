@@ -292,12 +292,12 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 	--verify_module $(basename $(notdir $@))
 
 # Sanity check
-tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst
+tls-sanity: record_fstar_version $(LIBFILES)
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
         --verify_module False \
-	$(FSTS) test/False.fst | tail -n 1 | grep -c "Error: 1 errors were reported (see above)"
+	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
 
 # Lax typecheck all files (with ideal flag off)
 tls-lax: record_fstar_version $(LIBFILES)
