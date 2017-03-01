@@ -1,6 +1,23 @@
 # These are all the known working targets in this file,
 # Check for regressions & comment about them!
-all: all-ver tls-sanity tls-lax tls-ffi
+
+# NOTE: the sequence of subtargets in all, build and verify
+# must be processed sequentially,
+# but each subtarget alone can be built with parallelism enabled.
+all:
+	+$(MAKE) build
+	+$(MAKE) verify
+
+build:
+	+$(MAKE) mitls.exe
+	+$(MAKE) tls-ffi
+
+verify:
+	+$(MAKE) all-ver
+	+$(MAKE) tls-sanity
+	+$(MAKE) tls-lax
+
+.PHONY: all build verify
 
 CONTRIB=ucontrib
 LIB=ulib
