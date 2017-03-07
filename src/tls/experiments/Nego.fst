@@ -27,16 +27,7 @@ noeq type server_config = {
   s_sk: sk:secret_repr{SK_ECDSA? sk};
 }
 
-type ffdhe =
-  | FFDHE2048
-  | FFDHE3072
-  | FFDHE4096
-  | FFDHE6144
-  | FFDHE8192
-
-type namedGroup =
-  | SEC of CoreCrypto.ec_curve
-  | FFDHE of ffdhe
+let share = g:group & s:pre_share g
 
 type clientOffer = {
   co_shares: list share;
@@ -52,7 +43,6 @@ type mode = {
 
 assume val public_repr_of_secret_repr: sk:secret_repr
   -> Tot (pk:public_repr{SK_ECDSA? sk ==> PK_ECDSA? pk})
-
 
 val negotiate: client_config -> server_config -> Tot (option mode)
 let negotiate c_cfg s_cfg =
@@ -83,15 +73,16 @@ noeq type client_state =
 
 noeq type server_state =
   | ServerInit: server_config -> server_state
-  | ServerClientOffer: server_config -> clientOffer -> nonce -> nonce -> server_state
-  | ServerMode: server_config -> clientOffer -> nonce -> nonce -> mode -> server_state
-  | ServerSign: server_config -> clientOffer -> nonce -> nonce -> mode -> server_state
+  | ServerClientOffer: server_config -> clientOffer -> crand -> srand -> server_state
+  | ServerMode: server_config -> clientOffer -> crand -> srand -> mode -> server_state
+  | ServerSign: server_config -> clientOffer -> crand -> srand -> mode -> server_state
   | ServerComplete
   | ServerClosed
 
 type state =
   | Client: #rgn:rid -> st:rref rgn client_state -> state
   | Server: #rgn:rid -> st:rref rgn server_state -> state
+
 
 (*
 
