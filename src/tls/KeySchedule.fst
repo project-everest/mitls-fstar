@@ -20,11 +20,8 @@ open TLSConstants
 open TLSExtensions
 open TLSInfo
 open Range
-//open HandshakeMessages
 open StatefulLHAE
 open HKDF
-//open Negotiation // We only depend minimally on Nego
-open Epochs	 // We only depend minimally on Epochs
 open PSK
 
 module MM = MonotoneMap
@@ -110,7 +107,7 @@ abstract let psk (i:esId) =
 
 let get_psk_info (i:esId) :pskInfo =
   match i with
-  | ResumptionPSK c -> c
+  | ResumptionPSK c _ -> c
   | ApplicationPSK c _ -> c
 
 
@@ -175,7 +172,7 @@ type recordInstance =
   | StAEInstance: #id:TLSInfo.id -> StAE.reader id -> StAE.writer id -> recordInstance
 
 (* 2 choices - I prefer the second:
-   (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
+     (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
    (2) redefine recordInstance as follows, and then import epoch_region_inv over here from Epochs:
 type recordInstance (rgn:rid) (n:TLSInfo.random) =
 | RI: #id:StAE.id -> r:StAE.reader (peerId id) -> w:StAE.writer id{epoch_region_inv' rgn r w /\ I.nonce_of_id id = n} -> recordInstance rgn n
@@ -293,50 +290,47 @@ let create #rid r hsl =
     | Server -> S (S_Init nonce) in
   (KS #ks_region (ralloc ks_region istate) hsl), nonce
 
-let rec group_list_to_share_list (gl:list CommonDH.group) (gxl:list (g:CommonDH.group & CommonDH.share g)) : Tot bool =
-  match (gl, gxl) with
-  | ([], []) -> true
-  | ((g::glr), (gx::gxlr)) ->
-    let gx : (g:CommonDH.group & CommonDH.share g) = gx in
-    let (| g', _ |) = gx in
-    g = g' && group_list_to_share_list glr gxlr
-  | _ -> false
-
 let group_of_valid_namedGroup
   (g:valid_namedGroup)
   : CommonDH.group
   = Some?.v (CommonDH.group_of_namedGroup g)
-
-val ks_client_13_1rtt_init:
-  ks:ks -> gl:list valid_namedGroup
-  -> ST (list (g:valid_namedGroup & CommonDH.share (group_of_valid_namedGroup g)))
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_Init? (C?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st hsl = ks in
-    group_list_to_share_list gl r /\
-    modifies (Set.singleton rid) h0 h1 /\
-    modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
 val map_ST: ('a -> St 'b) -> list 'a -> St (list 'b)
 let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
-let ks_client_13_1rtt_init ks groups =
+let group_and_keyshare = (g:CommonDH.group & CommonDH.keyshare g)
+let group_and_share = (g:CommonDH.group & CommonDH.share g)
+module ListT = FStar.List.Tot
+
+val ks_client_13_1rtt_init:
+  ks:ks -> gl:list valid_namedGroup
+  -> ST keyShare
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    C? kss /\ C_Init? (C?.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid st hsl = ks in
+    ClientKeyShare? r /\
+    gl = ListT.map fst (ClientKeyShare?._0 r) /\
+    modifies (Set.singleton rid) h0 h1 /\
+    modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+
+let ks_client_13_1rtt_init ks gl =
+  let groups = ListT.map group_of_valid_namedGroup gl in
   let KS #rid st hsl = ks in
   let C (C_Init cr) = !st in
   let keygen (g:CommonDH.group)
-    : St (g:CommonDH.group & CommonDH.keyshare g)
+    : St group_and_keyshare
     = (| g, CommonDH.keygen g |) in
   let gs = map_ST keygen groups in
   st := C (C_13_wait_SH cr None None gs);
-  let pub (gx : (g:CommonDH.group & CommonDH.keyshare g))
-    : Tot (g:CommonDH.group & CommonDH.share g)
+  let pub (gx : group_and_keyshare)
+    : Tot group_and_share
     = let (| g, gx |) = gx in
     (| g, CommonDH.pubshare gx |) in
-  List.Tot.map pub gs
+  ListT.map pub gs
 
 val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list CommonDH.group -> ST (list (g:CommonDH.group & CommonDH.share g))
   (requires fun h0 ->
@@ -344,7 +338,7 @@ val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list CommonDH.group -> ST (lis
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
-    group_list_to_share_list gl r /\
+    ListT.map dfst r = gl /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
@@ -1155,9 +1149,3 @@ let ks_client_12_server_finished ks
 
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i rd wr) = i
-
-val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random ->
-    			   h:handshake ->
-			   ks:recordInstance -> Tot (epoch r n)
-let recordInstanceToEpoch #hs_rgn #n hs (StAEInstance #i rd wr) =
-  Epoch hs rd wr

@@ -17,6 +17,7 @@ open HandshakeMessages
 open StAE
 open Negotiation
 
+module KS = KeySchedule
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module MR = FStar.Monotonic.RRef
@@ -239,3 +240,10 @@ let get_current_epoch (#r:_) (#n:_) (e:epochs r n) (rw:rw)
   = let j = get_ctr e rw in 
     let epochs = MS.i_read e.es in
     Seq.index epochs j
+
+
+val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random ->
+    			   h:Negotiation.handshake ->
+			   ks:KS.recordInstance -> Tot (epoch r n)
+let recordInstanceToEpoch #hs_rgn #n hs (KS.StAEInstance #i rd wr) =
+  Epoch hs rd wr

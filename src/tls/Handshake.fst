@@ -33,6 +33,7 @@ open HandshakeLog
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
+module KS = KeySchedule
 
 let hashSize = Hashing.Spec.tagLen
 
