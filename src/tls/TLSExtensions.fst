@@ -493,7 +493,7 @@ let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
        | None -> FirstConnection
        | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
     let res = [E_renegotiation_info(cri)] in
-    let res = [E_draftVersion (abyte2 (0z, 13z))] in
+    let res = (E_draftVersion (abyte2 (0z, 13z)))::res in
     let res =
        match pv, ks with
        | TLS_1p3,Some ks -> (E_keyShare ks)::res

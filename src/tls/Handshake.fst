@@ -55,8 +55,13 @@ let Nego.prepareClientOffer cfg =
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
+  (ensures (fun h0 i h1 -> True))  //TODO: what should we say here? something like the keyschedule state machine is initialized?
+                              //and that the HandshakeLog has only one message more which is a ClientHello that is computed from the input config
+			      //and that the returned bytes are serialized version of the hs_msg, perhaps this can be made part of the type refinement
 let prepareClientHello cfg ks log ri sido =
+  (* Negotiation: compute offer from configuration *)
+  let co = prepareClientOffer cfg in
+
   (* Who should be generating nonces? KS? *)
   let cr = KeySchedule.ks_client_random ks in
   (* Negotiation, KeySchedule, Messages: compute serialized key shares *)
@@ -65,33 +70,35 @@ let prepareClientHello cfg ks log ri sido =
      Messages should do the serialization (calling into CommonDH)\
   *)
   let kp =
-     match cfg.maxVer with
+     match co.protocol_version with
       | TLS_1p3 ->
          (* This doesn't do any filtering, it's just a map converting to CommonDH.group *)
-         let groups = List.Tot.choose CommonDH.group_of_namedGroup cfg.namedGroups in
+         (* let groups = List.Tot.choose CommonDH.group_of_namedGroup cfg.namedGroups in *)
          (* Call into KS to generate shares for all of them *)
          (* TODO: ks_client_13_1rtt_init should take `namedGroup`s, avoiding the above mapping *)
-         let gxl = KeySchedule.ks_client_13_1rtt_init ks groups in
+         (* let gxl = KeySchedule.ks_client_13_1rtt_init ks co.co_namedGroups in *)
+         KeySchedule.ks_client_13_1rtt_init ks co.co_namedGroups
          (* Serialized client shares. Probably should go to HandshakeMessages/Log? *)
-         let ser_share (gx:(g:CommonDH.group & CommonDH.share g)) =
-           let (| g, gx |) = gx in
-           match CommonDH.namedGroup_of_group g with
-           | None -> None // TODO: prove from def. of groups above that this is impossible
-           | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in
-         let serialized = List.Tot.choose ser_share gxl in
-	       Some (ClientKeyShare serialized)
+	 (* TODO: this could all go to KeySchedule, ks_client_13_1rtt_init could return the Some (ClientKeyShare serialized) directly *)
+         (* let ser_share (gx:(g:CommonDH.group & CommonDH.share g)) = *)
+         (*   let (| g, gx |) = gx in *)
+         (*   match CommonDH.namedGroup_of_group g with *)
+         (*   | None -> None // TODO: prove from def. of groups above that this is impossible *)
+         (*   | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in *)
+         (* let serialized = List.Tot.choose ser_share gxl in *)
+	 (*       Some (ClientKeyShare serialized) *)
       | _ ->
       	 let _ = KeySchedule.ks_client_12_init ks in
 	       None
       in
   (* Is (Some? sido) in case of resumption? *)
   let sid = match sido with | None -> empty_bytes | Some x -> x in
-  (* Negotiation: compute offer from configuration *)
-  (* The offer should contain kp *)
-  let co = prepareClientOffer cfg in
   (* Negotiation should do this: it computes the list of extensions to send, gives them back to 
      Handshake, which then calls into e.g. KeySchedule to turn them into proper extensions that
-     can be serialized *) 
+     can be serialized *)
+  (* this is currently in TLSExtensions *)
+  (* TODO: perhaps split TLSExtensions into two parts
+   * the parsing and serialization can be moved to HandshakeMessages, and preparing extensions can be moved to Nego (or submodules thereof) *)
   let ext = prepareExtensions co.co_protocol_version co.co_cipher_suites co.co_safe_resumption co.co_safe_renegotiation co.co_sigAlgs co.co_namedGroups ri kp in
   let ch =
   {ch_protocol_version = co.co_protocol_version;
@@ -102,6 +109,7 @@ let prepareClientHello cfg ks log ri sido =
    ch_compressions = co.co_compressions;
    ch_extensions = Some ext;} in
   (* `@@` has side-effects: it appends the message to the log and returns the message bytes *)
+  (* this is a call to HandshakeMessage *)
   let chb = log @@ (ClientHello ch) in
   (ClientHello ch, chb)
 

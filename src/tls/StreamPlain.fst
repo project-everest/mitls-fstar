@@ -84,7 +84,7 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
 let rec scan i bs j =
   let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
   let bs' = fst (split bs len) in
-  match index bs j with
+  match Seq.index bs j with
   | 0z ->
     if j > 0 then scan i bs (j - 1)
     else Error (AD_decode_error, "No ContentType byte")
@@ -161,10 +161,10 @@ let rec scan_pad_correct i payload ct len j =
   let bs = pad payload ct len in
   if j = length payload then
     begin
-    cut (abyte (index bs j) = ctBytes ct);
+    cut (abyte (Seq.index bs j) = ctBytes ct);
     lemma_split bs j;
     lemma_eq_intro payload (fst (split bs j));
-    match index bs j with
+    match Seq.index bs j with
     | 20z -> cut (j = 1)
     | 21z -> cut (j = 2)
     | 22z -> ()

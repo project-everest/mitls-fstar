@@ -20,10 +20,10 @@ open TLSConstants
 open TLSExtensions
 open TLSInfo
 open Range
-open HandshakeMessages
+//open HandshakeMessages
 open StatefulLHAE
 open HKDF
-open Negotiation // We only depend minimally on Nego
+//open Negotiation // We only depend minimally on Nego
 open Epochs	 // We only depend minimally on Epochs
 open PSK
 
@@ -56,12 +56,12 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
   let kh = Platform.Bytes.hex_of_bytes kb in
   IO.debug_print_string ("Share: "^kh^"\n")
 
-let keyLabel = function
-  | EarlyTrafficKey -> "early traffic key expansion"
-  | EarlyApplicationDataKey -> "early application data key expansion"
-  | HandshakeKey -> "handshake key expansion"
-  | ApplicationDataKey -> "application data key expansion"
-  | ApplicationRekey -> "application data key expansion"
+(* let keyLabel = function *)
+(*   | EarlyTrafficKey -> "early traffic key expansion" *)
+(*   | EarlyApplicationDataKey -> "early application data key expansion" *)
+(*   | HandshakeKey -> "handshake key expansion" *)
+(*   | ApplicationDataKey -> "application data key expansion" *)
+(*   | ApplicationRekey -> "application data key expansion" *)
 
 (***********************************************************
      Internal (resumption) PSKs, indexed by rmsId
@@ -108,9 +108,9 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 abstract let psk (i:esId) =
   b:bytes{length b = hashSize (esId_hash i)}
 
-let get_psk_info (i:esId) =
+let get_psk_info (i:esId) :pskInfo =
   match i with
-  | ResumptionPSK c _ -> c
+  | ResumptionPSK c -> c
   | ApplicationPSK c _ -> c
 
 
@@ -302,7 +302,14 @@ let rec group_list_to_share_list (gl:list CommonDH.group) (gxl:list (g:CommonDH.
     g = g' && group_list_to_share_list glr gxlr
   | _ -> false
 
-val ks_client_13_1rtt_init: ks:ks -> gl:list CommonDH.group -> ST (list (g:CommonDH.group & CommonDH.share g))
+let group_of_valid_namedGroup
+  (g:valid_namedGroup)
+  : CommonDH.group
+  = Some?.v (CommonDH.group_of_namedGroup g)
+
+val ks_client_13_1rtt_init:
+  ks:ks -> gl:list valid_namedGroup
+  -> ST (list (g:valid_namedGroup & CommonDH.share (group_of_valid_namedGroup g)))
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))

@@ -1366,6 +1366,12 @@ type namedGroup =
   | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = _FFz})
   | ECDHE_PRIVATE_USE of byte
 
+(*
+ * We only seem to be using these two named groups
+ * irrespective of whether it's TLS 12 or 13
+ *)
+type valid_namedGroup = x:namedGroup{SEC? x \/ FFDHE? x}
+
 (** Serializing function for (EC)DHE named groups *)
 val namedGroupBytes: namedGroup -> Tot (lbytes 2)
 let namedGroupBytes ng =

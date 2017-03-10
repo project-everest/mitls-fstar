@@ -18,13 +18,13 @@ open CoreCrypto
 inline_for_extraction let n_debug = false
 
 (* Negotiation: HELLO sub-module *)
-type ri = cVerifyData * sVerifyData 
+type ri = cVerifyData * sVerifyData
 
 type clientOffer = {
   co_protocol_version:protocolVersion;
   co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
-  co_namedGroups: list (x:namedGroup{SEC? x \/ FFDHE? x});
+  co_namedGroups: list valid_namedGroup;
   co_sigAlgs: list sigHashAlg;
   co_safe_resumption: bool;
   co_safe_renegotiation: bool;
