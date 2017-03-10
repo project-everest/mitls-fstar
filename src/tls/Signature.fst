@@ -325,7 +325,7 @@ let coerce #a pkr skr =
 
 
 (* ------------------------------------------------------------------------ *)
-(** TODO: Remove this by comparing/setting only `a.core` in `endorse` and `lookup_key` *)
+(* TODO: Remove this by comparing/setting only `a.core` in `endorse` and `lookup_key` *)
 assume HasEq_alg_unsound: hasEq alg
 
 val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr == a.core} -> ST pkey
