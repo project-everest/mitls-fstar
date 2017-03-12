@@ -1722,7 +1722,7 @@ let parseSigHashAlgs b =
 
 // TODO: replace "bytes" by either DH or ECDH parameters
 (** KeyShare entry definition *)
-type keyShareEntry = namedGroup * b:bytes{repr_bytes (length b) <= 2}
+type keyShareEntry = valid_namedGroup * b:bytes{repr_bytes (length b) <= 2}
 
 (** ClientKeyShare definition *)
 type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
@@ -1748,17 +1748,18 @@ let parseKeyShareEntry b =
   let ng,key_exchange = split b 2 in
   match parseNamedGroup ng with
   | Correct ng ->
-    begin
-    match vlparse 2 key_exchange with
-    | Correct ke -> Correct (ng, ke)
-    | Error z    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
-    end
+    if SEC? ng || FFDHE? ng then
+      match vlparse 2 key_exchange with
+      | Correct ke -> Correct (ng, ke)
+      | Error z    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+    else
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
   | Error z -> Error z
 
 
 (** Lemmas for KeyShare entries parsing/serializing inversions *)
 val inverse_keyShareEntry: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f keyShareEntryBytes parseKeyShareEntry x)
   [SMTPat (parseKeyShareEntry (keyShareEntryBytes x))]
 let inverse_keyShareEntry (ng, x) =
@@ -1771,7 +1772,7 @@ let inverse_keyShareEntry (ng, x) =
   assert (Seq.equal b x)
 
 val pinverse_keyShareEntry: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
   [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
 let pinverse_keyShareEntry x = ()

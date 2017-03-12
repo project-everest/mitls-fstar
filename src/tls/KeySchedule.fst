@@ -166,7 +166,7 @@ abstract type rms (i:rmsId) = Hashing.Spec.tag (rmsId_hash i)
 type ems (i:exportId) = Hashing.Spec.tag (exportId_hash i)
 
 // TODO this is superseeded by StAE.state i
-// but I'm waiting for it to be tester to switch over
+// but I'm waiting for it to be tested to switch over
 // TODO use the newer index types
 type recordInstance =
   | StAEInstance: #id:TLSInfo.id -> StAE.reader id -> StAE.writer id -> recordInstance
@@ -290,6 +290,8 @@ let create #rid r hsl =
     | Server -> S (S_Init nonce) in
   (KS #ks_region (ralloc ks_region istate) hsl), nonce
 
+#reset-options
+
 let group_of_valid_namedGroup
   (g:valid_namedGroup)
   : CommonDH.group
@@ -300,10 +302,6 @@ let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
-let group_and_keyshare = (g:CommonDH.group & CommonDH.keyshare g)
-let group_and_share = (g:CommonDH.group & CommonDH.share g)
-module ListT = FStar.List.Tot
-
 val ks_client_13_1rtt_init:
   ks:ks -> gl:list valid_namedGroup
   -> ST keyShare
@@ -313,48 +311,56 @@ val ks_client_13_1rtt_init:
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     ClientKeyShare? r /\
-    gl = ListT.map fst (ClientKeyShare?._0 r) /\
+    gl == List.Tot.map fst (ClientKeyShare?._0 r) /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_13_1rtt_init ks gl =
-  let groups = ListT.map group_of_valid_namedGroup gl in
   let KS #rid st hsl = ks in
   let C (C_Init cr) = !st in
+  let groups = List.Tot.map group_of_valid_namedGroup gl in
   let keygen (g:CommonDH.group)
-    : St group_and_keyshare
+    : St (g:CommonDH.group & CommonDH.keyshare g)
     = (| g, CommonDH.keygen g |) in
   let gs = map_ST keygen groups in
   st := C (C_13_wait_SH cr None None gs);
-  let pub (gx : group_and_keyshare)
-    : Tot group_and_share
-    = let (| g, gx |) = gx in
-    (| g, CommonDH.pubshare gx |) in
-  ListT.map pub gs
+  let serialize_share (gx:(g:CommonDH.group & CommonDH.share g)) =
+    let (| g, gx |) = gx in
+    match CommonDH.namedGroup_of_group g with
+    | None -> None // Impossible
+    | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in
+  let serialized = List.Tot.choose serialize_share gs in
+  ClientKeyShare serialized
 
-val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list CommonDH.group -> ST (list (g:CommonDH.group & CommonDH.share g))
+
+val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST keyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
-    ListT.map dfst r = gl /\
+    ClientKeyShare? r /\
+    gl == List.Tot.map fst (ClientKeyShare?._0 r) /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_client_13_0rtt_init ks esId groups =
+let ks_client_13_0rtt_init ks esId gl =
   let KS #rid st hsl = ks in
   let C (C_Init cr) = !st in
+  let groups = List.Tot.map group_of_valid_namedGroup gl in
   let keygen (g:CommonDH.group)
     : St (g:CommonDH.group & CommonDH.keyshare g)
     = (| g, CommonDH.keygen g |) in
   let gs = map_ST keygen groups in
   st := C (C_13_wait_CH cr esId gs);
-  let pub (gx : (g:CommonDH.group & CommonDH.keyshare g))
-    : Tot (g:CommonDH.group & CommonDH.share g)
-    = let (| g, gx |) = gx in
-    (| g, CommonDH.pubshare gx |) in
-  List.Tot.map pub gs
+  let serialize_share (gx:(g:CommonDH.group & CommonDH.share g)) =
+    let (| g, gx |) = gx in
+    match CommonDH.namedGroup_of_group g with
+    | None -> None // Impossible
+    | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in
+  let serialized = List.Tot.choose serialize_share gs in
+  ClientKeyShare serialized
+
 
 // Derive the early keys from the early secret
 let ks_client_13_0rtt_ch ks esId

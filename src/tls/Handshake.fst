@@ -44,6 +44,7 @@ let hashSize = Hashing.Spec.tagLen
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
 inline_for_extraction let hs_debug = false
+
 (* Sketch 
 val Nego.prepareClientOffer: config -> clientOffer
 let Nego.prepareClientOffer cfg =
@@ -56,63 +57,56 @@ let Nego.prepareClientOffer cfg =
 
 val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
   (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))  //TODO: what should we say here? something like the keyschedule state machine is initialized?
-                              //and that the HandshakeLog has only one message more which is a ClientHello that is computed from the input config
-			      //and that the returned bytes are serialized version of the hs_msg, perhaps this can be made part of the type refinement
-let prepareClientHello cfg ks log ri sido =
-  (* Negotiation: compute offer from configuration *)
-  let co = prepareClientOffer cfg in
-
-  (* Who should be generating nonces? KS? *)
-  let cr = KeySchedule.ks_client_random ks in
-  (* Negotiation, KeySchedule, Messages: compute serialized key shares *)
-  (* Negotiation should compute the list of groups;
-     KeySchedule should compute the shares from these groups (calling into CommonDH)
-     Messages should do the serialization (calling into CommonDH)\
+  (ensures (fun h0 i h1 -> True))
+  (* TODO: what should we say here? something like:
+    - The Keys Schedule state machine is in the initial state
+    - The Handshake log has exactly one more message: the ClientHello computed from the input configurtion
+    - The result is this ClientHello and its serialization
   *)
+let prepareClientHello cfg ks log ri sido =
+  (* Who should generate nonces? KeySchedule? *)
+  let cr = KeySchedule.ks_client_random ks in
+  (* Negotiation computes the list of groups from the configuration;
+     KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
+     Messages should do the serialization (calling into CommonDH), but dependencies are tricky
+  *)
+  (* In Negotiation: compute offer from configuration *)
+  let co = prepareClientOffer cfg in
+  (* In KeySchedule: compute shares for groups in offer *)
   let kp =
-     match co.protocol_version with
-      | TLS_1p3 ->
-         (* This doesn't do any filtering, it's just a map converting to CommonDH.group *)
-         (* let groups = List.Tot.choose CommonDH.group_of_namedGroup cfg.namedGroups in *)
-         (* Call into KS to generate shares for all of them *)
-         (* TODO: ks_client_13_1rtt_init should take `namedGroup`s, avoiding the above mapping *)
-         (* let gxl = KeySchedule.ks_client_13_1rtt_init ks co.co_namedGroups in *)
-         KeySchedule.ks_client_13_1rtt_init ks co.co_namedGroups
-         (* Serialized client shares. Probably should go to HandshakeMessages/Log? *)
-	 (* TODO: this could all go to KeySchedule, ks_client_13_1rtt_init could return the Some (ClientKeyShare serialized) directly *)
-         (* let ser_share (gx:(g:CommonDH.group & CommonDH.share g)) = *)
-         (*   let (| g, gx |) = gx in *)
-         (*   match CommonDH.namedGroup_of_group g with *)
-         (*   | None -> None // TODO: prove from def. of groups above that this is impossible *)
-         (*   | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in *)
-         (* let serialized = List.Tot.choose ser_share gxl in *)
-	 (*       Some (ClientKeyShare serialized) *)
-      | _ ->
-      	 let _ = KeySchedule.ks_client_12_init ks in
-	       None
-      in
-  (* Is (Some? sido) in case of resumption? *)
-  let sid = match sido with | None -> empty_bytes | Some x -> x in
-  (* Negotiation should do this: it computes the list of extensions to send, gives them back to 
-     Handshake, which then calls into e.g. KeySchedule to turn them into proper extensions that
-     can be serialized *)
-  (* this is currently in TLSExtensions *)
-  (* TODO: perhaps split TLSExtensions into two parts
-   * the parsing and serialization can be moved to HandshakeMessages, and preparing extensions can be moved to Nego (or submodules thereof) *)
-  let ext = prepareExtensions co.co_protocol_version co.co_cipher_suites co.co_safe_resumption co.co_safe_renegotiation co.co_sigAlgs co.co_namedGroups ri kp in
-  let ch =
-  {ch_protocol_version = co.co_protocol_version;
-   ch_client_random = cr;
-   ch_sessionID = sid;
-   ch_cipher_suites = co.co_cipher_suites;
-   ch_raw_cipher_suites = None;
-   ch_compressions = co.co_compressions;
-   ch_extensions = Some ext;} in
+    match co.co_protocol_version with
+    | TLS_1p3 -> Some (KeySchedule.ks_client_13_1rtt_init ks co.co_namedGroups)
+    | _       -> let _ = KeySchedule.ks_client_12_init ks in None
+    in
+  (* Some? sido in case of resumption *)
+  let sid =
+    match sido with
+    | None -> empty_bytes
+    | Some x -> x
+  in
+  (* In TLSExtensions: prepare client extensions, including key shares *)
+  let ext = prepareExtensions
+    co.co_protocol_version
+    co.co_cipher_suites
+    co.co_safe_resumption
+    co.co_safe_renegotiation
+    co.co_sigAlgs
+    co.co_namedGroups
+    ri kp in
+  let ch = {
+    ch_protocol_version = co.co_protocol_version;
+    ch_client_random = cr;
+    ch_sessionID = sid;
+    ch_cipher_suites = co.co_cipher_suites;
+    ch_raw_cipher_suites = None;
+    ch_compressions = co.co_compressions;
+    ch_extensions = Some ext
+  } in
   (* `@@` has side-effects: it appends the message to the log and returns the message bytes *)
-  (* this is a call to HandshakeMessage *)
+  (* this is a call to HandshakeMessages *)
   let chb = log @@ (ClientHello ch) in
   (ClientHello ch, chb)
+
 
 (*
 //16-05-31 somewhat duplicating TLSConstants.geqPV
@@ -516,7 +510,7 @@ let client_handle_server_hello (HS #r0 r res cfg nonce lgref hsref) msgs =
       (match keys with
       | Some keys ->
         let h = Negotiation.Fresh ({session_nego = n}) in
-        let ep = KeySchedule.recordInstanceToEpoch #r0 #nonce h keys in
+        let ep = Epochs.recordInstanceToEpoch #r0 #nonce h keys in
         Epochs.add_epoch lgref ep;
         Epochs.incr_reader lgref
       | None -> ());
@@ -661,7 +655,7 @@ let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_m
       | Correct [(ClientKeyExchange(cke),b1)] ->
              let keys = KeySchedule.ks_12_get_keys (!hsref).hs_ks in
              let h = Negotiation.Fresh ({session_nego = n}) in
-             let ep = KeySchedule.recordInstanceToEpoch h keys in
+             let ep = Epochs.recordInstanceToEpoch h keys in
              Epochs.add_epoch lgref ep;
              hsref := {!hsref with
                 hs_buffers = {(!hsref).hs_buffers with hs_outgoing = b1};
@@ -820,7 +814,7 @@ let client_handle_server_finished_13 (HS #r0 r res cfg id lgref hsref) msgs =
     | Error z -> InError z
     | Correct (hsl,svd,keys) ->
        let h = Negotiation.Fresh ({session_nego = n}) in
-       let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+       let ep = Epochs.recordInstanceToEpoch #r0 #id h keys in
        Epochs.add_epoch lgref ep;
        Epochs.incr_reader lgref;
        Epochs.incr_writer lgref; // TODO update writer key properly
@@ -844,7 +838,7 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
        (match keys with
         | Some ri ->
 	  let h = Negotiation.Fresh ({session_nego = n}) in
-	  let ep = KeySchedule.recordInstanceToEpoch #r0 #id h ri in
+	  let ep = Epochs.recordInstanceToEpoch #r0 #id h ri in
           // Do not increment writer yet as the SH is sent in plaintext
 	  Epochs.add_epoch lgref ep
 	| None -> ());
@@ -969,7 +963,7 @@ let server_handle_client_ccs (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
       | Correct () ->
         let keys = KeySchedule.ks_12_get_keys (!hsref).hs_ks in
         let h = Negotiation.Fresh ({session_nego = n}) in
-        let ep = KeySchedule.recordInstanceToEpoch h keys in
+        let ep = Epochs.recordInstanceToEpoch h keys in
         Epochs.add_epoch lgref ep;
         Epochs.incr_reader lgref;
         (hsref := {!hsref with
@@ -1086,7 +1080,7 @@ let server_send_server_finished_13 (HS #r0 r res cfg id lgref hsref) =
      | Correct ([(EncryptedExtensions(ee),eeb);(Certificate(c),cb);(CertificateVerify(scv),scvb);(Finished(f),sfinb)], keys) ->
             let nl = eeb @| cb @| scvb @| sfinb in
             let h = Negotiation.Fresh ({session_nego = n}) in
-            let ep = KeySchedule.recordInstanceToEpoch #r0 #id h keys in
+            let ep = Epochs.recordInstanceToEpoch #r0 #id h keys in
             Epochs.add_epoch lgref ep;
             Epochs.incr_writer lgref; // Switch to ATK after the SF
             Epochs.incr_reader lgref; // TODO when to increment the reader?
