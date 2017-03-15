@@ -20,12 +20,12 @@ open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages
+open Negotiation
 open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less
 open TLSExtensions
 //open CoreCrypto
-open Negotiation
 open Epochs
 open HandshakeLog
 
@@ -34,6 +34,7 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
 module KS = KeySchedule
+module Nego = Negotiation
 
 let hashSize = Hashing.Spec.tagLen
 
@@ -55,8 +56,8 @@ let Nego.prepareClientOffer cfg =
   let ext = prepareExtensions protocol_version cipher_suites sigAlgs groups kp in
 *)  
 
-val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> option sessionID -> ST (hs_msg * bytes)
-  (requires (fun h -> True))
+val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option Nego.ri -> option sessionID -> ST (hs_msg * bytes)
+  (requires (fun h -> True)) //TODO: add the precondition that Nego and KS are in proper state
   (ensures (fun h0 i h1 -> True))
   (* TODO: what should we say here? something like:
     - The Keys Schedule state machine is in the initial state
@@ -71,7 +72,7 @@ let prepareClientHello cfg ks log ri sido =
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky
   *)
   (* In Negotiation: compute offer from configuration *)
-  let co = prepareClientOffer cfg in
+  let co = Nego.prepareClientOffer cfg in
   (* In KeySchedule: compute shares for groups in offer *)
   let kp =
     match co.co_protocol_version with
@@ -144,11 +145,11 @@ val prepareServerHello: config -> KeySchedule.ks -> HandshakeLog.log -> option r
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let prepareServerHello cfg ks log ri (ClientHello ch,_) =
- let mode = computeServerMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in
+ let mode = Nego.computeServerMode cfg ch.ch_protocol_version ch.ch_cipher_suites ch.ch_extensions ch.ch_compressions ri in
   match mode with
    | Error(z) -> Error(z)
    | Correct(mode) ->
-     let srand = KeySchedule.ks_server_random ks in
+     let srand = KS.ks_server_random ks in
      let ksl =
        (match mode.sm_protocol_version, mode.sm_dh_group, mode.sm_dh_share with
        | TLS_1p3, Some gn, Some gxb ->
@@ -158,44 +159,43 @@ let prepareServerHello cfg ks log ri (ClientHello ch,_) =
            (match CommonDH.parse g gxb with
            | None -> None
            | Some gx ->
-             let gy = KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.sm_cipher_suite g gx in
-             (Some (ServerKeyShare (gn, CommonDH.serialize_raw #g gy)))))
+             Some (KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.sm_cipher_suite g gx)))
        | _ -> None) in
-  match negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
-  | Error(z) -> Error(z)
-  | Correct(sext) ->
-  let sid = CoreCrypto.random 32 in
-  let sh =
-   {sh_protocol_version = mode.sm_protocol_version;
-    sh_sessionID = Some sid;
-    sh_server_random = srand;
-    sh_cipher_suite = mode.sm_cipher_suite;
-    sh_compression = mode.sm_comp;
-    sh_extensions = sext} in
-  let nego =
-   {n_client_random = ch.ch_client_random;
-    n_server_random = srand;
-    n_sessionID = Some sid;
-    n_protocol_version = mode.sm_protocol_version;
-    n_kexAlg = mode.sm_kexAlg;
-    n_sigAlg = mode.sm_sigAlg;
-    n_aeAlg  = mode.sm_aeAlg;
-    n_cipher_suite = mode.sm_cipher_suite;
-    n_compression = mode.sm_comp;
-    n_dh_group = mode.sm_dh_group;
-    n_scsv = [];
-    n_extensions = mode.sm_ext;
-    (* [getCachedSession] returned [None], so no session resumption *)
-    n_resume = false} in
-  let _ = log @@ (ClientHello ch) in
-  let shb = log @@ (ServerHello sh) in
-  let keys = (match mode.sm_protocol_version with
-    	     | TLS_1p3 ->
-	       let keys = KeySchedule.ks_server_13_sh ks in
-	       Some keys
-	     | _ -> None) in
-    Correct (nego,keys,(ServerHello sh,shb))
-
+    (* TLSExtensions:negotiateServerExtensions *)
+    match negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
+    | Error(z) -> Error(z)
+    | Correct(sext) ->
+      let sid = CoreCrypto.random 32 in
+      let sh =
+      {sh_protocol_version = mode.sm_protocol_version;
+       sh_sessionID = Some sid;
+       sh_server_random = srand;
+       sh_cipher_suite = mode.sm_cipher_suite;
+       sh_compression = mode.sm_comp;
+       sh_extensions = sext} in
+      let nego =
+      {n_client_random = ch.ch_client_random;
+       n_server_random = srand;
+       n_sessionID = Some sid;
+       n_protocol_version = mode.sm_protocol_version;
+       n_kexAlg = mode.sm_kexAlg;
+       n_sigAlg = mode.sm_sigAlg;
+       n_aeAlg  = mode.sm_aeAlg;
+       n_cipher_suite = mode.sm_cipher_suite;
+       n_compression = mode.sm_comp;
+       n_dh_group = mode.sm_dh_group;
+       n_scsv = [];
+       n_extensions = mode.sm_ext;
+       (* [getCachedSession] returned [None], so no session resumption *)
+       n_resume = false} in
+       let _ = log @@ (ClientHello ch) in
+       let shb = log @@ (ServerHello sh) in
+       let keys = (match mode.sm_protocol_version with
+    		   | TLS_1p3 ->
+		     let keys = KeySchedule.ks_server_13_sh ks in
+		     Some keys
+		   | _ -> None) in
+		     Correct (nego,keys,(ServerHello sh,shb))
 
 val processServerHello: c:config -> KeySchedule.ks -> HandshakeLog.log -> option ri -> ch -> (hs_msg * bytes) ->
   ST (result (nego * option KeySchedule.recordInstance))

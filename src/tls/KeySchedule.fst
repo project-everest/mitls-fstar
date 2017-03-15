@@ -544,7 +544,10 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> g:CommonDH.group -> gx:CommonDH.share g -> ST (CommonDH.share g)
+val ks_server_13_1rtt_init:
+  ks:ks -> cr:random -> cs:cipherSuite
+  -> g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)}
+  -> gx:CommonDH.share g -> ST keyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -567,7 +570,9 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   let es = HKDF.hkdf_extract h zeroes zeroes in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   st := S (S_13_wait_SH (ae, h) cr sr None None (| hsId, hs |));
-  gy
+
+  match CommonDH.namedGroup_of_group g with
+  | Some gn -> ServerKeyShare (gn, CommonDH.serialize_raw #g gy)
 
 val ks_server_13_sh: ks:ks -> ST recordInstance
   (requires fun h0 ->
