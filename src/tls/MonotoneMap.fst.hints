@@ -100,13 +100,14 @@
       0,
       1,
       [
-        "@query", "data_elim_Prims.Some", "disc_equation_Prims.Some",
-        "equation_FStar.HyperHeap.test0", "equation_MonotoneMap.grows",
-        "equation_MonotoneMap.map_",
-        "function_token_typing_FStar.HyperHeap.test0",
+        "@query", "disc_equation_Prims.Some",
+        "equation_FStar.List.Tot.Base.test_sort",
+        "equation_MonotoneMap.grows", "equation_MonotoneMap.map_",
+        "equation_Prims._assert", "fuel_guarded_inversion_Prims.option",
+        "function_token_typing_FStar.List.Tot.Base.test_sort",
         "interpretation_Tm_arrow_dd86dc4e5f85a0aa032897c9a04b40ed",
         "proj_equation_Prims.Some_v", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_Prims.Some_v", "unit_inversion"
+        "projection_inverse_Prims.Some_v"
       ],
       0
     ],
