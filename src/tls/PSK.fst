@@ -289,6 +289,13 @@ let compatible_hash_st (i:pskid) (a:hash_alg) (h:mem) =
 let compatible_hash (i:pskid) (a:hash_alg) =
   MR.witnessed (compatible_hash_st i a)
 
+let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
+  (MM.defined app_psk_table i h /\
+  (let (_,ctx,_) = MM.value app_psk_table i h in c = ctx))
+
+let compatible_info (i:pskid) (c:pskInfo) =
+  MR.witnessed (compatible_info_st i c)
+
 let verify_hash (i:pskid) (a:hash_alg) : ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 b h1 ->
