@@ -325,6 +325,8 @@ and extensionBytes role ext =
     let payload = extensionPayloadBytes role ext in
     let payload = vlbytes 2 payload in
     head @| payload
+
+(* SI: API. Called by HandshakeMessages. *)
 and extensionsBytes role exts =
   vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
 
@@ -346,6 +348,8 @@ val parseExtensions: pinverse_t extensionsBytes
 #set-options "--lax"
 
 val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndication) (decreases (length b))
+
+(* SI: API. Called by HandshakeMessages. *)
 val parseExtension: r:role -> b:bytes -> Tot (result extension) (decreases (length b))
 val parseExtensions: r:role -> b:bytes -> Tot (result (list extension)) (decreases (length b))
 let rec parseExtension role b =
@@ -447,6 +451,8 @@ and parseEarlyDataIndication role b =
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for configuration id")
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data indication length")
   else Correct (ServerEarlyDataIndication)
+
+(* SI: API. Called by HandshakeMessages. *)
 and parseExtensions role b =
   let rec (aux:bytes -> list extension -> Tot (result (list extension))) = fun b exts ->
     if length b >= 4 then
@@ -470,6 +476,7 @@ and parseExtensions role b =
 
 #reset-options
 
+(* SI: API. Called by HandshakeMessages. *)
 val parseOptExtensions: r:role -> data:bytes -> Tot (result (option (list extension)))
 let parseOptExtensions r data =
   if length data = 0 then Correct(None)
@@ -478,11 +485,14 @@ let parseOptExtensions r data =
   | Correct(exts) -> Correct(Some exts)
   | Error(z) -> Error(z))
 
+(* SI: API. Called by Negotiation. *)
 (* JK: Need to get rid of such functions *)
 let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
   match l with | [] -> [] | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
+  
 let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup{p n})): Tot (list namedGroup) = match l with | [] -> [] | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
 
+(* SI: API. Called by Handshake. *)
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
 val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
@@ -568,6 +578,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
         else
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
 
+(* SI: API. Called by Negotiation. *)
 val negotiateClientExtensions: protocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   match pv with
@@ -640,6 +651,7 @@ let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:boo
                 Some(E_extended_padding)
     | _ -> None
 
+(* SI: API. Called by Negotiation. *)
 val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
 let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
   match cExt with
@@ -682,6 +694,7 @@ let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
         else {neg with ne_signature_algorithms = Some (sha)}
     | _ -> neg // JK : handle remaining cases
 
+(* SI: API. Called by Handshake. *)
 val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension)))
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
@@ -751,6 +764,7 @@ let default_sigHashAlg_fromSig pv sigAlg=
         //| SSL_3p0 -> [(DSA,NULL)]
     | _ -> unexpected "[default_sigHashAlg_fromSig] invoked on an invalid signature algorithm"
 
+(* SI: API. Called by HandshakeMessages. *)
 val default_sigHashAlg: protocolVersion -> cipherSuite -> ML (l:list sigHashAlg{List.Tot.length l <= 1})
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
