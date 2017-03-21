@@ -57,8 +57,6 @@ let parseRenegotiationInfo b =
 
 (** RFC 4.2 'Extension' Table *)
 
-(* SI: we currently only define Mandatory-to-Implement Extensions as listed in RFC 8.2. *)
-
 noeq type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
     ped_cipher_suite:valid_cipher_suite;
@@ -78,7 +76,12 @@ and cookie =
 and supportedVersions = 
   | SupportedVersions
 
-(* SI: non-{M,AF} extension commented-out for now.*)
+(* SI: we currently only define Mandatory-to-Implement Extensions as listed in RFC 8.2. 
+   Labels: 
+     M - MUST implement 
+     AF - MUST ... when offering applicable features. 
+
+   Non-{M,AF} extension commented-out for now.*)
 and extension =
   | E_server_name of list serverName (* M, AF *)
 (*| E_max_fragment_length | E_client_certificate_url | E_status_request 
