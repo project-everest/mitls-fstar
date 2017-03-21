@@ -32,6 +32,7 @@ let renegotiationInfoBytes ri =
     vlbytes 1 (cvd @| svd)
 
 (* TODO: inversion lemmas *)
+(* SI: deadcode
 val parseRenegotiationInfo: pinverse_t renegotiationInfoBytes
 let parseRenegotiationInfo b =
   if length b >= 1 then
@@ -50,7 +51,7 @@ let parseRenegotiationInfo b =
 	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
-
+*)
 noeq type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
     ped_cipher_suite:valid_cipher_suite;
@@ -349,7 +350,6 @@ val parseExtensions: pinverse_t extensionsBytes
 
 val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndication) (decreases (length b))
 
-(* SI: API. Called by HandshakeMessages. *)
 val parseExtension: r:role -> b:bytes -> Tot (result extension) (decreases (length b))
 val parseExtensions: r:role -> b:bytes -> Tot (result (list extension)) (decreases (length b))
 let rec parseExtension role b =
@@ -371,10 +371,12 @@ let rec parseExtension role b =
 	  (match parse_sni_list role data with
 	  | Correct(snis) -> Correct (E_server_name snis)
 	  | Error(z) -> Error(z))
-	| (0xFFz, 0x01z) -> // renego
+(* 	  
+	| (0xFFz, 0x01z) -> // renego (* OLD *)
 	  (match parseRenegotiationInfo data with
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
-	  | Error(z) -> Error(z))
+	  | Error(z) -> Error(z)
+*)	 
 	| (0x00z, 0x0Az) -> // supported groups
 	  if length data >= 2 && length data < 65538 then
 	  (match parseNamedGroups (data) with
@@ -714,6 +716,7 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
           in Correct cre
        | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))
 
+(* SI: deadcode 
 val isClientRenegotiationInfo: extension -> Tot (option cVerifyData)
 let isClientRenegotiationInfo e =
     match e with
@@ -742,6 +745,7 @@ let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerify
 
 val hasExtendedMS: negotiatedExtensions -> Tot bool
 let hasExtendedMS extL = extL.ne_extended_ms = true
+*)
 
 // JK : cannot add total effect here because of the exception thrown
 (* TODO *)
@@ -768,7 +772,7 @@ let default_sigHashAlg_fromSig pv sigAlg=
 val default_sigHashAlg: protocolVersion -> cipherSuite -> ML (l:list sigHashAlg{List.Tot.length l <= 1})
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
-
+(* SI: deadcode
 val sigHashAlg_contains: list sigHashAlg -> sigHashAlg -> Tot bool
 let sigHashAlg_contains (algList:list sigHashAlg) (alg:sigHashAlg) =
     List.Tot.mem alg algList
@@ -802,7 +806,7 @@ let rec cert_type_list_to_SigAlg ctl =
     match ctl with
     | [] -> []
     | h::t -> (cert_type_to_SigAlg h) :: (cert_type_list_to_SigAlg t)
-
+*)
 // JK : cannot add total effect here because of the exception thrown
 (* JK: changed from Tot (list sigHashAlg) to Tot (result (list (sigAlg*hashAlg))) to match the
    spec to the code *)
