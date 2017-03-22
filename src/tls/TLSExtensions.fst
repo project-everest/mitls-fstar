@@ -13,48 +13,6 @@ open TLSConstants
 open TLSInfo
 //open CoreCrypto
 
-let op_At = FStar.List.Tot.append
-
-type renegotiationInfo =
-  | FirstConnection
-  | ClientRenegotiationInfo of (cVerifyData)
-  | ServerRenegotiationInfo of (cVerifyData * sVerifyData)
-
-val renegotiationInfoBytes: renegotiationInfo -> Tot bytes
-let renegotiationInfoBytes ri =
-  match ri with
-  | FirstConnection ->
-    lemma_repr_bytes_values 0;
-    vlbytes 1 empty_bytes
-  | ClientRenegotiationInfo(cvd) ->
-    lemma_repr_bytes_values (length cvd);
-    vlbytes 1 cvd
-  | ServerRenegotiationInfo(cvd, svd) ->
-    lemma_repr_bytes_values (length (cvd @| svd));
-    vlbytes 1 (cvd @| svd)
-
-(* TODO: inversion lemmas *)
-(* SI: deadcode
-val parseRenegotiationInfo: pinverse_t renegotiationInfoBytes
-let parseRenegotiationInfo b =
-  if length b >= 1 then
-    match vlparse 1 b with
-    | Correct(payload) ->
-	let (len, _) = split b 1 in
-	(match int_of_bytes len with
-	| 0 -> Correct (FirstConnection)
-	| 12 | 36 -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
-	| 24 -> // TLS 1.2 case
-	    let cvd, svd = split payload 12 in
-	    Correct (ServerRenegotiationInfo (cvd, svd))
-	| 72 -> // SSLv3
-	    let cvd, svd = split payload 36 in
-	    Correct (ServerRenegotiationInfo (cvd, svd))
-	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
-    | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
-*)
-
 (** RFC 4.2 'Extension' Table *)
 
 noeq type preEarlyDataIndication : Type0 =
@@ -516,12 +474,12 @@ val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length
 let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
-    let cri =
-       match ri with
-       | None -> FirstConnection
-       | Some (cvd, svd) -> ClientRenegotiationInfo cvd in
-// SI: fixme        
-//    let res = [E_renegotiation_info(cri)] in
+// SI: is renego deadcode? 
+    (* let cri = *)
+    (*    match ri with *)
+    (*    | None -> FirstConnection *)
+    (*    | Some (cvd, svd) -> ClientRenegotiationInfo cvd in *)
+    (* let res = [E_renegotiation_info(cri)] in *)
 //    let res = (E_draftVersion (abyte2 (0z, 13z)))::res in
     let res =
        match pv, ks with
@@ -540,6 +498,46 @@ let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
           else (E_supported_groups g) :: res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
+
+(* SI: is renego deadcode? *)
+(*
+type renegotiationInfo =
+  | FirstConnection
+  | ClientRenegotiationInfo of (cVerifyData)
+  | ServerRenegotiationInfo of (cVerifyData * sVerifyData)
+
+val renegotiationInfoBytes: renegotiationInfo -> Tot bytes
+let renegotiationInfoBytes ri =
+  match ri with
+  | FirstConnection ->
+    lemma_repr_bytes_values 0;
+    vlbytes 1 empty_bytes
+  | ClientRenegotiationInfo(cvd) ->
+    lemma_repr_bytes_values (length cvd);
+    vlbytes 1 cvd
+  | ServerRenegotiationInfo(cvd, svd) ->
+    lemma_repr_bytes_values (length (cvd @| svd));
+    vlbytes 1 (cvd @| svd)
+
+val parseRenegotiationInfo: pinverse_t renegotiationInfoBytes
+let parseRenegotiationInfo b =
+  if length b >= 1 then
+    match vlparse 1 b with
+    | Correct(payload) ->
+	let (len, _) = split b 1 in
+	(match int_of_bytes len with
+	| 0 -> Correct (FirstConnection)
+	| 12 | 36 -> Correct (ClientRenegotiationInfo payload) // TLS 1.2 / SSLv3 client verify data sizes
+	| 24 -> // TLS 1.2 case
+	    let cvd, svd = split payload 12 in
+	    Correct (ServerRenegotiationInfo (cvd, svd))
+	| 72 -> // SSLv3
+	    let cvd, svd = split payload 36 in
+	    Correct (ServerRenegotiationInfo (cvd, svd))
+	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
+    | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
+  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
+*)
 
 (* TODO: remove *)
 let replace_subtyping (o:(option (cVerifyData * sVerifyData))) : Tot (option (bytes*bytes)) =
@@ -737,6 +735,9 @@ val default_sigHashAlg: protocolVersion -> cipherSuite -> ML (l:list sigHashAlg{
 let default_sigHashAlg pv cs =
     default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
 (* SI: deadcode
+
+let op_At = FStar.List.Tot.append
+
 val sigHashAlg_contains: list sigHashAlg -> sigHashAlg -> Tot bool
 let sigHashAlg_contains (algList:list sigHashAlg) (alg:sigHashAlg) =
     List.Tot.mem alg algList
