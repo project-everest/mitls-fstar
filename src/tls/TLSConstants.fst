@@ -1720,9 +1720,15 @@ let parseSigHashAlgs b =
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
 
+
 // TODO: replace "bytes" by either DH or ECDH parameters
+// should that go elsewhere?
 (** KeyShare entry definition *)
-type keyShareEntry = valid_namedGroup * b:bytes{repr_bytes (length b) <= 2}
+type keyShareEntry = 
+  | Share: g:CommonDH.group -> CommonDH.share g -> KeyShareEntry
+  | UnknownShare: 
+    ng:valid_namedGroup { None? (group_of_namedGroup ng)} -> 
+    b:bytes{repr_bytes (length b) <= 2} -> KeyShareEntry
 
 (** ClientKeyShare definition *)
 type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
@@ -1736,6 +1742,7 @@ noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
 
+// the parsing/formatting moves to the private part of Extensions
 (** Serializing function for a KeyShareEntry *)
 val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
 let keyShareEntryBytes (ng, b) =
@@ -1756,7 +1763,6 @@ let parseKeyShareEntry b =
       Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
   | Error z -> Error z
 
-
 (** Lemmas for KeyShare entries parsing/serializing inversions *)
 val inverse_keyShareEntry: x:_ -> Lemma
   (requires True)
@@ -1776,7 +1782,6 @@ val pinverse_keyShareEntry: x:_ -> Lemma
   (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
   [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
 let pinverse_keyShareEntry x = ()
-
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
@@ -1867,7 +1872,10 @@ let parseKeyShare is_client b =
       end
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
 
+
+
 // TODO: give more precise type
+// move elsewhere? 
 
 (** PSK Identity definition *)
 type pskIdentity = b:bytes{repr_bytes (length b) <= 2}
@@ -1883,7 +1891,6 @@ let parsePskIdentity b =
   match vlparse 2 b with
   | Correct vlb -> Correct vlb
   | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk_identity")
-
 
 // TODO: Choice, truncate when maximum length is exceeded
 
