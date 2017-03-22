@@ -56,7 +56,8 @@ let Nego.prepareClientOffer cfg =
   let ext = prepareExtensions protocol_version cipher_suites sigAlgs groups kp in
 *)  
 
-val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option Nego.ri -> option sessionID -> ST (hs_msg * bytes)
+val prepareClientHello: 
+  hs -> ST hs_msg
   (requires (fun h -> True)) //TODO: add the precondition that Nego and KS are in proper state
   (ensures (fun h0 i h1 -> True))
   (* TODO: what should we say here? something like:
@@ -64,49 +65,40 @@ val prepareClientHello: config -> KeySchedule.ks -> HandshakeLog.log -> option N
     - The Handshake log has exactly one more message: the ClientHello computed from the input configurtion
     - The result is this ClientHello and its serialization
   *)
-let prepareClientHello cfg ks log ri sido =
-  (* Who should generate nonces? KeySchedule? *)
-  let cr = KeySchedule.ks_client_random ks in
+let prepareClientHello st = 
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky
   *)
   (* In Negotiation: compute offer from configuration *)
-  let co = Nego.prepareClientOffer cfg in
+  let offer = Nego.prepareClientOffer hs.nego hs.cfg hs.resume in
   (* In KeySchedule: compute shares for groups in offer *)
-  let kp =
-    match co.co_protocol_version with
-    | TLS_1p3 -> Some (KeySchedule.ks_client_13_1rtt_init ks co.co_namedGroups)
-    | _       -> let _ = KeySchedule.ks_client_12_init ks in None
+  let shares =
+    match offer.co_protocol_version with
+    | TLS_1p3 -> Some (KeySchedule.ks_client_13_1rtt_init hs.ks offer.co_namedGroups)
+    | _       -> let si = KeySchedule.ks_client_12_init ks in None
     in
   (* Some? sido in case of resumption *)
   let sid =
-    match sido with
+    match fst hs.resume with
     | None -> empty_bytes
     | Some x -> x
   in
   (* In TLSExtensions: prepare client extensions, including key shares *)
-  let ext = prepareExtensions
-    co.co_protocol_version
-    co.co_cipher_suites
-    co.co_safe_resumption
-    co.co_safe_renegotiation
-    co.co_sigAlgs
-    co.co_namedGroups
-    ri kp in
-  let ch = {
-    ch_protocol_version = co.co_protocol_version;
-    ch_client_random = cr;
+  let ext = prepareExtensions offer hs.resume ri shares in
+  let ch = // a bit too concrete? ClientHello hs.nonce offer hs.resume ri shares
+  {
+    ch_protocol_version = offer.co_protocol_version;
+    ch_client_random = hs.nonce;
     ch_sessionID = sid;
-    ch_cipher_suites = co.co_cipher_suites;
+    ch_cipher_suites = offer.co_cipher_suites;
     ch_raw_cipher_suites = None;
-    ch_compressions = co.co_compressions;
+    ch_compressions = offer.co_compressions;
     ch_extensions = Some ext
   } in
-  (* `@@` has side-effects: it appends the message to the log and returns the message bytes *)
-  (* this is a call to HandshakeMessages *)
-  let chb = log @@ (ClientHello ch) in
-  (ClientHello ch, chb)
+  HandshakeLog.send hs.log (ClientHello ch) in
+  // TODO in two steps, appending the binders
+  ClientHello ch
 
 
 (*
@@ -285,43 +277,29 @@ let hs_msg_bufs_init() = {
 }
 
 
-//16-05-31 this type should be private to HS
-//16-06-01 simplify: use a record of mutable things, subject to monotonicity and region,
-//16-06-01 rather than a mutable ref to a record
-type handshake_state (r:role) =
-     {
-       hs_state: role_state;
-       hs_nego: option nego;
-       hs_log: HandshakeLog.log; // already stateful
-       hs_ks: KeySchedule.ks;    // already stateful
-
-       hs_buffers: hs_msg_bufs;
-
-       //16-06-01 could use the StreamAE.ideal_ctr pattern; see also logIndex below.
-       hs_reader: int;
-       hs_writer: int;
-     }
-
-//NS: needed this renaming trick for the .fsti
-//let handshake_state r = handshake_state' r
-
 
 //</expose for TestClient>
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
 
-type resume_id (r:role) = o:option sessionID{r=Server ==> o=None}
+type resume_info (r:role) = 
+  o:option sessionID{r=Server ==> o=None} *
+  l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally  
 
 type hs =
   | HS: #region: rgn { is_hs_rgn region } ->
           r: role ->
-          resume: resume_id r ->
+          resume: resume_info r (* client dyn. config, both for 1.2 and 1.3 *) ->
           cfg: config ->
-          nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced; proof from global HS invariant?
-          log: epochs region nonce ->
-          state: ref (handshake_state r){state.id = region}  ->       // opaque, subject to invariant
-          hs
+          nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
 
+          // states of the HS components, subject to joint invariant
+          epochs: epochs region nonce ->
+          nego: Nego.state region r ->
+          log: HandshakeLog.log region -> 
+          ks: KeySchedule.ks region r -> 
+          state: rref region role_state -> // state machine; should be opaque
+          hs
 
 (* the handshake internally maintains epoch
    indexes for the current reader and writer *)
@@ -491,7 +469,7 @@ val client_send_client_hello: hs -> ST unit
 let client_send_client_hello (HS #r0 r res cfg id lgref hsref) =
   match (!hsref).hs_state with
   | C(C_Idle ri) ->
-    let (ClientHello ch,chb) = prepareClientHello cfg (!hsref).hs_ks (!hsref).hs_log ri None in
+    let (ClientHello ch,chb) = prepareClientHello cfg ri None (!hsref).hs_ks (!hsref).hs_log  in
     hsref := {!hsref with
             hs_buffers = {(!hsref).hs_buffers with hs_outgoing = chb};
 	    hs_state = C(C_HelloSent ri ch)}
