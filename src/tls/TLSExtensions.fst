@@ -30,9 +30,8 @@ and earlyDataIndication =
 and cookie = 
   | Cookie
 
-(* SI: ToDo supportedVersions payload *)
 and supportedVersions = 
-  | SupportedVersions
+  | SupportedVersions of v:nat { v >= 2 /\ v <= 254 } 
 
 (* SI: we currently only define Mandatory-to-Implement Extensions as listed in RFC 8.2. 
    Labels: 
