@@ -31,7 +31,7 @@ and cookie =
   | Cookie
 
 and supportedVersions = 
-  | SupportedVersions of v:nat { v >= 2 /\ v <= 254 } 
+  | SupportedVersions 
 
 (* SI: we currently only define Mandatory-to-Implement Extensions as listed in RFC 8.2. 
    Labels in the variants below are: 
