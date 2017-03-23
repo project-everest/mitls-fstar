@@ -139,7 +139,7 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
   | Some exts when (pv = TLS_1p3) ->
     let rec aux: list extension -> Tot (result (option namedGroup * option bytes)) =
       function
-      | E_keyShare (ClientKeyShare gl) :: _ ->
+      | E_key_share (ClientKeyShare gl) :: _ ->
         let inConf (gn, gx) =
            (((SEC? gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
             || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))

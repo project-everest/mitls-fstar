@@ -122,9 +122,10 @@ let pinverse_ht x = ()
 
 /// Messages
 
+//  https://tlswg.github.io/tls13-spec/#rfc.section.4.1.2 
 noeq type ch = {
-  ch_protocol_version:protocolVersion;
-  ch_client_random:TLSInfo.random;
+  ch_protocol_version: protocolVersion;  // max supported version up to TLS_1p2 (TLS 1.3 uses the supported_versions extension)
+  ch_client_random: TLSInfo.random; 
   ch_sessionID:sessionID;
   ch_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   ch_raw_cipher_suites:option bytes;
@@ -132,11 +133,11 @@ noeq type ch = {
   ch_extensions:option (ce:list extension{List.Tot.length ce < 256});
 }
 
-let ch_is_resumption { ch_sessionID = sid } =
-  length sid > 0
+let ch_is_resumption { ch_sessionID = sid } = length sid > 0
 
+//  https://tlswg.github.io/tls13-spec/#rfc.section.4.1.2 
 noeq type sh = {
-  sh_protocol_version:protocolVersion;
+  sh_protocol_version:protocolVersion; 
   sh_server_random:TLSInfo.random;
   sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
   sh_cipher_suite:valid_cipher_suite;
@@ -208,6 +209,7 @@ noeq type sc = {
   sc_configuration_extensions:(l:list configurationExtension{List.Tot.length l < 65536});
 }
 
+//17-03-11 Finished payload, carrying a fixed-length MAC; share with binders?
 type fin = {
   fin_vd: (l:bytes{length l < 65536});
 }
@@ -224,18 +226,29 @@ type np = {
 noeq type hs_msg =
   | ClientHello of ch
   | ServerHello of sh
-  | SessionTicket of sticket
-  | EncryptedExtensions of ee
-  | ServerKeyExchange of ske
-  | CertificateRequest of cr
-  | ServerHelloDone
-  | Certificate of crt
+  | EncryptedExtensions of ee // TLS 1.3 server
+
+  // up to TLS 1.2
   | ClientKeyExchange of cke
+  | ServerKeyExchange of ske
+  | ServerHelloDone 
+
+  | CertificateRequest of cr
+  | Certificate of crt
   | CertificateVerify of cv
   | Finished of fin
-  | NextProtocol of np
-  | HelloRequest
-  | HelloRetryRequest of hrr
+  
+  | NextProtocol of np // ?? 
+
+  | HelloRequest // up to TLS 1.2
+  | HelloRetryRequest of hrr // TLS 1.3 server
+
+  // Post-Handshake (TLS 1.3) also including late CertificateRequest
+  | SessionTicket of sticket //17-03-11  --> NewSessionTicket ? 
+
+//17-03-11 missing
+//  | EndOfEarlyData  
+//  | KeyUpdateRequest of bool  // true -> the falg indicates whether this is a "first" request (to be responded)
 
 /// Handshake message format
 
