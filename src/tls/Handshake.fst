@@ -56,8 +56,10 @@ let Nego.prepareClientOffer cfg =
   let ext = prepareExtensions protocol_version cipher_suites sigAlgs groups kp in
 *)  
 
+
 val prepareClientHello: 
-  hs -> ST hs_msg
+  hs { hs.
+  -> ST hs_msg
   (requires (fun h -> True)) //TODO: add the precondition that Nego and KS are in proper state
   (ensures (fun h0 i h1 -> True))
   (* TODO: what should we say here? something like:
