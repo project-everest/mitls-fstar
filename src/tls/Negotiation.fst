@@ -18,13 +18,13 @@ open CoreCrypto
 inline_for_extraction let n_debug = false
 
 (* Negotiation: HELLO sub-module *)
-type ri = cVerifyData * sVerifyData 
+type ri = cVerifyData * sVerifyData
 
 type clientOffer = {
   co_protocol_version:protocolVersion;
   co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
-  co_namedGroups: list (x:namedGroup{SEC? x \/ FFDHE? x});
+  co_namedGroups: list valid_namedGroup;
   co_sigAlgs: list sigHashAlg;
   co_safe_resumption: bool;
   co_safe_renegotiation: bool;
@@ -139,7 +139,7 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
   | Some exts when (pv = TLS_1p3) ->
     let rec aux: list extension -> Tot (result (option namedGroup * option bytes)) =
       function
-      | E_keyShare (ClientKeyShare gl) :: _ ->
+      | E_key_share (ClientKeyShare gl) :: _ ->
         let inConf (gn, gx) =
            (((SEC? gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
             || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
@@ -211,6 +211,7 @@ let acceptableCipherSuite cfg spv cs =
 // due to the fact that we require calling the keyschedule
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
+(* TODO: why irreducible? *)
 irreducible val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result serverMode)
 let computeServerMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 

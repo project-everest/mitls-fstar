@@ -1366,6 +1366,12 @@ type namedGroup =
   | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = _FFz})
   | ECDHE_PRIVATE_USE of byte
 
+(*
+ * We only seem to be using these two named groups
+ * irrespective of whether it's TLS 12 or 13
+ *)
+type valid_namedGroup = x:namedGroup{SEC? x \/ FFDHE? x}
+
 (** Serializing function for (EC)DHE named groups *)
 val namedGroupBytes: namedGroup -> Tot (lbytes 2)
 let namedGroupBytes ng =
@@ -1714,9 +1720,15 @@ let parseSigHashAlgs b =
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
 
+
 // TODO: replace "bytes" by either DH or ECDH parameters
+// should that go elsewhere?
 (** KeyShare entry definition *)
-type keyShareEntry = namedGroup * b:bytes{repr_bytes (length b) <= 2}
+type keyShareEntry = 
+  | Share: g:CommonDH.group -> CommonDH.share g -> KeyShareEntry
+  | UnknownShare: 
+    ng:valid_namedGroup { None? (group_of_namedGroup ng)} -> 
+    b:bytes{repr_bytes (length b) <= 2} -> KeyShareEntry
 
 (** ClientKeyShare definition *)
 type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
@@ -1730,6 +1742,7 @@ noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
 
+// the parsing/formatting moves to the private part of Extensions
 (** Serializing function for a KeyShareEntry *)
 val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
 let keyShareEntryBytes (ng, b) =
@@ -1742,17 +1755,17 @@ let parseKeyShareEntry b =
   let ng,key_exchange = split b 2 in
   match parseNamedGroup ng with
   | Correct ng ->
-    begin
-    match vlparse 2 key_exchange with
-    | Correct ke -> Correct (ng, ke)
-    | Error z    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
-    end
+    if SEC? ng || FFDHE? ng then
+      match vlparse 2 key_exchange with
+      | Correct ke -> Correct (ng, ke)
+      | Error z    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+    else
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
   | Error z -> Error z
-
 
 (** Lemmas for KeyShare entries parsing/serializing inversions *)
 val inverse_keyShareEntry: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f keyShareEntryBytes parseKeyShareEntry x)
   [SMTPat (parseKeyShareEntry (keyShareEntryBytes x))]
 let inverse_keyShareEntry (ng, x) =
@@ -1765,11 +1778,10 @@ let inverse_keyShareEntry (ng, x) =
   assert (Seq.equal b x)
 
 val pinverse_keyShareEntry: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
   [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
 let pinverse_keyShareEntry x = ()
-
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
@@ -1860,7 +1872,10 @@ let parseKeyShare is_client b =
       end
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
 
+
+
 // TODO: give more precise type
+// move elsewhere? 
 
 (** PSK Identity definition *)
 type pskIdentity = b:bytes{repr_bytes (length b) <= 2}
@@ -1876,7 +1891,6 @@ let parsePskIdentity b =
   match vlparse 2 b with
   | Correct vlb -> Correct vlb
   | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk_identity")
-
 
 // TODO: Choice, truncate when maximum length is exceeded
 

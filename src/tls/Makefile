@@ -270,8 +270,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
-	$(addsuffix .fst,$(VERIFY))
+	--verify_module $(basename $(notdir $@))
 
 # Sanity check
 tls-sanity: record_fstar_version $(LIBFILES) $(FSTS) test/False.fst

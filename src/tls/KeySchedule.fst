@@ -20,11 +20,8 @@ open TLSConstants
 open TLSExtensions
 open TLSInfo
 open Range
-open HandshakeMessages
 open StatefulLHAE
 open HKDF
-open Negotiation // We only depend minimally on Nego
-open Epochs	 // We only depend minimally on Epochs
 open PSK
 
 module MM = MonotoneMap
@@ -56,12 +53,12 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
   let kh = Platform.Bytes.hex_of_bytes kb in
   IO.debug_print_string ("Share: "^kh^"\n")
 
-let keyLabel = function
-  | EarlyTrafficKey -> "early traffic key expansion"
-  | EarlyApplicationDataKey -> "early application data key expansion"
-  | HandshakeKey -> "handshake key expansion"
-  | ApplicationDataKey -> "application data key expansion"
-  | ApplicationRekey -> "application data key expansion"
+(* let keyLabel = function *)
+(*   | EarlyTrafficKey -> "early traffic key expansion" *)
+(*   | EarlyApplicationDataKey -> "early application data key expansion" *)
+(*   | HandshakeKey -> "handshake key expansion" *)
+(*   | ApplicationDataKey -> "application data key expansion" *)
+(*   | ApplicationRekey -> "application data key expansion" *)
 
 (***********************************************************
      Internal (resumption) PSKs, indexed by rmsId
@@ -108,7 +105,7 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 abstract let psk (i:esId) =
   b:bytes{length b = hashSize (esId_hash i)}
 
-let get_psk_info (i:esId) =
+let get_psk_info (i:esId) :pskInfo =
   match i with
   | ResumptionPSK c _ -> c
   | ApplicationPSK c _ -> c
@@ -169,13 +166,13 @@ abstract type rms (i:rmsId) = Hashing.Spec.tag (rmsId_hash i)
 type ems (i:exportId) = Hashing.Spec.tag (exportId_hash i)
 
 // TODO this is superseeded by StAE.state i
-// but I'm waiting for it to be tester to switch over
+// but I'm waiting for it to be tested to switch over
 // TODO use the newer index types
 type recordInstance =
   | StAEInstance: #id:TLSInfo.id -> StAE.reader id -> StAE.writer id -> recordInstance
 
 (* 2 choices - I prefer the second:
-   (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
+     (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
    (2) redefine recordInstance as follows, and then import epoch_region_inv over here from Epochs:
 type recordInstance (rgn:rid) (n:TLSInfo.random) =
 | RI: #id:StAE.id -> r:StAE.reader (peerId id) -> w:StAE.writer id{epoch_region_inv' rgn r w /\ I.nonce_of_id id = n} -> recordInstance rgn n
@@ -293,67 +290,77 @@ let create #rid r hsl =
     | Server -> S (S_Init nonce) in
   (KS #ks_region (ralloc ks_region istate) hsl), nonce
 
-let rec group_list_to_share_list (gl:list CommonDH.group) (gxl:list (g:CommonDH.group & CommonDH.share g)) : Tot bool =
-  match (gl, gxl) with
-  | ([], []) -> true
-  | ((g::glr), (gx::gxlr)) ->
-    let gx : (g:CommonDH.group & CommonDH.share g) = gx in
-    let (| g', _ |) = gx in
-    g = g' && group_list_to_share_list glr gxlr
-  | _ -> false
+#reset-options
 
-val ks_client_13_1rtt_init: ks:ks -> gl:list CommonDH.group -> ST (list (g:CommonDH.group & CommonDH.share g))
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_Init? (C?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st hsl = ks in
-    group_list_to_share_list gl r /\
-    modifies (Set.singleton rid) h0 h1 /\
-    modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+let group_of_valid_namedGroup
+  (g:valid_namedGroup)
+  : CommonDH.group
+  = Some?.v (CommonDH.group_of_namedGroup g)
 
 val map_ST: ('a -> St 'b) -> list 'a -> St (list 'b)
 let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
-let ks_client_13_1rtt_init ks groups =
-  let KS #rid st hsl = ks in
-  let C (C_Init cr) = !st in
-  let keygen (g:CommonDH.group)
-    : St (g:CommonDH.group & CommonDH.keyshare g)
-    = (| g, CommonDH.keygen g |) in
-  let gs = map_ST keygen groups in
-  st := C (C_13_wait_SH cr None None gs);
-  let pub (gx : (g:CommonDH.group & CommonDH.keyshare g))
-    : Tot (g:CommonDH.group & CommonDH.share g)
-    = let (| g, gx |) = gx in
-    (| g, CommonDH.pubshare gx |) in
-  List.Tot.map pub gs
-
-val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list CommonDH.group -> ST (list (g:CommonDH.group & CommonDH.share g))
+val ks_client_13_1rtt_init:
+  ks:ks -> gl:list valid_namedGroup
+  -> ST keyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
-    group_list_to_share_list gl r /\
+    ClientKeyShare? r /\
+    gl == List.Tot.map fst (ClientKeyShare?._0 r) /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_client_13_0rtt_init ks esId groups =
+let ks_client_13_1rtt_init ks gl =
   let KS #rid st hsl = ks in
   let C (C_Init cr) = !st in
+  let groups = List.Tot.map group_of_valid_namedGroup gl in
+  let keygen (g:CommonDH.group)
+    : St (g:CommonDH.group & CommonDH.keyshare g)
+    = (| g, CommonDH.keygen g |) in
+  let gs = map_ST keygen groups in
+  st := C (C_13_wait_SH cr None None gs);
+  let serialize_share (gx:(g:CommonDH.group & CommonDH.share g)) =
+    let (| g, gx |) = gx in
+    match CommonDH.namedGroup_of_group g with
+    | None -> None // Impossible
+    | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in
+  let serialized = List.Tot.choose serialize_share gs in
+  ClientKeyShare serialized
+
+
+val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST keyShare
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    C? kss /\ C_Init? (C?.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid st hsl = ks in
+    ClientKeyShare? r /\
+    gl == List.Tot.map fst (ClientKeyShare?._0 r) /\
+    modifies (Set.singleton rid) h0 h1 /\
+    modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+
+let ks_client_13_0rtt_init ks esId gl =
+  let KS #rid st hsl = ks in
+  let C (C_Init cr) = !st in
+  let groups = List.Tot.map group_of_valid_namedGroup gl in
   let keygen (g:CommonDH.group)
     : St (g:CommonDH.group & CommonDH.keyshare g)
     = (| g, CommonDH.keygen g |) in
   let gs = map_ST keygen groups in
   st := C (C_13_wait_CH cr esId gs);
-  let pub (gx : (g:CommonDH.group & CommonDH.keyshare g))
-    : Tot (g:CommonDH.group & CommonDH.share g)
-    = let (| g, gx |) = gx in
-    (| g, CommonDH.pubshare gx |) in
-  List.Tot.map pub gs
+  let serialize_share (gx:(g:CommonDH.group & CommonDH.share g)) =
+    let (| g, gx |) = gx in
+    match CommonDH.namedGroup_of_group g with
+    | None -> None // Impossible
+    | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in
+  let serialized = List.Tot.choose serialize_share gs in
+  ClientKeyShare serialized
+
 
 // Derive the early keys from the early secret
 let ks_client_13_0rtt_ch ks esId
@@ -537,7 +544,10 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> g:CommonDH.group -> gx:CommonDH.share g -> ST (CommonDH.share g)
+val ks_server_13_1rtt_init:
+  ks:ks -> cr:random -> cs:cipherSuite
+  -> g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)}
+  -> gx:CommonDH.share g -> ST keyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -560,7 +570,9 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   let es = HKDF.hkdf_extract h zeroes zeroes in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   st := S (S_13_wait_SH (ae, h) cr sr None None (| hsId, hs |));
-  gy
+
+  match CommonDH.namedGroup_of_group g with
+  | Some gn -> ServerKeyShare (gn, CommonDH.serialize_raw #g gy)
 
 val ks_server_13_sh: ks:ks -> ST recordInstance
   (requires fun h0 ->
@@ -1148,9 +1160,3 @@ let ks_client_12_server_finished ks
 
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i rd wr) = i
-
-val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random ->
-    			   h:handshake ->
-			   ks:recordInstance -> Tot (epoch r n)
-let recordInstanceToEpoch #hs_rgn #n hs (StAEInstance #i rd wr) =
-  Epoch hs rd wr
