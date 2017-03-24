@@ -512,34 +512,8 @@ let client_send_client_finished hs =
     hs.state := C_FinishedSent n tag
 *)
 
-val client_handle_server_ccs: hs -> list (hs_msg * bytes) -> ST incoming
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let client_handle_server_ccs (HS #r0 r res cfg id lgref hsref) msgs =
-  match (!hsref).hs_state with
-  | C(C_FinishedSent n vd) ->
-    begin
-      (match msgs with
-      | [(SessionTicket(stick),l)] ->
-        // ADL TODO implement session ticket processing
-        let _ = (!hsref).hs_log @@ SessionTicket(stick) in ()
-      | [] -> ());
-      hsref := {!hsref with hs_state = C(C_CCSReceived n vd)};
-      Epochs.incr_reader lgref;
-      InAck true false
-    end
-
-(* unused:
-//val client_handle_server_finished: hs -> list (hs_msg * bytes) -> ST incoming
-//  (requires (fun h -> True))
-//  (ensures (fun h0 i h1 -> True))
-let client_handle_server_finished hs f svd (*?*) =
-    let svd = KeySchedule.ks_client_12_server_finished ks in
-    if not (equalBytes svd f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify")
-    hs.state := C_PostHS;
-    InAck false true
-*)
-
+(*** receive Server CCS ***)
+// inlined in recv_ccs (two cases)
 
 (*** receive EncryptedExtension...ServerFinished 1.3 ***)
 // keep this function check against client ServerHelloDone
@@ -796,11 +770,8 @@ let server_ClientFinished hs digestCCS digestClientFinished =
                hs_state = S(S_OutCCS n)};
         InAck false false)
 
-let server_send_server_finished hs n =
-  match (!hsref).hs_state with
-  | S(S_OutCCS n) ->
-    hsref := {!hsref with
-           hs_state = S(S_FinishedSent n)}
+(*** send ServerFinish ***)
+// inlined 
 
 (*** send ServerFinish 1.3 ***)
 val server_send_server_finished_13: hs -> ST unit
@@ -1046,21 +1017,21 @@ let rec next_fragment i hs =
           hsref := {!hsref with hs_state = C (C_PostHS)};
           Epochs.incr_writer lgref; // Switch to ATK writer
           Outgoing None false true true
-       | S (S_HelloSent n) when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
+       | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
           server_ServerHelloDone hs n;
           next_fragment i hs
-       | S (S_HelloSent n) when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
+       | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
           server_send_server_finished_res hs;
           next_fragment i hs
-       | S (S_HelloSent n) when (Some? pv && pv = Some TLS_1p3) ->
+       | S_HelloSent n when (Some? pv && pv = Some TLS_1p3) ->
           server_send_server_finished_13 hs n;
           next_fragment i hs
-       | S (S_FinishedReceived n) ->
+       | S_FinishedReceived n ->
           Epochs.incr_reader lgref; // Switch to ATK reader
-          hsref := {!hsref with hs_state = S(S_PostHS)};
+          hs.state := S_PostHS;
           Outgoing None false true true
-       | S (S_OutCCS n) ->
-          server_send_server_finished hs;
+       | S_OutCCS n ->
+          hs.state := S_FinishedSent n  // who actually sends the ServerFinished? buffered?
           Outgoing None false false true
        | _ -> Outgoing None false false false)
 
