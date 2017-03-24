@@ -381,7 +381,6 @@ let client_send_client_hello hs =
   HandshakeLog.send hs.log (ClientHello ch);  // TODO in two steps, appending the binders
   hs.state := C_HelloSent ri ch
 
-
 (*** receive ServerHello ***)
 let client_ServerHello hs sh =
     IO.hs_debug_print_string "Processing client hello...\n";
@@ -439,7 +438,6 @@ let client_ServerHello hs sh =
       | None -> ());
       hs_state := C_HelloReceived n;
       InAck (Some? keys) false )
-
 
 (*** receive Certificate...ServerHelloDone ***)
 // with or without a certificate request; not for TLS 1.3
@@ -504,7 +502,6 @@ let client_ServerHelloDone hs c ske ocr =
                        hs.state := C_OutCCS n;                       
                        InAck false false )
 
-
 (*
 val client_send_client_finished: hs -> ST unit
   (requires (fun h -> True (* C_OutCCS *) ))
@@ -544,7 +541,7 @@ let client_handle_server_finished hs f svd (*?*) =
 *)
 
 
-(*** receive EncryptedExtension...ServerFinished  ***)
+(*** receive EncryptedExtension...ServerFinished 1.3 ***)
 // keep this function check against client ServerHelloDone
 let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify digestServerFinished =
     match Nego.clientComplete_13 hs.nego ee ocr c cv digestCert with 
@@ -605,7 +602,33 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
 
 (*** Handshake.Server ***)
 
-(*** send ServerHello ***) 
+(*** receive ClientHello ***) 
+val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 -> True))
+let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
+  match (!hsref).hs_state, msgs with
+  | S(S_Idle ri),[(ClientHello(ch),l)] ->
+    (match (prepareServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri (ClientHello ch,l)) with
+     | Error z -> InError z
+     | Correct (n, keys, (sh,shb)) ->
+       (match keys with
+        | Some ri ->
+      let h = Negotiation.Fresh ({session_nego = n}) in
+      let ep = Epochs.recordInstanceToEpoch #r0 #id h ri in
+          // Do not increment writer yet as the SH is sent in plaintext
+      Epochs.add_epoch lgref ep
+    | None -> ());
+       hsref := {!hsref with
+               hs_buffers = {(!hsref).hs_buffers with
+                 hs_outgoing = shb;
+                 // Increment writer after sending server hello if 1.3 used
+                 hs_outgoing_epochchange = (if None? keys then None else Some Writer);};
+           hs_nego = Some n;
+           hs_state = S(S_HelloSent n)};
+       InAck false false)
+
+(*** send ServerHello 1.3 ***) 
 // FIXME: TLS1.3
 // no point sharing between TLS 1.2 and TLS 1.3?
 val prepareServerHello: 
@@ -672,35 +695,7 @@ let prepareServerHello hs (* cfg ks log ri (ClientHello ch,_) *) =
              Correct (nego,keys,(ServerHello sh,shb))
 
 
-(*** receive ServerHello ***) 
-val server_handle_client_hello: hs -> list (hs_msg * bytes) -> ST incoming
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
-  match (!hsref).hs_state, msgs with
-  | S(S_Idle ri),[(ClientHello(ch),l)] ->
-    (match (prepareServerHello cfg (!hsref).hs_ks (!hsref).hs_log ri (ClientHello ch,l)) with
-     | Error z -> InError z
-     | Correct (n, keys, (sh,shb)) ->
-       (match keys with
-        | Some ri ->
-      let h = Negotiation.Fresh ({session_nego = n}) in
-      let ep = Epochs.recordInstanceToEpoch #r0 #id h ri in
-          // Do not increment writer yet as the SH is sent in plaintext
-      Epochs.add_epoch lgref ep
-    | None -> ());
-       hsref := {!hsref with
-               hs_buffers = {(!hsref).hs_buffers with
-                 hs_outgoing = shb;
-                 // Increment writer after sending server hello if 1.3 used
-                 hs_outgoing_epochchange = (if None? keys then None else Some Writer);};
-           hs_nego = Some n;
-           hs_state = S(S_HelloSent n)};
-       InAck false false)
-
-
 (*** send ServerHelloDone ***) 
-
 //val server_ServerHelloDone: hs -> ST unit
 //  (requires (fun h -> True))
 //  (ensures (fun h0 i h1 -> True))
@@ -781,8 +776,7 @@ let server_ClientCCS hs cke digest (* clientCert *)  =
           hs.state := S_CCSReceived n digest;
           InAck true false )
 
-
-(*** Receive ClientFinish ***) 
+(*** receive ClientFinish ***) 
 let server_ClientFinished hs digestCCS digestClientFinished =
 
     // to be adjusted
@@ -808,8 +802,7 @@ let server_send_server_finished hs n =
     hsref := {!hsref with
            hs_state = S(S_FinishedSent n)}
 
-
-(*** Send ServerFinish ***)
+(*** send ServerFinish 1.3 ***)
 val server_send_server_finished_13: hs -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
@@ -869,8 +862,7 @@ let server_send_server_finished_13 hs n =
             hs.state := S_FinishedSent n
       end
 
-
-(*** receive ClientFinish ***)
+(*** receive ClientFinish 1.3 ***)
 let server_ClientFinished_13 hs n f digest clientAuth=
    match clientAuth with
    | Some (c,cv) -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
@@ -910,6 +902,7 @@ let iT_old (HS r res cfg id l st) rw =
   match rw with
   | Reader -> (!st).hs_reader
   | Writer -> (!st).hs_writer
+
 
 
 (*** Control Interface ***)
