@@ -17,6 +17,140 @@ module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
+
+// <from TLSConstants>
+
+// TODO: give more precise type
+// move elsewhere? 
+
+(** PSK Identity definition *)
+type pskIdentity = b:bytes{repr_bytes (length b) <= 2}
+
+(** Serializing function for a PSK Identity *)
+val pskIdentityBytes: pskIdentity -> Tot (b:bytes{length b >= 2})
+let pskIdentityBytes pski =
+  vlbytes 2 pski
+
+(** Parsing function for a PSK Identity *)
+val parsePskIdentity: pinverse_t pskIdentityBytes
+let parsePskIdentity b =
+  match vlparse 2 b with
+  | Correct vlb -> Correct vlb
+  | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk_identity")
+
+// TODO: Choice, truncate when maximum length is exceeded
+
+(** Serializing function for a list of PSK Identity *)
+val pskIdentitiesBytes: list pskIdentity -> Tot (b:bytes{2 <= length b /\ length b < 65538})
+let pskIdentitiesBytes ids =
+  let rec pskIdentitiesBytes_aux (b:bytes{length b < 65536}) (ids:list pskIdentity): Tot (b:bytes{length b < 65536}) (decreases ids) =
+  match ids with
+  | [] -> b
+  | id::ids ->
+    let b' = b @| pskIdentityBytes id in
+    if length b' < 65536 then
+      pskIdentitiesBytes_aux b' ids
+    else b
+  in
+  let b = pskIdentitiesBytes_aux empty_bytes ids in
+  lemma_repr_bytes_values (length b);
+  vlbytes 2 b
+
+(** Parsing function for a list of PSK Identity *)
+val parsePskIdentities: pinverse_t pskIdentitiesBytes
+let parsePskIdentities b =
+  let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b ids ->
+    if length b > 0 then
+      if length b >= 2 then
+	let len, data = split b 2 in
+	let len = int_of_bytes len in
+	if length b >= len then
+	  let pski,bytes = split b len in
+	  if length pski >= 2 then
+   	    match parsePskIdentity pski with
+   	    | Correct id -> aux bytes (id::ids)
+   	    | Error z -> Error z
+	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identity length")
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identity length")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected psk identity to be at least 2 bytes long")
+    else Correct ids in
+  match vlparse 2 b with
+  | Correct b -> aux b []
+  | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identities")
+
+
+(** Client list of PSK identities *)
+type clientPreSharedKey = l:list pskIdentity{List.Tot.length l >= 1 /\ List.Tot.length l < 65536/2}
+
+(** Server list of PSK identities *)
+type serverPreSharedKey = pskIdentity
+
+(** PreSharedKey definition *)
+noeq type preSharedKey =
+  | ClientPreSharedKey of clientPreSharedKey
+  | ServerPreSharedKey of serverPreSharedKey
+
+(** Serializing function for ClientPreSharedKey *)
+val clientPreSharedKeyBytes: clientPreSharedKey -> Tot (b:bytes{ 2 <= length b /\ length b < 65538 })
+let clientPreSharedKeyBytes cpsk = pskIdentitiesBytes cpsk
+
+(** Parsing function for ClientPreSharedKey *)
+val parseClientPreSharedKey: b:bytes{ 2 <= length b /\ length b < 65538 }
+  -> Tot (result clientPreSharedKey)
+let parseClientPreSharedKey b =
+  match parsePskIdentities b with
+  | Correct ids ->
+    let l = List.Tot.length ids in
+    if 1 <= l && l < 65536/2
+    then Correct ids
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client psk identities")
+  | Error z -> Error z
+
+(** Serializing function for ServerPreSharedKey *)
+val serverPreSharedKeyBytes: serverPreSharedKey -> Tot (b:bytes{ 2 <= length b })
+let serverPreSharedKeyBytes cpsk = pskIdentityBytes cpsk
+
+(** Parsing function for ServerPreSharedKey *)
+val parseServerPreSharedKey: pinverse_t serverPreSharedKeyBytes
+let parseServerPreSharedKey b = parsePskIdentity b
+
+(** Serializing function for PreSharedKey *)
+val preSharedKeyBytes: preSharedKey -> Tot (b:bytes{length b >= 2})
+let preSharedKeyBytes = function
+  | ClientPreSharedKey cpsk -> clientPreSharedKeyBytes cpsk
+  | ServerPreSharedKey spsk -> serverPreSharedKeyBytes spsk
+
+(** Parsing function for PreSharedKey *)
+val parsePreSharedKey: pinverse_t preSharedKeyBytes
+let parsePreSharedKey b =
+  match vlparse 2 b with
+  | Correct b' ->
+    begin
+      match vlparse 2 b with
+      | Correct b'' -> // Client case
+	begin
+	if length b >= 2 && length b < 65538 then
+	  begin
+	  match parseClientPreSharedKey b with
+	  | Correct psks -> Correct (ClientPreSharedKey psks)
+	  | Error z -> Error z
+	  end
+	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse  psk")
+	end
+      | Error _ -> // Server case
+	begin
+	match parseServerPreSharedKey b with
+	| Correct psk -> Correct (ServerPreSharedKey psk)
+	| Error z -> Error z
+	end
+    end
+  | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse pre shared key")
+
+// </from TLSConstants>
+
+
+
+
 // *** PSK ***
 
 // The constraints for PSK indexes are:

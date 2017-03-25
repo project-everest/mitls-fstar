@@ -15,7 +15,7 @@ open FStar.HyperStack
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
-open TLSConstants
+open Format
 open TLSError
 open FStar.ST
 
@@ -356,4 +356,163 @@ let checkElement (p:parameters) (e:element) : option element  =
         | Some p -> Some ({dhe_nil with dhe_ec = Some p})
       end
     | _ -> failwith "impossible"
+*)
+
+
+
+
+// TODO imported from TLSConstants, in a broken state
+
+// TODO: replace "bytes" by either DH or ECDH parameters
+// should that go elsewhere? YES.
+(** KeyShare entry definition *)
+type keyShareEntry = 
+  | Share: g:group -> share g -> keyShareEntry
+  | UnknownShare: 
+    ng:valid_namedGroup { None? (group_of_namedGroup ng)} -> 
+    b:bytes{repr_bytes (length b) <= 2} -> keyShareEntry
+
+(** ClientKeyShare definition *)
+type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
+
+(** ServerKeyShare definition *)
+type serverKeyShare = keyShareEntry
+
+
+(** KeyShare definition *)
+noeq type keyShare =
+  | ClientKeyShare of clientKeyShare
+  | ServerKeyShare of serverKeyShare
+
+assume val keyShareBytes: keyShare -> Tot bytes
+
+(*
+// the parsing/formatting moves to the private part of Extensions
+(** Serializing function for a KeyShareEntry *)
+val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
+let keyShareEntryBytes (ng, b) =
+  let ng_bytes = namedGroupBytes ng in
+  ng_bytes @| vlbytes 2 b
+
+(** Parsing function for a KeyShareEntry *)
+val parseKeyShareEntry: pinverse_t keyShareEntryBytes
+let parseKeyShareEntry b =
+  let ng,key_exchange = split b 2 in
+  match parseNamedGroup ng with
+  | Correct ng ->
+    if SEC? ng || FFDHE? ng then
+      match vlparse 2 key_exchange with
+      | Correct ke -> Correct (ng, ke)
+      | Error z    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+    else
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+  | Error z -> Error z
+
+(** Lemmas for KeyShare entries parsing/serializing inversions *)
+val inverse_keyShareEntry: x:_ -> Lemma
+  (requires True)
+  (ensures lemma_inverse_g_f keyShareEntryBytes parseKeyShareEntry x)
+  [SMTPat (parseKeyShareEntry (keyShareEntryBytes x))]
+let inverse_keyShareEntry (ng, x) =
+  let b = namedGroupBytes ng @| vlbytes 2 x in
+  let b0,b1 = split b 2 in
+  let vl,b = split b1 2 in
+  vlparse_vlbytes 2 b;
+  assert (Seq.equal vl (bytes_of_int 2 (length b)));
+  assert (Seq.equal b0 (namedGroupBytes ng));
+  assert (Seq.equal b x)
+
+val pinverse_keyShareEntry: x:_ -> Lemma
+  (requires True)
+  (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
+  [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
+let pinverse_keyShareEntry x = ()
+
+// Choice: truncate when maximum length is exceeded
+(** Serializing function for a list of KeyShareEntry *)
+val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
+let keyShareEntriesBytes kes =
+  let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
+  match kes with
+  | [] -> b
+  | ke::kes ->
+    let b' = b @| keyShareEntryBytes ke in
+    if length b' < 65536 then
+      keyShareEntriesBytes_aux b' kes
+    else b
+  in
+  let b = keyShareEntriesBytes_aux empty_bytes kes in
+  lemma_repr_bytes_values (length b);
+  vlbytes 2 b
+
+(** Parsing function for a list KeyShareEntry *)
+val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
+let parseKeyShareEntries b =
+  let rec (aux: b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b))) = fun b entries ->
+    if length b > 0 then
+      if length b >= 4 then
+	let ng, data = split b 2 in
+	match vlsplit 2 data with
+	| Correct(kex, bytes) ->
+	  begin
+	  match parseKeyShareEntry (ng @| vlbytes 2 kex) with
+	  | Correct entry -> aux bytes (entries @ [entry])
+	  | Error z -> Error z
+	  end
+	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse key share entries")
+    else Correct entries in
+  match vlparse 2 b with
+  | Correct b -> aux b []
+  | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
+
+(** Serializing function for a ClientKeyShare *)
+val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{ 2 <= length b /\ length b < 65538 })
+let clientKeyShareBytes cks = keyShareEntriesBytes cks
+
+(** Parsing function for a ClientKeyShare *)
+val parseClientKeyShare: b:bytes{ 2 <= length b /\ length b < 65538 }
+  -> Tot (result clientKeyShare)
+let parseClientKeyShare b =
+  match parseKeyShareEntries b with
+  | Correct kes ->
+    if List.Tot.length kes < 65536/4
+    then Correct kes
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client key share entries")
+  | Error z -> Error z
+
+(** Serializing function for a ServerKeyShare *)
+val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{ 4 <= length b })
+let serverKeyShareBytes sks = keyShareEntryBytes sks
+
+(** Parsing function for a ServerKeyShare *)
+val parseServerKeyShare: pinverse_t serverKeyShareBytes
+let parseServerKeyShare b = parseKeyShareEntry b
+
+(** Serializing function for a KeyShare *)
+let keyShareBytes = function
+  | ClientKeyShare cks -> clientKeyShareBytes cks
+  | ServerKeyShare sks -> serverKeyShareBytes sks
+
+(** Parsing function for a KeyShare *)
+val parseKeyShare: bool -> bytes -> Tot (result keyShare)
+let parseKeyShare is_client b =
+  if is_client then
+    begin
+    if 2 <= length b && length b < 65538 then
+      begin
+      match parseClientKeyShare b with
+      | Correct kse -> Correct (ClientKeyShare kse)
+      | Error z -> Error z
+      end
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
+    end
+  else
+    if 4 <= length b then
+      begin
+      match parseServerKeyShare b with
+      | Correct ks -> Correct (ServerKeyShare ks)
+      | Error z -> Error z
+      end
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
 *)

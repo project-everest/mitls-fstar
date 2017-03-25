@@ -8,6 +8,13 @@ open TLSInfo
 open TLSConstants
 open HandshakeMessages
 
+
+//17-03-25 assumptions for Handshake.fst
+type rgn = FStar.HyperHeap.rid
+assume type t (region:rgn) (role:TLSConstants.role)
+assume val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
+
+
 //16-05-31 these opens are implementation-only; overall we should open less
 open TLSExtensions 
 open CoreCrypto
@@ -139,7 +146,7 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
   | Some exts when (pv = TLS_1p3) ->
     let rec aux: list extension -> Tot (result (option namedGroup * option bytes)) =
       function
-      | E_key_share (ClientKeyShare gl) :: _ ->
+      | E_key_share (CommonDH.ClientKeyShare gl) :: _ ->
         let inConf (gn, gx) =
            (((SEC? gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
             || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))

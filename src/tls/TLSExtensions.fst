@@ -47,8 +47,8 @@ and extension =
   | E_signature_algorithms of (list sigHashAlg) (* M, AF *)  
 (*| E_use_srtp | E_heartbeat | E_application_layer_protocol_negotiation
   | E_signed_certifcate_timestamp | E_client_certificate_type | E_padding *)
-  | E_key_share of keyShare (* M, AF *)
-  | E_pre_shared_key of preSharedKey (* M, AF *)
+  | E_key_share of CommonDH.keyShare (* M, AF *)
+  | E_pre_shared_key of PSK.preSharedKey (* M, AF *)
 (*| E_psk_key_exchange_modes *)
   | E_early_data of earlyDataIndication
   | E_cookie of cookie (* M *)
@@ -284,8 +284,8 @@ and extensionPayloadBytes role ext =
   | E_server_name(l)          -> if role = Client then vlbytes 2 (compile_sni_list l) else compile_sni_list l
   | E_supported_groups(l)     -> namedGroupsBytes l  
   | E_signature_algorithms sha -> sigHashAlgsBytes sha
-  | E_key_share ks             -> keyShareBytes ks
-  | E_pre_shared_key psk       -> preSharedKeyBytes psk
+  | E_key_share ks             -> CommonDH.keyShareBytes ks
+  | E_pre_shared_key psk       -> PSK.preSharedKeyBytes psk
   | E_early_data edt           -> earlyDataIndicationBytes edt
   | E_cookie c                 -> abyte 0z // SI: ToDo fixme stub!
   | E_supported_versions s     -> abyte 0z // 
@@ -469,7 +469,7 @@ let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup
 (* SI: API. Called by Handshake. *)
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
-val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (cVerifyData * sVerifyData) -> (option keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (cVerifyData * sVerifyData) -> (option CommonDH.keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
 let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
@@ -581,7 +581,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                 if resuming then correct l
                 else correct ({l with ne_signature_algorithms = Some (sha)})
 *)
-	    | E_key_share (ServerKeyShare sks) -> correct({l with ne_keyShare = Some sks})
+	    | E_key_share (CommonDH.ServerKeyShare sks) -> correct({l with ne_keyShare = Some sks})
 	    | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
         else
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
@@ -618,7 +618,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message")
      end
 
-val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option keyShare -> bool -> extension -> Tot (option extension)
+val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> Tot (option extension)
 let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
     match cExt with
     | E_early_data b -> None    // JK : TODO
@@ -656,7 +656,7 @@ let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
     | _ -> neg // JK : handle remaining cases
 
 (* SI: API. Called by Handshake. *)
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option keyShare -> bool -> Tot (result (option (list extension)))
+val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option CommonDH.keyShare -> bool -> Tot (result (option (list extension)))
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->

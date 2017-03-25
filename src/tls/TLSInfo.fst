@@ -224,7 +224,7 @@ type negotiatedExtensions = {
     ne_supported_point_formats: option (list ECGroup.point_format);
     ne_server_names: option (list serverName);
     ne_signature_algorithms: option (list sigHashAlg);
-    ne_keyShare: option serverKeyShare;
+    ne_keyShare: option CommonDH.serverKeyShare;
 }
 
 let ne_default =
