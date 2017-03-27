@@ -70,11 +70,6 @@ val sameExt : extension -> extension -> bool
 (** Extension serialize. *)
 val extensionHeaderBytes: extension -> Tot bytes
 
-type canFail (a:Type) =
-| ExFail of alertDescription * string
-| ExOK of list a
-
-
 val extension_depth : (ext: extension) -> Tot nat
 val extensions_depth : (exts:list extension) -> Tot nat
 
