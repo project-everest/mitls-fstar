@@ -381,61 +381,32 @@ let client_ClientHello hs =
 
 (* receive ServerHello *)
 let client_ServerHello hs sh =
-    IO.hs_debug_print_string "Processing client hello...\n";
-    let r = Nego.clientModel hs.nego  (*... don't repeat the offer? *) 
-      //ch.ch_extensions ch.ch_protocol_version 
-      sh.sh_protocol_version 
-      sh.sh_server_random 
-      sh.sh_cipher_suite 
-      sh.sh_extensions 
-      sh.sh_compression ri in
-    match r with
-    | Error z -> Error z
-    | Correct (n,keys) -> (
-
-    //17-03-24 what's the main "mode" type? o_nego or mode? 
-   (* no need for this one yet? 
-   let o_nego =
-    {n_client_random = ch.ch_client_random;
-     n_server_random = sh.sh_server_random;
-     n_sessionID = sh.sh_sessionID;
-     n_protocol_version = mode.cm_protocol_version;
-     n_kexAlg = mode.cm_kexAlg;
-     n_aeAlg = mode.cm_aeAlg;
-     n_sigAlg = mode.cm_sigAlg;
-     n_cipher_suite = mode.cm_cipher_suite;
-     n_dh_group = mode.cm_dh_group;
-     n_compression = sh.sh_compression;
-     n_scsv = [];
-     n_extensions = mode.cm_ext;
-     n_resume = false } in 
-     
-    (match o_nego.n_protocol_version, o_nego.n_kexAlg, mode.cm_dh_group, mode.cm_dh_share with
-     | TLS_1p3, Kex_DHE, Some gn, Some gyb
-     | TLS_1p3, Kex_ECDHE, Some gn, Some gyb ->
-       (match CommonDH.group_of_namedGroup gn with
-       | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unsupported group negotiated")
-       | Some g ->
-         (match CommonDH.parse g gyb  // This should have been parsed earlier! 
-         with
-         | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse server share")
-         | Some gy ->
-           let keys = KeySchedule.ks_client_13_sh ks o_nego.n_cipher_suite g gy false in
-           Correct (o_nego, Some keys)))
-     | _ -> Correct (o_nego,None))
-*)
-    // split between 1.2 and 1.3 
-      ( match keys with 
-      | Some keys -> ( // If a handshake encryption key is returned install the epoch and increment the reader
-          let ep = 
-            //? we don't have a full index yet for the epoch; reuse the one for keys??
-            let h = Negotiation.Fresh ({session_nego = n}) in
-            Epochs.recordInstanceToEpoch #r0 #nonce h keys in 
-          Epochs.add_epoch hs.epochs ep;
-          Epochs.incr_reader hs.epochs  )
-      | None -> ());
-      hs_state := C_HelloReceived n;
-      InAck (Some? keys) false )
+  IO.hs_debug_print_string "Processing client hello...\n";
+  let n = Nego.clientMode hs.nego sh in
+  match n with
+  | Error z      -> Error z
+  | Correct mode ->
+    let mode_and_keys =
+      (match mode.protocol_version, mode.kexAlg, mode.group, mode.share with
+       | TLS_1p3, Kex_DHE, Some g, Some gy
+       | TLS_1p3, Kex_ECDHE, Some g, Some gy ->
+         let keys = KeySchedule.ks_client_13_sh ks o_nego.n_cipher_suite g gy false in
+         Correct (mode, Some keys)
+       | TLS_1p3, _, None, _ ->
+         Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unsupported group negotiated")
+       | _, _, _, _ -> Correct (mode, None))
+    in
+    (match mode_and_keys with
+    // split between 1.2 and 1.3
+    | Correct (mode, Some keys) -> ( // If a handshake encryption key is returned install the epoch and increment the reader
+      let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
+        let h = Negotiation.Fresh ({session_nego = n}) in
+        Epochs.recordInstanceToEpoch #r0 #nonce h keys in
+      Epochs.add_epoch hs.epochs ep;
+      Epochs.incr_reader hs.epochs )
+    | None -> () );
+    hs_state := C_HelloReceived n;
+    InAck (Some? keys) false
 
 (* receive Certificate...ServerHelloDone *)
 // with or without a certificate request; not for TLS 1.3
@@ -547,28 +518,32 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
              let valid_signature = Signature.verify ha pk tbs sigv in
              IO.hs_debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
              if not valid then Error (AD_decode_error, "Certificate signature did not verify")
-             else *)
+             else
+      *)
 
-               let (cfin_key, sfin_key, app_keys) = KeySchedule.ks_client_13_server_finished ks in
-               // was also calling:  let keys = KeySchedule.ks_client_13_sf ks in
-               // was also calling:  let cvd = KeySchedule.ks_client_13_client_finished ks in
-               // was also calling: let ems = KeySchedule.ks_client_13_cf ks in // ? 
-               if  not MAC.verify sfin_key digestCertVerify svd then Error (AD_decode_error, "Finished MAC did not verify")
-               else (
-                 let digest = 
-                   match ocr with 
-                   | Some cr -> Handshake.Log.send_tag (Certificate ({crt_chain = []}))
-                   | None -> digestServerFinished in 
-                 let cvd = MAC.mac cfin_key digest in 
-                 Handshake.Log.send (Finished ({fin_vd = cvd});
-                 let ep = 
-                   let h = Negotiation.Fresh ({session_nego = full_mode}) in // review index?
-                   Epochs.recordInstanceToEpoch #r0 #id h app_keys in
-                 Epochs.add_epoch hs.epochs ep;
-                 Epochs.incr_reader hs.epochs;
-                 Epochs.incr_writer hs.epochs; // TODO update writer key properly
-                 hs.state := C_FinishedReceived full_mode (cvd,svd); // do we still need to keep those?
-                 InAck true false ))
+      let (cfin_key, sfin_key, app_keys) = KeySchedule.ks_client_13_server_finished hs.ks in
+      // was also calling: let keys = KeySchedule.ks_client_13_sf ks in
+      // was also calling: let cvd = KeySchedule.ks_client_13_client_finished ks in
+      // was also calling: let ems = KeySchedule.ks_client_13_cf ks in // ?
+      if not (MAC.verify sfin_key digestCertVerify svd) then
+        Error (AD_decode_error, "Finished MAC did not verify")
+      else
+        begin
+        let digest =
+          match ocr with
+          | Some cr -> Handshake.Log.send_tag (Certificate ({crt_chain = []}))
+          | None -> digestServerFinished in
+        let cvd = MAC.mac cfin_key digest in
+        Handshake.Log.send (Finished ({fin_vd = cvd}));
+        let ep =
+          let h = Negotiation.Fresh ({session_nego = full_mode}) in // review index?
+          Epochs.recordInstanceToEpoch #r0 #id h app_keys in
+        Epochs.add_epoch hs.epochs ep;
+        Epochs.incr_reader hs.epochs;
+        Epochs.incr_writer hs.epochs; // TODO update writer key properly
+        hs.state := C_FinishedReceived full_mode (cvd,svd); // do we still need to keep those?
+        InAck true false
+        end
 
 
 
