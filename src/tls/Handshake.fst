@@ -944,7 +944,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
 let next_fragment i hs =
     // let (HS #r0 r res cfg id lgref hsref) = hs in
 
-    // reading nego (defer?)
+    // reading nego (defer to state-specific code?)
     let pv,kex,res =
       (match (!hsref).hs_nego with
        | None -> None, None, None

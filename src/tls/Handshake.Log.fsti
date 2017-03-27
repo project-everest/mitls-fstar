@@ -164,6 +164,9 @@ val receiveCCS: #region:HH.rid -> #a:alg -> r:t region a -> ST (list msg * list 
 // - an output buffer (bytes) for handshake messages
 // - the three flags below, to be echoed and cleared once the buffer is empty
 
+type id = TLSInfo.id 
+open Range // for now
+
 // payload of a handshake fragment, to be made opaque eventually
 type fragment (i:id) = ( rg: frange i & rbytes rg )
 let out_msg i rg b : message i= (|rg, b|)
