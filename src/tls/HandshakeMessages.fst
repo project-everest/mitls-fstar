@@ -10,7 +10,7 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
-open TLSExtensions
+open Extensions
 open TLSInfo
 open Range
 open CommonDH
