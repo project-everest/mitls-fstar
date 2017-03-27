@@ -156,3 +156,60 @@ val receiveCCS: #region:HH.rid -> #a:alg -> r:t region a -> ST (list msg * list 
     let t1 = transcriptT h1 r in
     let tr = transcript_bytes t1 in 
     t1 == t0 @ ms /\ tags a t0 ms hs /\ hashed a tr /\ h = hash a tr ))
+
+
+// FRAGMENT INTERFACE 
+//
+// for outgoing messages, Handshake.Log maintains 
+// - an output buffer (bytes) for handshake messages
+// - the three flags below, to be echoed and cleared once the buffer is empty
+
+// payload of a handshake fragment, to be made opaque eventually
+type fragment (i:id) = ( rg: frange i & rbytes rg )
+let out_msg i rg b : message i= (|rg, b|)
+
+// What the HS asks the record layer to do, in that order.
+type outgoing (i:id) (* initial index *) =
+  | Outgoing:
+      send_first: option (fragment i) -> // HS fragment to be sent;  (with current id)
+      send_ccs  : bool               -> // CCS fragment to be sent; (with current id)
+      next_keys : bool               -> // the writer index increases;
+      complete  : bool               -> // the handshake is complete!
+      outgoing i
+
+//17-03-26 now return an outgoing result, for uniformity
+// | OutError: error -> outgoing i       // usage? send a polite Alert in case something goes wrong when preparing messages
+
+let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r && Outgoing?.next_keys r
+let out_complete (#i:id) (r:outgoing i)  = Outgoing? r && Outgoing?.complete r
+
+val next_fragment: st:t -> i:id -> St (Outgoing i) 
+  if length st.outgoing = 0 
+  return as we can, up to the fragment limit
+
+    //(1) return any pending output in Handshake.Log 
+    // GOING to Handshake.Log
+    //16-06-01 TODO: handle fragmentation; return fragment + flags set in some cases
+    let l = length b in
+    if (!hsref).hs_buffers.hs_outgoing_ccs then (
+       hsref := {!hsref with
+         hs_buffers = {(!hsref).hs_buffers with
+           hs_outgoing_ccs = false }};
+       Epochs.incr_writer lgref;
+       Outgoing None true true false
+    ) else if (l > 0) then ( // first, send next message fragment, possibly followed by a keychange signal )
+
+       let keychange =
+          match (!hsref).hs_buffers.hs_outgoing_epochchange with
+          | None -> false
+          | Some Reader -> Epochs.incr_reader lgref; true // possibly used by server in 0-RT
+          | Some Writer -> Epochs.incr_writer lgref; true in
+       IO.hs_debug_print_string (" * WRITE "^print_bytes b^"\n");
+       hsref := {!hsref with
+         hs_buffers = {(!hsref).hs_buffers with
+           hs_outgoing = empty_bytes;
+           hs_outgoing_epochchange = None }};
+       Outgoing (Some (out_msg i (l,l) b)) false keychange false)
+
+    else // were we waiting to advance our state machine & send the next messages?
+    

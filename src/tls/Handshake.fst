@@ -85,6 +85,7 @@ type machineState =
   // only after choosing TLS 1.3
   | S_HelloSent :                 nego -> serverState 
   | S_ZeroRTTReceived :           nego -> serverState
+  //missing:   | S_FinishedSent_13: serverState
   | S_PostHS:                             serverState
 
   // only after choosing TLS classic
@@ -97,6 +98,7 @@ type machineState =
 
   | S_Error:                     error -> serverState
 
+// Why an error state? to ensure the machine is stuck?
 // TODO: review their parameters; should probably all disappear except for some digests 
 
 
@@ -262,22 +264,6 @@ let i (HS #r0 _ _ _ _ epochs _) rw =
 
 
 
-// payload of a handshake fragment, to be made opaque eventually
-type message (i:id) = ( rg: frange i & rbytes rg )
-let out_msg i rg b : message i= (|rg, b|)
-
-// What the HS asks the record layer to do, in that order.
-type outgoing (i:id) (* initial index *) =
-  | Outgoing:
-      send_first: option (message i) -> // HS fragment to be sent;  (with current id)
-      send_ccs  : bool               -> // CCS fragment to be sent; (with current id)
-      next_keys : bool               -> // the writer index increases;
-      complete  : bool               -> // the handshake is complete!
-      outgoing i
-  | OutError: error -> outgoing i       // usage? in case something goes wrong when preparing messages.
-
-let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r && Outgoing?.next_keys r
-let out_complete (#i:id) (r:outgoing i)  = Outgoing? r && Outgoing?.complete r
 
 type incoming =
   // the fragment is accepted, and...
@@ -352,7 +338,7 @@ let Nego.prepareClientOffer cfg =
 (* Handshake.Client *)
 
 (* send ClientHello *)
-val client_send_client_hello: hs -> ST unit 
+val client_ClientHello: hs -> ST unit 
   (requires (fun h -> 
     True (* add the precondition that Nego and KS are in proper state *) ))
   (ensures (fun h0 i h1 -> True))
@@ -361,7 +347,7 @@ val client_send_client_hello: hs -> ST unit
     - The Handshake log has exactly one more message: the ClientHello computed from the input configurtion
     - The result is this ClientHello and its serialization
   *)
-let client_send_client_hello hs =
+let client_ClientHello hs =
   (* merged in prepare_client_hello *)
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
@@ -392,7 +378,8 @@ let client_send_client_hello hs =
     ch_extensions = Some ext
   } in
   Handshake.Log.send hs.log (ClientHello ch);  // TODO in two steps, appending the binders
-  hs.state := C_HelloSent ri ch
+  hs.state := C_HelloSent ri ch; 
+  Correct (Handshake.Log.next_fragment
 
 (* receive ServerHello *)
 let client_ServerHello hs sh =
@@ -955,71 +942,59 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     (if j = -1 then PlaintextID? i else let e = Seq.index es j in i = epoch_id e)
   ))
   (ensures (next_fragment_ensures s))
-let rec next_fragment i hs =
-    let (HS #r0 r res cfg id lgref hsref) = hs in
+let next_fragment i hs =
+    // let (HS #r0 r res cfg id lgref hsref) = hs in
+
+    // reading nego (defer?)
     let pv,kex,res =
       (match (!hsref).hs_nego with
        | None -> None, None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
-    let b = (!hsref).hs_buffers.hs_outgoing in
 
-    // GOING to Handshake.Log
-    //16-06-01 TODO: handle fragmentation; return fragment + flags set in some cases
-    let l = length b in
-    if (!hsref).hs_buffers.hs_outgoing_ccs then (
-       hsref := {!hsref with
-         hs_buffers = {(!hsref).hs_buffers with
-           hs_outgoing_ccs = false }};
-       Epochs.incr_writer lgref;
-       Outgoing None true true false
-    ) else if (l > 0) then (
-       let keychange =
-          match (!hsref).hs_buffers.hs_outgoing_epochchange with
-          | None -> false
-          | Some Reader -> Epochs.incr_reader lgref; true // possibly used by server in 0-RT
-          | Some Writer -> Epochs.incr_writer lgref; true in
-       IO.hs_debug_print_string (" * WRITE "^print_bytes b^"\n");
-       hsref := {!hsref with
-         hs_buffers = {(!hsref).hs_buffers with
-           hs_outgoing = empty_bytes;
-           hs_outgoing_epochchange = None }};
-       Outgoing (Some (out_msg i (l,l) b)) false keychange false)
-    else
-    
-      (match !hsref.state with
-       | C_Error e -> OutError e
-       | S_Error e -> OutError e
-       | C_Idle ri -> (
-          client_send_client_hello hs; 
-          next_fragment i hs )
-       | C_OutCCS n -> (
-          //was: client_send_client_finished hs;
+    let outgoing = Handshake.Log.next_fragment hs.log i in 
+
+    if outgoing <> Outgoing None false false false 
+    then 
+      // continue with pending messages and signals 
+      Correct outgoing  
+    else (
+      // prepare new messages & signals (resuming e.g. after a key change)
+      match !hsref.state with
+      | C_Error e -> Error e
+      | S_Error e -> Error e
+      | C_Idle ri -> client_ClientHello hs 
+      | C_OutCCS n -> (
+          // was: client_send_client_finished hs;
+          // we could store the MAC in OutCCS, to make this step trivial
           let tag = KeySchedule.ks_client_12_client_finished hs.ks in
           Handshake.Log.send hs.log (Finished ({fin_vd = tag}));
           hs.state := C_FinishedSent n tag
           Epochs.incr_writer lgref;
           Outgoing None true true false )
-       | C_FinishedReceived n (cvd,svd) ->
+      | C_FinishedReceived n (cvd,svd) ->
           hsref := {!hsref with hs_state = C (C_PostHS)};
           Epochs.incr_writer lgref; // Switch to ATK writer
           Outgoing None false true true
-       | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
+          
+      | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
           server_ServerHelloDone hs n;
           next_fragment i hs
-       | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
+      | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
           server_send_server_finished_res hs;
           next_fragment i hs
-       | S_HelloSent n when (Some? pv && pv = Some TLS_1p3) ->
+      | S_HelloSent n when (Some? pv && pv = Some TLS_1p3) ->
           server_send_server_finished_13 hs n;
           next_fragment i hs
-       | S_FinishedReceived n ->
+      | S_FinishedReceived n ->
           Epochs.incr_reader lgref; // Switch to ATK reader
           hs.state := S_PostHS;
           Outgoing None false true true
-       | S_OutCCS n ->
+      | S_OutCCS n ->
           hs.state := S_FinishedSent n  // who actually sends the ServerFinished? buffered?
           Outgoing None false false true
-       | _ -> Outgoing None false false false)
+      | _ -> Outgoing None false false false)
+    else Some outgoing
+
 
 (* Incoming (main) *)
 
@@ -1165,7 +1140,7 @@ let recv_ccs hs =
       | Some n -> Some n.n_protocol_version, Some n.n_kexAlg
       | None -> None, None in
 
-    // intuitively, receiving CCS triggers completion of the incoming flight of messages.
+    // CCS triggers completion of the incoming flight of messages.
     match Handshake.Log.ReadCCS hs.log with
     | Error -> InError(AD_unexpected_message, "CCS received at wrong time")
     | Correct (ms, hs, digest) -> 
@@ -1185,6 +1160,7 @@ let recv_ccs hs =
 
         | S_HelloDone n, ([ClientKeyExchange cke], []) 
           when (Some? pv && pv <> Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+          // push these restrictions to the handler? 
             server_ClientCCS hs cke digest
 (*
         // FIXME support optional client c and cv
