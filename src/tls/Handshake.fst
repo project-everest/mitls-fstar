@@ -25,7 +25,6 @@ open HandshakeMessages
 open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less
-open Extensions
 //open CoreCrypto
 open Epochs
 //open HandshakeLog
@@ -366,7 +365,7 @@ let client_ClientHello hs =
     | Some x -> x
   in
   (* In Extensions: prepare client extensions, including key shares *)
-  let ext = prepareExtensions offer hs.resume ri shares in
+  let ext = Extensions.prepareExtensions offer hs.resume ri shares in
   let ch = // a bit too concrete? ClientHello hs.nonce offer hs.resume ri shares
   {
     ch_protocol_version = offer.co_protocol_version;
@@ -596,7 +595,7 @@ let server_ClientHello hs ch =
              Some (KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.sm_cipher_suite g gx)))
        | _ -> None) in
       (* Extensions:negotiateServerExtensions *) 
-      match negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
+      match Extensions.negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
       | Error z -> Error z
       | Correct sext -> (
         let sid = CoreCrypto.random 32 in
