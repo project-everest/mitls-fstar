@@ -304,14 +304,14 @@ let rec map_ST f x = match x with
 
 val ks_client_13_1rtt_init:
   ks:ks -> gl:list valid_namedGroup
-  -> ST keyShare
+  -> ST CommonDH.keyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
-    ClientKeyShare? r /\
-    gl == List.Tot.map fst (ClientKeyShare?._0 r) /\
+    CommonDH.ClientKeyShare? r /\
+    gl == List.Tot.map fst (CommonDH.ClientKeyShare?._0 r) /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
@@ -330,17 +330,17 @@ let ks_client_13_1rtt_init ks gl =
     | None -> None // Impossible
     | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in
   let serialized = List.Tot.choose serialize_share gs in
-  ClientKeyShare serialized
+  CommonDH.ClientKeyShare serialized
 
 
-val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST keyShare
+val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST CommonDH.keyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
-    ClientKeyShare? r /\
-    gl == List.Tot.map fst (ClientKeyShare?._0 r) /\
+    CommonDH.ClientKeyShare? r /\
+    gl == List.Tot.map fst (CommonDH.ClientKeyShare?._0 r) /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
@@ -359,7 +359,7 @@ let ks_client_13_0rtt_init ks esId gl =
     | None -> None // Impossible
     | Some ng -> Some (ng, CommonDH.serialize_raw #g gx) in
   let serialized = List.Tot.choose serialize_share gs in
-  ClientKeyShare serialized
+  CommonDH.ClientKeyShare serialized
 
 
 // Derive the early keys from the early secret
@@ -547,7 +547,7 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
 val ks_server_13_1rtt_init:
   ks:ks -> cr:random -> cs:cipherSuite
   -> g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)}
-  -> gx:CommonDH.share g -> ST keyShare
+  -> gx:CommonDH.share g -> ST CommonDH.keyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -572,7 +572,7 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   st := S (S_13_wait_SH (ae, h) cr sr None None (| hsId, hs |));
 
   match CommonDH.namedGroup_of_group g with
-  | Some gn -> ServerKeyShare (gn, CommonDH.serialize_raw #g gy)
+  | Some gn -> CommonDH.ServerKeyShare (gn, CommonDH.serialize_raw #g gy)
 
 val ks_server_13_sh: ks:ks -> ST recordInstance
   (requires fun h0 ->

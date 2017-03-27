@@ -10,7 +10,15 @@ open TLSError
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
-// TLS memory---an attempt at splitting TLSConstants
+
+(** This file should be split in 3 different modules:
+  - Regions: for global table regions
+  - Format: for generic formatting functions
+  - DHFormat: for (EC)DHE-specific formatting
+*)
+
+
+(** Begin Module Regions *)
 
 (** Regions and colors for objects in memory *)
 let tls_color = -1
@@ -36,7 +44,10 @@ let tls_region : tls_rgn = new_colored_region HH.root tls_color
 let tls_tables_region : (r:tls_rgn{HH.parent r = tls_region}) =
     new_region tls_region
 
+(** End Module Regions *)
 
+
+(** Begin Module Format *)
 
 // basic parsing and formatting---an attempt at splitting TLSConstant.
 
@@ -123,6 +134,10 @@ let vlparse_vlbytes lSize vlb =
   | Error z   -> ()
   | Correct b -> lemma_vlbytes_inj lSize vlb b
 
+(** End Module Format *)
+
+
+(** Begin Module DHFormat *)
 
 // floating crypto definitions
 
@@ -134,15 +149,12 @@ type ffdhe =
   | FFDHE6144
   | FFDHE8192
 
-// BB.TODO: Document this !
-let _FFz = 0xFFz // Workaround for #514
-
 (** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
   | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z})
   | FFDHE of ffdhe
-  | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = _FFz})
+  | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = 0xFFz})
   | ECDHE_PRIVATE_USE of byte
 
 (*
@@ -210,13 +222,16 @@ val pinverse_namedGroup: x:_ -> Lemma
   [SMTPat (namedGroupBytes (Correct?._0 (parseNamedGroup x)))]
 let pinverse_namedGroup x = ()
 
-
+#set-options "--max_ifuel 2"
 private val namedGroupsBytes0: groups:list namedGroup
-  -> Tot (b:bytes { length b = op_Multiply 2 (List.Tot.length groups)})
+  -> Tot (b:bytes { length b == op_Multiply 2 (List.Tot.length groups)})
 let rec namedGroupsBytes0 groups =
   match groups with
   | [] -> empty_bytes
-  | g::gs -> namedGroupBytes g @| namedGroupsBytes0 gs
+  | g::gs ->
+    lemma_len_append (namedGroupBytes g) (namedGroupsBytes0 gs);
+    namedGroupBytes g @| namedGroupsBytes0 gs
+#reset-options
 
 (** Serialization function for a list of named groups *)
 val namedGroupsBytes: groups:list namedGroup{List.Tot.length groups < 65536/2}
@@ -254,6 +269,4 @@ let parseNamedGroups b =
   | Error z   ->
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
 
-
-
-
+(* End Module DHFormat *)
