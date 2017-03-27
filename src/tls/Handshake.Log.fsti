@@ -24,8 +24,8 @@ val parse_msg: b:bytes -> Tot (option (m:msg {b = format m}))
 let tagged = 
   let open HandshakeMessages in function 
   | Certificate _ -> true // for CertVerify payload in TLS 1.3
-  | CertificateVerify _ -> // for ServerFinish payload in TLS 1.3
-  | Finished _ -> // for 2nd Finished 
+  | CertificateVerify _ -> true // for ServerFinish payload in TLS 1.3
+  | Finished _ -> true // for 2nd Finished 
   | ClientHello _ 
   | ServerHello _ 
   | EncryptedExtensions _  
@@ -184,6 +184,7 @@ let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r && Outgoing?.next_keys r
 let out_complete (#i:id) (r:outgoing i)  = Outgoing? r && Outgoing?.complete r
 
 val next_fragment: st:t -> i:id -> St (Outgoing i) 
+(*
   if length st.outgoing = 0 
   return as we can, up to the fragment limit
 
@@ -212,4 +213,4 @@ val next_fragment: st:t -> i:id -> St (Outgoing i)
        Outgoing (Some (out_msg i (l,l) b)) false keychange false)
 
     else // were we waiting to advance our state machine & send the next messages?
-    
+ *)   

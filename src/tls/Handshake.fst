@@ -378,8 +378,7 @@ let client_ClientHello hs =
     ch_extensions = Some ext
   } in
   Handshake.Log.send hs.log (ClientHello ch);  // TODO in two steps, appending the binders
-  hs.state := C_HelloSent ri ch; 
-  Correct (Handshake.Log.next_fragment
+  hs.state := C_HelloSent ri ch
 
 (* receive ServerHello *)
 let client_ServerHello hs sh =
@@ -993,7 +992,6 @@ let next_fragment i hs =
           hs.state := S_FinishedSent n  // who actually sends the ServerFinished? buffered?
           Outgoing None false false true
       | _ -> Outgoing None false false false)
-    else Some outgoing
 
 
 (* Incoming (main) *)
