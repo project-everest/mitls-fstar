@@ -66,7 +66,7 @@ let getCachedSession cfg cg = None
 //17-03-24 we could also use two refinements. 
 type machineState =
   | C_Idle:                  option ri -> clientState
-  | C_HelloSent:       option ri -> ch -> clientState
+  | Wait_ServerHello:       option ri -> ch -> clientState
 
   // only after accepting TLS 1.3
   | C_HelloReceived:              nego -> clientState
@@ -378,7 +378,7 @@ let client_ClientHello hs =
     ch_extensions = Some ext
   } in
   Handshake.Log.send hs.log (ClientHello ch);  // TODO in two steps, appending the binders
-  hs.state := C_HelloSent ri ch
+  hs.state := Wait_ServerHello ri ch
 
 (* receive ServerHello *)
 let client_ServerHello hs sh =
@@ -957,7 +957,7 @@ let next_fragment i hs =
       // continue with pending messages and signals 
       Correct outgoing  
     else (
-      // prepare new messages & signals (resuming e.g. after a key change)
+      // prepare new messages & signals (resume from a "writing" state, after CCS and/or a key change)
       match !hsref.state with
       | C_Error e -> Error e
       | S_Error e -> Error e
@@ -1071,22 +1071,22 @@ let recv_fragment hs #i f =
       
       | C_Idle, _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
 
-      | C_HelloSent ch, Some ([ServerHello sh], [digestServerHello]) -> client_ServerHello sh digestServerHello
+      | Wait_ServerHello ch, Some ([ServerHello sh], [digestServerHello]) -> client_ServerHello sh digestServerHello
 
-      | C_HelloReceived n, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert])
+      | Wait_ServerHelloDone n, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert])
         when (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
           (* shall we also check we have a sigAlg? *)
           client_ServerHelloDone hs c ske None
 
-      | C_HelloReceived n, Some ([Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert])
+      | Wait_ServerHelloDone n, Some ([Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert])
         when (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
           client_ServerHelloDone hs c ske (Some cr)
 
-      | C_HelloReceived n, Some ([EncryptedExtensions ee; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) 
+      | Wait_Finished1 n, Some ([EncryptedExtensions ee; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) 
         when (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
           client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
-      | C_HelloReceived n, Some ([EncryptedExtensions ee; CertificateRequest cr; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) 
+      | Wait_Finished1 n, Some ([EncryptedExtensions ee; CertificateRequest cr; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) 
         when (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
           client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
