@@ -269,4 +269,4 @@ let parseNamedGroups b =
   | Error z   ->
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
 
-(** End Module DHFormat *)
+(* End Module DHFormat *)
