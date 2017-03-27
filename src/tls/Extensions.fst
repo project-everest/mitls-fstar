@@ -41,22 +41,30 @@ and supportedVersions =
    Non-{M,AF} extension commented-out for now.*)
 and extension =
   | E_server_name of list serverName (* M, AF *)
-(*| E_max_fragment_length | E_client_certificate_url | E_status_request 
-  | E_user_mapping | E_cert_type *)
+(*| E_max_fragment_length 
+  | E_client_certificate_url 
+  | E_status_request 
+  | E_user_mapping 
+  | E_cert_type *)
   | E_supported_groups of list namedGroup (* M, AF *)
   | E_signature_algorithms of (list sigHashAlg) (* M, AF *)  
-(*| E_use_srtp | E_heartbeat | E_application_layer_protocol_negotiation
-  | E_signed_certifcate_timestamp | E_client_certificate_type | E_padding *)
+(*| E_use_srtp 
+  | E_heartbeat 
+  | E_application_layer_protocol_negotiation
+  | E_signed_certifcate_timestamp 
+  | E_client_certificate_type 
+  | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
   | E_pre_shared_key of PSK.preSharedKey (* M, AF *)
 (*| E_psk_key_exchange_modes *)
   | E_early_data of earlyDataIndication
   | E_cookie of cookie (* M *)
   | E_supported_versions of supportedVersions (* M, AF *) 
-(*| E_certificate_authorities | E_oid_filters *)
-  | E_unknown_extension of (lbytes 2 * bytes) (* SI: old comment said: 
-						 Still store unknown extension to get parsing injectivity*)
+(*| E_certificate_authorities 
+  | E_oid_filters *)
+  | E_unknown_extension of (lbytes 2 * bytes) (** to return unimplemented or unknow extensions. *)
 
+(* API *)
 (** Extension equality *)
 let sameExt e1 e2 =
   match e1, e2 with
@@ -72,6 +80,7 @@ let sameExt e1 e2 =
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
 
+(* API *)
 val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
   match ext with                                     // 4.2 ExtensionType enum value
@@ -85,6 +94,7 @@ let extensionHeaderBytes ext =
   | E_supported_versions _   -> abyte2 (0x00z, 0x2bz) // 43 /
   | E_unknown_extension(h,b) -> h
 
+(* API ? *)
 type canFail (a:Type) =
 | ExFail of alertDescription * string
 | ExOK of list a
@@ -241,7 +251,7 @@ let addOnce ext extList =
     else
         let res = FStar.List.Tot.append extList [ext] in
         correct(res)
-
+(* API ? *)
 let rec extension_depth (ext:extension): Tot nat =
   match ext with
   | E_early_data edt           -> (
@@ -250,6 +260,7 @@ let rec extension_depth (ext:extension): Tot nat =
       | ClientEarlyDataIndication edi -> 1 + extensions_depth edi.ped_extensions
       )
   | _ -> 0
+(* API: extensions *)
 and extensions_depth (exts:list extension): Tot nat =
   match exts with
   | [] -> 0
@@ -264,6 +275,8 @@ val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
   (decreases (fun edi -> match edi with | ClientEarlyDataIndication edi -> extensions_depth edi.ped_extensions | _ -> 0))
 val extensionPayloadBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
+
+(* API *)
 val extensionBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
 val extensionsBytes: role -> cl:list extension -> Tot (b:bytes{length b <= 2 + 65535})
