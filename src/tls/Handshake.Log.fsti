@@ -26,6 +26,8 @@ let tagged =
   | Certificate _ -> true // for CertVerify payload in TLS 1.3
   | CertificateVerify _ -> true // for ServerFinish payload in TLS 1.3
   | Finished _ -> true // for 2nd Finished 
+  | _ -> false
+(*  
   | ClientHello _ 
   | ServerHello _ 
   | EncryptedExtensions _  
@@ -37,26 +39,30 @@ let tagged =
   | HelloRequest  
   | HelloRetryRequest _ 
   | SessionTicket _ -> false 
+*)
 
 // Does this message complete the flight? 
 // val eoflight: msg -> Tot bool 
 let eoflight = 
   let open HandshakeMessages in function
+  | ClientHello _
+  | HelloRetryRequest _
+  | ServerHello _
+  | ServerHelloDone 
+  | Finished _ -> true
+  | _ -> false
+(*
   | ClientKeyExchange _ 
-  | ClientHello _ 
-  | ServerHello _ 
   | EncryptedExtensions _  
   | ClientKeyExchange _ 
   | ServerKeyExchange _
-  | ServerHelloDone 
   | CertificateRequest _
   | Certificate _
   | CertificateVerify _
-  | Finished _
   | NextProtocol _
   | HelloRequest  
-  | HelloRetryRequest _ 
   | SessionTicket _ -> false 
+*) 
 
 // NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights. 
 
