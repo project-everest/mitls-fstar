@@ -16,7 +16,7 @@ assume val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> T
 
 
 //16-05-31 these opens are implementation-only; overall we should open less
-open TLSExtensions 
+open Extensions 
 open CoreCrypto
 
 (* A flag for runtime debugging of negotiation data.

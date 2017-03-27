@@ -4,7 +4,7 @@ This modules defines TLS 1.3 Extensions.
 
 @summary: TLS 1.3 Extensions. 
 *)
-module TLSExtensions
+module Extensions
 
 open Platform.Bytes
 open Platform.Error
