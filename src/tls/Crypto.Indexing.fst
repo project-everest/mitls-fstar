@@ -44,9 +44,6 @@ type aeadAlg =
 type id =
   i:TLSInfo.id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
 
-// ADL: TODO support in TLSInfo.id + mitls.exe
-let aesImpl_of_id (i:id) = Crypto.Config.aes_implementation
-
 let aeadAlg_of_id i =
   let AEAD aead _ = aeAlg_of_id i in
   match aead with
@@ -66,6 +63,21 @@ let cipherAlg_of_id i =
   | AES_256_GCM       -> AES256
   | CHACHA20_POLY1305 -> CHACHA20
 
+// ADL: TODO support in TLSInfo.id + mitls.exe
+let aesImpl_of_id (i:id) = Crypto.Config.aes_implementation
+
+val aeadAlg_cipherAlg: i:id -> Lemma
+  (requires True)
+  (ensures
+    ((aeadAlg_of_id i == AES_128_GCM ==> cipherAlg_of_id i == AES128) /\
+     (aeadAlg_of_id i == AES_256_GCM ==> cipherAlg_of_id i == AES256) /\
+     (aeadAlg_of_id i == CHACHA20_POLY1305 ==> cipherAlg_of_id i == CHACHA20)))
+  [SMTPat (aeadAlg_of_id i); SMTPat (cipherAlg_of_id i)]
+let aeadAlg_cipherAlg i = ()
+
 // controls abstraction of plaintexts
 // (kept abstract, but requires all the crypto steps above)
 let safeId = TLSInfo.safeId
+
+(* TODO: Implement to match hacl-star interface *)
+(* let testId a = ... *)
