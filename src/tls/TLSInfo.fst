@@ -506,16 +506,25 @@ type log_info (li:logInfo) (h:hashed_log) =
   injective #hashed_log #logInfo #equalBytes #eq_logInfo f /\ f h = li
 
 type pre_esId : Type0 =
-  | ApplicationPSK: info:PSK.pskInfo -> i:PSK.psk_identifier -> pre_esId
-  | ResumptionPSK: info:PSK.pskInfo -> i:pre_rmsId -> pre_esId
+  | ApplicationPSK: i:PSK.pskid -> ha:hash_alg{PSK.compatible_hash i ha} -> pre_esId
+  | ResumptionPSK: i:pre_rmsId -> pre_esId
+  | NoPSK: ha:hash_alg -> pre_esId
 
 and pre_hsId =
-  | HSID_PSK: pre_esId -> pre_hsId
-  | HSID_PSK_DHE: pre_esId -> g:CommonDH.group -> initiator:CommonDH.share g -> responder:CommonDH.share g -> pre_hsId
-  | HSID_DHE: hash_alg -> g:CommonDH.group -> initiator:CommonDH.share g -> responder:CommonDH.share g -> pre_hsId
+  | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
+  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
 
 and pre_asId =
-  | ASID: pre_hsId -> pre_asId
+  | ASID: pre_saltId -> pre_asId
+
+and pre_saltId =
+  | EarlySalt: pre_esId -> pre_saltId
+  | HandshakeSalt: pre_hsId -> pre_saltId
+
+and pre_secretId =
+  | EarlySecretID: pre_esId -> pre_secretId
+  | HandshakeSecretID: pre_hsId -> pre_secretId
+  | ApplicationSecretID: pre_asId -> pre_secretId
 
 and pre_rmsId =
   | RMSID: pre_asId -> logInfo -> hashed_log -> pre_rmsId
@@ -523,17 +532,16 @@ and pre_rmsId =
 and pre_exportId =
   | ExportID: pre_asId -> logInfo -> hashed_log -> pre_exportId
 
-and pre_rekeyId =
-  | RekeyID: pre_asId -> logInfo -> hashed_log -> nat -> pre_rekeyId
+and expandTag =
+  | EarlyTrafficSecret
+  | HandshakeTrafficSecret
+  | ApplicationTrafficSecret
+  | TrafficSecret
 
 and pre_expandId =
-  | EarlySecretID: pre_esId -> pre_expandId
-  | HandshakeSecretID: pre_hsId -> pre_expandId
-  | ApplicationSecretID: pre_asId -> pre_expandId
-  | RekeySecretID: pre_rekeyId -> pre_expandId
+  | ExpandedSecret: pre_secretId -> expandTag -> logInfo -> hashed_log -> pre_expandId
 
 and keyTag =
-  | EarlyTrafficKey
   | EarlyApplicationDataKey
   | HandshakeKey
   | ApplicationDataKey
@@ -553,33 +561,40 @@ and pre_finishedId =
 val esId_hash: pre_esId -> Tot hash_alg
 val hsId_hash: pre_hsId -> Tot hash_alg
 val asId_hash: pre_asId -> Tot hash_alg
+val saltId_hash: pre_saltId -> Tot hash_alg
+val secretId_hash: pre_secretId -> Tot hash_alg
 val rmsId_hash: pre_rmsId -> Tot hash_alg
 val exportId_hash: pre_exportId -> Tot hash_alg
-val rekeyId_hash: pre_rekeyId -> Tot hash_alg
 val expandId_hash: pre_expandId -> Tot hash_alg
 val keyId_hash: pre_keyId -> Tot hash_alg
 val finishedId_hash: pre_finishedId -> Tot hash_alg
 
 let rec esId_hash = function
-  | ApplicationPSK ctx _ -> PSK.pskInfo_hash ctx
-  | ResumptionPSK _ rmsId -> rmsId_hash rmsId
+  | ApplicationPSK pskid h -> h
+  | ResumptionPSK i -> rmsId_hash i
+  | NoPSK h -> h
 
 and hsId_hash = function
-  | HSID_PSK i -> esId_hash i
-  | HSID_DHE h _ _ _ -> h
-  | HSID_PSK_DHE i _ _ _ -> esId_hash i
+  | HSID_PSK i -> saltId_hash i
+  | HSID_DHE i _ _ _ -> saltId_hash i
 
 and asId_hash = function
-  | ASID i -> hsId_hash i
+  | ASID i -> saltId_hash i
+
+and saltId_hash = function
+  | EarlySalt i -> esId_hash i
+  | HandshakeSalt i -> hsId_hash i
+
+and secretId_hash = function
+  | EarlySecretID i -> esId_hash i
+  | HandshakeSecretID i -> hsId_hash i
+  | ApplicationSecretID i -> asId_hash i
 
 and rmsId_hash = function
   | RMSID asId _ _ -> asId_hash asId
 
 and exportId_hash = function
   | ExportID asId _ _ -> asId_hash asId
-
-and rekeyId_hash = function
-  | RekeyID i _ _ _ -> asId_hash i
 
 and expandId_hash = function
   | ExpandedSecret i _ _ _ -> secretId_hash i
@@ -623,87 +638,57 @@ type registered (i:pre_index) =
   else True)
 
 type valid (i:pre_index) =
-  (if Flags.ideal_KEF then
-    registered i /\
+  (match i with
+  | I_ES i ->
     (match i with
-    | I_ES i ->
-      (match i with
-      | ApplicationPSK i _ -> PSK.registered_psk i
-      | ResumptionPSK i -> registered (I_RMS i)
-      | NoPSK _ -> True)
-    | I_HS i ->
-      (match i with
-      | HSID_PSK i -> registered (I_SALT i)
-      | HSID_DHE i g si sr -> registered (I_SALT i) /\ CommonDH.registered (|g,si|) /\ CommonDH.registered (|g,sr|))
-    | I_AS i ->
-      (match i with
-      | ASID i -> registered (I_SALT i))
-    | I_SALT i ->
-      (match i with
-      | EarlySalt i -> registered (I_ES i)
-      | HandshakeSalt i -> registered (I_HS i))
-    | I_SECRET i ->
-      (match i with
-      | EarlySecretID i -> registered (I_ES i)
-      | HandshakeSecretID i -> registered (I_HS i)
-      | ApplicationSecretID i -> registered (I_AS i))
-    | I_RMS i ->
-      (match i with
-      | RMSID i _ _ -> registered (I_AS i))
-    | I_EXPORT i ->
-      (match i with
-      | ExportID i _ _ -> registered (I_AS i))
-    | I_EXPAND i ->
-      (match i with
-      | ExpandedSecret i _ _ _ -> registered (I_SECRET i))
-    | I_KEY i ->
-      (match i with
-      | KeyID i _ _ _ _ -> registered (I_EXPAND i))
-    | I_FINISHED i ->
-      (match i with
-      | FinishedID i _ _ _ _ -> registered (I_EXPAND i)))
-  else True)
+    | ApplicationPSK i _ -> PSK.registered_psk i
+    | ResumptionPSK i -> registered (I_RMS i)
+    | NoPSK _ -> True)
+  | I_HS i ->
+    (match i with
+    | HSID_PSK i -> registered (I_SALT i)
+    | HSID_DHE i g si sr -> registered (I_SALT i) /\ CommonDH.registered (|g,si|) /\ CommonDH.registered (|g,sr|))
+  | I_AS i ->
+    (match i with
+    | ASID i -> registered (I_SALT i))
+  | I_SALT i ->
+    (match i with
+    | EarlySalt i -> registered (I_ES i)
+    | HandshakeSalt i -> registered (I_HS i))
+  | I_SECRET i ->
+    (match i with
+    | EarlySecretID i -> registered (I_ES i)
+    | HandshakeSecretID i -> registered (I_HS i)
+    | ApplicationSecretID i -> registered (I_AS i))
+  | I_RMS i ->
+    (match i with
+    | RMSID i _ _ -> registered (I_AS i))
+  | I_EXPORT i ->
+    (match i with
+    | ExportID i _ _ -> registered (I_AS i))
+  | I_EXPAND i ->
+    (match i with
+    | ExpandedSecret i _ _ _ -> registered (I_SECRET i))
+  | I_KEY i ->
+    (match i with
+    | KeyID i _ _ _ _ -> registered (I_EXPAND i))
+  | I_FINISHED i ->
+    (match i with
+    | FinishedID i _ _ _ _ -> registered (I_EXPAND i)))
 
 type index = i:pre_index{valid i}
 
-type safe (i:index) =
+type honest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
     MR.witnessed (MM.contains log i true)
   else False)
 
-type unsafe (i:index) =
+type dishonest (i:index) =
   (if Flags.ideal_KEF then
     let log : i_safety_log = safety_table in
     MR.witnessed (MM.contains log i false)
   else True)
-
-#set-options "--z3rlimit 100"
-let is_honest (i:index) : ST bool
-  (requires (fun h -> valid i))
-  (ensures (fun h0 b h1 ->
-    modifies_none h0 h1 /\
-    (if Flags.ideal_KEF then
-      let log : i_safety_log = safety_table in
-      MM.contains log i b h1 /\
-      (b ==> safe i) /\
-      (not b ==> unsafe i)
-    else b == false)))
-  =
-  if Flags.ideal_KEF then
-   begin
-    let log : i_safety_log = safety_table in
-    cut(registered i);
-    let h = ST.get () in
-    MR.m_recall log;
-    MR.testify (MM.defined log i);
-    cut(Some? (MM.sel (MR.m_sel h log) i));
-    let b = Some?.v (MM.sel (MR.m_read log) i) in
-    cut(MM.contains log i b h);
-    MM.contains_stable log i b;
-    MR.witness log (MM.contains log i b); b
-   end
-  else false
 
 type esId = i:pre_esId{valid (I_ES i)}
 type hsId = i:pre_hsId{valid (I_HS i)}
