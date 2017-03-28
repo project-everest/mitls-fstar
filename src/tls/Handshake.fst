@@ -43,9 +43,16 @@ let hashSize = Hashing.Spec.tagLen
 
 (* A flag for runtime debugging of Handshake data.
    The F* normalizer will erase debug prints at extraction
-   when this flag is set to false. *)
+   when this flag is set to false. 
+
+   SI: pull both these out to a Debug/Config module. *)
 inline_for_extraction let hs_debug = false
 
+// inline/normalize  too? 
+let debug_print s = 
+  if hs_debug then
+    IO.debug_print_string s 
+  else false 
 
 
 (* Returns [c] if [c] is within the range of acceptable versions for [cfg],
@@ -381,7 +388,7 @@ let client_ClientHello hs =
   hs.state := C_Wait_ServerHello // we may still need to keep parts of ch
 
 let client_ServerHello hs sh =
-  IO.hs_debug_print_string "Processing client hello...\n";
+  debug_print "Processing client hello...\n";
   let n = Nego.clientMode hs.nego sh in
   match n with
   | Error z -> Error z
@@ -440,8 +447,8 @@ let client_ServerHelloDone hs c ske ocr =
               | None -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to get public key from chain") )
               | Some pk ->
                    let valid_signature = Signature.verify #a h pk tbs sigv in
-                   // IO.hs_debug_print_string("tbs = " ^ (Platform.Bytes.print_bytes tbs) ^ "\n");
-                   IO.hs_debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
+                   // debug_print("tbs = " ^ (Platform.Bytes.print_bytes tbs) ^ "\n");
+                   debug_print("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
                    if not valid_signature then Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
                    else 
                      match ske.ske_kex_s with
@@ -479,7 +486,7 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
     begin
        let Some cs_sigalg = n.n_sigAlg in
        let Some algs = n.n_extensions.ne_signature_algorithms in
-       IO.hs_debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n");
+       debug_print("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n");
        match sigHashAlg_of_ske cv.cv_sig with
        | Some ((sa,ha), sigv) ->
          if not (List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = ha)) (list_sigHashAlg_is_list_tuple_sig_hash algs))
@@ -497,7 +504,7 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
            | None -> Error (AD_decode_error, "Certificate was not valid")
            | Some pk ->
              let valid_signature = Signature.verify ha pk tbs sigv in
-             IO.hs_debug_print_string("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
+             debug_print("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
              if not valid then Error (AD_decode_error, "Certificate signature did not verify")
              else  *)
     | Error z -> Error z 
@@ -963,7 +970,7 @@ let recv_ensures (s:hs) (h0:HyperStack.mem) (result:incoming) (h1:HyperStack.mem
 let print_hsl hsl : Tot bool =
     let sl = List.Tot.map (fun (x,_) -> HandshakeMessages.string_of_handshakeMessage x) hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
-    IO.debug_print_string("Recv_fragment buffer: " ^ s ^ "\n")
+    debug_print ("Recv_fragment buffer: " ^ s ^ "\n")
 
 
 val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
@@ -975,18 +982,14 @@ let recv_fragment hs #i f =
     (* This should go to HSL: 
     let (| rg,rb |) = f in
     let b =
-      if hs_debug then
-        IO.debug_print_string ("   *** RAW "^(print_bytes rb)^"\n")
-      else false in
+      debug_print ("   *** RAW "^(print_bytes rb)^"\n")
     let (HS #r0 r res cfg id lgref hsref) = hs in
     let b = (!hsref).hs_buffers.hs_incoming in
     let b = b @| rb in
     match parseHandshakeMessages pv kex b with
     | Error (ad, s) ->
       let _ =
-        if hs_debug then
-          IO.debug_print_string ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n")
-        else false in
+        debug_print ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n")
       InError (ad,s)
     | Correct(r,hsl) ->
        let hsl = List.Tot.append (!hsref).hs_buffers.hs_incoming_parsed hsl in
@@ -1064,7 +1067,7 @@ val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge 
     (InError? result \/ result = InAck true false)
     ))
 let recv_ccs hs =
-    IO.hs_debug_print "CALL recv_ccs\n";
+    debug_print "CALL recv_ccs\n";
     let pv, kex = 
       match Nego.read_mode hs.nego with // not necessarily defined early enough?
       | Some n -> Some n.n_protocol_version, Some n.n_kexAlg
@@ -1082,7 +1085,7 @@ let recv_ccs hs =
             InAck true false )
 
         | C_WaitCCS2 n cv, ([SessionTicket st], []) -> (
-            IO.hs_debug_print "WARNING: no support for session tickets";
+            debug_print "WARNING: no support for session tickets";
             // we now expect the encrypted server finish, should keep the digest to verify it
             hs.state := C_CCSReceived n cv;
             Epochs.incr_reader hs.epochs;
