@@ -38,7 +38,7 @@ type tlsState =
   | Half of rw  // the other direction is closed (reachable from BC?)
   | Close 
 
-type c_rgn = region: TLSConstants.rgn { HH.disjoint region TLSConstants.tls_region } 
+type c_rgn = r:TLSConstants.rgn { HH.disjoint r TLSConstants.tls_region } 
 
 (*
  * AR: changing the type of state from rref to ref, with region captured in the refinement.

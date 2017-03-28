@@ -63,21 +63,23 @@ PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
 CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
-LLDIR=$(FSTAR_HOME)/examples/low-level
-LDIR=$(LLDIR)/crypto
+HACLDIR ?= ../../../hacl-star
+KREMLIN_HOME ?= ../../../kremlin
+LLDIR=$(HACLDIR)/secure_api
 LCDIR=$(LLDIR)/LowCProvider
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
 HINTS_ENABLED?=--use_hints
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 \
-  --z3rlimit 20 --__temp_no_proj Handshake.Log --__temp_no_proj Handshake --__temp_no_proj Connection \
-  $(HINTS_ENABLED) --include $(LDIR)/hacl
+  --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection \
+  $(HINTS_ENABLED)
 
 # The .fst interfaces for the platform and crypto libraries.
 LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
 
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LDIR)/real --include $(LCDIR)/fst --include $(LDIR) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
+HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACLDIR)/specs $(HACLDIR)/code/lib/kremlin $(HACLDIR)/code/bignum $(HACLDIR)/code/experimental/aesgcm $(HACLDIR)/code/poly1305 $(HACLDIR)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
+FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $(HACL_INCLUDES) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
 
 OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
 OCAML=ocamlfind ocamlopt
@@ -118,25 +120,47 @@ TLSInfo.fst \
 IdNonce.fst \
 Extensions.fst \
 Buffer.Utils.fst \
+FStar.Endianness.fst \
 Crypto.Symmetric.Bytes.fst \
-Crypto.Config.fst \
 Crypto.Indexing.fst \
 Flag.fst \
-Spartan.fst \
+Vale.AES.fst \
 Crypto.Symmetric.AES.fst \
 Crypto.Symmetric.AES128.fst \
-Crypto.Symmetric.Chacha20.fst \
+Hacl.UInt8.fst \
+Hacl.UInt32.fst \
+Hacl.UInt64.fst \
+Hacl.UInt128.fst \
+C.fst \
+C.Loops.fst \
+Hacl.Endianness.fst \
+Hacl.Lib.LoadStore32.fst \
+Spec.Loops.fst \
+Spec.Lib.fst \
+Spec.CTR.fst \
+Spec.Chacha20.fst \
+Hacl.Impl.Chacha20.fst \
+Hacl.SecureAPI.Chacha20.fst \
 Crypto.Symmetric.Cipher.fst \
-Crypto.Symmetric.Poly1305.Bigint.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part1.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part2.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part3.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part4.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part5.fst \
-Crypto.Symmetric.Poly1305.Bignum.Lemmas.Part6.fst \
-Crypto.Symmetric.Poly1305.Bignum.fst \
-Crypto.Symmetric.Poly1305.Spec.fst \
-Crypto.Symmetric.Poly1305.fst \
+Hacl.Bignum.Constants.fst \
+Hacl.Bignum.Parameters.fst \
+FStar.Math.Lib.fst \
+Spec.Poly1305.Lemmas.fst \
+Spec.Poly1305.fst \
+Hacl.Spec.Bignum.Fproduct.fst \
+Hacl.Spec.Bignum.Fmul.fst \
+Hacl.Spec.Bignum.Fsum.fst \
+Hacl.Spec.Bignum.Modulo.fst \
+Hacl.Spec.Bignum.AddAndMultiply.fst \
+Hacl.Spec.Bignum.Bigint.fst \
+Hacl.Spec.Bignum.Field.fst \
+Hacl.Spec.Poly1305_64.fst \
+Hacl.Bignum.Fproduct.fst \
+Hacl.Bignum.Modulo.fst \
+Hacl.Bignum.Fmul.fst \
+Hacl.Bignum.Fsum.fst \
+Hacl.Bignum.AddAndMultiply.fst \
+Hacl.Impl.Poly1305_64.fst \
 Crypto.Symmetric.GF128.Spec.fst \
 Crypto.Symmetric.GF128.fst \
 Crypto.Symmetric.MAC.fst \
@@ -302,7 +326,6 @@ tls-sanity: record_fstar_version $(LIBFILES)
 # Lax typecheck all files (with ideal flag off)
 tls-lax: record_fstar_version $(LIBFILES)
 	$(FSTAR) --lax \
-	--include $(LDIR)/spartan \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/concrete-flags \
 	$(FSTS)
@@ -355,7 +378,7 @@ mitls.cmxa: record_fstar_version $(LIBFILES)
 	mkdir -p $(OUTPUT_DIR)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
 	$(MAKE) -C $(FFI_HOME)
-	$(FSTAR) --include $(LDIR)/spartan \
+	$(FSTAR) \
 	  --no_location_info --lax --codegen OCaml --__temp_no_proj Extensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
