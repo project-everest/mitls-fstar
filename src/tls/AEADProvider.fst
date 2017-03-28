@@ -212,7 +212,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     assume false; // TODO
     let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
     let salt: salt i = CC.random (salt_length i) in
-    let st = CAEAD.aead_create (alg i) kv in
+    let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     LowC st kv salt
   | LowProvider ->
     assume false; // TODO
@@ -265,7 +265,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     | OpenSSLProvider ->
       OpenSSL (OAEAD.coerce r i k) s
     | LowCProvider ->
-      let st = CAEAD.aead_create (alg i) k in
+      let st = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
       LowC st k s
     | LowProvider ->
       let st = AE.coerce i r (from_bytes k) in

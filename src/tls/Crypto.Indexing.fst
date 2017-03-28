@@ -1,8 +1,6 @@
 module Crypto.Indexing
 
-open TLSConstants
 open TLSInfo
-open CoreCrypto
 
 module CC = CoreCrypto
 
@@ -12,43 +10,18 @@ record stack.
 
 (see mitls-fstar/.fstar/examples/low-level/crypto/Crypto.Indexing.fst)
 **)
-type rw =
-| Reader
-| Writer
 
 let rw2rw (r:TLSConstants.rw) : rw =
   match r with
   | TLSConstants.Reader -> Reader
   | TLSConstants.Writer -> Writer
 
-type macAlg =
-  | POLY1305
-  | GHASH
-
-type cipherAlg =
-  | AES128
-  | AES256
-  | CHACHA20
-
-type aesImpl =
-  Crypto.Config.aesImpl
-
-// References:
-//  - RFC 7539 for the AEAD algorithm
-//  - RFC 7905 for ChaCha20_Poly1305 TLS ciphersuites
-type aeadAlg =
-  | AES_128_GCM
-  | AES_256_GCM
-  | CHACHA20_POLY1305
-
-type id =
-  i:TLSInfo.id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
-
-// ADL: TODO support in TLSInfo.id + mitls.exe
-let aesImpl_of_id (i:id) = Crypto.Config.aes_implementation
+type id0 =
+  i:TLSInfo.id{~(PlaintextID? i) /\ TLSConstants.AEAD? (aeAlg_of_id i)}
+let id = id0
 
 let aeadAlg_of_id i =
-  let AEAD aead _ = aeAlg_of_id i in
+  let TLSConstants.AEAD aead _ = aeAlg_of_id i in
   match aead with
   | CC.AES_128_GCM -> AES_128_GCM
   | CC.AES_256_GCM -> AES_256_GCM
@@ -66,6 +39,9 @@ let cipherAlg_of_id i =
   | AES_256_GCM       -> AES256
   | CHACHA20_POLY1305 -> CHACHA20
 
-// controls abstraction of plaintexts
-// (kept abstract, but requires all the crypto steps above)
-let safeId = TLSInfo.safeId
+let aesImpl_of_id (i:id) = ValeAES
+
+let aeadAlg_cipherAlg (i:id) = ()
+
+let testId (a:aeadAlg) = admit()
+
