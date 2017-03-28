@@ -2,10 +2,41 @@
 options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
 --*)
 module KeySchedule
-(*the top level key schedule module, it should not expose secrets to Handshake *)
 
-(* the goal is to keep ephemerals like eph_s and eph_c as currently defined
-   in Handshake local *)
+(**
+Discussion for the planned changes to the KS API:
+
+val create: #rid:rid -> role -> ST (ks * random)
+// Do we still want these since KS returns the nonce?
+(val ks_client_random: ks:ks -> ST random)
+
+// Yikes! KS is expected to return a KeyShare extension?
+// I would prefer to return a list (g:group & share g), and Handshake turns it into an extension
+// What do we do for PSK? Pass list pskid? Related to binder computation
+val ks_client_13_1rtt_init: ks:ks -> gl:list valid_namedGroup -> ST r:CommonDH.keyShare{gl == List.Tot.map fst (CommonDH.ClientKeyShare?._0 r)}
+val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST r:CommonDH.keyShare{gl == List.Tot.map fst (CommonDH.ClientKeyShare?._0 r)}
+
+// Current style is to pass hashed_log with associated logInfo
+// We may instead pass an injective relation between the hash and the KS nonce
+val ks_client_13_0rtt_ch: ks:ks -> li:logInfo_CH -> h:hashed_log (LogInfo_CH li) -> ST (recordInstance)
+
+// To be removed
+//val ks_client_13_0rtt_finished: ks:ks -> ST (cvd:bytes) PSK binders?
+
+// Is it OK to return the finished key here?
+// This still assumes that there is always an ephemeral exchange
+// Must be extended for pure PSK
+val ks_client_13_sh: ks:ks -> cs:cipherSuite -> g:CommonDH.group -> gy:CommonDH.share g -> li:logInfo_SH -> h:hashed_log (LogInfo_SH li) -> TT recordInstance
+
+// To be removed
+//ks_client_13_server_finished ks : ST (svd:bytes)
+//ks_client_13_client_finished ks : ST (cvd:bytes)
+
+// Similar style. We may want to return finished keys too
+val ks_server_13_sf: ks:ks -> li:logInfo_SF -> h:hashed_log (LogInfo_SF li) -> ST (recordInstance)
+let ks_client_13_cf: ks:ks -> li:logInfo_CF -> h:hashed_log (LogInfo_CF li) -> ST (i:exportId & ems i)
+
+*)
 
 open FStar.Heap
 open FStar.HyperHeap
