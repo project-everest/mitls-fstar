@@ -106,6 +106,27 @@ val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> h
 type t (r:HH.rid) (a:alg) 
 //17-03-25 assume new warning?
 
+
+// MOVE to HandshakeMessage; internal state outline
+//16-06-01 we don't need to precisely track this part of the state
+//16-06-01 later, pre-allocate large-enough buffers for the connection.
+//16-06-01 also revisit type of encrypted messages
+type hs_msg_bufs = {
+     hs_incoming_parsed : list (hs_msg * bytes); // messages parsed earlier
+     hs_incoming: bytes;                         // incomplete message received earlier
+     hs_outgoing: bytes;                         // messages to be sent in current epoch
+     hs_outgoing_epochchange: option rw;         // Whether to increment the reader or writer epoch after sending the messages in the current epoch
+     hs_outgoing_ccs: bool;                      // Whether a CCS signal is buffered for the local writer
+}
+let hs_msg_bufs_init() = {
+     hs_incoming_parsed = [];
+     hs_incoming = empty_bytes;
+     hs_outgoing = empty_bytes;
+     hs_outgoing_epochchange = None;
+     hs_outgoing_ccs = false; //17-03-28 should now hold a formatted fragment. 
+}
+
+
 //  specification-level transcript of all handshake messages logged so far
 val transcriptT: h:HS.mem -> #region:HH.rid -> #a:alg -> t region a -> GTot (list msg) 
 
@@ -117,7 +138,10 @@ val create: region:HH.rid -> a:alg -> ST (t region a)
   (ensures (fun h0 r h1 -> // "allocated in r" /\ writing h1 r /\ 
     writing h1 r /\  
     transcriptT h1 r == []))
-  
+
+
+(* Outgoing *) 
+
 // We send one message at a time (or in two steps for CH); 
 // for call-site simplicity we distinguish between tagged and untagged messages
 // We require ms_0 be empty; otherwise the hash computation is messed up
@@ -140,8 +164,36 @@ val send_tag: #region:HH.rid -> #a:alg -> r:t region a -> m:msg (*{tagged m}*) -
     t_1 == t_0 @ [m] /\
     hashed a bs /\ h == hash a bs ))
 
-// An ad hoc variant for caching Finished messages to be sent immediately after the CCS
-val send_CCS_message_tag: #region:HH.rid -> #a:alg -> r:t region a -> m:msg (*{tagged m}*) -> ST (tag a)
+// An ad hoc variant for caching a message to be sent immediately after the CCS
+// We always increment the writer, sometimes report handshake completion.
+
+val send_CCS_tag: #region:HH.rid -> #a:alg -> r:t region a -> m:msg -> complete:bool -> ST (tag a)
+  (requires (fun h0 -> writing h0 r )) 
+  (ensures (fun h0 h h1 -> 
+    let t_0 = transcriptT h0 r in 
+    let t_1 = transcriptT h1 r in 
+    let bs = transcript_bytes t_1 in
+    writing h1 r /\
+    t_1 == t_0 @ [m] /\
+    hashed a bs /\ h == hash a bs )) 
+
+
+(* Incoming *) 
+
+(*
+val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot  (result (rem:bytes * list (hs_msg * bytes)))
+let rec parseHandshakeMessages pv kex buf =
+    match parseMessage buf with
+    | Error z -> Error z
+    | Correct None -> Correct (buf,[])
+    | Correct (Some (|rem,hstype,pl,to_log|)) ->
+      (match parseHandshakeMessage pv kex hstype pl with
+       | Error z -> Error z
+       | Correct hsm ->
+             (match parseHandshakeMessages pv kex rem with
+                | Error z -> Error z
+                | Correct (r,hsl) -> Correct(r,(hsm,to_log)::hsl)))
+*)
 
 // We receive messages in whole flights; 
 // note that, untill a full flight is received, we lose "writing h1 r"
@@ -153,12 +205,34 @@ val receive: #region:HH.rid -> #a:alg -> r:t region a -> bytes -> ST (option (li
     match o with 
     | Some (ms, hs) -> t1 == t0 @ ms /\ tags a t0 ms hs /\ writing h1 r
     | None -> t1 == t0 ))
+// rename to recv_fragment for uniformity? 
+    (* This should go to HSL: 
+    let (| rg,rb |) = f in
+    let b =
+      debug_print ("   *** RAW "^(print_bytes rb)^"\n")
+    let (HS #r0 r res cfg id lgref hsref) = hs in
+    let b = (!hsref).hs_buffers.hs_incoming in
+    let b = b @| rb in
+    match parseHandshakeMessages pv kex b with
+    | Error (ad, s) ->
+      let _ =
+        debug_print ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n")
+      InError (ad,s)
+    | Correct(r,hsl) ->
+       let hsl = List.Tot.append (!hsref).hs_buffers.hs_incoming_parsed hsl in
+       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
+      let b =
+        if hs_debug then
+          print_hsl hsl
+        else false in
+      *)
+
 
 // We receive CCS as external end-of-flight signals;
 // we return the messages processed so far, and their final tag; 
 // we still can't write.
 // This should *fail* if there are pending input bytes. 
-val receiveCCS: #region:HH.rid -> #a:alg -> r:t region a -> ST (list msg * list (tag a) * tag a)
+val receive_CCS: #region:HH.rid -> #a:alg -> r:t region a -> ST (list msg * list (tag a) * tag a)
   (requires (fun h0 -> True))
   (ensures (fun h0 (ms,hs,h) h1 -> 
     let t0 = transcriptT h0 r in
@@ -229,3 +303,12 @@ val next_fragment: st:t -> i:id -> St (Outgoing i)
 
     else // were we waiting to advance our state machine & send the next messages?
  *)   
+
+
+(*
+// move to Handshake.Log?
+let print_hsl hsl : Tot bool =
+    let sl = List.Tot.map (fun (x,_) -> HandshakeMessages.string_of_handshakeMessage x) hsl in
+    let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
+    debug_print ("Recv_fragment buffer: " ^ s ^ "\n")
+*)
