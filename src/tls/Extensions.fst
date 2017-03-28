@@ -95,7 +95,7 @@ let extensionHeaderBytes ext =
   | E_supported_versions _   -> abyte2 (0x00z, 0x2bz) // 43 /
   | E_unknown_extension(h,b) -> h
 
-(** local, failed to parse exc. *)
+(** local, failed-to-parse exc. *)
 private type canFail (a:Type) =
 | ExFail of alertDescription * string
 | ExOK of list a
