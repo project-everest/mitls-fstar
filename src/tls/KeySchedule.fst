@@ -76,6 +76,8 @@ let secretLabel = function
    when this flag is set to false *)
 inline_for_extraction let ks_debug = false
 
+#set-options "--lax"
+
 let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -136,17 +138,13 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 abstract let psk (i:esId) =
   b:bytes{length b = hashSize (esId_hash i)}
 
-let get_psk_info (i:esId) :pskInfo =
+let get_psk_info (i:esId) =
   match i with
-  | ResumptionPSK c _ -> c
-  | ApplicationPSK c _ -> c
+  | ApplicationPSK i _ -> PSK.psk_info i
 
-
-// Total by construction
 private let get_psk (i:esId) =
   match i with
-//  | ResumptionPSK i -> res_psk_value i
-  | ApplicationPSK _ pskid ->
+  | ApplicationPSK pskid _ ->
      let p : psk i = psk_value pskid in p
 
 // Agile "0" hash
@@ -154,8 +152,6 @@ private let zH h : St (Hashing.Spec.tag h) =
   let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   Hashing.compute h zeroes
-
-#set-options "--lax"
 
 // Resumption context
 let esId_rc (i:esId)  =
@@ -165,12 +161,11 @@ let esId_rc (i:esId)  =
   | ApplicationPSK _ _ -> zH (esId_hash i)
 
 let hsId_rc : _ -> St bytes  = function
-  | HSID_DHE h _ _ _ -> zH h
-  | HSID_PSK i -> esId_rc i
-  | HSID_PSK_DHE i _ _ _ -> esId_rc i
+  | HSID_DHE (EarlySalt i) _ _ _ -> esId_rc i
+  | HSID_PSK (EarlySalt i) -> esId_rc i
 
 let asId_rc : _ -> St bytes  = function
-  | ASID hsId -> hsId_rc hsId
+  | ASID (HandshakeSalt i) -> hsId_rc i
 
 // miTLS 0.9:
 // ==========
@@ -190,8 +185,9 @@ abstract type fink (i:finishedId) = Hashing.Spec.tag  (finishedId_hash i)
 // TLS 1.3 master secret (abstract)
 abstract type ams (i:asId) = Hashing.Spec.tag (asId_hash i)
 
+type rekeyId = expandId
 abstract type expander (i:expandId) = Hashing.Spec.tag (expandId_hash i)
-abstract type rekey_secret (i:rekeyId) = Hashing.Spec.tag (rekeyId_hash i)
+abstract type rekey_secret (i:expandId) = Hashing.Spec.tag (expandId_hash i)
 abstract type rms (i:rmsId) = Hashing.Spec.tag (rmsId_hash i)
 
 type ems (i:exportId) = Hashing.Spec.tag (exportId_hash i)
@@ -333,6 +329,10 @@ let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
+private let group_of_cks = function
+  | CommonDH.Share g _ -> Some?.v (CommonDH.namedGroup_of_group g)
+  | CommonDH.UnknownShare g _ -> g
+
 val ks_client_13_1rtt_init:
   ks:ks -> gl:list valid_namedGroup
   -> ST CommonDH.keyShare
@@ -342,7 +342,7 @@ val ks_client_13_1rtt_init:
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     CommonDH.ClientKeyShare? r /\
-    gl == List.Tot.map fst (CommonDH.ClientKeyShare?._0 r) /\
+    gl == List.Tot.map group_of_cks r /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
@@ -371,7 +371,7 @@ val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST Co
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     CommonDH.ClientKeyShare? r /\
-    gl == List.Tot.map fst (CommonDH.ClientKeyShare?._0 r) /\
+    gl == List.Tot.map group_of_cks r /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
