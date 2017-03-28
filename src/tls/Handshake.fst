@@ -82,7 +82,7 @@ type machineState =
   | S_Idle:                  option ri -> serverState
 
   // only after choosing TLS 1.3
-  | S_HelloSent :                 nego -> serverState 
+  | S_Sent_ServerHello 
   | S_ZeroRTTReceived :           nego -> serverState
   //missing:   | S_FinishedSent_13: serverState
   | S_PostHS:                             serverState
@@ -336,7 +336,7 @@ let Nego.prepareClientOffer cfg =
 
 (* -------------------- Handshake Client ------------------------ *)
 
-val client_ClientHello: hs -> ST unit 
+val client_ClientHello: hs -> i:id -> ST (result (Outgoing i))
   (requires (fun h -> 
     True (* add the precondition that Nego and KS are in proper state *) ))
   (ensures (fun h0 i h1 -> True))
@@ -378,7 +378,9 @@ let client_ClientHello hs =
     ch_extensions = Some ext
   } in
   Handshake.Log.send hs.log (ClientHello ch);  // TODO decompose in two steps, appending the binders
-  hs.state := C_Wait_ServerHello // we may still need to keep parts of ch
+  hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
+  Correct(Handshake.Log.next_fragment hs.log i)
+
 
 let client_ServerHello hs sh =
   IO.hs_debug_print_string "Processing client hello...\n";
@@ -680,7 +682,7 @@ let server_ClientFinished hs digestCCS digestClientFinished =
         InAck false false )
 
 (* send EncryptedExtensions; Certificate; CertificateVerify; Finish (1.3) *)
-val server_send_server_finished_13: hs -> ST unit
+val server_send_server_finished_13: hs -> i:id -> ST (result (Outgoing i))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ServerFinished_13 hs n = 
@@ -739,7 +741,10 @@ let server_ServerFinished_13 hs n =
             Epochs.incr_reader lgref; // TODO when to increment the reader?
 
             ///??? hs_outgoing_epochchange = Some Writer; };
-            hs.state := S_Wait_Finished2 n )
+            hs.state := S_Wait_Finished2;
+            Handshake.Log.set_flags "switch to ATK 0.5RTT" 
+            Correct(Handshake.Log.next_fragment hs.log i)
+            )
       end 
 
 (* receive ClientFinish 1.3 *)
@@ -868,7 +873,7 @@ let next_fragment_ensures (#i:id) (s:hs) h0 (result:outgoing i) h1 =
     Seq.length (logT s h1) >= Seq.length (logT s h0) /\
     (b2t (out_complete result) ==> r1 = w1 /\ indexable (logT s h1) w1 /\ completed (eT s Writer h1))
 
-val next_fragment: i:id -> s:hs -> ST (outgoing i)
+val next_fragment: hs -> i:id -> ST (result (outgoing i))
   (requires (fun h0 ->
     let es = logT s h0 in
     let j = iT s Writer h0 in
@@ -876,60 +881,48 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     (if j = -1 then PlaintextID? i else let e = Seq.index es j in i = epoch_id e)
   ))
   (ensures (next_fragment_ensures s))
-let next_fragment i hs =
-    // let (HS #r0 r res cfg id lgref hsref) = hs in
+let next_fragment hs i =
+    let outgoing = Handshake.Log.next_fragment hs.log i in
+    match !hs.state with 
+    | C_Idle when outgoing = Outgoing None false false false -> client_ClientHello hs i
+    | S_HelloSent when outgoing = Outgoing None false false false -> server_ServerFinished_13 hs i
+    | _ -> Correct outgoing // nothing to do
+    
+    // not needed anymore?
+        (* // *)
 
-    // reading nego (defer to state-specific code?)
-    let pv,kex,res =
-      (match (!hsref).hs_nego with
-       | None -> None, None, None
-       | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
+        (* | C_Sent_CCS1 tag -> ( *)
+        (*       // was: client_send_client_finished hs; *)
+        (*       // we could store the MAC in OutCCS, to make this step trivial *)
+        (*       let tag = KeySchedule.ks_client_12_client_finished hs.ks in *)
+        (*       Handshake.Log.send hs.log (Finished ({fin_vd = tag})); *)
+        (*       hs.state := C_FinishedSent n tag *)
+        (*       Epochs.incr_writer lgref; *)
+        (*       Outgoing None true true false ) *)
 
-    let outgoing = Handshake.Log.next_fragment hs.log i in 
+        (* | _ -> Correct outgoing // nothing to do *)
 
-    if outgoing <> Outgoing None false false false 
-    then 
-      // continue with pending messages and signals 
-      Correct outgoing  
-    else (
-      // prepare new messages & signals (resume from a "writing" state, after CCS and/or a key change)
-      match !hsref.state with
-      | C_Error e -> Error e
-      | S_Error e -> Error e
-      | C_Idle ri -> client_ClientHello hs 
-      | C_OutCCS n -> (
-          // was: client_send_client_finished hs;
-          // we could store the MAC in OutCCS, to make this step trivial
-          let tag = KeySchedule.ks_client_12_client_finished hs.ks in
-          Handshake.Log.send hs.log (Finished ({fin_vd = tag}));
-          hs.state := C_FinishedSent n tag
-          Epochs.incr_writer lgref;
-          Outgoing None true true false )
-      | C_FinishedReceived n (cvd,svd) ->
-          hsref := {!hsref with hs_state = C (C_PostHS)};
-          Epochs.incr_writer lgref; // Switch to ATK writer
-          Outgoing None false true true
-
-      // not needed anymore?
-      // | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
-      //    server_ServerHelloDone hs n;
-      //    next_fragment i hs
-
-      | S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
-          server_send_server_finished_res hs;
-          next_fragment i hs
-      | S_HelloSent n when (Some? pv && pv = Some TLS_1p3) ->
-          server_ServerFinished_13 hs n;
-          next_fragment i hs
-      | S_FinishedReceived n ->
-          Epochs.incr_reader lgref; // Switch to ATK reader
-          hs.state := S_PostHS;
-          Outgoing None false true true
-      | S_OutCCS n ->
-          hs.state := S_FinishedSent n  // who actually sends the ServerFinished? buffered?
-          Outgoing None false false true
-      | _ -> Outgoing None false false false)
-
+        //| C_FinishedReceived n (cvd,svd) ->
+        //    hsref := {!hsref with hs_state = C (C_PostHS)};
+        //    Epochs.incr_writer lgref; // Switch to ATK writer
+        //    Outgoing None false true true
+        //
+        //| S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
+        //    server_ServerHelloDone hs n;
+        //    next_fragment i hs
+        // | S_Sent_ServerHello when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
+        //      server_send_server_finished_res hs;
+        //      next_fragment i hs
+        
+        //| S_FinishedReceived n ->
+        //      Epochs.incr_reader lgref; // Switch to ATK reader
+        //      hs.state := S_PostHS;
+        //      Outgoing None false true true
+        //| S_OutCCS n ->
+        //      hs.state := S_FinishedSent n  // who actually sends the ServerFinished? buffered?
+        //      Outgoing None false false true
+        //| _ -> Outgoing None false false false)
+    
 
 (* Incoming (main) *)
 
