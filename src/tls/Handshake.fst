@@ -8,7 +8,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 //FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
 //AR: Yes ! Totally agree.
-//CF: TODO.
+//CF: TODO
 open FStar.Seq
  // for e.g. found
 open FStar.Set
@@ -21,7 +21,6 @@ open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages
-//open Negotiation
 open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less
@@ -134,8 +133,8 @@ type hs = | HS:
   #region: rgn { is_hs_rgn region } ->
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
-  nego: Negotiation.t region r ->
-  log: Handshake.Log.t region (Negotiation.hashAlg nego) (* embedding msg buffers *) -> 
+  nego: Nego.t region r ->
+  log: Handshake.Log.t region (Nego.hashAlg nego) (* embedding msg buffers *) -> 
   ks: KeySchedule.ks region r -> 
   epochs: epochs region nonce ->
   state: rref region machineState -> // state machine; should be opaque and depend on r.
@@ -143,9 +142,6 @@ type hs = | HS:
 
 // the states of the HS sub=module will be subject to a joint invariant
 
-// now both part of immutable nego state:
-// resume: resume_info r (* client dyn. config, both for 1.2 and 1.3 *) ->
-// cfg: config -> 
 
 
 (* the handshake internally maintains epoch
@@ -321,16 +317,6 @@ let sigHashAlg_of_ske signature =
 
 (* Handshake API: INTERNAL Callbacks, hidden from API *)
 
-(* Sketch 
-val Nego.prepareClientOffer: config -> clientOffer
-let Nego.prepareClientOffer cfg =
-  let groups = List.Tot.choose CommonDH.group_of_namedGroup cfg.namedGroups in
-  let cipher_suites = ... in
-  let sigAlgs = ... in
-  let protocol_version = ... in
-  let ext = prepareExtensions protocol_version cipher_suites sigAlgs groups kp in
-*)  
-
 
 
 
@@ -359,9 +345,8 @@ let client_ClientHello hs =
         let si = KeySchedule.ks_client_12_init ks in 
         None 
     in
-  (* Some? sido in case of resumption *)
-  let sid = // is it in offer? 
-    match nego.resume with 
+  let sid =
+    match offer.co_resume with 
     | None -> empty_bytes
     | Some x -> x
     in
@@ -394,9 +379,9 @@ let client_ServerHello hs sh =
       begin
         let keys = KeySchedule.ks_client_13_sh ks o_nego.n_cipher_suite g gy false in
         let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
-          let h = Negotiation.fresh ({session_nego = n}) in
-          Epochs.recordInstanceToEpoch #r0 #nonce h keys in
-        Epochs.add_epoch hs.epochs ep;
+          let h = Nego.handshakeKeyInfo hs.nego  in
+          Epochs.recordInstanceToEpoch #r0 #nonce h keys in // just coercion
+        Epochs.add_epoch hs.epochs ep; // actually extending the epochs log
         Epochs.incr_reader hs.epochs;
         hs_state := C_WaitFinished1;
         InAck true false
@@ -992,34 +977,35 @@ let recv_fragment hs #i f =
 
     (* incoming transitions for our state machine *) 
     match !hs.state, flight with 
-
+      | _, None -> InAck false false // nothing happened
+      
       (* CLIENT *) 
       
-      | C_Idle, _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
+      | C_Idle, _ -> Error (AD_unexpected_message, "Client hasn't sent hello yet")
       | C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello sh digest
 
       | C_Wait_ServerHelloDone n, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert])
-        when (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
-          (* shall we also check we have a sigAlg? *)
-          client_ServerHelloDone hs c ske None
+        // when (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) 
+        -> client_ServerHelloDone hs c ske None
 
       | C_Wait_ServerHelloDone n, Some ([Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert])
-        when (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
-          client_ServerHelloDone hs c ske (Some cr)
+        // when (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) 
+        -> client_ServerHelloDone hs c ske (Some cr)
 
       | C_Wait_Finished1 n, Some ([EncryptedExtensions ee; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) 
-        when (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
-          client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
+        //when (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) 
+        -> client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
       | C_Wait_Finished1 n, Some ([EncryptedExtensions ee; CertificateRequest cr; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) 
-        when (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
-          client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
+       // when (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
+         -> client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
       // we'll have other variants for resumption, shc as ([EncryptedExtensions ee; Finished f], [...]) 
 
-      | C_Wait_Finished2, Some ([Finished f], [digestServerFinished]) 
-        when Some? pv && pv <> Some TLS_1p3 ->
-          let svd = KeySchedule.ks_client_12_server_finished ks in // should provide digest!
+      | C_Wait_Finished2 digest, Some ([Finished f], [digestServerFinished]) 
+        // when Some? pv && pv <> Some TLS_1p3 
+        ->
+          let svd = KeySchedule.ks_client_12_server_finished ks digest in 
           if not (equalBytes svd f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify") 
           else (
             hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
@@ -1028,29 +1014,22 @@ let recv_fragment hs #i f =
       (* SERVER *) 
 
       //17-03-24 how to receive binders? we need the intermediate hash 
-      | S_Idle ri, Some ([ClientHello ch], [])  ->
-          server_ClientHello hs ch
+      | S_Idle ri, Some ([ClientHello ch], [])  -> server_ClientHello hs ch
+      | S_Wait_Finished1 s digest, Some ([Finished f], [digestClientFinish]) -> server_ClientFinished hs f digest digestClientFinish
 
-      | S_Wait_Finished1 s digest, Some ([Finished f], [digestClientFinish]) 
-        when (Some? pv && pv <> Some TLS_1p3) -> 
-          server_ClientFinished hs f digest digestClientFinish
-
-      | S_Sent_ServerHello s, Some ([Finished f], [digest])
-        when (Some? pv && pv = Some TLS_1p3) -> 
-          server_ClientFinished_13 hs s f digest None 
-
-      | S_Wait_Finished2 s, Some ([Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _]) 
-        when (Some? pv && pv = Some TLS_1p3) ->
+      | S_Wait_Finished2 s, Some ([Finished f], [digest]) -> server_ClientFinished_13 hs s f digest None 
+      | S_Wait_Finished2 s, Some ([Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _]) ->
           server_ClientFinished_13 hs s f digestClientFinished (Some (c,cv,digestSigned))  
 
        // are we missing the case with a Certificate but no CertificateVerify? 
 
       | C_Error e, _ -> InError e
       | S_Error e, _ -> InError e
+      
       | _, _ -> InAck false false // nothing yet to process
 
-
-val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge with recv_fragment
+// special case: CCS before 1p3; could merge with recv_fragment
+val recv_ccs: s:hs -> ST incoming  
   (requires (hs_inv s)) // could require pv <= 1p2
   (ensures (fun h0 result h1 ->
     recv_ensures s h0 result h1 /\

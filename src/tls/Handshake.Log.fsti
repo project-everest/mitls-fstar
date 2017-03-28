@@ -140,6 +140,9 @@ val send_tag: #region:HH.rid -> #a:alg -> r:t region a -> m:msg (*{tagged m}*) -
     t_1 == t_0 @ [m] /\
     hashed a bs /\ h == hash a bs ))
 
+// An ad hoc variant for caching Finished messages to be sent immediately after the CCS
+val send_CCS_message_tag: #region:HH.rid -> #a:alg -> r:t region a -> m:msg (*{tagged m}*) -> ST (tag a)
+
 // We receive messages in whole flights; 
 // note that, untill a full flight is received, we lose "writing h1 r"
 val receive: #region:HH.rid -> #a:alg -> r:t region a -> bytes -> ST (option (list msg * list (tag a)))
@@ -186,12 +189,15 @@ type outgoing (i:id) (* initial index *) =
       complete  : bool               -> // the handshake is complete!
       outgoing i
 
+
 //17-03-26 now return an outgoing result, for uniformity
 // | OutError: error -> outgoing i       // usage? send a polite Alert in case something goes wrong when preparing messages
 
 let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r && Outgoing?.next_keys r
 let out_complete (#i:id) (r:outgoing i)  = Outgoing? r && Outgoing?.complete r
 
+// provides outputs to the record layer, one fragment at a time
+// never fails, in contrast with Handshake.next_fragment
 val next_fragment: st:t -> i:id -> St (Outgoing i) 
 (*
   if length st.outgoing = 0 

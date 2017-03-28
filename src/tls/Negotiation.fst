@@ -12,7 +12,24 @@ open HandshakeMessages
 //17-03-25 assumptions for Handshake.fst
 type rgn = FStar.HyperHeap.rid
 assume type t (region:rgn) (role:TLSConstants.role)
+// this encapsulates config, resume proposal, offer, mode
+// now both part of immutable nego state:
+// resume: resume_info r (* client dyn. config, both for 1.2 and 1.3 *) ->
+// cfg: config -> 
+
+// a bit too restrictive: use a single Hash in any given offer
 assume val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
+
+
+(* Sketch 
+val Nego.prepareClientOffer: config -> clientOffer
+let Nego.prepareClientOffer cfg =
+  let groups = List.Tot.choose CommonDH.group_of_namedGroup cfg.namedGroups in
+  let cipher_suites = ... in
+  let sigAlgs = ... in
+  let protocol_version = ... in
+  let ext = prepareExtensions protocol_version cipher_suites sigAlgs groups kp in
+*)  
 
 
 //16-05-31 these opens are implementation-only; overall we should open less
@@ -24,10 +41,15 @@ open CoreCrypto
    when this flag is set to false. *)
 inline_for_extraction let n_debug = false
 
+assume val create: reg:rid -> cfg:TLSInfo.config -> r:role -> resume: resume_id -> St t
+// ensures these are the immutable parts of t
+
+
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
-type clientOffer = {
+// TODO add resume proposal; also probably the PSK list
+type offer = {
   co_protocol_version:protocolVersion;
   co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
@@ -37,7 +59,9 @@ type clientOffer = {
   co_safe_renegotiation: bool;
 }
 
-type serverMode = {
+assume val clientOffer: #region:rgn -> #role:TLSConstants.role -> t #region #role -> St offer
+
+type nego_server = {
      sm_protocol_version: protocolVersion;
      sm_kexAlg: TLSConstants.kexAlg;
      sm_aeAlg: TLSConstants.aeAlg;
@@ -50,7 +74,7 @@ type serverMode = {
      
 }
 
-type clientMode = {
+type nego_client = {
      cm_protocol_version: protocolVersion;
      cm_kexAlg: TLSConstants.kexAlg;
      cm_aeAlg: TLSConstants.aeAlg;
@@ -63,7 +87,7 @@ type clientMode = {
 
 }
 
-
+// whatever we know from CH + SH. 
 type nego = {
      n_resume: bool;
      n_client_random: TLSInfo.random;
@@ -80,6 +104,18 @@ type nego = {
      n_scsv: list scsv_suite;
      
 }                 
+
+assume val clientMode: #region:rgn -> #role:TLSConstants.role -> t #region #role -> sh -> 
+  St (result mode) // it needs to be computed, whether returned or not
+
+//assume val clientComplete: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... -> 
+//  St (result full_mode) // it needs to be computed, whether returned or not
+
+//assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... -> 
+//  St (result full_mode) // it needs to be computed, whether returned or not
+
+
+// TODO factor out signature processing, salvaging chunks from Handshake.fst
 
 type hs_id = {
      id_cert: Cert.chain;
@@ -100,6 +136,11 @@ type handshake =
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
+
+// to be renamed and extended to support HS keys, then 0RTT keys
+val handshakeKeyInfo: 
+  #region:rgn -> #role:TLSConstants.role -> t #region #role -> St handshake
+
 
 val prepareClientOffer: cfg:config -> Tot clientOffer
 let prepareClientOffer cfg =
