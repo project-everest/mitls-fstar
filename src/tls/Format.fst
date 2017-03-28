@@ -149,12 +149,13 @@ type ffdhe =
   | FFDHE6144
   | FFDHE8192
 
+let z3kill = 0xFFz
 (** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
   | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z})
   | FFDHE of ffdhe
-  | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = 0xFFz})
+  | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = z3kill})
   | ECDHE_PRIVATE_USE of byte
 
 (*
@@ -166,7 +167,7 @@ type valid_namedGroup = x:namedGroup{SEC? x \/ FFDHE? x}
 (** Serializing function for (EC)DHE named groups *)
 val namedGroupBytes: namedGroup -> Tot (lbytes 2)
 let namedGroupBytes ng =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match ng with
   | SEC ec ->
     begin
@@ -191,7 +192,7 @@ let namedGroupBytes ng =
 (** Parsing function for (EC)DHE named groups *)
 val parseNamedGroup: pinverse_t namedGroupBytes
 let parseNamedGroup b =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match cbyte2 b with
   | (0x00z, 0x17z) -> Correct (SEC ECC_P256)
   | (0x00z, 0x18z) -> Correct (SEC ECC_P384)
@@ -222,7 +223,7 @@ val pinverse_namedGroup: x:_ -> Lemma
   [SMTPat (namedGroupBytes (Correct?._0 (parseNamedGroup x)))]
 let pinverse_namedGroup x = ()
 
-#set-options "--max_ifuel 2"
+#set-options "--max_ifuel 2 --max_fuel 2"
 private val namedGroupsBytes0: groups:list namedGroup
   -> Tot (b:bytes { length b == op_Multiply 2 (List.Tot.length groups)})
 let rec namedGroupsBytes0 groups =
