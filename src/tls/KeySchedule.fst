@@ -317,8 +317,6 @@ let create #rid r hsl =
     | Server -> S (S_Init nonce) in
   (KS #ks_region (ralloc ks_region istate) hsl), nonce
 
-#reset-options
-
 let group_of_valid_namedGroup
   (g:valid_namedGroup)
   : CommonDH.group
@@ -342,7 +340,7 @@ val ks_client_13_1rtt_init:
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     CommonDH.ClientKeyShare? r /\
-    gl == List.Tot.map group_of_cks r /\
+    gl == List.Tot.map group_of_cks (CommonDH.ClientKeyShare?._0 r) /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
@@ -371,7 +369,7 @@ val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST Co
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     CommonDH.ClientKeyShare? r /\
-    gl == List.Tot.map group_of_cks r /\
+    gl == List.Tot.map group_of_cks (CommonDH.ClientKeyShare?._0 r) /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
