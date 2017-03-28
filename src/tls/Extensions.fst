@@ -64,7 +64,6 @@ and extension =
   | E_oid_filters *)
   | E_unknown_extension of (lbytes 2 * bytes) (** to return unimplemented or unknow extensions. *)
 
-(* API *)
 (** Extension equality *)
 private let sameExt e1 e2 =
   match e1, e2 with
@@ -94,7 +93,6 @@ let extensionHeaderBytes ext =
   | E_supported_versions _   -> abyte2 (0x00z, 0x2bz) // 43 /
   | E_unknown_extension(h,b) -> h
 
-(* API ? *)
 private type canFail (a:Type) =
 | ExFail of alertDescription * string
 | ExOK of list a
@@ -261,7 +259,6 @@ let rec extension_depth (ext:extension): Tot nat =
       | ClientEarlyDataIndication edi -> 1 + extensions_depth edi.ped_extensions
       )
   | _ -> 0
-(* API: extensions *)
 and extensions_depth (exts:list extension): Tot nat =
   match exts with
   | [] -> 0
@@ -602,6 +599,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
 
 (* SI: API. Called by Negotiation. *)
+(*     Should be moved to Nego. *)
 val negotiateClientExtensions: protocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   match pv with
@@ -654,6 +652,7 @@ let clientToServerExtension pv (cfg:config) (cs:cipherSuite) ri ks (resuming:boo
     | _ -> None
 
 (* SI: API. Called by Negotiation. *)
+(*     Should be moved to Nego. *)
 val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
 let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
   match cExt with
