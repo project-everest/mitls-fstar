@@ -1,3 +1,6 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 module HandshakeLog
 open FStar.Heap
 open FStar.HyperHeap
@@ -11,7 +14,7 @@ open Platform.Bytes
 open TLSConstants
 open TLSInfo
 open HandshakeMessages
-open Hashing.Spec 
+open Hashing.Spec
 
 (* A flag for runtime debugging of handshakelog data.
    The F* normalizer will erase debug prints at extraction
@@ -124,14 +127,10 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : logInfo_CH =
       ch_extensions = Some el
     })] -> ({
       li_ch_cr = cr;
-      li_ch_psk = ({
-        PSK.time_created = 0;
-        PSK.allow_early_data = false;
-        PSK.allow_dhe_resumption = false;
-        PSK.allow_psk_resumption = false;
-        PSK.early_ae = CoreCrypto.AES_128_GCM;
-        PSK.early_hash = SHA256;
-        PSK.identities = (empty_bytes, empty_bytes);});
+      li_ch_ed_psk = empty_bytes;
+      li_ch_ed_ae = AEAD CoreCrypto.AES_128_GCM SHA256;
+      li_ch_ed_hash = SHA256;
+      li_ch_psk = [];
     })
 
 val getHash_CH : l:log -> h:hash_alg ->
@@ -158,4 +157,3 @@ type validLog_SH (l:hs_log) =
 assume val checkLogSessionHash: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
 assume val checkLogClientFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
 assume val checkLogServerFinished: hs_log -> csr:csRands -> pv:protocolVersion -> cs:cipherSuite -> negotiatedExtensions -> GTot bool
-
