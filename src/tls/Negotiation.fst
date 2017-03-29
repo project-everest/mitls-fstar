@@ -43,53 +43,66 @@ type offer = {
   co_sigAlgs: list sigHashAlg;
   co_safe_resumption: bool;
   co_safe_renegotiation: bool;
+  co_resume: option sessionID;
 }
 
 assume val clientOffer: #region:rgn -> #r:TLSConstants.role -> t region r -> St offer
+(*
+let clientOffer #region #r nego =
+  let co =
+  {co_protocol_version = cfg.maxVer;
+   co_cipher_suites = cfg.ciphersuites;
+   co_compressions = [NullCompression];
+   co_namedGroups = cfg.namedGroups;
+   co_sigAlgs = cfg.signatureAlgorithms;
+   co_safe_resumption = cfg.safe_resumption;
+   co_safe_renegotiation = cfg.safe_renegotiation;
+   co_resume =
+   }
+  in
+  co
+*)
 
 type nego_server = {
-     sm_protocol_version: protocolVersion;
-     sm_kexAlg: TLSConstants.kexAlg;
-     sm_aeAlg: TLSConstants.aeAlg;
-     sm_sigAlg: option TLSConstants.sigAlg;
-     sm_cipher_suite: cipherSuite;
-     sm_dh_group: option namedGroup;
-     sm_dh_share: option bytes;
-     sm_comp: option compression;
-     sm_ext: negotiatedExtensions;
-     
+  sm_protocol_version: protocolVersion;
+  sm_kexAlg: TLSConstants.kexAlg;
+  sm_aeAlg: TLSConstants.aeAlg;
+  sm_sigAlg: option TLSConstants.sigAlg;
+  sm_cipher_suite: cipherSuite;
+  sm_dh_share: option CommonDH.clientKeyShare;
+  sm_comp: option compression;
+  sm_ext: negotiatedExtensions;
 }
 
 type nego_client = {
-     cm_protocol_version: protocolVersion;
-     cm_kexAlg: TLSConstants.kexAlg;
-     cm_aeAlg: TLSConstants.aeAlg;
-     cm_sigAlg: option TLSConstants.sigAlg;
-     cm_cipher_suite: cipherSuite;
-     cm_dh_group: option namedGroup;
-     cm_dh_share: option bytes;
-     cm_comp: option compression;
-     cm_ext: negotiatedExtensions;
+  cm_protocol_version: protocolVersion;
+  cm_kexAlg: TLSConstants.kexAlg;
+  cm_aeAlg: TLSConstants.aeAlg;
+  cm_sigAlg: option TLSConstants.sigAlg;
+  cm_cipher_suite: cipherSuite;
+  cm_dh_share: option CommonDH.serverKeyShare;
+  cm_comp: option compression;
+  cm_ext: negotiatedExtensions;
 }
 
 // whatever we know from CH + SH. 
 type mode = {
-     n_resume: bool;
-     n_client_random: TLSInfo.random;
-     n_server_random: TLSInfo.random;
-     n_sessionID: option sessionID;
-     n_protocol_version: protocolVersion;
-     n_kexAlg: TLSConstants.kexAlg;
-     n_aeAlg: TLSConstants.aeAlg;
-     n_sigAlg: option TLSConstants.sigAlg;
-     n_cipher_suite: cipherSuite;
-     n_dh_group: option namedGroup;
-     n_compression: option compression;
-     n_extensions: negotiatedExtensions;
-     n_scsv: list scsv_suite;
+  n_resume: bool;
+  n_client_random: TLSInfo.random;
+  n_server_random: TLSInfo.random;
+  n_sessionID: option sessionID;
+  n_protocol_version: protocolVersion;
+  n_kexAlg: TLSConstants.kexAlg;
+  n_aeAlg: TLSConstants.aeAlg;
+  n_sigAlg: option TLSConstants.sigAlg;
+  n_cipher_suite: cipherSuite;
+  n_dh_group: option namedGroup;
+  n_compression: option compression;
+  n_extensions: negotiatedExtensions;
+  n_scsv: list scsv_suite;
 }
 
-assume val clientMode: #region:rgn -> #r:TLSConstants.role -> t region r -> sh -> 
+assume val clientMode: #region:rgn -> #r:TLSConstants.role -> t region r -> HandshakeMessages.sh ->
   St (result mode) // it needs to be computed, whether returned or not
 
 //assume val clientComplete: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... -> 
@@ -101,12 +114,12 @@ assume val clientMode: #region:rgn -> #r:TLSConstants.role -> t region r -> sh -
 // TODO factor out signature processing, salvaging chunks from Handshake.fst
 
 type hs_id = {
-     id_cert: Cert.chain;
-     id_sigalg: option sigHashAlg;
+  id_cert: Cert.chain;
+  id_sigalg: option sigHashAlg;
 }
 
 type session = {
-     session_nego: mode;
+  session_nego: mode;
 }     
 
 
@@ -123,20 +136,6 @@ type handshake =
 // to be renamed and extended to support HS keys, then 0RTT keys
 val handshakeKeyInfo: 
   #region:rgn -> r:TLSConstants.role -> t region r -> St handshake
-
-val prepareClientOffer: cfg:config -> Tot offer
-let prepareClientOffer cfg =
-  let co = 
-  {co_protocol_version = cfg.maxVer;
-   co_cipher_suites = cfg.ciphersuites;
-   co_compressions = [NullCompression];
-   co_namedGroups = cfg.namedGroups;
-   co_sigAlgs = cfg.signatureAlgorithms;
-   co_safe_resumption = cfg.safe_resumption;
-   co_safe_renegotiation = cfg.safe_renegotiation;
-   } 
-  in
-  co
 
 // Checks that the protocol version in the CHELO message is
 // within the range of versions supported by the server configuration
@@ -163,7 +162,9 @@ let negotiateCipherSuite cfg pv ccs =
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
+assume
 val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (option namedGroup * option bytes))
+(*
 let rec negotiateGroupKeyShare cfg pv kex exts =
   match exts with
   | None when (pv = TLS_1p3) -> Error(AD_decode_error, "no supported group or key share extension found")
@@ -195,6 +196,8 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
       | gn :: _ -> Correct (Some gn, None)
       | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
     else Correct(None, None)
+*)
+
 
 // Determines if the server random value contains a downgrade flag
 // AND if there has been a downgrade
@@ -203,6 +206,7 @@ val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random 
 let isSentinelRandomValue c_pv s_pv s_random =
   geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
   geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
+
 
 // Confirms that the version negotiated by the server was:
 // - within the range specified by client config AND
@@ -215,8 +219,7 @@ let acceptableVersion cfg cpv spv sr =
   | Correct c_pv ->
     geqPV c_pv spv && geqPV spv cfg.minVer &&
     not (isSentinelRandomValue c_pv spv sr)
-  | Error _ ->
-    false
+  | Error _ -> false
 
 // Confirms that the ciphersuite negotiated by the server was:
 //  - consistent with the client config;
@@ -243,7 +246,7 @@ let acceptableCipherSuite cfg spv cs =
 // in between negotiating the named Group and preparing the
 // negotiated Extensions
 (* TODO: why irreducible? *)
-irreducible val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result serverMode)
+irreducible val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result mode)
 let computeServerMode cfg cpv ccs cexts comps ri = 
   (match (negotiateVersion cfg cpv) with 
     | Error(z) -> Error(z)
@@ -290,7 +293,8 @@ let computeServerMode cfg cpv ccs cexts comps ri =
       let comp = match comps with
                  | [] -> None
                  | _ -> Some NullCompression in
-      let mode = {
+      let mode = admit () in
+      (*{
         sm_protocol_version = npv;
         sm_kexAlg = kex;
         sm_aeAlg = ae;
@@ -300,10 +304,11 @@ let computeServerMode cfg cpv ccs cexts comps ri =
         sm_dh_share = gxo;
         sm_comp = comp;
         sm_ext = next;
-      } in
+      } in *)
       Correct (mode))
 
-irreducible val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result clientMode)
+
+irreducible val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result mode)
 let computeClientMode cfg cext cpv spv sr cs sext comp ri =
   if not (acceptableVersion cfg cpv spv sr) then
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
@@ -317,31 +322,31 @@ let computeClientMode cfg cext cpv spv sr cs sext comp ri =
     match cs with
      | CipherSuite kex sa ae ->
       match spv, kex, next.ne_keyShare with
-       | TLS_1p3, Kex_DHE, Some (gn, gyb)
-       | TLS_1p3, Kex_ECDHE, Some (gn, gyb) ->
-         let mode =
+       | TLS_1p3, Kex_DHE, Some gy
+       | TLS_1p3, Kex_ECDHE, Some gy ->
+         let mode = admit() in
+         (*
          {cm_protocol_version = spv;
           cm_kexAlg = kex;
           cm_aeAlg = ae;
           cm_sigAlg = sa;
           cm_cipher_suite = cs;
-          cm_dh_group = Some gn;
-          cm_dh_share = Some gyb;
+          cm_dh_share = Some gy;
           cm_comp = comp;
           cm_ext = next;
-         } in
-         Correct(mode)
+         } in *)
+         Correct mode
        | _ ->
-         let mode =
+         let mode = admit() in
+         (*
          {cm_protocol_version = spv;
           cm_kexAlg = kex;
           cm_aeAlg = ae;
           cm_sigAlg = sa;
           cm_cipher_suite = cs;
-          cm_dh_group = None;
           cm_dh_share = None;
           cm_comp = comp;
           cm_ext = next;
-         } in
-         Correct(mode)
+         } in *)
+         Correct mode
       | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
