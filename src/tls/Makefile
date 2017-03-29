@@ -97,7 +97,7 @@ Signature.fst \
 PSK.fst \
 TLSInfo.fst \
 IdNonce.fst \
-TLSExtensions.fst \
+Extensions.fst \
 Buffer.Utils.fst \
 Crypto.Symmetric.Bytes.fst \
 Crypto.Config.fst \
@@ -176,7 +176,7 @@ test/TestAPI.fst #the preceding space is significant!
 # should be added here.
 #
 # Missing modules from FSTS:
-# TLSExtensions, Encode, ENC, HandshakeMessages,
+# Extensions, Encode, ENC, HandshakeMessages,
 # TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
 
 
@@ -203,7 +203,7 @@ Cert \
 Signature \
 TLSInfo \
 IdNonce \
-TLSExtensions \
+Extensions \
 Range \
 DataStream \
 Alert \
@@ -337,7 +337,7 @@ mitls.cmxa: record_fstar_version $(LIBFILES)
 	# Build $(FFI_HOME)/FFICallbacks.cmxa
 	$(MAKE) -C $(FFI_HOME)
 	$(FSTAR) --include $(LDIR)/spartan \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj Extensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
@@ -378,7 +378,7 @@ test: test.out mitls.exe
 # Depends on mitls.cmxa
 rpc.ml:
 	$(FSTAR) \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj TLSExtensions \
+	  --no_location_info --lax --codegen OCaml --__temp_no_proj Extensions \
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \

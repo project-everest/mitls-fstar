@@ -8,7 +8,7 @@ open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError
-open TLSConstants
+open Format
 open FStar.ST
 
 type params = dhp:CoreCrypto.dh_params{length dhp.dh_p < 65536 && length dhp.dh_g < 65536}
