@@ -106,7 +106,7 @@ val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> h
 type t (r:HH.rid) (a:alg) 
 //17-03-25 assume new warning?
 
-
+(*
 // MOVE to HandshakeMessage; internal state outline
 //16-06-01 we don't need to precisely track this part of the state
 //16-06-01 later, pre-allocate large-enough buffers for the connection.
@@ -125,7 +125,7 @@ let hs_msg_bufs_init() = {
      hs_outgoing_epochchange = None;
      hs_outgoing_ccs = false; //17-03-28 should now hold a formatted fragment. 
 }
-
+*)
 
 //  specification-level transcript of all handshake messages logged so far
 val transcriptT: h:HS.mem -> #region:HH.rid -> #a:alg -> t region a -> GTot (list msg) 
@@ -252,7 +252,7 @@ open Range // for now
 
 // payload of a handshake fragment, to be made opaque eventually
 type fragment (i:id) = ( rg: frange i & rbytes rg )
-let out_msg i rg b : message i= (|rg, b|)
+//let out_msg i rg b : msg i = (|rg, b|)
 
 // What the HS asks the record layer to do, in that order.
 type outgoing (i:id) (* initial index *) =
@@ -267,12 +267,13 @@ type outgoing (i:id) (* initial index *) =
 //17-03-26 now return an outgoing result, for uniformity
 // | OutError: error -> outgoing i       // usage? send a polite Alert in case something goes wrong when preparing messages
 
-let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r && Outgoing?.next_keys r
-let out_complete (#i:id) (r:outgoing i)  = Outgoing? r && Outgoing?.complete r
+//17-03-29  these cause a mysterious error
+//let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r /\ Outgoing?.next_keys r
+//let out_complete (#i:id) (r:outgoing i)  = Outgoing? r /\ Outgoing?.complete r
 
 // provides outputs to the record layer, one fragment at a time
 // never fails, in contrast with Handshake.next_fragment
-val next_fragment: st:t -> i:id -> St (Outgoing i) 
+val next_fragment: #region:HH.rid -> #a:alg -> r:t region a -> i:id -> St (outgoing i) 
 (*
   if length st.outgoing = 0 
   return as we can, up to the fragment limit
