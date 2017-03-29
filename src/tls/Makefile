@@ -143,9 +143,9 @@ FStar.Math.Lib.fst \
 Spec.Poly1305.Lemmas.fst \
 Spec.Poly1305.fst \
 Hacl.Spec.Bignum.Fproduct.fst \
+Hacl.Spec.Bignum.Modulo.fst \
 Hacl.Spec.Bignum.Fmul.fst \
 Hacl.Spec.Bignum.Fsum.fst \
-Hacl.Spec.Bignum.Modulo.fst \
 Hacl.Spec.Bignum.AddAndMultiply.fst \
 Hacl.Spec.Bignum.Bigint.fst \
 Hacl.Spec.Bignum.Field.fst \
@@ -156,6 +156,8 @@ Hacl.Bignum.Fmul.fst \
 Hacl.Bignum.Fsum.fst \
 Hacl.Bignum.AddAndMultiply.fst \
 Hacl.Impl.Poly1305_64.fst \
+Spec.GaloisField.fst \
+Spec.GF128.fst \
 Crypto.Symmetric.GF128.Spec.fst \
 Crypto.Symmetric.GF128.fst \
 Crypto.Symmetric.MAC.fst \
