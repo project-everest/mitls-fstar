@@ -19,7 +19,7 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open Range
-open HandshakeMessages // for the Message syntax
+open HandshakeMessages // for the message syntax
 //open StAE 
 
 //16-05-31 these opens are implementation-only; overall we should open less
@@ -108,7 +108,7 @@ noeq type hs = | HS:
   log: Handshake.Log.t region (Nego.hashAlg nego) (* embedding msg buffers *) -> 
   ks: KeySchedule.ks -> //region r -> 
   epochs: epochs region nonce ->
-  state: ref machineState -> // state machine; should be opaque and depend on r.
+  state: ref machineState (*in region*) -> // state machine; should be opaque and depend on r.
   hs
 
 // the states of the HS sub=module will be subject to a joint invariant
@@ -172,17 +172,17 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
 
-assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS?.r s) -> Type0
+assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> machineState -> Type0
 
 let hs_inv (s:hs) (h: HyperStack.mem) =
   hs_invT s (logT s h) (sel h (HS?.state s))  //An abstract invariant of HS-internal state
-  /\ Epochs.containsT s.log h                //Nothing deep about these next two, since they can always
+  /\ Epochs.containsT s.epochs h                //Nothing deep about these next two, since they can always
   /\ HyperHeap.contains_ref s.state.ref (HyperStack.HS?.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 let iT (s:hs) rw (h:HyperStack.mem) =
     match rw with
-    | Reader -> Epochs.readerT s.log h
-    | Writer -> Epochs.writerT s.log h
+    | Reader -> Epochs.readerT s.epochs h
+    | Writer -> Epochs.writerT s.epochs h
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
