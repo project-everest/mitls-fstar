@@ -429,9 +429,9 @@ assume val strongAESI: sessionInfo -> Tot bool
 // be extracted from a log with EarlyDataIndication
 type logInfo_CH = {
   li_ch_cr: crand;
-  li_ch_ed_psk: PSK.pskid;       // 0-RT PSK
-  li_ch_ed_ae: a:aeAlg{AEAD? a}; // 0-RT AEAD alg
-  li_ch_ed_hash: h:hash_alg;     // 0-RT hash
+//  li_ch_ed_psk: PSK.pskid;       // 0-RT PSK
+//  li_ch_ed_ae: a:aeAlg{AEAD? a}; // 0-RT AEAD alg
+//  li_ch_ed_hash: h:hash_alg;     // 0-RT hash
   li_ch_psk: list PSK.pskid;     // other offered PSKs
 }
 
@@ -459,8 +459,7 @@ type logInfo =
 | LogInfo_SF of logInfo_SF
 | LogInfo_CF of logInfo_CF
 
-let logInfo_ae : logInfo -> Tot (a:aeAlg{AEAD? a}) = function
-| LogInfo_CH x -> x.li_ch_ed_ae
+let logInfo_ae : x:logInfo{~(LogInfo_CH? x)} -> Tot (a:aeAlg{AEAD? a}) = function
 | LogInfo_SH x -> x.li_sh_ae
 | LogInfo_SF x -> x.li_sf_sh.li_sh_ae
 | LogInfo_CF x -> x.li_cf_sf.li_sf_sh.li_sh_ae

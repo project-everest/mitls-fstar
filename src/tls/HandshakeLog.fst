@@ -127,9 +127,9 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : logInfo_CH =
       ch_extensions = Some el
     })] -> ({
       li_ch_cr = cr;
-      li_ch_ed_psk = empty_bytes;
-      li_ch_ed_ae = AEAD CoreCrypto.AES_128_GCM SHA256;
-      li_ch_ed_hash = SHA256;
+//      li_ch_ed_psk = empty_bytes;
+//      li_ch_ed_ae = AEAD CoreCrypto.AES_128_GCM SHA256;
+//      li_ch_ed_hash = SHA256;
       li_ch_psk = [];
     })
 
