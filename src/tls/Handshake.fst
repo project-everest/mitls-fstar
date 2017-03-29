@@ -26,7 +26,7 @@ open HandshakeMessages // for the Message syntax
 //open CoreCrypto
 open Epochs
 //open HandshakeLog
-
+ 
 
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
@@ -57,10 +57,10 @@ let debug_print s =
  * [Error] otherwise. *)
 
 // TODO : implement resumption
-val getCachedSession: cfg:config -> ch:ch -> ST (option session)
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> True))
-let getCachedSession cfg cg = None
+//val getCachedSession: cfg:config -> ch:ch -> ST (option session)
+//  (requires (fun h -> True))
+//  (ensures (fun h0 i h1 -> True))
+//let getCachedSession cfg cg = None
 
 
 (* Handshake API: TYPES, taken from FSTI *)
@@ -100,27 +100,26 @@ type machineState =
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
 
-type hs = | HS: 
+noeq type hs = | HS: 
   #region: rgn { is_hs_rgn region } ->
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
   nego: Nego.t region r ->
   log: Handshake.Log.t region (Nego.hashAlg nego) (* embedding msg buffers *) -> 
-  ks: KeySchedule.ks region r -> 
+  ks: KeySchedule.ks -> //region r -> 
   epochs: epochs region nonce ->
-  state: rref region machineState -> // state machine; should be opaque and depend on r.
+  state: ref machineState -> // state machine; should be opaque and depend on r.
   hs
 
 // the states of the HS sub=module will be subject to a joint invariant
 
 
-
 (* the handshake internally maintains epoch
    indexes for the current reader and writer *)
 
-let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.log h
+let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.epochs h
 
-let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS?.r s)
+let stateType (s:hs) = seq (epoch s.region s.nonce) * machineState // handshake_state (HS?.r s)
 
 let stateT (s:hs) (h:HyperStack.mem) : GTot (stateType s) = (logT s h, sel h s.state)
 
@@ -141,7 +140,6 @@ let fresh_epoch h0 s h1 =
 let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
  let es = logT s h in
  Seq.index es (Seq.length es - 1)
-
 
 
 (* vs modifies clauses? *)
