@@ -10,7 +10,6 @@ open FStar.HyperStack
 //AR: Yes ! Totally agree.
 //CF: TODO
 open FStar.Seq
- // for e.g. found
 open FStar.Set
 
 open Platform.Error
@@ -20,8 +19,8 @@ open TLSError
 open TLSInfo
 open TLSConstants
 open Range
-open HandshakeMessages
-open StAE
+open HandshakeMessages // for the Message syntax
+//open StAE 
 
 //16-05-31 these opens are implementation-only; overall we should open less
 //open CoreCrypto
@@ -233,9 +232,6 @@ let i (HS #r0 _ _ _ _ epochs _) rw =
   | Writer -> Epochs.get_writer epochs
 
 
-
-
-
 type incoming =
   // the fragment is accepted, and...
   | InAck:
@@ -248,7 +244,6 @@ type incoming =
 
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
-
 
 let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result hashAlg) =
   function
@@ -289,11 +284,6 @@ let sigHashAlg_of_ske signature =
      end
    | Error _ -> None
   else None
-
-
-(* Handshake API: INTERNAL Callbacks, hidden from API *)
-
-
 
 
 (* -------------------- Handshake Client ------------------------ *)
