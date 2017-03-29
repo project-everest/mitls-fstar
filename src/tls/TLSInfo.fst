@@ -119,6 +119,7 @@ noeq type config = {
     dhPQMinLength: nat * nat;
     }
 
+
 val sigAlgPref: list sigAlg -> list hashAlg' -> Tot (list sigHashAlg)
 let rec sigAlgPref s h =
     match s with
@@ -287,6 +288,10 @@ type abbrInfo =
      abbr_srand: srand;
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
+
+type resumeInfo (r:role) =
+  o:option sessionID{r=Server ==> o=None} *
+  l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
 // i.e. the session is not resumable.

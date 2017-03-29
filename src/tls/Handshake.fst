@@ -101,10 +101,6 @@ type machineState =
 // internal stuff: state machine, reader/writer counters, etc.
 // (will take other HS fields as parameters)
 
-type resume_info (r:role) = 
-  o:option sessionID{r=Server ==> o=None} *
-  l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally  
-
 type hs = | HS: 
   #region: rgn { is_hs_rgn region } ->
   r: role ->
@@ -752,7 +748,7 @@ let iT_old (HS r res cfg id l st) rw =
 (* Control Interface *)
 
 // Create instance for a fresh connection, with optional resumption for clients
-val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume: resume_id r -> ST hs
+val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
@@ -763,7 +759,7 @@ val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume: resume_id r -> ST 
     HS?.cfg s = cfg /\
     logT s h1 = Seq.createEmpty ))
 let handshake_state_init r0 cfg (r:role) (resume:rid) =
-  let nego = Nego.create cfg r resume in 
+  let nego = Nego.create #reg r cfg resume in
   let log = HandshakeLog.create #reg (Nego.hashAlg nego) in 
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
   let ks, nonce = KeySchedule.create #reg r log in

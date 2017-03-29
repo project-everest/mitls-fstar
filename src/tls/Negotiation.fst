@@ -8,42 +8,28 @@ open TLSInfo
 open TLSConstants
 open HandshakeMessages
 
-
-//17-03-25 assumptions for Handshake.fst
-type rgn = FStar.HyperHeap.rid
-assume type t (region:rgn) (role:TLSConstants.role)
-// this encapsulates config, resume proposal, offer, mode
-// now both part of immutable nego state:
-// resume: resume_info r (* client dyn. config, both for 1.2 and 1.3 *) ->
-// cfg: config -> 
-
-// a bit too restrictive: use a single Hash in any given offer
-assume val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
-
-
-(* Sketch 
-val Nego.prepareClientOffer: config -> clientOffer
-let Nego.prepareClientOffer cfg =
-  let groups = List.Tot.choose CommonDH.group_of_namedGroup cfg.namedGroups in
-  let cipher_suites = ... in
-  let sigAlgs = ... in
-  let protocol_version = ... in
-  let ext = prepareExtensions protocol_version cipher_suites sigAlgs groups kp in
-*)  
-
-
 //16-05-31 these opens are implementation-only; overall we should open less
 open Extensions 
 open CoreCrypto
 
-(* A flag for runtime debugging of negotiation data.
-   The F* normalizer will erase debug prints at extraction
-   when this flag is set to false. *)
+(**
+  Debugging flag.
+  F* normalizer will erase debug prints at extraction when set to false. 
+*)
 inline_for_extraction let n_debug = false
 
-assume val create: reg:rid -> cfg:TLSInfo.config -> r:role -> resume: resume_id -> St t
-// ensures these are the immutable parts of t
+// this encapsulates config, resume proposal, offer, mode
+// now both part of immutable nego state:
+// resume: resume_info r (* client dyn. config, both for 1.2 and 1.3 *) ->
+// cfg: config -> 
+assume type t (region:rgn) (role:TLSConstants.role)
 
+// a bit too restrictive: use a single Hash in any given offer
+assume val hashAlg: 
+  #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
+
+assume val create: 
+  region:rgn -> r:role -> cfg:TLSInfo.config -> resume:TLSInfo.resumeInfo r -> St (t region r)
 
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
@@ -59,7 +45,7 @@ type offer = {
   co_safe_renegotiation: bool;
 }
 
-assume val clientOffer: #region:rgn -> #role:TLSConstants.role -> t #region #role -> St offer
+assume val clientOffer: #region:rgn -> #r:TLSConstants.role -> t region r -> St offer
 
 type nego_server = {
      sm_protocol_version: protocolVersion;
@@ -84,11 +70,10 @@ type nego_client = {
      cm_dh_share: option bytes;
      cm_comp: option compression;
      cm_ext: negotiatedExtensions;
-
 }
 
 // whatever we know from CH + SH. 
-type nego = {
+type mode = {
      n_resume: bool;
      n_client_random: TLSInfo.random;
      n_server_random: TLSInfo.random;
@@ -102,18 +87,16 @@ type nego = {
      n_compression: option compression;
      n_extensions: negotiatedExtensions;
      n_scsv: list scsv_suite;
-     
-}                 
+}
 
-assume val clientMode: #region:rgn -> #role:TLSConstants.role -> t #region #role -> sh -> 
+assume val clientMode: #region:rgn -> #r:TLSConstants.role -> t region r -> sh -> 
   St (result mode) // it needs to be computed, whether returned or not
 
 //assume val clientComplete: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... -> 
 //  St (result full_mode) // it needs to be computed, whether returned or not
 
-//assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... -> 
+//assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... ->
 //  St (result full_mode) // it needs to be computed, whether returned or not
-
 
 // TODO factor out signature processing, salvaging chunks from Handshake.fst
 
@@ -123,7 +106,7 @@ type hs_id = {
 }
 
 type session = {
-     session_nego: nego;
+     session_nego: mode;
 }     
 
 
@@ -139,10 +122,9 @@ type handshake =
 
 // to be renamed and extended to support HS keys, then 0RTT keys
 val handshakeKeyInfo: 
-  #region:rgn -> #role:TLSConstants.role -> t #region #role -> St handshake
+  #region:rgn -> r:TLSConstants.role -> t region r -> St handshake
 
-
-val prepareClientOffer: cfg:config -> Tot clientOffer
+val prepareClientOffer: cfg:config -> Tot offer
 let prepareClientOffer cfg =
   let co = 
   {co_protocol_version = cfg.maxVer;
@@ -152,7 +134,8 @@ let prepareClientOffer cfg =
    co_sigAlgs = cfg.signatureAlgorithms;
    co_safe_resumption = cfg.safe_resumption;
    co_safe_renegotiation = cfg.safe_renegotiation;
-   } in
+   } 
+  in
   co
 
 // Checks that the protocol version in the CHELO message is
@@ -193,7 +176,7 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
             || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
            && List.Tot.mem gn cfg.namedGroups in
         (match List.Tot.filter inConf gl with
-        | (gn, gx) :: _ -> Correct (Some gn, Some gx)
+        | share :: _ -> Correct (Some share)
         | [] -> Error(AD_decode_error, "no shared group between client and server config"))
       | _ :: t -> aux t
       | [] -> Error(AD_decode_error, "no supported group or key share extension found")
