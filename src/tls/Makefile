@@ -241,7 +241,6 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 	$(FSTAR) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 # Verifying one file at a time
