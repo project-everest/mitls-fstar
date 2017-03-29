@@ -28,13 +28,6 @@ and earlyDataIndication =
   | ClientEarlyDataIndication of preEarlyDataIndication
   | ServerEarlyDataIndication
 
-(* SI: ToDo cookie payload *)
-and cookie = 
-  | Cookie
-
-and supportedVersions = 
-  | SupportedVersions 
-
 (* SI: we currently only define Mandatory-to-Implement Extensions as listed in the RFC's Section 8.2. 
    Labels in the variants below are: 
      M  - "MUST implement"
@@ -60,13 +53,13 @@ and extension =
   | E_pre_shared_key of PSK.preSharedKey (* M, AF *)
 (*| E_psk_key_exchange_modes *)
   | E_early_data of earlyDataIndication
-  | E_cookie of cookie (* M *)
-  | E_supported_versions of supportedVersions (* M, AF *) 
+  | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
+  | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
 (*| E_certificate_authorities 
   | E_oid_filters *)
   | E_unknown_extension of (lbytes 2 * bytes) (** un-{implemented,known} extensions. *)
 
-(** Extension equality *)
+(** shallow equality *)
 private let sameExt e1 e2 =
   match e1, e2 with
   | E_server_name _, E_server_name _ -> true
@@ -85,7 +78,7 @@ private let sameExt e1 e2 =
 val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
   match ext with                                     // 4.2 ExtensionType enum value
-  | E_server_name _        -> abyte2 (0x00z, 0x00z)
+  | E_server_name _          -> abyte2 (0x00z, 0x00z)
   | E_supported_groups _     -> abyte2 (0x00z, 0x0Az) // 10 
   | E_signature_algorithms _ -> abyte2 (0x00z, 0x0Dz) // 13
   | E_key_share _            -> abyte2 (0x00z, 0x28z) // 40
