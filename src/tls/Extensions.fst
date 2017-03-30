@@ -321,8 +321,10 @@ let rec parseExtension role b =
 	  | Error(z) -> Error(z))
 
         | (0xffz, 0x2cz) -> // cookie
-          Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "cookie unimplemented")
-
+	  if length data >= 1 && length data <= ((pow2 16) - 1) then 
+	    Correct (E_cookie data)
+	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "cookie"))
+	  
         | (0xffz, 0x2bz) -> // supported_versions
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "supported_verions unimplemented")
 
