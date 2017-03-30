@@ -372,14 +372,18 @@ let client_ServerHello hs sh digest =
 
 (* receive Certificate...ServerHelloDone, with optional cert request. Not for TLS 1.3 *)
 val client_ServerHelloDone: 
-  hs -> HandshakeMessages.crt -> HandshakeMessages.ske -> option HandshakeMessages.crt -> ST incoming
+  hs -> 
+  HandshakeMessages.crt -> 
+  HandshakeMessages.ske -> 
+  option HandshakeMessages.cr -> 
+  ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let client_ServerHelloDone hs c ske ocr = 
     let open Nego in 
-    match admit() (* Nego.clientComplete hs.nego c ske ocr *) with 
+    match Nego.clientComplete hs.nego c ske ocr with 
     | Error z -> InError z 
-    | Correct (fullmode, g) -> (
+    | Correct mode -> (
 
     (* here are the checks we were doing before; now hopefully in Nego:
     let valid_chain = hs.cfg.check_peer_certificate => Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file in
@@ -419,12 +423,14 @@ let client_ServerHelloDone hs c ske ocr =
                          | Some cr -> 
                              let cc = {crt_chain = []} in // TODO
                              Handshake.Log.send hs.log (Certificate cc));
-                       
-                       let gx = KeySchedule.ks_client_12_full_dh hs.ks 
-                         fullmode.n_server_random 
-                         fullmode.n_protocol_version 
-                         fullmode.n_cipher_suite 
-                         fullmode.n_extensions.ne_extended_ms // a flag controlling the use of ems
+
+                       let (| g, _ |) = Some?.v (mode.Nego.n_server_share) in // already set in KS
+                       let gx = 
+                         KeySchedule.ks_client_12_full_dh hs.ks 
+                         mode.Nego.n_server_random 
+                         mode.Nego.n_protocol_version 
+                         mode.Nego.n_cipher_suite 
+                         mode.Nego.n_extensions.ne_extended_ms // a flag controlling the use of ems
                          g in
                        let msg = ClientKeyExchange ({cke_kex_c = kex_c_of_dh_key #g gx}) in
                        let digestClientKeyExchange = Handshake.Log.send_tag hs.log msg  in
@@ -447,7 +453,7 @@ let client_ServerHelloDone hs c ske ocr =
 
 (* receive EncryptedExtension...ServerFinished for TLS 1.3, roughly mirroring client_ServerHelloDone *)
 let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify digestServerFinished =
-    match admit() (* Nego.clientComplete_13 hs.nego ee ocr c cv digestCert *) with 
+    match Nego.clientComplete_13 hs.nego ee ocr c cv digestCert with 
     (* here are the checks we were doing before; now hopefully in Nego:
     let valid_chain = cfg.check_peer_certificate => Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file in
     if not valid_chain then Error (AD_decode_error, "Certificate was not valid")
@@ -478,8 +484,9 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
              else  *)
     | Error z -> InError z 
     | Correct full_mode ->  
-        admit() (*17-03-30  until KS restructuring 
-        let (cfin_key, sfin_key, app_keys) = KeySchedule.ks_client_13_server_finished hs.ks in
+        //admit() // 17-03-30  until KS restructuring 
+        
+        let (sfin_key, cfin_key, app_keys) = KeySchedule.ks_client_13_sf hs.ks digestServerFinished in
         // was also calling: let keys = KeySchedule.ks_client_13_sf ks in
         // was also calling: let cvd = KeySchedule.ks_client_13_client_finished ks in
         // was also calling: let ems = KeySchedule.ks_client_13_cf ks in // ?
@@ -501,7 +508,6 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
           Epochs.incr_writer hs.epochs; // TODO update writer key properly
           hs.state := C_Complete; // full_mode (cvd,svd); do we still need to keep those?
           InAck true true )
-*)
 
 (* -------------------- Handshake Server ------------------------ *)
 
@@ -517,9 +523,14 @@ let server_ServerHelloDone hs n =
       let ems = n.n_extensions.ne_extended_ms in
       let pv = n.n_protocol_version in
       let cs = n.n_cipher_suite in
-      let Some gn = n.n_dh_group in // FIXME error flow
+      let Some gn = n.n_dh_group in // FIXME error flow -- should already be a CommonDH group
       let Some g = CommonDH.group_of_namedGroup gn in // FIXME static enforcement
-      let gy = KeySchedule.ks_server_12_init_dh ks cr pv cs ems g in
+      let gy : CommonDH.share g = KeySchedule.ks_server_12_init_dh hs.ks 
+        cr 
+        pv 
+        cs 
+        ems 
+        g in
       let kex_s = KEX_S_DHE gy in
       let sv = kex_s_to_bytes kex_s in
       let csr = n.n_client_random @| n.n_server_random in
@@ -565,12 +576,12 @@ val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs ch =
-    match Nego.computeServerMode hs.nego ch with
+    match Nego.serverMode hs.nego ch with
     | Error z -> Error z
     | Correct mode -> (
       //let srand = KS.ks_server_random hs.ks in
-      let ksl = // move to Nego?
-        (match mode.sm_protocol_version, mode.sm_dh_group, mode.sm_dh_share with
+      let server_share = // move to Nego?
+        (match mode.sm_protocol_version, mode.sm_dh_group, mode.sm_dh_share with // TODO mode should group g and gx as a single option in CommonDH
          | TLS_1p3, Some gn, Some gxb ->
          (match CommonDH.group_of_namedGroup gn with
           | None -> None
@@ -578,10 +589,14 @@ let server_ClientHello hs ch =
            (match CommonDH.parse g gxb with
            | None -> None
            | Some gx ->
-             Some (KeySchedule.ks_server_13_1rtt_init ks ch.ch_client_random mode.sm_cipher_suite g gx)))
+             Some (KeySchedule.ks_server_13_1rtt_init hs.ks  // getting the server key share
+               ch.ch_client_random 
+               mode.sm_cipher_suite 
+               g_gx
+               )))
        | _ -> None) in
       (* Extensions:negotiateServerExtensions *) 
-      match Extensions.negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri ksl false with
+      match Extensions.negotiateServerExtensions mode.sm_protocol_version ch.ch_extensions ch.ch_cipher_suites cfg mode.sm_cipher_suite ri server_share false with
         | Error z -> Error z
         | Correct sext -> (
           let sid = CoreCrypto.random 32 in
@@ -592,7 +607,7 @@ let server_ClientHello hs ch =
              sh_cipher_suite = mode.sm_cipher_suite;
              sh_compression = mode.sm_comp;
              sh_extensions = sext} in
-          Handshake.Log.send (ServerHello sh); 
+          let digest_ServerHello = Handshake.Log.send_tag (ServerHello sh) in 
              
           let nego = // should be directly returned by Nego? Who allocates sid?
           { n_client_random = ch.ch_client_random;
@@ -612,16 +627,16 @@ let server_ClientHello hs ch =
 
           if mode.sm_protocol_version = TLS_1p3 
           then (
-            let keys = KeySchedule.ks_server_13_sh ks in
+            let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello in
             let ep = 
               let h = Negotiation.Fresh ({session_nego = n}) in
-              Epochs.recordInstanceToEpoch #r0 #id h ri in
+              Epochs.recordInstanceToEpoch #r0 #id h hs_keys in
            // Do not increment writer yet as the SH is sent in plaintext
             Epochs.add_epoch lgref ep; 
             hs.state := S_Sent_ServerHello n;
             InAck false false)
 
-          else server_ServerHelloDon hs nego // sending our whole flight hopefully in a single packet. 
+          else server_ServerHelloDone hs nego // sending our whole flight hopefully in a single packet. 
           ))
 
 (* receive ClientKeyExchange; CCS *)
@@ -634,10 +649,8 @@ let server_ClientCCS hs cke digest (* clientCert *)  =
       | KEX_C_ECDHE gyb -> (
           let Some gn = n.n_dh_group in // FIXME error flow
           let Some g = CommonDH.group_of_namedGroup gn in // FIXME static enforcement
-          let gy = CommonDH.parse g gyb in 
-          KeySchedule.ks_server_12_cke_dh ks g gy; 
-
-          let app_keys = KeySchedule.ks_12_get_keys (!hsref).hs_ks in
+          let gy : CommonDH.share g = CommonDH.parse g gyb in // FIXME just need to pattern match on parsed share
+          let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks g gy digest in 
           let h = Negotiation.Fresh ({session_nego = n}) in
           let ep = Epochs.recordInstanceToEpoch h keys in
           Epochs.add_epoch lgref ep;
@@ -648,11 +661,12 @@ let server_ClientCCS hs cke digest (* clientCert *)  =
 (* receive ClientFinish *) 
 let server_ClientFinished hs digestCCS digestClientFinished =
     // to be adjusted
-    let cvd = KeySchedule.ks_server_12_client_finished ks in
+    let cfin_key, sfin_key = KeySchedule.ks_server_12_finished_keys hs.ks in
+    // TODO below
     if not (equalBytes cvd f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify")
     else (
         // TODO we *first* need to send CCS
-        let svd = KeySchedule.ks_server_12_server_finished ks in
+        //let svd = KeySchedule.ks_server_12_server_finished ks in
         Handshake.Log.send (Finished ({fin_vd = svd})); 
         InAck false false )
 
@@ -704,18 +718,19 @@ let server_ServerFinished_13 hs n =
             let signature = hab @| sab @| vlbytes 2 sigv in
 
             let digestFinished = Handshake.Log.send_tag hs.log (CertificateVerify ({cv_sig = signature})) in
-            let svd = KeySchedule.ks_server_13_server_finished hs.ks digestFinished in
-            Handshake.Log.send (Finished ({fin_vd = svd}));
+            let sfin_key = KeySchedule.ks_server_13_server_finished hs.ks  in
+            // TODO MAC
+            let digestServerFinished = Handshake.Log.send_tag (Finished ({fin_vd = svd})) in
 
-            let keys = KeySchedule.ks_server_13_sf ks in
+            let app_keys = KeySchedule.ks_server_13_sf ks digestServerFinished in
             let ep = 
                let h = Negotiation.Fresh ({session_nego = n}) in
-               Epochs.recordInstanceToEpoch #r0 #id h keys in
+               Epochs.recordInstanceToEpoch #r0 #id h app_keys in
             Epochs.add_epoch lgref ep;
             Epochs.incr_writer lgref; // Switch to ATK after the SF
             Epochs.incr_reader lgref; // TODO when to increment the reader?
 
-            ///??? hs_outgoing_epochchange = Some Writer; };
+            //??? hs_outgoing_epochchange = Some Writer; };
             hs.state := S_Wait_Finished2;
             Handshake.Log.set_flags "switch to ATK 0.5RTT" 
             Correct(Handshake.Log.next_fragment hs.log i)
@@ -727,7 +742,8 @@ let server_ClientFinished_13 hs n f digestClientFinished clientAuth=
    match clientAuth with
    | Some (c,cv,digest) -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None -> 
-       let cvd = KeySchedule.ks_server_13_client_finished hs.ks digestClientFinished in
+       let cfin_key = KeySchedule.ks_server_13_client_finished hs.ks in
+       // TODO MACVerify digestClientFinished
        if not (equalBytes cvd f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify")
        else (
           Epochs.incr_writer hs.epochs lgref;
@@ -927,7 +943,7 @@ let recv_fragment hs #i f =
 
       | C_Wait_Finished2 digest, Some ([Finished f], [digestServerFinished]) ->
           // assert Some? pv && pv <> Some TLS_1p3 
-          let sfin_key = KeySchedule.ks_client_12_server_finished ks digest in 
+          let sfin_key = KeySchedule.ks_client_12_server_finished ks in 
           if not (MAC.verify sfin_key digest f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify") 
           else (
             hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
