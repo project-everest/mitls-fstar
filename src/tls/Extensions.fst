@@ -10,10 +10,12 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
-//open TLSInfo
-//open CoreCrypto
 
 module TI = TLSInfo
+
+(*************************************************
+ Define extension. 
+ *************************************************)
 
 (** RFC 4.2 'Extension' Table's type definition. *)
 
@@ -28,7 +30,8 @@ and earlyDataIndication =
   | ClientEarlyDataIndication of preEarlyDataIndication
   | ServerEarlyDataIndication
 
-(* SI: we currently only define Mandatory-to-Implement Extensions as listed in the RFC's Section 8.2. 
+(* SI: we currently only define Mandatory-to-Implement Extensions 
+   as listed in the RFC's Section 8.2. 
    Labels in the variants below are: 
      M  - "MUST implement"
      AF - "MUST ... when offering applicable features"
@@ -70,10 +73,14 @@ private let sameExt e1 e2 =
   | E_early_data _, E_early_data _ -> true
   | E_cookie _, E_cookie _ -> true 
   | E_supported_versions _, E_supported_versions _ -> true
-  // For unknown extensions return true if the header is the same to mimic the general behaviour
+  // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
 
+(*************************************************
+ extension serializing
+ *************************************************)
+ 
 (* API *)
 val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
@@ -159,6 +166,7 @@ let parseserverName r b  =
       else
 	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
 
+(*
 let rec (compile_curve_list_aux:list ECGroup.ec_all_curve -> Tot bytes) = function
   | [] -> empty_bytes
   | ECGroup.EC_CORE c :: r ->
@@ -238,6 +246,7 @@ let compile_ecpf_list l =
   lemma_repr_bytes_values (length al);
   let bl:bytes = vlbytes 1 al in
   bl
+*)
 
 private val addOnce: extension -> list extension -> Tot (result (list extension))
 let addOnce ext extList =
@@ -326,6 +335,10 @@ val parseExtensions: pinverse_t extensionsBytes
 (* TODO *)
 #set-options "--lax"
 
+(*************************************************
+ extension parsing
+ *************************************************)
+ 
 let err_msg s = "Got inapproprite bytes for " ^ s
   
 val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndication) (decreases (length b))
@@ -363,7 +376,6 @@ let rec parseExtension role b =
 	  | Correct(algs) -> Correct (E_signature_algorithms algs)
 	  | Error(z) -> Error(z))
 	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "signature & hash algorithms"))
-
 
 	| (0x00z, 0x28z) -> // head TBD, key share
 (* SI: commented-out in CommonDH right now? 	
