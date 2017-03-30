@@ -146,7 +146,9 @@ let rec earlyDataIndicationBytes edi =
       
 and extensionPayloadBytes role ext =
   match ext with
-  | E_server_name(l)           -> if role = Client then vlbytes 2 (serverNameBytes l) else serverNameBytes l
+  | E_server_name(l)           -> 
+      if role = Client then vlbytes 2 (serverNameBytes l) 
+      else serverNameBytes l
   | E_supported_groups(l)      -> Format.namedGroupsBytes l  
   | E_signature_algorithms sha -> sigHashAlgsBytes sha
   | E_key_share ks             -> CommonDH.keyShareBytes ks
@@ -171,7 +173,8 @@ and extensionsBytes role exts =
 
 (* JK: For some reason without that I do not manage to get the
 definition of extensionsBytes *)
-assume val extensionsBytes_def: r:role -> cl:list extension{repr_bytes (length (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes cl)) <= 2} ->
+assume val extensionsBytes_def: r:role -> 
+  cl:list extension{repr_bytes (length (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes cl)) <= 2} ->
   Lemma (requires (True))
 	(ensures (extensionsBytes r cl = vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes cl)))
   [SMTPat (extensionsBytes r cl)]
@@ -235,7 +238,8 @@ let parseserverName r b  =
     | Server ->
       if length b = 0 then correct []
       else
-	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b))
+	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
+	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
     | Client ->
       if length b >= 2 then
 	begin
@@ -317,8 +321,10 @@ let rec parseExtension role b =
 	  | Error(z) -> Error(z))
 
         | (0xffz, 0x2cz) -> // cookie
-          Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "cookie unimplemented")
-
+	  if length data >= 1 && length data <= ((pow2 16) - 1) then 
+	    Correct (E_cookie data)
+	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "cookie"))
+	  
         | (0xffz, 0x2bz) -> // supported_versions
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "supported_verions unimplemented")
 
@@ -427,9 +433,14 @@ let parseOptExtensions r data =
 (* SI: API. Called by Negotiation. *)
 (* JK: Need to get rid of such functions *)
 let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
-  match l with | [] -> [] | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
+  match l with 
+  | [] -> [] 
+  | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
   
-private let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup{p n})): Tot (list namedGroup) = match l with | [] -> [] | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
+private let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup{p n})): Tot (list namedGroup) = 
+  match l with 
+  | [] -> [] 
+  | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
 
 (* SI: API. Called by Handshake. *)
 val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (TI.cVerifyData * TI.sVerifyData) -> (option CommonDH.keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
@@ -466,7 +477,7 @@ let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
  SI: 
  The rest of the code might be dead. 
  Some of the it is called by Nego, but it might be that
- it needs to be in Nego. 
+ it needs to move to Nego. 
  *************************************************)
 
 (* SI: is renego deadcode? *)
