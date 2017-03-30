@@ -381,7 +381,7 @@ let rec parseExtension role b =
 (* SI: commented-out in CommonDH right now? 	
 	  (let is_client = (match role with | Client -> true | Server -> false) in
 	  match parseKeyShare is_client data with
-	  | Correct (ks) -> Correct (E_keyShare(ks))
+	  | Correct (ks) -> Correct (E_key_share(ks))
 	  | Error(z) -> Error(z))
 *)
           Correct(E_unknown_extension(head,data))
