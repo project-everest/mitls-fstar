@@ -15,7 +15,7 @@ open TLSConstants
 
 module TI = TLSInfo
 
-(** RFC 4.2 'Extension' Table *)
+(** RFC 4.2 'Extension' Table's type definition. *)
 
 noeq type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
@@ -272,6 +272,7 @@ val extensionPayloadBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
 
 (* API *)
+(** Serialize extension. *)
 val extensionBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
 val extensionsBytes: role -> cl:list extension -> Tot (b:bytes{length b <= 2 + 65535})
@@ -325,8 +326,12 @@ val parseExtensions: pinverse_t extensionsBytes
 (* TODO *)
 #set-options "--lax"
 
+let err_msg s = "Got inapproprite bytes for " ^ s
+  
 val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndication) (decreases (length b))
 
+(* SI: API. Called by HandshakeMessages. *)
+(** Parse extension. *)
 val parseExtension: r:role -> b:bytes -> Tot (result extension) (decreases (length b))
 val parseExtensions: r:role -> b:bytes -> Tot (result (list extension)) (decreases (length b))
 let rec parseExtension role b =
@@ -335,33 +340,63 @@ let rec parseExtension role b =
     match vlparse 2 payload with
     | Correct (data) ->
 	(match cbyte2 head with
+(*
+        | (0xffz, 0x02z) -> // TLS 1.3 draft version
+          if length data = 2 then Correct (E_draftVersion data)
+          else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "draft 1.3 version"))
+
+*)	
 	| (0x00z, 0x00z) -> // sni
 	  (match parseserverName role data with
 	  | Correct(snis) -> Correct (E_server_name snis)
 	  | Error(z) -> Error(z))	
-(*
-        | (0xffz, 0x02z) -> // TLS 1.3 draft version
-          if length data = 2 then Correct (E_draftVersion data)
-          else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate draft 1.3 version")
-	| (0x00z, 0x0Dz) -> // sigalgs
-	  if length data >= 2 && length data < 65538 then (
-	  (match parseSigHashAlgs (data) with
-	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
+	| (0x00z, 0x0Az) -> // supported groups
+	  if length data >= 2 && length data < 65538 then
+	  (match Format.parseNamedGroups (data) with
+	  | Correct(groups) -> Correct (E_supported_groups(groups))
 	  | Error(z) -> Error(z))
-	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for signature & hash algorithms")
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "named groups"))
+
+	| (0x00z, 0x0Dz) -> // sighashalgs
+	  if length data >= 2 && length data < 65538 then (
+	  (match TLSConstants.parseSigHashAlgs (data) with
+	  | Correct(algs) -> Correct (E_signature_algorithms algs)
+	  | Error(z) -> Error(z))
+	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "signature & hash algorithms"))
+
+
+	| (0x00z, 0x28z) -> // head TBD, key share
+(* SI: commented-out in CommonDH right now? 	
+	  (let is_client = (match role with | Client -> true | Server -> false) in
+	  match parseKeyShare is_client data with
+	  | Correct (ks) -> Correct (E_keyShare(ks))
+	  | Error(z) -> Error(z))
+*)
+          Correct(E_unknown_extension(head,data))
+	| (0x00z, 0x29z) -> // head TBD, pre shared key
+	  if length data >= 2 then
+	  (match PSK.parsePreSharedKey data with
+	  | Correct(psk) -> Correct (E_pre_shared_key psk)
+	  | Error(z) -> Error(z))
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "pre shared key"))
+
+	| (0x00z, 0x2az) -> // head TBD, early data
+	  (match parseEarlyDataIndication role data with
+	  | Correct (edi) -> Correct (E_early_data(edi))
+	  | Error(z) -> Error(z))
+
+        | (0xffz, 0x2cz) -> // cookie
+          Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "cookie unimplemented")
+
+        | (0xffz, 0x2bz) -> // supported_versions
+          Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "supported_verions unimplemented")
 
 (* 	  
 	| (0xFFz, 0x01z) -> // renego (* OLD *)
 	  (match parseRenegotiationInfo data with
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
 	  | Error(z) -> Error(z)
-*)	 
-	| (0x00z, 0x0Az) -> // supported groups
-	  if length data >= 2 && length data < 65538 then
-	  (match parseNamedGroups (data) with
-	  | Correct(groups) -> Correct (E_supported_groups(groups))
-	  | Error(z) -> Error(z))
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes named groups")
+	 
 	| (0x00z, 0x0Bz) -> // ec point format
 	  if length data < 256 && length data >= 1 then
 	  (lemma_repr_bytes_values (length data);
@@ -378,21 +413,8 @@ let rec parseExtension role b =
 	| (0xBBz, 0x8Fz) -> // extended padding
 	  if length data = 0 then Correct (E_extended_padding)
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended padding extension")
-	| (0x00z, 0x2az) -> // head TBD, early data
-	  (match parseEarlyDataIndication role data with
-	  | Correct (edi) -> Correct (E_earlyData(edi))
-	  | Error(z) -> Error(z))
-	| (0x00z, 0x29z) -> // head TBD, pre shared key
-	  if length data >= 2 then
-	  (match parsePreSharedKey data with
-	  | Correct(psk) -> Correct (E_preSharedKey(psk))
-	  | Error(z) -> Error(z))
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for pre shared key")
-	| (0x00z, 0x28z) -> // head TBD, key share
-	  (let is_client = (match role with | Client -> true | Server -> false) in
-	  match parseKeyShare is_client data with
-	  | Correct (ks) -> Correct (E_keyShare(ks))
-	  | Error(z) -> Error(z)) *)
+
+ *)
 	| _ -> // Unknown extension
 	  Correct(E_unknown_extension(head,data)))
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
@@ -434,7 +456,6 @@ and parseEarlyDataIndication role b =
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data indication length")
   else Correct (ServerEarlyDataIndication)
 
-(* SI: API. Called by HandshakeMessages. *)
 and parseExtensions role b =
   let rec (aux:bytes -> list extension -> Tot (result (list extension))) = fun b exts ->
     if length b >= 4 then
@@ -477,6 +498,7 @@ private let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:na
 (* SI: API. Called by Handshake. *)
 // The extensions sent by the client
 // (for the server we negotiate the client extensions)
+(*val prepareExtensions: (offer:Nego.offer) -> resume -> ri -> shares*)
 val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (TI.cVerifyData * TI.sVerifyData) -> (option CommonDH.keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
 let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
