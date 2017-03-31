@@ -66,7 +66,8 @@ let ssl_verifyCertificate hashAlg ms log  =
   hash hashAlg forStep2
 *)
 
-(* TLS 1.0 and 1.1 *)
+abstract type key = bytes
+let coerce (k:bytes) : key = k
 
 val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
   (requires (fun _ -> True))
@@ -133,8 +134,8 @@ let tls12VerifyData cs ms role data =
 
 (* Internal agile implementation of PRF *)
 
-val verifyData: (protocolVersion * cipherSuite) -> bytes -> role -> bytes -> St bytes
-let verifyData (pv,cs) (secret:bytes) (role:role) (data:bytes) =
+val verifyData: (protocolVersion * cipherSuite) -> key -> role -> bytes -> St bytes
+let verifyData (pv,cs) (secret:key) (role:role) (data:bytes) =
   match pv with
     //| SSL_3p0           -> ssl_verifyData     secret role data
     | TLS_1p0 | TLS_1p1 -> tls_verifyData     secret role data

@@ -179,7 +179,7 @@ abstract type es (i:esId) = Hashing.Spec.tag (esId_hash i)
 
 // Handshake secret (abstract)
 abstract type hs (i:hsId) = Hashing.Spec.tag (hsId_hash i)
-abstract type fink (i:finishedId) = Hashing.Spec.tag  (finishedId_hash i)
+type fink (i:finishedId) = HMAC.UFCMA.key i (fun _ -> True)
 
 // TLS 1.3 master secret (abstract)
 abstract type ams (i:asId) = Hashing.Spec.tag (asId_hash i)
@@ -277,24 +277,6 @@ private let finished_13 h secret : St (bytes*bytes) =
   let cfk = HKDF.hkdf_expand_label h secret "client finished" empty_bytes hL in
   let sfk = HKDF.hkdf_expand_label h secret "server finished" empty_bytes hL in
   (cfk, sfk)
-
-val ks_client_random: ks:ks -> ST random
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_Init? (C?.s kss))
-  (ensures fun h0 _ h1 -> h0 = h1)
-let ks_client_random ks =
-  let KS #rid st hsl = ks in
-  let C (C_Init cr) = !st in cr
-
-val ks_server_random: ks:ks -> ST random
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S_Init? (S?.s kss))
-  (ensures fun h0 _ h1 -> h0 = h1)
-let ks_server_random ks =
-  let KS #rid st hsl = ks in
-  let S (S_Init sr) = !st in sr
 
 // Create a fresh key schedule instance
 // We expect this to be called when the Handshake instance is created
@@ -420,7 +402,7 @@ let ks_client_13_0rtt_ch ks esId : ST (recordInstance)
 
   let efId = FinishedID expandId EarlyFinished Client loginfo hashed_log in
   let (cfk0, _) = finished_13 h es_derived in
-  let cfk0 : fink efId = cfk0 in
+  let cfk0 : fink efId = HMAC.UFCMA.coerce efId (fun _ -> True) rid cfk0 in
 
   let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
@@ -432,6 +414,7 @@ let ks_client_13_0rtt_ch ks esId : ST (recordInstance)
   st := C (C_13_wait_SH cr (Some (| esId, es |)) (Some (| efId, cfk0 |)) gs);
   (early_d)
 
+(*)
 val ks_client_13_0rtt_finished: ks:ks -> ST (cvd:bytes)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
@@ -446,6 +429,7 @@ let ks_client_13_0rtt_finished ks : St bytes =
   let x = HandshakeLog.getHash hsl h in
   let y = esId_rc esId in
   HMAC.UFCMA.mac h cfk (x @| y)
+*)
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
@@ -525,7 +509,7 @@ let ks_server_13_0rtt_init ks cr esId cs g gx =
 
   let efId = FinishedID expandId EarlyFinished Client loginfo hashed_log in
   let (cfk0, _) = finished_13 h es_derived in
-  let cfk0 : fink efId = cfk0 in
+  let cfk0 : fink efId = HMAC.UFCMA.coerce efId (fun _ -> True) region cfk0 in
 
   let id = ID13 (KeyID expandId EarlyApplicationDataKey Client loginfo hashed_log) in
   let ckv: StreamAE.key id = ck' in
@@ -626,8 +610,8 @@ let ks_server_13_sh ks =
   let cfkId = FinishedID expandId HandshakeFinished Client loginfo hashed_log in
   let sfkId = FinishedID expandId HandshakeFinished Server loginfo hashed_log in
   let (cfk1, sfk1) = finished_13 h hs_derived in
-  let cfk1 : fink cfkId = cfk1 in
-  let sfk1 : fink sfkId = sfk1 in
+  let cfk1 : fink cfkId = HMAC.UFCMA.coerce cfkId (fun _ -> True) region cfk1 in
+  let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk1 in
 
   // Replace handshake secret with application master secret
   let amsId = ASID (HandshakeSalt hsId) in
@@ -703,13 +687,14 @@ let ks_client_12_resume ks sr pv cs =
 //   2. they use different return types
 //   3. they are called at different locations
 
-val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> g:CommonDH.group -> gy:CommonDH.share g -> accept_early_data:bool -> ST recordInstance
-  (requires fun h0 ->
+val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
+       gy:(g:CommonDH.group & CommonDH.share g) -> accept_early_data:bool ->
+  ST recordInstance (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SH? (C?.s kss) /\
     // Ensure consistency of ae/h if 0-RTT data is accepted
     (let C_13_wait_SH _ ei _ gc = C?.s kss in
-     (List.Tot.existsb (fun gx -> g = dfst gx) gc) /\
+     (List.Tot.existsb (fun gx -> dfst gy = dfst gx) gc) /\
      (match ei with | None -> True | Some (| id, _ |) ->
        let CipherSuite _ _ (AEAD ae h) = cs in
 // TODO lift app_psk_hash, app_psk_ae to resumption PSK
@@ -722,7 +707,7 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> g:CommonDH.group ->
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
 // ServerHello log breakpoint (client)
-let ks_client_13_sh ks sr cs g gy accept_ed =
+let ks_client_13_sh ks sr cs hashed_log (| g, gy|) accept_ed =
   let KS #region st hsl = ks in
   let C (C_13_wait_SH cr early_info early_fin gc) = !st in
   let Some gx = List.Tot.find (fun (gx:(x:CommonDH.group & CommonDH.share g)) -> let (| g', _ |) = gx in g = g') gc in
@@ -750,7 +735,6 @@ let ks_client_13_sh ks sr cs g gy accept_ed =
     li_sh_hash = h;
     li_sh_psk = None;
   }) in
-  let hashed_log = HandshakeLog.getHash hsl h in
   let expandId = ExpandedSecret secretId HandshakeTrafficSecret loginfo hashed_log in
 
   // Derived handshake secret
@@ -762,8 +746,8 @@ let ks_client_13_sh ks sr cs g gy accept_ed =
   let cfkId = FinishedID expandId HandshakeFinished Client loginfo hashed_log in
   let sfkId = FinishedID expandId HandshakeFinished Server loginfo hashed_log in
   let (cfk, sfk) = finished_13 h hs_derived in
-  let cfk1 : fink cfkId = cfk in
-  let sfk1 : fink sfkId = sfk in
+  let cfk1 : fink cfkId = HMAC.UFCMA.coerce cfkId (fun _ -> True) region cfk in
+  let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk in
 
   // Application master secret
   let asId = ASID (HandshakeSalt hsId) in
@@ -782,6 +766,7 @@ let ks_client_13_sh ks sr cs g gy accept_ed =
 
 (*************** FINISHED MAC COMPUTATION **********************)
 
+(*)
 let ks_client_13_server_finished ks
   : ST (svd:bytes)
   (requires fun h0 ->
@@ -831,12 +816,13 @@ let ks_server_13_client_finished ks
   let x = HandshakeLog.getHash hsl h in
   let y = asId_rc asId in
   HMAC.UFCMA.mac h cfk (x @| y)
+*)
 
 (******************************************************************)
 
 // Handshake must call this when ServerFinished goes into log
-let ks_client_13_sf ks
-  : ST (recordInstance)
+let ks_client_13_sf ks (hashed_log:bytes)
+  : ST (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) * recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SF? (C?.s kss))
@@ -846,12 +832,11 @@ let ks_client_13_sf ks
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st hsl = ks in
-  let C (C_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
+  let C (C_13_wait_SF alpha cfk sfk (| asId, ams |)) = !st in
   let (ae, h) = alpha in
   let (| FinishedID _ _ _ loginfo _, _ |) = cfk in // TODO loginfo
 
   let secretId = ApplicationSecretID asId in
-  let hashed_log = HandshakeLog.getHash hsl h in
   let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let expandId = ExpandedSecret secretId ApplicationTrafficSecret loginfo hashed_log in
@@ -864,7 +849,7 @@ let ks_client_13_sf ks
   // Post-handshake finished key
   let cfkId = FinishedID expandId LateFinished Client loginfo hashed_log in
   let (late_cfk, _) = finished_13 h ams_derived in
-  let late_cfk: fink cfkId = late_cfk in
+  let late_cfk: fink cfkId = HMAC.UFCMA.coerce cfkId (fun _ -> True) region late_cfk in
 
   // Rekeying secret
   let ri = expandId in
@@ -880,7 +865,7 @@ let ks_client_13_sf ks
   let r = StAE.genReader HyperHeap.root rw in
 
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| ri, rk1 |) (| cfkId, late_cfk |));
-  StAEInstance r w
+  (sfk, cfk, StAEInstance r w)
 
 let ks_server_13_sf ks
   : ST (recordInstance)
@@ -911,7 +896,7 @@ let ks_server_13_sf ks
   // Post-handshake finished key
   let cfkId = FinishedID expandId LateFinished Client loginfo hashed_log in
   let (late_cfk, _) = finished_13 h ams_derived in
-  let late_cfk: fink cfkId = late_cfk in
+  let late_cfk: fink cfkId = HMAC.UFCMA.coerce cfkId (fun _ -> True) region late_cfk in
 
   // Rekeying secret
   let ri = expandId in //RekeyID asId loginfo hashed_log 1 in
@@ -1034,7 +1019,7 @@ let ks_client_12_full_rsa ks sr pv cs ems pk =
       C_12_has_MS csr alpha msId ms in
   st := C ns; encrypted
 
-val ks_client_12_set_session_hash: ks:ks -> ST unit
+val ks_client_12_set_session_hash: ks:ks -> h:bytes -> ST unit
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
     C? st /\ C_12_wait_MS? (C?.s st))
@@ -1043,19 +1028,18 @@ val ks_client_12_set_session_hash: ks:ks -> ST unit
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_client_12_set_session_hash ks =
+let ks_client_12_set_session_hash ks hashed_log =
   let KS #region st hsl = ks in
   let C (C_12_wait_MS csr alpha pmsId pms) = !st in
   let (pv, cs, true) = alpha in
   let kef = kefAlg pv cs true in
   let h = verifyDataHashAlg_of_ciphersuite cs in
-  let log = HandshakeLog.getHash hsl h in
-  let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
+  let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") hashed_log 48 in
   let _ =
     if ks_debug then
       IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
     else false in
-  let msId = ExtendedMS pmsId log kef in
+  let msId = ExtendedMS pmsId hashed_log kef in
   st := C (C_12_has_MS csr alpha msId ms)
 
 // *********************************************************************************
@@ -1067,7 +1051,7 @@ let ks_client_12_set_session_hash ks =
 // Will become private; public API will have
 // ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
 // ks_server_12_keygen: ...
-val ks_12_get_keys: ks:ks -> ST (writer:recordInstance)
+val ks_12_get_keys: ks:ks -> ST (writer:recordInstance * key:TLSPRF.key)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
     match st with
@@ -1101,11 +1085,13 @@ val ks_12_get_keys: ks:ks -> ST (writer:recordInstance)
   let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
   let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
   let r = StAE.genReader HyperHeap.root rw in
-  StAEInstance r w
+  let msk = TLSPRF.coerce ms in
+  (StAEInstance r w, msk)
 
 (******************************************************************)
 (******************************************************************)
 
+(*)
 let ks_client_12_client_finished ks
   : ST (cvd:bytes)
   (requires fun h0 ->
@@ -1173,6 +1159,7 @@ let ks_client_12_server_finished ks
   let log = HandshakeLog.getBytes hsl in
   st := C C_Done;
   TLSPRF.verifyData (pv,cs) ms Server log
+*)
 
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i rd wr) = i
