@@ -87,8 +87,8 @@ type hash_alg_classic = a:hash_alg {Hashing.Spec.(a = MD5 \/ a = SHA1)}
 
 (** TLS-specific MAC algorithms *)
 type macAlg =
-  | HMAC     of hash_alg
-  | SSLKHASH of hash_alg_classic
+  | HMac     of hash_alg
+  | SSLKHash of hash_alg_classic
   
 
 (** Authenticated Encryption modes *)
@@ -264,13 +264,13 @@ let hashSize = function
 
 (** MAC key sizes *)
 let macKeySize = function
-  | HMAC alg
-  | SSLKHASH alg -> hashSize (Hash alg)
+  | HMac alg
+  | SSLKHash alg -> hashSize (Hash alg)
 
 (** MAC sizes *)
 let macSize = function
-  | HMAC alg
-  | SSLKHASH alg -> hashSize (Hash alg)
+  | HMac alg
+  | SSLKHash alg -> hashSize (Hash alg)
 
 (** Ciphersuite for SCSV *)
 type scsv_suite =
@@ -794,9 +794,9 @@ type vdAlg_t = protocolVersion * cipherSuite
 val prfMacAlg_of_ciphersuite_aux: cipherSuite -> Tot (option macAlg)
 let prfMacAlg_of_ciphersuite_aux =
   let open Hashing.Spec in function
-  | CipherSuite  _ _  (MtE  _ _ )   -> Some (HMAC SHA256)
-  | CipherSuite  _ _  (AEAD _ hAlg) -> Some (HMAC hAlg)
-  | CipherSuite  _ _  (MACOnly _)   -> Some (HMAC SHA256) //MK was (MACOnly hAlg) should it also be be (HMAC hAlg)?
+  | CipherSuite  _ _  (MtE  _ _ )   -> Some (HMac SHA256)
+  | CipherSuite  _ _  (AEAD _ hAlg) -> Some (HMac hAlg)
+  | CipherSuite  _ _  (MACOnly _)   -> Some (HMac SHA256) //MK was (MACOnly hAlg) should it also be be (HMAC hAlg)?
   | _                               -> None
 
 
@@ -862,11 +862,11 @@ val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { pv <> TLS_1p3 /\ ~(AEAD?
 let macAlg_of_aeAlg pv ae =
   match pv,ae with
   // 17-02-02 dropping support for weak ciphersuites. To be discussed!
-  //  | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
-  //  | SSL_3p0,MtE _ alg   -> SSLKHASH alg
-  //  | _      ,MACOnly alg -> SSLKHASH alg
+  //  | SSL_3p0,MACOnly alg -> SSLKHash alg (* dropped pattern on the left to simplify refinements *)
+  //  | SSL_3p0,MtE _ alg   -> SSLKHash alg
+  //  | _      ,MACOnly alg -> SSLKHash alg
   | _      ,MACOnly alg 
-  | _      ,MtE _ alg   -> HMAC alg
+  | _      ,MtE _ alg   -> HMac alg
 
 (** Ciphersuite names definition *)
 type cipherSuiteName =

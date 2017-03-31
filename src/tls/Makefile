@@ -91,7 +91,7 @@ PMS.fst \
 Hashing.OpenSSL.fst \
 Hashing.fst \
 Hashing.CRF.fst \
-HashMAC.fst \
+HMAC.fst \
 Cert.fst \
 Signature.fst \
 PSK.fst \
@@ -198,7 +198,7 @@ Hashing.Spec \
 Hashing.OpenSSL \
 Hashing \
 Hashing.CRF \
-HashMAC \
+HMAC \
 Cert \
 Signature \
 TLSInfo \

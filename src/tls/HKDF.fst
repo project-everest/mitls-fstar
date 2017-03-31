@@ -7,7 +7,7 @@ open Hashing.Spec
 
 private let max (a:int) (b:int) = if a < b then b else a
 
-let hkdf_extract ha salt ikm = HashMAC.hmac ha salt ikm
+let hkdf_extract ha salt ikm = HMAC.hmac ha salt ikm
 
 private val hkdf_expand_int: ha:hash_alg
   -> prk: hkey ha //was: bytes{tagLen ha <= length prk}
@@ -25,7 +25,7 @@ let rec hkdf_expand_int ha prk info len count curr prev =
     let count = count + 1 in
     let curr = curr + tagLen ha in
     lemma_repr_bytes_values count;
-    let prev = HashMAC.hmac ha prk (prev @| info @| bytes_of_int 1 count) in
+    let prev = HMAC.hmac ha prk (prev @| info @| bytes_of_int 1 count) in
     let next = hkdf_expand_int ha prk info len count curr prev in
     prev @| next
   else empty_bytes

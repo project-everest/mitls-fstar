@@ -445,7 +445,7 @@ let ks_client_13_0rtt_finished ks : St bytes =
   let h = esId_hash esId in
   let x = HandshakeLog.getHash hsl h in
   let y = esId_rc esId in
-  HashMAC.hmac h cfk (x @| y)
+  HMAC.UFCMA.mac h cfk (x @| y)
 
 // Called before sending client hello
 // (the external style of resumption may become internal to protect ms abstraction)
@@ -793,7 +793,7 @@ let ks_client_13_server_finished ks
   let C (C_13_wait_SF (_, h) _ (| _, sfk |) (| asId, _ |)) = !st in
   let x = HandshakeLog.getHash hsl h in
   let y = asId_rc asId in
-  HashMAC.hmac h sfk (x @| y)
+  HMAC.UFCMA.mac h sfk (x @| y)
 
 let ks_client_13_client_finished ks
   : ST (cvd:bytes)
@@ -806,7 +806,7 @@ let ks_client_13_client_finished ks
   let C (C_13_wait_CF (_, h) (| _, cfk |) (| asId, _ |) _ _) = !st in
   let x = HandshakeLog.getHash hsl h in
   let y = asId_rc asId in
-  HashMAC.hmac h cfk (x @| y)
+  HMAC.UFCMA.mac h cfk (x @| y)
 
 let ks_server_13_server_finished ks
   : ST (svd:bytes)
@@ -818,7 +818,7 @@ let ks_server_13_server_finished ks
   let S (S_13_wait_SF (ae, h) _ (| sfkId, sfk |) (| asId, _ |)) = !st in
   let x = HandshakeLog.getHash hsl h in
   let y = asId_rc asId in
-  HashMAC.hmac h sfk (x @| y)
+  HMAC.UFCMA.mac h sfk (x @| y)
 
 let ks_server_13_client_finished ks
   : ST (cvd:bytes)
@@ -830,7 +830,7 @@ let ks_server_13_client_finished ks
   let S (S_13_wait_CF (ae, h) (| _, cfk |) (| asId, _ |) _ _) = !st in
   let x = HandshakeLog.getHash hsl h in
   let y = asId_rc asId in
-  HashMAC.hmac h cfk (x @| y)
+  HMAC.UFCMA.mac h cfk (x @| y)
 
 (******************************************************************)
 

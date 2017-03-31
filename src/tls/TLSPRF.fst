@@ -8,7 +8,6 @@ open Platform.Bytes
 open Hashing.Spec
 open TLSConstants
 open TLSInfo
-//open HashMAC
 //open CoreCrypto
 
 
@@ -73,8 +72,8 @@ val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> by
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 let rec p_hash_int alg secret seed len it aPrev acc =
-  let aCur = HashMAC.tls_mac alg secret aPrev in
-  let pCur = HashMAC.tls_mac alg secret (aCur @| seed) in
+  let aCur = HMAC.tls_mac alg secret aPrev in
+  let pCur = HMAC.tls_mac alg secret (aCur @| seed) in
   if it = 1 then
     let hs = macSize alg in
     let r = len % hs in
@@ -95,8 +94,8 @@ let tls_prf secret label seed len =
   let l_s1 = (l_s+1)/2 in
   let secret1,secret2 = split secret l_s1 in
   let newseed = label @| seed in
-  let hmd5  = p_hash (HMAC MD5) secret1 newseed len in
-  let hsha1 = p_hash (HMAC SHA1) secret2 newseed len in
+  let hmd5  = p_hash (HMac MD5) secret1 newseed len in
+  let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
   xor len hmd5 hsha1
 
 val tls_finished_label: role -> Tot bytes

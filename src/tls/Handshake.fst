@@ -438,14 +438,14 @@ let client_ServerHelloDone hs c ske ocr =
                        (* fuse these two calls? *)
                        //17-03-29 FIXME if ems then KeySchedule.ks_client__12_set_session_hash hs.ks digestClientKeyExchange; 
                        // let cfin_key = admit() in
-                       let app_keys = KeySchedule.ks_12_get_keys hs.ks  in
+                       let cfin_key, app_keys = KeySchedule.ks_12_get_keys hs.ks  in
                        let ep = 
                          let h = admit() (*Negotiation.Fresh ({session_nego = fullmode})*) in
                          Epochs.recordInstanceToEpoch h app_keys in
                        Epochs.add_epoch hs.epochs ep;
 
                        (* will send CCS then encrypted Finished *)
-                       let cvd = admit() in //17-03-29  MAC.mac cfin_key digestClientKeyExchange in // or use the latest digest in case we client-sign
+                       let cvd = HMAC.UFCMA.mac cfin_key digestClientKeyExchange in // or use the latest digest in case we client-sign
                        let digestClientFinished = Handshake.Log.send_CCS_tag hs.log (Finished ({fin_vd = cvd})) false in
                        hs.state := C_Wait_CCS2 digestClientFinished;                       
                        InAck false false) 
@@ -491,14 +491,14 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
         // was also calling: let cvd = KeySchedule.ks_client_13_client_finished ks in
         // was also calling: let ems = KeySchedule.ks_client_13_cf ks in // ?
   
-        if not (MAC.verify sfin_key digestCertVerify svd) 
+        if not (HMAC.UFCMA.verify sfin_key digestCertVerify svd) 
         then InError (AD_decode_error, "Finished MAC did not verify")
         else (
           let digest =
             match ocr with
             | Some cr -> Handshake.Log.send_tag (Certificate ({crt_chain = []}))
             | None -> digestServerFinished in
-          let cvd = MAC.mac cfin_key digest in
+          let cvd = HMAC.UFCMA.mac cfin_key digest in
           Handshake.Log.send (Finished ({fin_vd = cvd}));
           let ep =
             let h = admit() (* Negotiation.Fresh ({session_nego = full_mode}) *) in // review index?
@@ -508,6 +508,15 @@ let client_ServerFinished_13 hs ee ocr c cv svd digestCert digestCertVerify dige
           Epochs.incr_writer hs.epochs; // TODO update writer key properly
           hs.state := C_Complete; // full_mode (cvd,svd); do we still need to keep those?
           InAck true true )
+
+let client_ServerFinished hs f digest =           
+    let sfin_key = KeySchedule.ks_client_12_server_finished ks in 
+    if HMAC.UFCMA.verify sfin_key digest f.fin_vd
+    then (
+      hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
+      Correct (InAck false true))
+    else 
+    InError (AD_decode_error, "Finished MAC did not verify") 
 
 (* -------------------- Handshake Server ------------------------ *)
 
@@ -660,15 +669,14 @@ let server_ClientCCS hs cke digest (* clientCert *)  =
 
 (* receive ClientFinish *) 
 let server_ClientFinished hs digestCCS digestClientFinished =
-    // to be adjusted
-    let cfin_key, sfin_key = KeySchedule.ks_server_12_finished_keys hs.ks in
-    // TODO below
-    if not (equalBytes cvd f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify")
-    else (
-        // TODO we *first* need to send CCS
-        //let svd = KeySchedule.ks_server_12_server_finished ks in
-        Handshake.Log.send (Finished ({fin_vd = svd})); 
-        InAck false false )
+    let (cfin_key, sfin_key) = KeySchedule.ks_server_12_finished_keys hs.ks in
+    if HMAC.UFCMA.verify cfin_key digestCCS f.fin_vd
+    then 
+      let svd = HMAC.UFCMA.mac sfin_key digestClientFinished in
+      let unused_digest = Handshake.Log.send_CCS_tag (Finished ({fin_vd = svd})) in
+      InAck false false
+    else 
+      InError (AD_decode_error, "Finished MAC did not verify")
 
 (* send EncryptedExtensions; Certificate; CertificateVerify; Finish (1.3) *)
 val server_send_server_finished_13: hs -> i:id -> ST (result (Outgoing i))
@@ -719,9 +727,9 @@ let server_ServerFinished_13 hs n =
 
             let digestFinished = Handshake.Log.send_tag hs.log (CertificateVerify ({cv_sig = signature})) in
             let sfin_key = KeySchedule.ks_server_13_server_finished hs.ks  in
-            // TODO MAC
+            let svd = HMAC.UFCMA.mac sfin_key digestFinished in 
             let digestServerFinished = Handshake.Log.send_tag (Finished ({fin_vd = svd})) in
-
+            // we need to call KeyScheduke twice, to pass this digest
             let app_keys = KeySchedule.ks_server_13_sf ks digestServerFinished in
             let ep = 
                let h = Negotiation.Fresh ({session_nego = n}) in
@@ -744,11 +752,12 @@ let server_ClientFinished_13 hs n f digestClientFinished clientAuth=
    | None -> 
        let cfin_key = KeySchedule.ks_server_13_client_finished hs.ks in
        // TODO MACVerify digestClientFinished
-       if not (equalBytes cvd f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify")
-       else (
+       if HMAC.UFCMA.verify cfin_key digestClientFinished f.fin_vd 
+       then (
           Epochs.incr_writer hs.epochs lgref;
           hs.state := Complete;
           InAck true false  (*?*)  )
+       else InError (AD_decode_error, "Finished MAC did not verify")
 
 (* TODO: resumption *)
 assume val server_send_server_finished_res: hs -> ST unit
@@ -943,11 +952,7 @@ let recv_fragment hs #i f =
 
       | C_Wait_Finished2 digest, Some ([Finished f], [digestServerFinished]) ->
           // assert Some? pv && pv <> Some TLS_1p3 
-          let sfin_key = KeySchedule.ks_client_12_server_finished ks in 
-          if not (MAC.verify sfin_key digest f.fin_vd) then Error (AD_decode_error, "Finished MAC did not verify") 
-          else (
-            hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
-            Correct (InAck false true))
+          client_ServerFinished hs f digest 
 
       //17-03-24 how to receive binders? we need the intermediate hash 
       | S_Idle ri, Some ([ClientHello ch], [])  -> server_ClientHello hs ch
