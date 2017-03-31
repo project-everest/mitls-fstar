@@ -303,7 +303,7 @@ let rec parseExtension role b =
 	| (0x00z, 0x28z) -> // head TBD, key share
 (* SI: commented-out in CommonDH right now? 	
 	  (let is_client = (match role with | Client -> true | Server -> false) in
-	  match parseKeyShare is_client data with
+	  match CommonDH.parseKeyShare is_client data with
 	  | Correct (ks) -> Correct (E_key_share(ks))
 	  | Error(z) -> Error(z))
 *)
@@ -328,7 +328,10 @@ let rec parseExtension role b =
         | (0xffz, 0x2bz) -> // supported_versions
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "supported_verions unimplemented")
 
-(* 	  
+(*
+        | (0xffz, 0x02z) -> // TLS 1.3 draft version
+          if length data = 2 then Correct (E_draftVersion data)
+          else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate draft 1.3 version")
 	| (0xFFz, 0x01z) -> // renego (* OLD *)
 	  (match parseRenegotiationInfo data with
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
@@ -350,7 +353,6 @@ let rec parseExtension role b =
 	| (0xBBz, 0x8Fz) -> // extended padding
 	  if length data = 0 then Correct (E_extended_padding)
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended padding extension")
-
  *)
 	| _ -> // Unknown extension
 	  Correct(E_unknown_extension(head,data)))
@@ -560,7 +562,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                     correct ({l with ne_supported_point_formats = Some spf})
 *)		    
 (* not allowed for server
-            | E_signatureAlgorithms sha ->
+            | E_signature_algorithms sha ->
                 if resuming then correct l
                 else correct ({l with ne_signature_algorithms = Some (sha)})
 *)

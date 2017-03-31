@@ -30,7 +30,7 @@ assume val create:
 // a bit too restrictive: use a single Hash in any given offer
 assume val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
 
-assume val config: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.config
+assume val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.config
 assume val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot (TLSInfo.resumeInfo role)
 
 
