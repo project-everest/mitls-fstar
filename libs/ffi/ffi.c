@@ -18,7 +18,11 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
+  MITLS_FFI_ENTRY(SetCertChainFile) \
+  MITLS_FFI_ENTRY(SetPrivateKeyFile) \
+  MITLS_FFI_ENTRY(SetCAFile) \
   MITLS_FFI_ENTRY(Connect) \
+  MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \
   MITLS_FFI_ENTRY(Recv)
  
@@ -116,6 +120,68 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
 
     CAMLreturnT(int,ret);
 }
+
+int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
+{
+    CAMLparam0();
+    CAMLlocal2(config, camlfile);
+    int ret = 0;
+
+    camlfile = caml_copy_string(file);
+    caml_acquire_runtime_system();
+    config = caml_callback2_exn(*g_mitls_FFI_SetCertChainFile, state->fstar_state, camlfile);
+    if (Is_exception_result(config)) {
+        // call caml_format_exception(Extract_exception(config)) to extract the exception information
+    } else {
+        state->fstar_state = config;
+        ret = 1;
+    }
+    caml_release_runtime_system();
+
+    CAMLreturnT(int,ret);
+}
+
+int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file)
+{
+    CAMLparam0();
+    CAMLlocal2(config, camlfile);
+    int ret = 0;
+
+    camlfile = caml_copy_string(file);
+    caml_acquire_runtime_system();
+    config = caml_callback2_exn(*g_mitls_FFI_SetPrivateKeyFile, state->fstar_state, camlfile);
+    if (Is_exception_result(config)) {
+        // call caml_format_exception(Extract_exception(config)) to extract the exception information
+    } else {
+        state->fstar_state = config;
+        ret = 1;
+    }
+    caml_release_runtime_system();
+
+    CAMLreturnT(int,ret);
+}
+
+int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
+{
+    CAMLparam0();
+    CAMLlocal2(config, camlfile);
+    int ret = 0;
+
+    camlfile = caml_copy_string(file);
+    caml_acquire_runtime_system();
+    config = caml_callback2_exn(*g_mitls_FFI_SetCAFile, state->fstar_state, camlfile);
+    if (Is_exception_result(config)) {
+        // call caml_format_exception(Extract_exception(config)) to extract the exception information
+    } else {
+        state->fstar_state = config;
+        ret = 1;
+    }
+    caml_release_runtime_system();
+
+    CAMLreturnT(int,ret);
+}
+
+
 
 // Called by the host app to free a mitls_state allocated by FFI_mitls_configure()
 void FFI_mitls_close(mitls_state *state)
@@ -235,6 +301,39 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         // The result is an integer.  How to deduce the value of 'c' needed for
         // subsequent FFI.read and FFI.write is TBD.
         
+    }
+    caml_release_runtime_system();
+    CAMLreturnT(int,ret);
+}
+
+// Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
+int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal1(result);
+    int ret;
+
+    *outmsg = NULL;
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    result = caml_callback2_exn(*g_mitls_FFI_AcceptConnected, state->fstar_state, PtrToValue(callbacks));
+    if (Is_exception_result(result)) {
+        // Call caml_format_exception(Extract_exception(result)) to extract the exception text
+        ret = 0;
+    } else {
+        // AcceptConnected returns back (Connection.connection * int)
+        value connection = Field(result,0);
+        ret = Int_val(Field(result,1));
+        if (ret == 0) {
+            caml_modify_generational_global_root(&state->fstar_state, connection);
+            ret = 1;
+        } else {
+            ret = 0;
+        }
+        // The result is an integer.  How to deduce the value of 'c' needed for
+        // subsequent FFI.read and FFI.write is TBD.
+
     }
     caml_release_runtime_system();
     CAMLreturnT(int,ret);
