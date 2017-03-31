@@ -13,7 +13,7 @@ module TLSOutline
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 open FStar.Monotonic.RRef
 open FStar.Ghost
 
@@ -84,7 +84,7 @@ type c_log_extension (#a:Type) (s0:erased (Seq.seq a)) (s1:erased (Seq.seq a)) :
 //    e.g., when generating new connections we will want to inspect the connection_log 
 assume val connection_log : m_rref tls_region (erased (Seq.seq connection)) c_log_extension
 assume type c_log_inv : hh -> Type
-type is_conn (c:connection) (h:hh) = b2t (SeqProperties.mem c (reveal (sel h connection_log)))
+type is_conn (c:connection) (h:hh) = b2t (Seq.mem c (reveal (sel h connection_log)))
 //A conn is a connection known to be in the connection log
 type conn = c:connection{witnessed (is_conn c)}
 
@@ -110,7 +110,7 @@ assume val c_log_inv_separation: c1:connection -> c2:connection{c_id c1 <> c_id 
 (* epoch partnering is a static property *)
 assume type partnered_epochs: epoch -> epoch -> Type
 assume val epoch_ofT: connection -> hh -> Tot (option epoch)         //the current epoch of a connection
-let epoch_ofT' (c:connection) (h:hh{is_Some (epoch_ofT c h)}) = Some.v (epoch_ofT c h)
+let epoch_ofT' (c:connection) (h:hh{Some? (epoch_ofT c h)}) = Some?.v (epoch_ofT c h)
 assume val epoch_assigned_to: epoch -> hh -> Tot (option connection) //the stable assignment of an epoch to a connection
 type was_assigned_to (e:epoch) (c:connection) (h:hh) = (epoch_assigned_to e h == Some c)
 assume val epoch_of: c:conn -> ST (option epoch)
@@ -118,13 +118,13 @@ assume val epoch_of: c:conn -> ST (option epoch)
   (ensures (fun h0 e h1 -> 
     h0=h1 /\
     epoch_ofT c h1 = e /\
-    (is_Some e ==> witnessed (was_assigned_to (Some.v e) c))))
+    (Some? e ==> witnessed (was_assigned_to (Some?.v e) c))))
 
 (* connection partnering is state dependent ... it is not necessarily stable
      But, we should be able to prove that it is symmetric *)
 type partnered_conn (c1:connection) (c2:connection) (h:hh) = 
-  is_Some (epoch_ofT c1 h) /\
-  is_Some (epoch_ofT c2 h) /\
+  Some? (epoch_ofT c1 h) /\
+  Some? (epoch_ofT c2 h) /\
   partnered_epochs (epoch_ofT' c1 h) (epoch_ofT' c2 h)
 
 (* relating index of the peer to the epoch's peer *)
@@ -168,7 +168,7 @@ type initial (r:role) (ns:_) (cfg:_) (resume:_) (cn: connection) (h:hh) =
     c_resume cn = resume /\
     c_config cn = cfg /\
     witnessed (is_conn cn) /\
-    is_Some (epoch_ofT cn h) /\
+    Some? (epoch_ofT cn h) /\
     is_initial_epoch (epoch_ofT' cn h)
 
 (* lemma about the initial epoch *)
@@ -241,7 +241,7 @@ type ioresult_w =
     | WriteAgainFinishing // the outgoing epoch changed & more to send to finish the handshake
     | WriteAgainClosing   // we are tearing down the connection & must still send an alert
 
-type ioresult_o = r:ioresult_w { is_Written r \/ is_WriteError r }
+type ioresult_o = r:ioresult_w { Written? r \/ WriteError? r }
 
 
 type modifies_c c h0 h1 =
@@ -262,27 +262,27 @@ assume val write: c:conn -> i:id -> rg:Range.frange i -> data: DataStream.fragme
   (requires (fun h0 ->
     c_log_inv h0 /\
     writableT c h0 /\            //TODO: make it so that writableT ==> implying epochsT c h0 is not empty
-    is_Some (epoch_ofT c h0) /\  
+    Some? (epoch_ofT c h0) /\  
     i = epochId (epoch_ofT' c h0)))
   (ensures (fun h0 r h1 ->
     c_log_inv h1 /\
     modifies_c c h0 h1 /\            //modified at most the last epoch
     epochsT c h1 = epochsT c h0 /\ //we didn't move to a new epoch
-    is_Some (epoch_ofT c h0) /\ 
+    Some? (epoch_ofT c h0) /\ 
     i = epochId (epoch_ofT' c h0) /\
    ((fun (current:epoch{current=epoch_ofT' c h0}) -> (* TODO: fix ugly encoded let *)
      (fun (log0:Seq.seq (DataStream.delta i))
         (log1:Seq.seq (DataStream.delta i)) -> 
 	(r = Written ==> (
-	  log1 = SeqProperties.snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId?
+	  log1 = Seq.snoc log0 (DataStream.Data data) /\   // should it be conditioned on authId?
 	  readableT c h1 = readableT c h0 /\ 
 	  readseqT current h1 = readseqT current h0   /\
 	  writableT c h1 = writableT c h0  ))
         /\
-	(is_WriteError r ==> (
+	(WriteError? r ==> (
   	  (log1 = (match WriteError.al r with 
 		       | None -> log0
-	               | Some v -> SeqProperties.snoc log0 (DataStream.Alert v))) /\
+	               | Some v -> Seq.snoc log0 (DataStream.Alert v))) /\
 	  ~(readableT c h1) 
 	  /\ readseqT current h1 = readseqT current h0 /\
 	  ~(writableT c h1)
@@ -325,14 +325,14 @@ type ioresult_r (i:id) =
     | ReadAgainFinishing
     | ReadFinished
 
-type ioresult_i (i:id) = i:ioresult_r i{is_Read i \/ is_ReadError i \/ is_CertQuery i \/ is_CompletedFirst i \/ is_CompletedSecond i \/ is_DontWrite i}
+type ioresult_i (i:id) = i:ioresult_r i{Read? i \/ ReadError? i \/ CertQuery? i \/ CompletedFirst? i \/ CompletedSecond? i \/ DontWrite? i}
 assume val dual : id -> Tot id //TODO: move this to TLSInfo?
 
 assume val read: c:conn -> i:id -> ST (ioresult_i i)              // unclear whether we should pass i in.
   (requires (fun h0 -> 
     c_log_inv h0 /\
     readableT c h0 /\                   //TODO: this should imply the next line
-    is_Some (epoch_ofT c h0) /\  
+    Some? (epoch_ofT c h0) /\  
     i = dual (epochId (epoch_ofT' c h0))))
   (ensures (fun h0 r h1 ->
     c_log_inv h1 /\
@@ -505,7 +505,7 @@ let client0RTT_13 tcp config_0RTT request =
 (*   let c = accept tcp cfg0 in  *)
 (*   let query, id1 = // two branches, depending on 0RTT succeeding or not *)
 (*     match read c with  *)
-(*     | ZeroData (| _, request |) -> parse request, id1 *)
+(*     | ZeroData ( _, request ) -> parse request, id1 *)
 (*       match read c with *)
 (*       | Complete id1 -> request, id1 *)
 (*       | _ -> failwith "dunno" *)
@@ -513,7 +513,7 @@ let client0RTT_13 tcp config_0RTT request =
 (*       // for the time being, we do not signal 0RTT loss; *)
 (*       // this information is available somewhere in id1 *)
 (*       match read c with  *)
-(*       | ZeroData (| _, request |) -> parse request, id1 *)
+(*       | ZeroData ( _, request ) -> parse request, id1 *)
 (*       | _ -> failwith "dunno"  *)
 (*     | _ -> failwith "dunno" in *)
 

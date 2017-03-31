@@ -13,7 +13,6 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties
 
 open Platform.Bytes
 open Platform.Error
@@ -28,10 +27,10 @@ open Range
    check its usage restrictions *)
 
 
-type id = i:id { is_MtE (aeAlg_of_id i) } 
-let alg (i:id) = MtE._0 (aeAlg_of_id i)
+type id = i:id { MtE? (aeAlg_of_id i) } 
+let alg (i:id) = MtE?._0 (aeAlg_of_id i)
 
-type idB = i:id { is_Block (alg i) }
+type idB = i:id { Block? (alg i) }
 
 type cipher (i:id) = 
   b:bytes { let l = length b in
@@ -47,7 +46,7 @@ let explicitIV (i:id) =
 //let clen (i:id) (plen:nat) = if explicitIV i then plen + blockSize i else plen
 
 
-let blockSize (i:idB) = CoreCrypto.blockSize (Block._0 (alg i))
+let blockSize (i:idB) = CoreCrypto.blockSize (Block?._0 (alg i))
 type block (i:idB) = lbytes (blockSize i)
 type iv (i:idB) = block i
 
@@ -58,10 +57,10 @@ let lblock (bl:nat) (c:bytes { length c >= bl }) : lbytes bl =
 //16-01-13 this can't work as bl appears in the inferred result type 
 let lastblock (i:idB) = 
   (fun (bl:nat) (c:cipher i { length c >= bl}) -> lblock bl c) 
-  (CoreCrypto.blockSize (Block._0 (alg i)))
+  (CoreCrypto.blockSize (Block?._0 (alg i)))
 
-//let lastblock (i:idB) (c:cipher i { length c >= CoreCrypto.blockSize (Block._0 (alg i))}) : block i =
-//  lblock (CoreCrypto.blockSize (Block._0 (alg i))) c 
+//let lastblock (i:idB) (c:cipher i { length c >= CoreCrypto.blockSize (Block?._0 (alg i))}) : block i =
+//  lblock (CoreCrypto.blockSize (Block?._0 (alg i))) c 
 
 (* abstract *) type key (i:id) = bytes
 // for the reduction to non-agile algorithms, we would use
@@ -73,9 +72,9 @@ let lastblock (i:idB) =
 // JP: disabled for testing purposes
 // private
 noeq type localState (region:rid): i:id -> Type = 
-  | StreamState:   i:id{ is_Stream (alg i) }                         -> s: CoreCrypto.cipher_stream -> localState region i
-  | OldBlockState: i:id{ is_Block (alg i) /\ ~(explicitIV i) } -> iv i -> localState region i
-  | NewBlockState: i:id{ is_Block (alg i) /\ explicitIV i  }          -> localState region i
+  | StreamState:   i:id{ Stream? (alg i) }                         -> s: CoreCrypto.cipher_stream -> localState region i
+  | OldBlockState: i:id{ Block? (alg i) /\ ~(explicitIV i) } -> iv i -> localState region i
+  | NewBlockState: i:id{ Block? (alg i) /\ explicitIV i  }          -> localState region i
 
 // type dplain (i:id) (ad: LHAEPlain.adata i) (c:cipher i) = 
 //   Encode.plain i ad (cipherRangeClass i (length c))
@@ -216,7 +215,7 @@ let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
         cipher *)
 
     | OldBlockState _ iv -> 
-         let a = (Block._0 (alg i)) in 
+         let a = (Block?._0 (alg i)) in 
          let cipher = cbcenc a k iv d in
          s := OldBlockState i (lastblock i cipher);
          cipher
@@ -231,7 +230,7 @@ let enc_int (i:id) (e:encryptor i) tlen d = // multiplexing concrete encryptions
 *) 
 
     | NewBlockState _ -> 
-         let a = (Block._0 (alg i)) in 
+         let a = (Block?._0 (alg i)) in 
          let iv = CoreCrypto.random (blockSize i) in
          cbcenc a k iv d 
 

@@ -1,6 +1,6 @@
 (*--build-config
-    options:--prims ../tls-ml/prims.fst --codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --verify_module StAEAD_HHSample --admit_fsi Seq --admit_fsi StatefulPlain --admit_fsi LHAEPlain --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Map --admit_fsi Seq --admit_fsi HyperHeap --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 10;
-    other-files:../../../FStar/lib/FStar.String.fst ../../../FStar/lib/FStar.List.fst ../../../FStar/lib/FStar.FunctionalExtensionality.fst ../../../FStar/lib/FStar.Classical.fst ../../../FStar/lib/FStar.Set.fsi ../../../FStar/lib/FStar.Set.fst ../../../FStar/lib/FStar.Heap.fst ../../../FStar/lib/FStar.ST.fst ../../../FStar/lib/map.fsi ../../../FStar/lib/hyperheap2.fsi ../../../FStar/lib/seq.fsi ../../../FStar/lib/FStar.SeqProperties.fst ../../../FStar/lib/FStar.Int64.fst ../../../FStar/contrib/Platform/fst/Bytes.fst ../../../FStar/contrib/Platform/fst/Date.fst ../../../FStar/contrib/Platform/fst/Error.fst ../../../FStar/contrib/Platform/fst/Tcp.fst ../../../FStar/contrib/CoreCrypto/fst/CoreCrypto.fst ../../../FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.p.fst Nonce.p.fst TLSConstants.p.fst RSAKey.p.fst DHGroup.p.fst ECGroup.p.fst CommonDH.p.fst PMS.p.fst HASH.p.fst HMAC.p.fst ../tls-lax/Sig.p.fst UntrustedCert.p.fsti Cert.p.fsti TLSInfo.p.fst TLSExtensions.p.fst TLSPRF.p.fst Range.p.fst DataStream.p.fst StatefulPlain.p.fsti LHAEPlain.p.fst AEAD_GCM.fst StatefulLHAE.fst
+    options:--prims ../tls-ml/prims.fst --codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib Seq.Properties --verify_module StAEAD_HHSample --admit_fsi Seq.Base --admit_fsi StatefulPlain --admit_fsi LHAEPlain --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Map --admit_fsi Seq.Base --admit_fsi HyperHeap --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 10;
+    other-files:../../../FStar/lib/FStar.String.fst ../../../FStar/lib/FStar.List.fst ../../../FStar/lib/FStar.FunctionalExtensionality.fst ../../../FStar/lib/FStar.Classical.fst ../../../FStar/lib/FStar.Set.fsi ../../../FStar/lib/FStar.Set.fst ../../../FStar/lib/FStar.Heap.fst ../../../FStar/lib/FStar.ST.fst ../../../FStar/lib/map.fsi ../../../FStar/lib/hyperheap2.fsi ../../../FStar/lib/seq.fsi ../../../FStar/lib/FStar.Seq.Properties.fst ../../../FStar/lib/FStar.Int64.fst ../../../FStar/contrib/Platform/fst/Bytes.fst ../../../FStar/contrib/Platform/fst/Date.fst ../../../FStar/contrib/Platform/fst/Error.fst ../../../FStar/contrib/Platform/fst/Tcp.fst ../../../FStar/contrib/CoreCrypto/fst/CoreCrypto.fst ../../../FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.p.fst Nonce.p.fst TLSConstants.p.fst RSAKey.p.fst DHGroup.p.fst ECGroup.p.fst CommonDH.p.fst PMS.p.fst HASH.p.fst HMAC.p.fst ../tls-lax/Sig.p.fst UntrustedCert.p.fsti Cert.p.fsti TLSInfo.p.fst TLSExtensions.p.fst TLSPRF.p.fst Range.p.fst DataStream.p.fst StatefulPlain.p.fsti LHAEPlain.p.fst AEAD_GCM.fst StatefulLHAE.fst
   --*)
 
 module StAEAD_HHSample
@@ -60,10 +60,10 @@ let wr () = snd ( both () )
 let rd () = fst ( both () )
 
 // Required to avoid unification failure?
-val access: e: entry i { Entry.ad e = ad /\ length (Entry.c e) = clen } ->
+val access: e: entry i { Entry?.ad e = ad /\ length (Entry?.c e) = clen } ->
   Tot (fragment i ad rg)
 let access e =
-  Entry.p e
+  Entry?.p e
 
 (* we need our own invariant:
    the first n Entries are those we protected
@@ -80,11 +80,11 @@ val protect: inputs: list (fragment i ad rg) ->
        /\ HyperHeap.modifies (Set.singleton ( root )) h0 h1 //root was StWriter.region (wr () )
        // both still missing type annotations
        // /\ inputs = List.mapT
-       //   #(e: entry i) // { Entry.ad e = ad /\ length (Entry.c e) = clen })
+       //   #(e: entry i) // { Entry?.ad e = ad /\ length (Entry?.c e) = clen })
        //   #(fragment i ad rg)
        //   access
        //   (sel h1 (StWriter.log wr))
-       // /\ cs = List.mapT #_ #block (fun e -> Entry.c e) (sel h1 (StWriter.log wr))
+       // /\ cs = List.mapT #_ #block (fun e -> Entry?.c e) (sel h1 (StWriter.log wr))
       ))
 
 
@@ -106,7 +106,7 @@ let rec protect (inputs: list (fragment i ad rg)) =
                   (*let n1 = Seq.length !(StWriter.log wr ) in*)
                   (*cons_length !(StWriter.log wr);*)
                   (*cut (forall (n:nat) . (n <= n1 + List.length inputs' ==> is_seqn n));*)
-                  (*cut (exists fpe. List.mem fpe fp1 /\ FPEntry.i fpe = i /\ FPEntry.w fpe = wr);*)
+                  (*cut (exists fpe. List.mem fpe fp1 /\ FPEntry?.i fpe = i /\ FPEntry?.w fpe = wr);*)
                   let bs = protect inputs' in
                   (*admit(); *)
                   // otherwise ``Unknown assertion failed''

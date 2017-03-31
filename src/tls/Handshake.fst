@@ -6,7 +6,7 @@ open FStar.HyperStack
 //FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
 //AR: Yes ! Totally agree.
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 open FStar.Set  
 
 open Platform.Error
@@ -276,9 +276,9 @@ type hs =
 
 let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.log h
 
-let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS.r s)
+let stateType (s:hs) = seq (epoch s.region s.nonce) * handshake_state (HS?.r s)
 
-let stateT (s:hs) (h:HyperStack.mem) : stateType s = (logT s h, sel h s.state)
+let stateT (s:hs) (h:HyperStack.mem) : GTot (stateType s) = (logT s h, sel h s.state)
 
 let non_empty h s = Seq.length (logT s h) > 0
 
@@ -330,12 +330,12 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
  
-assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS.r s) -> Type0
+assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> handshake_state (HS?.r s) -> Type0
 
 let hs_inv (s:hs) (h: HyperStack.mem) = 
-  hs_invT s (logT s h) (sel h (HS.state s))  //An abstract invariant of HS-internal state
+  hs_invT s (logT s h) (sel h (HS?.state s))  //An abstract invariant of HS-internal state
   /\ Epochs.containsT s.log h                //Nothing deep about these next two, since they can always 
-  /\ HyperHeap.contains_ref s.state.ref (HyperStack.HS.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
+  /\ HyperHeap.contains_ref s.state.ref (HyperStack.HS?.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 let iT (s:hs) rw (h:HyperStack.mem) =
     match rw with
@@ -350,16 +350,16 @@ let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
 
 //Here's a framing on stateT connecting it to the region discipline
 let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
-  : Lemma (requires HH.modifies_just mods (HyperStack.HS.h h0) (HyperStack.HS.h h1)
-		    /\ Map.contains (HyperStack.HS.h h0) s.region
+  : Lemma (requires HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
+		    /\ Map.contains (HyperStack.HS?.h h0) s.region
 		    /\ not (Set.mem s.region mods))
           (ensures stateT s h0 = stateT s h1)
   = ()	                               
 
 //This is probably the framing lemma that a client of this module will want to use
 let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
-  : Lemma (requires HH.modifies_just mods (HyperStack.HS.h h0) (HyperStack.HS.h h1)
-		    /\ Map.contains (HyperStack.HS.h h0) s.region
+  : Lemma (requires HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
+		    /\ Map.contains (HyperStack.HS?.h h0) s.region
 		    /\ not (Set.mem s.region mods))
           (ensures stateT s h0 = stateT s h1
 		   /\ iT s rw h0 = iT s rw h1)
@@ -377,7 +377,7 @@ val i: s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> h0 == h1 
 		      /\ i = iT s rw h1
-		      /\ Epochs.get_ctr_post (HS.log s) rw h0 i h1))
+		      /\ Epochs.get_ctr_post (HS?.log s) rw h0 i h1))
 let i (HS #r0 _ _ _ _ epochs _) rw =
   match rw with
   | Reader -> Epochs.get_reader epochs
@@ -414,8 +414,8 @@ type outgoing (i:id) (* initial index *) =
       outgoing i 
   | OutError: error -> outgoing i       // usage? in case something goes wrong when preparing messages. 
 
-let out_next_keys (#i:id) (r:outgoing i) = is_Outgoing r && Outgoing.next_keys r
-let out_complete (#i:id) (r:outgoing i)  = is_Outgoing r && Outgoing.complete r
+let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r && Outgoing?.next_keys r
+let out_complete (#i:id) (r:outgoing i)  = Outgoing? r && Outgoing?.complete r
 
 type incoming = 
   // the fragment is accepted, and...
@@ -427,8 +427,8 @@ type incoming =
   | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
   | InError: error -> incoming // how underspecified should it be?
 
-let in_next_keys (r:incoming) = is_InAck r && InAck.next_keys r
-let in_complete (r:incoming)  = is_InAck r && InAck.complete r
+let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
+let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 
 (* Handshake API: INTERNAL Callbacks, hidden from API *)
@@ -465,7 +465,7 @@ let client_handle_server_hello (HS #r0 r res cfg nonce lgref hsref) msgs =
       hsref := {!hsref with
 	       hs_nego = Some n;
 	       hs_state = C(C_HelloReceived n)};
-      InAck (is_Some keys) false)
+      InAck (Some? keys) false)
 
 
 let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result hashAlg) =
@@ -481,7 +481,7 @@ let rec list_sigHashAlg_is_list_tuple_sig_hash: list sigHashAlg -> Tot (list (si
   | [] -> []
   | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd) :: (list_sigHashAlg_is_list_tuple_sig_hash tl)
 
-val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{is_None csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
+val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
 let to_be_signed pv role csr tbs =
   match pv, csr with
   | TLS_1p3, None ->
@@ -516,7 +516,7 @@ val processServerHelloDone: cfg:config -> nego:nego -> ks:KeySchedule.ks -> log:
 let processServerHelloDone cfg n ks log msgs opt_msgs =
   match msgs with
   | [(Certificate(c),_); (ServerKeyExchange(ske),_); (ServerHelloDone,_)]
-    when (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
+    when (n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
      if (not cfg.check_peer_certificate) || Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file then
        let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
@@ -597,7 +597,7 @@ val client_handle_server_hello_done: hs -> list (hs_msg * bytes) -> list (hs_msg
 let client_handle_server_hello_done (HS #r0 r res cfg id lgref hsref) msgs opt_msgs =
   match (!hsref).hs_state with
   | C(C_HelloReceived n) when 
-     (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
+     (n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg &&
       (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) -> 
      (match processServerHelloDone cfg n (!hsref).hs_ks (!hsref).hs_log msgs opt_msgs with
       | Correct [(ClientKeyExchange(cke),b1)] ->
@@ -698,7 +698,7 @@ let processServerFinished_13 cfg n ks log msgs =
        rem,false in
     match rem with
     | [(Certificate c,_); (CertificateVerify cv,_); (Finished f,_)]
-     when (is_Some n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
+     when (Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) ->
      if (not cfg.check_peer_certificate) || Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file then
        let _ = log @@ Certificate(c) in
        let Some cs_sigalg = n.n_sigAlg in
@@ -794,14 +794,14 @@ let server_handle_client_hello (HS #r0 r res cfg id lgref hsref) msgs =
                hs_buffers = {(!hsref).hs_buffers with
                  hs_outgoing = shb;
                  // Increment writer after sending server hello if 1.3 used
-                 hs_outgoing_epochchange = (if is_None keys then None else Some Writer);};
+                 hs_outgoing_epochchange = (if None? keys then None else Some Writer);};
 	       hs_nego = Some n;
 	       hs_state = S(S_HelloSent n)};
        InAck false false)
     
 
 let prepareServerHelloDone cfg n ks log = 
-    if (n.n_protocol_version <> TLS_1p3 && is_Some n.n_sigAlg &&
+    if (n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg &&
        (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)) 
     then 
     match Cert.lookup_chain cfg.cert_chain_file with
@@ -962,7 +962,7 @@ let server_send_server_finished (HS #r0 r res cfg id lgref hsref) =
 
 
 let prepareServerFinished_13 cfg n ks log = 
-    if (n.n_protocol_version = TLS_1p3 && is_Some n.n_sigAlg &&
+    if (n.n_protocol_version = TLS_1p3 && Some? n.n_sigAlg &&
        (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE))
     then 
     let ee = {ee_extensions = []} in
@@ -1113,11 +1113,11 @@ val init: r0:rid -> r: role -> cfg:config -> resume: resume_id r ->
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
-    fresh_subregion r0 (HS.region s) h0 h1 /\
+    fresh_subregion r0 (HS?.region s) h0 h1 /\
     hs_inv s h1 /\
-    HS.r s = r /\
-    HS.resume s = resume /\
-    HS.cfg s = cfg /\
+    HS?.r s = r /\
+    HS?.resume s = resume /\
+    HS?.cfg s = cfg /\
     logT s h1 = Seq.createEmpty ))
 let init r0 r cfg res = 
     let id = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
@@ -1132,23 +1132,23 @@ let mods s h0 h1 =
 let modifies_internal h0 s h1 =
     hs_inv s h1 /\
     mods s h0 h1 /\ 
-    modifies_rref s.region !{as_ref s.state} (HyperStack.HS.h h0) (HyperStack.HS.h h1)
+    modifies_rref s.region !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
 
 // Idle client starts a full handshake on the current connection
 val rehandshake: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS.r s = Client))
+  (requires (fun h -> hs_inv s h /\ HS?.r s = Client))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
 
 // Idle client starts an abbreviated handshake resuming the current session
 val rekey: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS.r s = Client))
+  (requires (fun h -> hs_inv s h /\ HS?.r s = Client))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 let rekey s c = Platform.Error.unexpected "rekey: not yet implemented"
 
 // (Idle) Server requests an handshake
 val request: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS.r s = Server))
+  (requires (fun h -> hs_inv s h /\ HS?.r s = Server))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 let request s c = Platform.Error.unexpected "request: not yet implemented"
 
@@ -1182,7 +1182,7 @@ val next_fragment: i:id -> s:hs -> ST (outgoing i)
     let es = logT s h0 in
     let j = iT s Writer h0 in 
     hs_inv s h0 /\
-    (if j = -1 then is_PlaintextID i else let e = Seq.index es j in i = epoch_id e)   
+    (if j = -1 then PlaintextID? i else let e = Seq.index es j in i = epoch_id e)   
   ))
   (ensures (next_fragment_ensures s))
 let rec next_fragment i hs = 
@@ -1229,13 +1229,13 @@ let rec next_fragment i hs =
           hsref := {!hsref with hs_state = C (C_PostHS)};
           Epochs.incr_writer lgref; // Switch to ATK writer
           Outgoing None false true true
-       | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some false) ->
+       | S (S_HelloSent n) when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
           server_send_server_hello_done hs;
           next_fragment i hs
-       | S (S_HelloSent n) when (is_Some pv && pv <> Some TLS_1p3 && res = Some true) ->
+       | S (S_HelloSent n) when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
           server_send_server_finished_res hs;
           next_fragment i hs
-       | S (S_HelloSent n) when (is_Some pv && pv = Some TLS_1p3) ->
+       | S (S_HelloSent n) when (Some? pv && pv = Some TLS_1p3) ->
           server_send_server_finished_13 hs;
           next_fragment i hs
        | S (S_FinishedReceived n) ->
@@ -1324,7 +1324,7 @@ let recv_fragment hs #i f =
 			          (ServerKeyExchange(ske),l')::
 				  (ServerHelloDone,l'')::
 				  hsl 
-	 when (is_Some pv && pv <> Some TLS_1p3 && res = Some false &&
+	 when (Some? pv && pv <> Some TLS_1p3 && res = Some false &&
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 			   client_handle_server_hello_done hs 
@@ -1337,7 +1337,7 @@ let recv_fragment hs #i f =
 			          (CertificateRequest(cr),l'')::
 				  (ServerHelloDone,l''')::
 				  hsl 
-	 when (is_Some pv && pv <> Some TLS_1p3 && res = Some false &&
+	 when (Some? pv && pv <> Some TLS_1p3 && res = Some false &&
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 			   client_handle_server_hello_done hs 
@@ -1347,7 +1347,7 @@ let recv_fragment hs #i f =
 			   [(CertificateRequest(cr),l'')]
        
        | C (C_CCSReceived n cv), (Finished(f),l)::hsl 
-       	 when (is_Some pv && pv <> Some TLS_1p3) ->
+       	 when (Some? pv && pv <> Some TLS_1p3) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 			   client_handle_server_finished hs 
 			   [(Finished(f),l)]
@@ -1357,7 +1357,7 @@ let recv_fragment hs #i f =
 			          (CertificateVerify(cv),l3)::
 				  (Finished(f),l4)::
 				  [] 
-	 when (is_Some pv && pv = Some TLS_1p3 && 
+	 when (Some? pv && pv = Some TLS_1p3 && 
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
 			   client_handle_server_finished_13 hs 
@@ -1371,7 +1371,7 @@ let recv_fragment hs #i f =
 			          (CertificateVerify(cv),l3)::
 				  (Finished(f),l4)::
 				  [] 
-	 when (is_Some pv && pv = Some TLS_1p3 && 
+	 when (Some? pv && pv = Some TLS_1p3 && 
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
 			   client_handle_server_finished_13 hs 
@@ -1386,20 +1386,20 @@ let recv_fragment hs #i f =
 			   server_handle_client_hello hs
 			   [(ClientHello(ch),l)]
        | S (S_CCSReceived s), (Finished(f),l)::hsl 
-         when (is_Some pv && pv <> Some TLS_1p3) ->
+         when (Some? pv && pv <> Some TLS_1p3) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = hsl}};
 			   server_handle_client_finished hs
 			   [(Finished(f),l)]
 
        | S (S_FinishedSent s), (Finished(f),l')::[]  
-         when (is_Some pv && pv = Some TLS_1p3) ->
+         when (Some? pv && pv = Some TLS_1p3) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
 	   server_handle_client_finished_13 hs [(Finished(f),l')] []
 
        | S (S_FinishedSent s), (Certificate(c),l2)::
 			       (CertificateVerify(cv),l3)::
 			       (Finished(f),l4)::[]  
-         when (is_Some pv && pv = Some TLS_1p3) ->
+         when (Some? pv && pv = Some TLS_1p3) ->
 	   hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
 	   server_handle_client_finished_13 hs [(Finished(f),l4)] [(Certificate(c),l2);(CertificateVerify(cv),l3)]
 
@@ -1412,7 +1412,7 @@ val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge 
   (requires (hs_inv s)) // could require pv <= 1p2
   (ensures (fun h0 result h1 ->
     recv_ensures s h0 result h1 /\
-    (is_InError result \/ result = InAck true false)
+    (InError? result \/ result = InAck true false)
     ))
 let recv_ccs hs =
     let b = 
@@ -1435,7 +1435,7 @@ let recv_ccs hs =
         [(SessionTicket(st),l)]
     | S (S_HelloDone n), 
       (ClientKeyExchange(cke),l)::[] 
-      when (is_Some pv && pv <> Some TLS_1p3 && 
+      when (Some? pv && pv <> Some TLS_1p3 && 
             (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
       server_handle_client_ccs hs
@@ -1443,7 +1443,7 @@ let recv_ccs hs =
     | S (S_HelloDone n), 
       (Certificate(c),l)::
       (ClientKeyExchange(cke),l')::[] 
-      when (c.crt_chain = [] && is_Some pv && pv <> Some TLS_1p3 && 
+      when (c.crt_chain = [] && Some? pv && pv <> Some TLS_1p3 && 
             (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
       server_handle_client_ccs hs
@@ -1452,7 +1452,7 @@ let recv_ccs hs =
       (Certificate(c),l)::
       (ClientKeyExchange(cke),l')::
       (CertificateVerify(cv),l'')::[]
-      when (is_Some pv && pv <> Some TLS_1p3 && 
+      when (Some? pv && pv <> Some TLS_1p3 && 
             (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming_parsed = []}};
       server_handle_client_ccs hs
@@ -1465,5 +1465,5 @@ let recv_ccs hs =
 val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
-    (is_InAck result \/ is_InError result) /\ recv_ensures s h0 result h1 ))
+    (InAck? result \/ InError? result) /\ recv_ensures s h0 result h1 ))
 let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"

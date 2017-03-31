@@ -1,4 +1,4 @@
-//../../.fstar/bin/fstar.exe --lax --universes --explicit_deps --use_native_int --codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib SeqProperties --codegen-lib HyperHeap  --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3timeout 20 --__temp_no_proj Handshake --__temp_no_proj Connection --verify_module Nego ../../.fstar/ulib/FStar.Ghost.fst ../../.fstar/ulib/FStar.FunctionalExtensionality.fst ../../.fstar/ulib/FStar.Classical.fst ../../.fstar/ulib/FStar.Set.fst ../../.fstar/ulib/FStar.Heap.fst ../../.fstar/ulib/FStar.Map.fst ../../.fstar/ulib/FStar.List.Tot.fst ../../.fstar/ulib/FStar.HyperHeap.fst ../../.fstar/ulib/hyperheap/FStar.ST.fst ../../.fstar/ulib/hyperheap/FStar.All.fst ../../.fstar/ulib/FStar.Monotonic.RRef.fst ../../.fstar/ulib/FStar.Char.fsti ../../.fstar/ulib/FStar.String.fsti ../../.fstar/ulib/FStar.List.fst ../../.fstar/ulib/FStar.ListProperties.fst ../../.fstar/ulib/FStar.Seq.fst ../../.fstar/ulib/FStar.SeqProperties.fst ../../.fstar/ulib/FStar.Float.fsti ../../.fstar/ulib/FStar.IO.fsti ../../.fstar/ulib/FStar.UInt8.fst ../../.fstar/ucontrib/Platform/fst/Platform.Bytes.fst ../../.fstar/ucontrib/Platform/fst/Platform.Date.fst ../../.fstar/ucontrib/Platform/fst/Platform.Error.fst ../../.fstar/ucontrib/Platform/fst/Platform.Tcp.fst ../../.fstar/ucontrib/CoreCrypto/fst/CoreCrypto.fst ../../.fstar/ucontrib/CoreCrypto/fst/DHDB.fst         IdealFlags.fst MonotoneSeq.fst MonotoneMap.fst TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.fst ECGroup.fst CommonDH.fst PMS.fst HASH.fst HMAC.fst Signature.fst Cert.fst TLSInfo.fst IdNonce.fst TLSExtensions.fst experiments/Nego.fst
+//../../.fstar/bin/fstar.exe --lax --universes --explicit_deps --use_native_int --codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib Seq.Properties --codegen-lib HyperHeap  --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --verify_module Nego ../../.fstar/ulib/FStar.Ghost.fst ../../.fstar/ulib/FStar.FunctionalExtensionality.fst ../../.fstar/ulib/FStar.Classical.fst ../../.fstar/ulib/FStar.Set.fst ../../.fstar/ulib/FStar.Heap.fst ../../.fstar/ulib/FStar.Map.fst ../../.fstar/ulib/FStar.List.Tot.Base.fst ../../.fstar/ulib/FStar.HyperHeap.fst ../../.fstar/ulib/hyperheap/FStar.ST.fst ../../.fstar/ulib/hyperheap/FStar.All.fst ../../.fstar/ulib/FStar.Monotonic.RRef.fst ../../.fstar/ulib/FStar.Char.fsti ../../.fstar/ulib/FStar.String.fsti ../../.fstar/ulib/FStar.List.Tot.Properties.fst ../../.fstar/ulib/FStar.List.Tot.fst ../../.fstar/ulib/FStar.List.fst ../../.fstar/ulib/FStar.Seq.Base.fst ../../.fstar/ulib/FStar.Seq.Properties.fst ../../.fstar/ulib/FStar.Seq.fst ../../.fstar/ulib/FStar.Float.fsti ../../.fstar/ulib/FStar.IO.fsti ../../.fstar/ulib/FStar.UInt8.fst ../../.fstar/ucontrib/Platform/fst/Platform.Bytes.fst ../../.fstar/ucontrib/Platform/fst/Platform.Date.fst ../../.fstar/ucontrib/Platform/fst/Platform.Error.fst ../../.fstar/ucontrib/Platform/fst/Platform.Tcp.fst ../../.fstar/ucontrib/CoreCrypto/fst/CoreCrypto.fst ../../.fstar/ucontrib/CoreCrypto/fst/DHDB.fst         IdealFlags.fst MonotoneSeq.fst MonotoneMap.fst TLSError.fst TLSConstants.fst Nonce.fst RSAKey.fst DHGroup.fst ECGroup.fst CommonDH.fst PMS.fst HASH.fst HMAC.fst Signature.fst Cert.fst TLSInfo.fst IdNonce.fst TLSExtensions.fst experiments/Nego.fst
 
 
 module Nego
@@ -19,7 +19,7 @@ type config = {
     maxVer: protocolVersion;
     ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
     compressions: l:list compression{ List.Tot.length l <= 1 };
-    namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
+    namedGroups: list (x:namedGroup{SEC? x \/ FFDHE? x});
     signatureAlgorithms: list sigHashAlg;
 
     (* Handshake specific options *)
@@ -66,7 +66,7 @@ type offers1 = {
   co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
   co_compressions:(cl:list compression{List.Tot.length cl < 256});
   co_extensions:option (ce:list extension{List.Tot.length ce < 256});
-  co_namedGroups: list (x:namedGroup{is_SEC x \/ is_FFDHE x});
+  co_namedGroups: list (x:namedGroup{SEC? x \/ FFDHE? x});
   //MK: instead of extension containing key shares, we return list of named groups
 }
 

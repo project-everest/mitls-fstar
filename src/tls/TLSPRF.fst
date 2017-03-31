@@ -1,7 +1,6 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 (* STATUS : JK : assumed two arrays because, has to be fixed *)
 
-#light "off"
 
 module TLSPRF
 
@@ -36,13 +35,9 @@ let rec apply_prf secret seed nb res n  =
 val ssl_prf: bytes -> bytes -> int -> Tot bytes
 let ssl_prf secret seed nb = apply_prf secret seed nb empty_bytes  0 
 
-(*
-let ssl_sender_client = abytes [|0x43z; 0x4Cz; 0x4Ez; 0x54z|]
-let ssl_sender_server = abytes [|0x53z; 0x52z; 0x56z; 0x52z|]
- *)
-(* JK : Temporary fix *)
-assume val ssl_sender_client: bytes
-assume val ssl_sender_server: bytes
+// ADL: sring escape probably doesnt work in current F*
+let ssl_sender_client = abytes "\x43\x4C\x4E\x54"
+let ssl_sender_server = abytes "\x53\x52\x56\x52"
 
 let ssl_verifyData ms role data =
   let ssl_sender =

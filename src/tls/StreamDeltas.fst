@@ -14,7 +14,6 @@ module MS   = FStar.Monotonic.Seq
 module S    = StAE
 module C    = Content
 module DS   = DataStream
-module SeqP = FStar.SeqProperties
 
 let deltas i = Seq.seq (DS.delta i) //not yet handling the well-formedness condition of final deltas
 
@@ -22,7 +21,7 @@ let singleton (x:'a) : Tot (Seq.seq 'a) = Seq.create 1 x
 
 #reset-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
-private type id = i:id{~(is_PlaintextID i)}
+private type id = i:id{~(PlaintextID? i)}
 
 val project_one_frag: #i:id -> f:C.fragment i -> Tot (Seq.seq (DS.delta i))
 let project_one_frag #i = function
@@ -39,7 +38,7 @@ val stream_deltas: #i:id -> #rw:rw -> s:StAE.state i rw{authId i} -> mem -> GTot
 let stream_deltas #i #rw s h = project_deltas (StAE.fragments s h)
 
 let stream_deltas_snoc (i:id) (frags:StAE.frags i) (f:Content.fragment i)
-  : Lemma (project_deltas (SeqP.snoc frags f) == Seq.append (project_deltas frags) (project_one_frag f))
+  : Lemma (project_deltas (Seq.snoc frags f) == Seq.append (project_deltas frags) (project_one_frag f))
   = MS.collect_snoc project_one_frag frags f
 
 //A predicate stating the deltas of s always as ds as a prefix
@@ -63,7 +62,7 @@ let project_fragment_deltas #i #rw s fs =
   else ()
 
 let stream_deltas_snoc2 (#i:id) (#rw:rw) (s:StAE.state i rw) (h0:mem) (h1:mem) (f:Content.fragment i)
-  : Lemma (authId i /\ StAE.fragments s h1 == SeqP.snoc (StAE.fragments s h0) f
+  : Lemma (authId i /\ StAE.fragments s h1 == Seq.snoc (StAE.fragments s h0) f
 	   ==> stream_deltas s h1 == Seq.append (stream_deltas s h0) (project_one_frag f))
   = if authId i then stream_deltas_snoc i (StAE.fragments s h0) f else ()
 
@@ -76,7 +75,7 @@ val encrypt: #i:id -> wr:StAE.writer i -> f:Content.fragment i -> ST (Content.en
 	      modifies_one (StAE.region wr) h0 h1
 	      /\ StAE.seqnT wr h1 = StAE.seqnT wr h0 + 1
 	      /\ (authId i ==>
-	 	  StAE.fragments wr h1 == SeqP.snoc (StAE.fragments wr h0) f
+	 	  StAE.fragments wr h1 == Seq.snoc (StAE.fragments wr h0) f
 		  /\ MR.witnessed (StAE.fragments_prefix wr (StAE.fragments wr h1))
 		  /\ stream_deltas wr h1 == Seq.append (stream_deltas wr h0) (project_one_frag f)
  		  /\ MR.witnessed (deltas_prefix wr (stream_deltas wr h1)))))

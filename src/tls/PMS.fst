@@ -2,6 +2,8 @@
 
 (* Split from KEF *) 
 
+open FStar.All
+
 open Platform.Bytes
 open TLSConstants
 open CoreCrypto
@@ -28,7 +30,7 @@ let honestRSAPMS (pk:RSAKey.pk) (cv:TLSConstants.protocolVersion) pms =
   | ConcreteRSAPMS(s) -> false
 //#endif 
 
-let genRSA (pk:RSAKey.pk) (vc:protocolVersion): rsapms = 
+let genRSA (pk:RSAKey.pk) (vc:protocolVersion): EXT rsapms = 
     let verBytes = versionBytes vc in
     let rnd = CoreCrypto.random 46 in
     let pms = verBytes @| rnd in

@@ -53,6 +53,8 @@ let alertBytes ad =
     | AD_missing_extension ->                  abyte2 (2z, 109z)
     | AD_unsupported_extension ->              abyte2 (2z, 110z)
 
+#set-options "--z3rlimit 64"
+
 val parse: b:lbytes 2 -> Tot 
   (r: result alertDescription { forall ad. (r = Correct ad ==> b == alertBytes ad) })
 let parse b =
@@ -120,8 +122,8 @@ val init: r0:rid -> ST state
   (requires (fun h -> True)) 
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
-    extends (State.region s) r0 /\
-    fresh_region (State.region s) h0 h1))
+    extends (State?.region s) r0 /\
+    fresh_region (State?.region s) h0 h1))
 
 let init r0 =
   let r = new_region r0 in
@@ -144,7 +146,7 @@ let send (State b) (ad:alertDescription{isFatal ad}) =
 
 val next_fragment: s:state -> ST (option alertDescription)
   (requires (fun _ -> True))
-  (ensures (fun h0 r h1 -> modifies_one (State.region s) h0 h1))
+  (ensures (fun h0 r h1 -> modifies_one (State?.region s) h0 h1))
 
 let next_fragment (State b) =  
   match !b with 

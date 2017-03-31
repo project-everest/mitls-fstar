@@ -10,7 +10,6 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties
 open Platform.Bytes
 open Platform.Error
 
@@ -28,7 +27,7 @@ open Range
 
 // this style enables structural subtyping on range indexes
 // JP, NS: XXX temporarily removing the abstraction for the sake of extraction
-//private type id = i:id{~ (is_PlaintextID i)}
+//private type id = i:id{~ (PlaintextID? i)}
 
 type pre_fragment (i:id) = bytes
 
@@ -76,7 +75,7 @@ let final i d =
   | Close   -> true
   | Alert a -> isFatal a
 
-let finalized i s = is_Some (List.Tot.find (final i) s)
+let finalized i s = Some? (List.Tot.find (final i) s)
 
 val wellformed: i:id -> list (delta i) -> Tot bool
 let rec wellformed ki s =
@@ -104,14 +103,14 @@ type stream (i:id) = s: list (delta i) { wellformed i s }
 
 noeq type state (i:id) =
   | State: #region:rid ->
-           log: option (rref region (stream i)) { is_Some log <==> authId i } ->
+           log: option (rref region (stream i)) { Some? log <==> authId i } ->
            ctr: rref region nat ->
            state i
 
 (*
  * AR: adding the is_eternal_region refinement to satify the precondition of new_region.
  *)
-val gen: r0:rid{is_eternal_region r0} -> i:id -> (state i * state i)
+val gen: r0:rid{is_eternal_region r0} -> i:id -> ML (state i * state i)
 let gen r0 (i:id) =
   let r = new_region r0 in
   empty_is_well_formed i;

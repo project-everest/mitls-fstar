@@ -3,7 +3,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open FStar.SeqProperties // for e.g. found
+ // for e.g. found
 open FStar.Set
 open Platform.Error
 open Platform.Bytes
@@ -45,7 +45,7 @@ let getLogVersion hsl =
 (*   let next = update_hash h eb b in *)
 
 (*
- * AR: changing logref from rref to HS.ref, with region captured in the refinement.
+ * AR: changing logref from rref to HS?.ref, with region captured in the refinement.
  *)
 noeq type log =
   | LOG: #region:rid ->
@@ -134,7 +134,7 @@ let projectLog_CH (l:hs_log{validLog_CH l}) : logInfo_CH =
     })
 
 val getHash_CH : l:log -> h:CoreCrypto.hash_alg ->
-  ST ( li:logInfo{is_LogInfo_CH li} & hash:bytes{length hash = CoreCrypto.hashSize h} )
+  ST ( li:logInfo{LogInfo_CH? li} & hash:bytes{length hash = CoreCrypto.hashSize h} )
     (requires (fun h0 ->
       let lref = l.logref in
       let (| _, hsl, _ |) = sel h0 lref in validLog_CH hsl))

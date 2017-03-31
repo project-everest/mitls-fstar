@@ -2,6 +2,8 @@ module Transport
 
 // adding an indirection to TCP for applications that prefer to take control of their IOs.
 
+open FStar.All
+
 open Platform.Tcp 
 open Platform.Bytes
 open Platform.Error
@@ -20,7 +22,7 @@ let callbacks send recv = { snd = send; rcv = recv }
 let wrap tcp: t = callbacks (send tcp) (recv tcp)
 type tcpListener = tcpListener
 
-let listen domain port : tcpListener = listen domain port
+let listen domain port : ML tcpListener = listen domain port
 let accept listener = wrap (accept listener)
 let connect domain port = wrap (connect domain port)
 let close = close
@@ -30,7 +32,7 @@ let close = close
 let send tcp data = tcp.snd data
 let recv tcp len = tcp.rcv len
 
-val test: t -> bytes -> unit
+val test: t -> bytes -> ML unit
 let test (tcp:t) (data:bytes) = 
   let h0 = get() in 
   let _ = tcp.snd data in

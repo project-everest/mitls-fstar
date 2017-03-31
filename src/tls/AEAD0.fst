@@ -5,12 +5,11 @@ module AEAD0
 // handling both TLS 1.2 and TLS 1.3 (with implicit IV and noAD)
 
 //16-09-10 adapted from StreamAE and AEAD_GCM.
-//16-09-10 consider sharing some AEAD.Common.fst
+//16-09-10 consider sharing some AEAD?.Common.fst
 
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq
-open FStar.SeqProperties
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
@@ -31,8 +30,8 @@ private inline let max (a:int) (b:int) = if a < b then b else a
 // The index is treated abstractly, with
 // - a local restriction to ensure this is an AEAD index
 // - an `alg` function for algorithmic agility (consider making it private)
-type id = i:id{ ~(is_PlaintextID i) /\ is_AEAD (aeAlg_of_id i) }
-let alg (i:id) = AEAD._0 (aeAlg_of_id i)
+type id = i:id{ ~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i) }
+let alg (i:id) = AEAD?._0 (aeAlg_of_id i)
 
 
 (*** Key materials and counters ***)
@@ -45,7 +44,7 @@ let fullIVLen (i:id) = CoreCrypto.aeadRealIVSize (alg i)
 // The length of the per-record nonce is set to max(8 bytes, N_MIN)
 // for the AEAD algorithm (see [RFC5116] Section 4)
 let staticIVLen (i:id) = 
-  if is_ID13 i 
+  if ID13? i 
   then max 8 (fullIVLen i)
   else TLSConstants.aeadSaltSize (alg i)
 type staticIV (i:id) = lbytes (staticIVLen i)
@@ -70,7 +69,7 @@ val ivT: i:id -> siv: staticIV i -> n:seqn i -> Tot (iv i)
 let ivT i siv n = 
   lemma_repr_bytes_values n;
   max_seqn_value i;
-  if is_ID13 i || alg i = CoreCrypto.CHACHA20_POLY1305 then
+  if ID13? i || alg i = CoreCrypto.CHACHA20_POLY1305 then
     // The per-record nonce for the AEAD construction is formed as follows:
     //
     // 1. The 64-bit record sequence number is padded to the left with zeroes to iv_length.
@@ -232,7 +231,7 @@ val leak: #i:id{~(authId i)} -> #role:rw -> state i role -> ST (key i * iv i)
   (requires (fun h0 -> True))
   (ensures  (fun h0 r h1 -> modifies Set.empty h0 h1))
 
-#set-options "--z3timeout 10000"
+#set-options "--z3rlimit 10000"
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)
 // Note that result doesn't include the implicit IV (salt)
@@ -260,8 +259,8 @@ val encrypt: #i:id -> e:writer i -> ad:adata i -> l:plainLen -> p:plain i l -> S
   )))
 
 (*
-type (FStar.Monotonic.RRef.m_rref (AEAD0.State.log_region e) (FStar.Seq.seq (AEAD0.entry i (AEAD0.State.key e))) (FStar.Monotonic.Seq.grows ))
-type (AEAD0.ideal_log (AEAD0.State.log_region e) i (AEAD0.State.key e) (AEAD0.State.siv e))
+type (FStar.Monotonic.RRef.m_rref (AEAD0.State?.log_region e) (FStar.Seq.seq (AEAD0.entry i (AEAD0.State?.key e))) (FStar.Monotonic.Seq.grows ))
+type (AEAD0.ideal_log (AEAD0.State?.log_region e) i (AEAD0.State?.key e) (AEAD0.State?.siv e))
 *)
 
 val matches: #i:id -> c:cipher i -> adata i -> entry i -> Tot bool
@@ -276,7 +275,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
      (authId i ==>
        (let log = m_sel h0 (ilog d.log) in
        if j < Seq.length log && matches c ad (Seq.index log j)
-       then res = Some (Entry.p (Seq.index log j))
+       then res = Some (Entry?.p (Seq.index log j))
        else res = None))
     /\ (match res with
        | None -> modifies Set.empty h0 h1
@@ -298,7 +297,7 @@ let decrypt #i d ad c =
       begin
       increment_counter ictr;
       m_recall ctr;
-      Some (Entry.p (Seq.index log j))
+      Some (Entry?.p (Seq.index log j))
       end
     else None
   else // Concrete
@@ -320,7 +319,7 @@ let decrypt #i d ad c =
       // TODO: This should be done by StatefulPlain.mk_plain
       if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Change_cipher_spec && text <> Content.ccsBytes then
         None
-      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || Platform.Error.is_Error (Alert.parse text)) then
+      else if StatefulPlain.parseAD i (LHAEPlain.parseAD ad) = Content.Alert && (length text <> 2 || Platform.Error.Error? (Alert.parse text)) then
         None
       else
 	begin
@@ -371,7 +370,7 @@ let coerce parent i kv iv =
   let ectr: concrete_ctr writer_r i = m_alloc writer_r 0 in
   State #i #Writer #writer_r #writer_r kv iv () ectr 
 
-let leak #i #role s = State.key s, State.iv s
+let leak #i #role s = State?.key s, State?.iv s
 
 
 // The per-record nonce for the AEAD construction is formed as follows:
@@ -444,7 +443,7 @@ let decrypt #i d l c =
       begin
       increment_seqn ictr;
       m_recall ctr;
-      Some (Entry.p (Seq.index log j))
+      Some (Entry?.p (Seq.index log j))
       end
     else None
   else //concrete

@@ -16,7 +16,7 @@ open Range
 // We define payloads and additional data from those of StatefulPlain,
 // adding an 8-byte sequence number to its additional data.
 
-type id = i:id { is_ID12 i }
+type id = i:id { ID12? i }
 
 type seqn = n:nat{repr_bytes n <= 8}
 let ad_Length i = 8 + StatefulPlain.ad_Length i
@@ -43,7 +43,7 @@ val lemma_makeAD_seqN: i:id -> n:seqn -> ad:StatefulPlain.adata i
                    [SMTPat (makeAD i n ad)]
 
 let lemma_makeAD_seqN i n ad =
-    cut (Seq.equal (fst (SeqProperties.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
+    cut (Seq.equal (fst (Seq.split_eq (bytes_of_seq n @| ad) 8)) (bytes_of_seq n));
     int_of_bytes_of_int (Seq.length (bytes_of_seq n)) n
 
 val lemma_makeAD_parseAD: i:id -> n:seqn -> ad:StatefulPlain.adata i

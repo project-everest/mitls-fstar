@@ -67,5 +67,5 @@ let isFatal ad =
 
 type result 'a = Platform.Error.optResult (alertDescription * string) 'a
 
-val resT: r:result 'a { Platform.Error.is_Correct r } -> Tot 'a
+val resT: r:result 'a { Platform.Error.Correct? r } -> Tot 'a
 let resT (Platform.Error.Correct v) = v

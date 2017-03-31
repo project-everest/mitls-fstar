@@ -14,7 +14,7 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open CoreCrypto
-open FStar.SeqProperties
+open FStar.Seq
 
 (* Type representations for TLS negotiated values *)
 type protocolVersion =
@@ -326,12 +326,12 @@ let cipherSuiteBytesOpt cs =
 
     | _ -> None
 
-let knownCipherSuite (c:cipherSuite) = is_Some (cipherSuiteBytesOpt c)
+let knownCipherSuite (c:cipherSuite) = Some? (cipherSuiteBytesOpt c)
 type known_cipher_suite = c:cipherSuite{knownCipherSuite c}
 type known_cipher_suites = list known_cipher_suite
 
 val cipherSuiteBytes: known_cipher_suite -> Tot (lbytes 2)
-let cipherSuiteBytes c = Some.v (cipherSuiteBytesOpt c)
+let cipherSuiteBytes c = Some?.v (cipherSuiteBytesOpt c)
 
 val parseCipherSuiteAux : lbytes 2 -> Tot (result cipherSuite)
 let parseCipherSuiteAux b =
@@ -522,14 +522,14 @@ let prfMacAlg_of_ciphersuite_aux = function
 
 let pvcs (pv:protocolVersion) (cs:cipherSuite) =
   if pv=TLS_1p2
-  then is_Some (prfMacAlg_of_ciphersuite_aux cs)
+  then Some? (prfMacAlg_of_ciphersuite_aux cs)
   else true
 
 logic type require_some : #a:Type -> #b:Type -> =f:(a -> Tot (option b)) -> Type =
-   fun (a:Type) (b:Type) (f: (a -> Tot (option b))) -> (x:a{is_Some (f x)} -> Tot b)
+   fun (a:Type) (b:Type) (f: (a -> Tot (option b))) -> (x:a{Some? (f x)} -> Tot b)
 
 let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
-  fun x -> Some.v (prfMacAlg_of_ciphersuite_aux x)
+  fun x -> Some?.v (prfMacAlg_of_ciphersuite_aux x)
 
 (* PRF and verifyData hash algorithms are potentially independent in TLS 1.2, *)
 (* so we use two distinct functions. However, all currently defined ciphersuites *)
@@ -542,7 +542,7 @@ let verifyDataHashAlg_of_ciphersuite_aux = function
   | CipherSuite _ _ (MACOnly hAlg) -> Some SHA256
   | _                               -> None
 let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphersuite_aux =
-  fun x -> Some.v (verifyDataHashAlg_of_ciphersuite_aux x)
+  fun x -> Some?.v (verifyDataHashAlg_of_ciphersuite_aux x)
 
 val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
 let sessionHashAlg pv cs =
@@ -550,21 +550,21 @@ let sessionHashAlg pv cs =
     | SSL_3p0 | TLS_1p0 | TLS_1p1 -> MD5SHA1
     | TLS_1p2 -> Hash (verifyDataHashAlg_of_ciphersuite cs)
 
-val get_aeAlg: cs:cipherSuite{ is_CipherSuite cs } -> Tot aeAlg
+val get_aeAlg: cs:cipherSuite{ CipherSuite? cs } -> Tot aeAlg
 let get_aeAlg cs =
     match cs with
     | CipherSuite _ _ ae -> ae
 
 let null_aeAlg  = MACOnly MD5
 
-val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { is_MtE a }) -> Tot (encAlg * ivMode)
+val encAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { MtE? a }) -> Tot (encAlg * ivMode)
 let encAlg_of_aeAlg  pv ae =
     match pv,ae with
     | SSL_3p0, MtE (Block e) m -> (Block e),Stale
     | TLS_1p0, MtE (Block e) m -> (Block e),Stale
     | _, MtE e m -> e,Fresh
 
-val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { ~(is_AEAD a) }) -> Tot macAlg
+val macAlg_of_aeAlg: (pv:protocolVersion) -> (a:aeAlg { ~(AEAD? a) }) -> Tot macAlg
 let macAlg_of_aeAlg pv ae =
     match pv,ae with
 //  | SSL_3p0,MACOnly alg -> SSLKHASH alg (* dropped pattern on the left to simplify refinements *)
@@ -807,7 +807,7 @@ val lemma_vlbytes_inj : i:nat
                    (ensures (b=b'))
 let lemma_vlbytes_inj i b b' =
   let l = bytes_of_int i (length b) in
-  SeqProperties.lemma_append_inj l b l b'
+  Seq.lemma_append_inj l b l b'
 
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 0 --initial_fuel 0"   //need to reason about length
 val vlsplit: lSize:nat{lSize <= 4}
