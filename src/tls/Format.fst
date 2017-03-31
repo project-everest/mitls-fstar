@@ -20,6 +20,8 @@ module HS = FStar.HyperStack
 
 (** Begin Module Regions *)
 
+type fresh_subregion r0 r h0 h1 = stronger_fresh_region r h0 h1 /\ extends r r0
+
 (** Regions and colors for objects in memory *)
 let tls_color = -1
 let epoch_color = 1
@@ -43,6 +45,7 @@ let tls_region : tls_rgn = new_colored_region HH.root tls_color
 
 let tls_tables_region : (r:tls_rgn{HH.parent r = tls_region}) =
     new_region tls_region
+
 
 (** End Module Regions *)
 

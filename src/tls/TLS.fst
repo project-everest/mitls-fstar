@@ -15,9 +15,9 @@ open TLSConstants
 open TLSInfo
 
 open Range
-open Negotiation
+//open Negotiation
 open Epochs
-open Handshake
+//open Handshake
 open Connection
 
 module HH   = FStar.HyperHeap
@@ -34,7 +34,7 @@ module EP   = Epochs
    when this flag is set to false *)
 inline_for_extraction let tls_debug = false
 
-unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n
+unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n // s.[n] 
 
 // using also DataStream, Content, Record
 #set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
@@ -58,7 +58,7 @@ let outerPV (c:connection) : ST protocolVersion
 
 (** control API ***)
 
-// was connect, resume, accept_connected, ...
+// subsumes connect, resume, accept_connected, ...
 val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resume_id r -> ST connection
   (requires (fun h -> True))
   (ensures (fun h0 c h1 ->
@@ -73,8 +73,7 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
     c.tcp == tcp  /\
     (r = Server ==> resume = None) /\ //16-05-28 style: replacing a refinement under the option
     epochs c h1 == Seq.createEmpty /\ // we probably don't care---but we should say nothing written yet
-    HST.sel h1 c.state = BC 
-    ))
+    HST.sel h1 c.state = BC ))
 
 let create parent tcp role cfg resume =
     let m = new_region parent in

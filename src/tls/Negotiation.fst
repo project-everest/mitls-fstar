@@ -24,12 +24,15 @@ inline_for_extraction let n_debug = false
 // cfg: config -> 
 assume type t (region:rgn) (role:TLSConstants.role)
 
-// a bit too restrictive: use a single Hash in any given offer
-assume val hashAlg: 
-  #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
-
 assume val create: 
   region:rgn -> r:role -> cfg:TLSInfo.config -> resume:TLSInfo.resumeInfo r -> St (t region r)
+
+// a bit too restrictive: use a single Hash in any given offer
+assume val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
+
+assume val config: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.config
+assume val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot (TLSInfo.resumeInfo role)
+
 
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData

@@ -99,7 +99,7 @@ type machineState =
 // (will take other HS fields as parameters)
 
 noeq type hs = | HS: 
-  #region: rgn { is_hs_rgn region } ->
+  #region: rgn {is_hs_rgn region} ->
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
   nego: Nego.t region r ->
@@ -112,8 +112,7 @@ noeq type hs = | HS:
 // the states of the HS sub=module will be subject to a joint invariant
 
 
-(* the handshake internally maintains epoch
-   indexes for the current reader and writer *)
+(* the handshake internally maintains epoch counters  for the current reader and writer *)
 
 let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.epochs h
 

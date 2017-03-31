@@ -1,5 +1,12 @@
 module Epochs
 
+(* 
+    This modules implements the mutable state for the successive epochs allocated by KeySchedule and used by TLS. 
+    Its separation from Handshake and coding are somewhat arbitrary.
+    An elaboration would ensure that keys in old epochs are erased. 
+    (i.e. we only keep old epoch AE logs for specifying authentication)
+*)
+
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
@@ -17,14 +24,12 @@ open HandshakeMessages
 open StAE
 open Negotiation
 
-module KS = KeySchedule
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
 
 // relocate?
-type fresh_subregion r0 r h0 h1 = stronger_fresh_region r h0 h1 /\ extends r r0
 
 type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
   disjoint hs_rgn (region w)                  /\
@@ -104,12 +109,14 @@ type epoch_ctr_inv (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
 type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
   m_rref r (epoch_ctr_inv r es) increases
 
+// As part of the handshake state, 
+// we keep a sequence of allocated epochs, 
+// together with counters for reading and writing
 //NS: probably need some anti-aliasing invariant of these three references
-noeq type epochs (r:rgn) (n:TLSInfo.random) =
-  | MkEpochs: es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
-    	    read: epoch_ctr r es ->
-	    write: epoch_ctr r es ->
-	    epochs r n
+noeq type epochs (r:rgn) (n:TLSInfo.random) = | MkEpochs: 
+  es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
+  read: epoch_ctr r es ->
+  write: epoch_ctr r es -> epochs r n
 
 let containsT (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (h:mem) =
     MS.i_contains (MkEpochs?.es es) h 
@@ -243,7 +250,8 @@ let get_current_epoch (#r:_) (#n:_) (e:epochs r n) (rw:rw)
 
 
 val recordInstanceToEpoch: #r:rgn -> #n:TLSInfo.random ->
-    			   h:Negotiation.handshake ->
-			   ks:KS.recordInstance -> Tot (epoch r n)
-let recordInstanceToEpoch #hs_rgn #n hs (KS.StAEInstance #i rd wr) =
+  hs:Negotiation.handshake ->
+  ks:KeySchedule.recordInstance -> 
+  Tot (epoch r n)
+let recordInstanceToEpoch #hs_rgn #n hs (KeySchedule.StAEInstance #i rd wr) =
   Epoch hs rd wr
