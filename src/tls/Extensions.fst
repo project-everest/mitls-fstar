@@ -15,6 +15,7 @@ open TLSConstants
 
 module TI = TLSInfo
 
+
 (** RFC 4.2 'Extension' Table *)
 
 noeq type preEarlyDataIndication : Type0 =
@@ -339,29 +340,34 @@ let rec parseExtension role b =
 	  (match parseserverName role data with
 	  | Correct(snis) -> Correct (E_server_name snis)
 	  | Error(z) -> Error(z))	
+	| (0x00z, 0x0Az) -> // supported_groups
+	  if length data >= 2 && length data < 65538 then
+	  (match Format.parseNamedGroups (data) with
+	  | Correct(groups) -> Correct (E_supported_groups(groups))
+	  | Error(z) -> Error(z))
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes named groups")
+	| (0x00z, 0x0Dz) -> // signature_algorithms
+	  if length data >= 2 && length data < 65538 then (
+	  (match TLSConstants.parseSigHashAlgs (data) with
+	  | Correct(algs) -> Correct (E_signature_algorithms algs)
+	  | Error(z) -> Error(z))
+	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for signature & hash algorithms")
+(* CommonDH.parseKeyShare commented-out right now	  
+	| (0x00z, 0x28z) -> // head TBD, key share
+	  (let is_client = (match role with | Client -> true | Server -> false) in
+	  match CommonDH.parseKeyShare is_client data with
+	  | Correct (ks) -> Correct (E_key_share ks)
+	  | Error(z) -> Error(z))
+*)	  
+
 (*
         | (0xffz, 0x02z) -> // TLS 1.3 draft version
           if length data = 2 then Correct (E_draftVersion data)
           else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate draft 1.3 version")
-	| (0x00z, 0x0Dz) -> // sigalgs
-	  if length data >= 2 && length data < 65538 then (
-	  (match parseSigHashAlgs (data) with
-	  | Correct(algs) -> Correct (E_signatureAlgorithms algs)
-	  | Error(z) -> Error(z))
-	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for signature & hash algorithms")
-
-(* 	  
 	| (0xFFz, 0x01z) -> // renego (* OLD *)
 	  (match parseRenegotiationInfo data with
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
 	  | Error(z) -> Error(z)
-*)	 
-	| (0x00z, 0x0Az) -> // supported groups
-	  if length data >= 2 && length data < 65538 then
-	  (match parseNamedGroups (data) with
-	  | Correct(groups) -> Correct (E_supported_groups(groups))
-	  | Error(z) -> Error(z))
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes named groups")
 	| (0x00z, 0x0Bz) -> // ec point format
 	  if length data < 256 && length data >= 1 then
 	  (lemma_repr_bytes_values (length data);
@@ -388,11 +394,7 @@ let rec parseExtension role b =
 	  | Correct(psk) -> Correct (E_preSharedKey(psk))
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for pre shared key")
-	| (0x00z, 0x28z) -> // head TBD, key share
-	  (let is_client = (match role with | Client -> true | Server -> false) in
-	  match parseKeyShare is_client data with
-	  | Correct (ks) -> Correct (E_keyShare(ks))
-	  | Error(z) -> Error(z)) *)
+	  *)
 	| _ -> // Unknown extension
 	  Correct(E_unknown_extension(head,data)))
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
@@ -586,7 +588,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
                     correct ({l with ne_supported_point_formats = Some spf})
 *)		    
 (* not allowed for server
-            | E_signatureAlgorithms sha ->
+            | E_signature_algorithms sha ->
                 if resuming then correct l
                 else correct ({l with ne_signature_algorithms = Some (sha)})
 *)
