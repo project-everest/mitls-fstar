@@ -362,6 +362,7 @@ let checkElement (p:parameters) (e:element) : option element  =
 
 
 // TODO imported from TLSConstants, in a broken state
+// This may not belong to CommonDH.
 
 // TODO: replace "bytes" by either DH or ECDH parameters
 // should that go elsewhere? YES.
@@ -369,7 +370,7 @@ let checkElement (p:parameters) (e:element) : option element  =
 type keyShareEntry = 
   | Share: g:group -> share g -> keyShareEntry
   | UnknownShare: 
-    ng:valid_namedGroup { None? (group_of_namedGroup ng)} -> 
+    ng:namedGroup { None? (group_of_namedGroup ng)} -> 
     b:bytes{repr_bytes (length b) <= 2} -> keyShareEntry
 
 (** ClientKeyShare definition *)
@@ -377,7 +378,6 @@ type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
 
 (** ServerKeyShare definition *)
 type serverKeyShare = keyShareEntry
-
 
 (** KeyShare definition *)
 noeq type keyShare =

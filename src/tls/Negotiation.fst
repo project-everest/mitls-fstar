@@ -34,6 +34,7 @@ assume val create:
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
+// offers don't depend on a choice of client_random 
 // TODO add resume proposal; also probably the PSK list
 type offer = {
   co_protocol_version:protocolVersion;
@@ -46,7 +47,52 @@ type offer = {
   co_resume: option sessionID;
 }
 
-assume val clientOffer: #region:rgn -> #r:TLSConstants.role -> t region r -> St offer
+// The final negotiated outcome, including key shares and long-term identities.
+// mode is the name used in the resilience paper; 
+// session_info is the one from TLSInfo
+type mode = {
+  // from CH
+  n_client_random: TLSInfo.random;
+  n_sessionID: option sessionID; // optional, proposed 1.2 resumption id
+
+  // more from SH (both TLS 1.2 and TLS 1.3)
+  n_server_random: TLSInfo.random;
+  n_resume: bool; // is this a 1.2 resumption? 
+  n_protocol_version: protocolVersion;
+  n_kexAlg: TLSConstants.kexAlg;
+  n_aeAlg: TLSConstants.aeAlg;
+  n_sigAlg: option TLSConstants.sigAlg;
+  n_cipher_suite: cipherSuite;
+  n_compression: option compression;
+  n_extensions: negotiatedExtensions;
+  n_scsv: list scsv_suite;
+  n_psk: option PSK.pskid; // none with 1.2 (we are not doing PSK 1.2)
+
+  // TODO add client and server PSKs too
+
+  // more from SKE in ServerHelloDone flight (1.2) or SH (1.3)
+  n_server_share: option (g:CommonDH.group & CommonDH.share g);
+
+  // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
+  n_client_cert_request: option HandshakeMessages.cr;
+  n_server_cert: option Cert.chain;
+
+  // more from either CH+SH (1.3) or CKE (1.2) 
+  n_client_share: option (g:CommonDH.group & CommonDH.share g);
+  // { both shares are in the same negotiated group }
+
+  // more from the final client flight 
+  n_client_cert: option Cert.chain
+}
+
+// What we know after CH + SH (several cases)
+// for now we use mode with default values for convenience
+// could be verified using refinements, but note clientMode is ambiguous.
+type preMode_12 = mode
+type preModeAbbrv = mode
+type preMode_13 = mode
+
+assume val clientOffer: #region:rgn -> #role:TLSConstants.role -> t region role -> St offer
 (*
 let clientOffer #region #r nego =
   let co =
@@ -63,61 +109,42 @@ let clientOffer #region #r nego =
   co
 *)
 
-type nego_server = {
-  sm_protocol_version: protocolVersion;
-  sm_kexAlg: TLSConstants.kexAlg;
-  sm_aeAlg: TLSConstants.aeAlg;
-  sm_sigAlg: option TLSConstants.sigAlg;
-  sm_cipher_suite: cipherSuite;
-  sm_dh_share: option CommonDH.clientKeyShare;
-  sm_comp: option compression;
-  sm_ext: negotiatedExtensions;
-}
-
-type nego_client = {
-  cm_protocol_version: protocolVersion;
-  cm_kexAlg: TLSConstants.kexAlg;
-  cm_aeAlg: TLSConstants.aeAlg;
-  cm_sigAlg: option TLSConstants.sigAlg;
-  cm_cipher_suite: cipherSuite;
-  cm_dh_share: option CommonDH.serverKeyShare;
-  cm_comp: option compression;
-  cm_ext: negotiatedExtensions;
-}
-
-// whatever we know from CH + SH. 
-type mode = {
-  n_resume: bool;
-  n_client_random: TLSInfo.random;
-  n_server_random: TLSInfo.random;
-  n_sessionID: option sessionID;
-  n_protocol_version: protocolVersion;
-  n_kexAlg: TLSConstants.kexAlg;
-  n_aeAlg: TLSConstants.aeAlg;
-  n_sigAlg: option TLSConstants.sigAlg;
-  n_cipher_suite: cipherSuite;
-  n_dh_group: option namedGroup;
-  n_compression: option compression;
-  n_extensions: negotiatedExtensions;
-  n_scsv: list scsv_suite;
-}
-
-assume val clientMode: #region:rgn -> #r:TLSConstants.role -> t region r -> HandshakeMessages.sh ->
+assume val clientMode: #region:rgn -> #role:TLSConstants.role -> t region role -> 
+  HandshakeMessages.sh -> 
   St (result mode) // it needs to be computed, whether returned or not
 
-//assume val clientComplete: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... -> 
-//  St (result full_mode) // it needs to be computed, whether returned or not
+assume val clientComplete: #region:rgn -> #role:TLSConstants.role -> t region role ->  
+  serverCert: HandshakeMessages.crt -> 
+  HandshakeMessages.ske ->
+  ocr: option HandshakeMessages.cr ->
+  St (result mode) 
 
-//assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t #region #role -> ... ->
-//  St (result full_mode) // it needs to be computed, whether returned or not
+assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region role -> 
+  HandshakeMessages.ee -> 
+  ocr: option HandshakeMessages.cr -> 
+  serverCert: HandshakeMessages.crt ->
+  cv: HandshakeMessages.cv ->
+  digest:  bytes{length digest <= 32} ->
+  St (result mode) // it needs to be computed, whether returned or not
+
+assume val serverMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
+  HandshakeMessages.ch ->
+  St (result mode) 
+
+//17-03-30 still missing a few for servers.
+
+
 
 // TODO factor out signature processing, salvaging chunks from Handshake.fst
 
+
+//17-03-30 where is it used?
 type hs_id = {
   id_cert: Cert.chain;
   id_sigalg: option sigHashAlg;
 }
 
+//17-03-30 get rid of this wrapper? 
 type session = {
   session_nego: mode;
 }     

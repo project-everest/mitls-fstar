@@ -53,7 +53,7 @@ CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
 HINTS_ENABLED?=--use_hints
 VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 \
-  --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection \
+  --z3rlimit 20 --__temp_no_proj Handshake.Log --__temp_no_proj Handshake --__temp_no_proj Connection \
   $(HINTS_ENABLED) --include $(LDIR)/hacl
 
 # The .fst interfaces for the platform and crypto libraries.
@@ -91,7 +91,7 @@ PMS.fst \
 Hashing.OpenSSL.fst \
 Hashing.fst \
 Hashing.CRF.fst \
-HashMAC.fst \
+HMAC.fst \
 Cert.fst \
 Signature.fst \
 PSK.fst \
@@ -198,7 +198,7 @@ Hashing.Spec \
 Hashing.OpenSSL \
 Hashing \
 Hashing.CRF \
-HashMAC \
+HMAC \
 Cert \
 Signature \
 TLSInfo \
@@ -241,7 +241,6 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 	$(FSTAR) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include concrete-flags \
-	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 # Verifying one file at a time

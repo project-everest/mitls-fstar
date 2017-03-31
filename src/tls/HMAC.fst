@@ -1,4 +1,4 @@
-﻿module HashMAC
+﻿module HMAC
 
 open Platform.Bytes
 open TLSConstants
@@ -71,15 +71,15 @@ val tls_mac: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> ST (lbytes (macSize
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 let tls_mac a k d  =
     match a with
-    | HMAC     a -> hmac a  k d  
-    | SSLKHASH a -> sslKeyedHash a k d 
+    | HMac     a -> hmac a  k d  
+    | SSLKHash a -> sslKeyedHash a k d 
 
 val tls_macVerify: a:macAlg -> k:lbytes (macKeySize a) -> msg:bytes -> t:lbytes (macSize a) -> ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 let tls_macVerify a k d t =
     match a with
-    | HMAC alg -> hmacVerify alg k d t
-    | SSLKHASH alg -> sslKeyedHashVerify alg k d t
+    | HMac alg -> hmacVerify alg k d t
+    | SSLKHash alg -> sslKeyedHashVerify alg k d t
 
  

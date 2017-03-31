@@ -1,7 +1,6 @@
-﻿module MAC
+﻿module HMAC.UFCMA
 
-(* Idealizing HMAC for the TLS 1.2 record layer 
-    TODO: review indexing *) 
+(* Idealizing HMAC for Finished message payloads and binders. *)
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -13,20 +12,22 @@ open Platform.Bytes
 open Platform.Error
 //open CoreCrypto 
 
-open TLSConstants
-open TLSInfo
+//open TLSConstants
 open TLSError
 
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a:alg
 
-type id = i:id { ID12? i /\ (let ae = aeAlg_of_id i in MACOnly? ae \/ MtE? ae) }
+type rgn = TLSConstants.rgn
 
-let alg (i:id) = macAlg_of_id i
-
+type id = TLSInfo.finishedId 
+let alg (i:id) = TLSInfo.finishedId_hash  i
+assume val authId: id -> Tot bool
 type text = bytes
-type tag (i:id) = lbytes (macSize (alg i))
-type keyrepr (i:id) = lbytes (macSize (alg i))
+type tag (i:id) = lbytes (Hashing.Spec.tagLen (alg i))
+
+let keysize (i:id) = Hashing.Spec.tagLen (alg i) 
+type keyrepr (i:id) = lbytes (keysize i)
 
 
 type fresh_subregion rg parent h0 h1 = stronger_fresh_region rg h0 h1 /\ extends rg parent
@@ -64,7 +65,7 @@ val gen: i:id -> good: (bytes -> Type) -> parent: rgn -> ST(key i good)
   (ensures (fun h0 k h1 ->  
     modifies Set.empty h0 h1 /\
     fresh_subregion (region #i #good k) parent h0 h1 )) 
-let gen    i good parent    = gen0 i good parent (CoreCrypto.random (macKeySize (alg i)))
+let gen i good parent = gen0 i good parent (CoreCrypto.random (keysize i))
 
 val coerce: i:id -> good: (bytes -> Type) -> parent: rgn -> kv:keyrepr i -> ST(key i good)
   (requires (fun _ -> ~(authId i)))
@@ -85,13 +86,9 @@ val mac: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes { authId i ==
 
 
 // We log every authenticated texts, with their index and resulting tag
-(*
- * AR: had to add a recall to satisfy the precondition of k.log write.
- *)
 let mac #i #good k p =
-  //assume (HMAC.is_tls_mac (alg i));
   let p : p:bytes { authId i ==> good p } = p in
-  let t = HMAC.tls_mac (alg i) k.kv p in
+  let t = HMAC.hmac (alg i) k.kv p in
   let e : entry i good = Entry t p in
   recall k.log;
   k.log := snoc !k.log e;
@@ -106,7 +103,7 @@ val verify: #i:id -> #good:(bytes -> Type) -> k:key i good -> p:bytes -> t:tag i
 
 // We use the log to correct any verification errors
 let verify #i #good k p t =
-  let x = HMAC.tls_macVerify (alg i) k.kv p t in
+  let x = HMAC.hmacVerify (alg i) k.kv p t in
   let log = !k.log in
   x &&
   ( not(authId i) || Some? (seq_find (matches p) log))
