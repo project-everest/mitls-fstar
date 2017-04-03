@@ -410,9 +410,9 @@ tls-ffi: mitls.cmxa
 else
 tls-ffi: mitls.cmxa
     # pass "-z noexecstack" to better support Bash on Windows
-    # pass "-Bsymbolic" to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
+    # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
     #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
     #   can result in heap corruptions and crashes.
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so -ccopt "-Xlinker -z -Xlinker noexecstack --Xlinker -Bsymbolic"
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so -ccopt "-Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker libmitls_version_script"
 endif
 endif
