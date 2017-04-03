@@ -620,22 +620,65 @@ let ks_server_13_sh ks =
   st := S (S_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
   StAEInstance r w
 
+  // Will become private; public API will have
+  // ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
+  // ks_server_12_keygen: ...
+  val ks_12_get_keys: ks:ks -> ST (writer:recordInstance * key:TLSPRF.key)
+    (requires fun h0 ->
+      let st = sel h0 (KS?.state ks) in
+      match st with
+      | C (C_12_has_MS _ _ _ _) | S (S_12_has_MS _ _ _ _) -> true
+      | _ -> false)
+    (ensures fun h0 r h1 ->
+      modifies Set.empty h0 h1)
+
+  (*private*) let ks_12_get_keys ks =
+    let KS #region st _ = ks in
+    let role, csr, alpha, msId, ms =
+      match !st with
+      | C (C_12_has_MS csr alpha msId ms) -> Client, csr, alpha, msId, ms
+      | S (S_12_has_MS csr alpha msId ms) -> Server, csr, alpha, msId, ms in
+    let cr, sr = split csr 32 in
+    let (pv, cs, ems) = alpha in
+    let kdf = kdfAlg pv cs in
+    let ae = get_aeAlg cs in
+    let id = ID12 pv msId kdf ae cr sr role in
+    let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
+    let klen = CoreCrypto.aeadKeySize alg in
+    let slen = AEADProvider.salt_length id in
+    let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
+    let k1, expand = split expand klen in
+    let k2, expand = split expand klen in
+    let iv1, iv2 = split expand slen in
+    let wk, wiv, rk, riv =
+      match role with
+      | Client -> k1, iv1, k2, iv2
+      | Server -> k2, iv2, k1, iv1 in
+    let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
+    let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
+    let r = StAE.genReader HyperHeap.root rw in
+    let msk = TLSPRF.coerce ms in
+    (StAEInstance r w, msk)
+
+(******************************************************************)
+
 // log is the raw HS log, used for EMS derivation
-val ks_server_12_cke_dh: ks:ks -> g:CommonDH.group -> gy:CommonDH.share g -> ST unit
+val ks_server_12_cke_dh: ks:ks -> gy:(g:CommonDH.group & CommonDH.share g) -> bytes -> ST (recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_12_wait_CKE_DH? (S?.s kss) /\
     (let S (S_12_wait_CKE_DH _ _ (| g', _ |)) = kss in
-    g = g')) // Responder share must be over the same group as initiator's
+    g' = dfst gy)) // Responder share must be over the same group as initiator's
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_server_12_cke_dh ks g gy =
+let ks_server_12_cke_dh ks gy hashed_log =
   let KS #region st hsl = ks in
   let S (S_12_wait_CKE_DH csr alpha (| g, gx |)) = !st in
   let (pv, cs, ems) = alpha in
+  let (| _, gy |) = gy in
   let pmsb = CommonDH.dh_initiator #g gx gy in
   let () =
     if ks_debug then
@@ -648,10 +691,8 @@ let ks_server_12_cke_dh ks g gy =
   let kef = kefAlg pv cs ems in
   let msId, ms =
     if ems then
-      let Hash h = sessionHashAlg pv cs in // TODO TLS 1.0
-      let log = HandshakeLog.getHash hsl h in
-      let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") log 48 in
-      let msId = ExtendedMS pmsId log kef in
+      let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") hashed_log 48 in
+      let msId = ExtendedMS pmsId hashed_log kef in
       (msId, ms)
     else
       let ms = TLSPRF.extract kef pmsb csr 48 in
@@ -661,7 +702,9 @@ let ks_server_12_cke_dh ks g gy =
      if ks_debug then
       IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
      else false in
-   st := S (S_12_has_MS csr alpha msId ms)
+   st := S (S_12_has_MS csr alpha msId ms);
+   let (appk, _) = ks_12_get_keys ks in
+   appk
 
 // Called after receiving server hello; server accepts resumption proposal
 // This function only checks the agility paramaters compared to the resumed sessionInfo
@@ -1046,50 +1089,6 @@ let ks_client_12_set_session_hash ks hashed_log =
 //  All functions below assume that the MS is already computed (and thus they are
 //  shared accross role, key exchange, handshake mode...)
 // *********************************************************************************
-
-
-// Will become private; public API will have
-// ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
-// ks_server_12_keygen: ...
-val ks_12_get_keys: ks:ks -> ST (writer:recordInstance * key:TLSPRF.key)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    match st with
-    | C (C_12_has_MS _ _ _ _) | S (S_12_has_MS _ _ _ _) -> true
-    | _ -> false)
-  (ensures fun h0 r h1 ->
-    modifies Set.empty h0 h1)
-
-(*private*) let ks_12_get_keys ks =
-  let KS #region st _ = ks in
-  let role, csr, alpha, msId, ms =
-    match !st with
-    | C (C_12_has_MS csr alpha msId ms) -> Client, csr, alpha, msId, ms
-    | S (S_12_has_MS csr alpha msId ms) -> Server, csr, alpha, msId, ms in
-  let cr, sr = split csr 32 in
-  let (pv, cs, ems) = alpha in
-  let kdf = kdfAlg pv cs in
-  let ae = get_aeAlg cs in
-  let id = ID12 pv msId kdf ae cr sr role in
-  let AEAD alg _ = ae in (* 16-10-18 FIXME! only correct for AEAD *)
-  let klen = CoreCrypto.aeadKeySize alg in
-  let slen = AEADProvider.salt_length id in
-  let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
-  let k1, expand = split expand klen in
-  let k2, expand = split expand klen in
-  let iv1, iv2 = split expand slen in
-  let wk, wiv, rk, riv =
-    match role with
-    | Client -> k1, iv1, k2, iv2
-    | Server -> k2, iv2, k1, iv1 in
-  let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
-  let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
-  let r = StAE.genReader HyperHeap.root rw in
-  let msk = TLSPRF.coerce ms in
-  (StAEInstance r w, msk)
-
-(******************************************************************)
-(******************************************************************)
 
 (*)
 let ks_client_12_client_finished ks
