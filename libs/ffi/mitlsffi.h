@@ -15,6 +15,11 @@ extern void FFI_mitls_cleanup(void);
 // Configure miTLS ahead of connecting
 extern int   FFI_mitls_configure(/* out */ mitls_state **state, const char *tls_version, const char *host_name, /* out */ char **outmsg, /* out */ char **errmsg);
 
+// Set configuration options ahead of connecting
+extern int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file);
+extern int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file);
+extern int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file);
+
 // Close a miTLS session - either after configure or connect
 extern void FFI_mitls_close(/* in */ mitls_state *state);
 
@@ -29,6 +34,9 @@ struct _FFI_mitls_callbacks {
 
 // Connect to a TLS server
 extern int   FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+
+// Act as a TLS server to a client
+extern int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 
 // Send a message
 extern int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size,

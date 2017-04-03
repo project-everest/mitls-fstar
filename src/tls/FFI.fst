@@ -10,8 +10,6 @@ module FFI
 // TODO: guarantee (by typing) that we don't do stdio, and don't throw
 //       exceptions, notably for incomplete pattern matching
 
-// TODO: add server-side 
-
 open Platform.Bytes
 
 open TLSConstants
@@ -81,6 +79,20 @@ let connect send recv config_1 : ML (Connection.connection * int) =
     | Read _ -> failwith "unexpected early read" in
   c, firstResult
 
+let accept_connected send recv config_1 : ML (Connection.connection * int) =
+  // we assume the configuration specifies the target SNI;
+  // otherwise we should check after Complete that it matches the authenticated certificate chain.
+  let tcp = Transport.callbacks send recv in
+  let here = new_region HyperHeap.root in
+  let c = TLS.accept_connected here tcp config_1 in
+  let i_0 = currentId c Reader in
+  let firstResult =
+    match read c i_0 with
+    | Complete -> 0
+    | ReadError description txt -> errno description txt
+    | CertQuery _ _ -> failwith "unsupported certificate request from the client"
+    | Read _ -> failwith "unexpected early read" in
+  c, firstResult
 
 type read_result = // is it convenient?
   | Received of bytes 
@@ -144,6 +156,24 @@ let ffiConfig version host =
     ciphersuites = cipherSuites_of_nameList [TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256];
   }
 
+val ffiSetCertChainFile: cfg:config -> f:string -> ML config
+let ffiSetCertChainFile cfg f =
+  { cfg with
+  cert_chain_file = f;
+  }
+
+val ffiSetPrivateKeyFile: cfg:config -> f:string -> ML config
+let ffiSetPrivateKeyFile cfg f =
+  { cfg with
+  private_key_file = f;
+  }
+
+val ffiSetCAFile: cfg:config -> f:string -> ML config
+let ffiSetCAFile cfg f =
+  { cfg with
+  ca_file = f;
+  }
+
 type callbacks = FFICallbacks.callbacks
 
 val sendTcpPacket: callbacks:callbacks -> buf:bytes -> Platform.Tcp.EXT (Platform.Error.optResult string unit) 
@@ -166,6 +196,10 @@ val ffiConnect: config:config -> callbacks:callbacks -> ML (Connection.connectio
 let ffiConnect config cb =
   connect (sendTcpPacket cb) (recvTcpPacket cb) config
   
+val ffiAcceptConnected: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
+let ffiAcceptConnected config cb =
+  accept_connected (sendTcpPacket cb) (recvTcpPacket cb) config
+
 val ffiRecv: Connection.connection -> ML cbytes  
 let ffiRecv c =
   match read c with
