@@ -77,7 +77,7 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
 
 let create parent tcp role cfg resume =
     let m = new_region parent in
-    let hs = Handshake.init m role cfg resume in
+    let hs = Handshake.create m role cfg resume in
     let state = ralloc m BC in
     C #m hs tcp state
 
@@ -471,8 +471,9 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 	       sendFragment_success (Set.singleton (C?.region c)) c i wopt frag h0 h1
 	       /\ sel h1 c.state = (if st = Half Writer then Close else Half Reader)
 	     | _ -> False)))
-  = reveal_epoch_region_inv_all ();
-    let i = currentId c Writer in 
+  =
+    reveal_epoch_region_inv_all ();
+    let i = currentId c Writer in
     let wopt = current_writer c i in 
     let st = !c.state in
     let res = sendFragment c #i wopt (Content.CT_Alert #i (point 2) ad) in
@@ -662,6 +663,7 @@ unfold let writeHandshake_ensures h_init c new_writer h0 r h1 =
 	   r <> Written /\
       	   sendFragment_inv wopt h1)
 
+// Try to send a fragment for outgoing Handshake/CCS traffic, if any.
 val writeHandshake: h_init:HST.mem //initial heap, for stating an invariant on deltas
 		  -> c:connection
 		  -> new_writer:bool
@@ -691,62 +693,63 @@ let rec writeHandshake h_init c new_writer =
         else false in
       match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
-	recall_current_writer c;
-	sendAlert c ad reason
+          recall_current_writer c;
+          sendAlert c ad reason
       | _   -> 
-      	recall_current_writer c;
-	let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
-        if next_keys then c.state := BC; // much happening ghostly
-        let st = !c.state in
-        let new_writer = new_writer || next_keys in 
-        if complete && st = BC then c.state := AD; // much happening ghostly too
-        if complete || (None? om && not send_ccs)
-	then WrittenHS new_writer complete // done, either to completion or because there is nothing left to do
-        else if new_writer //splitting cases just to narrow in on the assertion failure that prompted the assume
-	then (let h = get () in 
-	      let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
-    	      let _ =
-    		let s = c.hs in
-    		let es = logT s h in
-		assume (j_ < Seq.length es) in  //NS: weird; not sure why this is not provable
-	      writeHandshake h_init c new_writer)
-	else writeHandshake h_init c new_writer
+          recall_current_writer c;
+          let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
+          if next_keys then c.state := BC; // much happening ghostly
+          let st = !c.state in
+          let new_writer = new_writer || next_keys in 
+          if complete && st = BC then c.state := AD; // much happening ghostly too
+          if complete || (None? om && not send_ccs)
+          then WrittenHS new_writer complete // done, either to completion or because there is nothing left to do
+          else if new_writer //splitting cases just to narrow in on the assertion failure that prompted the assume
+          then (
+            let h = get () in 
+            let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
+            let _ =
+              let s = c.hs in
+              let es = logT s h in
+              assume (j_ < Seq.length es) in  //NS: weird; not sure why this is not provable
+            writeHandshake h_init c new_writer)
+          else writeHandshake h_init c new_writer
 
 
 ////////////////////////////////////////////////////////////////////////////////
 #reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 val write: c:connection -> #i:id -> #rg:frange i -> data:DataStream.fragment i rg -> ST ioresult_w
   (requires (fun h -> 
-	       current_writer_pre c i h /\
-	       writeHandshake_requires h c false h))
+    current_writer_pre c i h /\
+    writeHandshake_requires h c false h))
   (ensures (fun h0 r h1 -> 
-    current_writer_pre c i h0
-    /\  (let wopt = current_writer_T c i h0 in
+    current_writer_pre c i h0 /\ ( 
+    let wopt = current_writer_T c i h0 in
         match r with 
         | Written -> 
-	 (authId i ==> 
-	    (let d : DataStream.pre_fragment i = data in //A widening coercion as a proof hint, unpacking (d:fragment i rg) to a pre_fr
-	     Seq.equal (SD.stream_deltas #i (Some?.v wopt) h1) (snoc (SD.stream_deltas #i (Some?.v wopt) h0) (DataStream.Data d))))
+         (authId i ==> 
+            (let d : DataStream.pre_fragment i = data in //A widening coercion as a proof hint, unpacking (d:fragment i rg) to a pre_fr
+             Seq.equal (SD.stream_deltas #i (Some?.v wopt) h1) (snoc (SD.stream_deltas #i (Some?.v wopt) h0) (DataStream.Data d))))
        | _ -> True)))
 
 #reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let write c #i #rg data =
   reveal_epoch_region_inv_all();
   let wopt = current_writer c i in
-  let h_init = get () in 
-  match writeHandshake h_init c false with
-  | WrittenHS false false ->
-      //and we didn't write any application data
+  let h0 = get () in 
+  match writeHandshake h0 c false with
+  | WrittenHS false false -> // we attempt to send some application data
       let frag = Content.CT_Data rg data in
-      begin // we attempt to send some application data
+      begin 
         match sendFragment c #i wopt frag with
-      	| Error(ad,reason) -> sendAlert c ad reason
-      	| _                -> Written
+        | Error(ad,reason) -> sendAlert c ad reason
+        | _ -> Written
       end
   | r -> r 
-// we report some handshake action; the user may retry at a different index.
-// variants may be more convenient,
-// e.g WrittenHS true false signals 0.5 writing, and we could then write AD and report completion.
+      // we didn't write any application data
+      // we report some handshake action; the user may retry at a different index.
+      // variants may be more convenient,
+      // e.g WrittenHS true false signals 0.5 writing, and we could then write AD and report completion.
 
 ////////////////////////////////////////////////////////////////////////////////
 // NOT DESIGNED TO BE VERIFIED BEYOND THIS POINT
@@ -996,6 +999,7 @@ let writeClose c =
   r
 
 
+
 (** incoming (implicitly writing) ***)
 
 // By default, all i:id are reader identifiers, i.e. peerId (handshakeId (reader_epoch.h)
@@ -1125,7 +1129,7 @@ let readFragment c i =
   match Record.read c.tcp with
   | Error e -> Error e
   | Correct(ct,pv,payload) ->
-    let es = MR.m_read (MkEpochs?.es c.hs.log) in
+    let es = MR.m_read (MkEpochs?.es c.hs.epochs) in
     let j : logIndex es = Handshake.i c.hs Reader in
     let _b = 
       if tls_debug then
@@ -1197,9 +1201,8 @@ let readOne c i =
       end
   | Correct(Content.CT_CCS rg) ->
       begin
-        // TODO exclude TLS 1.3, here or in the handshake
-        match recv_ccs c.hs with
-        | InError (x,y)    -> alertFlush c i x y
+        match Handshake.recv_ccs c.hs with
+        | InError (x,y) -> alertFlush c i x y
         | InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
   | Correct(Content.CT_Data rg f) ->
@@ -1209,10 +1212,9 @@ let readOne c i =
             IO.debug_print_string "readOne: CT_Data\n" 
           else false in
         match !c.state with
-        | AD | Half Reader        -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
-        | _                       -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
+        | AD | Half Reader -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
+        | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
       end
-
 
  
 // scheduling: we always write up before reading, to advance the Handshake.
