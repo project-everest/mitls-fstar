@@ -591,7 +591,7 @@ let server_ClientFinished hs digestCCS digestClientFinished =
     if cvd = TLSPRF.verifyData alpha fink Client digestCCS
     then
       let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
-      let unused_digest = Handshake.Log.send_CCS_tag (Finished ({fin_vd = svd})) in
+      let unused_digest = Handshake.Log.send_CCS_tag hs.log (Finished ({fin_vd = svd})) true in
       InAck false false
       // TODO hs.state := S_Complete; InAck false true // Server 1.2 ATK
       // ? tricky before installing the ATK writer
