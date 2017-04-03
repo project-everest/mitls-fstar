@@ -445,12 +445,7 @@ let client_ServerHelloDone hs c ske ocr =
                        let msg = ClientKeyExchange ({cke_kex_c = kex_c_of_dh_key #g gx}) in
                        let digestClientKeyExchange = Handshake.Log.send_tag hs.log msg  in
 
-                       (* fuse these two calls? *)
-                       //17-03-29 FIXME
-                       if mode.Nego.n_extensions.ne_extended_ms then
-                         KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange;
-
-                       let app_keys, cfin_key = KeySchedule.ks_12_get_keys hs.ks in
+                       let cfin_key, app_keys = KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange in
                        register hs app_keys;
                        // we send CCS then Finished;  we will use the new keys only after CCS
 
@@ -665,10 +660,13 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
 
 (* receive ClientFinish *)
 let server_ClientFinished hs digestCCS digestClientFinished =
-    let (cfin_key, sfin_key) = KeySchedule.ks_server_12_finished_keys hs.ks in
-    if HMAC.UFCMA.verify cfin_key digestCCS f.fin_vd
+    let fink = KeySchedule.ks_12_finished_key hs.ks in
+    let mode : Nego.mode = admit() in
+    let cvd : bytes = admit() in // Where is the ClientFinished message?
+    let alpha = (mode.Nego.n_protocol_version, mode.Nego.n_cipher_suite) in
+    if cvd = TLSPRF.verifyData alpha fink Client digestCCS
     then
-      let svd = HMAC.UFCMA.mac sfin_key digestClientFinished in
+      let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
       let unused_digest = Handshake.Log.send_CCS_tag (Finished ({fin_vd = svd})) in
       InAck false false
       // TODO hs.state := S_Complete; InAck false true // Server 1.2 ATK
