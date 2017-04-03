@@ -368,7 +368,7 @@ mitls.cmxa: record_fstar_version $(LIBFILES)
 	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
 
 #16-10-19 beware: failing tests in mitls.cmxa will leave mitls.exe unchanged.
-mitls.exe:  mitls.cmxa 
+mitls.exe:  test/mitls.ml mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -g mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
 
@@ -409,6 +409,10 @@ tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -ccopt -bundle -g mitls.cmxa -o libmitls.so
 else
 tls-ffi: mitls.cmxa
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so
+    # pass "-z noexecstack" to better support Bash on Windows
+    # pass "-Bsymbolic" to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
+    #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
+    #   can result in heap corruptions and crashes.
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so -ccopt "-Xlinker -z -Xlinker noexecstack --Xlinker -Bsymbolic"
 endif
 endif
