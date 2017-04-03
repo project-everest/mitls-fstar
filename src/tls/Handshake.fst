@@ -394,103 +394,41 @@ let client_ServerHelloDone hs c ske ocr =
     match Nego.clientComplete hs.nego c ske ocr with
     | Error z -> InError z
     | Correct mode -> (
+      ( match ocr with
+        | None -> ()
+        | Some cr ->
+            let cc = {crt_chain = []} in // TODO
+            Handshake.Log.send hs.log (Certificate cc));
 
-    (* here are the checks we were doing before; now hopefully in Nego:
-    let valid_chain = hs.cfg.check_peer_certificate => Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file in
-    if not valid_chain then Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failure")    else
-      let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-      let Some cs_sigalg = n.n_sigAlg in
-      let sigalgs = n.n_extensions.ne_signature_algorithms in
-      match sigHashAlg_of_ske ske.ske_sig with
-      | None -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
-      | Some ((sa,h),sigv) ->
-            let algs: list sigHashAlg =
-              match sigalgs with
-              | Some l -> l
-              | None -> [(cs_sigalg, Hash Hashing.Spec.SHA1)] in
-            if not (List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = h)) algs)
-            then Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
-            else
-              let a = Signature.Use (fun _ -> true) sa [h] false false in
-              let csr = (n.n_client_random @| n.n_server_random) in
-              let ems = n.n_extensions.ne_extended_ms in
-              let tbs = to_be_signed n.n_protocol_version Server (Some csr) ske_tbs in
-              match Signature.get_chain_public_key #a c.crt_chain with
-              | None -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to get public key from chain") )
-              | Some pk ->
-                   let valid_signature = Signature.verify #a h pk tbs sigv in
-                   // debug_print("tbs = " ^ (Platform.Bytes.print_bytes tbs) ^ "\n");
-                   debug_print("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
-                   if not valid_signature then Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
-                   else
-                     match ske.ske_kex_s with
-                     | KEX_S_RSA _ -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "only support ECDHE/DHE SKE") )
-                     | KEX_S_DHE (| g, gy |) ->
-                     *)
+      let (| g, _ |) = Some?.v (mode.Nego.n_server_share) in // already set in KS
+      let gx =
+        KeySchedule.ks_client_12_full_dh hs.ks
+        mode.Nego.n_server_random
+        mode.Nego.n_protocol_version
+        mode.Nego.n_cipher_suite
+        mode.Nego.n_extensions.ne_extended_ms // a flag controlling the use of ems
+        g in
+      let msg = ClientKeyExchange ({cke_kex_c = kex_c_of_dh_key #g gx}) in
+      let digestClientKeyExchange = Handshake.Log.send_tag hs.log msg  in
 
-                       ( match ocr with
-                         | None -> ()
-                         | Some cr ->
-                             let cc = {crt_chain = []} in // TODO
-                             Handshake.Log.send hs.log (Certificate cc));
+      (* fuse these two calls? *)
+      //17-03-29 FIXME
+      if mode.Nego.n_extensions.ne_extended_ms then
+        KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange;
 
-                       let (| g, _ |) = Some?.v (mode.Nego.n_server_share) in // already set in KS
-                       let gx =
-                         KeySchedule.ks_client_12_full_dh hs.ks
-                         mode.Nego.n_server_random
-                         mode.Nego.n_protocol_version
-                         mode.Nego.n_cipher_suite
-                         mode.Nego.n_extensions.ne_extended_ms // a flag controlling the use of ems
-                         g in
-                       let msg = ClientKeyExchange ({cke_kex_c = kex_c_of_dh_key #g gx}) in
-                       let digestClientKeyExchange = Handshake.Log.send_tag hs.log msg  in
+      let app_keys, cfin_key = KeySchedule.ks_12_get_keys hs.ks in
+      register hs app_keys; 
+      // we send CCS then Finished;  we will use the new keys only after CCS
 
-                       (* fuse these two calls? *)
-                       //17-03-29 FIXME
-                       if mode.Nego.n_extensions.ne_extended_ms then
-                         KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange;
-
-                       let app_keys, cfin_key = KeySchedule.ks_12_get_keys hs.ks in
-                       register hs app_keys; 
-                       // we send CCS then Finished;  we will use the new keys only after CCS
-
-                       let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
-                       let digestClientFinished = Handshake.Log.send_CCS_tag hs.log (Finished ({fin_vd = cvd})) false in
-                       hs.state := C_Wait_CCS2 digestClientFinished;
-                       InAck false false)
+      let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
+      let digestClientFinished = Handshake.Log.send_CCS_tag hs.log (Finished ({fin_vd = cvd})) false in
+      hs.state := C_Wait_CCS2 digestClientFinished;
+      InAck false false)
 
 #set-options "--lax"
 (* receive EncryptedExtension...ServerFinished for TLS 1.3, roughly mirroring client_ServerHelloDone *)
 let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVerify digestServerFinished =
     match Nego.clientComplete_13 hs.nego ee ocr c cv digestCert with
-    (* here are the checks we were doing before; now hopefully in Nego:
-    let valid_chain = cfg.check_peer_certificate => Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file in
-    if not valid_chain then Error (AD_decode_error, "Certificate was not valid")
-    else
-    begin
-       let Some cs_sigalg = n.n_sigAlg in
-       let Some algs = n.n_extensions.ne_signature_algorithms in
-       debug_print("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n");
-       match sigHashAlg_of_ske cv.cv_sig with
-       | Some ((sa,ha), sigv) ->
-         if not (List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = ha)) (list_sigHashAlg_is_list_tuple_sig_hash algs))
-         then Error (AD_handshake_failure, "Signature algorithm negotiation failed")
-         else (
-           begin
-           let Hash sh_alg = sessionHashAlg n.n_protocol_version n.n_cipher_suite in
-           let hL = hashSize sh_alg in
-           let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-           let rc = Hashing.compute sh_alg zeroes in
-           let lb = (HandshakeLog.getHash log sh_alg) @| rc in
-           let a = Signature.Use (fun _ -> true) sa [ha] false false in
-           let tbs = to_be_signed n.n_protocol_version Server None lb in
-           match Signature.get_chain_public_key #a c.crt_chain with
-           | None -> Error (AD_decode_error, "Certificate was not valid")
-           | Some pk ->
-             let valid_signature = Signature.verify ha pk tbs sigv in
-             debug_print("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
-             if not valid then Error (AD_decode_error, "Certificate signature did not verify")
-             else  *)
     | Error z -> InError z
     | Correct full_mode ->
         //admit() // 17-03-30  until KS restructuring
