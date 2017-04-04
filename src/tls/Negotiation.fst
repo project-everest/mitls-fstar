@@ -39,9 +39,9 @@ type ri = cVerifyData * sVerifyData
 
 type resumption_offer_12 = // part of resumeInfo
   | OfferNothing
-  | OfferTicket of id { length id <> 0 } 
-  | OfferSid of sid { length sid <> 0 } 
-type resumption_mode_12 (o: resumption_offer_12) = b:bool { NoOffer?b ==> b = false }
+  | OfferTicket of b:bytes{ length b <> 0 } 
+  | OfferSid of b:bytes { length b <> 0 } 
+// type resumption_mode_12 (o: resumption_offer_12) = b:bool { OfferNothing? o ==> b = false }
 
 // offers don't depend on a choice of client_random 
 // TODO add resume proposal; also probably the PSK list
@@ -84,7 +84,7 @@ type mode = {
 
   // TODO add client and server PSKs too
 
-  // more from SKE in ServerHelloDone flight (1.2) or SH (1.3)
+  // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
   n_server_share: option (g:CommonDH.group & CommonDH.share g);
 
   // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)

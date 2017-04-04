@@ -7,7 +7,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 //FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
 //AR: Yes ! Totally agree.
-//CF: TODO
+//CF: TODO. Ideally use module names, not abbrevs.
 open FStar.Seq
 open FStar.Set
 
@@ -19,6 +19,7 @@ open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages // for the message syntax
+open Handshake.Log // notably for Outgoing
 //open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less
@@ -46,11 +47,12 @@ let hashSize = Hashing.Spec.tagLen
    SI: pull both these out to a Debug/Config module. *)
 inline_for_extraction let hs_debug = false
 
-// inline/normalize  too?
-let debug_print s =
-  if hs_debug then
-    IO.debug_print_string s
-  else false
+// TODO: convenient shared printing & debugging.
+// is this guaranteed to disapper at compile time when hs_debug is false?
+val trace: s:string -> ST unit 
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let trace s = if hs_debug then IO.print_string ^"HS| "^s^"\n"
 
 
 (* Returns [c] if [c] is within the range of acceptable versions for [cfg],
@@ -350,17 +352,18 @@ let client_ClientHello hs i =
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
 let client_ServerHello hs sh digest =
+  trace "Processing ServerHello";
   let open Nego in
-  // debug_print "Processing client hello...\n";
-  let n = Nego.client_ServerHello hs.nego sh in
+  let n: Nego.mode = admit() in // = Nego.client_ServerHello hs.nego sh in
   match n with
   | Error z -> Error z
   | Correct mode ->
     match mode.n_protocol_version, mode.n_kexAlg with
     | TLS_1p3, Kex_DHE //, Some gy
     | TLS_1p3, Kex_ECDHE //, Some gy
-    -> (* commit to TLS 1.3 *)
+    -> 
       begin
+        trace "Running TLS 1.3";
         let hs_keys = KeySchedule.ks_client_13_sh hs.ks
           mode.n_server_random
           mode.n_cipher_suite
@@ -374,8 +377,9 @@ let client_ServerHello hs sh digest =
         Correct(InAck true false) // Client 1.3 HSK
       end
     | TLS_1p3, _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unsupported group negotiated")
-    | _, _ -> (* commit to TLS classic *)
+    | _, _ -> 
       begin
+        trace "Running TLS classic";
         hs.state := C_Wait_ServerHelloDone;
         Correct(InAck false false)
       end
@@ -390,6 +394,7 @@ val client_ServerHelloDone:
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let client_ServerHelloDone hs c ske ocr =
+    trace "Processing ...ServerHelloDone";
     let open Nego in
     match Nego.clientComplete hs.nego c ske ocr with
     | Error z -> InError z
@@ -397,7 +402,8 @@ let client_ServerHelloDone hs c ske ocr =
       ( match ocr with
         | None -> ()
         | Some cr ->
-            let cc = {crt_chain = []} in // TODO
+            trace "Processing certificate request (TODO)";
+            let cc = {crt_chain = []} in 
             Handshake.Log.send hs.log (Certificate cc));
 
       let (| g, _ |) = Some?.v (mode.Nego.n_server_share) in // already set in KS
@@ -515,10 +521,12 @@ let client_ServerFinished hs f digest =
     else
       InError (AD_decode_error, "Finished MAC did not verify")
 
+
 (* -------------------- Handshake Server ------------------------ *)
 
 (* called by server_ClientHello after sending TLS 1.2 ServerHello *)
 let server_ServerHelloDone hs n =
+    trace "Sending ...ServerHelloDone";
     // static precondition: n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
     // should instead use Nego for most of this processing
     let cfg = admit() in
@@ -582,6 +590,7 @@ val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs ch =
+    trace "Processing ClientHello";
     match Nego.serverMode hs.nego ch with
     | Error z -> InError z
     | Correct mode -> (
@@ -618,6 +627,7 @@ let server_ClientHello hs ch =
 
           if mode.n_protocol_version = TLS_1p3
           then (
+            trace "Derive handshake keys";
             let hs_keys = KeySchedule.ks_server_13_sh hs.ks (* digestServerHello *)  in
             register hs hs_keys;
             // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
@@ -632,6 +642,7 @@ let server_ClientHello hs ch =
 let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
     // FIXME support optional client c and cv
     // let ems = n.n_extensions.ne_extended_ms in // ask Nego?
+    trace "Process Client CCS"; 
     match cke.cke_kex_c with
       | KEX_C_RSA _ | KEX_C_DH -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
       | KEX_C_DHE gyb // ADL: the type of gyb will change from bytes to g & share g
@@ -648,6 +659,7 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
 
 (* receive ClientFinish *)
 let server_ClientFinished hs digestCCS digestClientFinished =
+    trace "Process Client Finished";
     let fink = KeySchedule.ks_12_finished_key hs.ks in
     let mode : Nego.mode = admit() in
     let cvd : bytes = admit() in // Where is the ClientFinished message?
@@ -669,6 +681,7 @@ val server_ServerFinished_13: hs -> i:id -> ST (result (Outgoing i))
 let server_ServerFinished_13 hs n =
     // static pre: n.n_protocol_version = TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
     // most of this should go to Nego
+    trace "Prepare Server Finished";
     match Cert.lookup_chain cfg.cert_chain_file with
     | Error z -> Error z
     | Correct chain ->
@@ -727,6 +740,7 @@ let server_ServerFinished_13 hs n =
 
 (* receive ClientFinish 1.3 *)
 let server_ClientFinished_13 hs n f digestClientFinished clientAuth=
+   trace "Process Client Finished";
    match clientAuth with
    | Some (c,cv,digest) -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
@@ -848,6 +862,7 @@ val next_fragment: hs -> i:id -> ST (result (outgoing i))
   ))
   (ensures (next_fragment_ensures s))
 let next_fragment hs i =
+    trace "next_fragment";
     let outgoing = Handshake.Log.next_fragment hs.log i in
     match !hs.state with
     | C_Idle when outgoing = Outgoing None false false false -> client_ClientHello hs i
@@ -907,6 +922,7 @@ val recv_fragment: s:hs -> #i:id -> message i -> ST incoming (* incoming transit
   (requires (hs_inv s))
   (ensures (recv_ensures s))
 let recv_fragment hs #i f =
+    trace "recv_fragment"; 
     let flight = Handshake.Log.receive hs.log f in
     match !hs.state, flight with
       | _, None -> InAck false false // nothing happened
@@ -958,7 +974,7 @@ val recv_ccs: s:hs -> ST incoming
     ))
 // TODO check CCS once committed to TLS 1.3 yields an alert
 let recv_ccs hs =
-    debug_print "CALL recv_ccs\n";
+    trace "recv_ccs";
     // assert pv <> TLS 1.3
     // CCS triggers completion of the incoming flight of messages.
     match Handshake.Log.receive_CCS hs.log with
@@ -966,15 +982,15 @@ let recv_ccs hs =
     | Correct (ms, hs, digest) ->
         match !hs.state, ms, hs with
         | C_Wait_CCS2 digest, ([], []) -> (
-            // we now expect the encrypted server finish, should keep the digest to verify it
+            trace "Processing CCS"; // now expect encrypted finish on this digest
+
             hs.state := C_CCSReceived digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK
             )
 
         | C_Wait_CCS2 digest, ([SessionTicket st], []) -> (
-            debug_print "WARNING: no support for session tickets";
-            // we now expect the encrypted server finish, should keep the digest to verify it
+            trace "Processing SessionTicket; CCS. WARNING: no support for tickets"; // now expect encrytped finish on this digest
             hs.state := C_CCSReceived digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK
