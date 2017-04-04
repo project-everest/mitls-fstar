@@ -12,7 +12,7 @@ open TLSConstants
 
 open FFI
 
-private let pr s = IO.print_string ("FFI: "^s^".\n") // verbose
+let pr s : ML unit = IO.print_string ("FFI: "^s^".\n")
 // let pr s = ()  // quieter
 
 
@@ -46,15 +46,14 @@ let client config host port =
     | _  -> pr "write error"))
   | _, err  -> pr "connect error" )
 
-let aux_server config client : ML unit = pr ("Success")
-(* let rec aux_server config client : ML unit =
+//let aux_server config client : ML unit = pr ("Success")
+let rec aux_server config client : ML unit =
   let send x = let b = IO.debug_print_string "TCP:send\n" in Platform.Tcp.send client x in
   let recv x = let b = IO.debug_print_string "TCP:recv\n" in Platform.Tcp.recv client x in
-  match FFI.accept_connected send recv config with
+  (match FFI.accept_connected send recv config with
   | c, 0 -> (
     match FFI.read c with
-    | Received response -> _ (
-      let db = DataStream.appBytes response in
+    | Received db -> (
       pr ("Received data: "^(iutf8 db));
       let text = "You are connected to miTLS* 1.3!\r\n"
         ^ "This is the request you sent:\r\n\r\n" ^ (iutf8 db) in
@@ -67,8 +66,8 @@ let aux_server config client : ML unit = pr ("Success")
       )
     | _ -> pr "read error"
     )
-  | _ -> pr"accept_connect error"
-*)
+  | _ -> pr"accept_connect error");
+  aux_server config client
 
 let server config host port =
  pr "===============================================\n Starting test TLS 1.3 server...\n";

@@ -48,7 +48,7 @@ let rec write_all' c i buffer sent =
   | Written -> write_all' c i buffer (sent+size)
   | r       -> r 
 
-private let write_all c i b = write_all' c i b 0
+private let write_all c i b : ML ioresult_w = write_all' c i b 0
 
 // an integer carrying the fatal alert descriptor
 // we could also write txt into the application error log 
@@ -98,7 +98,7 @@ type read_result = // is it convenient?
   | Received of bytes 
   | Errno of int
 
-let read c = 
+let read c : ML read_result = 
   let i = currentId c Reader in 
   match read c i with
   | Read (Data d)             -> Received (appBytes d)
