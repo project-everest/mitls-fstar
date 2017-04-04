@@ -96,9 +96,9 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
     *outmsg = NULL;
     *errmsg = NULL;
     
+    caml_acquire_runtime_system();
     version = caml_copy_string(tls_version);  
     host = caml_copy_string(host_name);
-    caml_acquire_runtime_system();
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
         // call caml_format_exception(Extract_exception(config)) to extract the exception information
@@ -127,8 +127,8 @@ int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char 
     CAMLlocal2(config, camlfile);
     int ret = 0;
 
-    camlfile = caml_copy_string(file);
     caml_acquire_runtime_system();
+    camlfile = caml_copy_string(file);
     config = caml_callback2_exn(*g_mitls_FFI_SetCertChainFile, state->fstar_state, camlfile);
     if (Is_exception_result(config)) {
         // call caml_format_exception(Extract_exception(config)) to extract the exception information
@@ -147,8 +147,8 @@ int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char
     CAMLlocal2(config, camlfile);
     int ret = 0;
 
-    camlfile = caml_copy_string(file);
     caml_acquire_runtime_system();
+    camlfile = caml_copy_string(file);
     config = caml_callback2_exn(*g_mitls_FFI_SetPrivateKeyFile, state->fstar_state, camlfile);
     if (Is_exception_result(config)) {
         // call caml_format_exception(Extract_exception(config)) to extract the exception information
@@ -167,8 +167,8 @@ int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
     CAMLlocal2(config, camlfile);
     int ret = 0;
 
-    camlfile = caml_copy_string(file);
     caml_acquire_runtime_system();
+    camlfile = caml_copy_string(file);
     config = caml_callback2_exn(*g_mitls_FFI_SetCAFile, state->fstar_state, camlfile);
     if (Is_exception_result(config)) {
         // call caml_format_exception(Extract_exception(config)) to extract the exception information
@@ -298,9 +298,6 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
         } else {
             ret = 0;
         }
-        // The result is an integer.  How to deduce the value of 'c' needed for
-        // subsequent FFI.read and FFI.write is TBD.
-        
     }
     caml_release_runtime_system();
     CAMLreturnT(int,ret);
@@ -331,9 +328,6 @@ int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ 
         } else {
             ret = 0;
         }
-        // The result is an integer.  How to deduce the value of 'c' needed for
-        // subsequent FFI.read and FFI.write is TBD.
-
     }
     caml_release_runtime_system();
     CAMLreturnT(int,ret);
