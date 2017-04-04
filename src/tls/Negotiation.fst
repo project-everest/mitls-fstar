@@ -37,6 +37,12 @@ assume val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> To
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
+type resumption_offer_12 = // part of resumeInfo
+  | OfferNothing
+  | OfferTicket of id { length id <> 0 } 
+  | OfferSid of sid { length sid <> 0 } 
+type resumption_mode_12 (o: resumption_offer_12) = b:bool { NoOffer?b ==> b = false }
+
 // offers don't depend on a choice of client_random 
 // TODO add resume proposal; also probably the PSK list
 type offer = {
@@ -50,17 +56,23 @@ type offer = {
   co_resume: option sessionID;
 }
 
+
 // The final negotiated outcome, including key shares and long-term identities.
 // mode is the name used in the resilience paper; 
 // session_info is the one from TLSInfo
 type mode = {
-  // from CH
+  n_offer: offer; // will be a flat sub-structure; could be inlined too. 
+
+   // from CH
   n_client_random: TLSInfo.random;
-  n_sessionID: option sessionID; // optional, proposed 1.2 resumption id
 
   // more from SH (both TLS 1.2 and TLS 1.3)
   n_server_random: TLSInfo.random;
-  n_resume: bool; // is this a 1.2 resumption? 
+  // the resumption response
+  n_resume: bool; // is this a 1.2 resumption with the offered sid?
+  n_psk: option PSK.pskid; // none with 1.2 (we are not doing PSK 1.2)
+  n_sessionID: option sessionID; // optional, proposed 1.2 id for *future* resumptions (not always what SH carries)
+
   n_protocol_version: protocolVersion;
   n_kexAlg: TLSConstants.kexAlg;
   n_aeAlg: TLSConstants.aeAlg;
@@ -69,7 +81,6 @@ type mode = {
   n_compression: option compression;
   n_extensions: negotiatedExtensions;
   n_scsv: list scsv_suite;
-  n_psk: option PSK.pskid; // none with 1.2 (we are not doing PSK 1.2)
 
   // TODO add client and server PSKs too
 

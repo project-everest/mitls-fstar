@@ -307,7 +307,7 @@ let client_ClientHello hs i =
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
   let open Nego in
-  let offer = clientOffer hs.nego in (* compute offer from configuration *)
+  let offer = Nego.clientOffer hs.nego in (* compute offer from configuration *)
   let shares =
     match offer.co_protocol_version with
       | TLS_1p3 -> (* compute shares for groups in offer *)
@@ -352,7 +352,7 @@ let client_ClientHello hs i =
 let client_ServerHello hs sh digest =
   let open Nego in
   // debug_print "Processing client hello...\n";
-  let n = clientMode hs.nego sh in
+  let n = Nego.client_ServerHello hs.nego sh in
   match n with
   | Error z -> Error z
   | Correct mode ->
