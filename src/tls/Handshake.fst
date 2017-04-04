@@ -354,7 +354,7 @@ let client_ClientHello hs i =
 let client_ServerHello hs sh digest =
   trace "Processing ServerHello";
   let open Nego in
-  let n: Nego.mode = admit() in // = Nego.client_ServerHello hs.nego sh in
+  let n = Nego.client_ServerHello hs.nego sh in
   match n with
   | Error z -> Error z
   | Correct mode ->
@@ -396,7 +396,7 @@ val client_ServerHelloDone:
 let client_ServerHelloDone hs c ske ocr =
     trace "Processing ...ServerHelloDone";
     let open Nego in
-    match Nego.clientComplete hs.nego c ske ocr with
+    match Nego.client_ServerKeyExchange hs.nego c ske ocr with
     | Error z -> InError z
     | Correct mode -> (
       ( match ocr with
@@ -591,7 +591,7 @@ val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs ch =
     trace "Processing ClientHello";
-    match Nego.serverMode hs.nego ch with
+    match Nego.server_ClientHello hs.nego ch with
     | Error z -> InError z
     | Correct mode -> (
       //let srand = KS.ks_server_random hs.ks in
@@ -647,7 +647,7 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
       | KEX_C_RSA _ | KEX_C_DH -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
       | KEX_C_DHE gyb // ADL: the type of gyb will change from bytes to g & share g
       | KEX_C_ECDHE gyb -> (
-          let mode:  Nego.mode = admit() in  //TODO read back from mode.
+          let mode = Nego.getMode() in  //TODO read back from mode.
           let g_gy : (g:CommonDH.group & CommonDH.share g) = admit() in // will be gyb
           let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks g_gy digestCCS1 in
           register hs app_keys;
@@ -661,7 +661,7 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
 let server_ClientFinished hs digestCCS digestClientFinished =
     trace "Process Client Finished";
     let fink = KeySchedule.ks_12_finished_key hs.ks in
-    let mode : Nego.mode = admit() in
+    let mode = Nego.getMode() in
     let cvd : bytes = admit() in // Where is the ClientFinished message?
     let alpha = (mode.Nego.n_protocol_version, mode.Nego.n_cipher_suite) in
     if cvd = TLSPRF.verifyData alpha fink Client digestCCS

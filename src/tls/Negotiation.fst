@@ -106,6 +106,7 @@ type preMode_12 = mode
 type preModeAbbrv = mode
 type preMode_13 = mode
 
+//HS
 assume val clientOffer: #region:rgn -> #role:TLSConstants.role -> t region role -> St offer
 (*
 let clientOffer #region #r nego =
@@ -123,16 +124,31 @@ let clientOffer #region #r nego =
   co
 *)
 
-assume val clientMode: #region:rgn -> #role:TLSConstants.role -> t region role -> 
+assume val getMode: #region:rgn -> #role:TLSConstants.role -> t region role -> 
+  ST mode 
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+
+assume val version: #region:rgn -> #role:TLSConstants.role -> t region role -> 
+  ST protocolVersion
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+
+(* CLIENT *) 
+
+//HS
+assume val client_ServerHello: #region:rgn -> #role:TLSConstants.role -> t region role -> 
   HandshakeMessages.sh -> 
   St (result mode) // it needs to be computed, whether returned or not
 
-assume val clientComplete: #region:rgn -> #role:TLSConstants.role -> t region role ->  
+//HS
+assume val client_ServerKeyExchange: #region:rgn -> #role:TLSConstants.role -> t region role ->  
   serverCert: HandshakeMessages.crt -> 
   HandshakeMessages.ske ->
   ocr: option HandshakeMessages.cr ->
   St (result mode) 
 
+//HS
 assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region role -> 
   HandshakeMessages.ee -> 
   ocr: option HandshakeMessages.cr -> 
@@ -141,7 +157,11 @@ assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region
   digest:  bytes{length digest <= 32} ->
   St (result mode) // it needs to be computed, whether returned or not
 
-assume val serverMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
+
+(* SERVER *)
+
+//HS
+assume val server_ClientHello: #region:rgn -> #role:TLSConstants.role -> t region role ->
   HandshakeMessages.ch ->
   St (result mode) 
 
