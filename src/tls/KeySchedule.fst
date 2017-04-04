@@ -623,7 +623,7 @@ let ks_server_13_sh ks =
   // Will become private; public API will have
   // ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
   // ks_server_12_keygen: ...
-  val ks_12_get_keys: ks:ks -> ST (writer:recordInstance * key:TLSPRF.key)
+  val ks_12_finished_key: ks:ks -> ST (key:TLSPRF.key)
     (requires fun h0 ->
       let st = sel h0 (KS?.state ks) in
       match st with
@@ -632,7 +632,14 @@ let ks_server_13_sh ks =
     (ensures fun h0 r h1 ->
       modifies Set.empty h0 h1)
 
-  (*private*) let ks_12_get_keys ks =
+ let ks_12_finished_key ks =
+   let KS #region st _ = ks in
+   let ms = match !st with
+   | C (C_12_has_MS _ _ _ ms) -> ms
+   | S (S_12_has_MS _ _ _ ms) -> ms in
+   TLSPRF.coerce ms
+
+  private let ks_12_record_key ks =
     let KS #region st _ = ks in
     let role, csr, alpha, msId, ms =
       match !st with
@@ -657,8 +664,7 @@ let ks_server_13_sh ks =
     let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
     let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
     let r = StAE.genReader HyperHeap.root rw in
-    let msk = TLSPRF.coerce ms in
-    (StAEInstance r w, msk)
+    StAEInstance r w
 
 (******************************************************************)
 
@@ -703,8 +709,7 @@ let ks_server_12_cke_dh ks gy hashed_log =
       IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
      else false in
    st := S (S_12_has_MS csr alpha msId ms);
-   let (appk, _) = ks_12_get_keys ks in
-   appk
+   ks_12_record_key ks
 
 // Called after receiving server hello; server accepts resumption proposal
 // This function only checks the agility paramaters compared to the resumed sessionInfo
@@ -1062,28 +1067,36 @@ let ks_client_12_full_rsa ks sr pv cs ems pk =
       C_12_has_MS csr alpha msId ms in
   st := C ns; encrypted
 
-val ks_client_12_set_session_hash: ks:ks -> h:bytes -> ST unit
+val ks_client_12_set_session_hash: ks:ks -> h:bytes -> ST (TLSPRF.key * recordInstance)
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
-    C? st /\ C_12_wait_MS? (C?.s st))
+    C? st /\ (C_12_wait_MS? (C?.s st) \/ C_12_has_MS? (C?.s st)))
   (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    let st = sel h1 (KS?.state ks) in
+    modifies (Set.singleton (KS?.region ks)) h0 h1 /\
+    C? st /\ (C_12_has_MS? (C?.s st))
+    /\ modifies_rref (KS?.region ks) !{as_ref (KS?.state ks)} (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_set_session_hash ks hashed_log =
   let KS #region st hsl = ks in
-  let C (C_12_wait_MS csr alpha pmsId pms) = !st in
-  let (pv, cs, true) = alpha in
-  let kef = kefAlg pv cs true in
-  let h = verifyDataHashAlg_of_ciphersuite cs in
-  let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") hashed_log 48 in
-  let _ =
-    if ks_debug then
-      IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
-    else false in
-  let msId = ExtendedMS pmsId hashed_log kef in
-  st := C (C_12_has_MS csr alpha msId ms)
+  let ms =
+    match !st with
+    | C (C_12_has_MS csr alpha msId ms) -> ms
+    | C (C_12_wait_MS csr alpha pmsId pms) ->
+      let (pv, cs, true) = alpha in
+      let kef = kefAlg pv cs true in
+      let h = verifyDataHashAlg_of_ciphersuite cs in
+      let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") hashed_log 48 in
+      let _ =
+        if ks_debug then
+          IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
+        else false in
+      let msId = ExtendedMS pmsId hashed_log kef in
+      st := C (C_12_has_MS csr alpha msId ms);
+      ms
+    in
+  let appk = ks_12_record_key ks in
+  (TLSPRF.coerce ms, appk)
 
 // *********************************************************************************
 //  All functions below assume that the MS is already computed (and thus they are
