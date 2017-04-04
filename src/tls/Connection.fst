@@ -60,10 +60,6 @@ let c_log c    = c.hs.epochs
 (* val writer_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h)) *)
 (* let writer_epoch #region #peer e = Handshake.writer_epoch e *)
 
-(***
-     WE WILL FOCUS VERIFICATION ON StreamAE and TLS-1.3 FOR NOW.
-     Ignores StatefulLHAE, which needs to be upgraded
- ***)
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 type st_inv c h = hs_inv (C?.hs c) h
 

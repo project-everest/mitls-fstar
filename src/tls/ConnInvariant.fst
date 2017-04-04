@@ -90,7 +90,7 @@ type conn_tab_t = MM.t tls_tables_region random r_conn pairwise_disjoint
 let conn_tab : conn_tab_t = 
   MM.alloc #tls_tables_region #random #r_conn #pairwise_disjoint
 
-(*** MAIN STATEFUL INVARIANT ***)
+(*** DEFINING MAIN STATEFUL INVARIANT ***)
 (* --------------------------------------------------------------------------------
    We define a joint, stateful invariant to relate the contents 
    of MasterSecret.ms_tab and conn_tab above.
@@ -162,7 +162,7 @@ let mc_inv (h:HST.mem) =
 
 (*** PROVING THE STABILITY OF mc_inv ***)
 (* --------------------------------------------------------------------------------
-   There are 4 main cases:
+   There are 4 main invariant-preservation cases, each with its lemma
      1. Deriving a new writer, using MS.derive 
      2. Registering a writer with a connection
      3. Mutating the log of some writer

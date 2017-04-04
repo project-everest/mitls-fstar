@@ -12,46 +12,6 @@ open HandshakeMessages
 //17-04-04 Here is a placeholder for signing stuff.
 (*
 
-(* ---------------- signature stuff, to be moved (at least) to Nego -------------------- *)
-
-// deep subtyping...
-let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result TLSConstants.hashAlg) =
-  function
-  | Error z -> Error z
-  | Correct h -> Correct h
-let sigHashAlg_is_tuple_sig_hash: sigHashAlg -> Tot (sigAlg * TLSConstants.hashAlg) =
-  function | a,b -> a,b
-let rec list_sigHashAlg_is_list_tuple_sig_hash: list sigHashAlg -> Tot (list (TLSConstants.sigAlg * TLSConstants.hashAlg)) =
-  function
-  | [] -> []
-  | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd) :: (list_sigHashAlg_is_list_tuple_sig_hash tl)
-
-val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
-let to_be_signed pv role csr tbs =
-  match pv, csr with
-  | TLS_1p3, None ->
-    let pad = abytes (String.make 64 (Char.char_of_int 32)) in
-    let ctx =
-      match role with
-      | Server -> "TLS 1.3, server CertificateVerify"
-      | Client -> "TLS 1.3, client CertificateVerify"
-    in
-    pad @| (abytes ctx) @| (abyte 0z) @| tbs
-  | _, Some csr -> csr @| tbs
-
-val sigHashAlg_of_ske: bytes -> Tot (option (sigHashAlg * bytes))
-let sigHashAlg_of_ske signature =
-  if length signature > 4 then
-   let h, sa, sigv = split2 signature 1 1 in
-   match vlsplit 2 sigv with
-   | Correct (sigv, eof) ->
-     begin
-     match length eof, parseSigAlg sa, optHashAlg_prime_is_optHashAlg (parseHashAlg h) with
-     | 0, Correct sa, Correct (Hash h) -> Some ((sa,Hash h), sigv)
-     | _, _, _ -> None
-     end
-   | Error _ -> None
-  else None
 
 
 From ...ClientHelloDone 
