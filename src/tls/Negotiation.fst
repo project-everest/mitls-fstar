@@ -8,6 +8,90 @@ open TLSInfo
 open TLSConstants
 open HandshakeMessages
 
+
+//17-04-04 Here is a placeholder for signing stuff.
+(*
+
+(* ---------------- signature stuff, to be moved (at least) to Nego -------------------- *)
+
+// deep subtyping...
+let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result TLSConstants.hashAlg) =
+  function
+  | Error z -> Error z
+  | Correct h -> Correct h
+let sigHashAlg_is_tuple_sig_hash: sigHashAlg -> Tot (sigAlg * TLSConstants.hashAlg) =
+  function | a,b -> a,b
+let rec list_sigHashAlg_is_list_tuple_sig_hash: list sigHashAlg -> Tot (list (TLSConstants.sigAlg * TLSConstants.hashAlg)) =
+  function
+  | [] -> []
+  | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd) :: (list_sigHashAlg_is_list_tuple_sig_hash tl)
+
+val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
+let to_be_signed pv role csr tbs =
+  match pv, csr with
+  | TLS_1p3, None ->
+    let pad = abytes (String.make 64 (Char.char_of_int 32)) in
+    let ctx =
+      match role with
+      | Server -> "TLS 1.3, server CertificateVerify"
+      | Client -> "TLS 1.3, client CertificateVerify"
+    in
+    pad @| (abytes ctx) @| (abyte 0z) @| tbs
+  | _, Some csr -> csr @| tbs
+
+val sigHashAlg_of_ske: bytes -> Tot (option (sigHashAlg * bytes))
+let sigHashAlg_of_ske signature =
+  if length signature > 4 then
+   let h, sa, sigv = split2 signature 1 1 in
+   match vlsplit 2 sigv with
+   | Correct (sigv, eof) ->
+     begin
+     match length eof, parseSigAlg sa, optHashAlg_prime_is_optHashAlg (parseHashAlg h) with
+     | 0, Correct sa, Correct (Hash h) -> Some ((sa,Hash h), sigv)
+     | _, _, _ -> None
+     end
+   | Error _ -> None
+  else None
+
+
+From ...ClientHelloDone 
+
+    (* here are the checks we were doing before; now hopefully in Nego:
+    let valid_chain = hs.cfg.check_peer_certificate => Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file in
+    if not valid_chain then Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failure")    else
+      let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
+      let Some cs_sigalg = n.n_sigAlg in
+      let sigalgs = n.n_extensions.ne_signature_algorithms in
+      match sigHashAlg_of_ske ske.ske_sig with
+      | None -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
+      | Some ((sa,h),sigv) ->
+            let algs: list sigHashAlg =
+              match sigalgs with
+              | Some l -> l
+              | None -> [(cs_sigalg, Hash Hashing.Spec.SHA1)] in
+            if not (List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = h)) algs)
+            then Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+            else
+              let a = Signature.Use (fun _ -> true) sa [h] false false in
+              let csr = (n.n_client_random @| n.n_server_random) in
+              let ems = n.n_extensions.ne_extended_ms in
+              let tbs = to_be_signed n.n_protocol_version Server (Some csr) ske_tbs in
+              match Signature.get_chain_public_key #a c.crt_chain with
+              | None -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to get public key from chain") )
+              | Some pk ->
+                   let valid_signature = Signature.verify #a h pk tbs sigv in
+                   // debug_print("tbs = " ^ (Platform.Bytes.print_bytes tbs) ^ "\n");
+                   debug_print("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
+                   if not valid_signature then Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
+                   else
+                     match ske.ske_kex_s with
+                     | KEX_S_RSA _ -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "only support ECDHE/DHE SKE") )
+                     | KEX_S_DHE (| g, gy |) ->
+                     *)
+
+
+*)
+
 //16-05-31 these opens are implementation-only; overall we should open less
 open Extensions 
 open CoreCrypto
