@@ -617,9 +617,13 @@ let ks_server_13_sh ks hashed_log =
   st := S (S_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
   StAEInstance r w
 
-let ks_server_13_finished_keys ks =
+let ks_server_13_finished_keys ks
+  : ST ((i:finishedId & fink i) * (i:finishedId & fink i))
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+  =
   let KS #region st = ks in
-  let S (S_13_wait_SF _ (|ci, cfk|) (|si,sfk|) _) = !st in
+  let S (S_13_wait_SF _ cfk sfk _) = !st in
   (sfk, cfk)
 
 // Will become private; public API will have
