@@ -630,7 +630,7 @@ let server_ServerFinished_13 hs i =
     let pv = n.Nego.n_protocol_version in
     let cs = n.Nego.n_cipher_suite in
     let sh_alg = sessionHashAlg pv cs in
-    let ha = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
+    let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
     let Some sa = n.Nego.n_sigAlg in
 
     //was:
@@ -639,7 +639,7 @@ let server_ServerFinished_13 hs i =
     //  | Correct chain ->
 
       Handshake.Log.send hs.log (EncryptedExtensions ({ee_extensions = []}));
-      let digestSig = Handshake.Log.send_tag hs.log (Certificate ({crt_chain = chain})) in
+      let digestSig = Handshake.Log.send_tag #halg hs.log (Certificate ({crt_chain = chain})) in
 
       //TODO factor out code for signing
       // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
@@ -656,8 +656,9 @@ let server_ServerFinished_13 hs i =
         | [] -> (sa, sh_alg) in
       let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
       let a = Signature.Use (fun _ -> true) sa [ha] false false in
+      let skey : option (Signature.skey a) = admit() in // Signature.lookup_key #a n.Nego.n_offer.private_key_file
       begin
-        match admit() with // Signature.lookup_key #a cfg.private_key_file with
+        match skey with
         | None -> Error (AD_internal_error, perror __SOURCE_FILE__ __LINE__ "could not load signing key")
         | Some csk -> (
             let Hash sh_alg = sh_alg in
@@ -669,12 +670,12 @@ let server_ServerFinished_13 hs i =
             let sigv = Signature.sign ha csk tbs in
             let signature = hab @| sab @| vlbytes 2 sigv in
 
-            let digestFinished = HSL.send_tag hs.log (CertificateVerify ({cv_sig = signature})) in
-            let sfin_key, _ = KS.ks_server_13_finished_keys hs.ks  in
-            let svd = HMAC.UFCMA.mac sfin_key digestFinished in
-            let digestServerFinished = Handshake.Log.send_tag hs.log (Finished ({fin_vd = svd})) in
+            let digestFinished = HSL.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
+            let (| sfinId, sfin_key |), _ = KS.ks_server_13_finished_keys hs.ks in
+            let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
+            let digestServerFinished = Handshake.Log.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
             // we need to call KeyScheduke twice, to pass this digest
-            let app_keys = KeySchedule.ks_server_13_sf ks digestServerFinished in
+            let app_keys = KS.ks_server_13_sf hs.ks digestServerFinished in
 
             register hs app_keys;
             Epochs.incr_writer hs.epochs; // Switch to ATK after the SF
@@ -687,14 +688,16 @@ let server_ServerFinished_13 hs i =
 
 
 (* receive ClientFinish 1.3 *)
-let server_ClientFinished_13 hs n f digestClientFinished clientAuth=
+let server_ClientFinished_13 hs n f digestClientFinished clientAuth =
    trace "Process Client Finished";
    match clientAuth with
-   | Some (c,cv,digest) -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
+   | Some (c,cv,digest) ->
+      InError(AD_internal_error,
+        perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
-       let cfin_key = KeySchedule.ks_server_13_client_finished hs.ks in
+       let _, (| i, cfin_key |) = KS.ks_server_13_finished_keys hs.ks in
        // TODO MACVerify digestClientFinished
-       if HMAC.UFCMA.verify cfin_key digestClientFinished f.fin_vd
+       if HMAC.UFCMA.verify #i cfin_key digestClientFinished f.fin_vd
        then (
           hs.state := S_Complete;
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs

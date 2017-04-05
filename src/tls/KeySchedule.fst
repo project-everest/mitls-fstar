@@ -619,7 +619,7 @@ let ks_server_13_sh ks hashed_log =
 
 let ks_server_13_finished_keys ks =
   let KS #region st = ks in
-  let S (S_13_wait_SF _ cfk sfk _) = !st in
+  let S (S_13_wait_SF _ (|ci, cfk|) (|si,sfk|) _) = !st in
   (sfk, cfk)
 
 // Will become private; public API will have
