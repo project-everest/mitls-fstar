@@ -1,7 +1,7 @@
 (*--build-config
 options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include . --include ideal-flags;
 --*)
-module HandshakeLog
+module Handshake.Log
 
 
 open FStar.Heap
@@ -28,25 +28,25 @@ module HS = FStar.HyperStack
 inline_for_extraction let hsl_debug = false
 
 // Do we compute a hash of the transcript ending with this message?
-// in doubt, we hash! 
-val tagged: protocolVersion -> hs_msg -> Tot bool 
-let tagged pv m = 
-  match (pv,m) with 
+// in doubt, we hash!
+val tagged: protocolVersion -> hs_msg -> Tot bool
+let tagged pv m =
+  match (pv,m) with
   | TLS_1p3,ClientHello _ -> true
   | TLS_1p3,ServerHello _ -> true
   | TLS_1p3,Certificate _ -> true // for CertVerify payload in TLS 1.3
   | _,CertificateVerify _ -> true // for ServerFinish payload in TLS 1.3
   | _,ClientKeyExchange _ -> true
-  | _,Finished _ -> true // for 2nd Finished 
+  | _,Finished _ -> true // for 2nd Finished
   | _ -> false
 
-// Does this message complete the flight? 
-val eoflight: hs_msg -> Tot bool 
+// Does this message complete the flight?
+val eoflight: hs_msg -> Tot bool
 let eoflight = function
   | ClientHello _
   | HelloRetryRequest _
   | ServerHello _
-  | ServerHelloDone 
+  | ServerHelloDone
   | Finished _ -> true
   | _ -> false
 
@@ -58,25 +58,27 @@ let validLog hsl =
     | (ClientHello ch) :: (ServerHello sh) :: rest -> true
     | _ -> false
 
-let hs_log : Type0 = 
+let hs_log : Type0 =
     if hsl_debug then l:list hs_msg{validLog l}
     else FStar.Ghost.erased (l:list hs_msg{validLog l})
 
-let reveal_log (l:hs_log) : GTot (x:list hs_msg{validLog x}) = 
+let reveal_log (l:hs_log) : GTot (x:list hs_msg{validLog x}) =
     if hsl_debug then l
     else FStar.Ghost.reveal l
 
-let hide_log (l:(x:list hs_msg{validLog x})) : Tot hs_log = 
+let hide_log (l:(x:list hs_msg{validLog x})) : Tot hs_log =
     if hsl_debug then l
     else FStar.Ghost.hide l
 
+// ADL Apr 5 Verification is in progress
+#set-options "--lax"
 let empty_log : hs_log = hide_log []
-let append_log (l:hs_log) (m:hs_msg) : Tot hs_log = 
+let append_log (l:hs_log) (m:hs_msg) : Tot hs_log =
     if hsl_debug then l @ [m]
     else FStar.Ghost.elift1 (fun l -> l @ [m]) l
 
 let print_hsl (hsl:hs_log) : Tot bool =
-    if hsl_debug then 
+    if hsl_debug then
     let sl = List.Tot.map HandshakeMessages.string_of_handshakeMessage hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
     IO.debug_print_string("Current log: " ^ s ^ "\n")
@@ -91,13 +93,13 @@ let getServerHelloVersion hsl =
 val getLogBytes: pv: protocolVersion -> hsl:hs_log -> GTot bytes
 let getLogBytes pv l = handshakeMessagesBytes (Some pv) (reveal_log l)
 
-val getLogBytes_injective: pv:protocolVersion -> ms0:list hs_msg -> ms1:list hs_msg -> 
+val getLogBytes_injective: pv:protocolVersion -> ms0:list hs_msg -> ms1:list hs_msg ->
   Lemma(Seq.equal (getLogBytes pv ms0) (getLogBytes pv ms1) ==> ms0 == ms1)
 
-val getLogBytes_append: pv:protocolVersion -> ms0: list hs_msg -> ms1: list hs_msg -> 
+val getLogBytes_append: pv:protocolVersion -> ms0: list hs_msg -> ms1: list hs_msg ->
   Lemma (getLogBytes pv (ms0 @ ms1) = getLogBytes pv ms0 @| getLogBytes pv ms1)
 
-type tagged_msg (pv:protocolVersion) (a:Hashing.alg) = 
+type tagged_msg (pv:protocolVersion) (a:Hashing.alg) =
      | T : h:hs_msg -> o:(option (tag a)){match o with | None -> ~(tagged pv h) | Some _ -> tagged pv h} -> tagged_msg pv a
 
 type hs_msg_bufs (pv:protocolVersion) (a:Hashing.alg) = {
@@ -115,11 +117,11 @@ let hs_msg_bufs_init() = {
      hs_incoming = empty_bytes;
      hs_outgoing = empty_bytes;
      hs_outgoing_epochchange = None;
-     hs_outgoing_ccs = false; //17-03-28 should now hold a formatted fragment. 
+     hs_outgoing_ccs = false; //17-03-28 should now hold a formatted fragment.
 }
 
 //The type below includes buffers, the log, the hash, and the params needed to parse and hash the log.
-//Note that a lot of this information is available in the log itself. 
+//Note that a lot of this information is available in the log itself.
 //In particular: pv+kex+hash_alg can be read from CH/SH, dh_group can be read from SKE
 //TODO: decide whether to keep these parameters explicit or compute them from the log
 
@@ -144,21 +146,21 @@ let getHash #ha (LOG #reg st) =
         if hsl_debug then
             print_hsl hsl
         else false in
-    Hashing.finalize #ha h 
+    Hashing.finalize #ha h
 
 
 
 //  specification-level transcript of all handshake messages logged so far
-val transcriptT: h:HS.mem -> log -> GTot (list hs_msg) 
-let transcriptT h t = 
-    if hsl_debug then 
+val transcriptT: h:HS.mem -> log -> GTot (list hs_msg)
+let transcriptT h t =
+    if hsl_debug then
     (sel h t.state).transcript
-    else 
+    else
     FStar.Ghost.reveal ((sel h t.state).transcript)
-    
+
 // specification-level guard for sending: we have not started receiving the next flight
-val writing: h:HS.mem -> log -> GTot bool 
-let writing h t = 
+val writing: h:HS.mem -> log -> GTot bool
+let writing h t =
   let (LOG_ST pv ha kex dh hsl b acc) = sel h t.state in
   b.writing
 
@@ -182,40 +184,39 @@ val setParams: l:log -> pv:protocolVersion -> h:Hashing.alg -> kexo: option kexA
   (ensures (fun h0 _ h1 ->
     modifies (Set.singleton l.region) h0 h1 /\
     transcriptT h1 l == transcriptT h0 l /\
-    writing h1 l == writing h0 l 
+    writing h1 l == writing h0 l
     ))
-let setParams (LOG #reg st) pv ha kex dh = 
+let setParams (LOG #reg st) pv ha kex dh =
   match !st with
   | LOG_ST _ _ _ _ hsl b h -> st := LOG_ST pv ha kex dh hsl b h
 
-
 (* SEND *)
 
-val send: l:log -> m:hs_msg (*{~(tagged m)}*) -> ST unit 
-  (requires (fun h0 -> writing h0 l )) 
-  (ensures (fun h0 _ h1 -> 
+val send: l:log -> m:hs_msg (*{~(tagged m)}*) -> ST unit
+  (requires (fun h0 -> writing h0 l ))
+  (ensures (fun h0 _ h1 ->
     writing h1 l /\
     transcriptT h1 l == transcriptT h0 l @ [m]  ))
-let send (LOG #reg st) m = 
+let send (LOG #reg st) m =
   let (LOG_ST pv ha kex dh l b h) = !st in
   let mb = handshakeMessageBytes (Some pv) m in
   let h = Hashing.extend #ha h mb in
   let b = {b with hs_outgoing = b.hs_outgoing @| mb} in
   let l = append_log l m in
   st := LOG_ST pv ha kex dh l b h
-    
+
 val send_tag: #a:Hashing.alg -> l:log -> m:hs_msg (*{tagged m}*) -> ST (tag a)
   (requires (fun h0 -> writing h0 l  /\
 		    (sel h0 l.state).hash_alg == a))
-  (ensures (fun h0 h h1 -> 
-    let t_0 = transcriptT h0 l in 
-    let t_1 = transcriptT h1 l in 
+  (ensures (fun h0 h h1 ->
+    let t_0 = transcriptT h0 l in
+    let t_1 = transcriptT h1 l in
     let pv = (sel h1 l.state).pv in
     let bs = getLogBytes pv t_1 in
     writing h1 l /\
     t_1 == t_0 @ [m] /\
     hashed a bs /\ h == hash a bs ))
-let send_tag #a (LOG #reg st) m = 
+let send_tag #a (LOG #reg st) m =
   let (LOG_ST pv ha kex dh l b h) = !st in
   let mb = handshakeMessageBytes (Some pv) m in
   let h = Hashing.extend #ha h mb in
@@ -225,27 +226,12 @@ let send_tag #a (LOG #reg st) m =
   st := LOG_ST pv ha kex dh l b h;
   t
 
-type id = TLSInfo.id 
-// payload of a handshake fragment, to be made opaque eventually
-open Range // for now
-type fragment (i:id) = ( rg: frange i & rbytes rg )
-val next_fragment: l:log -> i:id -> St (option (fragment i))
-let next_fragment (LOG #reg st) (i:id) = 
-    let (LOG_ST pv ha kex dh l b h) = !st in
-    let o = b.hs_outgoing in
-    let lo = length o in
-    if (lo = 0) then None else
-    if (lo <= max_TLSPlaintext_fragment_length) then
-      let rg = (lo, lo) in
-      Some (| rg, o |)
-    else 
-      let (x,y) = split o max_TLSPlaintext_fragment_length in
-      let b = {b with hs_outgoing = y} in
-      st := LOG_ST pv ha kex dh l b h;
-      let lx = length x in
-      let rg = (lx, lx) in
-      Some (| rg, x |)
+//ADL Apr. 5: implement me !
+assume val send_CCS_tag: #a:Hashing.alg -> l:log -> m:hs_msg -> complete:bool -> St (tag a)
 
+open Range // for now
+type id = TLSInfo.id
+type fragment (i:id) = ( rg: frange i & rbytes rg )
 
 // What the HS asks the record layer to do, in that order.
 type outgoing (i:id) (* initial index *) =
@@ -256,13 +242,33 @@ type outgoing (i:id) (* initial index *) =
       complete  : bool               -> // the handshake is complete!
       outgoing i
 
+// ADL Apl 5: TODO Cedric needs to implement the flag storage/reset logic here
+val next_fragment: l:log -> i:id -> St (outgoing i)
+let next_fragment (LOG #reg st) (i:id) =
+  let out_msg =
+    let (LOG_ST pv ha kex dh l b h) = !st in
+    let o = b.hs_outgoing in
+    let lo = length o in
+    if (lo = 0) then None else
+    if (lo <= max_TLSPlaintext_fragment_length) then
+      let rg = (lo, lo) in
+      Some (| rg, o |)
+    else
+      let (x,y) = split o max_TLSPlaintext_fragment_length in
+      let b = {b with hs_outgoing = y} in
+      st := LOG_ST pv ha kex dh l b h;
+      let lx = length x in
+      let rg = (lx, lx) in
+      Some (| rg, x |)
+  in
+  Outgoing out_msg false false false // FIXME Flag bufferization
 
 (* RECEIVE *)
 
-val parseHashHandshakeMessages : pv:protocolVersion -> a:Hashing.alg -> 
+val parseHashHandshakeMessages : pv:protocolVersion -> a:Hashing.alg ->
 				 option kexAlg -> buf:bytes -> Hashing.accv a ->
-				 ST  (result (rem:bytes * 
-					       acc:Hashing.accv a * 
+				 ST  (result (rem:bytes *
+					       acc:Hashing.accv a *
 					       list (tagged_msg pv a)))
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
@@ -270,10 +276,10 @@ let rec parseHashHandshakeMessages pv a kex buf acc =
     match parseMessage buf with
     | Error z -> Error z
     | Correct(None) -> Correct(buf,acc,[])
-    | Correct(Some (|rem,hstype,pl,to_log|)) ->   
+    | Correct(Some (|rem,hstype,pl,to_log|)) ->
       (match parseHandshakeMessage (Some pv) kex hstype pl with
-       | Error z -> Error z 
-       | Correct hsm -> 
+       | Error z -> Error z
+       | Correct hsm ->
              let acc = Hashing.extend #a acc to_log in
 	     let tg = if tagged pv hsm then Some (Hashing.finalize acc) else None in
              (match parseHashHandshakeMessages pv a kex rem acc with
@@ -281,46 +287,46 @@ let rec parseHashHandshakeMessages pv a kex buf acc =
        	     | Correct (r,acc,hsl) -> Correct (r,acc,(T hsm tg)::hsl)))
 
 
-// full specification of the hashed-prefix tags required for a given flight 
+// full specification of the hashed-prefix tags required for a given flight
 // (in relational style to capture computational-hashed)
 //val tags: a:alg -> prior: list msg -> ms: list msg -> hs: list (tag a) -> Tot Type0 (decreases ms)
-let rec tags (pv:protocolVersion) (a:alg) (prior: list hs_msg) 
-	     (ms: list (tagged_msg pv a)) : Tot Type0 (decreases ms) = 
-  match ms with 
+let rec tags (pv:protocolVersion) (a:alg) (prior: list hs_msg)
+	     (ms: list (tagged_msg pv a)) : Tot Type0 (decreases ms) =
+  match ms with
   | [] -> True
-  | (T m h) :: ms -> 
+  | (T m h) :: ms ->
       let prior = prior @ [m] in
-      match tagged pv m, h with 
-      | true, Some hv -> 
-	let t = getLogBytes pv prior in 
+      match tagged pv m, h with
+      | true, Some hv ->
+	let t = getLogBytes pv prior in
 	(hashed a t /\ hv == hash a t /\ tags pv a prior ms)
       | false, None -> tags pv a prior ms
-      | _ -> False 
+      | _ -> False
 
-let rec split_flight = function 
+let rec split_flight = function
   | [] -> [], []
-  | (T m h)::t -> if eoflight m then [T m h], t else 
+  | (T m h)::t -> if eoflight m then [T m h], t else
 		let (x,y) = split_flight t in
 		if (x <> []) then (T m h)::x,y else x, (T m h)::y
-    
+
 val receive: #pv:protocolVersion -> #a:Hashing.alg -> l:log -> bytes -> ST (option (list (tagged_msg pv a)))
   (requires (fun h -> (sel h l.state).hash_alg == a /\ (sel h l.state).pv == pv))
-  (ensures (fun h0 o h1 -> 
+  (ensures (fun h0 o h1 ->
     let t0 = transcriptT h0 l in
     let t1 = transcriptT h1 l in
-    match o with 
+    match o with
     | Some tl -> tags pv a t0 tl /\ writing h1 l
     | None -> t1 == t0 ))
-let receive #pv #a (LOG #reg st) mb = 
+let receive #pv #a (LOG #reg st) mb =
   let (LOG_ST pv ha kex dh l b acc) = !st in
   let b = {b with hs_incoming = b.hs_incoming @| mb} in
   match parseHashHandshakeMessages pv ha kex b.hs_incoming acc with
   | Error z -> None
-  | Correct(r,acc,l') -> 
+  | Correct(r,acc,l') ->
        let p = b.hs_incoming_parsed @ l' in
        let (x,y) = split_flight p in
        let l = l @ l' in
-       let b = {b with hs_incoming = r; 
+       let b = {b with hs_incoming = r;
 		       hs_incoming_parsed = y} in
        st := LOG_ST pv ha kex dh l b acc;
        Some x
@@ -333,38 +339,38 @@ let receive #pv #a (LOG #reg st) mb =
 val recv_fragment: s:hs -> #i:id -> message i -> ST incoming
   (requires (hs_inv s))
   (ensures (recv_ensures s))
-let recv_fragment hs #i f = 
+let recv_fragment hs #i f =
     let (| rg,rb |) = f in
-    let b = 
+    let b =
       if hs_debug then
         IO.debug_print_string ("   ***** RAW "^(print_bytes rb)^"\n")
       else false in
     let (HS #r0 r res cfg id lgref hsref) = hs in
     let b = !(hsref.hs_buffers).hs_incoming in
     let b = b @| rb in
-    let pv,kex,res = 
-      (match !(hsref.hs_nego) with 
+    let pv,kex,res =
+      (match !(hsref.hs_nego) with
        | None -> None, None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg, Some n.n_resume) in
     match parseHandshakeMessages pv kex b with
     | Error (ad, s) ->
-      let _ = 
+      let _ =
         if hs_debug then
           IO.debug_print_string ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n")
-        else false in 
+        else false in
       InError (ad,s)
     | Correct(r,hsl) ->
        let hsl = List.Tot.append !(hsref.hs_buffers).hs_incoming_parsed hsl in
        hsref.hs_buffers := {!(hsref.hs_buffers) with hs_incoming = r; hs_incoming_parsed = hsl};
-      let b = 
-        if hs_debug then 
-          print_hsl hsl 
+      let b =
+        if hs_debug then
+          print_hsl hsl
         else false in
-      (match !(hsref.hs_state),hsl with 
+      (match !(hsref.hs_state),hsl with
        | C (C_Idle ri), _ -> InError(AD_unexpected_message, "Client hasn't sent hello yet")
-       | C (C_HelloSent ri ch), (ServerHello(sh),l)::hsl 
+       | C (C_HelloSent ri ch), (ServerHello(sh),l)::hsl
 	 when (sh.sh_protocol_version <> TLS_1p3 || hsl = []) ->
-           let _ = 
+           let _ =
             if hs_debug then
               IO.debug_print_string "Processing client hello...\n"
             else false in
@@ -373,11 +379,11 @@ let recv_fragment hs #i f =
        | C (C_HelloReceived n), (Certificate(c),l)::
 			          (ServerKeyExchange(ske),l')::
 				  (ServerHelloDone,l'')::
-				  hsl 
+				  hsl
 	 when (Some? pv && pv <> Some TLS_1p3 && res = Some false &&
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = hsl};
-			   client_handle_server_hello_done hs 
+			   client_handle_server_hello_done hs
 			   [(Certificate(c),l) ;
 			   (ServerKeyExchange(ske),l') ;
 			   (ServerHelloDone,l'')]
@@ -386,31 +392,31 @@ let recv_fragment hs #i f =
 			          (ServerKeyExchange(ske),l')::
 			          (CertificateRequest(cr),l'')::
 				  (ServerHelloDone,l''')::
-				  hsl 
+				  hsl
 	 when (Some? pv && pv <> Some TLS_1p3 && res = Some false &&
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = hsl};
-			   client_handle_server_hello_done hs 
+			   client_handle_server_hello_done hs
 			   [(Certificate(c),l) ;
 			   (ServerKeyExchange(ske),l') ;
-			   (ServerHelloDone,l''')] 
+			   (ServerHelloDone,l''')]
 			   [(CertificateRequest(cr),l'')]
-       
-       | C (C_CCSReceived n cv), (Finished(f),l)::hsl 
+
+       | C (C_CCSReceived n cv), (Finished(f),l)::hsl
        	 when (Some? pv && pv <> Some TLS_1p3) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = hsl};
-			   client_handle_server_finished hs 
+			   client_handle_server_finished hs
 			   [(Finished(f),l)]
 
        | C (C_HelloReceived n), (EncryptedExtensions(ee),l1)::
 			          (Certificate(c),l2)::
 			          (CertificateVerify(cv),l3)::
 				  (Finished(f),l4)::
-				  [] 
-	 when (Some? pv && pv = Some TLS_1p3 && 
+				  []
+	 when (Some? pv && pv = Some TLS_1p3 &&
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
-			   client_handle_server_finished_13 hs 
+			   client_handle_server_finished_13 hs
 			   [(EncryptedExtensions(ee),l1);
 			   (Certificate(c),l2) ;
 			   (CertificateVerify(cv),l3) ;
@@ -420,35 +426,35 @@ let recv_fragment hs #i f =
 			          (Certificate(c),l2)::
 			          (CertificateVerify(cv),l3)::
 				  (Finished(f),l4)::
-				  [] 
-	 when (Some? pv && pv = Some TLS_1p3 && 
+				  []
+	 when (Some? pv && pv = Some TLS_1p3 &&
 	       (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
-			   client_handle_server_finished_13 hs 
+			   client_handle_server_finished_13 hs
 			   [(EncryptedExtensions(ee),l1);
 			   (CertificateRequest(cr),ll);
-			   (Certificate(c),l2) ;			   
+			   (Certificate(c),l2) ;
 			   (CertificateVerify(cv),l3) ;
 			   (Finished(f),l4)]
-       
-       | S (S_Idle ri), (ClientHello(ch),l)::hsl -> 
+
+       | S (S_Idle ri), (ClientHello(ch),l)::hsl ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = hsl};
 			   server_handle_client_hello hs
 			   [(ClientHello(ch),l)]
-       | S (S_CCSReceived s), (Finished(f),l)::hsl 
+       | S (S_CCSReceived s), (Finished(f),l)::hsl
          when (Some? pv && pv <> Some TLS_1p3) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = hsl};
 			   server_handle_client_finished hs
 			   [(Finished(f),l)]
 
-       | S (S_FinishedSent s), (Finished(f),l')::[]  
+       | S (S_FinishedSent s), (Finished(f),l')::[]
          when (Some? pv && pv = Some TLS_1p3) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
 	   server_handle_client_finished_13 hs [(Finished(f),l')] []
 
        | S (S_FinishedSent s), (Certificate(c),l2)::
 			       (CertificateVerify(cv),l3)::
-			       (Finished(f),l4)::[]  
+			       (Finished(f),l4)::[]
          when (Some? pv && pv = Some TLS_1p3) ->
 	   hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
 	   server_handle_client_finished_13 hs [(Finished(f),l4)] [(Certificate(c),l2);(CertificateVerify(cv),l3)]
@@ -456,7 +462,7 @@ let recv_fragment hs #i f =
        | C (C_Error e),_ -> InError e
        | S (S_Error e),_ -> InError e
        | _ , _ -> InAck false false)
-	   
+
 
 val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge with recv_fragment
   (requires (hs_inv s)) // could require pv <= 1p2
@@ -465,44 +471,44 @@ val recv_ccs: s:hs -> ST incoming  // special case: CCS before 1p3; could merge 
     (InError? result \/ result = InAck true false)
     ))
 let recv_ccs hs =
-    let b = 
-      if hs_debug then 
+    let b =
+      if hs_debug then
         IO.debug_print_string ("CALL recv_ccs\n")
       else false in
     let (HS #r0 r res cfg id lgref hsref) = hs in
-    let pv,kex = 
-      (match !(hsref.hs_nego) with 
+    let pv,kex =
+      (match !(hsref.hs_nego) with
        | None -> None, None
        | Some n -> Some n.n_protocol_version, Some n.n_kexAlg) in
     (match !((hsref.hs_state),!(hsref.hs_buffers).hs_incoming_parsed) with
     | C (C_FinishedSent n cv), [] ->
        hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
        client_handle_server_ccs hs []
-    | C (C_FinishedSent n cv), 
+    | C (C_FinishedSent n cv),
       (SessionTicket(st),l)::[] ->
        hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
-       client_handle_server_ccs hs 
+       client_handle_server_ccs hs
         [(SessionTicket(st),l)]
-    | S (S_HelloDone n), 
-      (ClientKeyExchange(cke),l)::[] 
-      when (Some? pv && pv <> Some TLS_1p3 && 
+    | S (S_HelloDone n),
+      (ClientKeyExchange(cke),l)::[]
+      when (Some? pv && pv <> Some TLS_1p3 &&
             (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
       hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
       server_handle_client_ccs hs
       [(ClientKeyExchange(cke),l)] []
-    | S (S_HelloDone n), 
+    | S (S_HelloDone n),
       (Certificate(c),l)::
-      (ClientKeyExchange(cke),l')::[] 
-      when (c.crt_chain = [] && Some? pv && pv <> Some TLS_1p3 && 
+      (ClientKeyExchange(cke),l')::[]
+      when (c.crt_chain = [] && Some? pv && pv <> Some TLS_1p3 &&
             (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
       hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
       server_handle_client_ccs hs
       [(ClientKeyExchange(cke),l')] [(Certificate(c),l)]
-    | S (S_HelloDone n), 
+    | S (S_HelloDone n),
       (Certificate(c),l)::
       (ClientKeyExchange(cke),l')::
       (CertificateVerify(cv),l'')::[]
-      when (Some? pv && pv <> Some TLS_1p3 && 
+      when (Some? pv && pv <> Some TLS_1p3 &&
             (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
       hsref.hs_buffers = {!(hsref.hs_buffers) with hs_incoming_parsed = []};
       server_handle_client_ccs hs
