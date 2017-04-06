@@ -32,45 +32,51 @@ module MS = FStar.Monotonic.Seq
 // relocate?
 
 type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
-  disjoint hs_rgn (region w)                  /\
-  parent (region w) <> HH.root    /\
-  parent (region r) <> HH.root    /\
-  parent hs_rgn = parent (parent (region w))  /\ //Grandparent of each writer is a sibling of the handshake
-  disjoint (region w) (region r)              /\
-  is_epoch_rgn (region w)                     /\ //they're all colored as epoch regions
-  is_epoch_rgn (region r)                     /\
-  is_epoch_rgn (parent (region w))            /\
-  is_epoch_rgn (parent (region r))            /\
-  is_hs_rgn hs_rgn                              //except for the hs_rgn, of course
+  disjoint hs_rgn (region w) /\
+  parent (region w) <> HH.root /\
+  parent (region r) <> HH.root /\
+  // grandparent of each writer is a sibling of the handshake
+  parent hs_rgn = parent (parent (region w))  /\ 
+  disjoint (region w) (region r) /\
+  // they are all colored as epoch regions
+  is_epoch_rgn (region w) /\ 
+  is_epoch_rgn (region r) /\
+  is_epoch_rgn (parent (region w)) /\
+  is_epoch_rgn (parent (region r)) /\
+  //except for the hs_rgn, of course
+  is_hs_rgn hs_rgn
 
-abstract type epoch_region_inv' (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
-  epoch_region_inv hs_rgn r w
+abstract
+type epoch_region_inv'
+  (#i:id)
+  (hs_rgn:rgn)
+  (r:reader (peerId i))
+  (w:writer i)
+= epoch_region_inv hs_rgn r w
 
 module I = IdNonce
 
 noeq type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
   | Epoch: #i:id{nonce_of_id i = n} ->
-           h:handshake ->
-           r: reader (peerId i) ->
-           w: writer i {epoch_region_inv' hs_rgn r w}
-	   -> epoch hs_rgn n
-  // we would extend/adapt it for TLS 1.3,
-  // e.g. to notify 0RTT/forwad-privacy transitions
-  // for now epoch completion is a total function on handshake --- should be stateful
+      h:handshake ->
+      r: reader (peerId i) ->
+      w: writer i {epoch_region_inv' hs_rgn r w} -> epoch hs_rgn n
+// we would extend/adapt it for TLS 1.3,
+// e.g. to notify 0RTT/forwad-privacy transitions
+// for now epoch completion is a total function on handshake --- should be stateful
 
 let epoch_id #r #n (e:epoch r n) : StAE.stae_id = Epoch?.i e
 
 let reveal_epoch_region_inv_all (u:unit)
   : Lemma (forall i hs_rgn r w.{:pattern (epoch_region_inv' #i hs_rgn r w)}
-	   epoch_region_inv' #i hs_rgn r w
-	   <==>
-   	   epoch_region_inv #i hs_rgn r w)
+       epoch_region_inv' #i hs_rgn r w   <==>
+       epoch_region_inv #i hs_rgn r w)
   = ()
 
 let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
   : Lemma (let r = Epoch?.r e in
-	   let w = Epoch?.w e in
-	   epoch_region_inv hs_rgn r w)
+       let w = Epoch?.w e in
+       epoch_region_inv hs_rgn r w)
   = ()
 
 let writer_epoch (#hs_rgn:rgn) (#n:TLSInfo.random) (e:epoch hs_rgn n)
@@ -97,9 +103,9 @@ abstract let epochs_inv' (#r:rgn) (#n:TLSInfo.random) (es: seq (epoch r n)) =
 
 let reveal_epochs_inv' (u:unit)
   : Lemma (forall (r:rgn) (#n:TLSInfo.random) (es:seq (epoch r n)). {:pattern (epochs_inv' es)}
-	     epochs_inv' es
-	     <==>
-	     epochs_inv es)
+         epochs_inv' es
+         <==>
+         epochs_inv es)
   = ()
 
 // Epoch counters i must satisfy -1 <= i < length !es
@@ -130,10 +136,10 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
        modifies_one r h0 h1
        /\ modifies_rref r !{} (HS.HS?.h h0) (HS.HS?.h h1)
        /\ (let (| is, c1, c2 |) = x in
-	  i_contains is h1
-	  /\ m_contains c1 h1
-	  /\ m_contains c2 h1
-	  /\ i_sel h1 is == Seq.createEmpty)))
+      i_contains is h1
+      /\ m_contains c1 h1
+      /\ m_contains c2 h1
+      /\ i_sel h1 is == Seq.createEmpty)))
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
   let is = alloc_mref_iseq p r init in
@@ -143,14 +149,14 @@ let alloc_log_and_ctrs #a #p r =
   (| is, c1, c2 |)
 
 val incr_epoch_ctr: #a:Type0 -> #p:(seq a -> Type0) -> #r:rgn -> #is:MS.i_seq r a p
-		  -> ctr:epoch_ctr r is
-		  -> ST unit
+          -> ctr:epoch_ctr r is
+          -> ST unit
    (requires (fun h -> 1 + m_sel h ctr < Seq.length (i_sel h is)))
    (ensures (fun h0 _ h1 ->
                   let ctr_as_hsref = MR.as_hsref ctr in
-		  modifies_one r h0 h1
-		  /\ modifies_rref r !{as_ref ctr_as_hsref} (HS.HS?.h h0) (HS.HS?.h h1)
-		  /\ m_sel h1 ctr = m_sel h0 ctr + 1))
+          modifies_one r h0 h1
+          /\ modifies_rref r !{as_ref ctr_as_hsref} (HS.HS?.h h0) (HS.HS?.h h1)
+          /\ m_sel h1 ctr = m_sel h0 ctr + 1))
 let incr_epoch_ctr #a #p #r #is ctr =
   m_recall ctr;
   let cur = m_read ctr in
@@ -158,10 +164,10 @@ let incr_epoch_ctr #a #p #r #is ctr =
   witness is (int_at_most (cur + 1) is);
   m_write ctr (cur + 1)
        
-val epochs_init: r:rgn -> n:TLSInfo.random -> ST (epochs r n)
+val create: r:rgn -> n:TLSInfo.random -> ST (epochs r n)
        (requires (fun h -> True))
        (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ modifies_rref r !{} (HS.HS?.h h0) (HS.HS?.h h1)))
-let epochs_init (r:rgn) (n:TLSInfo.random) =
+let create (r:rgn) (n:TLSInfo.random) =
   let (| esref, c1, c2 |) = alloc_log_and_ctrs #(epoch r n) #(epochs_inv #r #n) r in
   MkEpochs esref c1 c2
 
@@ -182,14 +188,14 @@ unfold let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
 val add_epoch: #r:rgn -> #n:TLSInfo.random ->
                es:epochs r n -> e: epoch r n -> ST unit
        (requires (fun h -> 
-	   let is = MkEpochs?.es es in
-	   epochs_inv #r #n (Seq.snoc (i_sel h is) e)))
+       let is = MkEpochs?.es es in
+       epochs_inv #r #n (Seq.snoc (i_sel h is) e)))
        (ensures (fun h0 x h1 -> 
-		   let es = MkEpochs?.es es in
-		   let es_as_hsref = MR.as_hsref es in
- 		   modifies_one r h0 h1  
- 		   /\ modifies_rref r !{as_ref es_as_hsref} (HS.HS?.h h0) (HS.HS?.h h1)
- 		   /\ i_sel h1 es == Seq.snoc (i_sel h0 es) e))
+           let es = MkEpochs?.es es in
+           let es_as_hsref = MR.as_hsref es in
+            modifies_one r h0 h1  
+            /\ modifies_rref r !{as_ref es_as_hsref} (HS.HS?.h h0) (HS.HS?.h h1)
+            /\ i_sel h1 es == Seq.snoc (i_sel h0 es) e))
 let add_epoch #r #n (MkEpochs es _ _) e = 
     MS.i_write_at_end es e
 
@@ -228,7 +234,7 @@ let get_ctr (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) (rw:rw)
   = let epochs = es.es in
     let n = m_read (ctr es rw) in
     testify (MS.int_at_most n epochs);
-    n 	 
+    n      
 
 let get_reader (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) = get_ctr es Reader
 let get_writer (#r:rgn) (#n:TLSInfo.random) (es:epochs r n) = get_ctr es Writer
@@ -239,11 +245,11 @@ let get_current_epoch (#r:_) (#n:_) (e:epochs r n) (rw:rw)
   : ST (epoch r n)
        (requires (fun h -> 0 <= m_sel h (ctr e rw)))
        (ensures (fun h0 rd h1 -> 
-		   let j = m_sel h1 (ctr e rw) in
-		   let epochs = MS.i_sel h1 e.es in
-		   h0==h1 /\
-		   Seq.indexable epochs j /\
-		   rd == Seq.index epochs j))
+           let j = m_sel h1 (ctr e rw) in
+           let epochs = MS.i_sel h1 e.es in
+           h0==h1 /\
+           Seq.indexable epochs j /\
+           rd == Seq.index epochs j))
   = let j = get_ctr e rw in 
     let epochs = MS.i_read e.es in
     Seq.index epochs j

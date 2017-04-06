@@ -208,7 +208,7 @@ val receive: s:t -> bytes -> ST (option (list msg * list anyTag))
     | Some (ms, hs) -> 
         t1 == t0 @ ms /\ 
         writing h1 s /\
-        (match oa with Some a -> tags a t0 ms hs | None -> hs == [])
+        (match oa with Some a -> tags a t0 ms hs | None -> hs == []) 
     | None -> t1 == t0 )))
 
 
@@ -216,17 +216,20 @@ val receive: s:t -> bytes -> ST (option (list msg * list anyTag))
 // we return the messages processed so far, and their final tag; 
 // we still can't write.
 // This should *fail* if there are pending input bytes. 
-val receive_CCS: s:t -> ST (list msg * list anyTag * anyTag)
+val receive_CCS: s:t -> ST (option (list msg * list anyTag * anyTag))
   (requires (fun h0 -> True))
-  (ensures (fun h0 (ms,hs,h) h1 -> 
-    let oa = hashAlg h1 s in 
-    let t0 = transcript h0 s in
-    let t1 = transcript h1 s in
-    let tr = transcript_bytes t1 in 
-    oa == hashAlg h0 s /\
-    Some? oa /\ (
-    let a = Some?.v oa in 
-    t1 == t0 @ ms /\ tags a t0 ms hs /\ hashed a tr /\ h = hash a tr )))
+  (ensures (fun h0 r h1 -> 
+    match r with 
+    | Some  (ms,hs,h) -> (
+        let oa = hashAlg h1 s in 
+        let t0 = transcript h0 s in
+        let t1 = transcript h1 s in
+        let tr = transcript_bytes t1 in 
+        oa == hashAlg h0 s /\
+        Some? oa /\ (
+        let a = Some?.v oa in 
+        t1 == t0 @ ms /\ tags a t0 ms hs /\ hashed a tr /\ h = hash a tr ))
+     | None -> True))
 
 
 // FRAGMENT INTERFACE 

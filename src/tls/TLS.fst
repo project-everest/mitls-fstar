@@ -1184,7 +1184,7 @@ let readOne c i =
           if tls_debug then 
             IO.debug_print_string "readOne: CT_Handshake, calling recv_fragment...\n" 
           else false in
-        match recv_fragment c.hs (| rg, f |) with
+        match Handshake.recv_fragment c.hs rg f with
         | InError (x,y) -> alertFlush c i x y
         | InQuery q a   -> CertQuery q a
         | InAck next_keys complete ->
