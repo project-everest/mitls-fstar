@@ -75,11 +75,13 @@ let print_hsl (hsl:hs_log) : Tot bool =
     IO.debug_print_string("Current log: " ^ s ^ "\n")
     else false
 
+(* ADL: do not use
 val getServerHelloVersion: hsl:hs_log -> GTot (option protocolVersion)
 let getServerHelloVersion hsl =
     match reveal_log hsl with
     | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
     | _ -> None
+*)
 
 val getLogBytes: pv: protocolVersion -> hsl:hs_log -> GTot bytes
 let getLogBytes pv l = handshakeMessagesBytes (Some pv) (reveal_log l)
@@ -90,10 +92,13 @@ val getLogBytes_injective: pv:protocolVersion -> ms0:list hs_msg -> ms1:list hs_
 val getLogBytes_append: pv:protocolVersion -> ms0: list hs_msg -> ms1: list hs_msg ->
   Lemma (getLogBytes pv (ms0 @ ms1) = getLogBytes pv ms0 @| getLogBytes pv ms1)
 
-type tagged_msg (pv:protocolVersion) (a:Hashing.alg) =
-     | T : h:hs_msg -> o:(option (tag a)){match o with | None -> ~(tagged pv h) | Some _ -> tagged pv h} -> tagged_msg pv a
+type tagged_msg (pv:protocolVersion) (a:option Hashing.alg) =
+  | T:
+    h:hs_msg ->
+    o: (if tagged pv h && Some? a then tag (Some?.v a) else unit) ->
+    tagged_msg pv a
 
-type hs_msg_bufs (pv:protocolVersion) (a:Hashing.alg) = {
+type hs_msg_bufs (pv:protocolVersion) (a:option Hashing.alg) = {
      writing: bool;
      hs_incoming_parsed : list (tagged_msg pv a);  // messages parsed and hashed earlier
      hs_incoming: bytes;                         // incomplete message received earlier
@@ -116,15 +121,21 @@ let hs_msg_bufs_init() = {
 //In particular: pv+kex+hash_alg can be read from CH/SH, dh_group can be read from SKE
 //TODO: decide whether to keep these parameters explicit or compute them from the log
 
+type delayed_hash pv (ha:option Hashing.alg) (transcript:hs_log) =
+  (match ha with
+  | Some a -> h: accv a {content h = getLogBytes pv transcript}
+  | None -> b:bytes {b = getLogBytes pv transcript})
+
 noeq type log_state =
-  | LOG_ST:  pv: protocolVersion ->    // Initially: the pv in the clientHello, then the pv in the serverHello
-         hash_alg: Hashing.alg ->  // Initially: the hash_alg(s?) in the clientHello, then the hash_alg chosen in the serverHello
-         kex: option kexAlg ->	           // Used for the CKE and SKE
-	 dh_group: option CommonDH.group -> // Used for the CKE
-         transcript: hs_log ->
-	 buffers: hs_msg_bufs pv hash_alg ->
-	 hash: accv hash_alg { content hash = getLogBytes pv transcript} ->
-	 log_state
+  | LOG_ST:
+    pv: protocolVersion ->             // Initially: the pv in the clientHello, then the pv in the serverHello
+    hash_alg: option Hashing.alg ->    // The handshake hash after it becomes known in ServerHello
+    kex: option kexAlg ->	             // Used for the CKE and SKE
+	  dh_group: option CommonDH.group -> // Used for the CKE
+    transcript: hs_log ->
+	  buffers: hs_msg_bufs pv hash_alg ->
+	  hash: delayed_hash pv hash_alg transcript ->
+	  log_state
 
 
 (* NEW *) 
@@ -197,19 +208,6 @@ let noReading st = st.parsed = [] & emptyBytes st.incoming
 // instead of 
 type log = HS.ref log_state
 
-val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
-    (requires (fun h -> (sel h t.state).hash_alg == ha))
-    (ensures (fun h0 i h1 -> h0 == h1))
-let getHash #ha (LOG #reg st) =
-    let (LOG_ST pv ha kex dh hsl b h) = !st in
-    let b =
-        if hsl_debug then
-            print_hsl hsl
-        else false in
-    Hashing.finalize #ha h
-
-
-
 //  specification-level transcript of all handshake messages logged so far
 val transcriptT: h:HS.mem -> log -> GTot (list hs_msg)
 let transcriptT h t =
@@ -224,45 +222,72 @@ let writing h t =
   let (LOG_ST pv ha kex dh hsl b acc) = sel h t.state in
   b.writing
 
-val create: #reg:rid -> pv:protocolVersion -> h:Hashing.alg -> ST log
+val create: #reg:rid -> pv:protocolVersion -> ST log
   (requires (fun h -> True))
   (ensures (fun h0 out h1 ->
     modifies (Set.singleton reg) h0 h1 /\
     out.region == reg /\
     transcriptT h1 out == [] /\
-    writing h1 out))
-let create #reg pv ha =
-    let hsl: hs_log = empty_log in
+    writing h1 out /\
+    (let st = sel h1 out.state in
+      None? st.hash_alg)))
+let create #reg pv =
     let b = hs_msg_bufs_init() in
-    let h = Hashing.start ha in
-    let l = LOG_ST pv ha None None hsl b h in
+    let l = LOG_ST pv None None None empty_log b empty_bytes in
     let st = ralloc reg l in
     LOG #reg st
 
-val setParams: l:log -> pv:protocolVersion -> h:Hashing.alg -> kexo: option kexAlg -> dho:option CommonDH.group -> ST unit
+// ADL NEW:
+// after calling setParams the delayed_hash becomes an accumulator
+// (before that it is just buffering messages)
+val setParams: l:log -> pv:protocolVersion -> h:Hashing.alg -> kexo: kexAlg -> dho:option CommonDH.group -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 ->
     modifies (Set.singleton l.region) h0 h1 /\
     transcriptT h1 l == transcriptT h0 l /\
-    writing h1 l == writing h0 l
+    writing h1 l == writing h0 l /\
+    (let st = sel h1 l.state in
+      Some? st.hash_alg)
     ))
 let setParams (LOG #reg st) pv ha kex dh =
   match !st with
-  | LOG_ST _ _ _ _ hsl b h -> st := LOG_ST pv ha kex dh hsl b h
+  | LOG_ST _ _ _ _ hsl b plain_buffer ->
+    let acc = Hashing.start ha in
+    let acc = Hashing.extend #ha acc plain_buffer in // TODO prove that content h = getLogBytes ...
+    st := LOG_ST pv (Some ha) (Some kex) dh hsl b acc
+
+val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
+    (requires (fun h -> (sel h t.state).hash_alg == Some ha))
+    (ensures (fun h0 i h1 -> h0 == h1))
+let getHash #ha (LOG #reg st) =
+    let cst = !st in
+    let b =
+        if hsl_debug then
+            print_hsl cst.transcript
+        else false in
+    Hashing.finalize #ha cst.hash
 
 (* SEND *)
 
 let send (LOG #reg st) m =
   let (LOG_ST pv ha kex dh l b h) = !st in
   let mb = handshakeMessageBytes (Some pv) m in
-  let h = Hashing.extend #ha h mb in
+  let h : delayed_hash pv ha (l @ [m]) =
+    match ha with
+    | Some ha ->
+      let h : accv ha = h in
+      Hashing.extend #ha h mb
+    | None ->
+      let h : bytes = h in
+      h @| mb
+    in
   let b = {b with hs_outgoing = b.hs_outgoing @| mb} in
   let l = append_log l m in
   st := LOG_ST pv ha kex dh l b h
 
 val send_tag: #a:Hashing.alg -> l:log -> m:hs_msg (*{tagged m}*) -> ST (tag a)
   (requires (fun h0 -> writing h0 l  /\
-		    (sel h0 l.state).hash_alg == a))
+		    (sel h0 l.state).hash_alg == Some a))
   (ensures (fun h0 h h1 ->
     let t_0 = transcriptT h0 l in
     let t_1 = transcriptT h1 l in
@@ -272,13 +297,13 @@ val send_tag: #a:Hashing.alg -> l:log -> m:hs_msg (*{tagged m}*) -> ST (tag a)
     t_1 == t_0 @ [m] /\
     hashed a bs /\ h == hash a bs ))
 let send_tag #a (LOG #reg st) m =
-  let (LOG_ST pv ha kex dh l b h) = !st in
+  let (LOG_ST pv (Some ha) kex dh l b h) = !st in
   let mb = handshakeMessageBytes (Some pv) m in
   let h = Hashing.extend #ha h mb in
   let t = Hashing.finalize #ha h in
   let b = {b with hs_outgoing = b.hs_outgoing @| mb} in
   let l = append_log l m in
-  st := LOG_ST pv ha kex dh l b h;
+  st := LOG_ST pv (Some ha) kex dh l b h;
   t
 
 //ADL Apr. 5: implement me !
