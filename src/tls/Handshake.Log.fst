@@ -27,8 +27,7 @@ module HS = FStar.HyperStack
    when this flag is set to false. *)
 inline_for_extraction let hsl_debug = false
 
-// Do we compute a hash of the transcript ending with this message?
-// in doubt, we hash!
+(* we decided to use a simpler version that does not depend on pv, which is hard to bind.
 val tagged: protocolVersion -> hs_msg -> Tot bool
 let tagged pv m =
   match (pv,m) with
@@ -39,17 +38,9 @@ let tagged pv m =
   | _,ClientKeyExchange _ -> true
   | _,Finished _ -> true // for 2nd Finished
   | _ -> false
+*)
 
-// Does this message complete the flight?
-val eoflight: hs_msg -> Tot bool
-let eoflight = function
-  | ClientHello _
-  | HelloRetryRequest _
-  | ServerHello _
-  | ServerHelloDone
-  | Finished _ -> true
-  | _ -> false
-
+(* was used for restricting the scope of signing *)
 val validLog: list hs_msg -> Tot bool
 let validLog hsl =
     match hsl with
@@ -135,7 +126,76 @@ noeq type log_state =
 	 hash: accv hash_alg { content hash = getLogBytes pv transcript} ->
 	 log_state
 
-type log = | LOG: #region:HH.rid -> state:HS.ref log_state{HS.MkRef?.id state = region} -> log
+
+(* NEW *) 
+type hs_msg_bufs (pv:protocolVersion) (a:Hashing.alg) = {
+     writing: bool;
+     hs_incoming_parsed : list (tagged_msg pv a);  // messages parsed and hashed earlier
+     hs_incoming: bytes;                         // incomplete message received earlier
+     hs_outgoing: bytes;                         // messages to be sent in current epoch
+     hs_outgoing_epochchange: option rw;         // Whether to increment the reader or writer epoch after sending the messages in the current epoch
+     hs_outgoing_ccs: bool;                      // Whether a CCS signal is buffered for the local writer
+}
+
+let hs_msg_bufs_init() = {
+     writing = true;
+     hs_incoming_parsed = [];
+     hs_incoming = empty_bytes;
+     hs_outgoing = empty_bytes;
+     hs_outgoing_epochchange = None;
+     hs_outgoing_ccs = false; //17-03-28 should now hold a formatted fragment.
+}
+
+// to be adjusted
+assume val transcript_bytes: list hs_msg -> bytes 
+let tags a b c d = True
+
+//The type below includes buffers, the log, the hash, and the params needed to parse and hash the log.
+//Note that a lot of this information is available in the log itself.
+//In particular: pv+kex+hash_alg can be read from CH/SH, dh_group can be read from SKE
+//TODO: decide whether to keep these parameters explicit or compute them from the log
+
+noeq type hashState (prior parsed: list hs_msg) = 
+  | OpenHash: b:bytes { b = transcript_bytes (prior @ parsed) } -> hashState prior parsed
+  | FixedHash: 
+      a: Hashing.alg -> 
+      state: accv a { Hashing.content state = transcript_bytes (prior @ parsed) } -> 
+      hashes: list (tag a) { tags a prior parsed hashes } -> 
+      hashState prior parsed
+
+noeq (* abstract *) type state = | State:
+  transcript: (*erased*) list hs_msg -> // session transcript shared with the HS so far 
+
+  // untrusted hints for parsing --- we do not verify they are synchronized with Nego
+  pv: option protocolVersion -> // Initially: the pv in the clientHello, then the pv in the serverHello
+  kex: option kexAlg -> // Used for the CKE and SKE
+  dh_group: option CommonDH.group -> // Used for the CKE
+
+  // incoming
+  incoming: bytes -> // received fragments; untrusted; not yet hashed or parsed
+  parsed: list hs_msg -> // partial incoming flight, hashed & parsed, with selected intermediate tags
+  hashes: hashState transcript parsed  -> 
+
+  // outgoing 
+  outgoing: bytes -> // outgoing messages, already formatted and hashed.
+  outgoing_next_keys: bool -> // for now only in the outgoing direction (as in Outgoing) although we may need to add  incoming key changes.
+  outgoing_complete: bool -> // deferred signal (as in Outgoing)
+  outgoing_ccs: option bytes -> // at most one fragment for the (already-hashed) Finished message to be sent immediately after CCS.
+
+  state
+// TODO, not urgent, bound the lengths of the bytes and lists.
+
+// static precondition for HS writing messages & signals
+val writing: h:HS.mem -> state -> GTot bool 
+let writing h st = List.Tot.isEmpty (HS.sel h r).parsed
+
+// must be checked before incrementing the read epoch.
+val notReading: state -> Tot bool 
+let noReading st = st.parsed = [] & emptyBytes st.incoming
+
+// the reference already carries the region
+// instead of 
+type log = HS.ref log_state
 
 val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
     (requires (fun h -> (sel h t.state).hash_alg == ha))
@@ -192,11 +252,6 @@ let setParams (LOG #reg st) pv ha kex dh =
 
 (* SEND *)
 
-val send: l:log -> m:hs_msg (*{~(tagged m)}*) -> ST unit
-  (requires (fun h0 -> writing h0 l ))
-  (ensures (fun h0 _ h1 ->
-    writing h1 l /\
-    transcriptT h1 l == transcriptT h0 l @ [m]  ))
 let send (LOG #reg st) m =
   let (LOG_ST pv ha kex dh l b h) = !st in
   let mb = handshakeMessageBytes (Some pv) m in
@@ -229,21 +284,8 @@ let send_tag #a (LOG #reg st) m =
 //ADL Apr. 5: implement me !
 assume val send_CCS_tag: #a:Hashing.alg -> l:log -> m:hs_msg -> complete:bool -> St (tag a)
 
-open Range // for now
-type id = TLSInfo.id
-type fragment (i:id) = ( rg: frange i & rbytes rg )
-
-// What the HS asks the record layer to do, in that order.
-type outgoing (i:id) (* initial index *) =
-  | Outgoing:
-      send_first: option (fragment i) -> // HS fragment to be sent;  (with current id)
-      send_ccs  : bool               -> // CCS fragment to be sent; (with current id)
-      next_keys : bool               -> // the writer index increases;
-      complete  : bool               -> // the handshake is complete!
-      outgoing i
 
 // ADL Apl 5: TODO Cedric needs to implement the flag storage/reset logic here
-val next_fragment: l:log -> i:id -> St (outgoing i)
 let next_fragment (LOG #reg st) (i:id) =
   let out_msg =
     let (LOG_ST pv ha kex dh l b h) = !st in

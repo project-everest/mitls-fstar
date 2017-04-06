@@ -27,6 +27,10 @@ let tagLen = function
   | SHA512 -> 64 
 type tag (a:alg) = lbytes (tagLen a)
 
+let maxTagLen = 64
+type anyTag = lbytes maxTagLen
+let lemma_maxLen (a:alg): Lemma (tagLen a <= maxTagLen) = ()
+  
 // internal hash state for incremental computation
 // with initial value and core algorithm, accumulating an extra block into the current state
 

@@ -18,7 +18,7 @@ val parse_msg: b:bytes -> Tot (option (m:msg {b = format m}))
 
 // No support for binders yet
 
-// Do we compute a hash of the transcript ending with this message?
+// When receiving, do we automatically compute a hash of the transcript ending with this message?
 // in doubt, we hash! 
 // val tagged: msg -> Tot bool 
 let tagged = 
@@ -84,61 +84,71 @@ val transcript_format_injective: ms0:list msg -> ms1:list msg ->
 val transcript_bytes_append: ms0: list msg -> ms1: list msg -> 
   Lemma (transcript_bytes (ms0 @ ms1) = transcript_bytes ms0 @| transcript_bytes ms1)
 
+// making subtyping explicit
+let narrowTag a (b:anyTag { length b = tagLen a}) : tag a = b
+let tagLength (b:anyTag) = length b
+
 // full specification of the hashed-prefix tags required for a given flight 
 // (in relational style to capture computational-hashed)
-//val tags: a:alg -> prior: list msg -> ms: list msg -> hs: list (tag a) -> Tot Type0 (decreases ms)
-let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list (tag a)) : Tot Type0 (decreases ms) = 
+//val tags: a:alg -> prior: list msg -> ms: list msg -> hs: list anyTag(tag a) -> Tot Type0 (decreases ms)
+let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Type0 (decreases ms) = 
   match ms with 
   | [] -> hs == [] 
   | m :: ms -> 
       let prior = prior @ [m] in
       match tagged m, hs with 
-      | true, h::hs -> let t = transcript_bytes prior in (hashed a t /\ h == hash a t /\ tags a prior ms hs)
+      | true, h::hs -> let t = transcript_bytes prior in (tagLength h = tagLen a /\ (let h = narrowTag a h in hashed a t /\ h == hash a t /\ tags a prior ms hs))
       | false, hs -> tags a prior ms hs
       | _ -> False 
 
-val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list (tag a) -> hs1: list (tag a) ->
+
+val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list anyTag -> hs1: list anyTag ->
   Lemma (tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
 
 
 (* STATE *)
 
-type t (r:HH.rid) (a:alg) 
-//17-03-25 assume new warning?
+type state  
+type t = HS.ref state 
+// instead of allocating a subregion, we reveal that t is a single reference;
+// hopefully we get separation by typing.
 
-(*
-// MOVE to HandshakeMessage; internal state outline
-//16-06-01 we don't need to precisely track this part of the state
-//16-06-01 later, pre-allocate large-enough buffers for the connection.
-//16-06-01 also revisit type of encrypted messages
-type hs_msg_bufs = {
-     hs_incoming_parsed : list (hs_msg * bytes); // messages parsed earlier
-     hs_incoming: bytes;                         // incomplete message received earlier
-     hs_outgoing: bytes;                         // messages to be sent in current epoch
-     hs_outgoing_epochchange: option rw;         // Whether to increment the reader or writer epoch after sending the messages in the current epoch
-     hs_outgoing_ccs: bool;                      // Whether a CCS signal is buffered for the local writer
-}
-let hs_msg_bufs_init() = {
-     hs_incoming_parsed = [];
-     hs_incoming = empty_bytes;
-     hs_outgoing = empty_bytes;
-     hs_outgoing_epochchange = None;
-     hs_outgoing_ccs = false; //17-03-28 should now hold a formatted fragment. 
-}
-*)
+//TODO we need framing for transcript, writing, ... 
+let region t: HH.rid = HS.(t.id)
 
 //  specification-level transcript of all handshake messages logged so far
-val transcriptT: h:HS.mem -> #region:HH.rid -> #a:alg -> t region a -> GTot (list msg) 
+val transcript: h:HS.mem -> t -> GTot (list msg) 
 
 // specification-level guard for sending: we have not started receiving the next flight
-val writing: h:HS.mem -> #region:HH.rid -> #a:alg -> t region a -> GTot bool 
+val writing: h:HS.mem -> t -> GTot bool 
 
-val create: region:HH.rid -> a:alg -> ST (t region a) 
+val hashAlg: h:HS.mem -> t -> GTot (option Hashing.alg)
+
+val create: parent:HH.rid -> ST t
   (requires (fun h0 -> True))
-  (ensures (fun h0 r h1 -> // "allocated in r" /\ writing h1 r /\ 
-    writing h1 r /\  
-    transcriptT h1 r == []))
+  (ensures (fun h0 s h1 -> 
+    //17-04-06 TODO extends (region r) parent /\ 
+    writing h1 s /\  
+    transcript h1 s == [] /\
+    hashAlg h1 s == None  ))
 
+let modifies_0 (s:t) h0 h1 = 
+  HS.(mods [Ref s] h0 h1) /\
+  transcript h1 s == transcript h0 s /\
+  writing h1 s == writing h0 s /\
+  hashAlg h1 s = hashAlg h0 s
+  
+val setParams: s:t -> 
+  TLSConstants.protocolVersion -> 
+  a: Hashing.alg -> 
+  option TLSConstants.kexAlg -> 
+  option CommonDH.group -> ST unit
+  (requires (fun h0 -> None? (hashAlg h0 s)))
+  (ensures (fun h0 _ h1 ->
+    HS.(mods [Ref s] h0 h1) /\
+    transcript h1 s == transcript h0 s /\
+    writing h1 s == writing h0 s /\
+    hashAlg h1 s == Some a ))
 
 (* Outgoing *) 
 
@@ -148,97 +158,75 @@ val create: region:HH.rid -> a:alg -> ST (t region a)
 
 // We do not enforce "tagged m", a local decision 
 
-val send: #region:HH.rid -> #a:alg -> r:t region a -> m:msg (*{~(tagged m)}*) -> ST unit 
-  (requires (fun h0 -> writing h0 r )) 
-  (ensures (fun h0 _ h1 -> 
-    writing h1 r /\
-    transcriptT h1 r == transcriptT h0 r @ [m]  ))
+let write_transcript h0 h1 (s:t) (m:msg) = 
+    HS.(mods [Ref s] h0 h1) /\
+    writing h1 s /\
+    hashAlg h1 s == hashAlg h0 s /\
+    transcript h1 s == transcript h0 s @ [m] 
 
-val send_tag: #region:HH.rid -> #a:alg -> r:t region a -> m:msg (*{tagged m}*) -> ST (tag a)
-  (requires (fun h0 -> writing h0 r )) 
+
+val send: s:t -> m:msg -> ST unit 
+  (requires (fun h0 -> writing h0 s)) 
+  (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
+
+val send_tag: #a:alg -> s:t -> m:msg -> ST (tag a)
+  (requires (fun h0 -> 
+    writing h0 s /\
+    hashAlg h0 s = Some a )) 
   (ensures (fun h0 h h1 -> 
-    let t_0 = transcriptT h0 r in 
-    let t_1 = transcriptT h1 r in 
-    let bs = transcript_bytes t_1 in
-    writing h1 r /\
-    t_1 == t_0 @ [m] /\
+    let bs = transcript_bytes (transcript h1 s)  in
+    write_transcript h0 h1 s m /\ 
     hashed a bs /\ h == hash a bs ))
 
 // An ad hoc variant for caching a message to be sent immediately after the CCS
 // We always increment the writer, sometimes report handshake completion.
 
-val send_CCS_tag: #region:HH.rid -> #a:alg -> r:t region a -> m:msg -> complete:bool -> ST (tag a)
-  (requires (fun h0 -> writing h0 r )) 
+val send_CCS_tag: #a:alg -> s:t -> m:msg -> complete:bool -> ST (tag a)
+  (requires (fun h0 -> 
+    writing h0 s /\
+    hashAlg h0 s = Some a )) 
   (ensures (fun h0 h h1 -> 
-    let t_0 = transcriptT h0 r in 
-    let t_1 = transcriptT h1 r in 
-    let bs = transcript_bytes t_1 in
-    writing h1 r /\
-    t_1 == t_0 @ [m] /\
-    hashed a bs /\ h == hash a bs )) 
+    let bs = transcript_bytes (transcript h1 s)  in
+    write_transcript h0 h1 s m /\ 
+    hashed a bs /\ h == hash a bs ))
 
 
 (* Incoming *) 
 
-(*
-val parseHandshakeMessages : option protocolVersion -> option kexAlg -> buf:bytes -> Tot  (result (rem:bytes * list (hs_msg * bytes)))
-let rec parseHandshakeMessages pv kex buf =
-    match parseMessage buf with
-    | Error z -> Error z
-    | Correct None -> Correct (buf,[])
-    | Correct (Some (|rem,hstype,pl,to_log|)) ->
-      (match parseHandshakeMessage pv kex hstype pl with
-       | Error z -> Error z
-       | Correct hsm ->
-             (match parseHandshakeMessages pv kex rem with
-                | Error z -> Error z
-                | Correct (r,hsl) -> Correct(r,(hsm,to_log)::hsl)))
-*)
 
 // We receive messages in whole flights; 
 // note that, untill a full flight is received, we lose "writing h1 r"
-val receive: #region:HH.rid -> #a:alg -> r:t region a -> bytes -> ST (option (list msg * list (tag a)))
+val receive: s:t -> bytes -> ST (option (list msg * list anyTag))
   (requires (fun h0 -> True))
   (ensures (fun h0 o h1 -> 
-    let t0 = transcriptT h0 r in
-    let t1 = transcriptT h1 r in
+    let oa = hashAlg h1 s in 
+    let t0 = transcript h0 s in
+    let t1 = transcript h1 s in
+    oa == hashAlg h0 s /\
+    HS.(mods [Ref s] h0 h1) /\ (
     match o with 
-    | Some (ms, hs) -> t1 == t0 @ ms /\ tags a t0 ms hs /\ writing h1 r
-    | None -> t1 == t0 ))
-// rename to recv_fragment for uniformity? 
-    (* This should go to HSL: 
-    let (| rg,rb |) = f in
-    let b =
-      debug_print ("   *** RAW "^(print_bytes rb)^"\n")
-    let (HS #r0 r res cfg id lgref hsref) = hs in
-    let b = (!hsref).hs_buffers.hs_incoming in
-    let b = b @| rb in
-    match parseHandshakeMessages pv kex b with
-    | Error (ad, s) ->
-      let _ =
-        debug_print ("Failed to parse message: "^(string_of_ad ad)^": "^s^"\n")
-      InError (ad,s)
-    | Correct(r,hsl) ->
-       let hsl = List.Tot.append (!hsref).hs_buffers.hs_incoming_parsed hsl in
-       hsref := {!hsref with hs_buffers = {(!hsref).hs_buffers with hs_incoming = r; hs_incoming_parsed = hsl}};
-      let b =
-        if hs_debug then
-          print_hsl hsl
-        else false in
-      *)
+    | Some (ms, hs) -> 
+        t1 == t0 @ ms /\ 
+        writing h1 s /\
+        (match oa with Some a -> tags a t0 ms hs | None -> hs == [])
+    | None -> t1 == t0 )))
 
 
 // We receive CCS as external end-of-flight signals;
 // we return the messages processed so far, and their final tag; 
 // we still can't write.
 // This should *fail* if there are pending input bytes. 
-val receive_CCS: #region:HH.rid -> #a:alg -> r:t region a -> ST (list msg * list (tag a) * tag a)
+val receive_CCS: s:t -> ST (list msg * list anyTag * anyTag)
   (requires (fun h0 -> True))
   (ensures (fun h0 (ms,hs,h) h1 -> 
-    let t0 = transcriptT h0 r in
-    let t1 = transcriptT h1 r in
+    let oa = hashAlg h1 s in 
+    let t0 = transcript h0 s in
+    let t1 = transcript h1 s in
     let tr = transcript_bytes t1 in 
-    t1 == t0 @ ms /\ tags a t0 ms hs /\ hashed a tr /\ h = hash a tr ))
+    oa == hashAlg h0 s /\
+    Some? oa /\ (
+    let a = Some?.v oa in 
+    t1 == t0 @ ms /\ tags a t0 ms hs /\ hashed a tr /\ h = hash a tr )))
 
 
 // FRAGMENT INTERFACE 
@@ -248,10 +236,9 @@ val receive_CCS: #region:HH.rid -> #a:alg -> r:t region a -> ST (list msg * list
 // - the three flags below, to be echoed and cleared once the buffer is empty
 
 type id = TLSInfo.id 
-open Range // for now
 
 // payload of a handshake fragment, to be made opaque eventually
-type fragment (i:id) = ( rg: frange i & rbytes rg )
+type fragment (i:id) = ( rg: Range.frange i & Range.rbytes rg )
 //let out_msg i rg b : msg i = (|rg, b|)
 
 // What the HS asks the record layer to do, in that order.
@@ -263,17 +250,12 @@ type outgoing (i:id) (* initial index *) =
       complete  : bool               -> // the handshake is complete!
       outgoing i
 
-
-//17-03-26 now return an outgoing result, for uniformity
-// | OutError: error -> outgoing i       // usage? send a polite Alert in case something goes wrong when preparing messages
-
-//17-03-29  these cause a mysterious error
-//let out_next_keys (#i:id) (r:outgoing i) = Outgoing? r /\ Outgoing?.next_keys r
-//let out_complete (#i:id) (r:outgoing i)  = Outgoing? r /\ Outgoing?.complete r
-
 // provides outputs to the record layer, one fragment at a time
 // never fails, in contrast with Handshake.next_fragment
-val next_fragment: #region:HH.rid -> #a:alg -> r:t region a -> i:id -> St (outgoing i) 
+val next_fragment: s:t -> i:id -> ST (outgoing i) 
+  (requires (fun h0 -> True))
+  (ensures (fun h0 r h1 -> modifies_0 s h0 h1))
+
 (*
   if length st.outgoing = 0 
   return as we can, up to the fragment limit

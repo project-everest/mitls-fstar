@@ -105,7 +105,7 @@ noeq type hs = | HS:
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
   nego: Nego.t region r ->
-  log: HSL.log -> // region (Nego.hashAlg nego) (* embedding msg buffers *) ->
+  log: HSL.t (* TODO {extends HSL.region log region} *) -> 
   ks: KeySchedule.ks -> //region r ->
   epochs: epochs region nonce ->
   state: ref machineState (*in region*) -> // state machine; should be opaque and depend on r.
