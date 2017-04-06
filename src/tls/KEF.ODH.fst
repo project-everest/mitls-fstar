@@ -65,12 +65,12 @@ let kdf_instances : kdf_instance_table =
   else
     ())
 
+(*)
 let create (i:id) (k:expand_kind i) : ST (state i)
   (requires ())
   (ensures ())
   =
-
-
+*)
 
 type salt (i:id) =
   (match i.kef_type with

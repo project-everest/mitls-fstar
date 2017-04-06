@@ -48,12 +48,7 @@ let extract (i:id) (b:bool) : ST (entry i)
   let psk = PSK.psk_value i in
   let pski = PSK.psk_info i in
   let ha = pskInfo_hash pski in
-  if Flags.ideal_KEF then
-    let st_pref = 
-  else
-   begin
-    let xs = HKDF.hkdf_extract
-   end
+  admit()
 
 (*
 let log_cmp (#i:id) (a:log i) (b:log i) =
