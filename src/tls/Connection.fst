@@ -7,7 +7,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
  // for e.g. found
-open FStar.Set
+//open FStar.Set
  
 open Platform.Bytes
 open Platform.Error
@@ -50,8 +50,8 @@ noeq type connection = | C:
 
 let c_role c   = c.hs.r
 let c_nonce c  = c.hs.nonce
-let c_cfg c    = Negotiation.config c.hs.nego
-let c_resume c : resume_id (c_role c) = Negotiation.resume c.hs.nego
+let c_cfg c    = Negotiation.local_config c.hs.nego
+let c_resume c : resumeInfo (c_role c) = Negotiation.resume c.hs.nego
 let c_log c    = c.hs.epochs
 
 (* val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h))) *)
@@ -105,6 +105,10 @@ let epoch_i c h i = Seq.index (epochs c h) i
    Later, we generalize over k, using the ghost_lemma combinator to introduce the quantifier.
 *)
 
-val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:HyperStack.mem -> h1:HyperStack.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (HyperStack.HS?.h h0) (HyperStack.HS?.h h1))
+val equal_on_disjoint: 
+  s1:Set.set rid -> 
+  s2:Set.set rid{disjoint_regions s1 s2} -> 
+  r:rid{Set.mem r s1} -> 
+  h0:HyperStack.mem -> h1:HyperStack.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (HyperStack.HS?.h h0) (HyperStack.HS?.h h1))
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 
