@@ -14,7 +14,7 @@ private let mk_id pv aeAlg =
   let kdf = match pv with
   | TLS_1p0 -> PRF_SSL3_concat
   | TLS_1p1 -> PRF_TLS_1p01 kdf_label
-  | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMAC Hashing.Spec.SHA256) in
+  | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx = CommonDH.keygen g in
   let gy, gxy = CommonDH.dh_responder #g gx in
@@ -26,13 +26,13 @@ private let mk_id13 aeAlg =
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx = CommonDH.keygen g in
   let gy, gxy = CommonDH.dh_responder #g gx in
-  let hsId = HSID_DHE hash_alg g (CommonDH.pubshare gx) gy in
-  let asId = ASID hsId in
-  let expandId = ApplicationSecretID asId in
+  let hsId = HSID_DHE (EarlySalt (NoPSK hash_alg)) g (CommonDH.pubshare gx) gy in
+  let asId = ASID (HandshakeSalt hsId) in
   let cr = CoreCrypto.random 32 in
   let sr = CoreCrypto.random 32 in
-  let logInfo = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg }) in
+  let logInfo = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg; li_sh_hash = hash_alg; li_sh_psk = None; }) in
   let hashed_log = CoreCrypto.random 32 in
+  let expandId = ExpandedSecret (ApplicationSecretID asId) ApplicationTrafficSecret logInfo hashed_log in
   let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
   ID13 keyId
 

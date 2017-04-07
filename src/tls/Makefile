@@ -80,6 +80,7 @@ FSTS=Flags.fst \
 MonotoneMap.fst \
 TLSError.fst \
 Hashing.Spec.fst \
+Format.fst \
 TLSConstants.fst \
 Transport.fst \
 Nonce.fst \
@@ -155,7 +156,7 @@ Record.fst \
 HKDF.fst \
 TLSPRF.fst \
 MasterSecret.fst \
-HandshakeLog.fst \
+Handshake.Log.fsti \
 Negotiation.fst \
 Epochs.fst \
 KeySchedule.fst \
@@ -167,9 +168,9 @@ FFI.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
 test/TestGCM.fst \
-test/TestHandshake.fst \
 test/TestFFI.fst \
 test/TestAPI.fst #the preceding space is significant!
+#test/TestHandshake.fst // Outdated since HS refactor
 
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it

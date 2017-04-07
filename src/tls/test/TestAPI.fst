@@ -4,10 +4,6 @@ open FStar.Seq
 open FStar.HyperHeap
 open Platform.Bytes
 open Platform.Error
-open HandshakeMessages
-open HandshakeLog
-open Negotiation
-open Handshake
 open TLSError
 open TLSInfo
 open TLSConstants

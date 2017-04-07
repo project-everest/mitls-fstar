@@ -19,7 +19,7 @@ open StAE
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
   let sr  = createBytes 32 0z in
-  let kdf = PRF_TLS_1p2 kdf_label (HMAC Hashing.Spec.SHA256) in
+  let kdf = PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx  = CommonDH.keygen g in
   let gy, gxy = CommonDH.dh_responder #g gx in

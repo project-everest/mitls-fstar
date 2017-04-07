@@ -114,7 +114,7 @@ let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:
   (exists e. (epochs c h) `Seq.contains` e  /\               //one of c's epochs, e
       (let i' = Epochs.epoch_id e in   //has an id corresponding to i
         i=i' /\ StAE.stream_state #i e.w == w))               //and holds w as as its writer
-  /\ MonSeq.i_contains (MkEpochs?.es c.hs.log) h                         //technical: the heap contains c's handshake log
+  /\ MonSeq.i_contains (MkEpochs?.es c.hs.epochs) h                         //technical: the heap contains c's handshake log
 	
 //The main invariant, relating an ms_tab and a conn_tab at index i, in state h
 let ms_conn_inv (ms:ms_t)
@@ -276,11 +276,11 @@ val register_writer_in_epoch_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i}
 	     let rgn = HS?.region c.hs in
 	     let _ = reveal_epoch_region_inv_all () in
 	     mc_inv h0 /\ //we're initially in the invariant
-	     MonSeq.i_contains (MkEpochs?.es c.hs.log) h0 /\
-	     MonSeq.i_contains (MkEpochs?.es c.hs.log) h1 /\
+	     MonSeq.i_contains (MkEpochs?.es c.hs.epochs) h0 /\
+	     MonSeq.i_contains (MkEpochs?.es c.hs.epochs) h1 /\
 	     i = Epochs.epoch_id e /\ //the epoch has id i
 	     (let w = StAE.stream_state #i (Epoch?.w e) in //the epoch writer
-	      let es_log_as_hsref = MR.as_hsref (MkEpochs?.es c.hs.log) in
+	      let es_log_as_hsref = MR.as_hsref (MkEpochs?.es c.hs.epochs) in
 	      let epochs = epochs c h0 in
               N.registered (nonce_of_id i) (HH.parent (StreamAE.State?.region w)) /\  //the writer's parent region is registered in the nonce table
 	      HH.disjoint (HH.parent (StreamAE.State?.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
