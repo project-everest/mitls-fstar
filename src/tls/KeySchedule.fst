@@ -522,6 +522,7 @@ let ks_server_13_0rtt_init ks cr esId hashed_log cs (|g,gx|) =
   st := S (S_13_wait_SH (ae, h) cr sr (Some (| esId, es |)) (Some (| efId, cfk0 |)) (| hsId, hs |));
   early_d, gy
 
+(* Obsolete: pass a list PSK.pskid t to 1rtt_init below
 val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
@@ -533,6 +534,7 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+*)
 
 val ks_server_13_1rtt_init:
   ks:ks -> cr:random -> cs:cipherSuite

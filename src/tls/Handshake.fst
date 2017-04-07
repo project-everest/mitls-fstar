@@ -497,39 +497,57 @@ let client_ServerFinished hs f digest =
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
   let mode = Nego.getMode hs.nego in
+  let pv = mode.Nego.n_protocol_version in
   let Some chain = mode.Nego.n_server_cert in // was using Cert.lookup_chain cfg.cert_chain_file
-  let g : CommonDH.group = admit() in // TODO
-  let gy = KeySchedule.ks_server_12_init_dh hs.ks
-    mode.Nego.n_client_random
-    mode.Nego.n_protocol_version
-    mode.Nego.n_cipher_suite
-    mode.Nego.n_extensions.ne_extended_ms
-    g in
-  // ad hoc signing of the nonces and server key share
-  let kex_s = KEX_S_DHE gy in
-  let tbs =
-    let sv = kex_s_to_bytes kex_s in
-    let csr = mode.Nego.n_client_random @| mode.Nego.n_server_random in
-    to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
 
-  // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
+  let ngroups =
+    match pv, mode.Nego.n_extensions.ne_supported_groups with
+    | TLS_1p3, None -> Error (AD_missing_extension,
+       perror __SOURCE_FILE__ __LINE__ "missing required SupportedGroups extension")
+    | _, Some gl -> Correct (List.Tot.choose CommonDH.group_of_namedGroup gl)
+    | _, None -> Correct (List.Tot.choose
+        // Cannot use an elliptic curve if SupportedGroups is missing in TLS<=1.2
+        (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
+        mode.Nego.n_offer.Nego.co_namedGroups) in
 
-  let a, sa, ha = sig_algs mode (Hash Hashing.Spec.SHA1) in
-  let skey = admit() in //Nego.getSigningKey #a hs.nego in
-  let sigv = Signature.sign #a ha skey tbs in
-  if not (length sigv >= 2 && length sigv < 65536)
-  then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-  else
-    begin
-      lemma_repr_bytes_values (length sigv);
-      let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
-      let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-      Handshake.Log.send hs.log (Certificate ({crt_chain = chain}));
-      Handshake.Log.send hs.log (ServerKeyExchange ske);
-      Handshake.Log.send hs.log ServerHelloDone;
-      hs.state := S_Wait_CCS1;
-      InAck true false // Server 1.2 ATK
-    end
+  match ngroups with
+  | Error e -> InError e
+  | Correct([]) -> InError (AD_handshake_failure,
+     perror __SOURCE_FILE__ __LINE__ "no shared supported group")
+  | Correct (g::_) ->
+   begin
+    let gy = KeySchedule.ks_server_12_init_dh hs.ks
+      mode.Nego.n_client_random
+      mode.Nego.n_protocol_version
+      mode.Nego.n_cipher_suite
+      mode.Nego.n_extensions.ne_extended_ms
+      g in
+    // ad hoc signing of the nonces and server key share
+    let kex_s = KEX_S_DHE gy in
+    let tbs =
+      let sv = kex_s_to_bytes kex_s in
+      let csr = mode.Nego.n_client_random @| mode.Nego.n_server_random in
+      to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
+
+    // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
+
+    let a, sa, ha = sig_algs mode (Hash Hashing.Spec.SHA1) in
+    let skey = admit() in //Nego.getSigningKey #a hs.nego in
+    let sigv = Signature.sign #a ha skey tbs in
+    if not (length sigv >= 2 && length sigv < 65536)
+    then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
+    else
+      begin
+        lemma_repr_bytes_values (length sigv);
+        let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
+        let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+        Handshake.Log.send hs.log (Certificate ({crt_chain = chain}));
+        Handshake.Log.send hs.log (ServerKeyExchange ske);
+        Handshake.Log.send hs.log ServerHelloDone;
+        hs.state := S_Wait_CCS1;
+        InAck true false // Server 1.2 ATK
+      end
+   end
 
 (* receive ClientHello, and choose a protocol version and mode *)
 val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
