@@ -497,24 +497,20 @@ let client_ServerFinished hs f digest =
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
   let mode = Nego.getMode hs.nego in
-  let pv = mode.Nego.n_protocol_version in
   let Some chain = mode.Nego.n_server_cert in // was using Cert.lookup_chain cfg.cert_chain_file
 
   let ngroups =
-    match pv, mode.Nego.n_extensions.ne_supported_groups with
-    | TLS_1p3, None -> Error (AD_missing_extension,
-       perror __SOURCE_FILE__ __LINE__ "missing required SupportedGroups extension")
-    | _, Some gl -> Correct (List.Tot.choose CommonDH.group_of_namedGroup gl)
-    | _, None -> Correct (List.Tot.choose
+    match mode.Nego.n_extensions.ne_supported_groups with
+    | Some gl -> List.Tot.choose CommonDH.group_of_namedGroup gl
+    | None -> List.Tot.choose
         // Cannot use an elliptic curve if SupportedGroups is missing in TLS<=1.2
         (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
-        mode.Nego.n_offer.Nego.co_namedGroups) in
+        mode.Nego.n_offer.Nego.co_namedGroups in
 
   match ngroups with
-  | Error e -> InError e
-  | Correct([]) -> InError (AD_handshake_failure,
+  | [] -> InError (AD_handshake_failure,
      perror __SOURCE_FILE__ __LINE__ "no shared supported group")
-  | Correct (g::_) ->
+  | g::_ ->
    begin
     let gy = KeySchedule.ks_server_12_init_dh hs.ks
       mode.Nego.n_client_random
