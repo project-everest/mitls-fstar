@@ -250,7 +250,7 @@ let currentId_T (c:connection) (rw:rw) (h:HST.mem) : GTot id =
   let j = Handshake.iT c.hs rw h in 
   if j < 0 
   then PlaintextID (c_nonce c)
-  else epoch_id (Handshake.eT c.hs rw h)
+  else Epoch.id_of (Handshake.eT c.hs rw h)
   
 let currentId (c:connection) (rw:rw) 
   : ST id 
@@ -259,7 +259,7 @@ let currentId (c:connection) (rw:rw)
 = 
   let j = Handshake.i c.hs rw in 
   if j<0 then PlaintextID (c_nonce c)
-  else let e = Epochs.get_current_epoch Handshake.(c.hs.epochs) rw in epoch_id e
+  else let e = Epochs.get_current_epoch Handshake.(c.hs.epochs) rw in Epoch.id_of e
 
 let maybe_indexable (es:seq 'a) (i:int) = i=(-1) \/ indexable es i
 
@@ -312,7 +312,7 @@ let current_writer_pre (c:connection) (i:id) (h:HST.mem) : GTot bool =
   then PlaintextID? i
   else 
     let epoch_i = Handshake.eT hs Writer h in 
-    i = epoch_id epoch_i
+    i = Epoch.id_of epoch_i
 
 let current_writer_T (c:connection) (i:id) (h:HST.mem{current_writer_pre c i h})
   : GTot (option (cwriter i c))
@@ -606,7 +606,7 @@ let next_fragment_pre (i:id) (c:connection) h0 =
     current_writer_pre c i h0 /\
     Handshake.hs_inv s h0 /\
     maybe_indexable es j /\
-    (if j = -1 then PlaintextID? i else i == epoch_id es.(j))
+    (if j = -1 then PlaintextID? i else i == Epoch.id_of es.(j))
 val next_fragment: i:id -> c:connection -> ST (result (Handshake.Log.outgoing i))
   (requires (next_fragment_pre i c))
   (ensures (fun h0 result h1 -> 
@@ -848,7 +848,7 @@ val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.
 (*     j == iT c.hs Writer h1 /\ //16-05-16 used to be =; see other instance above *)
 (*     (if j < 0 then PlaintextID? i /\ h0 = h1 else *)
 (*        let e = Seq.index es j in *)
-(*        i == epoch_id e /\ ( *)
+(*        i == Epoch.id_of e /\ ( *)
 (*        let wr:writer i = writer_epoch e in *)
 (*        modifies (Set.singleton (C?.region c)) h0 h1 *)
 (* )))) *)
@@ -949,9 +949,9 @@ let rec writeAll c i appdata =
     (assume false; // TODO
     match writeOne c i appdata with
     | WriteAgain          -> writeAll c i appdata
-//  | WriteAgainClosing   -> writeClosing c i // TODO, using updated epoch_id (epoch_w c)
+//  | WriteAgainClosing   -> writeClosing c i // TODO, using updated Epoch.id_of (epoch_w c)
     | WriteAgainFinishing -> // next writer epoch!
-                            writeAllFinishing c i // TODO, using updated epoch_id (epoch_w c)
+                            writeAllFinishing c i // TODO, using updated Epoch.id_of (epoch_w c)
     | WriteError x y      -> WriteError x y
     | WriteClose           -> WriteClose
     | WriteDone           -> WriteDone
@@ -1067,7 +1067,7 @@ let sel_reader h c =
   let j = Handshake.iT c.hs Reader h in
   (if j < 0 then None else
   let e = Seq.index es j in
-  let i = peerId (epoch_id e) in
+  let i = peerId (Epoch.id_of e) in
   assume(StAE.is_stream i);
   Some (| i, reader_epoch e |))
   // todo: add other cases depending on dispatch state
@@ -1095,7 +1095,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     st_inv c h0 /\
     (if j < 0 then PlaintextID? i else
       let e = Seq.index es j in
-      i == peerId (epoch_id e) /\
+      i == peerId (Epoch.id_of e) /\
       StAE.incrementable (reader_epoch e) h0)))
   (ensures (fun h0 r h1 ->
     let es = epochs c h0 in
@@ -1105,7 +1105,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
     j == Handshake.iT c.hs Reader h1 /\
     (if j < 0 then PlaintextID? i /\ h0 == h1 else
       let e = Seq.index es j in
-      i == peerId (epoch_id e) /\
+      i == peerId (Epoch.id_of e) /\
       (let rd: StAE.reader i = reader_epoch e in
       modifies (Set.singleton (StAE.region rd)) h0 h1 /\
       (match r with

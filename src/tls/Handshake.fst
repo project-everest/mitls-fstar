@@ -24,8 +24,6 @@ open Handshake.Log // notably for Outgoing
 
 //16-05-31 these opens are implementation-only; overall we should open less
 //open CoreCrypto
-open Epochs
-
 
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
@@ -816,7 +814,7 @@ val next_fragment: s:hs -> i:id -> ST (result (outgoing i))
     let es = logT s h0 in
     let j = iT s Writer h0 in
     hs_inv s h0 /\
-    (if j = -1 then PlaintextID? i else let e = Seq.index es j in i = epoch_id e)
+    (if j = -1 then PlaintextID? i else let e = Seq.index es j in i = Epoch.id_of e)
   ))
   (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
 let next_fragment hs i =
