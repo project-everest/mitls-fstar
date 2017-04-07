@@ -31,7 +31,6 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
 module Nego = Negotiation
-module KS = KeySchedule
 module HSL = Handshake.Log
 
 //open Negotiation // convenient for the numerous record fields
@@ -128,6 +127,8 @@ let forall_epochs (hs:hs) h (p:(epoch hs.region hs.nonce -> Type)) =
   (let es = logT hs h in
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
 //epochs in h1 extends epochs in h0 by one
+
+(*
 #set-options "--lax"
 let fresh_epoch h0 s h1 =
   let es0 = logT s h0 in
@@ -135,16 +136,16 @@ let fresh_epoch h0 s h1 =
   Seq.length es1 > 0 &&
   es0 = Seq.slice es1 0 (Seq.length es1 - 1)
 
-let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
-  let es = logT s h in
-  Seq.index es (Seq.length es - 1)
-
-
 (* vs modifies clauses? *)
 (* let unmodified_epochs s h0 h1 =  *)
 (*   forall_epochs s h0 (fun e ->  *)
 (*     let rs = regions e in  *)
 (*     (forall (r:rid{Set.mem r rs}).{:pattern (Set.mem r rs)} Map.sel h0 r = Map.sel h1 r)) *)
+*)
+
+let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
+  let es = logT s h in
+  Seq.index es (Seq.length es - 1)
 
 // separation policy: the handshake mutates its private state,
 // only depends on it, and only extends the log with fresh epochs.
@@ -162,10 +163,6 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
 // - within OutCCS..InCCSAck, we still use the older reader
 // - otherwise we use the latest readers and writers
 
-// technicality: module dependencies?
-// we used to pre-declare all identifiers in TLSInfo
-// we used owe could also record (fatal) errors as log terminators
-
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
 
@@ -182,57 +179,50 @@ let iT (s:hs) rw (h:HyperStack.mem) =
     | Writer -> Epochs.writerT s.epochs h
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
+#set-options "--lax"
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
-  : Lemma (stateT s h0 = stateT s h1
-           ==> iT s rw h0 = iT s rw h1)
-  = ()
+  : Lemma (stateT s h0 = stateT s h1  ==>  iT s rw h0 = iT s rw h1)
+  = () 
 
 //Here's a framing on stateT connecting it to the region discipline
 let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
-  : Lemma (requires HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
-            /\ Map.contains (HyperStack.HS?.h h0) s.region
-            /\ not (Set.mem s.region mods))
-          (ensures stateT s h0 = stateT s h1)
+  : Lemma 
+    (requires 
+      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
+      Map.contains (HyperStack.HS?.h h0) s.region /\
+      not (Set.mem s.region mods))
+    (ensures stateT s h0 = stateT s h1)
   = ()
 
 //This is probably the framing lemma that a client of this module will want to use
 let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
-  : Lemma (requires HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
-            /\ Map.contains (HyperStack.HS?.h h0) s.region
-            /\ not (Set.mem s.region mods))
-          (ensures stateT s h0 = stateT s h1
-           /\ iT s rw h0 = iT s rw h1)
-  = frame_stateT s rw h0 h1 mods;
-    frame_iT_trivial s rw h0 h1
+  : Lemma 
+    (requires 
+      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\ 
+      Map.contains (HyperStack.HS?.h h0) s.region /\
+      not (Set.mem s.region mods))
+    (ensures stateT s h0 = stateT s h1 /\ iT s rw h0 = iT s rw h1)
+= 
+  frame_stateT s rw h0 h1 mods;
+  frame_iT_trivial s rw h0 h1
 
-// returns the epoch for reading or writing
-let eT s rw (h:HyperStack.mem { iT s rw h >= 0 }) = Seq.index (logT s h) (iT s rw h)
-
+// returns the current epoch for reading or writing
+let eT s rw (h:HyperStack.mem {iT s rw h >= 0}) = Seq.index (logT s h) (iT s rw h)
 let readerT s h = eT s Reader h
 let writerT s h = eT s Writer h
 
 // this function increases (how to specify it once for all?)
 val i: s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> h0 == h1
-              /\ i = iT s rw h1
-              /\ Epochs.get_ctr_post (HS?.epochs s) rw h0 i h1))
+  (ensures (fun h0 i h1 -> 
+    h0 == h1 /\ 
+    i = iT s rw h1 /\ 
+    Epochs.get_ctr_post (HS?.epochs s) rw h0 i h1))
 let i hs rw =
   match rw with
   | Reader -> Epochs.get_reader hs.epochs
   | Writer -> Epochs.get_writer hs.epochs
 
-
-type incoming =
-  | InAck: // the fragment is accepted, and...
-      next_keys : bool -> // the reader index increases;
-      complete  : bool -> // the handshake is complete!
-      incoming
-  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
-  | InError: error -> incoming // how underspecified should it be?
-
-let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
-let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 
 // factored out; indexing to be reviewed
@@ -241,7 +231,6 @@ let register hs keys =
       let h = admit() in
       Epochs.recordInstanceToEpoch #hs.region #hs.nonce h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
-
 
 
 (* ---------------- signature stuff, to be moved (at least) to Nego -------------------- *)
@@ -258,17 +247,17 @@ let rec list_sigHashAlg_is_list_tuple_sig_hash: list sigHashAlg -> Tot (list (TL
   | [] -> []
   | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd) :: (list_sigHashAlg_is_list_tuple_sig_hash tl)
 
+// why an option?
 val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
 let to_be_signed pv role csr tbs =
   match pv, csr with
   | TLS_1p3, None ->
-    let pad = abytes (String.make 64 (Char.char_of_int 32)) in
-    let ctx =
-      match role with
-      | Server -> "TLS 1.3, server CertificateVerify"
-      | Client -> "TLS 1.3, client CertificateVerify"
-    in
-    pad @| (abytes ctx) @| (abyte 0z) @| tbs
+      let pad = abytes (String.make 64 (Char.char_of_int 32)) in
+      let ctx =
+        match role with
+        | Server -> "TLS 1.3, server CertificateVerify"
+        | Client -> "TLS 1.3, client CertificateVerify"  in
+      pad @| abytes ctx @| abyte 0z @| tbs
   | _, Some csr -> csr @| tbs
 
 val sigHashAlg_of_ske: bytes -> Tot (option (sigHashAlg * bytes))
@@ -285,16 +274,46 @@ let sigHashAlg_of_ske signature =
    | Error _ -> None
   else None
 
+let sig_algs mode sh_alg = 
+  // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
+  // If no signature nego took place we use the SA and KDF hash from the CS
+  let Some sa = mode.Nego.n_sigAlg in
+  let algs =
+    match mode.Nego.n_extensions.ne_signature_algorithms with
+    | Some l -> l
+    | None -> [sa, sh_alg] in
+  let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
+  let sa, ha =
+    match algs with
+    | ha::_ -> ha
+    | [] -> (sa, sh_alg) in
+  let a = Signature.Use (fun _ -> true) sa [ha] false false in
+  (a, sa, ha)
+
+
+
+type incoming =
+  | InAck: // the fragment is accepted, and...
+      next_keys : bool -> // the reader index increases;
+      complete  : bool -> // the handshake is complete!
+      incoming
+  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
+  | InError: error -> incoming // how underspecified should it be?
+
+let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
+let in_complete (r:incoming)  = InAck? r && InAck?.complete r
+
 
 (* -------------------- Handshake Client ------------------------ *)
 
 val client_ClientHello: hs -> i:id -> ST (result (Handshake.Log.outgoing i))
-  (requires (fun h ->
-    True (* add the precondition that Nego and KS are in proper state *) ))
-  (ensures (fun h0 i h1 -> True))
+  (requires fun h0 ->
+    True (* add the precondition that Nego and KS are in proper state *) )
+  (ensures fun h0 i h1 -> 
+    True)
   (* TODO: what should we say here? something like:
     - The Keys Schedule state machine is in the initial state
-    - The Handshake log has exactly one more message: the ClientHello computed from the input configurtion
+    - The Handshake log has exactly one more message: the ClientHello computed from the input configuration
     - The result is this ClientHello and its serialization
   *)
 let client_ClientHello hs i =
@@ -437,13 +456,7 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
     match Nego.clientComplete_13 hs.nego ee ocr c cv digestCert with
     | Error z -> InError z
     | Correct mode ->
-        //admit() // 17-03-30  until KS restructuring
-
         let (sfin_key, cfin_key, app_keys) = KeySchedule.ks_client_13_sf hs.ks digestServerFinished in
-        // was also calling: let keys = KeySchedule.ks_client_13_sf ks in
-        // was also calling: let cvd = KeySchedule.ks_client_13_client_finished ks in
-        // was also calling: let ems = KeySchedule.ks_client_13_cf ks in // ?
-
         let (| finId, sfin_key |) = sfin_key in
         if not (HMAC.UFCMA.verify sfin_key digestCertVerify svd)
         then InError (AD_decode_error, "Finished MAC did not verify")
@@ -465,7 +478,6 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
           )
 
 let client_ServerFinished hs f digest =
-  // TODO fixme
 //    let sfin_key = KeySchedule.ks_client_12_server_finished hs.ks in
 //    let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
 //    if HMAC.UFCMA.verify sfin_key digest f.fin_vd
@@ -481,65 +493,44 @@ let client_ServerFinished hs f digest =
 (* -------------------- Handshake Server ------------------------ *)
 
 (* called by server_ClientHello after sending TLS 1.2 ServerHello *)
-let server_ServerHelloDone hs n =
-    trace "Sending ...ServerHelloDone";
-    // static precondition: n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
-    // should instead use Nego for most of this processing
-    let cfg = admit() in
-    match Cert.lookup_chain cfg.cert_chain_file with
-    | Error z -> InError z
-    | Correct chain ->
-      let c = {crt_chain = chain} in
-      let cr = n.Nego.n_client_random in
-      let ems = n.Nego.n_extensions.ne_extended_ms in
-      let pv = n.Nego.n_protocol_version in
-      let cs = n.Nego.n_cipher_suite in
-      let g : CommonDH.group = admit() in // TODO
-      let gy = KeySchedule.ks_server_12_init_dh hs.ks
-        cr
-        pv
-        cs
-        ems
-        g in
-      let kex_s = KEX_S_DHE gy in
-      let sv = kex_s_to_bytes kex_s in
-      let csr = n.Nego.n_client_random @| n.Nego.n_server_random in
+// static precondition: n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
+// should instead use Nego for most of this processing
+let server_ServerHelloDone hs =
+  trace "Sending ...ServerHelloDone";
+  let mode = Nego.getMode hs.nego in 
+  let Some chain = mode.Nego.n_server_cert in // was using Cert.lookup_chain cfg.cert_chain_file 
+  let g : CommonDH.group = admit() in // TODO
+  let gy = KeySchedule.ks_server_12_init_dh hs.ks
+    mode.Nego.n_client_random
+    mode.Nego.n_protocol_version
+    mode.Nego.n_cipher_suite
+    mode.Nego.n_extensions.ne_extended_ms
+    g in
+  // ad hoc signing of the nonces and server key share
+  let kex_s = KEX_S_DHE gy in
+  let tbs = 
+    let sv = kex_s_to_bytes kex_s in
+    let csr = mode.Nego.n_client_random @| mode.Nego.n_server_random in
+    to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
 
-      // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
-      let Some sa = n.Nego.n_sigAlg in
-      let sigalgs = n.Nego.n_extensions.ne_signature_algorithms in
-      let algs =
-          match sigalgs with
-          | Some l -> l
-          | None -> [(sa,Hash Hashing.Spec.SHA1)]  in
-      let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
-      let sa, ha =
-          match algs with
-          | sha::_ -> sha
-          | [] -> (sa, Hash Hashing.Spec.SHA1)
-        in
-      let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
-      let a = Signature.Use (fun _ -> true) sa [ha] false false in
-      let tbs = to_be_signed n.Nego.n_protocol_version Server (Some csr) sv in
-      begin
-        match Signature.lookup_key #a cfg.private_key_file with
-        | None -> InError (AD_internal_error, perror __SOURCE_FILE__ __LINE__ "could not load siginig key")
-        | Some csk ->
-            let sigv = Signature.sign ha csk tbs in
-          if not (length sigv >= 2 && length sigv < 65536)
-          then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-          else
-              begin
-                lemma_repr_bytes_values (length sigv);
-                let signature = (hab @| sab @| (vlbytes 2 sigv)) in
-                let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-                Handshake.Log.send hs.log (Certificate c);
-                Handshake.Log.send hs.log (ServerKeyExchange ske);
-                Handshake.Log.send hs.log ServerHelloDone;
-                hs.state := S_Wait_CCS1;
-                InAck true false // Server 1.2 ATK
-              end
-      end
+  // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility. 
+  
+  let a, sa, ha = sig_algs mode (Hash Hashing.Spec.SHA1) in 
+  let skey = admit() in //Nego.getSigningKey #a hs.nego in
+  let sigv = Signature.sign #a ha skey tbs in
+  if not (length sigv >= 2 && length sigv < 65536)
+  then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
+  else 
+    begin
+      lemma_repr_bytes_values (length sigv);
+      let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
+      let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+      Handshake.Log.send hs.log (Certificate ({crt_chain = chain}));
+      Handshake.Log.send hs.log (ServerKeyExchange ske);
+      Handshake.Log.send hs.log ServerHelloDone;
+      hs.state := S_Wait_CCS1;
+      InAck true false // Server 1.2 ATK
+    end
 
 (* receive ClientHello, and choose a protocol version and mode *)
 val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
@@ -550,7 +541,6 @@ let server_ClientHello hs ch =
     match Nego.server_ClientHello hs.nego ch with
     | Error z -> InError z
     | Correct mode -> (
-      //let srand = KS.ks_server_random hs.ks in
       let server_share =
         match mode.Nego.n_protocol_version, mode.Nego.n_client_share  with
         | TLS_1p3, Some  (| g, gx |) -> Some (KeySchedule.ks_server_13_1rtt_init hs.ks ch.ch_client_random mode.Nego.n_cipher_suite g gx )
@@ -591,7 +581,7 @@ let server_ClientHello hs ch =
             hs.state := S_Sent_ServerHello;
             InAck false false)
 
-          else server_ServerHelloDone hs mode // sending our whole flight hopefully in a single packet.
+          else server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
           ))
 
 (* receive ClientKeyExchange; CCS *)
@@ -640,67 +630,47 @@ let server_ServerFinished_13 hs i =
     // static pre: n.n_protocol_version = TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
     // most of this should go to Nego
     trace "Prepare Server Finished";
-    let n = Nego.getMode hs.nego in
-    let Some chain = n.Nego.n_server_cert in
-    let pv = n.Nego.n_protocol_version in
-    let cs = n.Nego.n_cipher_suite in
+    let mode = Nego.getMode hs.nego in
+    let Some chain = mode.Nego.n_server_cert in
+    let pv = mode.Nego.n_protocol_version in
+    let cs = mode.Nego.n_cipher_suite in
     let sh_alg = sessionHashAlg pv cs in
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
-    let Some sa = n.Nego.n_sigAlg in
 
-    //was:
-    //  match Cert.lookup_chain cfg.cert_chain_file with
-    //  | Error z -> Error z
-    //  | Correct chain ->
+    Handshake.Log.send hs.log (EncryptedExtensions ({ee_extensions = []}));
+    let digestSig = Handshake.Log.send_tag #halg hs.log (Certificate ({crt_chain = chain})) in
 
-      Handshake.Log.send hs.log (EncryptedExtensions ({ee_extensions = []}));
-      let digestSig = Handshake.Log.send_tag #halg hs.log (Certificate ({crt_chain = chain})) in
+    // signing of the formatted session digest
+    let tbs : bytes = 
+      let Hash sh_alg = sh_alg in
+      let hL = hashSize sh_alg in
+      let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
+      let rc = Hashing.compute sh_alg zeroes in
+      let lb = digestSig @| rc in
+      to_be_signed pv Server None lb in
 
-      //TODO factor out code for signing
-      // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
-      // If no signature nego took place we use the SA and KDF hash from the CS
-      let algs =
-        match n.Nego.n_extensions.ne_signature_algorithms with
-        | Some l -> l
-        | None -> [sa, sh_alg]
-      in
-      let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
-      let sa, ha =
-        match algs with
-        | ha::_ -> ha
-        | [] -> (sa, sh_alg) in
-      let hab, sab = hashAlgBytes ha, sigAlgBytes sa in
-      let a = Signature.Use (fun _ -> true) sa [ha] false false in
-      let skey : option (Signature.skey a) = admit() in // Signature.lookup_key #a n.Nego.n_offer.private_key_file
+    let a, sa, ha = sig_algs mode sh_alg in 
+    let skey: Signature.skey a = admit() in // Nego.getSigningKey #a hs.nego in // Signature.lookup_key #a mode.Nego.n_offer.private_key_file
+    let sigv = Signature.sign #a ha skey tbs in
+    if not (length sigv >= 2 && length sigv < 65536)
+    then Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
+    else 
       begin
-        match skey with
-        | None -> Error (AD_internal_error, perror __SOURCE_FILE__ __LINE__ "could not load signing key")
-        | Some csk -> (
-            let Hash sh_alg = sh_alg in
-            let hL = hashSize sh_alg in
-            let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-            let rc = Hashing.compute  sh_alg zeroes in
-            let lb = digestSig @| rc in
-            let tbs = to_be_signed pv Server None lb in
-            let sigv = Signature.sign ha csk tbs in
-            let signature = hab @| sab @| vlbytes 2 sigv in
-
-            let digestFinished = HSL.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
-            let (| sfinId, sfin_key |), _ = KS.ks_server_13_finished_keys hs.ks in
-            let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
-            let digestServerFinished = Handshake.Log.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
-            // we need to call KeyScheduke twice, to pass this digest
-            let app_keys = KS.ks_server_13_sf hs.ks digestServerFinished in
-
-            register hs app_keys;
-            Epochs.incr_writer hs.epochs; // Switch to ATK after the SF
-            Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
-            hs.state := S_Wait_Finished2 digestServerFinished;
-            //TODO Handshake.Log.set_flags "switch to ATK 0.5RTT";
-            Correct(Handshake.Log.next_fragment hs.log i)
-            )
+        lemma_repr_bytes_values (length sigv);
+        let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
+        let digestFinished = HSL.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
+        let (| sfinId, sfin_key |), _ = KeySchedule.ks_server_13_finished_keys hs.ks in
+        let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
+        let digestServerFinished = Handshake.Log.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
+        // we need to call KeyScheduke twice, to pass this digest
+        let app_keys = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
+        register hs app_keys;
+        Epochs.incr_writer hs.epochs; // Switch to ATK after the SF
+        Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
+        hs.state := S_Wait_Finished2 digestServerFinished;
+        //TODO Handshake.Log.set_flags "switch to ATK 0.5RTT";
+        Correct(Handshake.Log.next_fragment hs.log i)
       end
-
 
 (* receive ClientFinish 1.3 *)
 val server_ClientFinished_13: hs -> 
@@ -714,7 +684,7 @@ let server_ClientFinished_13 hs f digestClientFinished clientAuth =
       InError(AD_internal_error,
         perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
-       let _, (| i, cfin_key |) = KS.ks_server_13_finished_keys hs.ks in
+       let _, (| i, cfin_key |) = KeySchedule.ks_server_13_finished_keys hs.ks in
        // TODO MACVerify digestClientFinished
        if HMAC.UFCMA.verify #i cfin_key digestClientFinished f
        then (
@@ -764,12 +734,12 @@ val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume:TLSInfo.resumeInfo 
     // HS?.resume s = resume /\
     // HS?.cfg s = cfg /\
     logT s h1 = Seq.createEmpty ))
-let handshake_state_init parent cfg role resume =
+let create parent cfg role resume =
   let r = new_region parent in 
   let nego = Nego.create r role  cfg resume in
   let log = HSL.create r (* cfg.maxVer (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = KS.create role in
+  let ks, nonce = KeySchedule.create #r role in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in
   HS role nonce nego log ks epochs state
