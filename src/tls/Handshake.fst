@@ -26,7 +26,7 @@ open Handshake.Log // notably for Outgoing
 //open CoreCrypto
 open Epochs
 
-  
+
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
@@ -104,7 +104,7 @@ noeq type hs = | HS:
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
   nego: Nego.t region r ->
-  log: HSL.t (* TODO {extends HSL.region log region} *) -> 
+  log: HSL.t (* TODO {extends HSL.region log region} *) ->
   ks: KeySchedule.ks -> //region r ->
   epochs: epochs region nonce ->
   state: ref machineState (*in region*) -> // state machine; should be opaque and depend on r.
@@ -182,12 +182,12 @@ let iT (s:hs) rw (h:HyperStack.mem) =
 #set-options "--lax"
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
   : Lemma (stateT s h0 = stateT s h1  ==>  iT s rw h0 = iT s rw h1)
-  = () 
+  = ()
 
 //Here's a framing on stateT connecting it to the region discipline
 let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
-  : Lemma 
-    (requires 
+  : Lemma
+    (requires
       HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
       Map.contains (HyperStack.HS?.h h0) s.region /\
       not (Set.mem s.region mods))
@@ -196,13 +196,13 @@ let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:S
 
 //This is probably the framing lemma that a client of this module will want to use
 let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
-  : Lemma 
-    (requires 
-      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\ 
+  : Lemma
+    (requires
+      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
       Map.contains (HyperStack.HS?.h h0) s.region /\
       not (Set.mem s.region mods))
     (ensures stateT s h0 = stateT s h1 /\ iT s rw h0 = iT s rw h1)
-= 
+=
   frame_stateT s rw h0 h1 mods;
   frame_iT_trivial s rw h0 h1
 
@@ -214,9 +214,9 @@ let writerT s h = eT s Writer h
 // this function increases (how to specify it once for all?)
 val i: s:hs -> rw:rw -> ST int
   (requires (fun h -> True))
-  (ensures (fun h0 i h1 -> 
-    h0 == h1 /\ 
-    i = iT s rw h1 /\ 
+  (ensures (fun h0 i h1 ->
+    h0 == h1 /\
+    i = iT s rw h1 /\
     Epochs.get_ctr_post (HS?.epochs s) rw h0 i h1))
 let i hs rw =
   match rw with
@@ -274,7 +274,7 @@ let sigHashAlg_of_ske signature =
    | Error _ -> None
   else None
 
-let sig_algs mode sh_alg = 
+let sig_algs mode sh_alg =
   // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
   // If no signature nego took place we use the SA and KDF hash from the CS
   let Some sa = mode.Nego.n_sigAlg in
@@ -309,7 +309,7 @@ let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 val client_ClientHello: hs -> i:id -> ST (result (Handshake.Log.outgoing i))
   (requires fun h0 ->
     True (* add the precondition that Nego and KS are in proper state *) )
-  (ensures fun h0 i h1 -> 
+  (ensures fun h0 i h1 ->
     True)
   (* TODO: what should we say here? something like:
     - The Keys Schedule state machine is in the initial state
@@ -441,14 +441,14 @@ let client_ServerHelloDone hs c ske ocr =
 
 #set-options "--lax"
 (* receive EncryptedExtension...ServerFinished for TLS 1.3, roughly mirroring client_ServerHelloDone *)
-val client_ServerFinished_13: 
+val client_ServerFinished_13:
   s: hs ->
   ee: HandshakeMessages.ee ->
   ocr: option HandshakeMessages.cr ->
   c: HandshakeMessages.crt ->
   cv: HandshakeMessages.cv ->
   svd: bytes ->
-  digestCert: Hashing.anyTag -> 
+  digestCert: Hashing.anyTag ->
   digestCertVerify: Hashing.anyTag ->
   digestServerFinished: Hashing.anyTag ->
   St incoming
@@ -478,10 +478,9 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
           )
 
 let client_ServerFinished hs f digest =
-//    let sfin_key = KeySchedule.ks_client_12_server_finished hs.ks in
-//    let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
-//    if HMAC.UFCMA.verify sfin_key digest f.fin_vd
-    if false
+    let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
+    let mode = Nego.getMode hs.nego in
+    if f.fin_vd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) sfin_key Server digest
     then (
       hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
       InAck false true // Client 1.2 ATK
@@ -497,8 +496,8 @@ let client_ServerFinished hs f digest =
 // should instead use Nego for most of this processing
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
-  let mode = Nego.getMode hs.nego in 
-  let Some chain = mode.Nego.n_server_cert in // was using Cert.lookup_chain cfg.cert_chain_file 
+  let mode = Nego.getMode hs.nego in
+  let Some chain = mode.Nego.n_server_cert in // was using Cert.lookup_chain cfg.cert_chain_file
   let g : CommonDH.group = admit() in // TODO
   let gy = KeySchedule.ks_server_12_init_dh hs.ks
     mode.Nego.n_client_random
@@ -508,19 +507,19 @@ let server_ServerHelloDone hs =
     g in
   // ad hoc signing of the nonces and server key share
   let kex_s = KEX_S_DHE gy in
-  let tbs = 
+  let tbs =
     let sv = kex_s_to_bytes kex_s in
     let csr = mode.Nego.n_client_random @| mode.Nego.n_server_random in
     to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
 
-  // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility. 
-  
-  let a, sa, ha = sig_algs mode (Hash Hashing.Spec.SHA1) in 
+  // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
+
+  let a, sa, ha = sig_algs mode (Hash Hashing.Spec.SHA1) in
   let skey = admit() in //Nego.getSigningKey #a hs.nego in
   let sigv = Signature.sign #a ha skey tbs in
   if not (length sigv >= 2 && length sigv < 65536)
   then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-  else 
+  else
     begin
       lemma_repr_bytes_values (length sigv);
       let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
@@ -605,7 +604,7 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
 
 (* receive ClientFinish *)
 val server_ClientFinished:
-  hs -> bytes -> Hashing.anyTag -> Hashing.anyTag -> St incoming 
+  hs -> bytes -> Hashing.anyTag -> Hashing.anyTag -> St incoming
 let server_ClientFinished hs cvd digestCCS digestClientFinished =
     trace "Process Client Finished";
     let fink = KeySchedule.ks_12_finished_key hs.ks in
@@ -641,7 +640,7 @@ let server_ServerFinished_13 hs i =
     let digestSig = Handshake.Log.send_tag #halg hs.log (Certificate ({crt_chain = chain})) in
 
     // signing of the formatted session digest
-    let tbs : bytes = 
+    let tbs : bytes =
       let Hash sh_alg = sh_alg in
       let hL = hashSize sh_alg in
       let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
@@ -649,12 +648,12 @@ let server_ServerFinished_13 hs i =
       let lb = digestSig @| rc in
       to_be_signed pv Server None lb in
 
-    let a, sa, ha = sig_algs mode sh_alg in 
+    let a, sa, ha = sig_algs mode sh_alg in
     let skey: Signature.skey a = admit() in // Nego.getSigningKey #a hs.nego in // Signature.lookup_key #a mode.Nego.n_offer.private_key_file
     let sigv = Signature.sign #a ha skey tbs in
     if not (length sigv >= 2 && length sigv < 65536)
     then Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-    else 
+    else
       begin
         lemma_repr_bytes_values (length sigv);
         let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
@@ -673,9 +672,9 @@ let server_ServerFinished_13 hs i =
       end
 
 (* receive ClientFinish 1.3 *)
-val server_ClientFinished_13: hs -> 
-  bytes -> 
-  Hashing.anyTag -> 
+val server_ClientFinished_13: hs ->
+  bytes ->
+  Hashing.anyTag ->
   option (HandshakeMessages.crt * HandshakeMessages.cv * Hashing.anyTag) -> St incoming
 let server_ClientFinished_13 hs f digestClientFinished clientAuth =
    trace "Process Client Finished";
@@ -735,7 +734,7 @@ val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume:TLSInfo.resumeInfo 
     // HS?.cfg s = cfg /\
     logT s h1 = Seq.createEmpty ))
 let create parent cfg role resume =
-  let r = new_region parent in 
+  let r = new_region parent in
   let nego = Nego.create r role  cfg resume in
   let log = HSL.create r (* cfg.maxVer (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
@@ -793,7 +792,7 @@ let next_fragment_ensures (#i:id) (s:hs) h0 (result: result (outgoing i)) h1 =
     r1 == r0 /\
     Seq.length (logT s h1) >= Seq.length (logT s h0) /\
     ( match result with
-      | Correct (Outgoing frg ccs nextKeys complete) -> 
+      | Correct (Outgoing frg ccs nextKeys complete) ->
           w1 == (if nextKeys then w0 + 1 else w0) /\
           (b2t complete ==> r1 = w1 /\ indexable (logT s h1) w1 /\ completed (eT s Writer h1))
       | _ -> True )
@@ -868,7 +867,7 @@ val recv_fragment: s:hs -> #i:id -> rg:frange i -> f:rbytes rg -> ST incoming (*
   (ensures (recv_ensures s))
 let recv_fragment hs #i rg f =
     trace "recv_fragment";
-    let h0 = ST.get() in 
+    let h0 = ST.get() in
     let flight = Handshake.Log.receive hs.log f in
     match !hs.state, flight with
       | _, None -> InAck false false // nothing happened
