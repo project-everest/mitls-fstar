@@ -43,16 +43,17 @@ type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region 
  *)
 noeq type connection = | C:
   #region: c_rgn ->
-  hs:      hs {extends (HS?.region hs) region /\ is_hs_rgn (HS?.region hs)} (* providing role, config, and uid *) ->
+  hs:      hs {extends (region_of hs) region /\ is_hs_rgn (region_of hs)} (* providing role, config, and uid *) ->
   tcp:     Transport.t ->
   state:   ref tlsState {state.id = region} -> 
   connection
 
-let c_role c   = c.hs.r
-let c_nonce c  = c.hs.nonce
-let c_cfg c    = Negotiation.local_config c.hs.nego
-let c_resume c : resumeInfo (c_role c) = Negotiation.resume c.hs.nego
-let c_log c    = c.hs.epochs
+// 17-04-08 helpful or not? 
+let c_role c = Handshake.role_of c.hs
+let c_nonce c = Handshake.random_of c.hs
+let c_cfg c = Handshake.config_of c.hs
+let c_resume c = Handshake.resumeInfo_of c.hs
+let c_log c = Handshake.epochs_of c.hs
 
 (* val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h))) *)
 (* let reader_epoch #region #peer e = Epoch?.r e *)
@@ -64,7 +65,7 @@ let c_log c    = c.hs.epochs
 type st_inv c h = hs_inv (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (HS?.region c.hs) (HS?.nonce c.hs)){
+val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (region_of c.hs) (random_of c.hs)){
   Epochs.epochs_inv es /\ es == logT c.hs h
 })
 let epochs c h = logT c.hs h
@@ -72,8 +73,9 @@ let epochs c h = logT c.hs h
 
 //16-05-30 unused?
 val frame_epochs: c:connection -> h0:HyperStack.mem -> h1:HyperStack.mem -> Lemma
-  (requires (Map.contains (HyperStack.HS?.h h0) (HS?.region c.hs)
-             /\ equal_on (Set.singleton (HS?.region c.hs)) (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)))
+  (requires (
+    Map.contains (HyperStack.HS?.h h0) (region_of c.hs) /\ 
+    equal_on (Set.singleton (region_of c.hs)) (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)))
   (ensures (epochs c h0 == epochs c h1))
 let frame_epochs c h0 h1 = ()
 

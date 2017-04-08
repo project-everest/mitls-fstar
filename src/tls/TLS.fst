@@ -63,7 +63,7 @@ let rec unexpected #a s = unexpected s
 let outerPV (c:connection) : ST protocolVersion
   (requires (Handshake.hs_inv c.hs))
   (ensures (fun h0 pv h1 -> h0 == h1)) =
-  match Handshake.version c.hs with
+  match Handshake.version_of c.hs with
   | TLS_1p3 -> TLS_1p0
   | pv      -> pv
 
@@ -80,8 +80,9 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
     Map.contains (HST.HS?.h h1) c.region /\ //NS: may be removeable: we should get it from fresh_region
     st_inv c h1 /\
     c_role c = r /\
-    c_cfg c == cfg /\
-    c_resume c = resume /\
+//17-04-08 commented out as their access is now stateful
+//    c_cfg c == cfg /\
+//    c_resume c = resume /\
     c.tcp == tcp  /\
     //17-04-07 went back to static refinements on resumeInfo r
     //(r = Server ==> resume = None) /\ //16-05-28 style: replacing a refinement under the option
@@ -179,7 +180,7 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
     )))
 
 let no_seqn_overflow c rw =
-  let es = MS.i_read (MkEpochs?.es Handshake.(c.hs.epochs)) in //MR.m_read c.hs.log in
+  let es = MS.i_read (Handshake.es_of c.hs) in //MR.m_read c.hs.log in
   let j = Handshake.i c.hs rw in // -1 <= j < length es
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ... 
     true
@@ -259,7 +260,7 @@ let currentId (c:connection) (rw:rw)
 = 
   let j = Handshake.i c.hs rw in 
   if j<0 then PlaintextID (c_nonce c)
-  else let e = Epochs.get_current_epoch Handshake.(c.hs.epochs) rw in epoch_id e
+  else let e = Epochs.get_current_epoch (Handshake.epochs_of c.hs) rw in epoch_id e
 
 let maybe_indexable (es:seq 'a) (i:int) = i=(-1) \/ indexable es i
 
@@ -303,7 +304,7 @@ let trigger_peer (#a:Type) (x:a) = True
 
 let cwriter (i:id) (c:connection) = 
   w:StAE.writer i{exists (r:StAE.reader (peerId i)).{:pattern (trigger_peer r)}
-		    epoch_region_inv' (Handshake.HS?.region c.hs) r w}
+		    epoch_region_inv' (Handshake.region_of c.hs) r w}
 
 let current_writer_pre (c:connection) (i:id) (h:HST.mem) : GTot bool = 
   let hs = c.hs in 
@@ -336,10 +337,11 @@ let current_writer c i =
   let ix = Handshake.i c.hs Writer in 
   if ix < 0
   then None
-  else let epochs = MS.i_read (MkEpochs?.es Handshake.(c.hs.epochs)) in
-       let e = epochs.(ix) in
-       let _ = cut (trigger_peer (Epoch?.r e)) in
-       Some (Epoch?.w e)
+  else 
+    let epochs = MS.i_read (Handshake.es_of c.hs) in
+    let e = epochs.(ix) in
+    let _ = cut (trigger_peer (Epoch?.r e)) in
+    Some (Epoch?.w e)
 
 let recall_current_writer (c:connection) 
   : ST unit (fun h -> True) (fun h0 _ h1 -> 
@@ -436,7 +438,7 @@ let sendFragment c #i wo f =
 	   | Some wr -> 
 	     SD.encrypt wr f 
        in
-       let pv = Handshake.version c.hs in
+       let pv = Handshake.version_of c.hs in
        lemma_repr_bytes_values (length payload);
        assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
        let record = Record.makePacket ct (PlaintextID? i) pv payload in
@@ -617,7 +619,7 @@ val next_fragment: i:id -> c:connection -> ST (result (Handshake.Log.outgoing i)
 let next_fragment i c =  
   let s = c.hs in
   let h0 = ST.get() in 
-  let ilog = MkEpochs?.es Handshake.(HS?.epochs s) in 
+  let ilog = Handshake.es_of s in 
   let w0 = Handshake.i s Writer in 
   let _  = if w0 >= 0 
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
@@ -1124,7 +1126,7 @@ let readFragment c i =
   match Record.read c.tcp with
   | Error e -> Error e
   | Correct(ct,pv,payload) ->
-    let es = MR.m_read (MkEpochs?.es Handshake.(c.hs.epochs)) in
+    let es = MR.m_read (Handshake.es_of c.hs) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
     trace ("Epoch index: "^string_of_int j);
     if j < 0 then // payload is in plaintext

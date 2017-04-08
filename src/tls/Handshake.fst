@@ -35,8 +35,6 @@ module HSL = Handshake.Log
 
 //open Negotiation // convenient for the numerous record fields
 
-let hashSize = Hashing.Spec.tagLen
-
 //<expose for TestClient> CF: temporarily broken; such tests should be coded against HS submodules.
 // TODO restore unit tests as in TestClient
 
@@ -99,7 +97,7 @@ type machineState =
 
 // Removed error states, consider adding again to ensure the machine is stuck?
 
-noeq type hs = | HS:
+noeq type hs' = | HS:
   #region: rgn {is_hs_rgn region} ->
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
@@ -108,17 +106,21 @@ noeq type hs = | HS:
   ks: KeySchedule.ks -> //region r ->
   epochs: epochs region nonce ->
   state: ref machineState (*in region*) -> // state machine; should be opaque and depend on r.
-  hs
+  hs'
+
+let hs = hs' //17-04-08 interface limitation
+
+let region_of s = s.region
+let role_of s = s.r
+let random_of s = s.nonce
+let config_of s = Nego. local_config s.nego 
+let version_of s = Nego.version s.nego
+let resumeInfo_of s = Nego.resume s.nego
+let epochs_of s = s.epochs
 
 // the states of the HS sub-module will be subject to a joint invariant
 // for example the Nego state is a function of ours.
 
-// the handshake epochs internally maintains counters for the current reader and writer
-
-let logIndex (#t:Type) (log: seq t) = n:int { -1 <= n /\ n < Seq.length log }
-
-let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT s.epochs h
-let non_empty h s = Seq.length (logT s h) > 0
 
 let stateType (s:hs) = seq (epoch s.region s.nonce) * machineState
 let stateT (s:hs) (h:HyperStack.mem) : GTot (stateType s) = (logT s h, sel h s.state)
@@ -151,7 +153,7 @@ let latest h (s:hs{Seq.length (logT s h) > 0}) = // accessing the latest epoch
 // only depends on it, and only extends the log with fresh epochs.
 
 // placeholder, to be implemented as a stateful property.
-assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce -> Type0
+let completed #rgn #nonce e = True
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -168,17 +170,15 @@ assume val completed: #region:rgn -> #nonce:TLSInfo.random -> epoch region nonce
 
 assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> machineState -> Type0
 
-let hs_inv (s:hs) (h: HyperStack.mem) =
+let hs_inv (s:hs) (h: HyperStack.mem) = True
+(* 17-04-08 TODO deal with inferred logic qualifiers
   hs_invT s (logT s h) (sel h (HS?.state s))  //An abstract invariant of HS-internal state
   /\ Epochs.containsT s.epochs h                //Nothing deep about these next two, since they can always
   /\ HyperHeap.contains_ref s.state.ref (HyperStack.HS?.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
-let iT (s:hs) rw (h:HyperStack.mem) =
-    match rw with
-    | Reader -> Epochs.readerT s.epochs h
-    | Writer -> Epochs.writerT s.epochs h
-
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
+*)
+
 #set-options "--lax"
 let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
   : Lemma (stateT s h0 = stateT s h1  ==>  iT s rw h0 = iT s rw h1)
@@ -205,23 +205,6 @@ let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.s
 =
   frame_stateT s rw h0 h1 mods;
   frame_iT_trivial s rw h0 h1
-
-// returns the current epoch for reading or writing
-let eT s rw (h:HyperStack.mem {iT s rw h >= 0}) = Seq.index (logT s h) (iT s rw h)
-let readerT s h = eT s Reader h
-let writerT s h = eT s Writer h
-
-// this function increases (how to specify it once for all?)
-val i: s:hs -> rw:rw -> ST int
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 ->
-    h0 == h1 /\
-    i = iT s rw h1 /\
-    Epochs.get_ctr_post (HS?.epochs s) rw h0 i h1))
-let i hs rw =
-  match rw with
-  | Reader -> Epochs.get_reader hs.epochs
-  | Writer -> Epochs.get_writer hs.epochs
 
 
 
@@ -292,16 +275,6 @@ let sig_algs mode sh_alg =
 
 
 
-type incoming =
-  | InAck: // the fragment is accepted, and...
-      next_keys : bool -> // the reader index increases;
-      complete  : bool -> // the handshake is complete!
-      incoming
-  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
-  | InError: error -> incoming // how underspecified should it be?
-
-let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
-let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 
 (* -------------------- Handshake Client ------------------------ *)
@@ -656,7 +629,7 @@ let server_ServerFinished_13 hs i =
     // signing of the formatted session digest
     let tbs : bytes =
       let Hash sh_alg = sh_alg in
-      let hL = hashSize sh_alg in
+      let hL = Hashing.Spec.tagLen sh_alg in
       let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
       let rc = Hashing.compute sh_alg zeroes in
       let lb = digestSig @| rc in
@@ -721,7 +694,6 @@ val version: s:hs -> Tot protocolVersion
   (requires (hs_inv s))
   (ensures (fun h0 pv h1 -> h0 = h1))
   *)
-let version s = Nego.version s.nego
 
 (* // JP: the outside has been checked against the fsti which had another *)
 (* // definition (at the bottom of this file) *)
@@ -736,17 +708,6 @@ let version s = Nego.version s.nego
 
 (* ----------------------- Control Interface -------------------------*)
 
-// Create instance for a fresh connection, with optional resumption for clients
-val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
-  (requires (fun h -> True))
-  (ensures (fun h0 s h1 ->
-    modifies Set.empty h0 h1 /\
-    //fresh_subregion r0 (HS?.region s) h0 h1 /\
-    // hs_inv s h1 /\
-    // HS?.r s = r /\
-    // HS?.resume s = resume /\
-    // HS?.cfg s = cfg /\
-    logT s h1 = Seq.createEmpty ))
 let create parent cfg role resume =
   let r = new_region parent in
   let nego = Nego.create r role  cfg resume in
@@ -757,36 +718,12 @@ let create parent cfg role resume =
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in
   HS role nonce nego log ks epochs state
 
-
-let mods s h0 h1 =
-  HyperStack.modifies_one s.region h0 h1
-
-let modifies_internal h0 s h1 =
-    hs_inv s h1 /\
-    mods s h0 h1 /\
-    modifies_rref s.region !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
-
-// Idle client starts a full handshake on the current connection
-val rehandshake: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS?.r s = Client))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
 
-// Idle client starts an abbreviated handshake resuming the current session
-val rekey: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS?.r s = Client))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 let rekey s c = Platform.Error.unexpected "rekey: not yet implemented"
 
-// (Idle) Server requests an handshake
-val request: s:hs -> config -> ST bool
-  (requires (fun h -> hs_inv s h /\ HS?.r s = Server))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 let request s c = Platform.Error.unexpected "request: not yet implemented"
 
-val invalidateSession: s:hs -> ST unit
-  (requires (hs_inv s))
-  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
 let invalidateSession hs = ()
 // ADL: disabling this for top-level API testing purposes
 // Platform.Error.unexpected "invalidateSession: not yet implemented"
@@ -794,31 +731,6 @@ let invalidateSession hs = ()
 
 (* ------------------ Outgoing -----------------------*)
 
-//val next_fragment: see .fsti
-let next_fragment_ensures (#i:id) (s:hs) h0 (result: result (outgoing i)) h1 =
-    let es = logT s h0 in
-    let w0 = iT s Writer h0 in
-    let w1 = iT s Writer h1 in
-    let r0 = iT s Reader h0 in
-    let r1 = iT s Reader h1 in
-    hs_inv s h1 /\
-    mods s h0 h1 /\
-    r1 == r0 /\
-    Seq.length (logT s h1) >= Seq.length (logT s h0) /\
-    ( match result with
-      | Correct (Outgoing frg ccs nextKeys complete) ->
-          w1 == (if nextKeys then w0 + 1 else w0) /\
-          (b2t complete ==> r1 = w1 /\ indexable (logT s h1) w1 /\ completed (eT s Writer h1))
-      | _ -> True )
-
-val next_fragment: s:hs -> i:id -> ST (result (outgoing i))
-  (requires (fun h0 ->
-    let es = logT s h0 in
-    let j = iT s Writer h0 in
-    hs_inv s h0 /\
-    (if j = -1 then PlaintextID? i else let e = Seq.index es j in i = epoch_id e)
-  ))
-  (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
 let next_fragment hs i =
     trace "next_fragment";
     let outgoing = Handshake.Log.next_fragment hs.log i in
@@ -865,20 +777,6 @@ let next_fragment hs i =
 
 (* ----------------------- Incoming ----------------------- *)
 
-let recv_ensures (s:hs) (h0:HyperStack.mem) (result:incoming) (h1:HyperStack.mem) =
-    let w0 = iT s Writer h0 in
-    let w1 = iT s Writer h1 in
-    let r0 = iT s Reader h0 in
-    let r1 = iT s Reader h1 in
-    hs_inv s h1 /\
-    mods s h0 h1 /\
-    w1 == w0 /\
-    r1 == (if in_next_keys result then r0 + 1 else r0) /\
-    (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 /\ completed (eT s Reader h1))
-
-val recv_fragment: s:hs -> #i:id -> rg:frange i -> f:rbytes rg -> ST incoming (* incoming transitions for our state machine *)
-  (requires (hs_inv s))
-  (ensures (recv_ensures s))
 let recv_fragment hs #i rg f =
     trace "recv_fragment";
     let h0 = ST.get() in
@@ -924,13 +822,6 @@ let recv_fragment hs #i rg f =
       | _, _ -> InAck false false // nothing yet to process
 
 
-// special case: CCS before 1p3; could merge with recv_fragment
-val recv_ccs: s:hs -> ST incoming
-  (requires (hs_inv s))
-  (ensures (fun h0 result h1 ->
-    recv_ensures s h0 result h1 /\
-    (InError? result \/ result = InAck true false))
-    )
 // TODO check CCS once committed to TLS 1.3 yields an alert
 let recv_ccs hs =
     trace "recv_ccs";
@@ -971,8 +862,4 @@ let recv_ccs hs =
         | _, _, _ -> InError(AD_unexpected_message, "CCS received at wrong time")
 
 
-val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
-  (requires (hs_inv s))
-  (ensures (fun h0 result h1 ->
-    (InAck? result \/ InError? result) /\ recv_ensures s h0 result h1 ))
 let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"

@@ -215,7 +215,7 @@ let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
 let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with 
   | Reader -> e.read
   | Writer -> e.write
-
+ 
 val readerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
 let readerT #rid #n (MkEpochs es r w) (h:mem) = m_sel h r
 

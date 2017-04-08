@@ -160,6 +160,7 @@ Handshake.Log.fsti \
 Negotiation.fst \
 Epochs.fst \
 KeySchedule.fst \
+Handshake.fsti \
 Handshake.fst \
 Connection.fst \
 ConnInvariant.fst \
