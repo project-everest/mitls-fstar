@@ -45,8 +45,9 @@ type c_rgn = region: TLSConstants.rgn { HH.disjoint region TLSConstants.tls_regi
  *)
 noeq type connection = | C:
   #region: c_rgn ->
-  hs:      hs {extends (HS?.region hs) region /\ is_hs_rgn (HS?.region hs)} (* providing role, config, and uid *) ->
-  tcp:     Transport.t ->
+  hs: hs {extends (HS?.region hs) region /\ is_hs_rgn (HS?.region hs)} (* providing role, config, and uid *) ->
+  tcp: Transport.t ->
+  recv: ref Record.input_state{recv.id = region} -> // added for buffering non-blocking reads
   state:   ref tlsState{state.id = region} -> 
   connection
 

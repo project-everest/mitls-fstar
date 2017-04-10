@@ -10,10 +10,9 @@ open Platform.Error
 open TLSError
 
 // make this type abstract? 
-noeq type t = 
-  { snd: bytes -> EXT (optResult string unit);
-    rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); 
-    } 
+noeq type t = { 
+  snd: bytes -> EXT (optResult string unit);
+  rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); } 
 
 let callbacks send recv = { snd = send; rcv = recv } 
 
@@ -40,7 +39,7 @@ let test (tcp:t) (data:bytes) =
   assert (h0==h1)
   
 
-// reading till we get enough bytes
+// blocking reading, till we get enough bytes to proceed
 
 private val really_read_rec: b:bytes -> t -> l:nat -> EXT (result (lbytes (l+length b)))
 

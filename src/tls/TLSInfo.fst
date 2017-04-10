@@ -100,6 +100,7 @@ noeq type config = {
     private_key_file: string;   // TEMPORARY
 
     (* Common *)
+    non_blocking_read: bool;
     safe_renegotiation: bool;   // demands this extension when renegotiating
     peer_name: option string;   // The expected name to match against the peer certificate
     check_peer_certificate: bool; // To disable certificate validation
@@ -167,6 +168,7 @@ let defaultConfig =
     cert_chain_file = "server.pem";
     private_key_file = "server.key";
 
+    non_blocking_read = false; 
     safe_renegotiation = true;
     safe_resumption = true;
     peer_name = None; // Disables hostname validation

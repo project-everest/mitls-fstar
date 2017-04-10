@@ -96,6 +96,7 @@ let accept_connected send recv config_1 : ML (Connection.connection * int) =
 
 type read_result = // is it convenient?
   | Received of bytes 
+  | WouldBlock
   | Errno of int
 
 let read c : ML read_result = 
@@ -105,6 +106,7 @@ let read c : ML read_result =
   | Read Close                -> Errno 0 
   | Read (Alert a)            -> Errno(errno (Some a) "alert") 
   | ReadError description txt -> Errno(errno description txt) 
+  | ReadWouldBlock -> WouldBlock
   | _                         -> failwith "unexpected FFI read result"
 
 let write c msg : ML int =

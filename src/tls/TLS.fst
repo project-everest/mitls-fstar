@@ -79,8 +79,9 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
 let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.init m role cfg resume in
+    let recv = ralloc m Record.input_state in 
     let state = ralloc m BC in
-    C #m hs tcp state
+    C #m hs tcp recv state
 
 
 //TODO upgrade commented-out types imported from TLS.fsti
@@ -1020,6 +1021,10 @@ type readOutcome (e:epoch) =
 
 
 type ioresult_i (i:id) =
+    | ReadWouldBlock
+        // TCP reading is non-blocking, and we are still waiting for incoming bytes
+        // (Do we ever need to signal TLS changes before this happens?)
+        
     | Read of DataStream.delta i
         // This delta has been added to the input stream;
         // We may have read
@@ -1090,7 +1095,8 @@ let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string) =
     | WriteError x y -> ReadError x y in         // how to compose ad reason x y ?
   r
 
-val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
+//17-04-10 added an option for asynchrony; could flatten instead
+val readFragment: c:connection -> i:id -> ST (result (option Content.fragment i))
   (requires (fun h0 ->
     let es = epochs c h0 in
     let j = iT c.hs Reader h0 in
@@ -1123,7 +1129,7 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
 
 let readFragment c i =
   assume false; // 16-05-19 can't prove POST.
-  match Record.read c.tcp with
+  match Record.read c.tcp c.recv with
   | Error e -> Error e
   | Correct(ct,pv,payload) ->
     let es = MR.m_read (MkEpochs?.es c.hs.log) in
@@ -1213,7 +1219,6 @@ let readOne c i =
         | AD | Half Reader        -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _                       -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
       end
-
 
  
 // scheduling: we always write up before reading, to advance the Handshake.

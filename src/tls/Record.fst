@@ -82,21 +82,57 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 
 (*** networking (floating) ***)
 
-val read: Transport.t -> Platform.Tcp.EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
+type read_result = 
+  | ReadError of TLSError.error
+  | ReadWouldBlock
+  | Received:
+      ct:contentType -> 
+      pv:protocolVersion ->
+      b:bytes {length b <= max_TLSCiphertext_fragment_length} 
+
+val read: Transport.t -> Platform.Tcp.EXT read_result
 
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;
 // our client never checks the consistency of the server's record pv.
 // (see earlier versions for the checks we used to perform)
 
-let read tcp =
-  match Transport.really_read tcp 5 with 
-  | Correct header -> (
-      match parseHeader header with  
-      | Correct (ct,pv,len) -> (
-         match Transport.really_read tcp len with
-         | Correct payload  -> Correct (ct,pv,payload)
-         | Error e          -> Error e )
-      | Error e             -> Error e )
-  | Error e                 -> Error e
+// connectlon-local input state
+// to be improved once we extract to C  
+type partial = 
+  | Header 
+  | Body: ct: contentType -> pv: protocolVersion -> partial
+type input_state = 
+  | State:
+    waiting: nat {waiting>0} -> 
+    received: bytes -> 
+    st: partial {
+      let max = if st = Header then 5 else max_TLSCiphertext_fragment_length in
+      length received + waiting < max} -> 
+    input_state
+let wait_header = State 5 empty_bytes Header
 
+let rec read tcp state =
+  let State len prior partial = !state in 
+  match Transport.recv tcp len with 
+  | Error e -> ReadError e 
+  | WouldBlock -> ReadWouldBlock
+  | Correct fresh -> 
+    if length fresh = 0 then 
+      ReadError(AD_internal_error,"TCP close") // otherwise we loop...
+    else if length fresh < len then (
+      // partial read
+      state := State (len - length fresh) (prior @| fresh) partial; 
+      ReadWouldBlock )
+    else (
+      // we have received what we asked for
+      match partial with 
+      | WaitHeader -> 
+          match parseHeader header with  
+          | Error e -> ReadError e 
+          | Correct (ct,pv,len) -> 
+              state := State  len empty_bytes (Body ct pv);
+              read s tcp )
+      | WaitBody ct pv -> 
+              state := State 5 empty_bytes Header; 
+              Correct(ct, pv, payload) 
