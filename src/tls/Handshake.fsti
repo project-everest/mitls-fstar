@@ -1,0 +1,186 @@
+(*--build-config options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
+module Handshake
+
+// provisional
+open FStar.HyperHeap
+open FStar.HyperStack
+
+open TLSConstants
+
+val hs: Type0
+
+// the handshake epochs internally maintains counters for the current reader and writer
+val region_of: hs -> Tot Format.rgn
+val role_of: hs -> role
+val random_of: hs -> Tot TLSInfo.random 
+val config_of: hs -> ST TLSInfo.config
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
+val version_of: hs -> ST TLSConstants.protocolVersion
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
+val resumeInfo_of: s:hs -> ST (TLSInfo.resumeInfo (role_of s))
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
+// annoyingly, we will need specification-level variants too.
+
+// 17-04-08 TODO unclear how abstract Epochs should be.
+
+let epochs_t_of (s:hs) = Seq.seq (Epochs.epoch (region_of s) (random_of s))
+val epochs_of: s:hs -> Tot (Epochs.epochs (region_of s) (random_of s))
+
+// val logT: s:hs ->  h:HyperStack.mem -> GTot (epochs_t_of s)
+let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT (epochs_of s) h
+
+let non_empty h s = Seq.length (logT s h) > 0
+
+let logIndex (#t:Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log }
+
+val completed: #region:rgn -> #nonce:TLSInfo.random -> Epochs.epoch region nonce -> Type0
+
+val hs_inv: s:hs -> HyperStack.mem -> Type0
+
+let es_of (s:hs) = Epochs.((epochs_of s).es)
+
+// returns the current counters, with a precise refinement
+let iT (s:hs) rw (h:HyperStack.mem): GTot (Epochs.epoch_ctr_inv (region_of s) (es_of s)) =
+  match rw with
+  | Reader -> Epochs.readerT (epochs_of s) h 
+  | Writer -> Epochs.writerT (epochs_of s) h 
+
+// this function increases (how to specify it once for all?)
+let i (s:hs) (rw:rw) : ST int
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 ->
+    h0 == h1 /\
+    i = iT s rw h1 /\
+    Epochs.get_ctr_post (epochs_of s) rw h0 i h1))
+=
+  match rw with
+  | Reader -> Epochs.get_reader (epochs_of s)
+  | Writer -> Epochs.get_writer (epochs_of s)
+
+// returns the current epoch for reading or writing
+let eT s rw (h:HyperStack.mem {iT s rw h >= 0}) = 
+  let es = logT s h in
+  let j = iT s rw h in 
+  assume(j < Seq.length es); //17-04-08 added verification hint; assumed for now.
+  Seq.index es j
+let readerT s h = eT s Reader h
+let writerT s h = eT s Writer h
+
+
+type incoming =
+  | InAck: // the fragment is accepted, and...
+      next_keys : bool -> // the reader index increases;
+      complete  : bool -> // the handshake is complete!
+      incoming
+  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
+  | InError: TLSError.error -> incoming // how underspecified should it be?
+
+let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
+let in_complete (r:incoming)  = InAck? r && InAck?.complete r
+
+(* ----------------------- Control Interface -------------------------*)
+
+// Create instance for a fresh connection, with optional resumption for clients
+val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
+  (requires (fun h -> True))
+  (ensures (fun h0 s h1 ->
+    modifies Set.empty h0 h1 /\
+    //fresh_subregion r0 (HS?.region s) h0 h1 /\
+    // hs_inv s h1 /\
+    // HS?.r s = r /\
+    // HS?.resume s = resume /\
+    // HS?.cfg s = cfg /\
+    logT s h1 == Seq.createEmpty ))
+
+let mods s h0 h1 = HyperStack.modifies_one (region_of s) h0 h1
+
+let modifies_internal h0 s h1 =
+    hs_inv s h1 /\
+    mods s h0 h1 
+    // can't say it abstractly:
+    // modifies_rref (region_of s)  !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
+
+// Idle client starts a full handshake on the current connection
+val rehandshake: s:hs -> TLSInfo.config -> ST bool
+  (requires (fun h -> hs_inv s h /\ role_of s = Client))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
+// Idle client starts an abbreviated handshake resuming the current session
+val rekey: s:hs -> TLSInfo.config -> ST bool
+  (requires (fun h -> hs_inv s h /\ role_of s = Client))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
+// (Idle) Server requests an handshake
+val request: s:hs -> TLSInfo.config -> ST bool
+  (requires (fun h -> hs_inv s h /\ role_of s = Server))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
+
+val invalidateSession: s:hs -> ST unit
+  (requires (hs_inv s))
+  (ensures (fun h0 _ h1 -> modifies_internal h0 s h1)) // underspecified
+
+
+(* ------------------ Outgoing -----------------------*)
+
+open TLSError //17-04-07 necessary to TC the | Correct pattern?
+//val next_fragment: see .fsti
+let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (Handshake.Log.outgoing i)) h1 =
+    let es = logT s h0 in
+    let w0 = iT s Writer h0 in
+    let w1 = iT s Writer h1 in
+    let r0 = iT s Reader h0 in
+    let r1 = iT s Reader h1 in
+    hs_inv s h1 /\
+    mods s h0 h1 /\
+    r1 == r0 /\
+    Seq.length (logT s h1) >= Seq.length (logT s h0) /\
+    ( let open Platform.Error in  
+      match result with
+      | Correct (Handshake.Log.Outgoing frg ccs nextKeys complete) ->
+          w1 == (if nextKeys then w0 + 1 else w0) /\
+          (b2t complete ==> r1 = w1 /\ Seq.indexable (logT s h1) w1 (*/\ completed (eT s Writer h1)*) )
+      | _ -> True )
+
+val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (Handshake.Log.outgoing i))
+  (requires (fun h0 ->
+    let es = logT s h0 in
+    let j = iT s Writer h0 in
+    j < Seq.length es /\ //17-04-08 added verification hint
+    hs_inv s h0 /\
+    (if j = -1 then TLSInfo.PlaintextID? i else let e = Seq.index es j in i = Epochs.epoch_id e)
+  ))
+  (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
+
+(* ----------------------- Incoming ----------------------- *)
+
+let recv_ensures (s:hs) (h0:HyperStack.mem) (result:incoming) (h1:HyperStack.mem) =
+    let w0 = iT s Writer h0 in
+    let w1 = iT s Writer h1 in
+    let r0 = iT s Reader h0 in
+    let r1 = iT s Reader h1 in
+    hs_inv s h1 /\
+    mods s h0 h1 /\
+    w1 == w0 /\
+    r1 == (if in_next_keys result then r0 + 1 else r0) /\
+    (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 (*/\ completed (eT s Reader h1)*) )
+
+val recv_fragment: s:hs -> #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg -> ST incoming (* incoming transitions for our state machine *)
+  (requires (hs_inv s))
+  (ensures (recv_ensures s))
+
+// special case: CCS before 1p3; could merge with recv_fragment
+val recv_ccs: s:hs -> ST incoming
+  (requires (hs_inv s))
+  (ensures (fun h0 result h1 ->
+    recv_ensures s h0 result h1 /\
+    (InError? result \/ result = InAck true false))
+    )
+
+val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
+  (requires (hs_inv s))
+  (ensures (fun h0 result h1 ->
+    (InAck? result \/ InError? result) /\ recv_ensures s h0 result h1 ))
