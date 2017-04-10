@@ -82,16 +82,6 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 
 (*** networking (floating) ***)
 
-type read_result = 
-  | ReadError of TLSError.error
-  | ReadWouldBlock
-  | Received:
-      ct:contentType -> 
-      pv:protocolVersion ->
-      b:bytes {length b <= max_TLSCiphertext_fragment_length} 
-
-val read: Transport.t -> Platform.Tcp.EXT read_result
-
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;
 // our client never checks the consistency of the server's record pv.
@@ -107,32 +97,59 @@ type input_state =
     waiting: nat {waiting>0} -> 
     received: bytes -> 
     st: partial {
-      let max = if st = Header then 5 else max_TLSCiphertext_fragment_length in
-      length received + waiting < max} -> 
+      match st with 
+      | Header -> length received + waiting = 5 
+      | Body _ _ -> length received + waiting <= max_TLSCiphertext_fragment_length } ->
     input_state
-let wait_header = State 5 empty_bytes Header
+let wait_header = 
+  let data = empty_bytes in
+  assert(length empty_bytes = 0);
+  State 5 empty_bytes Header
+
+type read_result = 
+  | ReadError of TLSError.error
+  | ReadWouldBlock
+  | Received:
+      ct:contentType -> 
+      pv:protocolVersion ->
+      b:bytes {length b <= max_TLSCiphertext_fragment_length} -> read_result
+
+val read: Transport.t -> s: HyperStack.ref input_state -> ST read_result
+  (requires fun h0 -> HyperStack.contains h0 s)
+  (ensures fun h0 _ h1 -> 
+    let id = HyperStack.frameOf s in 
+    HyperStack.modifies_one id h0 h1 /\ 
+    HyperStack.modifies_ref id (TSet.singleton (HyperStack.as_aref s)) h0 h1 )
 
 let rec read tcp state =
   let State len prior partial = !state in 
   match Transport.recv tcp len with 
-  | Error e -> ReadError e 
-  | WouldBlock -> ReadWouldBlock
-  | Correct fresh -> 
+  | Error e -> ReadError (AD_internal_error, e) 
+//| WouldBlock -> ReadWouldBlock
+  | Correct fresh -> (
+    let data = prior @| fresh in 
     if length fresh = 0 then 
       ReadError(AD_internal_error,"TCP close") // otherwise we loop...
     else if length fresh < len then (
       // partial read
-      state := State (len - length fresh) (prior @| fresh) partial; 
-      ReadWouldBlock )
+      state := State (len - length fresh) data partial; 
+      read tcp state // should probably ReadWouldBlock instead when non-blocking
+      )
     else (
       // we have received what we asked for
       match partial with 
-      | WaitHeader -> 
-          match parseHeader header with  
+      | Header -> (
+          match parseHeader data with  
           | Error e -> ReadError e 
           | Correct (ct,pv,len) -> 
-              state := State  len empty_bytes (Body ct pv);
-              read s tcp )
-      | WaitBody ct pv -> 
+              if len = 0 then (
+                // corner case, possibly excluded by the RFC?
+                state := State 5 empty_bytes Header; 
+                Received ct pv empty_bytes )
+              else (
+                state := State  len empty_bytes (Body ct pv);
+                read tcp state ))
+      | Body ct pv -> (
               state := State 5 empty_bytes Header; 
-              Correct(ct, pv, payload) 
+              Received ct pv data )))
+
