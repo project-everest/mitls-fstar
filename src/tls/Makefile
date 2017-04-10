@@ -21,7 +21,8 @@ verify:
 
 CONTRIB=ucontrib
 LIB=ulib
-FFI_HOME=../../libs/ffi
+MITLS_HOME?=../..
+FFI_HOME=$(MITLS_HOME)/libs/ffi
 MARCH?=x86_64
 
 clean:
@@ -248,22 +249,21 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 %.fst-lax: $(LIBFILES)
 	$(FSTAR) $(VERFLAGS) --lax \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include concrete-flags \
-	--verify_module $(basename $(notdir $@)) \
+	--include $(MITLS_HOME)/src/tls/concrete-flags \
 	$(basename $@).fst
 
 # Verifying one file at a time
 %.fst-ver: $(LIBFILES)
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include ideal-flags \
+	--include $(MITLS_HOME)/src/tls/ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fst
 
 %.fsti-ver: $(LIBFILES)
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include ideal-flags \
+	--include $(MITLS_HOME)/src/tls/ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
 	$(basename $@).fsti
 
@@ -271,21 +271,20 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 %.fst-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include ideal-flags \
+	--include $(MITLS_HOME)/src/tls/ideal-flags \
 	--verify_module $(basename $(notdir $@))
 
 %.fsti-in: 
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include ideal-flags \
-	--verify_module $(basename $(notdir $@)) \
-	$(addsuffix .fst,$(VERIFY))
+	--include $(MITLS_HOME)/src/tls/ideal-flags \
+	--verify_module $(basename $(notdir $@))
 
 # Sanity check
 tls-sanity: record_fstar_version $(LIBFILES)
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include ideal-flags \
+	--include $(MITLS_HOME)/src/tls/ideal-flags \
         --verify_module False \
 	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
 
@@ -294,7 +293,7 @@ tls-lax: record_fstar_version $(LIBFILES)
 	$(FSTAR) --lax \
 	--include $(LDIR)/spartan \
 	$(FSTAR_INCLUDE_PATHS) \
-	--include concrete-flags \
+	--include $(MITLS_HOME)/src/tls/concrete-flags \
 	$(FSTS)
 
 wc:
@@ -350,7 +349,7 @@ mitls.cmxa: record_fstar_version $(LIBFILES)
 	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  $(FSTAR_INCLUDE_PATHS) \
-	  --include concrete-flags \
+	  --include $(MITLS_HOME)/src/tls/concrete-flags \
 	  $(FSTS)
 	# Note (JP): the Makefile seems incorrect and we need to run make clean
 	# first
