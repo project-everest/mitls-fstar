@@ -201,6 +201,7 @@ HKDF.fst \
 TLSPRF.fst \
 MasterSecret.fst \
 Handshake.Log.fsti \
+Handshake.Log.fst \
 Negotiation.fst \
 Epochs.fst \
 KeySchedule.fst \
@@ -355,9 +356,9 @@ OUTPUT_DIR?=output
 
 # All our extracted modules.
 TLSML := $(subst .,_,$(FSTS))
+# fsti's are not extracted to mli, drop them
+TLSML := $(patsubst %_fsti,,$(TLSML))
 TLSML := $(subst _fst,.ml,$(TLSML))
-TLSML := $(subst Handshake.fsti, , $(TLSML))
-TLSML := $(subst StAE.fsti, , $(TLSML))
 # F* does not provide an implementation for these in fstarlib.cmxa, so add them
 # to our own list.
 TLSML := \
