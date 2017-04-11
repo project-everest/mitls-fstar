@@ -189,9 +189,9 @@ noeq (* abstract *) type state = | State:
 
   // outgoing 
   outgoing: bytes -> // outgoing messages, already formatted and hashed.
+  outgoing_ccs: option bytes -> // at most one fragment for the (already-hashed) Finished message to be sent immediately after CCS.
   outgoing_next_keys: bool -> // for now only in the outgoing direction (as in Outgoing) although we may need to add  incoming key changes.
   outgoing_complete: bool -> // deferred signal (as in Outgoing)
-  outgoing_ccs: option bytes -> // at most one fragment for the (already-hashed) Finished message to be sent immediately after CCS.
 
   state
 // TODO, not urgent, bound the lengths of the bytes and lists.

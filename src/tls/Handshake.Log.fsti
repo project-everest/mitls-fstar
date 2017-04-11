@@ -97,10 +97,14 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
   | m :: ms -> 
       let prior = prior @ [m] in
       match tagged m, hs with 
-      | true, h::hs -> let t = transcript_bytes prior in (tagLength h = tagLen a /\ (let h = narrowTag a h in hashed a t /\ h == hash a t /\ tags a prior ms hs))
+      | true, h::hs -> 
+          let t = transcript_bytes prior in 
+          (  tagLength h = tagLen a /\ 
+             (  let h = narrowTag a h in 
+                hashed a t /\ h == hash a t /\
+                tags a prior ms hs ))
       | false, hs -> tags a prior ms hs
       | _ -> False 
-
 
 val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list anyTag -> hs1: list anyTag ->
   Lemma (tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))

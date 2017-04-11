@@ -734,46 +734,14 @@ let invalidateSession hs = ()
 let next_fragment hs i =
     trace "next_fragment";
     let outgoing = Handshake.Log.next_fragment hs.log i in
-    match !hs.state with
-    | C_Idle when outgoing = Outgoing None false false false -> client_ClientHello hs i
-    | S_Sent_ServerHello when outgoing = Outgoing None false false false -> server_ServerFinished_13 hs i
+    match !hs.state, outgoing with
+    // when the output buffer is empty, we send extra messages in two cases
+    // we prepare the initial ClientHello; or     
+    // after sending ServerHello in plaintext, we continue with encrypted traffic   
+    // otherwise, we just returns buffered messages and signals
+    | Outgoing None false false false, C_Idle -> client_ClientHello hs i
+    | Outgoing None false false false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
     | _ -> Correct outgoing // nothing to do
-
-    // not needed anymore?
-        (* // *)
-
-        (* | C_Sent_CCS1 tag -> ( *)
-        (*       // was: client_send_client_finished hs; *)
-        (*       // we could store the MAC in OutCCS, to make this step trivial *)
-        (*       let tag = KeySchedule.ks_client_12_client_finished hs.ks in *)
-        (*       Handshake.Log.send hs.log (Finished ({fin_vd = tag})); *)
-        (*       hs.state := C_FinishedSent n tag *)
-        (*       Epochs.incr_writer lgref; *)
-        (*       Outgoing None true true false ) *)
-
-        (* | _ -> Correct outgoing // nothing to do *)
-
-        //| C_FinishedReceived n (cvd,svd) ->
-        //    hsref := {!hsref with hs_state = C (C_PostHS)};
-        //    Epochs.incr_writer lgref; // Switch to ATK writer
-        //    Outgoing None false true true
-        //
-        //| S_HelloSent n when (Some? pv && pv <> Some TLS_1p3 && res = Some false) ->
-        //    server_ServerHelloDone hs n;
-        //    next_fragment i hs
-        // | S_Sent_ServerHello when (Some? pv && pv <> Some TLS_1p3 && res = Some true) ->
-        //      server_send_server_finished_res hs;
-        //      next_fragment i hs
-
-        //| S_FinishedReceived n ->
-        //      Epochs.incr_reader lgref; // Switch to ATK reader
-        //      hs.state := S_PostHS;
-        //      Outgoing None false true true
-        //| S_OutCCS n ->
-        //      hs.state := S_FinishedSent n  // who actually sends the ServerFinished? buffered?
-        //      Outgoing None false false true
-        //| _ -> Outgoing None false false false)
-
 
 (* ----------------------- Incoming ----------------------- *)
 
