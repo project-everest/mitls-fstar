@@ -29,7 +29,7 @@ let client config host port =
   let tcp = Platform.Tcp.connect host port in 
   let request = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in 
   let send x = let b = IO.debug_print_string "TCP:send\n" in Platform.Tcp.send tcp x in
-  let recv x = let b = IO.debug_print_string "TCP:recv\n" in Platform.Tcp.recv tcp x in
+  let recv x = let b = IO.debug_print_string "TCP:recv\n" in Platform.Tcp.recv_async tcp x in
   match connect send recv config with 
   | c, 0 -> (
     pr "Read OK, sending HTTP request..."; (
@@ -49,7 +49,7 @@ let client config host port =
 //let aux_server config client : ML unit = pr ("Success")
 let rec aux_server config client : ML unit =
   let send x = let b = IO.debug_print_string "TCP:send\n" in Platform.Tcp.send client x in
-  let recv x = let b = IO.debug_print_string "TCP:recv\n" in Platform.Tcp.recv client x in
+  let recv x = let b = IO.debug_print_string "TCP:recv\n" in Platform.Tcp.recv_async client x in
   (match FFI.accept_connected send recv config with
   | c, 0 -> (
     match FFI.read c with

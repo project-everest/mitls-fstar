@@ -124,9 +124,9 @@ val read: Transport.t -> s: HyperStack.ref input_state -> ST read_result
 let rec read tcp state =
   let State len prior partial = !state in 
   match Transport.recv tcp len with 
-  | Error e -> ReadError (AD_internal_error, e) 
-//| WouldBlock -> ReadWouldBlock
-  | Correct fresh -> (
+  | Platform.Tcp.RecvWouldBlock -> ReadWouldBlock
+  | Platform.Tcp.RecvError e -> ReadError (AD_internal_error, e) 
+  | Platform.Tcp.Received fresh -> (
     let data = prior @| fresh in 
     if length fresh = 0 then 
       ReadError(AD_internal_error,"TCP close") // otherwise we loop...
