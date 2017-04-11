@@ -202,7 +202,7 @@ let writing h st = List.Tot.isEmpty (HS.sel h r).parsed
 
 // must be checked before incrementing the read epoch.
 val notReading: state -> Tot bool 
-let noReading st = st.parsed = [] & emptyBytes st.incoming
+let noReading st = st.parsed = [] && emptyBytes st.incoming
 
 // the reference already carries the region
 // instead of 

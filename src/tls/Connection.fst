@@ -5,6 +5,7 @@ module Connection
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
+// JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
  // for e.g. found
 //open FStar.Set
@@ -22,6 +23,7 @@ open Epochs
 open Handshake
 
 module MR = FStar.Monotonic.RRef
+module HH = FStar.HyperHeap
 
 // using also Range, DataStream, TLSFragment, Record
 
@@ -36,7 +38,7 @@ type tlsState =
   | Half of rw  // the other direction is closed (reachable from BC?)
   | Close 
 
-type c_rgn = region: TLSConstants.rgn { disjoint region TLSConstants.tls_region } 
+type c_rgn = r:TLSConstants.rgn { HH.disjoint r TLSConstants.tls_region } 
 
 (*
  * AR: changing the type of state from rref to ref, with region captured in the refinement.
