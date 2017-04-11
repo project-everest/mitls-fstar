@@ -26,7 +26,7 @@ open Handshake.Log // notably for Outgoing
 //open CoreCrypto
 open Epochs
 
-
+module Sig = Signature
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
@@ -113,7 +113,7 @@ let hs = hs' //17-04-08 interface limitation
 let region_of s = s.region
 let role_of s = s.r
 let random_of s = s.nonce
-let config_of s = Nego. local_config s.nego 
+let config_of s = Nego. local_config s.nego
 let version_of s = Nego.version s.nego
 let resumeInfo_of s = Nego.resume s.nego
 let epochs_of s = s.epochs
@@ -270,7 +270,7 @@ let sig_algs mode sh_alg =
     match algs with
     | ha::_ -> ha
     | [] -> (sa, sh_alg) in
-  let a = Signature.Use (fun _ -> true) sa [ha] false false in
+  let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
   (a, sa, ha)
 
 

@@ -76,7 +76,7 @@ private unfold let min (a:nat) (b:nat): nat = if a < b then a else b
 // AE-decrypted plaintext truncated to max_TLSPlaintext_fragment_length + 1.
 val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   j:nat { j < length bs
-	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } ->
+	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Platform.Bytes.index bs k)} Platform.Bytes.index bs k = 0z) } ->
   Tot (let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
        let bs' = fst (split bs len) in
        result (p:plain i len{ bs' == ghost_repr #i #len p }))
@@ -84,7 +84,7 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
 let rec scan i bs j =
   let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
   let bs' = fst (split bs len) in
-  match Seq.index bs j with
+  match Platform.Bytes.index bs j with
   | 0z ->
     if j > 0 then scan i bs (j - 1)
     else Error (AD_decode_error, "No ContentType byte")
