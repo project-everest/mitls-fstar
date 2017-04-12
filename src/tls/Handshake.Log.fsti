@@ -162,7 +162,7 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
     hashed a bs /\ h == hash a bs ))
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
-val send_signals: s:log -> outgoing_next_keys:bool -> outgoing_complete:bool -> ST (tag a)
+val send_signals: s:log -> outgoing_next_keys:bool -> outgoing_complete:bool -> ST unit
   (requires fun h0 -> 
     writing h0 s /\
     outgoing_next_keys \/ outgoing_complete)
