@@ -59,7 +59,7 @@ val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{len
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
 let rec store_bytes len buf i s =
   if i < len then
-    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (Seq.index s i))) in
+    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (Platform.Bytes.index s i))) in
     store_bytes len buf (i + 1) s
 
 val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))
@@ -212,7 +212,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     assume false; // TODO
     let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
     let salt: salt i = CC.random (salt_length i) in
-    let st = CAEAD.aead_create (alg i) kv in
+    let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     LowC st kv salt
   | LowProvider ->
     assume false; // TODO
@@ -265,7 +265,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     | OpenSSLProvider ->
       OpenSSL (OAEAD.coerce r i k) s
     | LowCProvider ->
-      let st = CAEAD.aead_create (alg i) k in
+      let st = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
       LowC st k s
     | LowProvider ->
       let st = AE.coerce i r (from_bytes k) in

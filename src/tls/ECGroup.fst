@@ -8,7 +8,7 @@ open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError
-open Format
+open Parse
 open FStar.ST
 
 type group = CoreCrypto.ec_curve

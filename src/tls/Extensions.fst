@@ -149,7 +149,7 @@ and extensionPayloadBytes role ext =
   | E_server_name(l)           -> 
       if role = Client then vlbytes 2 (serverNameBytes l) 
       else serverNameBytes l
-  | E_supported_groups(l)      -> Format.namedGroupsBytes l  
+  | E_supported_groups(l)      -> Parse.namedGroupsBytes l  
   | E_signature_algorithms sha -> sigHashAlgsBytes sha
   | E_key_share ks             -> CommonDH.keyShareBytes ks
   | E_pre_shared_key psk       -> PSK.preSharedKeyBytes psk
@@ -288,7 +288,7 @@ let rec parseExtension role b =
 	  | Error(z) -> Error(z))	
 	| (0x00z, 0x0Az) -> // supported groups
 	  if length data >= 2 && length data < 65538 then
-	  (match Format.parseNamedGroups (data) with
+	  (match Parse.parseNamedGroups (data) with
 	  | Correct(groups) -> Correct (E_supported_groups(groups))
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "named groups"))
@@ -632,7 +632,7 @@ let clientToNegotiatedExtension (cfg:TI.config) cs ri resuming neg cExt =
     | E_supported_groups l ->
         if resuming then neg
         else
-            let isOK g = List.Tot.existsb (fun (x:Format.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
+            let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
             {neg with TI.ne_supported_groups = Some (List.Tot.filter isOK l)}
     | E_server_name l ->
         {neg with TI.ne_server_names = Some l}

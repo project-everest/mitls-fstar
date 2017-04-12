@@ -15,7 +15,7 @@ open FStar.HyperStack
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
-open Format
+open Parse
 open TLSError
 open FStar.ST
 
@@ -367,10 +367,10 @@ let checkElement (p:parameters) (e:element) : option element  =
 // TODO: replace "bytes" by either DH or ECDH parameters
 // should that go elsewhere? YES.
 (** KeyShare entry definition *)
-type keyShareEntry = 
+type keyShareEntry =
   | Share: g:group -> share g -> keyShareEntry
-  | UnknownShare: 
-    ng:namedGroup { None? (group_of_namedGroup ng)} -> 
+  | UnknownShare:
+    ng:namedGroup { None? (group_of_namedGroup ng)} ->
     b:bytes{repr_bytes (length b) <= 2} -> keyShareEntry
 
 (** ClientKeyShare definition *)
