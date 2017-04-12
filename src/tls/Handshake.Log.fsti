@@ -50,7 +50,13 @@ let tagged m =
 - support abstract plaintexts and multiple epochs 
 *)
 
-val valid_transcript: list msg -> Tot bool
+let valid_transcript hsl =
+    match hsl with
+    | [] -> true
+    | [ClientHello ch] -> true
+    | (ClientHello ch) :: (ServerHello sh) :: rest -> true
+    | _ -> false
+
 let hs_transcript: Type0 = l:list msg{valid_transcript l}
 let empty_transcript: hs_transcript = []
 let extend_transcript (l:hs_transcript) (m:msg): Tot hs_transcript = l @ [m]

@@ -61,7 +61,8 @@ val finalize: #a:alg -> v:accv a -> ST (tag a)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> 
     let b = content v in 
-    modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\ // precise enough? unclear where it goes in hacl*
+//17-04-12 broken by our switch to haclstar? older comment: precise enough? unclear where it goes in hacl*
+// modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\ 
     t = hash a b /\ hashed a b 
   ))
 
