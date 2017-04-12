@@ -19,7 +19,7 @@ open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages // for the message syntax
-open Handshake.Log // notably for Outgoing
+open Handshake.Log // only for Outgoing
 //open StAE
 
 //16-05-31 these opens are implementation-only; overall we should open less
@@ -31,7 +31,6 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
 module Nego = Negotiation
-module HSL = Handshake.Log
 
 //open Negotiation // convenient for the numerous record fields
 
@@ -102,7 +101,7 @@ noeq type hs' = | HS:
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
   nego: Nego.t region r ->
-  log: HSL.t (* TODO {extends HSL.region log region} *) ->
+  log: Handshake.Log.t (* TODO {extends Handshake.Log.region log region} *) ->
   ks: KeySchedule.ks -> //region r ->
   epochs: epochs region nonce ->
   state: ref machineState (*in region*) -> // state machine; should be opaque and depend on r.
@@ -640,11 +639,11 @@ let server_ServerFinished_13 hs i =
     let sigv = Signature.sign #a ha skey tbs in
     if not (length sigv >= 2 && length sigv < 65536)
     then Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-    else
+    else 
       begin
         lemma_repr_bytes_values (length sigv);
         let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
-        let digestFinished = HSL.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
+        let digestFinished = Handshake.Log.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
         let (| sfinId, sfin_key |), _ = KeySchedule.ks_server_13_finished_keys hs.ks in
         let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
         let digestServerFinished = Handshake.Log.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
@@ -654,7 +653,7 @@ let server_ServerFinished_13 hs i =
         Epochs.incr_writer hs.epochs; // Switch to ATK after the SF
         Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
         hs.state := S_Wait_Finished2 digestServerFinished;
-        //TODO Handshake.Log.set_flags "switch to ATK 0.5RTT";
+        Handshake.Log.send_signals true true;
         Correct(Handshake.Log.next_fragment hs.log i)
       end
 
@@ -711,7 +710,7 @@ val version: s:hs -> Tot protocolVersion
 let create parent cfg role resume =
   let r = new_region parent in
   let nego = Nego.create r role  cfg resume in
-  let log = HSL.create r (* cfg.maxVer (Nego.hashAlg nego) *) in
+  let log = Handshake.Log.create r (* cfg.maxVer (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
   let ks, nonce = KeySchedule.create #r role in
   let epochs = Epochs.create r nonce in

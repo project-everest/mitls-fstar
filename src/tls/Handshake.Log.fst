@@ -217,7 +217,6 @@ let send_tag #a l m =
        st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
-
 // An ad hoc variant for caching a message to be sent immediately after the CCS
 // We always increment the writer, sometimes report handshake completion.
 
@@ -237,6 +236,11 @@ let send_CCS_tag #a l m cf =
   l := State t st.outgoing c true cf
        st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
+
+// TODO require or check that both flags are clear before the call
+let send_signals l outgoing_next_keys1 outgoing_complete1 = 
+  let State transcript outgoing outgoing_ccs outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in 
+  l := State transcript outgoing outgoing_ccs outgoing_next_keys1 outgoing_complete1  incoming parsed hashes pv kex dh_group = !l in 
 
 let next_fragment l (i:id) =
   let st = !l in

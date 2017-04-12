@@ -153,15 +153,25 @@ val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
 
 // An ad hoc variant for caching a message to be sent immediately after the CCS
 // We always increment the writer, sometimes report handshake completion.
-
+// This variant also sets flags and 'drops' the writing state
 val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
   (requires (fun h0 -> 
     writing h0 s /\
     hashAlg h0 s = Some a )) 
   (ensures (fun h0 h h1 -> 
     let bs = transcript_bytes (transcript h1 s)  in
+    hashAlg h0 s = hashAlg h1 s /\    
     write_transcript h0 h1 s m /\ 
     hashed a bs /\ h == hash a bs ))
+
+// Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
+val send_signals: s:log -> outgoing_next_keys:bool -> outgoing_complete:bool -> ST (tag a)
+  (requires fun h0 -> 
+    writing h0 s /\
+    outgoing_next_keys \/ outgoing_complete)
+  (ensures fun h0 _ h1 -> 
+    hashAlg h0 s = hashAlg h1 s /\
+    transcript h0 s = transcript h1 s)
 
 // FRAGMENT INTERFACE 
 //
