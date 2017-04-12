@@ -1,17 +1,13 @@
 module Handshake.Log
-
+ 
 // NB still missing regions and modifies clauses.
  
 open Platform.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :( 
 
 open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
-open Hashing
-open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
-open TLSConstants
-open HandshakeMessages
+open Hashing.CRF
+open HandshakeMessages // for pattern matching on messages
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
@@ -58,12 +54,11 @@ let valid_transcript hsl =
     | _ -> false
 
 let hs_transcript: Type0 = l:list msg{valid_transcript l}
-let empty_transcript: hs_transcript = []
-let extend_transcript (l:hs_transcript) (m:msg): Tot hs_transcript = l @ [m]
-let append_transcript (l:hs_transcript) (m:list msg): Tot hs_transcript = l @ m
-val transcript_bytes: hs_transcript -> GTot bytes
- 
 
+let append_transcript (l:hs_transcript) (m:list msg {valid_transcript (l @ m)}): Tot hs_transcript = l @ m
+
+val transcript_bytes: list msg -> GTot bytes
+ 
 // formatting of the whole transcript is injective (what about binders?)
 val transcript_format_injective: ms0:hs_transcript -> ms1:hs_transcript -> 
   Lemma(Seq.equal (transcript_bytes ms0) (transcript_bytes ms1) ==> ms0 == ms1)
@@ -77,11 +72,11 @@ let tagLength (b:anyTag) = length b
 // full specification of the hashed-prefix tags required for a given flight
 // (in relational style to capture computational-hashed)
 //val tags: a:alg -> prior: list msg -> ms: list msg -> hs: list anyTag(tag a) -> Tot Type0 (decreases ms)
-let rec tags (a:alg) (prior: hs_transcript) (ms: list msg) (hs:list anyTag) : Tot Type0 (decreases ms) =
+let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Type0 (decreases ms) =
   match ms with
   | [] -> hs == []
   | m :: ms ->
-      let prior = extend_transcript prior m in
+      let prior = prior@[m] in
       match tagged m, hs with 
       | true, h::hs -> 
           let t = transcript_bytes prior in 
@@ -92,8 +87,7 @@ let rec tags (a:alg) (prior: hs_transcript) (ms: list msg) (hs:list anyTag) : To
       | false, hs -> tags a prior ms hs
       | _ -> False
 
-val tags_append: a:alg -> prior: hs_transcript -> ms0: list msg -> ms1: list msg -> hs0: list anyTag -> hs1: list anyTag ->
-  Lemma (tags a prior ms0 hs0 /\ tags a (append_transcript prior ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
+val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list anyTag -> hs1: list anyTag -> Lemma (tags a prior ms0 hs0 /\ tags a (prior@ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
 
 (* STATE *)
 
@@ -101,16 +95,16 @@ val log: Type0
 type t = log
 
 val get_reference: log -> GTot HS.some_ref
-val init: h:HS.mem -> log -> option protocolVersion -> GTot bool
+val init: h:HS.mem -> log -> option TLSConstants.protocolVersion -> GTot bool
 val writing: h:HS.mem -> log -> GTot bool 
 val hashAlg: h:HS.mem -> log -> GTot (option Hashing.alg)
 val transcript: h:HS.mem -> log -> GTot (list hs_msg)
 
 //17-04-12 for now always called with pv = None.
-val create: reg:HH.rid -> pv:option protocolVersion -> ST log
+val create: reg:HH.rid -> pv:option TLSConstants.protocolVersion -> ST log
   (requires (fun h -> True))
   (ensures (fun h0 out h1 ->
-    modifies (Set.singleton reg) h0 h1 /\
+    HS.modifies (Set.singleton reg) h0 h1 /\
     List.Tot.length (transcript h1 out) == 0 /\
     writing h1 out /\
     init h1 out pv))
@@ -142,18 +136,19 @@ let write_transcript h0 h1 (s:log) (m:msg) =
     hashAlg h1 s == hashAlg h0 s /\
     transcript h1 s == transcript h0 s @ [m] 
 
-
 val send: s:log -> m:msg -> ST unit 
-  (requires (fun h0 -> writing h0 s)) 
+  (requires (fun h0 -> 
+    writing h0 s /\
+    valid_transcript (transcript h0 s @ [m]))) 
   (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
 
 val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
   (requires (fun h0 -> 
     writing h0 s /\
+    valid_transcript (transcript h0 s @ [m]) /\
     hashAlg h0 s = Some a )) 
   (ensures (fun h0 h h1 -> 
-    let t = transcript h1 s in
-    let bs = transcript_bytes t  in
+    let bs = transcript_bytes (transcript h1 s)  in
     write_transcript h0 h1 s m /\ 
     hashed a bs /\ h == hash a bs ))
 
@@ -163,10 +158,10 @@ val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
 val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
   (requires (fun h0 -> 
     writing h0 s /\
+    valid_transcript (transcript h0 s @ [m]) /\
     hashAlg h0 s = Some a )) 
   (ensures (fun h0 h h1 -> 
     let bs = transcript_bytes (transcript h1 s)  in
-    hashAlg h0 s = hashAlg h1 s /\    
     write_transcript h0 h1 s m /\ 
     hashed a bs /\ h == hash a bs ))
 
@@ -174,10 +169,12 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
 val send_signals: s:log -> outgoing_next_keys:bool -> outgoing_complete:bool -> ST unit
   (requires fun h0 -> 
     writing h0 s /\
-    outgoing_next_keys \/ outgoing_complete)
+    (outgoing_next_keys \/ outgoing_complete))
   (ensures fun h0 _ h1 -> 
-    hashAlg h0 s = hashAlg h1 s /\
-    transcript h0 s = transcript h1 s)
+    HS.(mods [get_reference s] h0 h1) /\
+    hashAlg h0 s == hashAlg h1 s /\
+    transcript h0 s == transcript h1 s)
+
 
 // FRAGMENT INTERFACE 
 //
@@ -217,6 +214,7 @@ val next_fragment: log -> i:id -> St (outgoing i)
 // We receive messages in whole flights; 
 // note that, untill a full flight is received, we lose "writing h1 r"
 val receive: s:log -> bytes -> ST (option (list msg * list anyTag))
+//TODO return instead ST (result (option (list msg * list anyTag)))
   (requires (fun h0 -> True))
   (ensures (fun h0 o h1 -> 
     let oa = hashAlg h1 s in 
@@ -235,14 +233,17 @@ val receive: s:log -> bytes -> ST (option (list msg * list anyTag))
 // we return the messages processed so far, and their final tag; 
 // we still can't write.
 // This should *fail* if there are pending input bytes. 
-val receive_CCS: s:log -> ST (option (list msg * list anyTag))
-  (requires (fun h0 -> True))
+val receive_CCS: #a:Hashing.alg -> s:log -> ST (option (list msg * list anyTag)) 
+//TODO return instead ST (result (list msg * list (tag a) * tag a))
+  (requires (fun h0 -> hashAlg h0 s == Some a))
   (ensures (fun h0 res h1 -> 
+    HS.(mods [get_reference s] h0 h1) /\ 
+    hashAlg h0 s == hashAlg h1 s /\ (
     match res with 
+    | None -> transcript h0 s == transcript h1 s 
     | Some (ml,tl) ->  
        let t0 = transcript h0 s in
        let t1 = transcript h1 s in
        let tr = transcript_bytes t1 in 
-       let a = hashAlg h1 s in
-       Some?a /\ t1 == t0 @ ml /\ tags (Some?.v a) t0 ml tl))
+       t1 == t0 @ ml /\ tags a t0 ml tl)))
 

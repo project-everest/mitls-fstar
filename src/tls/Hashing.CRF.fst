@@ -56,7 +56,8 @@ private val stop: s:string -> ST 'a
   (ensures (fun h0 r h1 -> False))
 let rec stop (s:string) = stop s 
 
-open Hashing
+include Hashing
+
 val finalize: #a:alg -> v:accv a -> ST (tag a)
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> 
