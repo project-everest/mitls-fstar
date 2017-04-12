@@ -53,12 +53,9 @@ let tagged m =
 val valid_transcript: list msg -> Tot bool
 let hs_transcript: Type0 = l:list msg{valid_transcript l}
 let empty_transcript: hs_transcript = []
-let extend_transcript (l:hs_transcript) (m:msg): Tot hs_transcript = 
-    l @ [m]
-let append_transcript (l:hs_transcript) (m:list msg): Tot hs_transcript = 
-    l @ m
+let extend_transcript (l:hs_transcript) (m:msg): Tot hs_transcript = l @ [m]
+let append_transcript (l:hs_transcript) (m:list msg): Tot hs_transcript = l @ m
 val transcript_bytes: hs_transcript -> GTot bytes
-
 
 
 // formatting of the whole transcript is injective (what about binders?)

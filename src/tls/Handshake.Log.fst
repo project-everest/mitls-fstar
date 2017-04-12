@@ -240,7 +240,7 @@ let send_CCS_tag #a l m cf =
 // TODO require or check that both flags are clear before the call
 let send_signals l outgoing_next_keys1 outgoing_complete1 = 
   let State transcript outgoing outgoing_ccs outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in 
-  l := State transcript outgoing outgoing_ccs outgoing_next_keys1 outgoing_complete1  incoming parsed hashes pv kex dh_group = !l in 
+  l := State transcript outgoing outgoing_ccs outgoing_next_keys1 outgoing_complete1  incoming parsed hashes pv kex dh_group 
 
 let next_fragment l (i:id) =
   let st = !l in
