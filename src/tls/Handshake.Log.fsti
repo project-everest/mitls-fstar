@@ -1,7 +1,7 @@
 module Handshake.Log
 
 // NB still missing regions and modifies clauses.
-
+ 
 open Platform.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :( 
 
@@ -56,7 +56,7 @@ let empty_transcript: hs_transcript = []
 let extend_transcript (l:hs_transcript) (m:msg): Tot hs_transcript = l @ [m]
 let append_transcript (l:hs_transcript) (m:list msg): Tot hs_transcript = l @ m
 val transcript_bytes: hs_transcript -> GTot bytes
-
+ 
 
 // formatting of the whole transcript is injective (what about binders?)
 val transcript_format_injective: ms0:hs_transcript -> ms1:hs_transcript -> 
@@ -99,13 +99,16 @@ val init: h:HS.mem -> log -> option protocolVersion -> GTot bool
 val writing: h:HS.mem -> log -> GTot bool 
 val hashAlg: h:HS.mem -> log -> GTot (option Hashing.alg)
 val transcript: h:HS.mem -> log -> GTot (list hs_msg)
-val create: #reg:HH.rid -> pv:option protocolVersion -> ST log
+
+//17-04-12 for now always called with pv = None.
+val create: reg:HH.rid -> pv:option protocolVersion -> ST log
   (requires (fun h -> True))
   (ensures (fun h0 out h1 ->
     modifies (Set.singleton reg) h0 h1 /\
     List.Tot.length (transcript h1 out) == 0 /\
     writing h1 out /\
     init h1 out pv))
+
 val setParams: s:log -> 
   TLSConstants.protocolVersion -> 
   a: Hashing.alg -> 

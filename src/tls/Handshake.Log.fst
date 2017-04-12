@@ -132,7 +132,7 @@ let writing h st =
 
 // must be checked before incrementing the read epoch.
 val notReading: state -> Tot bool 
-let noReading st = st.parsed = [] && st.incoming = empty_bytes
+let notReading st = st.parsed = [] && st.incoming = empty_bytes
 
 let hashAlg h st = 
     let s = HS.sel h st in 
@@ -148,7 +148,7 @@ let transcript h t =
     else
     FStar.Ghost.reveal ((sel h t).transcript)
 
-let create #reg pv =
+let create reg pv =
     let l = State empty_transcript empty_bytes None false false
     	    	  empty_bytes [] (OpenHash empty_bytes) 
 		  pv None None in

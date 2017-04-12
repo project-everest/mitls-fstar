@@ -653,7 +653,7 @@ let server_ServerFinished_13 hs i =
         Epochs.incr_writer hs.epochs; // Switch to ATK after the SF
         Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
         hs.state := S_Wait_Finished2 digestServerFinished;
-        Handshake.Log.send_signals true true;
+        Handshake.Log.send_signals hs.log true true;
         Correct(Handshake.Log.next_fragment hs.log i)
       end
 
@@ -707,10 +707,10 @@ val version: s:hs -> Tot protocolVersion
 
 (* ----------------------- Control Interface -------------------------*)
 
-let create parent cfg role resume =
+let create (parent:rid) cfg role resume =
   let r = new_region parent in
   let nego = Nego.create r role  cfg resume in
-  let log = Handshake.Log.create r (* cfg.maxVer (Nego.hashAlg nego) *) in
+  let log = Handshake.Log.create r None (* cfg.maxVer (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
   let ks, nonce = KeySchedule.create #r role in
   let epochs = Epochs.create r nonce in
@@ -733,7 +733,7 @@ let invalidateSession hs = ()
 let next_fragment hs i =
     trace "next_fragment";
     let outgoing = Handshake.Log.next_fragment hs.log i in
-    match !hs.state, outgoing with
+    match outgoing, !hs.state with
     // when the output buffer is empty, we send extra messages in two cases
     // we prepare the initial ClientHello; or     
     // after sending ServerHello in plaintext, we continue with encrypted traffic   
@@ -796,7 +796,8 @@ let recv_ccs hs =
     // CCS triggers completion of the incoming flight of messages.
     match Handshake.Log.receive_CCS hs.log with
     | None -> InError(AD_unexpected_message, "CCS received at wrong time")
-    | Some (ms, digests, digest) ->
+    | Some (ms, digests) ->
+        let digest = admit() in
         match !hs.state, ms, digests with
         | C_Wait_CCS2 digest, [], [] -> (
             trace "Processing CCS"; // now expect encrypted finish on this digest
