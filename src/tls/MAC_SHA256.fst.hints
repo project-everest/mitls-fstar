@@ -1,5 +1,5 @@
 [
-  "R¬èðh˜¼Û\u0005mØ6IØ…<",
+  "B\u001bËöhÕ…\u0003âY°60\u0019HÛ",
   [
     [
       "MAC_SHA256.id",
@@ -19,11 +19,11 @@
       0,
       1,
       [
-        "@query", "disc_equation_TLSConstants.AEAD",
+        "@MaxIFuel_assumption", "@query", "disc_equation_TLSConstants.AEAD",
         "disc_equation_TLSInfo.ID12", "equation_MAC_SHA256.id",
         "equation_TLSInfo.aeAlg_of_id", "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_ef543f06de057671fb803257f0e38d8f"
+        "refinement_interpretation_MAC_SHA256_Tm_refine_ef543f06de057671fb803257f0e38d8f"
       ],
       0
     ],
@@ -33,14 +33,15 @@
       0,
       1,
       [
-        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Platform.Bytes.HasEq_bytes",
         "disc_equation_TLSInfo.ID12", "equation_MAC_SHA256.id",
         "equation_MAC_SHA256.tag", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.lbytes", "equation_TLSConstants.macSize",
-        "haseqTm_refine_810128ef5f4b05b21d8806119a5984f5",
-        "haseqTm_refine_e14411b0ba9d8a27f90348bdef509a81",
+        "haseqMAC_SHA256_Tm_refine_7d7f7f1ebc9dc355f2de0d7b163f200b",
+        "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_ef543f06de057671fb803257f0e38d8f"
+        "refinement_interpretation_MAC_SHA256_Tm_refine_ef543f06de057671fb803257f0e38d8f"
       ],
       0
     ],
