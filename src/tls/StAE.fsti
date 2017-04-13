@@ -15,9 +15,9 @@ open TLSInfo
 
 (* distinguishing the two multiplexing choices of StAE based on the ids *)
 
-let is_stream i = ID13? i
+let is_stream (i: TLSInfo.id) = ID13? i
 
-let is_stlhae i = ID12? i && AEAD? (aeAlg_of_id i) &&
+let is_stlhae (i:TLSInfo.id) = ID12? i && AEAD? (aeAlg_of_id i) &&
   (AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_128_GCM ||
    AEAD?._0 (aeAlg_of_id i) = CoreCrypto.AES_256_GCM)
 
@@ -64,8 +64,8 @@ val state: i:id -> rw:rw -> Type0
 val region: #i:id -> #rw:rw -> state i rw -> Tot rgn
 val log_region: #i:id -> #rw:rw -> state i rw -> Tot rgn
 
-type reader i = state i Reader
-type writer i = state i Writer
+type reader (i:id) = state i Reader
+type writer (i:id) = state i Writer
 
 // how to specify those two? Their properties are available at creation-time. 
 

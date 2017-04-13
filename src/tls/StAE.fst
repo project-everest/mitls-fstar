@@ -45,7 +45,7 @@ let aeKeySize (i:stae_id) =
 noeq type state' (i:id) (rw:rw) =
   | Stream: u:unit{is_stream i} -> Stream.state i rw -> state' i rw
   | StLHAE: u:unit{is_stlhae i} -> StLHAE.state i rw -> state' i rw
-let state = state' // silly
+let state i rw = state' i rw // silly
 
 private let stream_state (#i:id{is_stream i}) (#rw:rw) (s:state i rw)
   : Tot (Stream.state i rw)
@@ -105,12 +105,15 @@ let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:mem): GTot (frags i) 
   let entries = MR.m_sel #(log_region s) #_ #MS.grows h (ilog s) in
   MS.map ptext entries
 
+//17-04-13 unclear why subtyping fails below
 val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}
   -> h0:mem -> h1:mem -> e:entry i
-  -> Lemma (let log = ilog w in
-           MR.m_sel #(log_region w) #_ #MS.grows h1 log ==
-	   Seq.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e ==>
-	   fragments w h1 == Seq.snoc (fragments w h0) (ptext e))
+  -> Lemma (
+        let log: state i Writer = ilog w in
+          MR.m_sel #(log_region w) #_ #MS.grows h1 log ==
+          Seq.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e
+        ==>
+          fragments w h1 == Seq.snoc (fragments w h0) (ptext e))
 let lemma_fragments_snoc_commutes #i w h0 h1 e =
   let log = ilog w in
   MS.map_snoc ptext (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e
