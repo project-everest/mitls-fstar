@@ -79,11 +79,11 @@ type writer i = state i Writer
 // TODO: consider adding constraint on terminator fragments
 type frags (i:id{~ (PlaintextID? i)}) = Seq.seq (Content.fragment i)
  
-val ideal_log (r:rgn) (i:id): Type0 // vs frags i?
-val ilog: #i:id -> #rw:rw -> s:state i rw{authId i} -> Tot (ideal_log (log_region s) i)
+// val ideal_log (r:rgn) (i:id): Type0 // vs frags i?
 
 val fragments: #i:id -> #rw:rw -> s:state i rw{authId i} ->  h:HyperStack.mem -> GTot (frags i)
-
+val fragments_prefix: #i:id -> #rw:rw -> s:state i rw{authId i} ->  fs:frags i -> HyperStack.mem -> GTot Type0
+// TODO get something out of it!
 
 (* projecting sequence numbers *) 
 
@@ -159,13 +159,15 @@ val encrypt: #i:id -> e:writer i -> f:Content.fragment i -> ST (Content.encrypte
     frame_f (seqnT e) h1 (Set.singleton (log_region e)) /\ 
     ( authId i ==>
         fragments e h1 == Seq.snoc (fragments e h0) f /\ 
-        frame_f (fragments e) h1 (Set.singleton (log_region e))
+        frame_f (fragments e) h1 (Set.singleton (log_region e)) /\
         //17-04-13  too concrete? /\
-        // Monotonic.RRef.witnessed (fragments_prefix e (fragments e h1))
+        Monotonic.RRef.witnessed (fragments_prefix e (fragments e h1))
         ))
 
 (* decryption, idealized as a lookup for safe instances *)
 
+val fragment_at_j: #i:id -> #rw:rw -> 
+  s:state i rw{authId i} -> n:nat -> f:Content.fragment i -> HyperStack.mem ->  Tot Type0
 
 // do we need length c = cipherLen i f? 
 val decrypt: #i:id -> d:reader i -> c:Content.decrypted i -> 
@@ -188,8 +190,8 @@ val decrypt: #i:id -> d:reader i -> c:Content.decrypted i ->
                     ( let written = fragments d h0 in
                       j < Seq.length written /\
                       f = Seq.index written j /\
-                      frame_f (fragments d) h1 (Set.singleton (log_region d)) 
+                      frame_f (fragments d) h1 (Set.singleton (log_region d)) /\
                       //17-04-13 too concrete? /\
-                      // Monotonic.RRef.witnessed (fragment_at_j d j f)
+                      Monotonic.RRef.witnessed (fragment_at_j d j f)
                       )))
 

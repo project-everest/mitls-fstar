@@ -211,7 +211,6 @@ Epochs.fst \
 Handshake.fsti \
 Handshake.fst \
 Connection.fst \
-ConnInvariant.fst \
 TLS.fst \
 FFI.fst \
 test/TestRecord.fst \
@@ -220,6 +219,7 @@ test/TestGCM.fst \
 test/TestFFI.fst \
 test/TestAPI.fst #the preceding space is significant!
 #test/TestHandshake.fst // Outdated since HS refactor
+#17-04-13 removed ConnInvariant.fst, verifying but not used yet
 
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it

@@ -81,7 +81,8 @@ let ideal_log (r:rgn) (i:id) =
     AEAD_GCM.ideal_log r i
   else False
 
-let ilog (#i:id) (#rw:rw) (s:state i rw{authId i}): Tot (ideal_log (log_region s) i) =
+val ilog: #i:id -> #rw:rw -> s:state i rw{authId i} -> Tot (ideal_log (log_region s) i)
+let ilog #i #rw s =
   match s with
   | Stream u s -> Stream.ilog (Stream.State?.log s)
   | StLHAE u s -> AEAD_GCM.ilog (AEAD_GCM.State?.log s)
@@ -288,7 +289,6 @@ let encrypt #i e f =
 
 (* decryption, idealized as a lookup for safe instances *)
 
-//17-04-13 move to fsti?
 let fragment_at_j (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:Content.fragment i) h =
   MS.map_has_at_index #_ #_ #(log_region s) (ilog s) ptext n f h
 
