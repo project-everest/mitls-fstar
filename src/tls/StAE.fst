@@ -105,11 +105,12 @@ let fragments (#i:id) (#rw:rw) (s:state i rw{authId i}) (h:mem): GTot (frags i) 
   let entries = MR.m_sel #(log_region s) #_ #MS.grows h (ilog s) in
   MS.map ptext entries
 
-//17-04-13 unclear why subtyping fails below
+#set-options "--print_universes --print_full_names" 
+//17-04-13 unclear why subtyping fails below 
 val lemma_fragments_snoc_commutes: #i:id -> w:writer i{authId i}
   -> h0:mem -> h1:mem -> e:entry i
   -> Lemma (
-        let log: state i Writer = ilog w in
+        let log = ilog #i #Writer w in
           MR.m_sel #(log_region w) #_ #MS.grows h1 log ==
           Seq.snoc (MR.m_sel #(log_region w) #_ #MS.grows h0 log) e
         ==>
