@@ -117,6 +117,7 @@ Cert.fst \
 Signature.fst \
 PSK.fst \
 TLSInfo.fst \
+HMAC.UFCMA.fst \
 IdNonce.fst \
 Extensions.fst \
 Buffer.Utils.fst \
@@ -147,6 +148,8 @@ Hacl.Bignum.Parameters.fst \
 FStar.Math.Lib.fst \
 Spec.Poly1305.Lemmas.fst \
 Spec.Poly1305.fst \
+Hacl.Bignum.Wide.fst \
+Hacl.Bignum.Limb.fst \
 Hacl.Spec.Bignum.Fproduct.fst \
 Hacl.Spec.Bignum.Modulo.fst \
 Hacl.Spec.Bignum.Fmul.fst \
@@ -203,8 +206,8 @@ MasterSecret.fst \
 Handshake.Log.fsti \
 Handshake.Log.fst \
 Negotiation.fst \
-Epochs.fst \
 KeySchedule.fst \
+Epochs.fst \
 Handshake.fsti \
 Handshake.fst \
 Connection.fst \

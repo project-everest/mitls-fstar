@@ -31,7 +31,7 @@ let print s = discard (IO.debug_print_string ("HL| "^s))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if hs_debug then print else (fun _ -> ())
+unfold let trace = if hsl_debug then print else (fun _ -> ())
 
 
 let erased_transcript : Type0 =
@@ -67,7 +67,7 @@ let print_hsl (hsl:erased_transcript) : Tot bool =
     if hsl_debug then
     let sl = List.Tot.map HandshakeMessages.string_of_handshakeMessage hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
-    trace ("Current log: " ^ s)
+    IO.debug_print_string ("Current log: " ^ s)
     else false
 
 let transcript_bytes l = handshakeMessagesBytes (transcript_version l) (reveal_log l)

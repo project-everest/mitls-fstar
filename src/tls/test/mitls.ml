@@ -2,7 +2,7 @@
 open TLSConstants
 open TLSInfo
 
-let tlsapi = ref false
+let tlsapi = ref true
 let args = ref []
 let role = ref Client
 let ffi  = ref false
@@ -45,11 +45,11 @@ let sas = [
 ]
 
 let ngs = [
-  ("P-521", SEC CoreCrypto.ECC_P521);
-  ("P-384", SEC CoreCrypto.ECC_P384);
-  ("P-256", SEC CoreCrypto.ECC_P256);
-  ("FFDHE4096", FFDHE FFDHE4096);
-  ("FFDHE3072", FFDHE FFDHE3072);
+  ("P-521", Parse.SEC CoreCrypto.ECC_P521);
+  ("P-384", Parse.SEC CoreCrypto.ECC_P384);
+  ("P-256", Parse.SEC CoreCrypto.ECC_P256);
+  ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
+  ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
 ]
 
 let prn s (k, _) = s ^ k ^ ", "
@@ -81,7 +81,7 @@ let _ =
   Arg.parse [
           ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v; maxVer = v;}), " sets minimum and maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3>");
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
-    ("-tlsapi", Arg.Unit (fun () -> tlsapi := true), "run through TLS API instead of scripted test file");
+    ("-tlsapi", Arg.Unit (fun () -> tlsapi := true), "run through the TLS API (now set by default)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
     ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2");
@@ -104,9 +104,11 @@ let _ =
   match !role, !config.maxVer with
   | Client, _ when !ffi    -> TestFFI.client !config host (Z.of_int port)
   | Server, _ when !ffi    -> failwith "server FFI to be completed"
-  | Client, _ when !tlsapi -> TestAPI.client !config host (Z.of_int port)
-  | Server, _ when !tlsapi -> TestAPI.server !config host (Z.of_int port)
+  | Client, _ -> TestAPI.client !config host (Z.of_int port)
+  | Server, _ -> TestAPI.server !config host (Z.of_int port)
+  (* TestHandshake is deprecated
   | Client, TLS_1p3        -> TestHandshake.client_13 !config host (Z.of_int port)
   | Client, _              -> TestHandshake.client_12 !config host (Z.of_int port)
   | Server, TLS_1p3        -> TestHandshake.server_13 !config host (Z.of_int port)
   | Server, _              -> TestHandshake.server_12 !config host (Z.of_int port)
+  *)

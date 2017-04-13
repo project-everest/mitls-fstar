@@ -794,7 +794,7 @@ let recv_ccs hs =
     trace "recv_ccs";
     // assert pv <> TLS 1.3
     // CCS triggers completion of the incoming flight of messages.
-    match Handshake.Log.receive_CCS hs.log with
+    match Handshake.Log.receive_CCS #(Nego.hashAlg hs.nego) hs.log with
     | None -> InError(AD_unexpected_message, "CCS received at wrong time")
     | Some (ms, digests) ->
         let digest = admit() in
