@@ -45,7 +45,7 @@ let aeKeySize (i:stae_id) =
 noeq type state' (i:id) (rw:rw) =
   | Stream: u:unit{is_stream i} -> Stream.state i rw -> state' i rw
   | StLHAE: u:unit{is_stlhae i} -> StLHAE.state i rw -> state' i rw
-let state = state' // silly
+let state i rw = state' i rw // silly
 
 private let stream_state (#i:id{is_stream i}) (#rw:rw) (s:state i rw)
   : Tot (Stream.state i rw)
