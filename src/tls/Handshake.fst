@@ -69,26 +69,22 @@ type digest = l:bytes{length l <= 32}
 type machineState =
   | C_Idle
   | C_Wait_ServerHello
+  | C_Wait_Finished1           // TLS 1.3
+//| C_Wait_CCS1 of digest      // TLS resume, digest to be MACed by server
+//| C_Wait_Finished1 of digest // TLS resume, digest to be MACed by server 
+  | C_Wait_ServerHelloDone     // TLS classic
+  | C_Wait_CCS2 of digest      // TLS classic, digest to be MACed by server 
+  | C_Wait_Finished2 of digest // TLS classic, digest to be MACed by server 
   | C_Complete
 
-  // only after accepting TLS 1.3
-  | C_Wait_Finished1
-
-  // only after accepting TLS classic
-  | C_Wait_ServerHelloDone
-  | C_Wait_CCS2 of digest
-  | C_Wait_Finished2 of digest // full HS transcript at the server (authenticated by server Finished2)
-
   | S_Idle
+  | S_Sent_ServerHello         // TLS 1.3, intermediate state to encryption
+  | S_Wait_Finished2 of digest // TLS 1.3, digest to be MACed by client 
+  | S_Wait_CCS1                // TLS classic   
+  | S_Wait_Finished1 of digest // TLS classic, digest to the MACed by client
+//| S_Wait_CCS2 of digest      // TLS resume, digest to be MACed by client
+//| S_Wait_Finished2 of digest // TLS resume, digest to be MACed by client
   | S_Complete
-
-  // only after choosing TLS 1.3
-  | S_Sent_ServerHello // required to start encryption
-  | S_Wait_Finished2 of digest
-
-  // only after choosing TLS classic
-  | S_Wait_CCS1
-  | S_Wait_Finished1 of digest // full HS transcript at the client (authenticated by client Finished1)
 
 //17-03-24 consider using instead "if role = Client then clientState else serverServer"
 //17-03-24 but that may break extraction to Kremlin and complicate typechecking
@@ -101,21 +97,34 @@ noeq type hs' = | HS:
   r: role ->
   nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
   nego: Nego.t region r ->
-  log: Handshake.Log.t (* TODO {extends Handshake.Log.region log region} *) ->
-  ks: KeySchedule.ks -> //region r ->
+  log: Handshake.Log.t {Handshake.Log.region_of log = region} ->
+  ks: KeySchedule.ks (*region*) -> 
   epochs: epochs region nonce ->
-  state: ref machineState (*in region*) -> // state machine; should be opaque and depend on r.
+  state: ref machineState {state.HyperStack.id = region} -> // state machine; should be opaque and depend on r.
   hs'
 
 let hs = hs' //17-04-08 interface limitation
 
-let region_of s = s.region
-let role_of s = s.r
-let random_of s = s.nonce
-let config_of s = Nego. local_config s.nego
-let version_of s = Nego.version s.nego
-let resumeInfo_of s = Nego.resume s.nego
-let epochs_of s = s.epochs
+let region_of (s:hs) = s.region
+let role_of (s:hs) = s.r
+let random_of (s:hs) = s.nonce
+let config_of (s:hs) = Nego. local_config s.nego
+let version_of (s:hs) = Nego.version s.nego
+let resumeInfo_of (s:hs) = Nego.resume s.nego
+let epochs_of (s:hs) = s.epochs
+
+(* WIP, suggesting new structure 
+let inv (s:hs) (h:HyperStack.mem) = 
+  // let context = Negotiation.context h hs.nego in 
+  let transcript = Handshake.Log.transcript h hs.log in 
+  match HyperStack.sel h s.state with 
+  | C_Wait_ServerHello -> 
+      hs.role = Client /\
+      transcript = [clientHello hs.nonce offer] /\
+      "nego in Wait_ServerHello" /\
+      "ks in wait_ServerHello" 
+  | _ -> True
+*)
 
 // the states of the HS sub-module will be subject to a joint invariant
 // for example the Nego state is a function of ours.
@@ -715,7 +724,8 @@ let create (parent:rid) cfg role resume =
   let ks, nonce = KeySchedule.create #r role in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in
-  HS role nonce nego log ks epochs state
+  let x: hs = HS role nonce nego log ks epochs state in //17-04-17 why needed?
+  x
 
 let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
 
@@ -730,7 +740,7 @@ let invalidateSession hs = ()
 
 (* ------------------ Outgoing -----------------------*)
 
-let next_fragment hs i =
+let next_fragment (hs:hs) i =
     trace "next_fragment";
     let outgoing = Handshake.Log.next_fragment hs.log i in
     match outgoing, !hs.state with
@@ -744,7 +754,7 @@ let next_fragment hs i =
 
 (* ----------------------- Incoming ----------------------- *)
 
-let recv_fragment hs #i rg f =
+let recv_fragment (hs:hs) #i rg f =
     trace "recv_fragment";
     let h0 = ST.get() in
     let flight = Handshake.Log.receive hs.log f in
@@ -790,7 +800,7 @@ let recv_fragment hs #i rg f =
 
 
 // TODO check CCS once committed to TLS 1.3 yields an alert
-let recv_ccs hs =
+let recv_ccs (hs:hs) =
     trace "recv_ccs";
     // assert pv <> TLS 1.3
     // CCS triggers completion of the incoming flight of messages.

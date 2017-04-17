@@ -119,6 +119,7 @@ type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
 // we keep a sequence of allocated epochs, 
 // together with counters for reading and writing
 //NS: probably need some anti-aliasing invariant of these three references
+//17-04-17 CF: consider switching to a single reference to a triple. 
 noeq type epochs (r:rgn) (n:random) = | MkEpochs: 
   es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
   read: epoch_ctr r es ->
