@@ -95,6 +95,11 @@ val log: Type0
 type t = log
 
 val get_reference: log -> GTot HS.some_ref
+let region_of s = 
+  let open FStar.HyperStack in 
+  let Ref r = get_reference s in 
+  r.id
+  
 val init: h:HS.mem -> log -> option TLSConstants.protocolVersion -> GTot bool
 val writing: h:HS.mem -> log -> GTot bool 
 val hashAlg: h:HS.mem -> log -> GTot (option Hashing.alg)

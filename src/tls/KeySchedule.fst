@@ -259,6 +259,8 @@ type ks_state =
  *)
 type ks =
 | KS: #region:rid -> state:(ref ks_state){HS.MkRef?.id state = region} -> ks
+//17-04-17 CF: expose it as a concrete ref? 
+//17-04-17 CF: no need to keep the region, already in the ref.
 
 // Extract keys and IVs from a derived 1.3 secret
 private let keygen_13 h secret phase ae : St (bytes * bytes * bytes * bytes) =
