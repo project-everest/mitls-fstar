@@ -181,6 +181,8 @@ Crypto.AEAD.Wrappers.CMA.fst \
 Crypto.AEAD.fst \
 Crypto.AEAD.Encrypt.fst \
 Crypto.AEAD.Decrypt.fst \
+Crypto.AEAD.Main.fsti \
+Crypto.AEAD.Main.fst \
 AEADOpenssl.fst \
 AEADProvider.fst \
 Range.fst \
