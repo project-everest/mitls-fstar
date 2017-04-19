@@ -11,6 +11,7 @@ open TLSConstants
 val hs: Type0
 
 // the handshake epochs internally maintains counters for the current reader and writer
+val nonce: hs -> Tot TLSInfo.random  // unique for all honest instances; locally enforced
 val region_of: hs -> Tot Parse.rgn
 val role_of: hs -> role
 val random_of: hs -> Tot TLSInfo.random

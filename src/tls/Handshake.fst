@@ -95,7 +95,6 @@ type machineState =
 noeq type hs' = | HS:
   #region: rgn {is_hs_rgn region} ->
   r: role ->
-  nonce: TLSInfo.random ->  // unique for all honest instances; locally enforced
   nego: Nego.t region r ->
   log: Handshake.Log.t {Handshake.Log.region_of log = region} ->
   ks: KeySchedule.ks (*region*) -> 
@@ -105,15 +104,16 @@ noeq type hs' = | HS:
 
 let hs = hs' //17-04-08 interface limitation
 
+let nonce (s:hs) = Nego.nonce hs.nego
 let region_of (s:hs) = s.region
 let role_of (s:hs) = s.r
 let random_of (s:hs) = s.nonce
-let config_of (s:hs) = Nego. local_config s.nego
+let config_of (s:hs) = Nego.local_config s.nego
 let version_of (s:hs) = Nego.version s.nego
 let resumeInfo_of (s:hs) = Nego.resume s.nego
 let epochs_of (s:hs) = s.epochs
 
-(* WIP, suggesting new structure 
+//(* WIP, suggesting new structure 
 let inv (s:hs) (h:HyperStack.mem) = 
   // let context = Negotiation.context h hs.nego in 
   let transcript = Handshake.Log.transcript h hs.log in 
@@ -282,7 +282,68 @@ let sig_algs mode sh_alg =
   (a, sa, ha)
 
 
+(* ------- Pure functions between offer/mode and their message encodings -------- *)
 
+let clientHello offer = // pure; shared by Client and Server
+  let sid =
+    match offer.co_resume with
+    | None -> empty_bytes
+    | Some x -> x
+    in
+  (* In Extensions: prepare client extensions, including key shares *)
+  //17-03-30 where are the keyshares? How to convert them?
+  let ext = Extensions.prepareExtensions
+    offer.co_protocol_version
+    offer.co_cipher_suites
+    false false //17-03-30 ??
+    offer.co_sigAlgs
+    offer.co_namedGroups // list of named groups?
+    None //17-03-30 ?? optional (cvd,svd)
+    offer.co_client_shares // apparently at most one for now
+    in
+  let ch = {
+    ch_protocol_version = offer.co_protocol_version;
+    ch_client_random = offer.co_client_random;
+    ch_sessionID = sid;
+    ch_cipher_suites = offer.co_cipher_suites;
+    ch_raw_cipher_suites = None;
+    ch_compressions = offer.co_compressions;
+    ch_extensions = Some ext } in
+  ClientHello ch
+
+let clientHello_offer ch = 
+  let namedGroups, sigAlgs, safe_resumption, psks, client_shares = 
+    Extensions.matchExtensions ch.ch_extensions in
+  Nego.Offer 
+    ch.ch_protocol_version 
+    ch.ch_cipher_suites 
+    ch.ch_compressions
+    // from extensions
+    namedGroups 
+    sigAlgs 
+    safe_resumption 
+    (if length ch.ch_sessionID = 0 then None else Some ch.ch_sessionID)
+    psks
+    client_shares
+
+// sufficient to prove that clientHello is injective
+let clientHello_inverse offer: Lemma (clientHello_offer (clientHello offer) = Some offer) = ()
+
+let serverHello nonce mode = 
+  let open Nego in 
+  let sh ={ 
+    sh_protocol_version = mode.n_protocol_version;
+    sh_sessionID = sid; //??
+    sh_server_random = nonce
+    sh_cipher_suite = mode.n_cipher_suite;
+    sh_compression = mode.n_compression;
+    sh_extensions = sext } in
+  ServerHello sh
+  
+let serverHello_mode sh = admit() 
+  // TODO the mode according to sh, still to be validated by nego.
+
+// TODO some inverse given an offer. 
 
 
 (* -------------------- Handshake Client ------------------------ *)
@@ -301,44 +362,19 @@ let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
-  let open Nego in
-  let offer = Nego.clientOffer hs.nego in (* compute offer from configuration *)
+  let config = Nego.config_of hs.nego in
   let shares =
-    match offer.co_protocol_version with
+    match config.maxVer  with
       | TLS_1p3 -> (* compute shares for groups in offer *)
-        let gx = KeySchedule.ks_client_13_1rtt_init hs.ks offer.co_namedGroups in
+        // TODO get binder keys too
+        let gx = KeySchedule.ks_client_13_1rtt_init hs.ks config.nameGroups in
         Some gx
       | _ ->
         let si = KeySchedule.ks_client_12_init hs.ks in  // we may need si to carry looked up PSKs
         None
     in
-  let sid =
-    match offer.co_resume with
-    | None -> empty_bytes
-    | Some x -> x
-    in
-  (* In Extensions: prepare client extensions, including key shares *)
-  //17-03-30 where are the keyshares? How to convert them?
-  let ext = Extensions.prepareExtensions
-    offer.co_protocol_version
-    offer.co_cipher_suites
-    false false //17-03-30 ??
-    offer.co_sigAlgs
-    offer.co_namedGroups // list of named groups?
-    None //17-03-30 ?? optional (cvd,svd)
-    shares // apparently at most one for now
-    in
-  let ch = // a bit too concrete? ClientHello hs.nonce offer hs.resume ri shares
-  {
-    ch_protocol_version = offer.co_protocol_version;
-    ch_client_random = hs.nonce;
-    ch_sessionID = sid;
-    ch_cipher_suites = offer.co_cipher_suites;
-    ch_raw_cipher_suites = None;
-    ch_compressions = offer.co_compressions;
-    ch_extensions = Some ext
-  } in
-  Handshake.Log.send hs.log (ClientHello ch);  // TODO decompose in two steps, appending the binders
+  let offer = Nego.clientOffer hs.nego shares in (* compute offer from configuration *)
+  Handshake.Log.send hs.log (clientHello offer);  // TODO decompose in two steps, appending the binders
   hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
   Correct(Handshake.Log.next_fragment hs.log i)
 
@@ -532,7 +568,8 @@ val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs ch =
     trace "Processing ClientHello";
-    match Nego.server_ClientHello hs.nego ch with
+    let offer = clientHello_offer ch in // we should not otherwise depend on ch
+    match Nego.server_ClientHello hs.nego offer with
     | Error z -> InError z
     | Correct mode -> (
       let server_share =
@@ -543,7 +580,7 @@ let server_ClientHello hs ch =
       match Extensions.negotiateServerExtensions
         mode.Nego.n_protocol_version
         ch.ch_extensions
-        ch.ch_cipher_suites
+        offer.Nego.co_cipher_suites
         (Nego.local_config hs.nego)
         mode.Nego.n_cipher_suite
         None (*Nego.resume hs.nego *)
@@ -552,16 +589,10 @@ let server_ClientHello hs ch =
       with
         | Error z -> InError z
         | Correct sext -> (
-          let sid = Some (CoreCrypto.random 32) (* always? *) in
-          let sh =
-          { sh_protocol_version = mode.Nego.n_protocol_version;
-             sh_sessionID = sid;
-             sh_server_random = hs.nonce;
-             sh_cipher_suite = mode.Nego.n_cipher_suite;
-             sh_compression = mode.Nego.n_compression;
-             sh_extensions = sext} in
+          let sid = Some (CoreCrypto.random 32) (* always?? should be recorded in mode *) in
+          let msg = serverHello (Nego.nonce hs.nego) mode in 
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-          let digestServerHello = Handshake.Log.send_tag #ha hs.log (ServerHello sh) in
+          let digestServerHello = Handshake.Log.send_tag #ha hs.log msg in
 
           let mode = // should be directly returned by Nego? updating: n_sessionID, n_server_share, what else?
           { mode with Nego.n_sessionID = sid; } in
@@ -718,13 +749,13 @@ val version: s:hs -> Tot protocolVersion
 
 let create (parent:rid) cfg role resume =
   let r = new_region parent in
-  let nego = Nego.create r role  cfg resume in
   let log = Handshake.Log.create r None (* cfg.maxVer (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
   let ks, nonce = KeySchedule.create #r role in
+  let nego = Nego.create r role cfg resume nonce in
   let epochs = Epochs.create r nonce in
   let state = ralloc r (if role = Client then C_Idle else S_Idle) in
-  let x: hs = HS role nonce nego log ks epochs state in //17-04-17 why needed?
+  let x: hs = HS role nego log ks epochs state in //17-04-17 why needed?
   x
 
 let rehandshake s c = Platform.Error.unexpected "rehandshake: not yet implemented"
