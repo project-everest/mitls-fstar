@@ -62,7 +62,7 @@ type retryInfo (offer:offer) =
 // The final negotiated outcome, including key shares and long-term identities.
 // mode is the name used in the resilience paper;
 // session_info is the one from TLSInfo
-type mode =
+noeq type mode =
   | Mode:
     // Negotiated client offer
     n_offer: offer ->
@@ -101,8 +101,7 @@ type mode =
     // { both shares are in the same negotiated group }
     mode
 
-
-type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
+noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
   | C_Init:     n_client_random: TLSInfo.random ->
                 negotiationState r cfg resume
@@ -148,16 +147,13 @@ type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 negotiationState r cfg resume
 
 
-let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r) : MR.reln (negotiationState r cfg resume) = 
+let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r) : MR.reln (negotiationState r cfg resume) =
   fun ns ns' ->
   match ns, ns' with
   | C_Init nonce, C_Init nonce' -> nonce == nonce'
   | C_Offer offer, C_Offer offer' -> offer == offer'
-  | C_Init nonce, C_Offer offer -> nonce == 
-  
-  | C_Offer offer, C_Mode offer' sr pv -> offer == offer' // /\ pv ...
-  | _, _ -> True
-
+  | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
+  | _, _ -> True // TODO
 
 noeq type t (region:rgn) (role:TLSConstants.role) =
   | NS:
@@ -166,24 +162,37 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
-val computeOffer: cfg:config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random -> (* ... *) offer
-let computeOffer cfg resume nonce ks psks =
-  {
-      co_protocol_version   = cfg.maxVer;
-      co_cipher_suites      = cfg.ciphersuites;
-      co_compressions       = cfg.compressions;
-      co_namedGroups        = cfg.namedGroups;
-      co_sigAlgs            = cfg.signatureAlgorithms;
-      co_safe_resumption    = cfg.safe_resumption;
-      co_safe_renegotiation = cfg.safe_renegotiation;
-      co_resume             = fst resume;
-      co_psks               = snd resume
-   }
 
-(*
-val clientHello_offer:
-val offer_ClientHello:
-*)
+val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random -> 
+  ks:option CommonDH.keyShare -> offer
+let computeOffer r cfg resume nonce ks =
+  let sid = 
+    match resume with
+    | Some sid, _ -> sid
+    | None, _ -> empty_bytes
+  in
+  let extensions = 
+    Extensions.prepareExtensions
+      cfg.maxVer
+      cfg.ciphersuites
+      cfg.safe_renegotiation
+      cfg.safe_resumption
+      cfg.signatureAlgorithms
+      cfg.namedGroups
+      None // : option (cVerifyData * sVerifyData)
+      ks
+  in
+  {
+    ch_protocol_version = cfg.maxVer; // legacy for 1.3
+    ch_client_random = nonce;
+    ch_sessionID = sid;
+    ch_cipher_suites = cfg.ciphersuites;
+    // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
+    ch_raw_cipher_suites = None; 
+    ch_compressions = cfg.compressions;
+    ch_extensions = Some extensions
+  }
+
 
 val create:
   region:rgn -> r:role -> cfg:TLSInfo.config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
@@ -191,15 +200,11 @@ val create:
 let create region r cfg resume nonce =
   match r with
   | Client ->
-    let state = ralloc region (C_Init nonce) in
+    let state = MR.m_alloc region (C_Init nonce) in
     NS cfg resume state
   | Server ->
-    let state = ralloc region (S_Init nonce) in
+    let state = MR.m_alloc region (S_Init nonce) in
     NS cfg resume state
-
-val clientOffer: #region:rgn -> t region Client -> St offer
-let clientOffer #region ns =
-  NS?.offer ns
 
 // a bit too restrictive: use a single Hash in any given offer
 val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Hashing.Spec.alg
