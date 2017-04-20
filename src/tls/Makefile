@@ -106,6 +106,12 @@ Transport.fst \
 Nonce.fst \
 RSAKey.fst \
 DHGroup.fst \
+FStar.Endianness.fst \
+Spec.Loops.fst \
+Spec.Lib.fst \
+Spec.Curve25519.Lemmas.fst \
+Spec.Curve25519.fst \
+Curve25519.fst \
 ECGroup.fst \
 CommonDH.fst \
 PMS.fst \
@@ -121,7 +127,6 @@ HMAC.UFCMA.fst \
 IdNonce.fst \
 Extensions.fst \
 Buffer.Utils.fst \
-FStar.Endianness.fst \
 Crypto.Symmetric.Bytes.fst \
 Crypto.Indexing.fst \
 Flag.fst \
@@ -136,8 +141,6 @@ C.fst \
 C.Loops.fst \
 Hacl.Endianness.fst \
 Hacl.Lib.LoadStore32.fst \
-Spec.Loops.fst \
-Spec.Lib.fst \
 Spec.CTR.fst \
 Spec.Chacha20.fst \
 Hacl.Impl.Chacha20.fst \

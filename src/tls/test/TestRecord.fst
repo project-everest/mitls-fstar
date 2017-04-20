@@ -26,8 +26,8 @@ private let mk_id13 aeAlg =
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx = CommonDH.keygen g in
   let gy, gxy = CommonDH.dh_responder #g gx in
-  let hsId = HSID_DHE (EarlySalt (NoPSK hash_alg)) g (CommonDH.pubshare gx) gy in
-  let asId = ASID (HandshakeSalt hsId) in
+  let hsId = HSID_DHE (Salt (EarlySecretID (NoPSK hash_alg))) g (CommonDH.pubshare gx) gy in
+  let asId = ASID (Salt (HandshakeSecretID hsId)) in
   let cr = CoreCrypto.random 32 in
   let sr = CoreCrypto.random 32 in
   let logInfo = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg; li_sh_hash = hash_alg; li_sh_psk = None; }) in

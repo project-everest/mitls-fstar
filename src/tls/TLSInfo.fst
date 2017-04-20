@@ -522,8 +522,7 @@ and pre_asId =
   | ASID: pre_saltId -> pre_asId
 
 and pre_saltId =
-  | EarlySalt: pre_esId -> pre_saltId
-  | HandshakeSalt: pre_hsId -> pre_saltId
+  | Salt: pre_secretId -> pre_saltId
 
 and pre_secretId =
   | EarlySecretID: pre_esId -> pre_secretId
@@ -586,8 +585,7 @@ and asId_hash = function
   | ASID i -> saltId_hash i
 
 and saltId_hash = function
-  | EarlySalt i -> esId_hash i
-  | HandshakeSalt i -> hsId_hash i
+  | Salt i -> secretId_hash i
 
 and secretId_hash = function
   | EarlySecretID i -> esId_hash i
@@ -657,8 +655,7 @@ type valid (i:pre_index) =
     | ASID i -> registered (I_SALT i))
   | I_SALT i ->
     (match i with
-    | EarlySalt i -> registered (I_ES i)
-    | HandshakeSalt i -> registered (I_HS i))
+    | Salt i -> registered (I_SECRET i))
   | I_SECRET i ->
     (match i with
     | EarlySecretID i -> registered (I_ES i)

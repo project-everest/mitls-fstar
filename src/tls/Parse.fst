@@ -1,3 +1,6 @@
+(*--build-config
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
+--*)
 module Parse
 
 open FStar.All
@@ -156,7 +159,7 @@ let z3kill = 0xFFz
 (** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
-  | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z})
+  | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z /\ b <> 0x1dz /\ b <> 0x1ez})
   | FFDHE of ffdhe
   | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = z3kill})
   | ECDHE_PRIVATE_USE of byte
@@ -178,6 +181,8 @@ let namedGroupBytes ng =
     | ECC_P256		-> abyte2 (0x00z, 0x17z)
     | ECC_P384		-> abyte2 (0x00z, 0x18z)
     | ECC_P521		-> abyte2 (0x00z, 0x19z)
+    | ECC_X25519  -> abyte2 (0x00z, 0x1dz)
+    | ECC_X448    -> abyte2 (0x00z, 0x1ez)
     end
   | EC_UNSUPPORTED b	-> abyte2 (0x00z, b)
   | FFDHE dhe ->
@@ -200,6 +205,8 @@ let parseNamedGroup b =
   | (0x00z, 0x17z) -> Correct (SEC ECC_P256)
   | (0x00z, 0x18z) -> Correct (SEC ECC_P384)
   | (0x00z, 0x19z) -> Correct (SEC ECC_P521)
+  | (0x00z, 0x1dz) -> Correct (SEC ECC_X25519)
+  | (0x00z, 0x1ez) -> Correct (SEC ECC_X448)
   | (0x00z, b)     -> Correct (EC_UNSUPPORTED b) // REMARK: only values 0x01z-0x16z and 0x1Az-0x1Ez are assigned
   | (0x01z, 0x00z) -> Correct (FFDHE FFDHE2048)
   | (0x01z, 0x01z) -> Correct (FFDHE FFDHE3072)

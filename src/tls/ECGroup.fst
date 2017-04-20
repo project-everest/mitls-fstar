@@ -1,7 +1,7 @@
 (*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
 --*)
-﻿module ECGroup
+module ECGroup
 
 open FStar.HyperStack
 open Platform.Bytes
@@ -14,14 +14,24 @@ open FStar.ST
 type group = CoreCrypto.ec_curve
 type params = CoreCrypto.ec_params
 
-type keyshare (g:group) = k:CoreCrypto.ec_key {
-   Some? k.ec_priv /\ k.ec_params.curve = g /\
-   length k.ec_point.ecx = ec_bytelen g /\
-   length k.ec_point.ecy = ec_bytelen g}
+type keyshare (g:group) =
+  (match g with
+  | ECC_X25519 -> Curve25519.keyshare
+  | ECC_X448 -> (pub:lbytes 56 * priv:lbytes 56)
+  | _ -> // NIST curves
+    k:CoreCrypto.ec_key {
+      Some? k.ec_priv /\ k.ec_params.curve = g /\
+      length k.ec_point.ecx = ec_bytelen g /\
+      length k.ec_point.ecy = ec_bytelen g
+    })
 
 type share (g:group) =
-  p:CoreCrypto.ec_point{
-    length p.ecx = ec_bytelen g /\ length p.ecy = ec_bytelen g}
+  (match g with
+  | ECC_X25519 -> Curve25519.point
+  | ECC_X448 -> lbytes 56
+  | _ -> p:CoreCrypto.ec_point{
+     length p.ecx = ec_bytelen g /\
+     length p.ecy = ec_bytelen g})
 
 type secret (g:group) = bytes
 
@@ -39,28 +49,58 @@ val params_of_group: group -> bool -> Tot params
 let params_of_group c compression = {curve = c; point_compression = compression}
 
 val pubshare: #g:group -> keyshare g -> Tot (share g)
-let pubshare #g k = k.ec_point
+let pubshare #g k =
+  match g with
+  | ECC_X25519 ->
+    let s:share g = Curve25519.pubshare k in s
+  | ECC_X448 ->
+    let (p,s) : (lbytes 56 * lbytes 56) = k in
+    p
+  | _ -> k.ec_point
 
 val keygen: g:group -> ST (keyshare g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let keygen g =
-  let params = params_of_group g false in
-  ec_gen_key params
+  match g with
+  | ECC_X25519 -> Curve25519.keygen ()
+  | ECC_X448 ->
+    let s = CoreCrypto.random 56 in
+    let p = CoreCrypto.random 56 in
+    (p, s)
+  | _ ->
+    let params = params_of_group g false in
+    ec_gen_key params
 
 val dh_responder: #g:group -> s:share g -> ST (keyshare g * secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_responder #g gx =
   let gy = keygen g in
-  let shared = ecdh_agreement gy gx in
-  gy, shared
+  match g with
+  | ECC_X25519 ->
+    let (p,s) : Curve25519.keyshare = gy in
+    let shared = Curve25519.mul s gx in
+    (gy, shared)
+  | ECC_X448 ->
+    let (p,s) : lbytes 56 * lbytes 56 = gy in
+    (gy, s) // FAKE ! LEAKS SECRET !
+  | _ ->
+    let shared = ecdh_agreement gy gx in
+    gy, shared
 
 val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> ST (secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_initiator #g gx gy =
-  ecdh_agreement gx gy
+  match g with
+  | ECC_X25519 ->
+    let (p,s) : Curve25519.keyshare = gx in
+    Curve25519.mul s gy
+  | ECC_X448 ->
+    let (p,s) : lbytes 56 * lbytes 56 = gx in
+    s
+  | _ -> ecdh_agreement gx gy
 
 val parse_curve: bytes -> Tot (option group)
 let parse_curve b =
@@ -71,6 +111,8 @@ let parse_curve b =
       | (0z, 23z) -> Some (ECC_P256)
       | (0z, 24z) -> Some (ECC_P384)
       | (0z, 25z) -> Some (ECC_P521)
+      | (0z, 29z) -> Some (ECC_X25519)
+      | (0z, 30z) -> Some (ECC_X448)
       | _ -> None
     else None
   else None
@@ -80,20 +122,30 @@ let curve_id g =
   abyte2 (match g with
   | ECC_P256 -> (0z, 23z)
   | ECC_P384 -> (0z, 24z)
-  | ECC_P521 -> (0z, 25z))
+  | ECC_P521 -> (0z, 25z)
+  | ECC_X25519 -> (0z, 29z)
+  | ECC_X448 -> (0z, 30z))
 
 val parse_point: g:group -> bytes -> Tot (option (share g))
 let parse_point g b =
-  let clen = ec_bytelen g in
-  if length b = (op_Multiply 2 clen) + 1 then
-    let (et, ecxy) = split b 1 in
-    match cbyte et with
-    | 4z ->
-      let (x,y) = split ecxy clen in
-      let e : share g = {ecx = x; ecy = y;} in
-      if CoreCrypto.ec_is_on_curve (params_of_group g false) e then Some e else None
-    |_ -> None
-  else None
+  match g with
+  | ECC_X448 ->
+    if length b = 56 then let p : lbytes 56 = b in Some p
+    else None
+  | ECC_X25519 ->
+    if length b = 32 then let p : lbytes 32 = b in Some p
+    else None
+  | _ ->
+    let clen = ec_bytelen g in
+    if length b = (op_Multiply 2 clen) + 1 then
+      let (et, ecxy) = split b 1 in
+      match cbyte et with
+      | 4z ->
+        let (x,y) = split ecxy clen in
+        let e : share g = {ecx = x; ecy = y;} in
+        if CoreCrypto.ec_is_on_curve (params_of_group g false) e then Some e else None
+      |_ -> None
+    else None
 
 val parse_partial: bytes -> Tot (result ((g:group & share g) * bytes))
 let parse_partial payload =
@@ -113,13 +165,19 @@ let parse_partial payload =
 open FStar.Mul
 
 (* Assumes uncompressed point format for now (04||ecx||ecy) *)
-val serialize_point: #g:group -> e:share g -> Tot (b:bytes{length b = 2*ec_bytelen g + 1})
+val serialize_point: #g:group -> e:share g -> Tot (b:bytes{length b <= 255})
 let serialize_point #g e =
-  let pc = abyte 4z in
-  let x = pc @| e.ecx @| e.ecy in
-  x
+  match g with
+  | ECC_X25519 ->
+    let p:lbytes 32 = e in p
+  | ECC_X448 ->
+    let p:lbytes 56 = e in p
+  | _ ->
+    let pc = abyte 4z in
+    let x = pc @| e.ecx @| e.ecy in
+    x
 
-val serialize: #g:group -> e:share g -> Tot (b:bytes{length b = 2*ec_bytelen g + 5})
+val serialize: #g:group -> e:share g -> Tot (b:bytes{length b <= 259})
 let serialize #g ecdh_Y =
   let ty = abyte 3z in
   let id = curve_id g in

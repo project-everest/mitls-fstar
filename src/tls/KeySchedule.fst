@@ -153,18 +153,21 @@ private let zH h : St (Hashing.Spec.tag h) =
   Hashing.compute h zeroes
 
 // Resumption context
-let esId_rc (i:esId)  =
-  match i with
-//  | ResumptionPSK i ->
-//    let (_, rc, _, _) = Some.v (MM.sel res_psk_table i) in rc
-  | ApplicationPSK _ _ -> zH (esId_hash i)
+let rec esId_rc : (esId -> St bytes) =
+  function
+  | NoPSK h -> zH h
 
-let hsId_rc : _ -> St bytes  = function
-  | HSID_DHE (EarlySalt i) _ _ _ -> esId_rc i
-  | HSID_PSK (EarlySalt i) -> esId_rc i
+and hsId_rc : (hsId -> St bytes) = function
+  | HSID_DHE (Salt i) _ _ _ -> secretId_rc i
+  | HSID_PSK (Salt i) -> secretId_rc i
 
-let asId_rc : _ -> St bytes  = function
-  | ASID (HandshakeSalt i) -> hsId_rc i
+and asId_rc : (asId -> St bytes) = function
+  | ASID (Salt i) -> secretId_rc i
+
+and secretId_rc : (secretId -> St bytes) = function
+  | EarlySecretID i -> esId_rc i
+  | HandshakeSecretID i -> hsId_rc i
+  | ApplicationSecretID i -> asId_rc i
 
 // miTLS 0.9:
 // ==========
@@ -259,7 +262,7 @@ type ks_state =
  *)
 type ks =
 | KS: #region:rid -> state:(ref ks_state){HS.MkRef?.id state = region} -> ks
-//17-04-17 CF: expose it as a concrete ref? 
+//17-04-17 CF: expose it as a concrete ref?
 //17-04-17 CF: no need to keep the region, already in the ref.
 
 // Extract keys and IVs from a derived 1.3 secret
@@ -519,7 +522,7 @@ let ks_server_13_0rtt_init ks cr esId hashed_log cs (|g,gx|) =
   let early_d = StAEInstance r rw in
 
   let gy, gxy = CommonDH.dh_responder gx in
-  let hsId = HSID_DHE (EarlySalt esId) g gx gy in
+  let hsId = HSID_DHE (Salt secretId) g gx gy in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   st := S (S_13_wait_SH (ae, h) cr sr (Some (| esId, es |)) (Some (| efId, cfk0 |)) (| hsId, hs |));
   early_d, gy
@@ -559,7 +562,7 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   let CipherSuite _ _ (AEAD ae h) = cs in
   let gy, gxy = CommonDH.dh_responder gx in
   let esId = NoPSK h in
-  let hsId = HSID_DHE (EarlySalt esId) g gx gy in
+  let hsId = HSID_DHE (Salt (EarlySecretID esId)) g gx gy in
   let hL = hashSize h in
   let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
   let es = HKDF.hkdf_extract h zeroes zeroes in
@@ -615,7 +618,7 @@ let ks_server_13_sh ks hashed_log =
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk1 in
 
   // Replace handshake secret with application master secret
-  let amsId = ASID (HandshakeSalt hsId) in
+  let amsId = ASID (Salt secretId) in
   let ams : ams amsId = HKDF.hkdf_extract h hs zeroes in
 
   st := S (S_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
@@ -783,7 +786,7 @@ let ks_client_13_sh ks sr cs hashed_log (| g, gy|) accept_ed =
     | _ -> NoPSK h, HKDF.hkdf_extract h zeroes zeroes
   in
 
-  let hsId = HSID_DHE (EarlySalt esId) g gx gy in
+  let hsId = HSID_DHE (Salt (EarlySecretID esId)) g gx gy in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   let secretId = HandshakeSecretID hsId in
   let loginfo = LogInfo_SH ({
@@ -808,7 +811,7 @@ let ks_client_13_sh ks sr cs hashed_log (| g, gy|) accept_ed =
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk in
 
   // Application master secret
-  let asId = ASID (HandshakeSalt hsId) in
+  let asId = ASID (Salt secretId) in
   let ams : ams asId = HKDF.hkdf_extract h hs zeroes in
 
   let id = ID13 (KeyID expandId HandshakeKey Client loginfo hashed_log) in
