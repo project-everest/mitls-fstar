@@ -17,8 +17,6 @@ module TI = TLSInfo
  Define extension. 
  *************************************************)
 
-type obfuscated_ticket_age = lbytes 4  // should it be UInt32? 
-
 (** RFC 4.2 'Extension' Table's type definition. *)
 noeq type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
@@ -51,8 +49,8 @@ and extension =
   | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
 
-  // this is the truncated one
-  | E_pre_shared_key of list (PSK.preSharedKey * obfuscated_ticket_age)  (* M, AF *)
+  // this is the truncated PSK extension, without the list of binder tags.
+  | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)  (* M, AF *)
 (*| E_psk_key_exchange_modes *)
   | E_early_data of earlyDataIndication
   | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
