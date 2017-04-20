@@ -31,8 +31,12 @@ type resumption_offer_12 = // part of resumeInfo
   | OfferSid of b:bytes { length b <> 0 }
 // type resumption_mode_12 (o: resumption_offer_12) = b:bool { OfferNothing? o ==> b = false }
 
+let valid_offer ch = 
+  True
+
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
-type offer =
+type offer = ch:HandshakeMessages.ch { valid_offer ch }
+(*
   | Offer:
     co_protocol_version: protocolVersion ->
     co_cipher_suites: (k:valid_cipher_suites{List.Tot.length k < 256}) ->
@@ -43,10 +47,17 @@ type offer =
     co_safe_renegotiation: bool ->
     co_resume: option sessionID ->
     // Each tag between 32 and 255 bytes, and the total length is < 2^16
+    // We need a timestamp too, for obfuscated_ticket_age
     co_psks: list (PSK.pskIdentity * Hashing.anyTag) ->
     co_client_shares: list (g:CommonDH.group & CommonDH.share g) ->
     co_client_random: TLSInfo.random ->
     offer
+*)    
+
+type retryInfo (offer:offer) =
+  hrr *
+  (list (g:CommonDH.group & CommonDH.share g)) *
+  (list (PSK.pskIdentity * Hashing.anyTag))
 
 // The final negotiated outcome, including key shares and long-term identities.
 // mode is the name used in the resilience paper;
@@ -57,10 +68,7 @@ type mode =
     n_offer: offer ->
 
     // Optional HRR (including cookie and overwritten part of initial offer)
-    n_hrr: option
-      (hrr *
-       (list (g:CommonDH.group & CommonDH.share g)) *
-       (list (PSK.pskIdentity * Hashing.anyTag))) ->
+    n_hrr: option (retryInfo n_offer) ->
 
     // more from SH (both TLS 1.2 and TLS 1.3)
     n_server_random: option TLSInfo.random ->
@@ -70,13 +78,14 @@ type mode =
     n_psk: option PSK.pskid -> // none with 1.2 (we are not doing PSK 1.2)
     n_sessionID: option sessionID -> // optional, proposed 1.2 id for *future* resumptions (not always what SH carries)
 
-    n_protocol_version: option protocolVersion ->
-    n_kexAlg: option TLSConstants.kexAlg ->
-    n_aeAlg: option TLSConstants.aeAlg ->
-    n_sigAlg: option TLSConstants.sigAlg ->
-    n_cipher_suite: option cipherSuite ->
-    n_extensions: option negotiatedExtensions ->
-    n_scsv: option (list scsv_suite) ->
+    n_protocol_version: protocolVersion ->
+    n_kexAlg: TLSConstants.kexAlg ->
+    n_aeAlg: TLSConstants.aeAlg ->
+    n_sigAlg: TLSConstants.sigAlg ->
+    n_cipher_suite: cipherSuite ->
+    n_extensions: negotiatedExtensions ->
+    n_server_extensions: (se:list extension{List.Tot.length se < 256}) ->
+    n_scsv: list scsv_suite ->
 
     // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
     n_server_share: option (g:CommonDH.group & CommonDH.share g) ->
@@ -90,56 +99,65 @@ type mode =
     // This is the share selected
     n_client_share: option (g:CommonDH.group & CommonDH.share g) ->
     // { both shares are in the same negotiated group }
+    mode
 
 
-type negotiationState =
+type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
   | C_Init:     n_client_random: TLSInfo.random ->
-                negotiationState
-
+                negotiationState r cfg resume
+                
   | C_Offer:    n_offer: offer ->
-                negotiationState
+                negotiationState r cfg resume
 
-  | C_HRR:
+  | C_HRR:      n_offer: offer ->
+                n_hrr: retryInfo n_offer ->
+                negotiationState r cfg resume
+
+  | C_WaitFinished1:
+                n_offer: offer ->
+                (* Here be fields of mode -> *)
+                negotiationState r cfg resume
 
   | C_Mode:     n_mode: mode -> // In 1.2, used for resumption and full handshakes
-                negotiationState
+                negotiationState r cfg resume
 
   | C_WaitFinished2: // Only 1.2
                 n_mode: mode ->
                 n_client_certificate: option Cert.chain ->
-                negotiationState
+                negotiationState r cfg resume
 
   | C_Complete: n_mode: mode ->
                 n_client_certificate: option Cert.chain ->
-                negotiationState
+                negotiationState r cfg resume
 
   | S_Init:     n_server_random: TLSInfo.random ->
-                negotiationState
+                negotiationState r cfg resume
+
+  // Waiting for ClientHello2
+  | S_HRR:      n_offer: offer ->
+                n_hrr: hrr ->
+                negotiationState r cfg resume
 
   // This state is used to wait for both Finished1 and Finished2
   | S_Mode:     n_mode: mode -> // If 1.2, then client_share is None
-                negotiationState
+                negotiationState r cfg resume
 
   | S_Complete: n_mode: mode ->
                 n_client_certificate: option Cert.chain ->
-                negotiationState
+                negotiationState r cfg resume
 
 
-let clientState (ns:negotiationState) = 
-  match ns with
-  | C_Offer _ 
-  | C_Mode _ _ _ 
-  | C_Complete _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> true
-  | _ -> false
-  
-
-val ns_rel: MR.reln negotiationState
-let ns_rel ns ns' =
+let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r) : MR.reln (negotiationState r cfg resume) = 
+  fun ns ns' ->
   match ns, ns' with
+  | C_Init nonce, C_Init nonce' -> nonce == nonce'
   | C_Offer offer, C_Offer offer' -> offer == offer'
+  | C_Init nonce, C_Offer offer -> nonce == 
+  
   | C_Offer offer, C_Mode offer' sr pv -> offer == offer' // /\ pv ...
   | _, _ -> True
+
 
 noeq type t (region:rgn) (role:TLSConstants.role) =
   | NS:
@@ -148,8 +166,7 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
-val computeOffer: cfg:config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
-   ->  -> offer
+val computeOffer: cfg:config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random -> (* ... *) offer
 let computeOffer cfg resume nonce ks psks =
   {
       co_protocol_version   = cfg.maxVer;
@@ -162,6 +179,11 @@ let computeOffer cfg resume nonce ks psks =
       co_resume             = fst resume;
       co_psks               = snd resume
    }
+
+(*
+val clientHello_offer:
+val offer_ClientHello:
+*)
 
 val create:
   region:rgn -> r:role -> cfg:TLSInfo.config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
