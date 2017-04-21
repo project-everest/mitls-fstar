@@ -73,7 +73,7 @@ noeq type mode =
     n_hrr: option (retryInfo n_offer) ->
 
     // more from SH (both TLS 1.2 and TLS 1.3)
-    n_server_random: option TLSInfo.random ->
+    n_server_random: TLSInfo.random ->
 
     // the resumption response
     n_resume: option bool -> // is this a 1.2 resumption with the offered sid?
@@ -242,6 +242,8 @@ let version #region #role nego =
 
 (* CLIENT *)
 
+assume val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> offer
+
 // Checks that the protocol version in the CHELO message is
 // within the range of versions supported by the server configuration
 // and outputs the negotiated version if true
@@ -332,6 +334,7 @@ assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region
 //HS
 assume val server_ClientHello: #region:rgn -> #role:TLSConstants.role -> t region role ->
   HandshakeMessages.ch ->
+  sessionID -> 
   St (result mode)
 
 //17-03-30 still missing a few for servers.

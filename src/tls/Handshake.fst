@@ -253,12 +253,11 @@ let sigHashAlg_of_ske signature =
    | Error _ -> None
   else None
 
-(* 17-04-21 now just Nego.n_extensions.ne_signature_algorithms? 
-let sig_algs (mode: Negotiation.mode) (sh_alg: TLSConstants.sigAlg) 
+let sig_algs (mode: Negotiation.mode) (sh_alg: TLSConstants.hashAlg) 
  =
   // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
   // If no signature nego took place we use the SA and KDF hash from the CS
-  let Some sa = mode.Nego.n_sigAlg in
+  let sa = mode.Nego.n_sigAlg in
   let algs =
     match mode.Nego.n_extensions.TLSInfo.ne_signature_algorithms with
     | Some l -> l
@@ -270,10 +269,10 @@ let sig_algs (mode: Negotiation.mode) (sh_alg: TLSConstants.sigAlg)
     | [] -> (sa, sh_alg) in
   let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
   (a, sa, ha)
-*)
 
 (* ------- Pure functions between offer/mode and their message encodings -------- *)
 
+(*
 let clientHello offer = // pure; shared by Client and Server
   let sid =
     match offer.co_resume with
@@ -299,79 +298,80 @@ let clientHello offer = // pure; shared by Client and Server
     ch_raw_cipher_suites = None;
     ch_compressions = offer.co_compressions;
     ch_extensions = Some ext } 
-
+*)
 
 (* -------------------- Handshake Client ------------------------ *)
 
-val client_ClientHello: hs -> i:id -> ST (result (Handshake.Log.outgoing i))
+val client_ClientHello: s:hs -> i:id -> ST (result (Handshake.Log.outgoing i))
   (requires fun h0 ->
-    let k = HyperStack.sel h0 hs.ks.KeySchedule.state in
-    let n = HyperStack.sel h0 hs.nego in 
-    let t = transcript h0 hs.log in 
+    let n = MR.m_sel h0 Nego.(s.nego.state) in 
+    let t = transcript h0 s.log in 
+    let k = HyperStack.sel h0 s.ks.KeySchedule.state in
     match n with 
-    | Nego.C_Init nonce -> k = KeySchedule.C_Init nonce /\ t = []
+    | Nego.C_Init nonce -> k = KeySchedule.(C (C_Init nonce)) /\ t = []
     | _ -> False )
   (ensures fun h0 r h1 ->
-    let n = HyperStack.sel h1 hs.nego in 
-    let t = transcript h0 hs.log in 
+    let n = MR.m_sel h0 Nego.(s.nego.state) in 
+    let t = transcript h0 s.log in 
+    let k = HyperStack.sel h1 s.ks.KeySchedule.state in
     ( Correct? r ==> 
-      ( Nego.C_Offer? n /\ (
-        let offer = Nego.C_Offer?.n_offer n in 
-        ( if n.Nego.ch_protocol_version = TLS_1p3 
-          then k == KeySchedule.C_13_Wait_SH offer.ch_client_random es cfk0
-          else k == KeySchedule.C_12_Full_CH offer.ch_client_random) /\
-        t = [ClientHello (Nego.C_Offer?.offer n)]  ))))
+      ( match n with 
+        | Nego.C_Offer offer -> (
+          ( if offer.ch_protocol_version = TLS_1p3 
+            then k = KeySchedule.(C(C_13_wait_SH offer.ch_client_random (admit() (*es*)) None(*?*) (Nego.gs_of offer)))
+            else k = KeySchedule.(C(C_12_Full_CH offer.ch_client_random))) /\
+          t = [ClientHello offer] )
+        | _ -> False )))
 
 let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
   let shares =
-    match config.maxVer  with
+    match (config_of hs).maxVer  with
       | TLS_1p3 -> (* compute shares for groups in offer *)
         // TODO get binder keys too
-        let gx = KeySchedule.ks_client_13_1rtt_init hs.ks config.nameGroups in
+        let gx = KeySchedule.ks_client_13_1rtt_init hs.ks (config_of hs).namedGroups in
         Some gx
       | _ ->
         let si = KeySchedule.ks_client_12_init hs.ks in  // we may need si to carry looked up PSKs
         None
     in
-  let offer = Nego.clientOffer hs.nego shares in (* compute offer from configuration *)
+  let offer = Nego.client_ClientHello hs.nego shares in (* compute offer from configuration *)
   Handshake.Log.send hs.log (ClientHello offer);  // TODO decompose in two steps, appending the binders
   hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
   Correct(Handshake.Log.next_fragment hs.log i)
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
-let client_ServerHello hs sh digest =
+let client_ServerHello (s:hs) (sh:sh) (digest:Hashing.anyTag) : St incoming =
   trace "Processing ServerHello";
-  match Nego.client_ServerHello hs.nego sh with
+  match Nego.client_ServerHello s.nego sh with
   | Error z -> InError z
   | Correct mode ->
-    let open Nego in
-    match mode.n_protocol_version, mode.n_kexAlg with
+    match mode.Nego.n_protocol_version, mode.Nego.n_kexAlg with
     | TLS_1p3, Kex_DHE //, Some gy
     | TLS_1p3, Kex_ECDHE //, Some gy
     ->
       begin
         trace "Running TLS 1.3";
-        let hs_keys = KeySchedule.ks_client_13_sh hs.ks
-          mode.n_server_random
-          mode.n_cipher_suite
+        let hs_keys = KeySchedule.ks_client_13_sh s.ks
+          mode.Nego.n_server_random
+          mode.Nego.n_cipher_suite
           digest
-          (Some?.v mode.n_server_share)
+          (Some?.v mode.Nego.n_server_share)
           false (* in case we provided PSKs earlier, ignore them from now on *)
           in
-        register hs hs_keys; // register new epoch
-        hs.state := C_Wait_Finished1;
-        Epochs.incr_reader hs.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
+        register s hs_keys; // register new epoch
+        s.state := C_Wait_Finished1;
+        Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
       end
     | TLS_1p3, _ -> InError(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unsupported group negotiated")
     | _, _ ->
       begin
         trace "Running TLS classic";
-        hs.state := C_Wait_ServerHelloDone;
+        s.state := C_Wait_ServerHelloDone;
         InAck false false
       end
 
@@ -386,7 +386,6 @@ val client_ServerHelloDone:
   (ensures (fun h0 i h1 -> True))
 let client_ServerHelloDone hs c ske ocr =
     trace "Processing ...ServerHelloDone";
-    let open Nego in
     match Nego.client_ServerKeyExchange hs.nego c ske ocr with
     | Error z -> InError z
     | Correct mode -> (
@@ -484,15 +483,16 @@ let server_ServerHelloDone hs =
     | None -> List.Tot.choose
         // Cannot use an elliptic curve if SupportedGroups is missing in TLS<=1.2
         (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
-        mode.Nego.n_offer.Nego.co_namedGroups in
+        (config_of hs).namedGroups in
 
   match ngroups with
   | [] -> InError (AD_handshake_failure,
      perror __SOURCE_FILE__ __LINE__ "no shared supported group")
   | g::_ ->
    begin
+    let cr = mode.Nego.n_offer.ch_client_random in 
     let gy = KeySchedule.ks_server_12_init_dh hs.ks
-      mode.Nego.n_client_random
+      cr
       mode.Nego.n_protocol_version
       mode.Nego.n_cipher_suite
       mode.Nego.n_extensions.ne_extended_ms
@@ -501,7 +501,7 @@ let server_ServerHelloDone hs =
     let kex_s = KEX_S_DHE gy in
     let tbs =
       let sv = kex_s_to_bytes kex_s in
-      let csr = mode.Nego.n_client_random @| mode.Nego.n_server_random in
+      let csr = cr @| mode.Nego.n_server_random in
       to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
 
     // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
@@ -524,25 +524,28 @@ let server_ServerHelloDone hs =
       end
    end
 
+assume val serverHello: TLSInfo.random -> Negotiation.mode -> sh
+
 (* receive ClientHello, and choose a protocol version and mode *)
 val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer =
     trace "Processing ClientHello";
-    match Nego.server_ClientHello hs.nego offer with
+    let sid = CoreCrypto.random 32 (* always? discard in 1.3? *) in
+    match Nego.server_ClientHello hs.nego offer sid with
     | Error z -> InError z
     | Correct mode -> (
       let server_share =
         match mode.Nego.n_protocol_version, mode.Nego.n_client_share  with
-        | TLS_1p3, Some  (| g, gx |) -> Some (KeySchedule.ks_server_13_1rtt_init hs.ks ch.ch_client_random mode.Nego.n_cipher_suite g gx )
+        | TLS_1p3, Some  (| g, gx |) -> Some (KeySchedule.ks_server_13_1rtt_init hs.ks offer.ch_client_random mode.Nego.n_cipher_suite g gx )
         | _ -> None in
       (* Extensions:negotiateServerExtensions *)
       match Extensions.negotiateServerExtensions
         mode.Nego.n_protocol_version
-        ch.ch_extensions
-        offer.Nego.co_cipher_suites
-        (Nego.local_config hs.nego)
+        offer.ch_extensions
+        offer.ch_cipher_suites
+        (config_of hs)
         mode.Nego.n_cipher_suite
         None (*Nego.resume hs.nego *)
         server_share
@@ -550,14 +553,9 @@ let server_ClientHello hs offer =
       with
         | Error z -> InError z
         | Correct sext -> (
-          let sid = Some (CoreCrypto.random 32) (* always?? should be recorded in mode *) in
-          let msg = serverHello (Nego.nonce hs.nego) mode in 
+          let msg = serverHello (nonce hs) mode in 
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-          let digestServerHello = Handshake.Log.send_tag #ha hs.log msg in
-
-          let mode = // should be directly returned by Nego? updating: n_sessionID, n_server_share, what else?
-          { mode with Nego.n_sessionID = sid; } in
-
+          let digestServerHello = Handshake.Log.send_tag #ha hs.log (ServerHello msg) in
           if mode.Nego.n_protocol_version = TLS_1p3
           then (
             trace "Derive handshake keys";
@@ -754,7 +752,7 @@ let recv_fragment (hs:hs) #i rg f =
       | _, None -> InAck false false // nothing happened
 
       | C_Idle, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
-      | C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
+      | C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest 
       | C_Wait_ServerHelloDone, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert]) ->
           // assert (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
           client_ServerHelloDone hs c ske None
