@@ -37,7 +37,7 @@ val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
-let print s = discard (IO.debug_print_string ("HS| "^s^"\n"))
+let print s = discard (IO.debug_print_string ("TLS| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -682,7 +682,7 @@ let rec writeHandshake h_init c new_writer =
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
   let wopt = current_writer c i in
-  trace ("CALL writeHandshake (wopt = "^(if None? wopt then "None" else "Some"));
+  trace ("CALL writeHandshake (wopt = "^(if None? wopt then "None)" else "Some)"));
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Error (ad,reason) -> sendAlert c ad reason

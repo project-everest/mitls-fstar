@@ -36,7 +36,7 @@ val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
-let print s = discard (IO.debug_print_string ("HS| "^s^"\n"))
+let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -337,9 +337,11 @@ let client_ClientHello hs i =
       | TLS_1p3 -> (* compute shares for groups in offer *)
         // TODO get binder keys too
         let gx = KeySchedule.ks_client_13_1rtt_init hs.ks (config_of hs).namedGroups in
+        trace "offering ClientHello 1.3";
         Some gx
       | _ ->
         let si = KeySchedule.ks_client_12_init hs.ks in  // we may need si to carry looked up PSKs
+        trace "offering ClientHello 1.2";
         None
     in
   let offer = Nego.client_ClientHello hs.nego shares in (* compute offer from configuration *)
@@ -745,6 +747,7 @@ let invalidateSession hs = ()
 let next_fragment (hs:hs) i =
     trace "next_fragment";
     let outgoing = Handshake.Log.next_fragment hs.log i in
+    trace "match outgoing";
     match outgoing, !hs.state with
     // when the output buffer is empty, we send extra messages in two cases
     // we prepare the initial ClientHello; or
