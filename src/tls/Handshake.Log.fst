@@ -22,12 +22,12 @@ module HS = FStar.HyperStack
 (* A flag for runtime debugging of handshakelog data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-inline_for_extraction let hsl_debug = false
+inline_for_extraction let hsl_debug = true
 val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
-let print s = discard (IO.debug_print_string ("HSL| "^s))
+let print s = discard (IO.debug_print_string ("HSL| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -185,6 +185,7 @@ let getHash #ha (LOG #reg st) =
 
 (* SEND *)
 let send l m =
+  trace ("send "^HandshakeMessages.string_of_handshakeMessage m);
   let st = !l in
   let mb = handshakeMessageBytes st.pv m in
   let h : hashState st.transcript (st.parsed @ [m]) =
@@ -200,7 +201,14 @@ let send l m =
   l := State t o st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
                 st.incoming st.parsed h st.pv st.kex st.dh_group
 
+let hash_tag #a l = 
+  let st = !l in
+  match st.hashes with
+  | FixedHash a acc hl -> Hashing.finalize #a acc 
+
+// maybe just compose the two functions above?
 let send_tag #a l m =
+  trace ("emit "^HandshakeMessages.string_of_handshakeMessage m^" and hash");
   let st = !l in
   let mb = handshakeMessageBytes st.pv m in
   let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) = 
@@ -243,20 +251,20 @@ let send_signals l outgoing_next_keys1 outgoing_complete1 =
 
 let next_fragment l (i:id) =
   let st = !l in
-  let out_msg,rem =
+  let out_msg, rem =
     let o = st.outgoing in
     let lo = length o in
-    if (lo = 0) then 
-       (None,None)
+    if lo = 0 then 
+       (None, None)
     else
     if (lo <= max_TLSPlaintext_fragment_length) then
       let rg = (lo, lo) in
-      (Some (| rg, o |),None)
+      (Some (| rg, o |), None)
     else
       let (x,y) = split o max_TLSPlaintext_fragment_length in
       let lx = length x in
       let rg = (lx, lx) in
-      (Some (| rg, x |),Some y)
+      (Some (| rg, x |), Some y)
   in  
     match rem with
     | None -> 
@@ -289,10 +297,13 @@ let rec parseHandshakeMessages pvo kexo buf =
       (match parseHandshakeMessage pvo kexo hstype pl with
        | Error z -> Error z
        | Correct hsm ->
-              if (eoflight hsm) then Correct(true,rem,[hsm],[to_log]) else
-             (match parseHandshakeMessages pvo kexo rem with
-             | Error z -> Error z
-             | Correct (b,r,hl,bl) -> Correct (b,r,hsm::hl,to_log::bl)))
+           trace ("parse "^HandshakeMessages.string_of_handshakeMessage hsm);
+           if eoflight hsm 
+           then Correct(true,rem,[hsm],[to_log]) 
+           else
+           ( match parseHandshakeMessages pvo kexo rem with
+              | Error z -> Error z
+              | Correct (b,r,hl,bl) -> Correct (b,r,hsm::hl,to_log::bl)))
 
 val hashHandshakeMessages : t: erased_transcript ->
               p: list msg ->
@@ -330,21 +341,23 @@ let receive l mb =
                  r st.parsed st.hashes st.pv st.kex st.dh_group;
        Some ([],[])
   | Correct(eof,r,ml,bl) ->
-       let hs = hashHandshakeMessages st.transcript st.parsed st.hashes ml bl in
-       if eof then 
-         let ml = st.parsed @ ml in
-   let nt = append_hs_transcript st.transcript ml in
-         let (hs,tl) : (hashState nt [] * list anyTag) = (match hs with
-      | FixedHash a ac htl -> FixedHash a ac [], htl
-      | OpenHash _ -> hs,[]) in
-         l := State nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+      let hs = hashHandshakeMessages st.transcript st.parsed st.hashes ml bl in
+      if eof then 
+        let ml = st.parsed @ ml in
+        let nt = append_hs_transcript st.transcript ml in
+        let (hs,tl) : hashState nt [] * list anyTag = 
+          match hs with
+          | FixedHash a ac htl -> FixedHash a ac [], htl
+          | OpenHash _ -> hs,[] in
+        l := State 
+                  nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
                   r [] hs st.pv st.kex st.dh_group;
-         Some (ml,tl)
-       else 
-         let ml = st.parsed @ ml in
-         l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+        Some (ml,tl)
+      else 
+        let ml = st.parsed @ ml in
+        l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
                   r ml hs st.pv st.kex st.dh_group;
-         Some ([],[])
+        Some ([],[])
  
 
 

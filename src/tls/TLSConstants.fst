@@ -97,6 +97,11 @@ type aeAlg =
   | MtE: encAlg -> hash_alg -> aeAlg
   | AEAD: aeadAlg -> hash_alg -> aeAlg  // the hash algorithm is for the ciphersuite; it is not used by the record layer.
 
+let aeAlg_hash = function 
+  | MACOnly ha -> ha
+  | MtE _ ha -> ha
+  | AEAD _ ha -> ha
+  
 (** Determine if this algorithm provide padding support with TLS 1.2 *)
 let lhae = function
   | MtE (Block _) _                         -> true

@@ -147,6 +147,13 @@ val send: s:log -> m:msg -> ST unit
     valid_transcript (transcript h0 s @ [m]))) 
   (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
 
+val hash_tag: #a:alg -> s:log -> ST (tag a)
+  (requires (fun h0 -> 
+    hashAlg h0 s = Some a )) 
+  (ensures (fun h0 h h1 -> 
+    let bs = transcript_bytes (transcript h1 s)  in
+    hashed a bs /\ h == hash a bs ))
+
 val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
   (requires (fun h0 -> 
     writing h0 s /\

@@ -547,7 +547,7 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
 		sendFragment_inv wopt h1
 		/\ sendHandshake_post wopt om send_ccs h0 r h1))
   =  let h0 = ST.get() in
-     trace "CALL sendHandshake";
+     trace "sendHandshake";
      let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
@@ -625,7 +625,7 @@ let next_fragment i c =
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
 		 FStar.Seq.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
-  trace ("nextFragment index type "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))); 
+  trace ("nextFragment "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))); 
   let res = Handshake.next_fragment s i in
   if w0 >= 0 then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
   res
@@ -682,7 +682,7 @@ let rec writeHandshake h_init c new_writer =
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
   let wopt = current_writer c i in
-  trace ("CALL writeHandshake (wopt = "^(if None? wopt then "None)" else "Some)"));
+  trace ("writeHandshake"^(if Some? wopt then "(encrypted)" else ""));
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Error (ad,reason) -> sendAlert c ad reason
@@ -690,7 +690,7 @@ let rec writeHandshake h_init c new_writer =
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change
-          trace ("next_fragment: next_keys = "^(if next_keys then "yes" else "no")^" complete = "^(if complete then "yes\n" else "no"));
+          trace ("next_fragment next_keys="^(if next_keys then "yes" else "no")^" complete="^(if complete then "yes\n" else "no"));
           match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
           recall_current_writer c;

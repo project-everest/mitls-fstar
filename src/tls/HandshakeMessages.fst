@@ -1711,21 +1711,22 @@ let rec handshakeMessagesBytes_is_injective pv l1 l2 =
 val string_of_handshakeMessage: hs_msg -> Tot string
 let string_of_handshakeMessage hs =
     match hs with
-    | ClientHello(ch) -> "ClientHello"
-    | ServerHello(sh) -> "ServerHello"
-    | Certificate(c) -> "Certificate"
-    | ServerKeyExchange(ske) -> "ServerKeyExchange"
+    | ClientHello ch -> "ClientHello"
+    | ServerHello sh -> "ServerHello"
+    | Certificate c -> "Certificate"
+    | ServerKeyExchange ske -> "ServerKeyExchange"
     | ServerHelloDone -> "ServerHelloDone"
-    | ClientKeyExchange(cke) -> "ClientKeyExchange"
-    | Finished(f) -> "Finished"
-    | SessionTicket(t) -> "NewSessionTicket"
-    | EncryptedExtensions(e) -> "EncryptedExtensions"
-    | CertificateRequest(cr) -> "CertificateRequest"
-    | CertificateVerify(cv) -> "CertificateVerify"
+    | ClientKeyExchange cke -> "ClientKeyExchange"
+    | Finished f -> "Finished"
+    | SessionTicket t -> "NewSessionTicket"
+    | EncryptedExtensions e -> "EncryptedExtensions"
+    | CertificateRequest cr -> "CertificateRequest"
+    | CertificateVerify cv -> "CertificateVerify"
     | HelloRequest -> "HelloRequest"
-    | HelloRetryRequest(hrr) -> "HelloRetryRequest"
+    | HelloRetryRequest hrr -> "HelloRetryRequest"
     (* | ServerConfiguration(sc) -> "ServerConfiguration" *)
-    | NextProtocol(n) -> "NextProtocol"
+    | NextProtocol n -> "NextProtocol"
+    | _ -> "???"
 
 (* val parseHandshakeMessage: option protocolVersion -> option kexAlg -> handshakeType -> b:bytes{repr_bytes (length b) <= 3} -> Tot (result hs_msg) *)
 val parseHandshakeMessage: option protocolVersion -> option kexAlg -> ht:handshakeType -> b:bytes{repr_bytes (length b) <= 3} -> Tot (result hs_msg)

@@ -351,17 +351,22 @@ let client_ClientHello hs i =
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
-let client_ServerHello (s:hs) (sh:sh) (digest:Hashing.anyTag) : St incoming =
+let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming =
   trace "Processing ServerHello";
   match Nego.client_ServerHello s.nego sh with
   | Error z -> InError z
   | Correct mode ->
-    match mode.Nego.n_protocol_version, mode.Nego.n_kexAlg with
+    let pv = mode.Nego.n_protocol_version in
+    let ha = aeAlg_hash mode.Nego.n_aeAlg in
+    let ka = mode.Nego.n_kexAlg in 
+    Handshake.Log.setParams s.log pv ha (Some ka) None (*?*);
+    match pv, ka with
     | TLS_1p3, Kex_DHE //, Some gy
     | TLS_1p3, Kex_ECDHE //, Some gy
     ->
       begin
         trace "Running TLS 1.3";
+        let digest = Handshake.Log.hash_tag #ha s.log in 
         let hs_keys = KeySchedule.ks_client_13_sh s.ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
@@ -747,7 +752,6 @@ let invalidateSession hs = ()
 let next_fragment (hs:hs) i =
     trace "next_fragment";
     let outgoing = Handshake.Log.next_fragment hs.log i in
-    trace "match outgoing";
     match outgoing, !hs.state with
     // when the output buffer is empty, we send extra messages in two cases
     // we prepare the initial ClientHello; or
@@ -767,7 +771,8 @@ let recv_fragment (hs:hs) #i rg f =
       | _, None -> InAck false false // nothing happened
 
       | C_Idle, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
-      | C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
+      | C_Wait_ServerHello, Some ([ServerHello sh], []) -> client_ServerHello hs sh 
+      //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
       | C_Wait_ServerHelloDone, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert]) ->
           // assert (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
           client_ServerHelloDone hs c ske None
@@ -800,8 +805,7 @@ let recv_fragment (hs:hs) #i rg f =
           server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
 
        // are we missing the case with a Certificate but no CertificateVerify?
-
-      | _, _ -> InAck false false // nothing yet to process
+      | _, Some _ -> InError(AD_unexpected_message, "unexpected flight")
 
 
 // TODO check CCS once committed to TLS 1.3 yields an alert
