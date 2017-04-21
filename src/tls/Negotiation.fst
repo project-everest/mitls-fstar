@@ -166,7 +166,6 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 n_client_certificate: option Cert.chain ->
                 negotiationState r cfg resume
 
-
 let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
   (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
   match ns, ns' with
@@ -234,22 +233,22 @@ let hashAlg #region #role ns =
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.config
 let local_config #region #role ns =
-  NS?.cfg ns
+  ns.cfg
 
 val nonce: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.random
 let nonce #region #role ns =
-  NS?.nonce ns
-
+  ns.nonce
+  
 val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.resumeInfo role
 let resume #region #role ns =
-  NS?.resume ns
-
+  ns.resume
+  
 val getMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST mode
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let getMode #region #role ns =
-  match MR.m_read (NS?.state ns) with
+  match MR.m_read ns.state with
   | C_Mode mode
   | C_WaitFinished2 mode _
   | C_Complete mode _
@@ -263,59 +262,30 @@ val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let version #region #role ns =
-  match MR.m_read (NS?.state ns) with
+  match MR.m_read ns.state with
   | C_Init _ -> ns.cfg.maxVer
-  | _ -> admit()
-
-(*
-  | C_Offer:    n_offer: offer ->
-                negotiationState r cfg resume
-
-  | C_HRR:      n_offer: offer ->
-                n_hrr: retryInfo n_offer ->
-                negotiationState r cfg resume
-
-  | C_WaitFinished1:
-                n_offer: offer ->
-                (* Here be fields of mode -> *)
-                negotiationState r cfg resume
-
-  | C_Mode:     n_mode: mode -> // In 1.2, used for resumption and full handshakes
-                negotiationState r cfg resume
-
-  | C_WaitFinished2: // Only 1.2
-                n_mode: mode ->
-                n_client_certificate: option Cert.chain ->
-                negotiationState r cfg resume
-
-  | C_Complete: n_mode: mode ->
-                n_client_certificate: option Cert.chain ->
-                negotiationState r cfg resume
-
-  | S_Init:     n_server_random: TLSInfo.random ->
-                negotiationState r cfg resume
-
-  // Waiting for ClientHello2
-  | S_HRR:      n_offer: offer ->
-                n_hrr: hrr ->
-                negotiationState r cfg resume
-
-  // This state is used to wait for both Finished1 and Finished2
-  | S_Mode:     n_mode: mode -> // If 1.2, then client_share is None
-                negotiationState r cfg resume
-
-  | S_Complete: n_mode: mode ->
-                n_client_certificate: option Cert.chain ->
-                negotiationState r cfg resume
- *)
-
+  | C_Offer _ -> ns.cfg.maxVer
+  | C_HRR o _ -> ns.cfg.maxVer
+  | C_WaitFinished1 _ -> ns.cfg.maxVer
+  | C_Mode mode 
+  | C_WaitFinished2 mode _
+  | C_Complete mode _ -> mode.n_protocol_version
+  | S_Init _ -> ns.cfg.maxVer
+  | S_HRR o _ -> ns.cfg.maxVer
+  | S_Mode mode
+  | S_Complete mode _ -> mode.n_protocol_version
 
 (* CLIENT *)
 
 val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> offer
-let client_ClientHello #region ns ks =
-  admit()
-
+let client_ClientHello #region ns oks =
+  let oks' =
+    match oks with
+    | Some ks -> Some (CommonDH.ClientKeyShare ks)
+    | None -> None
+  in
+  computeOffer Client ns.cfg ns.resume ns.nonce oks'
+  
 
 // Checks that the protocol version in the CHELO message is
 // within the range of versions supported by the server configuration
