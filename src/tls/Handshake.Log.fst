@@ -354,11 +354,16 @@ let receive l mb =
 // This should *fail* if there are pending input bytes. 
 let receive_CCS #a l =
   let st = !l in
-  if (st.incoming <> empty_bytes) then None else //Throw an error?
-  let nt = append_hs_transcript st.transcript st.parsed in
-  let (hs,tl) : (hashState nt [] * list anyTag) = match st.hashes with 
-      | OpenHash b -> OpenHash b,[]
-      | FixedHash a acc tl -> FixedHash a acc [], tl in
-  l := State nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
-             st.incoming [] hs st.pv st.kex st.dh_group;
-  Some (st.parsed,tl)
+  if st.incoming <> empty_bytes then None // error: unexpected fragmented message
+  else 
+  match st.hashes with 
+  | OpenHash b -> None // error (can be statilcally prevented)
+  | FixedHash a acc tl -> 
+    begin
+      let nt = append_hs_transcript st.transcript st.parsed in
+      let h = Hashing.finalize #a acc in
+      l := State 
+          nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+          st.incoming [] st.hashes st.pv st.kex st.dh_group;
+      Some (st.parsed,tl,h)
+    end 

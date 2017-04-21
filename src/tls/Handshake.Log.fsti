@@ -238,15 +238,14 @@ val receive: s:log -> bytes -> ST (option (list msg * list anyTag))
 // we return the messages processed so far, and their final tag; 
 // we still can't write.
 // This should *fail* if there are pending input bytes. 
-val receive_CCS: #a:Hashing.alg -> s:log -> ST (option (list msg * list anyTag)) 
-//TODO return instead ST (result (list msg * list (tag a) * tag a))
+val receive_CCS: #a:Hashing.alg -> s:log -> ST (option (list msg * list anyTag * anyTag)) 
   (requires (fun h0 -> hashAlg h0 s == Some a))
   (ensures (fun h0 res h1 -> 
     HS.(mods [get_reference s] h0 h1) /\ 
     hashAlg h0 s == hashAlg h1 s /\ (
     match res with 
     | None -> transcript h0 s == transcript h1 s 
-    | Some (ml,tl) ->  
+    | Some (ml,tl,h) ->  
        let t0 = transcript h0 s in
        let t1 = transcript h1 s in
        let tr = transcript_bytes t1 in 

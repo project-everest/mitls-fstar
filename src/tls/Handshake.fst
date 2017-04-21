@@ -318,9 +318,13 @@ val client_ClientHello: s:hs -> i:id -> ST (result (Handshake.Log.outgoing i))
       ( match n with 
         | Nego.C_Offer offer -> (
           ( if offer.ch_protocol_version = TLS_1p3 
-            then k = KeySchedule.(C(C_13_wait_SH offer.ch_client_random (admit() (*es*)) None(*?*) (Nego.gs_of offer)))
-            else k = KeySchedule.(C(C_12_Full_CH offer.ch_client_random))) /\
-          t = [ClientHello offer] )
+            then k = KeySchedule.(C(C_13_wait_SH 
+              (nonce s)
+              None (*TODO: es for 0RTT*)
+              None (*TODO: binders *) 
+              (Nego.gs_of offer)))
+            else k = KeySchedule.(C(C_12_Full_CH offer.ch_client_random)) /\
+          t = [ClientHello offer] ))
         | _ -> False )))
 
 let client_ClientHello hs i =
@@ -575,10 +579,14 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
     trace "Process Client CCS";
     match cke.cke_kex_c with
       | KEX_C_RSA _ | KEX_C_DH -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
-      | KEX_C_DHE gyb // ADL: the type of gyb will change from bytes to g & share g
+      | KEX_C_DHE gyb 
       | KEX_C_ECDHE gyb -> (
           let mode = Nego.getMode hs.nego in  //TODO read back from mode.
-          let g_gy : (g:CommonDH.group & CommonDH.share g) = admit() in // will be gyb
+
+          // ADL: the type of gyb will change from bytes to g & share g; for now we parse here.
+          let Some (|g,  _|) = mode.Nego.n_server_share in 
+          let gy: CommonDH.share g = CommonDH.parse g gyb in 
+          let g_gy = (|g, gy|) in
           let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks g_gy digestCCS1 in
           register hs app_keys;
           Epochs.incr_reader hs.epochs;
@@ -796,8 +804,7 @@ let recv_ccs (hs:hs) =
     // CCS triggers completion of the incoming flight of messages.
     match Handshake.Log.receive_CCS #(Nego.hashAlg hs.nego) hs.log with
     | None -> InError(AD_unexpected_message, "CCS received at wrong time")
-    | Some (ms, digests) ->
-        let digest = admit() in
+    | Some (ms, digests, digest) ->
         match !hs.state, ms, digests with
         | C_Wait_CCS2 digest, [], [] -> (
             trace "Processing CCS"; // now expect encrypted finish on this digest
