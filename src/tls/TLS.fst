@@ -424,9 +424,8 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let ct, rg = Content.ct_rg i f in
-
   let idt = if ID12? i then "ID12" else if ID13? i then "ID13" else "PlaintextID" in
-  trace ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n");
+  trace ("send "^Content.ctToString ct^" fragment with index "^idt);
   if not (check_incrementable wo)
   then ad_overflow 
   else begin
@@ -1154,6 +1153,7 @@ let readOne c i =
   | Error (x,y) -> alertFlush c i x y
   | Correct (Content.CT_Alert rg ad) ->
       begin
+        trace "read Alert fragment";
         if ad = AD_close_notify then
           if !c.state = Half Reader
           then ( // received a notify response; cleanly close the connection.
@@ -1172,7 +1172,7 @@ let readOne c i =
 
   | Correct(Content.CT_Handshake rg f) ->
       begin
-        trace "readOne: CT_Handshake, calling recv_fragment...";
+        trace "read Handshake fragment";
         match Handshake.recv_fragment c.hs rg f with
         | Handshake.InError (x,y) -> alertFlush c i x y
         | Handshake.InQuery q a   -> CertQuery q a
@@ -1190,13 +1190,14 @@ let readOne c i =
       end
   | Correct(Content.CT_CCS rg) ->
       begin
+        trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
         | Handshake.InError (x,y) -> alertFlush c i x y
         | Handshake.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
   | Correct(Content.CT_Data rg f) ->
       begin
-        trace "readOne: CT_Data"; 
+        trace "read Data fragment"; 
         match !c.state with
         | AD | Half Reader -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"

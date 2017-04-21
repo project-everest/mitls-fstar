@@ -805,7 +805,10 @@ let recv_fragment (hs:hs) #i rg f =
           server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
 
        // are we missing the case with a Certificate but no CertificateVerify?
-      | _, Some _ -> InError(AD_unexpected_message, "unexpected flight")
+      | _, Some _ -> 
+          trace "DISCARD FLIGHT";
+          InAck false false
+          //InError(AD_unexpected_message, "unexpected flight")
 
 
 // TODO check CCS once committed to TLS 1.3 yields an alert

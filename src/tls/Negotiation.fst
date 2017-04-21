@@ -74,6 +74,8 @@ let gs_of ch =
   | _ -> []
 
 
+// we keep both the server's HelloRetryRequest 
+// and the overwritten parts of the initial offer
 type retryInfo (offer:offer) =
   hrr *
   (list (g:CommonDH.group & CommonDH.share g)) *
@@ -84,12 +86,12 @@ type retryInfo (offer:offer) =
 // session_info is the one from TLSInfo
 noeq type mode =
   | Mode:
-    // Negotiated client offer
-    n_offer: offer ->
+    n_offer: offer -> // negotiated client offer
+    n_hrr: option (retryInfo n_offer) ->  // optional HRR roundtrip
 
-    // Optional HRR (including cookie and overwritten part of initial offer)
-    n_hrr: option (retryInfo n_offer) ->
-
+    //TODO reorder and recheck each of these fields (remove options and redundancy)
+    //TODO optimize for clarity, since it will be part of the main API.
+    
     // more from SH (both TLS 1.2 and TLS 1.3)
     n_server_random: TLSInfo.random ->
 
@@ -277,14 +279,19 @@ let version #region #role ns =
 
 (* CLIENT *)
 
-val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> offer
+val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> St offer
 let client_ClientHello #region ns oks =
-  let oks' =
+  //17-04-22 fix this in the definition of offer? 
+  let oks' = 
     match oks with
     | Some ks -> Some (CommonDH.ClientKeyShare ks)
     | None -> None
   in
-  computeOffer Client ns.cfg ns.resume ns.nonce oks'
+  match MR.m_read ns.state with 
+  | C_Init _ -> 
+      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in 
+      MR.m_write ns.state (C_Offer offer);
+      offer
   
 
 // Checks that the protocol version in the CHELO message is
@@ -296,11 +303,37 @@ let negotiateVersion cfg c =
   else if geqPV c cfg.maxVer then Correct cfg.maxVer
   else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
 
+// for this kind of function, can we just rely on type inference?
 val client_ServerHello: #region:rgn -> t region Client ->
   HandshakeMessages.sh ->
   St (result mode) // it needs to be computed, whether returned or not
 let client_ServerHello #region ns sh =
-  admit()
+  match MR.m_read ns.state with 
+  | C_Offer o -> 
+      let CipherSuite kex _ ae = sh.HandshakeMessages.sh_cipher_suite in 
+      let m = Mode //17-04-22 placeholder; should call computeOffer
+        o
+        None
+        sh.HandshakeMessages.sh_server_random
+        (Some false)
+        None
+        None //(Some sh.HandshakeMessages.sh_sessionID)
+        sh.HandshakeMessages.sh_protocol_version 
+        kex
+        ae
+        CoreCrypto.RSASIG
+        sh.HandshakeMessages.sh_cipher_suite
+        ne_default // negotiated extensions
+        [] // (let Some se = sh.HandshakeMessages.sh_extensions in se)
+        []
+        None // server_share
+        None
+        None // server cert
+        None // client share
+      in
+      MR.m_write ns.state (C_Mode m);
+      Correct m
+
 (*
   match negotiateVersion (NS?.cfg ns) pv with
   | Error e -> Error e
