@@ -52,9 +52,27 @@ type offer = ch:HandshakeMessages.ch { valid_offer ch }
     co_client_shares: list (g:CommonDH.group & CommonDH.share g) ->
     co_client_random: TLSInfo.random ->
     offer
-*)    
+*)   
 
-assume val gs_of: offer -> list (g:CommonDH.group & CommonDH.keyshare g)
+
+private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare) : 
+  list (g:CommonDH.group & CommonDH.share g) =
+  match ks with
+  | [] -> []
+  | CommonDH.Share g s :: tl -> (|g, s|) :: list_of_ClientKeyShare tl
+  | CommonDH.UnknownShare _ _  :: tl -> list_of_ClientKeyShare tl
+
+val gs_of: ch:offer -> list (g:CommonDH.group & CommonDH.share g)
+let gs_of ch =
+  match ch.ch_extensions with
+  | Some exts ->
+    begin
+    match List.Tot.find Extensions.E_key_share? exts with
+    | Some (E_key_share (CommonDH.ClientKeyShare ks)) -> list_of_ClientKeyShare ks
+    | _ -> []
+    end
+  | _ -> []
+
 
 type retryInfo (offer:offer) =
   hrr *
@@ -149,18 +167,19 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 negotiationState r cfg resume
 
 
-let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r) : MR.reln (negotiationState r cfg resume) =
-  fun ns ns' ->
+let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
+  (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
   match ns, ns' with
   | C_Init nonce, C_Init nonce' -> nonce == nonce'
   | C_Offer offer, C_Offer offer' -> offer == offer'
   | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
-  | _, _ -> True // TODO
+  | _, _ -> True  // TODO
 
 noeq type t (region:rgn) (role:TLSConstants.role) =
   | NS:
     cfg: config -> // local configuration
     resume: TLSInfo.resumeInfo role ->
+    nonce: TLSInfo.random ->
     state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
@@ -203,10 +222,10 @@ let create region r cfg resume nonce =
   match r with
   | Client ->
     let state = MR.m_alloc region (C_Init nonce) in
-    NS cfg resume state
+    NS cfg resume nonce state
   | Server ->
     let state = MR.m_alloc region (S_Init nonce) in
-    NS cfg resume state
+    NS cfg resume nonce state
 
 // a bit too restrictive: use a single Hash in any given offer
 val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Hashing.Spec.alg
@@ -217,8 +236,9 @@ val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> TLS
 let local_config #region #role ns =
   NS?.cfg ns
 
-// returns the local nonce (will require moving it out of state)
-assume val nonce: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.random
+val nonce: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.random
+let nonce #region #role ns =
+  NS?.nonce ns
 
 val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.resumeInfo role
 let resume #region #role ns =
@@ -228,21 +248,74 @@ val getMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST mode
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-let getMode #region #role nego =
-  admit()
-  //snd (NS?.state nego)
+let getMode #region #role ns =
+  match MR.m_read (NS?.state ns) with
+  | C_Mode mode
+  | C_WaitFinished2 mode _
+  | C_Complete mode _
+  | S_Mode mode
+  | S_Complete mode _ ->
+  mode
 
+(** Returns cfg.maxVersion or the negotiated version, when known *)
 val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST protocolVersion
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-let version #region #role nego =
-  admit()
+let version #region #role ns =
+  match MR.m_read (NS?.state ns) with
+  | C_Init _ -> ns.cfg.maxVer
+  | _ -> admit()
+
+(*
+  | C_Offer:    n_offer: offer ->
+                negotiationState r cfg resume
+
+  | C_HRR:      n_offer: offer ->
+                n_hrr: retryInfo n_offer ->
+                negotiationState r cfg resume
+
+  | C_WaitFinished1:
+                n_offer: offer ->
+                (* Here be fields of mode -> *)
+                negotiationState r cfg resume
+
+  | C_Mode:     n_mode: mode -> // In 1.2, used for resumption and full handshakes
+                negotiationState r cfg resume
+
+  | C_WaitFinished2: // Only 1.2
+                n_mode: mode ->
+                n_client_certificate: option Cert.chain ->
+                negotiationState r cfg resume
+
+  | C_Complete: n_mode: mode ->
+                n_client_certificate: option Cert.chain ->
+                negotiationState r cfg resume
+
+  | S_Init:     n_server_random: TLSInfo.random ->
+                negotiationState r cfg resume
+
+  // Waiting for ClientHello2
+  | S_HRR:      n_offer: offer ->
+                n_hrr: hrr ->
+                negotiationState r cfg resume
+
+  // This state is used to wait for both Finished1 and Finished2
+  | S_Mode:     n_mode: mode -> // If 1.2, then client_share is None
+                negotiationState r cfg resume
+
+  | S_Complete: n_mode: mode ->
+                n_client_certificate: option Cert.chain ->
+                negotiationState r cfg resume
+ *)
 
 
 (* CLIENT *)
 
-assume val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> offer
+val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> offer
+let client_ClientHello #region ns ks =
+  admit()
+
 
 // Checks that the protocol version in the CHELO message is
 // within the range of versions supported by the server configuration
@@ -331,7 +404,7 @@ assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region
 
 (* SERVER *)
 
-//HS
+//HS: similar to computeServerMode
 assume val server_ClientHello: #region:rgn -> #role:TLSConstants.role -> t region role ->
   HandshakeMessages.ch ->
   sessionID -> 
@@ -339,10 +412,7 @@ assume val server_ClientHello: #region:rgn -> #role:TLSConstants.role -> t regio
 
 //17-03-30 still missing a few for servers.
 
-
-
 // TODO factor out signature processing, salvaging chunks from Handshake.fst
-
 
 //17-03-30 where is it used?
 type hs_id = {
