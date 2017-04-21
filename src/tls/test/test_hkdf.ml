@@ -1,13 +1,12 @@
 open HKDF
-open CoreCrypto
 open Platform
-
+open Hashing_Spec
 
 module Test
   = struct
 
   type test_vector = {
-    hash: hash_alg;
+    hash: alg;
     ikm: string;
     salt: string;
     info: string;

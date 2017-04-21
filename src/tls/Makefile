@@ -220,6 +220,7 @@ TLS.fst \
 FFI.fst \
 test/TestRecord.fst \
 test/TestDH.fst \
+test/TestKS.fst \
 test/TestGCM.fst \
 test/TestFFI.fst \
 test/TestAPI.fst #the preceding space is significant!
