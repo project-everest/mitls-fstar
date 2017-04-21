@@ -20,6 +20,10 @@ type keyshare = point * scalar
 
 let pubshare (k:keyshare) : Tot point = fst k
 
+// Test files replace the rand function with a deterministic variant.
+let rand: ref (n:nat -> ST (lbytes n) (requires fun h->True) (ensures fun h0 _ h1 -> modifies_none h0 h1)) =
+  ralloc root CC.random
+
 // FIXME: Convert between Platform bytes (Seq.seq Char.char) and Hacl.Spec.Lib.bytes (Seq.seq UInt8.t)
 let bytes2hacl (b:bytes) : Tot (s:Seq.seq UInt8.t{Seq.length s = Seq.length b}) =
   Seq.init (length b) (fun i ->
@@ -38,7 +42,7 @@ let keygen () : ST keyshare
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
-  let s : lbytes 32 = CC.random 32 in
+  let s : lbytes 32 = !rand 32 in
   (point_of_scalar s, s)
 
 let mul (k:scalar) (p:point) : Tot point =
