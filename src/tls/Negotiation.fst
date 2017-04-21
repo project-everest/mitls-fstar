@@ -54,6 +54,8 @@ type offer = ch:HandshakeMessages.ch { valid_offer ch }
     offer
 *)    
 
+assume val gs_of: offer -> list (g:CommonDH.group & CommonDH.keyshare g)
+
 type retryInfo (offer:offer) =
   hrr *
   (list (g:CommonDH.group & CommonDH.share g)) *
@@ -214,6 +216,9 @@ let hashAlg #region #role ns =
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.config
 let local_config #region #role ns =
   NS?.cfg ns
+
+// returns the local nonce (will require moving it out of state)
+assume val nonce: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.random
 
 val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.resumeInfo role
 let resume #region #role ns =

@@ -2,28 +2,20 @@
 --*)
 module Handshake
 
+
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
-//FIXME! Don't open so much ... gets confusing. Use module abbrevs instead
-//AR: Yes ! Totally agree.
-//CF: TODO. Ideally use module names, not abbrevs.
 open FStar.Seq
 open FStar.Set
-
 open Platform.Error
 open Platform.Bytes
-
 open TLSError
 open TLSInfo
 open TLSConstants
 open Range
 open HandshakeMessages // for the message syntax
-open Handshake.Log // only for Outgoing
-//open StAE
-
-//16-05-31 these opens are implementation-only; overall we should open less
-//open CoreCrypto
+open Handshake.Log // for Outgoing
 open Epochs
 
 module Sig = Signature
@@ -31,11 +23,7 @@ module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
 module Nego = Negotiation
-
-//open Negotiation // convenient for the numerous record fields
-
-//<expose for TestClient> CF: temporarily broken; such tests should be coded against HS submodules.
-// TODO restore unit tests as in TestClient
+// For readabililty, we try to open/abbreviate fewer modules
 
 
 (* A flag for runtime debugging of Handshake data.
@@ -98,22 +86,22 @@ noeq type hs' = | HS:
   nego: Nego.t region r ->
   log: Handshake.Log.t {Handshake.Log.region_of log = region} ->
   ks: KeySchedule.ks (*region*) -> 
-  epochs: epochs region nonce ->
+  epochs: epochs region (Nego.nonce nego) ->
   state: ref machineState {state.HyperStack.id = region} -> // state machine; should be opaque and depend on r.
   hs'
 
 let hs = hs' //17-04-08 interface limitation
 
-let nonce (s:hs) = Nego.nonce hs.nego
+let nonce (s:hs) = Nego.nonce s.nego
 let region_of (s:hs) = s.region
 let role_of (s:hs) = s.r
-let random_of (s:hs) = s.nonce
+let random_of (s:hs) = nonce s
 let config_of (s:hs) = Nego.local_config s.nego
 let version_of (s:hs) = Nego.version s.nego
 let resumeInfo_of (s:hs) = Nego.resume s.nego
 let epochs_of (s:hs) = s.epochs
 
-//(* WIP, suggesting new structure 
+(* WIP on the handshake invariant
 let inv (s:hs) (h:HyperStack.mem) = 
   // let context = Negotiation.context h hs.nego in 
   let transcript = Handshake.Log.transcript h hs.log in 
@@ -130,11 +118,11 @@ let inv (s:hs) (h:HyperStack.mem) =
 // for example the Nego state is a function of ours.
 
 
-let stateType (s:hs) = seq (epoch s.region s.nonce) * machineState
+let stateType (s:hs) = seq (epoch s.region (nonce s)) * machineState
 let stateT (s:hs) (h:HyperStack.mem) : GTot (stateType s) = (logT s h, sel h s.state)
 
-let forall_epochs (hs:hs) h (p:(epoch hs.region hs.nonce -> Type)) =
-  (let es = logT hs h in
+let forall_epochs (s:hs) h (p:(epoch s.region (nonce s) -> Type)) =
+  (let es = logT s h in
    forall (i:nat{i < Seq.length es}).{:pattern (Seq.index es i)} p (Seq.index es i))
 //epochs in h1 extends epochs in h0 by one
 
@@ -176,7 +164,7 @@ let completed #rgn #nonce e = True
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
 
-assume val hs_invT : s:hs -> epochs:seq (epoch s.region s.nonce) -> machineState -> Type0
+assume val hs_invT : s:hs -> epochs:seq (epoch s.region (nonce s)) -> machineState -> Type0
 
 let hs_inv (s:hs) (h: HyperStack.mem) = True
 (* 17-04-08 TODO deal with inferred logic qualifiers
@@ -220,7 +208,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.s
 let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
       let h = admit() in
-      Epochs.recordInstanceToEpoch #hs.region #hs.nonce h keys in // just coercion
+      Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
 
@@ -265,12 +253,14 @@ let sigHashAlg_of_ske signature =
    | Error _ -> None
   else None
 
-let sig_algs mode sh_alg =
+(* 17-04-21 now just Nego.n_extensions.ne_signature_algorithms? 
+let sig_algs (mode: Negotiation.mode) (sh_alg: TLSConstants.sigAlg) 
+ =
   // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
   // If no signature nego took place we use the SA and KDF hash from the CS
   let Some sa = mode.Nego.n_sigAlg in
   let algs =
-    match mode.Nego.n_extensions.ne_signature_algorithms with
+    match mode.Nego.n_extensions.TLSInfo.ne_signature_algorithms with
     | Some l -> l
     | None -> [sa, sh_alg] in
   let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
@@ -280,7 +270,7 @@ let sig_algs mode sh_alg =
     | [] -> (sa, sh_alg) in
   let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
   (a, sa, ha)
-
+*)
 
 (* ------- Pure functions between offer/mode and their message encodings -------- *)
 
@@ -301,68 +291,41 @@ let clientHello offer = // pure; shared by Client and Server
     None //17-03-30 ?? optional (cvd,svd)
     offer.co_client_shares // apparently at most one for now
     in
-  let ch = {
+  {
     ch_protocol_version = offer.co_protocol_version;
     ch_client_random = offer.co_client_random;
     ch_sessionID = sid;
     ch_cipher_suites = offer.co_cipher_suites;
     ch_raw_cipher_suites = None;
     ch_compressions = offer.co_compressions;
-    ch_extensions = Some ext } in
-  ClientHello ch
-
-let clientHello_offer ch = 
-  let namedGroups, sigAlgs, safe_resumption, psks, client_shares = 
-    Extensions.matchExtensions ch.ch_extensions in
-  Nego.Offer 
-    ch.ch_protocol_version 
-    ch.ch_cipher_suites 
-    ch.ch_compressions
-    // from extensions
-    namedGroups 
-    sigAlgs 
-    safe_resumption 
-    (if length ch.ch_sessionID = 0 then None else Some ch.ch_sessionID)
-    psks
-    client_shares
-
-// sufficient to prove that clientHello is injective
-let clientHello_inverse offer: Lemma (clientHello_offer (clientHello offer) = Some offer) = ()
-
-let serverHello nonce mode = 
-  let open Nego in 
-  let sh ={ 
-    sh_protocol_version = mode.n_protocol_version;
-    sh_sessionID = sid; //??
-    sh_server_random = nonce
-    sh_cipher_suite = mode.n_cipher_suite;
-    sh_compression = mode.n_compression;
-    sh_extensions = sext } in
-  ServerHello sh
-  
-let serverHello_mode sh = admit() 
-  // TODO the mode according to sh, still to be validated by nego.
-
-// TODO some inverse given an offer. 
+    ch_extensions = Some ext } 
 
 
 (* -------------------- Handshake Client ------------------------ *)
 
 val client_ClientHello: hs -> i:id -> ST (result (Handshake.Log.outgoing i))
   (requires fun h0 ->
-    True (* add the precondition that Nego and KS are in proper state *) )
-  (ensures fun h0 i h1 ->
-    True)
-  (* TODO: what should we say here? something like:
-    - The Keys Schedule state machine is in the initial state
-    - The Handshake log has exactly one more message: the ClientHello computed from the input configuration
-    - The result is this ClientHello and its serialization
-  *)
+    let k = HyperStack.sel h0 hs.ks.KeySchedule.state in
+    let n = HyperStack.sel h0 hs.nego in 
+    let t = transcript h0 hs.log in 
+    match n with 
+    | Nego.C_Init nonce -> k = KeySchedule.C_Init nonce /\ t = []
+    | _ -> False )
+  (ensures fun h0 r h1 ->
+    let n = HyperStack.sel h1 hs.nego in 
+    let t = transcript h0 hs.log in 
+    ( Correct? r ==> 
+      ( Nego.C_Offer? n /\ (
+        let offer = Nego.C_Offer?.n_offer n in 
+        ( if n.Nego.ch_protocol_version = TLS_1p3 
+          then k == KeySchedule.C_13_Wait_SH offer.ch_client_random es cfk0
+          else k == KeySchedule.C_12_Full_CH offer.ch_client_random) /\
+        t = [ClientHello (Nego.C_Offer?.offer n)]  ))))
+
 let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
-  let config = Nego.config_of hs.nego in
   let shares =
     match config.maxVer  with
       | TLS_1p3 -> (* compute shares for groups in offer *)
@@ -374,7 +337,7 @@ let client_ClientHello hs i =
         None
     in
   let offer = Nego.clientOffer hs.nego shares in (* compute offer from configuration *)
-  Handshake.Log.send hs.log (clientHello offer);  // TODO decompose in two steps, appending the binders
+  Handshake.Log.send hs.log (ClientHello offer);  // TODO decompose in two steps, appending the binders
   hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
   Correct(Handshake.Log.next_fragment hs.log i)
 
@@ -382,11 +345,10 @@ let client_ClientHello hs i =
 // ensures TLS 1.3 ==> installed handshake keys
 let client_ServerHello hs sh digest =
   trace "Processing ServerHello";
-  let open Nego in
-  let n = Nego.client_ServerHello hs.nego sh in
-  match n with
+  match Nego.client_ServerHello hs.nego sh with
   | Error z -> InError z
   | Correct mode ->
+    let open Nego in
     match mode.n_protocol_version, mode.n_kexAlg with
     | TLS_1p3, Kex_DHE //, Some gy
     | TLS_1p3, Kex_ECDHE //, Some gy
@@ -566,9 +528,8 @@ let server_ServerHelloDone hs =
 val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
-let server_ClientHello hs ch =
+let server_ClientHello hs offer =
     trace "Processing ClientHello";
-    let offer = clientHello_offer ch in // we should not otherwise depend on ch
     match Nego.server_ClientHello hs.nego offer with
     | Error z -> InError z
     | Correct mode -> (

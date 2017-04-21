@@ -346,10 +346,11 @@ Hence, the server authenticates age, and may filter 0RTT accordingly.
 *)
 
 type ticket_age = UInt32.t 
+type obfuscated_ticket_age = UInt32.t 
 let default_obfuscated_age = 0ul
 open FStar.UInt32
-let encode_age t mask = t +%^ mask
-let decode_age t mask = t -%^ mask
+let encode_age (t:ticket_age)  mask = t +%^ mask
+let decode_age (t:obfuscated_ticket_age) mask = t -%^ mask
 
 private let inverse_mask t mask: Lemma (decode_age (encode_age t mask) mask = t) = ()
 
