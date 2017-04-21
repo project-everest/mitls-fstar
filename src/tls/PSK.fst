@@ -317,3 +317,40 @@ let verify_hash (i:pskid) (a:hash_alg) : ST bool
       true
      end
     else false
+
+
+(* 
+Provisional support for the PSK extension
+https://tlswg.github.io/tls13-spec/#rfc.section.4.2.10
+
+The PSK table should include (at least for tickets)
+
+  time_created: UInt32.t // the server's viewpoint
+  time_accepted: UInt32.t // the client's viewpoint
+  mask: UInt32.t 
+  livetime: UInt32.t 
+
+The authenticated property of the binder should includes
+
+  ClientHello[ nonce, ... pskid, obfuscated_ticket_age] /\ 
+  psk = lookup pskid 
+  ==> 
+  exists client. 
+    client.nonce = nonce /\
+    let age = client.time_connected - psk.time_created in 
+    age <= psk.livetime /\
+    obfuscated_ticket_age = encode_age age
+
+Hence, the server authenticates age, and may filter 0RTT accordingly.
+
+*)
+
+type ticket_age = UInt32.t 
+type obfuscated_ticket_age = UInt32.t 
+let default_obfuscated_age = 0ul
+open FStar.UInt32
+let encode_age (t:ticket_age)  mask = t +%^ mask
+let decode_age (t:obfuscated_ticket_age) mask = t -%^ mask
+
+private let inverse_mask t mask: Lemma (decode_age (encode_age t mask) mask = t) = ()
+

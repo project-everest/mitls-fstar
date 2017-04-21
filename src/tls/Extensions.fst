@@ -28,11 +28,11 @@ noeq type preEarlyDataIndication : Type0 =
 and earlyDataIndication =
   | ClientEarlyDataIndication of preEarlyDataIndication
   | ServerEarlyDataIndication
-
 (* SI: we currently only define Mandatory-to-Implement Extensions 
    as listed in the RFC's Section 8.2. Labels in the variants below are: 
      M  - "MUST implement"
      AF - "MUST ... when offering applicable features" *)
+
 and extension =
   | E_server_name of list TI.serverName (* M, AF *) (* RFC 6066 *)
 (*| E_max_fragment_length 
@@ -49,7 +49,9 @@ and extension =
   | E_client_certificate_type 
   | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
-  | E_pre_shared_key of PSK.preSharedKey (* M, AF *)
+
+  // this is the truncated PSK extension, without the list of binder tags.
+  | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)  (* M, AF *)
 (*| E_psk_key_exchange_modes *)
   | E_early_data of earlyDataIndication
   | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
@@ -152,7 +154,7 @@ and extensionPayloadBytes role ext =
   | E_supported_groups(l)      -> Parse.namedGroupsBytes l  
   | E_signature_algorithms sha -> sigHashAlgsBytes sha
   | E_key_share ks             -> CommonDH.keyShareBytes ks
-  | E_pre_shared_key psk       -> PSK.preSharedKeyBytes psk
+  | E_pre_shared_key psk -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
   | E_early_data edt           -> earlyDataIndicationBytes edt
   | E_cookie c                 -> c // SI: check 
   | E_supported_versions vv    -> 
@@ -310,7 +312,7 @@ let rec parseExtension role b =
           Correct(E_unknown_extension(head,data))
 	| (0x00z, 0x29z) -> // head TBD, pre shared key
 	  if length data >= 2 then
-	  (match PSK.parsePreSharedKey data with
+	  (match admit() (* 17-04-21 TODO PSK.parsePreSharedKey data *) with
 	  | Correct(psk) -> Correct (E_pre_shared_key psk)
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "pre shared key"))
@@ -445,7 +447,15 @@ private let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:na
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
 
 (* SI: API. Called by Handshake. *)
-val prepareExtensions: protocolVersion -> (k:valid_cipher_suites{List.Tot.length k < 256}) -> bool -> bool -> list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> option (TI.cVerifyData * TI.sVerifyData) -> (option CommonDH.keyShare) -> Tot (l:list extension{List.Tot.length l < 256})
+val prepareExtensions: 
+  protocolVersion -> 
+  k:valid_cipher_suites{List.Tot.length k < 256} -> 
+  bool -> 
+  bool -> 
+  list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> 
+  option (TI.cVerifyData * TI.sVerifyData) -> 
+  option CommonDH.keyShare -> 
+  Tot (l:list extension{List.Tot.length l < 256})
 let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
@@ -474,6 +484,24 @@ let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
 
+(*
+// TODO the code above is too restrictive, should support further extensions
+// TODO we need an inverse; broken due to extension ordering. Use pure views instead?
+val matchExtensions: list extension{List.Tot.length l < 256} -> Tot ( 
+  protocolVersion *
+  k:valid_cipher_suites{List.Tot.length k < 256} *
+  bool *
+  bool * 
+  list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) *
+  option (TI.cVerifyData * TI.sVerifyData) *
+  option CommonDH.keyShare )
+let matchExtensions ext = admit()
+
+let prepareExtensions_inverse pv cs sres sren sigAlgs namedGroups ri ks:
+  Lemma(
+    matchExtensions (prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks) =
+    (pv, cs, sres, sren, sigAlgs, namedGroups, ri, ks)) = ()
+*)
 
 (*************************************************
  SI: 

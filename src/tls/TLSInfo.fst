@@ -290,7 +290,8 @@ type abbrInfo =
      abbr_vd: option (cVerifyData * sVerifyData) }
 
 type resumeInfo (r:role) =
-  o:option sessionID{r=Server ==> o=None} *
+  //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection 
+  o:option sessionID {r=Server ==> o=None} *
   l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,

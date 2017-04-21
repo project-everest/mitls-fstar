@@ -319,14 +319,13 @@ private let group_of_cks = function
 
 val ks_client_13_1rtt_init:
   ks:ks -> gl:list valid_namedGroup
-  -> ST CommonDH.keyShare
+  -> ST CommonDH.clientKeyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
-    CommonDH.ClientKeyShare? r /\
-    gl == List.Tot.map group_of_cks (CommonDH.ClientKeyShare?._0 r) /\
+    gl == List.Tot.map group_of_cks r /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
@@ -345,7 +344,7 @@ let ks_client_13_1rtt_init ks gl =
     | None -> None // Impossible
     | Some ng -> Some (CommonDH.Share g gx) in
   let serialized = List.Tot.choose serialize_share gs in
-  CommonDH.ClientKeyShare serialized
+  serialized
 
 
 val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST CommonDH.keyShare

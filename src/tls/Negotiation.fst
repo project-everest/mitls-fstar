@@ -8,15 +8,285 @@ open TLSInfo
 open TLSConstants
 open HandshakeMessages
 
+module HH = FStar.HyperHeap
+module HS = FStar.HyperStack
+module MR = FStar.Monotonic.RRef
 
-//17-04-04 Here is a placeholder for signing stuff.
+//16-05-31 these opens are implementation-only; overall we should open less
+open Extensions
+open CoreCrypto
+
+(**
+  Debugging flag.
+  F* normalizer will erase debug prints at extraction when set to false.
+*)
+inline_for_extraction let n_debug = false
+ 
+(* Negotiation: HELLO sub-module *)
+type ri = cVerifyData * sVerifyData
+
+type resumption_offer_12 = // part of resumeInfo
+  | OfferNothing
+  | OfferTicket of b:bytes{ length b <> 0 }
+  | OfferSid of b:bytes { length b <> 0 }
+// type resumption_mode_12 (o: resumption_offer_12) = b:bool { OfferNothing? o ==> b = false }
+
+let valid_offer ch = 
+  True
+
+// There is a pure function computing a ClientHello from an offer (minus the PSK binders)
+type offer = ch:HandshakeMessages.ch { valid_offer ch }
 (*
+  | Offer:
+    co_protocol_version: protocolVersion ->
+    co_cipher_suites: (k:valid_cipher_suites{List.Tot.length k < 256}) ->
+    co_compressions: (cl:list compression{ List.Tot.length cl > 0 /\ List.Tot.length cl < 256 }) ->
+    co_namedGroups: list valid_namedGroup ->
+    co_sigAlgs: list sigHashAlg ->
+    co_safe_resumption: bool ->
+    co_safe_renegotiation: bool ->
+    co_resume: option sessionID ->
+    // Each tag between 32 and 255 bytes, and the total length is < 2^16
+    // We need a timestamp too, for obfuscated_ticket_age
+    co_psks: list (PSK.pskIdentity * Hashing.anyTag) ->
+    co_client_shares: list (g:CommonDH.group & CommonDH.share g) ->
+    co_client_random: TLSInfo.random ->
+    offer
+*)    
+
+assume val gs_of: offer -> list (g:CommonDH.group & CommonDH.keyshare g)
+
+type retryInfo (offer:offer) =
+  hrr *
+  (list (g:CommonDH.group & CommonDH.share g)) *
+  (list (PSK.pskIdentity * Hashing.anyTag))
+
+// The final negotiated outcome, including key shares and long-term identities.
+// mode is the name used in the resilience paper;
+// session_info is the one from TLSInfo
+noeq type mode =
+  | Mode:
+    // Negotiated client offer
+    n_offer: offer ->
+
+    // Optional HRR (including cookie and overwritten part of initial offer)
+    n_hrr: option (retryInfo n_offer) ->
+
+    // more from SH (both TLS 1.2 and TLS 1.3)
+    n_server_random: TLSInfo.random ->
+
+    // the resumption response
+    n_resume: option bool -> // is this a 1.2 resumption with the offered sid?
+    n_psk: option PSK.pskid -> // none with 1.2 (we are not doing PSK 1.2)
+    n_sessionID: option sessionID -> // optional, proposed 1.2 id for *future* resumptions (not always what SH carries)
+
+    n_protocol_version: protocolVersion ->
+    n_kexAlg: TLSConstants.kexAlg ->
+    n_aeAlg: TLSConstants.aeAlg ->
+    n_sigAlg: TLSConstants.sigAlg ->
+    n_cipher_suite: cipherSuite ->
+    n_extensions: negotiatedExtensions ->
+    n_server_extensions: (se:list extension{List.Tot.length se < 256}) ->
+    n_scsv: list scsv_suite ->
+
+    // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
+    n_server_share: option (g:CommonDH.group & CommonDH.share g) ->
+
+    // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
+    n_client_cert_request: option HandshakeMessages.cr ->
+    n_server_cert: option Cert.chain ->
+
+    // more from either CH+SH (1.3) or CKE (1.2)
+
+    // This is the share selected
+    n_client_share: option (g:CommonDH.group & CommonDH.share g) ->
+    // { both shares are in the same negotiated group }
+    mode
+
+noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
+  // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
+  | C_Init:     n_client_random: TLSInfo.random ->
+                negotiationState r cfg resume
+                
+  | C_Offer:    n_offer: offer ->
+                negotiationState r cfg resume
+
+  | C_HRR:      n_offer: offer ->
+                n_hrr: retryInfo n_offer ->
+                negotiationState r cfg resume
+
+  | C_WaitFinished1:
+                n_offer: offer ->
+                (* Here be fields of mode -> *)
+                negotiationState r cfg resume
+
+  | C_Mode:     n_mode: mode -> // In 1.2, used for resumption and full handshakes
+                negotiationState r cfg resume
+
+  | C_WaitFinished2: // Only 1.2
+                n_mode: mode ->
+                n_client_certificate: option Cert.chain ->
+                negotiationState r cfg resume
+
+  | C_Complete: n_mode: mode ->
+                n_client_certificate: option Cert.chain ->
+                negotiationState r cfg resume
+
+  | S_Init:     n_server_random: TLSInfo.random ->
+                negotiationState r cfg resume
+
+  // Waiting for ClientHello2
+  | S_HRR:      n_offer: offer ->
+                n_hrr: hrr ->
+                negotiationState r cfg resume
+
+  // This state is used to wait for both Finished1 and Finished2
+  | S_Mode:     n_mode: mode -> // If 1.2, then client_share is None
+                negotiationState r cfg resume
+
+  | S_Complete: n_mode: mode ->
+                n_client_certificate: option Cert.chain ->
+                negotiationState r cfg resume
 
 
+let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r) : MR.reln (negotiationState r cfg resume) =
+  fun ns ns' ->
+  match ns, ns' with
+  | C_Init nonce, C_Init nonce' -> nonce == nonce'
+  | C_Offer offer, C_Offer offer' -> offer == offer'
+  | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
+  | _, _ -> True // TODO
 
-From ...ClientHelloDone 
+noeq type t (region:rgn) (role:TLSConstants.role) =
+  | NS:
+    cfg: config -> // local configuration
+    resume: TLSInfo.resumeInfo role ->
+    state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
+    t region role
 
-    (* here are the checks we were doing before; now hopefully in Nego:
+
+val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random -> 
+  ks:option CommonDH.keyShare -> offer
+let computeOffer r cfg resume nonce ks =
+  let sid = 
+    match resume with
+    | Some sid, _ -> sid
+    | None, _ -> empty_bytes
+  in
+  let extensions = 
+    Extensions.prepareExtensions
+      cfg.maxVer
+      cfg.ciphersuites
+      cfg.safe_renegotiation
+      cfg.safe_resumption
+      cfg.signatureAlgorithms
+      cfg.namedGroups
+      None // : option (cVerifyData * sVerifyData)
+      ks
+  in
+  {
+    ch_protocol_version = cfg.maxVer; // legacy for 1.3
+    ch_client_random = nonce;
+    ch_sessionID = sid;
+    ch_cipher_suites = cfg.ciphersuites;
+    // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
+    ch_raw_cipher_suites = None; 
+    ch_compressions = cfg.compressions;
+    ch_extensions = Some extensions
+  }
+
+
+val create:
+  region:rgn -> r:role -> cfg:TLSInfo.config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
+  St (t region r)
+let create region r cfg resume nonce =
+  match r with
+  | Client ->
+    let state = MR.m_alloc region (C_Init nonce) in
+    NS cfg resume state
+  | Server ->
+    let state = MR.m_alloc region (S_Init nonce) in
+    NS cfg resume state
+
+// a bit too restrictive: use a single Hash in any given offer
+val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Hashing.Spec.alg
+let hashAlg #region #role ns =
+  Hashing.Spec.SHA256
+
+val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.config
+let local_config #region #role ns =
+  NS?.cfg ns
+
+// returns the local nonce (will require moving it out of state)
+assume val nonce: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.random
+
+val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.resumeInfo role
+let resume #region #role ns =
+  NS?.resume ns
+
+val getMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
+  ST mode
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let getMode #region #role nego =
+  admit()
+  //snd (NS?.state nego)
+
+val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
+  ST protocolVersion
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let version #region #role nego =
+  admit()
+
+
+(* CLIENT *)
+
+assume val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> offer
+
+// Checks that the protocol version in the CHELO message is
+// within the range of versions supported by the server configuration
+// and outputs the negotiated version if true
+val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
+let negotiateVersion cfg c =
+  if geqPV c cfg.minVer && geqPV cfg.maxVer c then Correct c
+  else if geqPV c cfg.maxVer then Correct cfg.maxVer
+  else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
+
+val client_ServerHello: #region:rgn -> t region Client ->
+  HandshakeMessages.sh ->
+  St (result mode) // it needs to be computed, whether returned or not
+let client_ServerHello #region ns sh =
+  admit()
+(*
+  match negotiateVersion (NS?.cfg ns) pv with
+  | Error e -> Error e
+  | Correct pv ->
+
+  ns := C_Mode
+*)
+
+
+(*
+{
+  sh_protocol_version:protocolVersion;
+  sh_server_random:TLSInfo.random;
+  sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
+  sh_cipher_suite:valid_cipher_suite;
+  sh_compression:option compression; // JK : made optional because not present in TLS 1.3
+  sh_extensions:option (se:list extension{List.Tot.length se < 256});
+}
+
+*)
+
+val client_ServerKeyExchange: #region:rgn -> t region Client ->
+  serverCert: HandshakeMessages.crt ->
+  HandshakeMessages.ske ->
+  ocr: option HandshakeMessages.cr ->
+  St (result mode)
+let client_ServerKeyExchange #region ns =
+  admit()
+(*
     let valid_chain = hs.cfg.check_peer_certificate => Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file in
     if not valid_chain then Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failure")    else
       let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
@@ -47,155 +317,12 @@ From ...ClientHelloDone
                      match ske.ske_kex_s with
                      | KEX_S_RSA _ -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "only support ECDHE/DHE SKE") )
                      | KEX_S_DHE (| g, gy |) ->
-                     *)
-
-
 *)
 
-//16-05-31 these opens are implementation-only; overall we should open less
-open Extensions 
-open CoreCrypto
 
-(**
-  Debugging flag.
-  F* normalizer will erase debug prints at extraction when set to false. 
-*)
-inline_for_extraction let n_debug = false
-
-// this encapsulates config, resume proposal, offer, mode
-// now both part of immutable nego state:
-// resume: resume_info r (* client dyn. config, both for 1.2 and 1.3 *) ->
-// cfg: config -> 
-assume type t (region:rgn) (role:TLSConstants.role)
-
-assume val create: 
-  region:rgn -> r:role -> cfg:TLSInfo.config -> resume:TLSInfo.resumeInfo r -> St (t region r)
-
-// a bit too restrictive: use a single Hash in any given offer
-assume val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot Hashing.Spec.alg
-
-assume val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.config
-assume val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot (TLSInfo.resumeInfo role)
-
-
-(* Negotiation: HELLO sub-module *)
-type ri = cVerifyData * sVerifyData
-
-type resumption_offer_12 = // part of resumeInfo
-  | OfferNothing
-  | OfferTicket of b:bytes{ length b <> 0 } 
-  | OfferSid of b:bytes { length b <> 0 } 
-// type resumption_mode_12 (o: resumption_offer_12) = b:bool { OfferNothing? o ==> b = false }
-
-// offers don't depend on a choice of client_random 
-// TODO add resume proposal; also probably the PSK list
-type offer = {
-  co_protocol_version:protocolVersion;
-  co_cipher_suites:(k:valid_cipher_suites{List.Tot.length k < 256});
-  co_compressions:(cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256});
-  co_namedGroups: list valid_namedGroup;
-  co_sigAlgs: list sigHashAlg;
-  co_safe_resumption: bool;
-  co_safe_renegotiation: bool;
-  co_resume: option sessionID;
-}
-
-
-// The final negotiated outcome, including key shares and long-term identities.
-// mode is the name used in the resilience paper; 
-// session_info is the one from TLSInfo
-type mode = {
-  n_offer: offer; // will be a flat sub-structure; could be inlined too. 
-
-   // from CH
-  n_client_random: TLSInfo.random;
-
-  // more from SH (both TLS 1.2 and TLS 1.3)
-  n_server_random: TLSInfo.random;
-  // the resumption response
-  n_resume: bool; // is this a 1.2 resumption with the offered sid?
-  n_psk: option PSK.pskid; // none with 1.2 (we are not doing PSK 1.2)
-  n_sessionID: option sessionID; // optional, proposed 1.2 id for *future* resumptions (not always what SH carries)
-
-  n_protocol_version: protocolVersion;
-  n_kexAlg: TLSConstants.kexAlg;
-  n_aeAlg: TLSConstants.aeAlg;
-  n_sigAlg: option TLSConstants.sigAlg;
-  n_cipher_suite: cipherSuite;
-  n_compression: option compression;
-  n_extensions: negotiatedExtensions;
-  n_scsv: list scsv_suite;
-
-  // TODO add client and server PSKs too
-
-  // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
-  n_server_share: option (g:CommonDH.group & CommonDH.share g);
-
-  // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
-  n_client_cert_request: option HandshakeMessages.cr;
-  n_server_cert: option Cert.chain;
-
-  // more from either CH+SH (1.3) or CKE (1.2) 
-  n_client_share: option (g:CommonDH.group & CommonDH.share g);
-  // { both shares are in the same negotiated group }
-
-  // more from the final client flight 
-  n_client_cert: option Cert.chain
-}
-
-// What we know after CH + SH (several cases)
-// for now we use mode with default values for convenience
-// could be verified using refinements, but note clientMode is ambiguous.
-type preMode_12 = mode
-type preModeAbbrv = mode
-type preMode_13 = mode
-
-//HS
-assume val clientOffer: #region:rgn -> #role:TLSConstants.role -> t region role -> St offer
-(*
-let clientOffer #region #r nego =
-  let co =
-  {co_protocol_version = cfg.maxVer;
-   co_cipher_suites = cfg.ciphersuites;
-   co_compressions = [NullCompression];
-   co_namedGroups = cfg.namedGroups;
-   co_sigAlgs = cfg.signatureAlgorithms;
-   co_safe_resumption = cfg.safe_resumption;
-   co_safe_renegotiation = cfg.safe_renegotiation;
-   co_resume =
-   }
-  in
-  co
-*)
-
-assume val getMode: #region:rgn -> #role:TLSConstants.role -> t region role -> 
-  ST mode 
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-
-assume val version: #region:rgn -> #role:TLSConstants.role -> t region role -> 
-  ST protocolVersion
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-
-(* CLIENT *) 
-
-//HS
-assume val client_ServerHello: #region:rgn -> #role:TLSConstants.role -> t region role -> 
-  HandshakeMessages.sh -> 
-  St (result mode) // it needs to be computed, whether returned or not
-
-//HS
-assume val client_ServerKeyExchange: #region:rgn -> #role:TLSConstants.role -> t region role ->  
-  serverCert: HandshakeMessages.crt -> 
-  HandshakeMessages.ske ->
+assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region role ->
+  HandshakeMessages.ee ->
   ocr: option HandshakeMessages.cr ->
-  St (result mode) 
-
-//HS
-assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region role -> 
-  HandshakeMessages.ee -> 
-  ocr: option HandshakeMessages.cr -> 
   serverCert: HandshakeMessages.crt ->
   cv: HandshakeMessages.cv ->
   digest:  bytes{length digest <= 32} ->
@@ -207,7 +334,8 @@ assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region
 //HS
 assume val server_ClientHello: #region:rgn -> #role:TLSConstants.role -> t region role ->
   HandshakeMessages.ch ->
-  St (result mode) 
+  sessionID -> 
+  St (result mode)
 
 //17-03-30 still missing a few for servers.
 
@@ -222,34 +350,25 @@ type hs_id = {
   id_sigalg: option sigHashAlg;
 }
 
-//17-03-30 get rid of this wrapper? 
+//17-03-30 get rid of this wrapper?
 type session = {
   session_nego: mode;
-}     
+}
 
 
-// represents the outcome of a successful handshake, 
+// represents the outcome of a successful handshake,
 // providing context for the derived epoch
-type handshake = 
+type handshake =
   | Fresh of session // was sessionInfo
-  | Resumed of session // was abbrInfo * sessionInfo 
+  | Resumed of session // was abbrInfo * sessionInfo
 // We use SessionInfo as unique session indexes.
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
 
 // to be renamed and extended to support HS keys, then 0RTT keys
-val handshakeKeyInfo: 
+val handshakeKeyInfo:
   #region:rgn -> r:TLSConstants.role -> t region r -> St handshake
-
-// Checks that the protocol version in the CHELO message is
-// within the range of versions supported by the server configuration
-// and outputs the negotiated version if true
-val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
-let negotiateVersion cfg c =
-  if geqPV c cfg.minVer && geqPV cfg.maxVer c then Correct c
-  else if geqPV c cfg.maxVer then Correct cfg.maxVer
-  else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
 
 // For use in negotiating the ciphersuite, takes two lists and
 // outputs the first ciphersuite in list2 that also is in list
@@ -316,7 +435,7 @@ let isSentinelRandomValue c_pv s_pv s_random =
 // Confirms that the version negotiated by the server was:
 // - within the range specified by client config AND
 // - is not an unnecessary downgrade AND
-// - is not a newer version than offered by the client 
+// - is not a newer version than offered by the client
 
 val acceptableVersion: config -> protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let acceptableVersion cfg cpv spv sr =
@@ -352,8 +471,8 @@ let acceptableCipherSuite cfg spv cs =
 // negotiated Extensions
 (* TODO: why irreducible? *)
 irreducible val computeServerMode: cfg:config -> cpv:protocolVersion -> ccs:valid_cipher_suites -> cexts:option (list extension) -> comps: (list compression) -> ri:option (cVerifyData*sVerifyData) -> Tot (result mode)
-let computeServerMode cfg cpv ccs cexts comps ri = 
-  (match (negotiateVersion cfg cpv) with 
+let computeServerMode cfg cpv ccs cexts comps ri =
+  (match (negotiateVersion cfg cpv) with
     | Error(z) -> Error(z)
     | Correct(npv) ->
   let nosa = fun (CipherSuite _ sa _) -> None? sa in
@@ -369,8 +488,8 @@ let computeServerMode cfg cpv ccs cexts comps ri =
           | _ -> false)
         | _ -> false)
     | _ ->
-       let _ = 
-        if n_debug then 
+       let _ =
+        if n_debug then
           IO.debug_print_string "WARNING cannot load server cert; restricting to anonymous CS...\n"
         else false in
        nosa in
@@ -378,7 +497,7 @@ let computeServerMode cfg cpv ccs cexts comps ri =
   match negotiateCipherSuite cfg npv ccs with
     | Error(z) -> Error(z)
     | Correct(kex,sa,ae,cs) ->
-  let nego = ne_default in 
+  let nego = ne_default in
   let next = (match cexts with
    | Some cexts -> Correct(List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri false) nego cexts)
 //   | None -> ne_default)
@@ -387,9 +506,9 @@ let computeServerMode cfg cpv ccs cexts comps ri =
                 let cre =
                   if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs ccs) then
                      {ne_default with ne_secure_renegotiation = RI_Valid}
-                  else ne_default 
+                  else ne_default
                 in Correct (cre)
-             | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))) 
+             | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello")))
   in
   let ng = negotiateGroupKeyShare cfg npv kex cexts in
   match next, ng with
