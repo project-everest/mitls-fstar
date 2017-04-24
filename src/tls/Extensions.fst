@@ -49,12 +49,11 @@ and extension =
   | E_client_certificate_type 
   | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
-
   // this is the truncated PSK extension, without the list of binder tags.
   | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)  (* M, AF *)
-(*| E_psk_key_exchange_modes *)
   | E_early_data of earlyDataIndication
   | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
+  | E_psk_key_exchange_modes (* SI: payload?? *)  
   | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
 (*| E_certificate_authorities 
   | E_oid_filters *)
@@ -70,27 +69,28 @@ private let sameExt e1 e2 =
   | E_pre_shared_key _, E_pre_shared_key _ -> true
   | E_early_data _, E_early_data _ -> true
   | E_cookie _, E_cookie _ -> true 
+  | E_psk_key_exchange_modes _, E_psk_key_exchange_modes _ -> true    
   | E_supported_versions _, E_supported_versions _ -> true
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
 
 (*************************************************
- extension serializing
+ extension formatting
  *************************************************)
  
-(* API *)
-val extensionHeaderBytes: extension -> Tot bytes
+private val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
   match ext with                                     // 4.2 ExtensionType enum value
-  | E_server_name _          -> abyte2 (0x00z, 0x00z)
-  | E_supported_groups _     -> abyte2 (0x00z, 0x0Az) // 10 
-  | E_signature_algorithms _ -> abyte2 (0x00z, 0x0Dz) // 13
-  | E_key_share _            -> abyte2 (0x00z, 0x28z) // 40
-  | E_pre_shared_key _       -> abyte2 (0x00z, 0x29z) // 41
-  | E_early_data _           -> abyte2 (0x00z, 0x2az) // 42
-  | E_cookie _               -> abyte2 (0x00z, 0x2cz) // 44 \ swapped
-  | E_supported_versions _   -> abyte2 (0x00z, 0x2bz) // 43 /
+  | E_server_name _            -> abyte2 (0x00z, 0x00z)
+  | E_supported_groups _       -> abyte2 (0x00z, 0x0Az) // 10 
+  | E_signature_algorithms _   -> abyte2 (0x00z, 0x0Dz) // 13
+  | E_key_share _              -> abyte2 (0x00z, 0x28z) // 40
+  | E_pre_shared_key _         -> abyte2 (0x00z, 0x29z) // 41
+  | E_early_data _             -> abyte2 (0x00z, 0x2az) // 42
+  | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
+  | E_psk_key_exchange_modes _ -> abyte2 (0x00z, 0x2dz) // 45
+  | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43 --
   | E_unknown_extension(h,b) -> h
 
 (** parse and serialize functions for server_name payload, TI.serverName. *)
@@ -157,6 +157,7 @@ and extensionPayloadBytes role ext =
   | E_pre_shared_key psk -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
   | E_early_data edt           -> earlyDataIndicationBytes edt
   | E_cookie c                 -> c // SI: check 
+  | E_psk_key_exchange_modes _ -> admit() 
   | E_supported_versions vv    -> 
       List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
   | E_unknown_extension(h,b)   -> b
@@ -327,6 +328,8 @@ let rec parseExtension role b =
 	    Correct (E_cookie data)
 	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "cookie"))
 	  
+        (* ToDo: | E_psk_key_exchange_modes *)
+	
         | (0xffz, 0x2bz) -> // supported_versions
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "supported_verions unimplemented")
 
@@ -434,9 +437,8 @@ let parseOptExtensions r data =
  Other extension functionality
  *************************************************)
 
-(* SI: API. Called by Negotiation. *)
 (* JK: Need to get rid of such functions *)
-let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
+private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
   match l with 
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
@@ -446,7 +448,7 @@ private let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:na
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
 
-(* SI: API. Called by Handshake. *)
+(* SI: API. Called by Nego. *)
 val prepareExtensions: 
   protocolVersion -> 
   k:valid_cipher_suites{List.Tot.length k < 256} -> 
