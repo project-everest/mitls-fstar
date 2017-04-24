@@ -1,5 +1,5 @@
 (*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
 --*)
 (**
 An abstract interface for Diffie-Hellman operations
@@ -55,13 +55,15 @@ type secret (g:group) =
   | FFDH dhg -> DHGroup.secret dhg
   | ECDH ecg -> ECGroup.secret ecg)
 
-let namedGroup_of_group (g:group) : Tot (option namedGroup) =
+let namedGroup_of_group (g:group) : Tot (r:(option namedGroup)
+  {Some? r <==> (ECDH? g \/ (FFDH? g /\ DHGroup.Named? (FFDH?._0 g)))}) =
   match g with
   | ECDH ec -> Some (SEC ec)
   | FFDH (DHGroup.Named ng) -> Some (FFDHE ng)
   | _ -> None
 
-val group_of_namedGroup: namedGroup -> Tot (option group)
+val group_of_namedGroup: ng:namedGroup -> Tot (r:option group
+  {Some? r <==> (SEC? ng \/ FFDHE? ng)})
 let group_of_namedGroup g =
   match g with
   | SEC ec    -> Some (ECDH ec)
@@ -368,7 +370,7 @@ let checkElement (p:parameters) (e:element) : option element  =
 // should that go elsewhere? YES.
 (** KeyShare entry definition *)
 type keyShareEntry =
-  | Share: g:group -> share g -> keyShareEntry
+  | Share: g:group{Some? (namedGroup_of_group g)} -> share g -> keyShareEntry
   | UnknownShare:
     ng:namedGroup { None? (group_of_namedGroup ng)} ->
     b:bytes{repr_bytes (length b) <= 2} -> keyShareEntry
@@ -384,30 +386,44 @@ noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
 
-assume val keyShareBytes: keyShare -> Tot bytes
-
-(*
 // the parsing/formatting moves to the private part of Extensions
 (** Serializing function for a KeyShareEntry *)
 val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
-let keyShareEntryBytes (ng, b) =
-  let ng_bytes = namedGroupBytes ng in
-  ng_bytes @| vlbytes 2 b
+let keyShareEntryBytes = function
+  | Share g s ->
+    assume false; // TODO
+    let Some ng = namedGroup_of_group g in
+    let ng_bytes = namedGroupBytes ng in
+    let b = serialize_raw #g s in
+    ng_bytes @| vlbytes 2 b
+  | UnknownShare ng b ->
+    let ng_bytes = namedGroupBytes ng in
+    ng_bytes @| vlbytes 2 b
 
 (** Parsing function for a KeyShareEntry *)
 val parseKeyShareEntry: pinverse_t keyShareEntryBytes
 let parseKeyShareEntry b =
-  let ng,key_exchange = split b 2 in
+  assume false; // ADL TODO
+  let ng, key_exchange = split b 2 in
   match parseNamedGroup ng with
   | Correct ng ->
-    if SEC? ng || FFDHE? ng then
+    begin
       match vlparse 2 key_exchange with
-      | Correct ke -> Correct (ng, ke)
-      | Error z    -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
-    else
-      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+      | Correct ke ->
+        (if SEC? ng || FFDHE? ng then
+          let go = group_of_namedGroup ng in
+          assert(SEC? ng \/ FFDHE? ng);
+          assert(Some? go);
+          let Some g = go in
+          Correct (Share g (parse g ke))
+        else
+          Correct (UnknownShare ng ke))
+      | Error z ->
+        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entry")
+    end
   | Error z -> Error z
 
+(* TODO
 (** Lemmas for KeyShare entries parsing/serializing inversions *)
 val inverse_keyShareEntry: x:_ -> Lemma
   (requires True)
@@ -427,6 +443,7 @@ val pinverse_keyShareEntry: x:_ -> Lemma
   (ensures lemma_pinverse_f_g Seq.equal keyShareEntryBytes parseKeyShareEntry x)
   [SMTPat (keyShareEntryBytes (Correct?._0 (parseKeyShareEntry x)))]
 let pinverse_keyShareEntry x = ()
+*)
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
@@ -515,4 +532,3 @@ let parseKeyShare is_client b =
       | Error z -> Error z
       end
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
-*)
