@@ -246,6 +246,7 @@ noeq type hs_msg =
   // Post-Handshake (TLS 1.3) also including late CertificateRequest
   | SessionTicket of sticket //17-03-11  --> NewSessionTicket ? 
 
+//  | ClientBinders of List Hashing.Spec.anyTag // with a 2-byte formatted length in 33..2^16-1 
 //17-03-11 missing
 //  | EndOfEarlyData  
 //  | KeyUpdateRequest of bool  // true -> the falg indicates whether this is a "first" request (to be responded)
@@ -1728,8 +1729,16 @@ let string_of_handshakeMessage hs =
     | NextProtocol n -> "NextProtocol"
     | _ -> "???"
 
+//17-04-24 should we call parseMessage from this function?
+
 (* val parseHandshakeMessage: option protocolVersion -> option kexAlg -> handshakeType -> b:bytes{repr_bytes (length b) <= 3} -> Tot (result hs_msg) *)
-val parseHandshakeMessage: option protocolVersion -> option kexAlg -> ht:handshakeType -> b:bytes{repr_bytes (length b) <= 3} -> Tot (result hs_msg)
+val parseHandshakeMessage: 
+  option protocolVersion -> 
+  option kexAlg -> 
+  ht:handshakeType -> 
+  b:bytes{repr_bytes (length b) <= 3} -> 
+  Tot (result hs_msg)
+
 let parseHandshakeMessage pv kex hstype pl =
   if length pl < 16777216 then (
     lemma_repr_bytes_values (length pl);

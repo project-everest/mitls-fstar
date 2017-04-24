@@ -352,7 +352,7 @@ let client_ClientHello hs i =
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
 let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming =
-  trace "Processing ServerHello";
+  trace "client_ServerHello";
   match Nego.client_ServerHello s.nego sh with
   | Error z -> InError z
   | Correct mode ->
@@ -397,14 +397,14 @@ val client_ServerHelloDone:
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let client_ServerHelloDone hs c ske ocr =
-    trace "Processing ...ServerHelloDone";
+    trace "processing ...ServerHelloDone";
     match Nego.client_ServerKeyExchange hs.nego c ske ocr with
     | Error z -> InError z
     | Correct mode -> (
       ( match ocr with
         | None -> ()
         | Some cr ->
-            trace "Processing certificate request (TODO)";
+            trace "processing certificate request (TODO)";
             let cc = {crt_chain = []} in
             Handshake.Log.send hs.log (Certificate cc));
 

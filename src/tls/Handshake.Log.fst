@@ -284,24 +284,32 @@ let next_fragment l (i:id) =
 
 (* RECEIVE *)
 
-val parseHandshakeMessages : pvo: option protocolVersion ->
-               kexo: option kexAlg ->
-           buf: bytes -> ST (result (bool * bytes * list msg * list bytes))
+//17-04-24 avoid parsing loop? simpler at the level of receive.
+val parseMessages: 
+  pvo: option protocolVersion -> kexo: option kexAlg -> b: bytes -> 
+  ST (result (
+    bool (* end of flight? *) * 
+    bytes (* remaining bytes *) * 
+    list msg (* parsed messages *) * 
+    list bytes (* ...and their unparsed bytes for hashes *)  ))
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
-let rec parseHandshakeMessages pvo kexo buf =
-    match parseMessage buf with
+let rec parseMessages pvo kexo buf =
+  match HandshakeMessages.parseMessage buf with
     | Error z -> Error z
-    | Correct(None) -> Correct(false,buf,[],[])
-    | Correct(Some (|rem,hstype,pl,to_log|)) ->
-      (match parseHandshakeMessage pvo kexo hstype pl with
-       | Error z -> Error z
-       | Correct hsm ->
-           trace ("parse "^HandshakeMessages.string_of_handshakeMessage hsm);
-           if eoflight hsm 
-           then Correct(true,rem,[hsm],[to_log]) 
+    | Correct None -> 
+        trace "more bytes required";
+        Correct (false, buf, [], [])
+    | Correct (Some (|rem, hstype, pl, to_log|)) ->
+      ( match parseHandshakeMessage pvo kexo hstype pl with
+        | Error z -> Error z
+        | Correct hsm ->
+          trace ("parsed "^HandshakeMessages.string_of_handshakeMessage hsm);
+          if eoflight hsm 
+          then 
+            (trace "end of flight"; Correct(true, rem, [hsm], [to_log]) )
            else
-           ( match parseHandshakeMessages pvo kexo rem with
+           ( match parseMessages pvo kexo rem with
               | Error z -> Error z
               | Correct (b,r,hl,bl) -> Correct (b,r,hsm::hl,to_log::bl)))
 
@@ -330,16 +338,15 @@ let rec hashHandshakeMessages t p hs n nb =
       let hs = FixedHash a acc tl in
       hashHandshakeMessages t (p @ [m]) hs mrest brest)
 
-
 let receive l mb =
   let st = !l in
   let ib = st.incoming @| mb in
-  match parseHandshakeMessages st.pv st.kex ib with
+  match parseMessages st.pv st.kex ib with
   | Error z -> None
   | Correct(false,r,[],[]) ->
        l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
                  r st.parsed st.hashes st.pv st.kex st.dh_group;
-       Some ([],[])
+       None
   | Correct(eof,r,ml,bl) ->
       let hs = hashHandshakeMessages st.transcript st.parsed st.hashes ml bl in
       if eof then 
@@ -352,12 +359,12 @@ let receive l mb =
         l := State 
                   nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
                   r [] hs st.pv st.kex st.dh_group;
-        Some (ml,tl)
+        Some (ml,tl) 
       else 
         let ml = st.parsed @ ml in
         l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
                   r ml hs st.pv st.kex st.dh_group;
-        Some ([],[])
+        None
  
 
 
