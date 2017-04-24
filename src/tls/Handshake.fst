@@ -821,15 +821,15 @@ let recv_ccs (hs:hs) =
     | Some (ms, digests, digest) ->
         match !hs.state, ms, digests with
         | C_Wait_CCS2 digest, [], [] -> (
-            trace "Processing CCS"; // now expect encrypted finish on this digest
-
+            trace "Processing CCS"; 
             hs.state := C_Wait_Finished2 digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK
             )
 
         | C_Wait_CCS2 digest, [SessionTicket st], [] -> (
-            trace "Processing SessionTicket; CCS. WARNING: no support for tickets"; // now expect encrytped finish on this digest
+            trace "Processing SessionTicket; CCS. WARNING: no support for tickets"; 
+            // now expect encrypted finish on this digest; shall we tell Nego? 
             hs.state := C_Wait_Finished2 digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK

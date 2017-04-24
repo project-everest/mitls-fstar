@@ -216,16 +216,18 @@ type ri_status =
 | RI_Invalid
 
 type negotiatedExtensions = {
-    ne_extended_ms: bool;
-    ne_extended_padding: bool;
-    ne_secure_renegotiation: ri_status;
+    ne_extended_ms: bool; // now a total function of the mode
+    ne_extended_padding: bool; // gone!
+    ne_secure_renegotiation: ri_status; // now a total function of the mode
 
     //$ Cedric: these extensions were missing in F7.
-    ne_supported_groups: option (list namedGroup);
-    ne_supported_point_formats: option (list ECGroup.point_format);
-    ne_server_names: option (list serverName);
-    ne_signature_algorithms: option (list sigHashAlg);
-    ne_keyShare: option CommonDH.serverKeyShare;
+    ne_server_names: option (list serverName); // now a total function of the mode, 
+    ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
+
+    // now internal, transient concerns for server-side nego
+    ne_signature_algorithms: option (list sigHashAlg); 
+    ne_supported_groups: option (list namedGroup); 
+    ne_supported_point_formats: option (list ECGroup.point_format); 
 }
 
 let ne_default =
