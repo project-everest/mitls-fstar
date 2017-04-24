@@ -39,9 +39,8 @@ let main () : ML unit =
   let ksc, cr = KS.create #rc Client in
   let kss, sr = KS.create #rs Server in
   p "OK.\n Generating client shares... ";
-  let s:CommonDH.keyShare = KS.ks_client_13_1rtt_init ksc [SEC (CC.ECC_X25519)] in
+  let ((CDH.Share g gx) :: _) = KS.ks_client_13_1rtt_init ksc [SEC (CC.ECC_X25519)] in
   p "OK.\n";
-  let CDH.ClientKeyShare ((CDH.Share g gx) :: _) = s in
   let gx : Curve25519.point = gx in
   p ("\t -- gx = "^(hex_of_bytes gx)^"\n");
   (*
@@ -56,10 +55,8 @@ let main () : ML unit =
   *)
   let cs = CipherSuite Kex_ECDHE (Some CC.RSASIG) (AEAD CC.AES_128_GCM Hashing.Spec.SHA256) in
   p " Generating server share... ";
-  let s:CommonDH.keyShare = KS.ks_server_13_1rtt_init kss cr cs g gx in
+  let (CDH.Share g gy) = KS.ks_server_13_1rtt_init kss cr cs g gx in
   p "OK.\n";
-  let CDH.ServerKeyShare (CDH.Share g gy) = s in
   let gy : Curve25519.point = gy in
   p ("\t gx = "^(hex_of_bytes gx)^"\n\t gy = "^(hex_of_bytes gy)^"\n");
   ()
-

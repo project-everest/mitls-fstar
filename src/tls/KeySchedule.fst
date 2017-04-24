@@ -347,14 +347,14 @@ let ks_client_13_1rtt_init ks gl =
   serialized
 
 
-val ks_client_13_0rtt_init: ks:ks -> i:esId -> gl:list valid_namedGroup -> ST CommonDH.keyShare
+val ks_client_13_0rtt_init: ks:ks -> i:esId ->
+  gl:list valid_namedGroup -> ST CommonDH.clientKeyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
-    CommonDH.ClientKeyShare? r /\
-    gl == List.Tot.map group_of_cks (CommonDH.ClientKeyShare?._0 r) /\
+    gl == List.Tot.map group_of_cks r /\
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
@@ -372,9 +372,7 @@ let ks_client_13_0rtt_init ks esId gl =
     match CommonDH.namedGroup_of_group g with
     | None -> None // Impossible
     | Some ng -> Some (CommonDH.Share g gx) in
-  let serialized = List.Tot.choose serialize_share gs in
-  CommonDH.ClientKeyShare serialized
-
+  List.Tot.choose serialize_share gs
 
 // Derive the early keys from the early secret
 let ks_client_13_0rtt_ch ks esId hashed_log : ST (recordInstance)
@@ -543,7 +541,7 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
 val ks_server_13_1rtt_init:
   ks:ks -> cr:random -> cs:cipherSuite
   -> g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)}
-  -> gx:CommonDH.share g -> ST CommonDH.keyShare
+  -> gx:CommonDH.share g -> ST CommonDH.serverKeyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
@@ -567,8 +565,7 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   let es = HKDF.hkdf_extract h zeroes zeroes in
   let hs : hs hsId = HKDF.hkdf_extract h es gxy in
   st := S (S_13_wait_SH (ae, h) cr sr None None (| hsId, hs |));
-  match CommonDH.namedGroup_of_group g with
-  | Some gn -> CommonDH.ServerKeyShare (CommonDH.Share g gy)
+  CommonDH.Share g gy
 
 val ks_server_13_sh: ks:ks -> log:bytes -> ST recordInstance
   (requires fun h0 ->

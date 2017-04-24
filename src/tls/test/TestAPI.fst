@@ -31,7 +31,7 @@ let rec read_loop con r : ML unit =
 
 private
 let client config host port =
-  IO.print_string "===============================================\n Starting test TLS 1.3 client...\n";
+  IO.print_string "===============================================\n Starting test TLS client...\n";
   let tcp = Transport.connect host port in
   let rid = new_region root in
   let con = TLS.connect rid tcp config in
@@ -68,7 +68,7 @@ private let rec aux_server config sock : ML unit =
      begin
       let db = DataStream.appBytes d in
       IO.print_string ("Received data: "^(iutf8 db));
-      let text = "You are connected to miTLS* 1.3!\r\n"
+      let text = "You are connected to miTLS*!\r\n"
         ^ "This is the request you sent:\r\n\r\n" ^ (iutf8 db) in
       let payload = utf8 ("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:"
         ^ (string_of_int (length (abytes text))) 
@@ -93,6 +93,6 @@ private let rec aux_server config sock : ML unit =
   in aux_server config sock
 
 let server config host port =
- IO.print_string "===============================================\n Starting test TLS 1.3 server...\n";
+ IO.print_string "===============================================\n Starting test TLS server...\n";
  let sock = Platform.Tcp.listen host port in
  aux_server config sock

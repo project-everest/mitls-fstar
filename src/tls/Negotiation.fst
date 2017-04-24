@@ -36,14 +36,12 @@ let valid_offer ch =
 
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
 type offer = ch:HandshakeMessages.ch { valid_offer ch }
-
 private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare) :
   list (g:CommonDH.group & CommonDH.share g) =
   match ks with
   | [] -> []
   | CommonDH.Share g s :: tl -> (|g, s|) :: list_of_ClientKeyShare tl
   | CommonDH.UnknownShare _ _  :: tl -> list_of_ClientKeyShare tl
-
 
 val gs_of: ch:offer -> list (g:CommonDH.group & CommonDH.share g)
 let gs_of ch =
@@ -78,7 +76,7 @@ noeq type mode =
 
     //TODO reorder and recheck each of these fields (remove options and redundancy)
     //TODO optimize for clarity, since it will be part of the main API.
-
+    
     // more from SH (both TLS 1.2 and TLS 1.3)
     n_server_random: TLSInfo.random ->
 
@@ -285,7 +283,6 @@ let client_ClientHello #region ns oks =
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in 
       MR.m_write ns.state (C_Offer offer);
       offer
-
 
 (**
   Checks that the protocol version in the CHELO message is

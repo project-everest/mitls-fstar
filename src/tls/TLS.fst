@@ -37,7 +37,7 @@ val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
-let print s = discard (IO.debug_print_string ("HS| "^s^"\n"))
+let print s = discard (IO.debug_print_string ("TLS| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -424,9 +424,8 @@ val sendFragment: c:connection -> #i:id -> wo:option (cwriter i c) -> f: Content
 let sendFragment c #i wo f =
   reveal_epoch_region_inv_all ();
   let ct, rg = Content.ct_rg i f in
-
   let idt = if ID12? i then "ID12" else if ID13? i then "ID13" else "PlaintextID" in
-  trace ("sendFragment with index "^idt^" and content "^Content.ctToString ct^"\n");
+  trace ("send "^Content.ctToString ct^" fragment with index "^idt);
   if not (check_incrementable wo)
   then ad_overflow 
   else begin
@@ -547,7 +546,7 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
 		sendFragment_inv wopt h1
 		/\ sendHandshake_post wopt om send_ccs h0 r h1))
   =  let h0 = ST.get() in
-     trace "CALL sendHandshake";
+     trace "sendHandshake";
      let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
@@ -625,7 +624,7 @@ let next_fragment i c =
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
 		 FStar.Seq.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
-  trace ("nextFragment index type "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))); 
+  trace ("nextFragment "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))); 
   let res = Handshake.next_fragment s i in
   if w0 >= 0 then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
   res
@@ -682,7 +681,7 @@ let rec writeHandshake h_init c new_writer =
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
   let wopt = current_writer c i in
-  trace ("CALL writeHandshake (wopt = "^(if None? wopt then "None" else "Some"));
+  trace ("writeHandshake"^(if Some? wopt then "(encrypted)" else ""));
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Error (ad,reason) -> sendAlert c ad reason
@@ -690,7 +689,7 @@ let rec writeHandshake h_init c new_writer =
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change
-          trace ("next_fragment: next_keys = "^(if next_keys then "yes" else "no")^" complete = "^(if complete then "yes\n" else "no"));
+          trace ("next_fragment next_keys="^(if next_keys then "yes" else "no")^" complete="^(if complete then "yes\n" else "no"));
           match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
           recall_current_writer c;
@@ -1154,6 +1153,7 @@ let readOne c i =
   | Error (x,y) -> alertFlush c i x y
   | Correct (Content.CT_Alert rg ad) ->
       begin
+        trace "read Alert fragment";
         if ad = AD_close_notify then
           if !c.state = Half Reader
           then ( // received a notify response; cleanly close the connection.
@@ -1172,7 +1172,7 @@ let readOne c i =
 
   | Correct(Content.CT_Handshake rg f) ->
       begin
-        trace "readOne: CT_Handshake, calling recv_fragment...";
+        trace "read Handshake fragment";
         match Handshake.recv_fragment c.hs rg f with
         | Handshake.InError (x,y) -> alertFlush c i x y
         | Handshake.InQuery q a   -> CertQuery q a
@@ -1190,13 +1190,14 @@ let readOne c i =
       end
   | Correct(Content.CT_CCS rg) ->
       begin
+        trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
         | Handshake.InError (x,y) -> alertFlush c i x y
         | Handshake.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
   | Correct(Content.CT_Data rg f) ->
       begin
-        trace "readOne: CT_Data"; 
+        trace "read Data fragment"; 
         match !c.state with
         | AD | Half Reader -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
