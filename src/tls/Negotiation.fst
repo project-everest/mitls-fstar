@@ -121,25 +121,29 @@ noeq type mode =
 // and for each of the fields of
 //    n_extensions: negotiatedExtensions ->
 
-let sig_algs (m: mode) (sh_alg: TLSConstants.hashAlg)
- = 
-  admit() (* 
+let client_sigalg_extension (m:mode) = 
+  match m.n_offer.ch_extensions with
+  | None -> None 
+  | Some es -> 
+    match List.Tot.find Extensions.E_signature_algorithms? es with
+    | None -> None 
+    | Some (E_signature_algorithms sas) -> Some sas 
+
+let sig_algs (m: mode) (ha0: TLSConstants.hashAlg) = 
   // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
   // If no signature nego took place we use the SA and KDF hash from the CS
-  let CipherSuite _ (Some sa) _ = mode.Nego.n_cipher_suite in
-  let algs =
-    match Nego.ne_signature_algorithms mode in 
-    | Some l -> l
-    | None -> [sa, sh_alg] in
-  let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
-  let sa, ha =
-    match algs with
-    | ha::_ -> ha
-    | [] -> (sa, sh_alg) in
+  let CipherSuite _ (Some sa) _ = m.n_cipher_suite in
+  let sa, ha = 
+    match client_sigalg_extension m with
+    | None -> sa, ha0  
+    | Some algs -> 
+        match List.Tot.find (fun (s,_) -> s = sa) algs with
+        | Some sa_ha -> sa_ha
+        | None -> sa, ha0 in 
   let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
   (a, sa, ha)
-*)
-
+//17-04-25 we seem to unduly respect the signature algorithm for the CS
+//17-04-25 on the server side, this should depend on the certs we have!
 
 noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet

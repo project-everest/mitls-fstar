@@ -514,7 +514,7 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
        | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p2;TLS_1p3] :: res 
        | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res // this case is not mandatory
        | _ -> res in
-    let res =
+    let res = 
        match pv, ks with
        | TLS_1p3, Some ks -> E_key_share ks::res
        | _,_ -> res in
