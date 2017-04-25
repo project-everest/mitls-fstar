@@ -11,6 +11,9 @@ open HandshakeMessages // for pattern matching on messages
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
+open Platform.Error
+open TLSError
+
 type msg = HandshakeMessages.hs_msg 
 
 // Does this message complete the flight? 
@@ -223,10 +226,10 @@ type outgoing (i:id) (* initial index *) =
 val next_fragment: log -> i:id -> St (outgoing i) 
 (* Incoming *) 
 
-// We receive messages in whole flights; 
-// note that, untill a full flight is received, we lose "writing h1 r"
-val receive: s:log -> bytes -> ST (option (list msg * list anyTag))
-//TODO return instead ST (result (option (list msg * list anyTag)))
+// We receive messages & hashes in whole flights; 
+// Untill a full flight is received, we lose "writing h1 r"
+val receive: s:log -> bytes -> ST (result (option (list msg * list anyTag)))
+//TODO return instead ST (result (list msg * list anyTag))
   (requires (fun h0 -> True))
   (ensures (fun h0 o h1 -> 
     let oa = hashAlg h1 s in 
@@ -235,26 +238,28 @@ val receive: s:log -> bytes -> ST (option (list msg * list anyTag))
     oa == hashAlg h0 s /\
     HS.(mods [get_reference s] h0 h1) /\ (
     match o with 
-    | Some (ms, hs) -> 
+    | Error _ -> True // left underspecified
+    | Correct None -> 
+        t1 == t0
+    | Correct (Some (ms, hs)) -> 
         t1 == t0 @ ms /\ 
         writing h1 s /\
-        (match oa with Some a -> tags a t0 ms hs | None -> hs == []) 
-    | None -> t1 == t0 )))
+        (match oa with Some a -> tags a t0 ms hs | None -> hs == [])  )))
 
 // We receive CCS as external end-of-flight signals;
-// we return the messages processed so far, and their final tag; 
-// we still can't write.
+// we return the messages & hashes processed so far, and their final tag; 
+// we still can't write (we should receive Finished next)
 // This should *fail* if there are pending input bytes. 
-val receive_CCS: #a:Hashing.alg -> s:log -> ST (option (list msg * list anyTag * anyTag)) 
+val receive_CCS: #a:Hashing.alg -> s:log -> ST (result (list msg * list anyTag * anyTag))
   (requires (fun h0 -> hashAlg h0 s == Some a))
   (ensures (fun h0 res h1 -> 
+    let oa = hashAlg h1 s in 
+    let t0 = transcript h0 s in
+    let t1 = transcript h1 s in
     HS.(mods [get_reference s] h0 h1) /\ 
     hashAlg h0 s == hashAlg h1 s /\ (
     match res with 
-    | None -> transcript h0 s == transcript h1 s 
-    | Some (ml,tl,h) ->  
-       let t0 = transcript h0 s in
-       let t1 = transcript h1 s in
-       let tr = transcript_bytes t1 in 
+    | Error _ -> True // left underspecified
+    | Correct (ml,tl,h) ->  
        t1 == t0 @ ml /\ tags a t0 ml tl)))
 

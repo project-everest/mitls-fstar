@@ -342,31 +342,31 @@ let receive l mb =
   let st = !l in
   let ib = st.incoming @| mb in
   match parseMessages st.pv st.kex ib with
-  | Error z -> None
-  | Correct(false,r,[],[]) ->
-       l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
-                 r st.parsed st.hashes st.pv st.kex st.dh_group;
-       None
+  | Error z -> Error z
+  | Correct (false,r,[],[]) -> (
+       l := State 
+         st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete 
+         r st.parsed st.hashes st.pv st.kex st.dh_group;
+       Correct None )
   | Correct(eof,r,ml,bl) ->
       let hs = hashHandshakeMessages st.transcript st.parsed st.hashes ml bl in
-      if eof then 
-        let ml = st.parsed @ ml in
+      let ml = st.parsed @ ml in
+      if eof then (
         let nt = append_hs_transcript st.transcript ml in
         let (hs,tl) : hashState nt [] * list anyTag = 
           match hs with
           | FixedHash a ac htl -> FixedHash a ac [], htl
           | OpenHash _ -> hs,[] in
         l := State 
-                  nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
-                  r [] hs st.pv st.kex st.dh_group;
-        Some (ml,tl) 
-      else 
-        let ml = st.parsed @ ml in
-        l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
-                  r ml hs st.pv st.kex st.dh_group;
-        None
+          nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+          r [] hs st.pv st.kex st.dh_group;
+        Correct (Some (ml,tl)))
+      else (
+        l := State 
+          st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+          r ml hs st.pv st.kex st.dh_group;
+        Correct None)
  
-
 
 // We receive CCS as external end-of-flight signals;
 // we return the messages processed so far, and their final tag; 
@@ -374,10 +374,11 @@ let receive l mb =
 // This should *fail* if there are pending input bytes. 
 let receive_CCS #a l =
   let st = !l in
-  if st.incoming <> empty_bytes then None // error: unexpected fragmented message
+  if st.incoming <> empty_bytes 
+  then Error (AD_unexpected_message, "unexpected fragment after CCS")
   else 
   match st.hashes with 
-  | OpenHash b -> None // error (can be statilcally prevented)
+  | OpenHash b -> Error (AD_internal_error, "can be statilcally prevented")
   | FixedHash a acc tl -> 
     begin
       let nt = append_hs_transcript st.transcript st.parsed in
@@ -385,5 +386,5 @@ let receive_CCS #a l =
       l := State 
           nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
           st.incoming [] st.hashes st.pv st.kex st.dh_group;
-      Some (st.parsed,tl,h)
+      Correct (st.parsed, tl, h)
     end 

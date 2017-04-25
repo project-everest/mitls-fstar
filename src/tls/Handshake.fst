@@ -767,49 +767,44 @@ let recv_fragment (hs:hs) #i rg f =
     trace "recv_fragment";
     let h0 = ST.get() in
     let flight = Handshake.Log.receive hs.log f in
-    match !hs.state, flight with
-      | _, None -> InAck false false // nothing happened
+    match flight with
+    | Error z -> InError z
+    | Correct None -> InAck false false // nothing happened
+    | Correct (Some (ms,ts)) -> 
+      match !hs.state, ms, ts with 
+      | C_Idle, _, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
+      | C_Wait_ServerHello, [ServerHello sh], [] -> client_ServerHello hs sh 
+    //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
+      | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert] ->
+        client_ServerHelloDone hs c ske None
 
-      | C_Idle, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
-      | C_Wait_ServerHello, Some ([ServerHello sh], []) -> client_ServerHello hs sh 
-      //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
-      | C_Wait_ServerHelloDone, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert]) ->
-          // assert (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
-          client_ServerHelloDone hs c ske None
+      | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert] ->
+        client_ServerHelloDone hs c ske (Some cr)
 
-      | C_Wait_ServerHelloDone, Some ([Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert]) ->
-          // assert (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
-          client_ServerHelloDone hs c ske (Some cr)
+      | C_Wait_Finished1, [EncryptedExtensions ee; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
+        client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
-      | C_Wait_Finished1, Some ([EncryptedExtensions ee; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) ->
-          // assert (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
-          client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
-
-      | C_Wait_Finished1, Some ([EncryptedExtensions ee; CertificateRequest cr; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished]) ->
-          // assert (Some? pv && pv = Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE));
-          client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
+      | C_Wait_Finished1, [EncryptedExtensions ee; CertificateRequest cr; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
+        client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
       // we'll have other variants for resumption, shc as ([EncryptedExtensions ee; Finished f], [...])
 
-      | C_Wait_Finished2 digest, Some ([Finished f], [digestServerFinished]) ->
-          // assert Some? pv && pv <> Some TLS_1p3
-          client_ServerFinished hs f digest
+      | C_Wait_Finished2 digest, [Finished f], [digestServerFinished] ->
+        client_ServerFinished hs f digest
 
-      //17-03-24 how to receive binders? we need the intermediate hash
-      | S_Idle, Some ([ClientHello ch], [])  -> server_ClientHello hs ch
-      | S_Wait_Finished1 digest, Some ([Finished f], [digestClientFinish]) ->
-          server_ClientFinished hs f.fin_vd digest digestClientFinish
+      | S_Idle, [ClientHello ch], []  -> 
+        server_ClientHello hs ch
+      | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] -> 
+        server_ClientFinished hs f.fin_vd digest digestClientFinish
+      | S_Wait_Finished2 s, [Finished f], [digest] -> 
+        server_ClientFinished_13 hs f.fin_vd digest None
+      | S_Wait_Finished2 s, [Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _] ->
+        server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
 
-      | S_Wait_Finished2 s, Some ([Finished f], [digest]) -> server_ClientFinished_13 hs f.fin_vd digest None
-      | S_Wait_Finished2 s, Some ([Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _]) ->
-          server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
-
-       // are we missing the case with a Certificate but no CertificateVerify?
-      | _, Some _ -> 
-          trace "DISCARD FLIGHT";
-          InAck false false
-          //InError(AD_unexpected_message, "unexpected flight")
-
+      // are we missing the case with a Certificate but no CertificateVerify?
+      | _,  _, _ -> 
+        trace "DISCARD FLIGHT"; InAck false false
+        //InError(AD_unexpected_message, "unexpected flight")
 
 // TODO check CCS once committed to TLS 1.3 yields an alert
 let recv_ccs (hs:hs) =
@@ -817,8 +812,8 @@ let recv_ccs (hs:hs) =
     // assert pv <> TLS 1.3
     // CCS triggers completion of the incoming flight of messages.
     match Handshake.Log.receive_CCS #(Nego.hashAlg hs.nego) hs.log with
-    | None -> InError(AD_unexpected_message, "CCS received at wrong time")
-    | Some (ms, digests, digest) ->
+    | Error z -> InError z
+    | Correct (ms, digests, digest) ->
         match !hs.state, ms, digests with
         | C_Wait_CCS2 digest, [], [] -> (
             trace "Processing CCS"; 
