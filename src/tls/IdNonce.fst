@@ -27,7 +27,7 @@ val insert: n:random -> i:n_id n -> ST unit
   (ensures (fun h0 _ h1 ->
       let nonce_id_table_as_hsref = MR.as_hsref nonce_id_table in
       (HS.modifies (Set.singleton tls_tables_region) h0 h1 /\
-       HS.modifies_ref tls_tables_region !{HH.as_ref (HS.MkRef?.ref nonce_id_table_as_hsref)} h0 h1 /\
+       HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HS.MkRef?.ref nonce_id_table_as_hsref)))) h0 h1 /\
        id_of_nonce n i)))
 let insert n i = 
   MR.m_recall nonce_id_table;

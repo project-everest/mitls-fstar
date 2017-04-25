@@ -301,7 +301,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Verifying one file at a time
 %.fst-ver: $(LIBFILES)
-	@$(FSTAR) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
