@@ -17,7 +17,7 @@ private let mk_id pv aeAlg =
   | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx = CommonDH.keygen g in
-  let gy, gxy = CommonDH.dh_responder #g gx in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
   let msid = StandardMS (PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy)) (er @| er) kdf in
   ID12 pv msid kdf aeAlg er er Client
 
@@ -25,7 +25,7 @@ private let mk_id13 aeAlg =
   let hash_alg = Hashing.Spec.SHA256 in
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx = CommonDH.keygen g in
-  let gy, gxy = CommonDH.dh_responder #g gx in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
   let hsId = HSID_DHE (Salt (EarlySecretID (NoPSK hash_alg))) g (CommonDH.pubshare gx) gy in
   let asId = ASID (Salt (HandshakeSecretID hsId)) in
   let cr = CoreCrypto.random 32 in

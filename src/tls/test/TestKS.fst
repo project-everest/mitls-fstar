@@ -41,8 +41,7 @@ let main () : ML unit =
   p "OK.\n Generating client shares... ";
   let ((CDH.Share g gx) :: _) = KS.ks_client_13_1rtt_init ksc [SEC (CC.ECC_X25519)] in
   p "OK.\n";
-  let gx : Curve25519.point = gx in
-  p ("\t -- gx = "^(hex_of_bytes gx)^"\n");
+  let b = KS.print_share #g gx in
   (*
   p "OK.\n Rewriting the shares in the state with the test ephemerals:\n";
   p "\t Secret = 00b4198a84ed6a7c 218702891735239d 40b7c66505330364 3d3c67f7458ecbc9\n";
@@ -57,6 +56,5 @@ let main () : ML unit =
   p " Generating server share... ";
   let (CDH.Share g gy) = KS.ks_server_13_1rtt_init kss cr cs g gx in
   p "OK.\n";
-  let gy : Curve25519.point = gy in
-  p ("\t gx = "^(hex_of_bytes gx)^"\n\t gy = "^(hex_of_bytes gy)^"\n");
+  let b = KS.print_share #g gy in
   ()

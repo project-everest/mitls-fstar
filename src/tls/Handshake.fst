@@ -319,11 +319,16 @@ val client_ClientHello: s:hs -> i:id -> ST (result (Handshake.Log.outgoing i))
       ( match n with
         | Nego.C_Offer offer -> (
           ( if offer.ch_protocol_version = TLS_1p3
-            then k = KeySchedule.(C(C_13_wait_SH
+            then
+             k = KeySchedule.(C(C_13_wait_SH
               (nonce s)
               None (*TODO: es for 0RTT*)
               None (*TODO: binders *)
-              (Nego.gs_of offer)))
+              (C_13_wait_SH?.gs (C?.s k)) // TODO
+                 // ADL: need an existential for the keyshares (offer only has contains shares)
+                 // + check that that the group and CommonDH.pubshare g gx match
+              //(Nego.gs_of offer)
+             ))
             else k = KeySchedule.(C(C_12_Full_CH offer.ch_client_random)) /\
           t = [ClientHello offer] ))
         | _ -> False )))
@@ -358,7 +363,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
   | Correct mode ->
     let pv = mode.Nego.n_protocol_version in
     let ha = aeAlg_hash mode.Nego.n_aeAlg in
-    let ka = mode.Nego.n_kexAlg in 
+    let ka = mode.Nego.n_kexAlg in
     Handshake.Log.setParams s.log pv ha (Some ka) None (*?*);
     match pv, ka with
     | TLS_1p3, Kex_DHE //, Some gy
@@ -366,7 +371,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
     ->
       begin
         trace "Running TLS 1.3";
-        let digest = Handshake.Log.hash_tag #ha s.log in 
+        let digest = Handshake.Log.hash_tag #ha s.log in
         let hs_keys = KeySchedule.ks_client_13_sh s.ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
@@ -510,7 +515,7 @@ let server_ServerHelloDone hs =
       mode.Nego.n_extensions.ne_extended_ms
       g in
     // ad hoc signing of the nonces and server key share
-    let kex_s = KEX_S_DHE gy in
+    let kex_s = KEX_S_DHE (| g, gy |) in
     let tbs =
       let sv = kex_s_to_bytes kex_s in
       let csr = cr @| mode.Nego.n_server_random in
@@ -591,20 +596,21 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
     match cke.cke_kex_c with
       | KEX_C_RSA _ | KEX_C_DH -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
       | KEX_C_DHE gyb
-      | KEX_C_ECDHE gyb -> (
+      | KEX_C_ECDHE gyb ->
+        begin
           let mode = Nego.getMode hs.nego in  //TODO read back from mode.
-
           // ADL: the type of gyb will change from bytes to g & share g; for now we parse here.
           let Some (|g,  _|) = mode.Nego.n_server_share in
-          let gy: CommonDH.share g = CommonDH.parse g gyb in
-          let g_gy = (|g, gy|) in
-          let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks g_gy digestCCS1 in
-          register hs app_keys;
-          Epochs.incr_reader hs.epochs;
-          // use the new reader; will use the new writer only after sending CCS
-          hs.state := S_Wait_Finished1 digestCCS1; // keep digest to verify the Client Finished
-          InAck true false  // Server 1.2 ATK
-          )
+          match CommonDH.parse g gyb with
+          | None -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Cannot parse client share in CKE")
+          | Some gy ->
+            let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks (| g, gy |) digestCCS1 in
+            register hs app_keys;
+            Epochs.incr_reader hs.epochs;
+            // use the new reader; will use the new writer only after sending CCS
+            hs.state := S_Wait_Finished1 digestCCS1; // keep digest to verify the Client Finished
+            InAck true false  // Server 1.2 ATK
+        end
 
 (* receive ClientFinish *)
 val server_ClientFinished:
@@ -767,6 +773,7 @@ let recv_fragment (hs:hs) #i rg f =
     trace "recv_fragment";
     let h0 = ST.get() in
     let flight = Handshake.Log.receive hs.log f in
+<<<<<<< c49d0d50477db8aac19dd0f18898518394f2e65a
     match flight with
     | Error z -> InError z
     | Correct None -> InAck false false // nothing happened
@@ -777,6 +784,17 @@ let recv_fragment (hs:hs) #i rg f =
     //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert] ->
         client_ServerHelloDone hs c ske None
+=======
+    match !hs.state, flight with
+      | _, None -> InAck false false // nothing happened
+
+      | C_Idle, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
+      | C_Wait_ServerHello, Some ([ServerHello sh], []) -> client_ServerHello hs sh
+      //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
+      | C_Wait_ServerHelloDone, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert]) ->
+          // assert (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
+          client_ServerHelloDone hs c ske None
+>>>>>>> Use explicit tagging in CommonDH / ECGroup
 
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert] ->
         client_ServerHelloDone hs c ske (Some cr)
@@ -792,6 +810,7 @@ let recv_fragment (hs:hs) #i rg f =
       | C_Wait_Finished2 digest, [Finished f], [digestServerFinished] ->
         client_ServerFinished hs f digest
 
+<<<<<<< c49d0d50477db8aac19dd0f18898518394f2e65a
       | S_Idle, [ClientHello ch], []  -> 
         server_ClientHello hs ch
       | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] -> 
@@ -800,6 +819,17 @@ let recv_fragment (hs:hs) #i rg f =
         server_ClientFinished_13 hs f.fin_vd digest None
       | S_Wait_Finished2 s, [Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _] ->
         server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
+=======
+      | S_Wait_Finished2 s, Some ([Finished f], [digest]) -> server_ClientFinished_13 hs f.fin_vd digest None
+      | S_Wait_Finished2 s, Some ([Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _]) ->
+          server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
+
+       // are we missing the case with a Certificate but no CertificateVerify?
+      | _, Some _ ->
+          trace "DISCARD FLIGHT";
+          InAck false false
+          //InError(AD_unexpected_message, "unexpected flight")
+>>>>>>> Use explicit tagging in CommonDH / ECGroup
 
       // are we missing the case with a Certificate but no CertificateVerify?
       | _,  _, _ -> 

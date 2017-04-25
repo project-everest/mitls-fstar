@@ -74,7 +74,13 @@ let secretLabel = function
 (* A flag for runtime debugging of computed keys.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false *)
-inline_for_extraction let ks_debug = false
+inline_for_extraction let ks_debug = true
+let discard (b:bool): ST unit (requires (fun _ -> True))
+ (ensures (fun h0 _ h1 -> h0 == h1)) = ()
+let print s = discard (IO.debug_print_string ("KS | "^s^"\n"))
+unfold let dbg : string -> ST unit (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1)) =
+  if ks_debug then print else (fun _ -> ())
 
 #set-options "--lax"
 
@@ -330,19 +336,21 @@ val ks_client_13_1rtt_init:
     modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_13_1rtt_init ks gl =
+  dbg "init 1-RTT";
   let KS #rid st = ks in
   let C (C_Init cr) = !st in
   let groups = List.Tot.map group_of_valid_namedGroup gl in
   let keygen (g:CommonDH.group)
-    : St (g:CommonDH.group & CommonDH.keyshare g)
-    = (| g, CommonDH.keygen g |) in
+    : ST (g:CommonDH.group & CommonDH.keyshare g)
+    (requires fun h -> True) (ensures fun h0 _ h1 -> modifies_none h0 h1)
+    = let gx = CommonDH.keygen g in (| g, gx |) in
   let gs = map_ST keygen groups in
   st := C (C_13_wait_SH cr None None gs);
-  let serialize_share (gx:(g:CommonDH.group & CommonDH.share g)) =
+  let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
     let (| g, gx |) = gx in
     match CommonDH.namedGroup_of_group g with
     | None -> None // Impossible
-    | Some ng -> Some (CommonDH.Share g gx) in
+    | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
   let serialized = List.Tot.choose serialize_share gs in
   serialized
 
@@ -367,11 +375,11 @@ let ks_client_13_0rtt_init ks esId gl =
     = (| g, CommonDH.keygen g |) in
   let gs = map_ST keygen groups in
   st := C (C_13_wait_CH cr esId gs);
-  let serialize_share (gx:(g:CommonDH.group & CommonDH.share g)) =
+  let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
     let (| g, gx |) = gx in
     match CommonDH.namedGroup_of_group g with
     | None -> None // Impossible
-    | Some ng -> Some (CommonDH.Share g gx) in
+    | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
   List.Tot.choose serialize_share gs
 
 // Derive the early keys from the early secret
@@ -702,7 +710,7 @@ let ks_server_12_cke_dh ks gy hashed_log =
       let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
       ()
     else () in
-  let pmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
+  let pmsId = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS pmsb) in
   let kef = kefAlg pv cs ems in
   let msId, ms =
     if ems then
@@ -767,7 +775,9 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
 let ks_client_13_sh ks sr cs hashed_log (| g, gy|) accept_ed =
   let KS #region st = ks in
   let C (C_13_wait_SH cr early_info early_fin gc) = !st in
-  let Some gx = List.Tot.find (fun (gx:(x:CommonDH.group & CommonDH.share g)) -> let (| g', _ |) = gx in g = g') gc in
+  let Some gx = List.Tot.find (
+      fun ((| g', _ |):(x:CommonDH.group & CommonDH.keyshare g)) -> g = g'
+    ) gc in
   let (| g, gx |) = gx in
   let gxy = CommonDH.dh_initiator #g gx gy in
   let CipherSuite _ _ (AEAD ae h) = cs in
@@ -1021,11 +1031,11 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
   let () =
     if ks_debug then
       let _ = print_share gx in
-      let _ = print_share (CommonDH.pubshare gy) in
+      let _ = print_share gy in
       let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
       ()
     else () in
-  let dhpmsId = PMS.DHPMS g gx (CommonDH.pubshare gy) (PMS.ConcreteDHPMS pmsb) in
+  let dhpmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
   let ns =
     if ems then
       C_12_wait_MS csr alpha dhpmsId pmsb
@@ -1038,7 +1048,7 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
         else false in
       let msId = StandardMS dhpmsId csr kef in
       C_12_has_MS csr alpha msId ms in
-  st := C ns; CommonDH.pubshare gy
+  st := C ns; gy
 
 // Called by Handshake after server hello when a full RSA key exchange is negotiated
 val ks_client_12_full_rsa: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> RSAKey.pk -> ST bytes
