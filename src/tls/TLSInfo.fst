@@ -215,6 +215,7 @@ type ri_status =
 | RI_Valid
 | RI_Invalid
 
+// deprecated (but still included in TLSInfo)
 type negotiatedExtensions = {
     ne_extended_ms: bool; // now a total function of the mode
     ne_extended_padding: bool; // gone!

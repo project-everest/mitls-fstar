@@ -254,22 +254,6 @@ let sigHashAlg_of_ske signature =
    | Error _ -> None
   else None
 
-let sig_algs (mode: Negotiation.mode) (sh_alg: TLSConstants.hashAlg)
- =
-  // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
-  // If no signature nego took place we use the SA and KDF hash from the CS
-  let sa = mode.Nego.n_sigAlg in
-  let algs =
-    match mode.Nego.n_extensions.TLSInfo.ne_signature_algorithms with
-    | Some l -> l
-    | None -> [sa, sh_alg] in
-  let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
-  let sa, ha =
-    match algs with
-    | ha::_ -> ha
-    | [] -> (sa, sh_alg) in
-  let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
-  (a, sa, ha)
 
 (* ------- Pure functions between offer/mode and their message encodings -------- *)
 
@@ -357,8 +341,8 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
   | Error z -> InError z
   | Correct mode ->
     let pv = mode.Nego.n_protocol_version in
-    let ha = aeAlg_hash mode.Nego.n_aeAlg in
-    let ka = mode.Nego.n_kexAlg in 
+    let ha = Nego.hashAlg mode in
+    let ka = Nego.kexAlg mode in 
     Handshake.Log.setParams s.log pv ha (Some ka) None (*?*);
     match pv, ka with
     | TLS_1p3, Kex_DHE //, Some gy
@@ -414,7 +398,7 @@ let client_ServerHelloDone hs c ske ocr =
         mode.Nego.n_server_random
         mode.Nego.n_protocol_version
         mode.Nego.n_cipher_suite
-        mode.Nego.n_extensions.ne_extended_ms // a flag controlling the use of ems
+        (Nego.emsFlag mode) // a flag controlling the use of ems
         gy in
       let (|g, _|) = gy in
       let msg = ClientKeyExchange ({cke_kex_c = kex_c_of_dh_key #g gx}) in
@@ -488,26 +472,16 @@ let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
   let mode = Nego.getMode hs.nego in
   let Some chain = mode.Nego.n_server_cert in // was using Cert.lookup_chain cfg.cert_chain_file
-
-  let ngroups =
-    match mode.Nego.n_extensions.ne_supported_groups with
-    | Some gl -> List.Tot.choose CommonDH.group_of_namedGroup gl
-    | None -> List.Tot.choose
-        // Cannot use an elliptic curve if SupportedGroups is missing in TLS<=1.2
-        (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
-        (config_of hs).namedGroups in
-
-  match ngroups with
-  | [] -> InError (AD_handshake_failure,
-     perror __SOURCE_FILE__ __LINE__ "no shared supported group")
-  | g::_ ->
+  match Nego.chosenGroup mode with
+  | None -> InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
+  | Some g  ->
    begin
     let cr = mode.Nego.n_offer.ch_client_random in
     let gy = KeySchedule.ks_server_12_init_dh hs.ks
       cr
       mode.Nego.n_protocol_version
       mode.Nego.n_cipher_suite
-      mode.Nego.n_extensions.ne_extended_ms
+      (Nego.emsFlag mode)
       g in
     // ad hoc signing of the nonces and server key share
     let kex_s = KEX_S_DHE gy in
@@ -518,7 +492,7 @@ let server_ServerHelloDone hs =
 
     // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
 
-    let a, sa, ha = sig_algs mode (Hash Hashing.Spec.SHA1) in
+    let a, sa, ha = Nego.sig_algs mode (Hash Hashing.Spec.SHA1) in
     let skey = admit() in //Nego.getSigningKey #a hs.nego in
     let sigv = Signature.sign #a ha skey tbs in
     if not (length sigv >= 2 && length sigv < 65536)
@@ -652,7 +626,7 @@ let server_ServerFinished_13 hs i =
       let lb = digestSig @| rc in
       to_be_signed pv Server None lb in
 
-    let a, sa, ha = sig_algs mode sh_alg in
+    let a, sa, ha = Nego.sig_algs mode sh_alg in
     let skey: Signature.skey a = admit() in // Nego.getSigningKey #a hs.nego in // Signature.lookup_key #a mode.Nego.n_offer.private_key_file
     let sigv = Signature.sign #a ha skey tbs in
     if not (length sigv >= 2 && length sigv < 65536)
@@ -811,7 +785,8 @@ let recv_ccs (hs:hs) =
     trace "recv_ccs";
     // assert pv <> TLS 1.3
     // CCS triggers completion of the incoming flight of messages.
-    match Handshake.Log.receive_CCS #(Nego.hashAlg hs.nego) hs.log with
+    let mode = Nego.getMode hs.nego in 
+    match Handshake.Log.receive_CCS #(Nego.hashAlg mode) hs.log with
     | Error z -> InError z
     | Correct (ms, digests, digest) ->
         match !hs.state, ms, digests with

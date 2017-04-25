@@ -64,7 +64,7 @@ and extension =
 
 
 (* string_of_ *)
-let string_of_extension e = function
+let string_of_extension = function
   | E_server_name _ -> "server_name" 
   | E_supported_groups _ -> "supported_groups" 
   | E_signature_algorithms _ -> "signature_algorithms"
@@ -74,9 +74,11 @@ let string_of_extension e = function
   | E_supported_versions _ -> "supported_versions"
   | E_cookie _ -> "cookie"
   | E_psk_key_exchange_modes -> "psk_kx_modes"
-  | E_unknown_extension _ -> "unknown"
-  
-let string_of_extensions es = List.Tot.map string_of_extension es 
+  | E_unknown_extension (n,_) -> print_bytes n
+
+let rec string_of_extensions = function
+  | e0::es -> string_of_extension e0^" "^string_of_extensions es
+  | []  -> ""
 
 (** shallow equality *)
 private let sameExt e1 e2 =

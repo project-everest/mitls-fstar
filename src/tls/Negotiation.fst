@@ -13,7 +13,7 @@ module HS = FStar.HyperStack
 module MR = FStar.Monotonic.RRef
 
 //16-05-31 these opens are implementation-only; overall we should open less
-//open Extensions
+open Extensions
 open CoreCrypto
 
 (**
@@ -59,7 +59,7 @@ let gs_of ch =
   | Some exts ->
     begin
     match List.Tot.find Extensions.E_key_share? exts with
-    | Some (E_key_share (CommonDH.ClientKeyShare ks)) -> list_of_ClientKeyShare ks
+    | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> list_of_ClientKeyShare ks
     | _ -> []
     end
   | _ -> []
@@ -84,25 +84,14 @@ noeq type mode =
     n_offer: offer -> // negotiated client offer
     n_hrr: option (retryInfo n_offer) ->  // optional HRR roundtrip
 
-    //TODO reorder and recheck each of these fields (remove options and redundancy)
-    //TODO optimize for clarity, since it will be part of the main API.
-    
     // more from SH (both TLS 1.2 and TLS 1.3)
-    n_server_random: TLSInfo.random ->
-
-    // the resumption response
-    n_resume: option bool -> // is this a 1.2 resumption with the offered sid?
-    n_psk: option PSK.pskid -> // none with 1.2 (we are not doing PSK 1.2)
-    n_sessionID: option sessionID -> // optional, proposed 1.2 id for *future* resumptions (not always what SH carries)
-
     n_protocol_version: protocolVersion ->
-    n_kexAlg: TLSConstants.kexAlg ->
-    n_aeAlg: TLSConstants.aeAlg ->
-    n_sigAlg: TLSConstants.sigAlg ->
+    n_server_random: TLSInfo.random ->
+    n_sessionID: option sessionID -> // optional 1.2 id for *future* resumptions (not always what SH carries)
     n_cipher_suite: cipherSuite ->
-    n_extensions: negotiatedExtensions ->
-    n_server_extensions: (se:list extension{List.Tot.length se < 256}) ->
-    n_scsv: list scsv_suite ->
+
+    // concatenating SH and EE extensions for 1.3, in wire order.
+    n_server_extensions: option (se:list extension{List.Tot.length se < 256}) ->
 
     // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
     n_server_share: option (g:CommonDH.group & CommonDH.share g) ->
@@ -112,11 +101,41 @@ noeq type mode =
     n_server_cert: option Cert.chain ->
 
     // more from either CH+SH (1.3) or CKE (1.2)
-
-    // This is the share selected
     n_client_share: option (g:CommonDH.group & CommonDH.share g) ->
     // { both shares are in the same negotiated group }
     mode
+
+// 17-04-25 we need pure functions of the mode for these old fields 
+//    n_resume: option bool -> // is this a 1.2 resumption with the offered sid?
+//    n_psk: option PSK.pskid -> // none with 1.2 (we are not doing PSK 1.2)
+//
+//    n_kexAlg: TLSConstants.kexAlg ->
+//    n_aeAlg: TLSConstants.aeAlg ->
+//    n_sigAlg: TLSConstants.sigAlg ->
+//    n_scsv: list scsv_suite ->
+//
+// and for each of the fields of
+//    n_extensions: negotiatedExtensions ->
+
+let sig_algs (m: mode) (sh_alg: TLSConstants.hashAlg)
+ = 
+  admit() (* 
+  // Signature agility (following the broken rules of 7.4.1.4.1. in RFC5246)
+  // If no signature nego took place we use the SA and KDF hash from the CS
+  let CipherSuite _ (Some sa) _ = mode.Nego.n_cipher_suite in
+  let algs =
+    match Nego.ne_signature_algorithms mode in 
+    | Some l -> l
+    | None -> [sa, sh_alg] in
+  let algs = List.Tot.filter (fun (s,_) -> s = sa) algs in
+  let sa, ha =
+    match algs with
+    | ha::_ -> ha
+    | [] -> (sa, sh_alg) in
+  let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
+  (a, sa, ha)
+*)
+
 
 noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
@@ -131,8 +150,7 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 negotiationState r cfg resume
 
   | C_WaitFinished1:
-                n_offer: offer ->
-                (* Here be fields of mode -> *)
+                n_partialmode: mode ->
                 negotiationState r cfg resume
 
   | C_Mode:     n_mode: mode -> // In 1.2, used for resumption and full handshakes
@@ -230,9 +248,29 @@ let create region r cfg resume nonce =
     NS cfg resume nonce state
 
 // a bit too restrictive: use a single Hash in any given offer
-val hashAlg: #region:rgn -> #role:TLSConstants.role -> t region role -> Hashing.Spec.alg
-let hashAlg #region #role ns =
+val hashAlg: mode -> Hashing.Spec.alg
+let hashAlg m = //FIXME!
   Hashing.Spec.SHA256
+ 
+val kexAlg: mode -> TLSConstants.kexAlg
+let kexAlg m  = //FIXME!
+  TLSConstants.Kex_ECDHE
+
+val emsFlag: mode -> bool
+let emsFlag m  = //FIXME!
+  true
+
+val chosenGroup: mode -> option CommonDH.group
+let chosenGroup m = admit()
+(*
+  let ngroups =
+    match mode.Nego.n_extensions.ne_supported_groups with
+    | Some gl -> List.Tot.choose CommonDH.group_of_namedGroup gl
+    | None -> List.Tot.choose
+        // Cannot use an elliptic curve if SupportedGroups is missing in TLS<=1.2
+        (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
+        (config_of hs).namedGroups in
+*)
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.config
 let local_config #region #role ns =
@@ -291,7 +329,7 @@ let client_ClientHello #region ns oks =
   match MR.m_read ns.state with 
   | C_Init _ -> 
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in 
-      trace "offering client extensions "^Extensions.string_of_extensions offer.ch_extensions;
+      trace ("offering client extensions [ "^Extensions.string_of_extensions (Some?.v offer.ch_extensions)^"]");
       MR.m_write ns.state (C_Offer offer);
       offer
 
@@ -327,7 +365,7 @@ let negotiateCipherSuite cfg pv ccs =
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
 assume
-val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (option namedGroup * option bytes))
+val negotiateGroupKeyShare: config -> protocolVersion -> TLSConstants.kexAlg -> option (list extension) -> Tot (result (option namedGroup * option bytes))
 (*
 let rec negotiateGroupKeyShare cfg pv kex exts =
   match exts with
@@ -452,18 +490,11 @@ let client_ServerHello #region ns sh =
            let mode = Mode
              offer 
              None // n_hrr
-             sr
-             (Some resume)
-             None // n_psk
-             None // (Some ssid)
              spv
-             kex
-             ae
-             sig
+             sr
+             None // (Some ssid)
              cs
-             ne_default // negotiated extensions
-             (Some?.v sext)
-             [] // n_scsv
+             sext
              (Some server_share)
              None // n_client_cert_request
              None // n_server_cert
@@ -475,18 +506,11 @@ let client_ServerHello #region ns sh =
            let mode = Mode 
              offer 
              None
-             sr
-             (Some resume)
-             None // n_psk
-             None // (Some ssid)
              spv
-             kex
-             ae
-             sig
+             sr
+             None // (Some ssid)
              cs
-             ne_default // negotiated extensions
-             (Some?.v sext)
-             [] // n_scsv
+             sext
              None // n_server_share; unknwon before SKE is received
              None // n_client_cert_request
              None // n_server_cert
