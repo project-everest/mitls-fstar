@@ -13,7 +13,7 @@ module HS = FStar.HyperStack
 module MR = FStar.Monotonic.RRef
 
 //16-05-31 these opens are implementation-only; overall we should open less
-open Extensions
+//open Extensions
 open CoreCrypto
 
 (**
@@ -438,7 +438,7 @@ let client_ServerHello #region ns sh =
     else if not (acceptableCipherSuite ns.cfg spv cs) then
       Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
     else
-     match negotiateClientExtensions spv ns.cfg cext sext cs None resume with
+     match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
       | Error z -> Error z
       | Correct next ->
       match cs with
@@ -640,7 +640,7 @@ let computeClientMode cfg cext cpv spv sr cs sext comp ri =
     Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
   else
    let resume = false in
-   match negotiateClientExtensions spv cfg cext sext cs ri resume with
+   match Extensions.negotiateClientExtensions spv cfg cext sext cs ri resume with
     | Error(z) -> Error(z)
     | Correct(next) ->
     match cs with
