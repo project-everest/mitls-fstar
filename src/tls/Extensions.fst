@@ -2,8 +2,8 @@
 (**
 This modules defines TLS 1.3 Extensions. 
 
-Ast: parsing and formatting. 
-prepareExtensions : config -> list extensions. 
+- An ast, and it's associated parsing and formatting functions. 
+- Nego calls prepareExtensions : config -> list extensions. 
 
 @summary: TLS 1.3 Extensions. 
 *)
