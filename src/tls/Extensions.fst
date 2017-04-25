@@ -2,6 +2,9 @@
 (**
 This modules defines TLS 1.3 Extensions. 
 
+Ast: parsing and formatting. 
+prepareExtensions : config -> list extensions. 
+
 @summary: TLS 1.3 Extensions. 
 *)
 module Extensions
@@ -28,6 +31,7 @@ noeq type preEarlyDataIndication : Type0 =
 and earlyDataIndication =
   | ClientEarlyDataIndication of preEarlyDataIndication
   | ServerEarlyDataIndication
+
 (* SI: we currently only define Mandatory-to-Implement Extensions 
    as listed in the RFC's Section 8.2. Labels in the variants below are: 
      M  - "MUST implement"
@@ -35,28 +39,27 @@ and earlyDataIndication =
 
 and extension =
   | E_server_name of list TI.serverName (* M, AF *) (* RFC 6066 *)
-(*| E_max_fragment_length 
-  | E_client_certificate_url 
-  | E_status_request 
-  | E_user_mapping 
-  | E_cert_type *)
-  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
+(*| E_max_fragment_length
+  | E_status_request *)
+  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)  
   | E_signature_algorithms of (list sigHashAlg) (* M, AF *) (* RFC 5246 *)
 (*| E_use_srtp 
   | E_heartbeat 
   | E_application_layer_protocol_negotiation
   | E_signed_certifcate_timestamp 
   | E_client_certificate_type 
+  | E_server_certificate_type 
   | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
   // this is the truncated PSK extension, without the list of binder tags.
   | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)  (* M, AF *)
   | E_early_data of earlyDataIndication
-  | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
-  | E_psk_key_exchange_modes (* SI: payload?? *)  
   | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
+  | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
+  | E_psk_key_exchange_modes (* ToDo: add payload *)  
 (*| E_certificate_authorities 
-  | E_oid_filters *)
+  | E_oid_filters 
+  | E_post_handshake_auth *)
   | E_unknown_extension of (lbytes 2 * bytes) (** un-{implemented,known} extensions. *)
 
 (** shallow equality *)
@@ -68,9 +71,9 @@ private let sameExt e1 e2 =
   | E_key_share _, E_key_share _ -> true
   | E_pre_shared_key _, E_pre_shared_key _ -> true
   | E_early_data _, E_early_data _ -> true
-  | E_cookie _, E_cookie _ -> true 
-  | E_psk_key_exchange_modes _, E_psk_key_exchange_modes _ -> true    
   | E_supported_versions _, E_supported_versions _ -> true
+  | E_cookie _, E_cookie _ -> true 
+  | E_psk_key_exchange_modes, E_psk_key_exchange_modes -> true    
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
@@ -88,9 +91,9 @@ let extensionHeaderBytes ext =
   | E_key_share _              -> abyte2 (0x00z, 0x28z) // 40
   | E_pre_shared_key _         -> abyte2 (0x00z, 0x29z) // 41
   | E_early_data _             -> abyte2 (0x00z, 0x2az) // 42
+  | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43
   | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
-  | E_psk_key_exchange_modes _ -> abyte2 (0x00z, 0x2dz) // 45
-  | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43 --
+  | E_psk_key_exchange_modes -> abyte2 (0x00z, 0x2dz) // 45
   | E_unknown_extension(h,b) -> h
 
 (** parse and serialize functions for server_name payload, TI.serverName. *)
@@ -121,7 +124,7 @@ and extensions_depth (exts:list extension): Tot nat =
 	     if y > x then y else x
 
 (* TODO *)
-#set-options "--lax"
+// #set-options "--lax"
 
 val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
   (decreases (fun edi -> match edi with | ClientEarlyDataIndication edi -> extensions_depth edi.ped_extensions | _ -> 0))
@@ -156,10 +159,10 @@ and extensionPayloadBytes role ext =
   | E_key_share ks             -> CommonDH.keyShareBytes ks
   | E_pre_shared_key psk -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
   | E_early_data edt           -> earlyDataIndicationBytes edt
-  | E_cookie c                 -> c // SI: check 
-  | E_psk_key_exchange_modes _ -> admit() 
   | E_supported_versions vv    -> 
       List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
+  | E_cookie c                 -> c // SI: check 
+  | E_psk_key_exchange_modes  -> admit() 
   | E_unknown_extension(h,b)   -> b
 
 and extensionBytes role ext =
@@ -172,7 +175,7 @@ and extensionBytes role ext =
 and extensionsBytes role exts =
   vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
 
-#reset-options
+//#reset-options
 
 (* JK: For some reason without that I do not manage to get the
 definition of extensionsBytes *)
@@ -189,7 +192,7 @@ val parseExtensions: pinverse_t extensionsBytes
 *)
 
 (* TODO *)
-#set-options "--lax"
+//#set-options "--lax"
 
 (*************************************************
  extension parsing
@@ -421,7 +424,7 @@ and parseExtensions role b =
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
 
-#reset-options
+//#reset-options
 
 (* SI: API. Called by HandshakeMessages. *)
 val parseOptExtensions: r:role -> data:bytes -> Tot (result (option (list extension)))
@@ -449,6 +452,22 @@ private let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:na
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
 
 (* SI: API. Called by Nego. *)
+(* RFC 4.2:
+When multiple extensions of different types are present, the
+extensions MAY appear in any order, with the exception of
+“pre_shared_key” Section 4.2.10 which MUST be the last extension in
+the ClientHello. There MUST NOT be more than one extension of the same
+type in a given extension block.
+
+RFC 8.2. ClientHello msg must: 
+If not containing a “pre_shared_key” extension, it MUST contain both a
+“signature_algorithms” extension and a “supported_groups” extension.
+If containing a “supported_groups” extension, it MUST also contain a
+“key_share” extension, and vice versa. An empty KeyShare.client_shares
+vector is permitted.
+
+*)
+
 val prepareExtensions: 
   protocolVersion -> 
   k:valid_cipher_suites{List.Tot.length k < 256} -> 
@@ -458,6 +477,9 @@ val prepareExtensions:
   option (TI.cVerifyData * TI.sVerifyData) -> 
   option CommonDH.keyShare -> 
   Tot (l:list extension{List.Tot.length l < 256})
+(* SI: implement this using prep combinators, of type exts->data->exts, per ext group. 
+   For instance, PSK, HS, etc extensions should all be done in one function each. 
+   This seems to make this prepareExtensions more modular. *)
 let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
@@ -727,7 +749,7 @@ let hasExtendedMS extL = extL.ne_extended_ms = true
 
 // JK : cannot add total effect here because of the exception thrown
 (* TODO *)
-#set-options "--lax"
+//#set-options "--lax"
 
 private val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> ML (list sigHashAlg)
 let default_sigHashAlg_fromSig pv sigAlg=
