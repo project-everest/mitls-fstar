@@ -645,3 +645,26 @@ let computeClientMode cfg cext cpv spv sr cs sext comp ri =
          } in *)
          Correct mode
       | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
+
+
+//17-03-30 where is it used?
+type hs_id = {
+  id_cert: Cert.chain;
+  id_sigalg: option sigHashAlg;
+}
+
+//17-03-30 get rid of this wrapper?
+type session = {
+  session_nego: mode;
+}
+
+
+// represents the outcome of a successful handshake,
+// providing context for the derived epoch
+type handshake =
+  | Fresh of session // was sessionInfo
+  | Resumed of session // was abbrInfo * sessionInfo
+// We use SessionInfo as unique session indexes.
+// We tried using instead hs, but this creates circularities
+// We'll probably need a global log to reason about them.
+// We should probably do the same in the session store.
