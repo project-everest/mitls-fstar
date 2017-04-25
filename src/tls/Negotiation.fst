@@ -36,26 +36,7 @@ let valid_offer ch =
 
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
 type offer = ch:HandshakeMessages.ch { valid_offer ch }
-(*
-  | Offer:
-    co_protocol_version: protocolVersion ->
-    co_cipher_suites: (k:valid_cipher_suites{List.Tot.length k < 256}) ->
-    co_compressions: (cl:list compression{ List.Tot.length cl > 0 /\ List.Tot.length cl < 256 }) ->
-    co_namedGroups: list valid_namedGroup ->
-    co_sigAlgs: list sigHashAlg ->
-    co_safe_resumption: bool ->
-    co_safe_renegotiation: bool ->
-    co_resume: option sessionID ->
-    // Each tag between 32 and 255 bytes, and the total length is < 2^16
-    // We need a timestamp too, for obfuscated_ticket_age
-    co_psks: list (PSK.pskIdentity * Hashing.anyTag) ->
-    co_client_shares: list (g:CommonDH.group & CommonDH.share g) ->
-    co_client_random: TLSInfo.random ->
-    offer
-*)   
-
-
-private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare) : 
+private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare) :
   list (g:CommonDH.group & CommonDH.share g) =
   match ks with
   | [] -> []
@@ -74,16 +55,20 @@ let gs_of ch =
   | _ -> []
 
 
-// we keep both the server's HelloRetryRequest 
-// and the overwritten parts of the initial offer
+(**
+  We keep both the server's HelloRetryRequest
+  and the overwritten parts of the initial offer
+*)
 type retryInfo (offer:offer) =
   hrr *
   (list (g:CommonDH.group & CommonDH.share g)) *
   (list (PSK.pskIdentity * Hashing.anyTag))
 
-// The final negotiated outcome, including key shares and long-term identities.
-// mode is the name used in the resilience paper;
-// session_info is the one from TLSInfo
+(**
+  The final negotiated outcome, including key shares and long-term identities.
+  mode is the name used in the resilience paper;
+  session_info is the one from TLSInfo
+*)
 noeq type mode =
   | Mode:
     n_offer: offer -> // negotiated client offer
@@ -174,6 +159,7 @@ let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
   | C_Init nonce, C_Init nonce' -> nonce == nonce'
   | C_Offer offer, C_Offer offer' -> offer == offer'
   | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
+  | C_Offer offer, C_Mode mode -> mode.n_offer == offer
   | _, _ -> True  // TODO
 
 noeq type t (region:rgn) (role:TLSConstants.role) =
@@ -203,6 +189,11 @@ let computeOffer r cfg resume nonce ks =
       cfg.namedGroups
       None // : option (cVerifyData * sVerifyData)
       ks
+  in
+  let compressions =
+    match cfg.compressions with
+    | [] -> [NullCompression]
+    | _  -> cfg.compressions
   in
   {
     ch_protocol_version = cfg.maxVer; // legacy for 1.3
@@ -292,16 +283,112 @@ let client_ClientHello #region ns oks =
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in 
       MR.m_write ns.state (C_Offer offer);
       offer
-  
 
-// Checks that the protocol version in the CHELO message is
-// within the range of versions supported by the server configuration
-// and outputs the negotiated version if true
+(**
+  Checks that the protocol version in the CHELO message is
+  within the range of versions supported by the server configuration
+  and outputs the negotiated version if true
+*)
 val negotiateVersion: cfg:config -> c:protocolVersion -> Tot (result protocolVersion)
 let negotiateVersion cfg c =
   if geqPV c cfg.minVer && geqPV cfg.maxVer c then Correct c
   else if geqPV c cfg.maxVer then Correct cfg.maxVer
   else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation failed")
+
+(**
+  For use in negotiating the ciphersuite, takes two lists and
+  outputs the first ciphersuite in list2 that also is in list
+  one and is a valid ciphersuite, or [None]
+*)
+val negotiate:l1:list valid_cipher_suite -> list valid_cipher_suite -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
+let negotiate l1 l2 =
+  List.Tot.find #valid_cipher_suite (fun s -> CipherSuite? s && List.Tot.mem s l1) l2
+
+(**
+  For use in ensuring the result from negotiate is a Correct
+  ciphersuite with associated kex, sig and ae algorithms,
+  and throws an error if No ciphersuites were supported in both lists
+*)
+val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> ccs:valid_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
+let negotiateCipherSuite cfg pv ccs =
+  match negotiate ccs cfg.ciphersuites with
+  | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
+  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
+
+assume
+val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (option namedGroup * option bytes))
+(*
+let rec negotiateGroupKeyShare cfg pv kex exts =
+  match exts with
+  | None when (pv = TLS_1p3) -> Error(AD_decode_error, "no supported group or key share extension found")
+  | Some exts when (pv = TLS_1p3) ->
+    let rec aux: list extension -> Tot (result (option namedGroup * option bytes)) =
+      function
+      | E_key_share (CommonDH.ClientKeyShare gl) :: _ ->
+        let inConf (gn, gx) =
+           (((SEC? gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
+            || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
+           && List.Tot.mem gn cfg.namedGroups in
+        (match List.Tot.filter inConf gl with
+        | share :: _ -> Correct (Some share)
+        | [] -> Error(AD_decode_error, "no shared group between client and server config"))
+      | _ :: t -> aux t
+      | [] -> Error(AD_decode_error, "no supported group or key share extension found")
+    in aux exts
+  | Some exts when (kex = Kex_ECDHE && List.Tot.existsb E_supported_groups? exts) ->
+    let Some (E_supported_groups gl) = List.Tot.find E_supported_groups? exts in
+    let filter x = SEC? x && List.Tot.mem x cfg.namedGroups in
+    (match List.Tot.filter filter gl with
+    | gn :: _ -> Correct (Some gn, None)
+    | [] -> Error(AD_decode_error, "no shared curve configured"))
+  | _ ->
+    let filter x =
+      (match kex with | Kex_DHE -> FFDHE? x | Kex_ECDHE -> SEC? x | _ -> false) in
+    if kex = Kex_DHE || kex = Kex_ECDHE then
+      (match List.Tot.filter filter cfg.namedGroups with
+      | gn :: _ -> Correct (Some gn, None)
+      | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
+    else Correct(None, None)
+*)
+
+
+(**
+  Determines if the server random value contains a downgrade flag
+  AND if there has been a downgrade
+  The downgrade flag is a random value set by RFC (6.3.1.1)
+*)
+val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
+let isSentinelRandomValue c_pv s_pv s_random =
+  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
+  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
+
+
+(** Confirms that the version negotiated by the server was:
+  - within the range specified by client config AND
+  - is not an unnecessary downgrade AND
+  - is not a newer version than offered by the client
+*)
+val acceptableVersion: config -> protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
+let acceptableVersion cfg cpv spv sr =
+  match negotiateVersion cfg cpv with
+  | Correct c_pv ->
+    geqPV c_pv spv && geqPV spv cfg.minVer &&
+    not (isSentinelRandomValue c_pv spv sr)
+  | Error _ -> false
+
+(** Confirms that the ciphersuite negotiated by the server was:
+  - consistent with the client config;
+  - TODO: [s_cs] is supported by the protocol version (e.g. no GCM with
+    TLS<1.2).
+ BD: Removed that the ciphersuite is acceptable given CHELO
+ given that the clientOffer is prepared with the entire list
+ of valid cipher suites in the client config
+*)
+val acceptableCipherSuite: config -> protocolVersion -> valid_cipher_suite -> Tot bool
+let acceptableCipherSuite cfg spv cs =
+  List.Tot.existsb (fun x -> x = cs) cfg.ciphersuites &&
+  not (isAnonCipherSuite cs) || cfg.allowAnonCipherSuite
+
 
 // for this kind of function, can we just rely on type inference?
 val client_ServerHello: #region:rgn -> t region Client ->
@@ -309,51 +396,77 @@ val client_ServerHello: #region:rgn -> t region Client ->
   St (result mode) // it needs to be computed, whether returned or not
 let client_ServerHello #region ns sh =
   match MR.m_read ns.state with 
-  | C_Offer o -> 
-      let CipherSuite kex _ ae = sh.HandshakeMessages.sh_cipher_suite in 
-      let m = Mode //17-04-22 placeholder; should call computeOffer
-        o
-        None
-        sh.HandshakeMessages.sh_server_random
-        (Some false)
-        None
-        None //(Some sh.HandshakeMessages.sh_sessionID)
-        sh.HandshakeMessages.sh_protocol_version 
-        kex
-        ae
-        CoreCrypto.RSASIG
-        sh.HandshakeMessages.sh_cipher_suite
-        ne_default // negotiated extensions
-        [] // (let Some se = sh.HandshakeMessages.sh_extensions in se)
-        []
-        None // server_share
-        None
-        None // server cert
-        None // client share
-      in
-      MR.m_write ns.state (C_Mode m);
-      Correct m
+  | C_Offer offer -> 
+    let spv  = sh.sh_protocol_version in
+    let sr   = sh.sh_server_random in
+    let cs   = sh.sh_cipher_suite in
+    let sext = sh.sh_extensions in
+    let ssid = sh.sh_sessionID in
+    let cext = offer.ch_extensions in
+    let sig  = CoreCrypto.RSASIG in
+    let resume = false in
+    if not (acceptableVersion ns.cfg ns.cfg.maxVer spv sr) then
+      Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
+    else if not (acceptableCipherSuite ns.cfg spv cs) then
+      Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+    else
+     match negotiateClientExtensions spv ns.cfg cext sext cs None resume with
+      | Error z -> Error z
+      | Correct next ->
+      match cs with
+       | CipherSuite kex sa ae ->
+        match spv, kex, next.ne_keyShare with
+         | TLS_1p3, Kex_DHE, Some (CommonDH.Share g gy)
+         | TLS_1p3, Kex_ECDHE, Some (CommonDH.Share g gy) ->
+           let server_share = (|g, gy|) in
+           let client_share = List.Tot.find (fun gx -> dfst gx = g) (gs_of offer) in
+           let mode = Mode 
+             offer 
+             None // n_hrr
+             sr
+             (Some resume)
+             None // n_psk
+             None // (Some ssid)
+             spv
+             kex
+             ae
+             sig
+             cs
+             ne_default // negotiated extensions
+             (Some?.v sext)
+             [] // n_scsv
+             (Some server_share)
+             None // n_client_cert_request
+             None // n_server_cert
+             client_share
+           in
+           MR.m_write ns.state (C_Mode mode);
+           Correct mode
+         | _ ->
+           let mode = Mode 
+             offer 
+             None
+             sr
+             (Some resume)
+             None // n_psk
+             None // (Some ssid)
+             spv
+             kex
+             ae
+             sig
+             cs
+             ne_default // negotiated extensions
+             (Some?.v sext)
+             [] // n_scsv
+             None // n_server_share; unknwon before SKE is received
+             None // n_client_cert_request
+             None // n_server_cert
+             None // n_client_share
+           in
+           MR.m_write ns.state (C_Mode mode);
+           Correct mode
+        | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
 
-(*
-  match negotiateVersion (NS?.cfg ns) pv with
-  | Error e -> Error e
-  | Correct pv ->
-
-  ns := C_Mode
-*)
-
-
-(*
-{
-  sh_protocol_version:protocolVersion;
-  sh_server_random:TLSInfo.random;
-  sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
-  sh_cipher_suite:valid_cipher_suite;
-  sh_compression:option compression; // JK : made optional because not present in TLS 1.3
-  sh_extensions:option (se:list extension{List.Tot.length se < 256});
-}
-
-*)
 
 val client_ServerKeyExchange: #region:rgn -> t region Client ->
   serverCert: HandshakeMessages.crt ->
@@ -414,121 +527,6 @@ assume val server_ClientHello: #region:rgn -> #role:TLSConstants.role -> t regio
   St (result mode)
 
 //17-03-30 still missing a few for servers.
-
-// TODO factor out signature processing, salvaging chunks from Handshake.fst
-
-//17-03-30 where is it used?
-type hs_id = {
-  id_cert: Cert.chain;
-  id_sigalg: option sigHashAlg;
-}
-
-//17-03-30 get rid of this wrapper?
-type session = {
-  session_nego: mode;
-}
-
-
-// represents the outcome of a successful handshake,
-// providing context for the derived epoch
-type handshake =
-  | Fresh of session // was sessionInfo
-  | Resumed of session // was abbrInfo * sessionInfo
-// We use SessionInfo as unique session indexes.
-// We tried using instead hs, but this creates circularities
-// We'll probably need a global log to reason about them.
-// We should probably do the same in the session store.
-
-// to be renamed and extended to support HS keys, then 0RTT keys
-val handshakeKeyInfo:
-  #region:rgn -> r:TLSConstants.role -> t region r -> St handshake
-
-// For use in negotiating the ciphersuite, takes two lists and
-// outputs the first ciphersuite in list2 that also is in list
-// one and is a valid ciphersuite, or [None]
-val negotiate:l1:list valid_cipher_suite -> list valid_cipher_suite -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
-let negotiate l1 l2 =
-  List.Tot.find #valid_cipher_suite (fun s -> CipherSuite? s && List.Tot.mem s l1) l2
-
-// For use in ensuring the result from negotiate is a Correct
-// ciphersuite with associated kex, sig and ae algorithms,
-// and throws an error if No ciphersuites were supported in both lists
-val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> ccs:valid_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
-let negotiateCipherSuite cfg pv ccs =
-  match negotiate ccs cfg.ciphersuites with
-  | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
-  | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
-
-assume
-val negotiateGroupKeyShare: config -> protocolVersion -> kexAlg -> option (list extension) -> Tot (result (option namedGroup * option bytes))
-(*
-let rec negotiateGroupKeyShare cfg pv kex exts =
-  match exts with
-  | None when (pv = TLS_1p3) -> Error(AD_decode_error, "no supported group or key share extension found")
-  | Some exts when (pv = TLS_1p3) ->
-    let rec aux: list extension -> Tot (result (option namedGroup * option bytes)) =
-      function
-      | E_key_share (CommonDH.ClientKeyShare gl) :: _ ->
-        let inConf (gn, gx) =
-           (((SEC? gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
-            || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
-           && List.Tot.mem gn cfg.namedGroups in
-        (match List.Tot.filter inConf gl with
-        | share :: _ -> Correct (Some share)
-        | [] -> Error(AD_decode_error, "no shared group between client and server config"))
-      | _ :: t -> aux t
-      | [] -> Error(AD_decode_error, "no supported group or key share extension found")
-    in aux exts
-  | Some exts when (kex = Kex_ECDHE && List.Tot.existsb E_supported_groups? exts) ->
-    let Some (E_supported_groups gl) = List.Tot.find E_supported_groups? exts in
-    let filter x = SEC? x && List.Tot.mem x cfg.namedGroups in
-    (match List.Tot.filter filter gl with
-    | gn :: _ -> Correct (Some gn, None)
-    | [] -> Error(AD_decode_error, "no shared curve configured"))
-  | _ ->
-    let filter x =
-      (match kex with | Kex_DHE -> FFDHE? x | Kex_ECDHE -> SEC? x | _ -> false) in
-    if kex = Kex_DHE || kex = Kex_ECDHE then
-      (match List.Tot.filter filter cfg.namedGroups with
-      | gn :: _ -> Correct (Some gn, None)
-      | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
-    else Correct(None, None)
-*)
-
-
-// Determines if the server random value contains a downgrade flag
-// AND if there has been a downgrade
-// The downgrade flag is a random value set by RFC (6.3.1.1)
-val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
-let isSentinelRandomValue c_pv s_pv s_random =
-  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
-  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
-
-
-// Confirms that the version negotiated by the server was:
-// - within the range specified by client config AND
-// - is not an unnecessary downgrade AND
-// - is not a newer version than offered by the client
-
-val acceptableVersion: config -> protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
-let acceptableVersion cfg cpv spv sr =
-  match negotiateVersion cfg cpv with
-  | Correct c_pv ->
-    geqPV c_pv spv && geqPV spv cfg.minVer &&
-    not (isSentinelRandomValue c_pv spv sr)
-  | Error _ -> false
-
-// Confirms that the ciphersuite negotiated by the server was:
-//  - consistent with the client config;
-//  - TODO: [s_cs] is supported by the protocol version (e.g. no GCM with
-//    TLS<1.2).
-// BD: Removed that the ciphersuite is acceptable given CHELO
-// given that the clientOffer is prepared with the entire list
-// of valid cipher suites in the client config
-val acceptableCipherSuite: config -> protocolVersion -> valid_cipher_suite -> Tot bool
-let acceptableCipherSuite cfg spv cs =
-  List.Tot.existsb (fun x -> x = cs) cfg.ciphersuites &&
-  not (isAnonCipherSuite cs) || cfg.allowAnonCipherSuite
 
 // TODO ADL: incorrect as written; CS nego depends on ext nego
 //   (e.g. in TLS 1.2 it's incorrect to select an EC cipher suite if
@@ -647,3 +645,26 @@ let computeClientMode cfg cext cpv spv sr cs sext comp ri =
          } in *)
          Correct mode
       | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
+
+
+//17-03-30 where is it used?
+type hs_id = {
+  id_cert: Cert.chain;
+  id_sigalg: option sigHashAlg;
+}
+
+//17-03-30 get rid of this wrapper?
+type session = {
+  session_nego: mode;
+}
+
+
+// represents the outcome of a successful handshake,
+// providing context for the derived epoch
+type handshake =
+  | Fresh of session // was sessionInfo
+  | Resumed of session // was abbrInfo * sessionInfo
+// We use SessionInfo as unique session indexes.
+// We tried using instead hs, but this creates circularities
+// We'll probably need a global log to reason about them.
+// We should probably do the same in the session store.
