@@ -389,6 +389,23 @@ let acceptableCipherSuite cfg spv cs =
   List.Tot.existsb (fun x -> x = cs) cfg.ciphersuites &&
   not (isAnonCipherSuite cs) || cfg.allowAnonCipherSuite
 
+let matching_share
+  (cext:option (ce:list extension{List.Tot.length ce < 256})) (g:CommonDH.group) :
+   option (g:CommonDH.group & CommonDH.share g) =
+  match cext with
+  | Some cext ->
+    begin
+    match List.Tot.find Extensions.E_key_share? cext with
+    | Some (E_key_share (CommonDH.ClientKeyShare shares)) ->
+      begin
+      match List.Tot.find (fun share -> CommonDH.Share?.g share = g) shares with
+      | Some (CommonDH.Share g gx) -> Some (|g, gx|)
+      | _ -> None
+      end
+    | _ -> None
+    end
+  | None -> None
+
 
 // for this kind of function, can we just rely on type inference?
 val client_ServerHello: #region:rgn -> t region Client ->
@@ -419,8 +436,9 @@ let client_ServerHello #region ns sh =
          | TLS_1p3, Kex_DHE, Some (CommonDH.Share g gy)
          | TLS_1p3, Kex_ECDHE, Some (CommonDH.Share g gy) ->
            let server_share = (|g, gy|) in
-           let client_share = List.Tot.find (fun gx -> dfst gx = g) (gs_of offer) in
-           let mode = Mode 
+           //let client_share = List.Tot.find (fun gx -> dfst gx = g) (gs_of offer) in
+           let client_share = matching_share cext g in
+           let mode = Mode
              offer 
              None // n_hrr
              sr
