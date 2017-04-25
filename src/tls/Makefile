@@ -277,13 +277,15 @@ MAC_SHA256 \
 MAC_SHA1 \
 StAE \
 KeySchedule \
+Handshake.Log \
+Handshake \
 StreamDeltas \
 HKDF \
 Epochs \
 Connection \
 ConnInvariant \
-FFI \
-TLS
+TLS \
+FFI
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
@@ -300,6 +302,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 	$(basename $@).fst
 
 # Verifying one file at a time
+# @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m"; 
 %.fst-ver: $(LIBFILES)
 	@$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \

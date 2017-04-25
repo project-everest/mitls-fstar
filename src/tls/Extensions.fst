@@ -62,6 +62,9 @@ and extension =
   | E_post_handshake_auth *)
   | E_unknown_extension of (lbytes 2 * bytes) (** un-{implemented,known} extensions. *)
 
+let string_of e = "SNI" 
+let string_of_extensions es = "something"
+
 (** shallow equality *)
 private let sameExt e1 e2 =
   match e1, e2 with
@@ -636,10 +639,9 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello")
      end
   | _ ->
-     begin
+     begin 
      match cExtL, sExtL with
-     | Some cExtL, Some sExtL ->
-	begin
+     | Some cExtL, Some sExtL -> (
         let nes = TI.ne_default in
         match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
         | Error(x,y) -> Error(x,y)
@@ -652,10 +654,9 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
 	      correct({l with TI.ne_signature_algorithms = Some shal})
 	    | None -> correct l
 	    | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
-	  end
-	end
+	  end )
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message")
-     end
+     end 
 
 private val clientToServerExtension: protocolVersion -> TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> Tot (option extension)
 let clientToServerExtension pv (cfg:TI.config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =

@@ -20,8 +20,18 @@ open CoreCrypto
   Debugging flag.
   F* normalizer will erase debug prints at extraction when set to false.
 *)
-inline_for_extraction let n_debug = false
- 
+inline_for_extraction let n_debug = true
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if n_debug then print else (fun _ -> ())
+
+
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
@@ -281,6 +291,7 @@ let client_ClientHello #region ns oks =
   match MR.m_read ns.state with 
   | C_Init _ -> 
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in 
+      trace "offering client extensions "^Extensions.string_of_extensions offer.ch_extensions;
       MR.m_write ns.state (C_Offer offer);
       offer
 
