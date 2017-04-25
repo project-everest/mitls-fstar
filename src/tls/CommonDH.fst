@@ -22,19 +22,38 @@ open FStar.ST
 module MR = FStar.Monotonic.RRef
 module MM = MonotoneMap
 
+(* A flag for runtime debugging of handshakelog data.
+   The F* normalizer will erase debug prints at extraction
+   when this flag is set to false. *)
+inline_for_extraction let cdh_debug = true
+let discard (b:bool): ST unit (requires (fun _ -> True))
+ (ensures (fun h0 _ h1 -> h0 == h1)) = ()
+let print s = discard (IO.debug_print_string ("CDH| "^s^"\n"))
+unfold let dbg : string -> ST unit (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1)) =
+  if cdh_debug then print else (fun _ -> ())
+
 type group =
   | FFDH of DHGroup.group
   | ECDH of ECGroup.group
 
+private type pre_keyshare' =
+  | KS_FF: g:DHGroup.group -> DHGroup.keyshare g -> pre_keyshare'
+  | KS_EC: g:ECGroup.group -> ECGroup.keyshare g -> pre_keyshare'
+
 type pre_keyshare (g:group) =
-  (match g with
-  | FFDH dhg -> DHGroup.keyshare dhg
-  | ECDH ecg -> ECGroup.keyshare ecg)
+  ks:pre_keyshare'{(match g with
+  | FFDH dhg -> KS_FF? ks /\ KS_FF?.g ks = dhg
+  | ECDH ecg -> KS_EC? ks /\ KS_EC?.g ks = ecg)}
+
+private type pre_share' =
+  | S_FF: g:DHGroup.group -> DHGroup.share g -> pre_share'
+  | S_EC: g:ECGroup.group -> ECGroup.share g -> pre_share'
 
 type pre_share (g:group) =
-  (match g with
-  | FFDH dhg -> DHGroup.share dhg
-  | ECDH ecg -> ECGroup.share ecg)
+  s:pre_share'{(match g with
+  | FFDH dhg -> S_FF? s /\ S_FF?.g s = dhg
+  | ECDH ecg -> S_EC? s /\ S_EC?.g s = ecg)}
 
 type id = g:group & s:pre_share g
 type honest (i:id) = bool
@@ -50,10 +69,7 @@ abstract let share_log: share_table =
   else
     ())
 
-type secret (g:group) =
-  (match g with
-  | FFDH dhg -> DHGroup.secret dhg
-  | ECDH ecg -> ECGroup.secret ecg)
+type secret (g:group) = bytes
 
 let namedGroup_of_group (g:group) : Tot (r:(option namedGroup)
   {Some? r <==> (ECDH? g \/ (FFDH? g /\ DHGroup.Named? (FFDH?._0 g)))}) =
@@ -95,8 +111,8 @@ type dishonest_share (i:id) =
 val pre_pubshare: #g:group -> pre_keyshare g -> Tot (pre_share g)
 let pre_pubshare #g ks =
   match g with
-  | FFDH dhg -> DHGroup.pubshare #dhg ks
-  | ECDH ecg -> ECGroup.pubshare #ecg ks
+  | FFDH dhg -> let KS_FF _ ks = ks in S_FF dhg (DHGroup.pubshare #dhg ks)
+  | ECDH ecg -> let KS_EC _ ks = ks in S_EC ecg (ECGroup.pubshare #ecg ks)
 
 type share (g:group) = s:pre_share g{registered (|g, s|)}
 type keyshare (g:group) = s:pre_keyshare g{registered (|g, pre_pubshare s|)}
@@ -216,9 +232,11 @@ val keygen: g:group -> ST (keyshare g)
      else
       modifies_none h0 h1)))
 let rec keygen g =
-  let gx : pre_keyshare g = match g with
-    | FFDH g -> DHGroup.keygen g
-    | ECDH g -> ECGroup.keygen g
+  dbg ("Keygen on "^(if FFDH? g then "DHGroup" else "ECGroup"));
+  let gx : pre_keyshare g =
+    match g with
+    | FFDH g -> KS_FF g (DHGroup.keygen g)
+    | ECDH g -> KS_EC g (ECGroup.keygen g)
     in
   let gx : keyshare g =
    if Flags.ideal_KEF then
@@ -241,22 +259,30 @@ val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_initiator #g gx gy =
+  dbg ("DH initiator on "^(if FFDH? g then "DHGroup" else "ECGroup"));
   match g with
-  | FFDH g -> DHGroup.dh_initiator #g gx gy
-  | ECDH g -> ECGroup.dh_initiator #g gx gy
+  | FFDH g ->
+    let KS_FF _ gx = gx in
+    let S_FF _ gy = gy in
+    DHGroup.dh_initiator #g gx gy
+  | ECDH g ->
+    let KS_EC _ gx = gx in
+    let S_EC _ gy = gy in
+    ECGroup.dh_initiator #g gx gy
 
-val dh_responder: #g:group -> share g -> ST (keyshare g * secret g)
+val dh_responder: #g:group -> share g -> ST (share g * secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 (ks,s) h1 ->
     (if Flags.ideal_KEF then
       modifies_one dh_region h0 h1 /\
-      honest_share (|g, pubshare ks|)
+      honest_share (|g, ks|)
      else
       modifies_none h0 h1)))
 let dh_responder #g gx =
+  dbg ("DH responder on "^(if FFDH? g then "DHGroup" else "ECGroup"));
   let gy = keygen g in
   let gxy = dh_initiator #g gy gx in
-  (gy, gxy)
+  (pubshare #g gy, gxy)
 
 #set-options "--z3rlimit 100"
 let register (#g:group) (gx:pre_share g) : ST (share g)
@@ -287,10 +313,12 @@ let register (#g:group) (gx:pre_share g) : ST (share g)
 val parse: g:group -> bytes -> Tot (option (pre_share g))
 let parse g x =
   match g with
-  | ECDH g -> ECGroup.parse_point g x
+  | ECDH g ->
+    (match ECGroup.parse_point g x with
+    | None -> None | Some gx -> Some (S_EC g gx))
   | FFDH g ->
     let dhp = DHGroup.params_of_group g in
-    if length x = length dhp.dh_p then Some x
+    if length x = length dhp.dh_p then Some (S_FF g x)
     else None
 
 val parse_partial: bool -> bytes -> Tot (result ((g:group & pre_share g) * bytes))
@@ -299,14 +327,14 @@ let parse_partial ec p =
     begin
     match ECGroup.parse_partial p with
     | Correct((|g , s|), rem) ->
-      Correct ((| ECDH g, s |), rem)
+      Correct ((| ECDH g, S_EC g s |), rem)
     | Error z -> Error z
     end
   else
     begin
     match DHGroup.parse_partial p with
     | Correct((|g, s|), rem) ->
-      Correct ((| FFDH g, s |), rem)
+      Correct ((| FFDH g, S_FF g s |), rem)
     | Error z -> Error z
     end
 
@@ -314,17 +342,20 @@ let parse_partial ec p =
 val serialize: #g:group -> pre_share g -> Tot bytes
 let serialize #g s =
   match g with
-  | FFDH g -> DHGroup.serialize #g s
-  | ECDH g -> ECGroup.serialize #g s
+  | FFDH g -> let S_FF _ s = s in DHGroup.serialize #g s
+  | ECDH g -> let S_EC _ s = s in ECGroup.serialize #g s
 
 // Serialize for keyShare extension
 val serialize_raw: #g:group -> pre_share g -> Tot bytes
 let serialize_raw #g s =
   match g with
   | FFDH g ->
+    let S_FF _ s = s in
     let dhp = DHGroup.params_of_group g in
     DHGroup.serialize_public #g s (length dhp.dh_p)
-  | ECDH g -> ECGroup.serialize_point #g s
+  | ECDH g ->
+    let S_EC _ s = s in
+    ECGroup.serialize_point #g s
 
 (*
 val key_params: key -> Tot params
@@ -403,7 +434,7 @@ let keyShareEntryBytes = function
 (** Parsing function for a KeyShareEntry *)
 val parseKeyShareEntry: pinverse_t keyShareEntryBytes
 let parseKeyShareEntry b =
-  assume false; // ADL TODO
+  assume false; // TODO registration
   let ng, key_exchange = split b 2 in
   match parseNamedGroup ng with
   | Correct ng ->
@@ -415,7 +446,9 @@ let parseKeyShareEntry b =
           assert(SEC? ng \/ FFDHE? ng);
           assert(Some? go);
           let Some g = go in
-          Correct (Share g (parse g ke))
+          match parse g ke with
+          | Some s -> Correct (Share g s)
+          | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share value")
         else
           Correct (UnknownShare ng ke))
       | Error z ->

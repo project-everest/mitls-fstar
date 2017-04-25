@@ -48,8 +48,11 @@ let ngs = [
   ("P-521", Parse.SEC CoreCrypto.ECC_P521);
   ("P-384", Parse.SEC CoreCrypto.ECC_P384);
   ("P-256", Parse.SEC CoreCrypto.ECC_P256);
+  ("X25519", Parse.SEC CoreCrypto.ECC_X25519);
+  ("X448",  Parse.SEC CoreCrypto.ECC_X448);
   ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
   ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
+  ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
 ]
 
 let prn s (k, _) = s ^ k ^ ", "

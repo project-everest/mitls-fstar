@@ -303,11 +303,16 @@ val client_ClientHello: s:hs -> i:id -> ST (result (Handshake.Log.outgoing i))
       ( match n with
         | Nego.C_Offer offer -> (
           ( if offer.ch_protocol_version = TLS_1p3
-            then k = KeySchedule.(C(C_13_wait_SH
+            then
+             k = KeySchedule.(C(C_13_wait_SH
               (nonce s)
               None (*TODO: es for 0RTT*)
               None (*TODO: binders *)
-              (Nego.gs_of offer)))
+              (C_13_wait_SH?.gs (C?.s k)) // TODO
+                 // ADL: need an existential for the keyshares (offer only has contains shares)
+                 // + check that that the group and CommonDH.pubshare g gx match
+              //(Nego.gs_of offer)
+             ))
             else k = KeySchedule.(C(C_12_Full_CH offer.ch_client_random)) /\
           t = [ClientHello offer] ))
         | _ -> False )))
@@ -350,7 +355,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
     ->
       begin
         trace "Running TLS 1.3";
-        let digest = Handshake.Log.hash_tag #ha s.log in 
+        let digest = Handshake.Log.hash_tag #ha s.log in
         let hs_keys = KeySchedule.ks_client_13_sh s.ks
           mode.Nego.n_server_random
           mode.Nego.n_cipher_suite
@@ -484,7 +489,7 @@ let server_ServerHelloDone hs =
       (Nego.emsFlag mode)
       g in
     // ad hoc signing of the nonces and server key share
-    let kex_s = KEX_S_DHE gy in
+    let kex_s = KEX_S_DHE (| g, gy |) in
     let tbs =
       let sv = kex_s_to_bytes kex_s in
       let csr = cr @| mode.Nego.n_server_random in
@@ -565,20 +570,21 @@ let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
     match cke.cke_kex_c with
       | KEX_C_RSA _ | KEX_C_DH -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
       | KEX_C_DHE gyb
-      | KEX_C_ECDHE gyb -> (
+      | KEX_C_ECDHE gyb ->
+        begin
           let mode = Nego.getMode hs.nego in  //TODO read back from mode.
-
           // ADL: the type of gyb will change from bytes to g & share g; for now we parse here.
           let Some (|g,  _|) = mode.Nego.n_server_share in
-          let gy: CommonDH.share g = CommonDH.parse g gyb in
-          let g_gy = (|g, gy|) in
-          let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks g_gy digestCCS1 in
-          register hs app_keys;
-          Epochs.incr_reader hs.epochs;
-          // use the new reader; will use the new writer only after sending CCS
-          hs.state := S_Wait_Finished1 digestCCS1; // keep digest to verify the Client Finished
-          InAck true false  // Server 1.2 ATK
-          )
+          match CommonDH.parse g gyb with
+          | None -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Cannot parse client share in CKE")
+          | Some gy ->
+            let app_keys = KeySchedule.ks_server_12_cke_dh hs.ks (| g, gy |) digestCCS1 in
+            register hs app_keys;
+            Epochs.incr_reader hs.epochs;
+            // use the new reader; will use the new writer only after sending CCS
+            hs.state := S_Wait_Finished1 digestCCS1; // keep digest to verify the Client Finished
+            InAck true false  // Server 1.2 ATK
+        end
 
 (* receive ClientFinish *)
 val server_ClientFinished:
@@ -744,10 +750,10 @@ let recv_fragment (hs:hs) #i rg f =
     match flight with
     | Error z -> InError z
     | Correct None -> InAck false false // nothing happened
-    | Correct (Some (ms,ts)) -> 
-      match !hs.state, ms, ts with 
+    | Correct (Some (ms,ts)) ->
+      match !hs.state, ms, ts with
       | C_Idle, _, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
-      | C_Wait_ServerHello, [ServerHello sh], [] -> client_ServerHello hs sh 
+      | C_Wait_ServerHello, [ServerHello sh], [] -> client_ServerHello hs sh
     //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert] ->
         client_ServerHelloDone hs c ske None
@@ -768,15 +774,15 @@ let recv_fragment (hs:hs) #i rg f =
 
       | S_Idle, [ClientHello ch], []  -> 
         server_ClientHello hs ch
-      | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] -> 
+      | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] ->
         server_ClientFinished hs f.fin_vd digest digestClientFinish
-      | S_Wait_Finished2 s, [Finished f], [digest] -> 
+      | S_Wait_Finished2 s, [Finished f], [digest] ->
         server_ClientFinished_13 hs f.fin_vd digest None
       | S_Wait_Finished2 s, [Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _] ->
         server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
 
       // are we missing the case with a Certificate but no CertificateVerify?
-      | _,  _, _ -> 
+      | _,  _, _ ->
         trace "DISCARD FLIGHT"; InAck false false
         //InError(AD_unexpected_message, "unexpected flight")
 
@@ -791,15 +797,15 @@ let recv_ccs (hs:hs) =
     | Correct (ms, digests, digest) ->
         match !hs.state, ms, digests with
         | C_Wait_CCS2 digest, [], [] -> (
-            trace "Processing CCS"; 
+            trace "Processing CCS";
             hs.state := C_Wait_Finished2 digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK
             )
 
         | C_Wait_CCS2 digest, [SessionTicket st], [] -> (
-            trace "Processing SessionTicket; CCS. WARNING: no support for tickets"; 
-            // now expect encrypted finish on this digest; shall we tell Nego? 
+            trace "Processing SessionTicket; CCS. WARNING: no support for tickets";
+            // now expect encrypted finish on this digest; shall we tell Nego?
             hs.state := C_Wait_Finished2 digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK

@@ -22,7 +22,7 @@ private let pre_id (role:role) =
   let kdf = PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx  = CommonDH.keygen g in
-  let gy, gxy = CommonDH.dh_responder #g gx in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
   let pms = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy) in
   let msid = StandardMS pms (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role

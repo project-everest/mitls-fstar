@@ -11,27 +11,39 @@ open TLSError
 open Parse
 open FStar.ST
 
-type group = CoreCrypto.ec_curve
-type params = CoreCrypto.ec_params
+module CC = CoreCrypto
 
+type group = CC.ec_curve
+type params = CC.ec_params
+
+private type pre_keyshare g =
+  | KS_CC of k:CC.ec_key {
+    Some? k.ec_priv /\ k.ec_params.curve = g /\
+    length k.ec_point.ecx = ec_bytelen g /\
+    length k.ec_point.ecy = ec_bytelen g }
+  | KS_X25519 of Curve25519.keyshare
+  | KS_X448 of (pub:lbytes 56 * priv:lbytes 56)
+
+// ADL do not use untagged union here!
+// The ML Obj.t type is not compatible with CC extracted as --codegen-lib
 type keyshare (g:group) =
-  (match g with
-  | ECC_X25519 -> Curve25519.keyshare
-  | ECC_X448 -> (pub:lbytes 56 * priv:lbytes 56)
-  | _ -> // NIST curves
-    k:CoreCrypto.ec_key {
-      Some? k.ec_priv /\ k.ec_params.curve = g /\
-      length k.ec_point.ecx = ec_bytelen g /\
-      length k.ec_point.ecy = ec_bytelen g
-    })
+  s:pre_keyshare g{(match g with
+    | ECC_X25519 -> KS_X25519? s
+    | ECC_X448 -> KS_X448? s
+    | _ -> KS_CC? s)}
+
+private type pre_share g =
+  | S_CC of p:CC.ec_point{
+     length p.ecx = ec_bytelen g /\
+     length p.ecy = ec_bytelen g}
+  | S_X25519 of Curve25519.point
+  | S_X448 of lbytes 56
 
 type share (g:group) =
-  (match g with
-  | ECC_X25519 -> Curve25519.point
-  | ECC_X448 -> lbytes 56
-  | _ -> p:CoreCrypto.ec_point{
-     length p.ecx = ec_bytelen g /\
-     length p.ecy = ec_bytelen g})
+  s:pre_share g{(match g with
+    | ECC_X25519 -> S_X25519? s
+    | ECC_X448 -> S_X448? s
+    | _ -> S_CC? s)}
 
 type secret (g:group) = bytes
 
@@ -52,26 +64,30 @@ val pubshare: #g:group -> keyshare g -> Tot (share g)
 let pubshare #g k =
   match g with
   | ECC_X25519 ->
-    let s:share g = Curve25519.pubshare k in s
+    let KS_X25519 ks = k in S_X25519 (Curve25519.pubshare ks)
   | ECC_X448 ->
-    let (p,s) : (lbytes 56 * lbytes 56) = k in
-    p
-  | _ -> k.ec_point
+    let KS_X448 (p,s) = k in S_X448 p
+  | _ ->
+    let KS_CC ks = k in S_CC ks.ec_point
 
 val keygen: g:group -> ST (keyshare g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let keygen g =
   match g with
-  | ECC_X25519 -> Curve25519.keygen ()
+  | ECC_X25519 -> KS_X25519 (Curve25519.keygen ())
   | ECC_X448 ->
     let s = CoreCrypto.random 56 in
     let p = CoreCrypto.random 56 in
-    (p, s)
+    KS_X448 (p, s)
   | _ ->
+    let b = IO.debug_print_string "ECGroup keygen call\n" in
     let params = params_of_group g false in
-    ec_gen_key params
+    let s = ec_gen_key params in
+    let b2 = IO.debug_print_string "CoreCrypto called\n" in
+    if b && b2 then KS_CC s else KS_CC s
 
+(* Unused, implemented in CommonDH
 val dh_responder: #g:group -> s:share g -> ST (keyshare g * secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -79,15 +95,19 @@ let dh_responder #g gx =
   let gy = keygen g in
   match g with
   | ECC_X25519 ->
-    let (p,s) : Curve25519.keyshare = gy in
+    let S_X25519 gx = gx in
+    let KS_X25519 (p,s) = gy in
     let shared = Curve25519.mul s gx in
     (gy, shared)
   | ECC_X448 ->
-    let (p,s) : lbytes 56 * lbytes 56 = gy in
+    let KS_X448 (p,s) = gy in
     (gy, s) // FAKE ! LEAKS SECRET !
   | _ ->
-    let shared = ecdh_agreement gy gx in
+    let S_CC gx = gx in
+    let KS_CC gy' = gy in
+    let shared = ecdh_agreement gy' gx in
     gy, shared
+*)
 
 val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> ST (secret g)
   (requires (fun h0 -> True))
@@ -95,12 +115,16 @@ val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> ST (secret g)
 let dh_initiator #g gx gy =
   match g with
   | ECC_X25519 ->
-    let (p,s) : Curve25519.keyshare = gx in
+    let KS_X25519 (p,s) = gx in
+    let S_X25519 gy = gy in
     Curve25519.mul s gy
   | ECC_X448 ->
-    let (p,s) : lbytes 56 * lbytes 56 = gx in
-    s
-  | _ -> ecdh_agreement gx gy
+    let KS_X448 (p,s) = gx in
+    s // TODO BEWARE
+  | _ ->
+    let KS_CC gx = gx in
+    let S_CC gy = gy in
+    ecdh_agreement gx gy
 
 val parse_curve: bytes -> Tot (option group)
 let parse_curve b =
@@ -130,10 +154,10 @@ val parse_point: g:group -> bytes -> Tot (option (share g))
 let parse_point g b =
   match g with
   | ECC_X448 ->
-    if length b = 56 then let p : lbytes 56 = b in Some p
+    if length b = 56 then let p : lbytes 56 = b in Some (S_X448 p)
     else None
   | ECC_X25519 ->
-    if length b = 32 then let p : lbytes 32 = b in Some p
+    if length b = 32 then let p : lbytes 32 = b in Some (S_X25519 p)
     else None
   | _ ->
     let clen = ec_bytelen g in
@@ -142,8 +166,10 @@ let parse_point g b =
       match cbyte et with
       | 4z ->
         let (x,y) = split ecxy clen in
-        let e : share g = {ecx = x; ecy = y;} in
-        if CoreCrypto.ec_is_on_curve (params_of_group g false) e then Some e else None
+        let e = {ecx = x; ecy = y;} in
+        if CoreCrypto.ec_is_on_curve (params_of_group g false) e then
+          Some (S_CC e)
+        else None
       |_ -> None
     else None
 
@@ -166,13 +192,14 @@ open FStar.Mul
 
 (* Assumes uncompressed point format for now (04||ecx||ecy) *)
 val serialize_point: #g:group -> e:share g -> Tot (b:bytes{length b <= 255})
-let serialize_point #g e =
+let serialize_point #g s =
   match g with
   | ECC_X25519 ->
-    let p:lbytes 32 = e in p
+    let S_X25519 p = s in p
   | ECC_X448 ->
-    let p:lbytes 56 = e in p
+    let S_X448 p = s in p
   | _ ->
+    let S_CC e = s in
     let pc = abyte 4z in
     let x = pc @| e.ecx @| e.ecy in
     x
@@ -185,7 +212,6 @@ let serialize #g ecdh_Y =
   lemma_repr_bytes_values (length e);
   let ve = vlbytes 1 e in
   ty @| id @| ve
-
 
 (* KB: older more general code below
 let getParams (c : ec_curve) : ec_params =
