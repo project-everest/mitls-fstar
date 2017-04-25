@@ -773,28 +773,16 @@ let recv_fragment (hs:hs) #i rg f =
     trace "recv_fragment";
     let h0 = ST.get() in
     let flight = Handshake.Log.receive hs.log f in
-<<<<<<< c49d0d50477db8aac19dd0f18898518394f2e65a
     match flight with
     | Error z -> InError z
     | Correct None -> InAck false false // nothing happened
-    | Correct (Some (ms,ts)) -> 
-      match !hs.state, ms, ts with 
+    | Correct (Some (ms,ts)) ->
+      match !hs.state, ms, ts with
       | C_Idle, _, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
-      | C_Wait_ServerHello, [ServerHello sh], [] -> client_ServerHello hs sh 
+      | C_Wait_ServerHello, [ServerHello sh], [] -> client_ServerHello hs sh
     //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert] ->
         client_ServerHelloDone hs c ske None
-=======
-    match !hs.state, flight with
-      | _, None -> InAck false false // nothing happened
-
-      | C_Idle, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
-      | C_Wait_ServerHello, Some ([ServerHello sh], []) -> client_ServerHello hs sh
-      //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
-      | C_Wait_ServerHelloDone, Some ([Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert]) ->
-          // assert (Some? pv && pv <> Some TLS_1p3 && res = Some false && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
-          client_ServerHelloDone hs c ske None
->>>>>>> Use explicit tagging in CommonDH / ECGroup
 
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert] ->
         client_ServerHelloDone hs c ske (Some cr)
@@ -810,29 +798,17 @@ let recv_fragment (hs:hs) #i rg f =
       | C_Wait_Finished2 digest, [Finished f], [digestServerFinished] ->
         client_ServerFinished hs f digest
 
-<<<<<<< c49d0d50477db8aac19dd0f18898518394f2e65a
       | S_Idle, [ClientHello ch], []  -> 
         server_ClientHello hs ch
-      | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] -> 
+      | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] ->
         server_ClientFinished hs f.fin_vd digest digestClientFinish
-      | S_Wait_Finished2 s, [Finished f], [digest] -> 
+      | S_Wait_Finished2 s, [Finished f], [digest] ->
         server_ClientFinished_13 hs f.fin_vd digest None
       | S_Wait_Finished2 s, [Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _] ->
         server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
-=======
-      | S_Wait_Finished2 s, Some ([Finished f], [digest]) -> server_ClientFinished_13 hs f.fin_vd digest None
-      | S_Wait_Finished2 s, Some ([Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _]) ->
-          server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
-
-       // are we missing the case with a Certificate but no CertificateVerify?
-      | _, Some _ ->
-          trace "DISCARD FLIGHT";
-          InAck false false
-          //InError(AD_unexpected_message, "unexpected flight")
->>>>>>> Use explicit tagging in CommonDH / ECGroup
 
       // are we missing the case with a Certificate but no CertificateVerify?
-      | _,  _, _ -> 
+      | _,  _, _ ->
         trace "DISCARD FLIGHT"; InAck false false
         //InError(AD_unexpected_message, "unexpected flight")
 
@@ -846,15 +822,15 @@ let recv_ccs (hs:hs) =
     | Correct (ms, digests, digest) ->
         match !hs.state, ms, digests with
         | C_Wait_CCS2 digest, [], [] -> (
-            trace "Processing CCS"; 
+            trace "Processing CCS";
             hs.state := C_Wait_Finished2 digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK
             )
 
         | C_Wait_CCS2 digest, [SessionTicket st], [] -> (
-            trace "Processing SessionTicket; CCS. WARNING: no support for tickets"; 
-            // now expect encrypted finish on this digest; shall we tell Nego? 
+            trace "Processing SessionTicket; CCS. WARNING: no support for tickets";
+            // now expect encrypted finish on this digest; shall we tell Nego?
             hs.state := C_Wait_Finished2 digest;
             Epochs.incr_reader hs.epochs;
             InAck true false // Client 1.2 ATK

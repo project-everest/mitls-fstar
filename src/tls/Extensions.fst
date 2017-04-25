@@ -654,7 +654,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   | _ ->
      begin 
      match cExtL, sExtL with
-     | _, None -> Correct TI.ne_default
+     | _, None when pv <> TLS_1p3 -> Correct TI.ne_default
      | Some cExtL, Some sExtL -> (
         let nes = TI.ne_default in
         match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
