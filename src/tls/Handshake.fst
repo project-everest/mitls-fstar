@@ -1132,7 +1132,7 @@ let mods s h0 h1 =
 let modifies_internal h0 s h1 =
     hs_inv s h1 /\
     mods s h0 h1 /\ 
-    modifies_rref s.region !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
+    modifies_rref s.region (Set.singleton (Heap.addr_of (as_ref s.state))) (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
 
 // Idle client starts a full handshake on the current connection
 val rehandshake: s:hs -> config -> ST bool

@@ -106,7 +106,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
        match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
+                /\ modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 let decrypt #i d ad c =
   let seqn = m_read (ctr d.counter) in

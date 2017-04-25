@@ -296,7 +296,7 @@ val create: #rid:rid -> role -> hsl:HandshakeLog.log -> ST (ks * random)
     stronger_fresh_region ks_region h0 h1
     /\ extends ks_region rid
     /\ modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref state} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref state))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let create #rid r hsl =
   ST.recall_region rid;
@@ -314,7 +314,7 @@ val ks_client_13_1rtt_init: ks:ks -> list (g:namedGroup{SEC? g \/ FFDHE? g}) -> 
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 val map_ST: ('a -> St 'b) -> list 'a -> St (list 'b)
 let rec map_ST f x = match x with
@@ -339,7 +339,7 @@ val ks_client_13_0rtt_init: ks:ks -> i:esId -> list (g:namedGroup{SEC? g \/ FFDH
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_13_0rtt_init ks esId groups =
   let KS #rid st hsl = ks in
@@ -361,7 +361,7 @@ let ks_client_13_0rtt_ch ks esId
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1)) =
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1)) =
   let KS #rid st hsl = ks in
   let C (C_13_wait_CH cr esId gs) = !st in
   let psk = get_psk esId in
@@ -426,7 +426,7 @@ val ks_client_12_init: ks:ks -> ST (option sessionInfo)
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 // TODO resumption support
 let ks_client_12_init ks =
@@ -452,7 +452,7 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_12_init_dh ks cr pv cs ems group =
   let KS #region st _ = ks in
@@ -475,7 +475,7 @@ val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:esId -> cs:cipherSuite -> gn
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_13_0rtt_init ks cr esId cs gn gxb =
   let KS #region st hsl = ks in
@@ -533,7 +533,7 @@ val ks_server_13_1rtt_psk_init: ks:ks -> cr:random -> cs:cipherSuite -> ST unit
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGroup -> gxb:bytes -> ST (our_share:bytes)
   (requires fun h0 ->
@@ -545,7 +545,7 @@ val ks_server_13_1rtt_init: ks:ks -> cr:random -> cs:cipherSuite -> gn:namedGrou
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_13_1rtt_init ks cr cs gn gxb =
   let KS #region st _ = ks in
@@ -567,7 +567,7 @@ val ks_server_13_sh: ks:ks -> ST recordInstance
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_13_sh ks =
   let KS #region st hsl = ks in
@@ -620,7 +620,7 @@ val ks_server_12_cke_dh: ks:ks -> peer_share:bytes -> ST unit
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_12_cke_dh ks gxb =
   let KS #region st hsl = ks in
@@ -665,7 +665,7 @@ val ks_client_12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_resume ks sr pv cs =
   let KS #region st _ = ks in
@@ -694,7 +694,7 @@ val ks_client_13_sh: ks:ks -> cs:cipherSuite -> gy:(namedGroup * bytes) -> accep
   (ensures fun h0 r h1 ->
     let KS #rid st hsl = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 // ServerHello log breakpoint (client)
 let ks_client_13_sh ks cs (gs, gyb) accept_ed =
@@ -809,7 +809,7 @@ let ks_client_13_sf ks
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st hsl = ks in
   let C (C_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
@@ -855,7 +855,7 @@ let ks_server_13_sf ks
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st hsl = ks in
   let S (S_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
@@ -902,7 +902,7 @@ let ks_client_13_cf ks
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st hsl = ks in
   let C (C_13_wait_CF alpha cfk (| asId, ams |) rekey_info latefin_info) = !st in
@@ -933,7 +933,7 @@ val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherS
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_full_dh ks sr pv cs ems peer_share =
   let KS #region st _ = ks in
@@ -976,7 +976,7 @@ val ks_client_12_full_rsa: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipher
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_full_rsa ks sr pv cs ems pk =
   let KS #region st _ = ks in
@@ -1006,7 +1006,7 @@ val ks_client_12_set_session_hash: ks:ks -> ST unit
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_set_session_hash ks =
   let KS #region st hsl = ks in
@@ -1109,7 +1109,7 @@ let ks_server_12_server_finished ks
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st hsl = ks in
   let S (S_12_has_MS csr alpha msId ms) = !st in
@@ -1128,7 +1128,7 @@ let ks_client_12_server_finished ks
   (ensures fun h0 r h1 ->
     let KS #rid st _ = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid !{as_ref st} (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   let KS #region st hsl = ks in
   let C (C_12_has_MS csr alpha msId ms) = !st in
