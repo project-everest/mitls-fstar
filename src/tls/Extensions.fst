@@ -441,7 +441,8 @@ let parseOptExtensions r data =
  *************************************************)
 
 (* JK: Need to get rid of such functions *)
-private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
+(* Called by Negotiation *)
+let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
   match l with 
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
