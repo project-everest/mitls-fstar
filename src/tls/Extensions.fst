@@ -31,12 +31,10 @@ noeq type preEarlyDataIndication : Type0 =
 and earlyDataIndication =
   | ClientEarlyDataIndication of preEarlyDataIndication
   | ServerEarlyDataIndication
-
 (* SI: we currently only define Mandatory-to-Implement Extensions 
    as listed in the RFC's Section 8.2. Labels in the variants below are: 
      M  - "MUST implement"
      AF - "MUST ... when offering applicable features" *)
-
 and extension =
   | E_server_name of list TI.serverName (* M, AF *) (* RFC 6066 *)
 (*| E_max_fragment_length
@@ -55,25 +53,25 @@ and extension =
   | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)  (* M, AF *)
   | E_early_data of earlyDataIndication
   | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
-  | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
+  | E_cookie of b:bytes { 1 <= length b /\ length b <= (pow2 16 - 1)}  (* M *)
   | E_psk_key_exchange_modes (* ToDo: add payload *)  
 (*| E_certificate_authorities 
   | E_oid_filters 
   | E_post_handshake_auth *)
-  | E_unknown_extension of (lbytes 2 * bytes) (** un-{implemented,known} extensions. *)
+  | E_unknown_extension of (lbytes 2 * bytes) (* un-{implemented,known} extensions. *)
 
 
 (* string_of_ *)
 let string_of_extension = function
-  | E_server_name _ -> "server_name" 
-  | E_supported_groups _ -> "supported_groups" 
-  | E_signature_algorithms _ -> "signature_algorithms"
-  | E_key_share _ -> "key_share" 
-  | E_pre_shared_key _ -> "psk"
-  | E_early_data _ -> "early_data"
-  | E_supported_versions _ -> "supported_versions"
+  | E_server_name _ -> "SNI" 
+  | E_supported_groups _ -> "groups" 
+  | E_signature_algorithms _ -> "sigAlgs"
+  | E_key_share _ -> "keyShare" 
+  | E_pre_shared_key _ -> "PSK"
+  | E_early_data _ -> "EDI"
+  | E_supported_versions _ -> "versions"
   | E_cookie _ -> "cookie"
-  | E_psk_key_exchange_modes -> "psk_kx_modes"
+  | E_psk_key_exchange_modes -> "psk_kex_modes"
   | E_unknown_extension (n,_) -> print_bytes n
 
 let rec string_of_extensions = function
@@ -488,6 +486,7 @@ vector is permitted.
 *)
 
 val prepareExtensions: 
+  protocolVersion ->
   protocolVersion -> 
   k:valid_cipher_suites{List.Tot.length k < 256} -> 
   bool -> 
@@ -499,7 +498,7 @@ val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group. 
    For instance, PSK, HS, etc extensions should all be done in one function each. 
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
+let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
 // SI: is renego deadcode? 
@@ -510,8 +509,14 @@ let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     (* let res = [E_renegotiation_info(cri)] in *)
 //    let res = (E_draftVersion (abyte2 (0z, 13z)))::res in
     let res =
+       match minpv, pv with
+       | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
+       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p2;TLS_1p3] :: res 
+       | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res // this case is not mandatory
+       | _ -> res in
+    let res =
        match pv, ks with
-       | TLS_1p3,Some ks -> (E_key_share ks)::res
+       | TLS_1p3, Some ks -> E_key_share ks::res
        | _,_ -> res in
 //    let res = if sres then E_extended_ms :: res else res in
     let res = (E_signature_algorithms sigAlgs) :: res in

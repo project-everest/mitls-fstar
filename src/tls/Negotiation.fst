@@ -31,6 +31,10 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if n_debug then print else (fun _ -> ())
 
+let string_of_option_extensions o = match o with 
+  | None -> "None" 
+  | Some es -> "[ "^Extensions.string_of_extensions es^"]"
+
 
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
@@ -209,6 +213,7 @@ let computeOffer r cfg resume nonce ks =
   in
   let extensions = 
     Extensions.prepareExtensions
+      cfg.minVer
       cfg.maxVer
       cfg.ciphersuites
       cfg.safe_renegotiation
@@ -329,7 +334,7 @@ let client_ClientHello #region ns oks =
   match MR.m_read ns.state with 
   | C_Init _ -> 
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in 
-      trace ("offering client extensions [ "^Extensions.string_of_extensions (Some?.v offer.ch_extensions)^"]");
+      trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);
       offer
 
@@ -471,6 +476,7 @@ let client_ServerHello #region ns sh =
     let cext = offer.ch_extensions in
     let sig  = CoreCrypto.RSASIG in
     let resume = false in
+    trace ("processing server extensions "^string_of_option_extensions sext);
     if not (acceptableVersion ns.cfg ns.cfg.maxVer spv sr) then
       Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
     else if not (acceptableCipherSuite ns.cfg spv cs) then
