@@ -1,3 +1,6 @@
+(*--build-config
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
+--*)
 module TLSConstants
 
 (**
@@ -75,7 +78,7 @@ type encAlg =
   | Stream of streamCipher
 
 
-type hash_alg = Hashing.Spec.alg 
+type hash_alg = Hashing.Spec.alg
 
 (** TLS-specific hash algorithms *)
 type hashAlg =
@@ -89,7 +92,7 @@ type hash_alg_classic = a:hash_alg {Hashing.Spec.(a = MD5 \/ a = SHA1)}
 type macAlg =
   | HMac     of hash_alg
   | SSLKHash of hash_alg_classic
-  
+
 
 (** Authenticated Encryption modes *)
 type aeAlg =
@@ -97,11 +100,11 @@ type aeAlg =
   | MtE: encAlg -> hash_alg -> aeAlg
   | AEAD: aeadAlg -> hash_alg -> aeAlg  // the hash algorithm is for the ciphersuite; it is not used by the record layer.
 
-let aeAlg_hash = function 
+let aeAlg_hash = function
   | MACOnly ha -> ha
   | MtE _ ha -> ha
   | AEAD _ ha -> ha
-  
+
 (** Determine if this algorithm provide padding support with TLS 1.2 *)
 let lhae = function
   | MtE (Block _) _                         -> true
@@ -158,7 +161,7 @@ type sigAlg = CoreCrypto.sig_alg
 (** Serializing function for signature algorithms *)
 val sigAlgBytes: sigAlg -> Tot (lbytes 1)
 let sigAlgBytes sa =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match sa with
   | RSASIG -> abyte 1z
   | DSA    -> abyte 2z
@@ -168,7 +171,7 @@ let sigAlgBytes sa =
 (** Parsing function associated to sigAlgBytes *)
 val parseSigAlg: pinverse_t sigAlgBytes
 let parseSigAlg b =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match cbyte b with
   | 1z -> Correct RSASIG
   | 2z -> Correct DSA
@@ -198,7 +201,7 @@ type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
 (** Serializing of the Hash algorithm *)
 val hashAlgBytes: hashAlg' -> Tot (lbytes 1)
 let hashAlgBytes ha =
-  let open Hashing.Spec in 
+  let open Hashing.Spec in
   match ha with
   | Hash MD5     -> abyte 1z
   | Hash SHA1    -> abyte 2z
@@ -211,7 +214,7 @@ let hashAlgBytes ha =
 (** Parsing of the Hash algorithm *)
 val parseHashAlg: pinverse_t hashAlgBytes
 let parseHashAlg b =
-  let open Hashing.Spec in 
+  let open Hashing.Spec in
   match cbyte b with
   | 1z -> Correct (Hash MD5)
   | 2z -> Correct (Hash SHA1)
@@ -219,7 +222,7 @@ let parseHashAlg b =
   | 4z -> Correct (Hash SHA256)
   | 5z -> Correct (Hash SHA384)
   | 6z -> Correct (Hash SHA512)
-  // | 7z -> admit(); Correct (NULL)  //TODO: FIXME!!!!         
+  // | 7z -> admit(); Correct (NULL)  //TODO: FIXME!!!!
   | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 val inverse_hashAlg: x:_ -> Lemma
@@ -235,7 +238,7 @@ val pinverse_hashAlg: x:_ -> Lemma
 let pinverse_hashAlg x = ()
 
 (** Encryption key sizes *)
-let encKeySize = 
+let encKeySize =
   let open CoreCrypto in function
   | Stream RC4_128      -> 16
   | Block TDES_EDE_CBC  -> 24
@@ -246,7 +249,7 @@ let encKeySize =
   | Block AES_256_CBC   -> 32
 
 (** AEAD salt sizes *)
-let aeadSaltSize = 
+let aeadSaltSize =
   let open CoreCrypto in function // TLS 1.3 IV salt.
   | AES_128_GCM       -> 4
   | AES_256_GCM       -> 4
@@ -254,7 +257,7 @@ let aeadSaltSize =
   | _                 -> 4 //recheck
 
 (** AEAD *)
-let aeadRecordIVSize = 
+let aeadRecordIVSize =
   let open CoreCrypto in function // TLS 1.2 explicit IVs
   | AES_128_GCM       -> 8
   | AES_256_GCM       -> 8
@@ -301,6 +304,7 @@ type scsv_suite =
 type cipherSuite =
   | NullCipherSuite: cipherSuite
   | CipherSuite    : kexAlg -> option CoreCrypto.sig_alg -> aeAlg -> cipherSuite
+  | CipherSuite13  : aeadAlg -> hash_alg -> cipherSuite
   | SCSV           : scsv_suite -> cipherSuite
   | UnknownCipherSuite: a:byte -> b:byte(* {not(List.Tot.contains (a,b) known_cs_list)}  *) -> cipherSuite // JK: incomplete spec
 
@@ -405,12 +409,18 @@ let geqPV a b = (b = minPV a b)
    have to be distinct from the 'correct' ones *)
 val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))
 let cipherSuiteBytesOpt cs =
-  let open CoreCrypto in 
-  let open Hashing.Spec in 
+  let open CoreCrypto in
+  let open Hashing.Spec in
   let abyte2 b: option (lbytes 2) = Some (abyte2 b) in
     match cs with
     | UnknownCipherSuite b1 b2 -> abyte2 (b1,b2)
     | NullCipherSuite                                              -> abyte2 ( 0x00z, 0x00z )
+
+    | CipherSuite13 AES_128_GCM       SHA256                       -> abyte2 ( 0x13z, 0x01z )
+    | CipherSuite13 AES_256_GCM       SHA384                       -> abyte2 ( 0x13z, 0x02z )
+    | CipherSuite13 CHACHA20_POLY1305 SHA256                       -> abyte2 ( 0x13z, 0x03z )
+    | CipherSuite13 AES_128_CCM       SHA256                       -> abyte2 ( 0x13z, 0x04z )
+    | CipherSuite13 AES_128_CCM_8     SHA256                       -> abyte2 ( 0x13z, 0x05z )
 
     | CipherSuite Kex_RSA None (MACOnly MD5)                       -> abyte2 ( 0x00z, 0x01z )
     | CipherSuite Kex_RSA None (MACOnly SHA1)                      -> abyte2 ( 0x00z, 0x02z )
@@ -520,10 +530,16 @@ let cipherSuiteBytes c = Some?.v (cipherSuiteBytesOpt c)
 (** Auxillary parsing function for ciphersuites *)
 val parseCipherSuiteAux : lbytes 2 -> Tot (result (c:cipherSuite{validCipherSuite c}))
 let parseCipherSuiteAux b =
-  let open CoreCrypto in 
-  let open Hashing.Spec in 
+  let open CoreCrypto in
+  let open Hashing.Spec in
   match cbyte2 b with
   | ( 0x00z, 0x00z ) -> Correct(NullCipherSuite)
+
+  | ( 0x13z, 0x01z ) -> Correct (CipherSuite13 AES_128_GCM SHA256)
+  | ( 0x13z, 0x02z ) -> Correct (CipherSuite13 AES_256_GCM SHA384)
+  | ( 0x13z, 0x03z ) -> Correct (CipherSuite13 CHACHA20_POLY1305 SHA256)
+  | ( 0x13z, 0x04z ) -> Correct (CipherSuite13 AES_128_CCM SHA256)
+  | ( 0x13z, 0x05z ) -> Correct (CipherSuite13 AES_128_CCM_8 SHA256)
 
   | ( 0x00z, 0x01z ) -> Correct(CipherSuite Kex_RSA None (MACOnly MD5))
   | ( 0x00z, 0x02z ) -> Correct(CipherSuite Kex_RSA None (MACOnly SHA1))
@@ -718,7 +734,7 @@ let isAnonCipherSuite cs =
 
 (** Determine if a ciphersuite implies using (EC)Diffie-Hellman KEX *)
 let isDHECipherSuite cs =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_DHE (Some DSA) _      -> true
   | CipherSuite Kex_DHE (Some RSASIG) _   -> true
@@ -728,7 +744,7 @@ let isDHECipherSuite cs =
 
 (** Determine if a ciphersuite implies using Elliptic Curves Diffie-Hellman KEX *)
 let isECDHECipherSuite cs =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_ECDHE (Some ECDSA) _  -> true
   | CipherSuite Kex_ECDHE (Some RSASIG) _ -> true
@@ -736,7 +752,7 @@ let isECDHECipherSuite cs =
 
 (** Determine if a ciphersuite implies using plain Diffie-Hellman KEX *)
 let isDHCipherSuite cs =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_DH (Some DSA) _    -> true
   | CipherSuite Kex_DH (Some RSASIG) _ -> true
@@ -756,7 +772,7 @@ let isOnlyMACCipherSuite cs =
 
 (** Determine the signature algorithm associated to a ciphersuite *)
 let sigAlg_of_ciphersuite cs =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   match cs with
   | CipherSuite Kex_RSA None _
   | CipherSuite Kex_ECDHE (Some RSASIG) _
@@ -795,7 +811,6 @@ type vdAlg_t = protocolVersion * cipherSuite
 // let verifyDataLen_of_ciphersuite (cs:cipherSuite) = 12
 
 // Only to be invoked with TLS 1.2 (hardcoded in previous versions)
-// BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 !
 val prfMacAlg_of_ciphersuite_aux: cipherSuite -> Tot (option macAlg)
 let prfMacAlg_of_ciphersuite_aux =
   let open Hashing.Spec in function
@@ -807,9 +822,11 @@ let prfMacAlg_of_ciphersuite_aux =
 
 (** Determine if the tuple PV and CS is the correct association with PRF *)
 let pvcs (pv:protocolVersion) (cs:cipherSuite) =
-  match pv with
-  | TLS_1p2 | TLS_1p3 -> Some? (prfMacAlg_of_ciphersuite_aux cs)
-  | _                 -> true
+  match pv, cs with
+  | TLS_1p3, CipherSuite13 _ _ -> true
+  | TLS_1p3, CipherSuite _ _ _ -> false
+  | pv, CipherSuite _ _ _ -> Some? (prfMacAlg_of_ciphersuite_aux cs)
+  | _                 -> false
 
 unfold type require_some (#a:Type) (#b:Type) ($f:(a -> Tot (option b))) =
   x:a{Some? (f x)} -> Tot b
@@ -824,7 +841,7 @@ let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
 
 // Only to be invoked with TLS 1.2 (hardcoded in previous versions
 // BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 !
-let verifyDataHashAlg_of_ciphersuite_aux = 
+let verifyDataHashAlg_of_ciphersuite_aux =
   let open Hashing.Spec in function
   | CipherSuite _ _ (MtE  _ _)    -> Some SHA256
   | CipherSuite _ _ (AEAD _ hAlg) -> Some hAlg
@@ -839,17 +856,20 @@ let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphers
 val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hashAlg
 let sessionHashAlg pv cs =
   match pv with
+  | TLS_1p3 -> let CipherSuite13 _ h = cs in Hash h
   | SSL_3p0 | TLS_1p0 | TLS_1p1 -> MD5SHA1
-  | TLS_1p2 | TLS_1p3           -> Hash (verifyDataHashAlg_of_ciphersuite cs)
+  | TLS_1p2 -> Hash (verifyDataHashAlg_of_ciphersuite cs)
+
 // TODO recheck this is the right hash for HKDF
 // SZ: Right. The TLS 1.3 draft says "Where HMAC [RFC2104] uses
 // the Hash algorithm for the handshake"
 
 (** Determine the Authenticated Encryption algorithm associated with a ciphersuite *)
-val get_aeAlg: cs:cipherSuite{ CipherSuite? cs } -> Tot aeAlg
+val get_aeAlg: cs:cipherSuite{ CipherSuite? cs \/ CipherSuite13? cs } -> Tot aeAlg
 let get_aeAlg cs =
   match cs with
   | CipherSuite _ _ ae -> ae
+  | CipherSuite13 a h -> AEAD a h
 
 //(** Define the null authenticated encryption algorithm *)
 // BB: Why does this default to MD5 ?
@@ -870,12 +890,18 @@ let macAlg_of_aeAlg pv ae =
   //  | SSL_3p0,MACOnly alg -> SSLKHash alg (* dropped pattern on the left to simplify refinements *)
   //  | SSL_3p0,MtE _ alg   -> SSLKHash alg
   //  | _      ,MACOnly alg -> SSLKHash alg
-  | _      ,MACOnly alg 
+  | _      ,MACOnly alg
   | _      ,MtE _ alg   -> HMac alg
 
 (** Ciphersuite names definition *)
 type cipherSuiteName =
   | TLS_NULL_WITH_NULL_NULL
+
+  | TLS_AES_128_GCM_SHA256
+  | TLS_AES_256_GCM_SHA384
+  | TLS_CHACHA20_POLY1305_SHA256
+  | TLS_AES_128_CCM_SHA256
+  | TLS_AES_128_CCM_8_SHA256
 
   | TLS_RSA_WITH_NULL_MD5
   | TLS_RSA_WITH_NULL_SHA
@@ -945,10 +971,16 @@ type cipherSuiteNames = list cipherSuiteName
 
 (** Determine the validity of a ciphersuite based on it's name *)
 val cipherSuite_of_name: cipherSuiteName -> Tot valid_cipher_suite
-let cipherSuite_of_name = 
-  let open CoreCrypto in 
+let cipherSuite_of_name =
+  let open CoreCrypto in
   let open Hashing.Spec in function
   | TLS_NULL_WITH_NULL_NULL                -> NullCipherSuite
+
+  | TLS_AES_128_GCM_SHA256                 -> CipherSuite13 AES_128_GCM       SHA256
+  | TLS_AES_256_GCM_SHA384                 -> CipherSuite13 AES_256_GCM       SHA384
+  | TLS_CHACHA20_POLY1305_SHA256           -> CipherSuite13 CHACHA20_POLY1305 SHA256
+  | TLS_AES_128_CCM_SHA256                 -> CipherSuite13 AES_128_CCM       SHA256
+  | TLS_AES_128_CCM_8_SHA256               -> CipherSuite13 AES_128_CCM_8     SHA256
 
   | TLS_RSA_WITH_NULL_MD5                  -> CipherSuite Kex_RSA None (MACOnly MD5)
   | TLS_RSA_WITH_NULL_SHA                  -> CipherSuite Kex_RSA None (MACOnly SHA1)
@@ -1020,9 +1052,15 @@ let cipherSuites_of_nameList nameList =
 
 (** Determine the name of a ciphersuite based on its construction *)
 let name_of_cipherSuite =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   let open Hashing.Spec in function
   | NullCipherSuite                                                      -> Correct TLS_NULL_WITH_NULL_NULL
+
+  | CipherSuite13 AES_128_GCM SHA256                                     -> Correct TLS_AES_128_GCM_SHA256
+  | CipherSuite13 AES_256_GCM SHA384                                     -> Correct TLS_AES_256_GCM_SHA384
+  | CipherSuite13 CHACHA20_POLY1305 SHA256                               -> Correct TLS_CHACHA20_POLY1305_SHA256
+  | CipherSuite13 AES_128_CCM SHA256                                     -> Correct TLS_AES_128_CCM_SHA256
+  | CipherSuite13 AES_128_CCM_8 SHA256                                   -> Correct TLS_AES_128_CCM_8_SHA256
 
   | CipherSuite Kex_RSA None (MACOnly MD5)                               -> Correct TLS_RSA_WITH_NULL_MD5
   | CipherSuite Kex_RSA None (MACOnly SHA1)                              -> Correct TLS_RSA_WITH_NULL_SHA
@@ -1183,7 +1221,7 @@ let rec parseCertificateTypeList data =
 (** Determine the certificate signature algorithms allowed according to the ciphersuite *)
 val defaultCertTypes: bool -> cipherSuite -> ML (l:list certType{List.Tot.length l <= 1})
 let defaultCertTypes sign cs =
-  let open CoreCrypto in 
+  let open CoreCrypto in
   let alg = sigAlg_of_ciphersuite cs in
     if sign then
       match alg with
@@ -1491,9 +1529,3 @@ let parseSigHashAlgs b =
   match vlparse 2 b with
   | Correct b -> aux b []
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
-
-
-
-
-
-
