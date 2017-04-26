@@ -25,7 +25,6 @@ let eoflight =
   | ServerHelloDone 
   | Finished _ -> true
   | _ -> false
-
 // No support for binders yet
 
 // Do we compute a hash of the transcript ending with this message?
@@ -102,20 +101,26 @@ let region_of s =
   let open FStar.HyperStack in 
   let Ref r = get_reference s in 
   r.id
-  
-val init: h:HS.mem -> log -> option TLSConstants.protocolVersion -> GTot bool
+
+// not needed.
+
+// the Handshake can write
 val writing: h:HS.mem -> log -> GTot bool 
+
+// the assigned hash algorithm, if any
 val hashAlg: h:HS.mem -> log -> GTot (option Hashing.alg)
+
+// the transcript of past messages, in both directions
 val transcript: h:HS.mem -> log -> GTot (list hs_msg)
 
 //17-04-12 for now always called with pv = None.
 val create: reg:HH.rid -> pv:option TLSConstants.protocolVersion -> ST log
   (requires (fun h -> True))
   (ensures (fun h0 out h1 ->
-    HS.modifies (Set.singleton reg) h0 h1 /\
-    List.Tot.length (transcript h1 out) == 0 /\
+    HS.modifies (Set.singleton reg) h0 h1 /\ // todo: we just allocate (ref_of out)
+    transcript h1 out == [] /\
     writing h1 out /\
-    init h1 out pv))
+    hashAlg h1 out == None ))
 
 val setParams: s:log -> 
   TLSConstants.protocolVersion -> 
@@ -138,6 +143,7 @@ val setParams: s:log ->
 
 // We do not enforce "tagged m", a local decision 
 
+// shared postcondition
 let write_transcript h0 h1 (s:log) (m:msg) = 
     HS.(mods [get_reference s] h0 h1) /\
     writing h1 s /\
@@ -223,7 +229,11 @@ type outgoing (i:id) (* initial index *) =
 
 // provides outputs to the record layer, one fragment at a time
 // never fails, in contrast with Handshake.next_fragment
-val next_fragment: log -> i:id -> St (outgoing i) 
+
+val next_fragment: log -> i:id -> St (outgoing i)
+// the spec should say the "high-level" view does not change
+
+
 (* Incoming *) 
 
 // We receive messages & hashes in whole flights; 
@@ -240,7 +250,7 @@ val receive: s:log -> bytes -> ST (result (option (list msg * list anyTag)))
     match o with 
     | Error _ -> True // left underspecified
     | Correct None -> 
-        t1 == t0
+        t1 == t0 
     | Correct (Some (ms, hs)) -> 
         t1 == t0 @ ms /\ 
         writing h1 s /\

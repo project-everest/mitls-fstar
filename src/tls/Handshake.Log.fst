@@ -103,9 +103,7 @@ noeq type state =
                        // partial incoming flight, hashed & parsed, with selected intermediate tags
     hashes: hashState transcript parsed  -> 
 
-  // flags
-
-  // memoized parameters
+    // memoized parameters
     pv: option protocolVersion ->             // Initially: the pv in the clientHello, then the pv in the serverHello
     kex: option kexAlg ->                    // Used for the CKE and SKE
     dh_group: option CommonDH.group -> // Used for the CKE
@@ -117,6 +115,7 @@ let log = HS.ref state
 let get_reference l = 
     HS.(Ref l)
 
+val init: h:HS.mem -> log -> option TLSConstants.protocolVersion -> GTot bool
 let init h (st:log) (pvo: option protocolVersion) = 
    let s = sel h st in
    s.hashes = OpenHash empty_bytes &&
@@ -254,13 +253,13 @@ let next_fragment l (i:id) =
   let out_msg, rem =
     let o = st.outgoing in
     let lo = length o in
-    if lo = 0 then 
+    if lo = 0 then // nothing to send
        (None, None)
-    else
+    else // at most one fragment
     if (lo <= max_TLSPlaintext_fragment_length) then
       let rg = (lo, lo) in
       (Some (| rg, o |), None)
-    else
+    else // at least two ragments
       let (x,y) = split o max_TLSPlaintext_fragment_length in
       let lx = length x in
       let rg = (lx, lx) in

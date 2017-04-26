@@ -68,6 +68,44 @@ let gs_of ch =
     end
   | _ -> []
 
+// finding the pre-shared keys in ClientHello
+let find_pske o = 
+  match o.ch_extensions with 
+  | None -> None 
+  | Some es -> 
+    match List.Tot.find Extensions.E_pre_shared_key? es with 
+    | None -> None 
+    | Some (Extensions.E_pre_shared_key psks) -> Some psks
+
+let find_supported_groups o = 
+  match o.ch_extensions with 
+  | None -> None 
+  | Some es -> 
+    match List.Tot.find Extensions.E_supported_groups? es with 
+    | None -> None 
+    | Some (Extensions.E_supported_groups gns) -> Some gns
+
+type share = g:CommonDH.group & CommonDH.share g
+
+// we authenticate the whole list, but only care about those we could parse
+let find_key_shares o: option (list share)  = 
+  match o.ch_extensions with 
+  | None -> None 
+  | Some es -> 
+    match List.Tot.find Extensions.E_key_share? es with 
+    | None -> None 
+    | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> 
+        let known = function
+        | CommonDH.Share g s -> Some #share (|g, s |) 
+        | _ -> None #share in
+        Some (List.Tot.choose known ks)
+
+// index in the list of PSKs offered by the client
+type pski (o:offer) = n:nat {
+  o.ch_protocol_version = TLS_1p3 /\
+  (match find_pske o with 
+  | Some psks -> n < List.length psks
+  | None -> False) } 
 
 (**
   We keep both the server's HelloRetryRequest
@@ -75,7 +113,7 @@ let gs_of ch =
 *)
 type retryInfo (offer:offer) =
   hrr *
-  (list (g:CommonDH.group & CommonDH.share g)) *
+  list CommonDH.group *
   (list (PSK.pskIdentity * Hashing.anyTag))
 
 (**
@@ -93,10 +131,11 @@ noeq type mode =
     n_server_random: TLSInfo.random ->
     n_sessionID: option sessionID {n_sessionID = None <==> n_protocol_version = TLS_1p3} -> 
     n_cipher_suite: cipherSuite ->
+    n_pski: option (pski n_offer) -> // only for TLS 1.3
 
     // concatenating SH and EE extensions for 1.3, in wire order.
     n_server_extensions: option (se:list extension{List.Tot.length se < 256}) ->
-
+    
     // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
     n_server_share: option (g:CommonDH.group & CommonDH.share g) ->
 
@@ -423,29 +462,52 @@ let negotiateCipherSuite cfg pv ccs =
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
-assume
-val negotiateGroupKeyShare: config -> protocolVersion -> TLSConstants.kexAlg -> list extension -> Tot (result (option namedGroup * option bytes))
 (*
-let rec negotiateGroupKeyShare cfg pv kex exts =
-  match exts with
-  | None when (pv = TLS_1p3) -> Error(AD_decode_error, "no supported group or key share extension found")
-  | Some exts when (pv = TLS_1p3) ->
-    let rec aux: list extension -> Tot (result (option namedGroup * option bytes)) =
-      function
-      | E_key_share (CommonDH.ClientKeyShare gl) :: _ ->
-        let inConf (gn, gx) =
-           (((SEC? gn) && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE))
-            || ((FFDHE? gn) && (kex = Kex_DHE || kex = Kex_PSK_DHE)))
-           && List.Tot.mem gn cfg.namedGroups in
-        (match List.Tot.filter inConf gl with
-        | share :: _ -> Correct (Some share)
-        | [] -> Error(AD_decode_error, "no shared group between client and server config"))
-      | _ :: t -> aux t
-      | [] -> Error(AD_decode_error, "no supported group or key share extension found")
-    in aux exts
+val negotiateGroupKeyShare13 
+  config -> 
+  list extension -> 
+  Tot (result (option (kexAlg * namedGroup * option share))
+let rec negotiateGroupKeyShare cfg pv exts =
+  // first fetch the two relevant extensions
+  let supported, keyshares = 
+    match o.ch_extensions with
+    | None -> None, None 
+    | Some es -> 
+      ( match List.Tot.find Extensions.E_supported_groups? es with 
+        | None -> None 
+        | Some (Extensions.E_supported_groups gs) -> Some gs)
+      ( match List.Tot.find Extensions.E_key_share? es with 
+        | None -> None 
+        | Some (Extensions.E_key_share (CommonDH.ClientKeyShare gl)) -> 
+            let filter (g, gx) =
+              List.Tot.mem g cfg.namedGroups &&
+              ( (SEC? g && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE)) || 
+                (FFDHE? g && (kex = Kex_DHE || kex = Kex_PSK_DHE)) ) in
+            Some(match List.Tot.filter filter gl)) in
+
+  if pv = TLS_1p3 then 
+    match keyshares with
+    | None -> Error(AD_decode_error, "no supported group or key share extension found")
+    | Some [] -> Error(AD_decode_error, "no shared group between client and server config")
+    | Some (share::_) -> Correct (Some share)
+    // todo support HRR depending on supported_groups
+    
+  else if kex = Kex_ECDHE && Some? supported then 
+    let filter g = SEC? g && List.Tot.mem g cfg.namedGroups in
+    let gs = List.Tot.filter  
+    
+    Correct(Some (match List.Tot.filter filter gs), None)
+
+    match supported with 
+
+    | Some 
+  List.Tot.existsb E_supported_groups? exts
+
+
   | Some exts when (kex = Kex_ECDHE && List.Tot.existsb E_supported_groups? exts) ->
     let Some (E_supported_groups gl) = List.Tot.find E_supported_groups? exts in
-    let filter x = SEC? x && List.Tot.mem x cfg.namedGroups in
+
+    let filter g = 
     (match List.Tot.filter filter gl with
     | gn :: _ -> Correct (Some gn, None)
     | [] -> Error(AD_decode_error, "no shared curve configured"))
@@ -458,7 +520,6 @@ let rec negotiateGroupKeyShare cfg pv kex exts =
       | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
     else Correct(None, None)
 *)
-
 
 (**
   Determines if the server random value contains a downgrade flag
@@ -554,6 +615,7 @@ let client_ServerHello #region ns sh =
              sr
              None // (Some ssid)
              cs
+             None // pski
              sext
              (Some server_share)
              None // n_client_cert_request
@@ -570,6 +632,7 @@ let client_ServerHello #region ns sh =
              sr
              None // (Some ssid)
              cs
+             None // pski
              sext
              None // n_server_share; unknwon before SKE is received
              None // n_client_cert_request
@@ -633,6 +696,68 @@ assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region
 
 (* SERVER *)
 
+type cs13 offer = 
+  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
+  | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
+
+assume val is_cs13: cipherSuite -> bool
+
+assume
+val compute_cs13: 
+  cfg: config -> o:offer -> 
+  psks: list (option cipherSuite) (* will be richer *) -> 
+  shares: list share (* pre-registered *) -> 
+  result (list (cs13 o))
+(*
+let compute_cs13 cfg o psks shares = 
+  // pick the (potential) group to use for DHE/ECDHE
+  let ng: option share = 
+    match find_supported_groups o with 
+    | None -> None
+    | Some gs -> 
+      match List.Tot.filter (fun g -> List.Tot.mem g cfg.namedGroups) gs with
+      | [] -> None
+      | g::_ -> 
+        let Some g = CommonDH.group_of_namedGroup g in
+        let os: option (CommonDH.share g) = (
+          match find_key_shares o with
+          | None -> None 
+          | Some ks -> 
+            match List.Tot.filter (fun g_s -> dfst g_s = g) ks with
+            | (| g,  s|)::_ -> Some s
+            | [] -> None ) in
+        admit() in
+        (|g, os |) in 
+        
+  // pick acceptable record ciphersuites
+  let ncs = List.Tot.filter (fun cs -> is_cs13 cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in
+
+  // pick preferred choice for each PSK (if any) -- we could stop at the first match too
+  let pske = 
+    match find_pske o with 
+    | Some pske -> pske 
+    | None -> [] in
+  assert(List.length pske = List.length psks); // precondition
+  let psk_kex = true in
+  // TODO find_psk_kex o
+  // TODO intersect with local preferences and group
+  let rec f i = 
+    if i = length pske then
+      ( match ng, ncs with  
+        | Some x, cs::_ -> [JUST_EDH ng cs]
+        | _ -> [] )
+    else 
+      let choices = 
+        match List.Tot.index psks i, psk_kex  with 
+        | None -> [] 
+        | Some cs, true -> [PSK_EDH i ng cs; PSK_EDH i None cs]
+      in
+      (choices :: f (i+1))
+  in
+  f 0
+*)  
+
+
 //17-03-30 still missing a few for servers.
 
 // TODO ADL: incorrect as written; CS nego depends on ext nego
@@ -656,7 +781,17 @@ let computeServerMode cfg co serverRandom serverID =
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
   match negotiate_version cfg co with
   | Error z -> Error z
-  | Correct pv ->
+  | Correct TLS_1p3 -> admit()
+  (*
+    begin
+      match compute_cs13 cfg co [] [] (*TODO*)  with 
+      | Error z -> Error z 
+      | Correct [] -> Error(AD_handshake_failure,"ciphersuite negotiation failed") 
+//    | PSK_EDH j ogs cs :: _ -> 
+      | Correct (JUST_EDH (g, ogx) cs  :: _) -> admit()
+    end
+  *)
+  | Correct pv -> 
 
   // with TLS 1.2, we pick the first ciphersuite compatible with our credentials
   // we could be a bit stricter and record wether the client is TLS
@@ -703,10 +838,9 @@ let computeServerMode cfg co serverRandom serverID =
 //    List.Tot.fold_left (Extensions.clientToNegotiatedExtension cfg cs None false) nego cexts 
 *)
   let serverExtensions = Some [] in 
-
-  match negotiateGroupKeyShare cfg pv kex cexts with 
-  | Error z -> Error z 
-  | Correct (ng,gxo) ->
+//  match negotiateGroupKeyShare cfg pv kex cexts with 
+//  | Error z -> Error z 
+//  | Correct (ng,gxo) ->
 
   // compression is null and non-negotiable; we just report client errors
   let correct_compression_offer = 
@@ -718,11 +852,12 @@ let computeServerMode cfg co serverRandom serverID =
 
   Correct (Mode
     co
-    None //TODO: support HRR 
+    None // no HRR before TLS 1.3
     pv
     serverRandom
     serverID
     cs
+    None
     serverExtensions
     None // no server key share yet
     None // no client request yet
