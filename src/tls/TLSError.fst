@@ -73,7 +73,6 @@ let string_of_ad = function
     | AD_missing_extension -> "AD_missing_extension"
     | AD_unsupported_extension -> "AD_unsupported_extension"
 
-
 let isFatal ad =
     match ad with
     | AD_unexpected_message
@@ -102,6 +101,8 @@ let isFatal ad =
     | _ -> false
 
 type error = alertDescription * string
+
+let string_of_error (a,s)= string_of_ad a^"  ("^s^")"
 
 type result 'a = Platform.Error.optResult error 'a
 

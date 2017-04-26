@@ -515,15 +515,28 @@ let server_ServerHelloDone hs =
       end
    end
 
-assume val serverHello: TLSInfo.random -> Negotiation.mode -> sh
+// the ServerHello message is a simple function of the mode.
+let serverHello (m:Nego.mode) = 
+  let open Nego in 
+  let pv = m.n_protocol_version in 
+  ServerHello ({ 
+    sh_protocol_version = pv;
+    sh_server_random = m.n_server_random;
+    sh_sessionID = m.n_sessionID;
+    sh_cipher_suite = m.n_cipher_suite;
+    sh_compression = if pv = TLS_1p3 then None else Some NullCompression;
+    sh_extensions = m.n_server_extensions })
 
-(* receive ClientHello, and choose a protocol version and mode *)
+(* receive ClientHello, choose a protocol version and mode *)
 val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer =
     trace "Processing ClientHello";
-    let sid = CoreCrypto.random 32 (* always? discard in 1.3? *) in
+
+    // Nego proceeds in two steps, first without the server share
+    
+    let sid = Some (CoreCrypto.random 32) (* used only if we negotiate TLS < 1.3 *) in
     match Nego.server_ClientHello hs.nego offer sid with
     | Error z -> InError z
     | Correct mode -> (
@@ -547,9 +560,8 @@ let server_ClientHello hs offer =
       with
         | Error z -> InError z
         | Correct sext -> (
-          let msg = serverHello (nonce hs) mode in
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-          let digestServerHello = Handshake.Log.send_tag #ha hs.log (ServerHello msg) in
+          let digestServerHello = Handshake.Log.send_tag #ha hs.log (serverHello mode) in
           if mode.Nego.n_protocol_version = TLS_1p3
           then (
             trace "Derive handshake keys";
