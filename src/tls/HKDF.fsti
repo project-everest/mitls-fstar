@@ -91,3 +91,19 @@ val hkdf_expand_label: ha: hash_alg
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
+(*-------------------------------------------------------------------*)
+(*
+  Derive-Secret(Secret, Label, Messages) =
+    HKDF-Expand-Label(Secret, Label,
+       Transcript-Hash(Messages), Hash.length)
+*)
+
+val derive_secret:
+  ha:hash_alg ->
+  secret: hkey ha ->
+  label: string{length (abytes label) < 256-9} ->
+  hs_hash: bytes{length hs_hash < 256} ->
+  ST (lbytes (Hashing.Spec.tagLen ha))
+  (requires fun h -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+

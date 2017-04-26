@@ -57,4 +57,6 @@ let main () : ML unit =
   let (CDH.Share g gy) = KS.ks_server_13_1rtt_init kss cr cs g gx in
   p "OK.\n";
   let b = KS.print_share #g gy in
+  let sh_log = bytes_of_hex "52c04472bdfe929772c98b91cf425f78f47659be9d4a7d68b9e29d162935e9b9" in
+  let hsk = KS.ks_server_13_sh kss sh_log in
   ()
