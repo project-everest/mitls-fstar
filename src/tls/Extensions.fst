@@ -58,6 +58,12 @@ and extension =
 (*| E_certificate_authorities 
   | E_oid_filters 
   | E_post_handshake_auth *)
+
+// Previous extension types
+(*| E_renegotiation_info of renegotiationInfo 
+  | E_extended_ms 
+  | E_extended_padding *)
+  | E_ec_point_format of list ECGroup.point_format
   | E_unknown_extension of (lbytes 2 * bytes) (* un-{implemented,known} extensions. *)
 
 
@@ -72,6 +78,7 @@ let string_of_extension = function
   | E_supported_versions _ -> "versions"
   | E_cookie _ -> "cookie"
   | E_psk_key_exchange_modes -> "psk_kex_modes"
+  | E_ec_point_format _ -> "ec_point_fmt" 
   | E_unknown_extension (n,_) -> print_bytes n
 
 let rec string_of_extensions = function
@@ -90,6 +97,7 @@ private let sameExt e1 e2 =
   | E_supported_versions _, E_supported_versions _ -> true
   | E_cookie _, E_cookie _ -> true 
   | E_psk_key_exchange_modes, E_psk_key_exchange_modes -> true    
+  | E_ec_point_format _, E_ec_point_format _ -> true 
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
@@ -109,7 +117,8 @@ let extensionHeaderBytes ext =
   | E_early_data _             -> abyte2 (0x00z, 0x2az) // 42
   | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43
   | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
-  | E_psk_key_exchange_modes -> abyte2 (0x00z, 0x2dz) // 45
+  | E_psk_key_exchange_modes   -> abyte2 (0x00z, 0x2dz) // 45
+							   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
   | E_unknown_extension(h,b) -> h
 
 (** parse and serialize functions for server_name payload, TI.serverName. *)
@@ -147,6 +156,19 @@ val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
 val extensionPayloadBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
 
+let rec (compile_ecpf_list_aux:list ECGroup.point_format -> Tot bytes) =
+  function
+  | [] -> empty_bytes
+  | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0z) @| compile_ecpf_list_aux r
+  | ECGroup.ECP_UNKNOWN(t) :: r -> (bytes_of_int 1 t) @| compile_ecpf_list_aux r
+
+val compile_ecpf_list: l:list ECGroup.point_format{length (compile_ecpf_list_aux l) < 256} -> Tot bytes
+let compile_ecpf_list l =
+  let al = compile_ecpf_list_aux l in
+  lemma_repr_bytes_values (length al);
+  let bl:bytes = vlbytes 1 al in
+  bl
+  
 (* API *)
 (** Serialize extension. *)
 val extensionBytes: role -> ext:extension -> Tot bytes
@@ -179,6 +201,7 @@ and extensionPayloadBytes role ext =
       List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
   | E_cookie c                 -> c // SI: check 
   | E_psk_key_exchange_modes  -> admit() 
+  | E_ec_point_format(l)      -> compile_ecpf_list l 
   | E_unknown_extension(h,b)   -> b
 
 and extensionBytes role ext =
@@ -292,6 +315,29 @@ val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndicati
 val parseExtension: r:role -> b:bytes -> Tot (result extension) (decreases (length b))
 val parseExtensions: r:role -> b:bytes -> Tot (result (list extension)) (decreases (length b))
 
+val parse_ecpf_list: bytes -> Tot (result (list ECGroup.point_format))
+let parse_ecpf_list b =
+    let rec aux:b:bytes -> Tot (canFail (ECGroup.point_format)) (decreases (length b)) = fun b ->
+        if equalBytes b empty_bytes then ExOK([])
+        else
+	  if (0 < length b) then 
+	    let (u,v) = split b 1 in
+              (match aux v with
+              | ExFail(x,y) -> ExFail(x,y)
+              | ExOK(l) ->
+                  let cur = match cbyte u with
+                  | 0z -> ECGroup.ECP_UNCOMPRESSED
+                  | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u)
+                  in ExOK(cur :: l))
+	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed curve list")
+    in match aux b with
+    | ExFail(x,y) -> Error(x,y)
+    | ExOK(l) -> 
+      if (List.Tot.mem ECGroup.ECP_UNCOMPRESSED l) then
+	correct l
+      else
+        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
+	
 let rec parseExtension role b =
   if length b >= 4 then
     let (head, payload) = split b 2 in
@@ -360,7 +406,7 @@ let rec parseExtension role b =
 	  (match parseRenegotiationInfo data with
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
 	  | Error(z) -> Error(z)
-	 
+*)	 
 	| (0x00z, 0x0Bz) -> // ec point format
 	  if length data < 256 && length data >= 1 then
 	  (lemma_repr_bytes_values (length data);
@@ -371,6 +417,7 @@ let rec parseExtension role b =
 	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for ecpf list")
+(*
 	| (0x00z, 0x17z) -> // extended ms
 	  if length data = 0 then Correct (E_extended_ms)
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended MS extension")
@@ -522,8 +569,7 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res = (E_signature_algorithms sigAlgs) :: res in
     let res =
         if List.Tot.existsb (fun x -> isECDHECipherSuite x) (list_valid_cs_is_list_cs cs) then
-	  // SI: fixme 
-          //E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: 
+          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: 
 	  (E_supported_groups (list_valid_ng_is_list_ng namedGroups)) :: res
         else
           let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) (list_valid_ng_is_list_ng namedGroups) in
@@ -630,13 +676,12 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             | E_server_name _ ->
                 if List.Tot.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
                 else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
-(*
             | E_ec_point_format(spf) ->
                 if resuming then
                     correct l
                 else
-                    correct ({l with ne_supported_point_formats = Some spf})
-*)		    
+                    correct ({l with TI.ne_supported_point_formats = Some spf})
+
 (* not allowed for server
             | E_signature_algorithms sha ->
                 if resuming then correct l
@@ -695,6 +740,9 @@ let clientToServerExtension pv (cfg:TI.config) (cs:cipherSuite) ri ks (resuming:
 	  then Some(E_server_name []) // TODO EncryptedExtensions
 	  else None
         | _ -> None)
+   | E_ec_point_format(l) ->
+        if resuming || pv = TLS_1p3 then None
+        else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])	
     | E_supported_groups(l) -> None
 // SI: the other E_*s? 
     | _ -> None
@@ -709,6 +757,11 @@ let clientToNegotiatedExtension (cfg:TI.config) cs ri resuming neg cExt =
         else
             let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
             {neg with TI.ne_supported_groups = Some (List.Tot.filter isOK l)}
+    | E_ec_point_format l ->
+        if resuming then neg
+        else
+            let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
+            {neg with TI.ne_supported_point_formats = Some nl}	    
     | E_server_name l ->
         {neg with TI.ne_server_names = Some l}
     | E_signature_algorithms sha ->
