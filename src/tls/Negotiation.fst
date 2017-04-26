@@ -113,7 +113,7 @@ type pski (o:offer) = n:nat {
 *)
 type retryInfo (offer:offer) =
   hrr *
-  list CommonDH.group *
+  list share (* we should actually keep the raw client extension content *) *
   (list (PSK.pskIdentity * Hashing.anyTag))
 
 (**
@@ -131,7 +131,7 @@ noeq type mode =
     n_server_random: TLSInfo.random ->
     n_sessionID: option sessionID {n_sessionID = None <==> n_protocol_version = TLS_1p3} -> 
     n_cipher_suite: cipherSuite ->
-    n_pski: option (pski n_offer) -> // only for TLS 1.3
+    n_pski: option (pski n_offer) -> // only for TLS 1.3, result of a tricky stateful computation
 
     // concatenating SH and EE extensions for 1.3, in wire order.
     n_server_extensions: option (se:list extension{List.Tot.length se < 256}) ->
@@ -748,18 +748,17 @@ type cs13 offer =
   | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
 
-assume val is_cs13: cipherSuite -> bool
-
-assume
+// returns a list of negotiable "core modes" for TLS 1.3
+// the key exchange can be derived from cs13 
+// (we could stop after finding the first)
 val compute_cs13: 
   cfg: config -> o:offer -> 
   psks: list (option cipherSuite) (* will be richer *) -> 
   shares: list share (* pre-registered *) -> 
   result (list (cs13 o))
-(*
 let compute_cs13 cfg o psks shares = 
   // pick the (potential) group to use for DHE/ECDHE
-  let ng: option share = 
+  let ng: option (g:CommonDH.group & option (CommonDH.share g)) = 
     match find_supported_groups o with 
     | None -> None
     | Some gs -> 
@@ -774,12 +773,14 @@ let compute_cs13 cfg o psks shares =
             match List.Tot.filter (fun g_s -> dfst g_s = g) ks with
             | (| g,  s|)::_ -> Some s
             | [] -> None ) in
-        admit() in
-        (|g, os |) in 
-        
-  // pick acceptable record ciphersuites
-  let ncs = List.Tot.filter (fun cs -> is_cs13 cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in
+        Some (|g, os |) in 
 
+  let g_gx: option share = 
+    match ng with
+    | Some (| g, Some s|) -> Some (|g, s|)
+    | _ -> None in 
+  // pick acceptable record ciphersuites
+  let ncs = List.Tot.filter (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in
   // pick preferred choice for each PSK (if any) -- we could stop at the first match too
   let pske = 
     match find_pske o with 
@@ -789,21 +790,20 @@ let compute_cs13 cfg o psks shares =
   let psk_kex = true in
   // TODO find_psk_kex o
   // TODO intersect with local preferences and group
-  let rec f i = 
-    if i = length pske then
-      ( match ng, ncs with  
-        | Some x, cs::_ -> [JUST_EDH ng cs]
+  let rec f i: list (cs13 o) = 
+    if i = List.length pske then
+      ( match g_gx, ncs with  
+        | Some x, (cs :: _) -> [JUST_EDH x cs]
         | _ -> [] )
     else 
       let choices = 
         match List.Tot.index psks i, psk_kex  with 
-        | None -> [] 
-        | Some cs, true -> [PSK_EDH i ng cs; PSK_EDH i None cs]
+        | None, _ -> [] 
+        | Some cs, true -> [PSK_EDH i g_gx cs]  // TODO add cases
       in
-      (choices :: f (i+1))
+      (choices @ f (i+1))
   in
-  f 0
-*)  
+  Correct (f 0)
 
 
 //17-03-30 still missing a few for servers.
