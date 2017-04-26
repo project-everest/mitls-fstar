@@ -721,8 +721,8 @@ let client_ServerKeyExchange #region ns crt ske ocr =
               if not valid then
                 Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
               else
-                let Mode offer hrr pv sr sid cs sext _ _ _ gx = mode in
-                let mode = Mode offer hrr pv sr sid cs sext (Some gy) ocr (Some scert) gx in
+                let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
+                let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr (Some scert) gx in
                 let ccert = None in // TODO
                 MR.m_write ns.state (C_WaitFinished2 mode ccert);
                 Correct mode
