@@ -377,7 +377,7 @@ let receive_CCS #a l =
   then Error (AD_unexpected_message, "unexpected fragment after CCS")
   else 
   match st.hashes with 
-  | OpenHash b -> Error (AD_internal_error, "can be statilcally prevented")
+  | OpenHash b -> Error (AD_internal_error, "can be statically prevented")
   | FixedHash a acc tl -> 
     begin
       let nt = append_hs_transcript st.transcript st.parsed in

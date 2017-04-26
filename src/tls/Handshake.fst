@@ -484,7 +484,7 @@ let client_ServerFinished hs f digest =
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
   let mode = Nego.getMode hs.nego in
-  let Some chain = mode.Nego.n_server_cert in // was using Cert.lookup_chain cfg.cert_chain_file
+  let Some chain = mode.Nego.n_server_cert in // Server cert chosen in Nego.server_ClientHello
   match Nego.chosenGroup mode with
   | None -> InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
   | Some g  ->
@@ -568,6 +568,10 @@ let server_ClientHello hs offer =
       with
         | Error z -> InError z
         | Correct sext -> (
+          let pv = mode.Nego.n_protocol_version in
+          let ha = Nego.hashAlg mode in
+          let ka = Nego.kexAlg mode in
+          Handshake.Log.setParams hs.log pv ha (Some ka) None;
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
           let digestServerHello = Handshake.Log.send_tag #ha hs.log (serverHello mode) in
           if mode.Nego.n_protocol_version = TLS_1p3
@@ -749,7 +753,7 @@ let next_fragment (hs:hs) i =
     // otherwise, we just returns buffered messages and signals
     | Outgoing None false false false, C_Idle -> client_ClientHello hs i
     | Outgoing None false false false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
-  //  | Outgoing msg  true _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing)
+   // | Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing)
     | _ -> Correct outgoing // nothing to do
 
 (* ----------------------- Incoming ----------------------- *)

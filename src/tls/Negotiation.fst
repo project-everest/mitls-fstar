@@ -824,7 +824,7 @@ let compute_cs13 cfg o psks shares =
 irreducible val computeServerMode: 
   cfg: config -> co: offer -> 
   serverRandom: TLSInfo.random -> serverID: option sessionID -> 
-  Tot (result mode)
+  St (result mode)
 let computeServerMode cfg co serverRandom serverID = 
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
   match negotiate_version cfg co with
@@ -848,13 +848,18 @@ let computeServerMode cfg co serverRandom serverID =
     match Cert.lookup_chain cfg.cert_chain_file with
     | Correct c when (Some? (Cert.endpoint_keytype c)) ->
       let kt = Cert.endpoint_keytype c in
-      (fun (CipherSuite _ sa _) ->
-        match sa,kt with
-        | Some sa, Some kt ->
-          (match sa, kt with
-          | RSASIG, KeyRSA _ | RSAPSS, KeyRSA _
-          | ECDSA, KeyECDSA _ | DSA, KeyDSA _ -> true
-          | _ -> false)
+      (fun cs ->
+        match cs with
+        | CipherSuite _ sa _ ->
+          begin
+          match sa,kt with
+          | Some sa, Some kt ->
+            (match sa, kt with
+            | RSASIG, KeyRSA _ | RSAPSS, KeyRSA _
+            | ECDSA, KeyECDSA _ | DSA, KeyDSA _ -> true
+            | _ -> false)
+          | _ -> false
+          end
         | _ -> false)
     | _ ->
        let _ =
@@ -897,7 +902,13 @@ let computeServerMode cfg co serverRandom serverID =
     else List.Tot.existsb (fun c -> c = NullCompression) co.ch_compressions in
   if not correct_compression_offer 
   then Error(AD_illegal_parameter, "Compression is deprecated") else 
-
+  let scert =
+    match Cert.lookup_chain cfg.cert_chain_file with
+    | Correct cert -> Some cert
+    | Error z ->
+      trace ("No cert found: "^string_of_error z);
+      None
+  in
   Correct (Mode
     co
     None // no HRR before TLS 1.3
@@ -908,8 +919,8 @@ let computeServerMode cfg co serverRandom serverID =
     None
     serverExtensions
     None // no server key share yet
-    None // no client request yet
-    None // no server cert yet
+    None
+    scert
     None // no client key share yet
   )
   
@@ -927,7 +938,7 @@ let server_ClientHello #region ns offer sid =
           Error z
       | Correct m -> 
           trace ("including server extensions "^string_of_option_extensions m.n_server_extensions);
-          MR.m_write ns.state (C_Offer offer);
+          MR.m_write ns.state (S_Mode m);
           Correct m
 
 
