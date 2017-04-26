@@ -211,6 +211,13 @@ let register hs keys =
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
+// SZ: just to test 1.2
+let register12 mode hs keys =
+    let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
+      let h = Nego.Fresh ({ Nego.session_nego = mode }) in
+      Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
+    Epochs.add_epoch hs.epochs ep // actually extending the epochs log
+
 
 (* ---------------- signature stuff, to be moved (at least) to Nego -------------------- *)
 
@@ -409,7 +416,7 @@ let client_ServerHelloDone hs c ske ocr =
       let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
       let digestClientKeyExchange = Handshake.Log.send_tag #ha hs.log msg  in
       let cfin_key, app_keys = KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange in
-      register hs app_keys;
+      register12 mode hs app_keys;
       // we send CCS then Finished;  we will use the new keys only after CCS
 
       let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
@@ -742,6 +749,7 @@ let next_fragment (hs:hs) i =
     // otherwise, we just returns buffered messages and signals
     | Outgoing None false false false, C_Idle -> client_ClientHello hs i
     | Outgoing None false false false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
+  //  | Outgoing msg  true _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing)
     | _ -> Correct outgoing // nothing to do
 
 (* ----------------------- Incoming ----------------------- *)

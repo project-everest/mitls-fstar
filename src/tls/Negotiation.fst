@@ -575,7 +575,6 @@ let matching_share
     end
   | None -> None
 
-
 // for this kind of function, can we just rely on type inference?
 val client_ServerHello: #region:rgn -> t region Client ->
   HandshakeMessages.sh ->
@@ -643,55 +642,104 @@ let client_ServerHello #region ns sh =
            Correct mode
         | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
 
+(* ---------------- signature stuff, to be removed from Handshake -------------------- *)
+
+// deep subtyping...
+let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result TLSConstants.hashAlg) =
+  function
+  | Error z -> Error z
+  | Correct h -> Correct h
+let sigHashAlg_is_tuple_sig_hash: sigHashAlg -> Tot (sigAlg * TLSConstants.hashAlg) =
+  function | a,b -> a,b
+let rec list_sigHashAlg_is_list_tuple_sig_hash: list sigHashAlg -> Tot (list (TLSConstants.sigAlg * TLSConstants.hashAlg)) =
+  function
+  | [] -> []
+  | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd) :: (list_sigHashAlg_is_list_tuple_sig_hash tl)
+
+// why an option?
+val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
+let to_be_signed pv role csr tbs =
+  match pv, csr with
+  | TLS_1p3, None ->
+      let pad = abytes (String.make 64 (Char.char_of_int 32)) in
+      let ctx =
+        match role with
+        | Server -> "TLS 1.3, server CertificateVerify"
+        | Client -> "TLS 1.3, client CertificateVerify"  in
+      pad @| abytes ctx @| abyte 0z @| tbs
+  | _, Some csr -> csr @| tbs
+
+val sigHashAlg_of_ske: bytes -> Tot (option (sigHashAlg * bytes))
+let sigHashAlg_of_ske signature =
+  if length signature > 4 then
+   let h, sa, sigv = split2 signature 1 1 in
+   match vlsplit 2 sigv with
+   | Correct (sigv, eof) ->
+     begin
+     match length eof, parseSigAlg sa, optHashAlg_prime_is_optHashAlg (parseHashAlg h) with
+     | 0, Correct sa, Correct (Hash h) -> Some ((sa,Hash h), sigv)
+     | _, _, _ -> None
+     end
+   | Error _ -> None
+  else None
 
 val client_ServerKeyExchange: #region:rgn -> t region Client ->
   serverCert: HandshakeMessages.crt ->
   HandshakeMessages.ske ->
   ocr: option HandshakeMessages.cr ->
   St (result mode)
-let client_ServerKeyExchange #region ns =
-  admit()
-(*
-    let valid_chain = hs.cfg.check_peer_certificate => Cert.validate_chain c.crt_chain true cfg.peer_name cfg.ca_file in
-    if not valid_chain then Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failure")    else
-      let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-      let Some cs_sigalg = n.n_sigAlg in
-      let sigalgs = n.n_extensions.ne_signature_algorithms in
-      match sigHashAlg_of_ske ske.ske_sig with
-      | None -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
-      | Some ((sa,h),sigv) ->
-            let algs: list sigHashAlg =
-              match sigalgs with
-              | Some l -> l
-              | None -> [(cs_sigalg, Hash Hashing.Spec.SHA1)] in
-            if not (List.Tot.existsb (fun (xs,xh) -> (xs = sa && xh = h)) algs)
-            then Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
-            else
-              let a = Signature.Use (fun _ -> true) sa [h] false false in
-              let csr = (n.n_client_random @| n.n_server_random) in
-              let ems = n.n_extensions.ne_extended_ms in
-              let tbs = to_be_signed n.n_protocol_version Server (Some csr) ske_tbs in
-              match Signature.get_chain_public_key #a c.crt_chain with
-              | None -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to get public key from chain") )
-              | Some pk ->
-                   let valid_signature = Signature.verify #a h pk tbs sigv in
-                   // debug_print("tbs = " ^ (Platform.Bytes.print_bytes tbs) ^ "\n");
-                   debug_print("Signature validation status = " ^ (if valid then "OK" else "FAIL") ^ "\n");
-                   if not valid_signature then Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "failed to check SKE signature")
-                   else
-                     match ske.ske_kex_s with
-                     | KEX_S_RSA _ -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "only support ECDHE/DHE SKE") )
-                     | KEX_S_DHE (| g, gy |) ->
-*)
+let client_ServerKeyExchange #region ns crt ske ocr =
+  match MR.m_read ns.state with
+  | C_Mode mode ->
+    match ske.ske_kex_s with
+    | KEX_S_RSA _ ->
+      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Illegal message")
+    | KEX_S_DHE gy ->
+      let scert = crt.crt_chain in
+      if (not ns.cfg.check_peer_certificate) ||
+         Cert.validate_chain crt.crt_chain true ns.cfg.peer_name ns.cfg.ca_file
+      then
+        let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
+        let (a, sa, ha) = sig_algs mode
+          (sessionHashAlg mode.n_protocol_version mode.n_cipher_suite) in
+        match sigHashAlg_of_ske ske.ske_sig with
+        | None ->
+          Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
+        | Some ((sa',ha'), sigv) ->
+          if (sa,ha) <> (sa',ha') then
+            Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+          else
+            let csr = ns.nonce @| mode.n_server_random in
+            let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
+            match Signature.get_chain_public_key #a scert with
+            | None ->
+              Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to get public key from chain")
+            | Some pk ->
+              let valid = Signature.verify #a ha pk tbs sigv in
+              // trace ("tbs = " ^ (Platform.Bytes.print_bytes tbs));
+              trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
+              if not valid then
+                Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
+              else
+                let Mode offer hrr pv sr sid cs sext _ _ _ gx = mode in
+                let mode = Mode offer hrr pv sr sid cs sext (Some gy) ocr (Some scert) gx in
+                let ccert = None in // TODO
+                MR.m_write ns.state (C_WaitFinished2 mode ccert);
+                Correct mode
+       else
+         Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failed")
 
 
-assume val clientComplete_13: #region:rgn -> #role:TLSConstants.role -> t region role ->
+val clientComplete_13: #region:rgn -> t region Client ->
   HandshakeMessages.ee ->
   ocr: option HandshakeMessages.cr ->
   serverCert: HandshakeMessages.crt ->
   cv: HandshakeMessages.cv ->
   digest:  bytes{length digest <= 32} ->
   St (result mode) // it needs to be computed, whether returned or not
+let clientComplete_13 #region ns ee ocr crt cv digest =
+  trace "Nego.clientComplete_13";
+  admit()
 
 
 (* SERVER *)
