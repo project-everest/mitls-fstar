@@ -558,8 +558,10 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res =
        match minpv, pv with
        | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
-       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p2;TLS_1p3] :: res 
-       | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res // this case is not mandatory
+       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p2;TLS_1p3] :: res
+       // REMARK: This case is not mandatory. E.g. www.google.com chokes on it
+       // Commenting this out. This behaviour should be configurable
+       // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
        | _ -> res in
     let res = 
        match pv, ks with
