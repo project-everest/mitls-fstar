@@ -3,7 +3,6 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module Handshake
 
-
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
@@ -347,7 +346,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
   | Correct mode ->
     let pv = mode.Nego.n_protocol_version in
     let ha = Nego.hashAlg mode in
-    let ka = Nego.kexAlg mode in 
+    let ka = Nego.kexAlg mode in
     Handshake.Log.setParams s.log pv ha (Some ka) None (*?*);
     match pv, ka with
     | TLS_1p3, Kex_DHE //, Some gy
@@ -435,7 +434,9 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
     match Nego.clientComplete_13 hs.nego ee ocr c cv digestCert with
     | Error z -> InError z
     | Correct mode ->
-        let (sfin_key, cfin_key, app_keys) = KeySchedule.ks_client_13_sf hs.ks digestServerFinished in
+        // ADL: 4th returned value is the exporter master secret.
+        // should be passed to application somehow
+        let (sfin_key, cfin_key, app_keys, _) = KeySchedule.ks_client_13_sf hs.ks digestServerFinished in
         let (| finId, sfin_key |) = sfin_key in
         if not (HMAC.UFCMA.verify sfin_key digestCertVerify svd)
         then InError (AD_decode_error, "Finished MAC did not verify")
@@ -658,7 +659,8 @@ let server_ServerFinished_13 hs i =
         let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
         let digestServerFinished = Handshake.Log.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
         // we need to call KeyScheduke twice, to pass this digest
-        let app_keys = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
+        // ADL this call also returns exporter master secret, which should be passed to application
+        let app_keys, _ = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
         register hs app_keys;
         Epochs.incr_writer hs.epochs; // Switch to ATK after the SF
         Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
@@ -703,17 +705,6 @@ val version: s:hs -> Tot protocolVersion
   (requires (hs_inv s))
   (ensures (fun h0 pv h1 -> h0 = h1))
   *)
-
-(* // JP: the outside has been checked against the fsti which had another *)
-(* // definition (at the bottom of this file) *)
-(* val iT_old:  s:hs -> rw:rw -> ST int *)
-(*   (requires (fun h -> True)) *)
-(*   (ensures (fun h0 i h1 -> True)) *)
-(* let iT_old (HS r res cfg id l st) rw = *)
-(*   match rw with *)
-(*   | Reader -> (!st).hs_reader *)
-(*   | Writer -> (!st).hs_writer *)
-
 
 (* ----------------------- Control Interface -------------------------*)
 
@@ -784,7 +775,7 @@ let recv_fragment (hs:hs) #i rg f =
       | C_Wait_Finished2 digest, [Finished f], [digestServerFinished] ->
         client_ServerFinished hs f digest
 
-      | S_Idle, [ClientHello ch], []  -> 
+      | S_Idle, [ClientHello ch], []  ->
         server_ClientHello hs ch
       | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] ->
         server_ClientFinished hs f.fin_vd digest digestClientFinish
@@ -803,7 +794,7 @@ let recv_ccs (hs:hs) =
     trace "recv_ccs";
     // assert pv <> TLS 1.3
     // CCS triggers completion of the incoming flight of messages.
-    let mode = Nego.getMode hs.nego in 
+    let mode = Nego.getMode hs.nego in
     match Handshake.Log.receive_CCS #(Nego.hashAlg mode) hs.log with
     | Error z -> InError z
     | Correct (ms, digests, digest) ->

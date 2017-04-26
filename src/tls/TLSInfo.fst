@@ -1,5 +1,5 @@
 (*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
 --*)
 module TLSInfo
 
@@ -222,13 +222,13 @@ type negotiatedExtensions = {
     ne_secure_renegotiation: ri_status; // now a total function of the mode
 
     //$ Cedric: these extensions were missing in F7.
-    ne_server_names: option (list serverName); // now a total function of the mode, 
+    ne_server_names: option (list serverName); // now a total function of the mode,
     ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
 
     // now internal, transient concerns for server-side nego
-    ne_signature_algorithms: option (list sigHashAlg); 
-    ne_supported_groups: option (list namedGroup); 
-    ne_supported_point_formats: option (list ECGroup.point_format); 
+    ne_signature_algorithms: option (list sigHashAlg);
+    ne_supported_groups: option (list namedGroup);
+    ne_supported_point_formats: option (list ECGroup.point_format);
 }
 
 let ne_default =
@@ -293,7 +293,7 @@ type abbrInfo =
      abbr_vd: option (cVerifyData * sVerifyData) }
 
 type resumeInfo (r:role) =
-  //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection 
+  //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
   o:option sessionID {r=Server ==> o=None} *
   l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
@@ -438,10 +438,14 @@ assume val strongAESI: sessionInfo -> Tot bool
 // be extracted from a log with EarlyDataIndication
 type logInfo_CH = {
   li_ch_cr: crand;
-//  li_ch_ed_psk: PSK.pskid;       // 0-RT PSK
-//  li_ch_ed_ae: a:aeAlg{AEAD? a}; // 0-RT AEAD alg
-//  li_ch_ed_hash: h:hash_alg;     // 0-RT hash
-  li_ch_psk: list PSK.pskid;     // other offered PSKs
+  li_ch_psk: list PSK.pskid;
+}
+
+type logInfo_CH0 = {
+  li_ch0_cr: crand;
+  li_ch0_ed_psk: PSK.pskid;        // 0-RT PSK
+  li_ch0_ed_ae: a:aeAlg{AEAD? a};  // 0-RT AEAD alg
+  li_ch0_ed_hash: h:hash_alg;      // 0-RT hash
 }
 
 type logInfo_SH = {
@@ -464,17 +468,20 @@ type logInfo_CF = {
 
 type logInfo =
 | LogInfo_CH of logInfo_CH
+| LogInfo_CH0 of logInfo_CH0
 | LogInfo_SH of logInfo_SH
 | LogInfo_SF of logInfo_SF
 | LogInfo_CF of logInfo_CF
 
 let logInfo_ae : x:logInfo{~(LogInfo_CH? x)} -> Tot (a:aeAlg{AEAD? a}) = function
+| LogInfo_CH0 x -> x.li_ch0_ed_ae
 | LogInfo_SH x -> x.li_sh_ae
 | LogInfo_SF x -> x.li_sf_sh.li_sh_ae
 | LogInfo_CF x -> x.li_cf_sf.li_sf_sh.li_sh_ae
 
-let logInfo_nonce (rw:role) = function
+let logInfo_nonce = function
 | LogInfo_CH x -> x.li_ch_cr
+| LogInfo_CH0 x -> x.li_ch0_cr
 | LogInfo_SH x -> x.li_sh_cr
 | LogInfo_SF x -> x.li_sf_sh.li_sh_cr
 | LogInfo_CF x -> x.li_cf_sf.li_sf_sh.li_sh_cr
@@ -484,9 +491,6 @@ let logInfo_nonce (rw:role) = function
 // injectivity
 let eq_logInfo (la:logInfo) (lb:logInfo) : Tot bool =
   la = lb // TODO extensionality!
-
-// Length constraint is enfoced in the 2nd definition step after valid
-type hashed_log = bytes
 
 // injective functions with extensional equality
 type injective (#a:Type) (#b:Type)
@@ -509,13 +513,13 @@ type injective (#a:Type) (#b:Type)
 // A predicate on info-carrying logs
 // The function f is defined much later in HandshakeLog
 // and folds the perfect hashing assumption and log projection
-type log_info (li:logInfo) (h:hashed_log) =
-  exists (f: hashed_log -> Tot logInfo).{:pattern (f h)}
-  injective #hashed_log #logInfo #equalBytes #eq_logInfo f /\ f h = li
+type hashed_log (li:logInfo) =
+  b:bytes{exists (f: bytes -> Tot logInfo).{:pattern (f b)}
+  injective #bytes #logInfo #equalBytes #eq_logInfo f /\ f b = li}
 
 type pre_esId : Type0 =
   | ApplicationPSK: i:PSK.pskid -> ha:hash_alg{PSK.compatible_hash i ha} -> pre_esId
-  | ResumptionPSK: i:pre_rmsId -> pre_esId
+  | ResumptionPSK: #li:logInfo -> i:pre_rmsId li -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
 
 and pre_hsId =
@@ -533,52 +537,43 @@ and pre_secretId =
   | HandshakeSecretID: pre_hsId -> pre_secretId
   | ApplicationSecretID: pre_asId -> pre_secretId
 
-and pre_rmsId =
-  | RMSID: pre_asId -> logInfo -> hashed_log -> pre_rmsId
+and pre_rmsId (li:logInfo) =
+  | RMSID: pre_asId -> hashed_log li -> pre_rmsId li
 
-and pre_exportId =
-  | ExportID: pre_asId -> logInfo -> hashed_log -> pre_exportId
+and pre_exportId (li:logInfo) =
+  | ExportID: pre_asId -> hashed_log li -> pre_exportId li
 
 and expandTag =
-  | EarlyTrafficSecret
-  | HandshakeTrafficSecret
-  | ApplicationTrafficSecret
-  | TrafficSecret
+  | ClientEarlyTrafficSecret
+  | ClientHandshakeTrafficSecret
+  | ServerHandshakeTrafficSecret
+  | ClientApplicationTrafficSecret
+  | ServerApplicationTrafficSecret
+  | ApplicationTrafficSecret // Re-keying
 
-and pre_expandId =
-  | ExpandedSecret: pre_secretId -> expandTag -> logInfo -> hashed_log -> pre_expandId
-
-and keyTag =
-  | EarlyApplicationDataKey
-  | HandshakeKey
-  | ApplicationDataKey
-  | ApplicationRekey
+and pre_expandId (li:logInfo) =
+  | ExpandedSecret: pre_secretId -> expandTag -> hashed_log li -> pre_expandId li
 
 and pre_keyId =
-  | KeyID: pre_expandId -> keyTag -> role -> logInfo -> hashed_log -> pre_keyId
-
-and finishedTag =
-  | EarlyFinished
-  | HandshakeFinished
-  | LateFinished
+  | KeyID: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_expandId li -> pre_keyId
 
 and pre_finishedId =
-  | FinishedID: pre_expandId -> finishedTag -> role -> logInfo -> hashed_log -> pre_finishedId
+  | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
 
-val esId_hash: pre_esId -> Tot hash_alg
-val hsId_hash: pre_hsId -> Tot hash_alg
-val asId_hash: pre_asId -> Tot hash_alg
-val saltId_hash: pre_saltId -> Tot hash_alg
-val secretId_hash: pre_secretId -> Tot hash_alg
-val rmsId_hash: pre_rmsId -> Tot hash_alg
-val exportId_hash: pre_exportId -> Tot hash_alg
-val expandId_hash: pre_expandId -> Tot hash_alg
-val keyId_hash: pre_keyId -> Tot hash_alg
-val finishedId_hash: pre_finishedId -> Tot hash_alg
+val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
+val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
+val asId_hash: i:pre_asId -> Tot hash_alg (decreases i)
+val saltId_hash: i:pre_saltId -> Tot hash_alg (decreases i)
+val secretId_hash: i:pre_secretId -> Tot hash_alg (decreases i)
+val rmsId_hash: #li:logInfo -> i:pre_rmsId li -> Tot hash_alg (decreases i)
+val exportId_hash: #li:logInfo -> i:pre_exportId li -> Tot hash_alg (decreases i)
+val expandId_hash: #li:logInfo -> i:pre_expandId li -> Tot hash_alg (decreases i)
+val keyId_hash: i:pre_keyId -> Tot hash_alg (decreases i)
+val finishedId_hash: i:pre_finishedId -> Tot hash_alg (decreases i)
 
 let rec esId_hash = function
   | ApplicationPSK pskid h -> h
-  | ResumptionPSK i -> rmsId_hash i
+  | ResumptionPSK #li i -> rmsId_hash #li i
   | NoPSK h -> h
 
 and hsId_hash = function
@@ -596,20 +591,20 @@ and secretId_hash = function
   | HandshakeSecretID i -> hsId_hash i
   | ApplicationSecretID i -> asId_hash i
 
-and rmsId_hash = function
-  | RMSID asId _ _ -> asId_hash asId
+and rmsId_hash #li i = match i with
+  | RMSID asId _ -> asId_hash asId
 
-and exportId_hash = function
-  | ExportID asId _ _ -> asId_hash asId
+and exportId_hash #li i = match i with
+  | ExportID asId _ -> asId_hash asId
 
-and expandId_hash = function
-  | ExpandedSecret i _ _ _ -> secretId_hash i
+and expandId_hash #li i = match i with
+  | ExpandedSecret i _ _ -> secretId_hash i
 
 and keyId_hash = function
-  | KeyID i _ _ _ _ -> expandId_hash i
+  | KeyID #li i -> expandId_hash #li i
 
 and finishedId_hash = function
-  | FinishedID i _ _ _ _ -> expandId_hash i
+  | FinishedID #li i -> expandId_hash #li i
 
 type valid_hlen (b:bytes) (h:hash_alg) =
   length b = Hashing.Spec.tagLen h
@@ -620,11 +615,11 @@ type pre_index =
 | I_AS of pre_asId
 | I_SALT of pre_saltId
 | I_SECRET of pre_secretId
-| I_RMS of pre_rmsId
-| I_EXPORT of pre_exportId
-| I_EXPAND of pre_expandId
-| I_KEY of pre_keyId
-| I_FINISHED of pre_finishedId
+| I_RMS: #li:logInfo -> pre_rmsId li -> pre_index
+| I_EXPORT: #li:logInfo -> pre_exportId li -> pre_index
+| I_EXPAND: #li:logInfo -> pre_expandId li -> pre_index
+| I_KEY: pre_keyId -> pre_index
+| I_FINISHED: pre_finishedId -> pre_index
 
 type honest_index (i:pre_index) = bool
 
@@ -648,7 +643,7 @@ type valid (i:pre_index) =
   | I_ES i ->
     (match i with
     | ApplicationPSK i _ -> PSK.registered_psk i
-    | ResumptionPSK i -> registered (I_RMS i)
+    | ResumptionPSK #li i -> registered (I_RMS #li i)
     | NoPSK _ -> True)
   | I_HS i ->
     (match i with
@@ -665,21 +660,21 @@ type valid (i:pre_index) =
     | EarlySecretID i -> registered (I_ES i)
     | HandshakeSecretID i -> registered (I_HS i)
     | ApplicationSecretID i -> registered (I_AS i))
-  | I_RMS i ->
+  | I_RMS #li i ->
     (match i with
-    | RMSID i _ _ -> registered (I_AS i))
-  | I_EXPORT i ->
+    | RMSID i _ -> registered (I_AS i))
+  | I_EXPORT #li i ->
     (match i with
-    | ExportID i _ _ -> registered (I_AS i))
-  | I_EXPAND i ->
+    | ExportID i _ -> registered (I_AS i))
+  | I_EXPAND #li i ->
     (match i with
-    | ExpandedSecret i _ _ _ -> registered (I_SECRET i))
+    | ExpandedSecret i _ _ -> registered (I_SECRET i))
   | I_KEY i ->
     (match i with
-    | KeyID i _ _ _ _ -> registered (I_EXPAND i))
+    | KeyID #li i -> registered (I_EXPAND #li i))
   | I_FINISHED i ->
     (match i with
-    | FinishedID i _ _ _ _ -> registered (I_EXPAND i)))
+    | FinishedID #li i -> registered (I_EXPAND #li i)))
 
 type index = i:pre_index{valid i}
 
@@ -700,9 +695,9 @@ type hsId = i:pre_hsId{valid (I_HS i)}
 type asId = i:pre_asId{valid (I_AS i)}
 type saltId = i:pre_saltId{valid (I_SALT i)}
 type secretId = i:pre_secretId{valid (I_SECRET i)}
-type rmsId = i:pre_rmsId{valid (I_RMS i)}
-type exportId = i:pre_exportId{valid (I_EXPORT i)}
-type expandId = i:pre_expandId{valid (I_EXPAND i)}
+type rmsId (li:logInfo) = i:pre_rmsId li{valid (I_RMS i)}
+type exportId (li:logInfo) = i:pre_exportId li{valid (I_EXPORT i)}
+type expandId (li:logInfo) = i:pre_expandId li{valid (I_EXPAND i)}
 type keyId = i:pre_keyId{valid (I_KEY i)}
 type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
 
@@ -712,11 +707,19 @@ type id =
 | ID13: keyId:keyId -> id
 | ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id
 
+let peerLabel = function
+  | ClientEarlyTrafficSecret -> ClientEarlyTrafficSecret
+  | ClientHandshakeTrafficSecret -> ServerHandshakeTrafficSecret
+  | ServerHandshakeTrafficSecret -> ClientHandshakeTrafficSecret
+  | ClientApplicationTrafficSecret -> ServerApplicationTrafficSecret
+  | ServerApplicationTrafficSecret -> ClientApplicationTrafficSecret
+  | ApplicationTrafficSecret -> ApplicationTrafficSecret
+
 let peerId = function
   | PlaintextID r -> PlaintextID r
   | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
-  | ID13 (KeyID i tag rw li log) ->
-      let kid = KeyID i tag (dualRole rw) li log in
+  | ID13 (KeyID #li (ExpandedSecret s t log)) ->
+      let kid = KeyID #li (ExpandedSecret s (peerLabel t) log) in
       assume(valid (I_KEY kid)); // Annoying: registration of keys as pairs
       ID13 kid
 
@@ -737,7 +740,7 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
 let nonce_of_id = function
   | PlaintextID r -> r
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
-  | ID13 (KeyID _ _ rw li _) -> logInfo_nonce rw li
+  | ID13 (KeyID #li _) -> logInfo_nonce li
 
 val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
@@ -754,7 +757,7 @@ let encAlg_of_id = function
 
 val aeAlg_of_id: i:id { ~ (PlaintextID? i) } -> Tot aeAlg
 let aeAlg_of_id = function
-  | ID13 (KeyID _ _ _ li _) -> logInfo_ae li
+  | ID13 (KeyID #li _) -> logInfo_ae li
   | ID12 pv _ _ ae _ _ _ -> ae
 
 let lemma_MtE (i:id{~(PlaintextID? i)})

@@ -1,4 +1,4 @@
-(* TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algorithm *) 
+(* TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algorithm *)
 module HKDF
 
 open Platform.Bytes
@@ -46,7 +46,14 @@ let hkdf_expand_label ha prk label hv len =
   lemma_repr_bytes_values len;
   lemma_repr_bytes_values (length label_bytes);
   lemma_repr_bytes_values (length hv);
-  let info = bytes_of_int 2 len @| 
+  let info = bytes_of_int 2 len @|
 	     vlbytes 1 label_bytes @|
 	     vlbytes 1 hv in
   hkdf_expand ha prk info len
+
+let derive_secret ha secret label hashed_log =
+  let info =
+    bytes_of_int 2 (Hashing.Spec.tagLen ha) @|
+    vlbytes 1 (tls13_prefix @| abytes label) @|
+    vlbytes 1 hashed_log in
+  hkdf_expand ha secret info (Hashing.Spec.tagLen ha)

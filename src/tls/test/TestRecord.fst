@@ -30,10 +30,10 @@ private let mk_id13 aeAlg =
   let asId = ASID (Salt (HandshakeSecretID hsId)) in
   let cr = CoreCrypto.random 32 in
   let sr = CoreCrypto.random 32 in
-  let logInfo = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg; li_sh_hash = hash_alg; li_sh_psk = None; }) in
-  let hashed_log = CoreCrypto.random 32 in
-  let expandId = ExpandedSecret (ApplicationSecretID asId) ApplicationTrafficSecret logInfo hashed_log in
-  let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
+  let li = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg; li_sh_hash = hash_alg; li_sh_psk = None; }) in
+  let log : hashed_log li = CoreCrypto.random 32 in
+  let expandId = ExpandedSecret (ApplicationSecretID asId) ApplicationTrafficSecret log in
+  let keyId = KeyID #li expandId in
   ID13 keyId
 
 private val fake_stream: (aeAlg: (a:aeAlg{AEAD? a})) -> (key:string) -> (iv:string) -> (plain:string) -> ML bytes
