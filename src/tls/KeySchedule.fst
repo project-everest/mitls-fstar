@@ -336,7 +336,6 @@ let ks_client_13_0rtt_ch ks esId (log:bytes) : ST (recordInstance)
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1)) =
-  =
   dbg ("ks_client_13_0rtt_ch log="^(print_bytes log));
   let KS #rid st = ks in
   let C (C_13_wait_CH cr esId gs) = !st in
