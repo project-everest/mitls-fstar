@@ -118,7 +118,7 @@ let extensionHeaderBytes ext =
   | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43
   | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
   | E_psk_key_exchange_modes   -> abyte2 (0x00z, 0x2dz) // 45
-							   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
+  | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
   | E_unknown_extension(h,b) -> h
 
 (** parse and serialize functions for server_name payload, TI.serverName. *)
