@@ -20,6 +20,21 @@ module TI = TLSInfo
  Define extension. 
  *************************************************)
 
+type psk = 
+  // this is the truncated PSK extension, without the list of binder tags.
+  | ClientPSK of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)
+  // this is just an index in the client offer's PSK extension
+  | ServerPSK of UInt16.t 
+
+// https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
+// restricting both proposed PSKs and future ones sent by the server
+// will also be used in the PSK table, and possibly in the configs
+type psk_kex =
+  | PSK_KE 
+  | PSK_DHE_KE 
+type client_psk_kexes = l:list psk_kex 
+  { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
+
 (** RFC 4.2 'Extension' Table's type definition. *)
 noeq type preEarlyDataIndication : Type0 =
   { ped_configuration_id: configurationId;
@@ -49,12 +64,11 @@ and extension =
   | E_server_certificate_type 
   | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
-  // this is the truncated PSK extension, without the list of binder tags.
-  | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age) (* M, AF *)
+  | E_pre_shared_key of psk (* M, AF *)
   | E_early_data of earlyDataIndication
   | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
   | E_cookie of b:bytes { 1 <= length b /\ length b <= (pow2 16 - 1)}  (* M *)
-  | E_psk_key_exchange_modes (* ToDo: add payload *)  
+  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  
 (*| E_certificate_authorities 
   | E_oid_filters 
   | E_post_handshake_auth *)

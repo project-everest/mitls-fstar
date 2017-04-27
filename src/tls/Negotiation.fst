@@ -57,6 +57,7 @@ private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare) :
   | CommonDH.Share g s :: tl -> (|g, s|) :: list_of_ClientKeyShare tl
   | CommonDH.UnknownShare _ _  :: tl -> list_of_ClientKeyShare tl
 
+// TODO remove duplication with find_key_shares below.
 val gs_of: ch:offer -> list (g:CommonDH.group & CommonDH.share g)
 let gs_of ch =
   match ch.ch_extensions with
@@ -76,6 +77,13 @@ let find_pske o =
     match List.Tot.find Extensions.E_pre_shared_key? es with 
     | None -> None 
     | Some (Extensions.E_pre_shared_key psks) -> Some psks
+
+// index in the list of PSKs offered by the client
+type pski (o:offer) = n:nat {
+  o.ch_protocol_version = TLS_1p3 /\
+  (match find_pske o with 
+  | Some psks -> n < List.length psks
+  | None -> False) } 
 
 let find_supported_groups o = 
   match o.ch_extensions with 
@@ -99,13 +107,6 @@ let find_key_shares o: option (list share)  =
         | CommonDH.Share g s -> Some #share (|g, s |) 
         | _ -> None #share in
         Some (List.Tot.choose known ks)
-
-// index in the list of PSKs offered by the client
-type pski (o:offer) = n:nat {
-  o.ch_protocol_version = TLS_1p3 /\
-  (match find_pske o with 
-  | Some psks -> n < List.length psks
-  | None -> False) } 
 
 (**
   We keep both the server's HelloRetryRequest
@@ -789,8 +790,10 @@ let compute_cs13 cfg o psks shares =
     match ng with
     | Some (| g, Some s|) -> Some (|g, s|)
     | _ -> None in 
+    
   // pick acceptable record ciphersuites
   let ncs = List.Tot.filter (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in
+
   // pick preferred choice for each PSK (if any) -- we could stop at the first match too
   let pske = 
     match find_pske o with 
