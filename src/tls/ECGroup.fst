@@ -70,7 +70,9 @@ let curve_id p =
   abyte2 (match p.curve with
   | ECC_P256 -> (0z, 23z)
   | ECC_P384 -> (0z, 24z)
-  | ECC_P521 -> (0z, 25z))
+  | ECC_P521 -> (0z, 25z)
+  | ECC_X25519 -> (0z, 29z)
+  | ECC_X448 -> (0z, 30z))
 
 val parse_point: params -> bytes -> Tot (option share)
 let parse_point p b =

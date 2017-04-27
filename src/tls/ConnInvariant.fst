@@ -154,7 +154,7 @@ let handshake_regions_exists (conn:c_t) (h:HH.t) =
 let mc_inv (h:HST.mem) =
     let conn_tab_as_hsref = MR.as_hsref conn_tab in
     let ms_tab_as_hsref = MR.as_hsref MS.ms_tab in
-    ~ (HH.as_ref (HST.MkRef?.ref conn_tab_as_hsref)===HH.as_ref (HST.MkRef?.ref ms_tab_as_hsref))   //Technical:the conn_tab and ms_tab are not aliased
+    (HH.addr_of (HST.MkRef?.ref conn_tab_as_hsref) <> HH.addr_of (HST.MkRef?.ref ms_tab_as_hsref))   //Technical:the conn_tab and ms_tab are not aliased
     /\ HH.contains_ref (HST.MkRef?.ref conn_tab_as_hsref) (HST.HS?.h h)                                //Technical:the heap contains the ms_tab
     /\ HH.contains_ref (HST.MkRef?.ref ms_tab_as_hsref) (HST.HS?.h h)                               //Technical:the heap contains the conn_tab
     /\ handshake_regions_exists (MR.m_sel h conn_tab) (HST.HS?.h h)                       //Technical:every logged connection's handshake exists

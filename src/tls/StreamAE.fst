@@ -149,7 +149,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
          HH.parent r.region = parent /\
 	       color r.region = color parent /\
          stronger_fresh_region r.region h0 h1 /\
-         op_Equality #(log_ref w.region i) w.log r.log /\
+         eq2 #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
 	       m_sel h1 (ctr r.counter) === 0))
 // encryption (on concrete bytes), returns (cipher @| tag)

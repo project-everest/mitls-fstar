@@ -106,7 +106,7 @@ let keyRegion:TLSConstants.rgn = new_region TLSConstants.tls_region
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
-type pubkey (a:alg) =
+noeq type pubkey (a:alg) =
   | PK: log:log_t a -> repr:public_repr{sigAlg_of_public_repr repr = a.core} -> pubkey a
 
 type pkey = (a:alg & pubkey a)
@@ -341,7 +341,9 @@ val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST
   (ensures  (fun h0 k h1 ->
 	     pkey_alg k == a
 	     /\ pkey_repr k = pkr
-             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> k = k')))
+             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> (dfst k == dfst k' /\
+	                                                                            PK?.repr (dsnd k) == PK?.repr (dsnd k'))))) //AR: 04/27: we don't get equality of refs anymore, we can get their addresses are equal, if we can show that one of them is contained in the heap
+										    
 let endorse #a pkr =
   let keys = m_read rkeys in
   match find_key pkr keys with
