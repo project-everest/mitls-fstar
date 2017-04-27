@@ -58,7 +58,6 @@ and extension =
 (*| E_certificate_authorities 
   | E_oid_filters 
   | E_post_handshake_auth *)
-
 // Previous extension types
 (*| E_renegotiation_info of renegotiationInfo 
   | E_extended_ms 
@@ -186,7 +185,6 @@ let rec earlyDataIndicationBytes edi =
       let context_bytes = vlbytes 1 edi.ped_context in
 //      let edt_bytes = earlyDataTypeBytes edi.ped_early_data_type in
       cid_bytes @| cs_bytes @| ext_bytes @| context_bytes //@| edt_bytes
-      
 and extensionPayloadBytes role ext =
   match ext with
   | E_server_name(l)           -> 
@@ -203,13 +201,11 @@ and extensionPayloadBytes role ext =
   | E_psk_key_exchange_modes  -> admit() 
   | E_ec_point_format(l)      -> compile_ecpf_list l 
   | E_unknown_extension(h,b)   -> b
-
 and extensionBytes role ext =
     let head = extensionHeaderBytes ext in
     let payload = extensionPayloadBytes role ext in
     let payload = vlbytes 2 payload in
     head @| payload
-
 (* SI: API. Called by HandshakeMessages. *)
 and extensionsBytes role exts =
   vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
@@ -397,7 +393,6 @@ let rec parseExtension role b =
 	
         | (0xffz, 0x2bz) -> // supported_versions
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "supported_verions unimplemented")
-
 (*
         | (0xffz, 0x02z) -> // TLS 1.3 draft version
           if length data = 2 then Correct (E_draftVersion data)
@@ -429,7 +424,6 @@ let rec parseExtension role b =
 	  Correct(E_unknown_extension(head,data)))
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Extension bytes are too short to store even the extension type")
-
 and parseEarlyDataIndication role b =
   if length b >= 2 then
     match vlsplit 2 b with
@@ -465,7 +459,6 @@ and parseEarlyDataIndication role b =
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for configuration id")
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data indication length")
   else Correct (ServerEarlyDataIndication)
-
 and parseExtensions role b =
   let rec (aux:bytes -> list extension -> Tot (result (list extension))) = fun b exts ->
     if length b >= 4 then
@@ -662,37 +655,39 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
       if List.Tot.existsb (sameExt sExt) cExtL then
-            match sExt with
-// SI: fixme. What's happened to E_renego? 
+      match sExt with
+// SI:. What's happened to E_renego?
 (*
-            | E_renegotiation_info (sri) ->
-              (match sri, replace_subtyping ri with
-              | FirstConnection, None -> correct ({l with ne_secure_renegotiation = RI_Valid})
-              | ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
-                 if equalBytes cvdc cvds && equalBytes svdc svds then
-                    correct ({l with ne_secure_renegotiation = RI_Valid})
-                 else
-                    Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
-              | _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
+      | E_renegotiation_info (sri) ->
+	(match sri, replace_subtyping ri with
+	| FirstConnection, None -> correct ({l with ne_secure_renegotiation = RI_Valid})
+	| ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
+	   if equalBytes cvdc cvds && equalBytes svdc svds then
+	      correct ({l with ne_secure_renegotiation = RI_Valid})
+	   else
+	      Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
+	| _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
 *)
-            | E_server_name _ ->
-                if List.Tot.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
-                else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
-            | E_ec_point_format(spf) ->
-                if resuming then
-                    correct l
-                else
-                    correct ({l with TI.ne_supported_point_formats = Some spf})
-
+      | E_server_name _ ->
+	  if List.Tot.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then
+            correct(l)
+	  else
+            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
+      | E_ec_point_format(spf) ->
+	  if resuming then
+            correct l
+          else
+            correct ({l with TI.ne_supported_point_formats = Some spf})
 (* not allowed for server
-            | E_signature_algorithms sha ->
-                if resuming then correct l
-                else correct ({l with ne_signature_algorithms = Some (sha)})
+      | E_signature_algorithms sha ->
+          if resuming then correct l
+	  else correct ({l with ne_signature_algorithms = Some (sha)})
 *)
-	    | E_key_share (CommonDH.ServerKeyShare sks) -> correct({l with TI.ne_keyShare = Some sks})
-	    | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
-        else
-            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
+      | E_key_share (CommonDH.ServerKeyShare sks) -> correct({l with TI.ne_keyShare = Some sks})
+      | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
+     else
+       Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
+
 
 (* SI: API. Called by Negotiation. *)
 (*     Should be moved to Nego. *)
@@ -726,65 +721,63 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
      end 
 
-private val clientToServerExtension: protocolVersion -> TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> Tot (option extension)
-let clientToServerExtension pv (cfg:TI.config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
-    match cExt with
-    | E_early_data b -> None    // JK : TODO
-    | E_pre_shared_key b -> None // JK : TODO
-    | E_key_share b ->
-        (match ks with
- 	| Some k -> Some (E_key_share k)
-	| None -> None)
-    | E_server_name l ->
-        (match List.Tot.tryFind (fun x->match x with | TI.SNI_DNS _ -> true | _ -> false) l with
-        | Some _ ->
-	  if pv <> TLS_1p3
-	  then Some(E_server_name []) // TODO EncryptedExtensions
-	  else None
-        | _ -> None)
-   | E_ec_point_format(l) ->
-        if resuming || pv = TLS_1p3 then None
-        else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])	
-    | E_supported_groups(l) -> None
-// SI: the other E_*s? 
-    | _ -> None
-
 (* SI: API. Called by Negotiation. *)
-(*     Should be moved to Nego. *)
 val clientToNegotiatedExtension: TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> bool -> TI.negotiatedExtensions -> extension -> Tot TI.negotiatedExtensions
 let clientToNegotiatedExtension (cfg:TI.config) cs ri resuming neg cExt =
   match cExt with
-    | E_supported_groups l ->
-        if resuming then neg
-        else
-            let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
-            {neg with TI.ne_supported_groups = Some (List.Tot.filter isOK l)}
-    | E_ec_point_format l ->
-        if resuming then neg
-        else
-            let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
-            {neg with TI.ne_supported_point_formats = Some nl}	    
-    | E_server_name l ->
-        {neg with TI.ne_server_names = Some l}
-    | E_signature_algorithms sha ->
-        if resuming then neg
-        else {neg with TI.ne_signature_algorithms = Some (sha)}
-// SI: the other E_*s? 	
-    | _ -> neg // JK : handle remaining cases
+  | E_supported_groups l ->
+      if resuming then neg
+      else
+	  let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
+	  {neg with TI.ne_supported_groups = Some (List.Tot.filter isOK l)}
+  | E_ec_point_format l ->
+      if resuming then neg
+      else
+	  let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
+	  {neg with TI.ne_supported_point_formats = Some nl}
+  | E_server_name l ->
+      {neg with TI.ne_server_names = Some l}
+  | E_signature_algorithms sha ->
+      if resuming then neg
+      else {neg with TI.ne_signature_algorithms = Some (sha)}
+  | _ -> neg // TODO: handle all remaining cases
+
+
+private val clientToServerExtension: protocolVersion -> TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> option extension
+let clientToServerExtension pv cfg cs ri ks resuming cext =
+  match cext with
+  | E_key_share _ ->
+    Option.map E_key_share ks // ks should be in one of client's groups
+  | E_server_name server_name_list ->
+    begin
+    // See https://tools.ietf.org/html/rfc6066
+    match pv, List.Tot.tryFind TI.SNI_DNS? server_name_list with
+    | TLS_1p3, _   -> None // TODO: SNI goes in EncryptedExtensions in TLS 1.3
+    | _, Some name -> Some (E_server_name [])
+    end
+  | E_ec_point_format ec_point_format_list ->
+    if resuming || pv = TLS_1p3 then
+      None // No ec_point_format in TLS 1.3
+    else
+      Some (E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
+  | E_supported_groups named_group_list ->
+    Some (E_supported_groups cfg.TI.namedGroups) // Purely informative
+  // TODO: handle all remaining cases
+  | E_early_data b -> None
+  | E_pre_shared_key b -> None
+  | _ -> None
+
 
 (* SI: API. Called by Handshake. *)
 val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> TI.config -> cipherSuite -> option (TI.cVerifyData*TI.sVerifyData) -> option CommonDH.keyShare -> bool -> Tot (result (option (list extension)))
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->
-      let server = List.Tot.choose (clientToServerExtension pv cfg cs ri ks resuming) cExtL in
-      Correct (Some server)
-//      let negi = ne_default in
-//      let nego = List.Tot.fold_left (clientToNegotiatedExtension cfg cs ri resuming) negi cExtL in
-//      Correct (Some server, nego)
+     let sexts = List.Tot.choose (clientToServerExtension pv cfg cs ri ks resuming) cExtL in
+     Correct (Some sexts)
    | None ->
        (match pv with
-(* SI: deadcode ? 
+(* SI: deadcode ?
        | SSL_3p0 ->
           let cre =
               if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs csl) then
@@ -792,7 +785,7 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
               else None //, ne_default in
           in Correct cre
 *)	  
-       | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoSrvrExts missing extensions in TLS client hello"))
+       | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "No extensions in ClientHello"))
 
 (* SI: deadcode 
 val isClientRenegotiationInfo: extension -> Tot (option TI.cVerifyData)
