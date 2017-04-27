@@ -485,7 +485,7 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 	       /\ sel h1 c.state = (if st = Half Writer then Close else Half Reader)
 	     | _ -> False)))
 =
-    trace ("sendAlert "^TLSError.string_of_ad ad);
+    trace ("sendAlert "^TLSError.string_of_error (ad,reason));
     reveal_epoch_region_inv_all ();
     let i = currentId c Writer in
     let wopt = current_writer c i in 

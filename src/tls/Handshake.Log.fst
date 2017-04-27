@@ -376,11 +376,13 @@ let receive l mb =
 // This should *fail* if there are pending input bytes. 
 let receive_CCS #a l =
   let st = !l in
-  if st.incoming <> empty_bytes 
-  then Error (AD_unexpected_message, "unexpected fragment after CCS")
+  if length st.incoming > 0 
+  then (
+    trace ("too many bytes: "^print_bytes st.incoming);
+    Error (AD_unexpected_message, "unexpected fragment after CCS"))
   else 
   match st.hashes with 
-  | OpenHash b -> Error (AD_internal_error, "can be statically prevented")
+  | OpenHash b -> Error (AD_internal_error, "the hash is open")
   | FixedHash a acc tl -> 
     begin
       let nt = append_hs_transcript st.transcript st.parsed in

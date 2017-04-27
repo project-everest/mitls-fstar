@@ -593,7 +593,7 @@ let server_ClientHello hs offer =
 let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =
     // FIXME support optional client c and cv
     // let ems = n.n_extensions.ne_extended_ms in // ask Nego?
-    trace "Process Client CCS";
+    trace "process Client CCS";
     match cke.cke_kex_c with
       | KEX_C_RSA _ | KEX_C_DH -> InError(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected DHE/ECDHE CKE")
       | KEX_C_DHE gyb
@@ -850,7 +850,9 @@ let recv_ccs (hs:hs) =
           when (Some? pv && pv <> Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE)) ->
             server_ClientCCS hs cke digestClientKeyExchange (Some (c, Some (cv, digestCertificateVerify)))
 *)
-        | _, _, _ -> InError(AD_unexpected_message, "CCS received at wrong time")
+        | _, _, _ -> 
+            trace "WARNING: bad CCS"; 
+            InError(AD_unexpected_message, "CCS received at wrong time")
 
 
 let authorize s ch = Platform.Error.unexpected "authorize: not yet implemented"

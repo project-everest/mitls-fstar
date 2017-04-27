@@ -304,7 +304,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 # Verifying one file at a time
 # @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m"; 
 %.fst-ver: $(LIBFILES)
-	@$(FSTAR) $(VERFLAGS) \
+	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
 	--verify_module $(basename $(notdir $@)) \

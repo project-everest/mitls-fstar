@@ -73,7 +73,7 @@ let derive (r:rgn) (i:AE.id)
 	   /\ HH.parent w.region = r
 	   /\ is_epoch_rgn w.region
 	   /\ modifies (Set.singleton tls_tables_region) h0 h1 //modifies at most the tls_tables region
-	   /\ modifies_rref tls_tables_region !{HH.as_ref ms_tab_as_hsref.ref} h0.h h1.h //and within it, at most ms_tab
+	   /\ modifies_rref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref ms_tab_as_hsref.ref))) h0.h h1.h //and within it, at most ms_tab
 	   /\ MR.witnessed (MR.rid_exists w.region) //and the writer's region is witnessed to exists also
 	   /\ MR.witnessed (MM.contains ms_tab i w) //and the writer is witnessed to be in ms_tab
 	   /\ (let old_ms = MR.m_sel h0 ms_tab in

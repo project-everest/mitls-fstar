@@ -85,8 +85,8 @@ noeq type config = {
     minVer: protocolVersion;
     maxVer: protocolVersion;
     ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
-    compressions: l:list compression{ List.Tot.length l <= 1 };
-    namedGroups: list (x:namedGroup{SEC? x \/ FFDHE? x});
+    compressions: l:list compression{ List.Tot.length l > 0 /\ List.Tot.length l < 256 };
+    namedGroups: list valid_namedGroup;
     signatureAlgorithms: list sigHashAlg;
 
     (* Handshake specific options *)
@@ -126,7 +126,7 @@ let rec sigAlgPref s h =
     | [] -> []
     | sa :: r -> List.Tot.append (List.Tot.map (fun u -> (sa,u)) h) (sigAlgPref r h)
 
-val ec_ff_to_ng: list CoreCrypto.ec_curve -> list ffdhe -> Tot (list (n:namedGroup{SEC? n \/ FFDHE? n}))
+val ec_ff_to_ng: list CoreCrypto.ec_curve -> list ffdhe -> Tot (list valid_namedGroup)
 let rec ec_ff_to_ng ecl ffl =
   match ecl with
   | ec::r -> (SEC ec) :: (ec_ff_to_ng r ffl)

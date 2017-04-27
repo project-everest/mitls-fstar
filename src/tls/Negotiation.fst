@@ -330,6 +330,7 @@ let emsFlag m  = //FIXME!
 val chosenGroup: mode -> option CommonDH.group
 let chosenGroup m =
   Some (CommonDH.ECDH CoreCrypto.ECC_P256)
+  //Some (CommonDH.FFDH (DHGroup.Named FFDHE2048))
 
 (*
   let ngroups =
@@ -880,7 +881,6 @@ let computeServerMode cfg co serverRandom serverID =
   match negotiateCipherSuite cfg pv ccs with
   | Error z -> Error z
   | Correct (kex,sa,ae,cs) ->
-
   // compute server extensions
   match co.ch_extensions with
   | None -> Error(AD_illegal_parameter, "Missing mandatory ClientHello extensions")
@@ -892,14 +892,14 @@ let computeServerMode cfg co serverRandom serverID =
                   else ne_default
                 in Correct (cre)
              | _ -> Error... )) *)
-  | Some cexts -> 
-(*
-  match Extensions.negotiateServerExtensions pv cexts with 
-  | Error z -> Error z 
-  | Correct serverExtensions -> 
-//    List.Tot.fold_left (Extensions.clientToNegotiatedExtension cfg cs None false) nego cexts 
-*)
-  let serverExtensions = Some [] in 
+  | Some cexts ->
+   (*
+    match Extensions.negotiateServerExtensions pv cexts with
+    | Error z -> Error z
+    | Correct serverExtensions ->
+    //    List.Tot.fold_left (Extensions.clientToNegotiatedExtension cfg cs None false) nego cexts
+    *)
+    let serverExtensions = None in // To be computed in Handshake and filled later
 //  match negotiateGroupKeyShare cfg pv kex cexts with 
 //  | Error z -> Error z 
 //  | Correct (ng,gxo) ->
@@ -930,7 +930,7 @@ let computeServerMode cfg co serverRandom serverID =
     None // no server key share yet
     None
     scert
-    None // no client key share yet
+    None // no client key share yet for 1.2
   )
   
 //HS: similar to computeServerMode
