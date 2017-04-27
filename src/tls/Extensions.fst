@@ -50,7 +50,7 @@ and extension =
   | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
   // this is the truncated PSK extension, without the list of binder tags.
-  | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)  (* M, AF *)
+  | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age) (* M, AF *)
   | E_early_data of earlyDataIndication
   | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
   | E_cookie of b:bytes { 1 <= length b /\ length b <= (pow2 16 - 1)}  (* M *)
@@ -170,6 +170,7 @@ val extensionBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
 val extensionsBytes: role -> cl:list extension -> Tot (b:bytes{length b <= 2 + 65535})
   (decreases (extensions_depth cl))
+
 let rec earlyDataIndicationBytes edi =
   match edi with
   | ServerEarlyDataIndication -> empty_bytes
@@ -205,7 +206,6 @@ and extensionBytes role ext =
     let payload = vlbytes 2 payload in
     head @| payload
 
-(* SI: API. Called by HandshakeMessages. *)
 and extensionsBytes role exts =
   vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
 
@@ -327,6 +327,25 @@ let parseEcpfList b =
 	correct l
       else
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
+
+(* ToDo: what about duplicates? *)
+val parseVersions: bytes -> Tot (result (list TLSConstants.protocolVersion))
+let parseVersions b =
+    let rec aux:b:bytes -> Tot (canFail (TLSConstants.protocolVersion)) (decreases (length b)) = fun b ->
+        if equalBytes b empty_bytes then ExOK([])
+        else
+	  if (0 < length b) then 
+	    let (u,v) = split b 2 in (* ToDo: check 2 bytes? *)
+            (match aux v with
+            | ExFail(x,y) -> ExFail(x,y)
+            | ExOK(l) ->
+		match TLSConstants.parseVersion u with 
+		| Correct(v) -> ExOK(v :: l)
+                | Error(e,msg) -> ExFail(e,msg))
+	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed versions")
+    in match aux b with
+    | ExFail(x,y) -> Error(x,y)
+    | ExOK(l) -> correct l
 	
 let rec parseExtension role b =
   if length b >= 4 then
@@ -343,41 +362,41 @@ let rec parseExtension role b =
 	| (0x00z, 0x00z) -> // sni
 	  (match parseserverName role data with
 	  | Correct(snis) -> Correct (E_server_name snis)
-	  | Error(z) -> Error(z))	
+	  | Error(z) -> Error(z))	  
 	| (0x00z, 0x0Az) -> // supported groups
 	  if length data >= 2 && length data < 65538 then
 	  (match Parse.parseNamedGroups (data) with
 	  | Correct(groups) -> Correct (E_supported_groups(groups))
 	  | Error(z) -> Error(z))
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "named groups"))
-
-	| (0x00z, 0x0Dz) -> // sighashalgs
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "SNI"))
+	| (0x00z, 0x0Dz) -> // sigAlgs
 	  if length data >= 2 && length data < 65538 then (
 	  (match TLSConstants.parseSigHashAlgs (data) with
 	  | Correct(algs) -> Correct (E_signature_algorithms algs)
 	  | Error(z) -> Error(z))
-	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "signature & hash algorithms"))
-
-	| (0x00z, 0x28z) -> // head TBD, key share
-(* SI: commented-out in CommonDH right now? 	
+	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "sigAlgs"))
+	| (0x00z, 0x28z) -> // keyShare
 	  (let is_client = (match role with | Client -> true | Server -> false) in
 	  match CommonDH.parseKeyShare is_client data with
 	  | Correct (ks) -> Correct (E_key_share(ks))
 	  | Error(z) -> Error(z))
-*)
-          Correct(E_unknown_extension(head,data))
-	| (0x00z, 0x29z) -> // head TBD, pre shared key
+	| (0x00z, 0x29z) -> // head TBD, PSK
 	  if length data >= 2 then
 	  (match admit() (* 17-04-21 TODO PSK.parsePreSharedKey data *) with
 	  | Correct(psk) -> Correct (E_pre_shared_key psk)
 	  | Error(z) -> Error(z))
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "pre shared key"))
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "PSK"))
 
-	| (0x00z, 0x2az) -> // head TBD, early data
+	| (0x00z, 0x2az) -> // EDI
 	  (match parseEarlyDataIndication role data with
 	  | Correct (edi) -> Correct (E_early_data(edi))
 	  | Error(z) -> Error(z))
-
+        | (0xffz, 0x2bz) -> // versions
+	  if length data >= 2 && length data < 254 then (
+	  (match parseVersions data with 
+	  | Correct(v) -> Correct (E_supported_versions v)
+	  | Error(z) -> Error(z))
+	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "versions"))
         | (0xffz, 0x2cz) -> // cookie
 	  if length data >= 1 && length data <= ((pow2 16) - 1) then 
 	    Correct (E_cookie data)
@@ -385,8 +404,7 @@ let rec parseExtension role b =
 	  
         (* ToDo: | E_psk_key_exchange_modes *)
 	
-        | (0xffz, 0x2bz) -> // supported_versions
-          Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "supported_verions unimplemented")
+
 
 (*
         | (0xffz, 0x02z) -> // TLS 1.3 draft version
@@ -406,7 +424,7 @@ let rec parseExtension role b =
 	  match parseEcpfList data with
 	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
 	  | Error(z) -> Error(z))
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for ecpf list")
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "ec_point_fmt"))
 (*
 	| (0x00z, 0x17z) -> // extended ms
 	  if length data = 0 then Correct (E_extended_ms)
@@ -683,7 +701,6 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
 
 (* SI: API. Called by Negotiation. *)
-(*     Should be moved to Nego. *)
 val negotiateClientExtensions: protocolVersion -> TI.config -> option (list extension) -> option (list extension) -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> bool -> Tot (result (TI.negotiatedExtensions))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   match pv with
@@ -738,7 +755,6 @@ let clientToServerExtension pv (cfg:TI.config) (cs:cipherSuite) ri ks (resuming:
     | _ -> None
 
 (* SI: API. Called by Negotiation. *)
-(*     Should be moved to Nego. *)
 val clientToNegotiatedExtension: TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> bool -> TI.negotiatedExtensions -> extension -> Tot TI.negotiatedExtensions
 let clientToNegotiatedExtension (cfg:TI.config) cs ri resuming neg cExt =
   match cExt with
@@ -781,40 +797,6 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
           in Correct cre
 *)	  
        | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoSrvrExts missing extensions in TLS client hello"))
-
-(* SI: deadcode 
-val isClientRenegotiationInfo: extension -> Tot (option TI.cVerifyData)
-let isClientRenegotiationInfo e =
-    match e with
-    | E_renegotiation_info(ClientRenegotiationInfo(cvd)) -> Some(cvd)
-    | _ -> None
-
-val checkClientRenegotiationInfoExtension: config -> list extension -> TI.cVerifyData -> Tot bool
-let checkClientRenegotiationInfoExtension config (cExtL: list extension) TI.cVerifyData =
-    match List.Tot.tryPick isClientRenegotiationInfo cExtL with
-    | None -> not (config.safe_renegotiation)
-    | Some(payload) -> equalBytes payload TI.cVerifyData
-
-val isServerRenegotiationInfo: extension -> Tot (option (TI.cVerifyData * TI.sVerifyData))
-let isServerRenegotiationInfo e =
-    match e with
-    | E_renegotiation_info (ServerRenegotiationInfo(cvd,svd)) -> Some((cvd,svd))
-    | _ -> None
-
-val checkServerRenegotiationInfoExtension: config -> list extension -> TI.cVerifyData -> TI.sVerifyData -> Tot bool
-let checkServerRenegotiationInfoExtension config (sExtL: list extension) cVerifyData sVerifyData =
-    match List.Tot.tryPick isServerRenegotiationInfo sExtL with
-    | None -> not (config.safe_renegotiation)
-    | Some(x) ->
-        let (cvd,svd) = x in
-        equalBytes (cvd @| svd) (cVerifyData @| sVerifyData)
-
-val hasExtendedMS: TI.negotiatedExtensions -> Tot bool
-let hasExtendedMS extL = extL.ne_extended_ms = true
-*)
-
-// JK : cannot add total effect here because of the exception thrown
-(* TODO *)
 
 private val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> ML (list sigHashAlg)
 let default_sigHashAlg_fromSig pv sigAlg=
