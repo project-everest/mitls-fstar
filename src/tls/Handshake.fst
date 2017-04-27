@@ -506,22 +506,25 @@ let server_ServerHelloDone hs =
     // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
 
     let a, sa, ha = Nego.sig_algs mode (Hash Hashing.Spec.SHA1) in
-    let skey = admit() in //Nego.getSigningKey #a hs.nego in
-    let sigv = Signature.sign #a ha skey tbs in
-    if not (length sigv >= 2 && length sigv < 65536)
-    then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-    else
-      begin
-        lemma_repr_bytes_values (length sigv);
-        let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
-        let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-        Handshake.Log.send hs.log (Certificate ({crt_chain = chain}));
-        Handshake.Log.send hs.log (ServerKeyExchange ske);
-        Handshake.Log.send hs.log ServerHelloDone;
-        hs.state := S_Wait_CCS1;
-        InAck true false // Server 1.2 ATK
-      end
-   end
+    match Nego.getSigningKey #a hs.nego with
+    | None ->
+      InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature key in chain")
+    | Some skey ->
+      let sigv = Signature.sign #a ha skey tbs in
+      if not (length sigv >= 2 && length sigv < 65536)
+      then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
+      else
+        begin
+          lemma_repr_bytes_values (length sigv);
+          let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
+          let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+          Handshake.Log.send hs.log (Certificate ({crt_chain = chain}));
+          Handshake.Log.send hs.log (ServerKeyExchange ske);
+          Handshake.Log.send hs.log ServerHelloDone;
+          hs.state := S_Wait_CCS1;
+          InAck true false // Server 1.2 ATK
+        end
+     end
 
 // the ServerHello message is a simple function of the mode.
 let serverHello (m:Nego.mode) = 

@@ -328,7 +328,9 @@ let emsFlag m  = //FIXME!
   true
 
 val chosenGroup: mode -> option CommonDH.group
-let chosenGroup m = admit()
+let chosenGroup m =
+  Some (CommonDH.ECDH CoreCrypto.ECC_P256)
+
 (*
   let ngroups =
     match mode.Nego.n_extensions.ne_supported_groups with
@@ -363,6 +365,13 @@ let getMode #region #role ns =
   | S_Mode mode
   | S_Complete mode _ ->
   mode
+
+val getSigningKey: #a:Signature.alg -> #region:rgn -> #role:TLSConstants.role -> t region role ->
+  ST (option (Signature.skey a))
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let getSigningKey #a #region #role ns =
+  Signature.lookup_key #a ns.cfg.private_key_file
 
 (** Returns cfg.maxVersion or the negotiated version, when known *)
 val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
