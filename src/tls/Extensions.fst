@@ -108,7 +108,7 @@ private let sameExt e1 e2 =
  
 private val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
-  match ext with                                     // 4.2 ExtensionType enum value
+  match ext with             // 4.2 ExtensionType enum value
   | E_server_name _            -> abyte2 (0x00z, 0x00z)
   | E_supported_groups _       -> abyte2 (0x00z, 0x0Az) // 10 
   | E_signature_algorithms _   -> abyte2 (0x00z, 0x0Dz) // 13
@@ -121,7 +121,6 @@ let extensionHeaderBytes ext =
   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
   | E_unknown_extension(h,b) -> h
 
-(** parse and serialize functions for server_name payload, TI.serverName. *)
 private val serverNameBytes: list TI.serverName -> Tot bytes
 let serverNameBytes l =
     let rec (aux:list TI.serverName -> Tot bytes) = function
@@ -130,7 +129,6 @@ let serverNameBytes l =
     | TI.SNI_UNKNOWN(t, x) :: r -> (bytes_of_int 1 t) @| bytes_of_int 2 (length x) @| x @| aux r
     in
     (aux l)
-
 
 private val extension_depth : extension -> Tot nat
 let rec extension_depth (ext:extension): Tot nat =
@@ -148,23 +146,20 @@ and extensions_depth (exts:list extension): Tot nat =
 	     let y = extension_depth hd in
 	     if y > x then y else x
 
-(* TODO *)
-// #set-options "--lax"
-
 val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
   (decreases (fun edi -> match edi with | ClientEarlyDataIndication edi -> extensions_depth edi.ped_extensions | _ -> 0))
 val extensionPayloadBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
 
-let rec (compile_ecpf_list_aux:list ECGroup.point_format -> Tot bytes) =
+let rec (ecpfListBytes_aux:list ECGroup.point_format -> Tot bytes) =
   function
   | [] -> empty_bytes
-  | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0z) @| compile_ecpf_list_aux r
-  | ECGroup.ECP_UNKNOWN(t) :: r -> (bytes_of_int 1 t) @| compile_ecpf_list_aux r
+  | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0z) @| ecpfListBytes_aux r
+  | ECGroup.ECP_UNKNOWN(t) :: r -> (bytes_of_int 1 t) @| ecpfListBytes_aux r
 
-val compile_ecpf_list: l:list ECGroup.point_format{length (compile_ecpf_list_aux l) < 256} -> Tot bytes
-let compile_ecpf_list l =
-  let al = compile_ecpf_list_aux l in
+val ecpfListBytes: l:list ECGroup.point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
+let ecpfListBytes l =
+  let al = ecpfListBytes_aux l in
   lemma_repr_bytes_values (length al);
   let bl:bytes = vlbytes 1 al in
   bl
@@ -201,7 +196,7 @@ and extensionPayloadBytes role ext =
       List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
   | E_cookie c                 -> c // SI: check 
   | E_psk_key_exchange_modes  -> admit() 
-  | E_ec_point_format(l)      -> compile_ecpf_list l 
+  | E_ec_point_format(l)      -> ecpfListBytes l 
   | E_unknown_extension(h,b)   -> b
 
 and extensionBytes role ext =
@@ -213,8 +208,6 @@ and extensionBytes role ext =
 (* SI: API. Called by HandshakeMessages. *)
 and extensionsBytes role exts =
   vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
-
-//#reset-options
 
 (* JK: For some reason without that I do not manage to get the
 definition of extensionsBytes *)
@@ -229,9 +222,6 @@ val parseEarlyDataIndication: pinverse_t earlyDataIndicationBytes
 val parseExtension: pinverse_t extensionBytes
 val parseExtensions: pinverse_t extensionsBytes
 *)
-
-(* TODO *)
-//#set-options "--lax"
 
 (*************************************************
  extension parsing
@@ -315,8 +305,8 @@ val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndicati
 val parseExtension: r:role -> b:bytes -> Tot (result extension) (decreases (length b))
 val parseExtensions: r:role -> b:bytes -> Tot (result (list extension)) (decreases (length b))
 
-val parse_ecpf_list: bytes -> Tot (result (list ECGroup.point_format))
-let parse_ecpf_list b =
+val parseEcpfList: bytes -> Tot (result (list ECGroup.point_format))
+let parseEcpfList b =
     let rec aux:b:bytes -> Tot (canFail (ECGroup.point_format)) (decreases (length b)) = fun b ->
         if equalBytes b empty_bytes then ExOK([])
         else
@@ -413,7 +403,7 @@ let rec parseExtension role b =
 	  match vlparse 1 data with
 	  | Error(z) -> Error(z)
 	  | Correct(data) ->
-	  match parse_ecpf_list data with
+	  match parseEcpfList data with
 	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for ecpf list")
@@ -486,8 +476,6 @@ and parseExtensions role b =
   | Correct(b) -> aux b []
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
-
-//#reset-options
 
 (* SI: API. Called by HandshakeMessages. *)
 val parseOptExtensions: r:role -> data:bytes -> Tot (result (option (list extension)))
@@ -827,7 +815,6 @@ let hasExtendedMS extL = extL.ne_extended_ms = true
 
 // JK : cannot add total effect here because of the exception thrown
 (* TODO *)
-//#set-options "--lax"
 
 private val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> ML (list sigHashAlg)
 let default_sigHashAlg_fromSig pv sigAlg=
@@ -897,44 +884,6 @@ let parse_curve_list b =
     | ExFail(x,y) -> Error(x,y)
     | ExOK([]) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Empty supported curve list")
     | ExOK(l) -> correct (l))
-
-private val parse_ecpf_list: bytes -> Tot (result (list ECGroup.point_format))
-let parse_ecpf_list b =
-    let rec aux:b:bytes -> Tot (canFail (ECGroup.point_format)) (decreases (length b)) = fun b ->
-        if equalBytes b empty_bytes then ExOK([])
-        else
-	  if (0 < length b) then
-	    let (u,v) = split b 1 in
-              (match aux v with
-              | ExFail(x,y) -> ExFail(x,y)
-              | ExOK(l) ->
-                  let cur = match cbyte u with
-                  | 0z -> ECGroup.ECP_UNCOMPRESSED
-                  | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u)
-                  in ExOK(cur :: l))
-	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed curve list")
-    in match aux b with
-    | ExFail(x,y) -> Error(x,y)
-    | ExOK(l) ->
-      if (List.Tot.mem ECGroup.ECP_UNCOMPRESSED l) then
-	correct l
-      else
-        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
-
-let rec (compile_ecpf_list_aux:list ECGroup.point_format -> Tot bytes) =
-  function
-  | [] -> empty_bytes
-  | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0z) @| compile_ecpf_list_aux r
-  | ECGroup.ECP_UNKNOWN(t) :: r -> (bytes_of_int 1 t) @| compile_ecpf_list_aux r
-
-private val compile_ecpf_list: l:list ECGroup.point_format{length (compile_ecpf_list_aux l) < 256} -> Tot bytes
-let compile_ecpf_list l =
-  let al = compile_ecpf_list_aux l in
-  lemma_repr_bytes_values (length al);
-  let bl:bytes = vlbytes 1 al in
-  bl
-*)
-
 
 (* SI: deadcode
 
