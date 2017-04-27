@@ -30,6 +30,17 @@ module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
 type random = TLSInfo.random 
 
+inline_for_extraction let epochs_debug = true
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("EPO| "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if epochs_debug then print else (fun _ -> ())
+
 
 type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
   disjoint hs_rgn (region w) /\
@@ -203,12 +214,14 @@ let incr_reader #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs?.read))
     (ensures (incr_post es MkEpochs?.read))
 = 
+  trace "next reader";
   incr_epoch_ctr (MkEpochs?.read es)
 
 let incr_writer #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs?.write))
     (ensures (incr_post es MkEpochs?.write))
 = 
+  trace "next writer";
   incr_epoch_ctr (MkEpochs?.write es)
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es

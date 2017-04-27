@@ -36,7 +36,7 @@ let tagged m =
   | ServerHello _ -> true
   | Certificate _ -> true // for CertVerify payload in TLS 1.3
   | CertificateVerify _ -> true // for ServerFinish payload in TLS 1.3
-  | ClientKeyExchange _ -> true
+  | ClientKeyExchange _ -> true // only for client signing
   | Finished _ -> true // for 2nd Finished
   | _ -> false
 // NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights. 

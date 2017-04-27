@@ -246,6 +246,8 @@ let send_CCS_tag #a l m cf =
 // TODO require or check that both flags are clear before the call
 let send_signals l outgoing_next_keys1 outgoing_complete1 = 
   let State transcript outgoing outgoing_ccs outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in 
+  if outgoing_next_keys0 && outgoing_next_keys1 then trace "WARNING: dirty next flag";
+  if outgoing_complete0 && outgoing_complete1 then trace "WARNING: dirty complete flag";
   l := State transcript outgoing outgoing_ccs outgoing_next_keys1 outgoing_complete1  incoming parsed hashes pv kex dh_group 
 
 let next_fragment l (i:id) =
@@ -306,7 +308,8 @@ let rec parseMessages pvo kexo buf =
           trace ("parsed "^HandshakeMessages.string_of_handshakeMessage hsm);
           if eoflight hsm 
           then 
-            (trace "end of flight"; Correct(true, rem, [hsm], [to_log]) )
+            ( trace ("end of flight"^(if length rem > 0 then " (bytes waiting)" else "")); 
+              Correct(true, rem, [hsm], [to_log]) )
            else
            ( match parseMessages pvo kexo rem with
               | Error z -> Error z

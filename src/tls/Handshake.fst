@@ -377,7 +377,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
     | TLS_1p3, _ -> InError(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unsupported group negotiated")
     | _, _ ->
       begin
-        trace "Running TLS classic";
+        trace "Running classic TLS";
         s.state := C_Wait_ServerHelloDone;
         InAck false false
       end
@@ -459,7 +459,7 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
 
           register hs app_keys; // start using ATKs in both directions
           Epochs.incr_reader hs.epochs;
-          Epochs.incr_writer hs.epochs; // 17-04-01 TODO how to signal incr_writer to TLS?
+          Handshake.Log.send_signals hs.log true false; //was: Epochs.incr_writer hs.epochs
           hs.state := C_Complete; // full_mode (cvd,svd); do we still need to keep those?
           InAck true true // Client 1.3 ATK
           )
@@ -676,7 +676,7 @@ let server_ServerFinished_13 hs i =
         // ADL this call also returns exporter master secret, which should be passed to application
         let app_keys, _ = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
         register hs app_keys;
-        Epochs.incr_writer hs.epochs; // Switch to ATK after the SF
+        Handshake.Log.send_signals hs.log true false; //was: Epochs.incr_writer hs.epochs
         Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
         hs.state := S_Wait_Finished2 digestServerFinished;
         Handshake.Log.send_signals hs.log true true;
@@ -756,12 +756,16 @@ let next_fragment (hs:hs) i =
     // otherwise, we just returns buffered messages and signals
     | Outgoing None false false false, C_Idle -> client_ClientHello hs i
     | Outgoing None false false false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
-   // | Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing)
+    | Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing) // delayed
     | _ -> Correct outgoing // nothing to do
 
 (* ----------------------- Incoming ----------------------- *)
 
-let recv_fragment (hs:hs) #i rg f =
+let rec recv_fragment (hs:hs) #i rg f =
+    let  recv_again r = 
+      match r with 
+      | InAck false false -> recv_fragment hs #i (0,0) empty_bytes // only case where the next incoming flight may already have been buffered.
+      | r -> r  in 
     trace "recv_fragment";
     let h0 = ST.get() in
     let flight = Handshake.Log.receive hs.log f in
@@ -771,10 +775,12 @@ let recv_fragment (hs:hs) #i rg f =
     | Correct (Some (ms,ts)) ->
       match !hs.state, ms, ts with
       | C_Idle, _, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
-      | C_Wait_ServerHello, [ServerHello sh], [] -> client_ServerHello hs sh
+      | C_Wait_ServerHello, [ServerHello sh], [] -> 
+        recv_again (client_ServerHello hs sh)
+        
     //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert] ->
-        client_ServerHelloDone hs c ske None
+        client_ServerHelloDone hs c ske None 
 
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert] ->
         client_ServerHelloDone hs c ske (Some cr)
@@ -804,6 +810,8 @@ let recv_fragment (hs:hs) #i rg f =
         trace "DISCARD FLIGHT"; InAck false false
         //InError(AD_unexpected_message, "unexpected flight")
 
+
+
 // TODO check CCS once committed to TLS 1.3 yields an alert
 let recv_ccs (hs:hs) =
     trace "recv_ccs";
@@ -829,7 +837,7 @@ let recv_ccs (hs:hs) =
             InAck true false // Client 1.2 ATK
             )
 
-        | S_Wait_CCS1, [ClientKeyExchange cke], [] ->
+        | S_Wait_CCS1, [ClientKeyExchange cke], [unused_digest] ->
             // assert (Some? pv && pv <> Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
             server_ClientCCS1 hs cke digest
 (*
