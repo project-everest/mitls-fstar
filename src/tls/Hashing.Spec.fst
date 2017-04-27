@@ -19,8 +19,8 @@ let blockLen = function
 
 // length of the resulting tag, in bytes (replicating CoreCrypto.hashSize)
 let tagLen = function 
-  | MD5      -> 16
-  | SHA1     -> 20
+  | MD5    -> 16
+  | SHA1   -> 20
   | SHA224 -> 28 // truncated SHA256
   | SHA256 -> 32
   | SHA384 -> 48 // truncated SHA512
