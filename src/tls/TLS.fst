@@ -1153,7 +1153,7 @@ let readOne c i =
   | Error (x,y) -> alertFlush c i x y
   | Correct (Content.CT_Alert rg ad) ->
       begin
-        trace "read Alert fragment";
+        trace ("read Alert fragment "^TLSError.string_of_ad ad);
         if ad = AD_close_notify then
           if !c.state = Half Reader
           then ( // received a notify response; cleanly close the connection.

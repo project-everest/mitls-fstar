@@ -2,8 +2,8 @@
 (**
 This modules defines TLS 1.3 Extensions. 
 
-Ast: parsing and formatting. 
-prepareExtensions : config -> list extensions. 
+- An ast, and it's associated parsing and formatting functions. 
+- Nego calls prepareExtensions : config -> list extensions. 
 
 @summary: TLS 1.3 Extensions. 
 *)
@@ -31,12 +31,10 @@ noeq type preEarlyDataIndication : Type0 =
 and earlyDataIndication =
   | ClientEarlyDataIndication of preEarlyDataIndication
   | ServerEarlyDataIndication
-
 (* SI: we currently only define Mandatory-to-Implement Extensions 
    as listed in the RFC's Section 8.2. Labels in the variants below are: 
      M  - "MUST implement"
      AF - "MUST ... when offering applicable features" *)
-
 and extension =
   | E_server_name of list TI.serverName (* M, AF *) (* RFC 6066 *)
 (*| E_max_fragment_length
@@ -55,12 +53,37 @@ and extension =
   | E_pre_shared_key of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)  (* M, AF *)
   | E_early_data of earlyDataIndication
   | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
-  | E_cookie of b:bytes { 1 <= length b /\ length b <= ((pow2 16) - 1)}  (* M *)
+  | E_cookie of b:bytes { 1 <= length b /\ length b <= (pow2 16 - 1)}  (* M *)
   | E_psk_key_exchange_modes (* ToDo: add payload *)  
 (*| E_certificate_authorities 
   | E_oid_filters 
   | E_post_handshake_auth *)
-  | E_unknown_extension of (lbytes 2 * bytes) (** un-{implemented,known} extensions. *)
+
+// Previous extension types
+(*| E_renegotiation_info of renegotiationInfo 
+  | E_extended_ms 
+  | E_extended_padding *)
+  | E_ec_point_format of list ECGroup.point_format
+  | E_unknown_extension of (lbytes 2 * bytes) (* un-{implemented,known} extensions. *)
+
+
+(* string_of_ *)
+let string_of_extension = function
+  | E_server_name _ -> "SNI" 
+  | E_supported_groups _ -> "groups" 
+  | E_signature_algorithms _ -> "sigAlgs"
+  | E_key_share _ -> "keyShare" 
+  | E_pre_shared_key _ -> "PSK"
+  | E_early_data _ -> "EDI"
+  | E_supported_versions _ -> "versions"
+  | E_cookie _ -> "cookie"
+  | E_psk_key_exchange_modes -> "psk_kex_modes"
+  | E_ec_point_format _ -> "ec_point_fmt" 
+  | E_unknown_extension (n,_) -> print_bytes n
+
+let rec string_of_extensions = function
+  | e0::es -> string_of_extension e0^" "^string_of_extensions es
+  | []  -> ""
 
 (** shallow equality *)
 private let sameExt e1 e2 =
@@ -74,6 +97,7 @@ private let sameExt e1 e2 =
   | E_supported_versions _, E_supported_versions _ -> true
   | E_cookie _, E_cookie _ -> true 
   | E_psk_key_exchange_modes, E_psk_key_exchange_modes -> true    
+  | E_ec_point_format _, E_ec_point_format _ -> true 
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
@@ -93,7 +117,8 @@ let extensionHeaderBytes ext =
   | E_early_data _             -> abyte2 (0x00z, 0x2az) // 42
   | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43
   | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
-  | E_psk_key_exchange_modes -> abyte2 (0x00z, 0x2dz) // 45
+  | E_psk_key_exchange_modes   -> abyte2 (0x00z, 0x2dz) // 45
+							   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
   | E_unknown_extension(h,b) -> h
 
 (** parse and serialize functions for server_name payload, TI.serverName. *)
@@ -131,6 +156,19 @@ val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
 val extensionPayloadBytes: role -> ext:extension -> Tot bytes
   (decreases (extension_depth ext))
 
+let rec (compile_ecpf_list_aux:list ECGroup.point_format -> Tot bytes) =
+  function
+  | [] -> empty_bytes
+  | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0z) @| compile_ecpf_list_aux r
+  | ECGroup.ECP_UNKNOWN(t) :: r -> (bytes_of_int 1 t) @| compile_ecpf_list_aux r
+
+val compile_ecpf_list: l:list ECGroup.point_format{length (compile_ecpf_list_aux l) < 256} -> Tot bytes
+let compile_ecpf_list l =
+  let al = compile_ecpf_list_aux l in
+  lemma_repr_bytes_values (length al);
+  let bl:bytes = vlbytes 1 al in
+  bl
+  
 (* API *)
 (** Serialize extension. *)
 val extensionBytes: role -> ext:extension -> Tot bytes
@@ -163,6 +201,7 @@ and extensionPayloadBytes role ext =
       List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
   | E_cookie c                 -> c // SI: check 
   | E_psk_key_exchange_modes  -> admit() 
+  | E_ec_point_format(l)      -> compile_ecpf_list l 
   | E_unknown_extension(h,b)   -> b
 
 and extensionBytes role ext =
@@ -276,6 +315,29 @@ val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndicati
 val parseExtension: r:role -> b:bytes -> Tot (result extension) (decreases (length b))
 val parseExtensions: r:role -> b:bytes -> Tot (result (list extension)) (decreases (length b))
 
+val parse_ecpf_list: bytes -> Tot (result (list ECGroup.point_format))
+let parse_ecpf_list b =
+    let rec aux:b:bytes -> Tot (canFail (ECGroup.point_format)) (decreases (length b)) = fun b ->
+        if equalBytes b empty_bytes then ExOK([])
+        else
+	  if (0 < length b) then 
+	    let (u,v) = split b 1 in
+              (match aux v with
+              | ExFail(x,y) -> ExFail(x,y)
+              | ExOK(l) ->
+                  let cur = match cbyte u with
+                  | 0z -> ECGroup.ECP_UNCOMPRESSED
+                  | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u)
+                  in ExOK(cur :: l))
+	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed curve list")
+    in match aux b with
+    | ExFail(x,y) -> Error(x,y)
+    | ExOK(l) -> 
+      if (List.Tot.mem ECGroup.ECP_UNCOMPRESSED l) then
+	correct l
+      else
+        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
+	
 let rec parseExtension role b =
   if length b >= 4 then
     let (head, payload) = split b 2 in
@@ -344,7 +406,7 @@ let rec parseExtension role b =
 	  (match parseRenegotiationInfo data with
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
 	  | Error(z) -> Error(z)
-	 
+*)	 
 	| (0x00z, 0x0Bz) -> // ec point format
 	  if length data < 256 && length data >= 1 then
 	  (lemma_repr_bytes_values (length data);
@@ -355,6 +417,7 @@ let rec parseExtension role b =
 	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for ecpf list")
+(*
 	| (0x00z, 0x17z) -> // extended ms
 	  if length data = 0 then Correct (E_extended_ms)
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended MS extension")
@@ -441,7 +504,7 @@ let parseOptExtensions r data =
  *************************************************)
 
 (* JK: Need to get rid of such functions *)
-(* Called by Negotiation *)
+(* API. Called by Negotiation *)
 let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
   match l with 
   | [] -> [] 
@@ -470,6 +533,7 @@ vector is permitted.
 *)
 
 val prepareExtensions: 
+  protocolVersion ->
   protocolVersion -> 
   k:valid_cipher_suites{List.Tot.length k < 256} -> 
   bool -> 
@@ -481,7 +545,7 @@ val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group. 
    For instance, PSK, HS, etc extensions should all be done in one function each. 
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
+let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
     (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
 // SI: is renego deadcode? 
@@ -492,15 +556,22 @@ let prepareExtensions pv cs sres sren sigAlgs namedGroups ri ks =
     (* let res = [E_renegotiation_info(cri)] in *)
 //    let res = (E_draftVersion (abyte2 (0z, 13z)))::res in
     let res =
+       match minpv, pv with
+       | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
+       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p2;TLS_1p3] :: res
+       // REMARK: This case is not mandatory. E.g. www.google.com chokes on it
+       // Commenting this out. This behaviour should be configurable
+       // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
+       | _ -> res in
+    let res = 
        match pv, ks with
-       | TLS_1p3,Some ks -> (E_key_share ks)::res
+       | TLS_1p3, Some ks -> E_key_share ks::res
        | _,_ -> res in
 //    let res = if sres then E_extended_ms :: res else res in
     let res = (E_signature_algorithms sigAlgs) :: res in
     let res =
         if List.Tot.existsb (fun x -> isECDHECipherSuite x) (list_valid_cs_is_list_cs cs) then
-	  // SI: fixme 
-          //E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: 
+          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: 
 	  (E_supported_groups (list_valid_ng_is_list_ng namedGroups)) :: res
         else
           let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) (list_valid_ng_is_list_ng namedGroups) in
@@ -607,13 +678,12 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             | E_server_name _ ->
                 if List.Tot.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then correct(l)
                 else Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
-(*
             | E_ec_point_format(spf) ->
                 if resuming then
                     correct l
                 else
-                    correct ({l with ne_supported_point_formats = Some spf})
-*)		    
+                    correct ({l with TI.ne_supported_point_formats = Some spf})
+
 (* not allowed for server
             | E_signature_algorithms sha ->
                 if resuming then correct l
@@ -636,10 +706,10 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello")
      end
   | _ ->
-     begin
+     begin 
      match cExtL, sExtL with
-     | Some cExtL, Some sExtL ->
-	begin
+     | _, None when pv <> TLS_1p3 -> Correct TI.ne_default
+     | Some cExtL, Some sExtL -> (
         let nes = TI.ne_default in
         match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
         | Error(x,y) -> Error(x,y)
@@ -652,10 +722,9 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
 	      correct({l with TI.ne_signature_algorithms = Some shal})
 	    | None -> correct l
 	    | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
-	  end
-	end
-     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS hello message")
-     end
+	  end )
+     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
+     end 
 
 private val clientToServerExtension: protocolVersion -> TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> Tot (option extension)
 let clientToServerExtension pv (cfg:TI.config) (cs:cipherSuite) ri ks (resuming:bool) (cExt:extension) : (option (extension)) =
@@ -673,6 +742,9 @@ let clientToServerExtension pv (cfg:TI.config) (cs:cipherSuite) ri ks (resuming:
 	  then Some(E_server_name []) // TODO EncryptedExtensions
 	  else None
         | _ -> None)
+   | E_ec_point_format(l) ->
+        if resuming || pv = TLS_1p3 then None
+        else Some(E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])	
     | E_supported_groups(l) -> None
 // SI: the other E_*s? 
     | _ -> None
@@ -687,6 +759,11 @@ let clientToNegotiatedExtension (cfg:TI.config) cs ri resuming neg cExt =
         else
             let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
             {neg with TI.ne_supported_groups = Some (List.Tot.filter isOK l)}
+    | E_ec_point_format l ->
+        if resuming then neg
+        else
+            let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
+            {neg with TI.ne_supported_point_formats = Some nl}	    
     | E_server_name l ->
         {neg with TI.ne_server_names = Some l}
     | E_signature_algorithms sha ->
@@ -715,7 +792,7 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
               else None //, ne_default in
           in Correct cre
 *)	  
-       | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Missing extensions in TLS client hello"))
+       | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoSrvrExts missing extensions in TLS client hello"))
 
 (* SI: deadcode 
 val isClientRenegotiationInfo: extension -> Tot (option TI.cVerifyData)

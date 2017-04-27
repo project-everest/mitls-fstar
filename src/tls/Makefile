@@ -277,13 +277,15 @@ MAC_SHA256 \
 MAC_SHA1 \
 StAE \
 KeySchedule \
+Handshake.Log \
+Handshake \
 StreamDeltas \
 HKDF \
 Epochs \
 Connection \
 ConnInvariant \
-FFI \
-TLS
+TLS \
+FFI
 
 depend:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
@@ -300,6 +302,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 	$(basename $@).fst
 
 # Verifying one file at a time
+# @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m"; 
 %.fst-ver: $(LIBFILES)
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -416,6 +419,10 @@ mitls.cmxa: record_fstar_version $(LIBFILES)
 mitls.exe:  mitls.cmxa 
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -g mitls.cmxa \
 		-I test/ -I output/ test/mitls.ml -o mitls.exe
+
+test.run:
+	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+	./test.out
 
 test.out: mitls.cmxa 
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out

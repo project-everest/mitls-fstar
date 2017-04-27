@@ -135,13 +135,15 @@ noeq type ch = {
 
 let ch_is_resumption { ch_sessionID = sid } = length sid > 0
 
-//  https://tlswg.github.io/tls13-spec/#rfc.section.4.1.2 
+// ServerHello: supporting two different syntaxes
+// https://tools.ietf.org/html/rfc5246#section-7.4.1.2 
+// https://tlswg.github.io/tls13-spec/#rfc.section.4.1.3
 noeq type sh = {
   sh_protocol_version:protocolVersion; 
   sh_server_random:TLSInfo.random;
-  sh_sessionID:option sessionID;  // JK : made optional because not present in TLS 1.3
+  sh_sessionID:option sessionID;  // omitted in TLS 1.3
   sh_cipher_suite:valid_cipher_suite;
-  sh_compression:option compression; // JK : made optional because not present in TLS 1.3
+  sh_compression:option compression; // omitted in TLS 1.3
   sh_extensions:option (se:list extension{List.Tot.length se < 256});
 }
 
@@ -326,7 +328,9 @@ let rec valid_list_to_list_valid l =
 (* JK: changed the serialization of the compression methods to match the spec *)
 val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) // JK: used to be 42 but cannot prove it with current specs. Is there a minimal length of 1 for the session ID maybe ?
 let clientHelloBytes ch =
-  let verB = versionBytes ch.ch_protocol_version in
+  //17-04-26 this is likely to break injectivity, now conditional on an extension.
+  let legacyVersion = minPV TLS_1p2 ch.ch_protocol_version in 
+  let verB = versionBytes legacyVersion in
   lemma_repr_bytes_values (length ch.ch_sessionID);
   let sidB = vlbytes 1 ch.ch_sessionID in
   let csb:bytes = cipherSuitesBytes (list_valid_to_valid_list ch.ch_cipher_suites) in

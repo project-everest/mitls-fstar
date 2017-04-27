@@ -87,6 +87,7 @@ let keygen g =
   let params = params_of_group g in
   dh_gen_key params
 
+(* Unused, implemented in CommonDH
 val dh_responder: #g:group -> share g -> ST (keyshare g * secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -94,6 +95,7 @@ let dh_responder #g gx =
   let y = keygen g in
   let shared = dh_agreement y gx in
   y, shared
+*)
 
 val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
   (requires (fun h0 -> True))

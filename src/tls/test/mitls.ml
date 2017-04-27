@@ -7,7 +7,7 @@ let args = ref []
 let role = ref Client
 let ffi  = ref false
 let config = ref {defaultConfig with
-  minVer = TLS_1p3;
+  minVer = TLS_1p2;
   maxVer = TLS_1p3;
   check_peer_certificate = false;
   cert_chain_file = "../../data/test_chain.pem";
@@ -48,8 +48,11 @@ let ngs = [
   ("P-521", Parse.SEC CoreCrypto.ECC_P521);
   ("P-384", Parse.SEC CoreCrypto.ECC_P384);
   ("P-256", Parse.SEC CoreCrypto.ECC_P256);
+  ("X25519", Parse.SEC CoreCrypto.ECC_X25519);
+  ("X448",  Parse.SEC CoreCrypto.ECC_X448);
   ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
   ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
+  ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
 ]
 
 let prn s (k, _) = s ^ k ^ ", "
@@ -79,7 +82,8 @@ let help = "A TLS test client.\n\n"
 
 let _ =
   Arg.parse [
-          ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v; maxVer = v;}), " sets minimum and maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3>");
+    ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with maxVer = v;}), " sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)");
+    ("-mv", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v;}), " sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)");
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
     ("-tlsapi", Arg.Unit (fun () -> tlsapi := true), "run through the TLS API (now set by default)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");

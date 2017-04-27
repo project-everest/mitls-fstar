@@ -17,7 +17,7 @@ private let mk_id pv aeAlg =
   | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx = CommonDH.keygen g in
-  let gy, gxy = CommonDH.dh_responder #g gx in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
   let msid = StandardMS (PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy)) (er @| er) kdf in
   ID12 pv msid kdf aeAlg er er Client
 
@@ -25,15 +25,15 @@ private let mk_id13 aeAlg =
   let hash_alg = Hashing.Spec.SHA256 in
   let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
   let gx = CommonDH.keygen g in
-  let gy, gxy = CommonDH.dh_responder #g gx in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
   let hsId = HSID_DHE (Salt (EarlySecretID (NoPSK hash_alg))) g (CommonDH.pubshare gx) gy in
   let asId = ASID (Salt (HandshakeSecretID hsId)) in
   let cr = CoreCrypto.random 32 in
   let sr = CoreCrypto.random 32 in
-  let logInfo = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg; li_sh_hash = hash_alg; li_sh_psk = None; }) in
-  let hashed_log = CoreCrypto.random 32 in
-  let expandId = ExpandedSecret (ApplicationSecretID asId) ApplicationTrafficSecret logInfo hashed_log in
-  let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
+  let li = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg; li_sh_hash = hash_alg; li_sh_psk = None; }) in
+  let log : hashed_log li = CoreCrypto.random 32 in
+  let expandId = ExpandedSecret (ApplicationSecretID asId) ApplicationTrafficSecret log in
+  let keyId = KeyID #li expandId in
   ID13 keyId
 
 private val fake_stream: (aeAlg: (a:aeAlg{AEAD? a})) -> (key:string) -> (iv:string) -> (plain:string) -> ML bytes
