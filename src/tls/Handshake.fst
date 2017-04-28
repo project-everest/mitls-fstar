@@ -794,6 +794,9 @@ let rec recv_fragment (hs:hs) #i rg f =
         server_ClientHello hs ch
       | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] ->
         server_ClientFinished hs f.fin_vd digest digestClientFinish
+      | S_Wait_Finished1 digest, [Finished f], tags ->
+        (trace (List.Tot.fold_left (fun a t -> a^" "^print_bytes t) "BAD TAGS: "tags);
+        server_ClientFinished hs f.fin_vd digest digest )
       | S_Wait_Finished2 s, [Finished f], [digest] ->
         server_ClientFinished_13 hs f.fin_vd digest None
       | S_Wait_Finished2 s, [Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _] ->

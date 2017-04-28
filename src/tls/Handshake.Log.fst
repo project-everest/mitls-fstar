@@ -386,9 +386,10 @@ let receive_CCS #a l =
   | FixedHash a acc tl -> 
     begin
       let nt = append_hs_transcript st.transcript st.parsed in
+      let hs': hashState nt [] = FixedHash a acc [] in
       let h = Hashing.finalize #a acc in
       l := State 
           nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
-          st.incoming [] st.hashes st.pv st.kex st.dh_group;
+          st.incoming [] hs' st.pv st.kex st.dh_group;
       Correct (st.parsed, tl, h)
     end 
