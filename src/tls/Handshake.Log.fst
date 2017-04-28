@@ -252,36 +252,36 @@ let send_signals l outgoing_next_keys1 outgoing_complete1 =
 
 let next_fragment l (i:id) =
   let st = !l in
-  let out_msg, rem =
+  // do we have a fragment to send? 
+  let fragment, outgoing' =
     let o = st.outgoing in
     let lo = length o in
     if lo = 0 then // nothing to send
-       (None, None)
+       (None, empty_bytes)
     else // at most one fragment
     if (lo <= max_TLSPlaintext_fragment_length) then
       let rg = (lo, lo) in
-      (Some (| rg, o |), None)
-    else // at least two ragments
+      (Some (| rg, o |), empty_bytes)
+    else // at least two fragments
       let (x,y) = split o max_TLSPlaintext_fragment_length in
       let lx = length x in
       let rg = (lx, lx) in
-      (Some (| rg, x |), Some y)
-  in  
-    match rem with
-    | None -> 
-      (match st.outgoing_ccs with 
-       | Some b ->  //CHECK FLAG RULES HERE
-           l := State st.transcript b None false false
-            st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-     Outgoing out_msg true true st.outgoing_complete
-       | None ->    //CHECK FLAG RULES HERE
-           l := State st.transcript empty_bytes None false false
-            st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-     Outgoing out_msg false st.outgoing_next_keys st.outgoing_complete)
-    | Some b ->
-      l := State st.transcript b st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+      (Some (| rg, x |), y) in 
+    if length outgoing' = 0 
+    then (
+      // send signals only after flushing the output buffer
+      let send_ccs, outgoing' = match st.outgoing_ccs with
+      | Some finishedFragment -> true, finishedFragment
+      | None -> false, outgoing' in 
+      l := State 
+              st.transcript outgoing'  None false false 
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing out_msg false false false 
+      Outgoing fragment send_ccs st.outgoing_next_keys st.outgoing_complete ) 
+    else (
+      l := State 
+              st.transcript outgoing' st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+              st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
+      Outgoing fragment false false false ) 
 
 (* RECEIVE *)
 
@@ -367,7 +367,7 @@ let receive l mb =
         l := State 
           st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
           r ml hs st.pv st.kex st.dh_group;
-        Correct None)
+        Correct None )
  
 
 // We receive CCS as external end-of-flight signals;
