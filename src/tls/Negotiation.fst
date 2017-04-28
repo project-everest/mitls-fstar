@@ -329,7 +329,7 @@ let kexAlg m  = //FIXME!
 
 val emsFlag: mode -> bool
 let emsFlag m  = //FIXME!
-  true
+  false
 
 val chosenGroup: mode -> option CommonDH.group
 let chosenGroup m =

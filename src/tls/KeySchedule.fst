@@ -663,14 +663,20 @@ let ks_server_12_cke_dh ks gy hashed_log =
   let kef = kefAlg pv cs ems in
   let msId, ms =
     if ems then
+      begin
       let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") hashed_log 48 in
+      dbg ("extended master secret:"^(print_bytes ms));
       let msId = ExtendedMS pmsId hashed_log kef in
-      (msId, ms)
+      msId, ms
+      end
     else
+      begin
       let ms = TLSPRF.extract kef pmsb csr 48 in
+      dbg ("master secret:"^(print_bytes ms));
       let msId = StandardMS pmsId csr kef in
-      (msId, ms) in
-  dbg ("master secret:"^(print_bytes ms));
+      msId, ms
+      end
+    in
   st := S (S_12_has_MS csr alpha msId ms);
   ks_12_record_key ks
 
@@ -1019,14 +1025,29 @@ let ks_client_12_set_session_hash ks log =
   let KS #region st = ks in
   let ms =
     match !st with
-    | C (C_12_has_MS csr alpha msId ms) -> ms
-    | C (C_12_wait_MS csr alpha pmsId pms) ->
-      let (pv, cs, true) = alpha in
-      let kef = kefAlg pv cs true in
-      let h = verifyDataHashAlg_of_ciphersuite cs in
-      let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
+    | C (C_12_has_MS csr alpha msId ms) ->
       dbg ("master secret:"^(print_bytes ms));
-      let msId = ExtendedMS pmsId log kef in
+      ms
+    | C (C_12_wait_MS csr alpha pmsId pms) ->
+      let (pv, cs, ems) = alpha in
+      let kef = kefAlg pv cs ems in
+      let h = verifyDataHashAlg_of_ciphersuite cs in
+      let msId, ms =
+        if ems then
+          begin
+          let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
+          dbg ("extended master secret:"^(print_bytes ms));
+          let msId = ExtendedMS pmsId log kef in
+          msId, ms
+          end
+        else
+          begin
+          let ms = TLSPRF.extract kef pms csr 48 in
+          dbg ("master secret:"^(print_bytes ms));
+          let msId = StandardMS pmsId csr kef in
+          msId, ms
+          end
+      in
       st := C (C_12_has_MS csr alpha msId ms);
       ms
     in
