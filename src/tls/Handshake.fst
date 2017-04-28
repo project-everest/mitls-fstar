@@ -491,7 +491,8 @@ let server_ServerHelloDone hs =
       to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv 
     in
     // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
-    let a, sa, ha = Nego.sig_algs mode (Hash Hashing.Spec.SHA1) in
+    let ha0 = sessionHashAlg mode.Nego.n_protocol_version mode.Nego.n_cipher_suite in
+    let a, sa, ha = Nego.sig_algs mode ha0 ha0 in
     match Nego.getSigningKey #a hs.nego with
     | None ->
       InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature key in chain")
@@ -653,8 +654,11 @@ let server_ServerFinished_13 hs i =
       let lb = digestSig @| rc in
       to_be_signed pv Server None lb in
 
-    let a, sa, ha = Nego.sig_algs mode sh_alg in
-    let skey: Signature.skey a = admit() in // Nego.getSigningKey #a hs.nego in // Signature.lookup_key #a mode.Nego.n_offer.private_key_file
+    let a, sa, ha = Nego.sig_algs mode sh_alg sh_alg in
+    match Nego.getSigningKey #a hs.nego with
+    | None ->
+      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature key in chain")
+    | Some skey ->
     let sigv = Signature.sign #a ha skey tbs in
     if not (length sigv >= 2 && length sigv < 65536)
     then Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")

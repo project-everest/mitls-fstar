@@ -180,13 +180,13 @@ let client_sigalg_extension (m:mode) : option (list sigHashAlg) =
     | Some (E_signature_algorithms sas) -> Some sas 
 
 // Signature agility, depending on the CS and an optional client extension
-let sig_algs (m: mode) (ha0: TLSConstants.hashAlg) = 
+let sig_algs (m:mode) (ha:TLSConstants.hashAlg) (ha0:TLSConstants.hashAlg) =
   let sa, ha = 
     if m.n_protocol_version = TLS_1p3 
     then 
       // the extension is required for signing
       // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.3 
-      // TO BE COMPLETED
+      // TODO: TO BE COMPLETED
       let Some ((sa,ha)::_) = client_sigalg_extension m in
       (sa, ha)
     else 
@@ -195,12 +195,11 @@ let sig_algs (m: mode) (ha0: TLSConstants.hashAlg) =
       // (is it too conservative?)
       // https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1 
       let CipherSuite _ (Some sa) _ = m.n_cipher_suite in
-      ( match client_sigalg_extension m with
-        | None -> sa, ha0  
-        | Some algs -> 
-          match List.Tot.find (fun (s,_) -> s = sa) algs with
-          | Some sa_ha -> sa_ha
-          | None -> (sa, ha0)) in
+      match client_sigalg_extension m with
+      | None -> sa, ha0
+      | Some algs ->
+        if List.Tot.mem (sa,ha) algs then (sa, ha) else (sa, ha0)
+     in
   let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
   (a, sa, ha)
 
@@ -717,12 +716,12 @@ let client_ServerKeyExchange #region ns crt ske ocr =
          Cert.validate_chain crt.crt_chain true ns.cfg.peer_name ns.cfg.ca_file
       then
         let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-        let (a, sa, ha) = sig_algs mode
-          (sessionHashAlg mode.n_protocol_version mode.n_cipher_suite) in
         match sigHashAlg_of_ske ske.ske_sig with
         | None ->
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
         | Some ((sa',ha'), sigv) ->
+          let (a, sa, ha) = sig_algs mode ha'
+            (sessionHashAlg mode.n_protocol_version mode.n_cipher_suite) in
           if (sa,ha) <> (sa',ha') then
             Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
           else
