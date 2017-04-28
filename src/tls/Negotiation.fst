@@ -765,6 +765,22 @@ type cs13 offer =
   | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
 
+// Work around #1016
+private let rec compute_cs13_aux
+  (i:nat) (o:offer)  pske (g_gx:option share)
+  ncs (psks:list (option cipherSuite)) psk_kex : list (cs13 o) =
+  if i = List.length pske then
+    ( match g_gx, ncs with
+      | Some x, (cs :: _) -> [JUST_EDH x cs]
+      | _ -> [] )
+  else
+    let choices =
+      match List.Tot.index psks i, psk_kex  with
+      | None, _ -> []
+      | Some cs, true -> [PSK_EDH i g_gx cs]  // TODO add cases
+    in
+    choices @ (compute_cs13_aux (i+1) o pske g_gx ncs psks psk_kex)
+
 // returns a list of negotiable "core modes" for TLS 1.3
 // the key exchange can be derived from cs13 
 // (we could stop after finding the first)
@@ -796,7 +812,6 @@ let compute_cs13 cfg o psks shares =
     match ng with
     | Some (| g, Some s|) -> Some (|g, s|)
     | _ -> None in 
-    
   // pick acceptable record ciphersuites
   let ncs = List.Tot.filter (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in
 
@@ -805,24 +820,10 @@ let compute_cs13 cfg o psks shares =
     match find_pske o with 
     | Some pske -> pske 
     | None -> [] in
+
   assert(List.length pske = List.length psks); // precondition
   let psk_kex = true in
-  // TODO find_psk_kex o
-  // TODO intersect with local preferences and group
-  let rec f i: list (cs13 o) = 
-    if i = List.length pske then
-      ( match g_gx, ncs with  
-        | Some x, (cs :: _) -> [JUST_EDH x cs]
-        | _ -> [] )
-    else 
-      let choices = 
-        match List.Tot.index psks i, psk_kex  with 
-        | None, _ -> [] 
-        | Some cs, true -> [PSK_EDH i g_gx cs]  // TODO add cases
-      in
-      (choices @ f (i+1))
-  in
-  Correct (f 0)
+  Correct (compute_cs13_aux 0 o pske g_gx ncs psks psk_kex)
 
 
 //17-03-30 still missing a few for servers.
