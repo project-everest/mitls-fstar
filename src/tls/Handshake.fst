@@ -68,7 +68,7 @@ type machineState =
   | S_Idle
   | S_Sent_ServerHello         // TLS 1.3, intermediate state to encryption
   | S_Wait_Finished2 of digest // TLS 1.3, digest to be MACed by client
-  | S_Wait_CCS1                // TLS classic
+  | S_Wait_CCS1                   // TLS classic
   | S_Wait_Finished1 of digest // TLS classic, digest to the MACed by client
 //| S_Wait_CCS2 of digest      // TLS resume, digest to be MACed by client
 //| S_Wait_Finished2 of digest // TLS resume, digest to be MACed by client
@@ -412,6 +412,7 @@ let client_ServerHelloDone hs c ske ocr =
       register hs app_keys;
       // we send CCS then Finished;  we will use the new keys only after CCS
 
+      trace ("digest is "^print_bytes digestClientKeyExchange);
       let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
       let digestClientFinished = Handshake.Log.send_CCS_tag #ha hs.log (Finished ({fin_vd = cvd})) false in
       hs.state := C_Wait_CCS2 digestClientFinished;
@@ -439,7 +440,7 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
         let (sfin_key, cfin_key, app_keys, _) = KeySchedule.ks_client_13_sf hs.ks digestServerFinished in
         let (| finId, sfin_key |) = sfin_key in
         if not (HMAC.UFCMA.verify sfin_key digestCertVerify svd)
-        then InError (AD_decode_error, "Finished MAC did not verify")
+        then InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
         else (
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
           let digest =
@@ -457,16 +458,17 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
           InAck true true // Client 1.3 ATK
           )
 
-let client_ServerFinished hs f digest =
+let client_ServerFinished hs f digestClientFinished =
     let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
     let mode = Nego.getMode hs.nego in
-    if f.fin_vd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) sfin_key Server digest
+    let expected_svd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) sfin_key Server digestClientFinished in
+    if equalBytes f.fin_vd expected_svd 
     then (
       hs.state := C_Complete; // ADL: TODO need a proper renego state Idle (Some (vd,svd)))};
       InAck false true // Client 1.2 ATK
       )
     else
-      InError (AD_decode_error, "Finished MAC did not verify")
+      InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 
 (* -------------------- Handshake Server ------------------------ *)
@@ -508,7 +510,7 @@ let server_ServerHelloDone hs =
           Handshake.Log.send hs.log (ServerKeyExchange ske);
           Handshake.Log.send hs.log ServerHelloDone;
           hs.state := S_Wait_CCS1;
-          InAck true false // Server 1.2 ATK
+          InAck false false // Server 1.2 ATK
         end
      
 
@@ -616,15 +618,15 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     let mode = Nego.getMode hs.nego in
     let alpha = (mode.Nego.n_protocol_version, mode.Nego.n_cipher_suite) in
     let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-    if cvd = TLSPRF.verifyData alpha fink Client digestCCS
+    let expected_cvd = TLSPRF.verifyData alpha fink Client digestCCS in
+    if equalBytes cvd expected_cvd
     then
       let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
       let unused_digest = Handshake.Log.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
-      InAck false false
-      // TODO hs.state := S_Complete; InAck false true // Server 1.2 ATK
-      // ? tricky before installing the ATK writer
+      hs.state := S_Complete; 
+      InAck false true // Server 1.2 ATK; will switch write key after sending
     else
-      InError (AD_decode_error, "Finished MAC did not verify")
+      InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 (* send EncryptedExtensions; Certificate; CertificateVerify; Finish (1.3) *)
 val server_ServerFinished_13: hs -> i:id -> ST (result (outgoing i))
@@ -697,7 +699,7 @@ let server_ClientFinished_13 hs f digestClientFinished clientAuth =
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
           InAck true true  // Server 1.3 ATK
           )
-       else InError (AD_decode_error, "Finished MAC did not verify")
+       else InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 (* TODO: resumption *)
 assume val server_send_server_finished_res: hs -> ST unit
@@ -787,8 +789,8 @@ let rec recv_fragment (hs:hs) #i rg f =
 
       // we'll have other variants for resumption, shc as ([EncryptedExtensions ee; Finished f], [...])
 
-      | C_Wait_Finished2 digest, [Finished f], [digestServerFinished] ->
-        client_ServerFinished hs f digest
+      | C_Wait_Finished2 digestClientFinished, [Finished f], [digestServerFinished] ->
+        client_ServerFinished hs f digestClientFinished
 
       | S_Idle, [ClientHello ch], []  ->
         server_ClientHello hs ch
@@ -817,7 +819,7 @@ let recv_ccs (hs:hs) =
     let mode = Nego.getMode hs.nego in
     match Handshake.Log.receive_CCS #(Nego.hashAlg mode) hs.log with
     | Error z -> InError z
-    | Correct (ms, digests, digest) ->
+    | Correct (ms, digests, digestCCS) ->
         match !hs.state, ms, digests with
         | C_Wait_CCS2 digest, [], [] -> (
             trace "Processing CCS";
@@ -834,9 +836,10 @@ let recv_ccs (hs:hs) =
             InAck true false // Client 1.2 ATK
             )
 
-        | S_Wait_CCS1, [ClientKeyExchange cke], [unused_digest] ->
+        | S_Wait_CCS1, [ClientKeyExchange cke], [digest_to_finish] ->
             // assert (Some? pv && pv <> Some TLS_1p3 && (kex = Some Kex_DHE || kex = Some Kex_ECDHE))
-            server_ClientCCS1 hs cke digest
+            // getting two copies of the same digest?
+            server_ClientCCS1 hs cke digestCCS
 (*
         // FIXME support optional client c and cv
         | S_HelloDone n, [Certificate c; ClientKeyExchange cke], [digestClientKeyExchange]
