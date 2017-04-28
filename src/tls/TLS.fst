@@ -695,10 +695,12 @@ let rec writeHandshake h_init c new_writer =
       | Error (ad,reason) -> 
           recall_current_writer c;
           sendAlert c ad reason
-      | _   -> 
+      | _   -> (
           recall_current_writer c;
           let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
-          if next_keys then c.state := BC; // much happening ghostly
+          if next_keys then (
+            Epochs.incr_writer (Handshake.epochs_of c.hs);// freshly added
+            c.state := BC); // much happening ghostly
           let st = !c.state in
           let new_writer = new_writer || next_keys in 
           if complete && st = BC then c.state := AD; // much happening ghostly too
@@ -713,7 +715,7 @@ let rec writeHandshake h_init c new_writer =
               let es = Handshake.logT s h in
               assume (j_ < Seq.length es) in  //NS: weird; not sure why this is not provable
             writeHandshake h_init c new_writer)
-          else writeHandshake h_init c new_writer
+          else writeHandshake h_init c new_writer)
 
 
 ////////////////////////////////////////////////////////////////////////////////
