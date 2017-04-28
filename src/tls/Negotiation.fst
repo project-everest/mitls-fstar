@@ -35,6 +35,76 @@ let string_of_option_extensions o = match o with
   | None -> "None" 
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
 
+let string_of_ciphersuite (cs:cipherSuite) =
+  match name_of_cipherSuite cs with
+  | Correct TLS_NULL_WITH_NULL_NULL -> "TLS_NULL_WITH_NULL_NULL"
+
+  | Correct TLS_AES_128_GCM_SHA256 -> "TLS_AES_128_GCM_SHA256"
+  | Correct TLS_AES_256_GCM_SHA384 -> "TLS_AES_256_GCM_SHA384"
+  | Correct TLS_CHACHA20_POLY1305_SHA256 -> "TLS_CHACHA20_POLY1305_SHA256"
+  | Correct TLS_AES_128_CCM_SHA256 -> "TLS_AES_128_CCM_SHA256"
+  | Correct TLS_AES_128_CCM_8_SHA256 -> "TLS_AES_128_CCM_8_SHA256"
+
+  | Correct TLS_RSA_WITH_NULL_MD5 -> "TLS_RSA_WITH_NULL_MD5"
+  | Correct TLS_RSA_WITH_NULL_SHA -> "TLS_RSA_WITH_NULL_SHA"
+  | Correct TLS_RSA_WITH_NULL_SHA256 -> "TLS_RSA_WITH_NULL_SHA256"
+  | Correct TLS_RSA_WITH_RC4_128_MD5 -> "TLS_RSA_WITH_RC4_128_MD5"
+  | Correct TLS_RSA_WITH_RC4_128_SHA -> "TLS_RSA_WITH_RC4_128_SHA"
+  | Correct TLS_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_RSA_WITH_3DES_EDE_CBC_SHA"
+  | Correct TLS_RSA_WITH_AES_128_CBC_SHA -> "TLS_RSA_WITH_AES_128_CBC_SHA"
+  | Correct TLS_RSA_WITH_AES_256_CBC_SHA -> "TLS_RSA_WITH_AES_256_CBC_SHA"
+  | Correct TLS_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_RSA_WITH_AES_128_CBC_SHA256"
+  | Correct TLS_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_RSA_WITH_AES_256_CBC_SHA256"
+
+  | Correct TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA"
+  | Correct TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA"
+  | Correct TLS_DHE_DSS_WITH_AES_128_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA"
+  | Correct TLS_DHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA"
+  | Correct TLS_DHE_DSS_WITH_AES_256_CBC_SHA -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA"
+  | Correct TLS_DHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA"
+  | Correct TLS_DHE_DSS_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_CBC_SHA256"
+  | Correct TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_CBC_SHA256"
+  | Correct TLS_DHE_DSS_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_DSS_WITH_AES_256_CBC_SHA256"
+  | Correct TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> "TLS_DHE_RSA_WITH_AES_256_CBC_SHA256"
+
+  | Correct TLS_ECDHE_RSA_WITH_RC4_128_SHA -> "TLS_ECDHE_RSA_WITH_RC4_128_SHA"
+  | Correct TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA -> "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA"
+  | Correct TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"
+  | Correct TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
+  | Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"
+  | Correct TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384"
+
+  | Correct TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+  | Correct TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+
+  | Correct TLS_DH_anon_WITH_RC4_128_MD5 -> "TLS_DH_anon_WITH_RC4_128_MD5"
+  | Correct TLS_DH_anon_WITH_3DES_EDE_CBC_SHA -> "TLS_DH_anon_WITH_3DES_EDE_CBC_SHA"
+  | Correct TLS_DH_anon_WITH_AES_128_CBC_SHA -> "TLS_DH_anon_WITH_AES_128_CBC_SHA"
+  | Correct TLS_DH_anon_WITH_AES_256_CBC_SHA -> "TLS_DH_anon_WITH_AES_256_CBC_SHA"
+  | Correct TLS_DH_anon_WITH_AES_128_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_128_CBC_SHA256"
+  | Correct TLS_DH_anon_WITH_AES_256_CBC_SHA256 -> "TLS_DH_anon_WITH_AES_256_CBC_SHA256"
+
+  | Correct TLS_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_RSA_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_RSA_WITH_AES_256_GCM_SHA384"
+  | Correct TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
+  | Correct TLS_DH_RSA_WITH_AES_128_GCM_SHA256 -> "TLS_DH_RSA_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_DH_RSA_WITH_AES_256_GCM_SHA384 -> "TLS_DH_RSA_WITH_AES_256_GCM_SHA384"
+  | Correct TLS_DHE_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DHE_DSS_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_DHE_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DHE_DSS_WITH_AES_256_GCM_SHA384"
+  | Correct TLS_DH_DSS_WITH_AES_128_GCM_SHA256 -> "TLS_DH_DSS_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_DH_DSS_WITH_AES_256_GCM_SHA384 -> "TLS_DH_DSS_WITH_AES_256_GCM_SHA384"
+  | Correct TLS_DH_anon_WITH_AES_128_GCM_SHA256 -> "TLS_DH_anon_WITH_AES_128_GCM_SHA256"
+  | Correct TLS_DH_anon_WITH_AES_256_GCM_SHA384 -> "TLS_DH_anon_WITH_AES_256_GCM_SHA384"
+
+  | Correct TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+  | Correct TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
+  | Correct TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+  | Correct TLS_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_PSK_WITH_CHACHA20_POLY1305_SHA256"
+  | Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
+  | Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256" | Error z -> "Unknown ciphersuite"
 
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
@@ -282,8 +352,8 @@ let computeOffer r cfg resume nonce ks =
       cfg.minVer
       cfg.maxVer
       cfg.ciphersuites
-      cfg.safe_renegotiation
       cfg.safe_resumption
+      cfg.safe_renegotiation
       cfg.signatureAlgorithms
       cfg.namedGroups
       None // : option (cVerifyData * sVerifyData)
@@ -324,17 +394,29 @@ let hashAlg m = //FIXME!
   Hashing.Spec.SHA256
  
 val kexAlg: mode -> TLSConstants.kexAlg
-let kexAlg m  = //FIXME!
-  TLSConstants.Kex_ECDHE
+let kexAlg m =
+  if m.n_protocol_version = TLS_1p3 then
+    Kex_ECDHE // FIXME: inspect extensions
+  else
+    let CipherSuite kex _ _ = m.n_cipher_suite in
+    kex
 
 val emsFlag: mode -> bool
-let emsFlag m  = //FIXME!
-  false
+let emsFlag mode =
+  if mode.n_protocol_version = TLS_1p3 then
+    true
+  else
+    match mode.n_offer.ch_extensions with
+    | None -> false
+    | Some cexts -> List.Tot.mem Extensions.E_extended_ms cexts
 
 val chosenGroup: mode -> option CommonDH.group
-let chosenGroup m =
-  Some (CommonDH.ECDH CoreCrypto.ECC_P256)
-  //Some (CommonDH.FFDH (DHGroup.Named FFDHE2048))
+let chosenGroup mode =
+  match kexAlg mode with
+  | Kex_PSK_DHE
+  | Kex_DHE -> Some (CommonDH.FFDH (DHGroup.Named FFDHE2048))
+  | Kex_PSK_ECDHE
+  | Kex_ECDHE -> Some (CommonDH.ECDH CoreCrypto.ECC_P256)
 
 (*
   let ngroups =
@@ -615,6 +697,7 @@ let client_ServerHello #region ns sh =
      match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
       | Error z -> Error z
       | Correct next ->
+      trace ("negotiated ciphersuite: " ^ (string_of_ciphersuite cs));
       match cs with
        | CipherSuite kex sa ae ->
         match spv, kex, next.ne_keyShare with
@@ -954,6 +1037,7 @@ let server_ClientHello #region ns offer sid =
       trace ("negotiation failed: "^string_of_error z);
       Error z
     | Correct m ->
+      trace ("negotiated ciphersuite: " ^ (string_of_ciphersuite m.n_cipher_suite));
       MR.m_write ns.state (S_ClientHello m);
       Correct m
 
@@ -966,9 +1050,11 @@ val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.keySha
 let server_ServerShare #region ns ks =
   match MR.m_read ns.state with 
   | S_ClientHello mode ->
+    let cexts = mode.n_offer.ch_extensions in
+    trace ("processing client extensions " ^ string_of_option_extensions cexts);
     match Extensions.negotiateServerExtensions
       mode.n_protocol_version
-      mode.n_offer.ch_extensions
+      cexts
       mode.n_offer.ch_cipher_suites
       ns.cfg
       mode.n_cipher_suite

@@ -73,9 +73,8 @@ and extension =
   | E_oid_filters 
   | E_post_handshake_auth *)
 // Previous extension types
-(*| E_renegotiation_info of renegotiationInfo 
-  | E_extended_ms 
-  | E_extended_padding *)
+(*| E_renegotiation_info of renegotiationInfo *)
+  | E_extended_ms
   | E_ec_point_format of list ECGroup.point_format
   | E_unknown_extension of (lbytes 2 * bytes) (* un-{implemented,known} extensions. *)
 
@@ -91,8 +90,10 @@ let string_of_extension = function
   | E_supported_versions _ -> "versions"
   | E_cookie _ -> "cookie"
   | E_psk_key_exchange_modes _ -> "psk_kex_modes"
+  | E_extended_ms -> "extended_master_secret"
   | E_ec_point_format _ -> "ec_point_fmt" 
   | E_unknown_extension (n,_) -> print_bytes n
+
 
 let rec string_of_extensions = function
   | e0::es -> string_of_extension e0^" "^string_of_extensions es
@@ -110,6 +111,7 @@ private let sameExt e1 e2 =
   | E_supported_versions _, E_supported_versions _ -> true
   | E_cookie _, E_cookie _ -> true 
   | E_psk_key_exchange_modes _, E_psk_key_exchange_modes _ -> true
+  | E_extended_ms, E_extended_ms -> true
   | E_ec_point_format _, E_ec_point_format _ -> true 
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
@@ -131,6 +133,7 @@ let extensionHeaderBytes ext =
   | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43
   | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
   | E_psk_key_exchange_modes _ -> abyte2 (0x00z, 0x2dz) // 45
+  | E_extended_ms              -> abyte2 (0x00z, 0x17z) // 45
   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
   | E_unknown_extension(h,b) -> h
 
@@ -209,8 +212,9 @@ and extensionPayloadBytes role ext =
       List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
   | E_cookie c                 -> c // SI: check 
   | E_psk_key_exchange_modes _ -> admit()
-  | E_ec_point_format(l)       -> ecpfListBytes l
-  | E_unknown_extension(h,b)   -> b
+  | E_extended_ms              -> empty_bytes
+  | E_ec_point_format l        -> ecpfListBytes l
+  | E_unknown_extension (h,b)  -> b
 and extensionBytes role ext =
     let head = extensionHeaderBytes ext in
     let payload = extensionPayloadBytes role ext in
@@ -356,7 +360,7 @@ let parseVersions b =
     in match aux b with
     | ExFail(x,y) -> Error(x,y)
     | ExOK(l) -> correct l
-	
+
 let rec parseExtension role b =
   if length b >= 4 then
     let (head, payload) = split b 2 in
@@ -421,6 +425,9 @@ let rec parseExtension role b =
 	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
 	  | Error(z) -> Error(z)
 *)	 
+	| (0x00z, 0x17z) -> // extended ms
+	  if length data = 0 then Correct (E_extended_ms)
+	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended MS extension")
 	| (0x00z, 0x0Bz) -> // ec point format
 	  if length data < 256 && length data >= 1 then
 	  (lemma_repr_bytes_values (length data);
@@ -431,14 +438,6 @@ let rec parseExtension role b =
 	  | Correct(ecpfs) -> Correct (E_ec_point_format(ecpfs))
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "ec_point_fmt"))
-(*
-	| (0x00z, 0x17z) -> // extended ms
-	  if length data = 0 then Correct (E_extended_ms)
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended MS extension")
-	| (0xBBz, 0x8Fz) -> // extended padding
-	  if length data = 0 then Correct (E_extended_padding)
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended padding extension")
- *)
 	| _ -> // Unknown extension
 	  Correct(E_unknown_extension(head,data)))
     | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
@@ -577,16 +576,17 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
        match pv, ks with
        | TLS_1p3, Some ks -> E_key_share ks::res
        | _,_ -> res in
-//    let res = if sres then E_extended_ms :: res else res in
-    let res = (E_signature_algorithms sigAlgs) :: res in
+    // Include extended_master_secret when resuming
+    let res = if sres then E_extended_ms :: res else res in
+    let res = E_signature_algorithms sigAlgs :: res in
     let res =
-        if List.Tot.existsb (fun x -> isECDHECipherSuite x) (list_valid_cs_is_list_cs cs) then
-          E_ec_point_format([ECGroup.ECP_UNCOMPRESSED]) :: 
-	  (E_supported_groups (list_valid_ng_is_list_ng namedGroups)) :: res
-        else
-          let g = List.Tot.filter (function | FFDHE _ -> true | _ -> false) (list_valid_ng_is_list_ng namedGroups) in
-          if g = [] then res
-          else (E_supported_groups g) :: res in
+      if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
+	E_ec_point_format [ECGroup.ECP_UNCOMPRESSED] :: 
+	  E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
+      else
+	let g = List.Tot.filter FFDHE? (list_valid_ng_is_list_ng namedGroups) in
+	if g = [] then res
+	else (E_supported_groups g) :: res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
 
@@ -690,7 +690,8 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             correct(l)
 	  else
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
-      | E_ec_point_format(spf) ->
+      | E_extended_ms -> correct ({l with TI.ne_extended_ms = true})
+      | E_ec_point_format spf ->
 	  if resuming then
             correct l
           else
@@ -749,6 +750,7 @@ let clientToNegotiatedExtension (cfg:TI.config) cs ri resuming neg cExt =
       else
 	  let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
 	  {neg with TI.ne_supported_groups = Some (List.Tot.filter isOK l)}
+
   | E_ec_point_format l ->
       if resuming then neg
       else
@@ -774,6 +776,7 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
     | TLS_1p3, _   -> None // TODO: SNI goes in EncryptedExtensions in TLS 1.3
     | _, Some name -> Some (E_server_name [])
     end
+  | E_extended_ms -> Some E_extended_ms // REMARK: not depending on cfg.safe_resumption
   | E_ec_point_format ec_point_format_list ->
     if resuming || pv = TLS_1p3 then
       None // No ec_point_format in TLS 1.3

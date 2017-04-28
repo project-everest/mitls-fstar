@@ -88,7 +88,7 @@ let _ =
     ("-tlsapi", Arg.Unit (fun () -> tlsapi := true), "run through the TLS API (now set by default)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
-    ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2");
+    ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2 (client only)");
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
     ("-groups", Arg.String setng, "colon-separated list of named groups; see above for valid values");
