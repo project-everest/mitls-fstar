@@ -207,14 +207,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.s
 // factored out; indexing to be reviewed
 let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
-      let h = admit() in
-      Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
-    Epochs.add_epoch hs.epochs ep // actually extending the epochs log
-
-// SZ: just to test 1.2
-let register12 mode hs keys =
-    let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
-      let h = Nego.Fresh ({ Nego.session_nego = mode }) in
+      let h = Nego.Fresh ({ Nego.session_nego = Nego.getMode hs.nego }) in
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
@@ -416,7 +409,7 @@ let client_ServerHelloDone hs c ske ocr =
       let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
       let digestClientKeyExchange = Handshake.Log.send_tag #ha hs.log msg  in
       let cfin_key, app_keys = KeySchedule.ks_client_12_set_session_hash hs.ks digestClientKeyExchange in
-      register12 mode hs app_keys;
+      register hs app_keys;
       // we send CCS then Finished;  we will use the new keys only after CCS
 
       let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
@@ -486,25 +479,18 @@ let server_ServerHelloDone hs =
   let mode = Nego.getMode hs.nego in
   let Some chain = mode.Nego.n_server_cert in // Server cert chosen in Nego.server_ClientHello
   match Nego.chosenGroup mode with
-  | None -> InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
+  | None -> 
+    InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
   | Some g  ->
-   begin
-    let cr = mode.Nego.n_offer.ch_client_random in
-    let gy = KeySchedule.ks_server_12_init_dh hs.ks
-      cr
-      mode.Nego.n_protocol_version
-      mode.Nego.n_cipher_suite
-      (Nego.emsFlag mode)
-      g in
     // ad hoc signing of the nonces and server key share
-    let kex_s = KEX_S_DHE (| g, gy |) in
+    let kex_s = KEX_S_DHE (Some?.v mode.Nego.n_server_share) in
     let tbs =
+      let cr = mode.Nego.n_offer.ch_client_random in
       let sv = kex_s_to_bytes kex_s in
       let csr = cr @| mode.Nego.n_server_random in
-      to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
-
+      to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv 
+    in
     // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
-
     let a, sa, ha = Nego.sig_algs mode (Hash Hashing.Spec.SHA1) in
     match Nego.getSigningKey #a hs.nego with
     | None ->
@@ -524,7 +510,7 @@ let server_ServerHelloDone hs =
           hs.state := S_Wait_CCS1;
           InAck true false // Server 1.2 ATK
         end
-     end
+     
 
 // the ServerHello message is a simple function of the mode.
 let serverHello (m:Nego.mode) = 
@@ -544,50 +530,58 @@ val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
   (ensures (fun h0 i h1 -> True))
 let server_ClientHello hs offer =
     trace "Processing ClientHello";
-
-    // Nego proceeds in two steps, first without the server share
-    
     let sid = Some (CoreCrypto.random 32) (* used only if we negotiate TLS < 1.3 *) in
+    // Nego proceeds in two steps, first server share
     match Nego.server_ClientHello hs.nego offer sid with
     | Error z -> InError z
-    | Correct mode -> (
+    | Correct mode ->
+      begin
       let server_share =
-        match mode.Nego.n_protocol_version, mode.Nego.n_client_share  with
-        | TLS_1p3, Some  (| g, gx |) ->
-          Some (CommonDH.ServerKeyShare (
-            KeySchedule.ks_server_13_1rtt_init hs.ks offer.ch_client_random mode.Nego.n_cipher_suite g gx
-          ))
-        | _ -> None in
-      (* Extensions:negotiateServerExtensions *)
-      match Extensions.negotiateServerExtensions
-        mode.Nego.n_protocol_version
-        offer.ch_extensions
-        offer.ch_cipher_suites
-        (config_of hs)
-        mode.Nego.n_cipher_suite
-        None (*Nego.resume hs.nego *)
-        server_share
-        false
-      with
-        | Error z -> InError z
-        | Correct sext -> (
-          let pv = mode.Nego.n_protocol_version in
-          let ha = Nego.hashAlg mode in
-          let ka = Nego.kexAlg mode in
-          Handshake.Log.setParams hs.log pv ha (Some ka) None;
-          let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-          let digestServerHello = Handshake.Log.send_tag #ha hs.log (serverHello mode) in
-          if mode.Nego.n_protocol_version = TLS_1p3
-          then (
-            trace "Derive handshake keys";
-            let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
-            register hs hs_keys;
-            // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
-            hs.state := S_Sent_ServerHello;
-            InAck false false)
+        match mode.Nego.n_protocol_version, mode.Nego.n_client_share, Nego.kexAlg mode with
+        | TLS_1p3, Some (| g, gx |), _ ->
+          Some 
+            (CommonDH.ServerKeyShare
+              (KeySchedule.ks_server_13_1rtt_init 
+                hs.ks offer.ch_client_random mode.Nego.n_cipher_suite g gx))
+        | TLS_1p3, _, _  -> None
+        | _, _, Kex_DHE
+        | _, _, Kex_ECDHE ->
+          begin
+          match Nego.chosenGroup mode with
+          | None ->  None // Should be unreachable
+          | Some g ->
+            let cr = mode.Nego.n_offer.ch_client_random in
+            let gy = KeySchedule.ks_server_12_init_dh hs.ks cr
+              mode.Nego.n_protocol_version
+              mode.Nego.n_cipher_suite
+              (Nego.emsFlag mode)
+              g
+            in Some (CommonDH.ServerKeyShare (CommonDH.Share g gy))
+          end
+      in
+      match Nego.server_ServerShare hs.nego server_share with
+      | Error z -> InError z
+      | Correct mode ->
+        let pv = mode.Nego.n_protocol_version in
+        let ha = Nego.hashAlg mode in
+        let ka = Nego.kexAlg mode in
+        Handshake.Log.setParams hs.log pv ha (Some ka) None;
+        let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
+        let digestServerHello = Handshake.Log.send_tag #ha hs.log (serverHello mode) in
+        if mode.Nego.n_protocol_version = TLS_1p3
+        then 
+          begin
+          trace "Derive handshake keys";
+          let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
+          register hs hs_keys;
+          // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
+          hs.state := S_Sent_ServerHello;
+          InAck false false
+          end
+        else 
+          server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
+        end
 
-          else server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
-          ))
 
 (* receive ClientKeyExchange; CCS *)
 let server_ClientCCS1 hs cke (* clientCert *) digestCCS1 =

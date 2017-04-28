@@ -240,6 +240,10 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 n_hrr: hrr ->
                 negotiationState r cfg resume
 
+  | S_ClientHello: // Transitional state to allow Handshake to call KS and generate a share
+                n_mode: mode -> // n_server_share and n_server_extensions are None
+                negotiationState r cfg resume
+
   // This state is used to wait for both Finished1 and Finished2
   | S_Mode:     n_mode: mode -> // If 1.2, then client_share is None
                 negotiationState r cfg resume
@@ -364,6 +368,7 @@ let getMode #region #role ns =
   | C_Mode mode
   | C_WaitFinished2 mode _
   | C_Complete mode _
+  | S_ClientHello mode
   | S_Mode mode
   | S_Complete mode _ ->
   mode
@@ -391,6 +396,7 @@ let version #region #role ns =
   | C_Complete mode _ -> mode.n_protocol_version
   | S_Init _ -> ns.cfg.maxVer
   | S_HRR o _ -> ns.cfg.maxVer
+  | S_ClientHello mode
   | S_Mode mode
   | S_Complete mode _ -> mode.n_protocol_version
 
@@ -935,8 +941,7 @@ let computeServerMode cfg co serverRandom serverID =
     scert
     None // no client key share yet for 1.2
   )
-  
-//HS: similar to computeServerMode
+
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
   option sessionID -> 
@@ -944,59 +949,54 @@ val server_ClientHello: #region:rgn -> t region Server ->
 let server_ClientHello #region ns offer sid =
   match MR.m_read ns.state with 
   | S_Init _ -> 
-      match computeServerMode ns.cfg offer ns.nonce sid with
-      | Error z -> 
-          trace ("negotiation failed: "^string_of_error z); 
-          Error z
-      | Correct m -> 
-          trace ("including server extensions "^string_of_option_extensions m.n_server_extensions);
-          MR.m_write ns.state (S_Mode m);
-          Correct m
+    match computeServerMode ns.cfg offer ns.nonce sid with
+    | Error z ->
+      trace ("negotiation failed: "^string_of_error z);
+      Error z
+    | Correct m ->
+      MR.m_write ns.state (S_ClientHello m);
+      Correct m
 
 
+let share_of_serverKeyShare (ks:CommonDH.keyShare) : share =
+  let CommonDH.ServerKeyShare (CommonDH.Share g gy) = ks in (| g, gy |)
 
-irreducible val computeClientMode: cfg:config -> cext:option (list extension) -> cpv:protocolVersion -> spv:protocolVersion -> sr:TLSInfo.random -> cs:valid_cipher_suite -> sext:option (list extension) -> comp:option compression -> option ri -> Tot (result mode)
-let computeClientMode cfg cext cpv spv sr cs sext comp ri =
-  if not (acceptableVersion cfg spv sr) then
-    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
-  else if not (acceptableCipherSuite cfg spv cs) then
-    Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
-  else
-   let resume = false in
-   match Extensions.negotiateClientExtensions spv cfg cext sext cs ri resume with
-    | Error(z) -> Error(z)
-    | Correct(next) ->
-    match cs with
-     | CipherSuite kex sa ae ->
-      match spv, kex, next.ne_keyShare with
-       | TLS_1p3, Kex_DHE, Some gy
-       | TLS_1p3, Kex_ECDHE, Some gy ->
-         let mode = admit() in
-         (*
-         {cm_protocol_version = spv;
-          cm_kexAlg = kex;
-          cm_aeAlg = ae;
-          cm_sigAlg = sa;
-          cm_cipher_suite = cs;
-          cm_dh_share = Some gy;
-          cm_comp = comp;
-          cm_ext = next;
-         } in *)
-         Correct mode
-       | _ ->
-         let mode = admit() in
-         (*
-         {cm_protocol_version = spv;
-          cm_kexAlg = kex;
-          cm_aeAlg = ae;
-          cm_sigAlg = sa;
-          cm_cipher_suite = cs;
-          cm_dh_share = None;
-          cm_comp = comp;
-          cm_ext = next;
-         } in *)
-         Correct mode
-      | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
+val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.keyShare -> 
+  St (result mode)
+let server_ServerShare #region ns ks =
+  match MR.m_read ns.state with 
+  | S_ClientHello mode ->
+    match Extensions.negotiateServerExtensions
+      mode.n_protocol_version
+      mode.n_offer.ch_extensions
+      mode.n_offer.ch_cipher_suites
+      ns.cfg
+      mode.n_cipher_suite
+      None  // option (TI.cVerifyData*TI.sVerifyData) 
+      ks
+      false // resume?
+    with
+    | Error z -> Error z
+    | Correct sexts -> 
+      begin
+      trace ("including server extensions " ^ string_of_option_extensions sexts);
+      let mode = Mode
+        mode.n_offer
+        mode.n_hrr
+        mode.n_protocol_version
+        mode.n_server_random
+        mode.n_sessionID
+        mode.n_cipher_suite
+        mode.n_pski
+        sexts
+        (Option.map share_of_serverKeyShare ks)
+        mode.n_client_cert_request
+        mode.n_server_cert
+        mode.n_client_share
+      in
+      MR.m_write ns.state (S_Mode mode);
+      Correct mode
+      end
 
 
 //17-03-30 where is it used?

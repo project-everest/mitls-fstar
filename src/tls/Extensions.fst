@@ -64,7 +64,7 @@ and extension =
   | E_server_certificate_type 
   | E_padding *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
-  | E_pre_shared_key of psk (* M, AF *)
+  | E_pre_shared_key of (list psk) (* M, AF *)
   | E_early_data of earlyDataIndication
   | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
   | E_cookie of b:bytes { 1 <= length b /\ length b <= (pow2 16 - 1)}  (* M *)
@@ -90,7 +90,7 @@ let string_of_extension = function
   | E_early_data _ -> "EDI"
   | E_supported_versions _ -> "versions"
   | E_cookie _ -> "cookie"
-  | E_psk_key_exchange_modes -> "psk_kex_modes"
+  | E_psk_key_exchange_modes _ -> "psk_kex_modes"
   | E_ec_point_format _ -> "ec_point_fmt" 
   | E_unknown_extension (n,_) -> print_bytes n
 
@@ -109,7 +109,7 @@ private let sameExt e1 e2 =
   | E_early_data _, E_early_data _ -> true
   | E_supported_versions _, E_supported_versions _ -> true
   | E_cookie _, E_cookie _ -> true 
-  | E_psk_key_exchange_modes, E_psk_key_exchange_modes -> true    
+  | E_psk_key_exchange_modes _, E_psk_key_exchange_modes _ -> true
   | E_ec_point_format _, E_ec_point_format _ -> true 
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
@@ -130,7 +130,7 @@ let extensionHeaderBytes ext =
   | E_early_data _             -> abyte2 (0x00z, 0x2az) // 42
   | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43
   | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
-  | E_psk_key_exchange_modes   -> abyte2 (0x00z, 0x2dz) // 45
+  | E_psk_key_exchange_modes _ -> abyte2 (0x00z, 0x2dz) // 45
   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
   | E_unknown_extension(h,b) -> h
 
@@ -208,8 +208,8 @@ and extensionPayloadBytes role ext =
   | E_supported_versions vv    -> 
       List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
   | E_cookie c                 -> c // SI: check 
-  | E_psk_key_exchange_modes  -> admit() 
-  | E_ec_point_format(l)      -> ecpfListBytes l 
+  | E_psk_key_exchange_modes _ -> admit()
+  | E_ec_point_format(l)       -> ecpfListBytes l
   | E_unknown_extension(h,b)   -> b
 and extensionBytes role ext =
     let head = extensionHeaderBytes ext in
@@ -411,7 +411,7 @@ let rec parseExtension role b =
 	  if length data >= 1 && length data <= ((pow2 16) - 1) then 
 	    Correct (E_cookie data)
 	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "cookie"))
-        (* ToDo: | E_psk_key_exchange_modes *)
+        (* ToDo: | E_psk_key_exchange_modes _ *)
 (*
         | (0xffz, 0x02z) -> // TLS 1.3 draft version
           if length data = 2 then Correct (E_draftVersion data)
@@ -700,7 +700,10 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
           if resuming then correct l
 	  else correct ({l with ne_signature_algorithms = Some (sha)})
 *)
-      | E_key_share (CommonDH.ServerKeyShare sks) -> correct({l with TI.ne_keyShare = Some sks})
+      | E_key_share (CommonDH.ServerKeyShare sks) ->
+        Correct ({l with TI.ne_keyShare = Some sks})
+      | E_supported_groups named_group_list ->
+        Correct ({l with TI.ne_supported_groups = Some named_group_list})
       | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
      else
        Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
