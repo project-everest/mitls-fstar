@@ -102,13 +102,15 @@ let isFatal ad =
 
 type error = alertDescription * string
 
-let string_of_error (a,s)= string_of_ad a^"  ("^s^")"
+let string_of_error (a,s)= string_of_ad a^" ("^s^")"
 
 type result 'a = Platform.Error.optResult error 'a
 
-
 open Platform.Error
-
+let string_of_result f = function
+  | Error z -> "Error: "^string_of_error z 
+  | Correct v -> f v 
+  
 
 val resT: r:result 'a { Platform.Error.Correct? r } -> Tot 'a
 let resT (Platform.Error.Correct v) = v

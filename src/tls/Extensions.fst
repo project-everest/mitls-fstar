@@ -20,7 +20,7 @@ module TI = TLSInfo
  Define extension. 
  *************************************************)
 
-type psk = 
+noeq type psk = 
   // this is the truncated PSK extension, without the list of binder tags.
   | ClientPSK of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)
   // this is just an index in the client offer's PSK extension
@@ -34,6 +34,9 @@ type psk_kex =
   | PSK_DHE_KE 
 type client_psk_kexes = l:list psk_kex 
   { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
+
+// The length reflects the RFC format constraint <2..254> 
+type protocol_versions = l: list TLSConstants.protocolVersion {List.Tot.length l >= 1 /\ List.Tot.length l <= 127}
 
 (** RFC 4.2 'Extension' Table's type definition. *)
 noeq type preEarlyDataIndication : Type0 =
@@ -66,7 +69,7 @@ and extension =
   | E_key_share of CommonDH.keyShare (* M, AF *)
   | E_pre_shared_key of (list psk) (* M, AF *)
   | E_early_data of earlyDataIndication
-  | E_supported_versions of list TLSConstants.protocolVersion (* M, AF *) 
+  | E_supported_versions of protocol_versions   (* M, AF *) 
   | E_cookie of b:bytes { 1 <= length b /\ length b <= (pow2 16 - 1)}  (* M *)
   | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  
 (*| E_certificate_authorities 
@@ -241,6 +244,7 @@ val parseExtensions: pinverse_t extensionsBytes
  extension parsing
  *************************************************)
 
+//17-05-01 why not using TLSError.result ?? 
 (** local, failed-to-parse exc. *)
 private type canFail (a:Type) =
 | ExFail of alertDescription * string
@@ -342,24 +346,28 @@ let parseEcpfList b =
       else
         Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
 
-(* ToDo: what about duplicates? *)
-val parseVersions: bytes -> Tot (result (list TLSConstants.protocolVersion))
-let parseVersions b =
-    let rec aux:b:bytes -> Tot (canFail (TLSConstants.protocolVersion)) (decreases (length b)) = fun b ->
-        if equalBytes b empty_bytes then ExOK([])
-        else
-	  if (0 < length b) then 
-	    let (u,v) = split b 2 in (* ToDo: check 2 bytes? *)
-            (match aux v with
-            | ExFail(x,y) -> ExFail(x,y)
-            | ExOK(l) ->
-		match TLSConstants.parseVersion u with 
-		| Correct(v) -> ExOK(v :: l)
-                | Error(e,msg) -> ExFail(e,msg))
-	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed versions")
-    in match aux b with
-    | ExFail(x,y) -> Error(x,y)
-    | ExOK(l) -> correct l
+(* We don't care about duplicates, not formally excluded. *)
+ 
+//17-05-01 added a refinement to control the list length; this function verifies.
+//17-05-01 should we use generic code to parse such bounded lists?
+val parseVersions: 
+  b:bytes -> 
+  Tot (result (l:list TLSConstants.protocolVersion {FStar.Mul.( length b = 2 * List.Tot.length l)})) (decreases (length b))
+let rec parseVersions b =
+  match length b with 
+  | 0 -> let r = [] in assert_norm (List.Tot.length [] = 0); Correct r
+  | 1 -> Error (AD_decode_error, "malformed version list") 
+  | _ -> 
+    let b2, b' = split b 2 in
+    match TLSConstants.parseVersion b2 with 
+    | Error z -> Error z
+    | Correct v -> 
+      match parseVersions b' with 
+      | Error z -> Error z 
+      | Correct vs -> (
+          let r = v::vs in 
+          assert_norm (List.Tot.length (v::vs) = 1 + List.Tot.length vs); // did not find usable length lemma in List.Tot
+          Correct r)
 
 let rec parseExtension role b =
   if length b >= 4 then
@@ -405,11 +413,13 @@ let rec parseExtension role b =
 	  (match parseEarlyDataIndication role data with
 	  | Correct (edi) -> Correct (E_early_data(edi))
 	  | Error(z) -> Error(z))
-        | (0xffz, 0x2bz) -> // versions
-	  if length data >= 2 && length data < 254 then (
+
+        //17-05-01 why was it 0xffz, as for cookie?
+        | (0x00z, 0x2bz) -> // versions
+	  if length data >= 2 && length data <= 254 then (
 	  (match parseVersions data with 
-	  | Correct(v) -> Correct (E_supported_versions v)
-	  | Error(z) -> Error(z))
+	  | Correct v -> Correct (E_supported_versions v)
+	  | Error z -> Error z)
 	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "versions"))
         | (0xffz, 0x2cz) -> // cookie
 	  if length data >= 1 && length data <= ((pow2 16) - 1) then 
@@ -567,8 +577,8 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res =
        match minpv, pv with
        | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
-       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p2;TLS_1p3] :: res
-       // REMARK: This case is not mandatory. E.g. www.google.com chokes on it
+       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p3;TLS_1p2] :: res
+       // REMARK: The case below is not mandatory. E.g. www.google.com chokes on it
        // Commenting this out. This behaviour should be configurable
        // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
        | _ -> res in

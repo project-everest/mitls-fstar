@@ -405,6 +405,14 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
 
 let geqPV a b = (b = minPV a b)
 
+let string_of_pv = function 
+  | SSL_3p0 -> "SSL3"
+  | TLS_1p0 -> "TLS 1.0"
+  | TLS_1p1 -> "TLS 1.1"
+  | TLS_1p2 -> "TLS 1.2"
+  | TLS_1p3 -> "TLS 1.3"
+
+
 (* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
    have to be distinct from the 'correct' ones *)
 val cipherSuiteBytesOpt: cipherSuite -> Tot (option (lbytes 2))

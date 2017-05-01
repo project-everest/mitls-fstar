@@ -184,7 +184,7 @@ let getHash #ha (LOG #reg st) =
 
 (* SEND *)
 let send l m =
-  trace ("send "^HandshakeMessages.string_of_handshakeMessage m);
+  trace ("emit "^HandshakeMessages.string_of_handshakeMessage m);
   let st = !l in
   let mb = handshakeMessageBytes st.pv m in
   let h : hashState st.transcript (st.parsed @ [m]) =
@@ -203,7 +203,9 @@ let send l m =
 let hash_tag #a l = 
   let st = !l in
   match st.hashes with
-  | FixedHash a acc hl -> Hashing.finalize #a acc 
+  | FixedHash a' acc hl -> 
+      if a <> a' then trace "BAD HASH (statically excluded)";
+      Hashing.finalize #a acc 
 
 // maybe just compose the two functions above?
 let send_tag #a l m =

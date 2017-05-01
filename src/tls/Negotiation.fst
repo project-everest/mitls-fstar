@@ -31,6 +31,8 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if n_debug then print else (fun _ -> ())
 
+
+//17-05-01 relocate these printing functions?!
 let string_of_option_extensions o = match o with 
   | None -> "None" 
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
@@ -139,14 +141,21 @@ let gs_of ch =
     end
   | _ -> []
 
+let find_client_extension filter o = 
+  match o.ch_extensions with 
+  | None -> None
+  | Some es -> List.Tot.find filter es
+
+let find_supported_versions o = 
+  match find_client_extension Extensions.E_supported_versions? o with
+  | None -> None 
+  | Some (Extensions.E_supported_versions vs) -> Some vs 
+
 // finding the pre-shared keys in ClientHello
 let find_pske o = 
-  match o.ch_extensions with 
+  match find_client_extension Extensions.E_pre_shared_key? o with 
   | None -> None 
-  | Some es -> 
-    match List.Tot.find Extensions.E_pre_shared_key? es with 
-    | None -> None 
-    | Some (Extensions.E_pre_shared_key psks) -> Some psks
+  | Some (Extensions.E_pre_shared_key psks) -> Some psks
 
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
@@ -156,24 +165,18 @@ type pski (o:offer) = n:nat {
   | None -> False) } 
 
 let find_supported_groups o = 
-  match o.ch_extensions with 
+  match find_client_extension Extensions.E_supported_groups? o with 
   | None -> None 
-  | Some es -> 
-    match List.Tot.find Extensions.E_supported_groups? es with 
-    | None -> None 
-    | Some (Extensions.E_supported_groups gns) -> Some gns
+  | Some (Extensions.E_supported_groups gns) -> Some gns
 
 type share = g:CommonDH.group & CommonDH.share g
 
 // we authenticate the whole list, but only care about those we could parse
 let find_key_shares o: option (list share)  = 
-  match o.ch_extensions with 
+  match find_client_extension Extensions.E_key_share? o with 
   | None -> None 
-  | Some es -> 
-    match List.Tot.find Extensions.E_key_share? es with 
-    | None -> None 
-    | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> 
-        let known = function
+  | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> 
+      let known = function
         | CommonDH.Share g s -> Some #share (|g, s |) 
         | _ -> None #share in
         Some (List.Tot.choose known ks)
@@ -365,7 +368,7 @@ let computeOffer r cfg resume nonce ks =
     | _  -> cfg.compressions
   in
   {
-    ch_protocol_version = cfg.maxVer; // legacy for 1.3
+    ch_protocol_version = minPV TLS_1p2 cfg.maxVer; // legacy for 1.3
     ch_client_random = nonce;
     ch_sessionID = sid;
     ch_cipher_suites = cfg.ciphersuites;
@@ -506,14 +509,7 @@ let client_ClientHello #region ns oks =
   
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1 
 let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []}) =
-  let extent = 
-    match o.ch_extensions with
-    | None -> None 
-    | Some es -> 
-      match List.Tot.find Extensions.E_supported_versions? es with
-      | None -> None 
-      | Some (Extensions.E_supported_versions vs) -> Some vs in
-  match extent with 
+  match find_supported_versions o with 
   | Some []  -> Error(AD_internal_error, "protocol version negotiation: empty proposal")
   | Some vs -> Correct vs  // might check no proposal is below min_pv
   | None -> // use legacy offer
@@ -532,11 +528,11 @@ let is_client13 (o:offer) =
   | Error _ -> false 
 
 let negotiate_version cfg offer = 
-  //17-04-26 TODO pass outer packet PV instead of TLS_1p2
-  match offered_versions TLS_1p2 offer with 
+  //17-04-26 TODO pass outer packet PV instead of TLS_1p0
+  match offered_versions TLS_1p0 offer with 
   | Error z -> Error z 
   | Correct vs -> 
-    match List.Tot.find (fun v -> geqPV cfg.maxVer v && geqPV cfg.minVer v) vs with 
+    match List.Tot.find (fun v -> geqPV cfg.maxVer v && geqPV v cfg.minVer) vs with 
     | Some v -> Correct v
     | None -> Error(AD_internal_error, "protocol version negotiation: mismatch")
 
@@ -697,7 +693,7 @@ let client_ServerHello #region ns sh =
      match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
       | Error z -> Error z
       | Correct next ->
-      trace ("negotiated ciphersuite: " ^ (string_of_ciphersuite cs));
+      trace ("negotiated "^string_of_pv spv^" "^string_of_ciphersuite cs);
       match cs with
        | CipherSuite kex sa ae ->
         match spv, kex, next.ne_keyShare with
@@ -931,16 +927,15 @@ let computeServerMode cfg co serverRandom serverID =
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
   match negotiate_version cfg co with
   | Error z -> Error z
-  | Correct TLS_1p3 -> admit()
-  (*
+  | Correct TLS_1p3 -> 
     begin
       match compute_cs13 cfg co [] [] (*TODO*)  with 
       | Error z -> Error z 
       | Correct [] -> Error(AD_handshake_failure,"ciphersuite negotiation failed") 
 //    | PSK_EDH j ogs cs :: _ -> 
-      | Correct (JUST_EDH (g, ogx) cs  :: _) -> admit()
+//    | Correct (JUST_EDH (g, ogx) cs  :: _) -> Error(AD_handshake_failure, "WIP")
+      | Correct _  -> Error(AD_handshake_failure, "negotiation succeeded; TBC")
     end
-  *)
   | Correct pv -> 
 
   // with TLS 1.2, we pick the first ciphersuite compatible with our credentials
@@ -1030,6 +1025,8 @@ val server_ClientHello: #region:rgn -> t region Server ->
   option sessionID -> 
   St (result mode)
 let server_ClientHello #region ns offer sid =
+  trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
+  trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
   match MR.m_read ns.state with 
   | S_Init _ -> 
     match computeServerMode ns.cfg offer ns.nonce sid with
@@ -1037,7 +1034,7 @@ let server_ClientHello #region ns offer sid =
       trace ("negotiation failed: "^string_of_error z);
       Error z
     | Correct m ->
-      trace ("negotiated ciphersuite: " ^ (string_of_ciphersuite m.n_cipher_suite));
+      trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
       MR.m_write ns.state (S_ClientHello m);
       Correct m
 
