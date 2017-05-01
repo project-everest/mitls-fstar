@@ -626,7 +626,8 @@ let parseClientHello data =
 
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 let serverHelloBytes sh =
-  let verB = versionBytes sh.sh_protocol_version in
+  // signalling the current draft version
+  let verB = versionBytes_draft sh.sh_protocol_version in
   let sidB =
     match sh.sh_sessionID with
     | Some sid ->
@@ -666,7 +667,7 @@ val serverHelloBytes_is_injective: msg1:valid_sh -> msg2:valid_sh ->
 let serverHelloBytes_is_injective msg1 msg2 =
   if serverHelloBytes msg1 = serverHelloBytes msg2 then
   begin
-    let verB1 = versionBytes msg1.sh_protocol_version in
+    let verB1 = versionBytes_draft msg1.sh_protocol_version in
     let sidB1 = match msg1.sh_sessionID with
       | Some sid -> lemma_repr_bytes_values (length sid); vlbytes 1 sid
       | _ -> empty_bytes in
@@ -681,7 +682,7 @@ let serverHelloBytes_is_injective msg1 msg2 =
       | TLS_1p3 -> verB1 @| (msg1.sh_server_random @| (csB1 @| extB1))
       | _       -> verB1 @| (msg1.sh_server_random @| (sidB1 @| (csB1 @| (cmB1 @| extB1)))) in
       lemma_repr_bytes_values (length data1);
-      let verB2 = versionBytes msg2.sh_protocol_version in
+      let verB2 = versionBytes_draft msg2.sh_protocol_version in
       let sidB2 = match msg2.sh_sessionID with
       | Some sid -> lemma_repr_bytes_values (length sid); vlbytes 1 sid
       | _ -> empty_bytes in
@@ -771,7 +772,7 @@ let parseServerHello data =
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   else
     let (serverVerBytes,serverRandomBytes,data) = split2 data 2 32 in
-    match parseVersion serverVerBytes with
+    match parseVersion_draft serverVerBytes with
     | Error z -> Error z
     | Correct serverVer ->
       (match serverVer with

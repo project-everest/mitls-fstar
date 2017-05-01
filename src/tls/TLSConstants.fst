@@ -369,8 +369,8 @@ let versionBytes pv =
   | TLS_1p0 -> abyte2 ( 3z, 1z)
   | TLS_1p1 -> abyte2 ( 3z, 2z )
   | TLS_1p2 -> abyte2 ( 3z, 3z )
-  | TLS_1p3 -> abyte2 ( 3z, 4z )
-
+  | TLS_1p3 -> abyte2 ( 3z, 4z ) 
+  
 (** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
 let parseVersion v =
@@ -380,7 +380,8 @@ let parseVersion v =
   | ( 3z, 2z ) -> Correct TLS_1p1
   | ( 3z, 3z ) -> Correct TLS_1p2
   | ( 3z, 4z ) -> Correct TLS_1p3
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed an unknown version")
+  | ( 127z, _ ) -> Error(AD_decode_error, "Parsed TLS 1.3 draft#"^print_bytes v)
+  | _ -> Error(AD_decode_error, "Parsed unknown version "^print_bytes v)
 
 val inverse_version: x:_ -> Lemma
   (requires (True))
@@ -393,6 +394,24 @@ val pinverse_version: x:_ -> Lemma
   (ensures (lemma_pinverse_f_g Seq.equal versionBytes parseVersion x))
   [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
 let pinverse_version x = ()
+
+// DRAFT#20
+// to be used *only* in ServerHello.version.
+// https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
+let draft = 19z
+let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
+  | TLS_1p3 -> abyte2 ( 127z, draft )  
+  | pv -> versionBytes pv
+val parseVersion_draft: pinverse_t versionBytes_draft 
+let parseVersion_draft v = 
+  match cbyte2 v with 
+  | (127z, d) -> 
+      if d = draft 
+      then Correct TLS_1p3 
+      else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v)
+  | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version")
+  | _ -> parseVersion v
+  
 
 (** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =
@@ -407,10 +426,10 @@ let geqPV a b = (b = minPV a b)
 
 let string_of_pv = function 
   | SSL_3p0 -> "SSL3"
-  | TLS_1p0 -> "TLS 1.0"
-  | TLS_1p1 -> "TLS 1.1"
-  | TLS_1p2 -> "TLS 1.2"
-  | TLS_1p3 -> "TLS 1.3"
+  | TLS_1p0 -> "1.0"
+  | TLS_1p1 -> "1.1"
+  | TLS_1p2 -> "1.2"
+  | TLS_1p3 -> "1.3"
 
 
 (* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
