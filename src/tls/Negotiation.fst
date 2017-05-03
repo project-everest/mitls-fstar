@@ -693,48 +693,50 @@ let client_ServerHello #region ns sh =
      match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
       | Error z -> Error z
       | Correct next ->
-      trace ("negotiated "^string_of_pv spv^" "^string_of_ciphersuite cs);
-      match cs with
-       | CipherSuite kex sa ae ->
-        match spv, kex, next.ne_keyShare with
-         | TLS_1p3, Kex_DHE, Some (CommonDH.Share g gy)
-         | TLS_1p3, Kex_ECDHE, Some (CommonDH.Share g gy) ->
-           let server_share = (|g, gy|) in
-           //let client_share = List.Tot.find (fun gx -> dfst gx = g) (gs_of offer) in
-           let client_share = matching_share cext g in
-           let mode = Mode
-             offer 
-             None // n_hrr
-             spv
-             sr
-             None // (Some ssid)
-             cs
-             None // pski
-             sext
-             (Some server_share)
-             None // n_client_cert_request
-             None // n_server_cert
-             client_share
-           in
-           MR.m_write ns.state (C_Mode mode);
-           Correct mode
-         | _ ->
-           let mode = Mode 
-             offer 
-             None
-             spv
-             sr
-             None // (Some ssid)
-             cs
-             None // pski
-             sext
-             None // n_server_share; unknwon before SKE is received
-             None // n_client_cert_request
-             None // n_server_cert
-             None // n_client_share
-           in
-           MR.m_write ns.state (C_Mode mode);
-           Correct mode
+        trace ("negotiated "^string_of_pv spv^" "^string_of_ciphersuite cs);
+        match cs with
+        | CipherSuite13 ae ha ->
+          begin
+          match spv, next.ne_keyShare with
+          | TLS_1p3, Some (CommonDH.Share g gy) ->
+            let server_share = (|g, gy|) in
+            let client_share = matching_share cext g in
+            let mode = Mode
+              offer
+              None // n_hrr
+              spv
+              sr
+              None // (Some ssid)
+              cs
+              None // pski
+              sext
+              (Some server_share)
+              None // n_client_cert_request
+              None // n_server_cert
+              client_share
+             in
+             MR.m_write ns.state (C_Mode mode);
+             Correct mode
+          | _ ->
+            Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+          end
+        | CipherSuite kex sa ae ->
+          let mode = Mode
+            offer
+            None
+            spv
+            sr
+            None // (Some ssid)
+            cs
+            None // pski
+            sext
+            None // n_server_share; unknwon before SKE is received
+            None // n_client_cert_request
+            None // n_server_cert
+            None // n_client_share
+          in
+          MR.m_write ns.state (C_Mode mode);
+          Correct mode
         | _ -> Error (AD_decode_error, "ServerHello ciphersuite is not a real ciphersuite")
 
 (* ---------------- signature stuff, to be removed from Handshake -------------------- *)
