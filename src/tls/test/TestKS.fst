@@ -52,7 +52,7 @@ let main () : ML unit =
   let gx = (| CDH.ECDH CC.ECC_X25519, share |) in
   ksc.KS.state := KS.C (KS.C_13_wait_SH cr None None [gx]);
   *)
-  let cs = CipherSuite Kex_ECDHE (Some CC.RSASIG) (AEAD CC.AES_128_GCM Hashing.Spec.SHA256) in
+  let cs = CipherSuite13 CC.AES_128_GCM Hashing.Spec.SHA256 in
   p " Generating server share... ";
   let (CDH.Share g gy) = KS.ks_server_13_1rtt_init kss cr cs g gx in
   p "OK.\n";
