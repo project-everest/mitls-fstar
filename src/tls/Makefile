@@ -467,8 +467,14 @@ endif
 
 # our interactive tests
 
+server12::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
+
 server13::
-	./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
 
 client13-local::
-	./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+
+client12-local::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
