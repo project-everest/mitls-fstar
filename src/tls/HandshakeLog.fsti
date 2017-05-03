@@ -1,4 +1,4 @@
-module Handshake.Log
+module HandshakeLog
  
 // NB still missing regions and modifies clauses.
  

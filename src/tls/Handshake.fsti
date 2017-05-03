@@ -131,7 +131,7 @@ val invalidateSession: s:hs -> ST unit
 
 open TLSError //17-04-07 necessary to TC the | Correct pattern?
 //val next_fragment: see .fsti
-let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (Handshake.Log.outgoing i)) h1 =
+let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLog.outgoing i)) h1 =
     let es = logT s h0 in
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
@@ -143,12 +143,12 @@ let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (Handshake.L
     Seq.length (logT s h1) >= Seq.length (logT s h0) /\
     ( let open Platform.Error in
       match result with
-      | Correct (Handshake.Log.Outgoing frg ccs nextKeys complete) ->
+      | Correct (HandshakeLog.Outgoing frg ccs nextKeys complete) ->
           w1 == (if nextKeys then w0 + 1 else w0) /\
           (b2t complete ==> r1 = w1 /\ Seq.indexable (logT s h1) w1 (*/\ completed (eT s Writer h1)*) )
       | _ -> True )
 
-val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (Handshake.Log.outgoing i))
+val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
   (requires (fun h0 ->
     let es = logT s h0 in
     let j = iT s Writer h0 in
