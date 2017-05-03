@@ -870,10 +870,11 @@ let prfMacAlg_of_ciphersuite : require_some prfMacAlg_of_ciphersuite_aux =
 // BB.TODO: Documentation ? Confirm that it is used with TLS 1.3 !
 let verifyDataHashAlg_of_ciphersuite_aux =
   let open Hashing.Spec in function
-  | CipherSuite _ _ (MtE  _ _)    -> Some SHA256
+  | CipherSuite _ _ (MtE  _ _) -> Some SHA256
   | CipherSuite _ _ (AEAD _ hAlg) -> Some hAlg
   | CipherSuite _ _ (MACOnly hAlg) -> Some SHA256
-  | _                               -> None
+  | CipherSuite13 _ hAlg -> Some hAlg
+  | _ -> None
 
 // BB.TODO: Documentation ?
 let verifyDataHashAlg_of_ciphersuite : require_some verifyDataHashAlg_of_ciphersuite_aux =
