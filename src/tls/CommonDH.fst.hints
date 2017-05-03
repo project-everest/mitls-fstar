@@ -59,6 +59,33 @@
       0
     ],
     [
+      "CommonDH.string_of_group",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.ECDH",
+        "disc_equation_CommonDH.FFDH", "disc_equation_CoreCrypto.ECC_P256",
+        "disc_equation_CoreCrypto.ECC_P384",
+        "disc_equation_CoreCrypto.ECC_P521",
+        "disc_equation_CoreCrypto.ECC_X25519",
+        "disc_equation_CoreCrypto.ECC_X448",
+        "disc_equation_DHGroup.Explicit", "disc_equation_DHGroup.Named",
+        "disc_equation_Parse.FFDHE2048", "disc_equation_Parse.FFDHE3072",
+        "disc_equation_Parse.FFDHE4096", "disc_equation_Parse.FFDHE6144",
+        "disc_equation_Parse.FFDHE8192", "equation_ECGroup.group",
+        "fuel_guarded_inversion_CommonDH.group",
+        "fuel_guarded_inversion_CoreCrypto.ec_curve",
+        "fuel_guarded_inversion_DHGroup.group",
+        "fuel_guarded_inversion_Parse.ffdhe",
+        "proj_equation_DHGroup.Named__0",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_DHGroup_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94",
+        "typing_DHGroup.__proj__Named__item___0"
+      ],
+      0
+    ],
+    [
       "CommonDH.pre_keyshare'",
       1,
       0,

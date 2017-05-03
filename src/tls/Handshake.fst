@@ -574,12 +574,13 @@ let server_ClientHello hs offer =
         if mode.Nego.n_protocol_version = TLS_1p3
         then 
           begin
-          trace "derive handshake keys";
-          let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
-          register hs hs_keys;
-          // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
-          hs.state := S_Sent_ServerHello;
-          InAck false false
+            Handshake.Log.send_signals hs.log true false; // signal key change after writing ServerHello
+            trace "derive handshake keys";
+            let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
+            register hs hs_keys;
+            // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
+            hs.state := S_Sent_ServerHello;
+            InAck false false
           end
         else 
           server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
