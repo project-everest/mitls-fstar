@@ -221,8 +221,9 @@ let incr_writer #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs?.write))
     (ensures (incr_post es MkEpochs?.write))
 = 
-  trace "next writer";
-  incr_epoch_ctr (MkEpochs?.write es)
+  incr_epoch_ctr (MkEpochs?.write es);
+  trace ("writer++, now r="^m_read MkEpoch?.read es^" w="^m_read MkEpoch?.write es)
+
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
 

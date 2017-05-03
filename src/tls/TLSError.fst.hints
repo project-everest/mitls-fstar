@@ -1,5 +1,5 @@
 [
-  "y*=_ÅÝv’ö´¡¢\u001cg\u0013A",
+  "ÒB%\u0014Žº\u00048\r\u007f–›|\nÄÿ",
   [
     [ "TLSError.uu___is_AD_close_notify", 1, 0, 1, [ "@query" ], 0 ],
     [ "TLSError.uu___is_AD_unexpected_message", 1, 0, 1, [ "@query" ], 0 ],
@@ -157,6 +157,23 @@
       0
     ],
     [ "TLSError.isFatal", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.string_of_error", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "TLSError.string_of_result",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_Platform.Error.Correct",
+        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
+        "function_token_typing_TLSError.error",
+        "lemma_Platform.Error.invertOptResult",
+        "typing_Platform.Error.uu___is_Correct",
+        "typing_Platform.Error.uu___is_Error", "uvar_typing_103798"
+      ],
+      0
+    ],
     [
       "TLSError.resT",
       1,

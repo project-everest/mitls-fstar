@@ -1,0 +1,477 @@
+[
+  "ÌŽ\u0019Å¨mÅ\u0014öê¹\u0019+ˆÕ’",
+  [
+    [
+      "Extensions.preEarlyDataIndication",
+      1,
+      0,
+      1,
+      [ "@query", "projection_inverse_BoxInt_proj_0" ],
+      0
+    ],
+    [
+      "Extensions.preEarlyDataIndication",
+      2,
+      0,
+      1,
+      [ "@query", "projection_inverse_BoxInt_proj_0" ],
+      0
+    ],
+    [
+      "Extensions.uu___is_ClientEarlyDataIndication",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
+      "Extensions.__proj__ClientEarlyDataIndication__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.ClientEarlyDataIndication",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_ff86658622606c320d8724021b386f32"
+      ],
+      0
+    ],
+    [
+      "Extensions.uu___is_ServerEarlyDataIndication",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [ "Extensions.uu___is_E_server_name", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_server_name__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_server_name",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_01a98bef4a66402541701421dc011671"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_supported_groups", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_supported_groups__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_supported_groups",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_946e78d534e45dc97ea440448420cabb"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_signature_algorithms", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_signature_algorithms__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_signature_algorithms",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_679352d32cdd410e389b1217ac84c112"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_key_share", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_key_share__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_key_share",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_fbf1c6f5ef026042c9be78b943935400"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_pre_shared_key", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_pre_shared_key__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_pre_shared_key",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_1b04554e0d0dac90905a96fd57dbe2fc"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_early_data", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_early_data__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_early_data",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_7f5b8f2c829f64cd264e02bcf6839e0f"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_cookie", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_cookie__item___0",
+      1,
+      0,
+      1,
+      [ "@query", "projection_inverse_BoxInt_proj_0" ],
+      0
+    ],
+    [
+      "Extensions.__proj__E_cookie__item___0",
+      2,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_cookie", "equation_Platform.Bytes.bytes",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_024cbba9b1a3552254c9dd670f05486e",
+        "refinement_interpretation_Extensions_Tm_refine_c39eff585a9e616b8f2b0b5e36fc1dc1"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_supported_versions", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_supported_versions__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_supported_versions",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_210f4af217f3c8f38cf8a4a1be412469"
+      ],
+      0
+    ],
+    [ "Extensions.uu___is_E_unknown_extension", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.__proj__E_unknown_extension__item___0",
+      1,
+      0,
+      1,
+      [ "@query", "projection_inverse_BoxInt_proj_0" ],
+      0
+    ],
+    [
+      "Extensions.__proj__E_unknown_extension__item___0",
+      2,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Extensions.E_unknown_extension",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_a0cbc30dd4a847c1fd3f94a4c02190d5"
+      ],
+      0
+    ],
+    [ "Extensions.sameExt", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.extensionHeaderBytes",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Extensions.E_key_share",
+        "constructor_distinct_Extensions.E_pre_shared_key",
+        "constructor_distinct_Extensions.E_signature_algorithms",
+        "disc_equation_Extensions.E_cookie",
+        "disc_equation_Extensions.E_early_data",
+        "disc_equation_Extensions.E_key_share",
+        "disc_equation_Extensions.E_pre_shared_key",
+        "disc_equation_Extensions.E_server_name",
+        "disc_equation_Extensions.E_signature_algorithms",
+        "disc_equation_Extensions.E_supported_groups",
+        "disc_equation_Extensions.E_supported_versions",
+        "disc_equation_Extensions.E_unknown_extension",
+        "fuel_guarded_inversion_Extensions.extension"
+      ],
+      0
+    ],
+    [
+      "Extensions.serverNameBytes",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Prims.Cons",
+        "disc_equation_Prims.Nil", "disc_equation_TLSInfo.SNI_DNS",
+        "disc_equation_TLSInfo.SNI_UNKNOWN", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.empty_bytes",
+        "fuel_guarded_inversion_Prims.list",
+        "fuel_guarded_inversion_TLSInfo.serverName",
+        "kinding_TLSInfo.serverName@tok", "proj_equation_Prims.Cons_hd",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_Prims.Cons_tl",
+        "refinement_interpretation_Prims_Tm_refine_7aac12c24449a22c34d98a0ea8ed4a32",
+        "refinement_interpretation_TLSConstants_Tm_refine_62be46b5d65726c91e550691e3da999b",
+        "subterm_ordering_Prims.Cons", "typing_Prims.__proj__Cons__item__hd"
+      ],
+      0
+    ],
+    [
+      "Extensions.extension_depth",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_bc912973473a50827c3a6e9b991e758d_0",
+        "disc_equation_Extensions.ClientEarlyDataIndication",
+        "disc_equation_Extensions.ServerEarlyDataIndication",
+        "equation_Prims.nat",
+        "fuel_guarded_inversion_Extensions.earlyDataIndication",
+        "fuel_guarded_inversion_Extensions.preEarlyDataIndication",
+        "primitive_Prims.op_Addition",
+        "proj_equation_Extensions.MkpreEarlyDataIndication_ped_extensions",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "subterm_ordering_Extensions.ClientEarlyDataIndication",
+        "subterm_ordering_Extensions.E_early_data",
+        "subterm_ordering_Extensions.MkpreEarlyDataIndication"
+      ],
+      0
+    ],
+    [
+      "Extensions.extension_depth",
+      2,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_0e03aee648ed9f7b1474d399f62a1312_0",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
+      ],
+      0
+    ],
+    [
+      "Extensions.extensionsBytes_def",
+      1,
+      0,
+      1,
+      [
+        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "assumption_Prims.HasEq_int", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.empty_bytes",
+        "haseqExtensions_Tm_refine_fdef5b273f8445f3443a54964b6abb9c"
+      ],
+      0
+    ],
+    [
+      "Extensions.extensionsBytes_def",
+      2,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.empty_bytes",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Extensions_Tm_refine_1c2174eb99c23eace8eeea822cc70eff"
+      ],
+      0
+    ],
+    [
+      "Extensions.parseOptExtensions",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "disc_equation_Platform.Error.Correct",
+        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result",
+        "fuel_correspondence_Extensions.parseExtensions.fuel_instrumented",
+        "function_token_typing_TLSError.error",
+        "kinding_Extensions.extension@tok", "kinding_Prims.list@tok",
+        "lemma_Platform.Error.invertOptResult",
+        "typing_Extensions.parseExtensions"
+      ],
+      0
+    ],
+    [
+      "Extensions.parseOptExtensions",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "Extensions.list_valid_cs_is_list_cs",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_73b69587da99270b009069f56b93d116_0",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "equation_TLSConstants.valid_cipher_suite",
+        "equation_TLSConstants.valid_cipher_suites",
+        "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
+      ],
+      0
+    ],
+    [
+      "Extensions.list_valid_ng_is_list_ng",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_a1eb0f73554a0076c839670033b3bacc_1",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "fuel_guarded_inversion_Prims.list",
+        "projection_inverse_Prims.Cons_tl", "subterm_ordering_Prims.Cons"
+      ],
+      0
+    ],
+    [ "Extensions.prepareExtensions", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Extensions.prepareExtensions",
+      2,
+      0,
+      1,
+      [
+        "@query", "assumption_Parse.namedGroup_haseq",
+        "assumption_Prims.list_haseq", "kinding_Parse.namedGroup@tok"
+      ],
+      0
+    ],
+    [
+      "Extensions.replace_subtyping",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_Prims.None", "disc_equation_Prims.Some",
+        "equation_TLSInfo.cVerifyData", "equation_TLSInfo.sVerifyData",
+        "function_token_typing_TLSInfo.cVerifyData",
+        "kinding_Prims.tuple2@tok", "lemma_Prims.invertOption",
+        "projection_inverse_BoxBool_proj_0", "typing_Prims.uu___is_None"
+      ],
+      0
+    ],
+    [
+      "Extensions.serverToNegotiatedExtension",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_Platform.Error.Correct",
+        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "equation_TLSInfo.ne_default",
+        "function_token_typing_TLSError.error",
+        "function_token_typing_TLSInfo.ne_default",
+        "kinding_TLSInfo.negotiatedExtensions@tok",
+        "lemma_Platform.Error.invertOptResult",
+        "pretyping_63dea59f3d70bcbc76c956982856e95a",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_Platform.Error.uu___is_Correct"
+      ],
+      0
+    ],
+    [
+      "Extensions.negotiateClientExtensions",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_Platform.Error.Correct",
+        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
+        "equation_TLSInfo.ne_default",
+        "function_token_typing_TLSError.error",
+        "function_token_typing_TLSInfo.ne_default",
+        "kinding_TLSInfo.negotiatedExtensions@tok",
+        "lemma_Platform.Error.invertOptResult",
+        "pretyping_63dea59f3d70bcbc76c956982856e95a",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_Platform.Error.uu___is_Error"
+      ],
+      0
+    ],
+    [
+      "Extensions.clientToServerExtension",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_Prims.None", "disc_equation_Prims.Some",
+        "kinding_CommonDH.keyShare@tok", "lemma_Prims.invertOption",
+        "projection_inverse_BoxBool_proj_0", "typing_Prims.uu___is_None"
+      ],
+      0
+    ],
+    [
+      "Extensions.clientToServerExtension",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_TLSConstants.protocolVersion_haseq" ],
+      0
+    ],
+    [
+      "Extensions.clientToNegotiatedExtension",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "fuel_guarded_inversion_TLSInfo.negotiatedExtensions"
+      ],
+      0
+    ],
+    [
+      "Extensions.clientToNegotiatedExtension",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_Parse.namedGroup_haseq" ],
+      0
+    ],
+    [
+      "Extensions.negotiateServerExtensions",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_Prims.None", "disc_equation_Prims.Some",
+        "kinding_Extensions.extension@tok", "kinding_Prims.list@tok",
+        "lemma_Prims.invertOption", "projection_inverse_BoxBool_proj_0",
+        "typing_Prims.uu___is_None"
+      ],
+      0
+    ]
+  ]
+]

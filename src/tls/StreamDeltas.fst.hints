@@ -15,13 +15,13 @@
       1,
       1,
       [
-        "@query", "equation_DataStream.fragment",
+        "@MaxIFuel_assumption", "@query", "equation_DataStream.fragment",
         "equation_Platform.Bytes.length", "equation_Prims.nat",
         "equation_Range.fragment_range", "equation_Range.frange",
         "equation_Range.range", "equation_Range.wider",
         "equation_Range.within",
-        "refinement_interpretation_Tm_refine_8c0595f9d7245b9878e388727ee0bff8",
-        "refinement_interpretation_Tm_refine_977063e22be61867cab4fea130513503"
+        "refinement_interpretation_DataStream_Tm_refine_7d14019f88b6224934e6f7e230327467",
+        "refinement_interpretation_Range_Tm_refine_4366373c1708417206d0b68720a39f0e"
       ],
       0
     ],
@@ -31,8 +31,8 @@
       1,
       1,
       [
-        "@query", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
+        "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0
     ],
@@ -43,10 +43,10 @@
       1,
       1,
       [
-        "@query", "equation_FStar.Seq.Properties.snoc",
-        "equation_StreamDeltas.id", "equation_StreamDeltas.project_deltas",
-        "pretyping_6dab7c447a2e7b98f8c4a628d11684fd",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.Seq.Properties.snoc", "equation_StreamDeltas.id",
+        "equation_StreamDeltas.project_deltas",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0
     ],
@@ -57,8 +57,8 @@
       1,
       1,
       [
-        "@query", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
+        "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0
     ],
@@ -68,18 +68,17 @@
       1,
       1,
       [
-        "@query", "bool_inversion", "disc_equation_TLSInfo.PlaintextID",
-        "equation_FStar.List.Tot.Base.test_sort",
-        "equation_FStar.Monotonic.Seq.map_prefix", "equation_Prims._assert",
-        "equation_StAE.entry", "equation_StAE.fragments",
-        "equation_StAE.fragments_prefix", "equation_StAE.ilog",
-        "equation_StAE.log_region", "equation_StreamDeltas.deltas_prefix",
-        "equation_StreamDeltas.id", "equation_StreamDeltas.project_deltas",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_TLSInfo.PlaintextID",
+        "equation_FStar.Monotonic.Seq.map_prefix", "equation_StAE.entry",
+        "equation_StAE.fragments", "equation_StAE.fragments_prefix",
+        "equation_StAE.ilog", "equation_StAE.log_region",
+        "equation_StreamDeltas.deltas_prefix", "equation_StreamDeltas.id",
+        "equation_StreamDeltas.project_deltas",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
-        "function_token_typing_FStar.List.Tot.Base.test_sort",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
-        "typing_TLSInfo.uu___is_PlaintextID", "unit_inversion"
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
+        "typing_TLSInfo.uu___is_PlaintextID", "unit_typing"
       ],
       0
     ],
@@ -89,8 +88,8 @@
       1,
       1,
       [
-        "@query", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_49edabf22ed387b83e79e9af2d6a6391"
+        "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391"
       ],
       0
     ],
@@ -115,8 +114,8 @@
       1,
       1,
       [
-        "@query", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
+        "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0
     ],
@@ -126,8 +125,8 @@
       1,
       1,
       [
-        "@query", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
+        "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0
     ],
@@ -145,8 +144,8 @@
       1,
       1,
       [
-        "@query", "equation_StreamDeltas.id",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
+        "@MaxIFuel_assumption", "@query", "equation_StreamDeltas.id",
+        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0
     ],

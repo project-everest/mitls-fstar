@@ -72,7 +72,7 @@
         "assumption_TLSError.alertDescription_haseq",
         "equation_DataStream.fragment", "equation_DataStream.pre_fragment",
         "equation_Range.fragment_range",
-        "haseqTm_refine_977063e22be61867cab4fea130513503"
+        "haseqDataStream_Tm_refine_7d14019f88b6224934e6f7e230327467"
       ],
       0
     ],
@@ -83,9 +83,9 @@
       0,
       1,
       [
-        "@query", "disc_equation_DataStream.Data",
+        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Data",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
+        "refinement_interpretation_DataStream_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0
     ],
@@ -97,9 +97,9 @@
       0,
       1,
       [
-        "@query", "disc_equation_DataStream.Alert",
+        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Alert",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
+        "refinement_interpretation_DataStream_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
       ],
       0
     ],
@@ -173,13 +173,14 @@
       0,
       1,
       [
-        "@query", "bool_inversion", "constructor_distinct_Prims.None",
-        "constructor_distinct_Prims.Some", "disc_equation_Prims.Some",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Prims.None", "constructor_distinct_Prims.Some",
+        "disc_equation_Prims.Some",
         "equation_FStar.HyperStack.is_eternal_region",
         "proj_equation_FStar.HyperStack.MkRef_ref",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Some_a", "projection_inverse_Prims.Some_v",
-        "refinement_interpretation_Tm_refine_5a09de1efe4b8e150cfdaeaf95d864d4",
+        "refinement_interpretation_FStar.Monotonic.RRef_Tm_refine_5a09de1efe4b8e150cfdaeaf95d864d4",
         "typing_FStar.HyperStack.is_eternal_region"
       ],
       0
