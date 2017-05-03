@@ -852,11 +852,31 @@ val clientComplete_13: #region:rgn -> t region Client ->
   ocr: option HandshakeMessages.cr ->
   serverCert: HandshakeMessages.crt ->
   cv: HandshakeMessages.cv ->
-  digest:  bytes{length digest <= 32} ->
+  digest: bytes{length digest <= 32} ->
   St (result mode) // it needs to be computed, whether returned or not
 let clientComplete_13 #region ns ee ocr crt cv digest =
   trace "Nego.clientComplete_13";
-  admit()
+  match MR.m_read ns.state with
+  | C_Mode mode ->
+    let ccert = None in
+    let scert = None in // TODO: get chain from serverCert
+    let sexts = mode.n_server_extensions in // TODO: add extensions from EE
+    let mode = Mode
+      mode.n_offer
+      mode.n_hrr
+      mode.n_protocol_version
+      mode.n_server_random
+      mode.n_sessionID
+      mode.n_cipher_suite
+      mode.n_pski
+      mode.n_server_extensions
+      mode.n_server_share
+      ocr
+      scert
+      mode.n_client_share
+    in
+    MR.m_write ns.state (C_Complete mode ccert);
+    Correct mode
 
 
 (* SERVER *)

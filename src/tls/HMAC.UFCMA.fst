@@ -27,7 +27,11 @@ type rgn = TLSConstants.rgn
 
 type id = TLSInfo.finishedId
 let alg (i:id) = TLSInfo.finishedId_hash  i
-assume val authId: id -> Tot bool
+
+//assume
+val authId: id -> Tot bool
+let authId id = false // TODO: move to Flags
+
 type text = bytes
 type tag (i:id) = lbytes (Hashing.Spec.tagLen (alg i))
 
