@@ -18,7 +18,8 @@ let rec certificateListBytes l =
   | [] -> empty_bytes
   | c::r -> 
     lemma_repr_bytes_values (length c);
-    (vlbytes 3 c) @| (certificateListBytes r)
+    lemma_repr_bytes_values 0;
+    vlbytes 3 c @| (vlbytes 2 empty_bytes @| certificateListBytes r)
 
 val certificateListBytes_is_injective: c1:chain -> c2:chain ->
   Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
@@ -28,29 +29,33 @@ let rec certificateListBytes_is_injective c1 c2 =
   | hd::tl, hd'::tl' ->
     if certificateListBytes c1 = certificateListBytes c2 then
       begin
-      lemma_repr_bytes_values (length hd); lemma_repr_bytes_values (length hd');
-      cut(Seq.equal ((vlbytes 3 hd) @| (certificateListBytes tl)) ((vlbytes 3 hd') @| (certificateListBytes tl')));
       lemma_repr_bytes_values (length hd);
       lemma_repr_bytes_values (length hd');
-      cut(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3) (Seq.slice (certificateListBytes c1) 0 3));
-      cut(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3) (Seq.slice (certificateListBytes c1) 0 3));
+      lemma_repr_bytes_values 0;
+      assert(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3)
+                       (Seq.slice (certificateListBytes c1) 0 3));
+      assert(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3)
+                       (Seq.slice (certificateListBytes c1) 0 3));
       vlbytes_length_lemma 3 hd hd';
-      lemma_append_inj (vlbytes 3 hd) (certificateListBytes tl) (vlbytes 3 hd') (certificateListBytes tl');
+      lemma_append_inj (vlbytes 3 hd)  (vlbytes 2 empty_bytes @| certificateListBytes tl)
+                       (vlbytes 3 hd') (vlbytes 2 empty_bytes @| certificateListBytes tl');
+      lemma_append_inj (vlbytes 2 empty_bytes) (certificateListBytes tl)
+                       (vlbytes 2 empty_bytes) (certificateListBytes tl');
       lemma_vlbytes_inj 3 hd hd';
       certificateListBytes_is_injective tl tl'
       end
   | [], hd::tl ->
     begin
-    cut (length (certificateListBytes c1) = 0);
+    assert_norm (length (certificateListBytes c1) == 0);
     lemma_repr_bytes_values (length hd);
-    cut (Seq.equal (certificateListBytes c2) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+    lemma_repr_bytes_values 0;
     lemma_vlbytes_len 3 hd
     end
   | hd::tl, [] ->
     begin
-    cut (length (certificateListBytes c2) = 0);
+    assert_norm (length (certificateListBytes c2) == 0);
     lemma_repr_bytes_values (length hd);
-    cut (Seq.equal (certificateListBytes c1) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+    lemma_repr_bytes_values 0;
     lemma_vlbytes_len 3 hd
     end
 
@@ -64,33 +69,53 @@ let rec parseCertificateList b =
   if length b >= 3 then
     match vlsplit 3 b with
     | Correct (c,r) ->
-      cut (repr_bytes (length c) <= 3);
-      let rl = parseCertificateList r in
       begin
-      match rl with
-      | Correct x -> (lemma_repr_bytes_values (length c); Correct (c::x))
-      | e -> e
+      cut (repr_bytes (length c) <= 3);
+      if length r >= 2 then
+        match vlsplit 2 r with
+        | Correct (e,r) ->
+          let rl = parseCertificateList r in
+          begin
+          match rl with
+          | Correct x -> (lemma_repr_bytes_values (length c); Correct (c::x))
+          | e -> e
+          end
+        | _ -> Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
+      else Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
       end
     | _ -> Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
   else if length b = 0 then Correct []
   else Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
 
+#set-options "--max_ifuel 4"
+
 val lemma_parseCertificateList_length: b:bytes -> 
   Lemma (ensures (match parseCertificateList b with
-		  | Correct ces -> length (certificateListBytes ces) = length b
+		  | Correct ces -> length (certificateListBytes ces) == length b
 		  | _ -> True))
 	(decreases (length b))
-let rec lemma_parseCertificateList_length b = 
-  match parseCertificateList b with
-  | Correct [] -> ()
-  | Correct (hd::tl) ->
-    begin
-    cut(length b >= 3);
-    match vlsplit 3 b with
-    | Correct (c, r) -> lemma_parseCertificateList_length r
+let rec lemma_parseCertificateList_length b =
+  if length b < 3 then ()
+  else
+    match parseCertificateList b with
+    | Correct (hd::tl) ->
+      begin
+      match vlsplit 3 b with
+      | Correct (c, r) ->
+        begin
+        if length r < 2 then ()
+        else
+          match vlsplit 2 r with
+          | Correct (e, r) ->
+            begin
+            assume (e == empty_bytes); // FIXME: we don't parse cert. extensions yet
+            lemma_parseCertificateList_length r
+            end
+          | _ -> ()
+        end
+      | _ -> ()
+      end
     | _ -> ()
-    end
-  | Error _ -> ()
 
 
 (* ------------------------------------------------------------------------ *)

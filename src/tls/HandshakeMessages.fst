@@ -316,14 +316,14 @@ let parseMessage buf =
 val list_valid_to_valid_list: l:valid_cipher_suites -> Tot (l':list (c:cipherSuite{validCipherSuite c}){List.Tot.length l = List.Tot.length l'})
 let rec list_valid_to_valid_list l =
   match l with
-  | [] -> []
   | hd::tl -> hd::(list_valid_to_valid_list tl)
+  | _ -> []
 
 val valid_list_to_list_valid: l':list (c:cipherSuite{validCipherSuite c}) -> Tot (l:valid_cipher_suites{List.Tot.length l = List.Tot.length l'})
 let rec valid_list_to_list_valid l =
   match l with
-  | [] -> []
   | hd::tl -> hd::(valid_list_to_list_valid tl)
+  | _ -> []
 
 (* JK: changed the serialization of the compression methods to match the spec *)
 val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) // JK: used to be 42 but cannot prove it with current specs. Is there a minimal length of 1 for the session ID maybe ?
@@ -856,7 +856,7 @@ let serverHelloDoneBytes =
 
 let valid_crt: Type0 = c:crt{length (Cert.certificateListBytes c.crt_chain) < 16777212}
 
-val certificateBytes: protocolVersion ->  valid_crt -> Tot (b:bytes{hs_msg_bytes HT_certificate b})
+val certificateBytes: protocolVersion -> valid_crt -> Tot (b:bytes{hs_msg_bytes HT_certificate b})
 let certificateBytes pv crt =
   let cb = Cert.certificateListBytes crt.crt_chain in
   lemma_repr_bytes_values (length cb);
