@@ -1146,6 +1146,12 @@ let readFragment c i =
       // payload decryption
       let e = Seq.index es j in
       let Epoch #r #n #i hs rd wr = e in
+      if not (valid_clen i (length payload))  // cache? check at a lower level?
+      then ( 
+        // we might make an effort to parse plaintext alerts
+        trace ("bad payload: "^print_bytes payload);
+        Error(AD_decryption_failed, "Invalid ciphertext length"))
+      else 
       match StAE.decrypt (reader_epoch e) (ct,payload) with
       | None -> Error(AD_internal_error,"Decryption failure")
       | Some f -> 
