@@ -119,9 +119,9 @@ type resumption_offer_12 = // part of resumeInfo
 
 let valid_offer ch = 
   True
-
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
 type offer = ch:HandshakeMessages.ch { valid_offer ch }
+
 private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare) :
   list (g:CommonDH.group & CommonDH.share g) =
   match ks with
@@ -863,7 +863,8 @@ private let rec compute_cs13_aux
 // the key exchange can be derived from cs13 
 // (we could stop after finding the first)
 val compute_cs13: 
-  cfg: config -> o:offer -> 
+  cfg: config ->
+  o:offer ->
   psks: list (option cipherSuite) (* will be richer *) -> 
   shares: list share (* pre-registered *) -> 
   result (list (cs13 o))
@@ -872,23 +873,27 @@ let compute_cs13 cfg o psks shares =
   let ng: option (g:CommonDH.group & option (CommonDH.share g)) = 
     match find_supported_groups o with 
     | None -> None
-    | Some gs -> 
+    | Some gs ->
       match List.Tot.filter (fun g -> List.Tot.mem g cfg.namedGroups) gs with
       | [] -> None
       | g::_ -> 
         let Some g = CommonDH.group_of_namedGroup g in
-        let os: option (CommonDH.share g) = (
+        let os:option (CommonDH.share g) =
+          begin
           match find_key_shares o with
           | None -> None 
           | Some ks -> 
             match List.Tot.filter (fun g_s -> dfst g_s = g) ks with
-            | (| g,  s|)::_ -> Some s
-            | [] -> None ) in
-        Some (|g, os |) in 
+            | (| g,  s |) :: _ -> Some s
+            | [] -> None
+            end
+        in
+        Some (| g, os |)
+    in
 
   let g_gx: option share = 
     match ng with
-    | Some (| g, Some s|) -> Some (|g, s|)
+    | Some (| g, Some s |) -> Some (|g, s|)
     | _ -> None in 
   // pick acceptable record ciphersuites
   let ncs = List.Tot.filter (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in

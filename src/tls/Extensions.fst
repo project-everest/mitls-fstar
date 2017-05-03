@@ -586,28 +586,31 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     (* let res = [E_renegotiation_info(cri)] in *)
 //    let res = (E_draftVersion (abyte2 (0z, 13z)))::res in
     let res =
-       match minpv, pv with
-       | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
-       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p3;TLS_1p2] :: res
-       // REMARK: The case below is not mandatory. E.g. www.google.com chokes on it
-       // Commenting this out. This behaviour should be configurable
-       // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
-       | _ -> res in
+      match minpv, pv with
+      | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
+      | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p3;TLS_1p2] :: res
+      // REMARK: The case below is not mandatory. This behaviour should be configurable
+      // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
+      | _ -> res
+    in
     let res = 
-       match pv, ks with
-       | TLS_1p3, Some ks -> E_key_share ks::res
-       | _,_ -> res in
+      match pv, ks with
+      | TLS_1p3, Some ks -> E_key_share ks::res
+      | _,_ -> res
+    in
     // Include extended_master_secret when resuming
     let res = if sres then E_extended_ms :: res else res in
     let res = E_signature_algorithms sigAlgs :: res in
     let res =
       if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
-	E_ec_point_format [ECGroup.ECP_UNCOMPRESSED] :: 
-	  E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
-      else
-	let g = List.Tot.filter FFDHE? (list_valid_ng_is_list_ng namedGroups) in
-	if g = [] then res
-	else (E_supported_groups g) :: res in
+	E_ec_point_format [ECGroup.ECP_UNCOMPRESSED] :: res
+      else res
+    in
+    let res =
+      if List.Tot.existsb (fun cs -> isDHECipherSuite cs || CipherSuite13? cs) (list_valid_cs_is_list_cs cs) then
+        E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
+      else res
+    in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
 
