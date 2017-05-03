@@ -37,6 +37,29 @@ type group =
   | FFDH of DHGroup.group
   | ECDH of ECGroup.group
 
+let string_of_group = function
+  | FFDH g ->
+    begin
+    let open DHGroup in
+    match g with
+    | Named FFDHE2048 -> "FFDHE2048"
+    | Named FFDHE3072 -> "FFDHE3072"
+    | Named FFDHE4096 -> "FFDHE4096"
+    | Named FFDHE6144 -> "FFDHE6144"
+    | Named FFDHE8192 -> "FFDHE8192"
+    | Explicit _      -> "Explicit group"
+    end
+  | ECDH g ->
+    begin
+    let open CoreCrypto in
+    match g with
+    | ECC_P256    -> "P256"
+    | ECC_P384    -> "P384"
+    | ECC_P521    -> "P521"
+    | ECC_X25519  -> "X255519"
+    | ECC_X448    -> "X448"
+    end
+
 private type pre_keyshare' =
   | KS_FF: g:DHGroup.group -> DHGroup.keyshare g -> pre_keyshare'
   | KS_EC: g:ECGroup.group -> ECGroup.keyshare g -> pre_keyshare'
@@ -232,7 +255,7 @@ val keygen: g:group -> ST (keyshare g)
      else
       modifies_none h0 h1)))
 let rec keygen g =
-  dbg ("Keygen on "^(if FFDH? g then "DHGroup" else "ECGroup"));
+  dbg ("Keygen on " ^ (string_of_group g));
   let gx : pre_keyshare g =
     match g with
     | FFDH g -> KS_FF g (DHGroup.keygen g)
@@ -259,7 +282,7 @@ val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_initiator #g gx gy =
-  dbg ("DH initiator on "^(if FFDH? g then "DHGroup" else "ECGroup"));
+  dbg ("DH initiator on " ^ (string_of_group g));
   match g with
   | FFDH g ->
     let KS_FF _ gx = gx in
@@ -279,7 +302,7 @@ val dh_responder: #g:group -> share g -> ST (share g * secret g)
      else
       modifies_none h0 h1)))
 let dh_responder #g gx =
-  dbg ("DH responder on "^(if FFDH? g then "DHGroup" else "ECGroup"));
+  dbg ("DH responder on " ^ (string_of_group g));
   let gy = keygen g in
   let gxy = dh_initiator #g gy gx in
   (pubshare #g gy, gxy)

@@ -211,8 +211,9 @@ and extensionPayloadBytes role ext =
   | E_key_share ks             -> CommonDH.keyShareBytes ks
   | E_pre_shared_key psk -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
   | E_early_data edt           -> earlyDataIndicationBytes edt
-  | E_supported_versions vv    -> 
-      List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv
+  | E_supported_versions vv    ->
+      vlbytes 1
+      (List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vv)
   | E_cookie c                 -> c // SI: check 
   | E_psk_key_exchange_modes _ -> admit()
   | E_extended_ms              -> empty_bytes
@@ -350,9 +351,10 @@ let parseEcpfList b =
  
 //17-05-01 added a refinement to control the list length; this function verifies.
 //17-05-01 should we use generic code to parse such bounded lists?
+//REMARK: This is not tail recursive, contrary to most of our parsing functions
 val parseVersions: 
   b:bytes -> 
-  Tot (result (l:list TLSConstants.protocolVersion {FStar.Mul.( length b = 2 * List.Tot.length l)})) (decreases (length b))
+  Tot (result (l:list TLSConstants.protocolVersion {FStar.Mul.( length b == 2 * List.Tot.length l)})) (decreases (length b))
 let rec parseVersions b =
   match length b with 
   | 0 -> let r = [] in assert_norm (List.Tot.length [] = 0); Correct r
@@ -368,6 +370,20 @@ let rec parseVersions b =
           let r = v::vs in 
           assert_norm (List.Tot.length (v::vs) = 1 + List.Tot.length vs); // did not find usable length lemma in List.Tot
           Correct r)
+
+let parseSupportedVersions (b:bytes) : result (list TLSConstants.protocolVersion) =
+  match vlparse 1 b with
+  | Correct b ->
+    begin
+    match parseVersions b with
+    | Correct pvs ->
+      let n = List.Tot.length pvs in
+      if 1 <= n && n <= 127 then Correct pvs else
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too many or too few protocol versions")
+    | Error z -> Error z
+    end
+  | Error z ->
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse protocol versions")
 
 let rec parseExtension role b =
   if length b >= 4 then
@@ -393,7 +409,7 @@ let rec parseExtension role b =
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "SNI"))
 	| (0x00z, 0x0Dz) -> // sigAlgs
 	  if length data >= 2 && length data < 65538 then (
-	  (match TLSConstants.parseSigHashAlgs (data) with
+	  (match TLSConstants.parseSigHashAlgs data with
 	  | Correct(algs) -> Correct (E_signature_algorithms algs)
 	  | Error(z) -> Error(z))
 	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "sigAlgs"))
@@ -408,19 +424,14 @@ let rec parseExtension role b =
 	  | Correct(psk) -> Correct (E_pre_shared_key psk)
 	  | Error(z) -> Error(z))
 	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "PSK"))
-
 	| (0x00z, 0x2az) -> // EDI
 	  (match parseEarlyDataIndication role data with
 	  | Correct (edi) -> Correct (E_early_data(edi))
 	  | Error(z) -> Error(z))
-
-        //17-05-01 why was it 0xffz, as for cookie?
-        | (0x00z, 0x2bz) -> // versions
-	  if length data >= 2 && length data <= 254 then (
-	  (match parseVersions data with 
+        | (0x00z, 0x2bz) -> // supported_versions
+	  (match parseSupportedVersions data with
 	  | Correct v -> Correct (E_supported_versions v)
 	  | Error z -> Error z)
-	  ) else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "versions"))
         | (0xffz, 0x2cz) -> // cookie
 	  if length data >= 1 && length data <= ((pow2 16) - 1) then 
 	    Correct (E_cookie data)
@@ -575,28 +586,31 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     (* let res = [E_renegotiation_info(cri)] in *)
 //    let res = (E_draftVersion (abyte2 (0z, 13z)))::res in
     let res =
-       match minpv, pv with
-       | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
-       | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p3;TLS_1p2] :: res
-       // REMARK: The case below is not mandatory. E.g. www.google.com chokes on it
-       // Commenting this out. This behaviour should be configurable
-       // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
-       | _ -> res in
+      match minpv, pv with
+      | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
+      | TLS_1p2, TLS_1p3 -> E_supported_versions [TLS_1p3;TLS_1p2] :: res
+      // REMARK: The case below is not mandatory. This behaviour should be configurable
+      // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
+      | _ -> res
+    in
     let res = 
-       match pv, ks with
-       | TLS_1p3, Some ks -> E_key_share ks::res
-       | _,_ -> res in
+      match pv, ks with
+      | TLS_1p3, Some ks -> E_key_share ks::res
+      | _,_ -> res
+    in
     // Include extended_master_secret when resuming
     let res = if sres then E_extended_ms :: res else res in
     let res = E_signature_algorithms sigAlgs :: res in
     let res =
       if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
-	E_ec_point_format [ECGroup.ECP_UNCOMPRESSED] :: 
-	  E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
-      else
-	let g = List.Tot.filter FFDHE? (list_valid_ng_is_list_ng namedGroups) in
-	if g = [] then res
-	else (E_supported_groups g) :: res in
+	E_ec_point_format [ECGroup.ECP_UNCOMPRESSED] :: res
+      else res
+    in
+    let res =
+      if List.Tot.existsb (fun cs -> isDHECipherSuite cs || CipherSuite13? cs) (list_valid_cs_is_list_cs cs) then
+        E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
+      else res
+    in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
 

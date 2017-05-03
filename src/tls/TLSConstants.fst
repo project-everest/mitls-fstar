@@ -1556,3 +1556,30 @@ let parseSigHashAlgs b =
   match vlparse 2 b with
   | Correct b -> aux b []
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
+
+(*
+// We use a non-tail recursive version in Extensions.fst
+let parseSupportedVersions b =
+  let rec aux: b:bytes -> pvs:list protocolVersion{length b + op_Multiply 2 (List.Tot.length pvs) < 65536} -> Tot (result (l:list protocolVersion{List.Tot.length l < 65536/2}))
+  (decreases (length b)) = fun b pvs ->
+    if length b > 0 then
+      if length b >= 2 then
+      let pv, bytes = split b 2 in
+      match parseProtocolVersion pv with
+      | Correct pv -> aux bytes (pv :: pvs)
+      | Error z    -> Error z
+      else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse protocol version")
+    else Correct pvs
+  in
+  match vlparse 2 b with
+  | Correct b ->
+    begin
+    match aux b [] with
+    | Correct [] ->
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Empty list of protocol versions")
+    | Correct pvs -> Correct pvs
+    | Error z -> Error z
+    end
+  | Error z ->
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse protocol versions")
+*)
