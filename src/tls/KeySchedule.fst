@@ -499,7 +499,7 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
   dbg ("Computed early secret: "^(print_bytes es));
   let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived secret" (H.emptyHash h) in
+  let salt = HKDF.derive_secret h es "derived secret" empty_bytes in
   dbg ("Handshake salt: "^(print_bytes salt));
   let gy, gxy = CommonDH.dh_responder gx in
   dbg ("DH shared secret: "^(print_bytes gxy));
@@ -567,8 +567,8 @@ let ks_server_13_sh ks log =
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived secret" (H.emptyHash h) in
-  dbg ("Handshake salt: "^(print_bytes salt));
+  let salt = HKDF.derive_secret h hs "derived secret" empty_bytes in
+  dbg ("Application salt: "^(print_bytes salt));
 
   // Replace handshake secret with application master secret
   let amsId = ASID saltId in
@@ -727,13 +727,13 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
 // ServerHello log breakpoint (client)
 let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   dbg ("ks_client_13_sh hashed_log = "^(print_bytes log));
-  let _ = print_share gy in
   let KS #region st = ks in
   let C (C_13_wait_SH cr early_info early_fin gc) = !st in
   let Some gx = List.Tot.find (
       fun ((| g', _ |):(x:CommonDH.group & CommonDH.keyshare g)) -> g = g'
     ) gc in
   let (| g, gx |) = gx in
+  let b = print_share gy in
   let gxy = CommonDH.dh_initiator #g gx gy in
   dbg ("DH shared secret: "^(print_bytes gxy));
   let CipherSuite13 ae h = cs in
@@ -796,7 +796,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   dbg ("Application salt: "^(print_bytes salt));
 
   let asId = ASID saltId in
-  let ams : ams asId = HKDF.hkdf_extract h hs (H.zeroHash h) in
+  let ams : ams asId = HKDF.hkdf_extract h salt (H.zeroHash h) in
   dbg ("Application secret: "^(print_bytes ams));
 
   let id = ID13 (KeyID c_expandId) in
