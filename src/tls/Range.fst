@@ -18,9 +18,9 @@ type id2 = i:id { ID12? i } // gradually adding TLS 1.3...
 
 (* ranges *)
 type range = r:(nat * nat) { fst r <= snd r }
-type within (n:nat) (r:range) = fst r <= n /\ n <= snd r
-type wider (r1:range) (r2:range) = fst r1 <= fst r2 /\ snd r2 <= snd r1
-type rbytes (r:range) = b:bytes { within (length b) r }
+let within (n:nat) (r:range) = fst r <= n && n <= snd r
+let wider (r1:range) (r2:range) = fst r1 <= fst r2 && snd r2 <= snd r1
+type rbytes (r:range) = b:bytes {within (length b) r}
 
 let point (n:nat) : range = (n,n)
 let zero = point 0
@@ -90,28 +90,28 @@ let minMaxPad i = (fixedPadSize i, maxPadSize i)
 // rather than the expected:
 // clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i <= max_TLSPlaintext_fragment_length
 // valid_clen i c doesn't imply that the plaintext after decrypting c will be shorter than max_TLSPlaintext_fragment_length
-type valid_clen (i:id) (clen:nat) =
+let valid_clen (i:id) (clen:nat) =
  (if PlaintextID? i then
-    0 <= clen /\ clen <= max_TLSPlaintext_fragment_length
+    0 <= clen && clen <= max_TLSPlaintext_fragment_length
   else if ID13? i then
     begin
     lemma_ID13 i;
     let tlen = CoreCrypto.aeadTagSize (aeAlg i) in
-    clen - tlen >= 0 /\
+    clen - tlen >= 0 &&
     clen - tlen <= max_TLSCiphertext_fragment_length_13
     end
   else // ID12? i
     begin
     if AEAD? (aeAlg_of_id i) then
       let tlen = CoreCrypto.aeadTagSize (aeAlg i) in
-      clen - AE.explicit_iv_length i - tlen >= 0 /\
+      clen - AE.explicit_iv_length i - tlen >= 0 &&
       clen - AE.explicit_iv_length i - tlen <= max_TLSPlaintext_fragment_length
     else if MtE? (aeAlg_of_id i) then
-      clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i >= 0 /\
+      clen - ivSize i - macSize (macAlg_of_id i) - fixedPadSize i >= 0 &&
       clen - ivSize i - macSize (macAlg_of_id i) - maxPadSize i <= max_TLSPlaintext_fragment_length
     else // MACOnly
       let MACOnly h = aeAlg_of_id i in
-      clen - hashLen h >= 0 /\
+      clen - hashLen h >= 0 &&
       clen - hashLen h <= max_TLSPlaintext_fragment_length
     end)
 

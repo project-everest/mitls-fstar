@@ -304,7 +304,7 @@ all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 # Verifying one file at a time
 # @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m"; 
 %.fst-ver: $(LIBFILES)
-	$(FSTAR) $(VERFLAGS) \
+	@$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
 	--verify_module $(basename $(notdir $@)) \
@@ -464,3 +464,17 @@ tls-ffi: mitls.cmxa
 	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so
 endif
 endif
+
+# our interactive tests
+
+server12::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
+
+server13::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+
+client13-local::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+
+client12-local::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 

@@ -398,7 +398,7 @@ let pinverse_version x = ()
 // DRAFT#20
 // to be used *only* in ServerHello.version.
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
-let draft = 19z
+let draft = 20z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> abyte2 ( 127z, draft )  
   | pv -> versionBytes pv

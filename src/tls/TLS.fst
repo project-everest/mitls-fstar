@@ -682,7 +682,7 @@ let rec writeHandshake h_init c new_writer =
   reveal_epoch_region_inv_all ();
   let i = currentId c Writer in
   let wopt = current_writer c i in
-  trace ("writeHandshake"^(if Some? wopt then "(encrypted)" else ""));
+  trace ("writeHandshake"^(if Some? wopt then " (encrypted)" else ""));
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Error (ad,reason) -> sendAlert c ad reason
@@ -690,8 +690,8 @@ let rec writeHandshake h_init c new_writer =
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change
-          trace ("next_fragment next_keys="^(if next_keys then "yes" else "no")^" complete="^(if complete then "yes\n" else "no"));
-          match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
+      trace ("next_fragment next_keys="^(if next_keys then "yes" else "no")^" complete="^(if complete then "yes\n" else "no"));
+      match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
           recall_current_writer c;
           sendAlert c ad reason
@@ -1055,7 +1055,15 @@ type ioresult_i (i:id) =
 //  | DontWrite
 //      // Nothing read yet, but we can't write anymore.
 
-
+let string_of_ioresult_i (#i:id) = function
+  | Read (DataStream.Data d) -> "Read "^string_of_int (length (DataStream.appBytes #i #Range.fragment_range d)) ^ " bytes of data"
+  | Read (DataStream.Alert a) -> "Read Alert "^string_of_ad a
+  | ReadError (Some o) txt -> "ReadError "^string_of_error(o,txt) 
+  | ReadError None txt -> "ReadError "^txt
+  | CertQuery _ _ -> "CertQuery"
+  | Complete -> "Complete"
+  | ReadAgain -> "ReadAgain" 
+  | ReadAgainFinishing -> "ReadAgainFinishing"
 
 let live_i e r = // is the connection still live?
   match r with
@@ -1130,7 +1138,7 @@ let readFragment c i =
   | Correct(ct,pv,payload) ->
     let es = MR.m_read (Handshake.es_of c.hs) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
-    trace ("Epoch index: "^string_of_int j);
+    //trace ("Epoch index: "^string_of_int j);
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in
       Correct(Content.mk_fragment i ct rg payload)
@@ -1138,6 +1146,12 @@ let readFragment c i =
       // payload decryption
       let e = Seq.index es j in
       let Epoch #r #n #i hs rd wr = e in
+      if not (valid_clen i (length payload))  // cache? check at a lower level?
+      then ( 
+        // we might make an effort to parse plaintext alerts
+        trace ("bad payload: "^print_bytes payload);
+        Error(AD_decryption_failed, "Invalid ciphertext length"))
+      else 
       match StAE.decrypt (reader_epoch e) (ct,payload) with
       | None -> Error(AD_internal_error,"Decryption failure")
       | Some f -> 
@@ -1220,6 +1234,10 @@ let rec read c i =
         trace ("read: WrittenHS, "^(if newWriter then "newWriter" else "oldWriter"));
         if complete then Complete // return at once, so that the app can authorize and use new indexes.
         // else ... then                // return at once, signalling falsestart
+        else 
+        if newWriter then 
+          (trace "calling read again"; 
+          read c i ) // i is off?!
         else
     
     // nothing written; now we can read
