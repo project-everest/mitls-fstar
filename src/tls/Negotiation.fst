@@ -108,6 +108,26 @@ let string_of_ciphersuite (cs:cipherSuite) =
   | Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
   | Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256" | Error z -> "Unknown ciphersuite"
 
+let string_of_sigAlg = function
+  | RSASIG -> "RSA"
+  | DSA    -> "DSA"
+  | ECDSA  -> "ECDSA"
+  | RSAPSS -> "RSA-PSS"
+
+let string_of_hashAlg = function
+  | Hash ha ->
+    let open Hashing.Spec in
+    match ha with
+    | MD5    -> "MD5"
+    | SHA1   -> "SHA1"
+    | SHA224 -> "SHA224"
+    | SHA256 -> "SHA256"
+    | SHA384 -> "SHA384"
+    | SHA512 -> "SHA512"
+
+let string_of_sigHashAlg = function
+  | sa, ha -> string_of_sigAlg sa ^ "+" ^ string_of_hashAlg ha
+   
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
@@ -955,6 +975,7 @@ let computeServerMode cfg co serverRandom serverID =
         | [] -> Error(AD_handshake_failure, "signature algorithm negotiation failed")
         | alg :: _ ->
           begin
+          trace ("negotiated " ^ (string_of_sigHashAlg alg));  
           let serverExtensions = None in // To be computed in Handshake and filled later
           let scert =
             match Cert.lookup_chain cfg.cert_chain_file with
@@ -1023,17 +1044,7 @@ let computeServerMode cfg co serverRandom serverID =
                 in Correct (cre)
              | _ -> Error... )) *)
   | Some cexts ->
-   (*
-    match Extensions.negotiateServerExtensions pv cexts with
-    | Error z -> Error z
-    | Correct serverExtensions ->
-    //    List.Tot.fold_left (Extensions.clientToNegotiatedExtension cfg cs None false) nego cexts
-    *)
     let serverExtensions = None in // To be computed in Handshake and filled later
-//  match negotiateGroupKeyShare cfg pv kex cexts with 
-//  | Error z -> Error z 
-//  | Correct (ng,gxo) ->
-
   // compression is null and non-negotiable; we just report client errors
   let correct_compression_offer = 
     if is_client13 co 
@@ -1062,6 +1073,7 @@ let computeServerMode cfg co serverRandom serverID =
     scert
     None // no client key share yet for 1.2
   )
+
 
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
