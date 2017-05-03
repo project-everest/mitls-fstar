@@ -210,26 +210,31 @@ val add_epoch :
         i_sel h1 es == Seq.snoc (i_sel h0 es) e)
 let add_epoch #r #n (MkEpochs es _ _) e = MS.i_write_at_end es e
 
+let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
+
+let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with 
+  | Reader -> e.read
+  | Writer -> e.write
+
+let string_of_es #r #n (es:epochs r n) =
+  let r = m_read (ctr es Reader) in
+  let w = m_read (ctr es Writer) in
+  string_of_int r^"/"^string_of_int w
+
 let incr_reader #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs?.read))
     (ensures (incr_post es MkEpochs?.read))
 = 
-  trace "next reader";
-  incr_epoch_ctr (MkEpochs?.read es)
+  incr_epoch_ctr (MkEpochs?.read es);
+  trace ("reader++ "^string_of_es es)
 
 let incr_writer #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs?.write))
     (ensures (incr_post es MkEpochs?.write))
 = 
   incr_epoch_ctr (MkEpochs?.write es);
-  trace ("writer++, now r="^m_read MkEpoch?.read es^" w="^m_read MkEpoch?.write es)
+  trace ("writer++ "^string_of_es es)
 
-
-let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
-
-let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with 
-  | Reader -> e.read
-  | Writer -> e.write
  
 val readerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
 let readerT #rid #n (MkEpochs es r w) (h:mem) = m_sel h r

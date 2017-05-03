@@ -625,7 +625,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
       let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
       let unused_digest = Handshake.Log.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
       hs.state := S_Complete; 
-      InAck false true // Server 1.2 ATK; will switch write key after sending
+      InAck false false // Server 1.2 ATK; will switch write key and signal completion after sending
     else
       InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
