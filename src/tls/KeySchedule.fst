@@ -425,8 +425,7 @@ val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:esId -> bytes -> cs:cipherSu
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
-    /\ CipherSuite? cs /\ (let CipherSuite kex _ _ = cs in
-       (kex = Kex_PSK_DHE \/ kex = Kex_PSK_ECDHE)))
+    /\ CipherSuite13? cs)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
@@ -476,15 +475,16 @@ let ks_server_13_0rtt_init ks cr esId log cs (| g, gx |) =
   early_d, gy
 
 val ks_server_13_1rtt_init:
-  ks:ks -> cr:random -> cs:cipherSuite
-  -> g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)}
-  -> gx:CommonDH.share g -> ST CommonDH.serverKeyShare
+  ks:ks ->
+  cr:random ->
+  cs:cipherSuite ->
+  g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)} ->
+  gx:CommonDH.share g ->
+  ST CommonDH.serverKeyShare
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
-    /\ CipherSuite? cs
-    /\ (let CipherSuite kex _ _ = cs in
-         (kex = Kex_DHE \/ kex = Kex_ECDHE)))
+    /\ CipherSuite13? cs)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
@@ -494,7 +494,7 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   dbg ("ks_server_1rtt_init");
   let KS #region st = ks in
   let S (S_Init sr) = !st in
-  let CipherSuite _ _ (AEAD ae h) = cs in
+  let CipherSuite13 ae h = cs in
   let esId = NoPSK h in
   let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
   dbg ("Computed early secret: "^(print_bytes es));
@@ -714,7 +714,7 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
     (let C_13_wait_SH _ ei _ gc = C?.s kss in
      (List.Tot.existsb (fun gx -> dfst gy = dfst gx) gc) /\
      (match ei with | None -> True | Some (| id, _ |) ->
-       let CipherSuite _ _ (AEAD ae h) = cs in
+       let CipherSuite13 ae h = cs in
 // TODO lift app_psk_hash, app_psk_ae to resumption PSK
 //       let ctxt = get_psk_info id in
 //       accept_early_data ==> ctxt.early_ae = ae /\ ctxt.early_hash = h
@@ -736,7 +736,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   let (| g, gx |) = gx in
   let gxy = CommonDH.dh_initiator #g gx gy in
   dbg ("DH shared secret: "^(print_bytes gxy));
-  let CipherSuite _ _ (AEAD ae h) = cs in
+  let CipherSuite13 ae h = cs in
   let gx = CommonDH.pubshare gx in
 
   // Early secret: must derive zero here as hash is not known before

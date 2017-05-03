@@ -211,14 +211,14 @@ noeq type mode =
     n_server_extensions: option (se:list extension{List.Tot.length se < 256}) ->
     
     // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
-    n_server_share: option (g:CommonDH.group & CommonDH.share g) ->
+    n_server_share: option share ->
 
     // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
     n_client_cert_request: option HandshakeMessages.cr ->
     n_server_cert: option Cert.chain ->
 
     // more from either CH+SH (1.3) or CKE (1.2)
-    n_client_share: option (g:CommonDH.group & CommonDH.share g) ->
+    n_client_share: option share ->
     // { both shares are in the same negotiated group }
     mode
 
@@ -864,8 +864,8 @@ private let rec compute_cs13_aux
 // (we could stop after finding the first)
 val compute_cs13: 
   cfg: config ->
-  o:offer ->
-  psks: list (option cipherSuite) (* will be richer *) -> 
+  o: offer ->
+  psks: list (option cipherSuite) (* will be richer *) ->
   shares: list share (* pre-registered *) -> 
   result (list (cs13 o))
 let compute_cs13 cfg o psks shares = 
@@ -909,6 +909,12 @@ let compute_cs13 cfg o psks shares =
   Correct (compute_cs13_aux 0 o pske g_gx ncs psks psk_kex)
 
 
+let find_signature_algorithms o = 
+  match find_client_extension Extensions.E_signature_algorithms? o with 
+  | None -> None 
+  | Some (Extensions.E_signature_algorithms algs) -> Some algs
+
+
 //17-03-30 still missing a few for servers.
 
 // TODO ADL: incorrect as written; CS nego depends on ext nego
@@ -919,14 +925,12 @@ let compute_cs13 cfg o psks shares =
 // but this REALLY needs to be rewritten properly from scratch by someone who has
 // read all TLS RFCs
 // FIXME ADL: grossly inefficient; we need to cache the server keytype at startup
-// TODO BD: ignoring extensions for the moment
-// due to the fact that we require calling the keyschedule
-// in between negotiating the named Group and preparing the
-// negotiated Extensions
 (* TODO: why irreducible? *)
 irreducible val computeServerMode: 
-  cfg: config -> co: offer -> 
-  serverRandom: TLSInfo.random -> serverID: option sessionID -> 
+  cfg: config -> 
+  co: offer -> 
+  serverRandom: TLSInfo.random -> 
+  serverID: option sessionID -> 
   St (result mode)
 let computeServerMode cfg co serverRandom serverID = 
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
@@ -934,15 +938,47 @@ let computeServerMode cfg co serverRandom serverID =
   | Error z -> Error z
   | Correct TLS_1p3 -> 
     begin
-      match compute_cs13 cfg co [] [] (*TODO*)  with 
-      | Error z -> Error z 
-      | Correct [] -> Error(AD_handshake_failure,"ciphersuite negotiation failed") 
-//    | PSK_EDH j ogs cs :: _ -> 
-//    | Correct (JUST_EDH (g, ogx) cs  :: _) -> Error(AD_handshake_failure, "WIP")
-      | Correct _  -> Error(AD_handshake_failure, "negotiation succeeded; TBC")
+    match compute_cs13 cfg co [] [] (*TODO*)  with 
+    | Error z -> Error z 
+    | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed") 
+    | Correct (PSK_EDH j ogs cs :: _) -> Error(AD_handshake_failure, "TODO: PSK_EDH unimplemented")
+    | Correct (JUST_EDH gx cs  :: _) ->
+      begin
+      match find_signature_algorithms co with
+      | None -> 
+        Error(AD_handshake_failure, "Client didn't send signature_algorithm extension")
+      | Some algs ->
+        begin
+        match List.Tot.filter (fun alg -> List.Tot.mem alg cfg.signatureAlgorithms) algs with
+        | [] -> Error(AD_handshake_failure, "signature algorithm negotiation failed")
+        | alg :: _ ->
+          begin
+          let serverExtensions = None in // To be computed in Handshake and filled later
+          let scert =
+            match Cert.lookup_chain cfg.cert_chain_file with
+            | Correct cert -> Some cert
+            | Error z -> 
+              trace ("*WARNING* no server certificate found: " ^ string_of_error z);
+              None
+          in          
+          Correct (Mode
+            co
+            None // TODO: no HRR
+            TLS_1p3
+            serverRandom
+            serverID
+            cs
+            None // No PSKs, pure (EC)DHE
+            serverExtensions
+            None // no server key share yet
+            None // TODO: n_client_cert_request
+            scert
+            (Some gx))
+          end
+        end
+      end
     end
   | Correct pv -> 
-
   // with TLS 1.2, we pick the first ciphersuite compatible with our credentials
   // we could be a bit stricter and record wether the client is TLS
   let nosa = fun (CipherSuite _ sa _) -> None? sa in
