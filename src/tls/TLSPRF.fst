@@ -125,12 +125,14 @@ let tls12prf cs ms label data len =
 let tls12prf' macAlg ms label data len =
   p_hash macAlg ms (label @| data) len
 
-
 val tls12VerifyData: cipherSuite -> bytes -> role -> bytes -> St (lbytes verifyDataLen)
 let tls12VerifyData cs ms role data =
   let verifyDataHashAlg = verifyDataHashAlg_of_ciphersuite cs in
   let hashed = Hashing.OpenSSL.compute verifyDataHashAlg data in
   tls12prf cs ms (tls_finished_label role) hashed verifyDataLen
+
+let finished12 hAlg (ms:key) role log =
+  p_hash (HMac hAlg) ms ((tls_finished_label role) @| log) verifyDataLen
 
 (* Internal agile implementation of PRF *)
 
