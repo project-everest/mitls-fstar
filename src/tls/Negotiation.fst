@@ -530,7 +530,7 @@ let client_ClientHello #region ns oks =
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1 
 let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []}) =
   match find_supported_versions o with 
-  | Some []  -> Error(AD_internal_error, "protocol version negotiation: empty proposal")
+  | Some []  -> Error(AD_protocol_version, "protocol version negotiation: empty proposal")
   | Some vs -> Correct vs  // might check no proposal is below min_pv
   | None -> // use legacy offer
       match o.ch_protocol_version, min_pv with 
@@ -540,7 +540,7 @@ let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []
       | TLS_1p2, TLS_1p0 -> Correct [TLS_1p2; TLS_1p1; TLS_1p0] 
       | TLS_1p2, TLS_1p1 -> Correct [TLS_1p2; TLS_1p1] 
       | TLS_1p2, TLS_1p2 -> Correct [TLS_1p2] 
-      | _, _ -> Error(AD_internal_error, "protocol version negotation: bad legacy proposal")
+      | _, _ -> Error(AD_protocol_version, "protocol version negotation: bad legacy proposal")
 
 let is_client13 (o:offer) = 
   match offered_versions TLS_1p3 o with 
@@ -554,7 +554,7 @@ let negotiate_version cfg offer =
   | Correct vs -> 
     match List.Tot.find (fun v -> geqPV cfg.maxVer v && geqPV v cfg.minVer) vs with 
     | Some v -> Correct v
-    | None -> Error(AD_internal_error, "protocol version negotiation: mismatch")
+    | None -> Error(AD_protocol_version, "protocol version negotiation: mismatch")
 
 (**
   For use in negotiating the ciphersuite, takes two lists and

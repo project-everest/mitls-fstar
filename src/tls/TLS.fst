@@ -89,6 +89,7 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
     epochs c h1 == Seq.createEmpty /\ // we probably don't care---but we should say nothing written yet
     HST.sel h1 c.state = BC ))
 
+#set-options "--z3rlimit 50"
 let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.create m cfg role resume in
@@ -793,7 +794,6 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
         )
     | WriteClose -> // writer view += Close (so we can't send anymore); only from calling sendAlert.
         st1 <> AD
-
     | WriteError oad reason ->
         // Something bad happened while writing (underspecified, for convenience)
         // * if appdata = None, then the current writer may have changed.
@@ -804,12 +804,10 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
         | None    -> True //TBC: writer view += at most appdata.value
         )
         // TBC, describing what may have been added to the projection
-
     | WrittenHS newWriter complete -> True
         // we sent higher-priority traffic; no visible effects,
         // we may be in a new epoch and/or have completed a handshake
         // several cases to be detailed (see below), none of them changing writer views.
-
 (* replacing:
     | WriteAgain -> // we sent higher-priority traffic; no visible effects.
         st0 = st1

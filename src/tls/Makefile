@@ -478,3 +478,7 @@ client13-local::
 
 client12-local::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
+
+# offering both
+client-local::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256

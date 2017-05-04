@@ -205,6 +205,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.s
 
 
 // factored out; indexing to be reviewed
+val register: hs -> KeySchedule.recordInstance -> St unit
 let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
       let h = Nego.Fresh ({ Nego.session_nego = Nego.getMode hs.nego }) in
@@ -449,13 +450,14 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
             | None -> digestServerFinished in
           let (| finId, cfin_key |) = cfin_key in
           let cvd = HMAC.UFCMA.mac cfin_key digest in
+          Epochs.incr_writer hs.epochs; // to HSK
           Handshake.Log.send hs.log (Finished ({fin_vd = cvd}));
 
-          register hs app_keys; // start using ATKs in both directions
-          Epochs.incr_reader hs.epochs;
-          Handshake.Log.send_signals hs.log true false; //was: Epochs.incr_writer hs.epochs
+          register hs app_keys; // ATKs are ready to use in both directions
+          Epochs.incr_reader hs.epochs; // to ATK
+          Handshake.Log.send_signals hs.log true true; //was: Epochs.incr_writer hs.epochs
           hs.state := C_Complete; // full_mode (cvd,svd); do we still need to keep those?
-          InAck true true // Client 1.3 ATK
+          InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal 
           )
 
 let client_ServerFinished hs f digestClientFinished =
@@ -476,6 +478,7 @@ let client_ServerFinished hs f digestClientFinished =
 (* called by server_ClientHello after sending TLS 1.2 ServerHello *)
 // static precondition: n.n_protocol_version <> TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
 // should instead use Nego for most of this processing
+val server_ServerHelloDone: hs -> St incoming // why do I need an explicit val? 
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
   let mode = Nego.getMode hs.nego in
