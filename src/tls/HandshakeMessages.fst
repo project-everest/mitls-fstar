@@ -155,10 +155,13 @@ noeq type hrr = {
   hrr_extensions:(he:list extension{List.Tot.length he < 256});
 }
 
+// NewSessionTicket payload, both for  RFC5077 and TLS 1.3
 type sticket = {
-  sticket_ticket_lifetime_hint:(b:bytes{length b = 4});
+  sticket_lifetime: lbytes 4;
+  sticket_age_add: lbytes 4; // 0 (and not formatted) before TLS 1.3 
   sticket_ticket:(b:bytes{length b < 16777212});
-}
+  sticket_extensions: es: list extension; // empty (and not formatted) before TLS 1.3
+} 
 
 noeq type ee = {
   ee_extensions:(ee:list extension{List.Tot.length ee < 256});
@@ -250,7 +253,7 @@ noeq type hs_msg =
   | HelloRetryRequest of hrr // TLS 1.3 server
 
   // Post-Handshake (TLS 1.3) also including late CertificateRequest
-  | SessionTicket of sticket //17-03-11  --> NewSessionTicket ? 
+  | NewSessionTicket of sticket 
 
 //  | ClientBinders of List Hashing.Spec.anyTag // with a 2-byte formatted length in 33..2^16-1 
 //17-03-11 missing
@@ -260,7 +263,7 @@ noeq type hs_msg =
 /// Handshake message format
 
 val messageBytes : ht:handshakeType -> data:bytes{ repr_bytes (length data) <= 3 }
-  -> Tot (lbytes (4+(length data)))
+  -> Tot (lbytes (4 + length data))
 let messageBytes ht data =
   let htb = htBytes ht in
   let vldata = vlbytes 3 data in
@@ -1339,10 +1342,25 @@ val parseFinished: data:bytes{length data < 65536 /\ repr_bytes(length data)<=3}
 let parseFinished data =
     Correct ({fin_vd = data})
 
+// unclear how to handle bounded lengths
+val extensionsBytes: list Extensions.extension -> Tot bytes 
+let extensionsBytes = function
+  | [] -> empty_bytes
+  | e::es -> 
+
 (* Session ticket *)
-val sessionTicketBytes: sticket -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
-let sessionTicketBytes sticket =
-    let payload = sticket.sticket_ticket_lifetime_hint @| sticket.sticket_ticket in
+val sessionTicketBytes: protocolVersion -> sticket -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
+let sessionTicketBytes pv sticket =
+    let payload = 
+      if pv = TLS_1p3 
+      then (
+        sticket.sticket_ticket_lifetime @| 
+        sticket.sticket_age_add @|
+        sticket.sticket_ticket @|
+        vlbytes 2 (extensionBytes sticket.sticket_extensions)
+      else (
+        sticket.sticket_ticket_lifetime @| 
+        ticket.sticket_ticket ) in
     lemma_repr_bytes_values (length payload);
     messageBytes HT_session_ticket payload
 
@@ -1546,7 +1564,7 @@ let handshakeMessageBytes pvo hs =
     | ServerHelloDone,_-> serverHelloDoneBytes
     | ClientKeyExchange(cke),Some pv-> clientKeyExchangeBytes pv cke
     | Finished(f),_-> finishedBytes f
-    | SessionTicket(t),_-> sessionTicketBytes t
+    | NewSessionTicket(t),_-> sessionTicketBytes t
     | EncryptedExtensions(e),_-> encryptedExtensionsBytes e
     | CertificateRequest(cr),_-> certificateRequestBytes cr
     | CertificateVerify(cv),_-> certificateVerifyBytes cv
@@ -1590,7 +1608,7 @@ let handshakeMessageBytes_is_injective pv msg1 msg2 =
     | HT_server_hello_done -> ()
     | HT_client_key_exchange -> clientKeyExchangeBytes_is_injective (Some?.v pv) (ClientKeyExchange?._0 msg1) (ClientKeyExchange?._0 msg2)
     | HT_finished -> finishedBytes_is_injective (Finished?._0 msg1) (Finished?._0 msg2)
-    | HT_session_ticket -> sessionTicketBytes_is_injective (SessionTicket?._0 msg1) (SessionTicket?._0 msg2)
+    | HT_session_ticket -> sessionTicketBytes_is_injective (NewSessionTicket?._0 msg1) (NewSessionTicket?._0 msg2)
     | HT_encrypted_extensions -> encryptedExtensionsBytes_is_injective (EncryptedExtensions?._0 msg1) (EncryptedExtensions?._0 msg2)
     | HT_certificate_request -> certificateRequestBytes_is_injective (CertificateRequest?._0 msg1) (CertificateRequest?._0 msg2)
     | HT_certificate_verify -> certificateVerifyBytes_is_injective (CertificateVerify?._0 msg1) (CertificateVerify?._0 msg2)
@@ -1728,7 +1746,7 @@ let string_of_handshakeMessage hs =
     | ServerHelloDone -> "ServerHelloDone"
     | ClientKeyExchange cke -> "ClientKeyExchange"
     | Finished f -> "Finished"
-    | SessionTicket t -> "NewSessionTicket"
+    | NewSessionTicket t -> "NewSessionTicket"
     | EncryptedExtensions e -> "EncryptedExtensions"
     | CertificateRequest cr -> "CertificateRequest"
     | CertificateVerify cv -> "CertificateVerify"
@@ -1755,7 +1773,7 @@ let parseHandshakeMessage pv kex hstype pl =
     | HT_hello_request,_,_       -> if (length pl = 0) then Correct(HelloRequest) else Error(AD_decode_error, "HelloRequest with non-empty body")
     | HT_client_hello,_,_        -> mapResult ClientHello (parseClientHello pl)
     | HT_server_hello,_,_        -> mapResult ServerHello (parseServerHello pl)
-    | HT_session_ticket,_,_      -> mapResult SessionTicket (parseSessionTicket pl)
+    | HT_session_ticket,_,_      -> mapResult NewSessionTicket (parseSessionTicket pl)
     | HT_hello_retry_request,_,_ -> mapResult HelloRetryRequest (parseHelloRetryRequest pl)
     | HT_encrypted_extensions,_,_ -> mapResult EncryptedExtensions (parseEncryptedExtensions pl)
     | HT_certificate,Some pv,_         -> mapResult Certificate (parseCertificate pv pl)
