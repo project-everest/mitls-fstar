@@ -7,56 +7,67 @@ open TLSError
 open TLSConstants
 open CoreCrypto
 
-type cert = b:bytes {length b <= 16777215}
-type chain = list cert
+// CertificateEntry in https://tlswg.github.io/tls13-spec/#rfc.section.4.4.2
+//17-05-04  we miss some length bounds and extensions (presumed empty for now)
+
+type cert = b:bytes {length b <= 16777215 } 
+type chain = list (list extension * cert)
 
 (* ------------------------------------------------------------------------ *)
 
-abstract val certificateListBytes: chain -> Tot bytes
-let rec certificateListBytes l =
-  match l with
+abstract val certificateListBytes: protocolVersion -> chain -> Tot bytes
+let rec certificateListBytes pv = function
   | [] -> empty_bytes
   | c::r -> 
     lemma_repr_bytes_values (length c);
-    lemma_repr_bytes_values 0;
-    vlbytes 3 c @| (vlbytes 2 empty_bytes @| certificateListBytes r)
+    if pv = TLSConstants.TLS_1p3 then (
+      lemma_repr_bytes_values 0;
+      vlbytes 3 c @| (vlbytes 2 empty_bytes @| certificateListBytes pv r))
+    else (
+      vlbytes 3 c @| certificateListBytes pv r)
+    
 
-val certificateListBytes_is_injective: c1:chain -> c2:chain ->
-  Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
-let rec certificateListBytes_is_injective c1 c2 =
+val certificateListBytes_is_injective: pv:protocolVersion -> c1:chain -> c2:chain ->
+  Lemma (Seq.equal (certificateListBytes pv c1) (certificateListBytes pv c2) ==> c1 == c2)
+let rec certificateListBytes_is_injective pv c1 c2 =
+  let b1 = certificateListBytes pv c1 in
+  let b2 = certificateListBytes pv c2 in
   match c1, c2 with
   | [], [] -> ()
   | hd::tl, hd'::tl' ->
-    if certificateListBytes c1 = certificateListBytes c2 then
+    if b1 = b2 then
       begin
       lemma_repr_bytes_values (length hd);
       lemma_repr_bytes_values (length hd');
       lemma_repr_bytes_values 0;
-      assert(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3)
-                       (Seq.slice (certificateListBytes c1) 0 3));
-      assert(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3)
-                       (Seq.slice (certificateListBytes c1) 0 3));
+      assert(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3) (Seq.slice b1 0 3));
+      assert(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3) (Seq.slice b1 0 3));
       vlbytes_length_lemma 3 hd hd';
-      lemma_append_inj (vlbytes 3 hd)  (vlbytes 2 empty_bytes @| certificateListBytes tl)
-                       (vlbytes 3 hd') (vlbytes 2 empty_bytes @| certificateListBytes tl');
-      lemma_append_inj (vlbytes 2 empty_bytes) (certificateListBytes tl)
-                       (vlbytes 2 empty_bytes) (certificateListBytes tl');
+      // TLS 1p3
+      lemma_append_inj (vlbytes 3 hd)  (vlbytes 2 empty_bytes @| certificateListBytes pv tl) (vlbytes 3 hd') (vlbytes 2 empty_bytes @| certificateListBytes pv tl');
+      lemma_append_inj (vlbytes 2 empty_bytes) (certificateListBytes pv tl) (vlbytes 2 empty_bytes) (certificateListBytes pv tl');
       lemma_vlbytes_inj 3 hd hd';
-      certificateListBytes_is_injective tl tl'
+      // TLS classic
+      lemma_append_inj (vlbytes 3 hd) (certificateListBytes pv tl) (vlbytes 3 hd') (certificateListBytes pv tl');
+      certificateListBytes_is_injective pv tl tl';
+      assert(c1 == c2)
       end
   | [], hd::tl ->
     begin
-    assert_norm (length (certificateListBytes c1) == 0);
+    assert_norm (length b1 == 0);
     lemma_repr_bytes_values (length hd);
     lemma_repr_bytes_values 0;
-    lemma_vlbytes_len 3 hd
+    lemma_vlbytes_len 3 hd;
+    assert(c1 == c2)
+
     end
   | hd::tl, [] ->
     begin
-    assert_norm (length (certificateListBytes c2) == 0);
+    assert_norm (length b2 == 0);
     lemma_repr_bytes_values (length hd);
     lemma_repr_bytes_values 0;
-    lemma_vlbytes_len 3 hd
+    lemma_vlbytes_len 3 hd;
+    assert (c1 == c2)
     end
 
 let endpoint_keytype (c:chain) : Tot (option CoreCrypto.key) =

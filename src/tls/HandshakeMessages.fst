@@ -164,14 +164,18 @@ noeq type ee = {
   ee_extensions:(ee:list extension{List.Tot.length ee < 256});
 }
 
-type crt = {
-  crt_chain: Cert.chain
-}
-
+// CertificateRequest payload
+// 17-05-04 TODO missing TLS 1.3 new format, with request_context and extensions
 type cr = {
   cr_cert_types: (cl:list certType{List.Tot.length cl < 256});
   cr_sig_hash_algs: option (shs:list sigHashAlg{List.Tot.length shs < 256});
   cr_distinguished_names: (dl:list dn{List.Tot.length dl < 128});
+}
+
+// Certificate payload
+type crt = {
+  crt_request_context: b:bytes {length b <= 255}; // empty (and not formatted) before TLS 1.3 
+  crt_chain: Cert.chain
 }
 
 noeq type kex_s =
