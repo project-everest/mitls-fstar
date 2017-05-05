@@ -372,7 +372,8 @@ type cert = b:bytes {length b < 16777216}
 
 // CertificateEntry certificate_list<0..2^24-1>;
 // See https://tlswg.github.io/tls13-spec/#rfc.section.4.4.2
-type chain = l:list (cert * extensions) // { ... }
+type chain = l:list cert // { ... }
+type chain13 = l:list (cert * extensions) // { ... }
 
 
 (*************************************************

@@ -828,7 +828,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
           else
             let csr = ns.nonce @| mode.n_server_random in
             let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-            let chain = List.Tot.map fst scert in
+            let chain = scert in // List.Tot.map fst scert in
             match Signature.get_chain_public_key #a chain with
             | None ->
               Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to get public key from chain")

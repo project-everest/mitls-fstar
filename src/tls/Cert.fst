@@ -6,27 +6,32 @@ open Platform.Error
 open TLSError
 open TLSConstants
 open CoreCrypto
-open Extensions
+open Extensions // defining cert, cert13, chain 
 
 (* ------------------------------------------------------------------------ *)
-type cert = b:bytes {length b < 16777216}
 
-abstract val certificateListBytes: protocolVersion -> chain -> Tot bytes
-let rec certificateListBytes pv = function
+abstract val certificateListBytes: chain -> Tot bytes
+let rec certificateListBytes = function
+  | [] -> empty_bytes
+  | crt :: rest ->
+    lemma_repr_bytes_values (length crt);
+    vlbytes 3 crt @| certificateListBytes rest
+
+abstract val certificateListBytes13: chain13 -> Tot bytes
+let rec certificateListBytes13 = function
   | [] -> empty_bytes
   | (crt, exts) :: rest ->
     lemma_repr_bytes_values (length crt);
-    match pv with
-    | TLS_1p3 ->
-      begin
-      vlbytes 3 crt @| (extensionsBytes exts @| certificateListBytes pv rest)
-      end
-    | _ -> vlbytes 3 crt @| certificateListBytes pv rest
+    vlbytes 3 crt @| extensionsBytes exts @| certificateListBytes13 rest
 
-val certificateListBytes_is_injective: pv:protocolVersion -> c1:chain -> c2:chain ->
-  Lemma (Seq.equal (certificateListBytes pv c1) (certificateListBytes pv c2) ==> c1 == c2)
-let rec certificateListBytes_is_injective pv c1 c2 =
-  admit ()
+val certificateListBytes_is_injective: c1:chain -> c2:chain ->
+  Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
+let rec certificateListBytes_is_injective c1 c2 = admit ()
+
+val certificateListBytes13_is_injective: c1:chain13 -> c2:chain13 ->
+  Lemma (Seq.equal (certificateListBytes13 c1) (certificateListBytes13 c2) ==> c1 == c2)
+let rec certificateListBytes13_is_injective c1 c2 = admit ()
+
 (*
   let b1 = certificateListBytes pv c1 in
   let b2 = certificateListBytes pv c2 in
@@ -71,56 +76,53 @@ let rec certificateListBytes_is_injective pv c1 c2 =
 let endpoint_keytype (c:chain) : option CoreCrypto.key =
   match c with
   | [] -> None
+  | h :: _ -> CoreCrypto.get_key_from_cert h
+let endpoint_keytype13 (c:chain13) : option CoreCrypto.key =
+  match c with
+  | [] -> None
   | (h,_) :: _ -> CoreCrypto.get_key_from_cert h
 
-abstract val parseCertificateList: pv:protocolVersion -> b:bytes -> Tot (result chain) (decreases (length b))
-let rec parseCertificateList pv b =
-  if length b = 0 then Correct [] 
-  else
-    if length b >= 3 then
-    match vlsplit 3 b with
-    | Correct (c,r) ->
-      begin
-      match pv with
-      | TLS_1p3 ->
-        if length r >= 2 then
-          match vlsplit 2 r with
-          | Correct (e,r) ->
-            begin
-            match parseExtensions Client (vlbytes 2 e) with
-            | Correct exts ->
-              begin
-              match parseCertificateList pv r with
-              | Correct x -> (lemma_repr_bytes_values (length c); Correct ((c,exts) :: x))
-              | Error z -> Error z
-              end
-            | Error z -> Error z
-            end
-          | _ -> Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
-        else Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
-      | _ ->
-        begin
-        match parseCertificateList pv r with
-        | Correct x -> (lemma_repr_bytes_values (length c); Correct ((c,[]) :: x))
-        | Error z -> Error z
-        end
-      end
-    | _ -> Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
-  else 
-    Error(AD_bad_certificate_fatal, perror __SOURCE_FILE__ __LINE__ "Badly encoded certificate list")
+abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
+let rec parseCertificateList b =
+  if length b = 0 then Correct [] else
+  if length b < 3 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
+  match vlsplit 3 b with
+  | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+  | Correct (c,r) -> (
+    match parseCertificateList r with
+    | Error z -> Error z 
+    | Correct cs -> lemma_repr_bytes_values (length c); Correct (c::cs) )
+
+abstract val parseCertificateList13: b:bytes -> Tot (result chain13) (decreases (length b))
+let rec parseCertificateList13 b =
+  if length b = 0 then Correct [] else
+  if length b < 3 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
+  match vlsplit 3 b with
+  | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+  | Correct (c,r) -> (
+    if length r < 2 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
+    match vlsplit 2 r with
+    | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+    | Correct (e,r) -> (
+      match parseExtensions Client (vlbytes 2 e) with
+      | Error z -> Error z 
+      | Correct exts -> (
+        match parseCertificateList13 r with
+        | Error z -> Error z 
+        | Correct x -> (lemma_repr_bytes_values (length c); Correct ((c,exts) :: x)) )))
 
 
 #set-options "--max_ifuel 4"
 
-val lemma_parseCertificateList_length: pv:protocolVersion -> b:bytes ->
-  Lemma (ensures (match parseCertificateList pv b with
-		  | Correct ces -> length (certificateListBytes pv ces) == length b
+val lemma_parseCertificateList_length: b:bytes ->
+  Lemma (ensures (match parseCertificateList b with
+		  | Correct ces -> length (certificateListBytes ces) == length b
 		  | _ -> True))
 	(decreases (length b))
-let rec lemma_parseCertificateList_length pv b =
+let rec lemma_parseCertificateList_length b =
   if length b < 3 then ()
   else
-    match parseCertificateList pv b with
+    match parseCertificateList b with
     | Correct (hd::tl) ->
       begin
       match vlsplit 3 b with
@@ -132,7 +134,7 @@ let rec lemma_parseCertificateList_length pv b =
           | Correct (e, r) ->
             begin
             assume (e == empty_bytes); // FIXME: we don't parse cert. extensions yet
-            lemma_parseCertificateList_length pv r
+            lemma_parseCertificateList_length r
             end
           | _ -> ()
         end
@@ -142,15 +144,15 @@ let rec lemma_parseCertificateList_length pv b =
 
 
 (* ------------------------------------------------------------------------ *)
-private let rec chain_to_list_bytes (c:chain) : Tot (list bytes) =
-  match c with
-  | [] -> []
-  | (c,_) :: tl -> c :: (chain_to_list_bytes tl)
-  
+private let rec chain13_to_chain (c:chain13) : Tot chain = List.Tot.map fst c
+
 val validate_chain: chain -> bool -> option string -> string -> Tot bool
-let validate_chain c for_signing host cafile =
-  let c = chain_to_list_bytes c in
-  CoreCrypto.validate_chain c for_signing host cafile
+let validate_chain c for_signing host cafile = 
+  CoreCrypto.validate_chain (List.Tot.map #cert #bytes (fun x -> x) c) for_signing host cafile
+
+val validate_chain13: chain13 -> bool -> option string -> string -> Tot bool
+let validate_chain13 c for_signing host cafile = 
+  CoreCrypto.validate_chain (List.Tot.map #(cert * extensions) #bytes (fun (x,es) -> x) c) for_signing host cafile
 
 private val check_length: list bytes -> chain -> option chain
 let rec check_length cs acc =
@@ -158,7 +160,7 @@ let rec check_length cs acc =
   | [] -> Some (List.Tot.rev acc)
   | c :: cs' ->
     lemma_repr_bytes_values 0;
-    if length c < 16777216 then check_length cs' ((c,[])::acc)
+    if length c < 16777216 then check_length cs' (c::acc)
     else None
 
 // TODO: we could retrieve sa from the subjectPublicKey field of
@@ -167,10 +169,8 @@ let rec check_length cs acc =
 val lookup_chain: pemfile:string -> result chain
 let lookup_chain pemfile =
   match CoreCrypto.load_chain pemfile with
-  | Some chain ->
-    begin
+  | None -> Error(AD_no_certificate, "cannot find suitable server certificate")
+  | Some chain -> (
     match check_length chain [] with
-    | Some chain -> Correct chain
-    | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "cannot find suitable server certificate")
-    end
-  | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "cannot find suitable server certificate")
+    | None -> Error(AD_no_certificate, "cannot find suitable server certificate")
+    | Some chain -> Correct chain )
