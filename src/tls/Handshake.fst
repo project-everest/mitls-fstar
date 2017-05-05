@@ -678,7 +678,7 @@ let server_ServerFinished_13 hs i =
         lemma_repr_bytes_values (length sigv);
         let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
         let digestFinished = Handshake.Log.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
-        let (| sfinId, sfin_key |), _ = KeySchedule.ks_server_13_finished_keys hs.ks in
+        let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
         let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
         let digestServerFinished = Handshake.Log.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
         // we need to call KeyScheduke twice, to pass this digest
@@ -694,20 +694,23 @@ let server_ServerFinished_13 hs i =
 
 (* receive ClientFinish 1.3 *)
 val server_ClientFinished_13: hs ->
-  bytes ->
-  Hashing.anyTag ->
+  cvd:bytes ->
+  Hashing.anyTag -> // Digest either up to ServerFinished or up to CertificateVerify with client certg
+  Hashing.anyTag -> // Digest up to ClientFinished
   option (HandshakeMessages.crt * HandshakeMessages.cv * Hashing.anyTag) -> St incoming
-let server_ClientFinished_13 hs f digestClientFinished clientAuth =
+let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinished clientAuth =
    trace "Process Client Finished";
    match clientAuth with
    | Some  (c,cv,digest) ->
       InError(AD_internal_error,
         perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
-       let _, (| i, cfin_key |) = KeySchedule.ks_server_13_finished_keys hs.ks in
+       let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
        // TODO MACVerify digestClientFinished
-       if HMAC.UFCMA.verify #i cfin_key digestClientFinished f
+       if HMAC.UFCMA.verify #i cfin_key digestBeforeClientFinished f
        then (
+          // ADL: missing call for resumption master secret etc
+          //let _ = KeySchedule.ks_server_13_cf ks digestClientFinished in
           hs.state := S_Complete;
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
           InAck true true  // Server 1.3 ATK
@@ -812,10 +815,12 @@ let rec recv_fragment (hs:hs) #i rg f =
       | S_Wait_Finished1 digest, [Finished f], tags ->
         (trace (List.Tot.fold_left (fun a t -> a^" "^print_bytes t) "BAD TAGS: "tags);
         server_ClientFinished hs f.fin_vd digest digest )
-      | S_Wait_Finished2 s, [Finished f], [digest] ->
-        server_ClientFinished_13 hs f.fin_vd digest None
-      | S_Wait_Finished2 s, [Certificate c; CertificateVerify cv; Finished f], [digestSigned; digestClientFinished; _] ->
-        server_ClientFinished_13 hs f.fin_vd digestClientFinished (Some (c,cv,digestSigned))
+      | S_Wait_Finished2 digestServerFinished, [Finished f], [digestClientFinished] ->
+        server_ClientFinished_13 hs f.fin_vd digestServerFinished digestClientFinished None
+      | S_Wait_Finished2 digestServerFinished,
+           [Certificate c; CertificateVerify cv; Finished f],
+           [digestSigned; digestCertVerify; digestClientFinished] ->
+        server_ClientFinished_13 hs f.fin_vd digestCertVerify digestClientFinished (Some (c, cv, digestSigned))
 
       // are we missing the case with a Certificate but no CertificateVerify?
       | _,  _, _ ->

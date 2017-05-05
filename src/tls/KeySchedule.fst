@@ -578,14 +578,23 @@ let ks_server_13_sh ks log =
   st := S (S_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
   StAEInstance r w
 
-let ks_server_13_finished_keys ks
-  : ST ((i:finishedId & fink i) * (i:finishedId & fink i))
+let ks_server_13_server_finished ks
+  : ST (i:finishedId & fink i)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
   =
   let KS #region st = ks in
-  let S (S_13_wait_SF _ cfk sfk _) = !st in
-  (sfk, cfk)
+  let S (S_13_wait_SF _ _ sfk _) = !st in
+  sfk
+
+let ks_server_13_client_finished ks
+  : ST (i:finishedId & fink i)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+  =
+  let KS #region st = ks in
+  let S (S_13_wait_CF _ cfk _ _) = !st in
+  cfk
 
 // Will become private; public API will have
 // ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
