@@ -26,7 +26,7 @@ verify:
 	+$(MAKE) tls-lax
 
 depend:
-	-rm .depend* $(ODIR)/.depend
+	-rm .depend* $(ODIR)/.depend $(ODIR)/.deporder
 
 clean:
 	$(MAKE) -C $(FSTAR_HOME)/ulib/ml clean MEM=HST
@@ -42,7 +42,7 @@ record_fstar_version:
 
 .PHONY: all build verify depend clean record_fstar_version
 
-STDLIB_REALIZED=Mul Float Char Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int_Cast BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack ST All
+STDLIB_REALIZED=Mul Float Char Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack ST All
 CODEGEN_LIBS=Platform
 # CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
 PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
@@ -143,11 +143,11 @@ $(ODIR)/%.ml: $$(subst _,.,%.fst)
 	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	--include concrete-flags $<
 
-test/%.ml: test/%.fst
+$(ODIR)/Test%.ml: test/Test%.fst
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
-	--odir test $(NOEXTRACT) \
+	--odir $(ODIR) $(NOEXTRACT) \
 	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	--include concrete-flags --extract_module $(*F) $<
+	--include concrete-flags --extract_module Test$(*F) $<
 
 # Special case for Crypto.AEAD.*: must look in hacl-star/secure_api/aead
 # Note that dependencies have absolute paths in the .depend so there is no need 
@@ -196,36 +196,36 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOM
 $(ODIR)/.depend: \
 		$(ODIR)/Flag.ml $(ODIR)/Flags.ml \
 	       	$(ODIR)/Crypto_AEAD_Main.ml \
-		$(ODIR)/HKDF.ml \
 	       	$(ODIR)/HandshakeLog.ml \
 	       	$(ODIR)/Handshake.ml \
 	       	$(ODIR)/FFI.ml \
-		test/TestAPI.ml \
-		test/TestFFI.ml
-	ocamlfind ocamldep -native -slash -all $(OCAMLPKG) $(OCAML_INCLUDE_PATHS) $(addsuffix /*.ml,$(OCAML_PATHS)) test/TestAPI.ml test/TestFFI.ml > $(ODIR)/.depend
+		$(ODIR)/TestAPI.ml \
+		$(ODIR)/TestFFI.ml
+	ocamlfind ocamldep -native -slash -all $(OCAMLPKG) $(OCAML_INCLUDE_PATHS) $(addsuffix /*.ml,$(OCAML_PATHS)) > $(ODIR)/.depend
 
 -include $(ODIR)/.depend
 
 %.cmi %.cmx: %.ml
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 
+$(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
+	echo `ls -rt output/*.cmx` > $(ODIR)/.deporder
+
 mitls.cmxa: \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
        	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
        	$(LCDIR)/LowCProvider.cmxa \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-       	$(ODIR)/FFI.cmx
-	ocamlfind ocamlopt $(OCAML_INCLUDE_PATHS) -a output/*.cmx -o mitls.cmxa
+	$(ODIR)/.deporder
+	ocamlfind ocamlopt $(OCAML_INCLUDE_PATHS) -a `cat $(ODIR)/.deporder` -o mitls.cmxa
 
-mitls.exe: mitls.cmxa test/TestAPI.cmx test/TestFFI.cmx test/mitls.cmx
+mitls.exe: mitls.cmxa test/mitls.cmx
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-	mitls.cmxa \
-	test/TestAPI.cmx test/TestFFI.cmx \
-       	test/mitls.cmx -o mitls.exe
+	mitls.cmxa test/mitls.cmx -o mitls.exe
 
 all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
@@ -281,12 +281,13 @@ tls-lax: record_fstar_version $(LIBFILES)
 wc:
 	wc -l $(LIBFILES) *.fst *.fsti
 
-test.run:
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
-	./test.out
-
-test.out: mitls.cmxa 
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml
+	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
+	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
+	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	mitls.cmxa \
+       	$(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
 .PHONY: test
 test: test.out mitls.exe
@@ -296,19 +297,6 @@ test: test.out mitls.exe
 	./mitls.exe  -v 1.2 -ffi www.google.com
 	./mitls.exe  -v 1.2 -noems www.microsoft.com
 	#./mitls.exe -v 1.3. www.google.com failing due to different draft versions
-
-# Depends on mitls.cmxa
-rpc.ml:
-	$(FSTAR) \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj Extensions \
-	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
-	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	  $(FSTAR_INCLUDE_PATHS) \
-	  test/Formatting.fst test/RPC.fst
-
-rpc.exe:
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-		-I output/ output/Formatting.ml output/RPC.ml test/rpc_test.ml -o rpc.exe
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
