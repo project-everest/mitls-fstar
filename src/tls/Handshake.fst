@@ -395,7 +395,7 @@ let client_ServerHelloDone hs c ske ocr =
         | Some cr ->
             trace "processing certificate request (TODO)";
             let cc = {crt_request_context = empty_bytes; crt_chain = []} in
-            Handshake.Log.send hs.log (Certificate cc));
+            HandshakeLog.send hs.log (Certificate cc));
 
       let gy = Some?.v (mode.Nego.n_server_share) in // already set in KS
       let gx =
@@ -416,7 +416,7 @@ let client_ServerHelloDone hs c ske ocr =
       trace ("digest is "^print_bytes digestClientKeyExchange);
       //let cvd = TLSPRF.verifyData (mode.Nego.n_protocol_version,mode.Nego.n_cipher_suite) cfin_key Client digestClientKeyExchange in
       let cvd = TLSPRF.finished12 ha cfin_key Client digestClientKeyExchange in
-      let digestClientFinished = Handshake.Log.send_CCS_tag #ha hs.log (Finished ({fin_vd = cvd})) false in
+      let digestClientFinished = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = cvd})) false in
       hs.state := C_Wait_CCS2 digestClientFinished;
       InAck false false)
 
@@ -447,16 +447,16 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
           let digest =
             match ocr with
-            | Some cr -> Handshake.Log.send_tag #ha hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = []}))
+            | Some cr -> HandshakeLog.send_tag #ha hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = []}))
             | None -> digestServerFinished in
           let (| finId, cfin_key |) = cfin_key in
           let cvd = HMAC.UFCMA.mac cfin_key digest in
           Epochs.incr_writer hs.epochs; // to HSK
-          Handshake.Log.send hs.log (Finished ({fin_vd = cvd}));
+          HandshakeLog.send hs.log (Finished ({fin_vd = cvd}));
 
           register hs app_keys; // ATKs are ready to use in both directions
           Epochs.incr_reader hs.epochs; // to ATK
-          Handshake.Log.send_signals hs.log true true; //was: Epochs.incr_writer hs.epochs
+          HandshakeLog.send_signals hs.log true true; //was: Epochs.incr_writer hs.epochs
           hs.state := C_Complete; // full_mode (cvd,svd); do we still need to keep those?
           InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
           )
@@ -513,9 +513,9 @@ let server_ServerHelloDone hs =
           lemma_repr_bytes_values (length sigv);
           let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
           let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-          Handshake.Log.send hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain}));
-          Handshake.Log.send hs.log (ServerKeyExchange ske);
-          Handshake.Log.send hs.log ServerHelloDone;
+          HandshakeLog.send hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain}));
+          HandshakeLog.send hs.log (ServerKeyExchange ske);
+          HandshakeLog.send hs.log ServerHelloDone;
           hs.state := S_Wait_CCS1;
           InAck false false // Server 1.2 ATK
         end
@@ -580,7 +580,7 @@ let server_ClientHello hs offer =
         if mode.Nego.n_protocol_version = TLS_1p3
         then
           begin
-            Handshake.Log.send_signals hs.log true false; // signal key change after writing ServerHello
+            HandshakeLog.send_signals hs.log true false; // signal key change after writing ServerHello
             trace "derive handshake keys";
             let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
             register hs hs_keys;
@@ -632,7 +632,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     then
       //let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
       let svd = TLSPRF.finished12 ha fink Server digestClientFinished in
-      let unused_digest = Handshake.Log.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
+      let unused_digest = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
       hs.state := S_Complete;
       InAck false false // Server 1.2 ATK; will switch write key and signal completion after sending
     else
@@ -653,8 +653,8 @@ let server_ServerFinished_13 hs i =
     let sh_alg = sessionHashAlg pv cs in
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
-    Handshake.Log.send hs.log (EncryptedExtensions ({ee_extensions = []}));
-    let digestSig = Handshake.Log.send_tag #halg hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain})) in
+    HandshakeLog.send hs.log (EncryptedExtensions ({ee_extensions = []}));
+    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain})) in
 
     // signing of the formatted session digest
     let tbs : bytes =
@@ -677,7 +677,7 @@ let server_ServerFinished_13 hs i =
       begin
         lemma_repr_bytes_values (length sigv);
         let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
-        let digestFinished = Handshake.Log.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
+        let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
         let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
         let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
         let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
