@@ -167,7 +167,7 @@ let sigAlgBytes sa =
   | RSASIG -> abyte 1z
   | DSA    -> abyte 2z
   | ECDSA  -> abyte 3z
-  | RSAPSS -> abyte 0z // TODO fix me!
+  | RSAPSS -> abyte 0z
 
 (** Parsing function associated to sigAlgBytes *)
 val parseSigAlg: pinverse_t sigAlgBytes
@@ -195,7 +195,6 @@ let pinverse_sigAlg x = ()
 
 (** Hash algorithm minimum requirements *)
 type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
-
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 2"
 
@@ -237,6 +236,70 @@ val pinverse_hashAlg: x:_ -> Lemma
   (ensures (lemma_pinverse_f_g Seq.equal hashAlgBytes parseHashAlg x))
   [SMTPat (hashAlgBytes (Correct?._0 (parseHashAlg x)))]
 let pinverse_hashAlg x = ()
+
+
+(** Payload of signature_algorithms extension, using format from TLS 1.3 spec
+    https://tlswg.github.io/tls13-spec/#signature-algorithms
+    https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
+*)
+type signatureScheme =
+  | RSA_PKCS1_SHA256
+  | RSA_PKCS1_SHA384
+  | RSA_PKCS1_SHA512
+  // ECDSA algorithms
+  | ECDSA_SECP256R1_SHA256
+  | ECDSA_SECP384R1_SHA384
+  | ECDSA_SECP521R1_SHA512
+  // RSASSA-PSS algorithms
+  | RSA_PSS_SHA256
+  | RSA_PSS_SHA384
+  | RSA_PSS_SHA512
+  // EdDSA algorithms
+  | ED25519
+  | ED448
+  // Legacy algorithms
+  | RSA_PKCS1_SHA1
+  | ECDSA_SHA1
+  // Reserved Code Points
+  | PRIVATE_USE of (codepoint:lbytes 2 { let a,_ = cbyte2 codepoint in a == 0xFEz \/ a == 0xFFz })
+
+val signatureSchemeBytes: signatureScheme -> lbytes 2
+let signatureSchemeBytes = function
+  | RSA_PKCS1_SHA256       -> abyte2 (0x04z, 0x01z)
+  | RSA_PKCS1_SHA384       -> abyte2 (0x05z, 0x01z)
+  | RSA_PKCS1_SHA512       -> abyte2 (0x06z, 0x01z)
+  | ECDSA_SECP256R1_SHA256 -> abyte2 (0x04z, 0x03z)
+  | ECDSA_SECP384R1_SHA384 -> abyte2 (0x05z, 0x03z)
+  | ECDSA_SECP521R1_SHA512 -> abyte2 (0x06z, 0x03z)
+  | RSA_PSS_SHA256         -> abyte2 (0x08z, 0x04z)
+  | RSA_PSS_SHA384         -> abyte2 (0x08z, 0x05z)
+  | RSA_PSS_SHA512         -> abyte2 (0x08z, 0x06z)
+  | ED25519                -> abyte2 (0x08z, 0x07z)
+  | ED448                  -> abyte2 (0x08z, 0x08z)
+  | RSA_PKCS1_SHA1         -> abyte2 (0x02z, 0x01z)
+  | ECDSA_SHA1             -> abyte2 (0x02z, 0x03z)
+  | PRIVATE_USE codepoint  -> codepoint
+
+val parseSignatureScheme: pinverse_t signatureSchemeBytes
+let parseSignatureScheme b =
+  match cbyte2 b with
+  | (0x04z, 0x01z) -> Correct RSA_PKCS1_SHA256
+  | (0x05z, 0x01z) -> Correct RSA_PKCS1_SHA384
+  | (0x06z, 0x01z) -> Correct RSA_PKCS1_SHA512
+  | (0x04z, 0x03z) -> Correct ECDSA_SECP256R1_SHA256
+  | (0x05z, 0x03z) -> Correct ECDSA_SECP384R1_SHA384
+  | (0x06z, 0x03z) -> Correct ECDSA_SECP521R1_SHA512
+  | (0x08z, 0x04z) -> Correct RSA_PSS_SHA256
+  | (0x08z, 0x05z) -> Correct RSA_PSS_SHA384
+  | (0x08z, 0x06z) -> Correct RSA_PSS_SHA512
+  | (0x08z, 0x07z) -> Correct ED25519
+  | (0x08z, 0x08z) -> Correct ED448
+  | (0x02z, 0x01z) -> Correct RSA_PKCS1_SHA1
+  | (0x02z, 0x03z) -> Correct ECDSA_SHA1
+  | (a, _) ->
+    if a = 0xFEz || a = 0xFFz then Correct (PRIVATE_USE b)
+    else Error(AD_decode_error, "Parsed invalide SignatureScheme " ^ print_bytes b)
+
 
 (** Encryption key sizes *)
 let encKeySize =
@@ -304,7 +367,7 @@ type scsv_suite =
 (** Ciphersuite definition *)
 type cipherSuite =
   | NullCipherSuite: cipherSuite
-  | CipherSuite    : kexAlg -> option CoreCrypto.sig_alg -> aeAlg -> cipherSuite
+  | CipherSuite    : kexAlg -> option sigAlg -> aeAlg -> cipherSuite
   | CipherSuite13  : aeadAlg -> hash_alg -> cipherSuite
   | SCSV           : scsv_suite -> cipherSuite
   | UnknownCipherSuite: a:byte -> b:byte(* {not(List.Tot.contains (a,b) known_cs_list)}  *) -> cipherSuite // JK: incomplete spec
@@ -1499,58 +1562,33 @@ let parseConfigurationExtensions b =
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
 
+let signatureSchemes = algs:list signatureScheme{List.Tot.length algs < 65536/2}
 
-(** Tuple Signature Algorithm and Hash Algorithm type definition *)
-type sigHashAlg = sigAlg * hashAlg'
-
-(** Serializing function for the Signature algorithm *)
-val sigHashAlgBytes: sigHashAlg -> Tot (lbytes 2)
-let sigHashAlgBytes sha =
-  let sign = sigAlgBytes (fst sha) in
-  let hash = hashAlgBytes (snd sha) in
-  hash @| sign
-
-(** Parsing function for the Signature algorithm *)
-val parseSigHashAlg: pinverse_t sigHashAlgBytes
-let parseSigHashAlg b =
-  let hash,sign = split b 1 in
-  match parseSigAlg sign with
-  | Correct sign ->
-    begin
-    match parseHashAlg hash with
-    | Correct hash -> Correct(sign, hash)
-    | Error z -> Error z
-    end
-  | Error z -> Error z
-
-// TODO: Moving this inside sigHashAlgsBytes gives a `Bound term variable not found` error
-// See https://github.com/FStarLang/FStar/issues/533
-
-(** Serializing function for a Signature algorithm list *)
-val sigHashAlgsBytes: algs:list sigHashAlg{List.Tot.length algs < 65536/2}
+(** Serializing function for a SignatureScheme list *)
+val signatureSchemesBytes: algs:signatureSchemes
   -> Tot (b:bytes{2 <= length b /\ length b < 65538})
-let sigHashAlgsBytes algs =
-  let rec sigHashAlgsBytes_aux: b:bytes
-    -> algs:list sigHashAlg{b2t (length b + op_Multiply 2 (List.Tot.length algs) < 65536)}
-    -> Tot (r:bytes{length r < 65536}) (decreases algs) = fun b algs ->
+let signatureSchemesBytes algs =
+  let rec aux: b:bytes ->
+    algs:list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs) < 65536 } ->
+    Tot (r:bytes{length r < 65536}) (decreases algs) = fun b algs ->
     match algs with
     | [] -> b
     | alg::algs' ->
-      let shb = sigHashAlgBytes alg in
-      sigHashAlgsBytes_aux (shb @| b) algs'
+      let shb = signatureSchemeBytes alg in
+      aux (shb @| b) algs'
   in
-  let b = sigHashAlgsBytes_aux empty_bytes algs in
-  lemma_repr_bytes_values (length b);
-  vlbytes 2 b
+  let pl = aux empty_bytes algs in
+  lemma_repr_bytes_values (length pl);
+  vlbytes 2 pl
 
-(** Parsing function for a Signature algorithm list *)
-val parseSigHashAlgs: pinverse_t sigHashAlgsBytes
-let parseSigHashAlgs b =
-  let rec aux: b:bytes -> algs:list sigHashAlg{length b + op_Multiply 2 (List.Tot.length algs) < 65536} -> Tot (result (l:list sigHashAlg{List.Tot.length l < 65536/2})) (decreases (length b)) = fun b algs ->
+(** Parsing function for a SignatureScheme list *)
+val parseSignatureSchemes: pinverse_t signatureSchemesBytes
+let parseSignatureSchemes b =
+  let rec aux: b:bytes -> algs:list signatureScheme{length b + op_Multiply 2 (List.Tot.length algs) < 65536} -> Tot (result signatureSchemes) (decreases (length b)) = fun b algs ->
     if length b > 0 then
       if length b >= 2 then
       let alg,bytes = split b 2 in
-      match parseSigHashAlg alg with
+      match parseSignatureScheme alg with
       | Correct sha -> aux bytes (sha::algs)
       | Error z     -> Error z
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
@@ -1627,7 +1665,6 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 *)
 
-
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     minVer: protocolVersion;
@@ -1635,7 +1672,7 @@ noeq type config = {
     ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
     compressions: l:list compression{ List.Tot.length l > 0 /\ List.Tot.length l < 256 };
     namedGroups: list valid_namedGroup;
-    signatureAlgorithms: list sigHashAlg;
+    signatureAlgorithms: signatureSchemes;
 
     (* Handshake specific options *)
 
@@ -1687,28 +1724,27 @@ type serverName =
 
 // deprecated (but still included in TLSInfo)
 type negotiatedExtensions = {
-    ne_extended_ms: bool; // now a total function of the mode
-    ne_extended_padding: bool; // gone!
-    ne_secure_renegotiation: ri_status; // now a total function of the mode
+  ne_extended_ms: bool; // now a total function of the mode
+  ne_extended_padding: bool; // gone!
+  ne_secure_renegotiation: ri_status; // now a total function of the mode
 
-    //$ Cedric: these extensions were missing in F7.
-    ne_server_names: option (list serverName); // now a total function of the mode,
-    ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
+  //$ Cedric: these extensions were missing in F7.
+  ne_server_names: option (list serverName); // now a total function of the mode,
+  ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
 
-    // now internal, transient concerns for server-side nego
-    ne_signature_algorithms: option (list sigHashAlg);
-    ne_supported_groups: option (list namedGroup);
-    ne_supported_point_formats: option (list ECGroup.point_format);
+  // now internal, transient concerns for server-side nego
+  ne_signature_algorithms: option signatureSchemes;
+  ne_supported_groups: option (list valid_namedGroup);
+  ne_supported_point_formats: option (list ECGroup.point_format);
 }
 
-let ne_default =
-{
-    ne_extended_ms = false;
-    ne_extended_padding = false;
-    ne_secure_renegotiation = RI_Unsupported;
-    ne_supported_groups = None;
-    ne_supported_point_formats = None;
-    ne_server_names = None;
-    ne_signature_algorithms = None;
-    ne_keyShare = None;
+let ne_default = {
+  ne_extended_ms = false;
+  ne_extended_padding = false;
+  ne_secure_renegotiation = RI_Unsupported;
+  ne_supported_groups = None;
+  ne_supported_point_formats = None;
+  ne_server_names = None;
+  ne_signature_algorithms = None;
+  ne_keyShare = None;
 }
