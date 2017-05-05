@@ -17,6 +17,7 @@ hash algorithm etc.
 open FStar.All
 
 open FStar.Seq
+open Platform.Date
 open Platform.Bytes
 open Platform.Error
 open TLSError
@@ -1584,3 +1585,130 @@ let parseSupportedVersions b =
   | Error z ->
     Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse protocol versions")
 *)
+
+
+// Moved here because it's used in both Extensions and TLSInfo and Extensions
+// and Extensions cannot depend on TLSInfo
+// -------------------------------------------------------------------
+// Application configuration
+// TODO Consider repackaging separate client and server options
+
+(* discussion about IDs and configurations (Cedric, Antoine, Santiago)
+
+Server Certificates?
+
+- the client initial parameters...
+
+- the server gets a CertSignQuery, picks its certificate chain from
+  the ClientHello/ServerHello contents [new in miTLS 1.0]
+
+- the client decides whether that's acceptable.
+
+Certificate Request?
+
+- in its ServerHello flight (or later) the server optionally requests a
+  Cert/CertVerify (optionally with a list of CAs). This depends on
+  what has been negotiated so far, including prior identities for
+  both, and possibly on application data (e.g. ACL-based) [new in miTLS 1.0]
+
+- the client optionally complies (for one of those CAs).
+  [We always pass explicit requests to the client, as a CertSignQuery read result.]
+  [We could have sign; read for solemnity; or read for simplicity.]
+
+- the server decides whether that's acceptable.
+  [We always pass inspection requests, as a CertVerifyQuery read result]
+  [We have authorize; read for solemnity; could have read for simplicity.]
+
+(forgetting about 0RTT for now)
+
+type ServerCertificateRequest // something that determines this Handshake message
+
+request_client_certificate: single_assign ServerCertificateRequest // uses this one, or asks the server; by default Some None.
+
+*)
+
+
+noeq type config = {
+    (* Supported versions, ciphersuites, groups, signature algorithms *)
+    minVer: protocolVersion;
+    maxVer: protocolVersion;
+    ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
+    compressions: l:list compression{ List.Tot.length l > 0 /\ List.Tot.length l < 256 };
+    namedGroups: list valid_namedGroup;
+    signatureAlgorithms: list sigHashAlg;
+
+    (* Handshake specific options *)
+
+    (* Client side *)
+    honourHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
+    allowAnonCipherSuite: bool; // a safeguard against proposing ciphersuites (not so useful?)
+    safe_resumption: bool;      // demands this extension when resuming
+
+    (* Server side *)
+    request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
+    check_client_version_in_pms_for_old_tls: bool;
+    cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
+    private_key_file: string;   // TEMPORARY
+
+    (* Common *)
+    safe_renegotiation: bool;   // demands this extension when renegotiating
+    peer_name: option string;   // The expected name to match against the peer certificate
+    check_peer_certificate: bool; // To disable certificate validation
+    ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
+                      // on Cygwin /etc/ssl/certs/ca-bundle.crt
+
+    (* Sessions database *)
+    sessionDBFileName: string;
+    sessionDBExpiry: timeSpan;
+
+    (* DH groups database *)
+    dhDBFileName: string;
+    dhDefaultGroupFileName: string;
+    dhPQMinLength: nat * nat;
+    }
+
+
+type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
+type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
+
+
+// -------------------------------------------------------------------
+// We support these extensions, with session scopes
+// (defined here because TLSExtension is internal)
+
+type ri_status =
+| RI_Unsupported
+| RI_Valid
+| RI_Invalid
+
+type serverName =
+| SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
+| SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
+
+// deprecated (but still included in TLSInfo)
+type negotiatedExtensions = {
+    ne_extended_ms: bool; // now a total function of the mode
+    ne_extended_padding: bool; // gone!
+    ne_secure_renegotiation: ri_status; // now a total function of the mode
+
+    //$ Cedric: these extensions were missing in F7.
+    ne_server_names: option (list serverName); // now a total function of the mode,
+    ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
+
+    // now internal, transient concerns for server-side nego
+    ne_signature_algorithms: option (list sigHashAlg);
+    ne_supported_groups: option (list namedGroup);
+    ne_supported_point_formats: option (list ECGroup.point_format);
+}
+
+let ne_default =
+{
+    ne_extended_ms = false;
+    ne_extended_padding = false;
+    ne_secure_renegotiation = RI_Unsupported;
+    ne_supported_groups = None;
+    ne_supported_point_formats = None;
+    ne_server_names = None;
+    ne_signature_algorithms = None;
+    ne_keyShare = None;
+}

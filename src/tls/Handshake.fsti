@@ -16,7 +16,7 @@ val nonce: hs -> Tot TLSInfo.random  // unique for all honest instances; locally
 val region_of: hs -> Tot Parse.rgn
 val role_of: hs -> role
 val random_of: hs -> Tot TLSInfo.random
-val config_of: hs -> ST TLSInfo.config
+val config_of: hs -> ST config
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
 val version_of: hs -> ST TLSConstants.protocolVersion
@@ -79,7 +79,7 @@ type incoming =
       next_keys : bool -> // the reader index increases;
       complete  : bool -> // the handshake is complete!
       incoming
-  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
+  | InQuery: Extensions.chain -> bool -> incoming // could be part of InAck if no explicit user auth
   | InError: TLSError.error -> incoming // how underspecified should it be?
 
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
@@ -88,7 +88,7 @@ let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 (* ----------------------- Control Interface -------------------------*)
 
 // Create instance for a fresh connection, with optional resumption for clients
-val create: r0:rid -> cfg:TLSInfo.config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
+val create: r0:rid -> cfg:config -> r:role -> resume:TLSInfo.resumeInfo r -> ST hs
   (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
@@ -108,17 +108,17 @@ let modifies_internal h0 s h1 =
     // modifies_rref (region_of s)  !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
 
 // Idle client starts a full handshake on the current connection
-val rehandshake: s:hs -> TLSInfo.config -> ST bool
+val rehandshake: s:hs -> config -> ST bool
   (requires (fun h -> hs_inv s h /\ role_of s = Client))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 
 // Idle client starts an abbreviated handshake resuming the current session
-val rekey: s:hs -> TLSInfo.config -> ST bool
+val rekey: s:hs -> config -> ST bool
   (requires (fun h -> hs_inv s h /\ role_of s = Client))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 
 // (Idle) Server requests an handshake
-val request: s:hs -> TLSInfo.config -> ST bool
+val request: s:hs -> config -> ST bool
   (requires (fun h -> hs_inv s h /\ role_of s = Server))
   (ensures (fun h0 _ h1 -> modifies_internal h0 s h1))
 
@@ -183,7 +183,7 @@ val recv_ccs: s:hs -> ST incoming
     (InError? result \/ result = InAck true false))
     )
 
-val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
+val authorize: s:hs -> Extensions.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
     (InAck? result \/ InError? result) /\ recv_ensures s h0 result h1 ))

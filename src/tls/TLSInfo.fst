@@ -16,108 +16,11 @@ open Platform.Bytes
 open Platform.Date
 open TLSConstants
 //open PMS
-open Cert
+//open Cert
 
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
-
-
-(**************** SPECIFYING SAFETY (GENERAL COMMENTS) **************
-  In the code of ideal implementations only,
-  we use F# functions that characterize the Safe and Auth predicates.
-
-  We need to typecheck ideal code,
-  so we write their modules in the style
-
-  #if ideal
-    if safe...(...)
-      ... GEN ...
-    else
-  ##endif
-  .... COERCE ...
-
-  This requires concrete safe/auth/strong/honest functions,
-  used solely for controlling idealization.                        *)
-
-
-// -------------------------------------------------------------------
-// Application configuration
-// TODO Consider repackaging separate client and server options
-
-(* discussion about IDs and configurations (Cedric, Antoine, Santiago)
-
-Server Certificates?
-
-- the client initial parameters...
-
-- the server gets a CertSignQuery, picks its certificate chain from
-  the ClientHello/ServerHello contents [new in miTLS 1.0]
-
-- the client decides whether that's acceptable.
-
-Certificate Request?
-
-- in its ServerHello flight (or later) the server optionally requests a
-  Cert/CertVerify (optionally with a list of CAs). This depends on
-  what has been negotiated so far, including prior identities for
-  both, and possibly on application data (e.g. ACL-based) [new in miTLS 1.0]
-
-- the client optionally complies (for one of those CAs).
-  [We always pass explicit requests to the client, as a CertSignQuery read result.]
-  [We could have sign; read for solemnity; or read for simplicity.]
-
-- the server decides whether that's acceptable.
-  [We always pass inspection requests, as a CertVerifyQuery read result]
-  [We have authorize; read for solemnity; could have read for simplicity.]
-
-(forgetting about 0RTT for now)
-
-type ServerCertificateRequest // something that determines this Handshake message
-
-request_client_certificate: single_assign ServerCertificateRequest // uses this one, or asks the server; by default Some None.
-
-*)
-
-
-noeq type config = {
-    (* Supported versions, ciphersuites, groups, signature algorithms *)
-    minVer: protocolVersion;
-    maxVer: protocolVersion;
-    ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
-    compressions: l:list compression{ List.Tot.length l > 0 /\ List.Tot.length l < 256 };
-    namedGroups: list valid_namedGroup;
-    signatureAlgorithms: list sigHashAlg;
-
-    (* Handshake specific options *)
-
-    (* Client side *)
-    honourHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
-    allowAnonCipherSuite: bool; // a safeguard against proposing ciphersuites (not so useful?)
-    safe_resumption: bool;      // demands this extension when resuming
-
-    (* Server side *)
-    request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
-    check_client_version_in_pms_for_old_tls: bool;
-    cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
-    private_key_file: string;   // TEMPORARY
-
-    (* Common *)
-    safe_renegotiation: bool;   // demands this extension when renegotiating
-    peer_name: option string;   // The expected name to match against the peer certificate
-    check_peer_certificate: bool; // To disable certificate validation
-    ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
-                      // on Cygwin /etc/ssl/certs/ca-bundle.crt
-
-    (* Sessions database *)
-    sessionDBFileName: string;
-    sessionDBExpiry: timeSpan;
-
-    (* DH groups database *)
-    dhDBFileName: string;
-    dhDefaultGroupFileName: string;
-    dhPQMinLength: nat * nat;
-    }
 
 
 val sigAlgPref: list sigAlg -> list hashAlg' -> Tot (list sigHashAlg)
@@ -195,53 +98,9 @@ type crand = random
 type srand = random
 type csRands = lbytes 64
 
-type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)
-type sVerifyData = b:bytes{length b <= 64} (* ServerFinished payload *)
-
 type sessionHash = bytes
 
 let noCsr:csRands = Nonce.noCsr
-
-// -------------------------------------------------------------------
-// We support these extensions, with session scopes
-// (defined here because TLSExtension is internal)
-
-type serverName =
-| SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
-| SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
-
-type ri_status =
-| RI_Unsupported
-| RI_Valid
-| RI_Invalid
-
-// deprecated (but still included in TLSInfo)
-type negotiatedExtensions = {
-    ne_extended_ms: bool; // now a total function of the mode
-    ne_extended_padding: bool; // gone!
-    ne_secure_renegotiation: ri_status; // now a total function of the mode
-
-    //$ Cedric: these extensions were missing in F7.
-    ne_server_names: option (list serverName); // now a total function of the mode,
-    ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
-
-    // now internal, transient concerns for server-side nego
-    ne_signature_algorithms: option (list sigHashAlg);
-    ne_supported_groups: option (list namedGroup);
-    ne_supported_point_formats: option (list ECGroup.point_format);
-}
-
-let ne_default =
-{
-    ne_extended_ms = false;
-    ne_extended_padding = false;
-    ne_secure_renegotiation = RI_Unsupported;
-    ne_supported_groups = None;
-    ne_supported_point_formats = None;
-    ne_server_names = None;
-    ne_signature_algorithms = None;
-    ne_keyShare = None;
-}
 
 // -------------------------------------------------------------------
 // Pre Master Secret indexes
@@ -279,9 +138,9 @@ noeq type sessionInfo = {
     pmsId: pmsId;
     session_hash: sessionHash;
     client_auth: bool;
-    clientID: Cert.chain;
+    clientID: Extensions.chain;
     clientSigAlg: sigHashAlg;
-    serverID: Cert.chain;
+    serverID: Extensions.chain;
     serverSigAlg: sigHashAlg;
     sessionID: sessionID;
     }
@@ -458,12 +317,12 @@ type logInfo_SH = {
 
 type logInfo_SF = {
   li_sf_sh: logInfo_SH;
-  li_sf_certificate: option Cert.chain;
+  li_sf_certificate: option Extensions.chain;
 }
 
 type logInfo_CF = {
   li_cf_sf: logInfo_SF;
-  li_cf_certificate: option Cert.chain;
+  li_cf_certificate: option Extensions.chain;
 }
 
 type logInfo =

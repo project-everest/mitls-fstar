@@ -235,7 +235,7 @@ noeq type mode =
 
     // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
     n_client_cert_request: option HandshakeMessages.cr ->
-    n_server_cert: option Cert.chain ->
+    n_server_cert: option Extensions.chain ->
 
     // more from either CH+SH (1.3) or CKE (1.2)
     n_client_share: option share ->
@@ -317,11 +317,11 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
 
   | C_WaitFinished2: // Only 1.2
                 n_mode: mode ->
-                n_client_certificate: option Cert.chain ->
+                n_client_certificate: option Extensions.chain ->
                 negotiationState r cfg resume
 
   | C_Complete: n_mode: mode ->
-                n_client_certificate: option Cert.chain ->
+                n_client_certificate: option Extensions.chain ->
                 negotiationState r cfg resume
 
   | S_Init:     n_server_random: TLSInfo.random ->
@@ -341,7 +341,7 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 negotiationState r cfg resume
 
   | S_Complete: n_mode: mode ->
-                n_client_certificate: option Cert.chain ->
+                n_client_certificate: option Extensions.chain ->
                 negotiationState r cfg resume
 
 let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
@@ -400,7 +400,7 @@ let computeOffer r cfg resume nonce ks =
 
 
 val create:
-  region:rgn -> r:role -> cfg:TLSInfo.config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
+  region:rgn -> r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
   St (t region r)
 let create region r cfg resume nonce =
   match r with
@@ -451,7 +451,7 @@ let chosenGroup mode =
         (config_of hs).namedGroups in
 *)
 
-val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.config
+val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
   ns.cfg
 
@@ -828,7 +828,8 @@ let client_ServerKeyExchange #region ns crt ske ocr =
           else
             let csr = ns.nonce @| mode.n_server_random in
             let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-            match Signature.get_chain_public_key #a scert with
+            let chain = List.Tot.map fst scert in
+            match Signature.get_chain_public_key #a chain with
             | None ->
               Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to get public key from chain")
             | Some pk ->
@@ -1159,7 +1160,7 @@ let server_ServerShare #region ns ks =
 
 //17-03-30 where is it used?
 type hs_id = {
-  id_cert: Cert.chain;
+  id_cert: Extensions.chain;
   id_sigalg: option sigHashAlg;
 }
 
