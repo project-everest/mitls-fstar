@@ -304,7 +304,8 @@ let rec parseMessages pvo kexo buf =
         trace "more bytes required";
         Correct (false, buf, [], [])
     | Correct (Some (|rem, hstype, pl, to_log|)) ->
-      ( match parseHandshakeMessage pvo kexo hstype pl with
+      ( trace ("parsing " ^ (Platform.Bytes.print_bytes pl));
+        match parseHandshakeMessage pvo kexo hstype pl with
         | Error z -> Error z
         | Correct hsm ->
           trace ("parsed "^HandshakeMessages.string_of_handshakeMessage hsm);

@@ -14,8 +14,6 @@ open Platform.Error
 open TLSError
 open TLSConstants
 
-module TI = TLSInfo
-
 (*************************************************
  Define extension. 
  *************************************************)
@@ -25,10 +23,16 @@ extension and extension lists can be formatted into bytes without
 overflowing 2^16. This create dependencies on the formatting
 functions, at odd with recursive extensions. *)
 
-let error s = Error (AD_decode_error, ("Extensions parsing: "^a))
+let error s = Error (AD_decode_error, ("Extensions parsing: "^s))
+
+//17-05-01 deprecated---use TLSError.result instead? 
+(** local, failed-to-parse exc. *)
+private type canFail (a:Type) =
+| ExFail of alertDescription * string
+| ExOK of list a
 
 
-(* PRE-SHARED-KEYS *) 
+(* PRE-SHARED KEYS AND KEY EXCHANGES *) 
 
 noeq type psk = 
   // this is the truncated PSK extension, without the list of binder tags.
@@ -45,35 +49,88 @@ let parse_psk: pinverse_t psk_bytes = admit()
 type psk_kex =
   | PSK_KE 
   | PSK_DHE_KE 
+
 type client_psk_kexes = l:list psk_kex 
   { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
+
+let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
 
 val psk_kex_bytes: psk_kex -> Tot (lbytes 1)
 let psk_kex_bytes = function 
   | PSK_KE -> abyte 0z 
   | PSK_DHE_KE -> abyte 1z
-let parse_psk_kex: pinverse_t psk_key_bytes = fun b -> match cbyte b with 
+let parse_psk_kex: pinverse_t psk_kex_bytes = fun b -> match cbyte b with 
   | 0z -> Correct PSK_KE
   | 1z -> Correct PSK_DHE_KE
   | _ -> error  "psk_key"
 
-let rec client_psk_kexes_bytes (ckxs: client_psk_kexes): bytes {length b < 4} = 
-  vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| psk_kex_bytes v) empty_bytes kexes)
-let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = admit()
-  // redundants lists yield decoding errors.
+let client_psk_kexes_bytes (ckxs: client_psk_kexes): b:bytes {length b <= 3} = 
+  let content: b:bytes {length b = 1 || length b = 2} = 
+    match ckxs with 
+    | [x] -> psk_kex_bytes x
+    | [x;y] -> psk_kex_bytes x @| psk_kex_bytes y in
+  lemma_repr_bytes_values (length content);
+  vlbytes 1 content
 
-// TODO psk_kexes_bytes & parse_psk
+let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b -> 
+  if equalBytes b (client_psk_kexes_bytes [PSK_KE]) then Correct [PSK_KE] else 
+  if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE]) then Correct [PSK_DHE_KE] else
+  if equalBytes b (client_psk_kexes_bytes [PSK_KE; PSK_DHE_KE]) then Correct [PSK_KE; PSK_DHE_KE]  else
+  if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE; PSK_KE]) then Correct [PSK_DHE_KE; PSK_KE] 
+  else error "PSK KEX payload"
+  // redundants lists yield an immediate decoding error.
+
+
+(* EARLY DATA INDICATION *) 
+
+type earlyDataIndication = option UInt32.t // Some  max_early_data_size, only in  NewSessionTicket
+
+val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
+let earlyDataIndicationBytes = function
+  | None -> empty_bytes // ClientHello, EncryptedExtensions
+  | Some max_early_data_size -> // NewSessionTicket
+    let n = UInt32.v max_early_data_size in    
+    lemma_repr_bytes_values n;
+    bytes_of_int 4 n
+
+val parseEarlyDataIndication: bytes -> result earlyDataIndication
+let parseEarlyDataIndication data =
+  match length data with 
+  | 0 -> Correct None 
+  | 4 -> 
+      let n = int_of_bytes data in
+      lemma_repr_bytes_values n;
+      assert_norm (pow2 32 == 4294967296);
+      Correct (Some (UInt32.uint_to_t n))
+  | _ -> error "early data indication" 
+  
+
+(* EC POINT FORMATS *) 
+
+let rec ecpfListBytes_aux: list ECGroup.point_format -> bytes = function
+  | [] -> empty_bytes
+  | ECGroup.ECP_UNCOMPRESSED :: r -> abyte 0z @| ecpfListBytes_aux r
+  | ECGroup.ECP_UNKNOWN t :: r -> bytes_of_int 1 t @| ecpfListBytes_aux r
+
+val ecpfListBytes: l:list ECGroup.point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
+let ecpfListBytes l =
+  let al = ecpfListBytes_aux l in
+  lemma_repr_bytes_values (length al);
+  let bl:bytes = vlbytes 1 al in
+  bl
 
 
 (* PROTOCOL VERSIONS *) 
 
 // The length exactly reflects the RFC format constraint <2..254> 
-type protocol_versions = l: list TLSConstants.protocolVersion {List.Tot.length l >= 1 /\ List.Tot.length l <= 127}
+type protocol_versions =
+  l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
-val protocol_versions_bytes: protocol_versions_bytes -> b:bytes {length b <= 255}
+val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
 let protocol_versions_bytes vs =
   vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vs)
-
+  // todo length bound; do we need an ad hoc variant of fold? 
+  
 //17-05-01 added a refinement to control the list length; this function verifies.
 //17-05-01 should we use generic code to parse such bounded lists?
 //REMARK: This is not tail recursive, contrary to most of our parsing functions
@@ -96,7 +153,8 @@ let rec parseVersions b =
           assert_norm (List.Tot.length (v::vs) = 1 + List.Tot.length vs); // did not find usable length lemma in List.Tot
           Correct r)
 
-let parseSupportedVersions (b:bytes) : result (list TLSConstants.protocolVersion) =
+val parseSupportedVersions: b:bytes{2 < length b /\ length b < 256} -> result protocol_versions
+let parseSupportedVersions b =
   match vlparse 1 b with
   | Error z -> error "protocol versions"
   | Correct b ->
@@ -104,7 +162,7 @@ let parseSupportedVersions (b:bytes) : result (list TLSConstants.protocolVersion
     match parseVersions b with
     | Error z -> Error z
     | Correct vs ->
-      let n = List.Tot.length pvs in
+      let n = List.Tot.length vs in
       if 1 <= n && n <= 127 
       then Correct vs 
       else  error "too many or too few protocol versions"
@@ -113,24 +171,18 @@ let parseSupportedVersions (b:bytes) : result (list TLSConstants.protocolVersion
 
 (* SERVER NAME INDICATION *) 
 
-private val serverNameBytes: list TI.serverName -> Tot bytes
+private val serverNameBytes: list serverName -> Tot bytes
 let serverNameBytes l =
-    let rec (aux:list TI.serverName -> Tot bytes) = function
-    | [] -> empty_bytes
-    | TI.SNI_DNS(x) :: r -> (abyte 0z) @| bytes_of_int 2 (length x) @| x @| aux r
-    | TI.SNI_UNKNOWN(t, x) :: r -> (bytes_of_int 1 t) @| bytes_of_int 2 (length x) @| x @| aux r
-    in
-    (aux l)
-
-//17-05-01 why not using TLSError.result ?? 
-(** local, failed-to-parse exc. *)
-private type canFail (a:Type) =
-| ExFail of alertDescription * string
-| ExOK of list a
-
-private val parseServerName: r:role -> b:bytes -> Tot (result (list TI.serverName))
+  let rec (aux:list serverName -> Tot bytes) = function
+  | [] -> empty_bytes
+  | SNI_DNS x :: r -> abyte 0z @| bytes_of_int 2 (length x) @| x @| aux r
+  | SNI_UNKNOWN(t, x) :: r -> bytes_of_int 1 t @| bytes_of_int 2 (length x) @| x @| aux r
+  in
+  aux l
+ 
+private val parseServerName: r:role -> b:bytes -> Tot (result (list serverName))
 let parseServerName r b  =
-  let rec aux: b:bytes -> Tot (canFail TI.serverName) (decreases (length b)) = fun b ->
+  let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
     if equalBytes b empty_bytes then ExOK []
     else if length b >= 3 then
       let ty,v = split b 1 in
@@ -146,15 +198,15 @@ let parseServerName r b  =
 	  let cur =
 	    begin
 	    match cbyte ty with
-	    | 0z -> TI.SNI_DNS(cur)
-	    | v  -> TI.SNI_UNKNOWN(int_of_bytes ty, cur)
+	    | 0z -> SNI_DNS(cur)
+	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
 	    end
 	  in
-	  let snidup: TI.serverName -> Tot bool = fun x ->
+	  let snidup: serverName -> Tot bool = fun x ->
 	    begin
 	    match x,cur with
-	    | TI.SNI_DNS _, TI.SNI_DNS _ -> true
-	    | TI.SNI_UNKNOWN(a,_), TI.SNI_UNKNOWN(b,_) -> a = b
+	    | SNI_DNS _, SNI_DNS _ -> true
+	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
 	    | _ -> false
 	    end
 	  in
@@ -178,56 +230,45 @@ let parseServerName r b  =
 	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
 	| Correct b ->
 	match aux b with
+	| ExFail(x,y) -> Error(x,y)
+	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
+	| ExOK l -> correct l
+	end
+      else
+	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
 
 (* TODO: supported_groups and signature_algorithms *) 
 
-
-
-(** RFC 4.2 'Extension' Table's type definition. *)
-
-noeq type preEarlyDataIndication : Type0 =
-  { ped_configuration_id: configurationId;
-    ped_cipher_suite:valid_cipher_suite;
-    ped_extensions:list extension;
-    ped_context:b:bytes{length b < 256};
-    //ped_early_data_type:earlyDataType;
-    }
-and earlyDataIndication =
-  | ClientEarlyDataIndication of preEarlyDataIndication
-  | ServerEarlyDataIndication
-(* SI: we currently only define Mandatory-to-Implement Extensions 
-   as listed in the RFC's Section 8.2. Labels in the variants below are: 
-     M  - "MUST implement"
-     AF - "MUST ... when offering applicable features" *)
-and extension =
-  | E_server_name of list TI.serverName (* M, AF *) (* RFC 6066 *)
-(*| E_max_fragment_length
-  | E_status_request *)
+// ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2 
+noeq type extension =
+  | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
   | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)  
   | E_signature_algorithms of (list sigHashAlg) (* M, AF *) (* RFC 5246 *)
-(*| E_use_srtp 
+  | E_key_share of CommonDH.keyShare (* M, AF *)
+  | E_pre_shared_key of (list psk) (* M, AF *)
+  | E_early_data of earlyDataIndication
+  | E_supported_versions of protocol_versions   (* M, AF *) 
+  | E_cookie of b:bytes {0 < length b /\ length b < 65536}  (* M *)
+  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  
+  | E_extended_ms
+  | E_ec_point_format of list ECGroup.point_format
+  | E_unknown_extension of (lbytes 2 * bytes) (* header, payload *)
+(* 
+We do not yet support the extensions below (authenticated but ignored)
+  | E_max_fragment_length
+  | E_status_request
+  | E_use_srtp 
   | E_heartbeat 
   | E_application_layer_protocol_negotiation
   | E_signed_certifcate_timestamp 
   | E_client_certificate_type 
   | E_server_certificate_type 
-  | E_padding *)
-  | E_key_share of CommonDH.keyShare (* M, AF *)
-  | E_pre_shared_key of (list psk) (* M, AF *)
-  | E_early_data of earlyDataIndication
-  | E_supported_versions of protocol_versions   (* M, AF *) 
-  | E_cookie of b:bytes { 1 <= length b /\ length b <= (pow2 16 - 1)}  (* M *)
-  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  
-(*| E_certificate_authorities 
+  | E_certificate_authorities 
   | E_oid_filters 
-  | E_post_handshake_auth *)
-// Previous extension types
-(*| E_renegotiation_info of renegotiationInfo *)
-  | E_extended_ms
-  | E_ec_point_format of list ECGroup.point_format
-  | E_unknown_extension of (lbytes 2 * bytes) (* un-{implemented,known} extensions. *)
+  | E_post_handshake_auth 
+  | E_renegotiation_info of renegotiationInfo
+*)
 
-(* string_of_ *)
 let string_of_extension = function
   | E_server_name _ -> "SNI" 
   | E_supported_groups _ -> "groups" 
@@ -242,10 +283,9 @@ let string_of_extension = function
   | E_ec_point_format _ -> "ec_point_fmt" 
   | E_unknown_extension (n,_) -> print_bytes n
 
-
 let rec string_of_extensions = function
-  | e0::es -> string_of_extension e0^" "^string_of_extensions es
-  | []  -> ""
+  | e0 :: es -> string_of_extension e0 ^ " " ^ string_of_extensions es
+  | [] -> ""
 
 (** shallow equality *)
 private let sameExt e1 e2 =
@@ -269,7 +309,8 @@ private let sameExt e1 e2 =
  extension formatting
  *************************************************)
 
-private val extensionHeaderBytes: extension -> Tot bytes
+//17-05-05 no good reason to pattern match twice when formatting? follow the same structure as for parsing?
+private val extensionHeaderBytes: extension -> lbytes 2
 let extensionHeaderBytes ext =
   match ext with             // 4.2 ExtensionType enum value
   | E_server_name _            -> abyte2 (0x00z, 0x00z)
@@ -283,158 +324,99 @@ let extensionHeaderBytes ext =
   | E_psk_key_exchange_modes _ -> abyte2 (0x00z, 0x2dz) // 45
   | E_extended_ms              -> abyte2 (0x00z, 0x17z) // 45
   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
-  | E_unknown_extension(h,b) -> h
+  | E_unknown_extension (h,b)  -> h
 
-
-private val extension_depth : extension -> Tot nat
-let rec extension_depth (ext:extension): Tot nat =
-  match ext with
-  | E_early_data edt           -> (
-      match edt with
-      | ServerEarlyDataIndication -> 0
-      | ClientEarlyDataIndication edi -> 1 + extensions_depth edi.ped_extensions
-      )
-  | _ -> 0
-and extensions_depth (exts:list extension): Tot nat =
-  match exts with
-  | [] -> 0
-  | hd::tl -> let x = extensions_depth tl in
-	     let y = extension_depth hd in
-	     if y > x then y else x
-
-val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
-  (decreases (fun edi -> match edi with | ClientEarlyDataIndication edi -> extensions_depth edi.ped_extensions | _ -> 0))
-val extensionPayloadBytes: role -> ext:extension -> Tot bytes
-  (decreases (extension_depth ext))
-
-let rec (ecpfListBytes_aux:list ECGroup.point_format -> Tot bytes) = function
-  | [] -> empty_bytes
-  | ECGroup.ECP_UNCOMPRESSED :: r -> abyte 0z @| ecpfListBytes_aux r
-  | ECGroup.ECP_UNKNOWN(t) :: r -> bytes_of_int 1 t @| ecpfListBytes_aux r
-
-val ecpfListBytes: l:list ECGroup.point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
-let ecpfListBytes l =
-  let al = ecpfListBytes_aux l in
-  lemma_repr_bytes_values (length al);
-  let bl:bytes = vlbytes 1 al in
-  bl
-  
 (* API *)
-(** Serialize extension. *)
-val extensionBytes: role -> ext:extension -> Tot bytes
-  (decreases (extension_depth ext))
-val extensionsBytes: role -> cl:list extension -> Tot (b:bytes{length b <= 2 + 65535})
-  (decreases (extensions_depth cl))
 
-let rec earlyDataIndicationBytes edi =
-  match edi with
-  | ServerEarlyDataIndication -> empty_bytes
-  | ClientEarlyDataIndication edi ->
-      let cid_bytes = configurationIdBytes edi.ped_configuration_id in
-      let cs_bytes = cipherSuiteBytes edi.ped_cipher_suite in
-      let ext_bytes = extensionsBytes Client edi.ped_extensions in
-      lemma_repr_bytes_values (length edi.ped_context);
-      let context_bytes = vlbytes 1 edi.ped_context in
-//      let edt_bytes = earlyDataTypeBytes edi.ped_early_data_type in
-      cid_bytes @| cs_bytes @| ext_bytes @| context_bytes //@| edt_bytes
-and extensionPayloadBytes role ext =
-  match ext with
-  | E_server_name(l)           -> 
-      if role = Client 
-      then vlbytes 2 (serverNameBytes l) 
-      else empty_bytes // do we statically know that l is empty?
-      
-  | E_supported_groups gs       -> Parse.namedGroupsBytes gs
+// Missing refinements in `extension` type constructors to be able to prove the length bound
+(** Serializes an extension payload *)
+val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
+let rec extensionPayloadBytes = function
+  | E_server_name []           -> empty_bytes // ServerHello, EncryptedExtensions
+  | E_server_name l            -> vlbytes 2 (serverNameBytes l) // ClientHello
+  | E_supported_groups l       -> namedGroupsBytes l  
   | E_signature_algorithms sha -> sigHashAlgsBytes sha
   | E_key_share ks             -> CommonDH.keyShareBytes ks
-  | E_pre_shared_key psk -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
-  | E_early_data edt           -> earlyDataIndicationBytes edt
-  | E_supported_versions vv    -> supportedVersionsBytes vv
-  | E_cookie c                 -> c // SI: check 
+  | E_pre_shared_key psk       -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
+  | E_early_data edi           -> earlyDataIndicationBytes edi
+  | E_supported_versions vv    ->
+    // Sending TLS 1.3 draft versions, as other implementations are doing
+    vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| versionBytes_draft v) empty_bytes vv)
+  | E_cookie c                 -> (lemma_repr_bytes_values (length c); vlbytes 2 c)
   | E_psk_key_exchange_modes _ -> admit()
   | E_extended_ms              -> empty_bytes
   | E_ec_point_format l        -> ecpfListBytes l
-  | E_unknown_extension (h,b)  -> b
-and extensionBytes role ext =
-    let head = extensionHeaderBytes ext in
-    let payload = extensionPayloadBytes role ext in
-    let payload = vlbytes 2 payload in
-    head @| payload
-and extensionsBytes role exts =
-  vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes role s) empty_bytes exts)
+  | E_unknown_extension (_,b)  -> b
 
+(** Serializes an extension *)
+val extensionBytes: ext:extension -> b:bytes { length b < 65536 }
+let rec extensionBytes ext =
+  let head = extensionHeaderBytes ext in
+  let payload = extensionPayloadBytes ext in
+  lemma_repr_bytes_values (length payload);
+  let payload = vlbytes 2 payload in
+  head @| payload
 
-(* JK: For some reason without that I do not manage to get the
-definition of extensionsBytes *)
-assume val extensionsBytes_def: r:role -> 
-  cl:list extension{repr_bytes (length (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes cl)) <= 2} ->
-  Lemma (requires (True))
-	(ensures (extensionsBytes r cl = vlbytes 2 (List.Tot.fold_left (fun l s -> l @| extensionBytes r s) empty_bytes cl)))
-  [SMTPat (extensionsBytes r cl)]
+type extensions = 
+  exts:list extension {repr_bytes (length (List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts)) <= 2}
 
-(* TODO: inversion lemmas
-val parseEarlyDataIndication: pinverse_t earlyDataIndicationBytes
-val parseExtension: pinverse_t extensionBytes
-val parseExtensions: pinverse_t extensionsBytes
-*)
+val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
+let extensionsBytes exts =
+  let b = List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts in
+  lemma_repr_bytes_values (length b);
+  vlbytes 2 b
+
+// opaque cert_data<1..2^24-1>
+type cert = b:bytes {length b < 16777216}
+
+// CertificateEntry certificate_list<0..2^24-1>;
+// See https://tlswg.github.io/tls13-spec/#rfc.section.4.4.2
+type chain = l:list (cert * extensions) // { ... }
+
 
 (*************************************************
- extension parsing
- *************************************************)
-
-	| ExFail(x,y) -> Error(x,y)
-	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
-	| ExOK l -> correct l
-	end
-      else
-	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
-
-private let err_msg s = "Got inapproprite bytes for " ^ s
+ Extension parsing
+**************************************************)
 
 private val addOnce: extension -> list extension -> Tot (result (list extension))
 let addOnce ext extList =
-    if List.Tot.existsb (sameExt ext) extList then
-        Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
-    else
-        let res = FStar.List.Tot.append extList [ext] in
-        correct(res)
+  if List.Tot.existsb (sameExt ext) extList then
+    Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Same extension received more than once")
+  else
+    let res = FStar.List.Tot.append extList [ext] in
+    correct res
 
-(* SI: API. Called by HandshakeMessages. *)
-(** Parse extension. *)
-val parseEarlyDataIndication: r:role -> b:bytes -> Tot (result earlyDataIndication) (decreases (length b))
-val parseExtension: r:role -> b:bytes -> Tot (result extension) (decreases (length b))
-val parseExtensions: r:role -> b:bytes -> Tot (result (list extension)) (decreases (length b))
-
-val parseEcpfList: bytes -> Tot (result (list ECGroup.point_format))
+val parseEcpfList: bytes -> result (list ECGroup.point_format)
 let parseEcpfList b =
-    let rec aux:b:bytes -> Tot (canFail (ECGroup.point_format)) (decreases (length b)) = fun b ->
-        if equalBytes b empty_bytes then ExOK([])
+    let rec aux: (b:bytes -> Tot (result (list ECGroup.point_format)) (decreases (length b))) = fun b -> 
+        if equalBytes b empty_bytes then Correct []
+        else if length b = 0 then error "malformed curve list" 
         else
-	  if (0 < length b) then 
-	    let (u,v) = split b 1 in
-              (match aux v with
-              | ExFail(x,y) -> ExFail(x,y)
-              | ExOK(l) ->
-                  let cur = match cbyte u with
-                  | 0z -> ECGroup.ECP_UNCOMPRESSED
-                  | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u)
-                  in ExOK(cur :: l))
-	  else ExFail(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed curve list")
+          let u,v = split b 1 in
+          ( match aux v with
+            | Error z -> Error z 
+            | Correct l ->
+              let cur = 
+              match cbyte u with
+              | 0z -> ECGroup.ECP_UNCOMPRESSED
+              | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u) in 
+              Correct (cur :: l))
     in match aux b with
-    | ExFail(x,y) -> Error(x,y)
-    | ExOK(l) -> 
-      if (List.Tot.mem ECGroup.ECP_UNCOMPRESSED l) then
-	correct l
-      else
-        error "uncompressed point format not supported"
+    | Error z -> Error z
+    | Correct l -> 
+      if List.Tot.mem ECGroup.ECP_UNCOMPRESSED l 
+      then correct l
+      else error "uncompressed point format not supported"
 
 (* We don't care about duplicates, not formally excluded. *)
  
 
-let rec parseExtension role b =
+val parseExtension: role -> bytes -> result extension
+let parseExtension role b =
   if length b < 4 then error "extension type: not enough bytes" else 
+  let head, payload = split b 2 in
   match vlparse 2 payload with
-  | Error z -> error ("extension: "^z)
+  | Error (_,s) -> error ("extension: "^s)
   | Correct data -> ( 
     match cbyte2 head with
     | (0x00z, 0x00z) -> mapResult E_server_name (parseServerName role data)
@@ -452,7 +434,7 @@ let rec parseExtension role b =
       if length data < 2 then error "PSK" else 
       mapResult E_pre_shared_key (admit()) (* 17-04-21 TODO PSK.parsePreSharedKey data *) 
 
-    | (0x00z, 0x2az) -> mapResult E_early_data (parseEarlyDataIndication role data)
+    | (0x00z, 0x2az) -> mapResult E_early_data (parseEarlyDataIndication data)
     | (0x00z, 0x2bz) -> mapResult E_supported_versions (parseSupportedVersions data)
 
     | (0xffz, 0x2cz) -> // cookie
@@ -474,43 +456,14 @@ let rec parseExtension role b =
       
     | _ -> Correct(E_unknown_extension(head,data)))
 
-and parseEarlyDataIndication role b =
-  if length b < 2 then Correct ServerEarlyDataIndication (* ??? *) else 
-  match vlsplit 2 b with
-  | Error z -> error "early data indication length"
-  | Correct(config_id, data) ->
-    if length config_id < 3 then error "not enough bytes for configuration id" else (
-    lemma_repr_bytes_values (length config_id);
-    match parseConfigurationId (vlbytes 2 config_id) with
-    | Error z -> Error z 
-    | Correct cid -> (
-      if length data < 2 then error "not enough bytes to parse cipher suite in early data indication" else 
-      let (cs, data) = split data 2 in
-      match parseCipherSuite cs with
-      | Error z -> Error z
-      | Correct cs ->
-        if length data < 2 then error "not enough bytes to parse cipher suite in early data indication" else (
-        match vlsplit 2 data with
-        | Error z -> Error z
-        | Correct(exts, data) -> (
-          match parseExtensions role (vlbytes 2 exts) with
-          | Error z -> Error z
-          | Correct exts ->
-            if length data < 1 then error "not enough bytes to parse cipher suite in early data indication" else (
-            match vlparse 1 data with
-            | Error z -> Error z
-            | Correct ctx -> Correct (ClientEarlyDataIndication ({ 
-                ped_configuration_id = cid;
-                ped_cipher_suite = cs;
-                ped_extensions = exts;
-                ped_context = ctx; })))))))
 
-and parseExtensions role b =
-  let rec (aux:bytes -> list extension -> Tot (result (list extension))) = fun b exts ->
+let parseExtensions role b =
+  let rec aux: 
+    b:bytes -> list extension -> Tot (result (list extension)) (decreases (length b)) = fun b exts ->
     if length b >= 4 then
       let ht, b = split b 2 in
       match vlsplit 2 b with
-      | Error(z) -> error "extension length 2"
+      | Error(z) -> error "extension length"
       | Correct(ext, bytes) -> (
 	(* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
 	match parseExtension role (ht @| vlbytes 2 ext) with
@@ -520,13 +473,13 @@ and parseExtensions role b =
 	  | Error z -> Error z)
 	| Error z -> Error z)
     else Correct exts in
-  if length b < 2 then error "extensions length" else
+  if length b < 2 then error "extensions" else
   match vlparse 2 b with
   | Correct b -> aux b []
-  | Error z -> error "extension length" 
+  | Error z -> error "extensions" 
 
 (* SI: API. Called by HandshakeMessages. *)
-val parseOptExtensions: r:role -> data:bytes -> Tot (result (option (list extension)))
+val parseOptExtensions: r:role -> data:bytes -> result (option (list extension))
 let parseOptExtensions r data =
   if length data = 0 
   then Correct None
@@ -539,12 +492,12 @@ let parseOptExtensions r data =
 
 (* JK: Need to get rid of such functions *)
 (* API. Called by Negotiation *)
-let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): Tot (list cipherSuite) =
+let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSuite =
   match l with 
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
   
-private let rec list_valid_ng_is_list_ng (#p:(namedGroup -> Type)) (l:list (n:namedGroup{p n})): Tot (list namedGroup) = 
+private let rec list_valid_ng_is_list_ng (#p:namedGroup -> Type) (l:list (n:namedGroup{p n})) : list namedGroup = 
   match l with 
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
@@ -573,9 +526,9 @@ val prepareExtensions:
   bool -> 
   bool -> 
   list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) -> 
-  option (TI.cVerifyData * TI.sVerifyData) -> 
+  option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare -> 
-  Tot (l:list extension{List.Tot.length l < 256})
+  l:list extension{List.Tot.length l < 256}
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group. 
    For instance, PSK, HS, etc extensions should all be done in one function each. 
    This seems to make this prepareExtensions more modular. *)
@@ -627,7 +580,7 @@ val matchExtensions: list extension{List.Tot.length l < 256} -> Tot (
   bool *
   bool * 
   list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) *
-  option (TI.cVerifyData * TI.sVerifyData) *
+  option (cVerifyData * sVerifyData) *
   option CommonDH.keyShare )
 let matchExtensions ext = admit()
 
@@ -648,8 +601,8 @@ let prepareExtensions_inverse pv cs sres sren sigAlgs namedGroups ri ks:
 (*
 type renegotiationInfo =
   | FirstConnection
-  | ClientRenegotiationInfo of (TI.cVerifyData)
-  | ServerRenegotiationInfo of (TI.cVerifyData * TI.sVerifyData)
+  | ClientRenegotiationInfo of (cVerifyData)
+  | ServerRenegotiationInfo of (cVerifyData * sVerifyData)
 
 val renegotiationInfoBytes: renegotiationInfo -> Tot bytes
 let renegotiationInfoBytes ri =
@@ -680,13 +633,13 @@ let parseRenegotiationInfo b =
 	    let cvd, svd = split payload 36 in
 	    Correct (ServerRenegotiationInfo (cvd, svd))
 	| _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate length for renegotiation info data (expected 12/24 for client/server in TLS1.x, 36/72 for SSL3"))
-    | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
+    | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse renegotiation info length")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
 *)
 
 (* TODO: remove *)
-private val replace_subtyping: (o:(option (TI.cVerifyData * TI.sVerifyData))) -> Tot (option (bytes*bytes)) 
-let replace_subtyping (o:(option (TI.cVerifyData * TI.sVerifyData))) : Tot (option (bytes*bytes)) =
+private val replace_subtyping: (o:(option (cVerifyData * sVerifyData))) -> Tot (option (bytes*bytes))
+let replace_subtyping (o:(option (cVerifyData * sVerifyData))) : Tot (option (bytes*bytes)) =
   match o with
   | None -> None
   | Some (a,b) -> Some (a,b)
@@ -694,8 +647,8 @@ let replace_subtyping (o:(option (TI.cVerifyData * TI.sVerifyData))) : Tot (opti
 // TODO
 // ADL the negotiation of renegotiation indication is incorrect
 // ADL needs to be consistent with clientToNegotiatedExtension
-private val serverToNegotiatedExtension: TI.config -> list extension -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> bool -> result TI.negotiatedExtensions -> extension -> Tot (result (TI.negotiatedExtensions))
-let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : result (TI.negotiatedExtensions)=
+private val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> result negotiatedExtensions -> extension -> Tot (result (negotiatedExtensions))
+let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : result (negotiatedExtensions)=
     match res with
     | Error(x,y) -> Error(x,y)
     | Correct(l) ->
@@ -718,42 +671,41 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             correct(l)
 	  else
             Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
-      | E_extended_ms -> correct ({l with TI.ne_extended_ms = true})
+      | E_extended_ms -> correct ({l with ne_extended_ms = true})
       | E_ec_point_format spf ->
 	  if resuming then
             correct l
           else
-            correct ({l with TI.ne_supported_point_formats = Some spf})
+            correct ({l with ne_supported_point_formats = Some spf})
 (* not allowed for server
       | E_signature_algorithms sha ->
           if resuming then correct l
 	  else correct ({l with ne_signature_algorithms = Some (sha)})
 *)
       | E_key_share (CommonDH.ServerKeyShare sks) ->
-        Correct ({l with TI.ne_keyShare = Some sks})
+        Correct ({l with ne_keyShare = Some sks})
       | E_supported_groups named_group_list ->
-        Correct ({l with TI.ne_supported_groups = Some named_group_list})
+        Correct ({l with ne_supported_groups = Some named_group_list})
       | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
      else
        Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
 
 
 (* SI: API. Called by Negotiation. *)
-val negotiateClientExtensions: protocolVersion -> TI.config -> option (list extension) -> option (list extension) -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> bool -> Tot (result (TI.negotiatedExtensions))
+val negotiateClientExtensions: protocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
 let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
   match pv with
   | SSL_3p0 ->
      begin
      match sExtL with
-     | None -> Correct TI.ne_default
+     | None -> Correct ne_default
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello")
      end
   | _ ->
      begin 
      match cExtL, sExtL with
-     | _, None when pv <> TLS_1p3 -> Correct TI.ne_default
      | Some cExtL, Some sExtL -> (
-        let nes = TI.ne_default in
+        let nes = ne_default in
         match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
         | Error(x,y) -> Error(x,y)
         | Correct l ->
@@ -762,37 +714,39 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
 	  begin
 	    match List.Tot.tryFind E_signature_algorithms? cExtL with
 	    | Some (E_signature_algorithms shal) ->
-	      correct({l with TI.ne_signature_algorithms = Some shal})
+	      correct({l with ne_signature_algorithms = Some shal})
 	    | None -> correct l
 	    | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
 	  end )
+     | _, None -> 
+       if pv <> TLS_1p3 then Correct ne_default
+       else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
      end 
-
+     
 (* SI: API. Called by Negotiation. *)
-val clientToNegotiatedExtension: TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> bool -> TI.negotiatedExtensions -> extension -> Tot TI.negotiatedExtensions
-let clientToNegotiatedExtension (cfg:TI.config) cs ri resuming neg cExt =
+val clientToNegotiatedExtension: config -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> negotiatedExtensions -> extension -> Tot negotiatedExtensions
+let clientToNegotiatedExtension (cfg:config) cs ri resuming neg cExt =
   match cExt with
   | E_supported_groups l ->
       if resuming then neg
       else
-	  let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.TI.namedGroups) in
-	  {neg with TI.ne_supported_groups = Some (List.Tot.filter isOK l)}
-
+	  let isOK g = List.Tot.existsb (fun (x:Parse.namedGroup) -> x = g) (list_valid_ng_is_list_ng cfg.namedGroups) in
+	  {neg with ne_supported_groups = Some (List.Tot.filter isOK l)}
   | E_ec_point_format l ->
       if resuming then neg
       else
 	  let nl = List.Tot.filter (fun x -> x = ECGroup.ECP_UNCOMPRESSED) l in
-	  {neg with TI.ne_supported_point_formats = Some nl}
+	  {neg with ne_supported_point_formats = Some nl}
   | E_server_name l ->
-      {neg with TI.ne_server_names = Some l}
+      {neg with ne_server_names = Some l}
   | E_signature_algorithms sha ->
       if resuming then neg
-      else {neg with TI.ne_signature_algorithms = Some (sha)}
+      else {neg with ne_signature_algorithms = Some (sha)}
   | _ -> neg // TODO: handle all remaining cases
 
 
-private val clientToServerExtension: protocolVersion -> TI.config -> cipherSuite -> option (TI.cVerifyData * TI.sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> option extension
+private val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> option extension
 let clientToServerExtension pv cfg cs ri ks resuming cext =
   match cext with
   | E_key_share _ ->
@@ -800,7 +754,7 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
   | E_server_name server_name_list ->
     begin
     // See https://tools.ietf.org/html/rfc6066
-    match pv, List.Tot.tryFind TI.SNI_DNS? server_name_list with
+    match pv, List.Tot.tryFind SNI_DNS? server_name_list with
     | TLS_1p3, _   -> None // TODO: SNI goes in EncryptedExtensions in TLS 1.3
     | _, Some name -> Some (E_server_name [])
     end
@@ -811,7 +765,7 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
     else
       Some (E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
   | E_supported_groups named_group_list ->
-    Some (E_supported_groups cfg.TI.namedGroups) // Purely informative
+    Some (E_supported_groups cfg.namedGroups) // Purely informative
   // TODO: handle all remaining cases
   | E_early_data b -> None
   | E_pre_shared_key b -> None
@@ -819,7 +773,7 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
 
 
 (* SI: API. Called by Handshake. *)
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> TI.config -> cipherSuite -> option (TI.cVerifyData*TI.sVerifyData) -> option CommonDH.keyShare -> bool -> Tot (result (option (list extension)))
+val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData*sVerifyData) -> option CommonDH.keyShare -> bool -> Tot (result (option (list extension)))
 let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
    match cExtL with
    | Some cExtL ->
@@ -845,7 +799,8 @@ let default_sigHashAlg_fromSig pv sigAlg=
     | RSASIG ->
         (match pv with
         | TLS_1p2 -> [(RSASIG, Hash SHA1)]
-        | TLS_1p0 | TLS_1p1 | SSL_3p0 -> [(RSASIG,MD5SHA1)])
+        | TLS_1p0 | TLS_1p1 | SSL_3p0 -> [(RSASIG,MD5SHA1)]
+        | TLS_1p3 -> unexpected "[default_sigHashAlg_fromSig] invoked on TLS 1.3")
         //| SSL_3p0 -> [(RSASIG,NULL)]
     | DSA ->
         [(DSA,Hash SHA1)]
@@ -857,8 +812,7 @@ let default_sigHashAlg_fromSig pv sigAlg=
 (* SI: API. Called by HandshakeMessages. *)
 val default_sigHashAlg: protocolVersion -> cipherSuite -> ML (l:list sigHashAlg{List.Tot.length l <= 1})
 let default_sigHashAlg pv cs =
-    default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
-
+  default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
 
 
 (*
@@ -944,32 +898,6 @@ let rec cert_type_list_to_SigAlg ctl =
     | [] -> []
     | h::t -> (cert_type_to_SigAlg h) :: (cert_type_list_to_SigAlg t)
 *)
-// JK : cannot add total effect here because of the exception thrown
-(* JK: changed from Tot (list sigHashAlg) to Tot (result (list (sigAlg*hashAlg))) to match the
-   spec to the code *)
-(* val default_sigHashAlg_fromSig: protocolVersion -> sigAlg -> Tot (result (list (sigAlg*hashAlg))) *)
-(* let default_sigHashAlg_fromSig pv sigAlg= *)
-(*     match sigAlg with *)
-(*     | RSASIG -> ( *)
-(*         match pv with *)
-(*         | TLS_1p2 -> Correct [(RSASIG, Hash SHA1)] *)
-(*         | TLS_1p0 | TLS_1p1 | SSL_3p0 -> Correct [(RSASIG,MD5SHA1)] *)
-(* 	| _ -> Error (AD_internal_error, perror __SOURCE_FILE__ __LINE__ "[default_sigHashAlg_fromSig] invoked on an invalid") *)
-(* 	) *)
-(*         //| SSL_3p0 -> [(RSASIG,NULL)] *)
-(*     | DSA -> *)
-(*         Correct [(DSA,Hash SHA1)] *)
-(*         //match pv with *)
-(*         //| TLS_1p0| TLS_1p1 | TLS_1p2 -> [(DSA, SHA1)] *)
-(*         //| SSL_3p0 -> [(DSA,NULL)] *)
-(*     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "[default_sigHashAlg_fromSig] invoked on an invalid signature algorithm") *)
-
-(* val default_sigHashAlg: protocolVersion -> cipherSuite -> (result (l:list sigHashAlg{List.Tot.length l <= 1})) *)
-(* let default_sigHashAlg pv cs = *)
-(*   admit(); *)
-(*   match default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs) with *)
-(*   | Correct (l) -> Correct(l) *)
-(*   | Error(z) -> Error(z) *)
 
 (* val sigHashAlg_contains: list sigHashAlg -> sigHashAlg -> Tot bool *)
 (* let sigHashAlg_contains (algList:list sigHashAlg) (alg:sigHashAlg) = *)
