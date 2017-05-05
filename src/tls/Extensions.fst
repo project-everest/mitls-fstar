@@ -40,8 +40,9 @@ noeq type psk =
   // this is just an index in the client offer's PSK extension
   | ServerPSK of UInt16.t 
 
-let psk_bytes: psk -> Tot bytes = admit()
-let parse_psk: pinverse_t psk_bytes = admit()
+//TODO
+//let psk_bytes: psk -> Tot bytes = admit()
+//let parse_psk: pinverse_t psk_bytes = admit()
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
 // restricting both proposed PSKs and future ones sent by the server
@@ -143,7 +144,7 @@ let rec parseVersions b =
   | 1 -> Error (AD_decode_error, "malformed version list") 
   | _ -> 
     let b2, b' = split b 2 in
-    match TLSConstants.parseVersion b2 with 
+    match TLSConstants.parseVersion_draft b2 with 
     | Error z -> Error z
     | Correct v -> 
       match parseVersions b' with 
@@ -456,7 +457,7 @@ let parseExtension role b =
       
     | _ -> Correct(E_unknown_extension(head,data)))
 
-
+val parseExtensions: role -> b:bytes -> result (list extension)
 let parseExtensions role b =
   let rec aux: 
     b:bytes -> list extension -> Tot (result (list extension)) (decreases (length b)) = fun b exts ->

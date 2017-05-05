@@ -846,7 +846,7 @@ let recv_ccs (hs:hs) =
             InAck true false // Client 1.2 ATK
             )
 
-        | C_Wait_CCS2 digest, [SessionTicket st], [] -> (
+        | C_Wait_CCS2 digest, [NewSessionTicket st], [] -> (
             trace "Processing SessionTicket; CCS. WARNING: no support for tickets";
             // now expect encrypted finish on this digest; shall we tell Nego?
             hs.state := C_Wait_Finished2 digest;

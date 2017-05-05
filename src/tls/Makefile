@@ -431,10 +431,10 @@ test.out: mitls.cmxa
 test: test.out mitls.exe
 	# Unit tests from test/test_main.ml
 	$(EXTRA_PATH) ./test.out
-	# Run mitls.exe 1.2
-	./mitls.exe www.google.com 443 -v 1.2
-	# Run mitls.exe 1.3. Broken right now. 
-	# mitls-fstar/src/tls/mitls.exe tls13.crypto.mozilla.org 443
+	# Run mitls.exe 
+	./mitls.exe  -v 1.2 -ffi www.google.com
+	./mitls.exe  -v 1.2 -noems www.microsoft.com
+	#./mitls.exe -v 1.3. www.google.com failing due to different draft versions
 
 # Depends on mitls.cmxa
 rpc.ml:
@@ -465,20 +465,18 @@ tls-ffi: mitls.cmxa
 endif
 endif
 
-# our interactive tests
+# our interactive tests; the baseline is make client{|12|13} vs make server 
 
+server::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
 server12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
-
 server13::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
 
-client13-local::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
-
-client12-local::
+client13::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
+client12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
-
-# offering both
-client-local::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+client::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443
