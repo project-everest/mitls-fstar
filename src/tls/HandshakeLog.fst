@@ -1,4 +1,4 @@
-module Handshake.Log
+module HandshakeLog
 
 
 open FStar.Heap
