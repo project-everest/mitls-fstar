@@ -268,7 +268,7 @@ private let sameExt e1 e2 =
 (*************************************************
  extension formatting
  *************************************************)
- 
+
 private val extensionHeaderBytes: extension -> Tot bytes
 let extensionHeaderBytes ext =
   match ext with             // 4.2 ExtensionType enum value
