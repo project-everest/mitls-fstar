@@ -510,7 +510,7 @@ private let sendAlert (c:connection) (ad:alertDescription) (reason:string)
 // Sending handshake messages on a given writer
 ////////////////////////////////////////////////////////////////////////////////
 let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c)) 
-		       (om:option (Handshake.Log.fragment i)) (send_ccs:bool) (h0:HST.mem) r (h1:HST.mem) = 
+		       (om:option (HandshakeLog.fragment i)) (send_ccs:bool) (h0:HST.mem) r (h1:HST.mem) = 
       modifies_just (opt_writer_regions wopt) (HST.HS?.h h0) (HST.HS?.h h1)    //didn't modify more than the writer's regions
       /\ (match wopt with
  	 | None -> True
@@ -541,7 +541,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       else frags1==frags0')))))
 
 #reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (Handshake.Log.fragment i)) (send_ccs:bool)
+private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (HandshakeLog.fragment i)) (send_ccs:bool)
   : ST (result unit)
        (requires (sendFragment_inv wopt))
        (ensures (fun h0 r h1 -> 
@@ -610,7 +610,7 @@ let next_fragment_pre (i:id) (c:connection) h0 =
     Handshake.hs_inv s h0 /\
     maybe_indexable es j /\
     (if j = -1 then PlaintextID? i else i == epoch_id es.(j))
-val next_fragment: i:id -> c:connection -> ST (result (Handshake.Log.outgoing i))
+val next_fragment: i:id -> c:connection -> ST (result (HandshakeLog.outgoing i))
   (requires (next_fragment_pre i c))
   (ensures (fun h0 result h1 -> 
     Handshake.next_fragment_ensures #i c.hs h0 result h1 /\
@@ -687,7 +687,7 @@ let rec writeHandshake h_init c new_writer =
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Error (ad,reason) -> sendAlert c ad reason
-  | Correct(Handshake.Log.Outgoing om send_ccs next_keys complete) -> 
+  | Correct(HandshakeLog.Outgoing om send_ccs next_keys complete) -> 
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change

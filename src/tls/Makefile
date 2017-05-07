@@ -1,9 +1,17 @@
-# These are all the known working targets in this file,
-# Check for regressions & comment about them!
+MITLS_HOME ?= ../..
+FSTAR_HOME ?= ../../../FStar
+KREMLIN_HOME ?= ../../../kremlin
+HACL_HOME ?= ../../../hacl-star
+FFI_HOME ?= $(MITLS_HOME)/libs/ffi
+MARCH ?= x86_64
+ODIR ?= output
 
-# NOTE: the sequence of subtargets in all, build and verify
-# must be processed sequentially,
-# but each subtarget alone can be built with parallelism enabled.
+FSTARFLAGS = --fstar_home $(FSTAR_HOME) $(OTHERFLAGS)
+FSTAR = $(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
+
+HINTS_ENABLED ?= --use_hints
+VERFLAGS = --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
+
 all:
 	+$(MAKE) build
 	+$(MAKE) verify
@@ -17,74 +25,42 @@ verify:
 	+$(MAKE) tls-sanity
 	+$(MAKE) tls-lax
 
-.PHONY: all build verify
-
-CONTRIB=ucontrib
-LIB=ulib
-MITLS_HOME?=../..
-FFI_HOME=$(MITLS_HOME)/libs/ffi
-MARCH?=x86_64
+depend:
+	-rm .depend* $(ODIR)/.depend $(ODIR)/.deporder
 
 clean:
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean MEM=HST
-	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml clean
-	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/Platform/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/ulib/ml clean MEM=HST
+	$(MAKE) -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml clean
+	$(MAKE) -C $(FSTAR_HOME)/ucontrib/Platform/ml clean
+	$(MAKE) -C $(HACL_HOME)/secure_api/LowCProvider clean
 	$(MAKE) -C $(FFI_HOME) clean
-	rm -rf *.ml *.p.* *.cm* *.o *.a *.exe *~ *.out output
-	rm -rf test/*.cm* test/*.o
+	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *~ *.out $(ODIR) 
+	-rm -rf test/*.cm* test/*.o
 
-# ------------------ Dependencies on F* & its libraries --------------
-# Default F* location. 
-FSTAR_HOME?=../../../FStar
-# This location can easily be overridden by doing:
-#   FSTAR_HOME=../../../fstar make mitls.exe
-# BUT NOT AS FOLLOWS
-#   make FSTAR_HOME=../../../fstar mitls.exe
-# the latter form won't work because FSTAR_HOME will incorrectly override
-# values in recursive invocations of $(MAKE)...
-
-.PHONY: record_fstar_version
 record_fstar_version:
-	$(FSTAR_HOME)/bin/fstar.exe --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > ../../.fstar_version
+	$(FSTAR) --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > $(MITLS_HOME)/.fstar_version
 
-# .fst files in [ulib/ml] that are realized in fstarlib.cmxa
-STDLIB_REALIZED=All List.Tot.Base List Heap Set Map ST HyperHeap HyperStack IO
+.PHONY: all build verify depend clean record_fstar_version
 
-OPTIONS=--fstar_home $(FSTAR_HOME)
-
-CODEGEN_LIBS=CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
-
-FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
-      $(FSTARFLAGS)
-
+STDLIB_REALIZED=Mul Float Char Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack ST All
+CODEGEN_LIBS=Platform
+# CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
 PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
-PDIR=$(FSTAR_HOME)/$(CONTRIB)/Platform/fst/
-PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
-
-CDIR=$(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/fst/
-HACLDIR ?= ../../../hacl-star
-KREMLIN_HOME ?= ../../../kremlin
-LLDIR=$(HACLDIR)/secure_api
+PDIR=$(FSTAR_HOME)/ucontrib/Platform/fst/
+CDIR=$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/
+LLDIR=$(HACL_HOME)/secure_api
 LCDIR=$(LLDIR)/LowCProvider
 
-CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
+# Modules that are implemented in ML or C
+NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) CoreCrypto LowCProvider FFICallbacks)
 
-HINTS_ENABLED?=--use_hints
-VERFLAGS=--max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 \
-  --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection \
-  $(HINTS_ENABLED)
-
-# The .fst interfaces for the platform and crypto libraries.
-LIBFILES=$(PLATFORM) $(CRYPTO) $(FFI_HOME)/FFICallbacks.fst
-
-HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACLDIR)/specs $(HACLDIR)/code/lib/kremlin $(HACLDIR)/code/bignum $(HACLDIR)/code/experimental/aesgcm $(HACLDIR)/code/poly1305 $(HACLDIR)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
+HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $(HACL_INCLUDES) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
 
-OCAMLOPTS=-package batteries,stdint,fileutils,sqlite3,zarith -linkpkg -g -thread -w a+A-27
-OCAML=ocamlfind ocamlopt
-OCAMLMKLIB=ocamlfind mklib
-OCAML_INCLUDE_PATHS=$(addprefix -I , $(FSTAR_HOME)/$(LIB)/ml/extracted $(FSTAR_HOME)/$(LIB)/ml/hyperstack $(FSTAR_HOME)/$(LIB)/ml $(FSTAR_HOME)/$(CONTRIB)/Platform/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/db $(LCDIR) ../../libs/ml $(FFI_HOME))
+OCAMLPKG=-package batteries,stdint,fileutils,sqlite3,zarith
+OCAMLOPTS=$(OCAMLPKG) -linkpkg -g -thread -w -a
+OCAML_PATHS=test $(ODIR) $(FSTAR_HOME)/ulib/ml/extracted $(FSTAR_HOME)/ulib/ml/hyperstack $(FSTAR_HOME)/ulib/ml $(FSTAR_HOME)/ucontrib/Platform/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/db $(LCDIR) ../../libs/ml $(FFI_HOME)
+OCAML_INCLUDE_PATHS=$(addprefix -I ,$(OCAML_PATHS))
 
 # Since quite a few people forget to set that in their path... eventually,
 # everyone should have it in their ~/.bashrc
@@ -92,151 +68,9 @@ ifeq ($(OS),Windows_NT)
   EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
 endif
 
-# ---------------------------------------------------------------------
-# These files are all extracted via lax type-checking in mitls.cmxa
-# Files are listed in dependency order
-
-FSTS=Flags.fst \
-MonotoneMap.fst \
-TLSError.fst \
-Hashing.Spec.fst \
-Transport.fst \
-Parse.fst \
-DHGroup.fst \
-FStar.Endianness.fst \
-Spec.Loops.fst \
-Spec.Lib.fst \
-Spec.Curve25519.Lemmas.fst \
-Spec.Curve25519.fst \
-Curve25519.fst \
-ECGroup.fst \
-CommonDH.fst \
-TLSConstants.fst \
-Nonce.fst \
-RSAKey.fst \
-PMS.fst \
-Hashing.OpenSSL.fst \
-Hashing.fst \
-Hashing.CRF.fst \
-HMAC.fst \
-PSK.fst \
-Extensions.fst \
-TLSInfo.fst \
-HMAC.UFCMA.fst \
-IdNonce.fst \
-Cert.fst \
-Signature.fst \
-Buffer.Utils.fst \
-Crypto.Symmetric.Bytes.fst \
-Crypto.Indexing.fst \
-Flag.fst \
-Vale.AES.fst \
-Crypto.Symmetric.AES.fst \
-Crypto.Symmetric.AES128.fst \
-Hacl.UInt8.fst \
-Hacl.UInt32.fst \
-Hacl.UInt64.fst \
-Hacl.UInt128.fst \
-C.fst \
-C.Loops.fst \
-Hacl.Endianness.fst \
-Hacl.Lib.LoadStore32.fst \
-Spec.CTR.fst \
-Spec.Chacha20.fst \
-Hacl.Impl.Chacha20.fst \
-Hacl.SecureAPI.Chacha20.fst \
-Crypto.Symmetric.Cipher.fst \
-Hacl.Bignum.Constants.fst \
-Hacl.Bignum.Parameters.fst \
-FStar.Math.Lib.fst \
-Spec.Poly1305.Lemmas.fst \
-Spec.Poly1305.fst \
-Hacl.Bignum.Wide.fst \
-Hacl.Bignum.Limb.fst \
-Hacl.Spec.Bignum.Fproduct.fst \
-Hacl.Spec.Bignum.Modulo.fst \
-Hacl.Spec.Bignum.Fmul.fst \
-Hacl.Spec.Bignum.Fsum.fst \
-Hacl.Spec.Bignum.AddAndMultiply.fst \
-Hacl.Spec.Bignum.Bigint.fst \
-Hacl.Spec.Bignum.Field.fst \
-Hacl.Spec.Poly1305_64.fst \
-Hacl.Bignum.Fproduct.fst \
-Hacl.Bignum.Modulo.fst \
-Hacl.Bignum.Fmul.fst \
-Hacl.Bignum.Fsum.fst \
-Hacl.Bignum.AddAndMultiply.fst \
-Hacl.Impl.Poly1305_64.fst \
-Spec.GaloisField.fst \
-Spec.GF128.fst \
-Crypto.Symmetric.GF128.Spec.fst \
-Crypto.Symmetric.GF128.fst \
-Crypto.Symmetric.MAC.fst \
-Crypto.Symmetric.UF1CMA.fst \
-Crypto.Plain.fst \
-Crypto.Symmetric.PRF.fst \
-Crypto.AEAD.Encoding.fst \
-Crypto.AEAD.Invariant.fst \
-Crypto.AEAD.Wrappers.PRF.fst \
-Crypto.AEAD.EnxorDexor.fst \
-Crypto.AEAD.Wrappers.Encoding.fst \
-Crypto.AEAD.Wrappers.CMA.fst \
-Crypto.AEAD.fst \
-Crypto.AEAD.Encrypt.fst \
-Crypto.AEAD.Decrypt.fst \
-Crypto.AEAD.Main.fsti \
-Crypto.AEAD.Main.fst \
-AEADOpenssl.fst \
-AEADProvider.fst \
-Range.fst \
-DataStream.fst \
-Alert.fst \
-Content.fst \
-StreamPlain.fst \
-StatefulPlain.fst \
-LHAEPlain.fst \
-StreamAE.fst \
-AEAD_GCM.fst \
-MAC.fst \
-Encode.fst \
-StatefulLHAE.fst \
-ENC.fst \
-HandshakeMessages.fst \
-StAE.fst \
-StreamDeltas.fst \
-Record.fst \
-HKDF.fst \
-TLSPRF.fst \
-MasterSecret.fst \
-Handshake.Log.fsti \
-Handshake.Log.fst \
-Negotiation.fst \
-KeySchedule.fst \
-Epochs.fst \
-Handshake.fsti \
-Handshake.fst \
-Connection.fst \
-TLS.fst \
-FFI.fst \
-test/TestRecord.fst \
-test/TestDH.fst \
-test/TestKS.fst \
-test/TestGCM.fst \
-test/TestFFI.fst \
-test/TestAPI.fst #the preceding space is significant!
-#test/TestHandshake.fst // Outdated since HS refactor
-#17-04-13 removed ConnInvariant.fst, verifying but not used yet
-
 # --------------------------------------------------------------------
 # Modules verified in tls-ver -- any time one more file verifies, it
 # should be added here.
-#
-# Missing modules from FSTS:
-# Extensions, Encode, ENC, HandshakeMessages,
-# TLSPRF, PRF, HandshakeLog, KeySchedule, Handshake
-
-
-# temporary removals
 
 VERIFY= \
 Flags \
@@ -277,7 +111,7 @@ MAC_SHA256 \
 MAC_SHA1 \
 StAE \
 KeySchedule \
-Handshake.Log \
+HandshakeLog \
 Handshake \
 StreamDeltas \
 HKDF \
@@ -287,10 +121,111 @@ ConnInvariant \
 TLS \
 FFI
 
-depend:
-	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make TLS.fst > .depend
+.depend-TLS: $(wildcard *.fst *.fsti)
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make FFI.fst > .depend-TLS
+.depend-HS: $(wildcard *.fst *.fsti)
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make Handshake.fst > .depend-HS
+.depend-AEAD: $(wildcard $(HACL_HOME)/secure_api/*/*.fst)
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make Crypto.AEAD.Main.fst > .depend-AEAD
 
-#include .depend
+-include .depend-TLS
+-include .depend-HS
+-include .depend-AEAD
+
+# Makefile voodoo to substitute _ for . in module names
+# Note that this is not sound if the F* module name contains an underscore (e.g. AEAD_GCM.fst)
+# The dependencies are handled by the .depend files above to allow semi-incremental extraction
+# (it is only incremental on connected components of the dependency graph rather than on a per-module basis)
+.SECONDEXPANSION:
+$(ODIR)/%.ml: $$(subst _,.,%.fst)
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
+	--odir $(ODIR) $(NOEXTRACT) \
+	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	--include concrete-flags $<
+
+$(ODIR)/Test%.ml: test/Test%.fst
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
+	--odir $(ODIR) $(NOEXTRACT) \
+	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	--include concrete-flags --extract_module Test$(*F) $<
+
+# Special case for Crypto.AEAD.*: must look in hacl-star/secure_api/aead
+# Note that dependencies have absolute paths in the .depend so there is no need 
+# to specialize for other internal Hacl paths
+$(ODIR)/Crypto_AEAD_%.ml: $(LLDIR)/aead/Crypto.AEAD.%.fst
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
+	--odir $(ODIR) $(NOEXTRACT) \
+	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	--include concrete-flags $<
+
+# miTLS flags: extract with concrete
+$(ODIR)/Flags.ml: concrete-flags/Flags.fst
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
+	--odir $(ODIR) $(NOEXTRACT) \
+	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	--include concrete-flags $<
+
+# Hacl flags: extract with concrete
+$(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
+	--odir $(ODIR) $(NOEXTRACT) \
+	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	--include concrete-flags $<
+
+# Try to only rebuild fstarlib when necessary
+$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa: \
+       		$(wildcard $(FSTAR_HOME)/ulib/*.fst) \
+		$(wildcard $(FSTAR_HOME)/ulib/ml/*.ml) \
+	       	$(wildcard $(FSTAR_HOME)/ulib/ml/extracted/*.ml) \
+		$(wildcard $(FSTAR_HOME)/ulib/ml/hyperstack/*.ml)
+	make -C $(FSTAR_HOME)/ulib/ml MEM=HST
+
+# Try to only rebuild CoreCrypto when necessary
+$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
+		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
+	make -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml
+
+# Try to only rebuild LowCProvider when necessary
+# Missing: not dependency on hacl-star/code/*
+$(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
+	make -C $(LCDIR)
+
+$(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
+	make -C $(FFI_HOME)
+
+$(ODIR)/.depend: \
+		$(ODIR)/Flag.ml $(ODIR)/Flags.ml \
+	       	$(ODIR)/Crypto_AEAD_Main.ml \
+	       	$(ODIR)/HandshakeLog.ml \
+	       	$(ODIR)/Handshake.ml \
+	       	$(ODIR)/FFI.ml \
+		$(ODIR)/TestAPI.ml \
+		$(ODIR)/TestFFI.ml
+	ocamlfind ocamldep -native -slash -all $(OCAMLPKG) $(OCAML_INCLUDE_PATHS) $(addsuffix /*.ml,$(OCAML_PATHS)) > $(ODIR)/.depend
+
+-include $(ODIR)/.depend
+
+%.cmi %.cmx: %.ml
+	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
+
+$(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
+	echo `ls -rt output/*.cmx` > $(ODIR)/.deporder
+
+mitls.cmxa: \
+	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
+       	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+       	$(LCDIR)/LowCProvider.cmxa \
+	$(FFI_HOME)/FFICallbacks.cmxa \
+	$(ODIR)/.deporder
+	ocamlfind ocamlopt $(OCAML_INCLUDE_PATHS) -a `cat $(ODIR)/.deporder` -o mitls.cmxa
+
+mitls.exe: mitls.cmxa test/mitls.cmx
+	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
+	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
+	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(FFI_HOME)/FFICallbacks.cmxa \
+	mitls.cmxa test/mitls.cmx -o mitls.exe
 
 all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
@@ -338,116 +273,30 @@ tls-sanity: record_fstar_version $(LIBFILES)
         --verify_module False \
 	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
 
-# Lax typecheck all files (with ideal flag off)
 tls-lax: record_fstar_version $(LIBFILES)
-	$(FSTAR) --lax \
-	$(FSTAR_INCLUDE_PATHS) \
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax \
 	--include $(MITLS_HOME)/src/tls/concrete-flags \
-	$(FSTS)
+	TLS.fst
 
 wc:
-	wc -l $(LIBFILES) $(FSTS)
+	wc -l $(LIBFILES) *.fst *.fsti
 
-# These are the .cmx files for all ML-implemented F* modules.
-# CoreCrypto has DB, DHDB, Platform and CoreCrypto all together.
-# fstarlib has the entire F* standard library.
-# Warning: remember that ORDER MATTERS for the GNU linker which discards unused
-# symbols... this is why libllcrypto comes AFTER lowc_stub
-LIB_ML= \
-  $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml/CoreCrypto.cmxa \
-  $(FSTAR_HOME)/$(LIB)/ml/fstarlib.cmxa \
-  $(LCDIR)/lowc_stub.o \
-  $(LCDIR)/libllcrypto.a \
-  $(LCDIR)/LowCProvider.cmx \
-  $(FFI_HOME)/FFICallbacks.cmxa
-
-# .fst files realized elsewhere.
-TLSGEN_REALIZED=$(addprefix --no_extract ,$(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) SessionDB DB DHDB CoreCrypto LowCProvider FFICallbacks)
-
-OUTPUT_DIR?=output
-
-# All our extracted modules.
-TLSML := $(subst .,_,$(FSTS))
-# fsti's are not extracted to mli, drop them
-TLSML := $(patsubst %_fsti,,$(TLSML))
-TLSML := $(subst _fst,.ml,$(TLSML))
-# F* does not provide an implementation for these in fstarlib.cmxa, so add them
-# to our own list.
-TLSML := \
-  FStar_Ghost.ml FStar_Seq_Base.ml \
-  FStar_List_Tot_Properties.ml FStar_List_Tot.ml FStar_BitVector.ml FStar_UInt.ml \
-  FStar_Seq_Properties.ml FStar_Seq.ml FStar_Monotonic_RRef.ml \
-  FStar_Monotonic_Seq.ml \
-  $(TLSML)
-# Last step: prefix with the output directory.
-TLSML := $(addprefix $(OUTPUT_DIR)/,$(notdir $(TLSML)))
-TLSML := $(TLSML) $(FFI_HOME)/FFIRegister.ml
-
-# Note to self: there is little point in breaking down this rule into more
-# atomic ones. One may hope that we can only rebuild the .ml files that have
-# changed; however, extraction is a global operation that touches every .ml
-# file; as make is only aware of mtimes (and not hashsums), we would rebuild
-# every single .ml file anyway...
-
-mitls.cmxa: record_fstar_version $(LIBFILES)
-	mkdir -p $(OUTPUT_DIR)
-	# Build $(FFI_HOME)/FFICallbacks.cmxa
-	$(MAKE) -C $(FFI_HOME)
-	$(FSTAR) \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj Extensions \
-	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
-	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	  $(FSTAR_INCLUDE_PATHS) \
-	  --include $(MITLS_HOME)/src/tls/concrete-flags \
-	  $(FSTS)
-	# Note (JP): the Makefile seems incorrect and we need to run make clean
-	# first
-	# Make OCaml version of F* libs. 
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml clean
-	# Builds everything against prims, setting MEM=HST
-	$(MAKE) -C $(FSTAR_HOME)/$(LIB)/ml MEM=HST
-	# Recursively builds everything in platform, etc.
-	$(MAKE) -C $(FSTAR_HOME)/$(CONTRIB)/CoreCrypto/ml
-	# Low-level C record stack
-	$(MAKE) -C $(LCDIR)
-	# # All our .cmx files
-	$(OCAML) $(OCAMLOPTS) -w -a $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) -c $(TLSML)
-	# A .cmxa with all the .cmx above
-	$(OCAML) -a $(OCAML_INCLUDE_PATHS) $(TLSML:.ml=.cmx) -I $(OUTPUT_DIR) -o mitls.cmxa
-
-#16-10-19 beware: failing tests in mitls.cmxa will leave mitls.exe unchanged.
-mitls.exe:  mitls.cmxa 
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) -g mitls.cmxa \
-		-I test/ -I output/ test/mitls.ml -o mitls.exe
-
-test.run:
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
-	./test.out
-
-test.out: mitls.cmxa 
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I $(OUTPUT_DIR) $(LIB_ML) mitls.cmxa -I test/ test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
+test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml
+	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
+	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
+	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	mitls.cmxa \
+	$(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
 .PHONY: test
 test: test.out mitls.exe
 	# Unit tests from test/test_main.ml
 	$(EXTRA_PATH) ./test.out
-	# Run mitls.exe 1.2
-	./mitls.exe www.google.com 443 -v 1.2
-	# Run mitls.exe 1.3. Broken right now. 
-	# mitls-fstar/src/tls/mitls.exe tls13.crypto.mozilla.org 443
-
-# Depends on mitls.cmxa
-rpc.ml:
-	$(FSTAR) \
-	  --no_location_info --lax --codegen OCaml --__temp_no_proj Extensions \
-	  --__temp_no_proj FStar.Heap --odir $(OUTPUT_DIR) $(TLSGEN_REALIZED) \
-	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	  $(FSTAR_INCLUDE_PATHS) \
-	  test/Formatting.fst test/RPC.fst
-
-rpc.exe:
-	$(OCAML) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) $(LIB_ML) mitls.cmxa \
-		-I output/ output/Formatting.ml output/RPC.ml test/rpc_test.ml -o rpc.exe
+	# Run mitls.exe 
+	./mitls.exe  -v 1.2 -ffi www.google.com
+	./mitls.exe  -v 1.2 -noems www.microsoft.com
+	#./mitls.exe -v 1.3. www.google.com failing due to different draft versions
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
@@ -465,20 +314,18 @@ tls-ffi: mitls.cmxa
 endif
 endif
 
-# our interactive tests
+# our interactive tests; the baseline is make client{|12|13} vs make server 
 
+server::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
 server12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
-
 server13::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
 
-client13-local::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
-
-client12-local::
+client13::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
+client12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
-
-# offering both
-client-local::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443 -groups P-521 -ciphers TLS_AES_128_GCM_SHA256 -sigalgs RSA+SHA256
+client::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443

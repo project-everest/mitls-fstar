@@ -2,7 +2,7 @@
 (**
 This modules defines TLS 1.3 Extensions. 
 
-- An ast, and it's associated parsing and formatting functions. 
+- An AST, and it's associated parsing and formatting functions. 
 - Nego calls prepareExtensions : config -> list extensions. 
 
 @summary: TLS 1.3 Extensions. 
@@ -18,11 +18,31 @@ open TLSConstants
  Define extension. 
  *************************************************)
 
+(* As a static invariant, we record that any intermediate, parsed
+extension and extension lists can be formatted into bytes without
+overflowing 2^16. This create dependencies on the formatting
+functions, at odd with recursive extensions. *)
+
+let error s = Error (AD_decode_error, ("Extensions parsing: "^s))
+
+//17-05-01 deprecated---use TLSError.result instead? 
+(** local, failed-to-parse exc. *)
+private type canFail (a:Type) =
+| ExFail of alertDescription * string
+| ExOK of list a
+
+
+(* PRE-SHARED KEYS AND KEY EXCHANGES *) 
+
 noeq type psk = 
   // this is the truncated PSK extension, without the list of binder tags.
   | ClientPSK of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)
   // this is just an index in the client offer's PSK extension
   | ServerPSK of UInt16.t 
+
+//TODO
+//let psk_bytes: psk -> Tot bytes = admit()
+//let parse_psk: pinverse_t psk_bytes = admit()
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
 // restricting both proposed PSKs and future ones sent by the server
@@ -34,15 +54,194 @@ type psk_kex =
 type client_psk_kexes = l:list psk_kex 
   { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
 
-// The length reflects the RFC format constraint <2..254> 
+let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
+
+val psk_kex_bytes: psk_kex -> Tot (lbytes 1)
+let psk_kex_bytes = function 
+  | PSK_KE -> abyte 0z 
+  | PSK_DHE_KE -> abyte 1z
+let parse_psk_kex: pinverse_t psk_kex_bytes = fun b -> match cbyte b with 
+  | 0z -> Correct PSK_KE
+  | 1z -> Correct PSK_DHE_KE
+  | _ -> error  "psk_key"
+
+let client_psk_kexes_bytes (ckxs: client_psk_kexes): b:bytes {length b <= 3} = 
+  let content: b:bytes {length b = 1 || length b = 2} = 
+    match ckxs with 
+    | [x] -> psk_kex_bytes x
+    | [x;y] -> psk_kex_bytes x @| psk_kex_bytes y in
+  lemma_repr_bytes_values (length content);
+  vlbytes 1 content
+
+let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b -> 
+  if equalBytes b (client_psk_kexes_bytes [PSK_KE]) then Correct [PSK_KE] else 
+  if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE]) then Correct [PSK_DHE_KE] else
+  if equalBytes b (client_psk_kexes_bytes [PSK_KE; PSK_DHE_KE]) then Correct [PSK_KE; PSK_DHE_KE]  else
+  if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE; PSK_KE]) then Correct [PSK_DHE_KE; PSK_KE] 
+  else error "PSK KEX payload"
+  // redundants lists yield an immediate decoding error.
+
+
+(* EARLY DATA INDICATION *) 
+
+type earlyDataIndication = option UInt32.t // Some  max_early_data_size, only in  NewSessionTicket
+
+val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
+let earlyDataIndicationBytes = function
+  | None -> empty_bytes // ClientHello, EncryptedExtensions
+  | Some max_early_data_size -> // NewSessionTicket
+    let n = UInt32.v max_early_data_size in    
+    lemma_repr_bytes_values n;
+    bytes_of_int 4 n
+
+val parseEarlyDataIndication: bytes -> result earlyDataIndication
+let parseEarlyDataIndication data =
+  match length data with 
+  | 0 -> Correct None 
+  | 4 -> 
+      let n = int_of_bytes data in
+      lemma_repr_bytes_values n;
+      assert_norm (pow2 32 == 4294967296);
+      Correct (Some (UInt32.uint_to_t n))
+  | _ -> error "early data indication" 
+  
+
+(* EC POINT FORMATS *) 
+
+let rec ecpfListBytes_aux: list ECGroup.point_format -> bytes = function
+  | [] -> empty_bytes
+  | ECGroup.ECP_UNCOMPRESSED :: r -> abyte 0z @| ecpfListBytes_aux r
+  | ECGroup.ECP_UNKNOWN t :: r -> bytes_of_int 1 t @| ecpfListBytes_aux r
+
+val ecpfListBytes: l:list ECGroup.point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
+let ecpfListBytes l =
+  let al = ecpfListBytes_aux l in
+  lemma_repr_bytes_values (length al);
+  let bl:bytes = vlbytes 1 al in
+  bl
+
+
+(* PROTOCOL VERSIONS *) 
+
+// The length exactly reflects the RFC format constraint <2..254> 
 type protocol_versions =
   l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
-type earlyDataIndication = option UInt32.t // Only Some for NewSessionTicket
+val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
+let protocol_versions_bytes vs =
+  vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vs)
+  // todo length bound; do we need an ad hoc variant of fold? 
+  
+//17-05-01 added a refinement to control the list length; this function verifies.
+//17-05-01 should we use generic code to parse such bounded lists?
+//REMARK: This is not tail recursive, contrary to most of our parsing functions
+val parseVersions: 
+  b:bytes -> 
+  Tot (result (l:list TLSConstants.protocolVersion {FStar.Mul.( length b == 2 * List.Tot.length l)})) (decreases (length b))
+let rec parseVersions b =
+  match length b with 
+  | 0 -> let r = [] in assert_norm (List.Tot.length [] = 0); Correct r
+  | 1 -> Error (AD_decode_error, "malformed version list") 
+  | _ -> 
+    let b2, b' = split b 2 in
+    match TLSConstants.parseVersion_draft b2 with 
+    | Error z -> Error z
+    | Correct v -> 
+      match parseVersions b' with 
+      | Error z -> Error z 
+      | Correct vs -> (
+          let r = v::vs in 
+          assert_norm (List.Tot.length (v::vs) = 1 + List.Tot.length vs); // did not find usable length lemma in List.Tot
+          Correct r)
 
-(** RFC 4.2 'Extension' Table's type definition. *)
-noeq 
-type extension =
+val parseSupportedVersions: b:bytes{2 < length b /\ length b < 256} -> result protocol_versions
+let parseSupportedVersions b =
+  match vlparse 1 b with
+  | Error z -> error "protocol versions"
+  | Correct b ->
+    begin
+    match parseVersions b with
+    | Error z -> Error z
+    | Correct vs ->
+      let n = List.Tot.length vs in
+      if 1 <= n && n <= 127 
+      then Correct vs 
+      else  error "too many or too few protocol versions"
+    end
+
+
+(* SERVER NAME INDICATION *) 
+
+private val serverNameBytes: list serverName -> Tot bytes
+let serverNameBytes l =
+  let rec (aux:list serverName -> Tot bytes) = function
+  | [] -> empty_bytes
+  | SNI_DNS x :: r -> abyte 0z @| bytes_of_int 2 (length x) @| x @| aux r
+  | SNI_UNKNOWN(t, x) :: r -> bytes_of_int 1 t @| bytes_of_int 2 (length x) @| x @| aux r
+  in
+  aux l
+ 
+private val parseServerName: r:role -> b:bytes -> Tot (result (list serverName))
+let parseServerName r b  =
+  let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
+    if equalBytes b empty_bytes then ExOK []
+    else if length b >= 3 then
+      let ty,v = split b 1 in
+      begin
+      match vlsplit 2 v with
+      | Error(x,y) ->
+	ExFail(x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
+      | Correct(cur, next) ->
+	begin
+	match aux next with
+	| ExFail(x,y) -> ExFail(x,y)
+	| ExOK l ->
+	  let cur =
+	    begin
+	    match cbyte ty with
+	    | 0z -> SNI_DNS(cur)
+	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
+	    end
+	  in
+	  let snidup: serverName -> Tot bool = fun x ->
+	    begin
+	    match x,cur with
+	    | SNI_DNS _, SNI_DNS _ -> true
+	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
+	    | _ -> false
+	    end
+	  in
+	  if List.Tot.existsb snidup l then
+	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
+	  else ExOK(cur :: l)
+	end
+      end
+    else ExFail(AD_decode_error, "Failed to parse SNI")
+    in
+    match r with
+    | Server ->
+      if length b = 0 then correct []
+      else
+	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
+	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
+    | Client ->
+      if length b >= 2 then
+	begin
+	match vlparse 2 b with
+	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+	| Correct b ->
+	match aux b with
+	| ExFail(x,y) -> Error(x,y)
+	| ExOK [] -> Error(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
+	| ExOK l -> correct l
+	end
+      else
+	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+
+(* TODO: supported_groups and signature_algorithms *) 
+
+// ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2 
+noeq type extension =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
   | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)  
   | E_signature_algorithms of signatureSchemes (* M, AF *) (* RFC 5246 *)
@@ -51,10 +250,12 @@ type extension =
   | E_early_data of earlyDataIndication
   | E_supported_versions of protocol_versions   (* M, AF *) 
   | E_cookie of b:bytes {0 < length b /\ length b < 65536}  (* M *)
-  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  | E_extended_ms
+  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  
+  | E_extended_ms
   | E_ec_point_format of list ECGroup.point_format
   | E_unknown_extension of (lbytes 2 * bytes) (* header, payload *)
-(*
+(* 
+We do not yet support the extensions below (authenticated but ignored)
   | E_max_fragment_length
   | E_status_request
   | E_use_srtp 
@@ -69,7 +270,6 @@ type extension =
   | E_renegotiation_info of renegotiationInfo
 *)
 
-(* string_of_ *)
 let string_of_extension = function
   | E_server_name _ -> "server_name"
   | E_supported_groups _ -> "supported_groups"
@@ -109,7 +309,8 @@ private let sameExt e1 e2 =
 (*************************************************
  extension formatting
  *************************************************)
- 
+
+//17-05-05 no good reason to pattern match twice when formatting? follow the same structure as for parsing?
 private val extensionHeaderBytes: extension -> lbytes 2
 let extensionHeaderBytes ext =
   match ext with             // 4.2 ExtensionType enum value
@@ -125,35 +326,6 @@ let extensionHeaderBytes ext =
   | E_extended_ms              -> abyte2 (0x00z, 0x17z) // 45
   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
   | E_unknown_extension (h,b)  -> h
-
-private val serverNameBytes: list serverName -> Tot bytes
-let serverNameBytes l =
-  let rec (aux:list serverName -> Tot bytes) = function
-  | [] -> empty_bytes
-  | SNI_DNS(x) :: r -> (abyte 0z) @| bytes_of_int 2 (length x) @| x @| aux r
-  | SNI_UNKNOWN(t, x) :: r -> (bytes_of_int 1 t) @| bytes_of_int 2 (length x) @| x @| aux r
-  in
-  (aux l)
- 
-val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
-let earlyDataIndicationBytes = function
-  | None -> empty_bytes // ClientHello, EncryptedExtensions
-  | Some max_early_data_size -> // NewSessionTicket
-    let n = UInt32.v max_early_data_size in    
-    lemma_repr_bytes_values n;
-    bytes_of_int 4 n
-
-let rec ecpfListBytes_aux : list ECGroup.point_format -> bytes = function
-  | [] -> empty_bytes
-  | ECGroup.ECP_UNCOMPRESSED :: r -> (abyte 0z) @| ecpfListBytes_aux r
-  | ECGroup.ECP_UNKNOWN t :: r -> (bytes_of_int 1 t) @| ecpfListBytes_aux r
-
-val ecpfListBytes: l:list ECGroup.point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
-let ecpfListBytes l =
-  let al = ecpfListBytes_aux l in
-  lemma_repr_bytes_values (length al);
-  let bl:bytes = vlbytes 1 al in
-  bl
 
 (* API *)
 
@@ -207,72 +379,6 @@ type chain = l:list (cert * extensions) // { ... }
  Extension parsing
 **************************************************)
 
-//17-05-01 why not using TLSError.result ?? 
-// SZ: NO idea. We should.
-(** local, failed-to-parse exc. *)
-private type canFail (a:Type) =
-| ExFail of alertDescription * string
-| ExOK of list a
-
-private val parseserverName: r:role -> b:bytes -> result (list serverName)
-let parseserverName r b  =
-  let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
-    if length b = 0 then ExOK []
-    else if length b >= 3 then
-      let ty,v = split b 1 in
-      begin
-      match vlsplit 2 v with
-      | Error (x,y) ->
-	ExFail (x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
-      | Correct (cur, next) ->
-	begin
-	match aux next with
-	| ExFail z -> ExFail z
-	| ExOK l ->
-	  let cur =
-	    begin
-	    match cbyte ty with
-	    | 0z -> SNI_DNS cur
-	    | v  -> SNI_UNKNOWN (int_of_bytes ty, cur)
-	    end
-	  in
-	  let snidup: serverName -> Tot bool = fun x ->
-	    begin
-	    match x,cur with
-	    | SNI_DNS _, SNI_DNS _ -> true
-	    | SNI_UNKNOWN (a,_), SNI_UNKNOWN (b,_) -> a = b
-	    | _ -> false
-	    end
-	  in
-	  if List.Tot.existsb snidup l then
-	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
-	  else ExOK (cur :: l)
-	end
-      end
-    else ExFail (AD_decode_error, "Failed to parse SNI")
-    in
-    match r with
-    | Server ->
-      if length b = 0 then correct []
-      else
-	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
-	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
-    | Client ->
-      if length b >= 2 then
-	begin
-	match vlparse 2 b with
-	| Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
-        | Correct b ->
-          match aux b with
-          | ExFail z -> Error z
-          | ExOK [] -> Error (AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Empty SNI extension")
-          | ExOK l -> correct l
-        end
-      else
-        Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
-
-private let err_msg s = "Got inapproprite bytes for " ^ s
-
 private val addOnce: extension -> list extension -> Tot (result (list extension))
 let addOnce ext extList =
   if List.Tot.existsb (sameExt ext) extList then
@@ -283,188 +389,104 @@ let addOnce ext extList =
 
 val parseEcpfList: bytes -> result (list ECGroup.point_format)
 let parseEcpfList b =
-  let rec aux:b:bytes -> Tot (canFail (ECGroup.point_format)) (decreases (length b)) = fun b ->
-    if equalBytes b empty_bytes then ExOK []
-    else
-      if 0 < length b then 
-        let u, v = split b 1 in
-        begin
-	match aux v with
-	| ExFail (x, y) -> ExFail (x, y)
-	| ExOK l ->
-	  let cur = 
-            match cbyte u with
-	    | 0z -> ECGroup.ECP_UNCOMPRESSED
-	    | _  -> ECGroup.ECP_UNKNOWN (int_of_bytes u)
-	  in ExOK (cur :: l)
-        end
-      else ExFail (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Malformed curve list")
-  in
-  match aux b with
-  | ExFail z -> Error z
-  | ExOK l -> 
-    if List.Tot.mem ECGroup.ECP_UNCOMPRESSED l then
-      correct l
-    else
-      Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Uncompressed point format not supported")
-
-
-//17-05-01 added a refinement to control the list length; this function verifies.
-//17-05-01 should we use generic code to parse such bounded lists?
-//REMARK: We don't care about duplicates, not formally excluded.
-//REMARK: This is not tail recursive, contrary to most of our parsing functions
-val parseVersions: 
-  b:bytes -> 
-  Tot (result (l:list protocolVersion {length b == FStar.Mul.(2 * List.Tot.length l)}))
-      (decreases (length b))
-let rec parseVersions b =
-  match length b with 
-  | 0 -> let r = [] in assert_norm (List.Tot.length [] = 0); Correct r
-  | 1 -> Error (AD_decode_error, "malformed version list")
-  | _ -> 
-    let b2, b' = split b 2 in
-    match parseVersion_draft b2 with
+    let rec aux: (b:bytes -> Tot (result (list ECGroup.point_format)) (decreases (length b))) = fun b -> 
+        if equalBytes b empty_bytes then Correct []
+        else if length b = 0 then error "malformed curve list" 
+        else
+          let u,v = split b 1 in
+          ( match aux v with
+            | Error z -> Error z 
+            | Correct l ->
+              let cur = 
+              match cbyte u with
+              | 0z -> ECGroup.ECP_UNCOMPRESSED
+              | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u) in 
+              Correct (cur :: l))
+    in match aux b with
     | Error z -> Error z
-    | Correct v -> 
-      match parseVersions b' with 
-      | Error z -> Error z 
-      | Correct vs ->
-        begin
- 	let r = v::vs in 
-	assert_norm (List.Tot.length (v::vs) = 1 + List.Tot.length vs); // did not find usable length lemma in List.Tot
-	Correct r
-        end
-  
-val parseSupportedVersions: b:bytes{2 < length b /\ length b < 256} -> result protocol_versions
-let parseSupportedVersions b =
-  match vlparse 1 b with
-  | Correct b ->
-    begin
-    match parseVersions b with // Necessary for verification
-    | Correct l -> Correct l
-    | Error z -> Error z
-    end
-  | Error z -> Error z
+    | Correct l -> 
+      if List.Tot.mem ECGroup.ECP_UNCOMPRESSED l 
+      then correct l
+      else error "uncompressed point format not supported"
 
-val parseEarlyDataIndication: b:bytes{length b == 0 \/ length b == 4} -> earlyDataIndication
-let parseEarlyDataIndication b =
-  if length b = 0 then None
-  else
-    begin
-    let n = int_of_bytes b in
-    lemma_repr_bytes_values n;
-    assert_norm (pow2 32 == 4294967296);
-    Some (UInt32.uint_to_t n)
-    end
+(* We don't care about duplicates, not formally excluded. *)
 
-val parseExtension: role -> b:bytes -> result extension
-let rec parseExtension role b =
-  if length b < 4 then
-    Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Extension bytes are too short to store even the extension type")
-  else
-    let head, payload = split b 2 in
-    match vlparse 2 payload with
-    | Error _ -> 
-      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 1")
-    | Correct data ->
-      begin
-      match cbyte2 head with
-      | (0x00z, 0x00z) -> // SNI
-        mapResult E_server_name (parseserverName role data)
-      | (0x00z, 0x0Az) -> // supported groups
-        if 2 <= length data && length data < 65538 then
-         (match parseNamedGroups data with
-          | Correct l -> Correct (E_supported_groups l)
-          | Error z -> Error z)
-        else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "SNI"))
-      | (0x00z, 0x0Dz) -> // sigAlgs
-        if 2 <= length data && length data < 65538 then
-          (match parseSignatureSchemes data with
-           | Correct algs -> Correct (E_signature_algorithms algs)
-           | Error z -> Error z)
-        else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "sigAlgs"))
-      | (0x00z, 0x28z) -> // keyShare
-        (match CommonDH.parseKeyShare (Client? role) data with
-         | Correct ks -> Correct (E_key_share ks)
-         | Error z -> Error z)
-      | (0x00z, 0x29z) -> // head TBD, PSK
-        if length data >= 2 then
-          (match admit() (* 17-04-21 TODO PSK.parsePreSharedKey data *) with
-           | Correct psk -> Correct psk
-           | Error z -> Error z)
-        else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "PSK"))
-      | (0x00z, 0x2az) -> // EDI
-        if length data = 0 || length data = 4 then
-          (match parseEarlyDataIndication data with
-           | None -> Correct (E_early_data None)
-           | Some n -> Correct (E_early_data (Some n)))
-        else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "early_data")) 
-      | (0x00z, 0x2bz) -> // supported_versions
-        if 2 < length data && length data < 256 then
-          (match parseSupportedVersions data with
-           | Correct v -> Correct (E_supported_versions v)
-           | Error z -> Error z)
-        else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "supported_versions"))
-      | (0xffz, 0x2cz) -> // cookie
-        if 0 < length data && length data < 65536 then
-	  Correct (E_cookie data)
-	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "cookie"))
-(* ToDo: | E_psk_key_exchange_modes _ *)
-(*
-	| (0xFFz, 0x01z) -> // renego (* OLD *)
-	  (match parseRenegotiationInfo data with
-	  | Correct(ri) -> Correct (E_renegotiation_info(ri))
-	  | Error z -> Error z
-*)	 
-	| (0x00z, 0x17z) -> // extended ms
-	  if length data = 0 then Correct (E_extended_ms)
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Got inappropriate bytes for extended MS extension")
-	| (0x00z, 0x0Bz) -> // ec point format
-	  if 1 <= length data && length data < 256 then
-	    (lemma_repr_bytes_values (length data);
-	     match vlparse 1 data with
-	     | Error z -> Error z
-	     | Correct data ->
-	       match parseEcpfList data with
-	       | Correct ecpfs -> Correct (E_ec_point_format ecpfs)
-	       | Error z -> Error z)
-	  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ (err_msg "ec_point_fmt"))
-	| _ -> // Unknown extension
-          Correct (E_unknown_extension (head,data))
-        end
+val parseExtension: role -> bytes -> result extension
+let parseExtension role b =
+  if length b < 4 then error "extension type: not enough bytes" else 
+  let head, payload = split b 2 in
+  match vlparse 2 payload with
+  | Error (_,s) -> error ("extension: "^s)
+  | Correct data -> ( 
+    match cbyte2 head with
+    | (0x00z, 0x00z) -> mapResult E_server_name (parseServerName role data)
+    | (0x00z, 0x0Az) -> // supported groups
+      if length data < 2 || length data >= 65538 then error "supported groups" else
+      mapResult E_supported_groups (Parse.parseNamedGroups data)
+
+    | (0x00z, 0x0Dz) -> // sigAlgs
+      if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else 
+      mapResult E_signature_algorithms (TLSConstants.parseSigHashAlgs data)
+      
+    | (0x00z, 0x28z) -> mapResult E_key_share (CommonDH.parseKeyShare (Client? role) data)
+
+    | (0x00z, 0x29z) -> // head TBD, PSK
+      if length data < 2 then error "PSK" else 
+      mapResult E_pre_shared_key (admit()) (* 17-04-21 TODO PSK.parsePreSharedKey data *) 
+
+    | (0x00z, 0x2az) ->
+      if length data <> 0 && length_data <> 4 then error "early data indication" else
+      mapResult E_early_data (parseEarlyDataIndication data)
+    | (0x00z, 0x2bz) ->
+      if length data <= 2 || length_data >= 256 then error "supported versions" else
+      mapResult E_supported_versions (parseSupportedVersions data)
+
+    | (0xffz, 0x2cz) -> // cookie
+      if length data <= 2 || length data >= 65538 then error "cookie" else
+      Correct (E_cookie data)
+      
+    (* ToDo: | E_psk_key_exchange_modes _ *)
+
+    | (0x00z, 0x17z) -> // extended ms
+      if length data > 0 then error "extended master secret" else 
+      Correct E_extended_ms
+      
+    | (0x00z, 0x0Bz) -> // ec point format
+      if length data < 1 || length data >= 256 then error "ec point format" else (
+      lemma_repr_bytes_values (length data);
+      match vlparse 1 data with
+      | Error z -> Error z
+      | Correct ecpfs -> mapResult E_ec_point_format (parseEcpfList ecpfs))
+      
+    | _ -> Correct (E_unknown_extension (head,data)))
 
 val parseExtensions: role -> b:bytes -> result (list extension)
-let rec parseExtensions role b =
+let parseExtensions role b =
   let rec aux: 
     b:bytes -> list extension -> Tot (result (list extension)) (decreases (length b)) = fun b exts ->
     if length b >= 4 then
       let ht, b = split b 2 in
       match vlsplit 2 b with
-      | Correct (ext, bytes) ->
-        begin
+      | Error(z) -> error "extension length"
+      | Correct(ext, bytes) -> (
+	(* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
 	match parseExtension role (ht @| vlbytes 2 ext) with
 	| Correct ext ->
-          begin
-	  match addOnce ext exts with // fails if the extension already is in the list
+	  (match addOnce ext exts with // fails if the extension already is in the list
 	  | Correct exts -> aux bytes exts
-	  | Error z -> Error z
-          end
-	| Error z -> Error z
-        end
-      | Error z -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extension length 2")
+	  | Error z -> Error z)
+	| Error z -> Error z)
     else Correct exts in
-  if length b >= 2 then
-    match vlparse 2 b with
-    | Correct b -> aux b []
-    | Error z -> 
-      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Incorrect extension data length")
-  else 
-    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse extensions length")
+  if length b < 2 then error "extensions" else
+  match vlparse 2 b with
+  | Correct b -> aux b []
+  | Error z -> error "extensions" 
 
 (* SI: API. Called by HandshakeMessages. *)
 val parseOptExtensions: r:role -> data:bytes -> result (option (list extension))
 let parseOptExtensions r data =
-  if length data = 0 then Correct None
+  if length data = 0 
+  then Correct None
   else mapResult Some (parseExtensions r data)
 
 

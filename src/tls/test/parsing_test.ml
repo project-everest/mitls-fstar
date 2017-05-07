@@ -96,9 +96,9 @@ let parse_handshake_message bytes =
 	               print_string (snd z))
       | '\x04' ->
 	 print_string "Parsing session ticket message...\n";
-	 (match parseSessionTicket msg with
+	 (match parseSessionTicket TLS_1p2 msg with
 	 | Correct(st) -> print_string "...OK\n";
-             let _,st_bytes = split (sessionTicketBytes(st)) (Z.of_int 4) in
+             let _,st_bytes = split (sessionTicketBytes TLS_1p2 st) (Z.of_int 4) in
 	     if equalBytes st_bytes msg then (print_string "Serializing session ticket...\n...OK\n") else
 	       (print_string "Serializing session ticket...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
