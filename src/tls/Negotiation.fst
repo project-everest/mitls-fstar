@@ -108,26 +108,28 @@ let string_of_ciphersuite (cs:cipherSuite) =
   | Correct TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256"
   | Correct TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256 -> "TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256" | Error z -> "Unknown ciphersuite"
 
-let string_of_sigAlg = function
-  | RSASIG -> "RSA"
-  | DSA    -> "DSA"
-  | ECDSA  -> "ECDSA"
-  | RSAPSS -> "RSA-PSS"
+let string_of_signatureScheme = function
+  | RSA_PKCS1_SHA256       -> "RSA_PKCS1_SHA256"
+  | RSA_PKCS1_SHA384       -> "RSA_PKCS1_SHA384"
+  | RSA_PKCS1_SHA512       -> "RSA_PKCS1_SHA512"
+  | ECDSA_SECP256R1_SHA256 -> "ECDSA_SECP256R1_SHA256"
+  | ECDSA_SECP384R1_SHA384 -> "ECDSA_SECP384R1_SHA384"
+  | ECDSA_SECP521R1_SHA512 -> "ECDSA_SECP521R1_SHA512"
+  | RSA_PSS_SHA256         -> "RSA_PSS_SHA256"
+  | RSA_PSS_SHA384         -> "RSA_PSS_SHA384"
+  | RSA_PSS_SHA512         -> "RSA_PSS_SHA512"
+  //| ED25519                -> "ED25519"
+  //| ED448                  -> "ED448"
+  | RSA_PKCS1_SHA1         -> "RSA_PKCS1_SHA1"
+  | ECDSA_SHA1             -> "ECDSA_SHA1"
+  | DSA_SHA1               -> "DSA_SHA1"
+  | DSA_SHA256             -> "DSA_SHA256"
+  | DSA_SHA384             -> "DSA_SHA384"
+  | DSA_SHA512             -> "DSA_SHA512"
+  | OBSOLETE codepoint     -> "OBSOLETE " ^ (print_bytes codepoint)
+  | PRIVATE_USE codepoint  -> "PRIVATE_USE " ^ (print_bytes codepoint)
 
-let string_of_hashAlg = function
-  | Hash ha ->
-    let open Hashing.Spec in
-    match ha with
-    | MD5    -> "MD5"
-    | SHA1   -> "SHA1"
-    | SHA224 -> "SHA224"
-    | SHA256 -> "SHA256"
-    | SHA384 -> "SHA384"
-    | SHA512 -> "SHA512"
 
-let string_of_sigHashAlg = function
-  | sa, ha -> string_of_sigAlg sa ^ "+" ^ string_of_hashAlg ha
-   
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
@@ -170,6 +172,11 @@ let find_supported_versions o =
   match find_client_extension Extensions.E_supported_versions? o with
   | None -> None 
   | Some (Extensions.E_supported_versions vs) -> Some vs 
+
+let find_signature_algorithms o : option signatureSchemeList =
+  match find_client_extension Extensions.E_signature_algorithms? o with
+  | None -> None
+  | Some (Extensions.E_signature_algorithms algs) -> Some algs
 
 // finding the pre-shared keys in ClientHello
 let find_pske o = 
@@ -264,38 +271,6 @@ let is_cacheable12 m =
 // and for each of the fields of
 //    n_extensions: negotiatedExtensions ->
 
-let client_sigalg_extension (m:mode) : option (list sigHashAlg) = 
-  match m.n_offer.ch_extensions with
-  | None -> None 
-  | Some es -> 
-    match List.Tot.find Extensions.E_signature_algorithms? es with
-    | None -> None 
-    | Some (E_signature_algorithms sas) -> Some sas 
-
-// Signature agility, depending on the CS and an optional client extension
-let sig_algs (m:mode) (ha:TLSConstants.hashAlg) (ha0:TLSConstants.hashAlg) =
-  let sa, ha = 
-    if m.n_protocol_version = TLS_1p3 
-    then 
-      // the extension is required for signing
-      // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.3 
-      // TODO: TO BE COMPLETED
-      let Some ((sa,ha)::_) = client_sigalg_extension m in
-      (sa, ha)
-    else 
-      // If no signature nego took place we use the SA and KDF hash from the CS
-      // otherwise we still follow the SA and only use the extension to pick the hash
-      // (is it too conservative?)
-      // https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1 
-      let CipherSuite _ (Some sa) _ = m.n_cipher_suite in
-      match client_sigalg_extension m with
-      | None -> sa, ha0
-      | Some algs ->
-        if List.Tot.mem (sa,ha) algs then (sa, ha) else (sa, ha0)
-     in
-  let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
-  (a, sa, ha)
-
 noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
   | C_Init:     n_client_random: TLSInfo.random ->
@@ -361,8 +336,7 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
-
-val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random -> 
+val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random ->
   ks:option CommonDH.keyShare -> offer
 let computeOffer r cfg resume nonce ks =
   let sid = 
@@ -477,13 +451,6 @@ let getMode #region #role ns =
   | S_Complete mode _ ->
   mode
 
-val getSigningKey: #a:Signature.alg -> #region:rgn -> #role:TLSConstants.role -> t region role ->
-  ST (option (Signature.skey a))
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-let getSigningKey #a #region #role ns =
-  Signature.lookup_key #a ns.cfg.private_key_file
-
 (** Returns cfg.maxVersion or the negotiated version, when known *)
 val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST protocolVersion
@@ -503,6 +470,74 @@ let version #region #role ns =
   | S_ClientHello mode
   | S_Mode mode
   | S_Complete mode _ -> mode.n_protocol_version
+
+
+assume val sigHashAlg_of_signatureScheme: signatureScheme -> sigAlg * TLSConstants.hashAlg
+
+assume val signatureScheme_of_sigHashAlg: sigAlg -> TLSConstants.hashAlg -> signatureScheme
+
+// Signature agility, depending on the CS and an optional client extension
+let signatureScheme_of_mode mode supported_algs =
+  let ha0 = sessionHashAlg mode.n_protocol_version mode.n_cipher_suite in
+  match mode.n_protocol_version with
+  | TLS_1p3 -> // signature_algorithms extension MUST have been offered
+    begin
+    match find_signature_algorithms mode.n_offer with
+    | None -> None
+    | Some algs -> List.Tot.find (fun alg -> List.Tot.mem alg supported_algs) algs
+    end
+   | TLS_1p2 ->
+     begin
+     let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
+     match find_signature_algorithms mode.n_offer with
+     | None -> Some (signatureScheme_of_sigHashAlg sa ha0)
+       // TODO: check that this is correct
+       // The RFC (https://tools.ietf.org/html/rfc5246#section-7.4.1.4.10)
+       // says that one should always use SHA1
+     | Some algs -> List.Tot.find (fun alg -> List.Tot.mem alg supported_algs) algs
+     end
+   | _ ->
+     let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
+     Some (signatureScheme_of_sigHashAlg sa ha0) // (sa, MD5SHA1)
+
+val getSigningKey: #a:Signature.alg -> #region:rgn -> #role:TLSConstants.role -> t region role ->
+  ST (option (Signature.skey a))
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let getSigningKey #a #region #role ns =
+  Signature.lookup_key #a ns.cfg.private_key_file
+
+val sign: #region:rgn -> #role:TLSConstants.role -> t region role -> bytes ->
+  ST (option bytes)
+  (requires (fun h -> True))
+  (ensures (fun h0 _ h1 -> True))
+let sign #region #role ns tbs =
+  let mode = getMode ns in
+  match signatureScheme_of_mode mode ns.cfg.signatureAlgorithms with
+  | None -> None
+  | Some scheme ->
+    begin
+    let sa, ha = sigHashAlg_of_signatureScheme scheme in
+    let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
+    match getSigningKey #a ns with
+    | None -> None
+    | Some skey ->
+      let sigv = Signature.sign #a ha skey tbs in
+      if length sigv >= 2 && length sigv < 65536 then Some (signatureSchemeBytes scheme @| sigv)
+      else None
+    end
+
+val verify: signatureScheme -> list cert -> bytes -> bytes ->
+  ST bool
+  (requires (fun h -> True))
+  (ensures (fun h0 _ h1 -> True))
+let verify scheme chain tbs sigv =
+  let (sa,ha) = sigHashAlg_of_signatureScheme scheme in
+  let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
+  match Signature.get_chain_public_key #a chain with
+  | None -> false
+  | Some pk -> Signature.verify #a ha pk tbs sigv
+
 
 (* CLIENT *)
 
@@ -761,20 +796,8 @@ let client_ServerHello #region ns sh =
 
 (* ---------------- signature stuff, to be removed from Handshake -------------------- *)
 
-// deep subtyping...
-let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result TLSConstants.hashAlg) =
-  function
-  | Error z -> Error z
-  | Correct h -> Correct h
-let sigHashAlg_is_tuple_sig_hash: sigHashAlg -> Tot (sigAlg * TLSConstants.hashAlg) =
-  function | a,b -> a,b
-let rec list_sigHashAlg_is_list_tuple_sig_hash: list sigHashAlg -> Tot (list (TLSConstants.sigAlg * TLSConstants.hashAlg)) =
-  function
-  | [] -> []
-  | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd) :: (list_sigHashAlg_is_list_tuple_sig_hash tl)
-
 // why an option?
-val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
+val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv == TLS_1p3} -> bytes -> bytes
 let to_be_signed pv role csr tbs =
   match pv, csr with
   | TLS_1p3, None ->
@@ -786,16 +809,17 @@ let to_be_signed pv role csr tbs =
       pad @| abytes ctx @| abyte 0z @| tbs
   | _, Some csr -> csr @| tbs
 
-val sigHashAlg_of_ske: bytes -> Tot (option (sigHashAlg * bytes))
-let sigHashAlg_of_ske signature =
+(** Note that in TLS < 1.2 SKE doesn't include the signature scheme *)
+val signatureScheme_of_ske: bytes -> option (signatureScheme * bytes)
+let signatureScheme_of_ske signature =
   if length signature > 4 then
-   let h, sa, sigv = split2 signature 1 1 in
+   let sa, sigv = split signature 2 in
    match vlsplit 2 sigv with
    | Correct (sigv, eof) ->
      begin
-     match length eof, parseSigAlg sa, optHashAlg_prime_is_optHashAlg (parseHashAlg h) with
-     | 0, Correct sa, Correct (Hash h) -> Some ((sa,Hash h), sigv)
-     | _, _, _ -> None
+     match length eof, parseSignatureScheme sa with
+     | 0, Correct sa -> Some (sa, sigv)
+     | _, _ -> None
      end
    | Error _ -> None
   else None
@@ -817,24 +841,21 @@ let client_ServerKeyExchange #region ns crt ske ocr =
          Cert.validate_chain crt.crt_chain true ns.cfg.peer_name ns.cfg.ca_file
       then
         let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-        match sigHashAlg_of_ske ske.ske_sig with
+        match signatureScheme_of_ske ske.ske_sig with
         | None ->
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
-        | Some ((sa',ha'), sigv) ->
-          let (a, sa, ha) = sig_algs mode ha'
-            (sessionHashAlg mode.n_protocol_version mode.n_cipher_suite) in
-          if (sa,ha) <> (sa',ha') then
-            Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
-          else
-            let csr = ns.nonce @| mode.n_server_random in
-            let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-            let chain = List.Tot.map fst scert in
-            match Signature.get_chain_public_key #a chain with
-            | None ->
-              Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to get public key from chain")
-            | Some pk ->
-              let valid = Signature.verify #a ha pk tbs sigv in
-              // trace ("tbs = " ^ (Platform.Bytes.print_bytes tbs));
+        | Some (sa', sigv) ->
+          begin
+          match signatureScheme_of_mode mode ns.cfg.signatureAlgorithms with
+          | None -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+          | Some sa ->
+            if sa <> sa' then
+              Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+            else
+              let csr = ns.nonce @| mode.n_server_random in
+              let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
+              let chain = List.Tot.map fst scert in
+              let valid = verify sa chain tbs sigv in
               trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
               if not valid then
                 Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
@@ -844,6 +865,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
                 let ccert = None in // TODO
                 MR.m_write ns.state (C_WaitFinished2 mode ccert);
                 Correct mode
+          end
        else
          Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failed")
 
@@ -952,12 +974,6 @@ let compute_cs13 cfg o psks shares =
   Correct (compute_cs13_aux 0 o pske g_gx ncs psks psk_kex)
 
 
-let find_signature_algorithms o = 
-  match find_client_extension Extensions.E_signature_algorithms? o with 
-  | None -> None 
-  | Some (Extensions.E_signature_algorithms algs) -> Some algs
-
-
 //17-03-30 still missing a few for servers.
 
 // TODO ADL: incorrect as written; CS nego depends on ext nego
@@ -996,7 +1012,7 @@ let computeServerMode cfg co serverRandom serverID =
         | [] -> Error(AD_handshake_failure, "signature algorithm negotiation failed")
         | alg :: _ ->
           begin
-          trace ("negotiated " ^ (string_of_sigHashAlg alg));  
+          trace ("negotiated " ^ (string_of_signatureScheme alg));
           let serverExtensions = None in // To be computed in Handshake and filled later
           let scert =
             match Cert.lookup_chain cfg.cert_chain_file with
@@ -1049,6 +1065,10 @@ let computeServerMode cfg co serverRandom serverID =
           IO.debug_print_string "WARNING cannot load server cert; restricting to anonymous CS...\n"
         else false in
        nosa in
+  // From https://tools.ietf.org/html/rfc5246#section-7.4.2:
+  // In order to negotiate correctly, the server MUST check any candidate
+  // cipher suites against the "signature_algorithms" extension before selecting them
+  // TODO: we're not doing this
   let ccs = List.Tot.filter sigfilter co.ch_cipher_suites in
   match negotiateCipherSuite cfg pv ccs with
   | Error z -> Error z
@@ -1161,7 +1181,7 @@ let server_ServerShare #region ns ks =
 //17-03-30 where is it used?
 type hs_id = {
   id_cert: Extensions.chain;
-  id_sigalg: option sigHashAlg;
+  id_sigalg: option signatureScheme;
 }
 
 //17-03-30 get rid of this wrapper?

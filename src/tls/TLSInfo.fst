@@ -23,12 +23,6 @@ module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 
 
-val sigAlgPref: list sigAlg -> list hashAlg' -> Tot (list sigHashAlg)
-let rec sigAlgPref s h =
-    match s with
-    | [] -> []
-    | sa :: r -> List.Tot.append (List.Tot.map (fun u -> (sa,u)) h) (sigAlgPref r h)
-
 val ec_ff_to_ng: list CoreCrypto.ec_curve -> list ffdhe -> Tot (list valid_namedGroup)
 let rec ec_ff_to_ng ecl ffl =
   match ecl with
@@ -42,7 +36,19 @@ val defaultConfig : config
 let defaultConfig =
     let sigPref = [CoreCrypto.ECDSA; CoreCrypto.RSAPSS; CoreCrypto.RSASIG] in
     let hashPref = Hashing.Spec.([Hash SHA512; Hash SHA384; Hash SHA256; Hash SHA1]) in
-    let sigAlgPrefs = sigAlgPref sigPref hashPref in
+    let sigAlgPrefs = [
+      ECDSA_SECP521R1_SHA512;
+      ECDSA_SECP384R1_SHA384;
+      ECDSA_SECP256R1_SHA256;
+      RSA_PSS_SHA512;
+      RSA_PSS_SHA384;
+      RSA_PSS_SHA256;
+      RSA_PKCS1_SHA512;
+      RSA_PKCS1_SHA384;
+      RSA_PKCS1_SHA256;
+      ECDSA_SHA1;
+      RSA_PKCS1_SHA1
+      ] in
     let l =         [ TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
@@ -139,9 +145,9 @@ noeq type sessionInfo = {
     session_hash: sessionHash;
     client_auth: bool;
     clientID: Extensions.chain;
-    clientSigAlg: sigHashAlg;
+    clientSigAlg: signatureScheme;
     serverID: Extensions.chain;
-    serverSigAlg: sigHashAlg;
+    serverSigAlg: signatureScheme;
     sessionID: sessionID;
     }
 
@@ -224,17 +230,6 @@ let msid si =
   let kef = kefAlg si.protocol_version si.cipher_suite ems in
   if ems then ExtendedMS si.pmsId si.session_hash kef
   else StandardMS si.pmsId    (csrands si) kef
-
-// Strengths of Handshake algorithms
-
-// SZ: Not as simple, because the ciphersuite doesn't determine the
-// hash algorithm. When using the `signature_algorithms` extension, this is
-// even more complicated.
-// NS: identifier not found: sigHashAlg_of_cipherSuite
-assume val sigHashAlg_of_ciphersuite: cipherSuite -> Tot sigHashAlg
-
-// SZ: To be replaced by Signature.int_cma
-//let strongSig si = Sig.strong (sigHashAlg_of_ciphersuite si.cipher_suite)
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF

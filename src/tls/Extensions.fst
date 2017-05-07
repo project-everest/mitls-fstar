@@ -244,7 +244,7 @@ let parseServerName r b  =
 noeq type extension =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
   | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)  
-  | E_signature_algorithms of signatureSchemes (* M, AF *) (* RFC 5246 *)
+  | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
   | E_pre_shared_key of (list psk) (* M, AF *)
   | E_early_data of earlyDataIndication
@@ -336,7 +336,7 @@ let rec extensionPayloadBytes = function
   | E_server_name []           -> empty_bytes // ServerHello, EncryptedExtensions
   | E_server_name l            -> vlbytes 2 (serverNameBytes l) // ClientHello
   | E_supported_groups l       -> namedGroupsBytes l  
-  | E_signature_algorithms sha -> signatureSchemesBytes sha
+  | E_signature_algorithms sha -> signatureSchemeListBytes sha
   | E_key_share ks             -> CommonDH.keyShareBytes ks
   | E_pre_shared_key psk       -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
   | E_early_data edi           -> earlyDataIndicationBytes edi
@@ -426,7 +426,7 @@ let parseExtension role b =
 
     | (0x00z, 0x0Dz) -> // sigAlgs
       if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else 
-      mapResult E_signature_algorithms (TLSConstants.parseSigHashAlgs data)
+      mapResult E_signature_algorithms (TLSConstants.parseSignatureSchemeList data)
       
     | (0x00z, 0x28z) -> mapResult E_key_share (CommonDH.parseKeyShare (Client? role) data)
 
@@ -435,10 +435,10 @@ let parseExtension role b =
       mapResult E_pre_shared_key (admit()) (* 17-04-21 TODO PSK.parsePreSharedKey data *) 
 
     | (0x00z, 0x2az) ->
-      if length data <> 0 && length_data <> 4 then error "early data indication" else
+      if length data <> 0 && length data <> 4 then error "early data indication" else
       mapResult E_early_data (parseEarlyDataIndication data)
     | (0x00z, 0x2bz) ->
-      if length data <= 2 || length_data >= 256 then error "supported versions" else
+      if length data <= 2 || length data >= 256 then error "supported versions" else
       mapResult E_supported_versions (parseSupportedVersions data)
 
     | (0xffz, 0x2cz) -> // cookie
@@ -495,8 +495,7 @@ let parseOptExtensions r data =
  *************************************************)
 
 (* JK: Need to get rid of such functions *)
-(* API. Called by Negotiation *)
-let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSuite =
+private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSuite =
   match l with 
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
@@ -529,7 +528,7 @@ val prepareExtensions:
   k:valid_cipher_suites{List.Tot.length k < 256} -> 
   bool -> 
   bool -> 
-  signatureSchemes -> 
+  signatureSchemeList ->
   list (x:namedGroup{SEC? x \/ FFDHE? x}) -> 
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare -> 
@@ -539,14 +538,13 @@ val prepareExtensions:
    This seems to make this prepareExtensions more modular. *)
 let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res = [] in 
-    (* Always send supported extensions. The configuration options will influence how strict the tests will be *)
-// SI: is renego deadcode? 
+    (* Always send supported extensions.
+       The configuration options will influence how strict the tests will be *)
     (* let cri = *)
     (*    match ri with *)
     (*    | None -> FirstConnection *)
     (*    | Some (cvd, svd) -> ClientRenegotiationInfo cvd in *)
     (* let res = [E_renegotiation_info(cri)] in *)
-//    let res = (E_draftVersion (abyte2 (0z, 13z)))::res in
     let res =
       match minpv, pv with
       | TLS_1p3, TLS_1p3 -> E_supported_versions [TLS_1p3] :: res
@@ -584,7 +582,7 @@ val matchExtensions: list extension{List.Tot.length l < 256} -> Tot (
   k:valid_cipher_suites{List.Tot.length k < 256} *
   bool *
   bool * 
-  list sigHashAlg -> list (x:namedGroup{SEC? x \/ FFDHE? x}) *
+  list signatureScheme -> list (x:namedGroup{SEC? x \/ FFDHE? x}) *
   option (cVerifyData * sVerifyData) *
   option CommonDH.keyShare )
 let matchExtensions ext = admit()
@@ -642,12 +640,6 @@ let parseRenegotiationInfo b =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
 *)
 
-(* TODO: remove *)
-private val replace_subtyping: (o:(option (cVerifyData * sVerifyData))) -> Tot (option (bytes*bytes))
-let replace_subtyping (o:(option (cVerifyData * sVerifyData))) : Tot (option (bytes*bytes)) =
-  match o with
-  | None -> None
-  | Some (a,b) -> Some (a,b)
 
 // TODO
 // ADL the negotiation of renegotiation indication is incorrect
@@ -659,7 +651,6 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
     | Correct(l) ->
       if List.Tot.existsb (sameExt sExt) cExtL then
       match sExt with
-// SI:. What's happened to E_renego?
 (*
       | E_renegotiation_info (sri) ->
 	(match sri, replace_subtyping ri with
@@ -682,11 +673,6 @@ let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : resul
             correct l
           else
             correct ({l with ne_supported_point_formats = Some spf})
-(* not allowed for server
-      | E_signature_algorithms sha ->
-          if resuming then correct l
-	  else correct ({l with ne_signature_algorithms = Some (sha)})
-*)
       | E_key_share (CommonDH.ServerKeyShare sks) ->
         Correct ({l with ne_keyShare = Some sks})
       | E_supported_groups named_group_list ->
@@ -778,9 +764,9 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
      end
 
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
-private val default_sigHashAlg_fromSig: protocolVersion -> sigAlg ->
+private val default_signatureScheme_fromSig: protocolVersion -> sigAlg ->
   ML (l:list signatureScheme{List.Tot.length l == 1})
-let default_sigHashAlg_fromSig pv sigAlg =
+let default_signatureScheme_fromSig pv sigAlg =
   let open CoreCrypto in
   let open Hashing.Spec in
   match sigAlg with
@@ -789,56 +775,12 @@ let default_sigHashAlg_fromSig pv sigAlg =
     match pv with
     | TLS_1p2 -> [ RSA_PKCS1_SHA1 ]
     | TLS_1p0 | TLS_1p1 | SSL_3p0 -> [ RSA_PKCS1_SHA1 ] // was MD5SHA1
-    | TLS_1p3 -> unexpected "[default_sigHashAlg_fromSig] invoked on TLS 1.3"
+    | TLS_1p3 -> unexpected "[default_signatureScheme_fromSig] invoked on TLS 1.3"
     end
   | ECDSA -> [ ECDSA_SHA1 ]
-  | _ -> unexpected "[default_sigHashAlg_fromSig] invoked on an invalid signature algorithm"
+  | _ -> unexpected "[default_signatureScheme_fromSig] invoked on an invalid signature algorithm"
 
 (* SI: API. Called by HandshakeMessages. *)
-val default_sigHashAlg: protocolVersion -> cipherSuite -> ML signatureSchemes
-let default_sigHashAlg pv cs =
-  default_sigHashAlg_fromSig pv (sigAlg_of_ciphersuite cs)
-
-
-(* Dead code?
-
-val sigHashAlg_contains: list sigHashAlg -> sigHashAlg -> Tot bool
-let sigHashAlg_contains (algList:list sigHashAlg) (alg:sigHashAlg) =
-    List.Tot.mem alg algList
-
-val sigHashAlg_bySigList: list sigHashAlg -> list sigAlg -> Tot (list sigHashAlg)
-let sigHashAlg_bySigList (algList:list sigHashAlg) (sigAlgList:list sigAlg) =
-    List.Tot.choose (fun alg -> let (sigA,_) = alg in if (List.Tot.existsb (fun a -> a = sigA) sigAlgList) then Some(alg) else None) algList
-
-val cert_type_to_SigHashAlg: certType -> protocolVersion -> ML (list sigHashAlg)
-let cert_type_to_SigHashAlg ct pv =
-    match ct with
-    | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> default_sigHashAlg_fromSig pv CoreCrypto.DSA
-    | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> default_sigHashAlg_fromSig pv CoreCrypto.RSASIG
-
-val cert_type_list_to_SigHashAlg: list certType -> protocolVersion -> ML (list sigHashAlg)
-let rec cert_type_list_to_SigHashAlg ctl pv =
-    // FIXME: Generates a list with duplicates!
-    match ctl with
-    | [] -> []
-    | h::t -> List.Tot.(cert_type_to_SigHashAlg h pv @ cert_type_list_to_SigHashAlg t pv)
-
-val cert_type_to_SigAlg: certType -> Tot sigAlg
-let cert_type_to_SigAlg ct =
-    match ct with
-    | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> CoreCrypto.DSA
-    | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> CoreCrypto.RSASIG
-
-val cert_type_list_to_SigAlg: list certType -> ML (list sigAlg)
-let rec cert_type_list_to_SigAlg ctl =
-    // FIXME: Generates a list with duplicates!
-    match ctl with
-    | [] -> []
-    | h::t -> (cert_type_to_SigAlg h) :: (cert_type_list_to_SigAlg t)
-
-val cert_type_to_SigHashAlg: certType -> protocolVersion -> list sigHashAlg
-let cert_type_to_SigHashAlg ct pv =
-    match ct with
-    | TLSConstants.DSA_fixed_dh | TLSConstants.DSA_sign -> default_sigHashAlg_fromSig pv DSA
-    | TLSConstants.RSA_fixed_dh | TLSConstants.RSA_sign -> default_sigHashAlg_fromSig pv RSASIG
-*)
+val default_signatureScheme: protocolVersion -> cipherSuite -> ML signatureSchemeList
+let default_signatureScheme pv cs =
+  default_signatureScheme_fromSig pv (sigAlg_of_ciphersuite cs)

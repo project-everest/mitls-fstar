@@ -167,12 +167,16 @@ noeq type ee = {
   ee_extensions:(ee:list extension{List.Tot.length ee < 256});
 }
 
-// CertificateRequest payload
-// 17-05-04 TODO missing TLS 1.3 new format, with request_context and extensions
+
+(** CertificateRequest for TLS 1.0-1.2
+ https://tools.ietf.org/html/rfc2246#section-7.4.4
+ https://tools.ietf.org/html/rfc4346#section-7.4.4
+ https://tools.ietf.org/html/rfc5246#section-7.4.4
+*)
 type cr = {
-  cr_cert_types: (cl:list certType{List.Tot.length cl < 256});
-  cr_sig_hash_algs: option (shs:list sigHashAlg{List.Tot.length shs < 256});
-  cr_distinguished_names: (dl:list dn{List.Tot.length dl < 128});
+  cr_cert_types: cl:list certType{0 < List.Tot.length cl /\ List.Tot.length cl < 256};
+  cr_sig_algorithms: option signatureSchemeList; // None for 1.0,1.1; Some for 1.2
+  cr_certificate_authorities: dl:list dn{List.Tot.length dl < 65536};
 }
 
 // Certificate payload
@@ -956,20 +960,22 @@ let parseCertificate pv data =
    | Error z -> Error z
 
 (* JK: TODO: rewrite taking the protocol version as an extra parameter, otherwise not injective *)
-val certificateRequestBytes: cr -> Tot (b:bytes{hs_msg_bytes HT_certificate_request b})
+val certificateRequestBytes: cr -> b:bytes{hs_msg_bytes HT_certificate_request b}
 let certificateRequestBytes cr =
-    let ctb = certificateTypeListBytes cr.cr_cert_types in
-    lemma_repr_bytes_values (length ctb);
-    let ctB = vlbytes 1 ctb in
-    let saB = match cr.cr_sig_hash_algs with
-              | None -> empty_bytes
-              | Some sal -> sigHashAlgsBytes sal in
-    let dnb = distinguishedNameListBytes cr.cr_distinguished_names in
-    lemma_repr_bytes_values (length dnb);
-    let dnB = vlbytes 2 dnb in
-    let data = ctB @| saB @| dnB in
-    lemma_repr_bytes_values (length data);
-    messageBytes HT_certificate_request data
+  let ctb = certificateTypeListBytes cr.cr_cert_types in
+  lemma_repr_bytes_values (length ctb);
+  let ctB = vlbytes 1 ctb in
+  let saB =
+    match cr.cr_sig_algorithms with
+    | None -> empty_bytes
+    | Some sigAlgs -> signatureSchemeListBytes sigAlgs // includes length header
+  in
+  let dnb = distinguishedNameListBytes cr.cr_certificate_authorities in
+  lemma_repr_bytes_values (length dnb);
+  let dnB = vlbytes 2 dnb in
+  let data = ctB @| saB @| dnB in
+  lemma_repr_bytes_values (length data);
+  messageBytes HT_certificate_request data
 
 val certificateTypeListBytes_is_injective: ctl1:list certType -> ctl2:list certType ->
   Lemma (requires (True))
@@ -1058,20 +1064,16 @@ let certificateRequestBytes_is_injective c1 c2 =
     let ctb1 = certificateTypeListBytes c1.cr_cert_types in
     lemma_repr_bytes_values (length ctb1);
     let ctB1 = vlbytes 1 ctb1 in
-    let saB1 = match c1.cr_sig_hash_algs with
-              | None -> empty_bytes
-              | Some sal -> sigHashAlgsBytes sal in
-    let dnb1 = distinguishedNameListBytes c1.cr_distinguished_names in
+    let saB1 = admit() in //signatureSchemeListBytes c1.cr_sig_algorithms in
+    let dnb1 = distinguishedNameListBytes c1.cr_certificate_authorities in
     lemma_repr_bytes_values (length dnb1);
     let dnB1 = vlbytes 2 dnb1 in
     let data1 = ctB1 @| saB1 @| dnB1 in
     let ctb2 = certificateTypeListBytes c2.cr_cert_types in
     lemma_repr_bytes_values (length ctb2);
     let ctB2 = vlbytes 1 ctb2 in
-    let saB2 = match c2.cr_sig_hash_algs with
-              | None -> empty_bytes
-              | Some sal -> sigHashAlgsBytes sal in
-    let dnb2 = distinguishedNameListBytes c2.cr_distinguished_names in
+    let saB2 = admit() in // signatureSchemeListBytes c2.cr_sig_algorithms in
+    let dnb2 = distinguishedNameListBytes c2.cr_certificate_authorities in
     lemma_repr_bytes_values (length dnb2);
     let dnB2 = vlbytes 2 dnb2 in
     let data2 = ctB2 @| saB2 @| dnB2 in
@@ -1085,63 +1087,65 @@ let certificateRequestBytes_is_injective c1 c2 =
     lemma_append_inj ctB1 (saB1 @| dnB1) ctB2 (saB2 @| dnB2)
   )
 
-val parseCertificateRequest: pv:protocolVersion -> data:bytes{repr_bytes(length data) <= 3} ->
-                             Tot (result cr)
-let parseCertificateRequest version data =
-    if length data >= 1 then
-        match vlsplit 1 data with
-        | Error(z) -> Error(z)
-        | Correct (res) ->
-        let (certTypeListBytes,data) = res in
-        let certTypeList = parseCertificateTypeList certTypeListBytes in
-	if List.Tot.length certTypeList < 256 then (
+val parseCertificateRequest: pv:protocolVersion -> data:bytes -> result cr
+let parseCertificateRequest pv data =
+  if length data >= 1 then
+    match vlsplit 1 data with
+    | Error z -> Error z
+    | Correct (certTypeListBytes, data) ->
+      let certTypeList = parseCertificateTypeList certTypeListBytes in
+      let n = List.Tot.length certTypeList in
+      if 0 < n && n < 256 then // Redundant to check upper bound
         if length data >= 2 then
-            match version with
-            | TLS_1p2 ->
-            (match vlsplit 2 data with
-            | Error(z) -> Error(z)
-            | Correct  (x,y) ->
-            if length y >= 2 then begin
-	       lemma_repr_bytes_values (length x);
-               match parseSigHashAlgs (vlbytes 2 x) with
-               | Error(z) -> Error(z)
-               | Correct (sigAlgs) ->
-	       match vlparse 2 y with
-	       | Error(z) -> Error(z)
-	       | Correct(y) ->
-               match parseDistinguishedNameList y [] with
-               | Error(z) -> Error(z)
-               | Correct (distNamesList) ->
-		 if List.Tot.length distNamesList < 128 && List.Tot.length sigAlgs < 256 then
-                 correct (
-                 {cr_cert_types = certTypeList;
-                  cr_sig_hash_algs = Some sigAlgs;
-                  cr_distinguished_names = distNamesList})
-		 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-	    end
-            else
-               Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-            | _ ->
-               match parseDistinguishedNameList data [] with
-               | Error(z) -> Error(z)
-               | Correct (distNamesList) ->
-		 if List.Tot.length distNamesList < 128 then
-                 correct (
-                 {cr_cert_types = certTypeList;
-                  cr_sig_hash_algs = None;
-                  cr_distinguished_names = distNamesList})
-		 else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") )
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+          begin
+          match pv with
+          | TLS_1p2 ->
+            begin
+            match vlsplit 2 data with
+            | Error z -> Error z
+            | Correct (signatureAlgorithmsBytes, data) ->
+              begin
+              lemma_repr_bytes_values (length signatureAlgorithmsBytes);
+              match parseSignatureSchemeList (vlbytes 2 signatureAlgorithmsBytes) with
+              | Error z -> Error z
+              | Correct sigAlgs ->
+                if length data >= 2 then
+                  match vlparse 2 data with
+                  | Error z -> Error z
+                  | Correct certificateAuthoritiesBytes ->
+                    begin
+                    match parseDistinguishedNameList certificateAuthoritiesBytes [] with
+                    | Error z -> Error z
+                    | Correct distNamesList ->
+                      correct (
+                        {cr_cert_types = certTypeList;
+                         cr_sig_algorithms = Some sigAlgs;
+                         cr_certificate_authorities = distNamesList})
+                    end
+                else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
+              end
+            end
+          | _ -> // TLS_1p0, TLS_1p1
+            match parseDistinguishedNameList data [] with
+            | Error z -> Error z
+            | Correct distNamesList ->
+              correct (
+               {cr_cert_types = certTypeList;
+                cr_sig_algorithms = None;
+                cr_certificate_authorities = distNamesList})
+          end // match pv
+        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
+      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "empty certificate_types in Certificate Request")
+  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Certificate Request message is too short")
 
 let mk_certificateRequestBytes sign cs version =
-    certificateRequestBytes (
+  certificateRequestBytes (
     {cr_cert_types = defaultCertTypes sign cs;
-     cr_sig_hash_algs = (match version with
-                         | TLS_1p2 -> Some (default_sigHashAlg version cs)
-                         | _ -> None);
-     cr_distinguished_names = []})
+     cr_sig_algorithms =
+       (match version with
+        | TLS_1p2 -> Some (default_signatureScheme version cs)
+        | _ -> None);
+     cr_certificate_authorities = []})
 
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 

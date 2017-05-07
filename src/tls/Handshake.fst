@@ -18,7 +18,6 @@ open HandshakeMessages // for the message syntax
 open HandshakeLog // for Outgoing
 open Epochs
 
-module Sig = Signature
 module HH = FStar.HyperHeap
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
@@ -211,49 +210,6 @@ let register hs keys =
       let h = Nego.Fresh ({ Nego.session_nego = Nego.getMode hs.nego }) in
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
-
-
-(* ---------------- signature stuff, to be moved (at least) to Nego -------------------- *)
-
-// deep subtyping...
-let optHashAlg_prime_is_optHashAlg: result hashAlg' -> Tot (result TLSConstants.hashAlg) =
-  function
-  | Error z -> Error z
-  | Correct h -> Correct h
-let sigHashAlg_is_tuple_sig_hash: sigHashAlg -> Tot (sigAlg * TLSConstants.hashAlg) =
-  function | a,b -> a,b
-let rec list_sigHashAlg_is_list_tuple_sig_hash: list sigHashAlg -> Tot (list (TLSConstants.sigAlg * TLSConstants.hashAlg)) =
-  function
-  | [] -> []
-  | hd::tl -> (sigHashAlg_is_tuple_sig_hash hd) :: (list_sigHashAlg_is_list_tuple_sig_hash tl)
-
-// why an option?
-val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> pv = TLS_1p3} -> bytes -> Tot bytes
-let to_be_signed pv role csr tbs =
-  match pv, csr with
-  | TLS_1p3, None ->
-      let pad = abytes (String.make 64 (Char.char_of_int 32)) in
-      let ctx =
-        match role with
-        | Server -> "TLS 1.3, server CertificateVerify"
-        | Client -> "TLS 1.3, client CertificateVerify"  in
-      pad @| abytes ctx @| abyte 0z @| tbs
-  | _, Some csr -> csr @| tbs
-
-val sigHashAlg_of_ske: bytes -> Tot (option (sigHashAlg * bytes))
-let sigHashAlg_of_ske signature =
-  if length signature > 4 then
-   let h, sa, sigv = split2 signature 1 1 in
-   match vlsplit 2 sigv with
-   | Correct (sigv, eof) ->
-     begin
-     match length eof, parseSigAlg sa, optHashAlg_prime_is_optHashAlg (parseHashAlg h) with
-     | 0, Correct sa, Correct (Hash h) -> Some ((sa,Hash h), sigv)
-     | _, _, _ -> None
-     end
-   | Error _ -> None
-  else None
-
 
 (* ------- Pure functions between offer/mode and their message encodings -------- *)
 
@@ -496,30 +452,22 @@ let server_ServerHelloDone hs =
       let cr = mode.Nego.n_offer.ch_client_random in
       let sv = kex_s_to_bytes kex_s in
       let csr = cr @| mode.Nego.n_server_random in
-      to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv
+      Nego.to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv
     in
-    // easier: let signature = Nego.sign hs.nego tbs, already in the right format, so that we can entirely hide agility.
-    let ha0 = sessionHashAlg mode.Nego.n_protocol_version mode.Nego.n_cipher_suite in
-    let a, sa, ha = Nego.sig_algs mode ha0 ha0 in
-    match Nego.getSigningKey #a hs.nego with
+    match Nego.sign hs.nego tbs with
     | None ->
-      InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature key in chain")
-    | Some skey ->
-      let sigv = Signature.sign #a ha skey tbs in
-      if not (length sigv >= 2 && length sigv < 65536)
-      then InError (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-      else
-        begin
-          lemma_repr_bytes_values (length sigv);
-          let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
-          let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-          HandshakeLog.send hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain}));
-          HandshakeLog.send hs.log (ServerKeyExchange ske);
-          HandshakeLog.send hs.log ServerHelloDone;
-          hs.state := S_Wait_CCS1;
-          InAck false false // Server 1.2 ATK
-        end
-
+      InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
+    | Some sigv ->
+      begin
+      lemma_repr_bytes_values (length sigv);
+      let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
+      let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+      HandshakeLog.send hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain}));
+      HandshakeLog.send hs.log (ServerKeyExchange ske);
+      HandshakeLog.send hs.log ServerHelloDone;
+      hs.state := S_Wait_CCS1;
+      InAck false false // Server 1.2 ATK
+      end
 
 // the ServerHello message is a simple function of the mode.
 let serverHello (m:Nego.mode) =
@@ -663,33 +611,28 @@ let server_ServerFinished_13 hs i =
       let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
       let rc = Hashing.compute sh_alg zeroes in
       let lb = digestSig @| rc in
-      to_be_signed pv Server None lb in
-
-    let a, sa, ha = Nego.sig_algs mode sh_alg sh_alg in
-    match Nego.getSigningKey #a hs.nego with
+      Nego.to_be_signed pv Server None lb
+    in
+    match Nego.sign ns tbs with
     | None ->
-      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature key in chain")
-    | Some skey ->
-    let sigv = Signature.sign #a ha skey tbs in
-    if not (length sigv >= 2 && length sigv < 65536)
-    then Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "signature length out of range")
-    else
+      InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
+    | Some sigv ->
       begin
-        lemma_repr_bytes_values (length sigv);
-        let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
-        let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
-        let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
-        let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
-        let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
-        // we need to call KeyScheduke twice, to pass this digest
-        // ADL this call also returns exporter master secret, which should be passed to application
-        let app_keys, _ = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
-        register hs app_keys;
-        HandshakeLog.send_signals hs.log true false; //was: Epochs.incr_writer hs.epochs
-        Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
-        hs.state := S_Wait_Finished2 digestServerFinished;
-        HandshakeLog.send_signals hs.log true true;
-        Correct(HandshakeLog.next_fragment hs.log i)
+      lemma_repr_bytes_values (length sigv);
+      let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
+      let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
+      let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
+      let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
+      let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
+      // we need to call KeyScheduke twice, to pass this digest
+      // ADL this call also returns exporter master secret, which should be passed to application
+      let app_keys, _ = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
+      register hs app_keys;
+      HandshakeLog.send_signals hs.log true false; //was: Epochs.incr_writer hs.epochs
+      Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
+      hs.state := S_Wait_Finished2 digestServerFinished;
+      HandshakeLog.send_signals hs.log true true;
+      Correct(HandshakeLog.next_fragment hs.log i)
       end
 
 (* receive ClientFinish 1.3 *)

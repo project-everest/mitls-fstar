@@ -159,85 +159,6 @@ type sigAlg = CoreCrypto.sig_alg
     y:b -> Tot (xopt:result a{(forall (x:a). r (f x) y <==> (xopt = Correct x))})
 *)
 
-(** Serializing function for signature algorithms *)
-val sigAlgBytes: sigAlg -> Tot (lbytes 1)
-let sigAlgBytes sa =
-  let open CoreCrypto in
-  match sa with
-  | RSASIG -> abyte 1z
-  | DSA    -> abyte 2z
-  | ECDSA  -> abyte 3z
-  | RSAPSS -> abyte 0z
-
-(** Parsing function associated to sigAlgBytes *)
-val parseSigAlg: pinverse_t sigAlgBytes
-let parseSigAlg b =
-  let open CoreCrypto in
-  match cbyte b with
-  | 1z -> Correct RSASIG
-  | 2z -> Correct DSA
-  | 3z -> Correct ECDSA
-  | 0z -> Correct RSAPSS
-  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-val inverse_sigAlg: x:_ -> Lemma
-  (requires (True))
-  (ensures lemma_inverse_g_f sigAlgBytes parseSigAlg x)
-  [SMTPat (parseSigAlg (sigAlgBytes x))]
-let inverse_sigAlg x = ()
-
-val pinverse_sigAlg: x:_ -> Lemma
-  (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.equal sigAlgBytes parseSigAlg x))
-  [SMTPat (sigAlgBytes (Correct?._0 (parseSigAlg x)))]
-let pinverse_sigAlg x = ()
-
-
-(** Hash algorithm minimum requirements *)
-type hashAlg' = h:hashAlg{h <> NULL /\ h <> MD5SHA1 }
-
-#set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 2"
-
-(** Serializing of the Hash algorithm *)
-val hashAlgBytes: hashAlg' -> Tot (lbytes 1)
-let hashAlgBytes ha =
-  let open Hashing.Spec in
-  match ha with
-  | Hash MD5     -> abyte 1z
-  | Hash SHA1    -> abyte 2z
-  | Hash SHA224  -> abyte 3z
-  | Hash SHA256  -> abyte 4z
-  | Hash SHA384  -> abyte 5z
-  | Hash SHA512  -> abyte 6z
-  //  | NULL -> abyte 7z // FIXME!!
-
-(** Parsing of the Hash algorithm *)
-val parseHashAlg: pinverse_t hashAlgBytes
-let parseHashAlg b =
-  let open Hashing.Spec in
-  match cbyte b with
-  | 1z -> Correct (Hash MD5)
-  | 2z -> Correct (Hash SHA1)
-  | 3z -> Correct (Hash SHA224)
-  | 4z -> Correct (Hash SHA256)
-  | 5z -> Correct (Hash SHA384)
-  | 6z -> Correct (Hash SHA512)
-  // | 7z -> admit(); Correct (NULL)  //TODO: FIXME!!!!
-  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-val inverse_hashAlg: x:_ -> Lemma
-  (requires (True))
-  (ensures lemma_inverse_g_f hashAlgBytes parseHashAlg x)
-  [SMTPat (parseHashAlg (hashAlgBytes x))]
-let inverse_hashAlg x = ()
-
-val pinverse_hashAlg: x:_ -> Lemma
-  (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.equal hashAlgBytes parseHashAlg x))
-  [SMTPat (hashAlgBytes (Correct?._0 (parseHashAlg x)))]
-let pinverse_hashAlg x = ()
-
-
 (** Payload of signature_algorithms extension, using format from TLS 1.3 spec
     https://tlswg.github.io/tls13-spec/#signature-algorithms
     https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
@@ -255,13 +176,26 @@ type signatureScheme =
   | RSA_PSS_SHA384
   | RSA_PSS_SHA512
   // EdDSA algorithms
-  | ED25519
-  | ED448
+  //| ED25519
+  //| ED448
   // Legacy algorithms
   | RSA_PKCS1_SHA1
   | ECDSA_SHA1
+
   // Reserved Code Points
-  | PRIVATE_USE of (codepoint:lbytes 2 { let a,_ = cbyte2 codepoint in a == 0xFEz \/ a == 0xFFz })
+  | DSA_SHA1
+  | DSA_SHA256
+  | DSA_SHA384
+  | DSA_SHA512
+  | OBSOLETE of (codepoint:lbytes 2 {
+      let v = int_of_bytes codepoint in
+      (0x0000 <= v /\ v <= 0x0100) \/
+      (0x0204 <= v /\ v <= 0x0400) \/
+      (0x0404 <= v /\ v <= 0x0500) \/
+      (0x0504 <= v /\ v <= 0x0600) \/
+      (0x0604 <= v /\ v <= 0x06FF) })
+  | PRIVATE_USE of (codepoint:lbytes 2 {
+      let v = int_of_bytes codepoint in 0xFE00 <= v /\ v <= 0xFFFF})
 
 val signatureSchemeBytes: signatureScheme -> lbytes 2
 let signatureSchemeBytes = function
@@ -274,10 +208,15 @@ let signatureSchemeBytes = function
   | RSA_PSS_SHA256         -> abyte2 (0x08z, 0x04z)
   | RSA_PSS_SHA384         -> abyte2 (0x08z, 0x05z)
   | RSA_PSS_SHA512         -> abyte2 (0x08z, 0x06z)
-  | ED25519                -> abyte2 (0x08z, 0x07z)
-  | ED448                  -> abyte2 (0x08z, 0x08z)
+  //| ED25519                -> abyte2 (0x08z, 0x07z)
+  //| ED448                  -> abyte2 (0x08z, 0x08z)
   | RSA_PKCS1_SHA1         -> abyte2 (0x02z, 0x01z)
   | ECDSA_SHA1             -> abyte2 (0x02z, 0x03z)
+  | DSA_SHA1               -> abyte2 (0x02z, 0x02z)
+  | DSA_SHA256             -> abyte2 (0x04z, 0x02z)
+  | DSA_SHA384             -> abyte2 (0x05z, 0x02z)
+  | DSA_SHA512             -> abyte2 (0x06z, 0x02z)
+  | OBSOLETE codepoint     -> codepoint
   | PRIVATE_USE codepoint  -> codepoint
 
 val parseSignatureScheme: pinverse_t signatureSchemeBytes
@@ -292,13 +231,48 @@ let parseSignatureScheme b =
   | (0x08z, 0x04z) -> Correct RSA_PSS_SHA256
   | (0x08z, 0x05z) -> Correct RSA_PSS_SHA384
   | (0x08z, 0x06z) -> Correct RSA_PSS_SHA512
-  | (0x08z, 0x07z) -> Correct ED25519
-  | (0x08z, 0x08z) -> Correct ED448
+  //| (0x08z, 0x07z) -> Correct ED25519
+  //| (0x08z, 0x08z) -> Correct ED448
   | (0x02z, 0x01z) -> Correct RSA_PKCS1_SHA1
   | (0x02z, 0x03z) -> Correct ECDSA_SHA1
-  | (a, _) ->
-    if a = 0xFEz || a = 0xFFz then Correct (PRIVATE_USE b)
-    else Error(AD_decode_error, "Parsed invalide SignatureScheme " ^ print_bytes b)
+  | (0x02z, 0x02z) -> Correct DSA_SHA1
+  | (0x04z, 0x02z) -> Correct DSA_SHA256
+  | (0x05z, 0x02z) -> Correct DSA_SHA384
+  | (0x06z, 0x02z) -> Correct DSA_SHA512
+  | (x, y) ->
+     let v = int_of_bytes b in
+     if (0x0000 <= v && v <= 0x0100) ||
+        (0x0204 <= v && v <= 0x0400) ||
+        (0x0404 <= v && v <= 0x0500) ||
+        (0x0504 <= v && v <= 0x0600) ||
+        (0x0604 <= v && v <= 0x06FF)
+     then Correct (OBSOLETE b)
+     else if 0xFE00 <= v && v <= 0xFFFF then Correct (PRIVATE_USE b)
+     else Error(AD_decode_error, "Parsed invalid SignatureScheme " ^ print_bytes b)
+
+val sigHashAlg_of_signatureScheme:
+  scheme:signatureScheme{~(PRIVATE_USE? scheme) /\ ~(OBSOLETE? scheme)} -> sigAlg * hashAlg
+let sigHashAlg_of_signatureScheme =
+  let open CoreCrypto in
+  let open Hashing.Spec in
+  function
+  | RSA_PKCS1_SHA256       -> (RSASIG, Hash SHA256)
+  | RSA_PKCS1_SHA384       -> (RSASIG, Hash SHA384)
+  | RSA_PKCS1_SHA512       -> (RSASIG, Hash SHA512)
+  | ECDSA_SECP256R1_SHA256 -> (ECDSA,  Hash SHA256)
+  | ECDSA_SECP384R1_SHA384 -> (ECDSA,  Hash SHA384)
+  | ECDSA_SECP521R1_SHA512 -> (ECDSA,  Hash SHA512)
+  | RSA_PSS_SHA256         -> (RSAPSS, Hash SHA256)
+  | RSA_PSS_SHA384         -> (RSAPSS, Hash SHA384)
+  | RSA_PSS_SHA512         -> (RSAPSS, Hash SHA512)
+  //| ED25519                -> (EdDSA,  Hash SHA512)
+  //| ED448                  -> (EdDSA,  Hash SHA512)
+  | RSA_PKCS1_SHA1         -> (RSASIG,    Hash SHA1)
+  | ECDSA_SHA1             -> (ECDSA,  Hash SHA1)
+  | DSA_SHA1               -> (DSA,    Hash SHA1)
+  | DSA_SHA256             -> (DSA,    Hash SHA256)
+  | DSA_SHA384             -> (DSA,    Hash SHA384)
+  | DSA_SHA512             -> (DSA,    Hash SHA512)
 
 
 (** Encryption key sizes *)
@@ -949,7 +923,7 @@ val sessionHashAlg: pv:protocolVersion -> cs:cipherSuite{pvcs pv cs} -> Tot hash
 let sessionHashAlg pv cs =
   match pv with
   | TLS_1p3 -> let CipherSuite13 _ h = cs in Hash h
-  | SSL_3p0 | TLS_1p0 | TLS_1p1 -> MD5SHA1
+  | SSL_3p0 | TLS_1p0 | TLS_1p1 -> MD5SHA1 // FIXME: DSA uses only SHA1
   | TLS_1p2 -> Hash (verifyDataHashAlg_of_ciphersuite cs)
 
 // TODO recheck this is the right hash for HKDF
@@ -1331,7 +1305,7 @@ let defaultCertTypes sign cs =
 
 
 (** Type definition of the Distinguished Name of a certificate *)
-type dn = s:string{length(utf8 s) <= 256}
+type dn = s:string{length(utf8 s) < 256}
 
 (** Serializing function for a list of Distinguished Names of certificates *)
 val distinguishedNameListBytes: names:list dn -> Tot (b:bytes{length b <= op_Multiply 258 (List.Tot.length names)})
@@ -1562,12 +1536,13 @@ let parseConfigurationExtensions b =
   | Error(z) -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
 
-let signatureSchemes = algs:list signatureScheme{List.Tot.length algs < 65536/2}
+let signatureSchemeList =
+  algs:list signatureScheme{0 < List.Tot.length algs /\ List.Tot.length algs < 65536/2}
 
 (** Serializing function for a SignatureScheme list *)
-val signatureSchemesBytes: algs:signatureSchemes
+val signatureSchemeListBytes: algs:signatureSchemeList
   -> Tot (b:bytes{2 <= length b /\ length b < 65538})
-let signatureSchemesBytes algs =
+let signatureSchemeListBytes algs =
   let rec aux: b:bytes ->
     algs:list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs) < 65536 } ->
     Tot (r:bytes{length r < 65536}) (decreases algs) = fun b algs ->
@@ -1582,9 +1557,9 @@ let signatureSchemesBytes algs =
   vlbytes 2 pl
 
 (** Parsing function for a SignatureScheme list *)
-val parseSignatureSchemes: pinverse_t signatureSchemesBytes
-let parseSignatureSchemes b =
-  let rec aux: b:bytes -> algs:list signatureScheme{length b + op_Multiply 2 (List.Tot.length algs) < 65536} -> Tot (result signatureSchemes) (decreases (length b)) = fun b algs ->
+val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
+let parseSignatureSchemeList b =
+  let rec aux: b:bytes -> algs:list signatureScheme{length b + op_Multiply 2 (List.Tot.length algs) < 65536} -> Tot (result signatureSchemeList) (decreases (length b)) = fun b algs ->
     if length b > 0 then
       if length b >= 2 then
       let alg,bytes = split b 2 in
@@ -1672,7 +1647,7 @@ noeq type config = {
     ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
     compressions: l:list compression{ List.Tot.length l > 0 /\ List.Tot.length l < 256 };
     namedGroups: list valid_namedGroup;
-    signatureAlgorithms: signatureSchemes;
+    signatureAlgorithms: signatureSchemeList;
 
     (* Handshake specific options *)
 
@@ -1733,7 +1708,7 @@ type negotiatedExtensions = {
   ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
 
   // now internal, transient concerns for server-side nego
-  ne_signature_algorithms: option signatureSchemes;
+  ne_signature_algorithms: option signatureSchemeList;
   ne_supported_groups: option (list valid_namedGroup);
   ne_supported_point_formats: option (list ECGroup.point_format);
 }
