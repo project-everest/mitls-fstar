@@ -85,9 +85,9 @@ let endpoint_keytype13 (c:chain13) : option CoreCrypto.key =
 abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
 let rec parseCertificateList b =
   if length b = 0 then Correct [] else
-  if length b < 3 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
+  if length b < 3 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list: too short") else
   match vlsplit 3 b with
-  | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+  | Error _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list: incorrect certificate length")
   | Correct (c,r) -> (
     match parseCertificateList r with
     | Error z -> Error z 
@@ -98,11 +98,11 @@ let rec parseCertificateList13 b =
   if length b = 0 then Correct [] else
   if length b < 3 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
   match vlsplit 3 b with
-  | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+  | Error _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
   | Correct (c,r) -> (
     if length r < 2 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
     match vlsplit 2 r with
-    | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+    | Error _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
     | Correct (e,r) -> (
       match parseExtensions Client (vlbytes 2 e) with
       | Error z -> Error z 

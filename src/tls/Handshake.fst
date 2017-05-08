@@ -460,7 +460,7 @@ let server_ServerHelloDone hs =
     | Some signature ->
       begin
       let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-      HandshakeLog.send hs.log (Certificate ({crt_chain = chain}));
+      HandshakeLog.send hs.log (Certificate ({crt_chain = Extensions.chain_down chain}));
       HandshakeLog.send hs.log (ServerKeyExchange ske);
       HandshakeLog.send hs.log ServerHelloDone;
       hs.state := S_Wait_CCS1;

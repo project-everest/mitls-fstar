@@ -844,11 +844,11 @@ let client_ServerKeyExchange #region ns crt ske ocr =
           Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
         | Some (sa', sigv) ->
           begin
-          match signatureScheme_of_mode mode ns.cfg.signatureAlgorithms with
+          match signatureScheme_of_mode mode [sa'] with
           | None -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
           | Some sa ->
             if sa <> sa' then
-              Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+              Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm in ServerKeyexchange message cannot be negotiated")
             else
               let csr = ns.nonce @| mode.n_server_random in
               let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
