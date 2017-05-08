@@ -600,7 +600,7 @@ let server_ServerFinished_13 hs i =
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
     HandshakeLog.send hs.log (EncryptedExtensions []);
-    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []})) in //chain})) in // TODO: FIXME
+    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in 
 
     // signing of the formatted session digest
     let tbs : bytes =

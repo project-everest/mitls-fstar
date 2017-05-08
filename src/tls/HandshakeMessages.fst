@@ -295,7 +295,7 @@ noeq type hs_msg =
 
   // formatted, but never parsed as messages
   | Binders of binders 
-  | MessageHash of Hashing.Spec.anyTag // NEVER PARSED
+  | MessageHash of Hashing.Spec.anyTag 
 //  | NextProtocol of np // ?? 
 
 

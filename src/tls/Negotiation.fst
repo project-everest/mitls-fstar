@@ -242,7 +242,7 @@ noeq type mode =
 
     // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
     n_client_cert_request: option HandshakeMessages.cr ->
-    n_server_cert: option Extensions.chain ->
+    n_server_cert: option Extensions.chain13 ->
 
     // more from either CH+SH (1.3) or CKE (1.2)
     n_client_share: option share ->
@@ -292,11 +292,11 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
 
   | C_WaitFinished2: // Only 1.2
                 n_mode: mode ->
-                n_client_certificate: option Extensions.chain ->
+                n_client_certificate: option Extensions.chain13 ->
                 negotiationState r cfg resume
 
   | C_Complete: n_mode: mode ->
-                n_client_certificate: option Extensions.chain ->
+                n_client_certificate: option Extensions.chain13 ->
                 negotiationState r cfg resume
 
   | S_Init:     n_server_random: TLSInfo.random ->
@@ -316,7 +316,7 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 negotiationState r cfg resume
 
   | S_Complete: n_mode: mode ->
-                n_client_certificate: option Extensions.chain ->
+                n_client_certificate: option Extensions.chain13 ->
                 negotiationState r cfg resume
 
 let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
@@ -834,7 +834,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
     | KEX_S_RSA _ ->
       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Illegal message")
     | KEX_S_DHE gy ->
-      let scert = crt.crt_chain in
+      let scert = chain_up crt.crt_chain in
       if (not ns.cfg.check_peer_certificate) ||
          Cert.validate_chain crt.crt_chain true ns.cfg.peer_name ns.cfg.ca_file
       then
@@ -1014,7 +1014,7 @@ let computeServerMode cfg co serverRandom serverID =
           let serverExtensions = None in // To be computed in Handshake and filled later
           let scert =
             match Cert.lookup_chain cfg.cert_chain_file with
-            | Correct cert -> Some cert
+            | Correct cert -> Some (chain_up cert)
             | Error z -> 
               trace ("*WARNING* no server certificate found: " ^ string_of_error z);
               None
@@ -1042,14 +1042,14 @@ let computeServerMode cfg co serverRandom serverID =
   let nosa = fun (CipherSuite _ sa _) -> None? sa in
   let sigfilter = 
     match Cert.lookup_chain cfg.cert_chain_file with
-    | Correct c when (Some? (Cert.endpoint_keytype c)) ->
-      let kt = Cert.endpoint_keytype c in
-      (fun cs ->
+    | Correct c  -> (
+      match Cert.endpoint_keytype c with 
+      | Some kt -> (fun cs ->
         match cs with
         | CipherSuite _ sa _ ->
           begin
-          match sa,kt with
-          | Some sa, Some kt ->
+          match sa with
+          | Some sa ->
             (match sa, kt with
             | RSASIG, KeyRSA _ | RSAPSS, KeyRSA _
             | ECDSA, KeyECDSA _ | DSA, KeyDSA _ -> true
@@ -1057,12 +1057,8 @@ let computeServerMode cfg co serverRandom serverID =
           | _ -> false
           end
         | _ -> false)
-    | _ ->
-       let _ =
-        if n_debug then
-          IO.debug_print_string "WARNING cannot load server cert; restricting to anonymous CS...\n"
-        else false in
-       nosa in
+      | _ -> trace "WARNING: loaded wrong server cert"; nosa)
+    | _ -> trace "WARNING: cannot load server cert"; nosa in 
   // From https://tools.ietf.org/html/rfc5246#section-7.4.2:
   // In order to negotiate correctly, the server MUST check any candidate
   // cipher suites against the "signature_algorithms" extension before selecting them
@@ -1093,7 +1089,7 @@ let computeServerMode cfg co serverRandom serverID =
   then Error(AD_illegal_parameter, "Compression is deprecated") else 
   let scert =
     match Cert.lookup_chain cfg.cert_chain_file with
-    | Correct cert -> Some cert
+    | Correct cert -> Some (chain_up cert)
     | Error z ->
       trace ("No cert found: "^string_of_error z);
       None
