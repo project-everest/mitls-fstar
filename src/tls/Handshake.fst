@@ -457,10 +457,8 @@ let server_ServerHelloDone hs =
     match Nego.sign hs.nego tbs with
     | None ->
       InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
-    | Some sigv ->
+    | Some signature ->
       begin
-      lemma_repr_bytes_values (length sigv);
-      let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
       let ske = {ske_kex_s = kex_s; ske_sig = signature} in
       HandshakeLog.send hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain}));
       HandshakeLog.send hs.log (ServerKeyExchange ske);
@@ -613,13 +611,11 @@ let server_ServerFinished_13 hs i =
       let lb = digestSig @| rc in
       Nego.to_be_signed pv Server None lb
     in
-    match Nego.sign ns tbs with
+    match Nego.sign hs.nego tbs with
     | None ->
-      InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
-    | Some sigv ->
+      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
+    | Some signature ->
       begin
-      lemma_repr_bytes_values (length sigv);
-      let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
       let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
       let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in

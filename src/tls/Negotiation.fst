@@ -471,11 +471,6 @@ let version #region #role ns =
   | S_Mode mode
   | S_Complete mode _ -> mode.n_protocol_version
 
-
-assume val sigHashAlg_of_signatureScheme: signatureScheme -> sigAlg * TLSConstants.hashAlg
-
-assume val signatureScheme_of_sigHashAlg: sigAlg -> TLSConstants.hashAlg -> signatureScheme
-
 // Signature agility, depending on the CS and an optional client extension
 let signatureScheme_of_mode mode supported_algs =
   let ha0 = sessionHashAlg mode.n_protocol_version mode.n_cipher_suite in
@@ -520,10 +515,13 @@ let sign #region #role ns tbs =
     let sa, ha = sigHashAlg_of_signatureScheme scheme in
     let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
     match getSigningKey #a ns with
-    | None -> None
+    | None ->
+      (trace "*WARNING* couldn't load signing key";
+       None)
     | Some skey ->
       let sigv = Signature.sign #a ha skey tbs in
-      if length sigv >= 2 && length sigv < 65536 then Some (signatureSchemeBytes scheme @| sigv)
+      lemma_repr_bytes_values (length sigv);
+      if length sigv >= 2 && length sigv < 65536 then Some (signatureSchemeBytes scheme @| vlbytes 2 sigv)
       else None
     end
 

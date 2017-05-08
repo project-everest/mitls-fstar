@@ -274,6 +274,29 @@ let sigHashAlg_of_signatureScheme =
   | DSA_SHA384             -> (DSA,    Hash SHA384)
   | DSA_SHA512             -> (DSA,    Hash SHA512)
 
+val signatureScheme_of_sigHashAlg: sigAlg -> hashAlg -> signatureScheme
+let signatureScheme_of_sigHashAlg sa ha =
+  let open CoreCrypto in
+  let open Hashing.Spec in
+  match sa, ha with
+  | (RSASIG, Hash SHA256) -> RSA_PKCS1_SHA256
+  | (RSASIG, Hash SHA384) -> RSA_PKCS1_SHA384
+  | (RSASIG, Hash SHA512) -> RSA_PKCS1_SHA512
+  | (ECDSA,  Hash SHA256) -> ECDSA_SECP256R1_SHA256
+  | (ECDSA,  Hash SHA384) -> ECDSA_SECP384R1_SHA384
+  | (ECDSA,  Hash SHA512) -> ECDSA_SECP521R1_SHA512
+  | (RSAPSS, Hash SHA256) -> RSA_PSS_SHA256
+  | (RSAPSS, Hash SHA384) -> RSA_PSS_SHA384
+  | (RSAPSS, Hash SHA512) -> RSA_PSS_SHA512
+  //| ED25519               -> (EdDSA,  Hash SHA512)
+  //| ED448                 -> (EdDSA,  Hash SHA512)
+  | (RSASIG,    Hash SHA1)-> RSA_PKCS1_SHA1
+  | (ECDSA,  Hash SHA1)   -> ECDSA_SHA1
+  | (DSA,    Hash SHA1)   -> DSA_SHA1
+  | (DSA,    Hash SHA256) -> DSA_SHA256
+  | (DSA,    Hash SHA384) -> DSA_SHA384
+  | (DSA,    Hash SHA512) -> DSA_SHA512
+
 
 (** Encryption key sizes *)
 let encKeySize =
