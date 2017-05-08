@@ -394,7 +394,8 @@ let lookup_key #a keyfile =
   | Some (pkr, skr) ->
     begin
     match find_key pkr keys with
-    | Some (| a', p |) -> if a' = a then
+    | Some (| a', p |) ->
+      if a'.core = a.core then // if a' = a then // Not computable in extracted code
       begin
         witness rkeys (generated (|a,p|));
         Some (p, skr)

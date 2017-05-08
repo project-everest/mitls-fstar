@@ -105,9 +105,7 @@ let mkConfig cs pvs = // from test_client.ml and test_server.ml
   let pv = match pvs with 
     | "1.3" -> TLS_1p3 
     | _     -> TLS_1p2 in
-  let sigPref = [CoreCrypto.RSASIG] in
-  let hashPref = [Hash CoreCrypto.SHA256] in
-  let sigAlgPrefs = sigAlgPref sigPref hashPref in
+  let sigAlgPrefs = [ RSA_PKCS1_SHA256 ] in
   let cfg = ({TLSInfo.defaultConfig with
         minVer = pv;
         maxVer = pv;

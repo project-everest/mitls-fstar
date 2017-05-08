@@ -40,14 +40,14 @@ let css = [
 ]
 
 let sas = [
-  ("RSA+SHA512", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA512));
-  ("RSA+SHA384", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA384));
-  ("RSA+SHA256", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA256));
-  ("RSA+SHA1", (CoreCrypto.RSASIG, Hash Hashing_Spec.SHA1));
-  ("ECDSA+SHA512", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA512));
-  ("ECDSA+SHA384", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA384));
-  ("ECDSA+SHA256", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA256));
-  ("ECDSA+SHA1", (CoreCrypto.ECDSA, Hash Hashing_Spec.SHA1));
+  ("RSA+SHA512",   RSA_PKCS1_SHA512);
+  ("RSA+SHA384",   RSA_PKCS1_SHA384);
+  ("RSA+SHA256",   RSA_PKCS1_SHA256);
+  ("RSA+SHA1",     RSA_PKCS1_SHA1);
+  ("ECDSA+SHA512", ECDSA_SECP521R1_SHA512);
+  ("ECDSA+SHA384", ECDSA_SECP384R1_SHA384);
+  ("ECDSA+SHA256", ECDSA_SECP256R1_SHA256);
+  ("ECDSA+SHA1",   ECDSA_SHA1);
 ]
 
 let ngs = [
