@@ -40,9 +40,10 @@ let defaultConfig =
       ECDSA_SECP521R1_SHA512;
       ECDSA_SECP384R1_SHA384;
       ECDSA_SECP256R1_SHA256;
-      RSA_PSS_SHA512;
-      RSA_PSS_SHA384;
-      RSA_PSS_SHA256;
+      // Not yet implemented in Signature
+      //RSA_PSS_SHA512;
+      //RSA_PSS_SHA384;
+      //RSA_PSS_SHA256;
       RSA_PKCS1_SHA512;
       RSA_PKCS1_SHA384;
       RSA_PKCS1_SHA256;
