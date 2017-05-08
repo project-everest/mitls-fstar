@@ -85,6 +85,14 @@ void FFI_mitls_cleanup(void)
  #undef MITLS_FFI_ENTRY
 }
 
+// Input:  v - an OCaml exception
+//         errmsg - in/out pointer to the current error log string, may 
+//                  point to NULL
+// Return:
+//         nothing
+//         *errmsg updated by realloc and appending the exception text.
+//                 On out-of-memory, the new exception is discarded and
+//                 the current error log string is returned unmodified.
 static void report_caml_exception(value v, char **errmsg)
 {
     if (errmsg) {
