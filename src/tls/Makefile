@@ -121,10 +121,10 @@ Hashing.CRF.fst \
 HMAC.fst \
 PSK.fst \
 Extensions.fst \
+Cert.fst \
 TLSInfo.fst \
 HMAC.UFCMA.fst \
 IdNonce.fst \
-Cert.fst \
 Signature.fst \
 Buffer.Utils.fst \
 Crypto.Symmetric.Bytes.fst \

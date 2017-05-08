@@ -525,7 +525,7 @@ let sign #region #role ns tbs =
       else None
     end
 
-val verify: signatureScheme -> list cert -> bytes -> bytes ->
+val verify: signatureScheme -> list Cert.cert -> bytes -> bytes ->
   ST bool
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> True))
