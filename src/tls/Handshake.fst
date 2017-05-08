@@ -513,7 +513,7 @@ let server_ServerHelloDone hs =
           lemma_repr_bytes_values (length sigv);
           let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
           let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-          HandshakeLog.send hs.log (Certificate ({crt_chain = chain}));
+          HandshakeLog.send hs.log (Certificate ({crt_chain = Extensions.chain_down chain}));
           HandshakeLog.send hs.log (ServerKeyExchange ske);
           HandshakeLog.send hs.log ServerHelloDone;
           hs.state := S_Wait_CCS1;
@@ -654,7 +654,7 @@ let server_ServerFinished_13 hs i =
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
     HandshakeLog.send hs.log (EncryptedExtensions []);
-    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []})) in //chain})) in // TODO: FIXME
+    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in 
 
     // signing of the formatted session digest
     let tbs : bytes =
