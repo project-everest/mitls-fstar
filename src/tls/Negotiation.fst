@@ -405,7 +405,13 @@ let emsFlag mode =
   else
     match mode.n_offer.ch_extensions with
     | None -> false
-    | Some cexts -> List.Tot.mem Extensions.E_extended_ms cexts
+    | Some cexts ->
+      List.Tot.mem Extensions.E_extended_ms cexts &&
+      (match mode.n_server_extensions with
+       // called from server_ClientHello
+       | None -> true
+       // called from client_ServerHelloDone
+       | Some sexts -> List.Tot.mem Extensions.E_extended_ms sexts)
 
 val chosenGroup: mode -> option CommonDH.group
 let chosenGroup mode =
