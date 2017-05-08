@@ -33,9 +33,12 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
   if cdh_debug then print else (fun _ -> ())
 
-type group =
+type group' =
   | FFDH of DHGroup.group
   | ECDH of ECGroup.group
+
+let group = group'
+let is_ec g = ECDH? g
 
 let string_of_group = function
   | FFDH g ->
@@ -64,7 +67,7 @@ private type pre_keyshare' =
   | KS_FF: g:DHGroup.group -> DHGroup.keyshare g -> pre_keyshare'
   | KS_EC: g:ECGroup.group -> ECGroup.keyshare g -> pre_keyshare'
 
-type pre_keyshare (g:group) =
+let pre_keyshare (g:group) =
   ks:pre_keyshare'{(match g with
   | FFDH dhg -> KS_FF? ks /\ KS_FF?.g ks = dhg
   | ECDH ecg -> KS_EC? ks /\ KS_EC?.g ks = ecg)}
@@ -73,16 +76,39 @@ private type pre_share' =
   | S_FF: g:DHGroup.group -> DHGroup.share g -> pre_share'
   | S_EC: g:ECGroup.group -> ECGroup.share g -> pre_share'
 
-type pre_share (g:group) =
+let pre_share (g:group) =
   s:pre_share'{(match g with
   | FFDH dhg -> S_FF? s /\ S_FF?.g s = dhg
   | ECDH ecg -> S_EC? s /\ S_EC?.g s = ecg)}
 
-type id = g:group & s:pre_share g
-type honest (i:id) = bool
+
+let namedGroup_of_group g =
+  match g with
+  | ECDH ec -> Some (SEC ec)
+  | FFDH (DHGroup.Named ng) -> Some (FFDHE ng)
+  | _ -> None
+
+let lemma_namedGroup_of_group (g:group)
+  : Lemma (Some? (namedGroup_of_group g) <==> (ECDH? g \/ (FFDH? g /\ DHGroup.Named? (FFDH?._0 g))))
+  [SMTPat (namedGroup_of_group g)]
+  = ()
+
+let group_of_namedGroup g =
+  match g with
+  | SEC ec    -> Some (ECDH ec)
+  | FFDHE dhe -> Some (FFDH (DHGroup.Named dhe))
+  | _ -> None
+
+let lemma_group_of_namedGroup (ng:namedGroup)
+  : Lemma (Some? (group_of_namedGroup ng) <==> (SEC? ng \/ FFDHE? ng))
+  [SMTPat (group_of_namedGroup ng)]
+  = ()
+
+let default_group = ECDH (CoreCrypto.ECC_P256)
 
 (* Global log of honestly generated DH shares *)
-private let dh_region:rgn = new_region tls_tables_region
+type honest (i:id) = bool
+let dh_region = new_region tls_tables_region
 private type ideal_log = MM.t dh_region id honest (fun _ -> True)
 private type share_table = (if Flags.ideal_KEF then ideal_log else unit)
 
@@ -92,69 +118,35 @@ abstract let share_log: share_table =
   else
     ())
 
-type secret (g:group) = bytes
-
-let namedGroup_of_group (g:group) : Tot (r:(option namedGroup)
-  {Some? r <==> (ECDH? g \/ (FFDH? g /\ DHGroup.Named? (FFDH?._0 g)))}) =
-  match g with
-  | ECDH ec -> Some (SEC ec)
-  | FFDH (DHGroup.Named ng) -> Some (FFDHE ng)
-  | _ -> None
-
-val group_of_namedGroup: ng:namedGroup -> Tot (r:option group
-  {Some? r <==> (SEC? ng \/ FFDHE? ng)})
-let group_of_namedGroup g =
-  match g with
-  | SEC ec    -> Some (ECDH ec)
-  | FFDHE dhe -> Some (FFDH (DHGroup.Named dhe))
-  | _ -> None
-
-val default_group: group
-let default_group = ECDH (CoreCrypto.ECC_P256)
-
-type registered (i:id) =
+let registered i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
     MR.witnessed (MM.defined log i)
   else
     True)
 
-type honest_share (i:id) =
+let honest_share i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
     MR.witnessed (MM.contains log i true)
   else False)
 
-type dishonest_share (i:id) =
+let dishonest_share i =
   (if Flags.ideal_KEF then
     let log : ideal_log = share_log in
     MR.witnessed (MM.contains log i false)
   else True)
 
-val pre_pubshare: #g:group -> pre_keyshare g -> Tot (pre_share g)
 let pre_pubshare #g ks =
   match g with
   | FFDH dhg -> let KS_FF _ ks = ks in S_FF dhg (DHGroup.pubshare #dhg ks)
   | ECDH ecg -> let KS_EC _ ks = ks in S_EC ecg (ECGroup.pubshare #ecg ks)
 
-type share (g:group) = s:pre_share g{registered (|g, s|)}
-type keyshare (g:group) = s:pre_keyshare g{registered (|g, pre_pubshare s|)}
-
 let pubshare (#g:group) (s:keyshare g) : Tot (share g) =
   let gx = pre_pubshare s in
   cut(registered (|g, gx |)); gx
 
-let is_honest (i:id) : ST bool
-  (requires (fun h -> registered i))
-  (ensures (fun h0 b h1 ->
-    modifies_none h0 h1 /\
-    (if Flags.ideal_KEF then
-      let log : ideal_log = share_log in
-      MM.contains log i b h1 /\
-      (b ==> honest_share i) /\
-      (not b ==> dishonest_share i)
-    else b == false)))
-  =
+let is_honest i =
   if Flags.ideal_KEF then
    begin
     let log : ideal_log = share_log in
@@ -246,14 +238,6 @@ let lemma_honest_not_dishonest (i:id)
   else ()
 
 #set-options "--z3rlimit 100"
-val keygen: g:group -> ST (keyshare g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 s h1 ->
-    (if Flags.ideal_KEF then
-      modifies_one dh_region h0 h1 /\
-      honest_share (|g, pubshare s|)
-     else
-      modifies_none h0 h1)))
 let rec keygen g =
   dbg ("Keygen on " ^ (string_of_group g));
   let gx : pre_keyshare g =
@@ -278,9 +262,6 @@ let rec keygen g =
    else gx in
   gx
 
-val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let dh_initiator #g gx gy =
   dbg ("DH initiator on " ^ (string_of_group g));
   match g with
@@ -293,14 +274,6 @@ let dh_initiator #g gx gy =
     let S_EC _ gy = gy in
     ECGroup.dh_initiator #g gx gy
 
-val dh_responder: #g:group -> share g -> ST (share g * secret g)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 (ks,s) h1 ->
-    (if Flags.ideal_KEF then
-      modifies_one dh_region h0 h1 /\
-      honest_share (|g, ks|)
-     else
-      modifies_none h0 h1)))
 let dh_responder #g gx =
   dbg ("DH responder on " ^ (string_of_group g));
   let gy = keygen g in
@@ -308,14 +281,7 @@ let dh_responder #g gx =
   (pubshare #g gy, gxy)
 
 #set-options "--z3rlimit 100"
-let register (#g:group) (gx:pre_share g) : ST (share g)
-(requires (fun h0 -> True))
-(ensures (fun h0 s h1 ->
-  (if Flags.ideal_KEF then
-    modifies_one dh_region h0 h1
-   else
-    modifies_none h0 h1)))
-  =
+let register #g gx =
   if Flags.ideal_KEF then
    begin
     let log : ideal_log = share_log in
@@ -333,7 +299,6 @@ let register (#g:group) (gx:pre_share g) : ST (share g)
    end
   else gx
 
-val parse: g:group -> bytes -> Tot (option (pre_share g))
 let parse g x =
   match g with
   | ECDH g ->
@@ -344,7 +309,6 @@ let parse g x =
     if length x = length dhp.dh_p then Some (S_FF g x)
     else None
 
-val parse_partial: bool -> bytes -> Tot (result ((g:group & pre_share g) * bytes))
 let parse_partial ec p =
   if ec then
     begin
@@ -362,14 +326,12 @@ let parse_partial ec p =
     end
 
 // Serialize in KeyExchange message format
-val serialize: #g:group -> pre_share g -> Tot bytes
 let serialize #g s =
   match g with
   | FFDH g -> let S_FF _ s = s in DHGroup.serialize #g s
   | ECDH g -> let S_EC _ s = s in ECGroup.serialize #g s
 
 // Serialize for keyShare extension
-val serialize_raw: #g:group -> pre_share g -> Tot bytes
 let serialize_raw #g s =
   match g with
   | FFDH g ->
@@ -420,29 +382,6 @@ let checkElement (p:parameters) (e:element) : option element  =
 // TODO imported from TLSConstants, in a broken state
 // This may not belong to CommonDH.
 
-// TODO: replace "bytes" by either DH or ECDH parameters
-// should that go elsewhere? YES.
-(** KeyShare entry definition *)
-type keyShareEntry =
-  | Share: g:group{Some? (namedGroup_of_group g)} -> share g -> keyShareEntry
-  | UnknownShare:
-    ng:namedGroup { None? (group_of_namedGroup ng)} ->
-    b:bytes{repr_bytes (length b) <= 2} -> keyShareEntry
-
-(** ClientKeyShare definition *)
-type clientKeyShare = l:list keyShareEntry{List.Tot.length l < 65536/4}
-
-(** ServerKeyShare definition *)
-type serverKeyShare = keyShareEntry
-
-(** KeyShare definition *)
-noeq type keyShare =
-  | ClientKeyShare of clientKeyShare
-  | ServerKeyShare of serverKeyShare
-
-// the parsing/formatting moves to the private part of Extensions
-(** Serializing function for a KeyShareEntry *)
-val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
 let keyShareEntryBytes = function
   | Share g s ->
     assume false; // TODO
@@ -455,7 +394,6 @@ let keyShareEntryBytes = function
     ng_bytes @| vlbytes 2 b
 
 (** Parsing function for a KeyShareEntry *)
-val parseKeyShareEntry: pinverse_t keyShareEntryBytes
 let parseKeyShareEntry b =
   assume false; // TODO registration
   let ng, key_exchange = split b 2 in
@@ -503,7 +441,6 @@ let pinverse_keyShareEntry x = ()
 
 // Choice: truncate when maximum length is exceeded
 (** Serializing function for a list of KeyShareEntry *)
-val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 let keyShareEntriesBytes kes =
   let rec keyShareEntriesBytes_aux (b:bytes{length b < 65536}) (kes:list keyShareEntry): Tot (b:bytes{length b < 65536}) (decreases kes) =
   match kes with
@@ -519,7 +456,6 @@ let keyShareEntriesBytes kes =
   vlbytes 2 b
 
 (** Parsing function for a list KeyShareEntry *)
-val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
 let parseKeyShareEntries b =
   let rec (aux: b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b))) = fun b entries ->
     if length b > 0 then
@@ -540,12 +476,9 @@ let parseKeyShareEntries b =
   | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share entries")
 
 (** Serializing function for a ClientKeyShare *)
-val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{ 2 <= length b /\ length b < 65538 })
 let clientKeyShareBytes cks = keyShareEntriesBytes cks
 
 (** Parsing function for a ClientKeyShare *)
-val parseClientKeyShare: b:bytes{ 2 <= length b /\ length b < 65538 }
-  -> Tot (result clientKeyShare)
 let parseClientKeyShare b =
   match parseKeyShareEntries b with
   | Correct kes ->
@@ -555,11 +488,9 @@ let parseClientKeyShare b =
   | Error z -> Error z
 
 (** Serializing function for a ServerKeyShare *)
-val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{ 4 <= length b })
 let serverKeyShareBytes sks = keyShareEntryBytes sks
 
 (** Parsing function for a ServerKeyShare *)
-val parseServerKeyShare: pinverse_t serverKeyShareBytes
 let parseServerKeyShare b = parseKeyShareEntry b
 
 (** Serializing function for a KeyShare *)
@@ -568,7 +499,6 @@ let keyShareBytes = function
   | ServerKeyShare sks -> serverKeyShareBytes sks
 
 (** Parsing function for a KeyShare *)
-val parseKeyShare: bool -> bytes -> Tot (result keyShare)
 let parseKeyShare is_client b =
   if is_client then
     begin

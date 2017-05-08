@@ -53,10 +53,6 @@ type ec_all_curve =
   | EC_EXPLICIT_PRIME
   | EC_EXPLICIT_BINARY
 
-type point_format =
-  | ECP_UNCOMPRESSED
-  | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
-
 val params_of_group: group -> bool -> Tot params
 let params_of_group c compression = {curve = c; point_compression = compression}
 

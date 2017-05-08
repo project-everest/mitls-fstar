@@ -1720,6 +1720,10 @@ type serverName =
 | SNI_DNS of b:bytes{repr_bytes (length b) <= 2}
 | SNI_UNKNOWN of (n:nat{repr_bytes n <= 1}) * (b:bytes{repr_bytes (length b) <= 2})
 
+type point_format =
+  | ECP_UNCOMPRESSED
+  | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
+
 // deprecated (but still included in TLSInfo)
 type negotiatedExtensions = {
   ne_extended_ms: bool; // now a total function of the mode
@@ -1733,7 +1737,7 @@ type negotiatedExtensions = {
   // now internal, transient concerns for server-side nego
   ne_signature_algorithms: option signatureSchemeList;
   ne_supported_groups: option (list valid_namedGroup);
-  ne_supported_point_formats: option (list ECGroup.point_format);
+  ne_supported_point_formats: option (list point_format);
 }
 
 let ne_default = {
