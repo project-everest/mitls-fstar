@@ -149,7 +149,7 @@ val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
          HH.parent r.region = parent /\
 	       color r.region = color parent /\
          stronger_fresh_region r.region h0 h1 /\
-         op_Equality #(log_ref w.region i) w.log r.log /\
+         eq2 #(log_ref w.region i) w.log r.log /\
 	       m_contains (ctr r.counter) h1 /\
 	       m_sel h1 (ctr r.counter) === 0))
 // encryption (on concrete bytes), returns (cipher @| tag)
@@ -273,7 +273,7 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
          | _  ->
                 let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
                 HH.modifies_one d.region h0.h h1.h /\
-                modifies_rref d.region !{as_ref ctr_counter_as_hsref} h0.h h1.h
+                modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h
 	              /\ m_sel h1 (ctr d.counter) === j + 1)))
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"

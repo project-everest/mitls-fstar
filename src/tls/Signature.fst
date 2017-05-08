@@ -106,7 +106,7 @@ let keyRegion:TLSConstants.rgn = new_region TLSConstants.tls_region
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
-type pubkey (a:alg) =
+noeq type pubkey (a:alg) =
   | PK: log:log_t a -> repr:public_repr{sigAlg_of_public_repr repr = a.core} -> pubkey a
 
 type pkey = (a:alg & pubkey a)
@@ -202,7 +202,7 @@ val sign: #a:alg
         let log = PK?.log pk in
 	let log_ashsref = as_hsref log in
         modifies_one keyRegion h0 h1 /\
-        modifies_rref keyRegion !{as_ref log_ashsref} h0.h h1.h /\
+        modifies_rref keyRegion (Set.singleton (Heap.addr_of (as_ref log_ashsref))) h0.h h1.h /\
         m_sel h1 log == st_update (m_sel h0 log) t
       else modifies Set.empty h0 h1))
 
@@ -279,7 +279,7 @@ val gen: a:alg -> All (skey a)
   (requires (fun h -> m_contains rkeys h))
   (ensures  (fun h0 (s:result (skey a)) h1 ->
 	         modifies_one keyRegion h0 h1
-               /\ modifies_rref keyRegion !{as_ref (as_hsref rkeys)} h0.h h1.h
+               /\ modifies_rref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref rkeys)))) h0.h h1.h
                /\ m_contains rkeys h1
 	       /\ (V? s ==>   witnessed (generated (| a, fst (V?.v s) |))
 			     /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1
@@ -311,7 +311,7 @@ val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
   (requires (fun _ -> True))
   (ensures  (fun h0 r h1 ->
 	      modifies_one keyRegion h0 h1
-	      /\ modifies_rref keyRegion !{as_ref (as_hsref (PK?.log (fst s)))} h0.h h1.h
+	      /\ modifies_rref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref (PK?.log (fst s)))))) h0.h h1.h
 	      /\ Corrupt? (m_sel h1 (PK?.log (fst s)))
 	      /\ fst r = PK?.repr (fst s)))
 let leak #a (PK log pkr, skr) =
@@ -341,7 +341,9 @@ val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr = a.core} -> ST
   (ensures  (fun h0 k h1 ->
 	     pkey_alg k == a
 	     /\ pkey_repr k = pkr
-             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> k = k')))
+             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> (dfst k == dfst k' /\
+	                                                                            PK?.repr (dsnd k) == PK?.repr (dsnd k'))))) //AR: 04/27: we don't get equality of refs anymore, we can get their addresses are equal, if we can show that one of them is contained in the heap
+										    
 let endorse #a pkr =
   let keys = m_read rkeys in
   match find_key pkr keys with

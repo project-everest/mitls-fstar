@@ -62,7 +62,7 @@ val create: #reg:rid -> ST log
     stronger_fresh_region r h0 h1 /\
     extends r reg /\
     modifies (Set.singleton r) h0 h1 /\
-    modifies_rref r !{as_ref lr} h0.h h1.h))
+    modifies_rref r (Set.singleton (Heap.addr_of (as_ref lr))) h0.h h1.h))
 let create #reg =
     let hsl: hs_log = [] in
     let r = new_region reg in
@@ -76,7 +76,7 @@ val append_log: l:log -> hm:hs_msg -> ST bytes
     (ensures (fun h0 _ h1 ->
       let LOG #r lr = l in
       modifies (Set.singleton r) h0 h1
-      /\ modifies_rref r !{as_ref lr} h0.h h1.h))
+      /\ modifies_rref r (Set.singleton (Heap.addr_of (as_ref lr))) h0.h h1.h))
 let append_log (LOG #reg lref) hm =
     let (| pv, hsl, lb |) = !lref in
     let hsl' = FStar.List.Tot.append hsl [hm] in

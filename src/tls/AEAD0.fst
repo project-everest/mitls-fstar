@@ -280,7 +280,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
     /\ (match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region !{as_ref (as_rref (ctr d.counter))} h0 h1
+                /\ modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref (as_rref (ctr d.counter))))) h0 h1
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
 (*

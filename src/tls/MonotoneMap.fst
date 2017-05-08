@@ -95,7 +95,7 @@ let extend (#r:rid) (#a:eqtype) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r
 		  let hsref = as_hsref m in
       		  m_contains m h1
       		  /\ modifies (Set.singleton r) h0 h1
-      		  /\ modifies_rref r !{HH.as_ref (HS.MkRef?.ref hsref)} h0.h h1.h
+      		  /\ modifies_rref r (Set.singleton (Heap.addr_of (HH.as_ref (HS.MkRef?.ref hsref)))) h0.h h1.h
       		  /\ m_sel h1 m == upd cur x y
       		  /\ witnessed (contains m x y)))
   = m_recall m;

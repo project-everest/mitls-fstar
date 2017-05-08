@@ -1333,7 +1333,7 @@ let _FFz = 0xFFz // Workaround for #514
 (** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
-  | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z})
+  | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z /\ b <> 0x1dz /\ b <> 0x1ez})  //AR: 04/27: added last two inequalities
   | FFDHE of ffdhe
   | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = _FFz})
   | ECDHE_PRIVATE_USE of byte
@@ -1345,9 +1345,11 @@ let namedGroupBytes ng =
   | SEC ec ->
     begin
     match ec with
-    | ECC_P256		-> abyte2 (0x00z, 0x17z)
-    | ECC_P384		-> abyte2 (0x00z, 0x18z)
-    | ECC_P521		-> abyte2 (0x00z, 0x19z)
+    | ECC_P256	  -> abyte2 (0x00z, 0x17z)
+    | ECC_P384    -> abyte2 (0x00z, 0x18z)
+    | ECC_P521    -> abyte2 (0x00z, 0x19z)
+    | ECC_X25519  -> abyte2 (0x00z, 0x1dz)
+    | ECC_X448    -> abyte2 (0x00z, 0x1ez)  //AR: 04/27: copied from the mitls_handshake branch
     end
   | EC_UNSUPPORTED b	-> abyte2 (0x00z, b)
   | FFDHE dhe ->
@@ -1369,6 +1371,8 @@ let parseNamedGroup b =
   | (0x00z, 0x17z) -> Correct (SEC ECC_P256)
   | (0x00z, 0x18z) -> Correct (SEC ECC_P384)
   | (0x00z, 0x19z) -> Correct (SEC ECC_P521)
+  | (0x00z, 0x1dz) -> Correct (SEC ECC_X25519)
+  | (0x00z, 0x1ez) -> Correct (SEC ECC_X448)
   | (0x00z, b)     -> Correct (EC_UNSUPPORTED b) // REMARK: only values 0x01z-0x16z and 0x1Az-0x1Ez are assigned
   | (0x01z, 0x00z) -> Correct (FFDHE FFDHE2048)
   | (0x01z, 0x01z) -> Correct (FFDHE FFDHE3072)

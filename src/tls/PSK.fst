@@ -114,7 +114,7 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   (ensures (fun h0 r h1 ->
     let app_psk_table_as_hsref = MR.as_hsref app_psk_table in
     modifies (Set.singleton tls_tables_region) h0 h1
-    /\ modifies_rref tls_tables_region !{HH.as_ref app_psk_table_as_hsref.ref} h0.h h1.h
+    /\ modifies_rref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref app_psk_table_as_hsref.ref))) h0.h h1.h
     /\ registered_app_psk i h1))
   =
   MR.m_recall app_psk_table;
