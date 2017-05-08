@@ -467,18 +467,18 @@ endif
 
 # our interactive tests
 
+TESTCFG=127.0.0.1 4443 -sigalgs RSA+SHA256
+
 server12::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s 127.0.0.1 4443 -sigalgs RSA+SHA256
-
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s $(TESTCFG)
 server13::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s 127.0.0.1 4443 -sigalgs RSA+SHA256
-
-client13::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 -sigalgs RSA+SHA256
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s $(TESTCFG)
+server::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s $(TESTCFG)
 
 client12::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 -sigalgs RSA+SHA256
-
-# offering both
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 $(TESTCFG)
+client13::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 $(TESTCFG) 
 client::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443 -sigalgs RSA+SHA256
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 $(TESTCFG)

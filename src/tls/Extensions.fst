@@ -460,7 +460,8 @@ let parseExtension role b =
       
     | _ -> Correct (E_unknown_extension (head,data)))
 
-val parseExtensions: role -> b:bytes -> result (list extension)
+//17-05-08 TODO precondition on bytes to prove length subtyping on the result
+val parseExtensions: role -> b:bytes -> result extensions
 let parseExtensions role b =
   let rec aux: 
     b:bytes -> list extension -> Tot (result (list extension)) (decreases (length b)) = fun b exts ->

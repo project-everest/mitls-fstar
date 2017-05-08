@@ -626,7 +626,7 @@ let next_fragment i c =
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
 		 FStar.Seq.contains_intro (MS.i_sel h0 ilog) w0 (MS.i_sel h0 ilog).(w0);
 	         MR.witness ilog (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog)) in
-  trace ("nextFragment "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))); 
+  trace ("HS.next_fragment "^(if ID12? i then "ID12" else (if ID13? i then "ID13" else "PlaintextID"))^"?"); 
   let res = Handshake.next_fragment s i in
   if w0 >= 0 then MR.testify (MS.i_at_least w0 (MS.i_sel h0 ilog).(w0) ilog);
   res
@@ -691,7 +691,11 @@ let rec writeHandshake h_init c new_writer =
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change
-      trace ("next_fragment next_keys="^(if next_keys then "yes" else "no")^" complete="^(if complete then "yes\n" else "no"));
+      trace ("HS.next_fragment returned "^
+        (if Some?om then "a fragment; " else "nothing")^
+        (if send_ccs then "; CCS" else "")^
+        (if next_keys then "; next_keys" else "")^
+        (if complete then "; complete" else ""));
       match sendHandshake wopt om send_ccs with  //as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error (ad,reason) -> 
           recall_current_writer c;
@@ -1241,6 +1245,7 @@ let rec read c i =
     // nothing written; now we can read
     // note that the reader index is unchanged
     let result = readOne c i in (
+    trace ("readOne "^string_of_ioresult_i result); 
     match result with
     // TODO: specify which results imply that c.state & epochs are unchanged
     | ReadAgain             -> read c i

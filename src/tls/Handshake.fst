@@ -591,7 +591,7 @@ val server_ServerFinished_13: hs -> i:id -> ST (result (outgoing i))
 let server_ServerFinished_13 hs i =
     // static pre: n.n_protocol_version = TLS_1p3 && Some? n.n_sigAlg && (n.n_kexAlg = Kex_DHE || n.n_kexAlg = Kex_ECDHE)
     // most of this should go to Nego
-    trace "Prepare Server Finished";
+    trace "prepare Server Finished";
     let mode = Nego.getMode hs.nego in
     let Some chain = mode.Nego.n_server_cert in
     let pv = mode.Nego.n_protocol_version in
@@ -627,7 +627,6 @@ let server_ServerFinished_13 hs i =
       HandshakeLog.send_signals hs.log true false; //was: Epochs.incr_writer hs.epochs
       Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
       hs.state := S_Wait_Finished2 digestServerFinished;
-      HandshakeLog.send_signals hs.log true true;
       Correct(HandshakeLog.next_fragment hs.log i)
       end
 

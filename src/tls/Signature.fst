@@ -107,7 +107,7 @@ let keyRegion:TLSConstants.rgn = new_region TLSConstants.tls_region
 
 type log_t (a:alg) = m_rref keyRegion (state a) evolves
 
-type pubkey (a:alg) =
+noeq type pubkey (a:alg) =
   | PK: log:log_t a
       -> repr:public_repr{sigAlg_of_public_repr repr == a.core}
       -> pubkey a

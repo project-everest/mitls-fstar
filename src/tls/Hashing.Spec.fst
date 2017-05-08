@@ -28,6 +28,7 @@ let tagLen = function
 type tag (a:alg) = lbytes (tagLen a)
 
 // The hash of the empty string, used in KS
+#set-options "--lax" //17-05-08 TODO size of bytes constants.
 let emptyHash : a:alg -> Tot (tag a) =
   function
   | MD5 -> bytes_of_hex "d41d8cd98f00b204e9800998ecf8427e"
@@ -36,6 +37,7 @@ let emptyHash : a:alg -> Tot (tag a) =
   | SHA256 -> bytes_of_hex "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   | SHA384 -> bytes_of_hex "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b"
   | SHA512 -> bytes_of_hex "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+#reset-options
 
 // A "placeholder" hash whose bytes are all 0 (used in KS)
 let zeroHash (a:alg) : Tot (tag a) =
