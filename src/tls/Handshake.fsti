@@ -79,7 +79,7 @@ type incoming =
       next_keys : bool -> // the reader index increases;
       complete  : bool -> // the handshake is complete!
       incoming
-  | InQuery: Extensions.chain -> bool -> incoming // could be part of InAck if no explicit user auth
+  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
   | InError: TLSError.error -> incoming // how underspecified should it be?
 
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
@@ -183,7 +183,7 @@ val recv_ccs: s:hs -> ST incoming
     (InError? result \/ result = InAck true false))
     )
 
-val authorize: s:hs -> Extensions.chain -> ST incoming // special case: explicit authorize (needed?)
+val authorize: s:hs -> Cert.chain -> ST incoming // special case: explicit authorize (needed?)
   (requires (hs_inv s))
   (ensures (fun h0 result h1 ->
     (InAck? result \/ InError? result) /\ recv_ensures s h0 result h1 ))

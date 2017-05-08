@@ -375,31 +375,6 @@ let extensionsBytes exts =
   vlbytes 2 b
 
 
-(* CERTIFICATES (relocate?)  
-
-The chain format changes between TLS 1.2 and TLS 1.3; we separate then
-in messages, but at least for now, we merge the two in Negotiation and
-in the main TLS API (with no extensions when using TLS 1.2 *)
-
-// opaque cert_data<1..2^24-1>
-type cert = b:bytes {length b < 16777216}
-type certes = cert * extensions
-// CertificateEntry certificate_list<0..2^24-1>;
-// See https://tlswg.github.io/tls13-spec/#rfc.section.4.4.2
-type chain = l:list cert // { ... }
-type chain13 = l:list certes // { ... }
-
-// we may use these types to keep track of un-extended chains, 
-// e.g. to prove that their formatting is injective
-let is_classic_chain (l:chain13): bool = 
-  List.Tot.for_all #certes (fun ces -> List.Tot.isEmpty (snd ces)) l
-type chain12 = l:chain13 {is_classic_chain l}  
-
-// todo: prove it is a chain12
-let chain_up (l:chain): chain13= List.Tot.map #cert #certes (fun c -> c,[]) l 
-let chain_down (l:chain13): chain = List.Tot.map #certes #cert fst l
-
-
 (*************************************************
  Extension parsing
 **************************************************)

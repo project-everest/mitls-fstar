@@ -8,6 +8,29 @@ open TLSConstants
 open CoreCrypto
 open Extensions // defining cert, cert13, chain 
 
+(* The chain format changes between TLS 1.2 and TLS 1.3; we separate
+then in messages, but at least for now, we merge the two in
+Negotiation and in the main TLS API (with no extensions when using TLS
+1.2 *)
+
+// opaque cert_data<1..2^24-1>
+type cert = b:bytes {length b < 16777216}
+type certes = cert * extensions
+// CertificateEntry certificate_list<0..2^24-1>;
+// See https://tlswg.github.io/tls13-spec/#rfc.section.4.4.2
+type chain = l:list cert // { ... }
+type chain13 = l:list certes // { ... }
+
+// we may use these types to keep track of un-extended chains, 
+// e.g. to prove that their formatting is injective
+let is_classic_chain (l:chain13): bool = 
+  List.Tot.for_all #certes (fun ces -> List.Tot.isEmpty (snd ces)) l
+type chain12 = l:chain13 {is_classic_chain l}  
+
+// todo: prove it is a chain12
+let chain_up (l:chain): chain13= List.Tot.map #cert #certes (fun c -> c,[]) l 
+let chain_down (l:chain13): chain = List.Tot.map #certes #cert fst l
+
 (* ------------------------------------------------------------------------ *)
 
 abstract val certificateListBytes: chain -> Tot bytes
@@ -85,9 +108,9 @@ let endpoint_keytype13 (c:chain13) : option CoreCrypto.key =
 abstract val parseCertificateList: b:bytes -> Tot (result chain) (decreases (length b))
 let rec parseCertificateList b =
   if length b = 0 then Correct [] else
-  if length b < 3 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
+  if length b < 3 then Error(AD_bad_certificate_fatal, "not enough bytes (certificate length)") else
   match vlsplit 3 b with
-  | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+  | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (certificate)")
   | Correct (c,r) -> (
     match parseCertificateList r with
     | Error z -> Error z 
@@ -96,13 +119,13 @@ let rec parseCertificateList b =
 abstract val parseCertificateList13: b:bytes -> Tot (result chain13) (decreases (length b))
 let rec parseCertificateList13 b =
   if length b = 0 then Correct [] else
-  if length b < 3 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
+  if length b < 3 then Error(AD_bad_certificate_fatal, "not enough bytes (certificate length)") else
   match vlsplit 3 b with
-  | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+  | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (certificate)")
   | Correct (c,r) -> (
-    if length r < 2 then Error(AD_bad_certificate_fatal, "Badly encoded certificate list") else
+    if length r < 2 then Error(AD_bad_certificate_fatal, "not enough bytes (extension length") else
     match vlsplit 2 r with
-    | _ -> Error(AD_bad_certificate_fatal, "Badly encoded certificate list")
+    | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (extension list)")
     | Correct (e,r) -> (
       match parseExtensions Client (vlbytes 2 e) with
       | Error z -> Error z 

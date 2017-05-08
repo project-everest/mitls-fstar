@@ -426,7 +426,7 @@ val client_ServerFinished_13:
   s: hs ->
   ee: HandshakeMessages.ee ->
   ocr: option HandshakeMessages.cr ->
-  c: HandshakeMessages.crt ->
+  c: HandshakeMessages.crt13 ->
   cv: HandshakeMessages.cv ->
   svd: bytes ->
   digestCert: Hashing.anyTag ->
@@ -434,7 +434,7 @@ val client_ServerFinished_13:
   digestServerFinished: Hashing.anyTag ->
   St incoming
 let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVerify digestServerFinished =
-    match Nego.clientComplete_13 hs.nego ee ocr c cv digestCert with
+    match Nego.clientComplete_13 hs.nego ee ocr c.crt_chain13 cv digestCert with
     | Error z -> InError z
     | Correct mode ->
         // ADL: 4th returned value is the exporter master secret.
@@ -513,7 +513,7 @@ let server_ServerHelloDone hs =
           lemma_repr_bytes_values (length sigv);
           let signature = hashAlgBytes ha @| sigAlgBytes sa @| vlbytes 2 sigv in
           let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-          HandshakeLog.send hs.log (Certificate ({crt_chain = Extensions.chain_down chain}));
+          HandshakeLog.send hs.log (Certificate ({crt_chain = Cert.chain_down chain}));
           HandshakeLog.send hs.log (ServerKeyExchange ske);
           HandshakeLog.send hs.log ServerHelloDone;
           hs.state := S_Wait_CCS1;
@@ -638,7 +638,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     else
       InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
-(* send EncryptedExtensions; Certificate; CertificateVerify; Finish (1.3) *)
+(* send EncryptedExtensions; Certificate13; CertificateVerify; Finish (1.3) *)
 val server_ServerFinished_13: hs -> i:id -> ST (result (outgoing i))
   (requires (fun h -> True))
   (ensures (fun h0 i h1 -> True))
@@ -697,7 +697,7 @@ val server_ClientFinished_13: hs ->
   cvd:bytes ->
   Hashing.anyTag -> // Digest either up to ServerFinished or up to CertificateVerify with client certg
   Hashing.anyTag -> // Digest up to ClientFinished
-  option (HandshakeMessages.crt * HandshakeMessages.cv * Hashing.anyTag) -> St incoming
+  option (HandshakeMessages.crt13 * HandshakeMessages.cv * Hashing.anyTag) -> St incoming
 let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinished clientAuth =
    trace "Process Client Finished";
    match clientAuth with
@@ -797,10 +797,10 @@ let rec recv_fragment (hs:hs) #i rg f =
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert] ->
         client_ServerHelloDone hs c ske (Some cr)
 
-      | C_Wait_Finished1, [EncryptedExtensions ee; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
+      | C_Wait_Finished1, [EncryptedExtensions ee; Certificate13 c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
         client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
-      | C_Wait_Finished1, [EncryptedExtensions ee; CertificateRequest cr; Certificate c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
+      | C_Wait_Finished1, [EncryptedExtensions ee; CertificateRequest cr; Certificate13 c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
         client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
       // we'll have other variants for resumption, shc as ([EncryptedExtensions ee; Finished f], [...])
@@ -818,7 +818,7 @@ let rec recv_fragment (hs:hs) #i rg f =
       | S_Wait_Finished2 digestServerFinished, [Finished f], [digestClientFinished] ->
         server_ClientFinished_13 hs f.fin_vd digestServerFinished digestClientFinished None
       | S_Wait_Finished2 digestServerFinished,
-           [Certificate c; CertificateVerify cv; Finished f],
+           [Certificate13 c; CertificateVerify cv; Finished f],
            [digestSigned; digestCertVerify; digestClientFinished] ->
         server_ClientFinished_13 hs f.fin_vd digestCertVerify digestClientFinished (Some (c, cv, digestSigned))
 

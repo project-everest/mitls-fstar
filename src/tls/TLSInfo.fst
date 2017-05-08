@@ -138,9 +138,9 @@ noeq type sessionInfo = {
     pmsId: pmsId;
     session_hash: sessionHash;
     client_auth: bool;
-    clientID: Extensions.chain;
+    clientID: Cert.chain;
     clientSigAlg: sigHashAlg;
-    serverID: Extensions.chain;
+    serverID: Cert.chain;
     serverSigAlg: sigHashAlg;
     sessionID: sessionID;
     }
@@ -317,12 +317,12 @@ type logInfo_SH = {
 
 type logInfo_SF = {
   li_sf_sh: logInfo_SH;
-  li_sf_certificate: option Extensions.chain;
+  li_sf_certificate: option Cert.chain;
 }
 
 type logInfo_CF = {
   li_cf_sf: logInfo_SF;
-  li_cf_certificate: option Extensions.chain;
+  li_cf_certificate: option Cert.chain;
 }
 
 type logInfo =

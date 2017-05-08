@@ -344,7 +344,7 @@ let endorse #a pkr =
 
 
 (* ------------------------------------------------------------------------ *)
-val get_chain_public_key: #a:alg -> list Extensions.cert -> St (option (pubkey a))
+val get_chain_public_key: #a:alg -> list Cert.cert -> St (option (pubkey a))
 let get_chain_public_key #a c =
   let sa = a.core in
   match c with

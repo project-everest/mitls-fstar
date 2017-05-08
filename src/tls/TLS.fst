@@ -1002,7 +1002,7 @@ let writeClose c =
 // By default, all i:id are reader identifiers, i.e. peerId (handshakeId (reader_epoch.h)
 // FIXME: Put the following definitions close to range and delta, and use them
 
-type query = Extensions.chain
+type query = Cert.chain
 type msg_i (i:id) = (range * DataStream.delta i)
 
 (* merged with ioresult_i

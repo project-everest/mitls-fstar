@@ -235,7 +235,7 @@ noeq type mode =
 
     // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
     n_client_cert_request: option HandshakeMessages.cr ->
-    n_server_cert: option Extensions.chain13 ->
+    n_server_cert: option Cert.chain13 ->
 
     // more from either CH+SH (1.3) or CKE (1.2)
     n_client_share: option share ->
@@ -317,11 +317,11 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
 
   | C_WaitFinished2: // Only 1.2
                 n_mode: mode ->
-                n_client_certificate: option Extensions.chain13 ->
+                n_client_certificate: option Cert.chain13 ->
                 negotiationState r cfg resume
 
   | C_Complete: n_mode: mode ->
-                n_client_certificate: option Extensions.chain13 ->
+                n_client_certificate: option Cert.chain13 ->
                 negotiationState r cfg resume
 
   | S_Init:     n_server_random: TLSInfo.random ->
@@ -341,7 +341,7 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 negotiationState r cfg resume
 
   | S_Complete: n_mode: mode ->
-                n_client_certificate: option Extensions.chain13 ->
+                n_client_certificate: option Cert.chain13 ->
                 negotiationState r cfg resume
 
 let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
@@ -812,7 +812,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
     | KEX_S_RSA _ ->
       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Illegal message")
     | KEX_S_DHE gy ->
-      let scert = chain_up crt.crt_chain in
+      let scert = Cert.chain_up crt.crt_chain in
       if (not ns.cfg.check_peer_certificate) ||
          Cert.validate_chain crt.crt_chain true ns.cfg.peer_name ns.cfg.ca_file
       then
@@ -828,7 +828,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
           else
             let csr = ns.nonce @| mode.n_server_random in
             let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-            match Signature.get_chain_public_key #a (chain_down scert) with
+            match Signature.get_chain_public_key #a (Cert.chain_down scert) with
             | None ->
               Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to get public key from chain")
             | Some pk ->
@@ -850,16 +850,16 @@ let client_ServerKeyExchange #region ns crt ske ocr =
 val clientComplete_13: #region:rgn -> t region Client ->
   HandshakeMessages.ee ->
   ocr: option HandshakeMessages.cr ->
-  serverCert: HandshakeMessages.crt ->
+  serverCert: Cert.chain13 ->
   cv: HandshakeMessages.cv ->
   digest: bytes{length digest <= 32} ->
   St (result mode) // it needs to be computed, whether returned or not
-let clientComplete_13 #region ns ee ocr crt cv digest =
+let clientComplete_13 #region ns ee ocr serverChain cv digest =
   trace "Nego.clientComplete_13";
   match MR.m_read ns.state with
   | C_Mode mode ->
     let ccert = None in
-    let scert = None in // TODO: get chain from serverCert
+    let scert = Some serverChain in 
     let sexts = mode.n_server_extensions in // TODO: add extensions from EE
     let mode = Mode
       mode.n_offer
@@ -999,7 +999,7 @@ let computeServerMode cfg co serverRandom serverID =
           let serverExtensions = None in // To be computed in Handshake and filled later
           let scert =
             match Cert.lookup_chain cfg.cert_chain_file with
-            | Correct cert -> Some (chain_up cert)
+            | Correct cert -> Some (Cert.chain_up cert)
             | Error z -> 
               trace ("*WARNING* no server certificate found: " ^ string_of_error z);
               None
@@ -1070,7 +1070,7 @@ let computeServerMode cfg co serverRandom serverID =
   then Error(AD_illegal_parameter, "Compression is deprecated") else 
   let scert =
     match Cert.lookup_chain cfg.cert_chain_file with
-    | Correct cert -> Some (chain_up cert)
+    | Correct cert -> Some (Cert.chain_up cert)
     | Error z ->
       trace ("No cert found: "^string_of_error z);
       None
@@ -1155,7 +1155,7 @@ let server_ServerShare #region ns ks =
 
 //17-03-30 where is it used?
 type hs_id = {
-  id_cert: Extensions.chain;
+  id_cert: Cert.chain;
   id_sigalg: option sigHashAlg;
 }
 

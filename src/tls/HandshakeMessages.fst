@@ -191,11 +191,11 @@ type cr13 = unit //17-05-05 TBC
 
 // Certificate payloads (the format changed deeply)
 noeq type crt = {
-  crt_chain: chain
+  crt_chain: Cert.chain
 }
 noeq type crt13 = {
   crt_request_context: b:bytes {length b <= 255}; 
-  crt_chain13: chain13;
+  crt_chain13: Cert.chain13;
 }
 
 noeq type kex_s =
@@ -964,7 +964,7 @@ let certificateBytes13_is_injective c1 c2 =
 (*   -> Tot (result (r:valid_crt{Seq.equal (certificateBytes pv r) (messageBytes HT_certificate data)})) *)
 val parseCertificate: data:bytes{repr_bytes (length data) <= 3} -> Tot (result valid_crt)
 let parseCertificate data =
-  if length data < 3 then error "parseCertificate" else
+  if length data < 3 then error "not enough certificate-list length bytes" else
   match vlparse 3 data with
   | Error (x,y) -> Error(AD_bad_certificate_fatal, y)
   | Correct certList -> (
@@ -977,14 +977,15 @@ let parseCertificate data =
 
 val parseCertificate13: data:bytes{repr_bytes (length data) <= 3} -> Tot (result valid_crt13)
 let parseCertificate13 data =
-  if length data < 1 then error "short certificate" else 
+  if length data < 1 then error "not enough bytes (context)" else 
   let hdr, data = split data 1 in 
-  if not (equalBytes hdr (abyte 0z)) then error "certificate header" else  
-  if length data < 3 then error "certificate content" else (
+  if not (equalBytes hdr (abyte 0z)) then error "non-empty context" else  
+  if length data < 3 then error "not enough bytes (certificate list length)" else (
   match vlparse 3 data with
   | Error (x,y) -> Error(AD_bad_certificate_fatal, y)
   | Correct certList -> (
     match Cert.parseCertificateList13 certList with
+    | Error z -> Error z 
     | Correct l ->
       if length certList >= 16777212 then error "certificate list is too large" else 
       ( //Cert.lemma_parseCertificateList_length13 certList;
