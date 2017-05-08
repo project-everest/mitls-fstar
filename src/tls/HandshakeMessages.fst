@@ -191,7 +191,7 @@ type cr = {
   cr_sig_algorithms: option signatureSchemeList; // None for 1.0,1.1; Some for 1.2
   cr_certificate_authorities: dl:list dn{List.Tot.length dl < 65536};
 }
-type cr13 = unit //17-05-05 TBC
+type cr13 = cr //17-05-05 TBC
 
 // Certificate payloads (the format changed deeply)
 noeq type crt = {

@@ -381,7 +381,7 @@ let client_ServerHelloDone hs c ske ocr =
 val client_ServerFinished_13:
   s: hs ->
   ee: HandshakeMessages.ee ->
-  ocr: option HandshakeMessages.cr ->
+  ocr: option HandshakeMessages.cr13 ->
   c: HandshakeMessages.crt13 ->
   cv: HandshakeMessages.cv ->
   svd: bytes ->
@@ -730,16 +730,16 @@ let rec recv_fragment (hs:hs) #i rg f =
         recv_again (client_ServerHello hs sh)
 
     //| C_Wait_ServerHello, Some ([ServerHello sh], [digest]) -> client_ServerHello hs sh digest
-      | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [unused_digestCert] ->
+      | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; ServerHelloDone], [] ->
         client_ServerHelloDone hs c ske None
 
-      | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [unused_digestCert] ->
+      | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [] ->
         client_ServerHelloDone hs c ske (Some cr)
 
       | C_Wait_Finished1, [EncryptedExtensions ee; Certificate13 c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
         client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
-      | C_Wait_Finished1, [EncryptedExtensions ee; CertificateRequest cr; Certificate13 c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
+      | C_Wait_Finished1, [EncryptedExtensions ee; CertificateRequest13 cr; Certificate13 c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
         client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
 
       // we'll have other variants for resumption, shc as ([EncryptedExtensions ee; Finished f], [...])

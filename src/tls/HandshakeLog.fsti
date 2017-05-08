@@ -34,7 +34,7 @@ let tagged m =
   match m with
   | ClientHello _ -> true
   | ServerHello _ -> true
-  | Certificate _ -> true // for CertVerify payload in TLS 1.3
+  | Certificate13 _ -> true // for CertVerify payload in TLS 1.3
   | CertificateVerify _ -> true // for ServerFinish payload in TLS 1.3
   | ClientKeyExchange _ -> true // only for client signing
   | Finished _ -> true // for 2nd Finished

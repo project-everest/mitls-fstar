@@ -870,7 +870,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
 
 val clientComplete_13: #region:rgn -> t region Client ->
   HandshakeMessages.ee ->
-  ocr: option HandshakeMessages.cr ->
+  ocr: option HandshakeMessages.cr13 ->
   serverCert: Cert.chain13 ->
   cv: HandshakeMessages.cv ->
   digest: bytes{length digest <= 32} ->
