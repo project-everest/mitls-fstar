@@ -350,7 +350,7 @@ let client_ServerHelloDone hs c ske ocr =
         | None -> ()
         | Some cr ->
             trace "processing certificate request (TODO)";
-            let cc = {crt_request_context = empty_bytes; crt_chain = []} in
+            let cc = {crt_chain = []} in
             HandshakeLog.send hs.log (Certificate cc));
 
       let gy = Some?.v (mode.Nego.n_server_share) in // already set in KS
@@ -403,7 +403,7 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
           let digest =
             match ocr with
-            | Some cr -> HandshakeLog.send_tag #ha hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = []}))
+            | Some cr -> HandshakeLog.send_tag #ha hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []}))
             | None -> digestServerFinished in
           let (| finId, cfin_key |) = cfin_key in
           let cvd = HMAC.UFCMA.mac cfin_key digest in
@@ -460,7 +460,7 @@ let server_ServerHelloDone hs =
     | Some signature ->
       begin
       let ske = {ske_kex_s = kex_s; ske_sig = signature} in
-      HandshakeLog.send hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain}));
+      HandshakeLog.send hs.log (Certificate ({crt_chain = chain}));
       HandshakeLog.send hs.log (ServerKeyExchange ske);
       HandshakeLog.send hs.log ServerHelloDone;
       hs.state := S_Wait_CCS1;
@@ -599,8 +599,8 @@ let server_ServerFinished_13 hs i =
     let sh_alg = sessionHashAlg pv cs in
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
-    HandshakeLog.send hs.log (EncryptedExtensions ({ee_extensions = []}));
-    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate ({crt_request_context = empty_bytes; crt_chain = chain})) in
+    HandshakeLog.send hs.log (EncryptedExtensions []);
+    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = []})) in //chain})) in // TODO: FIXME
 
     // signing of the formatted session digest
     let tbs : bytes =
