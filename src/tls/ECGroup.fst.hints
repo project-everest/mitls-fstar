@@ -1,5 +1,5 @@
 [
-  "²= ΕH¦\u001a\u0015\u000e6ζjP½\b°",
+  "ΞμέΰpΝÿ\u0000qI<=½):",
   [
     [
       "ECGroup.pre_keyshare",
@@ -357,33 +357,6 @@
     ],
     [ "ECGroup.uu___is_EC_EXPLICIT_PRIME", 1, 0, 1, [ "@query" ], 0 ],
     [ "ECGroup.uu___is_EC_EXPLICIT_BINARY", 1, 0, 1, [ "@query" ], 0 ],
-    [
-      "ECGroup.point_format",
-      1,
-      0,
-      1,
-      [
-        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
-        "haseqECGroup_Tm_refine_b2d096ea0433004efe3e6a6ca8c4a7bf",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
-      ],
-      0
-    ],
-    [ "ECGroup.uu___is_ECP_UNCOMPRESSED", 1, 0, 1, [ "@query" ], 0 ],
-    [ "ECGroup.uu___is_ECP_UNKNOWN", 1, 0, 1, [ "@query" ], 0 ],
-    [
-      "ECGroup.__proj__ECP_UNKNOWN__item___0",
-      1,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_ECGroup.ECP_UNKNOWN",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_ECGroup_Tm_refine_119f5c8a24aadffd9a5d6148b755096e"
-      ],
-      0
-    ],
     [
       "ECGroup.pubshare",
       1,

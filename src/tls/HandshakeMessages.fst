@@ -329,13 +329,11 @@ let messageBytes_is_injective ht1 data1 ht2 data2 =
     end
   else ()
 
-val parseMessage: buf:bytes
-  -> Tot (result (option
-		  (rem:bytes &
-		   hstype:handshakeType &
-		   payload:bytes{ repr_bytes (length payload) <= 3 } &
-		   to_log:bytes{ to_log = messageBytes hstype payload /\
-		                 Seq.equal buf (to_log @| rem) })))
+val parseMessage: buf:bytes -> Tot (result (option (
+  rem: bytes &
+  hstype: handshakeType &
+  payload: bytes {repr_bytes (length payload) <= 3} &
+  to_log: bytes {to_log = messageBytes hstype payload /\ Seq.equal buf (to_log @| rem) })))
 (*
  Somewhat inefficient implementation:
  - Repeatedly parse the first 4 bytes of the incoming buffer until we have a complete message;
@@ -603,70 +601,72 @@ let coercion_helper o =
 (*                                  /\ x.ch_protocol_version = x'.ch_protocol_version *)
 (*                                  /\ x.ch_client_random = x'.ch_client_random *)
 (*                                  /\ x.ch_sessionID = x'.ch_sessionID })) *)
-val parseClientHello: data:bytes{repr_bytes(length data) <= 3} -> Tot (result ch)
+
+//17-05-09 generalized signature (but no binder parsing  yet!)
+val parseClientHello: body:bytes -> Pure (result (ch * option (binders * nat)))
+  (requires (repr_bytes(length body) <= 3))
+  (ensures (function
+    | Error _ -> True
+    | Correct(ch, None) -> clientHelloBytes ch == htBytes HT_client_hello @| body
+    | Correct(ch, Some (binders, len)) ->
+        let truncated_body, suffix = split body (length body - len) in
+        clientHelloBytes ch == htBytes HT_client_hello @| truncated_body /\
+        bindersBytes binders == suffix
+  ))
 let parseClientHello data =
-  if length data < 35 then
-    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-  else
-    let (clVerBytes,cr,data) = split2 data 2 32 in
-    match parseVersion clVerBytes with
-    | Error z -> Error z
-    | Correct cv ->
-      match vlsplit 1 data with
-      | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse session id")
-      | Correct (sid,data) ->
-        if length sid <= 32 then
-	  (if length data >= 2 then
-	    (match vlsplit 2 data with
-	     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse cipher suite bytes")
-	     | Correct (clCiphsuitesBytes,data) ->
-	       if length clCiphsuitesBytes < 512 then
-	       (match parseCipherSuites clCiphsuitesBytes with
-	        | Error z -> Error z
-	        | Correct clientCipherSuites ->
-                  (* ADL More relaxed parsing for old ClientHello messages with *)
-                  (* no compression and no extensions *)
-                  let compExts =
-  	            if length data >= 1 && List.Tot.length clientCipherSuites < 256 then
-		    (match vlsplit 1 data with
-		     | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
-		     | Correct (cmBytes,extensions) ->
-		       let cm = parseCompressions cmBytes in
-		       (match parseOptExtensions Client extensions with
-		        | Error z -> Error z
-		        | Correct exts ->
-			  if (match exts with
-			      | None -> true
-			      | Some l -> List.Tot.length l < 256)
-			     && List.Tot.length cm < 256
-			     && List.Tot.length cm > 0
-			  then (
-			    let exts = coercion_helper exts in
-			    Correct (cm, exts)
-			    )
- 			  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")))
-                     (* else Correct ([], None) in *) // JK: there has to be a compression method
-						      // according to the spec
-                     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "") in
-                     (match compExts with
-                     | Correct (cm, exts) -> (
-			 cut (List.Tot.length clientCipherSuites < 256);
-			 let cCS = valid_list_to_list_valid clientCipherSuites in
-                            Correct ({
-                              ch_protocol_version = cv;
-                              ch_client_random = cr;
-                              ch_sessionID = sid;
-                              ch_cipher_suites = cCS;
-                              ch_raw_cipher_suites = Some clCiphsuitesBytes;
-                              ch_compressions = cm;
-                              ch_extensions = exts;
-                          })
-			)
-                      | Error e -> Error e))
-//		  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-	       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-	   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ""))
-	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+  if length data < 35 then error "ClientHello is too short" else
+  let clVerBytes,cr,data = split2 data 2 32 in
+  match parseVersion clVerBytes with
+  | Error z -> Error z
+  | Correct cv ->
+    match vlsplit 1 data with
+    | Error z -> error "sid length"
+    | Correct (sid,data) ->
+      if length sid > 32 || length data < 2 then error "sid" else (
+      match vlsplit 2 data with
+      | Error z -> error "ciphersuites length"
+      | Correct (clCiphsuitesBytes,data) ->
+        if length clCiphsuitesBytes >= 512 then error "ciphersuites" else (
+        match parseCipherSuites clCiphsuitesBytes with
+        | Error z -> Error z
+        | Correct clientCipherSuites ->
+          (* ADL More relaxed parsing for old ClientHello messages with *)
+          (* no compression and no extensions *)
+          let compExts =
+            if length data < 1 || List.Tot.length clientCipherSuites >= 256 then error "ciphersuites length" else (
+            match vlsplit 1 data with
+            | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
+            | Correct (cmBytes,extensions) ->
+              let cm = parseCompressions cmBytes in
+              ( match parseOptExtensions Client extensions with
+                | Error z -> Error z
+                | Correct exts ->
+                    if
+                      ( match exts with
+                        | None -> true
+                        | Some l -> List.Tot.length l < 256) &&
+                      List.Tot.length cm < 256 &&
+                      List.Tot.length cm > 0
+                    then (
+                      let exts = coercion_helper exts in
+                      Correct (cm, exts))
+                    else error "bad extension lengths"))
+             (* else Correct ([], None) in *) // JK: there has to be a compression method
+                      // according to the spec
+            in
+            ( match compExts with
+              | Error z -> Error z
+              | Correct (cm, exts) -> (
+                cut (List.Tot.length clientCipherSuites < 256);
+                let cCS = valid_list_to_list_valid clientCipherSuites in
+                Correct ({
+                  ch_protocol_version = cv;
+                  ch_client_random = cr;
+                  ch_sessionID = sid;
+                  ch_cipher_suites = cCS;
+                  ch_raw_cipher_suites = Some clCiphsuitesBytes;
+                  ch_compressions = cm;
+                  ch_extensions = exts; }, None)))))
 
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 let serverHelloBytes sh =
@@ -1853,7 +1853,7 @@ let parseHandshakeMessage pv kex hstype body =
   lemma_repr_bytes_values (length body);
   match hstype,pv,kex with
     | HT_hello_request,_,_       -> parseEmptyMessage HelloRequest body
-    | HT_client_hello,_,_        -> mapResult ClientHello (parseClientHello body)
+//  | HT_client_hello,_,_        -> mapResult ClientHello (parseClientHello body)
     | HT_server_hello,_,_        -> mapResult ServerHello (parseServerHello body)
     | HT_session_ticket, Some TLS_1p3,_      -> mapResult NewSessionTicket13 (parseSessionTicket13 body)
     | HT_session_ticket, Some _,_      -> mapResult NewSessionTicket (parseSessionTicket body)

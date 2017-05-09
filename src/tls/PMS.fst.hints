@@ -135,29 +135,7 @@
       ],
       0
     ],
-    [
-      "PMS.pms",
-      1,
-      0,
-      1,
-      [
-        "@query", "TLSConstants_pretyping_5137ddff2402f90869cbe4139eb3c809",
-        "assumption_CommonDH.group_haseq",
-        "assumption_CommonDH.pre_share__haseq",
-        "assumption_CoreCrypto.rsa_key_haseq", "assumption_PMS.dhpms_haseq",
-        "assumption_PMS.rsapms_haseq", "assumption_Prims.tuple3_haseq",
-        "assumption_TLSConstants.protocolVersion_haseq",
-        "data_typing_intro_TLSConstants.TLS_1p0@tok",
-        "equation_CommonDH.pre_share", "equation_CommonDH.share",
-        "equation_Platform.Bytes.bytes", "equation_RSAKey.pk",
-        "function_token_typing_RSAKey.pk",
-        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e",
-        "haseqCommonDH_Tm_refine_adde08d0455b9122892dd60f12e0c43d",
-        "haseqRSAKey_Tm_refine_3477d359262b20ef2e766e80d669ba1b",
-        "kinding_PMS.rsapms@tok", "kinding_TLSConstants.protocolVersion@tok"
-      ],
-      0
-    ],
+    null,
     [ "PMS.uu___is_RSAPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
       "PMS.__proj__RSAPMS__item___0",

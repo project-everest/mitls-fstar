@@ -287,7 +287,8 @@ let next_fragment l (i:id) =
 
 (* RECEIVE *)
 
-//17-04-24 avoid parsing loop? simpler at the level of receive.
+//17-04-24 avoid parsing loop? may be simpler at the level of receive.
+//17-05-09 but returning a list is convenient for handling truncated ClientHello
 val parseMessages: 
   pvo: option protocolVersion -> kexo: option kexAlg -> b: bytes -> 
   ST (result (
@@ -299,24 +300,36 @@ val parseMessages:
   (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
 let rec parseMessages pvo kexo buf =
   match HandshakeMessages.parseMessage buf with
-    | Error z -> Error z
-    | Correct None -> 
-        trace "more bytes required";
-        Correct (false, buf, [], [])
-    | Correct (Some (|rem, hstype, pl, to_log|)) ->
-      ( trace ("parsing " ^ (if pvo = Some TLS_1p3 then "(1.3) " else if pvo = Some TLS_1p2 then  "(1.2) " else "(?) ") ^ (Platform.Bytes.print_bytes pl));
+  | Error z -> Error z
+  | Correct None -> trace "more bytes required"; Correct (false, buf, [], [])
+  | Correct (Some (| rem, hstype, pl, to_log |)) ->
+    ( trace ("parsing " ^
+        (if pvo = Some TLS_1p3 then "(1.3) " else if pvo = Some TLS_1p2 then  "(1.2) " else "(?) ") ^
+        Platform.Bytes.print_bytes pl);
+      if hstype = HT_client_hello
+      then (
+        match parseClientHello pl with // ad hoc case: we parse into one or two messages
+        | Error z -> Error z
+        | Correct (ch, None) -> (
+          trace ("parsed [ClientHello] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
+          Correct(true, rem, [ClientHello ch], [to_log]))
+        | Correct (ch, Some (binders, truncated)) -> (
+          trace ("parsed [ClientHello; Binders] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
+          let chBytes, bindersBytes = split to_log (length to_log - truncated) in
+          Correct(true, rem, [ClientHello ch; Binders binders], [chBytes; bindersBytes])))
+      else (
         match parseHandshakeMessage pvo kexo hstype pl with
         | Error z -> Error z
-        | Correct hsm ->
-          trace ("parsed "^HandshakeMessages.string_of_handshakeMessage hsm);
-          if eoflight hsm 
-          then 
-            ( trace ("end of flight"^(if length rem > 0 then " (bytes waiting)" else "")); 
-              Correct(true, rem, [hsm], [to_log]) )
-           else
-           ( match parseMessages pvo kexo rem with
-              | Error z -> Error z
-              | Correct (b,r,hl,bl) -> Correct (b,r,hsm::hl,to_log::bl)))
+        | Correct msg ->
+          trace ("parsed "^HandshakeMessages.string_of_handshakeMessage msg);
+          if eoflight msg
+          then (
+            trace ("end of flight"^(if length rem > 0 then " (bytes waiting)" else ""));
+            Correct(true, rem, [msg], [to_log]) )
+          else (
+            match parseMessages pvo kexo rem with
+            | Error z -> Error z
+            | Correct (b,r,hl,bl) -> Correct (b,r,msg::hl,to_log::bl))))
 
 val hashHandshakeMessages : t: erased_transcript ->
               p: list msg ->

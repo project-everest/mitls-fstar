@@ -1,5 +1,5 @@
 [
-  "Û“/2Ó\u001a…\u0017j=—°Kù­(",
+  "|þÙÃkpŠåbÔ2[\u00176h¿",
   [
     [
       "TLSInfo.ec_ff_to_ng",
@@ -609,31 +609,7 @@
       [ "@query", "assumption_TLSInfo.logInfo_haseq" ],
       0
     ],
-    [
-      "TLSInfo.pre_esId",
-      1,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "assumption_CommonDH.group_haseq",
-        "assumption_CommonDH.pre_share__haseq",
-        "assumption_Hashing.Spec.alg_haseq",
-        "assumption_Platform.Bytes.HasEq_bytes",
-        "assumption_TLSInfo.logInfo_haseq", "equation_CommonDH.pre_share",
-        "equation_CommonDH.share", "equation_PSK.psk_identifier",
-        "equation_PSK.pskid", "equation_Platform.Bytes.bytes",
-        "equation_TLSConstants.hash_alg", "equation_TLSInfo.hashed_log",
-        "haseqCommonDH_Tm_refine_31f8b2b6b926a554d47d704ab80b9d0e",
-        "haseqCommonDH_Tm_refine_adde08d0455b9122892dd60f12e0c43d",
-        "haseqPSK_Tm_refine_226068e5c1abf4f9a2b470864e2fe4be",
-        "haseqPSK_Tm_refine_a2c28aa1b78c89ca16223117ea2cb497",
-        "haseqTLSInfo_Tm_refine_09d127107f044e79826620c3786e8a26",
-        "haseqTLSInfo_Tm_refine_395145d20482f1325b1be28e53a52c7a",
-        "haseqTLSInfo_Tm_refine_8a74b25b114071d9bbf69720a8b6179f",
-        "refinement_interpretation_TLSInfo_Tm_refine_09d127107f044e79826620c3786e8a26"
-      ],
-      0
-    ],
+    null,
     [ "TLSInfo.uu___is_ApplicationPSK", 1, 0, 1, [ "@query" ], 0 ],
     [
       "TLSInfo.__proj__ApplicationPSK__item__i",
