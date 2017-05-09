@@ -499,7 +499,7 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
   dbg ("Computed early secret: "^(print_bytes es));
   let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived" empty_bytes in
+  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("Handshake salt: "^(print_bytes salt));
   let gy, gxy = CommonDH.dh_responder gx in
   dbg ("DH shared secret: "^(print_bytes gxy));
@@ -567,7 +567,7 @@ let ks_server_13_sh ks log =
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived" empty_bytes in
+  let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
   dbg ("Application salt: "^(print_bytes salt));
 
   // Replace handshake secret with application master secret
@@ -761,7 +761,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   in
 
   let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived" empty_bytes in
+  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("Handshake salt: "^(print_bytes salt));
 
   let hsId = HSID_DHE saltId g gx gy in
@@ -801,7 +801,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived" empty_bytes in
+  let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
   dbg ("Application salt: "^(print_bytes salt));
 
   let asId = ASID saltId in

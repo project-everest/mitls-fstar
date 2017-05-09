@@ -1418,11 +1418,13 @@ let sessionTicketBytes_is_injective p s1 s2 =
 
 val parseSessionTicket: b:bytes{repr_bytes(length b) <= 3} ->
     Tot (result (s:sticket{Seq.equal (sessionTicketBytes s) (messageBytes HT_session_ticket b)}))
-let parseSessionTicket payload  = admit() // TODO
+let parseSessionTicket payload  =
+  Error(AD_internal_error, "Unimplemented TODO")
 
 val parseSessionTicket13: b:bytes{repr_bytes(length b) <= 3} ->
     Tot (result (s:sticket13{Seq.equal (sessionTicketBytes13 s) (messageBytes HT_session_ticket b)}))
-let parseSessionTicket13 payload  = admit() // TODO
+let parseSessionTicket13 payload  =
+  Error(AD_internal_error, "Unimplemented TODO")
 
 (*
   if length payload >= 4 && length payload < 65542 then

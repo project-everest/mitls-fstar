@@ -740,7 +740,7 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
       Some (E_ec_point_format [ECP_UNCOMPRESSED])
   | E_supported_groups named_group_list ->
     None
-    // REMARK: Purely informative, so not sending it now to avoid extension intolerance
+    // REMARK: Purely informative, can only appear in EncryptedExtensions
     // Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
   // TODO: handle all remaining cases
   | E_early_data b -> None
