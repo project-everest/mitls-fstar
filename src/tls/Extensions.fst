@@ -396,13 +396,23 @@ let noExtensions =
   lemma_repr_bytes_values (length (extensionListBytes [])); 
   []
 
-// SI: add a $delta$ param for truncated binders length. 
 val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
+// SI: add a $delta$ param for truncated binders length. 
+// _trunc will be the main exported function. 
+// SI: move to Format
+val vlbytes_trunc: lSize:nat -> b:bytes -> binderSize:nat -> Tot (r:bytes{length r = lSize + (length b) + binderSize})
+let vlbytes_trunc lSize b bSize = 
+  bytes_of_int lSize ((length b) + bSize) @| b 
+  
+val extensionsBytes_trunc: extensions -> bindersSize:nat -> b:bytes { length b < 2 + 65536 } 
+let extensionsBytes_trunc exts delta = 
+  let exts = extensionsBytes exts in
+  vlbytes_trunc 2 exts delta 
 
 (*************************************************
  Extension parsing
