@@ -44,21 +44,25 @@ noeq type psk =
 // SI: what needs to be made with a vlbytes, and what doesn't? 
 
 // SI: add restrictions on length of i:bytes
-val pski_bytes : bytes * UInt32.t -> Tot bytes
-let pski_bytes (i,ot) = i @| bytes_of_int 4 ot
+val pski_bytes : PSK.preSharedKey * UInt32.t -> Tot bytes
+let pski_bytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
 
 // SI: role? Error case to do with role/data mis-match? 
 val psk_bytes : role -> psk -> Tot bytes 
-let psk_bytes (r:role) (psk:psk) = 
-  match r, psk with 
+let psk_bytes role psk = 
+  match role, psk with 
   | Client, (ClientPSK ids) ->
-    let ids = List.Tot.fold_left (fun acc pski -> acc @| pski_bytes pski) empty_bytes ids in
-    vlbytes 2 ids 
-  | Server, (ServerPSK sid) -> vlbytes 1 sid
+    let ids' = List.Tot.fold_left (fun acc pski -> acc @| pski_bytes pski) empty_bytes ids in
+    vlbytes 2 ids'
+  | Server, (ServerPSK sid) -> vlbytes 1 (bytes_of_int 2 (UInt16.v sid))
   | _, _ -> empty_bytes // SI: error case? 
 
 //let parse_psk: pinverse_t psk_bytes = admit()
-val parse_psk: bytes -> result psk 
+val client_psk_parse : bytes -> result psk
+val server_psk_parse : bytes -> result psk 
+
+val parse_psk: role -> bytes -> result psk 
+//let parse_psk (role:role) (bb:bytes) = 
 
  
 
@@ -391,7 +395,8 @@ val noExtensions: exts:extensions {exts == []}
 let noExtensions = 
   lemma_repr_bytes_values (length (extensionListBytes [])); 
   []
-  
+
+// SI: add a $delta$ param for truncated binders length. 
 val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
