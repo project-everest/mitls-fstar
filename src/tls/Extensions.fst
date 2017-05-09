@@ -728,14 +728,20 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
     | _, Some name -> Some (E_server_name []) // Acknowledge client's choice
     | _ -> None
     end
-  | E_extended_ms -> Some E_extended_ms // REMARK: not depending on cfg.safe_resumption
+  | E_extended_ms ->
+    if pv = TLS_1p3 then
+      None
+    else
+      Some E_extended_ms // REMARK: not depending on cfg.safe_resumption
   | E_ec_point_format ec_point_format_list -> // REMARK: ignores client's list
     if resuming || pv = TLS_1p3 then
       None // No ec_point_format in TLS 1.3
     else
       Some (E_ec_point_format [ECP_UNCOMPRESSED])
-  | E_supported_groups named_group_list -> // REMARK: Purely informative
-    Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups)) 
+  | E_supported_groups named_group_list ->
+    None
+    // REMARK: Purely informative, so not sending it now to avoid extension intolerance
+    // Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
   // TODO: handle all remaining cases
   | E_early_data b -> None
   | E_pre_shared_key b -> None
