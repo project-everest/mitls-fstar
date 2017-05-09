@@ -43,27 +43,30 @@ noeq type psk =
 //TODO
 // SI: what needs to be made with a vlbytes, and what doesn't? 
 
-// SI: add restrictions on length of i:bytes
 val pski_bytes : PSK.preSharedKey * UInt32.t -> Tot bytes
 let pski_bytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
 
-// SI: role? Error case to do with role/data mis-match? 
-val psk_bytes : role -> psk -> Tot bytes 
-let psk_bytes role psk = 
-  match role, psk with 
-  | Client, (ClientPSK ids) ->
+// SI: add a refinement that role matched psk type. 
+val psk_bytes : psk -> Tot bytes 
+let psk_bytes psk = 
+  match psk with 
+  | ClientPSK ids ->
     let ids' = List.Tot.fold_left (fun acc pski -> acc @| pski_bytes pski) empty_bytes ids in
     vlbytes 2 ids'
-  | Server, (ServerPSK sid) -> vlbytes 1 (bytes_of_int 2 (UInt16.v sid))
-  | _, _ -> empty_bytes // SI: error case? 
+  | ServerPSK sid -> vlbytes 1 (bytes_of_int 2 (UInt16.v sid))
 
 //let parse_psk: pinverse_t psk_bytes = admit()
 val client_psk_parse : bytes -> result psk
+
 val server_psk_parse : bytes -> result psk 
 
-val parse_psk: role -> bytes -> result psk 
-//let parse_psk (role:role) (bb:bytes) = 
+type pskBinderEntry = bytes 
 
+val parse_psk: role -> bytes -> result (psk * option pskBinderEntry)
+let parse_psk role bb = 
+  match role with 
+  | Client -> client_psk_parse bb
+  | Server -> server_psk_parse bb 
  
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
@@ -403,8 +406,8 @@ let extensionsBytes exts =
   vlbytes 2 b
 
 // SI: add a $delta$ param for truncated binders length. 
-// _trunc will be the main exported function. 
-// SI: move to Format
+// The main exported extensionBytes function will have _trunc's type. 
+// SI: move vlbytes_trunc to Format
 val vlbytes_trunc: lSize:nat -> b:bytes -> binderSize:nat -> Tot (r:bytes{length r = lSize + (length b) + binderSize})
 let vlbytes_trunc lSize b bSize = 
   bytes_of_int lSize ((length b) + bSize) @| b 
