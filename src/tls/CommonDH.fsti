@@ -10,11 +10,11 @@ open Parse
 open TLSError
 open FStar.ST
 
-val group: Type0
+val group: t:Type0{hasEq t}
 val is_ec: group -> Tot bool
 
-val pre_keyshare (g:group) : Type0
-val pre_share (g:group) : Type0
+val pre_keyshare (g:group) : Tot (t:Type0{hasEq t})
+val pre_share (g:group) : Tot (t:Type0{hasEq t})
 
 // DH secret
 type secret (g:group) = bytes

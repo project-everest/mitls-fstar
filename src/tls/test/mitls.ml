@@ -14,7 +14,8 @@ let config = ref {defaultConfig with
   private_key_file = "../../data/server.key";
   ca_file = "../../data/CAFile.pem";
   safe_resumption = true;
-  ciphersuites = cipherSuites_of_nameList [ TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+  ciphersuites = cipherSuites_of_nameList [ TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
+                                            TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
                                             TLS_AES_128_GCM_SHA256 ];
 }
 

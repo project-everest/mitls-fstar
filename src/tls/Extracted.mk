@@ -7,7 +7,7 @@ mlclean:
 	$(MAKE) -C $(HACL_HOME)/secure_api/LowCProvider clean
 	$(MAKE) -C $(FFI_HOME) clean
 	-rm -rf test/*.cm* test/*.o
-	-rm -fr $(ODIR)/*.cm* $(ODIR)/*.o $(ODIR)/.deporder *.exe *.cm* *.o *.so *.dll *.out
+	-rm -fr $(ODIR)/*.cm* $(ODIR)/*.o $(ODIR)/.tmp $(ODIR)/.deporder *.exe *.cm* *.o *.so *.dll *.out
 
 .PHONY: mlclean
 
@@ -46,7 +46,7 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 
 # Try to only rebuild fstarlib when necessary
 $(FSTAR_HOME)/ulib/ml/fstarlib.cmxa: \
-       		$(wildcard $(FSTAR_HOME)/ulib/*.fst) \
+		$(wildcard $(FSTAR_HOME)/ulib/*.fst) \
 		$(wildcard $(FSTAR_HOME)/ulib/ml/*.ml) \
 	       	$(wildcard $(FSTAR_HOME)/ulib/ml/extracted/*.ml) \
 		$(wildcard $(FSTAR_HOME)/ulib/ml/hyperstack/*.ml)
@@ -67,6 +67,7 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOM
 
 %.cmi %.cmx: %.ml
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
+	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
 
 .depend-ML: \
 	$(ODIR)/Flag.ml \
@@ -82,12 +83,13 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOM
 -include .depend-ML
 
 $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
-	echo `ls -rt output/*.cmx` > $(ODIR)/.deporder
+	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
+	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 
 mitls.cmxa: \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
-       	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-       	$(LCDIR)/LowCProvider.cmxa \
+	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+	$(LCDIR)/LowCProvider.cmxa \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	$(ODIR)/.deporder $(ODIR)/FFI.cmx
 	ocamlfind ocamlopt $(OCAML_INCLUDE_PATHS) -a `cat $(ODIR)/.deporder` -o mitls.cmxa
@@ -113,7 +115,7 @@ test: test.out mitls.exe
 	$(EXTRA_PATH) ./test.out
 	# Run mitls.exe 
 	./mitls.exe  -v 1.2 -ffi www.google.com
-	./mitls.exe  -v 1.2 -noems www.microsoft.com
+	./mitls.exe  -v 1.2 www.microsoft.com
 	#./mitls.exe -v 1.3. www.google.com failing due to different draft versions
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
@@ -135,11 +137,11 @@ endif
 # our interactive tests; the baseline is make client{|12|13} vs make server 
 
 server::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA384
 server12::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 -sigalgs RSA+SHA256
 server13::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA384
 
 client13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 

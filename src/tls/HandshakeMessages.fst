@@ -166,15 +166,17 @@ noeq type hrr = {
   hrr_extensions: he:list extension{List.Tot.length he < 256};
 }
 
-// NewSessionTicket payload, both for  RFC5077 and TLS 1.3
+// NewSessionTicket payload for RFC5077 (https://tools.ietf.org/html/rfc5077)
 type sticket = {
   sticket_lifetime: UInt32.t;
-  sticket_ticket: b:bytes{length b < 16777212};
-} 
+  sticket_ticket: b:bytes{length b < 65536};
+}
+
+// NewSessionTicket payload for TLS 1.3 (https://tlswg.github.io/tls13-spec/#NSTMessage)
 noeq type sticket13 = {
   ticket13_lifetime: UInt32.t;
   ticket13_age_add: UInt32.t;
-  ticket13_ticket: b:bytes{length b < 16777212};
+  ticket13_ticket: b:bytes{length b < 65535};
   ticket13_extensions: es: list extension; 
 } 
 
@@ -1417,19 +1419,59 @@ let sessionTicketBytes_is_injective p s1 s2 =
 *)
 
 val parseSessionTicket: b:bytes{repr_bytes(length b) <= 3} ->
-    Tot (result (s:sticket{Seq.equal (sessionTicketBytes s) (messageBytes HT_session_ticket b)}))
-let parseSessionTicket payload  = admit() // TODO
+  result (s:sticket {Seq.equal (sessionTicketBytes s) (messageBytes HT_session_ticket b)})
+let parseSessionTicket b =
+  if length b < 6 then
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket: too short")
+  else
+    begin
+    let lifetimeB, ticketB = split b 4 in
+    let lifetime = int_of_bytes lifetimeB in
+    lemma_repr_bytes_values lifetime;
+    let lifetime = UInt32.uint_to_t lifetime in
+    match vlparse 2 ticketB with
+    | Correct ticket ->
+      Correct ({ sticket_lifetime = lifetime; sticket_ticket = ticket })
+    | Error _ ->
+      Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket: incorrect length")
+    end
 
 val parseSessionTicket13: b:bytes{repr_bytes(length b) <= 3} ->
-    Tot (result (s:sticket13{Seq.equal (sessionTicketBytes13 s) (messageBytes HT_session_ticket b)}))
-let parseSessionTicket13 payload  = admit() // TODO
+  result (s:sticket13 {Seq.equal (sessionTicketBytes13 s) (messageBytes HT_session_ticket b)})
+let parseSessionTicket13 b =
+  if length b < 12 then
+    Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: too short")
+  else
+    begin
+    let lifetimeB, rest = split b 4 in
+    let lifetime = int_of_bytes lifetimeB in
+    lemma_repr_bytes_values lifetime;
+    let lifetime = UInt32.uint_to_t lifetime in
+    let ageB, rest = split rest 4 in
+    let age = int_of_bytes ageB in
+    lemma_repr_bytes_values age;
+    let age = UInt32.uint_to_t age in
+    match vlsplit 2 rest with
+    | Correct (ticket, rest) ->
+      begin
+      match vlsplit 2 rest with
+      | Correct (exts, eof) ->
+        if length eof > 0 then
+          Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: dangling bytes")
+        else
+          begin
+          match parseExtensions Client (vlbytes 2 exts) with
+          | Correct exts ->
+            Correct ({ ticket13_lifetime = lifetime; ticket13_age_add = age;
+                       ticket13_ticket = ticket;
+                       ticket13_extensions = exts})
+          | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid extensions")
+          end
+      | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
+      end 
+    | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
+    end
 
-(*
-  if length payload >= 4 && length payload < 65542 then
-    let (lifetime_hint, ticket) = split payload 4 in
-    Correct({sticket_ticket_lifetime_hint = lifetime_hint; sticket_ticket = ticket})
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Inappropriate size in received session ticket")
-*)
 
 (* Hello retry request *)
 val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
