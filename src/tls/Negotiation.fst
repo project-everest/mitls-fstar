@@ -411,9 +411,9 @@ val chosenGroup: mode -> option CommonDH.group
 let chosenGroup mode =
   match kexAlg mode with
   | Kex_PSK_DHE
-  | Kex_DHE -> Some (CommonDH.FFDH (DHGroup.Named FFDHE2048))
+  | Kex_DHE -> CommonDH.group_of_namedGroup (FFDHE FFDHE2048)
   | Kex_PSK_ECDHE
-  | Kex_ECDHE -> Some (CommonDH.ECDH CoreCrypto.ECC_P256)
+  | Kex_ECDHE -> CommonDH.group_of_namedGroup (SEC CoreCrypto.ECC_P256)
 
 (*
   let ngroups =

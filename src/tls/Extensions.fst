@@ -108,12 +108,12 @@ let parseEarlyDataIndication data =
 
 (* EC POINT FORMATS *) 
 
-let rec ecpfListBytes_aux: list ECGroup.point_format -> bytes = function
+let rec ecpfListBytes_aux: list point_format -> bytes = function
   | [] -> empty_bytes
-  | ECGroup.ECP_UNCOMPRESSED :: r -> abyte 0z @| ecpfListBytes_aux r
-  | ECGroup.ECP_UNKNOWN t :: r -> bytes_of_int 1 t @| ecpfListBytes_aux r
+  | ECP_UNCOMPRESSED :: r -> abyte 0z @| ecpfListBytes_aux r
+  | ECP_UNKNOWN t :: r -> bytes_of_int 1 t @| ecpfListBytes_aux r
 
-val ecpfListBytes: l:list ECGroup.point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
+val ecpfListBytes: l:list point_format{length (ecpfListBytes_aux l) < 256} -> Tot bytes
 let ecpfListBytes l =
   let al = ecpfListBytes_aux l in
   lemma_repr_bytes_values (length al);
@@ -252,7 +252,7 @@ noeq type extension =
   | E_cookie of b:bytes {0 < length b /\ length b < 65536}  (* M *)
   | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  
   | E_extended_ms
-  | E_ec_point_format of list ECGroup.point_format
+  | E_ec_point_format of list point_format
   | E_unknown_extension of (lbytes 2 * bytes) (* header, payload *)
 (* 
 We do not yet support the extensions below (authenticated but ignored)
@@ -387,9 +387,9 @@ let addOnce ext extList =
     let res = FStar.List.Tot.append extList [ext] in
     correct res
 
-val parseEcpfList: bytes -> result (list ECGroup.point_format)
+val parseEcpfList: bytes -> result (list point_format)
 let parseEcpfList b =
-    let rec aux: (b:bytes -> Tot (result (list ECGroup.point_format)) (decreases (length b))) = fun b -> 
+    let rec aux: (b:bytes -> Tot (result (list point_format)) (decreases (length b))) = fun b ->
         if equalBytes b empty_bytes then Correct []
         else if length b = 0 then error "malformed curve list" 
         else
@@ -399,13 +399,13 @@ let parseEcpfList b =
             | Correct l ->
               let cur = 
               match cbyte u with
-              | 0z -> ECGroup.ECP_UNCOMPRESSED
-              | _ -> ECGroup.ECP_UNKNOWN(int_of_bytes u) in 
+              | 0z -> ECP_UNCOMPRESSED
+              | _ -> ECP_UNKNOWN(int_of_bytes u) in 
               Correct (cur :: l))
     in match aux b with
     | Error z -> Error z
     | Correct l -> 
-      if List.Tot.mem ECGroup.ECP_UNCOMPRESSED l 
+      if List.Tot.mem ECP_UNCOMPRESSED l 
       then correct l
       else error "uncompressed point format not supported"
 
@@ -564,7 +564,7 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res = E_signature_algorithms sigAlgs :: res in
     let res =
       if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
-	E_ec_point_format [ECGroup.ECP_UNCOMPRESSED] :: res
+	E_ec_point_format [ECP_UNCOMPRESSED] :: res
       else res
     in
     let res =
@@ -734,7 +734,7 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
     if resuming || pv = TLS_1p3 then
       None // No ec_point_format in TLS 1.3
     else
-      Some (E_ec_point_format [ECGroup.ECP_UNCOMPRESSED])
+      Some (E_ec_point_format [ECP_UNCOMPRESSED])
   | E_supported_groups named_group_list -> // REMARK: Purely informative
     Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups)) 
   // TODO: handle all remaining cases

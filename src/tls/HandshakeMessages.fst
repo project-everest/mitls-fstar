@@ -1188,11 +1188,14 @@ let parseCertificateRequest13 (body:bytes): result cr13 = error "Certificate req
 (** A.4.3 Client Authentication and Key Exchange Messages *)
 
 open CoreCrypto
+
+// ADL: this is silly, we have uniform support of EC now
 val kex_c_of_dh_key: #g:CommonDH.group -> CommonDH.pre_share g -> Tot kex_c
 let kex_c_of_dh_key #g kex =
-  match g with
-  | CommonDH.FFDH g' -> KEX_C_DHE (CommonDH.serialize_raw #g kex)
-  | CommonDH.ECDH g' -> KEX_C_ECDHE (CommonDH.serialize_raw #g kex)
+  if CommonDH.is_ec g then
+    KEX_C_ECDHE (CommonDH.serialize_raw #g kex)
+  else
+    KEX_C_DHE (CommonDH.serialize_raw #g kex)
 
 (* JK: TODO: add the kex as an extra parameter, otherwise not injective *)
 val clientKeyExchangeBytes: cke -> Tot (b:bytes{hs_msg_bytes HT_client_key_exchange b})
