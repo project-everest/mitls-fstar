@@ -154,7 +154,7 @@ FFI
 .depend-HS: # $(wildcard *.fst *.fsti)
 	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make Handshake.fst > .depend-HS
 .depend-AEAD: # $(wildcard $(HACL_HOME)/secure_api/*/*.fst)
-	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make Crypto.AEAD.Main.fst > .depend-AEAD
+	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make $(LLDIR)/Crypto.AEAD.Main.fst > .depend-AEAD
 .depend-CDH:
 	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make CommonDH.fst > .depend-CDH
 
