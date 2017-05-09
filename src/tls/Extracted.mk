@@ -7,7 +7,7 @@ mlclean:
 	$(MAKE) -C $(HACL_HOME)/secure_api/LowCProvider clean
 	$(MAKE) -C $(FFI_HOME) clean
 	-rm -rf test/*.cm* test/*.o
-	-rm -fr $(ODIR)/*.cm* $(ODIR)/*.o $(ODIR)/.deporder *.exe *.cm* *.o *.so *.dll *.out
+	-rm -fr $(ODIR)/*.cm* $(ODIR)/*.o $(ODIR)/.tmp $(ODIR)/.deporder *.exe *.cm* *.o *.so *.dll *.out
 
 .PHONY: mlclean
 
@@ -67,6 +67,7 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOM
 
 %.cmi %.cmx: %.ml
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
+	@[ -f $(ODIR)/.deporder ] || echo -n "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
 
 .depend-ML: \
 	$(ODIR)/Flag.ml \
@@ -82,7 +83,7 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOM
 -include .depend-ML
 
 $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
-	echo `ls -rt output/*.cmx` > $(ODIR)/.deporder
+	mv $(ODIR)/.tmp $(ODIR)/.deporder
 
 mitls.cmxa: \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
