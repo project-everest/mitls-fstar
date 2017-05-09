@@ -197,6 +197,17 @@ type signatureScheme =
   | PRIVATE_USE of (codepoint:lbytes 2 {
       let v = int_of_bytes codepoint in 0xFE00 <= v /\ v <= 0xFFFF})
 
+let is_handshake13_signatureScheme = function
+  | ECDSA_SECP256R1_SHA256
+  | ECDSA_SECP384R1_SHA384
+  | ECDSA_SECP521R1_SHA512
+//| ED25519
+//| ED448
+  | RSA_PSS_SHA256
+  | RSA_PSS_SHA384
+  | RSA_PSS_SHA512 -> true
+  | _ -> false
+
 val signatureSchemeBytes: signatureScheme -> lbytes 2
 let signatureSchemeBytes = function
   | RSA_PKCS1_SHA256       -> abyte2 (0x04z, 0x01z)

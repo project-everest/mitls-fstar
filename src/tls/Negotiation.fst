@@ -485,7 +485,9 @@ let signatureScheme_of_mode mode supported_algs =
     begin
     match find_signature_algorithms mode.n_offer with
     | None -> None
-    | Some algs -> List.Tot.find (fun alg -> List.Tot.mem alg supported_algs) algs
+    | Some algs ->
+      List.Tot.find
+        (fun alg -> is_handshake13_signatureScheme alg && List.Tot.mem alg supported_algs) algs
     end
    | TLS_1p2 ->
      begin
