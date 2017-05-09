@@ -83,7 +83,8 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOM
 -include .depend-ML
 
 $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
-	mv $(ODIR)/.tmp $(ODIR)/.deporder
+	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run `make mlclean` ==="
+	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 
 mitls.cmxa: \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
