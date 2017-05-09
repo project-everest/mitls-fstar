@@ -41,8 +41,26 @@ noeq type psk =
   | ServerPSK of UInt16.t 
 
 //TODO
-//let psk_bytes: psk -> Tot bytes = admit()
+// SI: what needs to be made with a vlbytes, and what doesn't? 
+
+// SI: add restrictions on length of i:bytes
+val pski_bytes : bytes * UInt32.t -> Tot bytes
+let pski_bytes (i,ot) = i @| bytes_of_int 4 ot
+
+// SI: role? Error case to do with role/data mis-match? 
+val psk_bytes : role -> psk -> Tot bytes 
+let psk_bytes (r:role) (psk:psk) = 
+  match r, psk with 
+  | Client, (ClientPSK ids) ->
+    let ids = List.Tot.fold_left (fun acc pski -> acc @| pski_bytes pski) empty_bytes ids in
+    vlbytes 2 ids 
+  | Server, (ServerPSK sid) -> vlbytes 1 sid
+  | _, _ -> empty_bytes // SI: error case? 
+
 //let parse_psk: pinverse_t psk_bytes = admit()
+val parse_psk: bytes -> result psk 
+
+ 
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
 // restricting both proposed PSKs and future ones sent by the server
@@ -129,6 +147,7 @@ type protocol_versions =
   l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
 #set-options "--lax" 
+// SI: dead code? 
 val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
 let protocol_versions_bytes vs =
   vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vs)
