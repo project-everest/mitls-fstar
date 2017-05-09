@@ -47,7 +47,7 @@ let client config host port =
   | _, err  -> pr "connect error" )
 
 //let aux_server config client : ML unit = pr ("Success")
-let rec aux_server config client : ML unit =
+let single_server config client : ML unit =
   let send x = let b = IO.debug_print_string "TCP:send\n" in Platform.Tcp.send client x in
   let recv x = let b = IO.debug_print_string "TCP:recv\n" in Platform.Tcp.recv client x in
   (match FFI.accept_connected send recv config with
@@ -66,12 +66,16 @@ let rec aux_server config client : ML unit =
       )
     | _ -> pr "read error"
     )
-  | _ -> pr"accept_connect error");
-  aux_server config client
+  | c, e -> pr "accept_connected error"
+  | _ -> pr"accept_connect error")
+
+let rec aux_server config sock : ML unit =
+ let client = Platform.Tcp.accept sock in
+ let _ = single_server config client in
+ aux_server config sock
 
 let server config host port =
  pr "===============================================\n Starting test TLS 1.3 server...\n";
  let sock = Platform.Tcp.listen host port in
- let client = Platform.Tcp.accept sock in
- aux_server config client
+ aux_server config sock
 

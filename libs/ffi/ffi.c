@@ -85,6 +85,33 @@ void FFI_mitls_cleanup(void)
  #undef MITLS_FFI_ENTRY
 }
 
+// Input:  v - an OCaml exception
+//         errmsg - in/out pointer to the current error log string, may 
+//                  point to NULL
+// Return:
+//         nothing
+//         *errmsg updated by realloc and appending the exception text.
+//                 On out-of-memory, the new exception is discarded and
+//                 the current error log string is returned unmodified.
+static void report_caml_exception(value v, char **errmsg)
+{
+    if (errmsg) {
+        char * msg = caml_format_exception(Extract_exception(v));
+        if (*errmsg == NULL) {
+            *errmsg = strdup(msg);
+        } else {
+            char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
+            if (newerrmsg) {
+                strcpy(newerrmsg, *errmsg);
+                strcat(newerrmsg, "\n");
+                strcat(newerrmsg, msg);
+                free(*errmsg);
+                *errmsg = newerrmsg;
+            }
+        }
+    }
+}
+
 // Called by the host app to configure miTLS ahead of creating a connection
 int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
@@ -101,7 +128,7 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
     host = caml_copy_string(host_name);
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
-        // call caml_format_exception(Extract_exception(config)) to extract the exception information
+        report_caml_exception(config, errmsg);
     } else {
         mitls_state * s;
         
@@ -131,7 +158,7 @@ int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char 
     camlfile = caml_copy_string(file);
     config = caml_callback2_exn(*g_mitls_FFI_SetCertChainFile, state->fstar_state, camlfile);
     if (Is_exception_result(config)) {
-        // call caml_format_exception(Extract_exception(config)) to extract the exception information
+        report_caml_exception(config, NULL); // bugbug: pass in errmsg
     } else {
         state->fstar_state = config;
         ret = 1;
@@ -151,7 +178,7 @@ int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char
     camlfile = caml_copy_string(file);
     config = caml_callback2_exn(*g_mitls_FFI_SetPrivateKeyFile, state->fstar_state, camlfile);
     if (Is_exception_result(config)) {
-        // call caml_format_exception(Extract_exception(config)) to extract the exception information
+        report_caml_exception(config, NULL); // bugbug: pass in errmsg
     } else {
         state->fstar_state = config;
         ret = 1;
@@ -171,7 +198,7 @@ int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
     camlfile = caml_copy_string(file);
     config = caml_callback2_exn(*g_mitls_FFI_SetCAFile, state->fstar_state, camlfile);
     if (Is_exception_result(config)) {
-        // call caml_format_exception(Extract_exception(config)) to extract the exception information
+        report_caml_exception(config, NULL); // bugbug: pass in errmsg
     } else {
         state->fstar_state = config;
         ret = 1;
@@ -197,7 +224,7 @@ void FFI_mitls_close(mitls_state *state)
 
 void FFI_mitls_free_msg(char *msg)
 {
-
+    free(msg);
 }
 
 void FFI_mitls_free_packet(void *packet)
@@ -286,7 +313,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
     caml_acquire_runtime_system();
     result = caml_callback2_exn(*g_mitls_FFI_Connect, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
-        // Call caml_format_exception(Extract_exception(result)) to extract the exception text
+        report_caml_exception(result, errmsg);
         ret = 0;
     } else {
         // Connect returns back (Connection.connection * int)
@@ -316,7 +343,7 @@ int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ 
     caml_acquire_runtime_system();
     result = caml_callback2_exn(*g_mitls_FFI_AcceptConnected, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
-        // Call caml_format_exception(Extract_exception(result)) to extract the exception text
+        report_caml_exception(result, errmsg);
         ret = 0;
     } else {
         // AcceptConnected returns back (Connection.connection * int)
@@ -349,7 +376,7 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     
     result = caml_callback2_exn(*g_mitls_FFI_Send, state->fstar_state, buffer_value);
     if (Is_exception_result(result)) {
-        // Call caml_format_exception(Extract_exception(result)) to extract the exception text
+        report_caml_exception(result, errmsg);
         ret = 0;
     } else {
         ret = 1;
@@ -372,7 +399,7 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
     caml_acquire_runtime_system();
     result = caml_callback_exn(*g_mitls_FFI_Recv, state->fstar_state);
     if (Is_exception_result(result)) {
-        // call caml_format_exception(Extract_exception(result)) to extract the exception text
+        report_caml_exception(result, errmsg);
         p = NULL;
     } else {
         // Return the plaintext data

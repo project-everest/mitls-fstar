@@ -24,7 +24,7 @@ open FFICallbacks
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-inline_for_extraction let ffi_debug = false
+inline_for_extraction let ffi_debug = true
 
 private let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length }) : fragment i (point (length b)) = 
   let rg : frange i = point(length b) in 
@@ -153,7 +153,18 @@ let ffiConfig version host =
     private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
     safe_resumption = true;
-    ciphersuites = cipherSuites_of_nameList [TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256];
+    ciphersuites = cipherSuites_of_nameList [
+                    (* mitls.exe expects this one *)
+                      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+                    (* default ciphersuites from TLSInfo.fst follow: *)
+                      TLS_RSA_WITH_AES_128_GCM_SHA256;
+                      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
+                      TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
+                      TLS_RSA_WITH_AES_128_CBC_SHA;
+                      TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
+                      TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
+                      TLS_RSA_WITH_3DES_EDE_CBC_SHA;
+                      ];
   }
 
 val ffiSetCertChainFile: cfg:config -> f:string -> ML config
