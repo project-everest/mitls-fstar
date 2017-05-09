@@ -354,7 +354,7 @@ let ks_client_13_0rtt_ch ks esId (log:bytes) : ST (recordInstance)
   }) in
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret secretId ClientEarlyTrafficSecret log in
-  let ets = HKDF.derive_secret h es "client early traffic secret" log in
+  let ets = HKDF.derive_secret h es "c e traffic" log in
   dbg ("Client early traffic secret: "^(print_bytes ets));
 
   // Expand all keys from the derived early secret
@@ -451,7 +451,7 @@ let ks_server_13_0rtt_init ks cr esId log cs (| g, gx |) =
   }) in
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret secretId ClientEarlyTrafficSecret log in
-  let ets = HKDF.derive_secret h es "client early traffic secret" log in
+  let ets = HKDF.derive_secret h es "c e traffic" log in
   dbg ("Client early traffic secret: "^(print_bytes ets));
 
   // Expand all keys from the derived early secret
@@ -499,7 +499,7 @@ let ks_server_13_1rtt_init ks cr cs g gx =
   let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
   dbg ("Computed early secret: "^(print_bytes es));
   let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived secret" empty_bytes in
+  let salt = HKDF.derive_secret h es "derived" empty_bytes in
   dbg ("Handshake salt: "^(print_bytes salt));
   let gy, gxy = CommonDH.dh_responder gx in
   dbg ("DH shared secret: "^(print_bytes gxy));
@@ -536,9 +536,9 @@ let ks_server_13_sh ks log =
   let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
 
   // Derived handshake secret
-  let cts = HKDF.derive_secret h hs "client handshake traffic secret" log in
+  let cts = HKDF.derive_secret h hs "c hs traffic" log in
   dbg ("client handshake traffic secret: "^(print_bytes cts));
-  let sts = HKDF.derive_secret h hs "server handshake traffic secret" log in
+  let sts = HKDF.derive_secret h hs "s hs traffic" log in
   dbg ("server handshake traffic secret: "^(print_bytes sts));
   let (ck,civ) = keygen_13 h cts ae in
   dbg ("handshake key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
@@ -567,7 +567,7 @@ let ks_server_13_sh ks log =
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived secret" empty_bytes in
+  let salt = HKDF.derive_secret h hs "derived" empty_bytes in
   dbg ("Application salt: "^(print_bytes salt));
 
   // Replace handshake secret with application master secret
@@ -761,7 +761,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   in
 
   let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived secret" empty_bytes in
+  let salt = HKDF.derive_secret h es "derived" empty_bytes in
   dbg ("Handshake salt: "^(print_bytes salt));
 
   let hsId = HSID_DHE saltId g gx gy in
@@ -780,9 +780,9 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   let c_expandId = ExpandedSecret secretId ClientHandshakeTrafficSecret log in
   let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
 
-  let cts = HKDF.derive_secret h hs "client handshake traffic secret" log in
+  let cts = HKDF.derive_secret h hs "c hs traffic" log in
   dbg ("client handshake traffic secret: "^(print_bytes cts));
-  let sts = HKDF.derive_secret h hs "server handshake traffic secret" log in
+  let sts = HKDF.derive_secret h hs "s hs traffic" log in
   dbg ("server handshake traffic secret: "^(print_bytes sts));
   let (ck,civ) = keygen_13 h cts ae in
   dbg ("handshake key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
@@ -801,7 +801,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_ed =
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce sfkId (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
-  let salt = HKDF.derive_secret h hs "derived secret" empty_bytes in
+  let salt = HKDF.derive_secret h hs "derived" empty_bytes in
   dbg ("Application salt: "^(print_bytes salt));
 
   let asId = ASID saltId in
@@ -844,12 +844,12 @@ let ks_client_13_sf ks (log:bytes)
   let c_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
   let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
 
-  let cts = HKDF.derive_secret h ams "client application traffic secret" log in
+  let cts = HKDF.derive_secret h ams "c ap traffic" log in
   dbg ("client application traffic secret: "^(print_bytes cts));
-  let sts = HKDF.derive_secret h ams "server application traffic secret" log in
+  let sts = HKDF.derive_secret h ams "s ap traffic" log in
   dbg ("server application traffic secret: "^(print_bytes sts));
   let emsId : exportId li = ExportID asId log in
-  let ems = HKDF.derive_secret h ams "exporter master secret" log in
+  let ems = HKDF.derive_secret h ams "exp master" log in
   dbg ("exporter master secret: "^(print_bytes ems));
 
   let (ck,civ) = keygen_13 h cts ae in
@@ -891,12 +891,12 @@ let ks_server_13_sf ks (log:bytes)
   let c_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
   let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
 
-  let cts = HKDF.derive_secret h ams "client application traffic secret" log in
+  let cts = HKDF.derive_secret h ams "c ap traffic" log in
   dbg ("client application traffic secret: "^(print_bytes cts));
-  let sts = HKDF.derive_secret h ams "server application traffic secret" log in
+  let sts = HKDF.derive_secret h ams "s ap traffic" log in
   dbg ("server application traffic secret: "^(print_bytes sts));
   let emsId : exportId li = ExportID asId log in
-  let ems = HKDF.derive_secret h ams "exporter master secret" log in
+  let ems = HKDF.derive_secret h ams "exp master" log in
   dbg ("exporter master secret: "^(print_bytes ems));
 
   let (ck,civ) = keygen_13 h cts ae in
@@ -937,7 +937,7 @@ let ks_client_13_cf ks (log:bytes) : ST unit
   let log : hashed_log li = log in
   let rmsId : rmsId li = RMSID asId log in
 
-  let rms : rms rmsId = HKDF.derive_secret h ams "resumption master secret" log in
+  let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
   dbg ("Resumption master secret: "^(print_bytes rms));
   st := C (C_13_postHS alpha rekey_info (| li, rmsId, rms |))
 

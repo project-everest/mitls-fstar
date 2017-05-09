@@ -93,7 +93,7 @@ let hkdf_expand ha prk info len =
   fst(split raw len)  // possibly chopping off the end of the last hash
 
 let tls13_prefix : lbytes 9 =
-  let s = abytes "TLS 1.3, " in
+  let s = abytes "tls13 " in
   assert_norm(length s = 9); s
 
 (*-------------------------------------------------------------------*)
