@@ -56,35 +56,48 @@ let parseBinderList b =
   let rec (aux: b:bytes -> binders -> Tot (result binders) (decreases (length b))) = fun b binders ->    
     if length b > 0 then
       if length b >= 5 then // SI: check ?
-	let binder, bytes = vlsplit 1 b in // SI: check 1?
-	aux bytes (binders @ [binder]) // use List.Total.snoc
+//	let binder, bytes = vlsplit 1 b in // SI: check 1?
+	match vlsplit 1 b with
+	| Error z -> error "parseBinderList failed to parse a binder"
+	| Correct(binder,bytes) -> aux bytes (binders @ [binder]) // use List.Total.snoc
       else error "parseBinderList: too few bytes"
     else Correct binders in
   match vlparse 2 b with 
   | Correct b -> aux b []
   | Error z -> error "parseBinderList" 
 
-val pski_bytes : PSK.preSharedKey * UInt32.t -> Tot bytes
-let pski_bytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
+val pskiBytes : PSK.preSharedKey * UInt32.t -> Tot bytes
+let pskiBytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
 
-val psk_bytes : psk -> Tot bytes 
-let psk_bytes psk = 
+val pskBytes : psk -> Tot bytes 
+let pskBytes psk = 
   match psk with 
   | ClientPSK ids ->
-    let ids' = List.Tot.fold_left (fun acc pski -> acc @| pski_bytes pski) empty_bytes ids in
+    let ids' = List.Tot.fold_left (fun acc pski -> acc @| pskiBytes pski) empty_bytes ids in
     vlbytes 2 ids' 
   | ServerPSK sid -> bytes_of_int 2 (UInt16.v sid)
 
 
 // SI: parsing uint32 depends upon #ota=4 precondition
-val parsePskIdentity : b:bytes{let _,ota = vlsplit 2 b in length ota == 4}  -> result pskIdentity
+let ota_is_4 (b:bytes) = 
+  match vlsplit 2 b with
+  | Error z -> False
+  | Correct(_id,ota) -> length ota == 4 
+  
+//val parsePskIdentity : b:bytes{let _,ota = vlsplit 2 b in length ota == 4}  -> result pskIdentity
+val parsePskIdentity : b:bytes{ota_is_4 b} -> result pskIdentity
 let parsePskIdentity b = 
-  let id,ota = vlsplit 2 b in // SI: check vlsplit use 
-  match PSK.parsePreSharedKey id with 
-  | Correct(id) -> 
-    let ota = int_of_bytes ota in
-    Correct (id,ota)
-  | Error z -> error "parsePskIdentity"
+//  let id,ota = vlsplit 2 b in // SI: check vlsplit use 
+  match vlsplit 2 b with
+  | Error z -> error "parsePskIdentity failed to parse"
+  | Correct(id,ota) -> 
+    begin
+      match PSK.parsePreSharedKey id with 
+      | Correct(id) -> 
+	let ota = int_of_bytes ota in
+	Correct (id,ota)
+      | Error z -> error "parsePskIdentity"
+      end
   
 val parsePskIdentities : bytes -> result (list pskIdentity)
 let parsePskIdentities b = 
