@@ -26,6 +26,7 @@ functions, at odd with recursive extensions. *)
 let error s = Error (AD_decode_error, ("Extensions parsing: "^s))
 
 //17-05-01 deprecated---use TLSError.result instead? 
+// SI: seems to be only used internally by parseServerName. Remove.
 (** local, failed-to-parse exc. *)
 private type canFail (a:Type) =
 | ExFail of alertDescription * string
@@ -34,20 +35,38 @@ private type canFail (a:Type) =
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *) 
 
+type pskIdentity = PSK.preSharedKey * PSK.obfuscated_ticket_age
+
 noeq type psk = 
   // this is the truncated PSK extension, without the list of binder tags.
-  | ClientPSK of list (PSK.preSharedKey * PSK.obfuscated_ticket_age)
+  | ClientPSK of list pskIdentity
   // this is just an index in the client offer's PSK extension
   | ServerPSK of UInt16.t 
 
-//
-// Serializing 
-//
+// SI: copied from HSM. Should be here in Extensions only. 
+// PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
+// We statically enforce length requirements to ensure that formatting is total.
+type binder = b:bytes {32 <= length b /\ length b <= 255} 
+val binderListBytes: list binder -> bytes 
+let binderListBytes bs = List.Tot.fold_left (fun a (b:binder) -> a @| Parse.vlbytes1 b) empty_bytes bs
+type binders = bs: list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= 65535} 
+let bindersBytes (bs:binders): bytes = Parse.vlbytes2 (binderListBytes bs)
+
+let parseBinderList b = 
+  let rec (aux: b:bytes -> binders -> Tot (result binders) (decreases (length b))) = fun b binders ->    
+    if length b > 0 then
+      if length b >= 5 then // SI: check ?
+	let binder, bytes = vlsplit 1 b in // SI: check 1?
+	aux bytes (binders @ [binder]) // use List.Total.snoc
+      else error "parseBinderList: too few bytes"
+    else Correct binders in
+  match vlparse 2 b with 
+  | Correct b -> aux b []
+  | Error z -> error "parseBinderList" 
+
 val pski_bytes : PSK.preSharedKey * UInt32.t -> Tot bytes
 let pski_bytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
 
-// SI: 1-1 lemma will be guarded by role matching psk type. 
-// SI: check usage of vlbytes here. 
 val psk_bytes : psk -> Tot bytes 
 let psk_bytes psk = 
   match psk with 
@@ -57,43 +76,53 @@ let psk_bytes psk =
   | ServerPSK sid -> bytes_of_int 2 (UInt16.v sid)
 
 
-//
-// Parsing 
-//
+// SI: parsing uint32 depends upon #ota=4 precondition
+val parsePskIdentity : b:bytes{let _,ota = vlsplit 2 b in length ota == 4}  -> result pskIdentity
+let parsePskIdentity b = 
+  let id,ota = vlsplit 2 b in // SI: check vlsplit use 
+  match PSK.parsePreSharedKey id with 
+  | Correct(id) -> 
+    let ota = int_of_bytes ota in
+    Correct (id,ota)
+  | Error z -> error "parsePskIdentity"
+  
+val parsePskIdentities : bytes -> result (list pskIdentity)
+let parsePskIdentities b = 
+  let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b psks ->    
+    if length b > 0 then
+      if length b >= 7 then 
+	let id, bytes = vlsplit b 2 in 
+	let ot, bytes = split bytes 4 in 
+	match parsePskIdentity (vlbytes2 id @| ot) with
+	| Correct pski -> aux bytes (psks @ [pski])
+	| Error z -> Error z
+      else error "parsePSKIdentities too few bytes"
+    else Correct psks in
+  match vlparse 2 b with
+  | Correct b -> aux b []
+  | Error z -> error "parsePskIdentities" 
 
-// TODO
-type pskBinderEntry = bytes 
-
-// TODO
-val parsePskIdentities : bytes -> result (list psk) 
-let parsePskIdentities b = admit()
-
-// val parsePskBinderEntry: bytes -> result (list pskBinderEntry)
-// SI: needs to use vlparse? 
-let parsePskBinderEntry b = admit()
-
-val client_psk_parse : bytes -> result (psk, option (list pskBinderEntry))
+val client_psk_parse : bytes -> result (psk, option binders)
 let client_psk_parse b = 
-  let ids, binders = vlsplit 2 b in // SI: this's a correct use of vlsplit. 
-  match parsePskIdentities ids with 
+  let ids, binders = vlsplit 2 b in 
+  // SI: add ids header back. 
+  match parsePskIdentities (vlbytes2 ids) with 
   | Correct ids -> 
     begin
-      match parsePskBinderEntry binders with
+      match parseBinderList binders with
       | Correct binders -> Correct (ClientPSK ids, Some binders)
       | Error z -> error "client_psk_parse_binders"
     end
   | Error z -> error "client_psk_parse_ids"
 	
-// SI: too small to be a function? 
-val server_psk_parse : bytes -> UInt16.t
-let server_psk_parse b = int_of_bytes b
+val server_psk_parse : bytes -> psk 
+let server_psk_parse b = ServerPSK (int_of_bytes b)
 
-//let parse_psk: pinverse_t psk_bytes = admit()
-val parse_psk: role -> bytes -> result (psk * option (list pskBinderEntry))
+val parse_psk: role -> bytes -> result (psk * option (list binders))
 let parse_psk role b = 
   match role with 
   | Client -> client_psk_parse b
-  | Server -> (ServerPSK (server_psk_parse b), None)
+  | Server -> (server_psk_parse b, None)
  
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
@@ -296,7 +325,8 @@ let parseServerName r b  =
 
 (* TODO: supported_groups and signature_algorithms *) 
 
-// ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2 
+// ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2. 
+// M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2. 
 noeq type extension =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
   | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)  
