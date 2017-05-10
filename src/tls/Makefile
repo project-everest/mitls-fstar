@@ -98,8 +98,6 @@ AEAD_GCM \
 MAC \
 StatefulLHAE \
 Record \
-MAC_SHA256 \
-MAC_SHA1 \
 StAE \
 KeySchedule \
 HandshakeLog \
