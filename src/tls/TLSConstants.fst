@@ -180,8 +180,8 @@ type signatureScheme =
   //| ED448
   // Legacy algorithms
   | RSA_PKCS1_SHA1
+  | RSA_PKCS1_MD5SHA1 // Only used internally, with codepoint 0xFFFF (PRIVATE_USE)
   | ECDSA_SHA1
-
   // Reserved Code Points
   | DSA_SHA1
   | DSA_SHA256
@@ -195,7 +195,7 @@ type signatureScheme =
       (0x0504 <= v /\ v <= 0x0600) \/
       (0x0604 <= v /\ v <= 0x06FF) })
   | PRIVATE_USE of (codepoint:lbytes 2 {
-      let v = int_of_bytes codepoint in 0xFE00 <= v /\ v <= 0xFFFF})
+      let v = int_of_bytes codepoint in 0xFE00 <= v /\ v < 0xFFFF})
 
 let is_handshake13_signatureScheme = function
   | ECDSA_SECP256R1_SHA256
@@ -208,7 +208,7 @@ let is_handshake13_signatureScheme = function
   | RSA_PSS_SHA512 -> true
   | _ -> false
 
-val signatureSchemeBytes: signatureScheme -> lbytes 2
+val signatureSchemeBytes: s:signatureScheme -> lbytes 2
 let signatureSchemeBytes = function
   | RSA_PKCS1_SHA256       -> abyte2 (0x04z, 0x01z)
   | RSA_PKCS1_SHA384       -> abyte2 (0x05z, 0x01z)
@@ -222,6 +222,7 @@ let signatureSchemeBytes = function
   //| ED25519                -> abyte2 (0x08z, 0x07z)
   //| ED448                  -> abyte2 (0x08z, 0x08z)
   | RSA_PKCS1_SHA1         -> abyte2 (0x02z, 0x01z)
+  | RSA_PKCS1_MD5SHA1      -> abyte2 (0xFFz, 0xFFz)
   | ECDSA_SHA1             -> abyte2 (0x02z, 0x03z)
   | DSA_SHA1               -> abyte2 (0x02z, 0x02z)
   | DSA_SHA256             -> abyte2 (0x04z, 0x02z)
@@ -245,6 +246,7 @@ let parseSignatureScheme b =
   //| (0x08z, 0x07z) -> Correct ED25519
   //| (0x08z, 0x08z) -> Correct ED448
   | (0x02z, 0x01z) -> Correct RSA_PKCS1_SHA1
+  | (0xFFz, 0xFFz) -> Correct RSA_PKCS1_MD5SHA1
   | (0x02z, 0x03z) -> Correct ECDSA_SHA1
   | (0x02z, 0x02z) -> Correct DSA_SHA1
   | (0x04z, 0x02z) -> Correct DSA_SHA256
@@ -258,7 +260,7 @@ let parseSignatureScheme b =
         (0x0504 <= v && v <= 0x0600) ||
         (0x0604 <= v && v <= 0x06FF)
      then Correct (OBSOLETE b)
-     else if 0xFE00 <= v && v <= 0xFFFF then Correct (PRIVATE_USE b)
+     else if 0xFE00 <= v && v < 0xFFFF then Correct (PRIVATE_USE b)
      else Error(AD_decode_error, "Parsed invalid SignatureScheme " ^ print_bytes b)
 
 val sigHashAlg_of_signatureScheme:
@@ -279,6 +281,7 @@ let sigHashAlg_of_signatureScheme =
   //| ED25519                -> (EdDSA,  Hash SHA512)
   //| ED448                  -> (EdDSA,  Hash SHA512)
   | RSA_PKCS1_SHA1         -> (RSASIG,    Hash SHA1)
+  | RSA_PKCS1_MD5SHA1      -> (RSASIG, MD5SHA1)
   | ECDSA_SHA1             -> (ECDSA,  Hash SHA1)
   | DSA_SHA1               -> (DSA,    Hash SHA1)
   | DSA_SHA256             -> (DSA,    Hash SHA256)
@@ -301,13 +304,16 @@ let signatureScheme_of_sigHashAlg sa ha =
   | (RSAPSS, Hash SHA512) -> RSA_PSS_SHA512
   //| ED25519               -> (EdDSA,  Hash SHA512)
   //| ED448                 -> (EdDSA,  Hash SHA512)
-  | (RSASIG,    Hash SHA1)-> RSA_PKCS1_SHA1
+  | (RSASIG, Hash SHA1)   -> RSA_PKCS1_SHA1
   | (ECDSA,  Hash SHA1)   -> ECDSA_SHA1
   | (DSA,    Hash SHA1)   -> DSA_SHA1
   | (DSA,    Hash SHA256) -> DSA_SHA256
   | (DSA,    Hash SHA384) -> DSA_SHA384
   | (DSA,    Hash SHA512) -> DSA_SHA512
-
+  | (RSASIG, MD5SHA1)     -> RSA_PKCS1_MD5SHA1
+  | _ -> // Map everything else to OBSOLETE 0x0000
+    lemma_repr_bytes_values 0x0000; int_of_bytes_of_int 2 0x0000;
+    OBSOLETE (bytes_of_int 2 0x0000)
 
 (** Encryption key sizes *)
 let encKeySize =
@@ -1571,16 +1577,17 @@ let parseConfigurationExtensions b =
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension")
 
 let signatureSchemeList =
-  algs:list signatureScheme{0 < List.Tot.length algs /\ List.Tot.length algs < 65536/2}
+  algs:list signatureScheme{0 < List.Tot.length algs /\ op_Multiply 2 (List.Tot.length algs) < 65536}
 
 (** Serializing function for a SignatureScheme list *)
 val signatureSchemeListBytes: algs:signatureSchemeList
-  -> Tot (b:bytes{2 <= length b /\ length b < 65538})
+  -> Tot (b:bytes{4 <= length b /\ length b < 65538})
 let signatureSchemeListBytes algs =
-  let rec aux: b:bytes ->
-    algs:list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs) < 65536 } ->
-    Tot (r:bytes{length r < 65536}) (decreases algs) = fun b algs ->
-    match algs with
+  let rec aux: b:bytes -> 
+  algs':list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs') == op_Multiply 2 (List.Tot.length algs) } ->
+    Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)}) 
+        (decreases algs') = fun b algs' ->
+    match algs' with
     | [] -> b
     | alg::algs' ->
       let shb = signatureSchemeBytes alg in
@@ -1590,21 +1597,31 @@ let signatureSchemeListBytes algs =
   lemma_repr_bytes_values (length pl);
   vlbytes 2 pl
 
+
 (** Parsing function for a SignatureScheme list *)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
 let parseSignatureSchemeList b =
-  let rec aux: b:bytes -> algs:list signatureScheme{length b + op_Multiply 2 (List.Tot.length algs) < 65536} -> Tot (result signatureSchemeList) (decreases (length b)) = fun b algs ->
-    if length b > 0 then
-      if length b >= 2 then
-      let alg,bytes = split b 2 in
+  match vlparse 2 b with
+  | Correct b -> 
+    let rec aux: algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
+    Tot 
+      (result (algs:list signatureScheme{op_Multiply 2 (List.Tot.length algs) == length b}))
+      (decreases (length b')) = fun algs b' ->
+    if length b' > 0 then
+      if length b' >= 2 then
+      let alg, bytes = split b' 2 in
       match parseSignatureScheme alg with
-      | Correct sha -> aux bytes (sha::algs)
+      | Correct sha -> aux (sha::algs) bytes
       | Error z     -> Error z
       else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Too few bytes to parse sig hash algs")
     else Correct algs in
-  match vlparse 2 b with
-  | Correct b -> aux b []
-  | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
+    begin
+    match aux [] b with // Silly, but necessary for typechecking
+    | Correct l -> Correct l
+    | Error z -> Error z    
+    end
+  | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
+
 
 (*
 // We use a non-tail recursive version in Extensions.fst

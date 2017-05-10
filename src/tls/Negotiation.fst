@@ -492,7 +492,9 @@ let signatureScheme_of_mode mode supported_algs =
      begin
      let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
      match find_signature_algorithms mode.n_offer with
-     | None -> Some (signatureScheme_of_sigHashAlg sa ha0)
+     | None -> 
+       Some (signatureScheme_of_sigHashAlg sa ha0)
+       // ({RSASIG, ECDSA, DSA}, {SHA1, SHA256, SHA384, SHA512})
        // TODO: check that this is correct
        // The RFC (https://tools.ietf.org/html/rfc5246#section-7.4.1.4.10)
        // says that one should always use SHA1
@@ -500,7 +502,7 @@ let signatureScheme_of_mode mode supported_algs =
      end
    | _ ->
      let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
-     Some (signatureScheme_of_sigHashAlg sa ha0) // (sa, MD5SHA1)
+     Some (signatureScheme_of_sigHashAlg sa ha0) // (RSASIG, MD5SHA1) \/ (DSA, Hash SHA1)
 
 val getSigningKey: #a:Signature.alg -> #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST (option (Signature.skey a))
