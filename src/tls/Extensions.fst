@@ -40,33 +40,60 @@ noeq type psk =
   // this is just an index in the client offer's PSK extension
   | ServerPSK of UInt16.t 
 
-//TODO
-// SI: what needs to be made with a vlbytes, and what doesn't? 
-
+//
+// Serializing 
+//
 val pski_bytes : PSK.preSharedKey * UInt32.t -> Tot bytes
 let pski_bytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
 
-// SI: add a refinement that role matched psk type. 
+// SI: 1-1 lemma will be guarded by role matching psk type. 
+// SI: check usage of vlbytes here. 
 val psk_bytes : psk -> Tot bytes 
 let psk_bytes psk = 
   match psk with 
   | ClientPSK ids ->
     let ids' = List.Tot.fold_left (fun acc pski -> acc @| pski_bytes pski) empty_bytes ids in
-    vlbytes 2 ids'
-  | ServerPSK sid -> vlbytes 1 (bytes_of_int 2 (UInt16.v sid))
+    vlbytes 2 ids' 
+  | ServerPSK sid -> bytes_of_int 2 (UInt16.v sid)
 
-//let parse_psk: pinverse_t psk_bytes = admit()
-val client_psk_parse : bytes -> result psk
 
-val server_psk_parse : bytes -> result psk 
+//
+// Parsing 
+//
 
+// TODO
 type pskBinderEntry = bytes 
 
-val parse_psk: role -> bytes -> result (psk * option pskBinderEntry)
-let parse_psk role bb = 
+// TODO
+val parsePskIdentities : bytes -> result (list psk) 
+let parsePskIdentities b = admit()
+
+// val parsePskBinderEntry: bytes -> result (list pskBinderEntry)
+// SI: needs to use vlparse? 
+let parsePskBinderEntry b = admit()
+
+val client_psk_parse : bytes -> result (psk, option (list pskBinderEntry))
+let client_psk_parse b = 
+  let ids, binders = vlsplit 2 b in // SI: this's a correct use of vlsplit. 
+  match parsePskIdentities ids with 
+  | Correct ids -> 
+    begin
+      match parsePskBinderEntry binders with
+      | Correct binders -> Correct (ClientPSK ids, Some binders)
+      | Error z -> error "client_psk_parse_binders"
+    end
+  | Error z -> error "client_psk_parse_ids"
+	
+// SI: too small to be a function? 
+val server_psk_parse : bytes -> UInt16.t
+let server_psk_parse b = int_of_bytes b
+
+//let parse_psk: pinverse_t psk_bytes = admit()
+val parse_psk: role -> bytes -> result (psk * option (list pskBinderEntry))
+let parse_psk role b = 
   match role with 
-  | Client -> client_psk_parse bb
-  | Server -> server_psk_parse bb 
+  | Client -> client_psk_parse b
+  | Server -> (ServerPSK (server_psk_parse b), None)
  
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
