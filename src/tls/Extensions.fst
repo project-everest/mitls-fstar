@@ -73,6 +73,7 @@ let client_psk_kexes_bytes (ckxs: client_psk_kexes): b:bytes {length b <= 3} =
   lemma_repr_bytes_values (length content);
   vlbytes 1 content
 
+#set-options "--lax"
 let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b -> 
   if equalBytes b (client_psk_kexes_bytes [PSK_KE]) then Correct [PSK_KE] else 
   if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE]) then Correct [PSK_DHE_KE] else
@@ -80,7 +81,7 @@ let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b ->
   if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE; PSK_KE]) then Correct [PSK_DHE_KE; PSK_KE] 
   else error "PSK KEX payload"
   // redundants lists yield an immediate decoding error.
-
+#reset-options
 
 (* EARLY DATA INDICATION *) 
 
@@ -127,11 +128,13 @@ let ecpfListBytes l =
 type protocol_versions =
   l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
+#set-options "--lax" 
 val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
 let protocol_versions_bytes vs =
   vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vs)
   // todo length bound; do we need an ad hoc variant of fold? 
-  
+#reset-options 
+
 //17-05-01 added a refinement to control the list length; this function verifies.
 //17-05-01 should we use generic code to parse such bounded lists?
 //REMARK: This is not tail recursive, contrary to most of our parsing functions
@@ -330,6 +333,7 @@ let extensionHeaderBytes ext =
 (* API *)
 
 // Missing refinements in `extension` type constructors to be able to prove the length bound
+#set-options "--lax"
 (** Serializes an extension payload *)
 val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
 let rec extensionPayloadBytes = function
@@ -348,6 +352,7 @@ let rec extensionPayloadBytes = function
   | E_extended_ms              -> empty_bytes
   | E_ec_point_format l        -> ecpfListBytes l
   | E_unknown_extension (_,b)  -> b
+#reset-options
 
 (** Serializes an extension *)
 val extensionBytes: ext:extension -> b:bytes { length b < 65536 }
@@ -410,7 +415,7 @@ let parseEcpfList b =
       else error "uncompressed point format not supported"
 
 (* We don't care about duplicates, not formally excluded. *)
-
+#set-options "--lax"
 val parseExtension: role -> bytes -> result extension
 let parseExtension role b =
   if length b < 4 then error "extension type: not enough bytes" else 
@@ -489,6 +494,7 @@ let parseOptExtensions r data =
   if length data = 0 
   then Correct None
   else mapResult Some (parseExtensions r data)
+#reset-options 
 
 
 (*************************************************
@@ -500,11 +506,13 @@ private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSui
   match l with 
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
-  
+
+#set-options "--lax"
 private let rec list_valid_ng_is_list_ng (l:list valid_namedGroup) : list namedGroup = 
   match l with 
   | [] -> [] 
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
+#reset-options 
 
 (* SI: API. Called by Nego. *)
 (* RFC 4.2:
@@ -522,7 +530,7 @@ If containing a “supported_groups” extension, it MUST also contain a
 vector is permitted.
 
 *)
-
+#set-options "--lax"
 val prepareExtensions: 
   protocolVersion ->
   protocolVersion -> 
@@ -574,7 +582,7 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
-
+#reset-options
 (*
 // TODO the code above is too restrictive, should support further extensions
 // TODO we need an inverse; broken due to extension ordering. Use pure views instead?
@@ -645,6 +653,7 @@ let parseRenegotiationInfo b =
 // TODO
 // ADL the negotiation of renegotiation indication is incorrect
 // ADL needs to be consistent with clientToNegotiatedExtension
+#set-options "--lax"
 private val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> result negotiatedExtensions -> extension -> Tot (result (negotiatedExtensions))
 let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : result (negotiatedExtensions)=
     match res with
@@ -715,6 +724,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
        else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
      end 
+#reset-options
 
 private val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> option extension
 let clientToServerExtension pv cfg cs ri ks resuming cext =
