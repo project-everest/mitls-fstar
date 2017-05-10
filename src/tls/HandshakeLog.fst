@@ -22,7 +22,6 @@ module HS = FStar.HyperStack
 (* A flag for runtime debugging of handshakelog data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-inline_for_extraction let hsl_debug = true
 val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -31,7 +30,7 @@ let print s = discard (IO.debug_print_string ("HSL| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if hsl_debug then print else (fun _ -> ())
+unfold let trace = if Flags.debug_HSL then print else (fun _ -> ())
 
 
 let erased_transcript : Type0 =

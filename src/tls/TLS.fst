@@ -32,7 +32,6 @@ module EP   = Epochs
 (* A flag for runtime debugging of TLS data. 
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false *)
-inline_for_extraction let tls_debug = true
 val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -41,7 +40,7 @@ let print s = discard (IO.debug_print_string ("TLS| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if tls_debug then print else (fun _ -> ())
+unfold let trace = if Flags.debug_TLS then print else (fun _ -> ())
 
 
 unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n // s.[n] 

@@ -26,7 +26,16 @@ open FFICallbacks
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-inline_for_extraction let ffi_debug = false
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("EPO| "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if Flags.debug_FFI then print else (fun _ -> ())
+
 
 private let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length }) : fragment i (point (length b)) = 
   let rg : frange i = point(length b) in 
@@ -59,8 +68,7 @@ private let errno description txt : ML int =
     match description with 
     | Some ad -> TLSError.string_of_ad ad
     | None    -> "(None)" in (
-  if ffi_debug then 
-    IO.print_string ("returning error: "^txt0^" "^txt^"\n"); (
+  trace ("returning error: "^txt0^" "^txt^"\n"); (
   match description with 
   | Some ad -> Char.int_of_char (snd (cbyte2 (Alert.alertBytes ad)))
   | None    -> -1 ))
@@ -106,10 +114,7 @@ let write c msg : ML int =
 // the full shutdown (but many servers don't acknowledge).
 
 let close c : ML int = 
-  let b = 
-    if ffi_debug then
-      IO.debug_print_string "FFI close\n" 
-    else false in 
+  trace ("FFI close\n"); 
   match writeCloseNotify c with 
   | WriteClose                 -> 0
   | WriteError description txt -> errno description txt
