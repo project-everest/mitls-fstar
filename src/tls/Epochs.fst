@@ -1,9 +1,12 @@
+(*--build-config
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
+--*)
 module Epochs
 
-(* 
-    This modules implements the mutable state for the successive StAE epochs allocated by KeySchedule and used by TLS. 
+(*
+    This modules implements the mutable state for the successive StAE epochs allocated by KeySchedule and used by TLS.
     Its separation from Handshake and coding is somewhat arbitrary.
-    An elaboration would ensure that keys in old epochs are erased. 
+    An elaboration would ensure that keys in old epochs are erased.
     (i.e. we only keep old epoch AE logs for specifying authentication)
 *)
 
@@ -28,7 +31,7 @@ module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
-type random = TLSInfo.random 
+type random = TLSInfo.random
 
 (* debug printing *)
 val discard: bool -> ST unit
@@ -47,10 +50,10 @@ type epoch_region_inv (#i:id) (hs_rgn:rgn) (r:reader (peerId i)) (w:writer i) =
   parent (region w) <> HH.root /\
   parent (region r) <> HH.root /\
   // grandparent of each writer is a sibling of the handshake
-  parent hs_rgn = parent (parent (region w))  /\ 
+  parent hs_rgn = parent (parent (region w))  /\
   disjoint (region w) (region r) /\
   // they are all colored as epoch regions
-  is_epoch_rgn (region w) /\ 
+  is_epoch_rgn (region w) /\
   is_epoch_rgn (region r) /\
   is_epoch_rgn (parent (region w)) /\
   is_epoch_rgn (parent (region r)) /\
@@ -86,17 +89,17 @@ let reveal_epoch_region_inv (#hs_rgn:rgn) (#n:random) (e:epoch hs_rgn n)
   : Lemma (let r = Epoch?.r e in
        let w = Epoch?.w e in
        epoch_region_inv hs_rgn r w)
-= 
+=
   ()
 
 let writer_epoch (#hs_rgn:rgn) (#n:random) (e:epoch hs_rgn n)
   : Tot (w:writer (e.i) {epoch_region_inv hs_rgn (Epoch?.r e) w})
-= 
+=
   Epoch?.w e
 
 let reader_epoch (#hs_rgn:rgn) (#n:random) (e:epoch hs_rgn n)
   : Tot (r:reader (peerId e.i) {epoch_region_inv hs_rgn r (Epoch?.w e)})
-= 
+=
   Epoch?.r e
 
 (* The footprint just includes the writer regions *)
@@ -126,29 +129,29 @@ type epoch_ctr_inv (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
 type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
   m_rref r (epoch_ctr_inv r es) increases
 
-// As part of the handshake state, 
-// we keep a sequence of allocated epochs, 
+// As part of the handshake state,
+// we keep a sequence of allocated epochs,
 // together with counters for reading and writing
 //NS: probably need some anti-aliasing invariant of these three references
-//17-04-17 CF: consider switching to a single reference to a triple. 
-noeq type epochs (r:rgn) (n:random) = | MkEpochs: 
+//17-04-17 CF: consider switching to a single reference to a triple.
+noeq type epochs (r:rgn) (n:random) = | MkEpochs:
   es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
   read: epoch_ctr r es ->
   write: epoch_ctr r es -> epochs r n
 
 let containsT (#r:rgn) (#n:random) (es:epochs r n) (h:mem) =
-    MS.i_contains (MkEpochs?.es es) h 
+    MS.i_contains (MkEpochs?.es es) h
 
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
   ST (is:MS.i_seq r a p & c1:epoch_ctr r is & c2:epoch_ctr r is)
     (requires (fun h -> p Seq.createEmpty))
     (ensures (fun h0 x h1 ->
-      modifies_one r h0 h1 /\ 
-      modifies_rref r Set.empty (HS.HS?.h h0) (HS.HS?.h h1) /\ 
+      modifies_one r h0 h1 /\
+      modifies_rref r Set.empty (HS.HS?.h h0) (HS.HS?.h h1) /\
       (let (| is, c1, c2 |) = x in
       i_contains is h1 /\
       m_contains c1 h1 /\
-      m_contains c2 h1 /\ 
+      m_contains c2 h1 /\
       i_sel h1 is == Seq.createEmpty)))
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
@@ -177,7 +180,7 @@ let incr_epoch_ctr #a #p #r #is ctr =
   MS.int_at_most_is_stable is (cur + 1);
   witness is (int_at_most (cur + 1) is);
   m_write ctr (cur + 1)
-       
+
 val create: r:rgn -> n:random -> ST (epochs r n)
     (requires (fun h -> True))
     (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ modifies_rref r Set.empty (HS.HS?.h h0) (HS.HS?.h h1)))
@@ -196,7 +199,7 @@ unfold let incr_post #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ct
   let newr = m_sel h1 ctr in
   let ctr_as_hsref = MR.as_hsref ctr in
   modifies_one r h0 h1 /\
-  HH.modifies_rref r (Set.singleton (Heap.addr_of (HH.as_ref (MkRef?.ref ctr_as_hsref)))) (HS.HS?.h h0) (HS.HS?.h h1) /\ 
+  HH.modifies_rref r (Set.singleton (Heap.addr_of (HH.as_ref (MkRef?.ref ctr_as_hsref)))) (HS.HS?.h h0) (HS.HS?.h h1) /\
   newr = oldr + 1
 
 val add_epoch :
@@ -212,7 +215,7 @@ let add_epoch #r #n (MkEpochs es _ _) e = MS.i_write_at_end es e
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
 
-let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with 
+let ctr (#r:_) (#n:_) (e:epochs r n) (rw:rw) = match rw with
   | Reader -> e.read
   | Writer -> e.write
 
@@ -224,38 +227,38 @@ let string_of_es #r #n (es:epochs r n) =
 let incr_reader #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs?.read))
     (ensures (incr_post es MkEpochs?.read))
-= 
+=
   incr_epoch_ctr (MkEpochs?.read es);
   trace ("reader++ "^string_of_es es)
 
 let incr_writer #r #n (es:epochs r n) : ST unit
     (requires (incr_pre es MkEpochs?.write))
     (ensures (incr_post es MkEpochs?.write))
-= 
+=
   incr_epoch_ctr (MkEpochs?.write es);
   trace ("writer++ "^string_of_es es)
 
- 
+
 val readerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
 let readerT #rid #n (MkEpochs es r w) (h:mem) = m_sel h r
 
 val writerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
 let writerT #rid #n (MkEpochs es r w) (h:mem) = m_sel h w
 
-unfold let get_ctr_post (#r:rgn) (#n:random) (es:epochs r n) (rw:rw) h0 (i:int) h1 = 
+unfold let get_ctr_post (#r:rgn) (#n:random) (es:epochs r n) (rw:rw) h0 (i:int) h1 =
   let epochs = MkEpochs?.es es in
-  h0 == h1 /\ 
-  i = m_sel h1 (ctr es rw) /\ 
-  -1 <= i /\ 
+  h0 == h1 /\
+  i = m_sel h1 (ctr es rw) /\
+  -1 <= i /\
   MS.int_at_most i epochs h1
 
 let get_ctr (#r:rgn) (#n:random) (es:epochs r n) (rw:rw)
   : ST int (requires (fun h -> True)) (ensures (get_ctr_post es rw))
-= 
+=
   let epochs = es.es in
   let n = m_read (ctr es rw) in
   testify (MS.int_at_most n epochs);
-  n      
+  n
 
 let get_reader (#r:rgn) (#n:random) (es:epochs r n) = get_ctr es Reader
 let get_writer (#r:rgn) (#n:random) (es:epochs r n) = get_ctr es Writer
@@ -269,18 +272,22 @@ let get_current_epoch
   (rw:rw)
   : ST (epoch r n)
        (requires (fun h -> 0 <= m_sel h (ctr e rw)))
-       (ensures (fun h0 rd h1 -> 
+       (ensures (fun h0 rd h1 ->
            let j = m_sel h1 (ctr e rw) in
            let epochs = MS.i_sel h1 e.es in
            h0==h1 /\
            Seq.indexable epochs j /\
            rd == Seq.index epochs j))
-= 
-  let j = get_ctr e rw in 
+=
+  let j = get_ctr e rw in
   let epochs = MS.i_read e.es in
   Seq.index epochs j
 
-val recordInstanceToEpoch: 
-  #r:rgn -> #n:random -> hs:Negotiation.handshake -> 
+val recordInstanceToEpoch:
+  #r:rgn -> #n:random -> hs:Negotiation.handshake ->
   ks:KeySchedule.recordInstance -> Tot (epoch r n)
-let recordInstanceToEpoch #hs_rgn #n hs (KeySchedule.StAEInstance #i rd wr) = Epoch hs rd wr
+let recordInstanceToEpoch #hs_rgn #n hs ri =
+  let KeySchedule.StAEInstance #i rd wr = ri in
+  assume(nonce_of_id i = n); // ADL: KS will need to provove this
+  assume(epoch_region_inv' hs_rgn rd wr);
+  Epoch #hs_rgn #n #i hs rd wr
