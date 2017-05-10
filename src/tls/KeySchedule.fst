@@ -965,7 +965,7 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
   let alpha = (pv, cs, ems) in
   let gy, pmsb = CommonDH.dh_responder #g gx in
   let () =
-    if ks_debug then
+    if Flags.debug_KS then
       let _ = print_share gx in
       let _ = print_share gy in
       let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
@@ -979,7 +979,7 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
       let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48 in
       let _ =
-        if ks_debug then
+        if Flags.debug_KS then
            IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
         else false in
       let msId = StandardMS dhpmsId csr kef in
