@@ -78,6 +78,10 @@ let seq_of_bytes b = int_of_bytes b
 val vlbytes: lSize:nat -> b:bytes{repr_bytes (length b) <= lSize} -> Tot (r:bytes{length r = lSize + length b})
 let vlbytes lSize b = bytes_of_int lSize (length b) @| b
 
+// avoiding explicit applications of the representation lemmas
+let vlbytes1 (b:bytes {length b < pow2 8}) = lemma_repr_bytes_values (length b); vlbytes 1 b
+let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b); vlbytes 2 b
+
 (** Lemmas associated to bytes manipulations *)
 val lemma_vlbytes_len : i:nat -> b:bytes{repr_bytes (length b) <= i}
   -> Lemma (ensures (length (vlbytes i b) = i + length b))
