@@ -29,13 +29,12 @@ module H = Hashing.Spec
 (* A flag for runtime debugging of computed keys.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false *)
-inline_for_extraction let ks_debug = true
 let discard (b:bool): ST unit (requires (fun _ -> True))
  (ensures (fun h0 _ h1 -> h0 == h1)) = ()
 let print s = discard (IO.debug_print_string ("KS | "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if ks_debug then print else (fun _ -> ())
+  if Flags.debug_KS then print else (fun _ -> ())
 
 #set-options "--lax"
 
