@@ -324,10 +324,6 @@ let coerce #a pkr skr =
   alloc_pubkey Corrupt pkr, skr
 
 
-(* ------------------------------------------------------------------------ *)
-(* TODO: Remove this by comparing/setting only `a.core` in `endorse` and `lookup_key` *)
-assume HasEq_alg_unsound: hasEq alg
-
 val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr == a.core} -> ST pkey
   (requires (fun _ -> True))
   (ensures  (fun h0 k h1 ->
@@ -339,7 +335,10 @@ let endorse #a pkr =
   let keys = m_read rkeys in
   match find_key pkr keys with
   | Some k ->
-    if pkey_alg k = a then k
+    if (pkey_alg k).core = a.core then begin
+      assume (pkey_alg k == a);  //AR: 05/10: adding it to ensure postcondition, the code below relies on it
+      k
+    end
     else (| a, alloc_pubkey Corrupt pkr |)
   | None   -> (| a, alloc_pubkey Corrupt pkr |)
 
