@@ -22,16 +22,15 @@ open FStar.ST
 module MR = FStar.Monotonic.RRef
 module MM = MonotoneMap
 
-(* A flag for runtime debugging of handshakelog data.
+(* A flag for runtime debugging of cDH data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-inline_for_extraction let cdh_debug = true
 let discard (b:bool): ST unit (requires (fun _ -> True))
  (ensures (fun h0 _ h1 -> h0 == h1)) = ()
 let print s = discard (IO.debug_print_string ("CDH| "^s^"\n"))
 unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if cdh_debug then print else (fun _ -> ())
+  if Flags.debug_CDH then print else (fun _ -> ())
 
 type group' =
   | FFDH of DHGroup.group

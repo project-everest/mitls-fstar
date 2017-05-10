@@ -17,7 +17,15 @@ open Content
 (* A flag for runtime debugging of record data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-inline_for_extraction let r_debug = false
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("EPO| "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if Flags.debug_Record then print else (fun _ -> ())
 
 // ------------------------outer packet format -------------------------------
 
@@ -40,10 +48,7 @@ let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
 //      ctBytes ct 
 //   @| versionBytes ver
    @| bytes_of_int 2 (length data) in
-  let _ = 
-    if r_debug then
-     IO.debug_print_string (" RECORD HEADERS: "^(print_bytes header)^"\n") 
-    else false in
+  trace (" RECORD HEADERS: "^(print_bytes header)^"\n"); 
   header @| data 
 
 
