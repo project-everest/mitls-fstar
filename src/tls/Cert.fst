@@ -49,52 +49,43 @@ let rec certificateListBytes13 = function
 
 val certificateListBytes_is_injective: c1:chain -> c2:chain ->
   Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
-let rec certificateListBytes_is_injective c1 c2 = admit ()
-
-val certificateListBytes13_is_injective: c1:chain13 -> c2:chain13 ->
-  Lemma (Seq.equal (certificateListBytes13 c1) (certificateListBytes13 c2) ==> c1 == c2)
-let rec certificateListBytes13_is_injective c1 c2 = admit ()
-
-(*
-  let b1 = certificateListBytes pv c1 in
-  let b2 = certificateListBytes pv c2 in
+let rec certificateListBytes_is_injective c1 c2 =
   match c1, c2 with
   | [], [] -> ()
   | hd::tl, hd'::tl' ->
-    if b1 = b2 then
+    if certificateListBytes c1 = certificateListBytes c2 then
       begin
+      lemma_repr_bytes_values (length hd); lemma_repr_bytes_values (length hd');
+      cut(Seq.equal ((vlbytes 3 hd) @| (certificateListBytes tl)) ((vlbytes 3 hd') @| (certificateListBytes tl')));
       lemma_repr_bytes_values (length hd);
       lemma_repr_bytes_values (length hd');
-      lemma_repr_bytes_values 0;
-      assert(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3) (Seq.slice b1 0 3));
-      assert(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3) (Seq.slice b1 0 3));
+      cut(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3) (Seq.slice (certificateListBytes c1) 0 3));
+      cut(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3) (Seq.slice (certificateListBytes c1) 0 3));
       vlbytes_length_lemma 3 hd hd';
-      // TLS 1p3
-      lemma_append_inj (vlbytes 3 hd)  (vlbytes 2 empty_bytes @| certificateListBytes pv tl) (vlbytes 3 hd') (vlbytes 2 empty_bytes @| certificateListBytes pv tl');
-      lemma_append_inj (vlbytes 2 empty_bytes) (certificateListBytes pv tl) (vlbytes 2 empty_bytes) (certificateListBytes pv tl');
+      lemma_append_inj (vlbytes 3 hd) (certificateListBytes tl) (vlbytes 3 hd') (certificateListBytes tl');
       lemma_vlbytes_inj 3 hd hd';
-      // TLS classic
-      lemma_append_inj (vlbytes 3 hd) (certificateListBytes pv tl) (vlbytes 3 hd') (certificateListBytes pv tl');
-      certificateListBytes_is_injective pv tl tl';
-      assert(c1 == c2)
+      certificateListBytes_is_injective tl tl'
       end
   | [], hd::tl ->
     begin
-    assert_norm (length b1 == 0);
+    cut (length (certificateListBytes c1) = 0);
     lemma_repr_bytes_values (length hd);
-    lemma_repr_bytes_values 0;
-    lemma_vlbytes_len 3 hd;
-    assert(c1 == c2)
+    cut (Seq.equal (certificateListBytes c2) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+    lemma_vlbytes_len 3 hd
     end
   | hd::tl, [] ->
     begin
-    assert_norm (length b2 == 0);
+    cut (length (certificateListBytes c2) = 0);
     lemma_repr_bytes_values (length hd);
-    lemma_repr_bytes_values 0;
-    lemma_vlbytes_len 3 hd;
-    assert (c1 == c2)
+    cut (Seq.equal (certificateListBytes c1) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+    lemma_vlbytes_len 3 hd
     end
-*)
+
+val certificateListBytes13_is_injective: c1:chain13 -> c2:chain13 ->
+  Lemma (Seq.equal (certificateListBytes13 c1) (certificateListBytes13 c2) ==> c1 == c2)
+let rec certificateListBytes13_is_injective c1 c2 = 
+  // TODO: need injectivity lemmas for extensions
+  admit()
 
 let endpoint_keytype (c:chain) : option CoreCrypto.key =
   match c with
@@ -149,18 +140,7 @@ let rec lemma_parseCertificateList_length b =
     | Correct (hd::tl) ->
       begin
       match vlsplit 3 b with
-      | Correct (c, r) ->
-        begin
-        if length r < 2 then ()
-        else
-          match vlsplit 2 r with
-          | Correct (e, r) ->
-            begin
-            assume (e == empty_bytes); // FIXME: we don't parse cert. extensions yet
-            lemma_parseCertificateList_length r
-            end
-          | _ -> ()
-        end
+      | Correct (c, r) -> lemma_parseCertificateList_length r
       | _ -> ()
       end
     | _ -> ()
