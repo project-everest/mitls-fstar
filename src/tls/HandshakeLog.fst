@@ -34,15 +34,15 @@ unfold let trace = if Flags.debug_HSL then print else (fun _ -> ())
 
 
 let erased_transcript : Type0 =
-    if hsl_debug then hs_transcript
+    if Flags.debug_HSL then hs_transcript
     else FStar.Ghost.erased hs_transcript
 
 let reveal_log (l:erased_transcript) : GTot (hs_transcript) =
-    if hsl_debug then l
+    if Flags.debug_HSL then l
     else FStar.Ghost.reveal l
 
 let hide_log (l:hs_transcript) : Tot erased_transcript =
-    if hsl_debug then l
+    if Flags.debug_HSL then l
     else FStar.Ghost.hide l
 
 val transcript_version: hsl:erased_transcript -> GTot (option protocolVersion)
@@ -56,14 +56,14 @@ let transcript_version hsl =
 
 let empty_hs_transcript : erased_transcript = hide_log []
 let extend_hs_transcript (l:erased_transcript) (m:msg) : Tot erased_transcript =
-    if hsl_debug then append_transcript l [m]
+    if Flags.debug_HSL then append_transcript l [m]
     else FStar.Ghost.elift1 (fun l -> append_transcript l [m]) l
 let append_hs_transcript (l:erased_transcript) (ml:list msg) : Tot erased_transcript =
-    if hsl_debug then append_transcript l ml
+    if Flags.debug_HSL then append_transcript l ml
     else FStar.Ghost.elift1 (fun l -> append_transcript l ml) l
 
 let print_hsl (hsl:erased_transcript) : Tot bool =
-    if hsl_debug then
+    if Flags.debug_HSL then
     let sl = List.Tot.map HandshakeMessages.string_of_handshakeMessage hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
     IO.debug_print_string ("Current log: " ^ s)
@@ -140,7 +140,7 @@ let hashAlg h st =
 
 //  specification-level transcript of all handshake messages logged so far
 let transcript h t =
-    if hsl_debug then
+    if Flags.debug_HSL then
     (sel h t).transcript
     else
     FStar.Ghost.reveal ((sel h t).transcript)
@@ -175,7 +175,7 @@ val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
 let getHash #ha (LOG #reg st) =
     let cst = !st in
     let b =
-        if hsl_debug then
+        if Flags.debug_HSL then
             print_hsl cst.transcript
         else false in
     Hashing.finalize #ha cst.hash
