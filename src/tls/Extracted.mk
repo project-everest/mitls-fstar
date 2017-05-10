@@ -86,13 +86,14 @@ $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
 	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 
+# We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
 mitls.cmxa: \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/LowCProvider.cmxa \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	$(ODIR)/.deporder $(ODIR)/FFI.cmx
-	ocamlfind ocamlopt $(OCAML_INCLUDE_PATHS) -a `cat $(ODIR)/.deporder` -o mitls.cmxa
+	ocamlfind ocamlopt $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` -o mitls.cmxa
 
 mitls.exe: mitls.cmxa test/mitls.cmx
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
