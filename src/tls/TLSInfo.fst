@@ -31,70 +31,68 @@ let rec ec_ff_to_ng ecl ffl =
     | ff :: r -> (FFDHE ff) :: (ec_ff_to_ng ecl r)
     | [] -> [])
 
-#set-options "--initial_fuel 10 --max_fuel 10"
+let default_cipherSuites =
+  [ TLS_RSA_WITH_AES_128_GCM_SHA256;
+    TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
+    TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
+    TLS_RSA_WITH_AES_128_CBC_SHA;
+    TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
+    TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
+    TLS_RSA_WITH_3DES_EDE_CBC_SHA
+  ] 
+
+let default_signatureSchemes = 
+ [ ECDSA_SECP521R1_SHA512;
+   ECDSA_SECP384R1_SHA384;
+   ECDSA_SECP256R1_SHA256;
+   // Not yet implemented in Signature
+   //RSA_PSS_SHA512;
+   //RSA_PSS_SHA384;
+   //RSA_PSS_SHA256;
+   RSA_PKCS1_SHA512;
+   RSA_PKCS1_SHA384;
+   RSA_PKCS1_SHA256;
+   ECDSA_SHA1;
+   RSA_PKCS1_SHA1
+ ]
+
 val defaultConfig : config
 let defaultConfig =
-    let sigPref = [CoreCrypto.ECDSA; CoreCrypto.RSAPSS; CoreCrypto.RSASIG] in
-    let hashPref = Hashing.Spec.([Hash SHA512; Hash SHA384; Hash SHA256; Hash SHA1]) in
-    let sigAlgPrefs = [
-      ECDSA_SECP521R1_SHA512;
-      ECDSA_SECP384R1_SHA384;
-      ECDSA_SECP256R1_SHA256;
-      // Not yet implemented in Signature
-      //RSA_PSS_SHA512;
-      //RSA_PSS_SHA384;
-      //RSA_PSS_SHA256;
-      RSA_PKCS1_SHA512;
-      RSA_PKCS1_SHA384;
-      RSA_PKCS1_SHA256;
-      ECDSA_SHA1;
-      RSA_PKCS1_SHA1
-      ] in
-    let l =         [ TLS_RSA_WITH_AES_128_GCM_SHA256;
-                      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-                      TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
-                      TLS_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
-                      TLS_RSA_WITH_3DES_EDE_CBC_SHA;
-                    ] in
-    let curves = CoreCrypto.([ECC_P521; ECC_P384; ECC_P256]) in
-    let ffdh = [FFDHE4096; FFDHE3072] in
-    let groups = ec_ff_to_ng curves ffdh in
+  let curves = CoreCrypto.([ECC_P521; ECC_P384; ECC_P256]) in
+  let ffdh = [FFDHE4096; FFDHE3072] in
+  let groups = ec_ff_to_ng curves ffdh in
+  assert_norm (List.Tot.length (cipherSuites_of_nameList default_cipherSuites) < 256);
+  assert_norm (List.Tot.length default_signatureSchemes < 65536/2);
+  {
+  minVer = TLS_1p0;
+  maxVer = TLS_1p2;
+  ciphersuites = cipherSuites_of_nameList default_cipherSuites;
+  compressions = [NullCompression];
+  namedGroups = groups;
+  signatureAlgorithms = default_signatureSchemes;
 
-    cut (List.Tot.length l == 7);//this requires 8 unfoldings
-    let csn = cipherSuites_of_nameList l in
-    {
-    minVer = TLS_1p0;
-    maxVer = TLS_1p2;
-    ciphersuites = csn;
-    compressions = [NullCompression];
-    namedGroups = groups;
-    signatureAlgorithms = sigAlgPrefs;
+  honourHelloReq = true;
+  allowAnonCipherSuite = false;
 
-    honourHelloReq = true;
-    allowAnonCipherSuite = false;
+  request_client_certificate = false;
+  check_client_version_in_pms_for_old_tls = true;
+  cert_chain_file = "server.pem";
+  private_key_file = "server.key";
 
-    request_client_certificate = false;
-    check_client_version_in_pms_for_old_tls = true;
-    cert_chain_file = "server.pem";
-    private_key_file = "server.key";
+  safe_renegotiation = true;
+  safe_resumption = true;
+  peer_name = None; // Disables hostname validation
+  check_peer_certificate = true;
+  ca_file = "CAFile.pem";
 
-    safe_renegotiation = true;
-    safe_resumption = true;
-    peer_name = None; // Disables hostname validation
-    check_peer_certificate = true;
-    ca_file = "CAFile.pem";
+  sessionDBFileName = "sessionDBFile.bin";
+  sessionDBExpiry = newTimeSpan 1 0 0 0; (*@ one day, as suggested by the RFC *)
 
-    sessionDBFileName = "sessionDBFile.bin";
-    sessionDBExpiry = newTimeSpan 1 0 0 0; (*@ one day, as suggested by the RFC *)
-
-    dhDBFileName = DHDB.defaultFileName;
-    dhDefaultGroupFileName = "default-dh.pem";
-    dhPQMinLength = DHDB.defaultPQMinLength;
-    }
-#reset-options
-
+  dhDBFileName = DHDB.defaultFileName;
+  dhDefaultGroupFileName = "default-dh.pem";
+  dhPQMinLength = DHDB.defaultPQMinLength;
+  }
+    
 // -------------------------------------------------------------------
 // Client/Server randomness (implemented in Nonce)
 
