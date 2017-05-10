@@ -333,7 +333,8 @@ val endorse: #a:alg -> pkr:public_repr{sigAlg_of_public_repr pkr == a.core} -> S
   (ensures  (fun h0 k h1 ->
 	     pkey_alg k == a
 	     /\ pkey_repr k = pkr
-             /\ (forall k'. generated k' h1 /\ pkey_repr k' == pkr /\ pkey_alg k' == a ==> k == k')))
+             /\ (forall k'. generated k' h1 /\ pkey_repr k' = pkr /\ pkey_alg k' == a ==> (dfst k == dfst k' /\
+	                                                                            PK?.repr (dsnd k) == PK?.repr (dsnd k'))))) //AR: 04/27: we don't get equality of refs anymore, we can get their addresses are equal, if we can show that one of them is contained in the heap
 let endorse #a pkr =
   let keys = m_read rkeys in
   match find_key pkr keys with
@@ -397,7 +398,8 @@ let lookup_key #a keyfile =
     | Some (| a', p |) ->
       if a'.core = a.core then // if a' = a then // Not computable in extracted code
       begin
-        witness rkeys (generated (|a,p|));
+        assume (a == a');  //AR: 05/10: relying on equality of alg
+        witness rkeys (generated (|a, p|));
         Some (p, skr)
       end
       else
