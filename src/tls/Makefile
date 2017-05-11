@@ -43,14 +43,14 @@ LLDIR=$(HACL_HOME)/secure_api
 LCDIR=$(LLDIR)/LowCProvider
 
 # Modules that are implemented in ML or C
-NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) CoreCrypto LowCProvider FFICallbacks)
+NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) CoreCrypto DHDB LowCProvider FFICallbacks)
 
 HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $(HACL_INCLUDES) --include $(FFI_HOME) --include $(FSTAR_HOME)/ulib/hyperstack
 
 OCAMLPKG=-package batteries,stdint,fileutils,sqlite3,zarith
 OCAMLOPTS=$(OCAMLPKG) -linkpkg -g -thread -w -a
-OCAML_PATHS=test $(ODIR) $(FSTAR_HOME)/ulib/ml/extracted $(FSTAR_HOME)/ulib/ml/hyperstack $(FSTAR_HOME)/ulib/ml $(FSTAR_HOME)/ucontrib/Platform/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/db $(LCDIR) ../../libs/ml $(FFI_HOME)
+OCAML_PATHS=test $(ODIR) $(FSTAR_HOME)/ulib/ml/extracted $(FSTAR_HOME)/ulib/ml/hyperstack $(FSTAR_HOME)/ulib/ml $(FSTAR_HOME)/ucontrib/Platform/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/db $(LCDIR) $(FFI_HOME)
 OCAML_INCLUDE_PATHS=$(addprefix -I ,$(OCAML_PATHS))
 
 # Since quite a few people forget to set that in their path... eventually,
