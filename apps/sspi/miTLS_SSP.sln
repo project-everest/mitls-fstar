@@ -1,0 +1,40 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26403.7
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "miTLS_SSP", "miTLS_SSP.vcxproj", "{408553C3-2511-40F8-8D79-C4E3F21F8030}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Detours Debug|x64 = Detours Debug|x64
+		Detours Debug|x86 = Detours Debug|x86
+		Detours Release|x64 = Detours Release|x64
+		Detours Release|x86 = Detours Release|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Debug|x64.ActiveCfg = Debug|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Debug|x64.Build.0 = Debug|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Debug|x86.ActiveCfg = Debug|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Debug|x86.Build.0 = Debug|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x64.ActiveCfg = Detours Debug|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x64.Build.0 = Detours Debug|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x86.ActiveCfg = Detours Debug|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x86.Build.0 = Detours Debug|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x64.ActiveCfg = Detours Release|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x64.Build.0 = Detours Release|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x86.ActiveCfg = Detours Release|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x86.Build.0 = Detours Release|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Release|x64.ActiveCfg = Release|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Release|x64.Build.0 = Release|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Release|x86.ActiveCfg = Release|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

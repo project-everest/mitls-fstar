@@ -33,7 +33,6 @@ unfold val trace_tcp: s:string -> ST unit
 unfold let trace_tcp = if ffi_debug then print_tcp else (fun _ -> ())
 
 
-
 private let rec readAll c : ML unit = // auxiliary while loop for reading the full response
   match read c with
   | Received extra -> trace ("Received data:\n"^iutf8 extra); readAll c
@@ -64,44 +63,42 @@ let client config host port =
     | _  -> trace "write error"))
   | _, err  -> trace "connect error" )
 
-
-(* TBC one we extend FFI.fst to server 
-let rec aux_server config sock =
-  let con = FFI.accept sock config in
-  match TLS.read con id with
-  | Complete ->
-   begin
-    let id = TLS.currentId con Reader in
-    match TLS.read con id with
-    | Read (DataStream.Data d) ->
-     begin
-      let db = DataStream.appBytes d in
+//let aux_server config client : ML unit = pr ("Success")
+let single_server config client : ML unit =
+  let send x = let b = trace_tcp ":send\n" in Platform.Tcp.send client x in
+  let recv x = let b = trace_tcp ":recv\n" in Platform.Tcp.recv client x in
+  match FFI.accept_connected send recv config with
+  | c, 0 ->
+    begin
+    match FFI.read c with
+    | Received db ->
+      begin
       trace ("Received data: "^(iutf8 db));
-      let text = "You are connected to miTLS* 1.3!\r\n"
+      let text = "You are connected to miTLS*!\r\n"
         ^ "This is the request you sent:\r\n\r\n" ^ (iutf8 db) in
       let payload = utf8 ("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:"
         ^ (string_of_int (length (abytes text))) 
         ^ "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" ^ text) in
-      let id = TLS.currentId con Writer in
-      let rg : Range.frange id = Range.point (length payload) in
-      let f = DataStream.appFragment id rg payload in
-      match TLS.write con f with
-      | Written  ->
-       begin
-        let id = TLS.currentId con Reader in
-        match TLS.read con id with
-        | Read DataStream.Close -> trace "Received close_notify! Closing socket.\n"
+      match FFI.write c payload with
+      | 0 -> 
+        begin
+        match FFI.read c with
+        | Errno 0 -> trace "received close_notify! Closing socket.\n"
         | _ -> trace "improperly closed connection\n"
-       end
-      | _ -> trace "failed to write HTTP response\n"
-     end
-    | _ -> trace "unexpted ioresult_w\n"
-   end
-  | _ -> trace "unexpected ioresult_i read\n"
-  in aux_server config sock
+        end
+      | _ -> trace "failed to write HTTP response"
+      end
+    | _ -> trace "unexpected FFI.read result"
+    end
+  | _ -> trace "accept_connected error"
+ 
+let rec aux_server config sock : ML unit =
+ let client = Platform.Tcp.accept sock in
+ let _ = single_server config client in
+ aux_server config sock
+
 
 let server config host port =
- trace "===============================================\n Starting test TLS 1.3 server...\n";
+ trace "===============================================\n Starting test TLS server...\n";
  let sock = Platform.Tcp.listen host port in
  aux_server config sock
-*)

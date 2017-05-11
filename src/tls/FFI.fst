@@ -10,8 +10,6 @@ module FFI
 // TODO: guarantee (by typing) that we don't do stdio, and don't throw
 //       exceptions, notably for incomplete pattern matching
 
-// TODO: add server-side 
-
 open Platform.Bytes
 
 open TLSConstants
@@ -36,7 +34,6 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if Flags.debug_FFI then print else (fun _ -> ())
 
-
 private let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length }) : fragment i (point (length b)) = 
   let rg : frange i = point(length b) in 
   appFragment i rg b 
@@ -59,7 +56,7 @@ let rec write_all' c i buffer sent =
   | Written -> write_all' c i buffer (sent+size)
   | r       -> r 
 
-private let write_all c i b = write_all' c i b 0
+private let write_all c i b : ML ioresult_w = write_all' c i b 0
 
 // an integer carrying the fatal alert descriptor
 // we could also write txt into the application error log 
@@ -89,12 +86,26 @@ let connect send recv config_1 : ML (Connection.connection * int) =
     | Read _ -> failwith "unexpected early read" in
   c, firstResult
 
+let accept_connected send recv config_1 : ML (Connection.connection * int) =
+  // we assume the configuration specifies the target SNI;
+  // otherwise we should check after Complete that it matches the authenticated certificate chain.
+  let tcp = Transport.callbacks send recv in
+  let here = new_region HyperHeap.root in
+  let c = TLS.accept_connected here tcp config_1 in
+  let i_0 = currentId c Reader in
+  let firstResult =
+    match read c i_0 with
+    | Complete -> 0
+    | ReadError description txt -> errno description txt
+    | CertQuery _ _ -> failwith "unsupported certificate request from the client"
+    | Read _ -> failwith "unexpected early read" in
+  c, firstResult
 
 type read_result = // is it convenient?
   | Received of bytes 
   | Errno of int
 
-let read c = 
+let read c : ML read_result = 
   let i = currentId c Reader in 
   match read c i with
   | Read (Data d)             -> Received (appBytes d)
@@ -146,7 +157,36 @@ let ffiConfig version host =
     private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
     safe_resumption = true;
-    ciphersuites = cipherSuites_of_nameList [TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256];
+    ciphersuites = cipherSuites_of_nameList [
+                    (* mitls.exe expects this one *)
+                      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+                    (* default ciphersuites from TLSInfo.fst follow: *)
+                      TLS_RSA_WITH_AES_128_GCM_SHA256;
+                      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
+                      TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
+                      TLS_RSA_WITH_AES_128_CBC_SHA;
+                      TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
+                      TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
+                      TLS_RSA_WITH_3DES_EDE_CBC_SHA;
+                      ];
+  }
+
+val ffiSetCertChainFile: cfg:config -> f:string -> ML config
+let ffiSetCertChainFile cfg f =
+  { cfg with
+  cert_chain_file = f;
+  }
+
+val ffiSetPrivateKeyFile: cfg:config -> f:string -> ML config
+let ffiSetPrivateKeyFile cfg f =
+  { cfg with
+  private_key_file = f;
+  }
+
+val ffiSetCAFile: cfg:config -> f:string -> ML config
+let ffiSetCAFile cfg f =
+  { cfg with
+  ca_file = f;
   }
 
 type callbacks = FFICallbacks.callbacks
@@ -171,6 +211,10 @@ val ffiConnect: config:config -> callbacks:callbacks -> ML (Connection.connectio
 let ffiConnect config cb =
   connect (sendTcpPacket cb) (recvTcpPacket cb) config
   
+val ffiAcceptConnected: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
+let ffiAcceptConnected config cb =
+  accept_connected (sendTcpPacket cb) (recvTcpPacket cb) config
+
 val ffiRecv: Connection.connection -> ML cbytes  
 let ffiRecv c =
   match read c with

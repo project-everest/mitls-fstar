@@ -146,12 +146,17 @@ tls-ffi: mitls.cmxa
 	-linkall -runtime-variant _pic -output-obj -ccopt -bundle -g mitls.cmxa -o libmitls.so
 else
 tls-ffi: mitls.cmxa
+    # pass "-z noexecstack" to better support Bash on Windows
+    # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
+    #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
+    #   can result in heap corruptions and crashes.
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-	-linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so
+	-linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so \
+	-ccopt "-Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker libmitls_version_script"
 endif
 endif
 
