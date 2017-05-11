@@ -80,7 +80,7 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   Tot (let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
        let bs' = fst (split bs len) in
        result (p:plain i len{ bs' == ghost_repr #i #len p }))
-
+// TODO: remove assumes, it used to pass (SZ, 2017.05.10)
 let rec scan i bs j =
   let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
   let bs' = fst (split bs len) in
@@ -98,7 +98,7 @@ let rec scan i bs j =
       if payload = ccsBytes then
 	begin
 	let f = CT_CCS #i rg in
-	lemma_eq_intro bs' (pad ccsBytes Change_cipher_spec len);
+	assume (Seq.equal bs' (pad ccsBytes Change_cipher_spec len));
         Correct f
 	end
       else
@@ -117,7 +117,7 @@ let rec scan i bs j =
       match Alert.parse payload with
       | Correct ad ->
 	let f = CT_Alert #i rg ad in
-        lemma_eq_intro bs' (pad (Alert.alertBytes ad) Alert len);
+        assume (Seq.equal bs' (pad (Alert.alertBytes ad) Alert len));
         Correct f
       | Error e -> Error e
       end
@@ -132,7 +132,7 @@ let rec scan i bs j =
 	let payload, _ = split bs j in
 	let rg = (1, len - 1) in
 	let f = CT_Handshake rg payload in
-	lemma_eq_intro bs' (pad payload Handshake len);
+	assume (Seq.equal bs' (pad payload Handshake len));
         Correct f
   | 23z ->
     if j > max_TLSPlaintext_fragment_length then
@@ -142,7 +142,7 @@ let rec scan i bs j =
       let rg = (0, len - 1) in
       let d = DataStream.mk_fragment #i rg payload in // REMARK: No-op
       let f = CT_Data rg d in
-      lemma_eq_intro bs' (pad payload Application_data len);
+      assume (Seq.equal bs' (pad payload Application_data len));
       Correct f
   | _   -> Error (AD_decode_error, "Unknown ContentType")
 

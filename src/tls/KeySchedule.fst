@@ -614,7 +614,8 @@ let ks_12_finished_key ks =
  | S (S_12_has_MS _ _ _ ms) -> ms in
  TLSPRF.coerce ms
 
-private let ks_12_record_key ks =
+private val ks_12_record_key: ks:ks -> St recordInstance
+let ks_12_record_key ks =
   dbg "ks_12_record_key";
   let KS #region st = ks in
   let role, csr, alpha, msId, ms =
@@ -657,7 +658,6 @@ val ks_server_12_cke_dh: ks:ks -> gy:(g:CommonDH.group & CommonDH.share g) ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
-
 let ks_server_12_cke_dh ks gy hashed_log =
   dbg "ks_server_12_cke_dh";
   let KS #region st = ks in
