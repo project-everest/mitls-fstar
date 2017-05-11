@@ -56,8 +56,7 @@ let parseBinderList b =
   let rec (aux: b:bytes -> binders -> Tot (result binders) (decreases (length b))) = fun b binders ->    
     if length b > 0 then
       if length b >= 5 then // SI: check ?
-//	let binder, bytes = vlsplit 1 b in // SI: check 1?
-	match vlsplit 1 b with
+	match vlsplit 1 b with // SI: check 1?
 	| Error z -> error "parseBinderList failed to parse a binder"
 	| Correct(binder,bytes) -> aux bytes (binders @ [binder]) // use List.Total.snoc
       else error "parseBinderList: too few bytes"
@@ -94,7 +93,7 @@ let parsePskIdentity b =
     begin
       match PSK.parsePreSharedKey id with 
       | Correct(id) -> 
-	let ota = int_of_bytes ota in
+	let ota = UInt32.uint_to_t (int_of_bytes ota) in
 	Correct (id,ota)
       | Error z -> error "parsePskIdentity"
       end
@@ -104,38 +103,42 @@ let parsePskIdentities b =
   let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b psks ->    
     if length b > 0 then
       if length b >= 7 then 
-	let id, bytes = vlsplit b 2 in 
-	let ot, bytes = split bytes 4 in 
+	match vlsplit 2 b with 
+	| Error z -> error "parsePskIdentities failed to parse id"
+	| Correct (id,bytes) -> 
+	let ot, bytes = split bytes 4 in (
 	match parsePskIdentity (vlbytes2 id @| ot) with
 	| Correct pski -> aux bytes (psks @ [pski])
-	| Error z -> Error z
+	| Error z -> Error z )
       else error "parsePSKIdentities too few bytes"
     else Correct psks in
   match vlparse 2 b with
   | Correct b -> aux b []
   | Error z -> error "parsePskIdentities" 
 
-val client_psk_parse : bytes -> result (psk, option binders)
+
+val client_psk_parse : bytes -> result (psk * option binders)
 let client_psk_parse b = 
-  let ids, binders = vlsplit 2 b in 
-  // SI: add ids header back. 
-  match parsePskIdentities (vlbytes2 ids) with 
-  | Correct ids -> 
-    begin
-      match parseBinderList binders with
-      | Correct binders -> Correct (ClientPSK ids, Some binders)
-      | Error z -> error "client_psk_parse_binders"
-    end
-  | Error z -> error "client_psk_parse_ids"
+  match vlsplit 2 b with
+  | Error z -> error "client_psk_parse failed to parse"
+  | Correct(ids,binders) -> (
+    // SI: add ids header back. 
+    match parsePskIdentities (vlbytes2 ids) with 
+    | Correct ids -> (
+	match parseBinderList binders with
+	| Correct binders -> Correct (ClientPSK ids, Some binders)
+	| Error z -> error "client_psk_parse_binders")
+    | Error z -> error "client_psk_parse_ids")
+
 	
 val server_psk_parse : bytes -> psk 
-let server_psk_parse b = ServerPSK (int_of_bytes b)
+let server_psk_parse b = ServerPSK (UInt16.uint_to_t (int_of_bytes b))
 
-val parse_psk: role -> bytes -> result (psk * option (list binders))
+val parse_psk: role -> bytes -> result (psk * option binders)
 let parse_psk role b = 
   match role with 
   | Client -> client_psk_parse b
-  | Server -> (server_psk_parse b, None)
+  | Server -> Correct (server_psk_parse b, None)
  
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
