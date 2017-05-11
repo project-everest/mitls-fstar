@@ -52,7 +52,7 @@ let binderListBytes bs = List.Tot.fold_left (fun a (b:binder) -> a @| Parse.vlby
 type binders = bs: list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= 65535} 
 let bindersBytes (bs:binders): bytes = Parse.vlbytes2 (binderListBytes bs)
 
-let parseBinderList b = 
+let parseBinderList (b:bytes) = 
   let rec (aux: b:bytes -> binders -> Tot (result binders) (decreases (length b))) = fun b binders ->    
     if length b > 0 then
       if length b >= 5 then // SI: check ?
