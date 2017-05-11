@@ -242,7 +242,7 @@ let disconnect c =
 
 // on some errors, we locally give up the connection
 val unrecoverable: c: connection -> r:string -> ST ioresult_w
-  (requires (fun h0 -> st_inv c h0))
+  (requires (fun h0 -> st_inv c h0 /\ h0 `HST.contains` c.state))
   (ensures (fun h0 i h1 -> st_inv c h1 /\ 
 		        modifies (Set.singleton (C?.region c)) h0 h1 /\
 			i = WriteError None r))
