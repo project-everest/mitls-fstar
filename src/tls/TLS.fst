@@ -93,6 +93,7 @@ let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.create m cfg role resume in
     let state = ralloc m BC in
+    assume (is_hs_rgn m);
     C #m hs tcp state
 
 
@@ -230,12 +231,14 @@ type ioresult_o = r:ioresult_w { Written? r \/ WriteError? r }
 
 // the connection fails now, and should not be resumed.
 val disconnect: c: connection -> ST unit
-  (requires (fun h0 -> st_inv c h0))
+  (requires (fun h0 -> st_inv c h0 /\ h0 `HST.contains` c.state))
   (ensures (fun h0 _ h1 -> st_inv c h1 /\ modifies (Set.singleton (C?.region c)) h0 h1))
 
 let disconnect c =
     Handshake.invalidateSession c.hs; //changes (HS?.region c.hs)
-    c.state := Close
+    c.state := Close;
+    let h = ST.get () in
+    assume (st_inv c h)
 
 // on some errors, we locally give up the connection
 val unrecoverable: c: connection -> r:string -> ST ioresult_w
