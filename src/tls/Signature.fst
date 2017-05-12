@@ -239,12 +239,15 @@ let verify #a h pk t s =
       begin
       let keys = m_read rkeys in
       let signed = Some? (Seq.seq_find (fun (t':signed a) -> t = t') ts) in
-      let honest = List.Tot.existsb (fun pk' -> pkey_repr pk' = PK?.repr pk) keys in
+      let find_pk pk' = pkey_repr pk' = PK?.repr pk in
+      let honest = List.Tot.existsb find_pk keys in
+      List.Tot.memP_existsb find_pk keys;
       if honest then verified && signed
       else
         begin
-        List.Tot.memP_existsb (fun pk' -> pkey_repr pk' = PK?.repr pk) keys;
+        assert (find_pk (|a, pk|));
         assert (~(List.Tot.memP (|a,pk|) keys));
+        admit();
         verified
         end
       end
