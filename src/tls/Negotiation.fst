@@ -32,8 +32,8 @@ unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
 
 
 //17-05-01 relocate these printing functions?!
-let string_of_option_extensions o = match o with 
-  | None -> "None" 
+let string_of_option_extensions o = match o with
+  | None -> "None"
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
 
 let string_of_ciphersuite (cs:cipherSuite) =
@@ -138,7 +138,7 @@ type resumption_offer_12 = // part of resumeInfo
   | OfferSid of b:bytes { length b <> 0 }
 // type resumption_mode_12 (o: resumption_offer_12) = b:bool { OfferNothing? o ==> b = false }
 
-let valid_offer ch = 
+let valid_offer ch =
   True
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
 type offer = ch:HandshakeMessages.ch { valid_offer ch }
@@ -162,15 +162,15 @@ let gs_of ch =
     end
   | _ -> []
 
-let find_client_extension filter o = 
-  match o.ch_extensions with 
+let find_client_extension filter o =
+  match o.ch_extensions with
   | None -> None
   | Some es -> List.Tot.find filter es
 
-let find_supported_versions o = 
+let find_supported_versions o =
   match find_client_extension Extensions.E_supported_versions? o with
-  | None -> None 
-  | Some (Extensions.E_supported_versions vs) -> Some vs 
+  | None -> None
+  | Some (Extensions.E_supported_versions vs) -> Some vs
 
 let find_signature_algorithms o : option signatureSchemeList =
   match find_client_extension Extensions.E_signature_algorithms? o with
@@ -178,34 +178,39 @@ let find_signature_algorithms o : option signatureSchemeList =
   | Some (Extensions.E_signature_algorithms algs) -> Some algs
 
 // finding the pre-shared keys in ClientHello
-let find_pske o = 
-  match find_client_extension Extensions.E_pre_shared_key? o with 
-  | None -> None 
+let find_pske o =
+  match find_client_extension Extensions.E_pre_shared_key? o with
+  | None -> None
   | Some (Extensions.E_pre_shared_key psks) -> Some psks
 
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
-  (match find_pske o with 
+  (match find_pske o with
   | Some psks -> n < List.length psks
-  | None -> False) } 
+  | None -> False) }
 
-let find_supported_groups o = 
-  match find_client_extension Extensions.E_supported_groups? o with 
-  | None -> None 
+let find_supported_groups o =
+  match find_client_extension Extensions.E_supported_groups? o with
+  | None -> None
   | Some (Extensions.E_supported_groups gns) -> Some gns
 
 type share = g:CommonDH.group & CommonDH.share g
 
 // we authenticate the whole list, but only care about those we could parse
-let find_key_shares o: option (list share)  = 
-  match find_client_extension Extensions.E_key_share? o with 
-  | None -> None 
-  | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> 
+let find_key_shares o: option (list share)  =
+  match find_client_extension Extensions.E_key_share? o with
+  | None -> None
+  | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) ->
       let known = function
-        | CommonDH.Share g s -> Some #share (|g, s |) 
+        | CommonDH.Share g s -> Some #share (|g, s |)
         | _ -> None #share in
         Some (List.Tot.choose known ks)
+
+let find_early_data o =
+  match find_client_extension Extensions.E_early_data? o with
+  | None -> None
+  | Some (Extensions.E_early_data maxl) -> Some maxl
 
 (**
   We keep both the server's HelloRetryRequest
@@ -229,13 +234,13 @@ noeq type mode =
     // more from SH (both TLS 1.2 and TLS 1.3)
     n_protocol_version: protocolVersion ->
     n_server_random: TLSInfo.random ->
-    n_sessionID: option sessionID {n_sessionID = None <==> n_protocol_version = TLS_1p3} -> 
+    n_sessionID: option sessionID {n_sessionID = None <==> n_protocol_version = TLS_1p3} ->
     n_cipher_suite: cipherSuite ->
     n_pski: option (pski n_offer) -> // only for TLS 1.3, result of a tricky stateful computation
 
     // concatenating SH and EE extensions for 1.3, in wire order.
     n_server_extensions: option (se:list extension{List.Tot.length se < 256}) ->
-    
+
     // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
     n_server_share: option share ->
 
@@ -248,17 +253,17 @@ noeq type mode =
     // { both shares are in the same negotiated group }
     mode
 
-let is_resumption12 m = 
+let is_resumption12 m =
   m.n_protocol_version <> TLS_1p3  &&
   m.n_sessionID = Some (m.n_offer.ch_sessionID)
 
-let is_cacheable12 m = 
+let is_cacheable12 m =
   m.n_protocol_version <> TLS_1p3  &&
   ( let Some sid = m.n_sessionID in
     sid <> m.n_offer.ch_sessionID &&
     sid <> empty_bytes)
 
-// 17-04-25 we need pure functions of the mode for these old fields 
+// 17-04-25 we need pure functions of the mode for these old fields
 //    n_resume: option bool -> // is this a 1.2 resumption with the offered sid?
 //    n_psk: option PSK.pskid -> // none with 1.2 (we are not doing PSK 1.2)
 //
@@ -274,7 +279,7 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
   | C_Init:     n_client_random: TLSInfo.random ->
                 negotiationState r cfg resume
-                
+
   | C_Offer:    n_offer: offer ->
                 negotiationState r cfg resume
 
@@ -338,12 +343,12 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
 val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random ->
   ks:option CommonDH.keyShare -> offer
 let computeOffer r cfg resume nonce ks =
-  let sid = 
+  let sid =
     match resume with
     | Some sid, _ -> sid
     | None, _ -> empty_bytes
   in
-  let extensions = 
+  let extensions =
     Extensions.prepareExtensions
       cfg.minVer
       cfg.maxVer
@@ -366,7 +371,7 @@ let computeOffer r cfg resume nonce ks =
     ch_sessionID = sid;
     ch_cipher_suites = cfg.ciphersuites;
     // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
-    ch_raw_cipher_suites = None; 
+    ch_raw_cipher_suites = None;
     ch_compressions = cfg.compressions;
     ch_extensions = Some extensions
   }
@@ -388,7 +393,7 @@ let create region r cfg resume nonce =
 val hashAlg: mode -> Hashing.Spec.alg
 let hashAlg m = //FIXME!
   Hashing.Spec.SHA256
- 
+
 val kexAlg: mode -> TLSConstants.kexAlg
 let kexAlg m =
   if m.n_protocol_version = TLS_1p3 then
@@ -437,11 +442,11 @@ let local_config #region #role ns =
 val nonce: #region:rgn -> #role:TLSConstants.role -> t region role -> Tot TLSInfo.random
 let nonce #region #role ns =
   ns.nonce
-  
+
 val resume: #region:rgn -> #role:TLSConstants.role -> t region role -> TLSInfo.resumeInfo role
 let resume #region #role ns =
   ns.resume
-  
+
 val getMode: #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST mode
   (requires (fun _ -> True))
@@ -467,7 +472,7 @@ let version #region #role ns =
   | C_Offer _ -> ns.cfg.maxVer
   | C_HRR o _ -> ns.cfg.maxVer
   | C_WaitFinished1 _ -> ns.cfg.maxVer
-  | C_Mode mode 
+  | C_Mode mode
   | C_WaitFinished2 mode _
   | C_Complete mode _ -> mode.n_protocol_version
   | S_Init _ -> ns.cfg.maxVer
@@ -492,7 +497,7 @@ let signatureScheme_of_mode mode supported_algs =
      begin
      let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
      match find_signature_algorithms mode.n_offer with
-     | None -> 
+     | None ->
        Some (signatureScheme_of_sigHashAlg sa ha0)
        // ({RSASIG, ECDSA, DSA}, {SHA1, SHA256, SHA384, SHA512})
        // TODO: check that this is correct
@@ -550,15 +555,15 @@ let verify scheme chain tbs sigv =
 
 val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> St offer
 let client_ClientHello #region ns oks =
-  //17-04-22 fix this in the definition of offer? 
-  let oks' = 
+  //17-04-22 fix this in the definition of offer?
+  let oks' =
     match oks with
     | Some ks -> Some (CommonDH.ClientKeyShare ks)
     | None -> None
   in
-  match MR.m_read ns.state with 
-  | C_Init _ -> 
-      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in 
+  match MR.m_read ns.state with
+  | C_Init _ ->
+      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);
       offer
@@ -568,33 +573,33 @@ let client_ClientHello #region ns oks =
   within the range of versions supported by the server configuration
   and outputs the negotiated version if true
 *)
-  
-// usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1 
+
+// usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []}) =
-  match find_supported_versions o with 
+  match find_supported_versions o with
   | Some []  -> Error(AD_protocol_version, "protocol version negotiation: empty proposal")
   | Some vs -> Correct vs  // might check no proposal is below min_pv
   | None -> // use legacy offer
-      match o.ch_protocol_version, min_pv with 
-      | TLS_1p0, TLS_1p0 -> Correct [TLS_1p0] 
-      | TLS_1p1, TLS_1p0 -> Correct [TLS_1p2; TLS_1p1] 
-      | TLS_1p1, TLS_1p1 -> Correct [TLS_1p1] 
-      | TLS_1p2, TLS_1p0 -> Correct [TLS_1p2; TLS_1p1; TLS_1p0] 
-      | TLS_1p2, TLS_1p1 -> Correct [TLS_1p2; TLS_1p1] 
-      | TLS_1p2, TLS_1p2 -> Correct [TLS_1p2] 
+      match o.ch_protocol_version, min_pv with
+      | TLS_1p0, TLS_1p0 -> Correct [TLS_1p0]
+      | TLS_1p1, TLS_1p0 -> Correct [TLS_1p2; TLS_1p1]
+      | TLS_1p1, TLS_1p1 -> Correct [TLS_1p1]
+      | TLS_1p2, TLS_1p0 -> Correct [TLS_1p2; TLS_1p1; TLS_1p0]
+      | TLS_1p2, TLS_1p1 -> Correct [TLS_1p2; TLS_1p1]
+      | TLS_1p2, TLS_1p2 -> Correct [TLS_1p2]
       | _, _ -> Error(AD_protocol_version, "protocol version negotation: bad legacy proposal")
 
-let is_client13 (o:offer) = 
-  match offered_versions TLS_1p3 o with 
-  | Correct vs -> List.Tot.existsb (fun v -> v = TLS_1p3) vs 
-  | Error _ -> false 
+let is_client13 (o:offer) =
+  match offered_versions TLS_1p3 o with
+  | Correct vs -> List.Tot.existsb (fun v -> v = TLS_1p3) vs
+  | Error _ -> false
 
-let negotiate_version cfg offer = 
+let negotiate_version cfg offer =
   //17-04-26 TODO pass outer packet PV instead of TLS_1p0
-  match offered_versions TLS_1p0 offer with 
-  | Error z -> Error z 
-  | Correct vs -> 
-    match List.Tot.find (fun v -> geqPV cfg.maxVer v && geqPV v cfg.minVer) vs with 
+  match offered_versions TLS_1p0 offer with
+  | Error z -> Error z
+  | Correct vs ->
+    match List.Tot.find (fun v -> geqPV cfg.maxVer v && geqPV v cfg.minVer) vs with
     | Some v -> Correct v
     | None -> Error(AD_protocol_version, "protocol version negotiation: mismatch")
 
@@ -619,51 +624,51 @@ let negotiateCipherSuite cfg pv ccs =
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
 (*
-val negotiateGroupKeyShare13 
-  config -> 
-  list extension -> 
+val negotiateGroupKeyShare13
+  config ->
+  list extension ->
   Tot (result (option (kexAlg * namedGroup * option share))
 let rec negotiateGroupKeyShare cfg pv exts =
   // first fetch the two relevant extensions
-  let supported, keyshares = 
+  let supported, keyshares =
     match o.ch_extensions with
-    | None -> None, None 
-    | Some es -> 
-      ( match List.Tot.find Extensions.E_supported_groups? es with 
-        | None -> None 
+    | None -> None, None
+    | Some es ->
+      ( match List.Tot.find Extensions.E_supported_groups? es with
+        | None -> None
         | Some (Extensions.E_supported_groups gs) -> Some gs)
-      ( match List.Tot.find Extensions.E_key_share? es with 
-        | None -> None 
-        | Some (Extensions.E_key_share (CommonDH.ClientKeyShare gl)) -> 
+      ( match List.Tot.find Extensions.E_key_share? es with
+        | None -> None
+        | Some (Extensions.E_key_share (CommonDH.ClientKeyShare gl)) ->
             let filter (g, gx) =
               List.Tot.mem g cfg.namedGroups &&
-              ( (SEC? g && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE)) || 
+              ( (SEC? g && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE)) ||
                 (FFDHE? g && (kex = Kex_DHE || kex = Kex_PSK_DHE)) ) in
             Some(match List.Tot.filter filter gl)) in
 
-  if pv = TLS_1p3 then 
+  if pv = TLS_1p3 then
     match keyshares with
     | None -> Error(AD_decode_error, "no supported group or key share extension found")
     | Some [] -> Error(AD_decode_error, "no shared group between client and server config")
     | Some (share::_) -> Correct (Some share)
     // todo support HRR depending on supported_groups
-    
-  else if kex = Kex_ECDHE && Some? supported then 
+
+  else if kex = Kex_ECDHE && Some? supported then
     let filter g = SEC? g && List.Tot.mem g cfg.namedGroups in
-    let gs = List.Tot.filter  
-    
+    let gs = List.Tot.filter
+
     Correct(Some (match List.Tot.filter filter gs), None)
 
-    match supported with 
+    match supported with
 
-    | Some 
+    | Some
   List.Tot.existsb E_supported_groups? exts
 
 
   | Some exts when (kex = Kex_ECDHE && List.Tot.existsb E_supported_groups? exts) ->
     let Some (E_supported_groups gl) = List.Tot.find E_supported_groups? exts in
 
-    let filter g = 
+    let filter g =
     (match List.Tot.filter filter gl with
     | gn :: _ -> Correct (Some gn, None)
     | [] -> Error(AD_decode_error, "no shared curve configured"))
@@ -697,7 +702,7 @@ val acceptableVersion: config -> protocolVersion -> TLSInfo.random -> Tot bool
 let acceptableVersion cfg pv sr =
   // we statically know that the offered versions are compatible with our config
   // (we may prove e.g. acceptableVersion pv ==> pv in offered_versions
-  geqPV pv cfg.minVer && 
+  geqPV pv cfg.minVer &&
   geqPV cfg.maxVer pv &&
   not (isSentinelRandomValue cfg.maxVer pv sr)
 
@@ -736,8 +741,8 @@ val client_ServerHello: #region:rgn -> t region Client ->
   HandshakeMessages.sh ->
   St (result mode) // it needs to be computed, whether returned or not
 let client_ServerHello #region ns sh =
-  match MR.m_read ns.state with 
-  | C_Offer offer -> 
+  match MR.m_read ns.state with
+  | C_Offer offer ->
     let spv  = sh.sh_protocol_version in
     let sr   = sh.sh_server_random in
     let cs   = sh.sh_cipher_suite in
@@ -889,7 +894,7 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
   match MR.m_read ns.state with
   | C_Mode mode ->
     let ccert = None in
-    let scert = Some serverChain in 
+    let scert = Some serverChain in
     let sexts = mode.n_server_extensions in // TODO: add extensions from EE
     let mode = Mode
       mode.n_offer
@@ -911,7 +916,7 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
 
 (* SERVER *)
 
-type cs13 offer = 
+type cs13 offer =
   | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
 
@@ -932,29 +937,29 @@ private let rec compute_cs13_aux
     choices @ (compute_cs13_aux (i+1) o pske g_gx ncs psks psk_kex)
 
 // returns a list of negotiable "core modes" for TLS 1.3
-// the key exchange can be derived from cs13 
+// the key exchange can be derived from cs13
 // (we could stop after finding the first)
-val compute_cs13: 
+val compute_cs13:
   cfg: config ->
   o: offer ->
   psks: list (option cipherSuite) (* will be richer *) ->
-  shares: list share (* pre-registered *) -> 
+  shares: list share (* pre-registered *) ->
   result (list (cs13 o))
-let compute_cs13 cfg o psks shares = 
+let compute_cs13 cfg o psks shares =
   // pick the (potential) group to use for DHE/ECDHE
-  let ng: option (g:CommonDH.group & option (CommonDH.share g)) = 
-    match find_supported_groups o with 
+  let ng: option (g:CommonDH.group & option (CommonDH.share g)) =
+    match find_supported_groups o with
     | None -> None
     | Some gs ->
       match List.Tot.filter (fun g -> List.Tot.mem g cfg.namedGroups) gs with
       | [] -> None
-      | g::_ -> 
+      | g::_ ->
         let Some g = CommonDH.group_of_namedGroup g in
         let os:option (CommonDH.share g) =
           begin
           match find_key_shares o with
-          | None -> None 
-          | Some ks -> 
+          | None -> None
+          | Some ks ->
             match List.Tot.filter (fun g_s -> dfst g_s = g) ks with
             | (| g,  s |) :: _ -> Some s
             | [] -> None
@@ -963,17 +968,17 @@ let compute_cs13 cfg o psks shares =
         Some (| g, os |)
     in
 
-  let g_gx: option share = 
+  let g_gx: option share =
     match ng with
     | Some (| g, Some s |) -> Some (|g, s|)
-    | _ -> None in 
+    | _ -> None in
   // pick acceptable record ciphersuites
   let ncs = List.Tot.filter (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in
 
   // pick preferred choice for each PSK (if any) -- we could stop at the first match too
-  let pske = 
-    match find_pske o with 
-    | Some pske -> pske 
+  let pske =
+    match find_pske o with
+    | Some pske -> pske
     | None -> [] in
 
   assert(List.length pske = List.length psks); // precondition
@@ -992,26 +997,26 @@ let compute_cs13 cfg o psks shares =
 // read all TLS RFCs
 // FIXME ADL: grossly inefficient; we need to cache the server keytype at startup
 (* TODO: why irreducible? *)
-irreducible val computeServerMode: 
-  cfg: config -> 
-  co: offer -> 
-  serverRandom: TLSInfo.random -> 
-  serverID: option sessionID -> 
+irreducible val computeServerMode:
+  cfg: config ->
+  co: offer ->
+  serverRandom: TLSInfo.random ->
+  serverID: option sessionID ->
   St (result mode)
-let computeServerMode cfg co serverRandom serverID = 
+let computeServerMode cfg co serverRandom serverID =
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
   match negotiate_version cfg co with
   | Error z -> Error z
-  | Correct TLS_1p3 -> 
+  | Correct TLS_1p3 ->
     begin
-    match compute_cs13 cfg co [] [] (*TODO*)  with 
-    | Error z -> Error z 
-    | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed") 
+    match compute_cs13 cfg co [] [] (*TODO*)  with
+    | Error z -> Error z
+    | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
     | Correct (PSK_EDH j ogs cs :: _) -> Error(AD_handshake_failure, "TODO: PSK_EDH unimplemented")
     | Correct (JUST_EDH gx cs  :: _) ->
       begin
       match find_signature_algorithms co with
-      | None -> 
+      | None ->
         Error(AD_handshake_failure, "Client didn't send signature_algorithm extension")
       | Some algs ->
         begin
@@ -1024,10 +1029,10 @@ let computeServerMode cfg co serverRandom serverID =
           let scert =
             match Cert.lookup_chain cfg.cert_chain_file with
             | Correct cert -> Some (Cert.chain_up cert)
-            | Error z -> 
+            | Error z ->
               trace ("*WARNING* no server certificate found: " ^ string_of_error z);
               None
-          in          
+          in
           Correct (Mode
             co
             None // TODO: no HRR
@@ -1045,14 +1050,14 @@ let computeServerMode cfg co serverRandom serverID =
         end
       end
     end
-  | Correct pv -> 
+  | Correct pv ->
   // with TLS 1.2, we pick the first ciphersuite compatible with our credentials
   // we could be a bit stricter and record wether the client is TLS
   let nosa = fun (CipherSuite _ sa _) -> None? sa in
-  let sigfilter = 
+  let sigfilter =
     match Cert.lookup_chain cfg.cert_chain_file with
     | Correct c  -> (
-      match Cert.endpoint_keytype c with 
+      match Cert.endpoint_keytype c with
       | Some kt -> (fun cs ->
         match cs with
         | CipherSuite _ sa _ ->
@@ -1067,7 +1072,7 @@ let computeServerMode cfg co serverRandom serverID =
           end
         | _ -> false)
       | _ -> trace "WARNING: loaded wrong server cert"; nosa)
-    | _ -> trace "WARNING: cannot load server cert"; nosa in 
+    | _ -> trace "WARNING: cannot load server cert"; nosa in
   // From https://tools.ietf.org/html/rfc5246#section-7.4.2:
   // In order to negotiate correctly, the server MUST check any candidate
   // cipher suites against the "signature_algorithms" extension before selecting them
@@ -1079,7 +1084,7 @@ let computeServerMode cfg co serverRandom serverID =
   // compute server extensions
   match co.ch_extensions with
   | None -> Error(AD_illegal_parameter, "Missing mandatory ClientHello extensions")
-  (* omitted details: 
+  (* omitted details:
               | SSL_3p0 ->
                 let cre =
                   if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs ccs) then
@@ -1090,12 +1095,12 @@ let computeServerMode cfg co serverRandom serverID =
   | Some cexts ->
     let serverExtensions = None in // To be computed in Handshake and filled later
   // compression is null and non-negotiable; we just report client errors
-  let correct_compression_offer = 
-    if is_client13 co 
-    then co.ch_compressions = [NullCompression] 
+  let correct_compression_offer =
+    if is_client13 co
+    then co.ch_compressions = [NullCompression]
     else List.Tot.existsb (fun c -> c = NullCompression) co.ch_compressions in
-  if not correct_compression_offer 
-  then Error(AD_illegal_parameter, "Compression is deprecated") else 
+  if not correct_compression_offer
+  then Error(AD_illegal_parameter, "Compression is deprecated") else
   let scert =
     match Cert.lookup_chain cfg.cert_chain_file with
     | Correct cert -> Some (Cert.chain_up cert)
@@ -1121,13 +1126,13 @@ let computeServerMode cfg co serverRandom serverID =
 
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
-  option sessionID -> 
+  option sessionID ->
   St (result mode)
 let server_ClientHello #region ns offer sid =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
-  match MR.m_read ns.state with 
-  | S_Init _ -> 
+  match MR.m_read ns.state with
+  | S_Init _ ->
     match computeServerMode ns.cfg offer ns.nonce sid with
     | Error z ->
       trace ("negotiation failed: "^string_of_error z);
@@ -1141,10 +1146,10 @@ let server_ClientHello #region ns offer sid =
 let share_of_serverKeyShare (ks:CommonDH.keyShare) : share =
   let CommonDH.ServerKeyShare (CommonDH.Share g gy) = ks in (| g, gy |)
 
-val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.keyShare -> 
+val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.keyShare ->
   St (result mode)
 let server_ServerShare #region ns ks =
-  match MR.m_read ns.state with 
+  match MR.m_read ns.state with
   | S_ClientHello mode ->
     let cexts = mode.n_offer.ch_extensions in
     trace ("processing client extensions " ^ string_of_option_extensions cexts);
@@ -1154,12 +1159,12 @@ let server_ServerShare #region ns ks =
       mode.n_offer.ch_cipher_suites
       ns.cfg
       mode.n_cipher_suite
-      None  // option (TI.cVerifyData*TI.sVerifyData) 
+      None  // option (TI.cVerifyData*TI.sVerifyData)
       ks
       false // resume?
     with
     | Error z -> Error z
-    | Correct sexts -> 
+    | Correct sexts ->
       begin
       trace ("including server extensions " ^ string_of_option_extensions sexts);
       let mode = Mode
