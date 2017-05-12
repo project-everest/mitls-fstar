@@ -25,8 +25,13 @@ open TLSError
 
 type rgn = TLSConstants.rgn
 
-type id = TLSInfo.finishedId
-let alg (i:id) = TLSInfo.finishedId_hash  i
+type id =
+| HMAC_Finished of TLSInfo.finishedId
+| HMAC_Binder of TLSInfo.binderId
+
+let alg (i:id) = match i with
+| HMAC_Finished i -> TLSInfo.finishedId_hash i
+| HMAC_Binder i -> TLSInfo.binderId_hash i
 
 //assume
 val authId: id -> Tot bool

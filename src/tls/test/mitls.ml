@@ -2,7 +2,6 @@
 open TLSConstants
 open TLSInfo
 
-let tlsapi = ref true
 let args = ref []
 let role = ref Client
 let ffi  = ref false
@@ -14,9 +13,14 @@ let config = ref {defaultConfig with
   private_key_file = "../../data/server.key";
   ca_file = "../../data/CAFile.pem";
   safe_resumption = true;
-  ciphersuites = cipherSuites_of_nameList [ TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
-                                            TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
-                                            TLS_AES_128_GCM_SHA256 ];
+  ciphersuites = cipherSuites_of_nameList
+    [ TLS_AES_128_GCM_SHA256;
+      TLS_AES_256_GCM_SHA384;
+      TLS_CHACHA20_POLY1305_SHA256;
+      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
+      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
+    ];
 }
 
 let s2pv = function
@@ -27,17 +31,20 @@ let s2pv = function
   | s -> failwith ("Invalid protocol version specified: "^s)
 
 let css = [
-  ("ECDHE-RSA-AES256-GCM-SHA384", TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384);
-  ("ECDHE-RSA-AES128-GCM-SHA256", TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
-  ("ECDHE-RSA-CHACHA20-POLY1305-SHA256", TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
-  ("DHE-RSA-AES256-GCM-SHA384", TLS_DHE_RSA_WITH_AES_256_GCM_SHA384);
-  ("DHE-RSA-AES128-GCM-SHA256", TLS_DHE_RSA_WITH_AES_128_GCM_SHA256);
-  ("DHE-RSA-CHACHA20-POLY1305-SHA256", TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
   ("TLS_AES_128_GCM_SHA256", TLS_AES_128_GCM_SHA256);
   ("TLS_AES_256_GCM_SHA384", TLS_AES_256_GCM_SHA384);
   ("TLS_CHACHA20_POLY1305_SHA256", TLS_CHACHA20_POLY1305_SHA256);
   ("TLS_AES_128_CCM_SHA256", TLS_AES_128_CCM_SHA256);
   ("TLS_AES_128_CCM_8_SHA256", TLS_AES_128_CCM_8_SHA256);
+  ("ECDHE-RSA-AES256-GCM-SHA384", TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384);
+  ("ECDHE-RSA-AES128-GCM-SHA256", TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
+  ("ECDHE-RSA-CHACHA20-POLY1305-SHA256", TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
+  ("ECDHE-ECDSA-AES256-GCM-SHA384", TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384);
+  ("ECDHE-ECDSA-AES128-GCM-SHA256", TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256);
+  ("ECDHE-ECDSA-CHACHA20-POLY1305-SHA256", TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256);
+  ("DHE-RSA-AES256-GCM-SHA384", TLS_DHE_RSA_WITH_AES_256_GCM_SHA384);
+  ("DHE-RSA-AES128-GCM-SHA256", TLS_DHE_RSA_WITH_AES_128_GCM_SHA256);
+  ("DHE-RSA-CHACHA20-POLY1305-SHA256", TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
 ]
 
 let sas = [
@@ -79,6 +86,40 @@ let setng x =
   let ngl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^"; check --help for list")) ngl in
   config := {!config with namedGroups = ngl}
 
+let offered_psk = ref []
+let loaded_psk : (string list) ref = ref []
+
+let load_psk x =
+  let id, key = BatString.split x ":" in
+  if List.mem id !loaded_psk then failwith ("Cannot load more than one PSK with label "^id);
+  loaded_psk := id :: !loaded_psk;
+  let id = Platform.Bytes.utf8 id in
+  let key = Platform.Bytes.bytes_of_hex key in
+  let cipher = List.hd ((!config).ciphersuites) in
+  let (ae, h) = match cipher with
+    | CipherSuite13(ae,h) -> ae, h
+    | _ -> failwith "the first ciphersuite must be 1.3 to load with PSK" in
+  let pskInfo = {
+    PSK.time_created = Prims.parse_int "0";
+    PSK.allow_early_data = true;
+    PSK.allow_dhe_resumption = true;
+    PSK.allow_psk_resumption = true;
+    PSK.early_ae = ae;
+    PSK.early_hash = h;
+    PSK.identities = Platform.Bytes.empty_bytes, Platform.Bytes.empty_bytes;
+   } in
+  PSK.coerce_psk id pskInfo key
+
+let offer_psk x =
+  let ids = BatString.nsplit x ":" in
+  let add_psk y =
+    if List.mem y !loaded_psk then
+      offered_psk := (Platform.Bytes.utf8 y) :: !offered_psk
+    else
+      failwith ("Cannot offer PSK with label "^y^" without loading it first")
+    in
+  List.iter add_psk ids
+
 let help = "A TLS test client.\n\n"
  ^ "Cipher suite names for colon-separated priority string:\n    "
  ^ (List.fold_left prn "" css) ^ "\n"
@@ -92,7 +133,10 @@ let _ =
     ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with maxVer = v;}), " sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)");
     ("-mv", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v;}), " sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)");
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
-    ("-tlsapi", Arg.Unit (fun () -> tlsapi := true), "run through the TLS API (now set by default)");
+    ("-0rtt", Arg.Unit (fun () -> config := {!config with enable_early_data = true;}), "enable early data (server support and client offer)");
+    ("-psk", Arg.String (fun s -> load_psk s), " L:K add an entry in the PSK database at label L with key K (in hex), associtated with the fist current -cipher");
+    ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with --psk). Client only.");
+    ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
     ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2 (client only)");
@@ -111,15 +155,8 @@ let _ =
     | host :: _ -> host, 443
     | _ -> (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443 in
 
-
   match !role, !config.maxVer with
   | Client, _ when !ffi    -> TestFFI.client !config host (Z.of_int port)
   | Server, _ when !ffi    -> TestFFI.server !config host (Z.of_int port)
-  | Client, _ when !tlsapi -> TestAPI.client !config host (Z.of_int port)
-  | Server, _ when !tlsapi -> TestAPI.server !config host (Z.of_int port)
-  (* TestHandshake is deprecated
-  | Client, TLS_1p3        -> TestHandshake.client_13 !config host (Z.of_int port)
-  | Client, _              -> TestHandshake.client_12 !config host (Z.of_int port)
-  | Server, TLS_1p3        -> TestHandshake.server_13 !config host (Z.of_int port)
-  | Server, _              -> TestHandshake.server_12 !config host (Z.of_int port)
-  *)
+  | Client, _ -> TestAPI.client !config host (Z.of_int port) (!offered_psk)
+  | Server, _ -> TestAPI.server !config host (Z.of_int port)
