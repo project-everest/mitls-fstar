@@ -524,7 +524,7 @@ let server_ClientHello hs offer =
         if mode.Nego.n_protocol_version = TLS_1p3
         then
           begin
-            HandshakeLog.send_signals hs.log (Some true) false; // signal key change after writing ServerHello
+            HandshakeLog.send_signals hs.log (Some false) false; // signal key change after writing ServerHello
             trace "derive handshake keys";
             let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
             register hs hs_keys;

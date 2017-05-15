@@ -30,7 +30,7 @@ let rec read_loop con r : ML unit =
     trace ("Received data: "^(iutf8 db));
     read_loop con r
   | ReadError _ t ->
-    trace ("ReadError: "^t^"\n")
+    trace ("ReadError: "^t)
   | Read (DataStream.Close) ->
     // already echoed by TLS
     //let _ = TLS.writeCloseNotify con in
@@ -62,9 +62,7 @@ let client config host port =
          read_loop con r
        | WriteError _ t -> trace ("Write error:"^t)
        | _ -> trace "unexpected ioresult_w")
-    | ReadError o t ->
-      trace ("ReadError: "^t)
-    | _ -> trace "unexpected ioresult_i read"
+    | r -> trace (string_of_ioresult_i #id r)
 
 private let rec server_read con: ML unit =
     // a somewhat generic server loop, with synchronous writing in-between reads.
@@ -73,11 +71,19 @@ private let rec server_read con: ML unit =
     trace (TLS.string_of_ioresult_i r);
     match r with
     | Complete -> trace "connection complete"; server_read con
-    | Update true -> trace "connection writable"; server_read con
     | Update false -> trace "connection still in handshake"; server_read con
+    | Update true ->
+      begin
+        trace "connection writable";
+        let id = TLS.currentId con Writer in
+        // we make a point of sending a padded empty fragment, because we can!
+        match TLS.write con (DataStream.appFragment id (0,10) empty_bytes) with
+        | Written -> trace "sent 0.5 empty fragment"; server_read con
+        | w -> trace ("failed to write 0.5 fragment: "^string_of_ioresult_w w)
+      end
     | Read (DataStream.Alert a) -> trace ("unexpected alert: "^string_of_ad a)
     | Read (DataStream.Data d) ->
-     begin
+      begin
       let db = DataStream.appBytes d in
       trace ("Received data: "^(iutf8 db));
       let text = "You are connected to miTLS*!\r\n"

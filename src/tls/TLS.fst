@@ -224,6 +224,13 @@ type ioresult_w =
     | WriteAgainClosing   // we are tearing down the connection & must still send an alert
 *)
 
+let string_of_ioresult_w = function
+  | Written -> "Written"
+  | WriteClose -> "WriteClose"
+  | WriteError (Some a) s -> "WriteError: "^string_of_error (a,s)
+  | WriteError None s -> "WriteError: "^s
+  | WrittenHS nw c -> "WrittenHS "^(match nw with | Some true -> "new-writable " | Some false -> "new-hanshake-only " | None -> "")^(if c then "complete" else "")
+
 type ioresult_o = r:ioresult_w { Written? r \/ WriteError? r }
 
 
