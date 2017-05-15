@@ -302,7 +302,7 @@ let ks_client_13_nopsk_init ks gl =
   serialized
 
 val ks_client_13_psk_init: ks:ks -> pskl:list PSK.psk_identifier -> gl:list valid_namedGroup
-  -> ST (list ((i:binderId & bk:binderKey i) * PSK.pskInfo) * CommonDH.clientKeyShare)
+  -> ST (list (i:binderId & bk:binderKey i) * list PSK.pskInfo * CommonDH.clientKeyShare)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
@@ -349,8 +349,9 @@ let ks_client_13_psk_init ks pskl gl =
     ((| i, es |), pski), ((| bId, bk|), pski) in
   let pskl = map_ST mk_binder pskl in
   let (esl, bkl) = List.Tot.split pskl in
+  let (bkl, pskinfo) = List.Tot.split bkl in
   st := C (C_13_wait_CH cr esl gs);
-  (bkl, gxl)
+  (bkl, pskinfo, gxl)
 
 // Derive the early data key from the first offered PSK
 // Only called if 0-RTT is enabled on the client

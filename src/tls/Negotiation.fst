@@ -340,9 +340,10 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
-val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random ->
-  ks:option CommonDH.keyShare -> offer
-let computeOffer r cfg resume nonce ks =
+val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
+  -> ks:option CommonDH.keyShare -> option (list PSK.pskInfo)
+  -> Tot offer
+let computeOffer r cfg resume nonce ks pskinfo =
   let sid =
     match resume with
     | Some sid, _ -> sid
@@ -553,8 +554,11 @@ let verify scheme chain tbs sigv =
 
 (* CLIENT *)
 
-val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> St offer
-let client_ClientHello #region ns oks =
+val client_ClientHello: #region:rgn -> t region Client
+  -> option CommonDH.clientKeyShare
+  -> option (list PSK.pskInfo)
+  -> St offer
+let client_ClientHello #region ns oks pskinfo =
   //17-04-22 fix this in the definition of offer?
   let oks' =
     match oks with
@@ -563,7 +567,7 @@ let client_ClientHello #region ns oks =
   in
   match MR.m_read ns.state with
   | C_Init _ ->
-      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in
+      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);
       offer
