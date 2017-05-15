@@ -120,6 +120,7 @@ let string_of_signatureScheme = function
   //| ED25519                -> "ED25519"
   //| ED448                  -> "ED448"
   | RSA_PKCS1_SHA1         -> "RSA_PKCS1_SHA1"
+  | RSA_PKCS1_MD5SHA1         -> "RSA_PKCS1_MD5SHA1"
   | ECDSA_SHA1             -> "ECDSA_SHA1"
   | DSA_SHA1               -> "DSA_SHA1"
   | DSA_SHA256             -> "DSA_SHA256"
@@ -186,10 +187,10 @@ let find_pske o =
 let find_clientPske o = 
   match find_client_extension Extensions.E_pre_shared_key? o with 
   | None -> None 
-  | Some (Extensions.E_pre_shared_key psk) -> (
+  | Some (Extensions.E_pre_shared_key psk) ->
     match psk with 
     | ServerPSK _ -> None
-    | ClientPSK (ids,_) -> Some ids)
+    | ClientPSK (ids,_) -> Some ids
 
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
@@ -208,12 +209,14 @@ type share = g:CommonDH.group & CommonDH.share g
 // we authenticate the whole list, but only care about those we could parse
 let find_key_shares o: option (list share)  = 
   match find_client_extension Extensions.E_key_share? o with 
-  | None -> None 
-  | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> 
-      let known = function
-        | CommonDH.Share g s -> Some #share (|g, s |) 
-        | _ -> None #share in
-        Some (List.Tot.choose known ks)
+  | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) ->
+     begin
+     let known = function
+      | CommonDH.Share g s -> Some #share (| g, s |)
+      | _ -> None #share in
+     Some (List.Tot.choose known ks)
+     end
+  | _ -> None
 
 (**
   We keep both the server's HelloRetryRequest
@@ -326,14 +329,25 @@ noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
                 n_client_certificate: option Cert.chain13 ->
                 negotiationState r cfg resume
 
-let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
+let ns_step (#r:role) (#cfg:config) (#resume:resumeInfo r)
   (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
   match ns, ns' with
-  | C_Init nonce, C_Init nonce' -> nonce == nonce'
-  | C_Offer offer, C_Offer offer' -> offer == offer'
   | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
   | C_Offer offer, C_Mode mode -> mode.n_offer == offer
-  | _, _ -> True  // TODO
+  | C_Offer _, C_Complete _ _ -> True
+  | C_Mode _, C_WaitFinished2 _ _ -> True
+  | C_Mode _, C_Complete _ _ -> True
+  | S_Init _, S_ClientHello _ -> True
+  | S_ClientHello _, S_Mode _ -> True
+  | _, _ -> ns == ns'
+
+let ns_rel (#r:role) (#cfg:config) (#resume:resumeInfo r)
+  (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
+  ns_step ns ns' \/
+  (exists ns0. ns_step ns ns0 /\ ns_step ns0 ns')
+
+assume val ns_rel_monotonic: #r:role -> #cfg:config -> #resume:resumeInfo r ->
+  Lemma (MR.monotonic (negotiationState r cfg resume) (ns_rel #r #cfg #resume))
 
 noeq type t (region:rgn) (role:TLSConstants.role) =
   | NS:
