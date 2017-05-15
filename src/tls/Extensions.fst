@@ -1,11 +1,14 @@
+(*--build-config
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
+--*)
 (* Copyright (C) 2012--2017 Microsoft Research and INRIA *)
 (**
-This modules defines TLS 1.3 Extensions. 
+This modules defines TLS 1.3 Extensions.
 
-- An AST, and it's associated parsing and formatting functions. 
-- Nego calls prepareExtensions : config -> list extensions. 
+- An AST, and it's associated parsing and formatting functions.
+- Nego calls prepareExtensions : config -> list extensions.
 
-@summary: TLS 1.3 Extensions. 
+@summary: TLS 1.3 Extensions.
 *)
 module Extensions
 
@@ -15,7 +18,7 @@ open TLSError
 open TLSConstants
 
 (*************************************************
- Define extension. 
+ Define extension.
  *************************************************)
 
 (* As a static invariant, we record that any intermediate, parsed
@@ -25,7 +28,7 @@ functions, at odd with recursive extensions. *)
 
 let error s = Error (AD_decode_error, ("Extensions parsing: "^s))
 
-//17-05-01 deprecated---use TLSError.result instead? 
+//17-05-01 deprecated---use TLSError.result instead?
 // SI: seems to be only used internally by parseServerName. Remove.
 (** local, failed-to-parse exc. *)
 private type canFail (a:Type) =
@@ -33,79 +36,111 @@ private type canFail (a:Type) =
 | ExOK of list a
 
 
-(* PRE-SHARED KEYS AND KEY EXCHANGES *) 
+(* PRE-SHARED KEYS AND KEY EXCHANGES *)
 
 type pskIdentity = PSK.preSharedKey * PSK.obfuscated_ticket_age
 
-noeq type psk = 
+noeq type psk =
   // this is the truncated PSK extension, without the list of binder tags.
-  | ClientPSK of list pskIdentity
+  | ClientPSK: identities:list pskIdentity -> binders_len:nat{binders_len <= 65535} -> psk
   // this is just an index in the client offer's PSK extension
-  | ServerPSK of UInt16.t 
+  | ServerPSK: UInt16.t -> psk
 
-// SI: copied from HSM. Should be here in Extensions only. 
+// SI: copied from HSM. Should be here in Extensions only.
 // PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
 // We statically enforce length requirements to ensure that formatting is total.
-type binder = b:bytes {32 <= length b /\ length b <= 255} 
-val binderListBytes: list binder -> bytes 
-let binderListBytes bs = List.Tot.fold_left (fun a (b:binder) -> a @| Parse.vlbytes1 b) empty_bytes bs
-type binders = bs: list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= 65535} 
-let bindersBytes (bs:binders): bytes = Parse.vlbytes2 (binderListBytes bs)
+type binder = b:bytes {32 <= length b /\ length b <= 255}
+type binders = bs:list binder {List.Tot.length bs >= 1 /\ List.Tot.length bs < 255}
 
-let parseBinderList (b:bytes) = 
-  let rec (aux: b:bytes -> binders -> Tot (result binders) (decreases (length b))) = fun b binders ->    
+val binderListBytes: binders -> Pure (b:bytes)
+  (requires True)
+  (ensures fun b -> length b >= 33 /\ length b <= 65535)
+let binderListBytes bs =
+  let rec aux (bl:list binder) : Tot (b:bytes{length b <= op_Multiply (List.Tot.length bl) 256}) =
+    match bl with
+    | [] -> empty_bytes
+    | b::t ->
+      let bt = aux t in
+      assert(length bt <= op_Multiply (List.Tot.length bl - 1) 256);
+      let b0 = Parse.vlbytes1 b in
+      assert(length b0 <= 256);
+      b0 @| (aux t) in
+  match bs with
+  | h::t ->
+    let b = aux t in
+    let b0 = Parse.vlbytes1 h in
+    assert(length b0 >= 33);
+    b0 @| b
+
+let bindersBytes (bs:binders): Tot (b:bytes{length b >= 35 /\ length b <= 65537}) =
+  let b = binderListBytes bs in
+  Parse.vlbytes2 b
+
+#set-options "--lax"
+let parseBinderList (b:bytes{2 <= length b}) : Tot (result binders) =
+  let rec (aux: b:bytes -> binders -> Tot (result binders) (decreases (length b))) =
+   fun b binders ->
     if length b > 0 then
       if length b >= 5 then // SI: check ?
-	match vlsplit 1 b with // SI: check 1?
-	| Error z -> error "parseBinderList failed to parse a binder"
-	| Correct(binder,bytes) -> aux bytes (binders @ [binder]) // use List.Total.snoc
+      	match vlsplit 1 b with // SI: check 1?
+      	| Error z -> error "parseBinderList failed to parse a binder"
+      	| Correct(binder, bytes) ->
+          if length binder < 32 then error "parseBinderList: binder too short"
+          else aux bytes (binders @ [binder]) // use List.Total.snoc
       else error "parseBinderList: too few bytes"
     else Correct binders in
-  match vlparse 2 b with 
+  match vlparse 2 b with
   | Correct b -> aux b []
-  | Error z -> error "parseBinderList" 
+  | Error z -> error "parseBinderList"
+#reset-options
 
 val pskiBytes : PSK.preSharedKey * UInt32.t -> Tot bytes
-let pskiBytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
+let pskiBytes (i,ot) =
+  let idx = UInt32.v ot in
+  assert(idx < 4294967296);
+  lemma_repr_bytes_values idx;
+  let n = bytes_of_int 4 idx in
+  (PSK.preSharedKeyBytes i) @| n
 
-val pskBytes : psk -> Tot bytes 
-let pskBytes psk = 
-  match psk with 
-  | ClientPSK ids ->
+#set-options "--lax"
+val pskBytes : psk -> Tot bytes
+let pskBytes psk =
+  match psk with
+  | ClientPSK ids binder_len ->
     let ids' = List.Tot.fold_left (fun acc pski -> acc @| pskiBytes pski) empty_bytes ids in
-    vlbytes 2 ids' 
+    vlbytes 2 ids' @| (bytes_of_int 2 binder_len)
   | ServerPSK sid -> bytes_of_int 2 (UInt16.v sid)
 
 
 // SI: parsing uint32 depends upon #ota=4 precondition
-let ota_is_4 (b:bytes) = 
+let ota_is_4 (b:bytes) =
   match vlsplit 2 b with
   | Error z -> False
-  | Correct(_id,ota) -> length ota == 4 
-  
+  | Correct(_id,ota) -> length ota == 4
+
 //val parsePskIdentity : b:bytes{let _,ota = vlsplit 2 b in length ota == 4}  -> result pskIdentity
 val parsePskIdentity : b:bytes{ota_is_4 b} -> result pskIdentity
-let parsePskIdentity b = 
-//  let id,ota = vlsplit 2 b in // SI: check vlsplit use 
+let parsePskIdentity b =
+//  let id,ota = vlsplit 2 b in // SI: check vlsplit use
   match vlsplit 2 b with
   | Error z -> error "parsePskIdentity failed to parse"
-  | Correct(id,ota) -> 
+  | Correct(id,ota) ->
     begin
-      match PSK.parsePreSharedKey id with 
-      | Correct(id) -> 
-	let ota = UInt32.uint_to_t (int_of_bytes ota) in
-	Correct (id,ota)
+      match PSK.parsePreSharedKey id with
+      | Correct(id) ->
+      	let ota = UInt32.uint_to_t (int_of_bytes ota) in
+      	Correct (id,ota)
       | Error z -> error "parsePskIdentity"
       end
-  
+
 val parsePskIdentities : bytes -> result (list pskIdentity)
-let parsePskIdentities b = 
-  let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b psks ->    
+let parsePskIdentities b =
+  let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b psks ->
     if length b > 0 then
-      if length b >= 7 then 
-	match vlsplit 2 b with 
+      if length b >= 7 then
+	match vlsplit 2 b with
 	| Error z -> error "parsePskIdentities failed to parse id"
-	| Correct (id,bytes) -> 
+	| Correct (id,bytes) ->
 	let ot, bytes = split bytes 4 in (
 	match parsePskIdentity (vlbytes2 id @| ot) with
 	| Correct pski -> aux bytes (psks @ [pski])
@@ -114,73 +149,71 @@ let parsePskIdentities b =
     else Correct psks in
   match vlparse 2 b with
   | Correct b -> aux b []
-  | Error z -> error "parsePskIdentities" 
-
+  | Error z -> error "parsePskIdentities"
 
 val client_psk_parse : bytes -> result (psk * option binders)
-let client_psk_parse b = 
+let client_psk_parse b =
   match vlsplit 2 b with
   | Error z -> error "client_psk_parse failed to parse"
-  | Correct(ids,binders) -> (
-    // SI: add ids header back. 
-    match parsePskIdentities (vlbytes2 ids) with 
+  | Correct(ids,binders_bytes) -> (
+    // SI: add ids header back.
+    match parsePskIdentities (vlbytes2 ids) with
     | Correct ids -> (
-	match parseBinderList binders with
-	| Correct binders -> Correct (ClientPSK ids, Some binders)
-	| Error z -> error "client_psk_parse_binders")
-    | Error z -> error "client_psk_parse_ids")
+    	match parseBinderList binders_bytes with
+    	| Correct bl -> Correct (ClientPSK ids (length binders_bytes - 2), Some bl)
+    	| Error z -> error "client_psk_parse_binders")
+        | Error z -> error "client_psk_parse_ids")
 
-	
-val server_psk_parse : bytes -> psk 
+val server_psk_parse : bytes -> psk
 let server_psk_parse b = ServerPSK (UInt16.uint_to_t (int_of_bytes b))
 
 val parse_psk: role -> bytes -> result (psk * option binders)
-let parse_psk role b = 
-  match role with 
+let parse_psk role b =
+  match role with
   | Client -> client_psk_parse b
   | Server -> Correct (server_psk_parse b, None)
- 
+
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
 // restricting both proposed PSKs and future ones sent by the server
 // will also be used in the PSK table, and possibly in the configs
 type psk_kex =
-  | PSK_KE 
-  | PSK_DHE_KE 
+  | PSK_KE
+  | PSK_DHE_KE
 
-type client_psk_kexes = l:list psk_kex 
+type client_psk_kexes = l:list psk_kex
   { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
 
 let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
 
 val psk_kex_bytes: psk_kex -> Tot (lbytes 1)
-let psk_kex_bytes = function 
-  | PSK_KE -> abyte 0z 
+let psk_kex_bytes = function
+  | PSK_KE -> abyte 0z
   | PSK_DHE_KE -> abyte 1z
-let parse_psk_kex: pinverse_t psk_kex_bytes = fun b -> match cbyte b with 
+let parse_psk_kex: pinverse_t psk_kex_bytes = fun b -> match cbyte b with
   | 0z -> Correct PSK_KE
   | 1z -> Correct PSK_DHE_KE
   | _ -> error  "psk_key"
 
-let client_psk_kexes_bytes (ckxs: client_psk_kexes): b:bytes {length b <= 3} = 
-  let content: b:bytes {length b = 1 || length b = 2} = 
-    match ckxs with 
+let client_psk_kexes_bytes (ckxs: client_psk_kexes): b:bytes {length b <= 3} =
+  let content: b:bytes {length b = 1 || length b = 2} =
+    match ckxs with
     | [x] -> psk_kex_bytes x
     | [x;y] -> psk_kex_bytes x @| psk_kex_bytes y in
   lemma_repr_bytes_values (length content);
   vlbytes 1 content
 
 #set-options "--lax"
-let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b -> 
-  if equalBytes b (client_psk_kexes_bytes [PSK_KE]) then Correct [PSK_KE] else 
+let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b ->
+  if equalBytes b (client_psk_kexes_bytes [PSK_KE]) then Correct [PSK_KE] else
   if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE]) then Correct [PSK_DHE_KE] else
   if equalBytes b (client_psk_kexes_bytes [PSK_KE; PSK_DHE_KE]) then Correct [PSK_KE; PSK_DHE_KE]  else
-  if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE; PSK_KE]) then Correct [PSK_DHE_KE; PSK_KE] 
+  if equalBytes b (client_psk_kexes_bytes [PSK_DHE_KE; PSK_KE]) then Correct [PSK_DHE_KE; PSK_KE]
   else error "PSK KEX payload"
   // redundants lists yield an immediate decoding error.
 #reset-options
 
-(* EARLY DATA INDICATION *) 
+(* EARLY DATA INDICATION *)
 
 type earlyDataIndication = option UInt32.t // Some  max_early_data_size, only in  NewSessionTicket
 
@@ -188,23 +221,23 @@ val earlyDataIndicationBytes: edi:earlyDataIndication -> Tot bytes
 let earlyDataIndicationBytes = function
   | None -> empty_bytes // ClientHello, EncryptedExtensions
   | Some max_early_data_size -> // NewSessionTicket
-    let n = UInt32.v max_early_data_size in    
+    let n = UInt32.v max_early_data_size in
     lemma_repr_bytes_values n;
     bytes_of_int 4 n
 
 val parseEarlyDataIndication: bytes -> result earlyDataIndication
 let parseEarlyDataIndication data =
-  match length data with 
-  | 0 -> Correct None 
-  | 4 -> 
+  match length data with
+  | 0 -> Correct None
+  | 4 ->
       let n = int_of_bytes data in
       lemma_repr_bytes_values n;
       assert_norm (pow2 32 == 4294967296);
       Correct (Some (UInt32.uint_to_t n))
-  | _ -> error "early data indication" 
-  
+  | _ -> error "early data indication"
 
-(* EC POINT FORMATS *) 
+
+(* EC POINT FORMATS *)
 
 let rec ecpfListBytes_aux: list point_format -> bytes = function
   | [] -> empty_bytes
@@ -219,39 +252,39 @@ let ecpfListBytes l =
   bl
 
 
-(* PROTOCOL VERSIONS *) 
+(* PROTOCOL VERSIONS *)
 
-// The length exactly reflects the RFC format constraint <2..254> 
+// The length exactly reflects the RFC format constraint <2..254>
 type protocol_versions =
   l:list protocolVersion {0 < List.Tot.length l /\ List.Tot.length l < 128}
 
-#set-options "--lax" 
-// SI: dead code? 
+#set-options "--lax"
+// SI: dead code?
 val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
 let protocol_versions_bytes vs =
   vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vs)
-  // todo length bound; do we need an ad hoc variant of fold? 
-#reset-options 
+  // todo length bound; do we need an ad hoc variant of fold?
+#reset-options
 
 //17-05-01 added a refinement to control the list length; this function verifies.
 //17-05-01 should we use generic code to parse such bounded lists?
 //REMARK: This is not tail recursive, contrary to most of our parsing functions
-val parseVersions: 
-  b:bytes -> 
+val parseVersions:
+  b:bytes ->
   Tot (result (l:list TLSConstants.protocolVersion {FStar.Mul.( length b == 2 * List.Tot.length l)})) (decreases (length b))
 let rec parseVersions b =
-  match length b with 
+  match length b with
   | 0 -> let r = [] in assert_norm (List.Tot.length [] = 0); Correct r
-  | 1 -> Error (AD_decode_error, "malformed version list") 
-  | _ -> 
+  | 1 -> Error (AD_decode_error, "malformed version list")
+  | _ ->
     let b2, b' = split b 2 in
-    match TLSConstants.parseVersion_draft b2 with 
+    match TLSConstants.parseVersion_draft b2 with
     | Error z -> Error z
-    | Correct v -> 
-      match parseVersions b' with 
-      | Error z -> Error z 
+    | Correct v ->
+      match parseVersions b' with
+      | Error z -> Error z
       | Correct vs -> (
-          let r = v::vs in 
+          let r = v::vs in
           assert_norm (List.Tot.length (v::vs) = 1 + List.Tot.length vs); // did not find usable length lemma in List.Tot
           Correct r)
 
@@ -265,13 +298,13 @@ let parseSupportedVersions b =
     | Error z -> Error z
     | Correct vs ->
       let n = List.Tot.length vs in
-      if 1 <= n && n <= 127 
-      then Correct vs 
+      if 1 <= n && n <= 127
+      then Correct vs
       else  error "too many or too few protocol versions"
     end
 
 
-(* SERVER NAME INDICATION *) 
+(* SERVER NAME INDICATION *)
 
 private val serverNameBytes: list serverName -> Tot bytes
 let serverNameBytes l =
@@ -281,7 +314,7 @@ let serverNameBytes l =
   | SNI_UNKNOWN(t, x) :: r -> bytes_of_int 1 t @| bytes_of_int 2 (length x) @| x @| aux r
   in
   aux l
- 
+
 private val parseServerName: r:role -> b:bytes -> Tot (result (list serverName))
 let parseServerName r b  =
   let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
@@ -339,36 +372,36 @@ let parseServerName r b  =
       else
 	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
 
-(* TODO: supported_groups and signature_algorithms *) 
+(* TODO: supported_groups and signature_algorithms *)
 
-// ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2. 
-// M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2. 
+// ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
+// M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
 noeq type extension =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
-  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)  
+  | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
-  | E_pre_shared_key of list psk (* M, AF *)
+  | E_pre_shared_key of psk (* M, AF *)
   | E_early_data of earlyDataIndication
-  | E_supported_versions of protocol_versions   (* M, AF *) 
+  | E_supported_versions of protocol_versions   (* M, AF *)
   | E_cookie of b:bytes {0 < length b /\ length b < 65536}  (* M *)
-  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)  
+  | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)
   | E_extended_ms
   | E_ec_point_format of list point_format
   | E_unknown_extension of (lbytes 2 * bytes) (* header, payload *)
-(* 
+(*
 We do not yet support the extensions below (authenticated but ignored)
   | E_max_fragment_length
   | E_status_request
-  | E_use_srtp 
-  | E_heartbeat 
+  | E_use_srtp
+  | E_heartbeat
   | E_application_layer_protocol_negotiation
-  | E_signed_certifcate_timestamp 
-  | E_client_certificate_type 
-  | E_server_certificate_type 
-  | E_certificate_authorities 
-  | E_oid_filters 
-  | E_post_handshake_auth 
+  | E_signed_certifcate_timestamp
+  | E_client_certificate_type
+  | E_server_certificate_type
+  | E_certificate_authorities
+  | E_oid_filters
+  | E_post_handshake_auth
   | E_renegotiation_info of renegotiationInfo
 *)
 
@@ -394,16 +427,16 @@ let rec string_of_extensions = function
 private let sameExt e1 e2 =
   match e1, e2 with
   | E_server_name _, E_server_name _ -> true
-  | E_supported_groups _, E_supported_groups _ -> true 
+  | E_supported_groups _, E_supported_groups _ -> true
   | E_signature_algorithms _, E_signature_algorithms _ -> true
   | E_key_share _, E_key_share _ -> true
   | E_pre_shared_key _, E_pre_shared_key _ -> true
   | E_early_data _, E_early_data _ -> true
   | E_supported_versions _, E_supported_versions _ -> true
-  | E_cookie _, E_cookie _ -> true 
+  | E_cookie _, E_cookie _ -> true
   | E_psk_key_exchange_modes _, E_psk_key_exchange_modes _ -> true
   | E_extended_ms, E_extended_ms -> true
-  | E_ec_point_format _, E_ec_point_format _ -> true 
+  | E_ec_point_format _, E_ec_point_format _ -> true
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
@@ -417,16 +450,16 @@ private val extensionHeaderBytes: extension -> lbytes 2
 let extensionHeaderBytes ext =
   match ext with             // 4.2 ExtensionType enum value
   | E_server_name _            -> abyte2 (0x00z, 0x00z)
-  | E_supported_groups _       -> abyte2 (0x00z, 0x0Az) // 10 
+  | E_supported_groups _       -> abyte2 (0x00z, 0x0Az) // 10
   | E_signature_algorithms _   -> abyte2 (0x00z, 0x0Dz) // 13
   | E_key_share _              -> abyte2 (0x00z, 0x28z) // 40
   | E_pre_shared_key _         -> abyte2 (0x00z, 0x29z) // 41
   | E_early_data _             -> abyte2 (0x00z, 0x2az) // 42
   | E_supported_versions _     -> abyte2 (0x00z, 0x2bz) // 43
-  | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44 
+  | E_cookie _                 -> abyte2 (0x00z, 0x2cz) // 44
   | E_psk_key_exchange_modes _ -> abyte2 (0x00z, 0x2dz) // 45
   | E_extended_ms              -> abyte2 (0x00z, 0x17z) // 45
-  | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11 
+  | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11
   | E_unknown_extension (h,b)  -> h
 
 (* API *)
@@ -438,10 +471,10 @@ val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
 let rec extensionPayloadBytes = function
   | E_server_name []           -> empty_bytes // ServerHello, EncryptedExtensions
   | E_server_name l            -> vlbytes 2 (serverNameBytes l) // ClientHello
-  | E_supported_groups l       -> namedGroupsBytes l  
+  | E_supported_groups l       -> namedGroupsBytes l
   | E_signature_algorithms sha -> signatureSchemeListBytes sha
   | E_key_share ks             -> CommonDH.keyShareBytes ks
-  | E_pre_shared_key psk       -> admit() //PSK.preSharedKeyBytes psk //17-04-21 TODO parse/format the list with ota
+  | E_pre_shared_key psk       -> pskBytes psk
   | E_early_data edi           -> earlyDataIndicationBytes edi
   | E_supported_versions vv    ->
     // Sending TLS 1.3 draft versions, as other implementations are doing
@@ -462,14 +495,14 @@ let rec extensionBytes ext =
   let payload = vlbytes 2 payload in
   head @| payload
 
-val extensionListBytes: exts: list extension -> bytes 
+val extensionListBytes: exts: list extension -> bytes
 let extensionListBytes exts = List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts
 
 type extensions = exts:list extension {repr_bytes (length (extensionListBytes exts)) <= 2}
 
 val noExtensions: exts:extensions {exts == []}
-let noExtensions = 
-  lemma_repr_bytes_values (length (extensionListBytes [])); 
+let noExtensions =
+  lemma_repr_bytes_values (length (extensionListBytes []));
   []
 
 val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
@@ -478,17 +511,17 @@ let extensionsBytes exts =
   lemma_repr_bytes_values (length b);
   vlbytes 2 b
 
-// SI: add a $delta$ param for truncated binders length. 
-// The main exported extensionBytes function will have _trunc's type. 
+// SI: add a $delta$ param for truncated binders length.
+// The main exported extensionBytes function will have _trunc's type.
 // SI: move vlbytes_trunc to Format
 val vlbytes_trunc: lSize:nat -> b:bytes -> binderSize:nat -> Tot (r:bytes{length r = lSize + (length b) + binderSize})
-let vlbytes_trunc lSize b bSize = 
-  bytes_of_int lSize ((length b) + bSize) @| b 
-  
-val extensionsBytes_trunc: extensions -> bindersSize:nat -> b:bytes { length b < 2 + 65536 } 
-let extensionsBytes_trunc exts delta = 
+let vlbytes_trunc lSize b bSize =
+  bytes_of_int lSize ((length b) + bSize) @| b
+
+val extensionsBytes_trunc: extensions -> bindersSize:nat -> b:bytes { length b < 2 + 65536 }
+let extensionsBytes_trunc exts delta =
   let exts = extensionsBytes exts in
-  vlbytes_trunc 2 exts delta 
+  vlbytes_trunc 2 exts delta
 
 (*************************************************
  Extension parsing
@@ -506,21 +539,21 @@ val parseEcpfList: bytes -> result (list point_format)
 let parseEcpfList b =
     let rec aux: (b:bytes -> Tot (result (list point_format)) (decreases (length b))) = fun b ->
         if equalBytes b empty_bytes then Correct []
-        else if length b = 0 then error "malformed curve list" 
+        else if length b = 0 then error "malformed curve list"
         else
           let u,v = split b 1 in
           ( match aux v with
-            | Error z -> Error z 
+            | Error z -> Error z
             | Correct l ->
-              let cur = 
+              let cur =
               match cbyte u with
               | 0z -> ECP_UNCOMPRESSED
-              | _ -> ECP_UNKNOWN(int_of_bytes u) in 
+              | _ -> ECP_UNKNOWN(int_of_bytes u) in
               Correct (cur :: l))
     in match aux b with
     | Error z -> Error z
-    | Correct l -> 
-      if List.Tot.mem ECP_UNCOMPRESSED l 
+    | Correct l ->
+      if List.Tot.mem ECP_UNCOMPRESSED l
       then correct l
       else error "uncompressed point format not supported"
 
@@ -528,11 +561,11 @@ let parseEcpfList b =
 #set-options "--lax"
 val parseExtension: role -> bytes -> result extension
 let parseExtension role b =
-  if length b < 4 then error "extension type: not enough bytes" else 
+  if length b < 4 then error "extension type: not enough bytes" else
   let head, payload = split b 2 in
   match vlparse 2 payload with
   | Error (_,s) -> error ("extension: "^s)
-  | Correct data -> ( 
+  | Correct data -> (
     match cbyte2 head with
     | (0x00z, 0x00z) -> mapResult E_server_name (parseServerName role data)
     | (0x00z, 0x0Az) -> // supported groups
@@ -540,14 +573,14 @@ let parseExtension role b =
       mapResult E_supported_groups (Parse.parseNamedGroups data)
 
     | (0x00z, 0x0Dz) -> // sigAlgs
-      if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else 
+      if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else
       mapResult E_signature_algorithms (TLSConstants.parseSignatureSchemeList data)
-      
+
     | (0x00z, 0x28z) -> mapResult E_key_share (CommonDH.parseKeyShare (Client? role) data)
 
     | (0x00z, 0x29z) -> // head TBD, PSK
-      if length data < 2 then error "PSK" else 
-      mapResult E_pre_shared_key (admit()) (* 17-04-21 TODO PSK.parsePreSharedKey data *) 
+      if length data < 2 then error "PSK" else
+      mapResult E_pre_shared_key (parse_psk role data) (* 17-04-21 TODO PSK.parsePreSharedKey data *)
 
     | (0x00z, 0x2az) ->
       if length data <> 0 && length data <> 4 then error "early data indication" else
@@ -559,26 +592,26 @@ let parseExtension role b =
     | (0xffz, 0x2cz) -> // cookie
       if length data <= 2 || length data >= 65538 then error "cookie" else
       Correct (E_cookie data)
-      
+
     (* ToDo: | E_psk_key_exchange_modes _ *)
 
     | (0x00z, 0x17z) -> // extended ms
-      if length data > 0 then error "extended master secret" else 
+      if length data > 0 then error "extended master secret" else
       Correct E_extended_ms
-      
+
     | (0x00z, 0x0Bz) -> // ec point format
       if length data < 1 || length data >= 256 then error "ec point format" else (
       lemma_repr_bytes_values (length data);
       match vlparse 1 data with
       | Error z -> Error z
       | Correct ecpfs -> mapResult E_ec_point_format (parseEcpfList ecpfs))
-      
+
     | _ -> Correct (E_unknown_extension (head,data)))
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
 val parseExtensions: role -> b:bytes -> result extensions
 let parseExtensions role b =
-  let rec aux: 
+  let rec aux:
     b:bytes -> list extension -> Tot (result (list extension)) (decreases (length b)) = fun b exts ->
     if length b >= 4 then
       let ht, b = split b 2 in
@@ -596,15 +629,15 @@ let parseExtensions role b =
   if length b < 2 then error "extensions" else
   match vlparse 2 b with
   | Correct b -> aux b []
-  | Error z -> error "extensions" 
+  | Error z -> error "extensions"
 
 (* SI: API. Called by HandshakeMessages. *)
 val parseOptExtensions: r:role -> data:bytes -> result (option (list extension))
 let parseOptExtensions r data =
-  if length data = 0 
+  if length data = 0
   then Correct None
   else mapResult Some (parseExtensions r data)
-#reset-options 
+#reset-options
 
 
 (*************************************************
@@ -613,16 +646,16 @@ let parseOptExtensions r data =
 
 (* JK: Need to get rid of such functions *)
 private let rec list_valid_cs_is_list_cs (l:valid_cipher_suites): list cipherSuite =
-  match l with 
-  | [] -> [] 
+  match l with
+  | [] -> []
   | hd :: tl -> hd :: list_valid_cs_is_list_cs tl
 
 #set-options "--lax"
-private let rec list_valid_ng_is_list_ng (l:list valid_namedGroup) : list namedGroup = 
-  match l with 
-  | [] -> [] 
+private let rec list_valid_ng_is_list_ng (l:list valid_namedGroup) : list namedGroup =
+  match l with
+  | [] -> []
   | hd :: tl -> hd :: list_valid_ng_is_list_ng tl
-#reset-options 
+#reset-options
 
 (* SI: API. Called by Nego. *)
 (* RFC 4.2:
@@ -632,7 +665,7 @@ extensions MAY appear in any order, with the exception of
 the ClientHello. There MUST NOT be more than one extension of the same
 type in a given extension block.
 
-RFC 8.2. ClientHello msg must: 
+RFC 8.2. ClientHello msg must:
 If not containing a “pre_shared_key” extension, it MUST contain both a
 “signature_algorithms” extension and a “supported_groups” extension.
 If containing a “supported_groups” extension, it MUST also contain a
@@ -641,22 +674,22 @@ vector is permitted.
 
 *)
 #set-options "--lax"
-val prepareExtensions: 
+val prepareExtensions:
   protocolVersion ->
-  protocolVersion -> 
-  k:valid_cipher_suites{List.Tot.length k < 256} -> 
-  bool -> 
-  bool -> 
+  protocolVersion ->
+  k:valid_cipher_suites{List.Tot.length k < 256} ->
+  bool ->
+  bool ->
   signatureSchemeList ->
-  list (x:namedGroup{SEC? x \/ FFDHE? x}) -> 
+  list (x:namedGroup{SEC? x \/ FFDHE? x}) ->
   option (cVerifyData * sVerifyData) ->
-  option CommonDH.keyShare -> 
+  option CommonDH.keyShare ->
   l:list extension{List.Tot.length l < 256}
-(* SI: implement this using prep combinators, of type exts->data->exts, per ext group. 
-   For instance, PSK, HS, etc extensions should all be done in one function each. 
+(* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
+   For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
 let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
-    let res = [] in 
+    let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
     (* let cri = *)
@@ -672,7 +705,7 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
       // | TLS_1p2, TLS_1p2 -> E_supported_versions [TLS_1p2] :: res
       | _ -> res
     in
-    let res = 
+    let res =
       match pv, ks with
       | TLS_1p3, Some ks -> E_key_share ks::res
       | _,_ -> res
@@ -696,11 +729,11 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
 (*
 // TODO the code above is too restrictive, should support further extensions
 // TODO we need an inverse; broken due to extension ordering. Use pure views instead?
-val matchExtensions: list extension{List.Tot.length l < 256} -> Tot ( 
+val matchExtensions: list extension{List.Tot.length l < 256} -> Tot (
   protocolVersion *
   k:valid_cipher_suites{List.Tot.length k < 256} *
   bool *
-  bool * 
+  bool *
   list signatureScheme -> list (x:namedGroup{SEC? x \/ FFDHE? x}) *
   option (cVerifyData * sVerifyData) *
   option CommonDH.keyShare )
@@ -713,10 +746,10 @@ let prepareExtensions_inverse pv cs sres sren sigAlgs namedGroups ri ks:
 *)
 
 (*************************************************
- SI: 
- The rest of the code might be dead. 
+ SI:
+ The rest of the code might be dead.
  Some of the it is called by Nego, but it might be that
- it needs to move to Nego. 
+ it needs to move to Nego.
  *************************************************)
 
 (* SI: is renego deadcode? *)
@@ -813,7 +846,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello")
      end
   | _ ->
-     begin 
+     begin
      match cExtL, sExtL with
      | Some cExtL, Some sExtL -> (
         let nes = ne_default in
@@ -829,11 +862,11 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
 	    | None -> correct l
 	    | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
 	  end )
-     | _, None -> 
+     | _, None ->
        if pv <> TLS_1p3 then Correct ne_default
        else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
      | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
-     end 
+     end
 #reset-options
 
 private val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> option extension
@@ -885,8 +918,8 @@ let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
                  Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
               else None //, ne_default in
           in Correct cre
-*)	  
-     | _ -> 
+*)
+     | _ ->
        Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "No extensions in ClientHello")
      end
 
