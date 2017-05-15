@@ -1,5 +1,7 @@
+(*--build-config
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
+--*)
 module HandshakeLog
-
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -80,12 +82,12 @@ let transcript_format_injective ms0 ms1 = admit()
 
 let tags_append a p ms0 ms1 hs1 hs1 = admit()
 
-noeq type hashState (prior parsed: list msg) = 
+noeq type hashState (prior parsed: list msg) =
   | OpenHash: b:bytes { b = transcript_bytes (prior @ parsed) } -> hashState prior parsed
-  | FixedHash: 
-      a: Hashing.alg -> 
-      state: accv a { Hashing.content state = transcript_bytes (prior @ parsed) } -> 
-      hashes: list (tag a) { tags a prior parsed hashes } -> 
+  | FixedHash:
+      a: Hashing.alg ->
+      state: accv a { Hashing.content state = transcript_bytes (prior @ parsed) } ->
+      hashes: list (tag a) { tags a prior parsed hashes } ->
       hashState prior parsed
 
 noeq type state =
@@ -95,12 +97,12 @@ noeq type state =
     outgoing: bytes -> // outgoing data, alrady formatted and hashed
     outgoing_ccs: option bytes ->
     outgoing_next_keys: bool ->
-    outgoing_complete: bool ->            
-    
+    outgoing_complete: bool ->
+
     incoming: bytes -> // received fragments; untrusted; not yet hashed or parsed
-    parsed: list msg{valid_transcript (transcript @ parsed)} -> 
+    parsed: list msg{valid_transcript (transcript @ parsed)} ->
                        // partial incoming flight, hashed & parsed, with selected intermediate tags
-    hashes: hashState transcript parsed  -> 
+    hashes: hashState transcript parsed  ->
 
     // memoized parameters
     pv: option protocolVersion ->             // Initially: the pv in the clientHello, then the pv in the serverHello
@@ -111,28 +113,28 @@ noeq type state =
 
 let log = HS.ref state
 
-let get_reference l = 
+let get_reference l =
     HS.(Ref l)
 
 val init: h:HS.mem -> log -> option TLSConstants.protocolVersion -> GTot bool
-let init h (st:log) (pvo: option protocolVersion) = 
-   let s = sel h st in
+let init h (st:log) (pvo: option protocolVersion) =
+   let s = HS.sel h st in
    s.hashes = OpenHash empty_bytes &&
    s.pv = pvo &&
    s.kex = None &&
    s.dh_group = None
 
 // static precondition for HS writing messages & signals
-let writing h st = 
+let writing h st =
     let s = HS.sel h st in
     List.Tot.isEmpty s.parsed
 
 // must be checked before incrementing the read epoch.
-val notReading: state -> Tot bool 
+val notReading: state -> Tot bool
 let notReading st = st.parsed = [] && st.incoming = empty_bytes
 
-let hashAlg h st = 
-    let s = HS.sel h st in 
+let hashAlg h st =
+    let s = HS.sel h st in
     match s.hashes with
     | OpenHash _ -> None
     | FixedHash a _ _ -> Some a
@@ -141,27 +143,27 @@ let hashAlg h st =
 //  specification-level transcript of all handshake messages logged so far
 let transcript h t =
     if Flags.debug_HSL then
-    (sel h t).transcript
+    (HS.sel h t).transcript
     else
-    FStar.Ghost.reveal ((sel h t).transcript)
+    FStar.Ghost.reveal ((HS.sel h t).transcript)
 
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false false
-              empty_bytes [] (OpenHash empty_bytes) 
+              empty_bytes [] (OpenHash empty_bytes)
       pv None None in
     let st = ralloc reg l in
     st
 
-let modifies_0 (s:log) h0 h1 = 
+let modifies_0 (s:log) h0 h1 =
   HS.(mods [Ref s] h0 h1) /\
   transcript h1 s == transcript h0 s /\
   writing h1 s == writing h0 s /\
   hashAlg h1 s = hashAlg h0 s
-  
+
 let setParams l pv ha kexo dho =
   let st = !l in
   match st.hashes with
-  | OpenHash msgs -> 
+  | OpenHash msgs ->
       let acc = Hashing.start ha in
       let acc = Hashing.extend #ha acc msgs in // TODO prove that content h = transcript_bytes ...
       let hs = FixedHash ha acc [] in
@@ -190,7 +192,7 @@ let send l m =
     match st.hashes with
     | FixedHash a acc hl ->
       let acc = Hashing.extend #a acc mb in
-      FixedHash a acc hl              
+      FixedHash a acc hl
     | OpenHash p ->
       OpenHash (p @| mb)
     in
@@ -199,19 +201,19 @@ let send l m =
   l := State t o st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
                 st.incoming st.parsed h st.pv st.kex st.dh_group
 
-let hash_tag #a l = 
+let hash_tag #a l =
   let st = !l in
   match st.hashes with
-  | FixedHash a' acc hl -> 
+  | FixedHash a' acc hl ->
       if a <> a' then trace "BAD HASH (statically excluded)";
-      Hashing.finalize #a acc 
+      Hashing.finalize #a acc
 
 // maybe just compose the two functions above?
 let send_tag #a l m =
   trace ("emit "^HandshakeMessages.string_of_handshakeMessage m^" and hash");
   let st = !l in
   let mb = handshakeMessageBytes st.pv m in
-  let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) = 
+  let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) =
     match st.hashes with
     | FixedHash a acc hl ->
       let acc = Hashing.extend #a acc mb in
@@ -230,7 +232,7 @@ let send_tag #a l m =
 let send_CCS_tag #a l m cf =
   let st = !l in
   let mb = handshakeMessageBytes st.pv m in
-  let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) = 
+  let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) =
     match st.hashes with
     | FixedHash a acc hl ->
       let acc = Hashing.extend #a acc mb in
@@ -245,15 +247,15 @@ let send_CCS_tag #a l m cf =
   tg
 
 // TODO require or check that both flags are clear before the call
-let send_signals l outgoing_next_keys1 outgoing_complete1 = 
-  let State transcript outgoing outgoing_ccs outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in 
+let send_signals l outgoing_next_keys1 outgoing_complete1 =
+  let State transcript outgoing outgoing_ccs outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in
   if outgoing_next_keys0 && outgoing_next_keys1 then trace "WARNING: dirty next flag";
   if outgoing_complete0 && outgoing_complete1 then trace "WARNING: dirty complete flag";
-  l := State transcript outgoing outgoing_ccs outgoing_next_keys1 outgoing_complete1  incoming parsed hashes pv kex dh_group 
+  l := State transcript outgoing outgoing_ccs outgoing_next_keys1 outgoing_complete1  incoming parsed hashes pv kex dh_group
 
 let next_fragment l (i:id) =
   let st = !l in
-  // do we have a fragment to send? 
+  // do we have a fragment to send?
   let fragment, outgoing' =
     let o = st.outgoing in
     let lo = length o in
@@ -267,36 +269,37 @@ let next_fragment l (i:id) =
       let (x,y) = split o max_TLSPlaintext_fragment_length in
       let lx = length x in
       let rg = (lx, lx) in
-      (Some (| rg, x |), y) in 
-    if length outgoing' = 0 
+      (Some (| rg, x |), y) in
+    if length outgoing' = 0
     then (
       // send signals only after flushing the output buffer
       let send_ccs, outgoing' = match st.outgoing_ccs with
       | Some finishedFragment -> true, finishedFragment
-      | None -> false, outgoing' in 
-      l := State 
-              st.transcript outgoing'  None false false 
+      | None -> false, outgoing' in
+      l := State
+              st.transcript outgoing'  None false false
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment send_ccs st.outgoing_next_keys st.outgoing_complete ) 
+      Outgoing fragment send_ccs st.outgoing_next_keys st.outgoing_complete )
     else (
-      l := State 
+      l := State
               st.transcript outgoing' st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment false false false ) 
+      Outgoing fragment false false false )
 
 (* RECEIVE *)
 
 //17-04-24 avoid parsing loop? may be simpler at the level of receive.
 //17-05-09 but returning a list is convenient for handling truncated ClientHello
-val parseMessages: 
-  pvo: option protocolVersion -> kexo: option kexAlg -> b: bytes -> 
+val parseMessages:
+  pvo: option protocolVersion -> kexo: option kexAlg -> b: bytes ->
   ST (result (
-    bool (* end of flight? *) * 
-    bytes (* remaining bytes *) * 
-    list msg (* parsed messages *) * 
+    bool (* end of flight? *) *
+    bytes (* remaining bytes *) *
+    list msg (* parsed messages *) *
     list bytes (* ...and their unparsed bytes for hashes *)  ))
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> modifies_none h0 h1))
+
 let rec parseMessages pvo kexo buf =
   match HandshakeMessages.parseMessage buf with
   | Error z -> Error z
@@ -312,9 +315,9 @@ let rec parseMessages pvo kexo buf =
         | Correct (ch, None) -> (
           trace ("parsed [ClientHello] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
           Correct(true, rem, [ClientHello ch], [to_log]))
-        | Correct (ch, Some (binders, truncated)) -> (
+        | Correct (ch, Some binders) -> (
           trace ("parsed [ClientHello; Binders] -- end of flight "^(if length rem > 0 then " (bytes waiting)" else ""));
-          let chBytes, bindersBytes = split to_log (length to_log - truncated) in
+          let chBytes, bindersBytes = split to_log (length to_log - HandshakeMessages.bindersLen_of_ch ch) in
           Correct(true, rem, [ClientHello ch; Binders binders], [chBytes; bindersBytes])))
       else (
         match parseHandshakeMessage pvo kexo hstype pl with
@@ -333,24 +336,25 @@ let rec parseMessages pvo kexo buf =
 val hashHandshakeMessages : t: erased_transcript ->
               p: list msg ->
           hashes: hashState t p ->
-          next: (list msg) -> 
-          nextb: (list bytes) -> 
+          next: (list msg) ->
+          nextb: (list bytes) ->
           ST (hashState t (p @ next))
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies Set.empty h0 h1))
-let rec hashHandshakeMessages t p hs n nb = 
+  (ensures (fun h0 t h1 -> modifies_none h0 h1))
+  
+let rec hashHandshakeMessages t p hs n nb =
     match n,nb with
     | [],[] -> hs
-    | m::mrest,mb::brest -> 
-         (match hs with 
+    | m::mrest,mb::brest ->
+         (match hs with
     | OpenHash b ->
       let hs = OpenHash (b @| mb) in
-      hashHandshakeMessages t (p @ [m]) hs mrest brest 
+      hashHandshakeMessages t (p @ [m]) hs mrest brest
     | FixedHash a acc tl ->
       let acc = Hashing.extend #a acc mb in
-      let tl = if tagged m then   
+      let tl = if tagged m then
              let t = Hashing.finalize #a acc in
-         tl @ [t] 
+         tl @ [t]
          else tl in
       let hs = FixedHash a acc tl in
       hashHandshakeMessages t (p @ [m]) hs mrest brest)
@@ -361,8 +365,8 @@ let receive l mb =
   match parseMessages st.pv st.kex ib with
   | Error z -> Error z
   | Correct (false,r,[],[]) -> (
-       l := State 
-         st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete 
+       l := State
+         st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
          r st.parsed st.hashes st.pv st.kex st.dh_group;
        Correct None )
   | Correct(eof,r,ml,bl) ->
@@ -370,41 +374,41 @@ let receive l mb =
       let ml = st.parsed @ ml in
       if eof then (
         let nt = append_hs_transcript st.transcript ml in
-        let (hs,tl) : hashState nt [] * list anyTag = 
+        let (hs,tl) : hashState nt [] * list anyTag =
           match hs with
           | FixedHash a ac htl -> FixedHash a ac [], htl
           | OpenHash _ -> hs,[] in
-        l := State 
+        l := State
           nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
           r [] hs st.pv st.kex st.dh_group;
         Correct (Some (ml,tl)))
       else (
-        l := State 
+        l := State
           st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
           r ml hs st.pv st.kex st.dh_group;
         Correct None )
- 
+
 
 // We receive CCS as external end-of-flight signals;
-// we return the messages processed so far, and their final tag; 
+// we return the messages processed so far, and their final tag;
 // we still can't write.
-// This should *fail* if there are pending input bytes. 
+// This should *fail* if there are pending input bytes.
 let receive_CCS #a l =
   let st = !l in
-  if length st.incoming > 0 
+  if length st.incoming > 0
   then (
     trace ("too many bytes: "^print_bytes st.incoming);
     Error (AD_unexpected_message, "unexpected fragment after CCS"))
-  else 
-  match st.hashes with 
+  else
+  match st.hashes with
   | OpenHash b -> Error (AD_internal_error, "the hash is open")
-  | FixedHash a acc tl -> 
+  | FixedHash a acc tl ->
     begin
       let nt = append_hs_transcript st.transcript st.parsed in
       let hs': hashState nt [] = FixedHash a acc [] in
       let h = Hashing.finalize #a acc in
-      l := State 
+      l := State
           nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
           st.incoming [] hs' st.pv st.kex st.dh_group;
       Correct (st.parsed, tl, h)
-    end 
+    end
