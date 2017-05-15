@@ -1,3 +1,6 @@
+(*--build-config
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
+--*)
 module Negotiation
 
 open Platform.Error
@@ -185,12 +188,12 @@ let find_pske o =
   | Some (Extensions.E_pre_shared_key psks) -> Some psks
 
 let find_clientPske o =
-  match find_client_extension Extensions.E_pre_shared_key? o with 
-  | None -> None 
+  match find_client_extension Extensions.E_pre_shared_key? o with
+  | None -> None
   | Some (Extensions.E_pre_shared_key psk) ->
-    match psk with 
+    match psk with
     | ServerPSK _ -> None
-    | ClientPSK (ids,_) -> Some ids
+    | ClientPSK ids _ -> Some ids
 
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
@@ -208,7 +211,7 @@ type share = g:CommonDH.group & CommonDH.share g
 
 // we authenticate the whole list, but only care about those we could parse
 let find_key_shares o:option (list share)  =
-  match find_client_extension Extensions.E_key_share? o with 
+  match find_client_extension Extensions.E_key_share? o with
   | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) ->
      begin
      let known = function
@@ -230,7 +233,7 @@ let find_early_data o =
 type retryInfo (offer:offer) =
   hrr *
   list share (* we should actually keep the raw client extension content *) *
-  (list (PSK.pskIdentity * Hashing.anyTag))
+  (list (PSK.pskid * Hashing.anyTag))
 
 (**
   The final negotiated outcome, including key shares and long-term identities.
@@ -362,9 +365,10 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     state: MR.m_rref region (negotiationState role cfg resume) ns_rel ->
     t region role
 
-val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random ->
-  ks:option CommonDH.keyShare -> offer
-let computeOffer r cfg resume nonce ks =
+val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
+  -> ks:option CommonDH.keyShare -> option (list (PSK.pskid * PSK.pskInfo))
+  -> Tot offer
+let computeOffer r cfg resume nonce ks pskinfo =
   let sid =
     match resume with
     | Some sid, _ -> sid
@@ -377,10 +381,12 @@ let computeOffer r cfg resume nonce ks =
       cfg.ciphersuites
       cfg.safe_resumption
       cfg.safe_renegotiation
+      cfg.enable_early_data
       cfg.signatureAlgorithms
       cfg.namedGroups
       None // : option (cVerifyData * sVerifyData)
       ks
+      pskinfo
   in
   let compressions =
     match cfg.compressions with
@@ -575,8 +581,11 @@ let verify scheme chain tbs sigv =
 
 (* CLIENT *)
 
-val client_ClientHello: #region:rgn -> t region Client -> option CommonDH.clientKeyShare -> St offer
-let client_ClientHello #region ns oks =
+val client_ClientHello: #region:rgn -> t region Client
+  -> option CommonDH.clientKeyShare
+  -> option (list (PSK.pskid * PSK.pskInfo))
+  -> St offer
+let client_ClientHello #region ns oks pskinfo =
   //17-04-22 fix this in the definition of offer?
   let oks' =
     match oks with
@@ -585,7 +594,7 @@ let client_ClientHello #region ns oks =
   in
   match MR.m_read ns.state with
   | C_Init _ ->
-      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' in
+      let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);
       offer

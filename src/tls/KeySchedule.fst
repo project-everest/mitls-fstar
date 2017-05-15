@@ -85,7 +85,7 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 abstract let psk (i:esId) =
   b:bytes{length b = H.tagLen (esId_hash i)}
 
-let read_psk (i:PSK.psk_identifier)
+let read_psk (i:PSK.pskid)
   : ST (esId * PSK.app_psk i * H.alg * aeadAlg)
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
@@ -301,12 +301,12 @@ let ks_client_13_nopsk_init ks gl =
   let serialized = List.Tot.choose serialize_share gs in
   serialized
 
-val ks_client_13_psk_init: ks:ks -> pskl:list PSK.psk_identifier -> gl:list valid_namedGroup
-  -> ST (list ((i:binderId & bk:binderKey i) * PSK.pskInfo) * CommonDH.clientKeyShare)
+val ks_client_13_psk_init: ks:ks -> pskl:list PSK.pskid -> gl:list valid_namedGroup
+  -> ST (list (i:binderId & bk:binderKey i) * list PSK.pskInfo * CommonDH.clientKeyShare)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
-  (ensures fun h0 (bkl, gxl) h1 ->
+  (ensures fun h0 (bkl, pskl, gxl) h1 ->
     let KS #rid st = ks in
     gl == List.Tot.map group_of_cks gxl /\
     modifies (Set.singleton rid) h0 h1 /\
@@ -329,7 +329,7 @@ let ks_client_13_psk_init ks pskl gl =
     | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
   let gxl = List.Tot.choose serialize_share gs in
 
-  let mk_binder (pskid:PSK.psk_identifier)
+  let mk_binder (pskid:PSK.pskid)
     : ST (((i:esId & es:es i) * PSK.pskInfo)
         * ((i:binderId & bk:binderKey i) * PSK.pskInfo))
     (requires fun h0 -> True)
@@ -349,8 +349,9 @@ let ks_client_13_psk_init ks pskl gl =
     ((| i, es |), pski), ((| bId, bk|), pski) in
   let pskl = map_ST mk_binder pskl in
   let (esl, bkl) = List.Tot.split pskl in
+  let (bkl, pskinfo) = List.Tot.split bkl in
   st := C (C_13_wait_CH cr esl gs);
-  (bkl, gxl)
+  (bkl, pskinfo, gxl)
 
 // Derive the early data key from the first offered PSK
 // Only called if 0-RTT is enabled on the client
