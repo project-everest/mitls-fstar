@@ -261,7 +261,6 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
              k = KeySchedule.(C(C_13_wait_SH
               (nonce s)
               None (*TODO: es for 0RTT*)
-              None (*TODO: binders *)
               (C_13_wait_SH?.gs (C?.s k)) // TODO
                  // ADL: need an existential for the keyshares (offer only has contains shares)
                  // + check that that the group and CommonDH.pubshare g gx match
@@ -275,22 +274,60 @@ let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
-  let shares =
+  let shares, binderInfo =
     match (config_of hs).maxVer  with
       | TLS_1p3 -> (* compute shares for groups in offer *)
-        // TODO get binder keys too
-        let gx = KeySchedule.ks_client_13_1rtt_init hs.ks (config_of hs).namedGroups in
         trace "offering ClientHello 1.3";
-        Some gx
+        let (sid, pskids) = resumeInfo_of hs in
+        (match pskids with
+        | [] ->
+          let gx = KeySchedule.ks_client_13_nopsk_init hs.ks (config_of hs).namedGroups in
+          Some gx, None
+        | pskl ->
+          let bkl, gx = KeySchedule.ks_client_13_psk_init hs.ks pskl (config_of hs).namedGroups in
+          Some gx, Some bkl
+        )
       | _ ->
-        let si = KeySchedule.ks_client_12_init hs.ks in  // we may need si to carry looked up PSKs
         trace "offering ClientHello 1.2";
-        None
+        // TODO: 1.2 resumption
+        let si = KeySchedule.ks_client_12_init hs.ks in
+        None, None
     in
-  let offer = Nego.client_ClientHello hs.nego shares in (* compute offer from configuration *)
+
+  // Offer + sending the truncated ClientHello
+  let offer = Nego.client_ClientHello hs.nego shares binderInfo in (* compute offer from configuration *)
   HandshakeLog.send hs.log (ClientHello offer);  // TODO decompose in two steps, appending the binders
-  hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
-  Correct(HandshakeLog.next_fragment hs.log i)
+
+  // Sending the binders
+  (match Nego.find_pske offer with
+  | None -> () // No PSK offered, CH is complete
+  | Some pske ->
+    let compute_binder (binderInfo:(i:binderId & bk:HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i)) * PSK.pskInfo)
+      : ST unit (requires fun h0 -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)
+      =
+      let (| bid, bk |), pskinfo = binderInfo in
+      // ADL: consider caching the hashes if the same algorithm is used more than once
+      let digest_CH0 = HandshakeLog.hash_tag #(PSK.pskInfo_hash pskinfo) hs.log in
+      HMAC.UFCMA.mac bk digest_CH0
+    in
+    let binders = KeySchedule.map_ST compute_binder binders in
+    HandshakeLog.send hs.log (Binders binders)
+  );
+
+  // 0-RTT data
+  match Nego.find_early_data offer, binders with
+  | None ->
+    hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
+    Correct(HandshakeLog.next_fragment hs.log i)
+  | Some _, ((| bid, bk |), pskinfo)::_ ->
+    let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash pskinfo) hs.log in
+    let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+    register hs edk;
+
+    // ADL: Todo add TLS signal
+    hs.state := C_Wait_ServerHello;
+    Correct(HandshakeLog.next_fragment hs.log i)
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
@@ -598,7 +635,7 @@ let server_ServerFinished_13 hs i =
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
     HandshakeLog.send hs.log (EncryptedExtensions []);
-    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in 
+    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
 
     // signing of the formatted session digest
     let tbs : bytes =

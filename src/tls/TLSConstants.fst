@@ -447,8 +447,8 @@ let versionBytes pv =
   | TLS_1p0 -> abyte2 ( 3z, 1z)
   | TLS_1p1 -> abyte2 ( 3z, 2z )
   | TLS_1p2 -> abyte2 ( 3z, 3z )
-  | TLS_1p3 -> abyte2 ( 3z, 4z ) 
-  
+  | TLS_1p3 -> abyte2 ( 3z, 4z )
+
 (** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
 let parseVersion v =
@@ -478,18 +478,18 @@ let pinverse_version x = ()
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let draft = 20z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
-  | TLS_1p3 -> abyte2 ( 127z, draft )  
+  | TLS_1p3 -> abyte2 ( 127z, draft )
   | pv -> versionBytes pv
-val parseVersion_draft: pinverse_t versionBytes_draft 
-let parseVersion_draft v = 
-  match cbyte2 v with 
-  | (127z, d) -> 
-      if d = draft 
-      then Correct TLS_1p3 
+val parseVersion_draft: pinverse_t versionBytes_draft
+let parseVersion_draft v =
+  match cbyte2 v with
+  | (127z, d) ->
+      if d = draft
+      then Correct TLS_1p3
       else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version")
   | _ -> parseVersion v
-  
+
 
 (** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =
@@ -502,7 +502,7 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
 
 let geqPV a b = (b = minPV a b)
 
-let string_of_pv = function 
+let string_of_pv = function
   | SSL_3p0 -> "SSL3"
   | TLS_1p0 -> "1.0"
   | TLS_1p1 -> "1.1"
@@ -1583,9 +1583,9 @@ let signatureSchemeList =
 val signatureSchemeListBytes: algs:signatureSchemeList
   -> Tot (b:bytes{4 <= length b /\ length b < 65538})
 let signatureSchemeListBytes algs =
-  let rec aux: b:bytes -> 
+  let rec aux: b:bytes ->
   algs':list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs') == op_Multiply 2 (List.Tot.length algs) } ->
-    Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)}) 
+    Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)})
         (decreases algs') = fun b algs' ->
     match algs' with
     | [] -> b
@@ -1602,9 +1602,9 @@ let signatureSchemeListBytes algs =
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
 let parseSignatureSchemeList b =
   match vlparse 2 b with
-  | Correct b -> 
+  | Correct b ->
     let rec aux: algs:list signatureScheme -> b':bytes{length b' + op_Multiply 2 (List.Tot.length algs) == length b} ->
-    Tot 
+    Tot
       (result (algs:list signatureScheme{op_Multiply 2 (List.Tot.length algs) == length b}))
       (decreases (length b')) = fun algs b' ->
     if length b' > 0 then
@@ -1618,7 +1618,7 @@ let parseSignatureSchemeList b =
     begin
     match aux [] b with // Silly, but necessary for typechecking
     | Correct l -> Correct l
-    | Error z -> Error z    
+    | Error z -> Error z
     end
   | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse sig hash algs")
 
@@ -1714,6 +1714,7 @@ noeq type config = {
     private_key_file: string;   // TEMPORARY
 
     (* Common *)
+    enable_early_data: bool;
     safe_renegotiation: bool;   // demands this extension when renegotiating
     peer_name: option string;   // The expected name to match against the peer certificate
     check_peer_certificate: bool; // To disable certificate validation

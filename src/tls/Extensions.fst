@@ -38,11 +38,16 @@ private type canFail (a:Type) =
 // SI: copied from HSM. Should be here in Extensions only. 
 // PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
 // We statically enforce length requirements to ensure that formatting is total.
-type binder = b:bytes {32 <= length b /\ length b <= 255} 
-val binderListBytes: list binder -> bytes 
-let binderListBytes bs = List.Tot.fold_left (fun a (b:binder) -> a @| Parse.vlbytes1 b) empty_bytes bs
-type binders = bs: list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= 65535} 
-let bindersBytes (bs:binders): bytes = Parse.vlbytes2 (binderListBytes bs)
+type binder = b:bytes {32 <= length b /\ length b <= 255}
+
+val binderListBytes: list binder -> bytes
+let binderListBytes bs =
+  List.Tot.fold_left (fun a (b:binder) -> a @| Parse.vlbytes1 b) empty_bytes bs
+
+type binders =
+  bs:list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= 65535}
+
+let bindersBytes (bs:binders) = Parse.vlbytes2 (binderListBytes bs)
 
 type pskIdentity = PSK.preSharedKey * PSK.obfuscated_ticket_age
 
@@ -696,7 +701,7 @@ val prepareExtensions:
   bool -> 
   bool -> 
   signatureSchemeList ->
-  list (x:namedGroup{SEC? x \/ FFDHE? x}) -> 
+  list valid_namedGroup ->
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare -> 
   l:list extension{List.Tot.length l < 256}
