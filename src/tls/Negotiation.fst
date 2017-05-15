@@ -1,3 +1,6 @@
+(*--build-config
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
+--*)
 module Negotiation
 
 open Platform.Error
@@ -183,12 +186,20 @@ let find_pske o =
   | None -> None
   | Some (Extensions.E_pre_shared_key psks) -> Some psks
 
+let find_clientPske o =
+  match find_client_extension Extensions.E_pre_shared_key? o with
+  | None -> None
+  | Some (Extensions.E_pre_shared_key psk) -> (
+    match psk with
+    | ServerPSK _ -> None
+    | ClientPSK ids _ -> Some ids)
+
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
-  (match find_pske o with
-  | Some psks -> n < List.length psks
-  | None -> False) }
+  (match find_clientPske o with
+  | Some ids -> n < List.length ids
+  | _ -> False) }
 
 let find_supported_groups o =
   match find_client_extension Extensions.E_supported_groups? o with
@@ -360,6 +371,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       cfg.namedGroups
       None // : option (cVerifyData * sVerifyData)
       ks
+      pskinfo
   in
   let compressions =
     match cfg.compressions with
@@ -981,7 +993,7 @@ let compute_cs13 cfg o psks shares =
 
   // pick preferred choice for each PSK (if any) -- we could stop at the first match too
   let pske =
-    match find_pske o with
+    match find_clientPske o with
     | Some pske -> pske
     | None -> [] in
 

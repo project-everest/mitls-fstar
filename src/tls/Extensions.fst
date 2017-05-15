@@ -35,9 +35,7 @@ private type canFail (a:Type) =
 | ExFail of alertDescription * string
 | ExOK of list a
 
-
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
-
 type pskIdentity = PSK.preSharedKey * PSK.obfuscated_ticket_age
 
 noeq type psk =
@@ -92,7 +90,6 @@ let parseBinderList (b:bytes{2 <= length b}) : Tot (result binders) =
   match vlparse 2 b with
   | Correct b -> aux b []
   | Error z -> error "parseBinderList"
-#reset-options
 
 val pskiBytes : PSK.preSharedKey * UInt32.t -> Tot bytes
 let pskiBytes (i,ot) =
@@ -110,7 +107,6 @@ let pskBytes psk =
     let ids' = List.Tot.fold_left (fun acc pski -> acc @| pskiBytes pski) empty_bytes ids in
     vlbytes 2 ids' @| (bytes_of_int 2 binder_len)
   | ServerPSK sid -> bytes_of_int 2 (UInt16.v sid)
-
 
 // SI: parsing uint32 depends upon #ota=4 precondition
 let ota_is_4 (b:bytes) =
@@ -148,8 +144,10 @@ let parsePskIdentities b =
       else error "parsePSKIdentities too few bytes"
     else Correct psks in
   match vlparse 2 b with
-  | Correct b -> aux b []
-  | Error z -> error "parsePskIdentities"
+  | Correct b -> (
+    if (length b >= 7) then aux b []
+    else error "parsePskIdentities: too short")
+  | Error z -> error "parsePskIdentities: failed to parse"
 
 val client_psk_parse : bytes -> result (psk * option binders)
 let client_psk_parse b =
@@ -162,7 +160,7 @@ let client_psk_parse b =
     	match parseBinderList binders_bytes with
     	| Correct bl -> Correct (ClientPSK ids (length binders_bytes - 2), Some bl)
     	| Error z -> error "client_psk_parse_binders")
-        | Error z -> error "client_psk_parse_ids")
+    | Error z -> error "client_psk_parse_ids")
 
 val server_psk_parse : bytes -> psk
 let server_psk_parse b = ServerPSK (UInt16.uint_to_t (int_of_bytes b))
@@ -172,7 +170,7 @@ let parse_psk role b =
   match role with
   | Client -> client_psk_parse b
   | Server -> Correct (server_psk_parse b, None)
-
+#reset-options
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
 // restricting both proposed PSKs and future ones sent by the server
@@ -236,7 +234,6 @@ let parseEarlyDataIndication data =
       Correct (Some (UInt32.uint_to_t n))
   | _ -> error "early data indication"
 
-
 (* EC POINT FORMATS *)
 
 let rec ecpfListBytes_aux: list point_format -> bytes = function
@@ -250,7 +247,6 @@ let ecpfListBytes l =
   lemma_repr_bytes_values (length al);
   let bl:bytes = vlbytes 1 al in
   bl
-
 
 (* PROTOCOL VERSIONS *)
 
@@ -302,7 +298,6 @@ let parseSupportedVersions b =
       then Correct vs
       else  error "too many or too few protocol versions"
     end
-
 
 (* SERVER NAME INDICATION *)
 
@@ -480,7 +475,7 @@ let rec extensionPayloadBytes = function
     // Sending TLS 1.3 draft versions, as other implementations are doing
     vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| versionBytes_draft v) empty_bytes vv)
   | E_cookie c                 -> (lemma_repr_bytes_values (length c); vlbytes 2 c)
-  | E_psk_key_exchange_modes _ -> admit()
+  | E_psk_key_exchange_modes kex -> client_psk_kexes_bytes kex
   | E_extended_ms              -> empty_bytes
   | E_ec_point_format l        -> ecpfListBytes l
   | E_unknown_extension (_,b)  -> b
@@ -505,12 +500,7 @@ let noExtensions =
   lemma_repr_bytes_values (length (extensionListBytes []));
   []
 
-val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
-let extensionsBytes exts =
-  let b = extensionListBytes exts in
-  lemma_repr_bytes_values (length b);
-  vlbytes 2 b
-
+#set-options "--lax"
 // SI: add a $delta$ param for truncated binders length.
 // The main exported extensionBytes function will have _trunc's type.
 // SI: move vlbytes_trunc to Format
@@ -518,10 +508,21 @@ val vlbytes_trunc: lSize:nat -> b:bytes -> binderSize:nat -> Tot (r:bytes{length
 let vlbytes_trunc lSize b bSize =
   bytes_of_int lSize ((length b) + bSize) @| b
 
-val extensionsBytes_trunc: extensions -> bindersSize:nat -> b:bytes { length b < 2 + 65536 }
-let extensionsBytes_trunc exts delta =
-  let exts = extensionsBytes exts in
-  vlbytes_trunc 2 exts delta
+// old proposal
+(* val extensionsBytes_trunc: extensions -> bindersSize:nat -> b:bytes { length b < 2 + 65536 }  *)
+(* let extensionsBytes_trunc exts delta =  *)
+(*   let exts = extensionsBytes exts in *)
+(*   vlbytes_trunc 2 exts delta  *)
+
+// SI: serialize, but pretend the len includes the binder_len.
+// (we get the binder_len by looking it up in the E_pre_shared_key's payload.)
+val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
+let extensionsBytes exts =
+  let b = extensionListBytes exts in
+  let binder_len = admit() in // SI: fixme
+  lemma_repr_bytes_values (length b);
+  vlbytes_trunc 2 b binder_len
+#reset-options
 
 (*************************************************
  Extension parsing
@@ -559,7 +560,11 @@ let parseEcpfList b =
 
 (* We don't care about duplicates, not formally excluded. *)
 #set-options "--lax"
-val parseExtension: role -> bytes -> result extension
+
+let normallyNone ctor r =
+    (ctor r, None)
+
+val parseExtension: role -> bytes -> result (extension * option binders)
 let parseExtension role b =
   if length b < 4 then error "extension type: not enough bytes" else
   let head, payload = split b 2 in
@@ -567,78 +572,98 @@ let parseExtension role b =
   | Error (_,s) -> error ("extension: "^s)
   | Correct data -> (
     match cbyte2 head with
-    | (0x00z, 0x00z) -> mapResult E_server_name (parseServerName role data)
+    | (0x00z, 0x00z) ->
+//      mapResult E_server_name (parseServerName role data)
+      mapResult (normallyNone E_server_name) (parseServerName role data)
     | (0x00z, 0x0Az) -> // supported groups
       if length data < 2 || length data >= 65538 then error "supported groups" else
-      mapResult E_supported_groups (Parse.parseNamedGroups data)
+      mapResult (normallyNone E_supported_groups) (Parse.parseNamedGroups data)
 
     | (0x00z, 0x0Dz) -> // sigAlgs
       if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else
-      mapResult E_signature_algorithms (TLSConstants.parseSignatureSchemeList data)
+      mapResult (normallyNone E_signature_algorithms) (TLSConstants.parseSignatureSchemeList data)
 
-    | (0x00z, 0x28z) -> mapResult E_key_share (CommonDH.parseKeyShare (Client? role) data)
+    | (0x00z, 0x28z) ->
+      mapResult (normallyNone E_key_share) (CommonDH.parseKeyShare (Client? role) data)
 
-    | (0x00z, 0x29z) -> // head TBD, PSK
-      if length data < 2 then error "PSK" else
-      mapResult E_pre_shared_key (parse_psk role data) (* 17-04-21 TODO PSK.parsePreSharedKey data *)
+    | (0x00z, 0x29z) -> // PSK
+      if length data < 2 then error "PSK"
+      else (match parse_psk role data with
+      | Error z -> Error z
+      | Correct (psk, None) -> Correct (E_pre_shared_key psk, None)
+      | Correct (psk, Some binders) -> Correct (E_pre_shared_key psk, Some binders))
 
     | (0x00z, 0x2az) ->
       if length data <> 0 && length data <> 4 then error "early data indication" else
-      mapResult E_early_data (parseEarlyDataIndication data)
+      mapResult (normallyNone E_early_data) (parseEarlyDataIndication data)
+
     | (0x00z, 0x2bz) ->
       if length data <= 2 || length data >= 256 then error "supported versions" else
-      mapResult E_supported_versions (parseSupportedVersions data)
+      mapResult (normallyNone E_supported_versions) (parseSupportedVersions data)
 
     | (0xffz, 0x2cz) -> // cookie
       if length data <= 2 || length data >= 65538 then error "cookie" else
-      Correct (E_cookie data)
+      Correct (E_cookie data,None)
 
-    (* ToDo: | E_psk_key_exchange_modes _ *)
+    | (0x00z, 0x2dz) -> // key ex
+      if length data < 2 then error "psk_key_exchange_modes" else
+      mapResult (normallyNone E_psk_key_exchange_modes) (parse_client_psk_kexes data)
 
     | (0x00z, 0x17z) -> // extended ms
       if length data > 0 then error "extended master secret" else
-      Correct E_extended_ms
+      Correct (E_extended_ms,None)
 
     | (0x00z, 0x0Bz) -> // ec point format
       if length data < 1 || length data >= 256 then error "ec point format" else (
       lemma_repr_bytes_values (length data);
       match vlparse 1 data with
       | Error z -> Error z
-      | Correct ecpfs -> mapResult E_ec_point_format (parseEcpfList ecpfs))
+      | Correct ecpfs -> mapResult (normallyNone E_ec_point_format) (parseEcpfList ecpfs))
 
-    | _ -> Correct (E_unknown_extension (head,data)))
+    | _ -> Correct (E_unknown_extension (head,data), None))
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
-val parseExtensions: role -> b:bytes -> result extensions
+// SI: simplify binder accumulation code. (Binders should be the last in the list.)
+val parseExtensions: role -> b:bytes -> result (extensions * option binders)
 let parseExtensions role b =
-  let rec aux:
-    b:bytes -> list extension -> Tot (result (list extension)) (decreases (length b)) = fun b exts ->
+  let rec aux: b:bytes -> list extension * option binders
+    -> Tot (result (list extension * option binders))
+    (decreases (length b)) =
+    fun b (exts, obinders) ->
     if length b >= 4 then
       let ht, b = split b 2 in
       match vlsplit 2 b with
       | Error(z) -> error "extension length"
-      | Correct(ext, bytes) -> (
-	(* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
-	match parseExtension role (ht @| vlbytes 2 ext) with
-	| Correct ext ->
-	  (match addOnce ext exts with // fails if the extension already is in the list
-	  | Correct exts -> aux bytes exts
-	  | Error z -> Error z)
-	| Error z -> Error z)
-    else Correct exts in
+      | Correct(ext, bytes) ->
+      	(* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
+      	(match parseExtension role (ht @| vlbytes 2 ext) with
+      	// SI:
+      	| Correct (ext, Some binders) ->
+      	  (match addOnce ext exts with // fails if the extension already is in the list
+      	  | Correct exts -> aux bytes (exts, Some binders) // keep the binder we got
+      	  | Error z -> Error z)
+      	| Correct (ext, None) ->
+      	  (match addOnce ext exts with // fails if the extension already is in the list
+      	  | Correct exts -> aux bytes (exts, obinders)  // use binder-so-far.
+      	  | Error z -> Error z)
+      	| Error z -> Error z)
+    else Correct (exts,obinders) in
   if length b < 2 then error "extensions" else
   match vlparse 2 b with
-  | Correct b -> aux b []
+  | Correct b -> aux b ([], None)
   | Error z -> error "extensions"
 
 (* SI: API. Called by HandshakeMessages. *)
-val parseOptExtensions: r:role -> data:bytes -> result (option (list extension))
+// returns either Some,Some or None,
+val parseOptExtensions: r:role -> data:bytes -> result (option (list extension) * option binders)
 let parseOptExtensions r data =
   if length data = 0
-  then Correct None
-  else mapResult Some (parseExtensions r data)
+  then Correct (None,None)
+  else (
+    match parseExtensions r data with
+    | Error z -> Error z
+    | Correct (ee,obinders) -> Correct (Some ee, obinders))
 #reset-options
-
 
 (*************************************************
  Other extension functionality

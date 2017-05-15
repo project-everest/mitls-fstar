@@ -1,5 +1,5 @@
 (*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
 --*)
 (* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 
@@ -45,7 +45,7 @@ let lbyte_eq_lemma a b = if a <> b then cut (Seq.index (abyte a) 0 <> Seq.index 
 
 
 //17-05-05 why separately parsing headers and payloads? Can we entirely avoid handshakeType?
- 
+
 (* TODO: move to TLSConstants. CF why?? *)
 type handshakeType =
   | HT_hello_request
@@ -69,7 +69,7 @@ type handshakeType =
 
 val htBytes: handshakeType -> Tot (lbytes 1)
 let htBytes t =
-  let z = 
+  let z =
   match t with
   | HT_hello_request        -> 0z
   | HT_client_hello         -> 1z
@@ -114,7 +114,7 @@ let parseHt b =
   //| 17z -> Correct HT_server_configuration
   | 20z -> Correct HT_finished
   | 24z -> Correct HT_key_update
-  | 254z -> Correct HT_message_hash 
+  | 254z -> Correct HT_message_hash
   //| 67z -> Correct HT_next_protocol
   | _   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
@@ -133,10 +133,10 @@ let pinverse_ht x = ()
 
 /// Messages
 
-//  https://tlswg.github.io/tls13-spec/#rfc.section.4.1.2 
+//  https://tlswg.github.io/tls13-spec/#rfc.section.4.1.2
 noeq type ch = {
   ch_protocol_version: protocolVersion;  // max supported version up to TLS_1p2 (TLS 1.3 uses the supported_versions extension)
-  ch_client_random: TLSInfo.random; 
+  ch_client_random: TLSInfo.random;
   ch_sessionID: sessionID;
   ch_cipher_suites: k:valid_cipher_suites{List.Tot.length k < 256};
   ch_raw_cipher_suites:option bytes;
@@ -145,12 +145,19 @@ noeq type ch = {
 }
 
 let ch_is_resumption {ch_sessionID = sid} = length sid > 0
+let bindersLen_of_ch ch =
+  match ch.ch_extensions with
+  | None -> 0
+  | Some el ->
+    (match List.Tot.find (Extensions.E_pre_shared_key?) el with
+    | Some (Extensions.E_pre_shared_key (Extensions.ClientPSK _ len)) -> len
+    | _ -> 0)
 
 // ServerHello: supporting two different syntaxes depending on the embedded pv
-// https://tools.ietf.org/html/rfc5246#section-7.4.1.2 
+// https://tools.ietf.org/html/rfc5246#section-7.4.1.2
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.1.3
 noeq type sh = {
-  sh_protocol_version: protocolVersion; 
+  sh_protocol_version: protocolVersion;
   sh_server_random: TLSInfo.random;
   sh_sessionID: option sessionID;  // omitted in TLS 1.3
   sh_cipher_suite: valid_cipher_suite;
@@ -177,8 +184,8 @@ noeq type sticket13 = {
   ticket13_lifetime: UInt32.t;
   ticket13_age_add: UInt32.t;
   ticket13_ticket: b:bytes{length b < 65535};
-  ticket13_extensions: es: list extension; 
-} 
+  ticket13_extensions: es: list extension;
+}
 
 type ee = l:list extension{List.Tot.length l < 256}
 
@@ -200,7 +207,7 @@ noeq type crt = {
   crt_chain: Cert.chain
 }
 noeq type crt13 = {
-  crt_request_context: b:bytes {length b <= 255}; 
+  crt_request_context: b:bytes {length b <= 255};
   crt_chain13: Cert.chain13;
 }
 
@@ -262,16 +269,16 @@ let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b)
 
 // PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
 // We statically enforce length requirements to ensure that formatting is total.
-type binder = b:bytes {32 <= length b /\ length b <= 255} 
-val binderListBytes: list binder -> bytes 
+type binder = b:bytes {32 <= length b /\ length b <= 255}
+val binderListBytes: list binder -> bytes
 let binderListBytes bs = List.Tot.fold_left (fun a (b:binder) -> a @| vlbytes1 b) empty_bytes bs
-type binders = bs: list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= pow2 16 - 1} 
+type binders = bs: list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= pow2 16 - 1}
 let bindersBytes (bs:binders): bytes = vlbytes2 (binderListBytes bs)
 
 // TODO: unify, either keep separate finished messages for client and servers or
 // merge them into single "finished" as it is the case for certificates
 noeq type hs_msg =
-  // shared 
+  // shared
   | ClientHello of ch
   | ServerHello of sh
   | CertificateVerify of cv
@@ -280,25 +287,25 @@ noeq type hs_msg =
   // up to TLS 1.2
   | ClientKeyExchange of cke
   | ServerKeyExchange of ske
-  | ServerHelloDone 
+  | ServerHelloDone
   | Certificate of crt
   | CertificateRequest of cr
   | HelloRequest
-  | NewSessionTicket of sticket 
+  | NewSessionTicket of sticket
 
-  // new formats for TLS 1.3 
+  // new formats for TLS 1.3
   | EndOfEarlyData // client
   | EncryptedExtensions of ee // server
   | Certificate13 of crt13
   | CertificateRequest13 of cr13
-  | HelloRetryRequest of hrr 
+  | HelloRetryRequest of hrr
   | NewSessionTicket13 of sticket13
   | KeyUpdate of bool  // true when the sender is the requester
 
   // formatted, but never parsed as messages
-  | Binders of binders 
-  | MessageHash of Hashing.Spec.anyTag 
-//  | NextProtocol of np // ?? 
+  | Binders of binders
+  | MessageHash of Hashing.Spec.anyTag
+//  | NextProtocol of np // ??
 
 
 /// Handshake message format
@@ -374,7 +381,7 @@ let rec valid_list_to_list_valid l =
 val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) // JK: used to be 42 but cannot prove it with current specs. Is there a minimal length of 1 for the session ID maybe ?
 let clientHelloBytes ch =
   //17-04-26 this will complicate injectivity, now conditional on an extension.
-  let legacyVersion = minPV TLS_1p2 ch.ch_protocol_version in 
+  let legacyVersion = minPV TLS_1p2 ch.ch_protocol_version in
   let verB = versionBytes legacyVersion in
   lemma_repr_bytes_values (length ch.ch_sessionID);
   let sidB = vlbytes 1 ch.ch_sessionID in
@@ -585,12 +592,12 @@ let clientHelloBytes_is_injective msg1 msg2 =
   else ()
 
 (* JK: to work around a subtyping difficulty in parseClientHello *)
-val coercion_helper: o:option (list extension){Some? o ==> List.Tot.length (Some?.v o) < 256} ->
-  Tot (x:option (l:list extension{List.Tot.length l < 256}))
-let coercion_helper o =
-  match o with
+val coercion_helper: o:option (list extension){Some? o ==>  List.Tot.length (Some?.v o) < 256} * option binders
+   -> Tot (option (l:list extension{List.Tot.length l < 256}) * option binders)
+let coercion_helper (e,b) =
+  (match e with
   | None -> None
-  | Some li -> (cut (List.Tot.length li < 256); Some li)
+  | Some li -> cut (List.Tot.length li < 256); Some li), b
 
 (* This function adds a "first connection" renegotiation info *)
 (*    extension to the client hello when parsing it. The cipher suite *)
@@ -605,15 +612,15 @@ let coercion_helper o =
 (*                                  /\ x.ch_sessionID = x'.ch_sessionID })) *)
 
 //17-05-09 generalized signature (but no binder parsing  yet!)
-val parseClientHello: body:bytes -> Pure (result (ch * option (binders * nat)))
+val parseClientHello: body:bytes -> Pure (result (ch * option binders))
   (requires (repr_bytes(length body) <= 3))
   (ensures (function
     | Error _ -> True
     | Correct(ch, None) -> clientHelloBytes ch == htBytes HT_client_hello @| body
-    | Correct(ch, Some (binders, len)) ->
-        let truncated_body, suffix = split body (length body - len) in
+    | Correct(ch, Some binders) ->
+        let truncated_body, suffix = split body (length body - bindersLen_of_ch ch) in
         clientHelloBytes ch == htBytes HT_client_hello @| truncated_body /\
-        bindersBytes binders == suffix
+        bindersBytes binders == suffix // ADL: FIXME must strip the length from binders
   ))
 let parseClientHello data =
   if length data < 35 then error "ClientHello is too short" else
@@ -643,12 +650,10 @@ let parseClientHello data =
               ( match parseOptExtensions Client extensions with
                 | Error z -> Error z
                 | Correct exts ->
-                    if
-                      ( match exts with
-                        | None -> true
-                        | Some l -> List.Tot.length l < 256) &&
-                      List.Tot.length cm < 256 &&
-                      List.Tot.length cm > 0
+                    if (match exts with
+                        | None,_ -> true
+                        | Some l, _ -> List.Tot.length l < 256)
+                        && List.Tot.length cm < 256 &&	List.Tot.length cm > 0
                     then (
                       let exts = coercion_helper exts in
                       Correct (cm, exts))
@@ -658,7 +663,7 @@ let parseClientHello data =
             in
             ( match compExts with
               | Error z -> Error z
-              | Correct (cm, exts) -> (
+              | Correct (cm, (exts, obinders)) -> (
                 cut (List.Tot.length clientCipherSuites < 256);
                 let cCS = valid_list_to_list_valid clientCipherSuites in
                 Correct ({
@@ -668,7 +673,7 @@ let parseClientHello data =
                   ch_cipher_suites = cCS;
                   ch_raw_cipher_suites = Some clCiphsuitesBytes;
                   ch_compressions = cm;
-                  ch_extensions = exts; }, None)))))
+                  ch_extensions = exts; }, obinders)))))
 
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 let serverHelloBytes sh =
@@ -826,13 +831,13 @@ let parseServerHello data =
 	    | Correct cs ->
 	      (match parseOptExtensions Server data with
 	       | Error z -> Error z
-	       | Correct exts ->
+	       | Correct (exts,obinders) ->
 		 if (match exts with
 		     | None -> false // JK: check how to handle the no extension case (empty variable
 				    // length vector according to the spec
 		     | Some l -> List.Tot.length l < 256)
 		 then
-		   let exts = coercion_helper exts in
+		   let (exts,_) = coercion_helper (exts,obinders) in
 		   correct ({
 		     sh_protocol_version = serverVer;
 		     sh_server_random = serverRandomBytes;
@@ -863,12 +868,12 @@ let parseServerHello data =
 		    | NullCompression ->
 		      (match parseOptExtensions Server data with
 		       | Error z -> Error z
-		       | Correct exts ->
+		       | Correct (exts,obinders) ->
 			 if (match exts with
 			     | None -> true
 			     | Some l -> List.Tot.length l < 256)
 			 then
-			   let exts = coercion_helper exts in
+			   let (exts,_) = coercion_helper (exts,obinders) in
 		           correct ({
 		             sh_protocol_version = serverVer;
 		             sh_server_random = serverRandomBytes;
@@ -983,17 +988,17 @@ let parseCertificate data =
 
 val parseCertificate13: data:bytes{repr_bytes (length data) <= 3} -> Tot (result valid_crt13)
 let parseCertificate13 data =
-  if length data < 1 then error "not enough bytes (context)" else 
-  let hdr, data = split data 1 in 
-  if not (equalBytes hdr (abyte 0z)) then error "non-empty context" else  
+  if length data < 1 then error "not enough bytes (context)" else
+  let hdr, data = split data 1 in
+  if not (equalBytes hdr (abyte 0z)) then error "non-empty context" else
   if length data < 3 then error "not enough bytes (certificate list length)" else (
   match vlparse 3 data with
   | Error (x,y) -> Error(AD_bad_certificate_fatal, y)
   | Correct certList -> (
     match Cert.parseCertificateList13 certList with
-    | Error z -> Error z 
+    | Error z -> Error z
     | Correct l ->
-      if length certList >= 16777212 then error "certificate list is too large" else 
+      if length certList >= 16777212 then error "certificate list is too large" else
       ( //Cert.lemma_parseCertificateList_length13 certList;
         Correct ({crt_request_context = empty_bytes; crt_chain13 = l}))))
 
@@ -1389,14 +1394,14 @@ let parseFinished data =
 val sessionTicketBytes: sticket -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
 val sessionTicketBytes13: sticket13 -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
 let sessionTicketBytes t =
-    let payload = 
-      bytes_of_int 4 (UInt32.v t.sticket_lifetime) @| 
+    let payload =
+      bytes_of_int 4 (UInt32.v t.sticket_lifetime) @|
       t.sticket_ticket in
     lemma_repr_bytes_values (length payload);
     messageBytes HT_session_ticket payload
 let sessionTicketBytes13 t =
-    let payload = 
-      bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @| 
+    let payload =
+      bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @|
       bytes_of_int 4 (UInt32.v t.ticket13_age_add) @|
       t.ticket13_ticket @|
       vlbytes 2 (extensionsBytes t.ticket13_extensions)  in
@@ -1407,7 +1412,7 @@ let sessionTicketBytes13 t =
 val sessionTicketBytes_is_injective: p:protocolVersion -> s1:sticket -> s2:sticket ->
   Lemma (requires (p <> TLS_1p3))
 	(ensures (Seq.equal (sessionTicketBytes p s1) (sessionTicketBytes p s2) ==> s1 = s2))
-let sessionTicketBytes_is_injective p s1 s2 = 
+let sessionTicketBytes_is_injective p s1 s2 =
   if sessionTicketBytes p s1 = sessionTicketBytes p s2 then (
     let payload1 = s1.sticket_lifetime @| s1.sticket_ticket in
     let payload2 = s2.sticket_lifetime @| s2.sticket_ticket in
@@ -1461,14 +1466,14 @@ let parseSessionTicket13 b =
         else
           begin
           match parseExtensions Client (vlbytes 2 exts) with
-          | Correct exts ->
+          | Correct (exts,None) ->
             Correct ({ ticket13_lifetime = lifetime; ticket13_age_add = age;
                        ticket13_ticket = ticket;
                        ticket13_extensions = exts})
           | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid extensions")
           end
       | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
-      end 
+      end
     | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
     end
 
@@ -1531,7 +1536,7 @@ let parseHelloRetryRequest b =
 	  (match parseNamedGroup ng with
 	  | Correct(ng) ->
 	    (match parseExtensions Server data with
-	    | Correct(exts) ->
+	    | Correct(exts,None) ->
 	      if List.Tot.length exts < 256 then
 	      Correct ({ hrr_protocol_version = pv;
 			hrr_cipher_suite = cs;
@@ -1564,8 +1569,13 @@ let encryptedExtensionsBytes_is_injective e1 e2 =
 
 (* JK : TODO *)
 assume val lemma_extensionsBytes_length: r:role -> b:bytes ->
-  Lemma (requires (True))
-	(ensures (Correct? (parseExtensions r b) ==> length (extensionsBytes (Correct?._0 (parseExtensions r b))) = length b))
+  Lemma (requires True)
+	(ensures (
+	  match parseExtensions r b with
+	  | Error _ -> True
+	  | Correct (ee, obinders) ->
+	  let len = match obinders with | Some (_,len) -> len | _ -> 0 in
+	  length (extensionsBytes ee) + len == length b))
 
 (* val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->  *)
 (*     Tot (result (s:valid_ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})) *)
@@ -1574,7 +1584,7 @@ val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->
 let parseEncryptedExtensions payload  =
   match parseExtensions Server payload with
   | Error z -> Error z
-  | Correct exts -> 
+  | Correct (exts,None) ->
     if List.Tot.length exts >= 256 then  error "too many extensions" else
     ( lemma_extensionsBytes_length Server payload;
       Correct exts)
@@ -1639,24 +1649,24 @@ let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : Type0  =
 
 let valid_hs_msg (pv: option protocolVersion): Type0 = msg: hs_msg{
   associated_to_pv pv msg /\ (
-  match msg with 
+  match msg with
   | EncryptedExtensions ee -> repr_bytes (length (extensionsBytes ee)) <= 3
   | ServerHello sh -> (
-      if sh.sh_protocol_version = TLS_1p3 
-      then (None? sh.sh_sessionID /\ None? sh.sh_compression) 
+      if sh.sh_protocol_version = TLS_1p3
+      then (None? sh.sh_sessionID /\ None? sh.sh_compression)
       else (Some? sh.sh_sessionID /\ Some? sh.sh_compression))
   | Certificate13 crt -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
-  | Certificate crt -> length (Cert.certificateListBytes crt.crt_chain) < 16777212 
+  | Certificate crt -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
   | _ -> True )}
 
- 
+
 let parsed = function
-  | Binders _ | MessageHash _ -> false 
+  | Binders _ | MessageHash _ -> false
   | _ -> true
 
-val handshakeMessageBytes: 
-  pvo: option protocolVersion -> 
-  msg:valid_hs_msg pvo -> 
+val handshakeMessageBytes:
+  pvo: option protocolVersion ->
+  msg:valid_hs_msg pvo ->
   Tot (b:bytes {parsed msg ==> (exists (ht:handshakeType). hs_msg_bytes ht b)})
 let handshakeMessageBytes pvo = function
   | ClientHello ch -> clientHelloBytes ch
@@ -1679,7 +1689,7 @@ let handshakeMessageBytes pvo = function
   | KeyUpdate b -> messageBytes HT_key_update (abyte (if b then 1z else 0z))
   // these two are not actual HS messages
   | Binders bs -> bindersBytes bs //
-  | MessageHash h -> h // not 
+  | MessageHash h -> h // not
 
 
 val splitHandshakeMessage: b:bytes{exists (ht:handshakeType). hs_msg_bytes ht b} ->
@@ -1870,23 +1880,23 @@ let string_of_handshakeMessage hs =
     | NewSessionTicket13 t -> "NewSessionTicket13"
     | KeyUpdate b -> "KeyUpdate"^(if b then "1" else "2")
     | Binders _ -> "Binders"
-    | MessageHash _ -> "MessageHash" 
+    | MessageHash _ -> "MessageHash"
 
 //17-04-24 should we call parseMessage from this function?
 
 (* val parseHandshakeMessage: option protocolVersion -> option kexAlg -> handshakeType -> b:bytes{repr_bytes (length b) <= 3} -> Tot (result hs_msg) *)
-val parseHandshakeMessage: 
-  option protocolVersion -> 
-  option kexAlg -> 
-  ht:handshakeType -> 
-  b:bytes{repr_bytes (length b) <= 3} -> 
+val parseHandshakeMessage:
+  option protocolVersion ->
+  option kexAlg ->
+  ht:handshakeType ->
+  b:bytes{repr_bytes (length b) <= 3} ->
   Tot (result hs_msg)
 
-let parseEmptyMessage v body = 
-  if length body = 0 then Correct v else error "non-empty body" 
+let parseEmptyMessage v body =
+  if length body = 0 then Correct v else error "non-empty body"
 
-let parseBoolean (body: bytes): result bool = 
-  if equalBytes body (abyte 1z) then Correct true 
+let parseBoolean (body: bytes): result bool =
+  if equalBytes body (abyte 1z) then Correct true
   else if equalBytes body (abyte 0z) then Correct false
   else error "not a boolean"
 
@@ -1910,6 +1920,5 @@ let parseHandshakeMessage pv kex hstype body =
     | HT_certificate_verify,_,_  -> mapResult CertificateVerify (parseCertificateVerify body)
     | HT_client_key_exchange,Some pv,Some kex -> mapResult ClientKeyExchange (parseClientKeyExchange kex body)
     | HT_finished,_,_            -> mapResult Finished (parseFinished body)
-    | HT_key_update,_,_ -> mapResult KeyUpdate (parseBoolean body) 
+    | HT_key_update,_,_ -> mapResult KeyUpdate (parseBoolean body)
     | _ -> error "unexpected message" )
-    

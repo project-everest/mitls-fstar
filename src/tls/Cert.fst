@@ -120,7 +120,7 @@ let rec parseCertificateList13 b =
     | Correct (e,r) -> (
       match parseExtensions Client (vlbytes 2 e) with
       | Error z -> Error z 
-      | Correct exts -> (
+      | Correct (exts,_) -> (
         match parseCertificateList13 r with
         | Error z -> Error z 
         | Correct x -> (lemma_repr_bytes_values (length c); Correct ((c,exts) :: x)) )))
