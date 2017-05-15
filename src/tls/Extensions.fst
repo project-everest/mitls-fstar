@@ -45,15 +45,27 @@ let binderListBytes bs =
   List.Tot.fold_left (fun a (b:binder) -> a @| Parse.vlbytes1 b) empty_bytes bs
 
 type binders =
-  bs:list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= 65535}
+  bs:list binder {let l = length (binderListBytes bs) in 32 < l /\ l < 65536}
 
 let bindersBytes (bs:binders) = Parse.vlbytes2 (binderListBytes bs)
 
-type pskIdentity = PSK.preSharedKey * PSK.obfuscated_ticket_age
+type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
+
+val pskiBytes: PSK.preSharedKey * PSK.obfuscated_ticket_age -> bytes
+let pskiBytes (i,ot) =
+  lemma_repr_bytes_values (UInt32.v ot);
+  (PSK.preSharedKeyBytes i @| bytes_of_int 4 (UInt32.v ot))
+
+val pskiListBytes: list pskIdentity -> bytes
+let pskiListBytes ids =
+  List.Tot.fold_left (fun acc pski -> acc @| pskiBytes pski) empty_bytes ids
 
 noeq type psk = 
   // client identities and binders length
-  | ClientPSK of (list pskIdentity) * nat
+  | ClientPSK:
+    ids:list pskIdentity{let n = length (pskiListBytes ids) in 6 < n /\ n < 65536} ->
+    len:int{32 < len /\ len < 65536} ->
+    psk
   // this is just an index in the client offer's PSK extension
   | ServerPSK of UInt16.t 
 
@@ -62,52 +74,43 @@ noeq type psk =
 let parseBinderList (b:bytes) : Tot (result (binders * (list nat))) = 
   let rec (aux: b:bytes -> (binders * list nat) -> Tot (result (binders * list nat)) (decreases (length b))) = fun b (binders,lens) ->    
     if length b > 0 then
-      if length b >= 33 then 
-	match vlsplit 1 b with 
-	| Error z -> error "parseBinderList failed to parse a binder"
+      if length b >= 33 then
+        match vlsplit 1 b with
+        | Error z -> error "parseBinderList failed to parse a binder"
 	| Correct(binder,bytes) -> 
 	  // SI: use List.Total.snoc
-	  let binders',lens' = (binders @ [binder], lens @ [length binder]) in
-	  aux bytes (binders',lens')
+          let binders',lens' = (binders @ [binder], lens @ [length binder]) in
+          aux bytes (binders',lens')
       else error "parseBinderList: too few bytes"
     else Correct (binders,lens) in
-  match vlparse 2 b with 
-  | Correct b -> aux b ([],[])
-  | Error z -> error "parseBinderList" 
+  if length b < 2 then
+    error "pskBinderList not enough bytes to read length header"
+  else
+    match vlparse 2 b with
+    | Correct b -> aux b ([],[])
+    | Error z -> error "parseBinderList"
+#reset-options
 
+val pskBytes: psk -> bytes
+let pskBytes = function
+  | ClientPSK ids _ -> vlbytes2 (pskiListBytes ids)
+  | ServerPSK sid ->
+    lemma_repr_bytes_values (UInt16.v sid);
+    bytes_of_int 2 (UInt16.v sid)
 
-val pskiBytes : PSK.preSharedKey * UInt32.t -> Tot bytes
-let pskiBytes (i,ot) = (PSK.preSharedKeyBytes i) @| bytes_of_int 4 (UInt32.v ot)
-
-val pskBytes : psk -> Tot bytes 
-let pskBytes psk = 
-  match psk with 
-  | ClientPSK (ids,_binderlen) -> // SI: we don't want to serialize binderlen, correct?
-    let ids' = List.Tot.fold_left (fun acc pski -> acc @| pskiBytes pski) empty_bytes ids in
-    (vlbytes 2 ids') 
-  | ServerPSK sid -> bytes_of_int 2 (UInt16.v sid)
-
-// SI: parsing uint32 depends upon #ota=4 precondition
-let ota_is_4 (b:bytes) = 
-  match vlsplit 2 b with
-  | Error z -> False
-  | Correct(_id,ota) -> length ota == 4 
-  
-val parsePskIdentity : b:bytes{ota_is_4 b} -> result pskIdentity
+val parsePskIdentity: b:bytes -> result pskIdentity
 let parsePskIdentity b = 
-//  let id,ota = vlsplit 2 b in // SI: check vlsplit use 
-  match vlsplit 2 b with
-  | Error z -> error "parsePskIdentity failed to parse"
-  | Correct(id,ota) -> 
-    begin
-      match PSK.parsePreSharedKey id with 
-      | Correct(id) -> 
-	// SI: check ota_is_4
-	let ota = UInt32.uint_to_t (int_of_bytes ota) in
-	Correct (id,ota)
-      | Error z -> error "parsePskIdentity"
-      end
-  
+  if length b < 2 then
+    error "not enough bytes to parse the length of the identity field of PskIdentity"
+  else
+    match vlsplit 2 b with
+    | Error z -> error "malformed PskIdentity"
+    | Correct (id, ota) ->
+      if length ota == 4 then
+        let ota = uint32_of_bytes ota in
+        Correct (id, ota)
+      else error "malformed PskIdentity"
+
 val parsePskIdentities : bytes -> result (list pskIdentity)
 let parsePskIdentities b = 
   let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b psks ->    
@@ -139,7 +142,7 @@ let client_psk_parse b =
 	match parseBinderList binders with
 	| Correct (binders,their_lens) -> (
 	  let len = List.Tot.fold_left (fun len b -> len + b) 0 their_lens in 
-	  Correct (ClientPSK (ids, len), Some binders))
+	  Correct (ClientPSK ids len, Some binders))
 	| Error z -> error "client_psk_parse_binders")
     | Error z -> error "client_psk_parse_ids")
 	
@@ -152,12 +155,11 @@ let parse_psk role b =
   | Client -> client_psk_parse b
   | Server -> Correct (server_psk_parse b, None)
 
-val len_of_psk : psk -> nat
-let len_of_psk psk =
-  match psk with 
-  | ClientPSK(ids,len) -> len
-  | ServerPSK(t) -> 0
-  
+val len_of_psk: psk -> nat
+let len_of_psk = function
+  | ClientPSK ids len -> len
+  | ServerPSK _ -> 0
+
 #reset-options
  
 
@@ -492,26 +494,19 @@ let noExtensions =
   lemma_repr_bytes_values (length (extensionListBytes [])); 
   []
 
-#set-options "--lax"
-// SI: add a $delta$ param for truncated binders length. 
-// The main exported extensionBytes function will have _trunc's type. 
-// SI: move vlbytes_trunc to Format
-val vlbytes_trunc: lSize:nat -> b:bytes -> binderSize:nat -> Tot (r:bytes{length r = lSize + (length b) + binderSize})
-let vlbytes_trunc lSize b bSize = 
-  bytes_of_int lSize ((length b) + bSize) @| b 
+let find_pske_binders_length exts =
+  match List.Tot.find E_pre_shared_key? exts with
+  | Some (Extensions.E_pre_shared_key (ClientPSK _ len)) -> len
+  | _ -> 0
 
-// old proposal 
-(* val extensionsBytes_trunc: extensions -> bindersSize:nat -> b:bytes { length b < 2 + 65536 }  *)
-(* let extensionsBytes_trunc exts delta =  *)
-(*   let exts = extensionsBytes exts in *)
-(*   vlbytes_trunc 2 exts delta  *)
-
-// SI: serialize, but pretend the len includes the binder_len. 
-// (we get the binder_len by looking it up in the E_pre_shared_key's payload.) 
+(** Serializes a list of extensions.
+  If there is a PreSharedKey client extension, then add the length of the PSK binders to
+  the total length. Note that the `E_pre_shared_key` argument includes the length of
+  binders in this case.
+*)
 val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
-  let binder_len = admit() in // SI: fixme 
   lemma_repr_bytes_values (length b);
   vlbytes_trunc 2 b binder_len
 
