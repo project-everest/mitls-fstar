@@ -247,7 +247,6 @@ let verify #a h pk t s =
         begin
         assert (find_pk (|a, pk|));
         assert (~(List.Tot.memP (|a,pk|) keys));
-        admit();
         verified
         end
       end
