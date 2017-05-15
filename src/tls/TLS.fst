@@ -156,6 +156,7 @@ let rekey c ops       = Handshake.rekey       (C?.hs c) ops
 //  ))
 let request c ops     = Handshake.request     (C?.hs c) ops
 
+let get_mode c = (Handshake.get_mode (C?.hs c))
 
 (** current epochs ***)
 

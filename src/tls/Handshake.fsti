@@ -25,6 +25,9 @@ val version_of: hs -> ST TLSConstants.protocolVersion
 val resumeInfo_of: s:hs -> ST (TLSInfo.resumeInfo (role_of s))
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
+val get_mode: hs -> ST Negotiation.mode
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
 // annoyingly, we will need specification-level variants too.
 
 // 17-04-08 TODO unclear how abstract Epochs should be.
