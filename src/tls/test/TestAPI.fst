@@ -32,8 +32,9 @@ let rec read_loop con r : ML unit =
   | ReadError _ t ->
     trace ("ReadError: "^t^"\n")
   | Read (DataStream.Close) ->
-    trace "Got close_notify. The connection is now closed.\n";
-    Transport.close con.tcp()
+    // already echoed by TLS
+    //let _ = TLS.writeCloseNotify con in
+    ()
   | Read (DataStream.Alert a)->
     trace ("Got alert: "^(string_of_ad a)^"\n");
     trace "Closing connection.\n";
@@ -65,20 +66,16 @@ let client config host port =
       trace ("ReadError: "^t)
     | _ -> trace "unexpected ioresult_i read"
 
-private let rec aux_server config sock : ML unit =
-  let rid = new_region root in
-  let con = TLS.accept rid sock config in
-  let id = TLS.currentId con Reader in
-
-  let r = TLS.read con id in 
-  trace (TLS.string_of_ioresult_i r); 
-  let () = match r with
-  | Complete ->
-   begin
+private let rec server_read con: ML unit =
+    // a somewhat generic server loop, with synchronous writing in-between reads.
     let id = TLS.currentId con Reader in
     let r = TLS.read con id in
-    trace (TLS.string_of_ioresult_i r); 
+    trace (TLS.string_of_ioresult_i r);
     match r with
+    | Complete -> trace "connection complete"; server_read con
+    | Update true -> trace "connection writable"; server_read con
+    | Update false -> trace "connection still in handshake"; server_read con
+    | Read (DataStream.Alert a) -> trace ("unexpected alert: "^string_of_ad a)
     | Read (DataStream.Data d) ->
      begin
       let db = DataStream.appBytes d in
@@ -94,21 +91,22 @@ private let rec aux_server config sock : ML unit =
       match TLS.write con f with
       | Written  ->
        begin
-        trace "Reading again\n";
-        let id = TLS.currentId con Reader in
-        match TLS.read con id with
-        | Read DataStream.Close -> trace "Received close_notify! Closing socket."
-        | _ -> trace "improperly closed connection."
+        trace "Written; now closing";
+        match TLS.writeClose con with
+        | WriteClose -> (
+            let id = TLS.currentId con Reader in
+            match TLS.read con id with
+            | Read DataStream.Close -> trace "Received close_notify, closing socket. The test succeeds!"
+            | r -> trace ("improperly closed connection: "^string_of_ioresult_i #id r))
+        | w -> trace ("failed to close_notify")
        end
-      | _ -> trace "failed to write HTTP response."
+      | w -> trace ("failed to write HTTP response")
      end
-    | Read (DataStream.Alert a) -> trace ("unexpected alert: "^string_of_ad a)
-    | _ -> trace "unexpected read result"
-   end
-  | _ -> trace "unexpected ioresult_i read."
-  in aux_server config sock
+    | r -> trace ("unexpected read result: "^string_of_ioresult_i #id r)
 
 let server config host port =
  trace "*** Starting test TLS server ***";
  let sock = Platform.Tcp.listen host port in
- aux_server config sock
+ let rid = new_region root in
+ let c = TLS.accept rid sock config in
+ server_read c

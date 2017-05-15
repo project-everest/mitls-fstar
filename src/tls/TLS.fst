@@ -1212,7 +1212,7 @@ let readOne c i =
           if Closed? (snd !c.state)
           then ( // received a notify response; cleanly close the connection.
             c.state := (Closed,Closed);
-            Read (DataStream.Alert ad))
+            Read (DataStream.Close))
           else ( // received first notification; immediately enqueue notify response [RFC 7.2.1]
             c.state := (Closed, snd !c.state);
             alertFlush c i AD_close_notify "notify response")  // switching to (Closed,Closed)
