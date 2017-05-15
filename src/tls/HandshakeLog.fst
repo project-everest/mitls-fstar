@@ -207,6 +207,13 @@ let hash_tag #a l =
   | FixedHash a' acc hl ->
       if a <> a' then trace "BAD HASH (statically excluded)";
       Hashing.finalize #a acc
+  | OpenHash b -> Hashing.compute a b
+
+let hash_tag_truncated #a l len =
+  let st = !l in
+  match st.hashes with
+  | FixedHash a' acc hl -> trace "BAD HASH (statically excluded)"; admit()
+  | OpenHash b -> Hashing.compute a (fst (split b (length b - len)))
 
 // maybe just compose the two functions above?
 let send_tag #a l m =
@@ -215,10 +222,13 @@ let send_tag #a l m =
   let mb = handshakeMessageBytes st.pv m in
   let (h,tg) : (hashState st.transcript (st.parsed @ [m]) * anyTag) =
     match st.hashes with
-    | FixedHash a acc hl ->
+    | FixedHash a' acc hl ->
       let acc = Hashing.extend #a acc mb in
       let tg = Hashing.finalize #a acc in
       (FixedHash a acc hl,tg)
+    | OpenHash b ->
+      let b = b @| mb in
+      (OpenHash b, Hashing.compute a b)
     in
   let o = st.outgoing @| mb in
   let t = extend_hs_transcript st.transcript m in
