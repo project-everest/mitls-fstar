@@ -82,6 +82,13 @@ let vlbytes lSize b = bytes_of_int lSize (length b) @| b
 let vlbytes1 (b:bytes {length b < pow2 8}) = lemma_repr_bytes_values (length b); vlbytes 1 b
 let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b); vlbytes 2 b
 
+val vlbytes_trunc: lSize:nat -> b:bytes ->
+  binderSize:nat{repr_bytes (length b + binderSize) <= lSize} ->
+  r:bytes{length r == lSize + length b}
+let vlbytes_trunc lSize b binderSize =
+  bytes_of_int lSize (length b + binderSize) @| b
+
+
 (** Lemmas associated to bytes manipulations *)
 val lemma_vlbytes_len : i:nat -> b:bytes{repr_bytes (length b) <= i}
   -> Lemma (ensures (length (vlbytes i b) = i + length b))
@@ -143,6 +150,25 @@ let vlparse_vlbytes lSize vlb =
   match vlparse lSize (vlbytes lSize vlb) with
   | Error z   -> ()
   | Correct b -> lemma_vlbytes_inj lSize vlb b
+
+val uint16_of_bytes:
+  b:bytes{length b == 2} ->
+  n:UInt16.t{repr_bytes (UInt16.v n) <= 2 /\ bytes_of_int 2 (UInt16.v n) == b}
+let uint16_of_bytes b =
+  let n = int_of_bytes b in
+  assert_norm (pow2 16 == 65536);
+  lemma_repr_bytes_values n;
+  int_of_bytes_of_int 2 n;
+  UInt16.uint_to_t n
+
+val uint32_of_bytes:
+  b:bytes{length b == 4} ->
+  n:UInt32.t{repr_bytes (UInt32.v n) <= 4 /\ bytes_of_int 4 (UInt32.v n) == b}
+let uint32_of_bytes b =
+  let n = int_of_bytes b in
+  assert_norm (pow2 32 == 4294967296);
+  lemma_repr_bytes_values n;
+  UInt32.uint_to_t n
 
 (** End Module Format *)
 
@@ -226,13 +252,13 @@ let parseNamedGroup b =
 
 (** Lemmas for named groups parsing/serializing inversions *)
 val inverse_namedGroup: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f namedGroupBytes parseNamedGroup x)
   [SMTPat (parseNamedGroup (namedGroupBytes x))]
 let inverse_namedGroup x = ()
 
 val pinverse_namedGroup: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal namedGroupBytes parseNamedGroup x))
   [SMTPat (namedGroupBytes (Correct?._0 (parseNamedGroup x)))]
 let pinverse_namedGroup x = ()

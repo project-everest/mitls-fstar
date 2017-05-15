@@ -96,6 +96,7 @@ let random_of (s:hs) = nonce s
 let config_of (s:hs) = Nego.local_config s.nego
 let version_of (s:hs) = Nego.version s.nego
 let resumeInfo_of (s:hs) = Nego.resume s.nego
+let get_mode (s:hs) = Nego.getMode s.nego
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant
@@ -261,7 +262,6 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
              k = KeySchedule.(C(C_13_wait_SH
               (nonce s)
               None (*TODO: es for 0RTT*)
-              None (*TODO: binders *)
               (C_13_wait_SH?.gs (C?.s k)) // TODO
                  // ADL: need an existential for the keyshares (offer only has contains shares)
                  // + check that that the group and CommonDH.pubshare g gx match
@@ -271,26 +271,74 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
           t = [ClientHello offer] ))
         | _ -> False )))
 
+private let rec zip = function
+  | [], [] -> []
+  | h1::t1, h2::t2 -> (h1,h2) :: (zip (t1,t2))
+
+let compute_binder hs (binderKey:(i:binderId & bk:KeySchedule.binderKey i))
+  : ST (HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i)))
+    (requires fun h0 -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  let (| bid, bk |) = binderKey in
+  let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
+  HMAC.UFCMA.mac bk digest_CH0
+
 let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
-  let shares =
+  let shares, binderKeys, pskinfo =
     match (config_of hs).maxVer  with
       | TLS_1p3 -> (* compute shares for groups in offer *)
-        // TODO get binder keys too
-        let gx = KeySchedule.ks_client_13_1rtt_init hs.ks (config_of hs).namedGroups in
         trace "offering ClientHello 1.3";
-        Some gx
+        let (sid, pskids) = resumeInfo_of hs in
+        (match pskids with
+        | [] ->
+          let gx = KeySchedule.ks_client_13_nopsk_init hs.ks (config_of hs).namedGroups in
+          Some gx, None, None
+        | pskl ->
+          let bkl, pskinfo, gx = KeySchedule.ks_client_13_psk_init hs.ks pskl (config_of hs).namedGroups in
+          Some gx, Some bkl, Some (zip (pskl, pskinfo))
+        )
       | _ ->
-        let si = KeySchedule.ks_client_12_init hs.ks in  // we may need si to carry looked up PSKs
         trace "offering ClientHello 1.2";
-        None
+        // TODO: 1.2 resumption
+        let si = KeySchedule.ks_client_12_init hs.ks in
+        None, None, None
     in
-  let offer = Nego.client_ClientHello hs.nego shares in (* compute offer from configuration *)
+
+  // Offer + sending the truncated ClientHello
+  let offer = Nego.client_ClientHello hs.nego shares pskinfo in (* compute offer from configuration *)
   HandshakeLog.send hs.log (ClientHello offer);  // TODO decompose in two steps, appending the binders
-  hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
-  Correct(HandshakeLog.next_fragment hs.log i)
+
+  // Computing & sending the binders
+  let nego_psk =
+    (match Nego.find_clientPske offer, binderKeys with
+    | Some pskl, Some bk ->
+      // We only compute binders for PSK identities negotiated in ClientHello
+      //let filter bk =
+//        let (| Binder esId _, bk |) = bk in
+        //let ApplicationPSK pskid h = esId in
+        //List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
+      //let nego_binders = List.Tot.filter filter bk in
+      let binders = KeySchedule.map_ST (compute_binder hs) bk in
+      HandshakeLog.send hs.log (Binders binders);
+      Some pskl
+    | _ -> None) in
+
+  // 0-RTT data
+  match Nego.find_early_data offer, pskinfo with
+  | Some _, Some ((pskid,pskinfo)::_) ->
+    let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash pskinfo) hs.log in
+    let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+    register hs edk;
+    // ADL: Todo add TLS signal
+    hs.state := C_Wait_ServerHello;
+    Correct(HandshakeLog.next_fragment hs.log i)
+  | _ ->
+    hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
+    Correct(HandshakeLog.next_fragment hs.log i)
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
@@ -315,7 +363,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           mode.Nego.n_cipher_suite
           digest
           (Some?.v mode.Nego.n_server_share)
-          false (* in case we provided PSKs earlier, ignore them from now on *)
+          None (* in case we provided PSKs earlier, ignore them from now on *)
           in
         register s hs_keys; // register new epoch
         s.state := C_Wait_Finished1;
@@ -598,7 +646,7 @@ let server_ServerFinished_13 hs i =
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
     HandshakeLog.send hs.log (EncryptedExtensions []);
-    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in 
+    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
 
     // signing of the formatted session digest
     let tbs : bytes =
@@ -616,7 +664,7 @@ let server_ServerFinished_13 hs i =
       begin
       let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
-      let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
+      let svd = HMAC.UFCMA.mac sfin_key digestFinished in
       let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
       // we need to call KeyScheduke twice, to pass this digest
       // ADL this call also returns exporter master secret, which should be passed to application
@@ -643,7 +691,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
    | None ->
        let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
        // TODO MACVerify digestClientFinished
-       if HMAC.UFCMA.verify #i cfin_key digestBeforeClientFinished f
+       if HMAC.UFCMA.verify cfin_key digestBeforeClientFinished f
        then (
           // ADL: missing call for resumption master secret etc
           //let _ = KeySchedule.ks_server_13_cf ks digestClientFinished in
