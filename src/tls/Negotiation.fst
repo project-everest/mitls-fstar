@@ -193,7 +193,7 @@ let find_clientPske o =
   | Some (Extensions.E_pre_shared_key psk) ->
     match psk with
     | ServerPSK _ -> None
-    | ClientPSK ids _ -> Some ids)
+    | ClientPSK ids _ -> Some ids
 
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
