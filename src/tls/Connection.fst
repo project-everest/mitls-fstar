@@ -27,7 +27,7 @@ module HH = FStar.HyperHeap
 
 // using also Range, DataStream, TLSFragment, Record
 
-
+(*
 type tlsState = 
 //| Early       // TLS 1.3 0RTT in 
 //| KeyUpdate   // TLS 1.3 after sending first KeyUpdate
@@ -37,6 +37,25 @@ type tlsState =
   | AD          // Application Data (duplex), once the connection is established
   | Half of rw  // the other direction is closed (reachable from BC?)
   | Close 
+// translation:
+// BC ~ Ctrl Ctrl
+// AD ~ Open Open
+// Half Read ~ Open Closed
+// Close ~ Closed Closed
+*)
+
+type halfState =
+  | Ctrl
+  | Open
+  | Closed
+type tlsState = halfState * halfState // reader/writer
+
+let string_of_halfState = function
+  | Ctrl -> "Ctrl"
+  | Open -> "Open"
+  | Closed -> "Closed"
+let string_of_state (r,w) =
+  string_of_halfState r^"/"^string_of_halfState w
 
 type c_rgn = r:TLSConstants.rgn { HH.disjoint r TLSConstants.tls_region } 
 

@@ -410,7 +410,7 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
 
           register hs app_keys; // ATKs are ready to use in both directions
           Epochs.incr_reader hs.epochs; // to ATK
-          HandshakeLog.send_signals hs.log true true; //was: Epochs.incr_writer hs.epochs
+          HandshakeLog.send_signals hs.log (Some true) true; //was: Epochs.incr_writer hs.epochs
           hs.state := C_Complete; // full_mode (cvd,svd); do we still need to keep those?
           InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
           )
@@ -524,7 +524,7 @@ let server_ClientHello hs offer =
         if mode.Nego.n_protocol_version = TLS_1p3
         then
           begin
-            HandshakeLog.send_signals hs.log true false; // signal key change after writing ServerHello
+            HandshakeLog.send_signals hs.log (Some true) false; // signal key change after writing ServerHello
             trace "derive handshake keys";
             let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
             register hs hs_keys;
@@ -622,7 +622,7 @@ let server_ServerFinished_13 hs i =
       // ADL this call also returns exporter master secret, which should be passed to application
       let app_keys, _ = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
       register hs app_keys;
-      HandshakeLog.send_signals hs.log true false; //was: Epochs.incr_writer hs.epochs
+      HandshakeLog.send_signals hs.log (Some true) false;
       Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
       hs.state := S_Wait_Finished2 digestServerFinished;
       Correct(HandshakeLog.next_fragment hs.log i)
@@ -702,8 +702,8 @@ let next_fragment (hs:hs) i =
     // we prepare the initial ClientHello; or
     // after sending ServerHello in plaintext, we continue with encrypted traffic
     // otherwise, we just returns buffered messages and signals
-    | Outgoing None false false false, C_Idle -> client_ClientHello hs i
-    | Outgoing None false false false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
+    | Outgoing None None false, C_Idle -> client_ClientHello hs i
+    | Outgoing None None false, S_Sent_ServerHello -> server_ServerFinished_13 hs i
     //| Outgoing msg  true _ _, _ -> (Epochs.incr_writer hs.epochs; Correct outgoing) // delayed
     | _ -> Correct outgoing // nothing to do
 

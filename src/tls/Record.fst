@@ -21,7 +21,7 @@ val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
-let print s = discard (IO.debug_print_string ("EPO| "^s^"\n"))
+let print s = discard (IO.debug_print_string ("REC| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -48,7 +48,7 @@ let makePacket ct plain ver (data: b:bytes { repr_bytes (length b) <= 2}) =
 //      ctBytes ct 
 //   @| versionBytes ver
    @| bytes_of_int 2 (length data) in
-  trace (" RECORD HEADERS: "^(print_bytes header)^"\n"); 
+  trace ("record headers: "^print_bytes header);
   header @| data 
 
 

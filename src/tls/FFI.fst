@@ -28,7 +28,7 @@ val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
-let print s = discard (IO.debug_print_string ("EPO| "^s^"\n"))
+let print s = discard (IO.debug_print_string ("FFI| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
