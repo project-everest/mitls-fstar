@@ -585,12 +585,13 @@ let clientHelloBytes_is_injective msg1 msg2 =
   else ()
 
 (* JK: to work around a subtyping difficulty in parseClientHello *)
-val coercion_helper: o:option (list extension){Some? o ==> List.Tot.length (Some?.v o) < 256} ->
-  Tot (x:option (l:list extension{List.Tot.length l < 256}))
-let coercion_helper o =
-  match o with
-  | None -> None
-  | Some li -> (cut (List.Tot.length li < 256); Some li)
+val coercion_helper: o:option (list extension){Some? o ==>  List.Tot.length (Some?.v o) < 256} * option (binders * nat) 
+   ->
+  Tot (option (l:list extension{List.Tot.length l < 256}) * option (binders * nat))
+let coercion_helper (e,b) =
+  match e with
+  | None -> (None, b)
+  | Some li -> (cut (List.Tot.length li < 256); (Some li,b))
 
 (* This function adds a "first connection" renegotiation info *)
 (*    extension to the client hello when parsing it. The cipher suite *)
@@ -645,10 +646,10 @@ let parseClientHello data =
                 | Correct exts ->
                     if
                       ( match exts with
-                        | None -> true
-                        | Some l -> List.Tot.length l < 256) &&
-                      List.Tot.length cm < 256 &&
-                      List.Tot.length cm > 0
+                        | None,_ -> true
+                        | Some l,_obinders -> List.Tot.length l < 256) &&
+			List.Tot.length cm < 256 &&
+			List.Tot.length cm > 0
                     then (
                       let exts = coercion_helper exts in
                       Correct (cm, exts))
@@ -658,7 +659,7 @@ let parseClientHello data =
             in
             ( match compExts with
               | Error z -> Error z
-              | Correct (cm, exts) -> (
+              | Correct (cm, (exts,obinders)) -> (
                 cut (List.Tot.length clientCipherSuites < 256);
                 let cCS = valid_list_to_list_valid clientCipherSuites in
                 Correct ({
@@ -668,7 +669,7 @@ let parseClientHello data =
                   ch_cipher_suites = cCS;
                   ch_raw_cipher_suites = Some clCiphsuitesBytes;
                   ch_compressions = cm;
-                  ch_extensions = exts; }, None)))))
+                  ch_extensions = exts; }, obinders)))))
 
 val serverHelloBytes: sh -> Tot (b:bytes{length b >= 34 /\ hs_msg_bytes HT_server_hello b})
 let serverHelloBytes sh =
@@ -826,13 +827,13 @@ let parseServerHello data =
 	    | Correct cs ->
 	      (match parseOptExtensions Server data with
 	       | Error z -> Error z
-	       | Correct exts ->
+	       | Correct (exts,obinders) ->
 		 if (match exts with
 		     | None -> false // JK: check how to handle the no extension case (empty variable
 				    // length vector according to the spec
 		     | Some l -> List.Tot.length l < 256)
 		 then
-		   let exts = coercion_helper exts in
+		   let (exts,_) = coercion_helper (exts,obinders) in
 		   correct ({
 		     sh_protocol_version = serverVer;
 		     sh_server_random = serverRandomBytes;
@@ -863,12 +864,12 @@ let parseServerHello data =
 		    | NullCompression ->
 		      (match parseOptExtensions Server data with
 		       | Error z -> Error z
-		       | Correct exts ->
+		       | Correct (exts,obinders) ->
 			 if (match exts with
 			     | None -> true
 			     | Some l -> List.Tot.length l < 256)
 			 then
-			   let exts = coercion_helper exts in
+			   let (exts,_) = coercion_helper (exts,obinders) in
 		           correct ({
 		             sh_protocol_version = serverVer;
 		             sh_server_random = serverRandomBytes;
@@ -1461,7 +1462,7 @@ let parseSessionTicket13 b =
         else
           begin
           match parseExtensions Client (vlbytes 2 exts) with
-          | Correct exts ->
+          | Correct (exts,None) ->
             Correct ({ ticket13_lifetime = lifetime; ticket13_age_add = age;
                        ticket13_ticket = ticket;
                        ticket13_extensions = exts})
@@ -1531,7 +1532,7 @@ let parseHelloRetryRequest b =
 	  (match parseNamedGroup ng with
 	  | Correct(ng) ->
 	    (match parseExtensions Server data with
-	    | Correct(exts) ->
+	    | Correct(exts,None) ->
 	      if List.Tot.length exts < 256 then
 	      Correct ({ hrr_protocol_version = pv;
 			hrr_cipher_suite = cs;
@@ -1564,8 +1565,13 @@ let encryptedExtensionsBytes_is_injective e1 e2 =
 
 (* JK : TODO *)
 assume val lemma_extensionsBytes_length: r:role -> b:bytes ->
-  Lemma (requires (True))
-	(ensures (Correct? (parseExtensions r b) ==> length (extensionsBytes (Correct?._0 (parseExtensions r b))) = length b))
+  Lemma (requires True)
+	(ensures (
+	  match parseExtensions r b with 
+	  | Error _ -> True
+	  | Correct (ee, obinders) -> 
+	  let len = match obinders with | Some (_,len) -> len | _ -> 0 in 
+	  length (extensionsBytes ee) + len == length b))
 
 (* val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->  *)
 (*     Tot (result (s:valid_ee{Seq.equal (encryptedExtensionsBytes s) (messageBytes HT_encrypted_extensions b)})) *)
@@ -1574,7 +1580,7 @@ val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->
 let parseEncryptedExtensions payload  =
   match parseExtensions Server payload with
   | Error z -> Error z
-  | Correct exts -> 
+  | Correct (exts,None) -> 
     if List.Tot.length exts >= 256 then  error "too many extensions" else
     ( lemma_extensionsBytes_length Server payload;
       Correct exts)

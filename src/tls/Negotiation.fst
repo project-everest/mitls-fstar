@@ -183,12 +183,20 @@ let find_pske o =
   | None -> None 
   | Some (Extensions.E_pre_shared_key psks) -> Some psks
 
+let find_clientPske o = 
+  match find_client_extension Extensions.E_pre_shared_key? o with 
+  | None -> None 
+  | Some (Extensions.E_pre_shared_key psk) -> (
+    match psk with 
+    | ServerPSK _ -> None
+    | ClientPSK (ids,_) -> Some ids)
+
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
-  (match find_pske o with 
-  | Some psks -> n < List.length psks
-  | None -> False) } 
+  (match find_clientPske o with
+  | Some ids -> n < List.length ids
+  | _ -> False) }
 
 let find_supported_groups o = 
   match find_client_extension Extensions.E_supported_groups? o with 
@@ -972,7 +980,7 @@ let compute_cs13 cfg o psks shares =
 
   // pick preferred choice for each PSK (if any) -- we could stop at the first match too
   let pske = 
-    match find_pske o with 
+    match find_clientPske o with 
     | Some pske -> pske 
     | None -> [] in
 

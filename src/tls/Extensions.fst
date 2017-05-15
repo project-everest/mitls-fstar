@@ -643,11 +643,15 @@ let parseExtensions role b =
   | Error z -> error "extensions" 
 
 (* SI: API. Called by HandshakeMessages. *)
-val parseOptExtensions: r:role -> data:bytes -> result (option (list extension * option (binders * nat)))
+// returns either Some,Some or None,
+val parseOptExtensions: r:role -> data:bytes -> result (option (list extension) * option (binders * nat))
 let parseOptExtensions r data =
   if length data = 0 
-  then Correct None
-  else mapResult Some (parseExtensions r data)
+  then Correct (None,None)
+  else (
+    match parseExtensions r data with 
+    | Error z -> Error z
+    | Correct (ee,obinders) -> Correct (Some ee, obinders))
 #reset-options 
 
 
