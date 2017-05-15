@@ -306,7 +306,7 @@ val ks_client_13_psk_init: ks:ks -> pskl:list PSK.psk_identifier -> gl:list vali
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
-  (ensures fun h0 (bkl, gxl) h1 ->
+  (ensures fun h0 (bkl, pskl, gxl) h1 ->
     let KS #rid st = ks in
     gl == List.Tot.map group_of_cks gxl /\
     modifies (Set.singleton rid) h0 h1 /\

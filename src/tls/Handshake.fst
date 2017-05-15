@@ -320,8 +320,7 @@ let client_ClientHello hs i =
     let nego_binders = List.Tot.filter filter binderKeys in
     let binders = KeySchedule.map_ST compute_binder nego_binders in
     HandshakeLog.send hs.log (Binders binders)
-    Some pskl
-  in
+    Some pskl) in
 
   // 0-RTT data
   match Nego.find_early_data offer, nego_psk with
