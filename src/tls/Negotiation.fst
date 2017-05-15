@@ -230,7 +230,7 @@ let find_early_data o =
 type retryInfo (offer:offer) =
   hrr *
   list share (* we should actually keep the raw client extension content *) *
-  (list (PSK.pskIdentity * Hashing.anyTag))
+  (list (PSK.pskid * Hashing.anyTag))
 
 (**
   The final negotiated outcome, including key shares and long-term identities.
@@ -352,7 +352,7 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     t region role
 
 val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
-  -> ks:option CommonDH.keyShare -> option (list PSK.pskInfo)
+  -> ks:option CommonDH.keyShare -> option (list (PSK.pskid * PSK.pskInfo))
   -> Tot offer
 let computeOffer r cfg resume nonce ks pskinfo =
   let sid =
@@ -367,6 +367,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       cfg.ciphersuites
       cfg.safe_resumption
       cfg.safe_renegotiation
+      cfg.enable_early_data
       cfg.signatureAlgorithms
       cfg.namedGroups
       None // : option (cVerifyData * sVerifyData)
@@ -568,7 +569,7 @@ let verify scheme chain tbs sigv =
 
 val client_ClientHello: #region:rgn -> t region Client
   -> option CommonDH.clientKeyShare
-  -> option (list PSK.pskInfo)
+  -> option (list (PSK.pskid * PSK.pskInfo))
   -> St offer
 let client_ClientHello #region ns oks pskinfo =
   //17-04-22 fix this in the definition of offer?

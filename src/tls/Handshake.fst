@@ -270,6 +270,19 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
           t = [ClientHello offer] ))
         | _ -> False )))
 
+private let rec zip = function
+  | [], [] -> []
+  | h1::t1, h2::t2 -> (h1,h2) :: (zip (t1,t2))
+
+let compute_binder hs (binderKey:(i:binderId & bk:KeySchedule.binderKey i))
+  : ST (HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i)))
+    (requires fun h0 -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  let (| bid, bk |) = binderKey in
+  let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
+  HMAC.UFCMA.mac bk digest_CH0
+
 let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
@@ -285,7 +298,7 @@ let client_ClientHello hs i =
           Some gx, None, None
         | pskl ->
           let bkl, pskinfo, gx = KeySchedule.ks_client_13_psk_init hs.ks pskl (config_of hs).namedGroups in
-          Some gx, Some bkl, Some pskinfo
+          Some gx, Some bkl, Some (zip (pskl, pskinfo))
         )
       | _ ->
         trace "offering ClientHello 1.2";
@@ -299,34 +312,25 @@ let client_ClientHello hs i =
   HandshakeLog.send hs.log (ClientHello offer);  // TODO decompose in two steps, appending the binders
 
   // Computing & sending the binders
-  let nego_psk = (match Nego.find_pske offer with
-  | None -> None // No PSK offered, CH is complete
-  | Some (Extensions.ClientPSK pskl) ->
-    let compute_binder (binderKey:(i:binderId & bk:HMAC.UFCMA.key (HMAC.UFCMA.HMAC_Binder i)))
-      : ST unit (requires fun h0 -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)
-      =
-      let (| bid, bk |) = binderKey in
-      // ADL: consider caching the hashes if the same algorithm is used more than once
-      let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
-      HMAC.UFCMA.mac bk digest_CH0
-    in
-
-    // We only compute binders for PSK identities negotiated in ClientHello
-    let filter bk =
-      let (| Binder esId _, bk |) = bk in
-      let ApplicationPSK pskid h = esId in
-      List.Tot.existsb (fun x -> equalBytes x pskid) pskl in
-    let nego_binders = List.Tot.filter filter binderKeys in
-    let binders = KeySchedule.map_ST compute_binder nego_binders in
-    HandshakeLog.send hs.log (Binders binders)
-    Some pskl) in
+  let nego_psk =
+    (match Nego.find_clientPske offer, binderKeys with
+    | Some pskl, Some bk ->
+      // We only compute binders for PSK identities negotiated in ClientHello
+      //let filter bk =
+//        let (| Binder esId _, bk |) = bk in
+        //let ApplicationPSK pskid h = esId in
+        //List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
+      //let nego_binders = List.Tot.filter filter bk in
+      let binders = KeySchedule.map_ST (compute_binder hs) bk in
+      HandshakeLog.send hs.log (Binders binders);
+      Some pskl
+    | _ -> None) in
 
   // 0-RTT data
-  match Nego.find_early_data offer, nego_psk with
-  | Some _, Some (pskid::_) ->
+  match Nego.find_early_data offer, pskinfo with
+  | Some _, Some ((pskid,pskinfo)::_) ->
     let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash pskinfo) hs.log in
-    let edk = KeySchedule.ks_client_13_ch hs.ks pskid digest_CH in
+    let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
     register hs edk;
     // ADL: Todo add TLS signal
     hs.state := C_Wait_ServerHello;

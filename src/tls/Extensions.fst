@@ -36,7 +36,7 @@ private type canFail (a:Type) =
 | ExOK of list a
 
 (* PRE-SHARED KEYS AND KEY EXCHANGES *)
-type pskIdentity = PSK.preSharedKey * PSK.obfuscated_ticket_age
+type pskIdentity = PSK.psk_identifier * PSK.obfuscated_ticket_age
 
 noeq type psk =
   // this is the truncated PSK extension, without the list of binder tags.
@@ -91,13 +91,13 @@ let parseBinderList (b:bytes{2 <= length b}) : Tot (result binders) =
   | Correct b -> aux b []
   | Error z -> error "parseBinderList"
 
-val pskiBytes : PSK.preSharedKey * UInt32.t -> Tot bytes
+val pskiBytes : PSK.psk_identifier * UInt32.t -> Tot bytes
 let pskiBytes (i,ot) =
   let idx = UInt32.v ot in
   assert(idx < 4294967296);
   lemma_repr_bytes_values idx;
   let n = bytes_of_int 4 idx in
-  (PSK.preSharedKeyBytes i) @| n
+  (vlbytes2 i) @| n
 
 #set-options "--lax"
 val pskBytes : psk -> Tot bytes
@@ -112,7 +112,7 @@ let pskBytes psk =
 let ota_is_4 (b:bytes) =
   match vlsplit 2 b with
   | Error z -> False
-  | Correct(_id,ota) -> length ota == 4
+  | Correct(_, ota) -> length ota == 4
 
 //val parsePskIdentity : b:bytes{let _,ota = vlsplit 2 b in length ota == 4}  -> result pskIdentity
 val parsePskIdentity : b:bytes{ota_is_4 b} -> result pskIdentity
@@ -121,13 +121,8 @@ let parsePskIdentity b =
   match vlsplit 2 b with
   | Error z -> error "parsePskIdentity failed to parse"
   | Correct(id,ota) ->
-    begin
-      match PSK.parsePreSharedKey id with
-      | Correct(id) ->
-      	let ota = UInt32.uint_to_t (int_of_bytes ota) in
-      	Correct (id,ota)
-      | Error z -> error "parsePskIdentity"
-      end
+    let ota = UInt32.uint_to_t (int_of_bytes ota) in
+    Correct (id, ota)
 
 val parsePskIdentities : bytes -> result (list pskIdentity)
 let parsePskIdentities b =
@@ -705,15 +700,17 @@ val prepareExtensions:
   k:valid_cipher_suites{List.Tot.length k < 256} ->
   bool ->
   bool ->
+  bool ->
   signatureSchemeList ->
   list (x:namedGroup{SEC? x \/ FFDHE? x}) ->
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
+  option (list (PSK.pskid * PSK.pskInfo)) ->
   l:list extension{List.Tot.length l < 256}
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
+let prepareExtensions minpv pv cs sres sren edi sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -740,7 +737,7 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
     let res = E_signature_algorithms sigAlgs :: res in
     let res =
       if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
-	E_ec_point_format [ECP_UNCOMPRESSED] :: res
+	      E_ec_point_format [ECP_UNCOMPRESSED] :: res
       else res
     in
     let res =
@@ -748,9 +745,33 @@ let prepareExtensions minpv pv cs sres sren sigAlgs namedGroups ri ks =
         E_supported_groups (list_valid_ng_is_list_ng namedGroups) :: res
       else res
     in
+    let res =
+      let filter = (fun (_,x) -> x.PSK.allow_psk_resumption || x.PSK.allow_dhe_resumption) in
+      if pv = TLS_1p3 && Some? psks && List.Tot.filter filter (Some?.v psks) <> [] then
+        let (pskids, pskinfos) : list PSK.pskid * list PSK.pskInfo = List.Tot.split (Some?.v psks) in
+        let psk_kex = [] in
+        let psk_kex =
+          if List.Tot.existsb (fun x -> x.PSK.allow_psk_resumption) pskinfos
+          then PSK_KE :: psk_kex else psk_kex in
+        let psk_kex =
+          if List.Tot.existsb (fun x -> x.PSK.allow_dhe_resumption) pskinfos
+          then PSK_DHE_KE :: psk_kex else psk_kex in
+        let res = E_psk_key_exchange_modes psk_kex :: res in
+        let binder_len = List.Tot.fold_left (fun ctr pski ->
+            let h = PSK.pskInfo_hash pski in
+            ctr + (Hashing.Spec.tagLen h)
+          ) 0 pskinfos in
+        let pskidentities = List.Tot.map (fun x -> x, PSK.default_obfuscated_age) pskids in
+        let res = E_pre_shared_key (ClientPSK pskidentities binder_len) :: res in
+        let psk0 :: _ = pskinfos in
+        if edi && psk0.PSK.allow_early_data then (E_early_data None) :: res // ADL: todo add to pskinfo
+        else res
+      else res
+    in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
 #reset-options
+
 (*
 // TODO the code above is too restrictive, should support further extensions
 // TODO we need an inverse; broken due to extension ordering. Use pure views instead?

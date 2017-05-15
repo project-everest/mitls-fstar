@@ -267,14 +267,6 @@ let error s = Error(AD_decode_error, "Handshake parser: "^s)
 let vlbytes1 (b:bytes {length b < pow2 8}) = lemma_repr_bytes_values (length b); vlbytes 1 b
 let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b); vlbytes 2 b
 
-// PSK binders, actually the truncated suffix of TLS 1.3 ClientHello
-// We statically enforce length requirements to ensure that formatting is total.
-type binder = b:bytes {32 <= length b /\ length b <= 255}
-val binderListBytes: list binder -> bytes
-let binderListBytes bs = List.Tot.fold_left (fun a (b:binder) -> a @| vlbytes1 b) empty_bytes bs
-type binders = bs: list binder {let l = length (binderListBytes bs) in 33 <= l /\ l <= pow2 16 - 1}
-let bindersBytes (bs:binders): bytes = vlbytes2 (binderListBytes bs)
-
 // TODO: unify, either keep separate finished messages for client and servers or
 // merge them into single "finished" as it is the case for certificates
 noeq type hs_msg =
@@ -368,12 +360,15 @@ let parseMessage buf =
 
 val list_valid_to_valid_list: l:valid_cipher_suites -> Tot (l':list (c:cipherSuite{validCipherSuite c}){List.Tot.length l = List.Tot.length l'})
 let rec list_valid_to_valid_list l =
+  assume false;
   match l with
-  | hd::tl -> hd::(list_valid_to_valid_list tl)
+  | hd::tl ->
+    hd::(list_valid_to_valid_list tl)
   | _ -> []
 
 val valid_list_to_list_valid: l':list (c:cipherSuite{validCipherSuite c}) -> Tot (l:valid_cipher_suites{List.Tot.length l = List.Tot.length l'})
 let rec valid_list_to_list_valid l =
+  assume false;
   match l with
   | hd::tl -> hd::(valid_list_to_list_valid tl)
   | _ -> []
@@ -1574,7 +1569,9 @@ assume val lemma_extensionsBytes_length: r:role -> b:bytes ->
 	  match parseExtensions r b with
 	  | Error _ -> True
 	  | Correct (ee, obinders) ->
-	  let len = match obinders with | Some (_,len) -> len | _ -> 0 in
+	  let len = match obinders with
+      | Some binders -> length (bindersBytes binders)
+      | _ -> 0 in
 	  length (extensionsBytes ee) + len == length b))
 
 (* val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->  *)
