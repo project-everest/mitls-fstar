@@ -148,10 +148,7 @@ let ch_is_resumption {ch_sessionID = sid} = length sid > 0
 let bindersLen_of_ch ch =
   match ch.ch_extensions with
   | None -> 0
-  | Some el ->
-    (match List.Tot.find (Extensions.E_pre_shared_key?) el with
-    | Some (Extensions.E_pre_shared_key (Extensions.ClientPSK _ len)) -> len
-    | _ -> 0)
+  | Some el -> Extensions.bindersLen el
 
 // ServerHello: supporting two different syntaxes depending on the embedded pv
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.2

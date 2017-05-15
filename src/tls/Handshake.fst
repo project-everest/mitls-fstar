@@ -362,7 +362,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           mode.Nego.n_cipher_suite
           digest
           (Some?.v mode.Nego.n_server_share)
-          false (* in case we provided PSKs earlier, ignore them from now on *)
+          None (* in case we provided PSKs earlier, ignore them from now on *)
           in
         register s hs_keys; // register new epoch
         s.state := C_Wait_Finished1;
@@ -663,7 +663,7 @@ let server_ServerFinished_13 hs i =
       begin
       let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
-      let svd = HMAC.UFCMA.mac #sfinId sfin_key digestFinished in
+      let svd = HMAC.UFCMA.mac sfin_key digestFinished in
       let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
       // we need to call KeyScheduke twice, to pass this digest
       // ADL this call also returns exporter master secret, which should be passed to application
@@ -690,7 +690,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
    | None ->
        let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
        // TODO MACVerify digestClientFinished
-       if HMAC.UFCMA.verify #i cfin_key digestBeforeClientFinished f
+       if HMAC.UFCMA.verify cfin_key digestBeforeClientFinished f
        then (
           // ADL: missing call for resumption master secret etc
           //let _ = KeySchedule.ks_server_13_cf ks digestClientFinished in

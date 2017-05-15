@@ -395,6 +395,11 @@ We do not yet support the extensions below (authenticated but ignored)
   | E_renegotiation_info of renegotiationInfo
 *)
 
+let bindersLen el =
+  match List.Tot.find (E_pre_shared_key?) el with
+  | Some (Extensions.E_pre_shared_key (ClientPSK _ len)) -> len
+  | _ -> 0
+
 let string_of_extension = function
   | E_server_name _ -> "server_name"
   | E_supported_groups _ -> "supported_groups"
@@ -514,7 +519,7 @@ let vlbytes_trunc lSize b bSize =
 val extensionsBytes: extensions -> b:bytes { length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
-  let binder_len = admit() in // SI: fixme
+  let binder_len = bindersLen exts in
   lemma_repr_bytes_values (length b);
   vlbytes_trunc 2 b binder_len
 #reset-options
@@ -762,10 +767,11 @@ let prepareExtensions minpv pv cs sres sren edi sigAlgs namedGroups ri ks psks =
             ctr + (Hashing.Spec.tagLen h)
           ) 0 pskinfos in
         let pskidentities = List.Tot.map (fun x -> x, PSK.default_obfuscated_age) pskids in
-        let res = E_pre_shared_key (ClientPSK pskidentities binder_len) :: res in
         let psk0 :: _ = pskinfos in
-        if edi && psk0.PSK.allow_early_data then (E_early_data None) :: res // ADL: todo add to pskinfo
-        else res
+        let res =
+          if edi && psk0.PSK.allow_early_data then (E_early_data None) :: res // ADL: todo add to pskinfo
+          else res in
+        E_pre_shared_key (ClientPSK pskidentities binder_len) :: res // MUST BE LAST
       else res
     in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
