@@ -207,7 +207,7 @@ let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.s
 val register: hs -> KeySchedule.recordInstance -> St unit
 let register hs keys =
     let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
-      let h = Nego.Fresh ({ Nego.session_nego = Nego.getMode hs.nego }) in
+      let h = Nego.Fresh ({ Nego.session_nego = None }) in
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
@@ -815,6 +815,11 @@ let rec recv_fragment (hs:hs) #i rg f =
 
       | S_Idle, [ClientHello ch], []  ->
         server_ClientHello hs ch
+
+      // FIXME: we need to pass the binders to server_ClientHello
+      | S_Idle, [ClientHello ch; Binders binders], []  ->
+        server_ClientHello hs ch
+
       | S_Wait_Finished1 digest, [Finished f], [digestClientFinish] ->
         server_ClientFinished hs f.fin_vd digest digestClientFinish
       | S_Wait_Finished1 digest, [Finished f], tags ->
