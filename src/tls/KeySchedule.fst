@@ -314,6 +314,8 @@ let ks_client_13_init ks pskl gl =
     let bId = Binder i ll in
     let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
     dbg ("Binder key: "^(print_bytes bk));
+    let bk = finished_13 h bk in
+    dbg ("Binder Finished key: "^(print_bytes bk));
     let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
     ((| i, es |), pski), ((| bId, bk|), (pskid, pski)) in
 
@@ -416,46 +418,68 @@ val ks_server_13_init:
   cr:random ->
   cs:cipherSuite ->
   pskid:option PSK.pskid ->
-  g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)} ->
-  gx:CommonDH.share g ->
-  ST CommonDH.serverKeyShare
+  g_gx:option (g:CommonDH.group & CommonDH.share g) ->
+  ST (option CommonDH.serverKeyShare * option (i:binderId & binderKey i))
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
+    /\ (Some? g_gx \/ Some? pskid)
+    /\ (Some? g_gx ==> Some? (CommonDH.namedGroup_of_group (dfst (Some?.v g_gx))))
     /\ CipherSuite13? cs)
-  (ensures fun h0 r h1 ->
+  (ensures fun h0 (gy, bk) h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
+    /\ (Some? bk <==> Some? pskid)
+    /\ (Some? gy \/ Some? bk)
     /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_server_13_init ks cr cs pskid g gx =
+let ks_server_13_init ks cr cs pskid g_gx =
   dbg ("ks_server_init");
   let KS #region st = ks in
   let S (S_Init sr) = !st in
   let CipherSuite13 ae h = cs in
-  let esId, es =
+  let esId, es, bk =
     match pskid with
-    | Some i ->
-      dbg ("Using negotiated PSK: "^(print_bytes i));
-      let i, psk, h, _ = read_psk pskid in
-      i, HKDF.hkdf_extract h (H.zeroHash h) psk
+    | Some id ->
+      dbg ("Using negotiated PSK: "^(print_bytes id));
+      let i, psk, h, _ = read_psk id in
+      let es = HKDF.hkdf_extract h (H.zeroHash h) psk in
+      let ll, lb =
+        if ApplicationPSK? i then ExtBinder, "ext binder"
+        else ResBinder, "res binder" in
+      let bId = Binder i ll in
+      let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
+      dbg ("Binder key: "^(print_bytes bk));
+      let bk = finished_13 h bk in
+      dbg ("Binder Finished key: "^(print_bytes bk));
+      let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
+      i, es, Some (| bId, bk |)
     | None ->
       dbg "No PSK selected.";
-      NoPSK h, HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h)
+      NoPSK h, HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h), None
     in
   dbg ("Computed early secret: "^(print_bytes es));
   let saltId = Salt (EarlySecretID esId) in
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("Handshake salt: "^(print_bytes salt));
-  let gy, gxy = CommonDH.dh_responder gx in
-  dbg ("DH shared secret: "^(print_bytes gxy));
-  let hsId = HSID_DHE saltId g gx gy in
-  let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+  let gy, hsId, hs =
+    match g_gx with
+    | Some (| g, gx |) ->
+      let gy, gxy = CommonDH.dh_responder gx in
+      dbg ("DH shared secret: "^(print_bytes gxy));
+      let hsId = HSID_DHE saltId g gx gy in
+      let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+      Some (CommonDH.Share g gy), hsId, hs
+    | None ->
+      let hsId = HSID_PSK saltId in
+      let hs : hs hsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+      None, hsId, hs
+    in
   dbg ("Handshake secret: "^(print_bytes hs));
   st := S (S_13_wait_SH (ae, h) cr sr (| esId, es |) (| hsId, hs |));
-  CommonDH.Share g gy
+  gy, bk
 
-let ks_server_13_0rtt_key ks log
+let ks_server_13_0rtt_key ks (log:bytes)
   : ST (recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in

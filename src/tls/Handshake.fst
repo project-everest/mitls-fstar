@@ -553,55 +553,59 @@ let server_ClientHello hs offer =
     | Error z -> InError z
     | Correct mode ->
       begin
-      let server_share =
-        match mode.Nego.n_protocol_version, mode.Nego.n_client_share, Nego.kexAlg mode with
-        | TLS_1p3, Some (| g, gx |), _ ->
-          Some
-            (CommonDH.ServerKeyShare
-              (KeySchedule.ks_server_13_1rtt_init
-                hs.ks offer.ch_client_random mode.Nego.n_cipher_suite g gx))
-        | TLS_1p3, _, _  -> None
-        | _, _, Kex_DHE
-        | _, _, Kex_ECDHE ->
-          begin
-          match Nego.chosenGroup mode with
-          | None ->  None // Should be unreachable
-          | Some g ->
-            let cr = mode.Nego.n_offer.ch_client_random in
-            let gy = KeySchedule.ks_server_12_init_dh hs.ks cr
-              mode.Nego.n_protocol_version
-              mode.Nego.n_cipher_suite
-              (Nego.emsFlag mode)
-              g
-            in Some (CommonDH.ServerKeyShare (CommonDH.Share g gy))
-          end
-      in
-      match Nego.server_ServerShare hs.nego server_share with
-      | Error z -> InError z
-      | Correct mode ->
         let pv = mode.Nego.n_protocol_version in
-        let ha = Nego.hashAlg mode in
-        let ka = Nego.kexAlg mode in
-        HandshakeLog.setParams hs.log pv ha (Some ka) None;
-        let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-        let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
-        if mode.Nego.n_protocol_version = TLS_1p3
-        then
-          begin
-            // TODO handle 0RTT accepted and 0RTT refused
-            // - get 0RTT key from KS.
-            // - do the signalling
-            HandshakeLog.send_signals hs.log true false; // signal key change after writing ServerHello
-            trace "derive handshake keys";
-            let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
-            register hs hs_keys;
-            // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
-            hs.state := S_Sent_ServerHello;
-            InAck false false
-          end
-        else
-          server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
-        end
+        let cr = mode.Nego.n_offer.ch_client_random in
+        let cs = mode.Nego.n_cipher_suite in
+        let g_gx = mode.Nego.n_client_share in
+        let offerpsk = Nego.find_clientPske offer in
+        let n_psk =
+          match mode.Nego.n_pski with
+          | Some i -> Some (List.Tot.nth (Some?.v offerpsk) i)
+          | None -> None in
+
+        let server_share, binder_key =
+          match pv with
+          | TLS_1p3 -> KeySchedule.ks_server_13_init hs.ks cr cs n_psk g_gx
+          | _ ->
+            (match Nego.kexAlg mode, g_gx with
+            | Kex_DHE
+            | Kex_ECDHE ->
+              let Some g = Nego.chosenGroup mode in
+              let gy = KeySchedule.ks_server_12_init_dh hs.ks cr pv cs (Nego.emsFlag mode) g in
+              Some (CommonDH.Share g gy), None
+            | _ -> // TODO RSA key exchange
+              None, None)
+          in
+
+        let server_share = match server_share with
+          | None -> None | Some entry -> Some (CommonDH.ServerKeyShare entry) in
+
+        match Nego.server_ServerShare hs.nego server_share with
+        | Error z -> InError z
+        | Correct mode ->
+          let pv = mode.Nego.n_protocol_version in
+          let ha = Nego.hashAlg mode in
+          let ka = Nego.kexAlg mode in
+          HandshakeLog.setParams hs.log pv ha (Some ka) None;
+          let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
+          let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
+          if mode.Nego.n_protocol_version = TLS_1p3
+          then
+            begin
+              // TODO handle 0RTT accepted and 0RTT refused
+              // - get 0RTT key from KS.
+              // - do the signalling
+              HandshakeLog.send_signals hs.log true false; // signal key change after writing ServerHello
+              trace "derive handshake keys";
+              let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
+              register hs hs_keys;
+              // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
+              hs.state := S_Sent_ServerHello;
+              InAck false false
+            end
+          else
+            server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
+      end
 
 
 (* receive ClientKeyExchange; CCS *)
