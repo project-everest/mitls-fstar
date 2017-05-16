@@ -473,6 +473,14 @@ let chosenGroup mode =
         (config_of hs).namedGroups in
 *)
 
+val zeroRTToffer: offer -> bool
+let zeroRTToffer o = Some? (find_early_data o)
+
+val zeroRTT: mode -> bool
+let zeroRTT mode =
+  zeroRTToffer mode.n_offer &&
+  Some? mode.n_pski
+
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
   ns.cfg

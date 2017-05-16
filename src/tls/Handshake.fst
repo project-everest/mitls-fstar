@@ -281,7 +281,6 @@ let compute_binder hs (binderKey:(i:binderId & bk:KeySchedule.binderKey i))
   let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
   HMAC.UFCMA.mac bk digest_CH0
 
-
 let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
@@ -317,7 +316,8 @@ let client_ClientHello hs i =
       //        let ApplicationPSK pskid _ = esId in
       //        List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
       //      let nego_binders = List.Tot.filter filter binderKeys in
-      if List.Tot.length pskl <> length binderKeys then trace "WARNING: PSK filtering";
+      if List.Tot.length pskl <> List.Tot.length binderKeys then
+        trace "WARNING: PSK filtering";
       let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
       HandshakeLog.send hs.log (Binders binders);
       pskl
@@ -336,7 +336,6 @@ let client_ClientHello hs i =
 
   hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
   Correct(HandshakeLog.next_fragment hs.log i)
-
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
@@ -362,7 +361,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           digest
           (Some?.v mode.Nego.n_server_share)
           mode.Nego.n_pski in
-        ( match Nego.zeroRTToffer mode.n_offer, Nego.zeroRTT mode with
+          (match Nego.zeroRTToffer mode.Nego.n_offer, Nego.zeroRTT mode with
           | true, true -> trace "0RTT accepted"
           | true, false -> trace "0RTT refused"
           | _ -> ());
