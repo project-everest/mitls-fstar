@@ -537,7 +537,7 @@ val extensionsBytes:
   b:bytes { length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
-  let binder_len = bindersLen exts in
+  let binder_len = 2 + bindersLen exts in
   lemma_repr_bytes_values (length b + binder_len);
   vlbytes_trunc 2 b binder_len
 
