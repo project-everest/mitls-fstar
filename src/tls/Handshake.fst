@@ -365,7 +365,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           | true, true -> trace "0RTT accepted"
           | true, false -> trace "0RTT refused"
           | _ -> ());
-        *)
+
         //TODO check we cover 0rtt-accepted and 0rtt-refused cases
         // we expect 0RTTing clients to check the mode after handshake completion.
         //
