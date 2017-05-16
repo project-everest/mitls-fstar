@@ -195,6 +195,14 @@ let find_clientPske o =
     | ServerPSK _ -> None
     | ClientPSK ids _ -> Some ids
 
+let find_serverPske sh =
+  match sh.sh_extensions with
+  | None -> None
+  | Some exts ->
+    match List.Tot.find E_pre_shared_key? exts with
+    | Some (E_pre_shared_key (ServerPSK idx)) -> Some (UInt16.v idx)
+    | _ -> None
+
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
@@ -464,6 +472,14 @@ let chosenGroup mode =
         (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
         (config_of hs).namedGroups in
 *)
+
+val zeroRTToffer: offer -> bool
+let zeroRTToffer o = Some? (find_early_data o)
+
+val zeroRTT: mode -> bool
+let zeroRTT mode =
+  zeroRTToffer mode.n_offer &&
+  Some? mode.n_pski
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -797,28 +813,44 @@ let client_ServerHello #region ns sh =
         match cs with
         | CipherSuite13 ae ha ->
           begin
-          match spv, next.ne_keyShare with
-          | TLS_1p3, Some (CommonDH.Share g gy) ->
-            let server_share = (|g, gy|) in
-            let client_share = matching_share cext g in
-            let mode = Mode
-              offer
-              None // n_hrr
-              spv
-              sr
-              None // (Some ssid)
-              cs
-              None // pski
-              sext
-              (Some server_share)
-              None // n_client_cert_request
-              None // n_server_cert
-              client_share
-             in
-             MR.m_write ns.state (C_Mode mode);
-             Correct mode
-          | _ ->
-            Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+          let pski =
+            match find_clientPske offer, find_serverPske sh with
+            | Some ids, Some idx ->
+              if idx < List.Tot.length ids then
+                Correct (Some idx) // REMARK: we can't check yet consistency with early_data in EE
+              else
+                Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "PSK out of bounds")
+            | None, Some _ ->
+              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "PSK not offered")
+            | _, _ -> Correct None
+          in
+          match pski with
+          | Error z -> Error z
+          | Correct pski ->
+            begin
+            match spv, next.ne_keyShare with
+            | TLS_1p3, Some (CommonDH.Share g gy) ->
+              let server_share = (|g, gy|) in
+              let client_share = matching_share cext g in
+              let mode = Mode
+                offer
+                None // n_hrr
+                spv
+                sr
+                None // (Some ssid)
+                cs
+                pski
+                sext
+                (Some server_share)
+                None // n_client_cert_request
+                None // n_server_cert
+                client_share
+               in
+               MR.m_write ns.state (C_Mode mode);
+               Correct mode
+            | _ ->
+              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+            end
           end
         | CipherSuite kex sa ae ->
           let mode = Mode
@@ -952,10 +984,11 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
 type cs13 offer =
   | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
+  // JUST_PSK: TODO
 
 // Work around #1016
 private let rec compute_cs13_aux
-  (i:nat) (o:offer)  pske (g_gx:option share)
+  (i:nat) (o:offer) pske (g_gx:option share)
   ncs (psks:list (option cipherSuite)) psk_kex : list (cs13 o) =
   if i = List.length pske then
     ( match g_gx, ncs with
@@ -963,7 +996,7 @@ private let rec compute_cs13_aux
       | _ -> [] )
   else
     let choices =
-      match List.Tot.index psks i, psk_kex  with
+      match List.Tot.index psks i, psk_kex with
       | None, _ -> []
       | Some cs, true -> [PSK_EDH i g_gx cs]  // TODO add cases
     in
@@ -1014,7 +1047,12 @@ let compute_cs13 cfg o psks shares =
     | Some pske -> pske
     | None -> [] in
 
-  assert(List.length pske = List.length psks); // precondition
+  // FIXME: this picks the first acceptable ciphersuite, and assumes it's compatible
+  // with all PSKs offered
+  let cs::_ = ncs in
+  let psks = List.Tot.map (fun psk -> Some cs) pske in
+
+  assert(List.length pske == List.length psks); // precondition
   let psk_kex = true in
   Correct (compute_cs13_aux 0 o pske g_gx ncs psks psk_kex)
 
@@ -1042,11 +1080,10 @@ let computeServerMode cfg co serverRandom serverID =
   | Error z -> Error z
   | Correct TLS_1p3 ->
     begin
-    match compute_cs13 cfg co [] [] (*TODO*)  with
+    match compute_cs13 cfg co [] [] (*TODO*) with
     | Error z -> Error z
     | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
-    | Correct (PSK_EDH j ogs cs :: _) -> Error(AD_handshake_failure, "TODO: PSK_EDH unimplemented")
-    | Correct (JUST_EDH gx cs  :: _) ->
+    | Correct (kex :: _) ->
       begin
       match find_signature_algorithms co with
       | None ->
@@ -1066,19 +1103,36 @@ let computeServerMode cfg co serverRandom serverID =
               trace ("*WARNING* no server certificate found: " ^ string_of_error z);
               None
           in
-          Correct (Mode
-            co
-            None // TODO: no HRR
-            TLS_1p3
-            serverRandom
-            serverID
-            cs
-            None // No PSKs, pure (EC)DHE
-            serverExtensions
-            None // no server key share yet
-            None // TODO: n_client_cert_request
-            scert
-            (Some gx))
+          match kex with
+          | PSK_EDH j ogx cs  ->
+            (trace "PSK_EDH";
+            Correct (Mode
+              co
+              None // TODO: no HRR
+              TLS_1p3
+              serverRandom
+              serverID
+              cs
+              (Some j)
+              serverExtensions
+              None // no server key share yet
+              None // TODO: n_client_cert_request
+              scert
+              ogx))
+          | JUST_EDH gx cs ->
+            Correct (Mode
+              co
+              None // TODO: no HRR
+              TLS_1p3
+              serverRandom
+              serverID
+              cs
+              None // No PSKs, pure (EC)DHE
+              serverExtensions
+              None // no server key share yet
+              None // TODO: n_client_cert_request
+              scert
+              (Some gx))
           end
         end
       end
@@ -1156,7 +1210,6 @@ let computeServerMode cfg co serverRandom serverID =
     None // no client key share yet for 1.2
   )
 
-
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
   option sessionID ->
@@ -1227,7 +1280,7 @@ type hs_id = {
 
 //17-03-30 get rid of this wrapper?
 type session = {
-  session_nego: mode;
+  session_nego: option mode;
 }
 
 

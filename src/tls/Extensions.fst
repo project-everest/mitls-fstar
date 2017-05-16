@@ -964,9 +964,10 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
     None
     // REMARK: Purely informative, can only appear in EncryptedExtensions
     // Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
+  // FIXME: properly select early_data and a psk index
+  | E_early_data b -> None //Some (E_early_data None)
+  | E_pre_shared_key b -> None //Some (E_pre_shared_key (ServerPSK 0us))
   // TODO: handle all remaining cases
-  | E_early_data b -> None
-  | E_pre_shared_key b -> None
   | _ -> None
 
 (* SI: API. Called by Handshake. *)

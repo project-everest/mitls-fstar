@@ -196,8 +196,8 @@ type ks_server_state =
 | S_12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:(g:CommonDH.group & CommonDH.keyshare g) -> ks_server_state
 | S_12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
-| S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:option ( i:esId & es i ) ->
-                cfk0:option ( i:finishedId & fink i ) -> hs:( i:hsId & hs i ) -> ks_server_state
+| S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:(i:esId & es i) ->
+                hs:( i:hsId & hs i ) -> ks_server_state
 | S_13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:finishedId & sfk:fink i ) ->
                 ( i:asId & ams:ams i ) -> ks_server_state
 | S_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams i ) ->
@@ -314,6 +314,8 @@ let ks_client_13_init ks pskl gl =
     let bId = Binder i ll in
     let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
     dbg ("Binder key: "^(print_bytes bk));
+    let bk = finished_13 h bk in
+    dbg ("Binder Finished key: "^(print_bytes bk));
     let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
     ((| i, es |), pski), ((| bId, bk|), (pskid, pski)) in
 
@@ -411,36 +413,91 @@ let ks_server_12_init_dh ks cr pv cs ems g =
   st := S (S_12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |));
   CommonDH.pubshare our_share
 
-val ks_server_13_0rtt_init: ks:ks -> cr:random -> i:PSK.psk_identifier -> bytes -> cs:cipherSuite -> gx:(g:CommonDH.group & CommonDH.share g) -> ST (recordInstance * our_share:CommonDH.share (dfst gx))
+val ks_server_13_init:
+  ks:ks ->
+  cr:random ->
+  cs:cipherSuite ->
+  pskid:option PSK.pskid ->
+  g_gx:option (g:CommonDH.group & CommonDH.share g) ->
+  ST (option CommonDH.serverKeyShare * option (i:binderId & binderKey i))
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_Init? (S?.s kss)
+    /\ (Some? g_gx \/ Some? pskid)
+    /\ (Some? g_gx ==> Some? (CommonDH.namedGroup_of_group (dfst (Some?.v g_gx))))
     /\ CipherSuite13? cs)
-  (ensures fun h0 r h1 ->
+  (ensures fun h0 (gy, bk) h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
+    /\ (Some? bk <==> Some? pskid)
+    /\ (Some? gy \/ Some? bk)
     /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_server_13_0rtt_init ks cr pskid log cs (| g, gx |) =
-  dbg "ks_server_13_0rtt_init";
-  let _ = print_share #g gx in
+let ks_server_13_init ks cr cs pskid g_gx =
+  dbg ("ks_server_init");
   let KS #region st = ks in
   let S (S_Init sr) = !st in
-  let esId, psk, h, ae = read_psk pskid in
+  let CipherSuite13 ae h = cs in
+  let esId, es, bk =
+    match pskid with
+    | Some id ->
+      dbg ("Using negotiated PSK: "^(print_bytes id));
+      let i, psk, h, _ = read_psk id in
+      let es = HKDF.hkdf_extract h (H.zeroHash h) psk in
+      let ll, lb =
+        if ApplicationPSK? i then ExtBinder, "ext binder"
+        else ResBinder, "res binder" in
+      let bId = Binder i ll in
+      let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
+      dbg ("Binder key: "^(print_bytes bk));
+      let bk = finished_13 h bk in
+      dbg ("Binder Finished key: "^(print_bytes bk));
+      let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
+      i, es, Some (| bId, bk |)
+    | None ->
+      dbg "No PSK selected.";
+      NoPSK h, HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h), None
+    in
+  dbg ("Computed early secret: "^(print_bytes es));
+  let saltId = Salt (EarlySecretID esId) in
+  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
+  dbg ("Handshake salt: "^(print_bytes salt));
+  let gy, hsId, hs =
+    match g_gx with
+    | Some (| g, gx |) ->
+      let gy, gxy = CommonDH.dh_responder gx in
+      dbg ("DH shared secret: "^(print_bytes gxy));
+      let hsId = HSID_DHE saltId g gx gy in
+      let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
+      Some (CommonDH.Share g gy), hsId, hs
+    | None ->
+      let hsId = HSID_PSK saltId in
+      let hs : hs hsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
+      None, hsId, hs
+    in
+  dbg ("Handshake secret: "^(print_bytes hs));
+  st := S (S_13_wait_SH (ae, h) cr sr (| esId, es |) (| hsId, hs |));
+  gy, bk
 
-  dbg ("Loaded pre-shared key: "^(print_bytes psk));
-  let es : es esId = HKDF.hkdf_extract h (H.zeroHash h) psk in
-  dbg ("Early secret: "^(print_bytes es));
+let ks_server_13_0rtt_key ks (log:bytes)
+  : ST (recordInstance)
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    S? kss /\ S_13_wait_SH? (S?.s kss))
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  dbg "ks_server_13_0rtt_key";
+  let KS #region st = ks in
+  let S (S_13_wait_SH (ae, h) cr sr (| esId, es |) _) = !st in
 
-  let secretId = EarlySecretID esId in
   let li = LogInfo_CH0 ({
     li_ch0_cr = cr;
     li_ch0_ed_ae = AEAD ae h;
     li_ch0_ed_hash = h;
-    li_ch0_ed_psk = pskid;
+    li_ch0_ed_psk = empty_bytes;
   }) in
   let log : hashed_log li = log in
-  let expandId : expandId li = ExpandedSecret secretId ClientEarlyTrafficSecret log in
+  let expandId : expandId li = ExpandedSecret (EarlySecretID esId) ClientEarlyTrafficSecret log in
   let ets = HKDF.derive_secret h es "c e traffic" log in
   dbg ("Client early traffic secret: "^(print_bytes ets));
 
@@ -455,49 +512,7 @@ let ks_server_13_0rtt_init ks cr pskid log cs (| g, gx |) =
   let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
-
-  let gy, gxy = CommonDH.dh_responder gx in
-  let _ = print_share gy in
-  let hsId = HSID_DHE (Salt secretId) g gx gy in
-  let hs : hs hsId = HKDF.hkdf_extract h es gxy in
-  dbg ("Handshake secret: "^(print_bytes hs));
-  st := S (S_13_wait_SH (ae, h) cr sr (Some (| esId, es |)) None (| hsId, hs |));
-  early_d, gy
-
-val ks_server_13_1rtt_init:
-  ks:ks ->
-  cr:random ->
-  cs:cipherSuite ->
-  g:CommonDH.group{Some? (CommonDH.namedGroup_of_group g)} ->
-  gx:CommonDH.share g ->
-  ST CommonDH.serverKeyShare
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S_Init? (S?.s kss)
-    /\ CipherSuite13? cs)
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
-
-let ks_server_13_1rtt_init ks cr cs g gx =
-  dbg ("ks_server_1rtt_init");
-  let KS #region st = ks in
-  let S (S_Init sr) = !st in
-  let CipherSuite13 ae h = cs in
-  let esId = NoPSK h in
-  let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
-  dbg ("Computed early secret: "^(print_bytes es));
-  let saltId = Salt (EarlySecretID esId) in
-  let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
-  dbg ("Handshake salt: "^(print_bytes salt));
-  let gy, gxy = CommonDH.dh_responder gx in
-  dbg ("DH shared secret: "^(print_bytes gxy));
-  let hsId = HSID_DHE saltId g gx gy in
-  let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
-  dbg ("Handshake secret: "^(print_bytes hs));
-  st := S (S_13_wait_SH (ae, h) cr sr None None (| hsId, hs |));
-  CommonDH.Share g gy
+  early_d
 
 val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
   (requires fun h0 ->
@@ -511,7 +526,7 @@ val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
 let ks_server_13_sh ks log =
   dbg ("ks_server_13_sh, hashed log = "^(print_bytes log));
   let KS #region st = ks in
-  let S (S_13_wait_SH (ae, h) cr sr _ _ (| hsId, hs |)) = !st in
+  let S (S_13_wait_SH (ae, h) cr sr _ (| hsId, hs |)) = !st in
   let secretId = HandshakeSecretID hsId in
   let li = LogInfo_SH ({
     li_sh_cr = cr;
