@@ -51,6 +51,7 @@ unfold let trace = if Flags.debug_HS then print else (fun _ -> ())
 // some states keep digests (irrespective of their hash algorithm)
 type digest = l:bytes{length l <= 32}
 
+#set-options "--lax"
 type machineState =
   | C_Idle
   | C_Wait_ServerHello
@@ -560,16 +561,17 @@ let server_ClientHello hs offer =
         let offerpsk = Nego.find_clientPske offer in
         let n_psk =
           match mode.Nego.n_pski with
-          | Some i -> Some (List.Tot.nth (Some?.v offerpsk) i)
+          | Some i ->
+            let Some (id, _) = List.Tot.nth (Some?.v offerpsk) i in
+            assume(PSK.registered_psk id); Some id
           | None -> None in
 
         let server_share, binder_key =
           match pv with
           | TLS_1p3 -> KeySchedule.ks_server_13_init hs.ks cr cs n_psk g_gx
           | _ ->
-            (match Nego.kexAlg mode, g_gx with
-            | Kex_DHE
-            | Kex_ECDHE ->
+            (match Nego.kexAlg mode with
+            | Kex_DHE | Kex_ECDHE ->
               let Some g = Nego.chosenGroup mode in
               let gy = KeySchedule.ks_server_12_init_dh hs.ks cr pv cs (Nego.emsFlag mode) g in
               Some (CommonDH.Share g gy), None
