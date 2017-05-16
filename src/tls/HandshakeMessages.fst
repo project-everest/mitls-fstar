@@ -362,6 +362,16 @@ let rec valid_list_to_list_valid l =
   | hd::tl -> hd::(valid_list_to_list_valid tl)
   | _ -> []
 
+val messageBytes_extra: 
+  ht:handshakeType -> 
+  data:bytes ->
+  extra:nat{ repr_bytes (length data + extra) <= 3 } -> 
+  lbytes (4 + length data)
+let messageBytes_extra ht data extra =
+  let htb = htBytes ht in
+  let vldata = vlbytes_trunc 3 data extra in
+  htb @| vldata
+
 val clientHelloBytes: ch -> Tot (b:bytes{length b >= 41 /\ hs_msg_bytes HT_client_hello b}) // JK: used to be 42 but cannot prove it with current specs. Is there a minimal length of 1 for the session ID maybe ?
 let clientHelloBytes ch =
   //17-04-26 this will complicate injectivity, now conditional on an extension.
@@ -382,8 +392,9 @@ let clientHelloBytes ch =
     | Some ext -> extensionsBytes ext
     | None -> empty_bytes in
   let data = verB @| (ch.ch_client_random @| (sidB @| (csB @| (cmB @| extB)))) in
-  lemma_repr_bytes_values (length data);
-  messageBytes HT_client_hello data
+  let binders_len = bindersLen_of_ch ch in
+  lemma_repr_bytes_values (length data + binders_len);
+  messageBytes_extra HT_client_hello data binders_len
 
 val versionBytes_is_injective: pv1:protocolVersion -> pv2:protocolVersion ->
   Lemma (versionBytes pv1 = versionBytes pv2 ==> pv1 = pv2)
