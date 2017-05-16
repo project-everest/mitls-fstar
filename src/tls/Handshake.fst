@@ -281,6 +281,7 @@ let compute_binder hs (binderKey:(i:binderId & bk:KeySchedule.binderKey i))
   let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
   HMAC.UFCMA.mac bk digest_CH0
 
+
 let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
@@ -299,21 +300,24 @@ let client_ClientHello hs i =
         let si = KeySchedule.ks_client_12_init hs.ks in
         None, [], []
     in
-
+  //
   // Compute & send the ClientHello offer
+  // for now we assume there is no filtering or reordering on the PSKs.
+  // TODO filter PKSs within Nego, not extensions!
   let offer = Nego.client_ClientHello hs.nego shares pskinfo in (* compute offer from configuration *)
   HandshakeLog.send hs.log (ClientHello offer);
-
+  //
   // Computing & sending the binders
   let nego_psk =
     (match Nego.find_clientPske offer with
     | Some pskl ->
-      // We only compute binders for PSK identities negotiated in ClientHello
-//      let filter bk =
-//        let (| Binder esId _, bk |) = bk in
-//        let ApplicationPSK pskid _ = esId in
-//        List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
-//      let nego_binders = List.Tot.filter filter binderKeys in
+      // for later: we only compute binders for PSK identities negotiated in ClientHello
+      //      let filter bk =
+      //        let (| Binder esId _, bk |) = bk in
+      //        let ApplicationPSK pskid _ = esId in
+      //        List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
+      //      let nego_binders = List.Tot.filter filter binderKeys in
+      if List.Tot.length pskl <> length binderKeys then trace "WARNING: PSK filtering";
       let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
       HandshakeLog.send hs.log (Binders binders);
       pskl
@@ -326,10 +330,13 @@ let client_ClientHello hs i =
     let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash info0) hs.log in
     let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
     register hs edk
+    // TODO enable client 0RTT
+  | Some _, [] -> trace "statically excluded"
   | _ -> ());
 
   hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
   Correct(HandshakeLog.next_fragment hs.log i)
+
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
@@ -354,8 +361,14 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           mode.Nego.n_cipher_suite
           digest
           (Some?.v mode.Nego.n_server_share)
-          None (* in case we provided PSKs earlier, ignore them from now on *) //17-05-16 why?
-          in
+          mode.Nego.n_pski in
+        ( match Nego.zeroRTToffer mode.n_offer, Nego.zeroRTT mode with
+          | true, true -> trace "0RTT accepted"
+          | true, false -> trace "0RTT refused"
+          | _ -> ());
+        //TODO check we cover 0rtt-accepted and 0rtt-refused cases
+        // we expect 0RTTing clients to check the mode after handshake completion.
+        //
         register s hs_keys; // register new epoch
         s.state := C_Wait_Finished1;
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
@@ -454,7 +467,7 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
         then InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
         else (
           register hs app_keys; // ATKs are ready to use in both directions
-          if false (* zero_rtt *) then (
+          if Nego.zeroRTT mode then (
             HandshakeLog.send hs.log EndOfEarlyData;
             HandshakeLog.send_signals hs.log false false;
             hs.state := C_Sent_EOED digestServerFinished ocr cfin_key;
@@ -575,6 +588,9 @@ let server_ClientHello hs offer =
         if mode.Nego.n_protocol_version = TLS_1p3
         then
           begin
+            // TODO handle 0RTT accepted and 0RTT refused
+            // - get 0RTT key from KS.
+            // - do the signalling
             HandshakeLog.send_signals hs.log true false; // signal key change after writing ServerHello
             trace "derive handshake keys";
             let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in

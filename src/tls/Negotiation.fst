@@ -250,6 +250,8 @@ noeq type mode =
     n_server_random: TLSInfo.random ->
     n_sessionID: option sessionID {n_sessionID = None <==> n_protocol_version = TLS_1p3} ->
     n_cipher_suite: cipherSuite ->
+
+    // redundant with the server extension response?
     n_pski: option (pski n_offer) -> // only for TLS 1.3, result of a tricky stateful computation
 
     // concatenating SH and EE extensions for 1.3, in wire order.
