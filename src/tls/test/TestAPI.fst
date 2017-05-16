@@ -22,13 +22,24 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if api_debug then print else (fun _ -> ())
 
-
-let rec read_loop con r : ML unit =
+// a permissive client loop (not checking the TLS state machine)
+let rec client_read con host: ML unit =
+  let r = TLS.currentId con Reader in
   match TLS.read con r with
+  | Complete ->
+       trace "Read OK, sending HTTP request...";
+       let payload = utf8 ("GET /r HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
+       let id = TLS.currentId con Writer in
+       let rg : Range.frange id = Range.point (length payload) in
+       let f = DataStream.appFragment id rg payload in
+       (match TLS.write con f with
+       | Written -> client_read con host
+       | WriteError _ t -> trace ("Write error:"^t)
+       | _ -> trace "unexpected ioresult_w")
   | Read (DataStream.Data d) ->
     let db = DataStream.appBytes d in
-    trace ("Received data: "^(iutf8 db));
-    read_loop con r
+    trace ("Received data: "^iutf8 db);
+    client_read con host
   | ReadError _ t ->
     trace ("ReadError: "^t)
   | Read (DataStream.Close) ->
@@ -40,28 +51,15 @@ let rec read_loop con r : ML unit =
     trace "Closing connection.\n";
     let _ = TLS.writeCloseNotify con in
     ()
+  | other -> trace (string_of_ioresult_i #r other)
 
 let client config host port offerpsk =
   trace "*** Starting miTLS client...";
   let tcp = Transport.connect host port in
   let rid = new_region root in
   let con = TLS.resume rid tcp config None offerpsk in
+  client_read con host
 
-  let id = TLS.currentId con Reader in
-  match TLS.read con id with
-    | Complete ->
-       trace "Read OK, sending HTTP request...";
-       let payload = utf8 ("GET /r HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
-       let id = TLS.currentId con Writer in
-       let rg : Range.frange id = Range.point (length payload) in
-       let f = DataStream.appFragment id rg payload in
-       (match TLS.write con f with
-       | Written ->
-         let r = TLS.currentId con Reader in
-         read_loop con r
-       | WriteError _ t -> trace ("Write error:"^t)
-       | _ -> trace "unexpected ioresult_w")
-    | r -> trace (string_of_ioresult_i #id r)
 
 private let rec server_read con: ML unit =
     // a somewhat generic server loop, with synchronous writing in-between reads.

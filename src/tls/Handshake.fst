@@ -470,7 +470,7 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
           register hs app_keys; // ATKs are ready to use in both directions
           if Nego.zeroRTT mode then (
             HandshakeLog.send hs.log EndOfEarlyData;
-            HandshakeLog.send_signals hs.log false false;
+            HandshakeLog.send_signals hs.log (Some false) false;
             hs.state := C_Sent_EOED digestServerFinished ocr cfin_key;
             trace "queued AEAD; are we sending it??";
             InAck false false )
