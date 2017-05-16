@@ -121,7 +121,8 @@ let parseBinderList (b:bytes{2 <= length b}) : result binders =
 (** REMARK: we don't serialize the binders length; we do it when serializing Binders *)
 val pskBytes: psk -> bytes
 let pskBytes = function
-  | ClientPSK ids len -> vlbytes2 (pskiListBytes ids)
+  | ClientPSK ids len ->
+    vlbytes2 (pskiListBytes ids)
   | ServerPSK sid ->
     lemma_repr_bytes_values (UInt16.v sid);
     bytes_of_int 2 (UInt16.v sid)
@@ -484,21 +485,26 @@ let extensionHeaderBytes ext =
 (** Serializes an extension payload *)
 val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
 let rec extensionPayloadBytes = function
-  | E_server_name []           -> empty_bytes // ServerHello, EncryptedExtensions
-  | E_server_name l            -> vlbytes 2 (serverNameBytes l) // ClientHello
-  | E_supported_groups l       -> namedGroupsBytes l
-  | E_signature_algorithms sha -> signatureSchemeListBytes sha
-  | E_key_share ks             -> CommonDH.keyShareBytes ks
-  | E_pre_shared_key psk       -> pskBytes psk
-  | E_early_data edi           -> earlyDataIndicationBytes edi
+  | E_server_name []           -> vlbytes 2 empty_bytes // ServerHello, EncryptedExtensions
+  | E_server_name l            -> vlbytes 2 (vlbytes 2 (serverNameBytes l)) // ClientHello
+  | E_supported_groups l       -> vlbytes 2 (namedGroupsBytes l)
+  | E_signature_algorithms sha -> vlbytes 2 (signatureSchemeListBytes sha)
+  | E_key_share ks             -> vlbytes 2 (CommonDH.keyShareBytes ks)
+  | E_pre_shared_key psk       ->
+    (match psk with
+    | ClientPSK ids len -> vlbytes_trunc 2 (pskBytes psk) (2 + len)
+    | _ -> vlbytes 2 (pskBytes psk))
+  | E_early_data edi           -> vlbytes 2 (earlyDataIndicationBytes edi)
   | E_supported_versions vv    ->
     // Sending TLS 1.3 draft versions, as other implementations are doing
-    vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| versionBytes_draft v) empty_bytes vv)
-  | E_cookie c                 -> (lemma_repr_bytes_values (length c); vlbytes 2 c)
-  | E_psk_key_exchange_modes kex -> client_psk_kexes_bytes kex
-  | E_extended_ms              -> empty_bytes
-  | E_ec_point_format l        -> ecpfListBytes l
-  | E_unknown_extension (_,b)  -> b
+    vlbytes 2
+      (vlbytes 1
+        (List.Tot.fold_left (fun acc v -> acc @| versionBytes_draft v) empty_bytes vv))
+  | E_cookie c                 -> (lemma_repr_bytes_values (length c); vlbytes 2 (vlbytes 2 c))
+  | E_psk_key_exchange_modes kex -> vlbytes 2 (client_psk_kexes_bytes kex)
+  | E_extended_ms              -> vlbytes 2 empty_bytes
+  | E_ec_point_format l        -> vlbytes 2 (ecpfListBytes l)
+  | E_unknown_extension (_,b)  -> vlbytes 2 b
 #reset-options
 
 (** Serializes an extension *)
@@ -507,11 +513,12 @@ let rec extensionBytes ext =
   let head = extensionHeaderBytes ext in
   let payload = extensionPayloadBytes ext in
   lemma_repr_bytes_values (length payload);
-  let payload = vlbytes 2 payload in
+  //let payload = vlbytes 2 payload in
   head @| payload
 
 val extensionListBytes: exts: list extension -> bytes
-let extensionListBytes exts = List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts
+let extensionListBytes exts =
+  List.Tot.fold_left (fun l s -> extensionBytes s @| l) empty_bytes exts
 
 type extensions = exts:list extension {repr_bytes (length (extensionListBytes exts)) <= 2}
 
@@ -773,9 +780,8 @@ let prepareExtensions minpv pv cs sres sren edi sigAlgs namedGroups ri ks psks =
           then PSK_DHE_KE :: psk_kex else psk_kex in
         let res = E_psk_key_exchange_modes psk_kex :: res in
         let binder_len = List.Tot.fold_left (fun ctr pski ->
-            let h = PSK.pskInfo_hash pski in
-            ctr + (Hashing.Spec.tagLen h)
-          ) 0 pskinfos in
+          let h = PSK.pskInfo_hash pski in
+          ctr + 1 + Hashing.Spec.tagLen h) 0 pskinfos in
         let pskidentities = List.Tot.map (fun x -> x, PSK.default_obfuscated_age) pskids in
         let psk0 :: _ = pskinfos in
         let res =

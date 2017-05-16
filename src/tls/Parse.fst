@@ -83,10 +83,10 @@ let vlbytes1 (b:bytes {length b < pow2 8}) = lemma_repr_bytes_values (length b);
 let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b); vlbytes 2 b
 
 val vlbytes_trunc: lSize:nat -> b:bytes ->
-  binderSize:nat{repr_bytes (length b + binderSize) <= lSize} ->
+  extra:nat{repr_bytes (length b + extra) <= lSize} ->
   r:bytes{length r == lSize + length b}
-let vlbytes_trunc lSize b binderSize =
-  bytes_of_int lSize (length b + binderSize) @| b
+let vlbytes_trunc lSize b extra =
+  bytes_of_int lSize (length b + extra) @| b
 
 
 (** Lemmas associated to bytes manipulations *)
