@@ -1,5 +1,5 @@
 (*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
 --*)
 module PSK
 
@@ -16,140 +16,6 @@ module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
-
-
-// <from TLSConstants>
-
-// TODO: give more precise type
-// move elsewhere? 
-
-(** PSK Identity definition *)
-type pskIdentity = b:bytes{repr_bytes (length b) <= 2}
-
-(** Serializing function for a PSK Identity *)
-val pskIdentityBytes: pskIdentity -> Tot (b:bytes{length b >= 2})
-let pskIdentityBytes pski =
-  vlbytes 2 pski
-
-(** Parsing function for a PSK Identity *)
-val parsePskIdentity: pinverse_t pskIdentityBytes
-let parsePskIdentity b =
-  match vlparse 2 b with
-  | Correct vlb -> Correct vlb
-  | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk_identity")
-
-// TODO: Choice, truncate when maximum length is exceeded
-
-(** Serializing function for a list of PSK Identity *)
-val pskIdentitiesBytes: list pskIdentity -> Tot (b:bytes{2 <= length b /\ length b < 65538})
-let pskIdentitiesBytes ids =
-  let rec pskIdentitiesBytes_aux (b:bytes{length b < 65536}) (ids:list pskIdentity): Tot (b:bytes{length b < 65536}) (decreases ids) =
-  match ids with
-  | [] -> b
-  | id::ids ->
-    let b' = b @| pskIdentityBytes id in
-    if length b' < 65536 then
-      pskIdentitiesBytes_aux b' ids
-    else b
-  in
-  let b = pskIdentitiesBytes_aux empty_bytes ids in
-  lemma_repr_bytes_values (length b);
-  vlbytes 2 b
-
-(** Parsing function for a list of PSK Identity *)
-val parsePskIdentities: pinverse_t pskIdentitiesBytes
-let parsePskIdentities b =
-  let rec (aux: b:bytes -> list pskIdentity -> Tot (result (list pskIdentity)) (decreases (length b))) = fun b ids ->
-    if length b > 0 then
-      if length b >= 2 then
-	let len, data = split b 2 in
-	let len = int_of_bytes len in
-	if length b >= len then
-	  let pski,bytes = split b len in
-	  if length pski >= 2 then
-   	    match parsePskIdentity pski with
-   	    | Correct id -> aux bytes (id::ids)
-   	    | Error z -> Error z
-	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identity length")
-        else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identity length")
-      else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Expected psk identity to be at least 2 bytes long")
-    else Correct ids in
-  match vlparse 2 b with
-  | Correct b -> aux b []
-  | Error z   -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse psk identities")
-
-
-(** Client list of PSK identities *)
-type clientPreSharedKey = l:list pskIdentity{List.Tot.length l >= 1 /\ List.Tot.length l < 65536/2}
-
-(** Server list of PSK identities *)
-type serverPreSharedKey = pskIdentity
-
-(** PreSharedKey definition *)
-noeq type preSharedKey =
-  | ClientPreSharedKey of clientPreSharedKey
-  | ServerPreSharedKey of serverPreSharedKey
-
-(** Serializing function for ClientPreSharedKey *)
-val clientPreSharedKeyBytes: clientPreSharedKey -> Tot (b:bytes{ 2 <= length b /\ length b < 65538 })
-let clientPreSharedKeyBytes cpsk = pskIdentitiesBytes cpsk
-
-(** Parsing function for ClientPreSharedKey *)
-val parseClientPreSharedKey: b:bytes{ 2 <= length b /\ length b < 65538 }
-  -> Tot (result clientPreSharedKey)
-let parseClientPreSharedKey b =
-  match parsePskIdentities b with
-  | Correct ids ->
-    let l = List.Tot.length ids in
-    if 1 <= l && l < 65536/2
-    then Correct ids
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client psk identities")
-  | Error z -> Error z
-
-(** Serializing function for ServerPreSharedKey *)
-val serverPreSharedKeyBytes: serverPreSharedKey -> Tot (b:bytes{ 2 <= length b })
-let serverPreSharedKeyBytes cpsk = pskIdentityBytes cpsk
-
-(** Parsing function for ServerPreSharedKey *)
-val parseServerPreSharedKey: pinverse_t serverPreSharedKeyBytes
-let parseServerPreSharedKey b = parsePskIdentity b
-
-(** Serializing function for PreSharedKey *)
-val preSharedKeyBytes: preSharedKey -> Tot (b:bytes{length b >= 2})
-let preSharedKeyBytes = function
-  | ClientPreSharedKey cpsk -> clientPreSharedKeyBytes cpsk
-  | ServerPreSharedKey spsk -> serverPreSharedKeyBytes spsk
-
-(** Parsing function for PreSharedKey *)
-val parsePreSharedKey: pinverse_t preSharedKeyBytes
-let parsePreSharedKey b =
-  match vlparse 2 b with
-  | Correct b' ->
-    begin
-      match vlparse 2 b with
-      | Correct b'' -> // Client case
-	begin
-	if length b >= 2 && length b < 65538 then
-	  begin
-	  match parseClientPreSharedKey b with
-	  | Correct psks -> Correct (ClientPreSharedKey psks)
-	  | Error z -> Error z
-	  end
-	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse  psk")
-	end
-      | Error _ -> // Server case
-	begin
-	match parseServerPreSharedKey b with
-	| Correct psk -> Correct (ServerPreSharedKey psk)
-	| Error z -> Error z
-	end
-    end
-  | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse pre shared key")
-
-// </from TLSConstants>
-
-
-
 
 // *** PSK ***
 
@@ -319,7 +185,7 @@ let verify_hash (i:pskid) (a:hash_alg) : ST bool
     else false
 
 
-(* 
+(*
 Provisional support for the PSK extension
 https://tlswg.github.io/tls13-spec/#rfc.section.4.2.10
 
@@ -327,17 +193,17 @@ The PSK table should include (at least for tickets)
 
   time_created: UInt32.t // the server's viewpoint
   time_accepted: UInt32.t // the client's viewpoint
-  mask: UInt32.t 
-  livetime: UInt32.t 
+  mask: UInt32.t
+  livetime: UInt32.t
 
 The authenticated property of the binder should includes
 
-  ClientHello[ nonce, ... pskid, obfuscated_ticket_age] /\ 
-  psk = lookup pskid 
-  ==> 
-  exists client. 
+  ClientHello[ nonce, ... pskid, obfuscated_ticket_age] /\
+  psk = lookup pskid
+  ==>
+  exists client.
     client.nonce = nonce /\
-    let age = client.time_connected - psk.time_created in 
+    let age = client.time_connected - psk.time_created in
     age <= psk.livetime /\
     obfuscated_ticket_age = encode_age age
 
@@ -345,12 +211,11 @@ Hence, the server authenticates age, and may filter 0RTT accordingly.
 
 *)
 
-type ticket_age = UInt32.t 
-type obfuscated_ticket_age = UInt32.t 
+type ticket_age = UInt32.t
+type obfuscated_ticket_age = UInt32.t
 let default_obfuscated_age = 0ul
 open FStar.UInt32
 let encode_age (t:ticket_age)  mask = t +%^ mask
 let decode_age (t:obfuscated_ticket_age) mask = t -%^ mask
 
 private let inverse_mask t mask: Lemma (decode_age (encode_age t mask) mask = t) = ()
-

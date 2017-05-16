@@ -39,9 +39,9 @@ let default_cipherSuites =
     TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
     TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
     TLS_RSA_WITH_3DES_EDE_CBC_SHA
-  ] 
+  ]
 
-let default_signatureSchemes = 
+let default_signatureSchemes =
  [ ECDSA_SECP521R1_SHA512;
    ECDSA_SECP384R1_SHA384;
    ECDSA_SECP256R1_SHA256;
@@ -79,6 +79,7 @@ let defaultConfig =
   cert_chain_file = "server.pem";
   private_key_file = "server.key";
 
+  enable_early_data = false;
   safe_renegotiation = true;
   safe_resumption = true;
   peer_name = None; // Disables hostname validation
@@ -92,7 +93,7 @@ let defaultConfig =
   dhDefaultGroupFileName = "default-dh.pem";
   dhPQMinLength = DHDB.defaultPQMinLength;
   }
-    
+
 // -------------------------------------------------------------------
 // Client/Server randomness (implemented in Nonce)
 
@@ -370,10 +371,17 @@ type hashed_log (li:logInfo) =
   b:bytes{exists (f: bytes -> Tot logInfo).{:pattern (f b)}
   injective #bytes #logInfo #equalBytes #eq_logInfo f /\ f b = li}
 
+type binderLabel =
+  | ExtBinder
+  | ResBinder
+
 type pre_esId : Type0 =
   | ApplicationPSK: i:PSK.pskid -> ha:hash_alg{PSK.compatible_hash i ha} -> pre_esId
   | ResumptionPSK: #li:logInfo -> i:pre_rmsId li -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
+
+and pre_binderId =
+  | Binder: pre_esId -> binderLabel -> pre_binderId
 
 and pre_hsId =
   | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
@@ -414,6 +422,7 @@ and pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
 
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
+val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
 val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
 val asId_hash: i:pre_asId -> Tot hash_alg (decreases i)
 val saltId_hash: i:pre_saltId -> Tot hash_alg (decreases i)
@@ -428,6 +437,9 @@ let rec esId_hash = function
   | ApplicationPSK pskid h -> h
   | ResumptionPSK #li i -> rmsId_hash #li i
   | NoPSK h -> h
+
+and binderId_hash = function
+  | Binder i _ -> esId_hash i
 
 and hsId_hash = function
   | HSID_PSK i -> saltId_hash i
@@ -464,6 +476,7 @@ type valid_hlen (b:bytes) (h:hash_alg) =
 
 type pre_index =
 | I_ES of pre_esId
+| I_BINDER of pre_binderId
 | I_HS of pre_hsId
 | I_AS of pre_asId
 | I_SALT of pre_saltId
@@ -498,6 +511,7 @@ type valid (i:pre_index) =
     | ApplicationPSK i _ -> PSK.registered_psk i
     | ResumptionPSK #li i -> registered (I_RMS #li i)
     | NoPSK _ -> True)
+  | I_BINDER (Binder i _) -> registered (I_ES i)
   | I_HS i ->
     (match i with
     | HSID_PSK i -> registered (I_SALT i)
@@ -544,6 +558,7 @@ type dishonest (i:index) =
   else True)
 
 type esId = i:pre_esId{valid (I_ES i)}
+type binderId = i:pre_binderId{valid (I_BINDER i)}
 type hsId = i:pre_hsId{valid (I_HS i)}
 type asId = i:pre_asId{valid (I_AS i)}
 type saltId = i:pre_saltId{valid (I_SALT i)}

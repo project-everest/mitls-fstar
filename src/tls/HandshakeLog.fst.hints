@@ -1,0 +1,72 @@
+[
+  "ß\u0010Ü¦\u001d\u0018ÛrÔÆª2³E«(",
+  [
+    [ "HandshakeLog.eoflight", 1, 0, 1, [ "@query" ], 0 ],
+    [ "HandshakeLog.tagged", 1, 0, 1, [ "@query" ], 0 ],
+    [ "HandshakeLog.valid_transcript", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "HandshakeLog.append_transcript",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_HandshakeLog.msg",
+        "refinement_interpretation_HandshakeLog_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
+      ],
+      0
+    ],
+    [
+      "HandshakeLog.discard",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Heap.equal_dom",
+        "equation_FStar.HyperStack.equal_stack_domains",
+        "fuel_guarded_inversion_FStar.HyperStack.mem", "unit_typing"
+      ],
+      0
+    ],
+    [
+      "HandshakeLog.trace",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Heap.equal_dom",
+        "equation_FStar.HyperStack.equal_stack_domains",
+        "fuel_guarded_inversion_FStar.HyperStack.mem", "unit_typing"
+      ],
+      0
+    ],
+    [
+      "HandshakeLog.erased_transcript",
+      1,
+      0,
+      1,
+      [ "@query", "equation_HandshakeLog.hs_transcript" ],
+      0
+    ],
+    [
+      "HandshakeLog.reveal_log",
+      1,
+      0,
+      1,
+      [ "@query", "equation_HandshakeLog.erased_transcript" ],
+      0
+    ],
+    [
+      "HandshakeLog.hide_log",
+      1,
+      0,
+      1,
+      [
+        "@query", "equation_FStar.Ghost.hide",
+        "equation_HandshakeLog.erased_transcript",
+        "equation_HandshakeLog.hs_transcript"
+      ],
+      0
+    ],
+    [ "HandshakeLog.transcript_version", 1, 0, 1, [ "@query" ], 0 ]
+  ]
+]

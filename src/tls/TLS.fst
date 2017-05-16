@@ -117,8 +117,9 @@ let create parent tcp role cfg resume =
 //    initial Client ns c resume cn h1
 //    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
 //  ))
-let connect m0 tcp cfg        = create m0 tcp Client cfg (None,[])
-let resume  m0 tcp cfg sid    = create m0 tcp Client cfg (Some sid,[])
+let connect m0 tcp cfg         = create m0 tcp Client cfg (None, [])
+let resume  m0 tcp cfg sid psk = create m0 tcp Client cfg (sid, psk)
+
 //val accept_connected: ns:Transport.t -> c:config -> ST connection
 //  (requires (fun h0 -> True))
 //  (ensures (fun h0 cn h1 ->
@@ -155,6 +156,7 @@ let rekey c ops       = Handshake.rekey       (C?.hs c) ops
 //  ))
 let request c ops     = Handshake.request     (C?.hs c) ops
 
+let get_mode c = (Handshake.get_mode (C?.hs c))
 
 (** current epochs ***)
 

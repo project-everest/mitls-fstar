@@ -164,21 +164,31 @@ val send: s:log -> m:msg -> ST unit
   (ensures (fun h0 _ h1 -> write_transcript h0 h1 s m))
 
 val hash_tag: #a:alg -> s:log -> ST (tag a)
-  (requires (fun h0 -> 
-    hashAlg h0 s = Some a )) 
-  (ensures (fun h0 h h1 -> 
+  (requires fun h0 -> True)
+  (ensures fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
-    hashed a bs /\ h == hash a bs ))
+    h0 == h1 /\
+    hashed a bs /\ h == hash a bs )
+
+val hash_tag_truncated: #a:alg -> s:log -> suffix_len:nat -> ST (tag a)
+  (requires fun h0 ->
+    let bs = transcript_bytes (transcript h0 s) in
+    None? (hashAlg h0 s) /\
+    suffix_len <= length bs )
+  (ensures fun h0 h h1 ->
+    let bs = transcript_bytes (transcript h1 s)  in
+    h0 == h1 /\ suffix_len <= length bs /\ (
+    let prefix, _ = split bs (length bs - suffix_len)  in
+    hashed a prefix /\ h == hash a prefix))
 
 val send_tag: #a:alg -> s:log -> m:msg -> ST (tag a)
-  (requires (fun h0 -> 
+  (requires fun h0 ->
     writing h0 s /\
-    valid_transcript (transcript h0 s @ [m]) /\
-    hashAlg h0 s = Some a )) 
-  (ensures (fun h0 h h1 -> 
+    valid_transcript (transcript h0 s @ [m]))
+  (ensures fun h0 h h1 ->
     let bs = transcript_bytes (transcript h1 s)  in
     write_transcript h0 h1 s m /\ 
-    hashed a bs /\ h == hash a bs ))
+    hashed a bs /\ h == hash a bs )
 
 // An ad hoc variant for caching a message to be sent immediately after the CCS
 // We always increment the writer, sometimes report handshake completion.

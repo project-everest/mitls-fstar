@@ -41,12 +41,11 @@ let rec read_loop con r : ML unit =
     let _ = TLS.writeCloseNotify con in
     ()
 
-private
-let client config host port =
-  trace "*** Starting test TLS client...";
+let client config host port offerpsk =
+  trace "*** Starting miTLS client...";
   let tcp = Transport.connect host port in
   let rid = new_region root in
-  let con = TLS.connect rid tcp config in
+  let con = TLS.resume rid tcp config None offerpsk in
 
   let id = TLS.currentId con Reader in
   match TLS.read con id with
@@ -89,7 +88,7 @@ private let rec server_read con: ML unit =
       let text = "You are connected to miTLS*!\r\n"
         ^ "This is the request you sent:\r\n\r\n" ^ (iutf8 db) in
       let payload = utf8 ("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:"
-        ^ (string_of_int (length (abytes text))) 
+        ^ (string_of_int (length (abytes text)))
         ^ "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" ^ text) in
       let id = TLS.currentId con Writer in
       let rg : Range.frange id = Range.point (length payload) in

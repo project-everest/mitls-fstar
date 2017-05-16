@@ -23,8 +23,8 @@ all:
 	+$(MAKE) verify
 
 build:
-	+$(MAKE) mitls.exe
-	+$(MAKE) tls-ffi
+	$(MAKE) mitls.exe
+	$(MAKE) tls-ffi
 
 verify:
 	+$(MAKE) all-ver
