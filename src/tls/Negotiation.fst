@@ -195,6 +195,14 @@ let find_clientPske o =
     | ServerPSK _ -> None
     | ClientPSK ids _ -> Some ids
 
+let find_serverPske sh =
+  match sh.sh_extensions with
+  | None -> None
+  | Some exts ->
+    match List.Tot.find E_pre_shared_key? exts with
+    | Some (E_pre_shared_key (ServerPSK idx)) -> Some (UInt16.v idx)
+    | _ -> None
+
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
@@ -797,28 +805,44 @@ let client_ServerHello #region ns sh =
         match cs with
         | CipherSuite13 ae ha ->
           begin
-          match spv, next.ne_keyShare with
-          | TLS_1p3, Some (CommonDH.Share g gy) ->
-            let server_share = (|g, gy|) in
-            let client_share = matching_share cext g in
-            let mode = Mode
-              offer
-              None // n_hrr
-              spv
-              sr
-              None // (Some ssid)
-              cs
-              None // pski
-              sext
-              (Some server_share)
-              None // n_client_cert_request
-              None // n_server_cert
-              client_share
-             in
-             MR.m_write ns.state (C_Mode mode);
-             Correct mode
-          | _ ->
-            Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+          let pski =
+            match find_clientPske offer, find_serverPske sh with
+            | Some ids, Some idx ->
+              if idx < List.Tot.length ids then
+                Correct (Some idx) // REMARK: we can't check yet consistency with early_data in EE
+              else
+                Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "PSK out of bounds")
+            | None, Some _ ->
+              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "PSK not offered")
+            | _, _ -> Correct None
+          in
+          match pski with
+          | Error z -> Error z
+          | Correct pski ->
+            begin
+            match spv, next.ne_keyShare with
+            | TLS_1p3, Some (CommonDH.Share g gy) ->
+              let server_share = (|g, gy|) in
+              let client_share = matching_share cext g in
+              let mode = Mode
+                offer
+                None // n_hrr
+                spv
+                sr
+                None // (Some ssid)
+                cs
+                pski
+                sext
+                (Some server_share)
+                None // n_client_cert_request
+                None // n_server_cert
+                client_share
+               in
+               MR.m_write ns.state (C_Mode mode);
+               Correct mode
+            | _ ->
+              Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+            end
           end
         | CipherSuite kex sa ae ->
           let mode = Mode
