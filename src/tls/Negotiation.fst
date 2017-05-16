@@ -366,7 +366,7 @@ noeq type t (region:rgn) (role:TLSConstants.role) =
     t region role
 
 val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:TLSInfo.random
-  -> ks:option CommonDH.keyShare -> option (list (PSK.pskid * PSK.pskInfo))
+  -> ks:option CommonDH.keyShare -> list (PSK.pskid * PSK.pskInfo)
   -> Tot offer
 let computeOffer r cfg resume nonce ks pskinfo =
   let sid =
@@ -583,7 +583,7 @@ let verify scheme chain tbs sigv =
 
 val client_ClientHello: #region:rgn -> t region Client
   -> option CommonDH.clientKeyShare
-  -> option (list (PSK.pskid * PSK.pskInfo))
+  -> list (PSK.pskid * PSK.pskInfo)
   -> St offer
 let client_ClientHello #region ns oks pskinfo =
   //17-04-22 fix this in the definition of offer?

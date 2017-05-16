@@ -181,9 +181,7 @@ type ks_client_state =
 | C_12_Full_CH: cr:random -> ks_client_state
 | C_12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
 | C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
-| C_13_wait_CH: cr:random -> esl:list ((i:esId & es i) * PSK.pskInfo) ->
-                gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
-| C_13_wait_SH: cr:random -> esl:option (list (i:esId & es i)) ->
+| C_13_wait_SH: cr:random -> esl: list ((i:esId & es i) * PSK.pskInfo) ->
                 gs:list (g:CommonDH.group & CommonDH.keyshare g) -> ks_client_state
 | C_13_wait_SF: alpha:ks_alpha13 -> (i:finishedId & cfk:fink i) -> (i:finishedId & sfk:fink i) ->
                 (i:asId & ams:ams i) -> ks_client_state
@@ -270,39 +268,10 @@ private let group_of_cks = function
   | CommonDH.Share g _ -> Some?.v (CommonDH.namedGroup_of_group g)
   | CommonDH.UnknownShare g _ -> g
 
-val ks_client_13_nopsk_init:
-  ks:ks -> gl:list valid_namedGroup
-  -> ST CommonDH.clientKeyShare
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_Init? (C?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    gl == List.Tot.map group_of_cks r /\
-    modifies (Set.singleton rid) h0 h1 /\
-    modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
-
-let ks_client_13_nopsk_init ks gl =
-  dbg "init (1-RTT no-PSK)";
-  let KS #rid st = ks in
-  let C (C_Init cr) = !st in
-  let groups = List.Tot.map group_of_valid_namedGroup gl in
-  let keygen (g:CommonDH.group)
-    : ST (g:CommonDH.group & CommonDH.keyshare g)
-    (requires fun h -> True) (ensures fun h0 _ h1 -> modifies_none h0 h1)
-    = let gx = CommonDH.keygen g in (| g, gx |) in
-  let gs = map_ST keygen groups in
-  st := C (C_13_wait_SH cr None gs);
-  let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
-    let (| g, gx |) = gx in
-    match CommonDH.namedGroup_of_group g with
-    | None -> None // Impossible
-    | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
-  let serialized = List.Tot.choose serialize_share gs in
-  serialized
-
-val ks_client_13_psk_init: ks:ks -> pskl:list PSK.pskid -> gl:list valid_namedGroup
-  -> ST (list (i:binderId & bk:binderKey i) * list PSK.pskInfo * CommonDH.clientKeyShare)
+val ks_client_13_init: ks:ks -> pskl:list PSK.pskid -> gl:list valid_namedGroup
+  -> ST (list (i:binderId & bk:binderKey i) *
+         list (PSK.pskid * PSK.pskInfo) *
+         CommonDH.clientKeyShare)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_Init? (C?.s kss))
@@ -312,8 +281,8 @@ val ks_client_13_psk_init: ks:ks -> pskl:list PSK.pskid -> gl:list valid_namedGr
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
-let ks_client_13_psk_init ks pskl gl =
-  dbg ("ks_client_13_psk_init");
+let ks_client_13_init ks pskl gl =
+  dbg ("ks_client_13_init");
   let KS #rid st = ks in
   let C (C_Init cr) = !st in
   let groups = List.Tot.map group_of_valid_namedGroup gl in
@@ -331,7 +300,7 @@ let ks_client_13_psk_init ks pskl gl =
 
   let mk_binder (pskid:PSK.pskid)
     : ST (((i:esId & es:es i) * PSK.pskInfo)
-        * ((i:binderId & bk:binderKey i) * PSK.pskInfo))
+        * ((i:binderId & bk:binderKey i) * (PSK.pskid * PSK.pskInfo)))
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1) =
     let i, psk, h, ae = read_psk pskid in
@@ -346,11 +315,12 @@ let ks_client_13_psk_init ks pskl gl =
     let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
     dbg ("Binder key: "^(print_bytes bk));
     let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
-    ((| i, es |), pski), ((| bId, bk|), pski) in
+    ((| i, es |), pski), ((| bId, bk|), (pskid, pski)) in
+
   let pskl = map_ST mk_binder pskl in
   let (esl, bkl) = List.Tot.split pskl in
   let (bkl, pskinfo) = List.Tot.split bkl in
-  st := C (C_13_wait_CH cr esl gs);
+  st := C (C_13_wait_SH cr esl gs);
   (bkl, pskinfo, gxl)
 
 // Derive the early data key from the first offered PSK
@@ -358,15 +328,14 @@ let ks_client_13_psk_init ks pskl gl =
 let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_Init? (C?.s kss))
+    C? kss /\ C_13_wait_SH? (C?.s kss))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    modifies_none h0 h1)
   =
   dbg ("ks_client_13_ch log="^(print_bytes log));
   let KS #rid st = ks in
-  let C (C_13_wait_CH cr esl gs) = !st in
+  let C (C_13_wait_SH cr esl gs) = !st in
   let ((| i, es |), pski) :: _ = esl in // First PSK is for ED
 
   let h = esId_hash i in
@@ -391,9 +360,6 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
   let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
-
-  let esl, _ = List.Tot.split esl in
-  st := C (C_13_wait_SH cr (Some esl) gs);
   early_d
 
 // Called before sending client hello
@@ -747,8 +713,8 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
     (let C_13_wait_SH _ ei gc = C?.s kss in
      (List.Tot.existsb (fun gx -> dfst gy = dfst gx) gc) /\
      (match ei, accept_psk with
-      | None, None -> True
-      | Some esl, Some n -> n < List.Tot.length esl
+      | [], None -> True
+      | _::_ , Some n -> n < List.Tot.length ei
       | _ -> False)))
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
@@ -773,11 +739,12 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   // Early secret: must derive zero here as hash is not known before
   let esId, es =
     match esl, accept_psk with
-    | Some l, Some n ->
-      let Some (| i, es |) : option (i:esId & es i) = List.Tot.nth l n in
+    | l, Some n ->
+      let Some ((| i, es |), pski) : option ((i:esId & es i) * PSK.pskInfo)
+        = List.Tot.nth l n in
       dbg ("Recalling early secret: "^(print_bytes es));
       i, es
-    | None, None ->
+    | [], None ->
       let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
       dbg ("Early secret: "^(print_bytes es));
       NoPSK h, es

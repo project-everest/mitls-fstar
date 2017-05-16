@@ -262,7 +262,7 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
             then
              k = KeySchedule.(C(C_13_wait_SH
               (nonce s)
-              None (*TODO: es for 0RTT*)
+              [] (*TODO: es for 0RTT*)
               (C_13_wait_SH?.gs (C?.s k)) // TODO
                  // ADL: need an existential for the keyshares (offer only has contains shares)
                  // + check that that the group and CommonDH.pubshare g gx match
@@ -271,11 +271,6 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
             else k = KeySchedule.(C(C_12_Full_CH offer.ch_client_random)) /\
           t = [ClientHello offer] ))
         | _ -> False )))
-
-//17-05-16 todo: move to List.Tot
-private let rec zip = function
-  | [], [] -> []
-  | h1::t1, h2::t2 -> (h1,h2) :: (zip (t1,t2))
 
 let compute_binder hs (binderKey:(i:binderId & bk:KeySchedule.binderKey i))
   : ST (HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i)))
@@ -296,43 +291,42 @@ let client_ClientHello hs i =
     match (config_of hs).maxVer  with
       | TLS_1p3 -> (* compute shares for groups in offer *)
         trace "offering ClientHello 1.3";
-        (match pskids with
-        | [] ->
-          let gx = KeySchedule.ks_client_13_nopsk_init hs.ks (config_of hs).namedGroups in
-          Some gx, None, None
-        | pskl ->
-          let bkl, pskinfo, gx = KeySchedule.ks_client_13_psk_init hs.ks pskl (config_of hs).namedGroups in
-          Some gx, Some bkl, Some (zip (pskl, pskinfo))
-        )
+        let (sid, pskids) = resumeInfo_of hs in
+        let bk, pski, shares = KeySchedule.ks_client_13_init hs.ks pskids (config_of hs).namedGroups in
+        Some shares, bk, pski
       | _ ->
         trace "offering ClientHello 1.2";
         let si = KeySchedule.ks_client_12_init hs.ks in
-        None, None, None   in
+        None, [], []
+    in
 
   // Compute & send the ClientHello offer
   let offer = Nego.client_ClientHello hs.nego shares pskinfo in (* compute offer from configuration *)
   HandshakeLog.send hs.log (ClientHello offer);
 
-  // Choose, compute & send binders authenticating the offer.
-  ( match Nego.find_clientPske offer, binderKeys with
-    | Some pskl, Some bk ->
+  // Computing & sending the binders
+  let nego_psk =
+    (match Nego.find_clientPske offer with
+    | Some pskl ->
       // We only compute binders for PSK identities negotiated in ClientHello
-      //let filter bk =
+//      let filter bk =
 //        let (| Binder esId _, bk |) = bk in
-        //let ApplicationPSK pskid h = esId in
-        //List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
-      //let nego_binders = List.Tot.filter filter bk in
-      let binders = KeySchedule.map_ST (compute_binder hs) bk in
-      HandshakeLog.send hs.log (Binders binders)
-    | _ -> ());
+//        let ApplicationPSK pskid _ = esId in
+//        List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
+//      let nego_binders = List.Tot.filter filter binderKeys in
+      let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
+      HandshakeLog.send hs.log (Binders binders);
+      pskl
+    | _ -> []) in
 
-  // Conditionally enable 0-RTT data (using the first PSK, if any) TODO pick 1st negotiated PSK.
-  ( match Nego.find_early_data offer, pskinfo with
-    | Some _, Some ((pskid,pskinfo)::_) ->
-      let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash pskinfo) hs.log in
-      let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
-      register hs edk
-    | _ -> ());
+  // 0-RTT data
+  (match Nego.find_early_data offer, nego_psk with
+  | Some _, (pskid, _) :: _ ->
+    let Some (_, info0) = List.Tot.find (fun (x,_) -> equalBytes x pskid) pskinfo in
+    let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash info0) hs.log in
+    let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+    register hs edk
+  | _ -> ());
 
   hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
   Correct(HandshakeLog.next_fragment hs.log i)

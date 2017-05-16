@@ -50,7 +50,7 @@ let pskiListBytes ids =
 noeq type psk =
   // this is the truncated PSK extension, without the list of binder tags.
   | ClientPSK:
-    identities:list pskIdentity{ 
+    identities:list pskIdentity{
       let n = length (pskiListBytes identities) in 6 < n /\ n < 65536} ->
     binders_len:nat{binders_len <= 65535} ->
     psk
@@ -84,7 +84,7 @@ let binderListBytes bs =
     let b0 = Parse.vlbytes1 h in
     assert(length b0 >= 33);
     b0 @| b
-   
+
 let bindersBytes (bs:binders): b:bytes{length b >= 35 /\ length b <= 65537} =
   let b = binderListBytes bs in
   Parse.vlbytes2 b
@@ -105,12 +105,12 @@ let parseBinderList (b:bytes{2 <= length b}) : result binders =
     error "pskBinderList not enough bytes to read length header"
   else
     match vlparse 2 b with
-    | Correct b -> 
+    | Correct b ->
       begin
       match aux b [] with
-      | Correct bs -> 
+      | Correct bs ->
         let len = List.Tot.length bs in
-        if 0 < len && len < 255 then 
+        if 0 < len && len < 255 then
           Correct bs
         else
           error "none or too many binders"
@@ -128,7 +128,7 @@ let pskBytes = function
     bytes_of_int 2 (UInt16.v sid)
 
 val parsePskIdentity: b:bytes -> result pskIdentity
-let parsePskIdentity b = 
+let parsePskIdentity b =
   if length b < 2 then
     error "not enough bytes to parse the length of the identity field of PskIdentity"
   else
@@ -532,8 +532,8 @@ let noExtensions =
   the total length. Note that the `E_pre_shared_key` argument includes the length of
   binders in this case.
 *)
-val extensionsBytes: 
-  exts:extensions {length (extensionListBytes exts) + bindersLen exts < 65536} -> 
+val extensionsBytes:
+  exts:extensions {length (extensionListBytes exts) + bindersLen exts < 65536} ->
   b:bytes { length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
@@ -727,7 +727,7 @@ val prepareExtensions:
   list valid_namedGroup ->
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
-  option (list (PSK.pskid * PSK.pskInfo)) ->
+  list (PSK.pskid * PSK.pskInfo) ->
   l:list extension{List.Tot.length l < 256}
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
@@ -769,8 +769,8 @@ let prepareExtensions minpv pv cs sres sren edi sigAlgs namedGroups ri ks psks =
     in
     let res =
       let filter = (fun (_,x) -> x.PSK.allow_psk_resumption || x.PSK.allow_dhe_resumption) in
-      if pv = TLS_1p3 && Some? psks && List.Tot.filter filter (Some?.v psks) <> [] then
-        let (pskids, pskinfos) : list PSK.pskid * list PSK.pskInfo = List.Tot.split (Some?.v psks) in
+      if pv = TLS_1p3 && List.Tot.filter filter psks <> [] then
+        let (pskids, pskinfos) : list PSK.pskid * list PSK.pskInfo = List.Tot.split psks in
         let psk_kex = [] in
         let psk_kex =
           if List.Tot.existsb (fun x -> x.PSK.allow_psk_resumption) pskinfos
