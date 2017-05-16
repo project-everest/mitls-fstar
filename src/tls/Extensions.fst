@@ -417,8 +417,8 @@ We do not yet support the extensions below (authenticated but ignored)
 *)
 
 let bindersLen el : nat =
-  match List.Tot.find (E_pre_shared_key?) el with
-  | Some (Extensions.E_pre_shared_key (ClientPSK _ len)) -> len
+  match List.Tot.find E_pre_shared_key? el with
+  | Some (Extensions.E_pre_shared_key (ClientPSK _ len)) -> 2 + len
   | _ -> 0
 
 let string_of_extension = function
@@ -537,7 +537,7 @@ val extensionsBytes:
   b:bytes { length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
-  let binder_len = 2 + bindersLen exts in
+  let binder_len = bindersLen exts in
   lemma_repr_bytes_values (length b + binder_len);
   vlbytes_trunc 2 b binder_len
 
