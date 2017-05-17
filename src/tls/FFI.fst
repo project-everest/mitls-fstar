@@ -150,7 +150,7 @@ let s2pv = function
 let ffiConfig version host =
   let v = s2pv version in 
   {defaultConfig with
-    minVer = v;
+    minVer = TLS_1p2;
     maxVer = v;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
@@ -158,16 +158,12 @@ let ffiConfig version host =
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
     safe_resumption = true;
     ciphersuites = cipherSuites_of_nameList [
-                    (* mitls.exe expects this one *)
+                      TLS_AES_128_GCM_SHA256;
+                      TLS_AES_256_GCM_SHA384;
+                      TLS_CHACHA20_POLY1305_SHA256;
+                      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
                       TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
-                    (* default ciphersuites from TLSInfo.fst follow: *)
-                      TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-                      TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
-                      TLS_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
-                      TLS_RSA_WITH_3DES_EDE_CBC_SHA;
                       ];
   }
 
