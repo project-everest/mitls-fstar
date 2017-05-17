@@ -147,6 +147,45 @@ let s2pv = function
   | "1.0" -> TLS_1p0
   | s -> failwith ("Invalid protocol version specified: "^s)
 
+let css = [
+  ("TLS_AES_128_GCM_SHA256", TLS_AES_128_GCM_SHA256);
+  ("TLS_AES_256_GCM_SHA384", TLS_AES_256_GCM_SHA384);
+  ("TLS_CHACHA20_POLY1305_SHA256", TLS_CHACHA20_POLY1305_SHA256);
+  ("TLS_AES_128_CCM_SHA256", TLS_AES_128_CCM_SHA256);
+  ("TLS_AES_128_CCM_8_SHA256", TLS_AES_128_CCM_8_SHA256);
+  ("ECDHE-RSA-AES256-GCM-SHA384", TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384);
+  ("ECDHE-RSA-AES128-GCM-SHA256", TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
+  ("ECDHE-RSA-CHACHA20-POLY1305-SHA256", TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
+  ("ECDHE-ECDSA-AES256-GCM-SHA384", TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384);
+  ("ECDHE-ECDSA-AES128-GCM-SHA256", TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256);
+  ("ECDHE-ECDSA-CHACHA20-POLY1305-SHA256", TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256);
+  ("DHE-RSA-AES256-GCM-SHA384", TLS_DHE_RSA_WITH_AES_256_GCM_SHA384);
+  ("DHE-RSA-AES128-GCM-SHA256", TLS_DHE_RSA_WITH_AES_128_GCM_SHA256);
+  ("DHE-RSA-CHACHA20-POLY1305-SHA256", TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
+]
+
+let sas = [
+  ("RSA+SHA512",   RSA_PKCS1_SHA512);
+  ("RSA+SHA384",   RSA_PKCS1_SHA384);
+  ("RSA+SHA256",   RSA_PKCS1_SHA256);
+  ("RSA+SHA1",     RSA_PKCS1_SHA1);
+  ("ECDSA+SHA512", ECDSA_SECP521R1_SHA512);
+  ("ECDSA+SHA384", ECDSA_SECP384R1_SHA384);
+  ("ECDSA+SHA256", ECDSA_SECP256R1_SHA256);
+  ("ECDSA+SHA1",   ECDSA_SHA1);
+]
+
+let ngs = [
+  ("P-521", Parse.SEC CoreCrypto.ECC_P521);
+  ("P-384", Parse.SEC CoreCrypto.ECC_P384);
+  ("P-256", Parse.SEC CoreCrypto.ECC_P256);
+  ("X25519", Parse.SEC CoreCrypto.ECC_X25519);
+  ("X448",  Parse.SEC CoreCrypto.ECC_X448);
+  ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
+  ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
+  ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
+]
+
 let ffiConfig version host =
   let v = s2pv version in 
   {defaultConfig with
@@ -158,11 +197,15 @@ let ffiConfig version host =
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
     safe_resumption = true;
     ciphersuites = cipherSuites_of_nameList [
-                      TLS_AES_128_GCM_SHA256;
-                      TLS_AES_256_GCM_SHA384;
-                      TLS_CHACHA20_POLY1305_SHA256;
-                      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
-                      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+                    (* mitls.ml ciphersuites *)
+		      TLS_AES_128_GCM_SHA256;
+		      TLS_AES_256_GCM_SHA384;
+		      TLS_CHACHA20_POLY1305_SHA256;
+		      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
+		      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+		      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
+                    (* default ciphersuites from TLSInfo.fst follow: *)
+                      TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
                       ];
   }
@@ -184,6 +227,43 @@ let ffiSetCAFile cfg f =
   { cfg with
   ca_file = f;
   }
+
+let rec findsetting f l = match l with
+  | [] -> None
+  | (s, i)::tl -> if s = f then Some i else findsetting f tl
+
+val ffiSetCipherSuites: cfg:config -> x:string -> ML config
+let ffiSetCipherSuites cfg x =
+  let csl = String.split [':'] x in
+  let csl = List.map (fun x-> match findsetting x css with
+    | None -> failwith ("Unknown ciphersuite: "^x)
+    | Some a -> a
+    ) csl in
+  { cfg with 
+  ciphersuites = cipherSuites_of_nameList csl
+  }
+
+val ffiSetSignatureAlgorithms: cfg:config -> x:string -> ML config
+let ffiSetSignatureAlgorithms cfg x =
+  let sal = String.split [':'] x in
+  let sal = List.map (fun x-> match findsetting x sas with
+    | None -> failwith ("Unknown signature algorithm: "^x)
+    | Some a -> a
+  ) sal in
+  { cfg with 
+  signatureAlgorithms = sal
+  }
+
+val ffiSetNamedGroups: cfg:config -> x:string -> ML config
+let ffiSetNamedGroups cfg x =
+  let ngl = String.split [':'] x in
+  let ngl = List.map (fun x-> match findsetting x ngs with
+    | None -> failwith ("Unknown named group: "^x)
+    | Some a -> a
+  ) ngl in
+  { cfg with 
+  namedGroups = ngl
+  }  
 
 type callbacks = FFICallbacks.callbacks
 

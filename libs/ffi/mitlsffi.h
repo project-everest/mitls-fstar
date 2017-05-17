@@ -19,6 +19,9 @@ extern int   FFI_mitls_configure(/* out */ mitls_state **state, const char *tls_
 extern int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file);
 extern int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file);
 extern int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file);
+extern int FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs);
+extern int FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa);
+extern int FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng);
 
 // Close a miTLS session - either after configure or connect
 extern void FFI_mitls_close(/* in */ mitls_state *state);
