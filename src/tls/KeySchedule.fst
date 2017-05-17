@@ -758,11 +758,11 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
     | l, Some n ->
       let Some ((| i, es |), pski) : option ((i:esId & es i) * PSK.pskInfo)
         = List.Tot.nth l n in
-      dbg ("Recalling early secret: "^(print_bytes es));
+      dbg ("Recalling PSK early secret: "^(print_bytes es));
       i, es
     | _, None ->
       let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
-      dbg ("Early secret: "^(print_bytes es));
+      dbg ("No PSK negotiated. Early secret: "^(print_bytes es));
       NoPSK h, es
   in
 
