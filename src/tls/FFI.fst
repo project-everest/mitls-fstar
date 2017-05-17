@@ -189,7 +189,7 @@ let ngs = [
 let ffiConfig version host =
   let v = s2pv version in 
   {defaultConfig with
-    minVer = v;
+    minVer = TLS_1p3;
     maxVer = v;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
