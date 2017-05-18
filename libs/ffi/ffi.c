@@ -21,6 +21,9 @@
   MITLS_FFI_ENTRY(SetCertChainFile) \
   MITLS_FFI_ENTRY(SetPrivateKeyFile) \
   MITLS_FFI_ENTRY(SetCAFile) \
+  MITLS_FFI_ENTRY(SetCipherSuites) \
+  MITLS_FFI_ENTRY(SetSignatureAlgorithms) \
+  MITLS_FFI_ENTRY(SetNamedGroups) \
   MITLS_FFI_ENTRY(Connect) \
   MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \
@@ -148,15 +151,16 @@ int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char
     CAMLreturnT(int,ret);
 }
 
-int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
+// Helper routine to set a string-based value in the config object
+static int configure_common(/* in */ mitls_state *state, const char * str, value* function)
 {
     CAMLparam0();
-    CAMLlocal2(config, camlfile);
+    CAMLlocal2(config, camlvalue);
     int ret = 0;
 
     caml_acquire_runtime_system();
-    camlfile = caml_copy_string(file);
-    config = caml_callback2_exn(*g_mitls_FFI_SetCertChainFile, state->fstar_state, camlfile);
+    camlvalue = caml_copy_string(str);
+    config = caml_callback2_exn(*function, state->fstar_state, camlvalue);
     if (Is_exception_result(config)) {
         report_caml_exception(config, NULL); // bugbug: pass in errmsg
     } else {
@@ -166,49 +170,37 @@ int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char 
     caml_release_runtime_system();
 
     CAMLreturnT(int,ret);
+}
+
+int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
+{
+    return configure_common(state, file, g_mitls_FFI_SetCertChainFile);
 }
 
 int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file)
 {
-    CAMLparam0();
-    CAMLlocal2(config, camlfile);
-    int ret = 0;
-
-    caml_acquire_runtime_system();
-    camlfile = caml_copy_string(file);
-    config = caml_callback2_exn(*g_mitls_FFI_SetPrivateKeyFile, state->fstar_state, camlfile);
-    if (Is_exception_result(config)) {
-        report_caml_exception(config, NULL); // bugbug: pass in errmsg
-    } else {
-        state->fstar_state = config;
-        ret = 1;
-    }
-    caml_release_runtime_system();
-
-    CAMLreturnT(int,ret);
+    return configure_common(state, file, g_mitls_FFI_SetPrivateKeyFile);
 }
 
 int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
 {
-    CAMLparam0();
-    CAMLlocal2(config, camlfile);
-    int ret = 0;
-
-    caml_acquire_runtime_system();
-    camlfile = caml_copy_string(file);
-    config = caml_callback2_exn(*g_mitls_FFI_SetCAFile, state->fstar_state, camlfile);
-    if (Is_exception_result(config)) {
-        report_caml_exception(config, NULL); // bugbug: pass in errmsg
-    } else {
-        state->fstar_state = config;
-        ret = 1;
-    }
-    caml_release_runtime_system();
-
-    CAMLreturnT(int,ret);
+    return configure_common(state, file, g_mitls_FFI_SetCAFile);
 }
 
+int FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
+{
+    return configure_common(state, cs, g_mitls_FFI_SetCipherSuites);
+}
 
+int FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa)
+{
+    return configure_common(state, sa, g_mitls_FFI_SetSignatureAlgorithms);
+}
+
+int FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng)
+{
+    return configure_common(state, ng, g_mitls_FFI_SetNamedGroups);
+}
 
 // Called by the host app to free a mitls_state allocated by FFI_mitls_configure()
 void FFI_mitls_close(mitls_state *state)

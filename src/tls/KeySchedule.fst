@@ -90,6 +90,7 @@ let read_psk (i:PSK.pskid)
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
+  let i = utf8 (iutf8 i) in // FIXME Platform.Bytes !!
   let c = PSK.psk_info i in
   (ApplicationPSK i c.early_hash, PSK.psk_value i, c.early_hash, c.early_ae)
 
@@ -757,11 +758,11 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
     | l, Some n ->
       let Some ((| i, es |), pski) : option ((i:esId & es i) * PSK.pskInfo)
         = List.Tot.nth l n in
-      dbg ("Recalling early secret: "^(print_bytes es));
+      dbg ("Recalling PSK early secret: "^(print_bytes es));
       i, es
     | _, None ->
       let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
-      dbg ("Early secret: "^(print_bytes es));
+      dbg ("No PSK negotiated. Early secret: "^(print_bytes es));
       NoPSK h, es
   in
 

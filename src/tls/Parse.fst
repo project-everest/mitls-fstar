@@ -185,14 +185,19 @@ type ffdhe =
   | FFDHE6144
   | FFDHE8192
 
-let z3kill = 0xFFz
+
+type unknownNG =
+  u:(byte*byte){(let (b1,b2) = u in
+    (b1 = 0x00z ==> b2 <> 0x17z /\ b2 <> 0x18z /\ b2 <> 0x19z
+                 /\ b2 <> 0x1dz /\ b2 <> 0x1ez) /\
+    (b1 = 0x01z ==> b2 <> 0x00z /\ b2 <> 0x01z /\ b2 <> 0x02z
+                 /\ b2 <> 0x03z /\ b2 <> 0x04z))}
+
 (** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
   | SEC of CoreCrypto.ec_curve
-  | EC_UNSUPPORTED of (b:byte{b <> 0x17z /\ b <> 0x18z /\ b <> 0x19z /\ b <> 0x1dz /\ b <> 0x1ez})
   | FFDHE of ffdhe
-  | FFDHE_PRIVATE_USE of (b:byte{b = 0xFCz \/ b = 0xFDz \/ b = 0xFEz \/ b = z3kill})
-  | ECDHE_PRIVATE_USE of byte
+  | NG_UNKNOWN of unknownNG
 
 (*
  * We only seem to be using these two named groups
@@ -214,7 +219,6 @@ let namedGroupBytes ng =
     | ECC_X25519  -> abyte2 (0x00z, 0x1dz)
     | ECC_X448    -> abyte2 (0x00z, 0x1ez)
     end
-  | EC_UNSUPPORTED b	-> abyte2 (0x00z, b)
   | FFDHE dhe ->
     begin
     match dhe with
@@ -224,8 +228,7 @@ let namedGroupBytes ng =
     | FFDHE6144		-> abyte2 (0x01z, 0x03z)
     | FFDHE8192		-> abyte2 (0x01z, 0x04z)
     end
-  | FFDHE_PRIVATE_USE b -> abyte2 (0x01z, b)
-  | ECDHE_PRIVATE_USE b -> abyte2 (0xFEz, b)
+  | NG_UNKNOWN u	-> abyte2 u
 
 (** Parsing function for (EC)DHE named groups *)
 val parseNamedGroup: pinverse_t namedGroupBytes
@@ -237,20 +240,15 @@ let parseNamedGroup b =
   | (0x00z, 0x19z) -> Correct (SEC ECC_P521)
   | (0x00z, 0x1dz) -> Correct (SEC ECC_X25519)
   | (0x00z, 0x1ez) -> Correct (SEC ECC_X448)
-  | (0x00z, b)     -> Correct (EC_UNSUPPORTED b) // REMARK: only values 0x01z-0x16z and 0x1Az-0x1Ez are assigned
   | (0x01z, 0x00z) -> Correct (FFDHE FFDHE2048)
   | (0x01z, 0x01z) -> Correct (FFDHE FFDHE3072)
   | (0x01z, 0x02z) -> Correct (FFDHE FFDHE4096)
   | (0x01z, 0x03z) -> Correct (FFDHE FFDHE6144)
   | (0x01z, 0x04z) -> Correct (FFDHE FFDHE8192)
-  | (0x01z, b)     ->
-    if b = 0xFCz || b = 0xFDz || b = 0xFEz || b = 0xFFz
-    then Correct (FFDHE_PRIVATE_USE b)
-    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong ffdhe private use group")
-  | (0xFEz, b)     -> Correct (ECDHE_PRIVATE_USE b)
-  | _ -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong named group")
+  | u -> Correct (NG_UNKNOWN u)
 
 (** Lemmas for named groups parsing/serializing inversions *)
+#set-options "--max_ifuel 10 --max_fuel 10"
 val inverse_namedGroup: x:_ -> Lemma
   (requires True)
   (ensures lemma_inverse_g_f namedGroupBytes parseNamedGroup x)
