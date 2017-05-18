@@ -462,13 +462,13 @@ let parseVersion v =
   | _ -> Error(AD_decode_error, "Parsed unknown version "^print_bytes v)
 
 val inverse_version: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f versionBytes parseVersion x)
   [SMTPat (parseVersion (versionBytes x))]
 let inverse_version x = ()
 
 val pinverse_version: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal versionBytes parseVersion x))
   [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
 let pinverse_version x = ()
@@ -765,7 +765,7 @@ let inverse_cipherSuite x = ()
 
 (** Lemma for ciphersuite serializing/parsing inversions *)
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (let y = parseCipherSuiteAux x in
 	    (Correct? y ==>
               (if UnknownCipherSuite? (Correct?._0 y) then true
@@ -1284,13 +1284,13 @@ let parseCertType b =
 
 (** Lemmas associated to serializing/parsing of certificate types *)
 val inverse_certType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f certTypeBytes parseCertType x)
   [SMTPat (parseCertType (certTypeBytes x))]
 let inverse_certType x = ()
 
 val pinverse_certType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal certTypeBytes parseCertType x))
   [SMTPat (certTypeBytes (Correct?._0 (parseCertType x)))]
 let pinverse_certType x = ()
@@ -1411,45 +1411,17 @@ let parseConfigurationId b =
 
 (** Lemmas for configurationId serializing/parsing inversion *)
 val inverse_configurationId: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f configurationIdBytes parseConfigurationId x)
   [SMTPat (parseConfigurationId (configurationIdBytes x))]
 let inverse_configurationId x =
   lemma_repr_bytes_values (length x)
 
 val pinverse_configurationId: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal configurationIdBytes parseConfigurationId x))
   [SMTPat (configurationIdBytes (Correct?._0 (parseConfigurationId x)))]
 let pinverse_configurationId x = ()
-
-
-//
-// BB.TODO: Some of the following code should be moved outside TLSConstants !
-//          In particular, the integer definitions can be taken from F* ulib.
-
-type uint32 = b:lbytes 4
-
-val uint32Bytes: uint32 -> Tot (lbytes 4)
-let uint32Bytes u = u
-
-val parseUint32: pinverse_t uint32Bytes
-let parseUint32 b =
-  if length b = 4 then Correct(b)
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-val inverse_uint32: x:_ -> Lemma
-  (requires (True))
-  (ensures lemma_inverse_g_f uint32Bytes parseUint32 x)
-  [SMTPat (parseUint32 (uint32Bytes x))]
-let inverse_uint32 x = ()
-
-val pinverse_uint32: x:_ -> Lemma
-  (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.equal uint32Bytes parseUint32 x))
-  [SMTPat (uint32Bytes (Correct?._0 (parseUint32 x)))]
-let pinverse_uint32 x = ()
-
 
 
 (** EarlyData type definition *)
@@ -1478,13 +1450,13 @@ let parseEarlyDataType b =
 
 (** Lemmas for Early Data parsing/serializing inversions *)
 val inverse_earlyDataType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f earlyDataTypeBytes parseEarlyDataType x)
   [SMTPat (parseEarlyDataType (earlyDataTypeBytes x))]
 let inverse_earlyDataType x = ()
 
 val pinverse_earlyDataType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal earlyDataTypeBytes parseEarlyDataType x))
   [SMTPat (earlyDataTypeBytes (Correct?._0 (parseEarlyDataType x)))]
 let pinverse_earlyDataType x = ()
@@ -1516,7 +1488,7 @@ let parseConfigurationExtension b =
 
 (** Lemmas for Configuration Extension parsing/serializing inversions *)
 val inverse_configurationExtension: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f configurationExtensionBytes parseConfigurationExtension x)
   [SMTPat (parseConfigurationExtension (configurationExtensionBytes x))]
 let inverse_configurationExtension x =
@@ -1531,7 +1503,7 @@ let inverse_configurationExtension x =
   assert (Seq.equal b payload)
 
 val pinverse_configurationExtension: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal configurationExtensionBytes parseConfigurationExtension x))
   [SMTPat (configurationExtensionBytes (Correct?._0 (parseConfigurationExtension x)))]
 let pinverse_configurationExtension x = ()
