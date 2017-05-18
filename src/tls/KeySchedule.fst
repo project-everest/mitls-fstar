@@ -90,7 +90,6 @@ let read_psk (i:PSK.pskid)
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
-  dbg ("PSK_id = " ^ (print_bytes i));
   let i = utf8 (iutf8 i) in // FIXME Platform.Bytes !!
   let c = PSK.psk_info i in
   (ApplicationPSK i c.early_hash, PSK.psk_value i, c.early_hash, c.early_ae)
