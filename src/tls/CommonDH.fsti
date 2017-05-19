@@ -81,7 +81,7 @@ val serialize_raw: #g:group -> pre_share g -> Tot bytes
 // should that go elsewhere? YES.
 (** KeyShare entry definition *)
 type keyShareEntry =
-  | Share: g:group{Some? (namedGroup_of_group g)} -> share g -> keyShareEntry
+  | Share: g:group{Some? (namedGroup_of_group g)} -> pre_share g -> keyShareEntry
   | UnknownShare:
     ng:namedGroup { None? (group_of_namedGroup ng)} ->
     b:bytes{repr_bytes (length b) <= 2} -> keyShareEntry
