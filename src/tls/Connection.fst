@@ -66,6 +66,7 @@ noeq type connection = | C:
   #region: c_rgn ->
   hs:      hs {extends (region_of hs) region /\ is_hs_rgn (region_of hs)} (* providing role, config, and uid *) ->
   tcp:     Transport.t ->
+  recv: ref Record.input_state{recv.id = region} -> // added for buffering non-blocking reads
   state:   ref tlsState {state.id = region} -> 
   connection
 
