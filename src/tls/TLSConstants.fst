@@ -1762,6 +1762,7 @@ type negotiatedExtensions = {
   //$ Cedric: these extensions were missing in F7.
   ne_server_names: option (list serverName); // now a total function of the mode,
   ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
+  ne_pskIndex: option nat;
 
   // now internal, transient concerns for server-side nego
   ne_signature_algorithms: option signatureSchemeList;
@@ -1778,4 +1779,5 @@ let ne_default = {
   ne_server_names = None;
   ne_signature_algorithms = None;
   ne_keyShare = None;
+  ne_pskIndex = None;
 }
