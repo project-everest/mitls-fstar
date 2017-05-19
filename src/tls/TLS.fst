@@ -1285,7 +1285,7 @@ let rec read c i =
     | WriteClose -> unexpected "Sent Close" // can't happen while sending?
     | WrittenHS newWriter complete ->
         let st1 = !c.state in
-        trace ("read: WrittenHS, "^string_of_state st1^(
+        trace ("read: WrittenHS, "^string_of_state st1^", "^(
           match newWriter, complete with
           | Some b, true -> "new writer: complete"
           | Some true, _ -> "new writer: writable"

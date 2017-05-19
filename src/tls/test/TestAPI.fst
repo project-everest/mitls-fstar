@@ -26,7 +26,7 @@ unfold let trace = if api_debug then print else (fun _ -> ())
 let rec client_read con host: ML unit =
   let r = TLS.currentId con Reader in
   match TLS.read con r with
-  | Complete ->
+  | Update true | Complete ->
        trace "Read OK, sending HTTP request...";
        let payload = utf8 ("GET /r HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
        let id = TLS.currentId con Writer in
@@ -51,7 +51,7 @@ let rec client_read con host: ML unit =
     trace "Closing connection.\n";
     let _ = TLS.writeCloseNotify con in
     ()
-  | other -> trace (string_of_ioresult_i #r other)
+  | other -> trace ("unexpected read result: "^string_of_ioresult_i #r other)
 
 let client config host port offerpsk =
   trace "*** Starting miTLS client...";

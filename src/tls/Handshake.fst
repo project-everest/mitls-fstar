@@ -298,8 +298,7 @@ let client_ClientHello hs i =
       | _ ->
         trace "offering ClientHello 1.2";
         let si = KeySchedule.ks_client_12_init hs.ks in
-        None, [], []
-    in
+        None, [], [] in
   //
   // Compute & send the ClientHello offer
   // for now we assume there is no filtering or reordering on the PSKs.
@@ -326,11 +325,13 @@ let client_ClientHello hs i =
 
   // 0-RTT data
   (match Nego.find_early_data offer, nego_psk with
-  | Some _, (pskid, _) :: _ ->
-    let Some (_, info0) = List.Tot.find (fun (x,_) -> equalBytes x pskid) pskinfo in
-    let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash info0) hs.log in
-    let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
-    register hs edk
+  | Some _, (pskid, _) :: _ -> 
+      let Some (_, info0) = List.Tot.find (fun (x,_) -> equalBytes x pskid) pskinfo in
+      let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash info0) hs.log in
+      let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+      trace "setting up 0RTT";
+      register hs edk;
+      HandshakeLog.send_signals hs.log (Some true) false 
     // TODO enable client 0RTT
   | Some _, [] -> trace "statically excluded"
   | _ -> ());
