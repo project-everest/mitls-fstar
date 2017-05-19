@@ -194,6 +194,12 @@ mitls.cmxa: $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx) \
 mitls.exe: mitls.cmxa
 	make -f Extracted.mk mitls.exe
 
+cmitls.o: cmitls.c
+	make -f Extracted.mk cmitls.o
+cmitls.exe: cmitls.o
+	echo $(MAKECMDGOALS)
+	make -f Extracted.mk $(MAKECMDGOALS)
+
 # Some rules are only defined after extraction, and passed to the post-extraction Makefile (with ocamldep)
 .DEFAULT:
 	make -f Extracted.mk $(MAKECMDGOALS)

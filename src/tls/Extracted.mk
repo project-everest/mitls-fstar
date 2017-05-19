@@ -126,17 +126,20 @@ test: test.out mitls.exe
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
-tls-ffi: mitls.cmxa
+LIBMITLS=libmitls.dll
+
+$(LIBMITLS): mitls.cmxa
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-	-linkall -output-obj -g mitls.cmxa -o libmitls.dll
+	-linkall -output-obj -g mitls.cmxa -o $(LIBMITLS)
 else
 UNAME_S = $(shell uname -s)
+LIBMITLS=libmitls.so
 ifeq ($(UNAME_S),Darwin)
-tls-ffi: mitls.cmxa
+$(LIBMITLS): mitls.cmxa
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
@@ -148,9 +151,9 @@ tls-ffi: mitls.cmxa
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-	-linkall -runtime-variant _pic -output-obj -ccopt -bundle -g mitls.cmxa -o libmitls.so
+	-linkall -runtime-variant _pic -output-obj -ccopt -bundle -g mitls.cmxa -o $(LIBMITLS)
 else
-tls-ffi: mitls.cmxa
+$(LIBMITLS): mitls.cmxa
     # pass "-z noexecstack" to better support Bash on Windows
     # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
     #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
@@ -160,10 +163,22 @@ tls-ffi: mitls.cmxa
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-	-linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o libmitls.so \
+	-linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o $(LIBMITLS) \
 	-ccopt "-Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker libmitls_version_script"
 endif
 endif
+
+tls-ffi: $(LIBMITLS)
+
+# ask OCaml about the name of the native C compiler.  This will be mingw on Windows.
+NATIVE_C_COMPILER=$(shell ocamlfind opt -config | grep native_c_compiler | sed -e "s/native_c_compiler: //")
+NATIVE_C_LIBRARIES=$(shell ocamlfind opt -config | grep native_c_libraries | sed -e "s/native_c_libraries: //")
+
+# C test of the FFI
+cmitls.o: cmitls.c $(FFI_HOME)/mitlsffi.h
+	$(NATIVE_C_COMPILER) -g -c -I$(FFI_HOME) -g -Wall -O0 cmitls.c
+cmitls.exe: cmitls.o $(LIBMITLS)
+	$(NATIVE_C_COMPILER) -g -o cmitls.exe cmitls.o $(LIBMITLS) $(NATIVE_C_LIBRARIES)
 
 # our interactive tests; the baseline is make client{|12|13} vs make server 
 
@@ -175,6 +190,14 @@ server13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA384
 server-psk::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA384
+cserver::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA384
+cserver12::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 127.0.0.1 4443 -sigalgs RSA+SHA256
+cserver13::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA384
+cserver-psk::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA384
 
 client13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
@@ -184,8 +207,16 @@ client12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
 client::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443
+cclient13::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443
+cclient-psk::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
+cclient12::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443
+cclient::
+	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443
 
-.PHONY: test tls-ffi server server12 server13 client client12 client13
+.PHONY: test tls-ffi server server12 server13 client client12 client13 cserver cserver12 cserver13 cclient cclient12 cclient3
 
 .DEFAULT:
 
