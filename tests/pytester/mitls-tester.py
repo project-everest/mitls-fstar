@@ -1,6 +1,8 @@
 import unittest
 import logging
 import os
+import time
+import threading
 
 from ctypes import  CDLL, \
                     c_long, \
@@ -17,36 +19,145 @@ from ctypes import  CDLL, \
                     POINTER                  
 
 
-SUCCESS             = 1
-NULL_BYTE           = b"\0"
-TLS_VERSION_1_3     = b"1.3" + NULL_BYTE
-MITLS_SO_PATH       = "../../../everest/mitls-fstar/src/tls/libmitls.so"
-SERVER_CERT_PATH    = "certs/test_server.crt" 
-SERVER_KEY_PATH     = "certs/test_server.key"
+SUCCESS                     = 1
+NULL_BYTE                   = b"\0"
+TLS_VERSION_1_3             = b"1.3" + NULL_BYTE
+MITLS_SO_PATH               = "../../../everest/mitls-fstar/src/tls/libmitls.so"
+SERVER_CERT_PATH            = "../../../everest/mitls-fstar/data/server-ecdsa.crt" 
+SERVER_KEY_PATH             = "../../../everest/mitls-fstar/data/server-ecdsa.key"
+SERVER_SIGNATURE_ALGORITHM  = "ECDSA+SHA384"
+# SERVER_NAMED_GROUPS         = ""
 
 class MITLSError( Exception ):
     def __init__( self, msg ):
         Exception.__init__( self, msg )
 
+
+class MemorySocket():
+    SLEEP_INTERVAL_SECONDS = 0.05
+
+    def __init__( self, readTimeout = 5, logMsgs = False ):
+        self.clientToServerPipe = bytearray()
+        self.serverToClientPipe = bytearray()
+        self.readTimeout        = readTimeout
+        self.logMsgs            = logMsgs
+
+        self.SetupLogger()
+
+    def SetupLogger( self ):
+        self.log = logging.getLogger( 'MemorySocket' )
+        self.log.setLevel(logging.DEBUG)
+
+        formatter      = logging.Formatter('%(asctime)s %(name)-20s %(levelname)-10s %(message)s')
+        consoleHandler = logging.StreamHandler()
+        consoleHandler.setLevel(logging.DEBUG)
+        consoleHandler.setFormatter(formatter)
+
+        self.log.handlers = []
+        self.log.addHandler(consoleHandler) 
+
+    def FormatBuffer( self, buffer ):
+        humanReadableBuffer = ""
+        for i, byte in enumerate( buffer ):
+          humanReadableBuffer += "0x%2X, " % byte 
+          if ( i + 1 ) % 8 == 0:
+              humanReadableBuffer += "\n"
+
+        return humanReadableBuffer
+
+    #Used by client to send to server:
+    def SendToServer( self, ctx, buffer, bufferSize ):
+        self.log.debug( "SendToServer bufferSize = %d" % bufferSize ) 
+        pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )
+        
+        if self.logMsgs:
+            self.log.debug( "SendToServer -->\n" + self.FormatBuffer( pyBuffer ) ) 
+
+        self.clientToServerPipe += pyBuffer
+        return bufferSize
+
+    #Used by server to read from client:
+    def ReadFromClient( self, ctx, buffer, bufferSize ):
+        self.log.debug( "ReadFromClient, bufferSize = %d" % bufferSize )
+
+        # Wait for data to be available:
+        startTime = time.time()
+        while len( self.clientToServerPipe ) == 0:
+            time.sleep( self.SLEEP_INTERVAL_SECONDS )
+            if( time.time() - startTime > self.readTimeout ):
+                self.log.error( "ReadFromClient: timeout expired" )
+                return 0
+
+        bytesToReturn = len( self.clientToServerPipe )
+        if bufferSize < bytesToReturn:
+            bytesToReturn = bufferSize
+
+        pyBuffer = ( c_uint8 * bufferSize ).from_address( buffer )
+        pyBuffer[ 0 : bytesToReturn ] = self.clientToServerPipe[ 0 : bytesToReturn ]
+
+        # "flush" bytes read:
+        self.clientToServerPipe = self.clientToServerPipe[ bytesToReturn : ]
+
+        self.log.debug( "ReadFromClient: returned %d bytes" % bytesToReturn )
+        return bytesToReturn
+
+    #Used by server to send to client:
+    def SendToClient( self, ctx, buffer, bufferSize ):
+        self.log.debug( "SendToClient bufferSize = %d" % bufferSize ) 
+        pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )
+        
+        if self.logMsgs:
+            self.log.debug( "SendToClient -->\n" + self.FormatBuffer( pyBuffer ) ) 
+
+        self.serverToClientPipe += pyBuffer
+        return bufferSize
+
+    #Used by client to read from server:
+    def ReadFromServer( self, ctx, buffer, bufferSize  ):
+        self.log.debug( "ReadFromServer, bufferSize = %d" % bufferSize )
+
+        # Wait for data to be available:
+        startTime = time.time()
+        while len( self.serverToClientPipe ) == 0:
+            time.sleep( self.SLEEP_INTERVAL_SECONDS )
+            if( time.time() - startTime > self.readTimeout ):
+                self.log.error( "ReadFromServer: timeout expired" )
+                return 0
+
+        bytesToReturn = len( self.serverToClientPipe )
+        if bufferSize < bytesToReturn:
+            bytesToReturn = bufferSize
+
+        pyBuffer = ( c_uint8 * bufferSize ).from_address( buffer )
+        pyBuffer[ 0 : bytesToReturn ] = self.serverToClientPipe[ 0 : bytesToReturn ]
+
+        # "flush" bytes:
+        self.serverToClientPipe = self.serverToClientPipe[ bytesToReturn : ]
+
+        self.log.debug( "ReadFromServer: returned %d bytes" % bytesToReturn )
+        return bytesToReturn
+
+memorySocket = MemorySocket()
+
 #Used by client to send to server:
 def SendToServer( ctx, buffer, bufferSize ):
-    print( "SendToServer" )
-    return bufferSize
+    # print( "SendToServer" )
+    return memorySocket.SendToServer( ctx, buffer, bufferSize )
 
 #Used by server to read from client:
 def ReadFromClient( ctx, buffer, bufferSize ):
-    print( "ReadFromClient" )
-    return 0
+    # print( "ReadFromClient" )
+    return memorySocket.ReadFromClient( ctx, buffer, bufferSize )
 
 #Used by server to send to client:
 def SendToClient( ctx, buffer, bufferSize ):
-    print( "SendToClient" )
-    return bufferSize
+    # print( "SendToClient" )
+    return memorySocket.SendToClient( ctx, buffer, bufferSize )
 
 #Used by client to read from server:
 def ReadFromServer( ctx, buffer, bufferSize  ):
-    print( "ReadFromServer" )
-    return 0
+    # print( "ReadFromServer" )
+    return memorySocket.ReadFromServer( ctx, buffer, bufferSize )
 
 GLOBAL_MITLS_INITIALIZED = False
 
@@ -83,9 +194,9 @@ class MITLS():
         self.log.handlers = []
         self.log.addHandler(consoleHandler) 
 
-    def VerifyResult( self, result, expectedValue = SUCCESS ):
+    def VerifyResult( self, functionName, result, expectedValue = SUCCESS ):
         if result != expectedValue:
-            logMsg = "Returned %d, instead of %d" % ( result, expectedValue )
+            logMsg = "%s returned %d, instead of %d" % ( functionName, result, expectedValue )
             self.log.error( logMsg )
             raise MITLSError( logMsg )
 
@@ -94,7 +205,7 @@ class MITLS():
         
         self.miTLS.FFI_mitls_init.restype = c_int
         result = self.miTLS.FFI_mitls_init()
-        self.VerifyResult( result )
+        self.VerifyResult( "FFI_mitls_init", result )
         
         return result
 
@@ -103,7 +214,7 @@ class MITLS():
         
         self.miTLS.FFI_mitls_thread_register.restype = c_int
         result = self.miTLS.FFI_mitls_thread_register()
-        self.VerifyResult( result )
+        self.VerifyResult( "FFI_mitls_thread_register", result )
         
         return result
 
@@ -131,32 +242,50 @@ class MITLS():
                                                 byref( outmsg ),
                                                 byref( errmsg ) )
         self.PrintMsgIfNotNull( outmsg, errmsg )
-        self.VerifyResult( ret )
+        self.VerifyResult( "FFI_mitls_configure", ret )
 
         return mitls_state
 
     def MITLS_configure_cert_chain_file( self, filePath ):
-        self.log.debug( "MITLS_configure_cert_chain_file" )
+        self.log.debug( "MITLS_configure_cert_chain_file; filePath = %s" % os.path.abspath( filePath ) )
         self.miTLS.FFI_mitls_configure_cert_chain_file.restype = c_int
 
         serverCertPath = c_char_p( bytes( filePath, "ascii" ) + NULL_BYTE )
         ret            = self.miTLS.FFI_mitls_configure_cert_chain_file( self.mitls_state, serverCertPath )
-        self.VerifyResult( ret )
+        self.VerifyResult( "FFI_mitls_configure_cert_chain_file", ret )
 
     def MITLS_configure_private_key_file( self, filePath ):
-        self.log.debug( "MITLS_configure_private_key_file" )
-        self.miTLS.FFI_mitls_configure_cert_chain_file.restype = c_int
+        self.log.debug( "MITLS_configure_private_key_file; filePath = %s" % os.path.abspath( filePath ) )
+        self.miTLS.FFI_mitls_configure_private_key_file.restype = c_int
 
-        serverCertPath = c_char_p( bytes( filePath, "ascii" ) + NULL_BYTE )
-        ret            = self.miTLS.FFI_mitls_configure_private_key_file( self.mitls_state, serverCertPath )
-        self.VerifyResult( ret )
+        serverKeyPath = c_char_p( bytes( filePath, "ascii" ) + NULL_BYTE )
+        ret           = self.miTLS.FFI_mitls_configure_private_key_file( self.mitls_state, serverKeyPath )
+        self.VerifyResult( "FFI_mitls_configure_private_key_file", ret )
+
+    def FFI_mitls_configure_signature_algorithms( self, signatureAlgorithm ):
+        self.log.debug( 'FFI_mitls_configure_signature_algorithms; signatureAlgorithm = "%s"' % signatureAlgorithm )
+        self.miTLS.FFI_mitls_configure_cipher_suites.restype = c_int
+
+        cipherSuite_c = c_char_p( bytes( signatureAlgorithm, "ascii" ) + NULL_BYTE )
+        ret           = self.miTLS.FFI_mitls_configure_signature_algorithms( self.mitls_state, cipherSuite_c )
+        self.VerifyResult( "FFI_mitls_configure_signature_algorithms", ret )
+
+    # def MITLS_configure_named_groups( self, namedGroups ):
+    #     self.log.debug( 'MITLS_configure_cipher_suites; namedGroups = "%s"' )
+    #     self.miTLS.FFI_mitls_configure_named_groups.restype = c_int
+
+    #     namedGroups_c = c_char_p( bytes( namedGroups, "ascii" ) + NULL_BYTE )
+    #     ret           = self.miTLS.FFI_mitls_configure_named_groups( self.mitls_state, namedGroups_c )
+    #     self.VerifyResult( "FFI_mitls_configure_named_groups", ret )
 
     def InitServer( self ):
         self.log.debug( "InitServer" )
 
         self.mitls_state = self.MITLS_Configure()
-        self.MITLS_configure_cert_chain_file( SERVER_CERT_PATH )
-        self.MITLS_configure_private_key_file( SERVER_KEY_PATH )
+        self.MITLS_configure_cert_chain_file            ( SERVER_CERT_PATH )
+        self.MITLS_configure_private_key_file           ( SERVER_KEY_PATH )
+        self.FFI_mitls_configure_signature_algorithms   ( SERVER_SIGNATURE_ALGORITHM )
+        # self.MITLS_configure_named_groups    ( SERVER_NAMED_GROUPS )
 
     def InitClient( self, hostName ):
         self.log.debug( "InitClient" )
@@ -179,6 +308,42 @@ class MITLS():
 
         return FFI_mitls_callbacks
 
+    def GetServerCallbacks( self ):
+        # Callbacks are defined in mitls.h:
+        # typedef int (*pfn_FFI_send)(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
+        # typedef int (*pfn_FFI_recv)(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
+        MITLS_CALLBACK      = CFUNCTYPE(c_int, c_voidp, c_voidp, c_long ) 
+        self.sendCallback   = MITLS_CALLBACK( SendToClient )
+        self.recvCallback   = MITLS_CALLBACK( ReadFromClient )
+
+        self.cutils.getAddress.restype = c_voidp
+
+        FFI_mitls_callbacks = (c_voidp * 2)()
+        FFI_mitls_callbacks[ 0 ] = self.cutils.getAddress( self.sendCallback )
+        FFI_mitls_callbacks[ 1 ] = self.cutils.getAddress( self.recvCallback )
+
+        return FFI_mitls_callbacks
+
+    def AcceptConnection( self ):
+        self.log.debug( "AcceptConnection" )
+        outmsg              = c_char_p()
+        errmsg              = c_char_p() 
+        FFI_mitls_callbacks = self.GetServerCallbacks()
+
+        self.miTLS.FFI_mitls_accept_connected.restype  = c_int
+        self.miTLS.FFI_mitls_accept_connected.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp ]
+
+        ret = self.miTLS.FFI_mitls_thread_register()
+        self.VerifyResult( "FFI_mitls_thread_register", ret )
+
+        ret = self.miTLS.FFI_mitls_accept_connected(FFI_mitls_callbacks,
+                                                    self.mitls_state,
+                                                    byref( outmsg ),
+                                                    byref( errmsg ) )
+        self.PrintMsgIfNotNull( outmsg, errmsg )
+        self.VerifyResult( "FFI_mitls_accept_connected", ret )
+        self.log.debug( "FFI_mitls_accept_connected done!")
+
     # For client side
     def Connect( self ):
         self.log.debug( "Connect" )
@@ -189,13 +354,12 @@ class MITLS():
         self.miTLS.FFI_mitls_connect.restype = c_int
         self.miTLS.FFI_mitls_connect.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp ]
 
-        print( "self.mitls_state = %s" % self.mitls_state )
         ret = self.miTLS.FFI_mitls_connect( FFI_mitls_callbacks,
                                             self.mitls_state,
                                             byref( outmsg ),
                                             byref( errmsg ) )
         self.PrintMsgIfNotNull( outmsg, errmsg )
-        self.VerifyResult( ret )
+        self.VerifyResult( "FFI_mitls_connect", ret )
 
 class MITLSTester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
@@ -225,18 +389,22 @@ class MITLSTester(unittest.TestCase):
         self.tlsServer = MITLS( "client" )
         self.tlsServer.InitClient( hostName )
 
-    # def testMultiple( self ):
-    #     for i in range( 5 ):
-    #         mitls = MITLS( "test-%d" % i )
-    #         mitls.Cleanup()
-
     def testClientAndServer( self ):
         hostName = "test_server.com"
+
+        self.tlsServer = MITLS( "server" )
+        self.tlsServer.InitServer()
+
+        # self.tlsServer.AcceptConnection()
+        serverThread = threading.Thread(target = self.tlsServer.AcceptConnection )
+        serverThread.start()
 
         self.tlsClient = MITLS( "client" )
         self.tlsClient.InitClient( hostName )
         self.tlsClient.Connect()
+        print( "########################")
 
+        serverThread.join()
 if __name__ == '__main__':
 	unittest.main()
 
