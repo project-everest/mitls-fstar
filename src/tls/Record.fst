@@ -124,7 +124,7 @@ val read: Transport.t -> s: HyperStack.ref input_state -> ST read_result
   (ensures fun h0 _ h1 -> 
     let id = HyperStack.frameOf s in 
     HyperStack.modifies_one id h0 h1 /\ 
-    HyperStack.modifies_ref id (TSet.singleton (HyperStack.as_aref s)) h0 h1 )
+    HyperStack.modifies_ref id (Set.singleton (HyperStack.as_addr s)) h0 h1 )
 
 let rec read tcp state =
   let State len prior partial = !state in 

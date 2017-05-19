@@ -1279,8 +1279,7 @@ let readOne c i =
         match fst !c.state with
         | Open -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
-      end
-
+      end )
  
 // scheduling: we always write up before reading, to advance the Handshake.
 // those writes are never AppData; they may be for other/changing epochs;
