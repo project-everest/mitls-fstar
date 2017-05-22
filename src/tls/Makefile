@@ -25,6 +25,7 @@ all:
 build:
 	$(MAKE) mitls.exe
 	$(MAKE) tls-ffi
+	$(MAKE) cmitls.exe 
 
 verify:
 	+$(MAKE) all-ver

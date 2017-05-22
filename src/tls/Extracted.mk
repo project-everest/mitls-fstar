@@ -116,13 +116,14 @@ test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test
 	mitls.cmxa \
 	$(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
-test: test.out mitls.exe
+test: test.out mitls.exe cmitls.exe
 	# Unit tests from test/test_main.ml
 	$(EXTRA_PATH) ./test.out
 	# Run mitls.exe 
 	./mitls.exe  -v 1.2 -ffi www.google.com
 	./mitls.exe  -v 1.2 www.microsoft.com
 	#./mitls.exe -v 1.3. www.google.com failing due to different draft versions
+	./cmitls.exe -v 1.2 www.google.com
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
