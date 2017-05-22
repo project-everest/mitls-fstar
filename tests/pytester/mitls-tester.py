@@ -335,6 +335,17 @@ class TLSParser():
 
         return msg
 
+    def ParseExtensionContent( self, extensionType, extensionContent ):
+        curretPosition = 0
+        if extensionType == EXTENSION_TYPE_SUPPORTED_VERSIONS:
+            numVersions     = int( extensionContent[ curretPosition ] / SIZE_OF_UINT16 )
+            curretPosition += SIZE_OF_UINT8
+            for versionIdx in range( numVersions ):
+                versionID       = extensionContent[ curretPosition  : curretPosition + SIZE_OF_UINT16 ]
+                curretPosition += SIZE_OF_UINT16
+
+                sys.stdout.write( Magenta(" 0x%02x%02x," % ( versionID[ 0 ] , versionID[ 1 ]  ) )  )
+
     def ParseClientHello_Extensions( self, msg, rawExtensions ):
         curretPosition = 0
 
@@ -350,17 +361,49 @@ class TLSParser():
             if curretPosition + extensionSize > len( rawExtensions ):
                 raise TLSParserError( "Extension size too big: %d" % extensionSize )
 
-            sys.stdout.write(   Green( "Found extension " ) + 
-                                Yellow( "%-30s" % self.GetExtensionName( extensionType ) + "(%d)" % extensionType ) +
-                                Green( " Extension size: " ) + Blue( "%d" % extensionSize ) +
-                                "\n" )
-
             extensionContent = rawExtensions[ curretPosition : curretPosition + extensionSize ]
             curretPosition  += extensionSize
-
             extensions.append( ( extensionType, extensionContent ) )
 
+            sys.stdout.write(   Green( "Found extension " ) + 
+                                Yellow( "%-30s" % self.GetExtensionName( extensionType ) + "(%d)" % extensionType ) +
+                                Green( " Extension size: " ) + Blue( "%d" % extensionSize ) )
+
+            self.ParseExtensionContent( extensionType, extensionContent )
+            print( "" )
+
         msg[ 'extensions' ] = extensions
+
+    def ParseServerHello( self, msg ):
+        SIZE_OF_RANDOM = 32
+        curretPosition = SIZE_OF_TYPE + SIZE_OF_UINT24
+
+        msg[ 'handshake_protocol' ]  = msg[ 'body' ][ curretPosition : curretPosition + SIZE_OF_UINT16 ]
+        curretPosition              += SIZE_OF_UINT16
+
+        msg[ 'random' ]              = msg[ 'body' ][ curretPosition : curretPosition + SIZE_OF_RANDOM ]
+        curretPosition              += SIZE_OF_RANDOM
+
+        cipherSuite                 = struct.unpack( ">H", msg[ 'body' ][ curretPosition : curretPosition + SIZE_OF_UINT16 ] )[0]
+        curretPosition              += SIZE_OF_UINT16
+
+        ################# Extensions:
+        sizeOfExtensions           = struct.unpack( ">H", msg[ 'body' ][ curretPosition : curretPosition + SIZE_OF_UINT16 ] )[0]
+        curretPosition            += SIZE_OF_UINT16
+
+        if curretPosition + sizeOfExtensions != len( msg[ 'body' ] ):
+            raise TLSParserError( "Extensions size is %d instead of %d" %  
+                                    (sizeOfExtensions, len( msg[ 'body' ] ) - curretPosition)  )
+
+        extensions = msg[ 'body' ][ curretPosition : curretPosition + sizeOfExtensions ]
+        self.ParseClientHello_Extensions( msg, extensions )
+        
+        ################ Print parsed ServerHello:
+        sys.stdout.write( "\n--> " )  
+        sys.stdout.write( Green( " handshake_protocol: ") + Magenta( str( msg[ 'handshake_protocol' ] ) ) + " " )
+        sys.stdout.write( Green( "random: \n") + Magenta( self.FormatBuffer( msg[ 'random' ] ) ) + " " )
+        sys.stdout.write( Green( "cipherSuite: ") + Blue( "0x%x: " % cipherSuite ) + Yellow( self.GetCipherSuiteName( cipherSuite ) ) + "\n" ) 
+
 
     def ParseClientHello( self, msg ):
         SIZE_OF_RANDOM = 32
@@ -441,6 +484,10 @@ class TLSParser():
 
         if msg[ 'handshake_type' ] == HANDSHAKE_TYPE_CLIENT_HELLO:
             self.ParseClientHello( msg )
+
+        if msg[ 'handshake_type' ] == HANDSHAKE_TYPE_SERVER_HELLO:
+            self.ParseServerHello( msg )
+
         return msg
 
     def ParseMsgBody( self, msg ):
@@ -459,7 +506,7 @@ class TLSParser():
         print( "" )
         return msg
 
-    def Digest( self, bytes, printPacket = False ):
+    def Digest( self, bytes, printPacket = True ):
         if printPacket:
             sys.stdout.write( Green( self.FormatBuffer( bytes ) )  + "\n" )
 
