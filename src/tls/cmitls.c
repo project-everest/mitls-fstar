@@ -3,9 +3,16 @@
 #include <stdlib.h>
 #if _WIN32 // Windows 32-bit or 64-bit... mingw
 #include <winsock2.h>
+typedef int socklen_t;
 #else
+#include <unistd.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
-typedef SOCKET int;
+#include <netdb.h>
+#include <errno.h>
+#include <alloca.h>
+#define _alloca alloca
+typedef int SOCKET;
 #define SOCKET_ERROR (-1)
 #define WSAGetLastError() (errno)
 #define closesocket(fd) close(fd)
@@ -300,7 +307,7 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
 
 int TestServer()
 {
-	UINT_PTR sockfd;
+	SOCKET sockfd;
 	struct hostent *host;
 	struct sockaddr_in addr;
 	mitls_state *state;
@@ -333,8 +340,8 @@ int TestServer()
 		return 1;
 	}
 	while (1) {
-		UINT_PTR clientsockfd;
-		int len = sizeof(addr);
+		SOCKET clientsockfd;
+		socklen_t len = sizeof(addr);
 		
 		clientsockfd = accept(sockfd, (struct sockaddr*)&addr, &len);
 		if (clientsockfd == SOCKET_ERROR) {
@@ -356,7 +363,7 @@ int TestServer()
 int TestClient(void)
 {
 	mitls_state *state;
-	UINT_PTR sockfd;
+	SOCKET sockfd;
 	struct hostent *peer;
 	struct sockaddr_in addr;
 	int requestlength;
