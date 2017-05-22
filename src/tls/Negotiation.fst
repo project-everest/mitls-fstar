@@ -35,7 +35,7 @@ unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
 
 
 //17-05-01 relocate these printing functions?!
-let string_of_option_extensions o = match o with
+let string_of_option_extensions (o: option extensions) = match o with
   | None -> "None"
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
 
