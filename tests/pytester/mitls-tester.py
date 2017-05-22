@@ -5,6 +5,7 @@ import sys
 import time
 import threading
 import struct
+import pprint
 
 from ctypes import  CDLL, \
                     c_long, \
@@ -205,6 +206,83 @@ CIPHER_SUITES_NAMES = {
     TLS_DHE_RSA_WITH_AES_128_GCM_SHA256     : "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256",
 }
 
+# https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
+EXTENSION_TYPE_MAX_FRAGMENT_LENGTH                      = 1
+EXTENSION_TYPE_CLIENT_CERTIFICATE_URL                   = 2
+EXTENSION_TYPE_TRUSTED_CA_KEYS                          = 3
+EXTENSION_TYPE_TRUNCATED_HMAC                           = 4
+EXTENSION_TYPE_STATUS_REQUEST                           = 5
+EXTENSION_TYPE_USER_MAPPING                             = 6
+EXTENSION_TYPE_CLIENT_AUTHZ                             = 7
+EXTENSION_TYPE_SERVER_AUTHZ                             = 8
+EXTENSION_TYPE_CERT_TYPE                                = 9
+EXTENSION_TYPE_SUPPORTED_GROUPS                         = 10
+EXTENSION_TYPE_EC_POINT_FORMATS                         = 11
+EXTENSION_TYPE_SRP                                      = 12
+EXTENSION_TYPE_SIGNATURE_ALGORITHMS                     = 13
+EXTENSION_TYPE_USE_SRTP                                 = 14
+EXTENSION_TYPE_HEARTBEAT                                = 15
+EXTENSION_TYPE_APPLICATION_LAYER_PROTOCOL_NEGOTIATION   = 16
+EXTENSION_TYPE_STATUS_REQUEST_V2                        = 17
+EXTENSION_TYPE_SIGNED_CERTIFICATE_TIMESTAMP             = 18
+EXTENSION_TYPE_CLIENT_CERTIFICATE_TYPE                  = 19
+EXTENSION_TYPE_SERVER_CERTIFICATE_TYPE                  = 20
+EXTENSION_TYPE_PADDING                                  = 21
+EXTENSION_TYPE_ENCRYPT_THEN_MAC                         = 22
+EXTENSION_TYPE_EXTENDED_MASTER_SECRET                   = 23
+EXTENSION_TYPE_TOKEN_BINDING                            = 24
+EXTENSION_TYPE_CACHED_INFO                              = 25
+EXTENSION_TYPE_SESSIONTICKET                            = 35
+EXTENSION_TYPE_KEY_SHARE                                = 40
+EXTENSION_TYPE_PRE_SHARED_KEY                           = 41
+EXTENSION_TYPE_EARLY_DATA                               = 42
+EXTENSION_TYPE_SUPPORTED_VERSIONS                       = 43
+EXTENSION_TYPE_COOKIE                                   = 44
+EXTENSION_TYPE_PSK_KEY_EXCHANGE_MODES                   = 45
+EXTENSION_TYPE_CERTIFICATE_AUTHORITIES                  = 47
+EXTENSION_TYPE_OID_FILTERS                              = 48
+EXTENSION_TYPE_POST_HANDSHAKE_AUTH                      = 49
+EXTENSION_TYPE_RENEGOTIATION_INFO                       = 65281
+
+EXTENSION_TYPE_NAMES = {
+    1  : "MAX_FRAGMENT_LENGTH",
+    2  : "CLIENT_CERTIFICATE_URL",
+    3  : "TRUSTED_CA_KEYS",
+    4  : "TRUNCATED_HMAC",
+    5  : "STATUS_REQUEST",
+    6  : "USER_MAPPING",
+    7  : "CLIENT_AUTHZ",
+    8  : "SERVER_AUTHZ",
+    9  : "CERT_TYPE",
+    10 : "SUPPORTED_GROUPS",
+    11 : "EC_POINT_FORMATS",
+    12 : "SRP",
+    13 : "SIGNATURE_ALGORITHMS",
+    14 : "USE_SRTP",
+    15 : "HEARTBEAT",
+    16 : "APPLICATION_LAYER_PROTOCOL_NEGOTIATION",
+    17 : "STATUS_REQUEST_V2",
+    18 : "SIGNED_CERTIFICATE_TIMESTAMP",
+    19 : "CLIENT_CERTIFICATE_TYPE",
+    20 : "SERVER_CERTIFICATE_TYPE",
+    21 : "PADDING",
+    22 : "ENCRYPT_THEN_MAC",
+    23 : "EXTENDED_MASTER_SECRET",
+    24 : "TOKEN_BINDING",
+    25 : "CACHED_INFO",
+    35 : "SESSIONTICKET",
+    40 : "KEY_SHARE",
+    41 : "PRE_SHARED_KEY",
+    42 : "EARLY_DATA",
+    43 : "SUPPORTED_VERSIONS",
+    44 : "COOKIE",
+    45 : "PSK_KEY_EXCHANGE_MODES",
+    47 : "CERTIFICATE_AUTHORITIES",
+    48 : "OID_FILTERS",
+    49 : "POST_HANDSHAKE_AUTH",
+    65281 : "RENEGOTIATION_INFO",
+}
+
 class TLSParser():
     TLS_1_3_MAGIC   = b"\x03\x01"
 
@@ -227,6 +305,12 @@ class TLSParser():
 
         return "unknown_type"
 
+    def GetExtensionName( self, typeNumber ):
+        if typeNumber in EXTENSION_TYPE_NAMES.keys():
+            return EXTENSION_TYPE_NAMES[ typeNumber ]
+
+        return "unknown_extension"
+    
     def GetCipherSuiteName( self, suiteID ):
         if suiteID in CIPHER_SUITES_NAMES.keys():
             return CIPHER_SUITES_NAMES[ suiteID ]
@@ -250,6 +334,33 @@ class TLSParser():
             raise TLSParserError( "Protocol magic is %s instead of expected %s" % ( msg[ 'protocol' ], TLS_1_3_MAGIC ) )
 
         return msg
+
+    def ParseClientHello_Extensions( self, msg, rawExtensions ):
+        curretPosition = 0
+
+        print( "" )
+        extensions = []
+        while curretPosition < len( rawExtensions ):
+            extensionType       = struct.unpack( ">H", rawExtensions[ curretPosition: curretPosition + SIZE_OF_UINT16 ] )[0]
+            curretPosition     += SIZE_OF_UINT16
+
+            extensionSize       = struct.unpack( ">H", rawExtensions[ curretPosition: curretPosition + SIZE_OF_UINT16 ] )[0]
+            curretPosition     += SIZE_OF_UINT16
+
+            if curretPosition + extensionSize > len( rawExtensions ):
+                raise TLSParserError( "Extension size too big: %d" % extensionSize )
+
+            sys.stdout.write(   Green( "Found extension " ) + 
+                                Yellow( "%-30s" % self.GetExtensionName( extensionType ) + "(%d)" % extensionType ) +
+                                Green( " Extension size: " ) + Blue( "%d" % extensionSize ) +
+                                "\n" )
+
+            extensionContent = rawExtensions[ curretPosition : curretPosition + extensionSize ]
+            curretPosition  += extensionSize
+
+            extensions.append( ( extensionType, extensionContent ) )
+
+        msg[ 'extensions' ] = extensions
 
     def ParseClientHello( self, msg ):
         SIZE_OF_RANDOM = 32
@@ -300,7 +411,7 @@ class TLSParser():
                                     (sizeOfExtensions, len( msg[ 'body' ] ) - curretPosition)  )
 
         extensions = msg[ 'body' ][ curretPosition : curretPosition + sizeOfExtensions ]
-        # self.ParseClientHello_Extensions( extensions )
+        self.ParseClientHello_Extensions( msg, extensions )
 
         ################ Print parsed ClientHello:
         sys.stdout.write( "\n--> " )  
@@ -360,7 +471,7 @@ class TLSParser():
         if len( self.recentBytes ) >= TLS_RECORD_HEADER_SIZE + msg[ 'length' ]:
             self.ParseMsgBody( msg )
 
-
+        # pprint.pprint( msg )
 
     @staticmethod
     def FormatBuffer( buffer ):
