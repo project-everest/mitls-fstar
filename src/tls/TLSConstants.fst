@@ -231,6 +231,15 @@ let signatureSchemeBytes = function
   | OBSOLETE codepoint     -> codepoint
   | PRIVATE_USE codepoint  -> codepoint
 
+let signatureSchemeBytes_is_injective
+  (s1 s2: signatureScheme)
+: Lemma
+  (requires (Seq.equal (signatureSchemeBytes s1) (signatureSchemeBytes s2)))
+  (ensures (s1 == s2))
+= if (OBSOLETE? s1 || PRIVATE_USE? s1) = (OBSOLETE? s2 || PRIVATE_USE? s2)
+  then ()
+  else assume (s1 == s2) // TODO: strengthen int_of_bytes vs. abyte2
+
 val parseSignatureScheme: pinverse_t signatureSchemeBytes
 let parseSignatureScheme b =
   match cbyte2 b with
@@ -1580,23 +1589,62 @@ let signatureSchemeList =
   algs:list signatureScheme{0 < List.Tot.length algs /\ op_Multiply 2 (List.Tot.length algs) < 65536}
 
 (** Serializing function for a SignatureScheme list *)
+
+private
+let rec signatureSchemeListBytes_aux
+  (algs: signatureSchemeList)
+  (b:bytes)
+  (algs':list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs') == op_Multiply 2 (List.Tot.length algs) })
+: Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)})
+  (decreases algs')
+= match algs' with
+  | [] -> b
+  | alg::algs' ->
+    let shb = signatureSchemeBytes alg in
+    signatureSchemeListBytes_aux algs (shb @| b) algs'
+
+private
+let rec signatureSchemeListBytes_aux_is_injective
+  (algs1: signatureSchemeList)
+  (b1: bytes)
+  (algs1': list signatureScheme{ length b1 + op_Multiply 2 (List.Tot.length algs1') == op_Multiply 2 (List.Tot.length algs1) })
+  (algs2: signatureSchemeList { List.Tot.length algs1 == List.Tot.length algs2 } )
+  (b2: bytes { length b1 == length b2 } )
+  (algs2': list signatureScheme{ length b2 + op_Multiply 2 (List.Tot.length algs2') == op_Multiply 2 (List.Tot.length algs2) })
+: Lemma
+  (requires (Seq.equal (signatureSchemeListBytes_aux algs1 b1 algs1') (signatureSchemeListBytes_aux algs2 b2 algs2')))
+  (ensures (b1 == b2 /\ algs1' == algs2'))
+  (decreases algs1')
+= match algs1', algs2' with
+  | [], [] -> ()
+  | alg1::algs1_, alg2::algs2_ ->
+    let shb1 = signatureSchemeBytes alg1 in
+    let shb2 = signatureSchemeBytes alg2 in
+    signatureSchemeListBytes_aux_is_injective algs1 (shb1 @| b1) algs1_ algs2 (shb2 @| b2) algs2_;
+    lemma_append_inj shb1 b1 shb2 b2;
+    signatureSchemeBytes_is_injective alg1 alg2
+
 val signatureSchemeListBytes: algs:signatureSchemeList
   -> Tot (b:bytes{4 <= length b /\ length b < 65538})
 let signatureSchemeListBytes algs =
-  let rec aux: b:bytes ->
-  algs':list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs') == op_Multiply 2 (List.Tot.length algs) } ->
-    Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)})
-        (decreases algs') = fun b algs' ->
-    match algs' with
-    | [] -> b
-    | alg::algs' ->
-      let shb = signatureSchemeBytes alg in
-      aux (shb @| b) algs'
-  in
-  let pl = aux empty_bytes algs in
+  let pl = signatureSchemeListBytes_aux algs empty_bytes algs in
   lemma_repr_bytes_values (length pl);
   vlbytes 2 pl
 
+let signatureSchemeListBytes_is_injective
+  (algs1: signatureSchemeList)
+  (s1: bytes)
+  (algs2: signatureSchemeList)
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (signatureSchemeListBytes algs1 @| s1) (signatureSchemeListBytes algs2 @| s2)))
+  (ensures (algs1 == algs2 /\ s1 == s2))
+= let pl1 = signatureSchemeListBytes_aux algs1 empty_bytes algs1 in
+  lemma_repr_bytes_values (length pl1);
+  let pl2 = signatureSchemeListBytes_aux algs2 empty_bytes algs2 in
+  lemma_repr_bytes_values (length pl2);
+  lemma_vlbytes_inj_strong 2 pl1 s1 pl2 s2;
+  signatureSchemeListBytes_aux_is_injective algs1 empty_bytes algs1 algs2 empty_bytes algs2
 
 (** Parsing function for a SignatureScheme list *)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
