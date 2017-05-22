@@ -1,0 +1,12 @@
+run command: 
+------------
+python3 mitls-tester.py
+
+The testing class "MITLSTester" is based on Python built in 'unittest' module.
+
+External dependencies:
+MITLS_SO_PATH               = "../../../everest/mitls-fstar/src/tls/libmitls.so"
+SERVER_CERT_PATH            = "../../../everest/mitls-fstar/data/server-ecdsa.crt" 
+SERVER_KEY_PATH             = "../../../everest/mitls-fstar/data/server-ecdsa.key"
+
+Test of simple handshake is implemented in "testClientAndServer" function.
