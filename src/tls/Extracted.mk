@@ -91,7 +91,13 @@ $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 
 
 # We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
-mitls.cmxa:
+mitls.cmxa: \
+	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
+	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+	$(LCDIR)/LowCProvider.cmxa \
+	$(FFI_HOME)/FFICallbacks.cmxa \
+	$(ODIR)/.deporder $(ODIR)/FFI.cmx \
+	$(ODIR)/FFIRegister.cmx
 	ocamlfind ocamlopt $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
 mitls.exe: mitls.cmxa test/mitls.cmx
