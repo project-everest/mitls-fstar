@@ -11,9 +11,6 @@ mlclean:
 
 .PHONY: mlclean
 
-# Trying to solve race conditions during CI
-.NOTPARALLEL:
-
 # Makefile voodoo to substitute _ for . in module names
 # Note that this is not sound if the F* module name contains an underscore (e.g. AEAD_GCM.fst)
 # The dependencies are handled by the .depend files above to allow semi-incremental extraction
@@ -94,13 +91,7 @@ $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 
 
 # We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
-mitls.cmxa: \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
-	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/LowCProvider.cmxa \
-	$(FFI_HOME)/FFICallbacks.cmxa \
-	$(ODIR)/.deporder $(ODIR)/FFI.cmx \
-	$(ODIR)/FFIRegister.cmx
+mitls.cmxa:
 	ocamlfind ocamlopt $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
 mitls.exe: mitls.cmxa test/mitls.cmx
