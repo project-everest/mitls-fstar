@@ -152,7 +152,7 @@ $(LIBMITLS): mitls.cmxa
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-	-linkall -runtime-variant _pic -output-obj -ccopt -bundle -g mitls.cmxa -o $(LIBMITLS)
+	-linkall -runtime-variant _pic -ccopt -dynamiclib -g mitls.cmxa -o $(LIBMITLS)
 else
 $(LIBMITLS): mitls.cmxa
     # pass "-z noexecstack" to better support Bash on Windows
