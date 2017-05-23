@@ -186,12 +186,9 @@ tls-lax: record_fstar_version $(LIBFILES)
 wc:
 	wc -l $(LIBFILES) *.fst *.fsti
 
-mitls.cmxa: $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx) \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
-	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/LowCProvider.cmxa \
-	$(FFI_HOME)/FFICallbacks.cmxa
+mitls.cmxa: $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx)
 	make -f Extracted.mk mitls.cmxa
+
 mitls.exe: mitls.cmxa
 	make -f Extracted.mk mitls.exe
 
