@@ -950,10 +950,19 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
   | _, _, None -> Correct ()
   | _, None, Some sExtL ->
     Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
+
 #reset-options
 
-private val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> option extension
-let clientToServerExtension pv cfg cs ri ks resuming cext =
+private val clientToServerExtension: protocolVersion
+  -> config
+  -> cipherSuite
+  -> option (cVerifyData * sVerifyData)
+  -> option nat // PSK index
+  -> option CommonDH.keyShare
+  -> bool
+  -> extension
+  -> option extension
+let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   match cext with
   | E_key_share _ ->
     Option.map E_key_share ks // ks should be in one of client's groups
@@ -975,22 +984,33 @@ let clientToServerExtension pv cfg cs ri ks resuming cext =
       None // No ec_point_format in TLS 1.3
     else
       Some (E_ec_point_format [ECP_UNCOMPRESSED])
+  | E_pre_shared_key _ ->
+    if pski = None then None
+    else Some (E_pre_shared_key (ServerPSK (UInt16.uint_to_t (Some?.v pski))))
   | E_supported_groups named_group_list ->
     None
     // REMARK: Purely informative, can only appear in EncryptedExtensions
     // Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
   // FIXME: properly select early_data and a psk index
   | E_early_data b -> None //Some (E_early_data None)
-  | E_pre_shared_key b -> None //Some (E_pre_shared_key (ServerPSK 0us))
   // TODO: handle all remaining cases
   | _ -> None
 
 (* SI: API. Called by Handshake. *)
-val negotiateServerExtensions: protocolVersion -> option (list extension) -> valid_cipher_suites -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option CommonDH.keyShare -> bool -> result (option (list extension))
-let negotiateServerExtensions pv cExtL csl cfg cs ri ks resuming =
+val negotiateServerExtensions: protocolVersion
+   -> option (list extension)
+   -> valid_cipher_suites
+   -> config
+   -> cipherSuite
+   -> option (cVerifyData * sVerifyData)
+   -> option nat
+   -> option CommonDH.keyShare
+   -> bool
+   -> result (option (list extension))
+let negotiateServerExtensions pv cExtL csl cfg cs ri pski ks resuming =
    match cExtL with
    | Some cExtL ->
-     let sexts = List.Tot.choose (clientToServerExtension pv cfg cs ri ks resuming) cExtL in
+     let sexts = List.Tot.choose (clientToServerExtension pv cfg cs ri pski ks resuming) cExtL in
      Correct (Some sexts)
    | None ->
      begin

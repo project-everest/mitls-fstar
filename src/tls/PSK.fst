@@ -93,6 +93,20 @@ let psk_info (i:pskid) : ST (pskInfo)
   match MM.lookup app_psk_table i with
   | Some (_, ctx, _) -> ctx
 
+let psk_lookup (i:psk_identifier) : ST (option pskInfo)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 r h1 ->
+    modifies_none h0 h1
+    /\ (Some? r ==> registered_psk i)))
+  =
+  MR.m_recall app_psk_table;
+  match MM.lookup app_psk_table i with
+  | Some (_, ctx, _) ->
+    assume(MR.stable_on_t app_psk_table (MM.defined app_psk_table i));
+    MR.witness app_psk_table (MM.defined app_psk_table i);
+    Some ctx
+  | None -> None
+
 type honest_st (i:pskid) (h:mem) =
   (MM.defined app_psk_table i h /\
   (let (_,_,b) = MM.value app_psk_table i h in b = true))
