@@ -11,6 +11,9 @@ mlclean:
 
 .PHONY: mlclean
 
+# Trying to solve race conditions during CI
+.NOTPARALLEL:
+
 # Makefile voodoo to substitute _ for . in module names
 # Note that this is not sound if the F* module name contains an underscore (e.g. AEAD_GCM.fst)
 # The dependencies are handled by the .depend files above to allow semi-incremental extraction
@@ -64,7 +67,7 @@ $(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa
 
 $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
 	make -C $(FFI_HOME)
-	
+
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
@@ -220,4 +223,3 @@ cclient::
 .PHONY: test tls-ffi server server12 server13 client client12 client13 cserver cserver12 cserver13 cclient cclient12 cclient3
 
 .DEFAULT:
-
