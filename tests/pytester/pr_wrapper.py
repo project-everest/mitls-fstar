@@ -58,24 +58,29 @@ def ReadCallback( ctx, buffer, bufferSize ):
 class PRWrapper():
     def __init__( self ):
         self.nspr   = globalNSPR.nspr
+        
         self.cutils = CDLL( "cutils/cutils.so" )
-
-        READ_CALLBACK     	= CFUNCTYPE(c_int, c_voidp, c_voidp, c_int ) 
-        self.readCallback   = READ_CALLBACK( ReadCallback )
-
         self.cutils.getAddress.restype = c_voidp
 
+        self.ReadCallback = None
+
+        self.SetupPRIOMethods()
+        self.RegisterPRIOMethods()
+
+    def SetupPRIOMethods( self ):
+        READ_CALLBACK       = CFUNCTYPE(c_int, c_voidp, c_voidp, c_int ) 
+        self.readCallback   = READ_CALLBACK( ReadCallback )
+
         self.PRIOMethods = (c_voidp * METHODS_NUM_POINTERS )()
-        self.PRIOMethods[ METHODS_FILE_TYPE ] 	= PR_DESC_LAYERED
-        self.PRIOMethods[ METHODS_READ ] 		= self.cutils.getAddress( self.readCallback )
+        self.PRIOMethods[ METHODS_FILE_TYPE ]   = PR_DESC_LAYERED
+        self.PRIOMethods[ METHODS_READ ]        = self.cutils.getAddress( self.readCallback )
 
+    def RegisterPRIOMethods( self ):
         self.fileDescriptor = self.RegisterNewFileDescriptor()
-        FAKE_FD = c_int( self.fileDescriptor )
+        fakeFD              = c_int( self.fileDescriptor )
 
+        self.prFileDesc = self.nspr.PR_AllocFileDesc( fakeFD, self.PRIOMethods )
         
-
-        self.prFileDesc = self.nspr.PR_AllocFileDesc( FAKE_FD, self.PRIOMethods )
-
     def RegisterNewFileDescriptor( self ):
         global globalDescriptorTable
 
@@ -89,19 +94,12 @@ class PRWrapper():
 
         return fileDescriptor
 		
-    def ReadCallback( self, buffer, bufferSize ):
-        print( "ReadCallback with fd = %d" % self.fileDescriptor )
-        pyBuffer = ( c_uint8 * bufferSize ).from_address( buffer )
-        for i in range( bufferSize ):
-            pyBuffer[ i ] = c_uint8( i )
 
-        return bufferSize
 
     def Read( self, size ):
         buffer  = bytearray( size )
         cBuffer = ( c_uint8 * size ).from_buffer( buffer )
         cSize   = c_int( size )
-
 
         ret = self.nspr.PR_Read( self.prFileDesc, cBuffer, cSize )
         print( "ret = %s, buffer = %s" % ( ret, buffer ) )
@@ -111,6 +109,22 @@ class PRWrapper():
 class PRWrapperTester( unittest.TestCase ):
     def __init__(self, *args, **kwargs):
         super( PRWrapperTester, self).__init__(*args, **kwargs)
+
+    def ReadCallbackForClient( self, buffer, bufferSize ):
+        print( "ReadCallbackForClient" )
+        pyBuffer = ( c_uint8 * bufferSize ).from_address( buffer )
+        for i in range( bufferSize ):
+            pyBuffer[ i ] = c_uint8( i )
+
+        return bufferSize
+
+    def ReadCallbackForServer( self, buffer, bufferSize ):
+        print( "ReadCallbackForServer" )
+        pyBuffer = ( c_uint8 * bufferSize ).from_address( buffer )
+        for i in range( bufferSize ):
+            pyBuffer[ i ] = c_uint8( i )
+
+        return bufferSize
 
     def setUp(self):
         pass
@@ -124,6 +138,9 @@ class PRWrapperTester( unittest.TestCase ):
         
         clientSocket = PRWrapper()
         serverSocket = PRWrapper()
+
+        clientSocket.ReadCallback = self.ReadCallbackForClient
+        serverSocket.ReadCallback = self.ReadCallbackForServer
 
         clientSocket.Read( 10 )
         serverSocket.Read( 10 )
