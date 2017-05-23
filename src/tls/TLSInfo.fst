@@ -140,7 +140,7 @@ noeq type sessionInfo = {
     protocol_version: p:protocolVersion; // { p <> TLS_1p3 };
     cipher_suite: cipherSuite;
     compression: compression;
-    extensions: negotiatedExtensions;
+    extended_ms: bool;
     pmsId: pmsId;
     session_hash: sessionHash;
     client_auth: bool;
@@ -226,10 +226,10 @@ let honestMS = function
 //CF subsumes both MsI and mk_msid
 val msid: si:sessionInfo { Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) } -> Tot msId
 let msid si =
-  let ems = si.extensions.ne_extended_ms in
+  let ems = si.extended_ms in
   let kef = kefAlg si.protocol_version si.cipher_suite ems in
   if ems then ExtendedMS si.pmsId si.session_hash kef
-  else StandardMS si.pmsId    (csrands si) kef
+  else StandardMS si.pmsId (csrands si) kef
 
 // ``The algorithms of si are strong for both KDF and VerifyData, despite all others'
 // guarding idealization in PRF
@@ -243,7 +243,7 @@ let strongPRF si = strongKDF(kdfAlg si.protocol_version si.cipher_suite) && stro
 let strongHS si =
   strongKEX (si.pmsId) &&
   Some? (prfMacAlg_of_ciphersuite_aux si.cipher_suite) && //NS: needed to add this ...
-  strongKEF (kefAlg si.protocol_version si.cipher_suite si.extensions.ne_extended_ms) && //NS: ... to verify this
+  strongKEF (kefAlg si.protocol_version si.cipher_suite si.extended_ms) && //NS: ... to verify this
   strongPRF si
   //strongSig si //SZ: need to state the precise agile INT-CMA assumption, with a designated hash algorithm and a set of hash algorithms allowed in signing queries
   //CF * hashAlg for certs?

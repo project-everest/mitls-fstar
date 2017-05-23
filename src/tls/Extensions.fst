@@ -861,80 +861,95 @@ let parseRenegotiationInfo b =
 *)
 
 
-// TODO
-// ADL the negotiation of renegotiation indication is incorrect
-// ADL needs to be consistent with clientToNegotiatedExtension
-#set-options "--lax"
-private val serverToNegotiatedExtension: config -> list extension -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> result negotiatedExtensions -> extension -> Tot (result (negotiatedExtensions))
-let serverToNegotiatedExtension cfg cExtL cs ri (resuming:bool) res sExt : result (negotiatedExtensions)=
-    match res with
-    | Error(x,y) -> Error(x,y)
-    | Correct(l) ->
-      if List.Tot.existsb (sameExt sExt) cExtL then
-      match sExt with
-(*
-      | E_renegotiation_info (sri) ->
-	(match sri, replace_subtyping ri with
-	| FirstConnection, None -> correct ({l with ne_secure_renegotiation = RI_Valid})
-	| ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
-	   if equalBytes cvdc cvds && equalBytes svdc svds then
-	      correct ({l with ne_secure_renegotiation = RI_Valid})
-	   else
-	      Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
-	| _ -> Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack"))
+(* TODO (adl):
+   The negotiation of renegotiation indication is incorrect,
+   Needs to be consistent with clientToNegotiatedExtension
 *)
-      | E_server_name _ ->
-	  if List.Tot.existsb (fun x->match x with |E_server_name _ -> true | _ -> false) cExtL then
-            correct(l)
-	  else
-            Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an SNI acknowledgement without an SNI provided")
-      | E_extended_ms -> correct ({l with ne_extended_ms = true})
-      | E_ec_point_format spf ->
-	  if resuming then
-            correct l
-          else
-            correct ({l with ne_supported_point_formats = Some spf})
-      | E_key_share (CommonDH.ServerKeyShare sks) ->
-        Correct ({l with ne_keyShare = Some sks})
-      | E_supported_groups named_group_list ->
-        Correct ({l with ne_supported_groups = Some named_group_list})
-      | _ -> Error (AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Unexpected pattern in serverToNegotiatedExtension")
-     else
-       Error(AD_handshake_failure,perror __SOURCE_FILE__ __LINE__ "Server sent an extension not present in client hello")
+#set-options "--lax"
+private val serverToNegotiatedExtension:
+  config ->
+  list extension ->
+  cipherSuite ->
+  option (cVerifyData * sVerifyData) ->
+  bool ->
+  result unit ->
+  extension ->
+  result unit
+let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
+  match res with
+  | Error z -> Error z
+  | Correct l ->
+    match sExt with
+    (*
+    | E_renegotiation_info sri ->
+      if List.Tot.existsb E_renegotiation_info? cExtL then
+      begin
+      match sri, replace_subtyping ri with
+      | FirstConnection, None -> correct ()
+      | ServerRenegotiationInfo(cvds,svds), Some(cvdc, svdc) ->
+        if equalBytes cvdc cvds && equalBytes svdc svds then
+          correct l
+        else
+          Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Mismatch in contents of renegotiation indication")
+      | _ -> Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Detected a renegotiation attack")
+      end
+      *)
+    | E_server_name _ ->
+      if List.Tot.existsb E_server_name? cExtL then correct ()
+      else Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Server sent an unrequests SNI acknowledgement")
+    | E_extended_ms -> correct ()
+    | E_ec_point_format spf ->
+      if resuming then correct ()
+      else correct () //({l with ne_supported_point_formats = Some spf})
+    | E_key_share (CommonDH.ServerKeyShare sks) ->
+      Correct () // ({l with ne_keyShare = Some sks})
+    | E_supported_groups named_group_list ->
+      Correct () // ({l with ne_supported_groups = Some named_group_list})
+    | _ ->
+      Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Server sent an unexpected extension")
 
-
-(* SI: API. Called by Negotiation. *)
-val negotiateClientExtensions: protocolVersion -> config -> option (list extension) -> option (list extension) -> cipherSuite -> option (cVerifyData * sVerifyData) -> bool -> Tot (result (negotiatedExtensions))
-let negotiateClientExtensions pv cfg cExtL sExtL cs ri (resuming:bool) =
-  match pv with
-  | SSL_3p0 ->
-     begin
-     match sExtL with
-     | None -> Correct ne_default
-     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 server hello")
-     end
-  | _ ->
-     begin
-     match cExtL, sExtL with
-     | Some cExtL, Some sExtL -> (
-        let nes = ne_default in
-        match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct nes) sExtL with
-        | Error(x,y) -> Error(x,y)
-        | Correct l ->
-          if resuming then correct l
-          else
-	  begin
-	    match List.Tot.tryFind E_signature_algorithms? cExtL with
-	    | Some (E_signature_algorithms shal) ->
-	      correct({l with ne_signature_algorithms = Some shal})
-	    | None -> correct l
-	    | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unappropriate sig algs in negotiateClientExtensions")
-	  end )
-     | _, None ->
-       if pv <> TLS_1p3 then Correct ne_default
-       else Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
-     | _ -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negoClientExts missing extensions in TLS hello message")
-     end
+val negotiateClientExtensions:
+  protocolVersion ->
+  config ->
+  option (list extension) ->
+  option (list extension) ->
+  cipherSuite ->
+  option (cVerifyData * sVerifyData) ->
+  bool ->
+  result unit
+let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
+  match pv, cExtL, sExtL with
+  | SSL_3p0, _, None ->
+    Correct ()
+  | SSL_3p0, _, Some _ ->
+    Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Received extensions in SSL 3.0 ServerHello")
+  | TLS_1p3, Some cExtL, Some sExtL ->
+    (*
+    match List.Tot.find E_psk_key_exchange_modes? cExtL,
+          List.Tot.find E_pre_shared_key? sExtL
+    with
+    | None, None -> Correct ()
+    | None, Some _ ->
+      Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Received pre_shared_key extension but did not offer psk_key_exchange_modes")
+    | Some kexs, Some (ServerPSK idx) ->
+      match List.Tot.find E_pre_shared_key? cExtL with
+      | None ->
+        Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Sent psk_key_exchange_modes without pre_shared_key")
+      | Some (ClientPSK ids _) ->
+        if UInt16.v idx < List.Tot.length ids then Correct ()
+        else
+        Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Server sent an out of bounds PSK index")
+    *)
+    Correct ()
+  | _, Some cExtL, Some sExtL ->
+    begin
+    match List.Tot.fold_left (serverToNegotiatedExtension cfg cExtL cs ri resuming) (correct ()) sExtL with
+    | Error z -> Error z
+    | Correct () -> correct ()
+    end
+  | _, _, None -> Correct ()
+  | _, None, Some sExtL ->
+    Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
 #reset-options
 
 private val clientToServerExtension: protocolVersion -> config -> cipherSuite -> option (cVerifyData * sVerifyData) -> option CommonDH.keyShare -> bool -> extension -> option extension

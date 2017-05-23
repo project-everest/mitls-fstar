@@ -711,7 +711,7 @@ let ks_client_12_resume ks sr pv cs =
   let KS #region st = ks in
   let C (C_12_Resume_CH cr si msId ms) = !st in
   let csr = cr @| sr in
-  let ems = si.extensions.ne_extended_ms in
+  let ems = si.extended_ms in
   st := C (C_12_has_MS csr (pv, cs, ems) msId ms)
 
 // The two functions below are similar but we decide not to factor them because:

@@ -203,6 +203,14 @@ let find_serverPske sh =
     | Some (E_pre_shared_key (ServerPSK idx)) -> Some (UInt16.v idx)
     | _ -> None
 
+let find_serverKeyShare sh =
+  match sh.sh_extensions with
+  | None -> None
+  | Some exts ->
+    match List.Tot.find E_key_share? exts with
+    | Some (E_key_share (CommonDH.ServerKeyShare ks)) -> Some ks
+    | _ -> None
+
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
@@ -286,18 +294,6 @@ let is_cacheable12 m =
   ( let Some sid = m.n_sessionID in
     sid <> m.n_offer.ch_sessionID &&
     sid <> empty_bytes)
-
-// 17-04-25 we need pure functions of the mode for these old fields
-//    n_resume: option bool -> // is this a 1.2 resumption with the offered sid?
-//    n_psk: option PSK.pskid -> // none with 1.2 (we are not doing PSK 1.2)
-//
-//    n_kexAlg: TLSConstants.kexAlg ->
-//    n_aeAlg: TLSConstants.aeAlg ->
-//    n_sigAlg: TLSConstants.sigAlg ->
-//    n_scsv: list scsv_suite ->
-//
-// and for each of the fields of
-//    n_extensions: negotiatedExtensions ->
 
 noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
@@ -414,7 +410,6 @@ let computeOffer r cfg resume nonce ks pskinfo =
     ch_extensions = Some extensions
   }
 
-
 val create:
   region:rgn -> r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
   St (t region r)
@@ -440,6 +435,12 @@ let kexAlg m =
     let CipherSuite kex _ _ = m.n_cipher_suite in
     kex
 
+val aeAlg:
+  m:mode{CipherSuite? m.n_cipher_suite \/ CipherSuite13? m.n_cipher_suite} ->
+  TLSConstants.aeAlg
+let aeAlg m =
+  TLSConstants.get_aeAlg m.n_cipher_suite
+
 val emsFlag: mode -> bool
 let emsFlag mode =
   if mode.n_protocol_version = TLS_1p3 then
@@ -462,16 +463,6 @@ let chosenGroup mode =
   | Kex_DHE -> CommonDH.group_of_namedGroup (FFDHE FFDHE2048)
   | Kex_PSK_ECDHE
   | Kex_ECDHE -> CommonDH.group_of_namedGroup (SEC CoreCrypto.ECC_P256)
-
-(*
-  let ngroups =
-    match mode.Nego.n_extensions.ne_supported_groups with
-    | Some gl -> List.Tot.choose CommonDH.group_of_namedGroup gl
-    | None -> List.Tot.choose
-        // Cannot use an elliptic curve if SupportedGroups is missing in TLS<=1.2
-        (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
-        (config_of hs).namedGroups in
-*)
 
 val zeroRTToffer: offer -> bool
 let zeroRTToffer o = Some? (find_early_data o)
@@ -808,7 +799,7 @@ let client_ServerHello #region ns sh =
     else
      match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
       | Error z -> Error z
-      | Correct next ->
+      | Correct () ->
         trace ("negotiated "^string_of_pv spv^" "^string_of_ciphersuite cs);
         match cs with
         | CipherSuite13 ae ha ->
@@ -828,7 +819,7 @@ let client_ServerHello #region ns sh =
           | Error z -> Error z
           | Correct pski ->
             begin
-            match spv, next.ne_keyShare with
+            match spv, find_serverKeyShare sh with
             | TLS_1p3, Some (CommonDH.Share g gy) ->
               let server_share = (|g, gy|) in
               let client_share = matching_share cext g in
@@ -848,7 +839,7 @@ let client_ServerHello #region ns sh =
                in
                MR.m_write ns.state (C_Mode mode);
                Correct mode
-            | _ ->
+            | _ -> // TODO: pure PSK mode
               Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
             end
           end
