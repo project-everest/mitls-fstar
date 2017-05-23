@@ -387,7 +387,7 @@ let parseServerName r b  =
 
 // ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
-noeq type extension =
+noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_server_name of list serverName (* M, AF *) (* RFC 6066 *)
   | E_supported_groups of list namedGroup (* M, AF *) (* RFC 7919 *)
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
@@ -399,7 +399,7 @@ noeq type extension =
   | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)
   | E_extended_ms
   | E_ec_point_format of list point_format
-  | E_unknown_extension of (lbytes 2 * bytes) (* header, payload *)
+  | E_unknown_extension of ((x: lbytes 2 {p x}) * bytes) (* header, payload *)
 (*
 We do not yet support the extensions below (authenticated but ignored)
   | E_max_fragment_length
@@ -416,12 +416,12 @@ We do not yet support the extensions below (authenticated but ignored)
   | E_renegotiation_info of renegotiationInfo
 *)
 
-let bindersLen el : nat =
+let bindersLen (#p: (lbytes 2 -> GTot Type0)) (el: list (extension' p)) : nat =
   match List.Tot.find E_pre_shared_key? el with
   | Some (Extensions.E_pre_shared_key (ClientPSK _ len)) -> 2 + len
   | _ -> 0
 
-let string_of_extension = function
+let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match e with
   | E_server_name _ -> "server_name"
   | E_supported_groups _ -> "supported_groups"
   | E_signature_algorithms _ -> "signature_algorithms"
@@ -435,13 +435,14 @@ let string_of_extension = function
   | E_ec_point_format _ -> "ec_point_formats"
   | E_unknown_extension (n,_) -> print_bytes n
 
-let rec string_of_extensions = function
+let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension' p)) = match l with
   | e0 :: es -> string_of_extension e0 ^ " " ^ string_of_extensions es
   | [] -> ""
 
 (** shallow equality *)
-private let sameExt e1 e2 =
-  match e1, e2 with
+private let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p) =
+  let q : extension' p * extension' p = e1, e2 in
+  match q with
   | E_server_name _, E_server_name _ -> true
   | E_supported_groups _, E_supported_groups _ -> true
   | E_signature_algorithms _, E_signature_algorithms _ -> true
@@ -462,8 +463,8 @@ private let sameExt e1 e2 =
  *************************************************)
 
 //17-05-05 no good reason to pattern match twice when formatting? follow the same structure as for parsing?
-private val extensionHeaderBytes: extension -> lbytes 2
-let extensionHeaderBytes ext =
+val extensionHeaderBytes: (#p: (lbytes 2 -> GTot Type0)) -> extension' p -> lbytes 2
+let extensionHeaderBytes #p ext =
   match ext with             // 4.2 ExtensionType enum value
   | E_server_name _            -> abyte2 (0x00z, 0x00z)
   | E_supported_groups _       -> abyte2 (0x00z, 0x0Az) // 10
@@ -477,6 +478,36 @@ let extensionHeaderBytes ext =
   | E_extended_ms              -> abyte2 (0x00z, 0x17z) // 45
   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11
   | E_unknown_extension (h,b)  -> h
+
+// 17-05-19: We constrain unknown extensions to have headers different from known extensions.
+let unknown_extensions_unknown
+  (h: lbytes 2)
+: GTot Type0
+= forall (p: (lbytes 2 -> GTot Type0)) (e' : extension' p { equalBytes h (extensionHeaderBytes e') = true } ) . E_unknown_extension? e'
+
+type extension = extension' unknown_extensions_unknown
+
+private let testKnownExt : extension = E_extended_ms
+private let testUnknownExt : extension = E_unknown_extension (abyte2 (0x01z, 0x18z), empty_bytes)
+
+private
+let equal_extensionHeaderBytes_sameExt
+  (e1 e2: extension)
+: Lemma
+  (requires (equalBytes (extensionHeaderBytes e1) (extensionHeaderBytes e2) = true))
+  (ensures (sameExt e1 e2))
+= assert (extensionHeaderBytes e1 == extensionHeaderBytes e2);
+  match e1 with
+  | E_unknown_extension _ -> assert (E_unknown_extension? e2)
+  | _ -> ()
+
+private
+let sameExt_equal_extensionHeaderBytes
+  (e1 e2: extension)
+: Lemma
+  (requires (sameExt e1 e2))
+  (ensures (equalBytes (extensionHeaderBytes e1) (extensionHeaderBytes e2) = true))
+= ()
 
 (* API *)
 
@@ -508,7 +539,7 @@ let rec extensionPayloadBytes = function
 #reset-options
 
 (** Serializes an extension *)
-val extensionBytes: ext:extension -> b:bytes { length b < 65536 }
+val extensionBytes: ext:extension -> b:bytes { 2 <= length b /\ length b < 65536 }
 let rec extensionBytes ext =
   let head = extensionHeaderBytes ext in
   let payload = extensionPayloadBytes ext in
@@ -516,9 +547,198 @@ let rec extensionBytes ext =
   //let payload = vlbytes 2 payload in
   head @| payload
 
+let extensionBytes_is_injective
+  (ext1: extension)
+  (s1: bytes)
+  (ext2: extension)
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (extensionBytes ext1 @| s1) (extensionBytes ext2 @| s2)))
+  (ensures (ext1 == ext2 /\ s1 == s2))
+= let head1 = extensionHeaderBytes ext1 in
+  let payload1 = extensionPayloadBytes ext1 in
+  let head2 = extensionHeaderBytes ext2 in
+  let payload2 = extensionPayloadBytes ext2 in
+  append_assoc head1 payload1 s1;
+  append_assoc head2 payload2 s2;  
+  lemma_append_inj head1 (payload1 @| s1) head2 (payload2 @| s2);
+  equal_extensionHeaderBytes_sameExt ext1 ext2;
+  match ext1 with
+  | E_supported_groups l1 ->
+    let (E_supported_groups l2) = ext2 in
+    assume (List.Tot.length l1 < 65536/2 );
+    let n1 = namedGroupsBytes l1 in
+    assume (List.Tot.length l2 < 65536/2 );
+    let n2 = namedGroupsBytes l2 in
+    assume (repr_bytes (length n1) <= 2);
+    assume (repr_bytes (length n2) <= 2);
+    lemma_vlbytes_inj_strong 2 n1 s1 n2 s2;
+    namedGroupsBytes_is_injective l1 empty_bytes l2 empty_bytes
+  | E_signature_algorithms sha1 ->
+    let (E_signature_algorithms sha2) = ext2 in
+    let sg1 = signatureSchemeListBytes sha1 in
+    let sg2 = signatureSchemeListBytes sha2 in
+    assume (repr_bytes (length sg1) <= 2);
+    assume (repr_bytes (length sg2) <= 2);
+    lemma_vlbytes_inj_strong 2 sg1 s1 sg2 s2;
+    signatureSchemeListBytes_is_injective sha1 empty_bytes sha2 empty_bytes
+  | E_extended_ms ->
+    lemma_repr_bytes_values (length empty_bytes);
+    lemma_vlbytes_inj_strong 2 empty_bytes s1 empty_bytes s2
+  | E_unknown_extension (h1, b1) ->
+    let (E_unknown_extension (h2, b2)) = ext2 in
+    assume (repr_bytes (length b1) <= 2);
+    assume (repr_bytes (length b2) <= 2);
+    lemma_vlbytes_inj_strong 2 b1 s1 b2 s2
+  | _ ->
+    assume (ext1 == ext2 /\ s1 == s2)
+
 val extensionListBytes: exts: list extension -> bytes
 let extensionListBytes exts =
-  List.Tot.fold_left (fun l s -> extensionBytes s @| l) empty_bytes exts
+  List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts
+
+private let rec extensionListBytes_eq exts accu :
+  Lemma (List.Tot.fold_left (fun l s -> l @| extensionBytes s) accu exts ==
+  accu @| extensionListBytes exts)
+= match exts with
+  | [] -> append_empty_bytes_r accu
+  | s :: q ->
+    let e = extensionBytes s in
+    append_empty_bytes_l e;
+    extensionListBytes_eq q (accu @| e);
+    extensionListBytes_eq q e;
+    append_assoc accu e (extensionListBytes q)
+
+let extensionListBytes_cons
+  (e: extension)
+  (es: list extension)
+: Lemma
+  (extensionListBytes (e :: es) == extensionBytes e @| extensionListBytes es)
+= let l = extensionBytes e in
+  append_empty_bytes_l l;
+  extensionListBytes_eq es l
+
+let rec extensionListBytes_append
+  (e1 e2: list extension)
+: Lemma
+  (extensionListBytes (e1 @ e2) == extensionListBytes e1 @| extensionListBytes e2)
+= match e1 with
+  | [] ->
+    append_empty_bytes_l (extensionListBytes e2)
+  | e :: q ->
+    extensionListBytes_cons e (q @ e2);
+    extensionListBytes_append q e2;
+    append_assoc (extensionBytes e) (extensionListBytes q) (extensionListBytes e2);
+    extensionListBytes_cons e q
+
+let rec extensionListBytes_is_injective_same_length_in
+  (exts1: list extension)
+  (s1: bytes)
+  (exts2: list extension)
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (extensionListBytes exts1 @| s1) (extensionListBytes exts2 @| s2) /\ List.Tot.length exts1 == List.Tot.length exts2))
+  (ensures (exts1 == exts2 /\ s1 == s2))
+= match exts1, exts2 with
+  | [], [] ->
+    lemma_append_inj empty_bytes s1 empty_bytes s2
+  | ext1::q1, ext2::q2 ->
+    let e1 = extensionBytes ext1 in
+    let l1 = extensionListBytes q1 in
+    extensionListBytes_cons ext1 q1;
+    append_assoc e1 l1 s1;
+    let e2 = extensionBytes ext2 in
+    let l2 = extensionListBytes q2 in
+    extensionListBytes_cons ext2 q2;
+    append_assoc e2 l2 s2;
+    extensionBytes_is_injective ext1 (l1 @| s1) ext2 (l2 @| s2);
+    extensionListBytes_is_injective_same_length_in q1 s1 q2 s2
+
+let rec extensionListBytes_is_injective_same_length_out
+  (exts1: list extension)
+  (s1: bytes)
+  (exts2: list extension)
+  (s2: bytes)
+: Lemma
+  (requires (
+    let l1 = extensionListBytes exts1 in
+    let l2 = extensionListBytes exts2 in (
+    Seq.equal (l1 @| s1) (l2 @| s2) /\ length l1 == length l2
+  )))
+  (ensures (exts1 == exts2 /\ s1 == s2))
+= match exts1 with
+  | [] ->
+    begin match exts2 with
+    | [] -> lemma_append_inj empty_bytes s1 empty_bytes s2
+    | e :: q -> extensionListBytes_cons e q
+    end
+  | ext1::q1 ->
+    extensionListBytes_cons ext1 q1;
+    let (ext2::q2) = exts2 in
+    let e1 = extensionBytes ext1 in
+    let l1 = extensionListBytes q1 in
+    append_assoc e1 l1 s1;
+    let e2 = extensionBytes ext2 in
+    let l2 = extensionListBytes q2 in
+    extensionListBytes_cons ext2 q2;
+    append_assoc e2 l2 s2;
+    extensionBytes_is_injective ext1 (l1 @| s1) ext2 (l2 @| s2);
+    extensionListBytes_is_injective_same_length_out q1 s1 q2 s2
+
+let rec extensionListBytes_is_injective
+  (exts1: list extension)
+  (exts2: list extension)
+: Lemma
+  (requires (Seq.equal (extensionListBytes exts1) (extensionListBytes exts2)))
+  (ensures (exts1 == exts2))
+= extensionListBytes_is_injective_same_length_out exts1 empty_bytes exts2 empty_bytes
+
+let rec extensionListBytes_same_bindersLen
+  (exts1: list extension)
+  (s1: bytes)
+  (exts2: list extension)
+  (s2: bytes)
+: Lemma
+  (requires (
+    let e1 = extensionListBytes exts1 in
+    let e2 = extensionListBytes exts2 in (
+    Seq.equal (e1 @| s1) (e2 @| s2) /\ length e1 + bindersLen exts1 == length e2 + bindersLen exts2
+  )))
+  (ensures (bindersLen exts1 == bindersLen exts2))
+= match exts1, exts2 with
+  | x1::q1, x2::q2 ->
+    extensionListBytes_cons x1 q1;
+    let ex1 = extensionBytes x1 in
+    let eq1 = extensionListBytes q1 in
+    append_assoc ex1 eq1 s1;
+    extensionListBytes_cons x2 q2;
+    let ex2 = extensionBytes x2 in
+    let eq2 = extensionListBytes q2 in
+    append_assoc ex2 eq2 s2;
+    extensionBytes_is_injective x1 (eq1 @| s1) x2 (eq2 @| s2);
+    if E_pre_shared_key? x1
+    then ()
+    else begin
+      Seq.lemma_len_append ex1 eq1;
+      Seq.lemma_len_append ex2 eq2;
+      extensionListBytes_same_bindersLen q1 s1 q2 s2
+    end
+  | _ -> ()
+
+let extensionListBytes_is_injective_strong
+  (exts1: list extension)
+  (s1: bytes)
+  (exts2: list extension)
+  (s2: bytes)
+: Lemma
+  (requires (
+    let e1 = extensionListBytes exts1 in
+    let e2 = extensionListBytes exts2 in (
+    Seq.equal (e1 @| s1) (e2 @| s2) /\ length e1 + bindersLen exts1 == length e2 + bindersLen exts2
+  )))
+  (ensures (exts1 == exts2 /\ s1 == s2))
+= extensionListBytes_same_bindersLen exts1 s1 exts2 s2;
+  extensionListBytes_is_injective_same_length_out exts1 s1 exts2 s2
 
 type extensions = exts:list extension {repr_bytes (length (extensionListBytes exts)) <= 2}
 
@@ -540,6 +760,23 @@ let extensionsBytes exts =
   let binder_len = bindersLen exts in
   lemma_repr_bytes_values (length b + binder_len);
   vlbytes_trunc 2 b binder_len
+
+let extensionsBytes_is_injective
+  (exts1:extensions {length (extensionListBytes exts1) + bindersLen exts1 < 65536})
+  (s1: bytes)
+  (exts2:extensions {length (extensionListBytes exts2) + bindersLen exts2 < 65536})
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (extensionsBytes exts1 @| s1) (extensionsBytes exts2 @| s2)))
+  (ensures (exts1 == exts2 /\ s1 == s2))
+= let b1 = extensionListBytes exts1 in
+  let binder_len1 = bindersLen exts1 in
+  lemma_repr_bytes_values (length b1 + binder_len1);
+  let b2 = extensionListBytes exts2 in
+  let binder_len2 = bindersLen exts2 in
+  lemma_repr_bytes_values (length b2 + binder_len2);
+  vlbytes_trunc_injective 2 b1 binder_len1 s1 b2 binder_len2 s2;
+  extensionListBytes_is_injective_strong exts1 s1 exts2 s2
 
 (*************************************************
  Extension parsing
@@ -950,7 +1187,6 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
   | _, _, None -> Correct ()
   | _, None, Some sExtL ->
     Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
-
 #reset-options
 
 private val clientToServerExtension: protocolVersion
@@ -986,7 +1222,12 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       Some (E_ec_point_format [ECP_UNCOMPRESSED])
   | E_pre_shared_key _ ->
     if pski = None then None
-    else Some (E_pre_shared_key (ServerPSK (UInt16.uint_to_t (Some?.v pski))))
+    else
+      let x = Some?.v pski in
+      begin
+        assume (x < 65536);
+        Some (E_pre_shared_key (ServerPSK (UInt16.uint_to_t x)))
+      end
   | E_supported_groups named_group_list ->
     None
     // REMARK: Purely informative, can only appear in EncryptedExtensions
