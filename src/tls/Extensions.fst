@@ -754,14 +754,14 @@ let noExtensions =
 *)
 val extensionsBytes:
   exts:extensions {length (extensionListBytes exts) + bindersLen exts < 65536} ->
-  b:bytes { length b < 2 + 65536 }
+  b:bytes { 2 <= length b /\ length b < 2 + 65536 }
 let extensionsBytes exts =
   let b = extensionListBytes exts in
   let binder_len = bindersLen exts in
   lemma_repr_bytes_values (length b + binder_len);
   vlbytes_trunc 2 b binder_len
 
-let extensionsBytes_is_injective
+let extensionsBytes_is_injective_strong
   (exts1:extensions {length (extensionListBytes exts1) + bindersLen exts1 < 65536})
   (s1: bytes)
   (exts2:extensions {length (extensionListBytes exts2) + bindersLen exts2 < 65536})
@@ -777,6 +777,13 @@ let extensionsBytes_is_injective
   lemma_repr_bytes_values (length b2 + binder_len2);
   vlbytes_trunc_injective 2 b1 binder_len1 s1 b2 binder_len2 s2;
   extensionListBytes_is_injective_strong exts1 s1 exts2 s2
+
+let extensionsBytes_is_injective
+  (ext1: extensions {length (extensionListBytes ext1) + bindersLen ext1 < 65536} )
+  (ext2: extensions {length (extensionListBytes ext2) + bindersLen ext2 < 65536} )
+: Lemma (requires True)
+  (ensures (Seq.equal (extensionsBytes ext1) (extensionsBytes ext2) ==> ext1 == ext2))
+= Classical.move_requires (extensionsBytes_is_injective_strong ext1 empty_bytes ext2) empty_bytes
 
 (*************************************************
  Extension parsing
