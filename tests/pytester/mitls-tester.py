@@ -288,8 +288,8 @@ class MITLSTester(unittest.TestCase):
     def testSetupClient( self ):
         hostName = "test_server.com"
 
-        self.tlsServer = MITLS( "client" )
-        self.tlsServer.InitClient( hostName )
+        self.tlsClient = MITLS( "client" )
+        self.tlsClient.InitClient( hostName )
 
     def test_MITLS_ClientAndServer( self ):
         hostName = "test_server.com"
