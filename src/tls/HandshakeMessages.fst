@@ -1692,20 +1692,24 @@ let parseNextProtocol payload =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 *)
-let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : Type0  =
-  (Certificate? msg \/ ClientKeyExchange? msg) ==> Some? pv
+let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : GTot bool  =
+  if Certificate? msg || ClientKeyExchange? msg then Some? pv else true
 
-let valid_hs_msg (pv: option protocolVersion): Type0 = msg: hs_msg{
-  associated_to_pv pv msg /\ (
+let valid_hs_msg_prop (pv: option protocolVersion) (msg: hs_msg): GTot bool =
+  associated_to_pv pv msg && (
   match msg with
   | EncryptedExtensions ee -> repr_bytes (length (extensionsBytes ee)) <= 3
   | ServerHello sh -> (
       if sh.sh_protocol_version = TLS_1p3
-      then (None? sh.sh_sessionID /\ None? sh.sh_compression)
-      else (Some? sh.sh_sessionID /\ Some? sh.sh_compression))
+      then (None? sh.sh_sessionID && None? sh.sh_compression)
+      else (Some? sh.sh_sessionID && Some? sh.sh_compression))
   | Certificate13 crt -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
   | Certificate crt -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
-  | _ -> True )}
+  | _ -> true )
+
+let valid_hs_msg (pv: option protocolVersion): Type0 = msg: hs_msg{
+  valid_hs_msg_prop pv msg
+}
 
 
 let parsed = function
