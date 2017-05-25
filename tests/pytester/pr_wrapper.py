@@ -1,6 +1,5 @@
 import unittest
-
-
+import struct
 
 from ctypes import  CDLL, \
                     c_long, \
@@ -18,15 +17,22 @@ from ctypes import  CDLL, \
                     POINTER    
 
 
-SIZE_OF_METHODS 		= 288
-SIZE_OF_VOID_P 	 		= 8
-SIZE_OF_PRNET_ADDR      = 112
+SIZE_OF_METHODS 		    = 288
+SIZE_OF_UINT16              = 2
+SIZE_OF_UINT32              = 4 
+SIZE_OF_VOID_P              = 8
+SIZE_OF_PRNET_ADDR          = 112
+SIZE_OF_SOCKETOPTIONDATA    = 232
 
-METHODS_NUM_POINTERS 	= int( SIZE_OF_METHODS / SIZE_OF_VOID_P )
-METHODS_FILE_TYPE 		= 0 # see see nspr\pr\include\prio.h
-METHODS_READ 			= 2
-METHODS_WRITE           = 3
-METHODS_GETPEERNAME     = 25
+METHODS_NUM_POINTERS 	  = int( SIZE_OF_METHODS / SIZE_OF_VOID_P )
+METHODS_FILE_TYPE 		    = 0 # see see nspr\pr\include\prio.h
+METHODS_READ 			    = 2
+METHODS_WRITE               = 3
+METHODS_CONNECT             = 12
+METHODS_RECV                = 17
+METHODS_SEND                = 18
+METHODS_GETPEERNAME         = 25
+METHODS_GETSOCKET_OPTION    = 28
 # METHODS_WRITEV          = 11
 
 PR_DESC_FILE 		= 1
@@ -52,6 +58,11 @@ class PRDLL():
         self.nspr.PR_FileDesc2NativeHandle.restype  = c_int
         self.nspr.PR_FileDesc2NativeHandle.argtypes = [ c_voidp ]
 
+        self.nspr.PR_Connect.restype  = c_int32
+        self.nspr.PR_Connect.argtypes = [ c_voidp, c_voidp, c_int32 ]
+
+        self.nspr.PR_Recv.restype = c_int32
+
 globalNSPR            = PRDLL()
 globalDescriptorTable = {}
 
@@ -62,11 +73,6 @@ def ReadCallback( ctx, buffer, bufferSize ):
     print( "fileDescriptor = %s" % fileDescriptor )
 
     return globalDescriptorTable[ fileDescriptor ].ReadCallback( buffer, bufferSize )
-    # pyBuffer = ( c_uint8 * bufferSize ).from_address( buffer )
-    # for i in range( bufferSize ):
-    #     pyBuffer[ i ] = c_uint8( i )
-
-    # return bufferSize
 
 def WriteCallback( ctx, buffer, bufferSize ):
     print( "ReadCallback" )
@@ -76,13 +82,61 @@ def WriteCallback( ctx, buffer, bufferSize ):
 
     return globalDescriptorTable[ fileDescriptor ].WriteCallback( buffer, bufferSize )
 
+def RecvCallback( ctx, buffer, bufferSize, flags, timeout ):
+    print( "RecvCallback" )
+
+    fileDescriptor = globalNSPR.nspr.PR_FileDesc2NativeHandle( c_voidp( ctx ) )
+    print( "fileDescriptor = %s" % fileDescriptor )
+
+    return globalDescriptorTable[ fileDescriptor ].ReadCallback( None, buffer, bufferSize )
+
+def SendCallback( ctx, buffer, bufferSize, flags, timeout ):
+    print( "SendCallback" )
+
+    fileDescriptor = globalNSPR.nspr.PR_FileDesc2NativeHandle( c_voidp( ctx ) )
+    print( "fileDescriptor = %s" % fileDescriptor )
+
+    return globalDescriptorTable[ fileDescriptor ].WriteCallback( None, buffer, bufferSize )
+
+
 def GetPeernameCallback( fileDescriptor, addr ):
+    PRNET_OFFSET_FAMILY = 0
+    PRNET_OFFSET_PORT   = 2
+    PRNET_OFFSET_IP     = 4
+    PR_AF_INET          = 2
+    RANDOM_PORT         = 1942
+    LOOPBACK_IP         = [ 127, 0, 0, 1 ]
+
     print( "GetPeernameCallback" )
-    addrBuffer = ( c_uint8 * SIZE_OF_PRNET_ADDR ).from_address( addr )
 
-    for i in range( SIZE_OF_PRNET_ADDR ):
-        addrBuffer[ i ] = 0
+    addrBuffer    = ( c_uint8 * SIZE_OF_PRNET_ADDR ).from_address( addr ) 
+    addrBuffer[:] = bytearray( b"\x00" * SIZE_OF_PRNET_ADDR )
+    addrBuffer[ PRNET_OFFSET_FAMILY : PRNET_OFFSET_FAMILY + SIZE_OF_UINT16 ]    = struct.pack( "H", PR_AF_INET )
+    addrBuffer[ PRNET_OFFSET_PORT   : PRNET_OFFSET_PORT   + SIZE_OF_UINT16 ]    = struct.pack( "H", RANDOM_PORT )
+    addrBuffer[ PRNET_OFFSET_IP     : PRNET_OFFSET_IP     + SIZE_OF_UINT32 ]    = LOOPBACK_IP
 
+    return PR_SUCCESS
+
+def ConnectCallback( ctx, addr, timeout ):
+    print( "ConnectCallback" )
+
+    fileDescriptor = globalNSPR.nspr.PR_FileDesc2NativeHandle( c_voidp( ctx ) )
+    print( "fileDescriptor = %s" % fileDescriptor )
+
+    return PR_SUCCESS
+
+def GetsocketoptionCallback( ctx, data ):
+    OFFSET_OF_FIRST_OPTION = 8
+
+    socketOptions   = ( c_uint8 * SIZE_OF_SOCKETOPTIONDATA ).from_address( data )
+    optionID        = struct.unpack( "I", bytearray( socketOptions[ 0 : SIZE_OF_UINT32 ] ) ) [0]
+    optionValue     = struct.unpack( "I", bytearray( socketOptions[ OFFSET_OF_FIRST_OPTION : OFFSET_OF_FIRST_OPTION + SIZE_OF_UINT32 ] ) )[0]
+
+    print( "GetsocketoptionCallback optionID = %d; first value: 0x%x" % ( optionID, optionValue ) )
+
+    # socketOptions[ OFFSET_OF_FIRST_OPTION ] = 1
+    # optionValue     = struct.unpack( "I", bytearray( socketOptions[ OFFSET_OF_FIRST_OPTION : OFFSET_OF_FIRST_OPTION + SIZE_OF_UINT32 ] ) )[0]
+    # print( "Modified option to %d" % optionValue )
     return PR_SUCCESS
 
 # def WritevCallback( a,b,c,d ):
@@ -108,14 +162,26 @@ class PRWrapper():
         self.RegisterPRIOMethods()
 
     def SetupPRIOMethods( self ):
-        READ_CALLBACK           = CFUNCTYPE( c_int, c_voidp, c_voidp, c_int ) 
-        self.readCallback       = READ_CALLBACK( ReadCallback )
+        READ_CALLBACK                   = CFUNCTYPE( c_int, c_voidp, c_voidp, c_int ) 
+        self.readCallback               = READ_CALLBACK( ReadCallback )
+        
+        WRITE_CALLBACK                  = CFUNCTYPE( c_int, c_voidp, c_voidp, c_int ) 
+        self.writeCallback              = WRITE_CALLBACK( WriteCallback )
+        
+        GET_PEERNAME_CALLBACK           = CFUNCTYPE( c_int, c_voidp, c_voidp )
+        self.getPeernameCallback        = GET_PEERNAME_CALLBACK( GetPeernameCallback )
+        
+        CONNECT_CALLBACK                = CFUNCTYPE( c_int, c_voidp, c_voidp, c_int32 )
+        self.connectCallback            = CONNECT_CALLBACK( ConnectCallback )
 
-        WRITE_CALLBACK          = CFUNCTYPE( c_int, c_voidp, c_voidp, c_int ) 
-        self.writeCallback      = WRITE_CALLBACK( WriteCallback )
+        GET_SOCKET_OPTION_CALLBACK      = CFUNCTYPE( c_int, c_voidp, c_voidp )
+        self.getSocketOptionCallback    = GET_SOCKET_OPTION_CALLBACK( GetsocketoptionCallback )
 
-        GET_PEERNAME_CALLBACK   = CFUNCTYPE( c_int, c_voidp, c_voidp )
-        self.getPeernameCallback = GET_PEERNAME_CALLBACK( GetPeernameCallback )
+        RECV_CALLBACK                   = CFUNCTYPE( c_int, c_voidp, c_voidp, c_int32, c_int32, c_int32 )
+        self.recvCallback               = RECV_CALLBACK( RecvCallback )
+        
+        SEND_CALLBACK                   = CFUNCTYPE( c_int, c_voidp, c_voidp, c_int32, c_int32, c_int32 )
+        self.sendCallback               = SEND_CALLBACK( SendCallback )        
 
         # NULL_CALLBACK       = CFUNCTYPE( None )
         # self.nullCallback   = NULL_CALLBACK( NullCallback )
@@ -124,10 +190,14 @@ class PRWrapper():
         # self.writevCallback   = WRITEV_CALLBACK( WritevCallback )
 
         self.PRIOMethods = (c_voidp * METHODS_NUM_POINTERS )()
-        self.PRIOMethods[ METHODS_FILE_TYPE     ]   = PR_DESC_LAYERED
-        self.PRIOMethods[ METHODS_READ          ]   = self.cutils.getAddress( self.readCallback )
-        self.PRIOMethods[ METHODS_WRITE         ]   = self.cutils.getAddress( self.writeCallback )
-        self.PRIOMethods[ METHODS_GETPEERNAME   ]   = self.cutils.getAddress( self.getPeernameCallback )
+        self.PRIOMethods[ METHODS_FILE_TYPE     ]       = PR_DESC_LAYERED
+        self.PRIOMethods[ METHODS_READ          ]       = self.cutils.getAddress( self.readCallback )
+        self.PRIOMethods[ METHODS_WRITE         ]       = self.cutils.getAddress( self.writeCallback )
+        self.PRIOMethods[ METHODS_GETPEERNAME   ]       = self.cutils.getAddress( self.getPeernameCallback )
+        self.PRIOMethods[ METHODS_CONNECT       ]       = self.cutils.getAddress( self.connectCallback )
+        self.PRIOMethods[ METHODS_GETSOCKET_OPTION ]    = self.cutils.getAddress( self.getSocketOptionCallback )
+        self.PRIOMethods[ METHODS_RECV          ]    = self.cutils.getAddress( self.recvCallback )
+        self.PRIOMethods[ METHODS_SEND          ]    = self.cutils.getAddress( self.sendCallback )
         # self.PRIOMethods[ METHODS_WRITEV ]      = self.cutils.getAddress( self.writevCallback )
 
     def RegisterPRIOMethods( self ):
@@ -175,6 +245,14 @@ class PRWrapper():
         result = self.nspr.PR_GetPeerName( self.prFileDesc, prNetaddr )
 
         return ( result == PR_SUCCESS )
+
+    def Connect( self ):
+        self.nspr.PR_Connect.restype = c_int32
+
+        timeout = c_int32( 0 )
+        result = self.nspr.PR_Connect( self.prFileDesc, NULL_PTR, timeout )
+
+        return (result == PR_SUCCESS ) 
 
     # def WriteV( self ):
     #     # Used for testing NULL callback
@@ -238,6 +316,11 @@ class PRWrapperTester( unittest.TestCase ):
         socket = PRWrapper()
 
         self.assertTrue( socket.GetPeerName() )
+
+    def testGetPeerName( self ):
+        socket = PRWrapper()
+
+        self.assertTrue( socket.Connect() )
 
     # def testNullCallback( self ):
     #     pr = PRWrapper()
