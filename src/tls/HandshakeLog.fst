@@ -272,6 +272,7 @@ let setParams l pv ha kexo dho =
               st.incoming st.parsed hs (Some pv) kexo dho
 
 // TR: verifies up to this point
+#set-options "--lax"
 
 (*
 val getHash: #ha:hash_alg -> t:log -> ST (tag ha)
