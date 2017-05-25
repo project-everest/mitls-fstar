@@ -851,6 +851,22 @@ let serverHelloBytes_is_injective msg1 msg2 =
       )
     end
 
+// TR: the following proof successfully verifies
+let serverHelloBytes_is_injective_strong
+  (msg1:valid_sh)
+  (s1: bytes)
+  (msg2:valid_sh)
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (serverHelloBytes msg1 @| s1) (serverHelloBytes msg2 @| s2)))
+  (ensures (msg1 == msg2 /\ s1 == s2))
+= let b1 = serverHelloBytes msg1 in
+  let b1' = snd (split b1 4) in
+  let b2 = serverHelloBytes msg2 in
+  let b2' = snd (split b2 4) in
+  messageBytes_is_injective_strong HT_server_hello b1' s1 HT_server_hello b2' s2;
+  serverHelloBytes_is_injective msg1 msg2
+
 #reset-options
 //#set-options "--lax"
 

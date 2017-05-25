@@ -144,9 +144,9 @@ let transcript_format_injective ms0 ms1 =
       clientHelloBytes_is_injective_strong ch0 l0 ch1 l1;
       begin match q0 with
       | [] -> ()
-      | ServerHello sh0 :: _ ->
-        let (ServerHello sh1 :: _) = q1 in
-        assume (sh0 == sh1);
+      | ServerHello sh0 :: q0' ->
+        let (ServerHello sh1 :: q1') = q1 in
+        serverHelloBytes_is_injective_strong sh0 (handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v q0')) sh1 (handshakeMessagesBytes v1 (valid_transcript_to_list_valid_hs_msg_aux v1 q1'));
         handshakeMessagesBytes_is_injective v (valid_transcript_to_list_valid_hs_msg_aux v ms0) (valid_transcript_to_list_valid_hs_msg_aux v ms1);
         valid_transcript_to_list_valid_hs_msg_aux_inj v ms0 ms1
       end
