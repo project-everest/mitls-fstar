@@ -1034,6 +1034,7 @@ let prepareExtensions minpv pv cs sres sren edi sigAlgs namedGroups ri ks psks =
         E_pre_shared_key (ClientPSK pskidentities binder_len) :: res // MUST BE LAST
       else res
     in
+    let res = List.Tot.rev res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
 #reset-options
