@@ -58,8 +58,8 @@ let default_signatureSchemes =
 
 val defaultConfig : config
 let defaultConfig =
-  let curves = CoreCrypto.([ECC_P521; ECC_P384; ECC_P256]) in
-  let ffdh = [FFDHE4096; FFDHE3072] in
+  let curves = CoreCrypto.([ECC_P521; ECC_P384; ECC_P256; ECC_X25519; ECC_X448]) in
+  let ffdh = [FFDHE4096; FFDHE3072; FFDHE2048] in
   let groups = ec_ff_to_ng curves ffdh in
   assert_norm (List.Tot.length (cipherSuites_of_nameList default_cipherSuites) < 256);
   assert_norm (List.Tot.length default_signatureSchemes < 65536/2);
