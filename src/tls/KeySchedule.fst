@@ -844,7 +844,7 @@ let ks_client_13_sf ks (log:bytes)
   let C (C_13_wait_SF alpha cfk sfk (| asId, ams |)) = !st in
   let (ae, h) = alpha in
 
-  let (| (FinishedID #li _), _ |) = cfk in // TODO loginfo
+  let FinishedID #li _ = dfst cfk in // TODO loginfo
   let log : hashed_log li = log in
   let secretId = ApplicationSecretID asId in
   let c_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
@@ -889,7 +889,7 @@ let ks_server_13_sf ks (log:bytes)
   dbg ("ks_server_13_sf hashed_log = "^(print_bytes log));
   let KS #region st = ks in
   let S (S_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
-  let (| (FinishedID #li _), _ |) = cfk in // TODO loginfo
+  let FinishedID #li _ = dfst cfk in // TODO loginfo
   let (ae, h) = alpha in
 
   let log : hashed_log li = log in
