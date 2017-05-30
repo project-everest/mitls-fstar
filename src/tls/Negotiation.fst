@@ -987,10 +987,9 @@ private let rec compute_cs13_aux (i:nat) (o:offer)
       | (id, info), true ->
         let cs = CipherSuite13 info.PSK.early_ae info.PSK.early_hash in
         if List.Tot.mem cs ncs then
-          (let Some (Extensions.E_psk_key_exchange_modes kex::_) =
-            find_client_extension Extensions.E_psk_key_exchange_modes? o in
-           if kex = Extensions.PSK_KE then [PSK_EDH i None cs]
-           else [PSK_EDH i g_gx cs])
+         (match find_client_extension Extensions.E_psk_key_exchange_modes? o with
+         | Some (Extensions.E_psk_key_exchange_modes (Extensions.PSK_KE :: _)) -> [PSK_EDH i None cs]
+         | _ -> [PSK_EDH i g_gx cs])
         else []
       | _ -> []
     in

@@ -444,7 +444,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
     match pskid with
     | Some id ->
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
-      let i, psk, h =
+      let i, psk, h : esId * bytes * Hashing.Spec.alg =
         match Ticket.check_ticket id with
         | Some (Ticket.Ticket13 cs li rmsId rms) ->
           let i = ResumptionPSK #li rmsId in
@@ -468,7 +468,9 @@ let ks_server_13_init ks cr cs pskid g_gx =
       i, es, Some (| bId, bk |)
     | None ->
       dbg "No PSK selected.";
-      NoPSK h, HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h), None
+      let esId = NoPSK h in
+      let es : es esId = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
+      esId, es, None
     in
   dbg ("Computed early secret: "^(print_bytes es));
   let saltId = Salt (EarlySecretID esId) in
