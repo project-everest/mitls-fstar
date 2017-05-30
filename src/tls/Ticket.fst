@@ -84,7 +84,7 @@ let create_ticket t =
   let plain = (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b) in
   let nb = bytes_of_int 12 !ctr in
   ctr := !ctr + 1;
-  let iv = xor 12 nb nonce in
+  let iv = xor 12 nb salt in
   let ae = AE.encrypt #tid #65535 ticket_enc iv empty_bytes plain in
   nb @| ae
 
