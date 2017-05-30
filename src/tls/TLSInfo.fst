@@ -80,7 +80,7 @@ let defaultConfig =
   private_key_file = "server.key";
 
   non_blocking_read = false;
-  enable_early_data = false;
+  enable_early_data = true;
   safe_renegotiation = true;
   safe_resumption = true;
   peer_name = None; // Disables hostname validation

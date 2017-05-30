@@ -963,7 +963,7 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
 (* SERVER *)
 
 type cs13 offer =
-  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
+  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite -> cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
   // JUST_PSK: TODO
 
@@ -1071,6 +1071,9 @@ let computeServerMode cfg co serverRandom serverID =
     | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
     | Correct (kex :: _) ->
       begin
+      (match kex with
+      | PSK_EDH _ _ _ -> trace "Selecting PSK_EDH..."
+      | JUST_EDH _ _ -> trace "Selecting EDH...");
       match find_signature_algorithms co with
       | None ->
         Error(AD_handshake_failure, "Client didn't send signature_algorithm extension")

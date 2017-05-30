@@ -204,8 +204,6 @@ client13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
 client-psk::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
-client-0rtt::
-	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -0rtt -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
 client12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
 client::
