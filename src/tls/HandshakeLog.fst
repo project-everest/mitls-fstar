@@ -267,7 +267,7 @@ let setParams l pv ha kexo dho =
       assume (tags ha (reveal_log st.transcript) st.parsed []); // TODO: FIXME: should this be part of OpenHash?
       let hs = FixedHash ha acc [] in
       recall l;
-      l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+      l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed hs (Some pv) kexo dho
 
 // TR: verifies up to this point

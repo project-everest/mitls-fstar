@@ -540,7 +540,12 @@ let serverHello (m:Nego.mode) =
     sh_sessionID = m.n_sessionID;
     sh_cipher_suite = m.n_cipher_suite;
     sh_compression = if pv = TLS_1p3 then None else Some NullCompression;
-    sh_extensions = m.n_server_extensions })
+    sh_extensions =
+      match pv, m.n_server_extensions with
+      | TLS_1p3, Some exts ->
+        Some (List.Tot.filter (fun e -> not (Extensions.encryptedExtension e)) exts)
+      | _ -> m.n_server_extensions
+   })
 
 (* receive ClientHello, choose a protocol version and mode *)
 val server_ClientHello: hs -> HandshakeMessages.ch -> ST incoming
@@ -667,10 +672,12 @@ let server_ServerFinished_13 hs i =
     let Some chain = mode.Nego.n_server_cert in
     let pv = mode.Nego.n_protocol_version in
     let cs = mode.Nego.n_cipher_suite in
+    let exts = Some?.v mode.Nego.n_server_extensions in
     let sh_alg = sessionHashAlg pv cs in
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
-    HandshakeLog.send hs.log (EncryptedExtensions []);
+    let eexts = List.Tot.filter Extensions.encryptedExtension exts in
+    HandshakeLog.send hs.log (EncryptedExtensions eexts);
     let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
     // signing of the formatted session digest
     let tbs = Nego.to_be_signed pv Server None digestSig in
