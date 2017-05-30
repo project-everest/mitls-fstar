@@ -572,7 +572,7 @@ let server_ClientHello hs offer =
             assume(PSK.registered_psk id); Some id
           | None -> None in
 
-        let server_share, binder_key =
+        let server_share, binder_key = // TODO verify the binder!
           match pv with
           | TLS_1p3 -> KeySchedule.ks_server_13_init hs.ks cr cs n_psk g_gx
           | _ ->
@@ -596,10 +596,16 @@ let server_ClientHello hs offer =
           let ka = Nego.kexAlg mode in
           HandshakeLog.setParams hs.log pv ha (Some ka) None;
           let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
+          // these hashes are not always used
+          let digestClientHelloBinders = HandshakeLog.hash_tag #ha hs.log in 
           let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
           if mode.Nego.n_protocol_version = TLS_1p3
           then
             begin
+              if Nego.zeroRTT mode then (
+                let zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in 
+                register hs zero_keys
+              );
               // TODO handle 0RTT accepted and 0RTT refused
               // - get 0RTT key from KS.
               // - do the signalling
@@ -609,7 +615,7 @@ let server_ClientHello hs offer =
               register hs hs_keys;
               // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
               hs.state := S_Sent_ServerHello;
-              InAck false false
+              InAck (Nego.zeroRTT mode) false
             end
           else
             server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.

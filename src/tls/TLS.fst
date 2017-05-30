@@ -1255,6 +1255,7 @@ let readOne c i =
         | Handshake.InAck next_keys complete ->
             if complete
             then (c.state := (Open, Open); Complete)
+            //else if next_keys then (trace "0RTT?"; c.state := (Open,snd c.state); Update #i false) 
             else ReadAgain
             (* // TODO: additional sanity checks.
             ( match !c.state with
@@ -1278,8 +1279,9 @@ let readOne c i =
       begin
         trace "read Data fragment"; 
         match fst !c.state with
-        | Open -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
-        | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
+        | _ -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
+//      | Open -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
+//      | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
       end )
  
 // scheduling: we always write up before reading, to advance the Handshake.
