@@ -487,8 +487,13 @@ let unknown_extensions_unknown
 
 type extension = extension' unknown_extensions_unknown
 
-private let testKnownExt : extension = E_extended_ms
-private let testUnknownExt : extension = E_unknown_extension (abyte2 (0x01z, 0x18z), empty_bytes)
+val encryptedExtension: extension -> bool
+let encryptedExtension ext =
+  match ext with
+  | E_server_name _
+  | E_supported_groups _
+  | E_early_data _ -> true
+  | _ -> false
 
 private
 let equal_extensionHeaderBytes_sameExt
@@ -1237,11 +1242,14 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
         Some (E_pre_shared_key (ServerPSK (UInt16.uint_to_t x)))
       end
   | E_supported_groups named_group_list ->
-    None
-    // REMARK: Purely informative, can only appear in EncryptedExtensions
-    // Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
-  // FIXME: properly select early_data and a psk index
-  | E_early_data b -> None //Some (E_early_data None)
+    if pv = TLS_1p3 then
+      // REMARK: Purely informative, can only appear in EncryptedExtensions
+      Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
+    else None
+  | E_early_data b -> // EE
+    if cfg.enable_early_data then
+      Some (E_early_data None)
+    else None
   // TODO: handle all remaining cases
   | _ -> None
 
