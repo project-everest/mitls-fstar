@@ -52,7 +52,7 @@ typedef struct mitls_state {
 //
 //  Returns:  0 for error, nonzero for success
 //
-int  FFI_mitls_init(void)
+int MITLS_CALLCONV FFI_mitls_init(void)
 {
     char *Argv[2];
 
@@ -80,7 +80,7 @@ int  FFI_mitls_init(void)
     return 1; // success
 }
 
-void FFI_mitls_cleanup(void)
+void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
 #define MITLS_FFI_ENTRY(x) \
     g_mitls_FFI_##x = NULL;
@@ -116,7 +116,7 @@ static void report_caml_exception(value v, char **errmsg)
 }
 
 // Called by the host app to configure miTLS ahead of creating a connection
-int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
+int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
     CAMLparam0();
     CAMLlocal3(config, version, host);
@@ -172,38 +172,38 @@ static int configure_common(/* in */ mitls_state *state, const char * str, value
     CAMLreturnT(int,ret);
 }
 
-int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
+int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
 {
     return configure_common(state, file, g_mitls_FFI_SetCertChainFile);
 }
 
-int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file)
+int MITLS_CALLCONV FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file)
 {
     return configure_common(state, file, g_mitls_FFI_SetPrivateKeyFile);
 }
 
-int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
+int MITLS_CALLCONV FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
 {
     return configure_common(state, file, g_mitls_FFI_SetCAFile);
 }
 
-int FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
+int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
 {
     return configure_common(state, cs, g_mitls_FFI_SetCipherSuites);
 }
 
-int FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa)
+int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa)
 {
     return configure_common(state, sa, g_mitls_FFI_SetSignatureAlgorithms);
 }
 
-int FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng)
+int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng)
 {
     return configure_common(state, ng, g_mitls_FFI_SetNamedGroups);
 }
 
 // Called by the host app to free a mitls_state allocated by FFI_mitls_configure()
-void FFI_mitls_close(mitls_state *state)
+void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
 {
     if (state) {
         caml_acquire_runtime_system();
@@ -214,12 +214,12 @@ void FFI_mitls_close(mitls_state *state)
     }
 }
 
-void FFI_mitls_free_msg(char *msg)
+void MITLS_CALLCONV FFI_mitls_free_msg(char *msg)
 {
     free(msg);
 }
 
-void FFI_mitls_free_packet(void *packet)
+void MITLS_CALLCONV FFI_mitls_free_packet(void *packet)
 {
     free(packet);
 }
@@ -293,7 +293,7 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
 }
 
 // Called by the host app to create a TLS connection.
-int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -323,7 +323,7 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
 }
 
 // Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
-int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -353,7 +353,7 @@ int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ 
 }
 
 // Called by the host app transmit a packet
-int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal2(buffer_value, result);
@@ -379,7 +379,7 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
 }
 
 // Called by the host app to receive a packet
-void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal1(result);
@@ -404,13 +404,13 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
 
 
 // Register the calling thread, so it can call miTLS.  Returns 1 for success, 0 for error.
-int FFI_mitls_thread_register(void)
+int MITLS_CALLCONV FFI_mitls_thread_register(void)
 {
     return caml_c_thread_register();
 }
 
 // Unregister the calling thread, so it can no longer call miTLS.  Returns 1 for success, 0 for error.
-int FFI_mitls_thread_unregister(void)
+int MITLS_CALLCONV FFI_mitls_thread_unregister(void)
 {
     return caml_c_thread_unregister();
 }

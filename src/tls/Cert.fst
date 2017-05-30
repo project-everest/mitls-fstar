@@ -15,13 +15,13 @@ Negotiation and in the main TLS API (with no extensions when using TLS
 
 // opaque cert_data<1..2^24-1>
 type cert = b:bytes {length b < 16777216}
-type certes = cert * extensions
+type certes = cert * (exts:extensions{length (extensionListBytes exts) < 65536 /\ bindersLen exts == 0})
 // CertificateEntry certificate_list<0..2^24-1>;
 // See https://tlswg.github.io/tls13-spec/#rfc.section.4.4.2
 type chain = l:list cert // { ... }
 type chain13 = l:list certes // { ... }
 
-// we may use these types to keep track of un-extended chains, 
+// we may use these types to keep track of un-extended chains,
 // e.g. to prove that their formatting is injective
 let is_classic_chain (l:chain13): bool = 
   List.Tot.for_all #certes (fun ces -> List.Tot.isEmpty (snd ces)) l
@@ -123,8 +123,14 @@ let rec parseCertificateList13 b =
       | Correct (exts,_) -> (
         match parseCertificateList13 r with
         | Error z -> Error z 
-        | Correct x -> (lemma_repr_bytes_values (length c); Correct ((c,exts) :: x)) )))
-
+        | Correct x ->
+          if bindersLen exts = 0 then
+          begin
+            lemma_repr_bytes_values (length c);
+            lemma_repr_bytes_values (length (extensionListBytes exts));
+            Correct ((c,exts) :: x)
+          end
+          else Error(AD_bad_certificate_fatal, "unexpected extension") )))
 
 #set-options "--max_ifuel 4"
 
@@ -155,7 +161,7 @@ let validate_chain c for_signing host cafile =
 
 val validate_chain13: chain13 -> bool -> option string -> string -> Tot bool
 let validate_chain13 c for_signing host cafile = 
-  CoreCrypto.validate_chain (List.Tot.map #(cert * extensions) #bytes (fun (x,es) -> x) c) for_signing host cafile
+  CoreCrypto.validate_chain (List.Tot.map #(cert * _) #bytes (fun (x,es) -> x) c) for_signing host cafile
 
 private val check_length: list bytes -> chain -> option chain
 let rec check_length cs acc =

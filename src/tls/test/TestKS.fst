@@ -39,7 +39,7 @@ let main () : ML unit =
   let ksc, cr = KS.create #rc Client in
   let kss, sr = KS.create #rs Server in
   p "OK.\n Generating client shares... ";
-  let ((CDH.Share g gx) :: _) = KS.ks_client_13_1rtt_init ksc [SEC (CC.ECC_X25519)] in
+  let (_, _, (CDH.Share g gx :: _)) = KS.ks_client_13_init ksc [] [SEC CC.ECC_X25519] in
   p "OK.\n";
   let b = KS.print_share #g gx in
   (*
@@ -54,7 +54,7 @@ let main () : ML unit =
   *)
   let cs = CipherSuite13 CC.AES_128_GCM Hashing.Spec.SHA256 in
   p " Generating server share... ";
-  let (CDH.Share g gy) = KS.ks_server_13_1rtt_init kss cr cs g gx in
+  let (Some (CDH.Share g gy), _) = KS.ks_server_13_init kss cr cs None (Some (|g, gx|)) in
   p "OK.\n";
   let b = KS.print_share #g gy in
   let sh_log = bytes_of_hex "52c04472bdfe929772c98b91cf425f78f47659be9d4a7d68b9e29d162935e9b9" in

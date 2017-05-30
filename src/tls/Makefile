@@ -25,6 +25,7 @@ all:
 build:
 	$(MAKE) mitls.exe
 	$(MAKE) tls-ffi
+	$(MAKE) cmitls.exe 
 
 verify:
 	+$(MAKE) all-ver
@@ -37,9 +38,9 @@ clean:
 record_fstar_version:
 	$(FSTAR) --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > $(MITLS_HOME)/.fstar_version
 
-.PHONY: all build verify init depend clean record_fstar_version
+.PHONY: all build verify init depend clean record_fstar_version test
 
-STDLIB_REALIZED=Mul Float Char Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack ST All
+STDLIB_REALIZED=Pervasives Mul Float Char Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack ST All
 CODEGEN_LIBS=Platform
 # CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
 PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
@@ -185,14 +186,20 @@ tls-lax: record_fstar_version $(LIBFILES)
 wc:
 	wc -l $(LIBFILES) *.fst *.fsti
 
-mitls.cmxa: $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx) \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
-	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/LowCProvider.cmxa \
-	$(FFI_HOME)/FFICallbacks.cmxa
+mitls.cmxa: $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx)
 	make -f Extracted.mk mitls.cmxa
+
 mitls.exe: mitls.cmxa
 	make -f Extracted.mk mitls.exe
+
+cmitls.o: cmitls.c
+	make -f Extracted.mk cmitls.o
+cmitls.exe: cmitls.o
+	echo $(MAKECMDGOALS)
+	make -f Extracted.mk $(MAKECMDGOALS)
+
+test:
+	make -f Extracted.mk test
 
 # Some rules are only defined after extraction, and passed to the post-extraction Makefile (with ocamldep)
 .DEFAULT:

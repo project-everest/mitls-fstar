@@ -231,6 +231,15 @@ let signatureSchemeBytes = function
   | OBSOLETE codepoint     -> codepoint
   | PRIVATE_USE codepoint  -> codepoint
 
+let signatureSchemeBytes_is_injective
+  (s1 s2: signatureScheme)
+: Lemma
+  (requires (Seq.equal (signatureSchemeBytes s1) (signatureSchemeBytes s2)))
+  (ensures (s1 == s2))
+= if (OBSOLETE? s1 || PRIVATE_USE? s1) = (OBSOLETE? s2 || PRIVATE_USE? s2)
+  then ()
+  else assume (s1 == s2) // TODO: strengthen int_of_bytes vs. abyte2
+
 val parseSignatureScheme: pinverse_t signatureSchemeBytes
 let parseSignatureScheme b =
   match cbyte2 b with
@@ -462,13 +471,13 @@ let parseVersion v =
   | _ -> Error(AD_decode_error, "Parsed unknown version "^print_bytes v)
 
 val inverse_version: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f versionBytes parseVersion x)
   [SMTPat (parseVersion (versionBytes x))]
 let inverse_version x = ()
 
 val pinverse_version: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal versionBytes parseVersion x))
   [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
 let pinverse_version x = ()
@@ -765,7 +774,7 @@ let inverse_cipherSuite x = ()
 
 (** Lemma for ciphersuite serializing/parsing inversions *)
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (let y = parseCipherSuiteAux x in
 	    (Correct? y ==>
               (if UnknownCipherSuite? (Correct?._0 y) then true
@@ -1284,13 +1293,13 @@ let parseCertType b =
 
 (** Lemmas associated to serializing/parsing of certificate types *)
 val inverse_certType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f certTypeBytes parseCertType x)
   [SMTPat (parseCertType (certTypeBytes x))]
 let inverse_certType x = ()
 
 val pinverse_certType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal certTypeBytes parseCertType x))
   [SMTPat (certTypeBytes (Correct?._0 (parseCertType x)))]
 let pinverse_certType x = ()
@@ -1411,45 +1420,17 @@ let parseConfigurationId b =
 
 (** Lemmas for configurationId serializing/parsing inversion *)
 val inverse_configurationId: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f configurationIdBytes parseConfigurationId x)
   [SMTPat (parseConfigurationId (configurationIdBytes x))]
 let inverse_configurationId x =
   lemma_repr_bytes_values (length x)
 
 val pinverse_configurationId: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal configurationIdBytes parseConfigurationId x))
   [SMTPat (configurationIdBytes (Correct?._0 (parseConfigurationId x)))]
 let pinverse_configurationId x = ()
-
-
-//
-// BB.TODO: Some of the following code should be moved outside TLSConstants !
-//          In particular, the integer definitions can be taken from F* ulib.
-
-type uint32 = b:lbytes 4
-
-val uint32Bytes: uint32 -> Tot (lbytes 4)
-let uint32Bytes u = u
-
-val parseUint32: pinverse_t uint32Bytes
-let parseUint32 b =
-  if length b = 4 then Correct(b)
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
-val inverse_uint32: x:_ -> Lemma
-  (requires (True))
-  (ensures lemma_inverse_g_f uint32Bytes parseUint32 x)
-  [SMTPat (parseUint32 (uint32Bytes x))]
-let inverse_uint32 x = ()
-
-val pinverse_uint32: x:_ -> Lemma
-  (requires (True))
-  (ensures (lemma_pinverse_f_g Seq.equal uint32Bytes parseUint32 x))
-  [SMTPat (uint32Bytes (Correct?._0 (parseUint32 x)))]
-let pinverse_uint32 x = ()
-
 
 
 (** EarlyData type definition *)
@@ -1478,13 +1459,13 @@ let parseEarlyDataType b =
 
 (** Lemmas for Early Data parsing/serializing inversions *)
 val inverse_earlyDataType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f earlyDataTypeBytes parseEarlyDataType x)
   [SMTPat (parseEarlyDataType (earlyDataTypeBytes x))]
 let inverse_earlyDataType x = ()
 
 val pinverse_earlyDataType: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal earlyDataTypeBytes parseEarlyDataType x))
   [SMTPat (earlyDataTypeBytes (Correct?._0 (parseEarlyDataType x)))]
 let pinverse_earlyDataType x = ()
@@ -1516,7 +1497,7 @@ let parseConfigurationExtension b =
 
 (** Lemmas for Configuration Extension parsing/serializing inversions *)
 val inverse_configurationExtension: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures lemma_inverse_g_f configurationExtensionBytes parseConfigurationExtension x)
   [SMTPat (parseConfigurationExtension (configurationExtensionBytes x))]
 let inverse_configurationExtension x =
@@ -1531,7 +1512,7 @@ let inverse_configurationExtension x =
   assert (Seq.equal b payload)
 
 val pinverse_configurationExtension: x:_ -> Lemma
-  (requires (True))
+  (requires True)
   (ensures (lemma_pinverse_f_g Seq.equal configurationExtensionBytes parseConfigurationExtension x))
   [SMTPat (configurationExtensionBytes (Correct?._0 (parseConfigurationExtension x)))]
 let pinverse_configurationExtension x = ()
@@ -1580,23 +1561,62 @@ let signatureSchemeList =
   algs:list signatureScheme{0 < List.Tot.length algs /\ op_Multiply 2 (List.Tot.length algs) < 65536}
 
 (** Serializing function for a SignatureScheme list *)
+
+private
+let rec signatureSchemeListBytes_aux
+  (algs: signatureSchemeList)
+  (b:bytes)
+  (algs':list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs') == op_Multiply 2 (List.Tot.length algs) })
+: Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)})
+  (decreases algs')
+= match algs' with
+  | [] -> b
+  | alg::algs' ->
+    let shb = signatureSchemeBytes alg in
+    signatureSchemeListBytes_aux algs (shb @| b) algs'
+
+private
+let rec signatureSchemeListBytes_aux_is_injective
+  (algs1: signatureSchemeList)
+  (b1: bytes)
+  (algs1': list signatureScheme{ length b1 + op_Multiply 2 (List.Tot.length algs1') == op_Multiply 2 (List.Tot.length algs1) })
+  (algs2: signatureSchemeList { List.Tot.length algs1 == List.Tot.length algs2 } )
+  (b2: bytes { length b1 == length b2 } )
+  (algs2': list signatureScheme{ length b2 + op_Multiply 2 (List.Tot.length algs2') == op_Multiply 2 (List.Tot.length algs2) })
+: Lemma
+  (requires (Seq.equal (signatureSchemeListBytes_aux algs1 b1 algs1') (signatureSchemeListBytes_aux algs2 b2 algs2')))
+  (ensures (b1 == b2 /\ algs1' == algs2'))
+  (decreases algs1')
+= match algs1', algs2' with
+  | [], [] -> ()
+  | alg1::algs1_, alg2::algs2_ ->
+    let shb1 = signatureSchemeBytes alg1 in
+    let shb2 = signatureSchemeBytes alg2 in
+    signatureSchemeListBytes_aux_is_injective algs1 (shb1 @| b1) algs1_ algs2 (shb2 @| b2) algs2_;
+    lemma_append_inj shb1 b1 shb2 b2;
+    signatureSchemeBytes_is_injective alg1 alg2
+
 val signatureSchemeListBytes: algs:signatureSchemeList
   -> Tot (b:bytes{4 <= length b /\ length b < 65538})
 let signatureSchemeListBytes algs =
-  let rec aux: b:bytes ->
-  algs':list signatureScheme{ length b + op_Multiply 2 (List.Tot.length algs') == op_Multiply 2 (List.Tot.length algs) } ->
-    Tot (r:bytes{length r == op_Multiply 2 (List.Tot.length algs)})
-        (decreases algs') = fun b algs' ->
-    match algs' with
-    | [] -> b
-    | alg::algs' ->
-      let shb = signatureSchemeBytes alg in
-      aux (shb @| b) algs'
-  in
-  let pl = aux empty_bytes algs in
+  let pl = signatureSchemeListBytes_aux algs empty_bytes algs in
   lemma_repr_bytes_values (length pl);
   vlbytes 2 pl
 
+let signatureSchemeListBytes_is_injective
+  (algs1: signatureSchemeList)
+  (s1: bytes)
+  (algs2: signatureSchemeList)
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (signatureSchemeListBytes algs1 @| s1) (signatureSchemeListBytes algs2 @| s2)))
+  (ensures (algs1 == algs2 /\ s1 == s2))
+= let pl1 = signatureSchemeListBytes_aux algs1 empty_bytes algs1 in
+  lemma_repr_bytes_values (length pl1);
+  let pl2 = signatureSchemeListBytes_aux algs2 empty_bytes algs2 in
+  lemma_repr_bytes_values (length pl2);
+  lemma_vlbytes_inj_strong 2 pl1 s1 pl2 s2;
+  signatureSchemeListBytes_aux_is_injective algs1 empty_bytes algs1 algs2 empty_bytes algs2
 
 (** Parsing function for a SignatureScheme list *)
 val parseSignatureSchemeList: pinverse_t signatureSchemeListBytes
@@ -1753,32 +1773,3 @@ type serverName =
 type point_format =
   | ECP_UNCOMPRESSED
   | ECP_UNKNOWN of (n:nat{repr_bytes n <= 1})
-
-// deprecated (but still included in TLSInfo)
-type negotiatedExtensions = {
-  ne_extended_ms: bool; // now a total function of the mode
-  ne_extended_padding: bool; // gone!
-  ne_secure_renegotiation: ri_status; // now a total function of the mode
-
-  //$ Cedric: these extensions were missing in F7.
-  ne_server_names: option (list serverName); // now a total function of the mode,
-  ne_keyShare: option CommonDH.serverKeyShare; // now gone (elsewherer in the mode)
-  ne_pskIndex: option nat;
-
-  // now internal, transient concerns for server-side nego
-  ne_signature_algorithms: option signatureSchemeList;
-  ne_supported_groups: option (list valid_namedGroup);
-  ne_supported_point_formats: option (list point_format);
-}
-
-let ne_default = {
-  ne_extended_ms = false;
-  ne_extended_padding = false;
-  ne_secure_renegotiation = RI_Unsupported;
-  ne_supported_groups = None;
-  ne_supported_point_formats = None;
-  ne_server_names = None;
-  ne_signature_algorithms = None;
-  ne_keyShare = None;
-  ne_pskIndex = None;
-}
