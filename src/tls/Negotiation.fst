@@ -1071,9 +1071,6 @@ let computeServerMode cfg co serverRandom serverID =
     | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
     | Correct (kex :: _) ->
       begin
-      (match kex with
-      | PSK_EDH _ _ _ -> trace "Selecting PSK_EDH..."
-      | JUST_EDH _ _ -> trace "Selecting EDH...");
       match find_signature_algorithms co with
       | None ->
         Error(AD_handshake_failure, "Client didn't send signature_algorithm extension")
