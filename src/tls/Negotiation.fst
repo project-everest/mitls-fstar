@@ -168,6 +168,11 @@ let find_pske o =
   | None -> None
   | Some (Extensions.E_pre_shared_key psks) -> Some psks
 
+let find_sessionTicket o =
+  match find_client_extension Extensions.E_session_ticket? o with
+  | None -> None
+  | Some (Extensions.E_session_ticket b) -> Some b
+
 let find_clientPske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
   | None -> None
@@ -375,6 +380,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       cfg.minVer
       cfg.maxVer
       cfg.ciphersuites
+      cfg.peer_name
       cfg.safe_resumption
       cfg.safe_renegotiation
       cfg.enable_early_data
@@ -965,7 +971,6 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
 type cs13 offer =
   | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
-  // JUST_PSK: TODO
 
 // Work around #1016
 private let rec compute_cs13_aux (i:nat) (o:offer)
@@ -980,8 +985,13 @@ private let rec compute_cs13_aux (i:nat) (o:offer)
     let choices =
       match List.Tot.index psks i, psk_kex with
       | (id, info), true ->
-        // ADL: FIXME pure PSK
-        [PSK_EDH i g_gx (CipherSuite13 info.PSK.early_ae info.PSK.early_hash)]
+        let cs = CipherSuite13 info.PSK.early_ae info.PSK.early_hash in
+        if List.Tot.mem cs ncs then
+          (let Some (Extensions.E_psk_key_exchange_modes kex::_) =
+            find_client_extension Extensions.E_psk_key_exchange_modes? o in
+           if kex = Extensions.PSK_KE then [PSK_EDH i None cs]
+           else [PSK_EDH i g_gx cs])
+        else []
       | _ -> []
     in
     choices @ (compute_cs13_aux (i+1) o psks g_gx ncs psk_kex)
@@ -1026,9 +1036,12 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   | [] -> []
   | (id, _) :: t ->
     let id = utf8 (iutf8 id) in // FIXME Platform.Bytes
-    (match PSK.psk_lookup id with
+    match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
-    | None -> filter_psk t)
+    | None ->
+      (match PSK.psk_lookup id with
+      | Some info -> (id, info) :: (filter_psk t)
+      | None -> filter_psk t)
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)

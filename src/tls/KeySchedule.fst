@@ -139,7 +139,8 @@ type rekeyId (li:logInfo) = i:expandId li{
 abstract type rekey_secrets #li (i:expandId li) =
   H.tag (expandId_hash i) * H.tag (expandId_hash i)
 
-abstract type rms #li (i:rmsId li) = H.tag (rmsId_hash i)
+// Leaked to HS for tickets
+(*abstract*) type rms #li (i:rmsId li) = H.tag (rmsId_hash i)
 
 type ems #li (i:exportId li) = H.tag (exportId_hash i)
 
@@ -204,7 +205,7 @@ type ks_server_state =
 | S_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams i ) ->
                 ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->  ks_server_state
 | S_13_postHS: alpha:ks_alpha13 -> ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->
-                ( li:logInfo & i:rmsId li & rms i ) -> ks_server_state
+                ks_server_state
 | S_Done
 
 // Reflecting state separation from HS
@@ -307,7 +308,7 @@ let ks_client_13_init ks pskl gl =
     let i, psk, h, ae = read_psk pskid in
     let pski = PSK.psk_info pskid in
     dbg ("Loaded pre-shared key "^(print_bytes pskid)^": "^(print_bytes psk));
-    let es : es i = HKDF.hkdf_extract h (H.zeroHash h) psk in
+    let es : es i = HKDF.hkdf_extract h psk (H.zeroHash h) in
     dbg ("Early secret: "^(print_bytes es));
     let ll, lb =
       if ApplicationPSK? i then ExtBinder, "ext binder"
@@ -442,9 +443,19 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let esId, es, bk =
     match pskid with
     | Some id ->
-      dbg ("Using negotiated PSK: "^(print_bytes id));
-      let i, psk, h, _ = read_psk id in
-      let es = HKDF.hkdf_extract h (H.zeroHash h) psk in
+      dbg ("Using negotiated PSK identity: "^(print_bytes id));
+      let i, psk, h =
+        match Ticket.check_ticket id with
+        | Some (Ticket.Ticket13 cs li rmsId rms) ->
+          let i = ResumptionPSK #li rmsId in
+          let CipherSuite13 _ h = cs in
+          (i, rms, h)
+        | None ->
+          let i, psk, h, _ = read_psk id in
+          (i, psk, h)
+        in
+      dbg ("Pre-shared key: "^(print_bytes psk));
+      let es = HKDF.hkdf_extract h psk (H.zeroHash h) in
       let ll, lb =
         if ApplicationPSK? i then ExtBinder, "ext binder"
         else ResBinder, "res binder" in
@@ -620,6 +631,11 @@ let ks_12_finished_key ks =
  | C (C_12_has_MS _ _ _ ms) -> ms
  | S (S_12_has_MS _ _ _ ms) -> ms in
  TLSPRF.coerce ms
+
+let ks_12_pms ks =
+  let KS #region st = ks in
+  match !st with
+  | S (S_12_has_MS _ _ _ ms) -> ms
 
 private val ks_12_record_key: ks:ks -> St recordInstance
 let ks_12_record_key ks =
@@ -922,6 +938,30 @@ let ks_server_13_sf ks (log:bytes)
 
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |));
   StAEInstance r w, (| li, emsId, ems |)
+
+let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    S? kss /\ S_13_wait_CF? (S?.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+  =
+  dbg ("ks_server_13_cf hashed_log = "^(print_bytes log));
+  let KS #region st = ks in
+  let S (S_13_wait_CF alpha cfk (| asId, ams |) rekey_info) = !st in
+  let (ae, h) = alpha in
+
+  // TODO loginfo CF
+  let (| li, _, _ |) = rekey_info in
+  let log : hashed_log li = log in
+  let rmsId : rmsId li = RMSID asId log in
+
+  let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
+  dbg ("Resumption master secret: "^(print_bytes rms));
+  st := S (S_13_postHS alpha rekey_info);
+  (| li, rmsId, rms |)
 
 // Handshake must call this when ClientFinished goes into log
 let ks_client_13_cf ks (log:bytes) : ST unit

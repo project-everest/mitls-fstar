@@ -372,10 +372,10 @@ let rec valid_list_to_list_valid l =
   | hd::tl -> hd::(valid_list_to_list_valid tl)
   | _ -> []
 
-val messageBytes_extra: 
-  ht:handshakeType -> 
+val messageBytes_extra:
+  ht:handshakeType ->
   data:bytes ->
-  extra:nat{ repr_bytes (length data + extra) <= 3 } -> 
+  extra:nat{ repr_bytes (length data + extra) <= 3 } ->
   lbytes (4 + length data)
 let messageBytes_extra ht data extra =
   let htb = htBytes ht in
@@ -441,7 +441,7 @@ let versionBytes_is_injective pv1 pv2 =
 val optionExtensionsBytes: exts:option (ce:list extension{List.Tot.length ce < 256}) -> Tot (b:bytes{length b <= 2 + 65535})
 let optionExtensionsBytes exts =
   match exts with
-  | Some ext -> 
+  | Some ext ->
     assume (repr_bytes (length (extensionListBytes ext)) <= 2 /\ length (Extensions.extensionListBytes ext) + bindersLen ext < 65536); // TODO: FIXME
     extensionsBytes ext
   | None -> empty_bytes
@@ -1458,15 +1458,15 @@ val sessionTicketBytes13: sticket13 -> Tot (b:bytes{hs_msg_bytes HT_session_tick
 let sessionTicketBytes t =
     let payload =
       bytes_of_int 4 (UInt32.v t.sticket_lifetime) @|
-      t.sticket_ticket in
+      (vlbytes 2 t.sticket_ticket) in
     lemma_repr_bytes_values (length payload);
     messageBytes HT_session_ticket payload
 let sessionTicketBytes13 t =
     let payload =
       bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @|
       bytes_of_int 4 (UInt32.v t.ticket13_age_add) @|
-      t.ticket13_ticket @|
-      vlbytes 2 (extensionsBytes t.ticket13_extensions)  in
+      vlbytes 2 t.ticket13_ticket @|
+      extensionsBytes t.ticket13_extensions in
     lemma_repr_bytes_values (length payload);
     messageBytes HT_session_ticket payload
 

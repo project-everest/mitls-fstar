@@ -641,6 +641,9 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     trace "Process Client Finished";
     let fink = KeySchedule.ks_12_finished_key hs.ks in
     let mode = Nego.getMode hs.nego in
+    let cfg = Nego.local_config hs.nego in
+    let pv = mode.Nego.n_protocol_version in
+    let cs = mode.Nego.n_cipher_suite in
     let alpha = (mode.Nego.n_protocol_version, mode.Nego.n_cipher_suite) in
     let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
     let expected_cvd = TLSPRF.finished12 ha fink Client digestCCS in
@@ -648,7 +651,18 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     if equalBytes cvd expected_cvd
     then
       //let svd = TLSPRF.verifyData alpha fink Server digestClientFinished in
-      let svd = TLSPRF.finished12 ha fink Server digestClientFinished in
+      let digestTicket =
+        match Nego.find_sessionTicket mode.Nego.n_offer with
+        | Some _ when cfg.enable_tickets ->
+          let ticket = Ticket.Ticket12 pv cs (KeySchedule.ks_12_pms hs.ks) in
+          let ticket = {
+            sticket_lifetime = FStar.UInt32.(uint_to_t 3600);
+            sticket_ticket = Ticket.create_ticket ticket;
+          } in
+          HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket)
+        | None -> digestClientFinished
+        in
+      let svd = TLSPRF.finished12 ha fink Server digestTicket in
       let unused_digest = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
       hs.state := S_Complete;
       InAck false false // Server 1.2 ATK; will switch write key and signal completion after sending
@@ -708,11 +722,20 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
         perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
        let (| i, cfin_key |) = KeySchedule.ks_server_13_client_finished hs.ks in
-       // TODO MACVerify digestClientFinished
        if HMAC.UFCMA.verify cfin_key digestBeforeClientFinished f
        then (
-          // ADL: missing call for resumption master secret etc
-          //let _ = KeySchedule.ks_server_13_cf ks digestClientFinished in
+          let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
+          let mode = Nego.getMode hs.nego in
+          let cs = mode.Nego.n_cipher_suite in
+          let ticket = Ticket.Ticket13 cs li rmsid rms in
+          let tb = Ticket.create_ticket ticket in
+          trace ("Sending ticket: "^(print_bytes tb));
+          HandshakeLog.send hs.log (NewSessionTicket13 ({
+            ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
+            ticket13_age_add = FStar.UInt32.(uint_to_t 0);
+            ticket13_ticket = tb;
+            ticket13_extensions = [];
+          }));
           hs.state := S_Complete;
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
           InAck true true  // Server 1.3 ATK
