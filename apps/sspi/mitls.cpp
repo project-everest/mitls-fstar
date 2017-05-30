@@ -18,23 +18,24 @@ extern "C" {
 #include "..\..\libs\ffi\mitlsffi.h"
 }
 
-typedef int  (*tFFI_mitls_init)(void);
-typedef void (*tFFI_mitls_cleanup)(void);
-typedef int  (*tFFI_mitls_configure)(/* out */ mitls_state **state, const char *tls_version, const char *host_name, /* out */ char **outmsg, /* out */ char **errmsg);
-typedef void (*tFFI_mitls_close)(/* in */ mitls_state *state);
-typedef int  (*tFFI_mitls_connect)(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
-typedef int (*tFFI_mitls_send)(/* in */ mitls_state *state, const void* buffer, size_t buffer_size,
+typedef int  (MITLS_CALLCONV *tFFI_mitls_init)(void);
+typedef void (MITLS_CALLCONV *tFFI_mitls_cleanup)(void);
+typedef int  (MITLS_CALLCONV *tFFI_mitls_configure)(/* out */ mitls_state **state, const char *tls_version, const char *host_name, /* out */ char **outmsg, /* out */ char **errmsg);
+typedef void (MITLS_CALLCONV *tFFI_mitls_close)(/* in */ mitls_state *state);
+typedef int  (MITLS_CALLCONV *tFFI_mitls_connect)(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+typedef int (MITLS_CALLCONV *tFFI_mitls_send)(/* in */ mitls_state *state, const void* buffer, size_t buffer_size,
     /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
-typedef void *(*tFFI_mitls_receive)(/* in */ mitls_state *state, /* out */ size_t *packet_size,
+typedef void *(MITLS_CALLCONV *tFFI_mitls_receive)(/* in */ mitls_state *state, /* out */ size_t *packet_size,
     /* out */ char **outmsg, /* out */ char **errmsg);     // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
-typedef void (*tFFI_mitls_free_packet)(void* packet);
-typedef void (*tFFI_mitls_free_msg)(char *msg);
-typedef int (*tFFI_mitls_thread_register)(void);
-typedef int (*tFFI_mitls_thread_unregister)(void);
+typedef void (MITLS_CALLCONV *tFFI_mitls_free_packet)(void* packet);
+typedef void (MITLS_CALLCONV *tFFI_mitls_free_msg)(char *msg);
+typedef int (MITLS_CALLCONV *tFFI_mitls_thread_register)(void);
+typedef int (MITLS_CALLCONV *tFFI_mitls_thread_unregister)(void);
+typedef void *(MITLS_CALLCONV *tFFI_mitls_get_cert)(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg);
 
 void MITLS_ProcessMessages(char *outmsg, char *errmsg);
-int MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
-int MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
+int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
+int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
 
 typedef enum _TLS_WORK_ITEM_TYPE {
     TLS_CONNECT,
@@ -79,6 +80,9 @@ typedef struct _ConnectionState {
 
     bool fShuttingDownConnection;
     bool fDeleteOnComplete;
+
+    BYTE *peer_cert;
+    DWORD peer_cert_length;
 } ConnectionState;
 
 typedef struct _TLS_CONNECT_WORK_ITEM {
@@ -122,6 +126,7 @@ tFFI_mitls_free_packet pfnFFI_mitls_free_packet;
 tFFI_mitls_free_msg pfnFFI_mitls_free_msg;
 tFFI_mitls_thread_register pfnFFI_mitls_thread_register;
 tFFI_mitls_thread_unregister pfnFFI_mitls_thread_unregister;
+tFFI_mitls_get_cert pfnFFI_mitls_get_cert;
 
 const char *_formats[] = {
     "",
@@ -180,6 +185,17 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
         state->status = SEC_E_INTERNAL_ERROR;
         return;
     }
+    _Print("FFI_mitls_get_cert");
+    size_t cb;
+    void *pb = pfnFFI_mitls_get_cert(state->state, &cb, &outmsg, &errmsg);
+    MITLS_ProcessMessages(outmsg, errmsg);
+    if (pb == NULL) {
+        _Print("Failed to get the peer certificate");
+        state->status = SEC_E_INTERNAL_ERROR;
+        return;
+    }
+    state->peer_cert = (BYTE*)pb;
+    state->peer_cert_length = (DWORD)cb;
     state->status = SEC_E_OK;
     if (state->fDeleteOnComplete) {
         _Print("Deleting state per request, at the end of the miTLS connect");
@@ -366,6 +382,11 @@ BOOL MITLS_Initialize(void)
         _Print("Unable to bind to FFI_mitls_thread_unregister");
         return FALSE;
     }
+    pfnFFI_mitls_get_cert = (tFFI_mitls_get_cert)GetProcAddress(hmitls, "FFI_mitls_get_cert");
+    if (pfnFFI_mitls_get_cert == NULL) {
+        _Print("Unable to bind to FFI_mitls_get_cert");
+        return FALSE;
+    }
 
     int ret = pfnFFI_mitls_init();
     if (ret == 0) {
@@ -478,7 +499,7 @@ ParseOutputBufferDesc(
 
 
 
-int MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size)
+int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size)
 {
     ConnectionState *state = CONTAINING_RECORD(callbacks, ConnectionState, callbacks);
     ULONG BytesCopy = ~0u;
@@ -545,7 +566,7 @@ int MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buff
     return BytesCopy;
 }
 
-int MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size)
+int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size)
 {
     ConnectionState *state = CONTAINING_RECORD(callbacks, ConnectionState, callbacks);
 
@@ -998,30 +1019,20 @@ SECURITY_STATUS SEC_ENTRY MITLS_QueryContextAttributesW(
     switch (ulAttribute) {
     case SECPKG_ATTR_REMOTE_CERT_CONTEXT: // pBuffer is a PCERT_CONTEXT
     {
-        FILE *fp;
-        if (fopen_s(&fp, "c:\\users\\barrybo\\desktop\\US, Washington, Redmond, Microsoft Corporation, www.microsoft.com.cert", "rb") == 0) {
-            fseek(fp, 0, SEEK_END);
-            long cb = ftell(fp);
-            rewind(fp);
-            BYTE *pb = (BYTE*)malloc(cb);
-            fread(pb, 1, cb, fp);
-            fclose(fp);
+        ConnectionState *state = (ConnectionState*)phContext->dwUpper;
 
-            HCERTSTORE hCertStore = CertOpenStore(CERT_STORE_PROV_MEMORY, 0, NULL, 0, NULL);
-
-            PCERT_CONTEXT p;
-            DWORD dwContextType;
-            CertAddSerializedElementToStore(hCertStore, pb, cb, CERT_STORE_ADD_USE_EXISTING, 0, CERT_STORE_ALL_CONTEXT_FLAG, &dwContextType, (const void**)&p);
-            free(pb);
-            *(PCERT_CONTEXT*)pBuffer = p;
-
-            char Subject[1024];
-            CertNameToStrA(p->dwCertEncodingType, &p->pCertInfo->Subject, CERT_SIMPLE_NAME_STR, Subject, sizeof(Subject));
-            _Print("Faking server certificate %s", Subject);
-            return SEC_E_OK;
-        } else {
-            return SEC_E_NOT_SUPPORTED;
+        HCERTSTORE hCertStore = CertOpenStore(CERT_STORE_PROV_MEMORY, 0, NULL, 0, NULL);
+        PCCERT_CONTEXT p;
+        if (!CertAddEncodedCertificateToStore(hCertStore, 
+                                              X509_ASN_ENCODING|PKCS_7_ASN_ENCODING,
+                                              state->peer_cert, state->peer_cert_length, 
+                                              CERT_STORE_ADD_USE_EXISTING, &p)) {
+            DWORD dwErr = GetLastError();
+            _Print("CertAddEncodedCertificateToStore failed.  gle=%d(%x).", dwErr, dwErr);
+            return SEC_E_INTERNAL_ERROR;
         }
+        *(PCCERT_CONTEXT*)pBuffer = p;
+        return SEC_E_OK;
     }
     case SECPKG_ATTR_CONNECTION_INFO: // pBuffer is a PSecPkgContext_ConnectionInfo
     {

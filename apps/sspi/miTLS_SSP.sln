@@ -9,10 +9,10 @@ Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
-		Detours Debug|x64 = Detours Debug|x64
-		Detours Debug|x86 = Detours Debug|x86
-		Detours Release|x64 = Detours Release|x64
-		Detours Release|x86 = Detours Release|x86
+		DetoursDebug|x64 = DetoursDebug|x64
+		DetoursDebug|x86 = DetoursDebug|x86
+		DetoursRelease|x64 = DetoursRelease|x64
+		DetoursRelease|x86 = DetoursRelease|x86
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
 	EndGlobalSection
@@ -21,14 +21,14 @@ Global
 		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Debug|x64.Build.0 = Debug|x64
 		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Debug|x86.ActiveCfg = Debug|Win32
 		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Debug|x86.Build.0 = Debug|Win32
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x64.ActiveCfg = Detours Debug|x64
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x64.Build.0 = Detours Debug|x64
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x86.ActiveCfg = Detours Debug|Win32
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Debug|x86.Build.0 = Detours Debug|Win32
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x64.ActiveCfg = Detours Release|x64
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x64.Build.0 = Detours Release|x64
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x86.ActiveCfg = Detours Release|Win32
-		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Detours Release|x86.Build.0 = Detours Release|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursDebug|x64.ActiveCfg = DetoursDebug|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursDebug|x64.Build.0 = DetoursDebug|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursDebug|x86.ActiveCfg = DetoursDebug|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursDebug|x86.Build.0 = DetoursDebug|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursRelease|x64.ActiveCfg = DetoursRelease|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursRelease|x64.Build.0 = DetoursRelease|x64
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursRelease|x86.ActiveCfg = DetoursRelease|Win32
+		{408553C3-2511-40F8-8D79-C4E3F21F8030}.DetoursRelease|x86.Build.0 = DetoursRelease|Win32
 		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Release|x64.ActiveCfg = Release|x64
 		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Release|x64.Build.0 = Release|x64
 		{408553C3-2511-40F8-8D79-C4E3F21F8030}.Release|x86.ActiveCfg = Release|Win32

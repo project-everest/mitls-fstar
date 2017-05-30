@@ -9,4 +9,4 @@ let _ = Callback.register "MITLS_FFI_Config" FFI.ffiConfig;
         Callback.register "MITLS_FFI_AcceptConnected"  FFI.ffiAcceptConnected;
         Callback.register "MITLS_FFI_Send" FFI.ffiSend;
         Callback.register "MITLS_FFI_Recv" FFI.ffiRecv;
-        
+        Callback.register "MITLS_FFI_GetCert" FFI.ffiGetCert;

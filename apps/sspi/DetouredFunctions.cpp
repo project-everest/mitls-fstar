@@ -45,9 +45,9 @@ Mine_AcquireCredentialsHandleW(
     _Out_opt_ PTimeStamp ptsExpiry                // (out) Lifetime (optional)
 )
 {
-    _PrintEnter("%p: _AcquireCredentialsHandleW(%ls %ls %x %x %x %x %x %x %x\n",
-        pszPrincipal,
-        pszPackage,
+    _PrintEnter("_AcquireCredentialsHandleW(%ls %ls %x %x %x %x %x %x %x\n",
+        (pszPrincipal == NULL) ? L"(NULL)" : pszPrincipal,
+        (pszPackage == NULL) ? L"(NULL)" : pszPackage,
         fCredentialUse,
         pvLogonId,
         pAuthData,
@@ -93,9 +93,9 @@ Mine_AcquireCredentialsHandleA(
     _Out_opt_ PTimeStamp ptsExpiry                // (out) Lifetime (optional)
 )
 {
-    _PrintEnter("%p: _AcquireCredentialsHandleA(%s %s %x %x %x %x %x %x %x\n",
-        pszPrincipal,
-        pszPackage,
+    _PrintEnter("_AcquireCredentialsHandleA(%s %s %x %x %x %x %x %x %x\n",
+        (pszPrincipal == NULL) ? "(NULL)" : pszPrincipal,
+        (pszPackage == NULL) ? "(NULL)" : pszPackage,
         fCredentialUse,
         pvLogonId,
         pAuthData,

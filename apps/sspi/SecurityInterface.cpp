@@ -17,6 +17,7 @@
 #include <schannel.h>
 #include "mitls.h"
 
+HMODULE g_hModule;
 
 SECURITY_STATUS SEC_ENTRY
 SpiEnumerateSecurityPackagesW(
@@ -795,4 +796,150 @@ SpiUnsealMessage(
 {
     VERBOSE(("%s\n", __FUNCTION__));
     return MITLS_DecryptMessage(ContextHandle, Message, Sequence, QOP);
+}
+
+
+BOOL WINAPI DllMain(
+	_In_ HINSTANCE hinstDLL,
+	_In_ DWORD fdwReason,
+	_In_ LPVOID lpvReserved
+)
+{
+	g_hModule = (HMODULE)hinstDLL;
+	if (fdwReason == DLL_PROCESS_ATTACH) {
+		DisableThreadLibraryCalls((HMODULE)hinstDLL);
+	}
+	return TRUE;
+}
+
+HRESULT __stdcall DllRegisterServer(void)
+{
+	LSTATUS l;
+	HKEY hKey;
+	DWORD dwType;
+	WCHAR Value[8192];
+	DWORD cbValue;
+	WCHAR ModuleName[_MAX_PATH+1];
+
+	l = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\SecurityProviders", 
+					  0,
+					  KEY_READ|KEY_WRITE|KEY_SET_VALUE,
+					  &hKey);
+	if (l != ERROR_SUCCESS) {
+		MessageBoxW(NULL, L"Failed to open the SecurityProviders key.  regsvr32.exe must be run elevated.", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	cbValue = sizeof(Value); // this is truly a byte count, not a character count
+	l = RegQueryValueExW(hKey, L"SecurityProviders",
+						 NULL,
+						 &dwType,
+						 (LPBYTE)Value,
+						 &cbValue);
+	if (l != ERROR_SUCCESS) {
+		MessageBoxW(NULL, L"Failed to query the SecurityProviders key.", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	} else if (dwType != REG_SZ) {
+		MessageBoxW(NULL, L"Unexpected type for the SecurityProviders value.  Expected REG_SZ", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	const DWORD MaxModuleNameSize = sizeof(ModuleName) / sizeof(ModuleName[0]);
+	DWORD ModuleNameSize = GetModuleFileNameW(g_hModule, ModuleName, MaxModuleNameSize);
+	if (ModuleNameSize >= MaxModuleNameSize) {
+		MessageBoxW(NULL, L"GetModuleFileNameW failed", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	if (wcschr(ModuleName, L' ')) {
+		MessageBoxW(NULL, L"Path to this DLL may not contain a space", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	if (Value[0] != '\0') { // appending after an existing SSP
+		if (wcscat_s(Value, L",")) {
+			MessageBoxW(NULL, L"Strings are too long", L"miTLS_SSP", MB_OK);
+			return E_FAIL;
+		}
+	}
+	if (wcscat_s(Value, ModuleName)) {
+		MessageBoxW(NULL, L"Strings are too long", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	l = RegSetValueExW(hKey, L"SecurityProviders",
+					   0,
+					   REG_SZ,
+					   (const BYTE*)Value,
+					   (DWORD)(wcslen(Value)+1) * sizeof(Value[0])); // Length in bytes, not characters, counting '\0'
+	if (l != ERROR_SUCCESS) {
+		MessageBoxW(NULL, L"Failed to write to SecurityProviders", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	RegCloseKey(hKey);
+	return S_OK;
+}
+
+HRESULT __stdcall DllUnregisterServer(void)
+{
+	LSTATUS l;
+	HKEY hKey;
+	DWORD dwType;
+	WCHAR Value[8192];
+	WCHAR NewValue[8192];
+	DWORD cbValue;
+	WCHAR ModuleName[_MAX_PATH + 1];
+
+	l = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\SecurityProviders",
+					  0,
+					  KEY_READ | KEY_WRITE | KEY_SET_VALUE,
+					  &hKey);
+	if (l != ERROR_SUCCESS) {
+		MessageBoxW(NULL, L"Failed to open the SecurityProviders key.  regsvr32.exe must be run elevated.", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	cbValue = sizeof(Value); // this is truly a byte count, not a character count
+	l = RegQueryValueExW(hKey, L"SecurityProviders",
+						 NULL,
+						 &dwType,
+						 (LPBYTE)Value,
+						 &cbValue);
+	if (l != ERROR_SUCCESS) {
+		MessageBoxW(NULL, L"Failed to query the SecurityProviders key.", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	} else if (dwType != REG_SZ) {
+		MessageBoxW(NULL, L"Unexpected type for the SecurityProviders value.  Expected REG_SZ", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	const DWORD MaxModuleNameSize = sizeof(ModuleName) / sizeof(ModuleName[0]);
+	DWORD ModuleNameSize = GetModuleFileNameW(g_hModule, ModuleName, MaxModuleNameSize);
+	if (ModuleNameSize >= MaxModuleNameSize) {
+		MessageBoxW(NULL, L"GetModuleFileNameW failed", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	if (wcschr(ModuleName, L' ')) {
+		MessageBoxW(NULL, L"Path to this DLL may not contain a space", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+
+	wchar_t *p = wcsstr(Value, ModuleName);
+	if (!p) {
+		MessageBoxW(NULL, L"The SSP does not appear to be registered", L"miTLS_SSP", MB_OK);
+		return S_OK;
+	}
+	wchar_t *pEnd = p + wcslen(ModuleName); // get a pointer to the text following our name
+	if (p != Value) {
+		p--;  // we are not the first entry, so back up and include the comma or space separator
+	}
+	*p = '\0'; // truncate ahead of our DLL name
+	if (wcscpy_s(NewValue, Value) || wcscat_s(NewValue, pEnd)) {
+		MessageBoxW(NULL, L"String too long", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	l = RegSetValueExW(hKey, L"SecurityProviders",
+					   0,
+					   REG_SZ,
+					   (const BYTE*)NewValue,
+					   (DWORD)(wcslen(NewValue) + 1) * sizeof(NewValue[0])); // Length in bytes, not characters, counting '\0'
+	if (l != ERROR_SUCCESS) {
+		MessageBoxW(NULL, L"Failed to write to SecurityProviders", L"miTLS_SSP", MB_OK);
+		return E_FAIL;
+	}
+	RegCloseKey(hKey);
+	return S_OK;
 }
