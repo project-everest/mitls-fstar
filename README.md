@@ -126,20 +126,3 @@ If you use F* for other projects that lack a Makefile with a <file.fst(i)-in> ta
 		     (error "--debug Low"))))
       (split-string argstr))))
 ```
-
-Error messages shown in the mini-buffer are sometimes truncated. It can be convenient to set the debug flag and open the `*Messages*` buffer in another window to see exactly what is going on. To make Emacs follow the end of the `*Messages*` buffer, use this snippet:
-
-```elisp
-(setq fstar-subp-debug t)
-
-(defadvice message (after message-tail activate)
-  "goto point max after a message"
-  (with-current-buffer "*Messages*"
-    (goto-char (point-max))
-    (walk-windows
-     (lambda (window)
-       (if (string-equal (buffer-name (window-buffer window)) "*Messages*")
-           (set-window-point window (point-max))))
-     nil
-     t)))
-```

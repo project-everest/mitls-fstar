@@ -96,7 +96,8 @@ type derived (i1:id) (i2:id) = StatefulLHAE.reader i1 * StatefulLHAE.writer i2
 
 noeq type state =
   | Init
-  | Committed of protocolVersion * aeAlg * negotiatedExtensions
+  // 2017.05.21: Removed negotiatedExtensions. Replace args by mode?
+  | Committed of protocolVersion * aeAlg (* * negotiatedExtensions *)
   | Derived: a:id -> b:id -> derived a b -> state
 //  | Done 
 //  | Wasted
@@ -130,7 +131,7 @@ let commit csr pv a ext = Committed(pv,a,ext)
 
 
 
-let keyCommit (csr:csRands) (pv:protocolVersion) (a:aeAlg) (ext:negotiatedExtensions) : unit = 
+let keyCommit (csr:csRands) (pv:protocolVersion) (a:aeAlg) (* (ext:negotiatedExtensions) *) : unit =
 (* ideal
   match read csr !kdlog with 
   | Init -> 

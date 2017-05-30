@@ -51,8 +51,8 @@ let rec really_read_rec prev tcp len =
       match recv tcp len with
       | Correct b -> 
             let lb = length b in
-      	    if lb = len then Correct(prev @| b)
-      	    else if lb = 0 then Error(AD_internal_error,"TCP close") //16-07-24 otherwise we loop...
+            if lb = len then Correct(prev @| b)
+            else if lb = 0 then Error(AD_internal_error,"TCP close") //16-07-24 otherwise we loop...
             else really_read_rec (prev @| b) tcp (len - lb)
       | Error e -> Error(AD_internal_error,e)
 

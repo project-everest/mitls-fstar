@@ -28,7 +28,7 @@ let reStream (e:id) (s:stream) (r:range) (p:plain) (s':stream) = p
 
 let makeExtPad (i:id) (r:range) (p:plain) =
 #if TLSExt_extendedPadding
-    if TLSExtensions.hasExtendedPadding i then
+    if Extensions.hasExtendedPadding i then
         let f = p.frag in
         let len = length f in
         let pad = extendedPad i r len in
@@ -39,7 +39,7 @@ let makeExtPad (i:id) (r:range) (p:plain) =
 
 let parseExtPad (i:id) (r:range) (p:plain) : result (plain) =
 #if TLSExt_extendedPadding
-    if TLSExtensions.hasExtendedPadding i then
+    if Extensions.hasExtendedPadding i then
         let f = p.frag in
         match TLSConstants.vlsplit 2 f with
         | Error(x) -> Error(x)

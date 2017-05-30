@@ -14,27 +14,26 @@ private let mk_id pv aeAlg =
   let kdf = match pv with
   | TLS_1p0 -> PRF_SSL3_concat
   | TLS_1p1 -> PRF_TLS_1p01 kdf_label
-  | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
-  let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
-  let g = CommonDH.key_params gx in
-  let gy, gxy = CommonDH.dh_responder gx in
-  let msid = StandardMS (PMS.DHPMS(g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy))) (er @| er) kdf in
+  | TLS_1p2 -> PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
+  let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
+  let gx = CommonDH.keygen g in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
+  let msid = StandardMS (PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy)) (er @| er) kdf in
   ID12 pv msid kdf aeAlg er er Client
 
 private let mk_id13 aeAlg =
-  let hash_alg = CoreCrypto.SHA256 in
-  let gx = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
-  let gy,_ = CommonDH.dh_responder gx in
-  let initiator = CommonDH.share_of_key gx in
-  let responder = CommonDH.share_of_key gy in
-  let hsId = HSID_DHE hash_alg initiator responder in
-  let asId = ASID hsId in
-  let expandId = ApplicationSecretID asId in
+  let hash_alg = Hashing.Spec.SHA256 in
+  let g = CommonDH.ECDH CoreCrypto.ECC_P256 in
+  let gx = CommonDH.keygen g in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
+  let hsId = HSID_DHE (Salt (EarlySecretID (NoPSK hash_alg))) g (CommonDH.pubshare gx) gy in
+  let asId = ASID (Salt (HandshakeSecretID hsId)) in
   let cr = CoreCrypto.random 32 in
   let sr = CoreCrypto.random 32 in
-  let logInfo = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg }) in
-  let hashed_log = CoreCrypto.random 32 in
-  let keyId = KeyID expandId ApplicationDataKey Client logInfo hashed_log in
+  let li = LogInfo_SH ({ li_sh_cr = cr; li_sh_sr = sr; li_sh_ae = aeAlg; li_sh_hash = hash_alg; li_sh_psk = None; }) in
+  let log : hashed_log li = CoreCrypto.random 32 in
+  let expandId = ExpandedSecret (ApplicationSecretID asId) ApplicationTrafficSecret log in
+  let keyId = KeyID #li expandId in
   ID13 keyId
 
 private val fake_stream: (aeAlg: (a:aeAlg{AEAD? a})) -> (key:string) -> (iv:string) -> (plain:string) -> ML bytes
@@ -119,7 +118,7 @@ private let fake_cbc pv aeAlg seqn key iv plain macKey =
   // StatefulPlain.adata id -> bytes
   let ad: StatefulPlain.adata id = StatefulPlain.makeAD id Content.Application_data in
   // Prepends sequence number
-  let ad = LHAEPlain.makeAD id seqn ad in 
+  let ad = LHAEPlain.makeAD id seqn ad in
   // Range.frange -> Range.range
   let rg: Range.frange id = 0, length text in
   // DataStream.fragment -> DataStream.pre_fragment -> bytes
@@ -180,17 +179,17 @@ private let test_cbc pv aeAlg seqn key iv plain cipher macKey =
 
 val main : unit -> ML unit
 let main () =
-  test_stream (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256)
+  test_stream (AEAD CoreCrypto.AES_128_GCM Hashing.Spec.SHA256)
     "152300c2dc44c8f695d4fb1471791659"
     "b56bf932b56bf932ffffffff"
     "474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a"
     "bd324f59c8ff0eb7fcdc519e0fd84203fbc1efcdca0c7f3160d8856cebe3e340fedc8ea409093a847e9b8d5863bf5a4899d453e11447de6f0068341625120b0d9b03b57595a74fb89d7a6ae6bdb7b3ac";
-  test_aead TLS_1p2 (AEAD CoreCrypto.AES_128_GCM CoreCrypto.SHA256)
+  test_aead TLS_1p2 (AEAD CoreCrypto.AES_128_GCM Hashing.Spec.SHA256)
     "152300c2dc44c8f695d4fb1471791659"
     "b56bf932"
     "474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a"
     "0000000000000000ed3ca96c8bd2fbb376c2dc417f3ec249e8ab550dab1c421293f0e642a0c152b43a546aa26bbe62e8651214d28ab90e70217b3d";
-  test_cbc TLS_1p2 (MtE (Block CoreCrypto.AES_128_CBC) CoreCrypto.SHA1) 1
+  test_cbc TLS_1p2 (MtE (Block CoreCrypto.AES_128_CBC) Hashing.Spec.SHA1) 1
     "e77f6871e1697b2286416f973aee9ff6"
     "00000000000000000000000000000000"
     "474554202f20485454502f312e310d0a486f73743a20756e646566696e65640d0a0d0a"

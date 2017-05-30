@@ -16,12 +16,15 @@ module N  = Nonce
 module I  = IdNonce
 module AE = StreamAE
 
+//17-04-13 this file verified by is not yet used.
+//17-04-13 it should probably depend on StAE instead of StreamAE.
+
 ////////////////////////////////////////////////////////////////////////////////
 //Framing writes to an epoch
 ////////////////////////////////////////////////////////////////////////////////
 let epoch_regions_exist (s:hs) (h0:HST.mem) =
   let epochs = logT s h0 in 
-  Map.contains (HST.HS?.h h0) (HS?.region s)
+  Map.contains (HST.HS?.h h0) (region_of s)
   /\ (forall (k:nat{k < Seq.length epochs}).{:pattern (Seq.index epochs k)}
       let wr = writer_epoch (Seq.index epochs k) in
       Map.contains (HST.HS?.h h0) (StAE.region wr))
@@ -64,7 +67,7 @@ type id = StreamAE.id
 //The type of connection with a particular nonce
 //   `r_conn n` should never really have more than 1 inhabitant, 
 //   one of the purposes of the conn_table defined below is to enforce that
-type r_conn (nonce:random) = c:connection{c.hs.nonce = nonce}
+type r_conn (nonce:random) = c:connection{random_of c.hs == nonce}
 
 //The connection associated with an id
 type i_conn (i:id) = r_conn (nonce_of_id i)
@@ -90,7 +93,7 @@ type conn_tab_t = MM.t tls_tables_region random r_conn pairwise_disjoint
 let conn_tab : conn_tab_t = 
   MM.alloc #tls_tables_region #random #r_conn #pairwise_disjoint
 
-(*** MAIN STATEFUL INVARIANT ***)
+(*** DEFINING MAIN STATEFUL INVARIANT ***)
 (* --------------------------------------------------------------------------------
    We define a joint, stateful invariant to relate the contents 
    of MasterSecret.ms_tab and conn_tab above.
@@ -113,9 +116,9 @@ type c_t  = MM.map' random r_conn
 let registered (i:id{StAE.is_stream i}) (w:StreamAE.writer i) (c:connection) (h:HST.mem) =
   (exists e. (epochs c h) `Seq.contains` e  /\               //one of c's epochs, e
       (let i' = Epochs.epoch_id e in   //has an id corresponding to i
-        i=i' /\ StAE.stream_state #i e.w == w))               //and holds w as as its writer
-  /\ MonSeq.i_contains (MkEpochs?.es c.hs.log) h                         //technical: the heap contains c's handshake log
-	
+        equals #id i i' /\ StAE.stream_state #i e.w == w))               //and holds w as as its writer
+  /\ MonSeq.i_contains (MkEpochs?.es #(region_of c.hs) #(random_of c.hs) (epochs_of c.hs)) h                         //technical: the heap contains c's handshake log
+
 //The main invariant, relating an ms_tab and a conn_tab at index i, in state h
 let ms_conn_inv (ms:ms_t)
  		(conn:c_t)
@@ -146,7 +149,7 @@ let ms_conn_invariant (ms:ms_t)
 let handshake_regions_exists (conn:c_t) (h:HH.t) = 
   forall n.{:pattern (Some? (MM.sel conn n))}
       Some? (MM.sel conn n) 
-       ==> (let hs_rgn = HS?.region (C?.hs (Some?.v (MM.sel conn n))) in 
+       ==> (let hs_rgn = region_of (C?.hs (Some?.v (MM.sel conn n))) in 
  	    Map.contains h hs_rgn /\
 	    HH.disjoint hs_rgn tls_tables_region)
 
@@ -162,7 +165,7 @@ let mc_inv (h:HST.mem) =
 
 (*** PROVING THE STABILITY OF mc_inv ***)
 (* --------------------------------------------------------------------------------
-   There are 4 main cases:
+   There are 4 main invariant-preservation cases, each with its lemma
      1. Deriving a new writer, using MS.derive 
      2. Registering a writer with a connection
      3. Mutating the log of some writer
@@ -242,20 +245,20 @@ let try_ms_derive (epoch_region:rgn) (i:AE.id)
 (* Some simply sanity checks on the association between connections, ids, nonces, writers regions *)
 let all_epoch_writers_share_conn_nonce (c:connection) (i:AE.id) (wi:AE.writer i) (h:HST.mem)
     : Lemma (requires (registered i wi c h))
-            (ensures (nonce_of_id i = c.hs.nonce))
+            (ensures (nonce_of_id i == random_of c.hs))
     = ()
 
 let writer_registered_to_at_most_one_connection
     (n1:random) (c1:r_conn n1)
     (n2:random) (c2:r_conn n2{n1 <> n2})
-    (i:AE.id {nonce_of_id i = n1}) (w:AE.writer i) (h:HST.mem)
+    (i:AE.id {nonce_of_id i == n1}) (w:AE.writer i) (h:HST.mem)
     : Lemma (requires (registered i w c1 h))
 	    (ensures (~ (registered i w c2 h)))
     = ()
 
 let writer_region_within_connection
     (n:random) (c:r_conn n)
-    (i:AE.id {nonce_of_id i = n}) (w:AE.writer i) (h:HST.mem)
+    (i:AE.id {nonce_of_id i == n}) (w:AE.writer i) (h:HST.mem)
     : Lemma (requires (registered i w c h))
 	    (ensures (HH.includes (C?.region c) (StreamAE.State?.region w)))
     = reveal_epoch_region_inv_all ()
@@ -267,20 +270,20 @@ let writer_region_within_connection
       -- so, we're in the "not yet used" case ... so, the epoch's writer is in its initial state and we can return it (our goal is to return a fresh epoch)
 *)
 val register_writer_in_epoch_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i}
-		-> c:r_conn (nonce_of_id i) -> e:epoch (HS?.region c.hs) (nonce_of_id i)
+		-> c:r_conn (nonce_of_id i) -> e:epoch (region_of c.hs) (nonce_of_id i)
   -> Lemma (requires
             (let ctab = MR.m_sel h0 conn_tab in
 	     let mstab = MR.m_sel h0 MS.ms_tab in
 	     let old_hs_log = epochs c h0 in
      	     let new_hs_log = epochs c h1 in
-	     let rgn = HS?.region c.hs in
+	     let rgn = region_of c.hs in
 	     let _ = reveal_epoch_region_inv_all () in
 	     mc_inv h0 /\ //we're initially in the invariant
-	     MonSeq.i_contains (MkEpochs?.es c.hs.log) h0 /\
-	     MonSeq.i_contains (MkEpochs?.es c.hs.log) h1 /\
+	     MonSeq.i_contains (MkEpochs?.es (epochs_of c.hs)) h0 /\
+	     MonSeq.i_contains (MkEpochs?.es (epochs_of c.hs)) h1 /\
 	     i = Epochs.epoch_id e /\ //the epoch has id i
 	     (let w = StAE.stream_state #i (Epoch?.w e) in //the epoch writer
-	      let es_log_as_hsref = MR.as_hsref (MkEpochs?.es c.hs.log) in
+	      let es_log_as_hsref = MR.as_hsref (MkEpochs?.es (epochs_of c.hs)) in
 	      let epochs = epochs c h0 in
               N.registered (nonce_of_id i) (HH.parent (StreamAE.State?.region w)) /\  //the writer's parent region is registered in the nonce table
 	      HH.disjoint (HH.parent (StreamAE.State?.region w)) tls_region /\          //technical: ... needed just for well-formedness of the rest of the formula
@@ -288,8 +291,8 @@ val register_writer_in_epoch_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i}
 	      (forall e. epochs `Seq.contains` e ==> Epochs.epoch_id e <> i) /\            //i is fresh for c
  	      MM.sel mstab i == Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (nonce_of_id i) == Some c /\ //we found the connection in the conn_table
-      	      HH.modifies_one (HS?.region c.hs) (HST.HS?.h h0) (HST.HS?.h h1) /\ //we just modified this connection's handshake region
-	      HH.modifies_rref (HS?.region c.hs) (Set.singleton (Heap.addr_of (HH.as_ref (HST.MkRef?.ref es_log_as_hsref)))) (HST.HS?.h h0) (HST.HS?.h h1) /\ //and within it, just the epochs log
+      	      HH.modifies_one (region_of c.hs) (HST.HS?.h h0) (HST.HS?.h h1) /\ //we just modified this connection's handshake region
+	      HH.modifies_rref (region_of c.hs) (Set.singleton (Heap.addr_of (HH.as_ref (HST.MkRef?.ref es_log_as_hsref)))) (HST.HS?.h h0) (HST.HS?.h h1) /\ //and within it, just the epochs log
 	      new_hs_log == Seq.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
 let register_writer_in_epoch_ok h0 h1 i c e =
@@ -378,7 +381,7 @@ let mutate_registered_writer_ok h0 h1 i w c = (* () *)
 (* An auxiliary formula, needed as a pre-condition to add a c to conn_tab *)
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 let conn_hs_region_exists (c:connection) (h:HST.mem) =
-   let hs_rgn = HS?.region c.hs in
+   let hs_rgn = region_of c.hs in
    Map.contains (HST.HS?.h h) hs_rgn /\
    HH.disjoint hs_rgn tls_tables_region
 

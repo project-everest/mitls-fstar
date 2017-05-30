@@ -24,7 +24,15 @@ open FFICallbacks
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
-inline_for_extraction let ffi_debug = true
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("EPO| "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if Flags.debug_FFI then print else (fun _ -> ())
 
 private let fragment_1 i (b:bytes { length b <= max_TLSPlaintext_fragment_length }) : fragment i (point (length b)) = 
   let rg : frange i = point(length b) in 
@@ -57,8 +65,7 @@ private let errno description txt : ML int =
     match description with 
     | Some ad -> TLSError.string_of_ad ad
     | None    -> "(None)" in (
-  if ffi_debug then 
-    IO.print_string ("returning error: "^txt0^" "^txt^"\n"); (
+  trace ("returning error: "^txt0^" "^txt^"\n"); (
   match description with 
   | Some ad -> Char.int_of_char (snd (cbyte2 (Alert.alertBytes ad)))
   | None    -> -1 ))
@@ -78,6 +85,13 @@ let connect send recv config_1 : ML (Connection.connection * int) =
     | CertQuery _ _ -> failwith "unsupported certificate request from the server"
     | Read _ -> failwith "unexpected early read" in
   c, firstResult
+
+val getCert: Connection.connection -> ML bytes // bytes of the first certificate in the server-certificate chain.
+let getCert c = 
+  let mode = TLS.get_mode c in 
+  match mode.Negotiation.n_server_cert with
+  | Some ((c,_)::_) -> c
+  | _ -> empty_bytes
 
 let accept_connected send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
@@ -118,10 +132,7 @@ let write c msg : ML int =
 // the full shutdown (but many servers don't acknowledge).
 
 let close c : ML int = 
-  let b = 
-    if ffi_debug then
-      IO.debug_print_string "FFI close\n" 
-    else false in 
+  trace ("FFI close\n"); 
   match writeCloseNotify c with 
   | WriteClose                 -> 0
   | WriteError description txt -> errno description txt
@@ -143,10 +154,49 @@ let s2pv = function
   | "1.0" -> TLS_1p0
   | s -> failwith ("Invalid protocol version specified: "^s)
 
+let css = [
+  ("TLS_AES_128_GCM_SHA256", TLS_AES_128_GCM_SHA256);
+  ("TLS_AES_256_GCM_SHA384", TLS_AES_256_GCM_SHA384);
+  ("TLS_CHACHA20_POLY1305_SHA256", TLS_CHACHA20_POLY1305_SHA256);
+  ("TLS_AES_128_CCM_SHA256", TLS_AES_128_CCM_SHA256);
+  ("TLS_AES_128_CCM_8_SHA256", TLS_AES_128_CCM_8_SHA256);
+  ("ECDHE-RSA-AES256-GCM-SHA384", TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384);
+  ("ECDHE-RSA-AES128-GCM-SHA256", TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256);
+  ("ECDHE-RSA-CHACHA20-POLY1305-SHA256", TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
+  ("ECDHE-ECDSA-AES256-GCM-SHA384", TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384);
+  ("ECDHE-ECDSA-AES128-GCM-SHA256", TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256);
+  ("ECDHE-ECDSA-CHACHA20-POLY1305-SHA256", TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256);
+  ("DHE-RSA-AES256-GCM-SHA384", TLS_DHE_RSA_WITH_AES_256_GCM_SHA384);
+  ("DHE-RSA-AES128-GCM-SHA256", TLS_DHE_RSA_WITH_AES_128_GCM_SHA256);
+  ("DHE-RSA-CHACHA20-POLY1305-SHA256", TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
+]
+
+let sas = [
+  ("RSA+SHA512",   RSA_PKCS1_SHA512);
+  ("RSA+SHA384",   RSA_PKCS1_SHA384);
+  ("RSA+SHA256",   RSA_PKCS1_SHA256);
+  ("RSA+SHA1",     RSA_PKCS1_SHA1);
+  ("ECDSA+SHA512", ECDSA_SECP521R1_SHA512);
+  ("ECDSA+SHA384", ECDSA_SECP384R1_SHA384);
+  ("ECDSA+SHA256", ECDSA_SECP256R1_SHA256);
+  ("ECDSA+SHA1",   ECDSA_SHA1);
+]
+
+let ngs = [
+  ("P-521", Parse.SEC CoreCrypto.ECC_P521);
+  ("P-384", Parse.SEC CoreCrypto.ECC_P384);
+  ("P-256", Parse.SEC CoreCrypto.ECC_P256);
+  ("X25519", Parse.SEC CoreCrypto.ECC_X25519);
+  ("X448",  Parse.SEC CoreCrypto.ECC_X448);
+  ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
+  ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
+  ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
+]
+
 let ffiConfig version host =
   let v = s2pv version in 
   {defaultConfig with
-    minVer = v;
+    minVer = TLS_1p2;
     maxVer = v;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
@@ -154,16 +204,16 @@ let ffiConfig version host =
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
     safe_resumption = true;
     ciphersuites = cipherSuites_of_nameList [
-                    (* mitls.exe expects this one *)
-                      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+                    (* mitls.ml ciphersuites *)
+		      TLS_AES_128_GCM_SHA256;
+		      TLS_AES_256_GCM_SHA384;
+		      TLS_CHACHA20_POLY1305_SHA256;
+		      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
+		      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+		      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
                     (* default ciphersuites from TLSInfo.fst follow: *)
                       TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-                      TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
-                      TLS_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
-                      TLS_RSA_WITH_3DES_EDE_CBC_SHA;
                       ];
   }
 
@@ -184,6 +234,43 @@ let ffiSetCAFile cfg f =
   { cfg with
   ca_file = f;
   }
+
+let rec findsetting f l = match l with
+  | [] -> None
+  | (s, i)::tl -> if s = f then Some i else findsetting f tl
+
+val ffiSetCipherSuites: cfg:config -> x:string -> ML config
+let ffiSetCipherSuites cfg x =
+  let csl = String.split [':'] x in
+  let csl = List.map (fun x-> match findsetting x css with
+    | None -> failwith ("Unknown ciphersuite: "^x)
+    | Some a -> a
+    ) csl in
+  { cfg with 
+  ciphersuites = cipherSuites_of_nameList csl
+  }
+
+val ffiSetSignatureAlgorithms: cfg:config -> x:string -> ML config
+let ffiSetSignatureAlgorithms cfg x =
+  let sal = String.split [':'] x in
+  let sal = List.map (fun x-> match findsetting x sas with
+    | None -> failwith ("Unknown signature algorithm: "^x)
+    | Some a -> a
+  ) sal in
+  { cfg with 
+  signatureAlgorithms = sal
+  }
+
+val ffiSetNamedGroups: cfg:config -> x:string -> ML config
+let ffiSetNamedGroups cfg x =
+  let ngl = String.split [':'] x in
+  let ngl = List.map (fun x-> match findsetting x ngs with
+    | None -> failwith ("Unknown named group: "^x)
+    | Some a -> a
+  ) ngl in
+  { cfg with 
+  namedGroups = ngl
+  }  
 
 type callbacks = FFICallbacks.callbacks
 

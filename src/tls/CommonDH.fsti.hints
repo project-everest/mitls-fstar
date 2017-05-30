@@ -1,0 +1,193 @@
+[
+  "×ZFìÌ¢›Þ\u000f'©Çmüvâ",
+  [
+    [
+      "CommonDH.is_honest",
+      1,
+      0,
+      1,
+      [ "@query", "assumption_Prims.HasEq_bool" ],
+      0
+    ],
+    [ "CommonDH.is_honest", 2, 0, 1, [ "@query" ], 0 ],
+    [ "CommonDH.keygen", 1, 0, 1, [ "@query" ], 0 ],
+    [ "CommonDH.dh_responder", 1, 0, 1, [ "@query" ], 0 ],
+    [ "CommonDH.register", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "CommonDH.keyShareEntry",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parse.namedGroup_haseq",
+        "assumption_Platform.Bytes.HasEq_bytes", "equation_CommonDH.share",
+        "equation_Platform.Bytes.bytes",
+        "function_token_typing_CommonDH.group",
+        "haseqCommonDH_Tm_refine_4e627658e18fba0c8d3ce5bac81d0d12",
+        "haseqCommonDH_Tm_refine_62be46b5d65726c91e550691e3da999b",
+        "haseqCommonDH_Tm_refine_8b5ac726a6b2c5e744e9e32127065f93",
+        "haseqCommonDH_Tm_refine_a8be441a33e9134acfea527361c50c75",
+        "refinement_interpretation_CommonDH_Tm_refine_4e627658e18fba0c8d3ce5bac81d0d12",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_CommonDH.pre_share"
+      ],
+      0
+    ],
+    [
+      "CommonDH.uu___is_Share",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Curve25519_non_total_function_typing_Non_total_Tm_arrow_15071",
+        "bool_inversion", "equation_FStar.HyperStack.is_mm",
+        "equation_FStar.HyperStack.ref",
+        "function_token_typing_Curve25519.rand",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_FStar.HyperStack_Tm_refine_957e65310ce1a9712607354807b9857b",
+        "typing_FStar.HyperStack.is_mm"
+      ],
+      0
+    ],
+    [
+      "CommonDH.__proj__Share__item__g",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.Share",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
+      ],
+      0
+    ],
+    [ "CommonDH.__proj__Share__item___1", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "CommonDH.__proj__Share__item___1",
+      2,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_CommonDH.Share",
+        "proj_equation_CommonDH.Share_g",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_CommonDH.Share_g",
+        "refinement_interpretation_CommonDH_Tm_refine_419290ad1633289796ca4faa3415e88c"
+      ],
+      0
+    ],
+    [
+      "CommonDH.uu___is_UnknownShare",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Curve25519_non_total_function_typing_Non_total_Tm_arrow_15071",
+        "bool_inversion", "equation_FStar.HyperStack.is_mm",
+        "equation_FStar.HyperStack.ref",
+        "function_token_typing_Curve25519.rand",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_FStar.HyperStack_Tm_refine_957e65310ce1a9712607354807b9857b",
+        "typing_FStar.HyperStack.is_mm"
+      ],
+      0
+    ],
+    [
+      "CommonDH.__proj__UnknownShare__item__ng",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.UnknownShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
+      ],
+      0
+    ],
+    [
+      "CommonDH.__proj__UnknownShare__item__b",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.UnknownShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
+      ],
+      0
+    ],
+    [
+      "CommonDH.clientKeyShare",
+      1,
+      0,
+      1,
+      [ "@query", "projection_inverse_BoxInt_proj_0" ],
+      0
+    ],
+    [
+      "CommonDH.uu___is_ClientKeyShare",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Curve25519_non_total_function_typing_Non_total_Tm_arrow_15071",
+        "bool_inversion", "equation_FStar.HyperStack.is_mm",
+        "equation_FStar.HyperStack.ref",
+        "function_token_typing_Curve25519.rand",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_FStar.HyperStack_Tm_refine_957e65310ce1a9712607354807b9857b",
+        "typing_FStar.HyperStack.is_mm"
+      ],
+      0
+    ],
+    [
+      "CommonDH.__proj__ClientKeyShare__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.ClientKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_6def7493d05b3fbcbe82678fc375d428"
+      ],
+      0
+    ],
+    [
+      "CommonDH.uu___is_ServerKeyShare",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Curve25519_non_total_function_typing_Non_total_Tm_arrow_15071",
+        "bool_inversion", "equation_FStar.HyperStack.is_mm",
+        "equation_FStar.HyperStack.ref",
+        "function_token_typing_Curve25519.rand",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_FStar.HyperStack_Tm_refine_957e65310ce1a9712607354807b9857b",
+        "typing_FStar.HyperStack.is_mm"
+      ],
+      0
+    ],
+    [
+      "CommonDH.__proj__ServerKeyShare__item___0",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CommonDH.ServerKeyShare",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_CommonDH_Tm_refine_9cc025d1d8ed93fe703d76a8ddd03286"
+      ],
+      0
+    ]
+  ]
+]

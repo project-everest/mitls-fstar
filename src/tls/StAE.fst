@@ -236,9 +236,10 @@ let reads (s:Set.set rid) (a:Type) =
     f: (h:mem -> GTot a){forall h1 h2. (HH.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
 				  ==> f h1 == f h2}
 
+(*
 val fragments' : #i:id -> #rw:rw -> s:state i rw{ authId i } -> Tot (reads (Set.singleton (log_region s)) (frags i))
-let fragments' #i #rw s = fragments s
-
+let fragments' #i #rw s = fun h -> fragments #i #rw s h
+*)
 
 (*------------------------------------------------------------------*)
 let genPost (#i:id) parent h0 (w:writer i) h1 =

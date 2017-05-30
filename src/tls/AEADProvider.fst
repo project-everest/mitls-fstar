@@ -1,5 +1,5 @@
 (*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
 --*)
 module AEADProvider
 
@@ -13,12 +13,13 @@ open TLSConstants
 open TLSInfo
 open FStar.UInt32
 
-module Plain = Crypto.Plain
 module CC = CoreCrypto
-module CAEAD = LowCProvider
-module AE = Crypto.AEAD
-module CB = Crypto.Symmetric.Bytes
 module OAEAD = AEADOpenssl
+module CAEAD = LowCProvider
+
+module Plain = Crypto.Plain
+module AE = Crypto.AEAD.Main
+module CB = Crypto.Symmetric.Bytes
 
 type provider =
   | OpenSSLProvider
@@ -59,7 +60,7 @@ val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{len
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
 let rec store_bytes len buf i s =
   if i < len then
-    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (index s i))) in
+    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (Platform.Bytes.index s i))) in
     store_bytes len buf (i + 1) s
 
 val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))
@@ -115,7 +116,7 @@ type salt (i:id) = lbytes (salt_length i)
 noeq type state (i:id) (r:rw) =
 | OpenSSL: st:OAEAD.state i r -> salt:salt i -> state i r
 | LowC: st:CAEAD.aead_state -> key:key i -> salt:salt i -> state i r
-| LowLevel: st:Crypto.AEAD.Invariant.aead_state i (Crypto.Indexing.rw2rw r) -> salt:salt i -> state i r
+| LowLevel: st:AE.aead_state i (Crypto.Indexing.rw2rw r) -> salt: salt i -> state i r
 
 type writer i = s:state i Writer
 type reader i = s:state i Reader
@@ -173,23 +174,24 @@ let region (#i:id) (#rw:rw) (st:state i rw) =
   (match st with
   | OpenSSL st _ -> OAEAD.State?.region st
   | LowC st _ _ -> tls_region // TODO
-  | LowLevel st _ -> Crypto.AEAD.Invariant.AEADState?.log_region st) // TODO
+  | LowLevel st _ -> tls_region) // TODO
 
 let log_region (#i:id) (#rw:rw) (st:state i rw) =
   match st with
   | OpenSSL st _ -> OAEAD.State?.log_region st
   | LowC st _ _ -> let r:rgn = tls_region in r // TODO
-  | LowLevel st _ ->
-    let r = Crypto.AEAD.Invariant.AEADState?.log_region st in
+  | LowLevel st _ -> let r:rgn = tls_region in r // TODO
+(*
     assume(r<>root);
     assume(forall (s:rid).{:pattern is_eternal_region s} is_above s r ==> is_eternal_region s);
     r
+*)
 
 let st_inv (#i:id) (#rw:rw) (st:state i rw) h =
   match st with
   | OpenSSL st _ -> True
   | LowC st _ _ -> True
-  | LowLevel st _ -> Crypto.AEAD.Invariant.inv st h
+  | LowLevel st _ -> True // TODO
 
 let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
   modifies_none h0 h1 /\
@@ -212,7 +214,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
     assume false; // TODO
     let kv: key i = CC.random (CC.aeadKeySize (alg i)) in
     let salt: salt i = CC.random (salt_length i) in
-    let st = CAEAD.aead_create (alg i) kv in
+    let st = CAEAD.aead_create (alg i) CAEAD.ValeAES kv in
     LowC st kv salt
   | LowProvider ->
     assume false; // TODO
@@ -249,7 +251,7 @@ let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
     OpenSSL (OAEAD.genReader parent w) salt
   | LowLevel st salt ->
     assume false;
-    let st' : Crypto.AEAD.Invariant.aead_state i Crypto.Indexing.Reader = AE.genReader st in
+    let st' : AE.aead_state i Crypto.Indexing.Reader = AE.genReader st in
     LowLevel st' salt
   | LowC st k s ->
     assume false;
@@ -265,7 +267,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
     | OpenSSLProvider ->
       OpenSSL (OAEAD.coerce r i k) s
     | LowCProvider ->
-      let st = CAEAD.aead_create (alg i) k in
+      let st = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
       LowC st k s
     | LowProvider ->
       let st = AE.coerce i r (from_bytes k) in
@@ -279,9 +281,6 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *) type plain (i:id) (l:plainlen) = b:lbytes l
-let lemma_plainlen (#i:id) (#l:plainlen) (p:plain i l)
- : Lemma (l <= Crypto.AEAD.Invariant.maxplain i)
- = assert_norm (max_TLSPlaintext_fragment_length = Crypto.AEAD.Invariant.maxplain i)
 let repr (#i:id) (#l:plainlen) (p:plain i l) : Tot (lbytes l) = p
 
 let adlen i = match pv_of_id i with
@@ -304,9 +303,7 @@ let uint128_of_iv (#i:id) (iv:iv i)
 type fresh_iv (#i:id{authId i}) (w:writer i) (iv:iv i) h =
   (match w with
   | OpenSSL st _ -> OAEAD.fresh_iv #i st iv h
-  | LowLevel st _ ->
-    let nonce = uint128_of_iv iv in
-    Crypto.AEAD.Invariant.(fresh_nonce_st #i #Crypto.Indexing.Writer nonce st h)
+  | LowLevel st _ -> True // TODO
   | _ -> True)
 
 let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
@@ -338,7 +335,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let ad = from_bytes ad in
       let plainlen = uint_to_t l in
       let cipherlen = uint_to_t (cipherlen i l) in
-      assume(Crypto.AEAD.Invariant.safelen i (v plainlen) (Crypto.Symmetric.PRF.ctr_0 i +^ 1ul)); // ADL not proving because this will change in PlanA
+      assume(AE.safelen i (v plainlen) = true); // TODO
       let plainbuf = from_bytes plain in
       let plainba = CB.load_bytes plainlen plainbuf in
       let plain = Plain.create i 0uy plainlen in
@@ -348,7 +345,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       end;
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
-      Crypto.AEAD.Encrypt.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
+      AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
       to_bytes l cipher
   in
   pop_frame ();
@@ -389,7 +386,7 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
       let plainlen = uint_to_t l in
       let cbuf = from_bytes cipher in
       let plain = Plain.create i 0uy plainlen in
-      if Crypto.AEAD.Decrypt.decrypt i st iv adlen ad plainlen plain cbuf then
+      if AE.decrypt i st iv adlen ad plainlen plain cbuf then
         Some (to_bytes l (Plain.bufferRepr #i plain))
       else None
     in

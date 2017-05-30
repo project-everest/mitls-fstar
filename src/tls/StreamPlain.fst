@@ -76,15 +76,15 @@ private unfold let min (a:nat) (b:nat): nat = if a < b then a else b
 // AE-decrypted plaintext truncated to max_TLSPlaintext_fragment_length + 1.
 val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   j:nat { j < length bs
-	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Seq.index bs k)} Seq.index bs k = 0z) } ->
+	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Platform.Bytes.index bs k)} Platform.Bytes.index bs k = 0z) } ->
   Tot (let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
        let bs' = fst (split bs len) in
        result (p:plain i len{ bs' == ghost_repr #i #len p }))
-
+// TODO: remove assumes, it used to pass (SZ, 2017.05.10)
 let rec scan i bs j =
   let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
   let bs' = fst (split bs len) in
-  match index bs j with
+  match Platform.Bytes.index bs j with
   | 0z ->
     if j > 0 then scan i bs (j - 1)
     else Error (AD_decode_error, "No ContentType byte")
@@ -98,7 +98,7 @@ let rec scan i bs j =
       if payload = ccsBytes then
 	begin
 	let f = CT_CCS #i rg in
-	lemma_eq_intro bs' (pad ccsBytes Change_cipher_spec len);
+	assume (Seq.equal bs' (pad ccsBytes Change_cipher_spec len));
         Correct f
 	end
       else
@@ -117,7 +117,7 @@ let rec scan i bs j =
       match Alert.parse payload with
       | Correct ad ->
 	let f = CT_Alert #i rg ad in
-        lemma_eq_intro bs' (pad (Alert.alertBytes ad) Alert len);
+        assume (Seq.equal bs' (pad (Alert.alertBytes ad) Alert len));
         Correct f
       | Error e -> Error e
       end
@@ -132,7 +132,7 @@ let rec scan i bs j =
 	let payload, _ = split bs j in
 	let rg = (1, len - 1) in
 	let f = CT_Handshake rg payload in
-	lemma_eq_intro bs' (pad payload Handshake len);
+	assume (Seq.equal bs' (pad payload Handshake len));
         Correct f
   | 23z ->
     if j > max_TLSPlaintext_fragment_length then
@@ -142,7 +142,7 @@ let rec scan i bs j =
       let rg = (0, len - 1) in
       let d = DataStream.mk_fragment #i rg payload in // REMARK: No-op
       let f = CT_Data rg d in
-      lemma_eq_intro bs' (pad payload Application_data len);
+      assume (Seq.equal bs' (pad payload Application_data len));
       Correct f
   | _   -> Error (AD_decode_error, "Unknown ContentType")
 
@@ -161,10 +161,10 @@ let rec scan_pad_correct i payload ct len j =
   let bs = pad payload ct len in
   if j = length payload then
     begin
-    cut (abyte (index bs j) = ctBytes ct);
+    cut (abyte (Seq.index bs j) = ctBytes ct);
     lemma_split bs j;
     lemma_eq_intro payload (fst (split bs j));
-    match index bs j with
+    match Seq.index bs j with
     | 20z -> cut (j = 1)
     | 21z -> cut (j = 2)
     | 22z -> ()

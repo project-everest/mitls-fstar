@@ -64,7 +64,7 @@ let repr (i:id) r f =
 
 let makeExtPad (i:id) (r:range) (f:fragment) =
 #if TLSExt_extendedPadding
-    if TLSExtensions.hasExtendedPadding i then
+    if Extensions.hasExtendedPadding i then
         let (e',s,d) = f.frag in
         //AP: This e' has no relation to i.
         //AP: In particular, e' misses crucial information such as negotiated ciphersute and extensions
@@ -81,7 +81,7 @@ let makeExtPad (i:id) (r:range) (f:fragment) =
 
 let parseExtPad (i:id) (r:range) (f:fragment) : result (fragment) =
 #if TLSExt_extendedPadding
-    if TLSExtensions.hasExtendedPadding i then
+    if Extensions.hasExtendedPadding i then
         let (e',s,d) = f.frag in
         let b = DataStream.deltaBytes e' s r d in
         match TLSConstants.vlsplit 2 b with
