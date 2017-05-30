@@ -48,18 +48,32 @@ let tagged m =
 - support abstract plaintexts and multiple epochs 
 *)
 
-let valid_transcript hsl =
+let weak_valid_transcript hsl =
     match hsl with
     | [] -> true
     | [ClientHello ch] -> true
     | (ClientHello ch) :: (ServerHello sh) :: rest -> true
     | _ -> false
 
-let hs_transcript: Type0 = l:list msg{valid_transcript l}
+let transcript_version (x: list msg { weak_valid_transcript x } ) = match x with
+    | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
+    | _ -> None
+
+(* TODO: move to something like FStar.List.GTot *)
+let rec gforall (#a: Type) (f: (a -> GTot bool)) (l: list a) : GTot bool =
+  match l with
+  | [] -> true
+  | x :: q -> f x && gforall f q
+
+let valid_transcript hsl : GTot bool =
+  weak_valid_transcript hsl &&
+  gforall (valid_hs_msg_prop (transcript_version hsl)) hsl
+
+let hs_transcript: Type0 = l:list msg {valid_transcript l}
 
 let append_transcript (l:hs_transcript) (m:list msg {valid_transcript (l @ m)}): Tot hs_transcript = l @ m
 
-val transcript_bytes: list msg -> GTot bytes
+val transcript_bytes: hs_transcript -> GTot bytes
  
 // formatting of the whole transcript is injective (what about binders?)
 val transcript_format_injective: ms0:hs_transcript -> ms1:hs_transcript -> 
@@ -81,11 +95,13 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
       let prior = prior@[m] in
       match tagged m, hs with 
       | true, h::hs -> 
+          valid_transcript prior /\ (
           let t = transcript_bytes prior in 
           (  tagLength h = tagLen a /\ 
              (  let h = narrowTag a h in 
                 hashed a t /\ h == hash a t /\
                 tags a prior ms hs ))
+          )
       | false, hs -> tags a prior ms hs
       | _ -> False
 
@@ -105,9 +121,15 @@ type t = log
 
 val get_reference: log -> GTot HS.some_ref
 let region_of s = 
-  let open FStar.HyperStack in 
-  let Ref r = get_reference s in 
-  r.id
+  let (HS.Ref r) = get_reference s in
+  HS.frameOf r
+
+let modifies_one (s: log) (h0 h1: HS.mem) =
+  let (HS.Ref r) = get_reference s in
+  let rg = region_of s in (
+    HS.modifies (Set.singleton rg) h0 h1 /\
+    HS.modifies_ref rg (Set.singleton (HS.as_addr r)) h0 h1
+  )
 
 // not needed.
 
@@ -118,10 +140,10 @@ val writing: h:HS.mem -> log -> GTot bool
 val hashAlg: h:HS.mem -> log -> GTot (option Hashing.alg)
 
 // the transcript of past messages, in both directions
-val transcript: h:HS.mem -> log -> GTot (list hs_msg)
+val transcript: h:HS.mem -> log -> GTot hs_transcript
 
 //17-04-12 for now always called with pv = None.
-val create: reg:HH.rid -> pv:option TLSConstants.protocolVersion -> ST log
+val create: reg:TLSConstants.rgn -> pv:option TLSConstants.protocolVersion -> ST log
   (requires (fun h -> True))
   (ensures (fun h0 out h1 ->
     HS.modifies (Set.singleton reg) h0 h1 /\ // todo: we just allocate (ref_of out)
@@ -136,7 +158,7 @@ val setParams: s:log ->
   option CommonDH.group -> ST unit
   (requires (fun h0 -> None? (hashAlg h0 s)))
   (ensures (fun h0 _ h1 ->
-    HS.(mods [get_reference s] h0 h1) /\
+    modifies_one s h0 h1 /\
     transcript h1 s == transcript h0 s /\
     writing h1 s == writing h0 s /\
     hashAlg h1 s == Some a ))
@@ -152,7 +174,7 @@ val setParams: s:log ->
 
 // shared postcondition
 let write_transcript h0 h1 (s:log) (m:msg) = 
-    HS.(mods [get_reference s] h0 h1) /\
+    modifies_one s h0 h1 /\
     writing h1 s /\
     hashAlg h1 s == hashAlg h0 s /\
     transcript h1 s == transcript h0 s @ [m] 
@@ -209,7 +231,7 @@ val send_signals: s:log -> next_keys:option bool -> complete:bool -> ST unit
     writing h0 s /\
     (Some? next_keys || complete))
   (ensures fun h0 _ h1 -> 
-    HS.(mods [get_reference s] h0 h1) /\
+    modifies_one s h0 h1 /\
     hashAlg h0 s == hashAlg h1 s /\
     transcript h0 s == transcript h1 s)
 
@@ -267,7 +289,7 @@ val receive: s:log -> bytes -> ST (result (option (list msg * list anyTag)))
     let t0 = transcript h0 s in
     let t1 = transcript h1 s in
     oa == hashAlg h0 s /\
-    HS.(mods [get_reference s] h0 h1) /\ (
+    modifies_one s h0 h1 /\ (
     match o with 
     | Error _ -> True // left underspecified
     | Correct None -> 
@@ -287,7 +309,7 @@ val receive_CCS: #a:Hashing.alg -> s:log -> ST (result (list msg * list anyTag *
     let oa = hashAlg h1 s in 
     let t0 = transcript h0 s in
     let t1 = transcript h1 s in
-    HS.(mods [get_reference s] h0 h1) /\ 
+    modifies_one s h0 h1 /\
     hashAlg h0 s == hashAlg h1 s /\ (
     match res with 
     | Error _ -> True // left underspecified

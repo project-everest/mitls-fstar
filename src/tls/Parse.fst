@@ -88,11 +88,46 @@ val vlbytes_trunc: lSize:nat -> b:bytes ->
 let vlbytes_trunc lSize b extra =
   bytes_of_int lSize (length b + extra) @| b
 
+let vlbytes_trunc_injective
+  (lSize: nat)
+  (b1: bytes)
+  (extra1: nat { repr_bytes (length b1 + extra1) <= lSize } )
+  (s1: bytes)
+  (b2: bytes)
+  (extra2: nat { repr_bytes (length b2 + extra2) <= lSize } )
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (vlbytes_trunc lSize b1 extra1 @| s1) (vlbytes_trunc lSize b2 extra2 @| s2)))
+  (ensures (length b1 + extra1 == length b2 + extra2 /\ b1 @| s1 == b2 @| s2))
+= let l1 = bytes_of_int lSize (length b1 + extra1) in
+  let l2 = bytes_of_int lSize (length b2 + extra2) in
+  Seq.append_assoc l1 b1 s1;
+  Seq.append_assoc l2 b2 s2;
+  Seq.lemma_append_inj l1 (b1 @| s1) l2 (b2 @| s2);
+  int_of_bytes_of_int lSize (length b1 + extra1);
+  int_of_bytes_of_int lSize (length b2 + extra2)
 
 (** Lemmas associated to bytes manipulations *)
 val lemma_vlbytes_len : i:nat -> b:bytes{repr_bytes (length b) <= i}
   -> Lemma (ensures (length (vlbytes i b) = i + length b))
 let lemma_vlbytes_len i b = ()
+
+val lemma_vlbytes_inj_strong : i:nat
+  -> b:bytes{repr_bytes (length b) <= i}
+  -> s:bytes
+  -> b':bytes{repr_bytes (length b') <= i}
+  -> s':bytes
+  -> Lemma (requires (Seq.equal (vlbytes i b @| s) (vlbytes i b' @| s')))
+          (ensures (b == b' /\ s == s'))
+let lemma_vlbytes_inj_strong i b s b' s' =
+  let l = bytes_of_int i (length b) in
+  let l' = bytes_of_int i (length b') in
+  Seq.append_assoc l b s;
+  Seq.append_assoc l' b' s';
+  Seq.lemma_append_inj l (b @| s) l' (b' @| s');
+  int_of_bytes_of_int i (length b);
+  int_of_bytes_of_int i (length b');
+  Seq.lemma_append_inj b s b' s'
 
 val lemma_vlbytes_inj : i:nat
   -> b:bytes{repr_bytes (length b) <= i}
@@ -100,8 +135,7 @@ val lemma_vlbytes_inj : i:nat
   -> Lemma (requires (Seq.equal (vlbytes i b) (vlbytes i b')))
           (ensures (b == b'))
 let lemma_vlbytes_inj i b b' =
-  let l = bytes_of_int i (length b) in
-  Seq.lemma_append_inj l b l b'
+  lemma_vlbytes_inj_strong i b Seq.createEmpty b' Seq.createEmpty
 
 val vlbytes_length_lemma: n:nat -> a:bytes{repr_bytes (length a) <= n} -> b:bytes{repr_bytes (length b) <= n} ->
   Lemma (requires (Seq.equal (Seq.slice (vlbytes n a) 0 n) (Seq.slice (vlbytes n b) 0 n)))
@@ -230,6 +264,22 @@ let namedGroupBytes ng =
     end
   | NG_UNKNOWN u	-> abyte2 u
 
+(* TODO: move to Platform.Bytes *)
+let abyte2_inj x1 x2 : Lemma
+  (abyte2 x1 == abyte2 x2 ==> x1 == x2)
+  [SMTPat (abyte2 x1); SMTPat (abyte2 x2)]
+= let s1 = abyte2 x1 in
+  let s2 = abyte2 x2 in
+  assert (x1 == (Seq.index s1 0, Seq.index s1 1));
+  assert (x2 == (Seq.index s2 0, Seq.index s2 1))
+
+let namedGroupBytes_is_injective
+  (ng1 ng2: namedGroup)
+: Lemma
+  (requires (Seq.equal (namedGroupBytes ng1) (namedGroupBytes ng2)))
+  (ensures (ng1 == ng2))
+= ()
+
 (** Parsing function for (EC)DHE named groups *)
 val parseNamedGroup: pinverse_t namedGroupBytes
 let parseNamedGroup b =
@@ -272,6 +322,18 @@ let rec namedGroupsBytes0 groups =
     namedGroupBytes g @| namedGroupsBytes0 gs
 #reset-options
 
+private
+let rec namedGroupsBytes0_is_injective
+  (groups1 groups2: list namedGroup)
+: Lemma
+  (requires (Seq.equal (namedGroupsBytes0 groups1) (namedGroupsBytes0 groups2)))
+  (ensures (groups1 == groups2))
+= match groups1, groups2 with
+  | [], [] -> ()
+  | g1::groups1', g2::groups2' ->
+    lemma_append_inj (namedGroupBytes g1) (namedGroupsBytes0 groups1') (namedGroupBytes g2) (namedGroupsBytes0 groups2');
+    namedGroupsBytes0_is_injective groups1' groups2'
+
 (** Serialization function for a list of named groups *)
 val namedGroupsBytes: groups:list namedGroup{List.Tot.length groups < 65536/2}
   -> Tot (b:bytes { length b = 2 + op_Multiply 2 (List.Tot.length groups)})
@@ -279,6 +341,21 @@ let namedGroupsBytes groups =
   let gs = namedGroupsBytes0 groups in
   lemma_repr_bytes_values (length gs);
   vlbytes 2 gs
+
+let namedGroupsBytes_is_injective
+  (groups1: list namedGroup { List.Tot.length groups1 < 65536/2 } )
+  (s1: bytes)
+  (groups2: list namedGroup { List.Tot.length groups2 < 65536/2 } )
+  (s2: bytes)
+: Lemma
+  (requires (Seq.equal (namedGroupsBytes groups1 @| s1) (namedGroupsBytes groups2 @| s2)))
+  (ensures (groups1 == groups2 /\ s1 == s2))
+= let gs1 = namedGroupsBytes0 groups1 in
+  lemma_repr_bytes_values (length gs1);
+  let gs2 = namedGroupsBytes0 groups2 in
+  lemma_repr_bytes_values (length gs2);
+  lemma_vlbytes_inj_strong 2 gs1 s1 gs2 s2;
+  namedGroupsBytes0_is_injective groups1 groups2
 
 private val parseNamedGroups0: b:bytes -> l:list namedGroup
   -> Tot (result (groups:list namedGroup{List.Tot.length groups = List.Tot.length l + length b / 2}))

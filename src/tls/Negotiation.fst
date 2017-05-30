@@ -35,7 +35,7 @@ unfold let trace = if Flags.debug_NGO then print else (fun _ -> ())
 
 
 //17-05-01 relocate these printing functions?!
-let string_of_option_extensions o = match o with
+let string_of_option_extensions (o: option extensions) = match o with
   | None -> "None"
   | Some es -> "[ "^Extensions.string_of_extensions es^"]"
 
@@ -147,25 +147,6 @@ let valid_offer ch =
 // There is a pure function computing a ClientHello from an offer (minus the PSK binders)
 type offer = ch:HandshakeMessages.ch { valid_offer ch }
 
-private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare) :
-  list (g:CommonDH.group & CommonDH.share g) =
-  match ks with
-  | [] -> []
-  | CommonDH.Share g s :: tl -> (|g, s|) :: list_of_ClientKeyShare tl
-  | CommonDH.UnknownShare _ _  :: tl -> list_of_ClientKeyShare tl
-
-// TODO remove duplication with find_key_shares below.
-val gs_of: ch:offer -> list (g:CommonDH.group & CommonDH.share g)
-let gs_of ch =
-  match ch.ch_extensions with
-  | Some exts ->
-    begin
-    match List.Tot.find Extensions.E_key_share? exts with
-    | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> list_of_ClientKeyShare ks
-    | _ -> []
-    end
-  | _ -> []
-
 let find_client_extension filter o =
   match o.ch_extensions with
   | None -> None
@@ -203,6 +184,14 @@ let find_serverPske sh =
     | Some (E_pre_shared_key (ServerPSK idx)) -> Some (UInt16.v idx)
     | _ -> None
 
+let find_serverKeyShare sh =
+  match sh.sh_extensions with
+  | None -> None
+  | Some exts ->
+    match List.Tot.find E_key_share? exts with
+    | Some (E_key_share (CommonDH.ServerKeyShare ks)) -> Some ks
+    | _ -> None
+
 // index in the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
@@ -216,18 +205,27 @@ let find_supported_groups o =
   | Some (Extensions.E_supported_groups gns) -> Some gns
 
 type share = g:CommonDH.group & CommonDH.share g
+type pre_share = g:CommonDH.group & CommonDH.pre_share g
 
-// we authenticate the whole list, but only care about those we could parse
-let find_key_shares o:option (list share)  =
+let find_key_shares (o:offer)
+  : Tot (option (CommonDH.clientKeyShare))
+  =
   match find_client_extension Extensions.E_key_share? o with
-  | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) ->
-     begin
-     let known = function
-      | CommonDH.Share g s -> Some #share (| g, s |)
-      | _ -> None #share in
-     Some (List.Tot.choose known ks)
-     end
+  | Some (Extensions.E_key_share (CommonDH.ClientKeyShare ks)) -> Some ks
   | _ -> None
+
+private let rec list_of_ClientKeyShare (ks:CommonDH.clientKeyShare)
+  : Tot (list pre_share)
+  =
+  match ks with
+  | [] -> []
+  | CommonDH.Share g s :: tl -> (|g, s|) :: list_of_ClientKeyShare tl
+  | CommonDH.UnknownShare _ _  :: tl -> list_of_ClientKeyShare tl
+
+let gs_of (o:offer) : Tot (list pre_share) =
+  match find_key_shares o with
+  | Some ksl -> list_of_ClientKeyShare ksl
+  | _ -> []
 
 let find_early_data o =
   match find_client_extension Extensions.E_early_data? o with
@@ -286,18 +284,6 @@ let is_cacheable12 m =
   ( let Some sid = m.n_sessionID in
     sid <> m.n_offer.ch_sessionID &&
     sid <> empty_bytes)
-
-// 17-04-25 we need pure functions of the mode for these old fields
-//    n_resume: option bool -> // is this a 1.2 resumption with the offered sid?
-//    n_psk: option PSK.pskid -> // none with 1.2 (we are not doing PSK 1.2)
-//
-//    n_kexAlg: TLSConstants.kexAlg ->
-//    n_aeAlg: TLSConstants.aeAlg ->
-//    n_sigAlg: TLSConstants.sigAlg ->
-//    n_scsv: list scsv_suite ->
-//
-// and for each of the fields of
-//    n_extensions: negotiatedExtensions ->
 
 noeq type negotiationState (r:role) (cfg:config) (resume:resumeInfo r) =
   // Have C_Offer_13 and C_Offer? Shares aren't available in C_Offer yet
@@ -414,7 +400,6 @@ let computeOffer r cfg resume nonce ks pskinfo =
     ch_extensions = Some extensions
   }
 
-
 val create:
   region:rgn -> r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> TLSInfo.random ->
   St (t region r)
@@ -440,6 +425,12 @@ let kexAlg m =
     let CipherSuite kex _ _ = m.n_cipher_suite in
     kex
 
+val aeAlg:
+  m:mode{CipherSuite? m.n_cipher_suite \/ CipherSuite13? m.n_cipher_suite} ->
+  TLSConstants.aeAlg
+let aeAlg m =
+  TLSConstants.get_aeAlg m.n_cipher_suite
+
 val emsFlag: mode -> bool
 let emsFlag mode =
   if mode.n_protocol_version = TLS_1p3 then
@@ -462,16 +453,6 @@ let chosenGroup mode =
   | Kex_DHE -> CommonDH.group_of_namedGroup (FFDHE FFDHE2048)
   | Kex_PSK_ECDHE
   | Kex_ECDHE -> CommonDH.group_of_namedGroup (SEC CoreCrypto.ECC_P256)
-
-(*
-  let ngroups =
-    match mode.Nego.n_extensions.ne_supported_groups with
-    | Some gl -> List.Tot.choose CommonDH.group_of_namedGroup gl
-    | None -> List.Tot.choose
-        // Cannot use an elliptic curve if SupportedGroups is missing in TLS<=1.2
-        (fun ng -> if SEC? ng then CommonDH.group_of_namedGroup ng else None)
-        (config_of hs).namedGroups in
-*)
 
 val zeroRTToffer: offer -> bool
 let zeroRTToffer o = Some? (find_early_data o)
@@ -808,7 +789,7 @@ let client_ServerHello #region ns sh =
     else
      match Extensions.negotiateClientExtensions spv ns.cfg cext sext cs None resume with
       | Error z -> Error z
-      | Correct next ->
+      | Correct () ->
         trace ("negotiated "^string_of_pv spv^" "^string_of_ciphersuite cs);
         match cs with
         | CipherSuite13 ae ha ->
@@ -828,7 +809,7 @@ let client_ServerHello #region ns sh =
           | Error z -> Error z
           | Correct pski ->
             begin
-            match spv, next.ne_keyShare with
+            match spv, find_serverKeyShare sh with
             | TLS_1p3, Some (CommonDH.Share g gy) ->
               let server_share = (|g, gy|) in
               let client_share = matching_share cext g in
@@ -848,7 +829,7 @@ let client_ServerHello #region ns sh =
                in
                MR.m_write ns.state (C_Mode mode);
                Correct mode
-            | _ ->
+            | _ -> // TODO: pure PSK mode
               Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
             end
           end
@@ -987,20 +968,23 @@ type cs13 offer =
   // JUST_PSK: TODO
 
 // Work around #1016
-private let rec compute_cs13_aux
-  (i:nat) (o:offer) pske (g_gx:option share)
-  ncs (psks:list (option cipherSuite)) psk_kex : list (cs13 o) =
-  if i = List.length pske then
-    ( match g_gx, ncs with
-      | Some x, (cs :: _) -> [JUST_EDH x cs]
-      | _ -> [] )
+private let rec compute_cs13_aux (i:nat) (o:offer)
+  (psks:list (PSK.pskid * PSK.pskInfo))
+  (g_gx:option share)
+  ncs psk_kex : list (cs13 o) =
+  if i = List.length psks then
+    match g_gx, ncs with
+    | Some x, (cs :: _) -> [JUST_EDH x cs]
+    | _ -> []
   else
     let choices =
       match List.Tot.index psks i, psk_kex with
-      | None, _ -> []
-      | Some cs, true -> [PSK_EDH i g_gx cs]  // TODO add cases
+      | (id, info), true ->
+        // ADL: FIXME pure PSK
+        [PSK_EDH i g_gx (CipherSuite13 info.PSK.early_ae info.PSK.early_hash)]
+      | _ -> []
     in
-    choices @ (compute_cs13_aux (i+1) o pske g_gx ncs psks psk_kex)
+    choices @ (compute_cs13_aux (i+1) o psks g_gx ncs psk_kex)
 
 // returns a list of negotiable "core modes" for TLS 1.3
 // the key exchange can be derived from cs13
@@ -1008,12 +992,12 @@ private let rec compute_cs13_aux
 val compute_cs13:
   cfg: config ->
   o: offer ->
-  psks: list (option cipherSuite) (* will be richer *) ->
+  psks: list (PSK.pskid * PSK.pskInfo) ->
   shares: list share (* pre-registered *) ->
   result (list (cs13 o))
 let compute_cs13 cfg o psks shares =
   // pick the (potential) group to use for DHE/ECDHE
-  let ng: option (g:CommonDH.group & option (CommonDH.share g)) =
+  let g_gx: option share =
     match find_supported_groups o with
     | None -> None
     | Some gs ->
@@ -1021,41 +1005,37 @@ let compute_cs13 cfg o psks shares =
       | [] -> None
       | g::_ ->
         let Some g = CommonDH.group_of_namedGroup g in
-        let os:option (CommonDH.share g) =
-          begin
-          match find_key_shares o with
-          | None -> None
-          | Some ks ->
-            match List.Tot.filter (fun g_s -> dfst g_s = g) ks with
-            | (| g,  s |) :: _ -> Some s
-            | [] -> None
-            end
-        in
-        Some (| g, os |)
+        match List.Tot.filter (fun g_s -> dfst g_s = g) shares with
+        | [] -> None
+        | s :: _ -> Some s
     in
 
-  let g_gx: option share =
-    match ng with
-    | Some (| g, Some s |) -> Some (|g, s|)
-    | _ -> None in
   // pick acceptable record ciphersuites
-  let ncs = List.Tot.filter (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites) o.ch_cipher_suites in
+  let ncs = List.Tot.filter
+    (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites)
+    o.ch_cipher_suites in
 
-  // pick preferred choice for each PSK (if any) -- we could stop at the first match too
-  let pske =
-    match find_clientPske o with
-    | Some pske -> pske
-    | None -> [] in
-
-  // FIXME: this picks the first acceptable ciphersuite, and assumes it's compatible
-  // with all PSKs offered
-  let cs::_ = ncs in
-  let psks = List.Tot.map (fun psk -> Some cs) pske in
-
-  assert(List.length pske == List.length psks); // precondition
   let psk_kex = true in
-  Correct (compute_cs13_aux 0 o pske g_gx ncs psks psk_kex)
+  Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex)
 
+// Registration and filtering of DH shares
+let rec filter_psk (l:list Extensions.pskIdentity)
+  : St (list (PSK.pskid * PSK.pskInfo))
+  =
+  match l with
+  | [] -> []
+  | (id, _) :: t ->
+    let id = utf8 (iutf8 id) in // FIXME Platform.Bytes
+    (match PSK.psk_lookup id with
+    | Some info -> (id, info) :: (filter_psk t)
+    | None -> filter_psk t)
+
+// Registration of DH shares
+let rec register_shares (l:list pre_share)
+  : St (list share) =
+  match l with
+  | [] -> []
+  | (| g, gx |) :: t -> (| g, CommonDH.register #g gx |) :: (register_shares t)
 
 //17-03-30 still missing a few for servers.
 
@@ -1080,7 +1060,13 @@ let computeServerMode cfg co serverRandom serverID =
   | Error z -> Error z
   | Correct TLS_1p3 ->
     begin
-    match compute_cs13 cfg co [] [] (*TODO*) with
+    // Filter and register offered PSKs
+    let pske =
+      match find_clientPske co with
+      | Some pske -> filter_psk pske
+      | None -> [] in
+    let shares = register_shares (gs_of co) in
+    match compute_cs13 cfg co pske shares with
     | Error z -> Error z
     | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
     | Correct (kex :: _) ->
@@ -1246,6 +1232,7 @@ let server_ServerShare #region ns ks =
       ns.cfg
       mode.n_cipher_suite
       None  // option (TI.cVerifyData*TI.sVerifyData)
+      mode.n_pski
       ks
       false // resume?
     with

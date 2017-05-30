@@ -47,22 +47,40 @@ let hide_log (l:hs_transcript) : Tot erased_transcript =
     if Flags.debug_HSL then l
     else FStar.Ghost.hide l
 
-val transcript_version: hsl:erased_transcript -> GTot (option protocolVersion)
-let transcript_version hsl =
-    match reveal_log hsl with
-    | (ClientHello ch) :: (ServerHello sh) :: rest -> Some sh.sh_protocol_version
-    | _ -> None
+(** TODO: move to FStar.Ghost (breach of abstraction)  *)
+let elift1_def (#a #b: Type) (f: (a -> GTot b)) (x: FStar.Ghost.erased a) : Lemma (FStar.Ghost.elift1 f x == FStar.Ghost.hide (f (FStar.Ghost.reveal x))) = ()
 
-// ADL Apr 5 Verification is in progress
-#set-options "--lax"
+let ghost_bind
+  (#a #b: Type)
+  (x: erased a)
+  (f: (
+    (x': a) ->
+    Pure (erased b)
+    (requires (x' == FStar.Ghost.reveal x))
+    (ensures (fun _ -> True))
+  ))
+: Tot (y: erased b { y == f (FStar.Ghost.reveal x) } )
+= f (FStar.Ghost.reveal x)
+
+let bind_log
+  (l: erased_transcript)
+  (f: (
+    (x: hs_transcript) ->
+    Pure erased_transcript
+    (requires (x == reveal_log l))
+    (ensures (fun _ -> True))
+  ))
+: Tot (y: erased_transcript { y == f (reveal_log l) } )
+= if Flags.debug_HSL then f l
+  else ghost_bind #hs_transcript #hs_transcript l f
 
 let empty_hs_transcript : erased_transcript = hide_log []
-let extend_hs_transcript (l:erased_transcript) (m:msg) : Tot erased_transcript =
-    if Flags.debug_HSL then append_transcript l [m]
-    else FStar.Ghost.elift1 (fun l -> append_transcript l [m]) l
-let append_hs_transcript (l:erased_transcript) (ml:list msg) : Tot erased_transcript =
-    if Flags.debug_HSL then append_transcript l ml
-    else FStar.Ghost.elift1 (fun l -> append_transcript l ml) l
+
+let append_hs_transcript (l:erased_transcript) (ml:list msg { valid_transcript (reveal_log l @ ml) } ) : Tot erased_transcript =
+    bind_log l (fun l' -> hide_log (append_transcript l' ml))
+
+let extend_hs_transcript (l:erased_transcript) (m:msg { valid_transcript (reveal_log l @ [m]) } ) : Tot erased_transcript =
+    append_hs_transcript l [m]
 
 let print_hsl (hsl:erased_transcript) : Tot bool =
     if Flags.debug_HSL then
@@ -71,23 +89,109 @@ let print_hsl (hsl:erased_transcript) : Tot bool =
     IO.debug_print_string ("Current log: " ^ s)
     else false
 
-let transcript_bytes l = handshakeMessagesBytes (transcript_version l) (reveal_log l)
+(* TODO: move to something like List.GTot *)
+let rec gforall_list_to_list_refined
+  (#a: Type)
+  (f: (a -> GTot bool))
+  (l: list a { gforall f l } )
+: Tot (l': list (x: a {f x}))
+= match l with
+  | [] -> []
+  | x :: q -> x :: gforall_list_to_list_refined f q
 
-let transcript_format_injective ms0 ms1 = admit()
+let rec valid_transcript_to_list_valid_hs_msg_aux
+  (v: option protocolVersion)
+  (l: list hs_msg { gforall (valid_hs_msg_prop v) l } )
+: Tot (list (valid_hs_msg v))
+=
+(* FIXME: WHY WHY WHY can this not be defined as:
+   gforall_list_to_list_refined (valid_hs_msg_prop v) l
+*)
+  match l with
+  | [] -> []
+  | a :: q -> a :: valid_transcript_to_list_valid_hs_msg_aux v q
+
+let rec valid_transcript_to_list_valid_hs_msg_aux_inj
+  (v: option protocolVersion)
+  (l1: list hs_msg { gforall (valid_hs_msg_prop v) l1 } )
+  (l2: list hs_msg { gforall (valid_hs_msg_prop v) l2 } )
+: Lemma
+  (requires (valid_transcript_to_list_valid_hs_msg_aux v l1 == valid_transcript_to_list_valid_hs_msg_aux v l2))
+  (ensures (l1 == l2))
+= match l1, l2 with
+  | _ :: q1, _ :: q2 -> valid_transcript_to_list_valid_hs_msg_aux_inj v q1 q2
+  | _ -> ()
+
+let transcript_bytes l =
+  let v = transcript_version l in
+  handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v l)
+
+#set-options "--z3rlimit 64"
+
+let transcript_format_injective ms0 ms1 =
+  let f ()
+  : Lemma
+    (requires (Seq.equal (transcript_bytes ms0) (transcript_bytes ms1)))
+    (ensures (ms0 == ms1))
+  = match ms0 with
+    | [] -> ()
+    | ClientHello ch0 :: q0 ->
+      let v = transcript_version ms0 in
+      let (ClientHello ch1 :: q1) = ms1 in
+      let v1 = transcript_version ms1 in
+      let l0 = handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v q0) in
+      let l1 = handshakeMessagesBytes v1 (valid_transcript_to_list_valid_hs_msg_aux v1 q1) in
+      clientHelloBytes_is_injective_strong ch0 l0 ch1 l1;
+      begin match q0 with
+      | [] -> ()
+      | ServerHello sh0 :: q0' ->
+        let (ServerHello sh1 :: q1') = q1 in
+        serverHelloBytes_is_injective_strong sh0 (handshakeMessagesBytes v (valid_transcript_to_list_valid_hs_msg_aux v q0')) sh1 (handshakeMessagesBytes v1 (valid_transcript_to_list_valid_hs_msg_aux v1 q1'));
+        handshakeMessagesBytes_is_injective v (valid_transcript_to_list_valid_hs_msg_aux v ms0) (valid_transcript_to_list_valid_hs_msg_aux v ms1);
+        valid_transcript_to_list_valid_hs_msg_aux_inj v ms0 ms1
+      end
+  in
+  Classical.move_requires f ()
 
 //The type below includes buffers, the log, the hash, and the params needed to parse and hash the log.
 //Note that a lot of this information is available in the log itself.
 //In particular: pv+kex+hash_alg can be read from CH/SH, dh_group can be read from SKE
 //TODO: decide whether to keep these parameters explicit or compute them from the log
 
-let tags_append a p ms0 ms1 hs1 hs1 = admit()
+private
+let rec tags_append_aux
+  (a: alg)
+  (prior ms0 ms1: list msg)
+  (hs0 hs1: list anyTag)
+: Lemma
+  (requires (tags a prior ms0 hs0 /\ tags a (prior @ ms0) ms1 hs1))
+  (ensures (tags a prior (ms0 @ ms1) (hs0 @ hs1)))
+  (decreases ms0)
+= match ms0 with
+  | [] ->
+    List.Tot.append_l_nil prior
+  | m :: ms ->
+    let prior_before = prior in
+    let prior = prior @ [m] in
+    let _ : squash (tags a (prior @ ms) ms1 hs1) =
+      List.Tot.append_assoc prior_before [m] ms
+    in
+    if tagged m
+    then
+      let (_::hs) = hs0 in
+      tags_append_aux a prior ms ms1 hs hs1
+    else
+      tags_append_aux a prior ms ms1 hs0 hs1
+
+let tags_append a prior ms0 ms1 hs0 hs1 =
+  Classical.move_requires (tags_append_aux a prior ms0 ms1 hs0) hs1
 
 noeq type hashState (prior parsed: list msg) =
-  | OpenHash: b:bytes { b = transcript_bytes (prior @ parsed) } -> hashState prior parsed
+  | OpenHash: b:bytes { valid_transcript (prior @ parsed) /\ b = transcript_bytes (prior @ parsed) } -> hashState prior parsed
   | FixedHash:
       a: Hashing.alg ->
-      state: accv a { Hashing.content state = transcript_bytes (prior @ parsed) } ->
-      hashes: list (tag a) { tags a prior parsed hashes } ->
+      state: accv a { valid_transcript (prior @ parsed) /\ Hashing.content state = transcript_bytes (prior @ parsed) } ->
+      hashes: list anyTag { tags a prior parsed hashes } ->
       hashState prior parsed
 
 noeq type state =
@@ -99,7 +203,7 @@ noeq type state =
     outgoing_complete: bool ->
     
     incoming: bytes -> // received fragments; untrusted; not yet hashed or parsed
-    parsed: list msg{valid_transcript (transcript @ parsed)} ->
+    parsed: list msg{valid_transcript (reveal_log transcript @ parsed)} ->
                        // partial incoming flight, hashed & parsed, with selected intermediate tags
     hashes: hashState transcript parsed  ->
 
@@ -118,7 +222,8 @@ let get_reference l =
 val init: h:HS.mem -> log -> option TLSConstants.protocolVersion -> GTot bool
 let init h (st:log) (pvo: option protocolVersion) =
    let s = HS.sel h st in
-   s.hashes = OpenHash empty_bytes &&
+   OpenHash? s.hashes &&
+   OpenHash?.b s.hashes = empty_bytes &&
    s.pv = pvo &&
    s.kex = None &&
    s.dh_group = None
@@ -130,7 +235,7 @@ let writing h st =
 
 // must be checked before incrementing the read epoch.
 val notReading: state -> Tot bool
-let notReading st = st.parsed = [] && st.incoming = empty_bytes
+let notReading st = List.Tot.isEmpty st.parsed && st.incoming = empty_bytes
 
 let hashAlg h st =
     let s = HS.sel h st in
@@ -141,10 +246,7 @@ let hashAlg h st =
 
 //  specification-level transcript of all handshake messages logged so far
 let transcript h t =
-    if Flags.debug_HSL then
-    (HS.sel h t).transcript
-    else
-    FStar.Ghost.reveal ((HS.sel h t).transcript)
+    reveal_log ((HS.sel h t).transcript)
 
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false
@@ -153,21 +255,23 @@ let create reg pv =
     let st = ralloc reg l in
     st
 
-let modifies_0 (s:log) h0 h1 =
-  HS.(mods [Ref s] h0 h1) /\
-  transcript h1 s == transcript h0 s /\
-  writing h1 s == writing h0 s /\
-  hashAlg h1 s = hashAlg h0 s
-
 let setParams l pv ha kexo dho =
   let st = !l in
   match st.hashes with
   | OpenHash msgs ->
       let acc = Hashing.start ha in
-      let acc = Hashing.extend #ha acc msgs in // TODO prove that content h = transcript_bytes ...
+      let acc = Hashing.extend #ha acc msgs in
+      let _ : squash (Hashing.content acc == msgs) =
+        append_empty_bytes_l msgs
+      in
+      assume (tags ha (reveal_log st.transcript) st.parsed []); // TODO: FIXME: should this be part of OpenHash?
       let hs = FixedHash ha acc [] in
-      l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
+      recall l;
+      l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed hs (Some pv) kexo dho
+
+// TR: verifies up to this point
+#set-options "--lax"
 
 (*
 val getHash: #ha:hash_alg -> t:log -> ST (tag ha)

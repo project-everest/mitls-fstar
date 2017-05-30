@@ -86,6 +86,13 @@ let connect send recv config_1 : ML (Connection.connection * int) =
     | Read _ -> failwith "unexpected early read" in
   c, firstResult
 
+val getCert: Connection.connection -> ML bytes // bytes of the first certificate in the server-certificate chain.
+let getCert c = 
+  let mode = TLS.get_mode c in 
+  match mode.Negotiation.n_server_cert with
+  | Some ((c,_)::_) -> c
+  | _ -> empty_bytes
+
 let accept_connected send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
@@ -207,11 +214,6 @@ let ffiConfig version host =
                     (* default ciphersuites from TLSInfo.fst follow: *)
                       TLS_RSA_WITH_AES_128_GCM_SHA256;
                       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-                      TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
-                      TLS_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
-                      TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
-                      TLS_RSA_WITH_3DES_EDE_CBC_SHA;
                       ];
   }
 

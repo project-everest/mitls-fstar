@@ -672,16 +672,8 @@ let server_ServerFinished_13 hs i =
 
     HandshakeLog.send hs.log (EncryptedExtensions []);
     let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
-
     // signing of the formatted session digest
-    let tbs : bytes =
-      let Hash sh_alg = sh_alg in
-      let hL = Hashing.Spec.tagLen sh_alg in
-      let zeroes = Platform.Bytes.abytes (String.make hL (Char.char_of_int 0)) in
-      let rc = Hashing.compute sh_alg zeroes in
-      let lb = digestSig @| rc in
-      Nego.to_be_signed pv Server None lb
-    in
+    let tbs = Nego.to_be_signed pv Server None digestSig in
     match Nego.sign hs.nego tbs with
     | None ->
       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
