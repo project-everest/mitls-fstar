@@ -34,7 +34,7 @@ let tid =
 // ADL TODO: add config setting for ticket keys
 private let ticket_enc = AE.gen tid region
 private let ticket_dec = AE.genReader region ticket_enc
-private let nonce = CC.random 12
+private let salt = CC.random 12
 private let ctr = ralloc region 0
 
 type ticket =
