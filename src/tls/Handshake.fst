@@ -237,7 +237,6 @@ let clientHello offer = // pure; shared by Client and Server
     ch_client_random = offer.co_client_random;
     ch_sessionID = sid;
     ch_cipher_suites = offer.co_cipher_suites;
-    ch_raw_cipher_suites = None;
     ch_compressions = offer.co_compressions;
     ch_extensions = Some ext }
 *)

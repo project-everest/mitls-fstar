@@ -401,7 +401,6 @@ let computeOffer r cfg resume nonce ks pskinfo =
     ch_sessionID = sid;
     ch_cipher_suites = cfg.ciphersuites;
     // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
-    ch_raw_cipher_suites = None;
     ch_compressions = cfg.compressions;
     ch_extensions = Some extensions
   }
