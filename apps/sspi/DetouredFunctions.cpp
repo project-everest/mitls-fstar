@@ -57,7 +57,7 @@ Mine_AcquireCredentialsHandleW(
         ptsExpiry);
 
     SECURITY_STATUS rv = 0;
-    if (_wcsicmp(pszPackage, UNISP_NAME_W) == 0) {
+    if (_wcsicmp(pszPackage, UNISP_NAME_W) == 0 || _wcsicmp(pszPackage, DEFAULT_TLS_SSP_NAME_W) == 0) {
         // Redirect to the miTLS SSP
         pszPackage = MITLS_NAME_W;
     }
@@ -105,7 +105,7 @@ Mine_AcquireCredentialsHandleA(
         ptsExpiry);
 
     SECURITY_STATUS rv = 0;
-    if (_stricmp(pszPackage, UNISP_NAME_A) == 0) {
+    if (_stricmp(pszPackage, UNISP_NAME_A) == 0 || _stricmp(pszPackage, DEFAULT_TLS_SSP_NAME_A) == 0) {
         // Redirect to the miTLS SSP
         pszPackage = MITLS_NAME_A;
     }
@@ -297,6 +297,13 @@ VOID DetDetach(PVOID *ppbReal, PVOID pbMine, PCHAR psz)
 
 bool AttachDetours(VOID)
 {
+    // The C compiler initialize the Real_* variables to point at thunk code inside
+    // mitls_ssp.dll, causing Detours to hook the thunk code, not the SspiCli
+    // entrypoints.
+    HMODULE h = LoadLibraryW(L"SspiCli.dll");
+    Real_AcquireCredentialsHandleA = (ACQUIRE_CREDENTIALS_HANDLE_FN_A)GetProcAddress(h, "AcquireCredentialsHandleA");
+    Real_AcquireCredentialsHandleW = (ACQUIRE_CREDENTIALS_HANDLE_FN_W)GetProcAddress(h, "AcquireCredentialsHandleW");
+
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
 
