@@ -1218,9 +1218,8 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | E_server_name server_name_list ->
     begin
     // See https://tools.ietf.org/html/rfc6066
-    match pv, List.Tot.tryFind SNI_DNS? server_name_list with
-    | TLS_1p3, _   -> None // TODO: SNI goes in EncryptedExtensions in TLS 1.3
-    | _, Some name -> Some (E_server_name []) // Acknowledge client's choice
+    match List.Tot.tryFind SNI_DNS? server_name_list with
+    | Some name -> Some (E_server_name []) // Acknowledge client's choice
     | _ -> None
     end
   | E_extended_ms ->

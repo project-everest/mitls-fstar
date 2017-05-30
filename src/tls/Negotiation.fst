@@ -1015,7 +1015,7 @@ let compute_cs13 cfg o psks shares =
     (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites)
     o.ch_cipher_suites in
 
-  let psk_kex = true in
+  let psk_kex = Cons? psks in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex)
 
 // Registration and filtering of DH shares
@@ -1239,7 +1239,7 @@ let server_ServerShare #region ns ks =
     | Error z -> Error z
     | Correct sexts ->
       begin
-      trace ("including server extensions " ^ string_of_option_extensions sexts);
+      trace ("including server extensions (SH + EE) " ^ string_of_option_extensions sexts);
       let mode = Mode
         mode.n_offer
         mode.n_hrr
@@ -1257,7 +1257,6 @@ let server_ServerShare #region ns ks =
       MR.m_write ns.state (S_Mode mode);
       Correct mode
       end
-
 
 //17-03-30 where is it used?
 type hs_id = {
