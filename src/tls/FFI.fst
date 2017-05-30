@@ -110,6 +110,7 @@ let accept_connected send recv config_1 : ML (Connection.connection * int) =
 
 type read_result = // is it convenient?
   | Received of bytes 
+  | WouldBlock
   | Errno of int
 
 let read c : ML read_result = 
@@ -119,6 +120,7 @@ let read c : ML read_result =
   | Read Close                -> Errno 0 
   | Read (Alert a)            -> Errno(errno (Some a) "alert") 
   | ReadError description txt -> Errno(errno description txt) 
+  | ReadWouldBlock -> WouldBlock
   | _                         -> failwith "unexpected FFI read result"
 
 let write c msg : ML int =
@@ -282,13 +284,16 @@ let sendTcpPacket callbacks buf =
   else 
     Platform.Error.Correct () 
     
-val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Error.optResult string (b:bytes{length b <= max}))
+val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Tcp.recv_result max)
 let recvTcpPacket callbacks max =
   let (result,str) = FFICallbacks.recvcb callbacks max in
   if result then
-    Platform.Error.Correct(abytes str)
+    let b = abytes str in 
+    if length b = 0 
+    then Platform.Tcp.RecvWouldBlock
+    else Platform.Tcp.Received b
   else
-    Platform.Error.Error ("socket recv failure")
+    Platform.Tcp.RecvError ("socket recv failure")
   
 val ffiConnect: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
 let ffiConnect config cb =
@@ -302,6 +307,7 @@ val ffiRecv: Connection.connection -> ML cbytes
 let ffiRecv c =
   match read c with
     | Received response -> get_cbytes response
+    | WouldBlock
     | Errno _ -> get_cbytes empty_bytes
   
 val ffiSend: Connection.connection -> cbytes -> ML int

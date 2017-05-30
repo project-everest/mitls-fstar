@@ -11,6 +11,7 @@ open HandshakeMessages
 open HandshakeLog
 open Negotiation
 
+type record_t = HyperStack.ref Record.input_state
 
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
@@ -48,11 +49,11 @@ private let sendHSRecord tcp pv msg =
 
 private let hsbuf = ralloc #(list (hs_msg * bytes)) root []
 
-private let recvHSRecord tcp pv kex =
+private let recvHSRecord tcp (recv: record_t) pv kex =
   let (hs_msg, to_log) =
     match !hsbuf with
-    | [] ->
-      let Correct (ct,rpv,pl) = Record.read tcp in
+    | [] -> 
+      let Record.Received ct rpv pl = Record.read tcp recv in
       let hsml =
 	match Handshake.parseHandshakeMessages (Some pv) (Some kex) pl with
       	| Correct (_,hsml) -> hsml
@@ -71,18 +72,18 @@ private let recvHSRecord tcp pv kex =
   else IO.print_string "no\n";
   hs_msg, to_log
 
-private let recvCCSRecord tcp =
-  let Correct (Content.Change_cipher_spec,_,ccs) = Record.read tcp in
+private let recvCCSRecord tcp (recv: record_t) =
+  let Record.Received Content.Change_cipher_spec _ ccs = Record.read tcp recv in
   IO.print_string "Received CCS\n";
   ccs
 
 private let enc_hsbuf = ralloc #(list (hs_msg * bytes)) root []
 
-private let recvEncHSRecord tcp pv kex rd =
+private let recvEncHSRecord tcp (recv: record_t) pv kex rd =
   let (hs_msg, to_log) =
     match !enc_hsbuf with
     | [] ->
-      let Correct(_,_,cipher) = Record.read tcp in
+      let Record.Received _ _ cipher = Record.read tcp recv in
       let payload = decryptRecord rd Content.Handshake cipher in
       let Correct (rem,hsm) = Handshake.parseHandshakeMessages (Some pv) (Some kex) payload in
       let h :: rem = hsm in
@@ -96,8 +97,8 @@ private let recvEncHSRecord tcp pv kex rd =
   else IO.print_string "no\n";
   hs_msg, to_log
 
-private let recvEncAppDataRecord tcp pv rd =
-  let Correct (Content.Application_data,_,cipher) = Record.read tcp in
+private let recvEncAppDataRecord tcp (recv: record_t) pv rd =
+  let Record.Received Content.Application_data _ cipher = Record.read tcp recv in
   let payload = decryptRecord rd Content.Application_data cipher in
   IO.print_string ("Received Data:\n" ^ (iutf8 payload) ^ "\n");
   payload
@@ -111,12 +112,13 @@ private let rec server_loop_12 config sock : ML unit =
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
   let ks, sr = KeySchedule.create #rid Server log in
+  let recv = ralloc rid Record.wait_header in 
 
   let kex = TLSConstants.Kex_ECDHE in
   let pv = TLS_1p2 in
 
   // Receive ClientHello
-  let ClientHello(ch), chb = recvHSRecord tcp pv kex in
+  let ClientHello(ch), chb = recvHSRecord tcp recv pv kex in
 
   // Send ServerHello
   let (nego, None, (ServerHello sh, shb)) =
@@ -167,7 +169,7 @@ private let rec server_loop_12 config sock : ML unit =
   sendHSRecord tcp pv shdb;
 
   // Get ClientKeyExchange
-  let (ClientKeyExchange(cke), ckeb) = recvHSRecord tcp pv kex in
+  let (ClientKeyExchange(cke), ckeb) = recvHSRecord tcp recv pv kex in
   if ems then IO.print_string " ***** USING EXTENDED MASTER SECRET ***** \n";
   let gx =
     begin
@@ -187,8 +189,8 @@ private let rec server_loop_12 config sock : ML unit =
   let KeySchedule.StAEInstance rd wr = KeySchedule.ks_12_get_keys ks in
 
   // Receive CCS and ClientFinished
-  let _ = recvCCSRecord tcp in
-  let Finished(cfin), cfinb = recvEncHSRecord tcp pv kex rd in
+  let _ = recvCCSRecord tcp recv in
+  let Finished(cfin), cfinb = recvEncHSRecord tcp recv pv kex rd in
   //  let Correct svd = Handshake.processClientFinished n ks log [(Finished cfin, cfinb)] in
   let _ = log @@ Finished(cfin) in
   let lb = HandshakeLog.getBytes log in
@@ -202,7 +204,7 @@ private let rec server_loop_12 config sock : ML unit =
   sendRecord tcp pv Content.Handshake efinb;
 
   // Receive Client request, whatever
-  let req = recvEncAppDataRecord tcp pv rd in
+  let req = recvEncAppDataRecord tcp recv pv rd in
 
   // Send Response
   let text = "You are connected to miTLS*!\r\nThis is the request you sent:\r\n\r\n" ^ (iutf8 req) in
@@ -229,6 +231,7 @@ let client_12 config host port : ML unit =
   let rid = new_region root in
   let log = HandshakeLog.create #rid in
   let ks, cr = KeySchedule.create #rid Client log in
+  let recv = ralloc rid Record.wait_header in 
 
   // Send ClientHello
   let (ClientHello ch,chb) = Handshake.prepareClientHello config ks log None None in   let pv = ch.ch_protocol_version in
@@ -236,7 +239,7 @@ let client_12 config host port : ML unit =
   sendHSRecord tcp pv chb;
 
   // Receive ServerHello
-  let ServerHello(sh), shb = recvHSRecord tcp pv kex in
+  let ServerHello(sh), shb = recvHSRecord tcp recv pv kex in
   let Correct (n,None) = Handshake.processServerHello config ks log None ch (ServerHello(sh), shb) in
 
   let pv = n.n_protocol_version in
@@ -246,9 +249,9 @@ let client_12 config host port : ML unit =
   let sal = n.n_extensions.ne_signature_algorithms in
 
   // Receive ServerCertificate, ServerKeyExchange and ServerHelloDone
-  let (Certificate(sc),scb) = recvHSRecord tcp pv kex in
-  let ServerKeyExchange(ske), skeb = recvHSRecord tcp pv kex in
-  let ServerHelloDone, shdb = recvHSRecord tcp pv kex in
+  let (Certificate(sc),scb) = recvHSRecord tcp recv pv kex in
+  let ServerKeyExchange(ske), skeb = recvHSRecord tcp recv pv kex in
+  let ServerHelloDone, shdb = recvHSRecord tcp recv pv kex in
   IO.print_string ("Certificate validation status = " ^
     (if Cert.validate_chain sc.crt_chain true (Some host) config.ca_file then
       "OK" else "FAIL")^"\n");
@@ -279,8 +282,8 @@ let client_12 config host port : ML unit =
   sendRecord tcp pv Content.Handshake efinb;
 
   // Receive CCS
-  let _ = recvCCSRecord tcp in
-  let Finished(sfin), sfinb = recvEncHSRecord tcp pv kex rd in
+  let _ = recvCCSRecord tcp recv in
+  let Finished(sfin), sfinb = recvEncHSRecord tcp recv pv kex rd in
   let Correct svd = Handshake.processServerFinished ks log (Finished sfin, sfinb) in
 
   IO.print_string ("Recd fin = expected fin? ");
@@ -292,7 +295,7 @@ let client_12 config host port : ML unit =
   sendRecord tcp pv Content.Application_data get;
 
   // Receive response
-  let ad = recvEncAppDataRecord tcp pv rd in
+  let ad = recvEncAppDataRecord tcp recv pv rd in
   ()
 
 
@@ -304,6 +307,7 @@ let client_13 config host port : ML unit =
   let rid = new_region root in
   let lg = HandshakeLog.create #rid in
   let ks, cr = KeySchedule.create #rid Client lg in
+  let recv = ralloc rid Record.wait_header in 
 
   // This will call KS.ks_client_13_init_1rtt
   let (ClientHello ch,chb) = Handshake.prepareClientHello config ks lg None None in
@@ -311,7 +315,7 @@ let client_13 config host port : ML unit =
   let kex = TLSConstants.Kex_ECDHE in
   sendHSRecord tcp pv chb;
 
-  let ServerHello(sh), shb = recvHSRecord tcp pv kex in
+  let ServerHello(sh), shb = recvHSRecord tcp recv pv kex in
 
   let Correct (n, Some k) = Handshake.processServerHello config ks lg None ch (ServerHello sh, shb) in
   let pv = sh.sh_protocol_version in
@@ -320,10 +324,10 @@ let client_13 config host port : ML unit =
   let KeySchedule.StAEInstance rd wr = k in
   let sal = n.n_extensions.ne_signature_algorithms in
 
-  let EncryptedExtensions(ee),_ = recvEncHSRecord tcp pv kex rd in
+  let EncryptedExtensions(ee),_ = recvEncHSRecord tcp recv pv kex rd in
   let _ = lg @@ (EncryptedExtensions (ee)) in
 
-  let Certificate(sc),_ = recvEncHSRecord tcp pv kex rd in
+  let Certificate(sc),_ = recvEncHSRecord tcp recv pv kex rd in
   let _ = lg @@ Certificate(sc) in
 
   IO.print_string ("Certificate validation status = " ^
@@ -335,7 +339,7 @@ let client_13 config host port : ML unit =
   let rc = Hashing.compute h zeroes in
   let cv_log = (HandshakeLog.getHash lg h) @| rc in
 
-  let CertificateVerify(cv),_ = recvEncHSRecord tcp pv kex rd in
+  let CertificateVerify(cv),_ = recvEncHSRecord tcp recv pv kex rd in
   let _ = lg @@ CertificateVerify(cv) in
 
   //let _ = IO.debug_print_string("cv_sig = " ^ (Platform.Bytes.print_bytes cv.cv_sig) ^ "\n") in
@@ -348,7 +352,7 @@ let client_13 config host port : ML unit =
     (if Signature.verify h pk tbs sigv then "OK" else "FAIL") ^ "\n");
 
   let svd = KeySchedule.ks_client_13_server_finished ks in
-  let Finished({fin_vd = sfin}),_ = recvEncHSRecord tcp pv kex rd in
+  let Finished({fin_vd = sfin}),_ = recvEncHSRecord tcp recv pv kex rd in
   let _ = lg @@ Finished({fin_vd = sfin}) in
 
   (if equalBytes sfin svd then
@@ -369,7 +373,7 @@ let client_13 config host port : ML unit =
   let payload = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in
   let get = encryptRecord dwr Content.Application_data (utf8 payload) in
   sendRecord tcp pv Content.Application_data get;
-  let ad = recvEncAppDataRecord tcp pv drd in
+  let ad = recvEncAppDataRecord tcp recv pv drd in
   ()
 
 private let sendEncHSRecord tcp pv msg wr =
@@ -385,6 +389,7 @@ private let rec server_loop_13 config sock : ML unit =
   let rid = new_region root in
   let lg = HandshakeLog.create #rid in
   let ks, sr = KeySchedule.create #rid Server lg in
+  let recv = ralloc rid Record.wait_header in 
 
   let kex = TLSConstants.Kex_ECDHE in
   let pv = TLS_1p3 in
@@ -392,7 +397,7 @@ private let rec server_loop_13 config sock : ML unit =
   let sa = CoreCrypto.RSASIG in
   let cs = CipherSuite kex (Some sa) (AEAD CoreCrypto.AES_128_GCM h) in
 
-  let ClientHello(ch), chb = recvHSRecord tcp pv kex in
+  let ClientHello(ch), chb = recvHSRecord tcp recv pv kex in
 
   let (cr, sid, csl, ext) = (match ch with
     | {ch_protocol_version = TLS_1p3;
@@ -439,7 +444,7 @@ private let rec server_loop_13 config sock : ML unit =
   let KeySchedule.StAEInstance drd dwr = KeySchedule.ks_server_13_sf ks in
 
   let cvd = KeySchedule.ks_server_13_client_finished ks in
-  let Finished({fin_vd = cfin}), _ = recvEncHSRecord tcp pv kex rd in
+  let Finished({fin_vd = cfin}), _ = recvEncHSRecord tcp recv pv kex rd in
   let _ = lg @@ (Finished ({fin_vd = cfin})) in
 
   (if equalBytes cfin cvd then
@@ -447,7 +452,7 @@ private let rec server_loop_13 config sock : ML unit =
   else
     failwith "Failed to verify server finished");
 
-  let req = recvEncAppDataRecord tcp pv drd in
+  let req = recvEncAppDataRecord tcp recv pv drd in
   let text = "You are connected to miTLS* 1.3!\r\nThis is the request you sent:\r\n\r\n" ^ (iutf8 req) in
   let payload = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:" ^ (string_of_int (length (abytes text))) ^ "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" ^ text in
 

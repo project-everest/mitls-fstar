@@ -26,7 +26,8 @@ unfold let trace = if api_debug then print else (fun _ -> ())
 let rec client_read con host: ML unit =
   let r = TLS.currentId con Reader in
   match TLS.read con r with
-  | Update true | Complete ->
+  | Update true // aggressively using 0RTT 
+  | Complete ->
        trace "Read OK, sending HTTP request...";
        let payload = utf8 ("GET /r HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
        let id = TLS.currentId con Writer in
@@ -56,6 +57,7 @@ let rec client_read con host: ML unit =
 let client config host port offerpsk =
   trace "*** Starting miTLS client...";
   let tcp = Transport.connect host port in
+  
   let rid = new_region root in
   let con = TLS.resume rid tcp config None offerpsk in
   client_read con host

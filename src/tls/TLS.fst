@@ -92,9 +92,10 @@ val create: r0:c_rgn -> tcp:Transport.t -> r:role -> cfg:config -> resume: resum
 let create parent tcp role cfg resume =
     let m = new_region parent in
     let hs = Handshake.create m cfg role resume in
+    let recv = ralloc m Record.wait_header in 
     let state = ralloc m (Ctrl,Ctrl) in
     assume (is_hs_rgn m);
-    C #m hs tcp state
+    C #m hs tcp recv state
 
 
 //TODO upgrade commented-out types imported from TLS.fsti
@@ -1046,6 +1047,10 @@ type readOutcome (e:epoch) =
 
 
 type ioresult_i (i:id) =
+    | ReadWouldBlock
+        // TCP reading is non-blocking, and we are still waiting for incoming bytes
+        // (Do we ever need to signal TLS changes before this happens?)
+        
     | Read of DataStream.delta i
         // This delta has been added to the input stream;
         // We may have read
@@ -1147,7 +1152,8 @@ let alertFlush c ri (ad:alertDescription { isFatal ad }) (reason:string) =
     | WriteError x y -> ReadError x y in         // how to compose ad reason x y ?
   r
 
-val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
+//17-04-10 added an option for asynchrony; could flatten instead
+val readFragment: c:connection -> i:id -> ST (result (option (Content.fragment i)))
   (requires (fun h0 ->
     let es = epochs c h0 in
     let j = Handshake.iT c.hs Reader h0 in
@@ -1169,7 +1175,8 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
       modifies (Set.singleton (StAE.region rd)) h0 h1 /\
       (match r with
       | Error e -> True // don't know what seqnT is, don't care.
-      | Correct f ->
+      | Correct None -> True // TBC
+      | Correct (Some f) ->
           StAE.seqnT rd h1 = StAE.seqnT rd h0 + 1 /\
           (authId i ==>
             (let frs = StAE.fragments #i rd h0 in
@@ -1180,15 +1187,16 @@ val readFragment: c:connection -> i:id -> ST (result (Content.fragment i))
 
 let readFragment c i =
   assume false; // 16-05-19 can't prove POST.
-  match Record.read c.tcp with
-  | Error e -> Error e
-  | Correct(ct,pv,payload) ->
+  match Record.read c.tcp c.recv with
+  | Record.ReadError e -> Error e
+  | Record.ReadWouldBlock -> Correct None
+  | Record.Received ct pv payload ->
     let es = MR.m_read (Handshake.es_of c.hs) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
     //trace ("Epoch index: "^string_of_int j);
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in
-      Correct(Content.mk_fragment i ct rg payload)
+      Correct(Some (Content.mk_fragment i ct rg payload))
     else
       // payload decryption
       let e = Seq.index es j in
@@ -1203,7 +1211,7 @@ let readFragment c i =
       | None -> Error(AD_internal_error,"Decryption failure")
       | Some f -> 
           trace "StAE decrypt correct."; 
-          Correct f
+          Correct (Some f)
 
 // We receive, decrypt, parse a record (ct,f); what to do with it?
 // i is the presumed reader, threaded from the application.
@@ -1215,7 +1223,10 @@ let readOne c i =
   assume false; //16-05-19
   match readFragment c i with
   | Error (x,y) -> alertFlush c i x y
-  | Correct (Content.CT_Alert rg ad) ->
+  | Correct None -> ReadWouldBlock
+  | Correct (Some f) -> (
+    match f with 
+    | Content.CT_Alert rg ad ->
       begin
         trace ("read Alert fragment "^TLSError.string_of_ad ad);
         if ad = AD_close_notify then
@@ -1235,7 +1246,7 @@ let readOne c i =
       // recheck we tolerate alerts in all states; used to be just Init|Open, otherwise:
       // alertFlush c AD_unexpected_message (perror __SOURCE_FILE__ __LINE__ "Message type received in wrong state")
 
-  | Correct(Content.CT_Handshake rg f) ->
+    | Content.CT_Handshake rg f ->
       begin
         trace "read Handshake fragment";
         match Handshake.recv_fragment c.hs rg f with
@@ -1256,21 +1267,20 @@ let readOne c i =
       //| InFinished    -> ReadAgain // should we care? probably before e.g. accepting falseStart traffic
       // recheck correctness for all states; used to be just Init|Finishing|Open
       end
-  | Correct(Content.CT_CCS rg) ->
+    | Content.CT_CCS rg ->
       begin
         trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
         | Handshake.InError (x,y) -> alertFlush c i x y
         | Handshake.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
-  | Correct(Content.CT_Data rg f) ->
+    | Content.CT_Data rg f ->
       begin
         trace "read Data fragment"; 
         match fst !c.state with
         | Open -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
         | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
-      end
-
+      end )
  
 // scheduling: we always write up before reading, to advance the Handshake.
 // those writes are never AppData; they may be for other/changing epochs;

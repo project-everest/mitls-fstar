@@ -87,21 +87,74 @@ let recordPacketOut (i:StatefulLHAE.id) (wr:StatefulLHAE.writer i) (pv: protocol
 
 (*** networking (floating) ***)
 
-val read: Transport.t -> Platform.Tcp.EXT (result (contentType * protocolVersion * b:bytes { length b <= max_TLSCiphertext_fragment_length}))
-
 // in the spirit of TLS 1.3, we ignore the outer protocol version (see appendix C):
 // our server never treats the ClientHello's record pv as its minimum supported pv;
 // our client never checks the consistency of the server's record pv.
 // (see earlier versions for the checks we used to perform)
 
-let read tcp =
-  match Transport.really_read tcp 5 with 
-  | Correct header -> (
-      match parseHeader header with  
-      | Correct (ct,pv,len) -> (
-         match Transport.really_read tcp len with
-         | Correct payload  -> Correct (ct,pv,payload)
-         | Error e          -> Error e )
-      | Error e             -> Error e )
-  | Error e                 -> Error e
+// connectlon-local input state
+// to be improved once we extract to C  
+type partial = 
+  | Header 
+  | Body: ct: contentType -> pv: protocolVersion -> partial
+type input_state = 
+  | State:
+    waiting: nat {waiting>0} -> 
+    received: bytes -> 
+    st: partial {
+      match st with 
+      | Header -> length received + waiting = 5 
+      | Body _ _ -> length received + waiting <= max_TLSCiphertext_fragment_length } ->
+    input_state
+let wait_header = 
+  let data = empty_bytes in
+  assert(length empty_bytes = 0);
+  State 5 empty_bytes Header
+
+type read_result = 
+  | ReadError of TLSError.error
+  | ReadWouldBlock
+  | Received:
+      ct:contentType -> 
+      pv:protocolVersion ->
+      b:bytes {length b <= max_TLSCiphertext_fragment_length} -> read_result
+
+val read: Transport.t -> s: HyperStack.ref input_state -> ST read_result
+  (requires fun h0 -> HyperStack.contains h0 s)
+  (ensures fun h0 _ h1 -> 
+    let id = HyperStack.frameOf s in 
+    HyperStack.modifies_one id h0 h1 /\ 
+    HyperStack.modifies_ref id (Set.singleton (HyperStack.as_addr s)) h0 h1 )
+
+let rec read tcp state =
+  let State len prior partial = !state in 
+  match Transport.recv tcp len with 
+  | Platform.Tcp.RecvWouldBlock -> ReadWouldBlock
+  | Platform.Tcp.RecvError e -> ReadError (AD_internal_error, e) 
+  | Platform.Tcp.Received fresh -> (
+    let data = prior @| fresh in 
+    if length fresh = 0 then 
+      ReadError(AD_internal_error,"TCP close") // otherwise we loop...
+    else if length fresh < len then (
+      // partial read
+      state := State (len - length fresh) data partial; 
+      read tcp state // should probably ReadWouldBlock instead when non-blocking
+      )
+    else (
+      // we have received what we asked for
+      match partial with 
+      | Header -> (
+          match parseHeader data with  
+          | Error e -> ReadError e 
+          | Correct (ct,pv,len) -> 
+              if len = 0 then (
+                // corner case, possibly excluded by the RFC?
+                state := State 5 empty_bytes Header; 
+                Received ct pv empty_bytes )
+              else (
+                state := State  len empty_bytes (Body ct pv);
+                read tcp state ))
+      | Body ct pv -> (
+              state := State 5 empty_bytes Header; 
+              Received ct pv data )))
 

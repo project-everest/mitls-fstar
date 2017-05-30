@@ -56,7 +56,7 @@ let default_signatureSchemes =
    RSA_PKCS1_SHA1
  ]
 
-val defaultConfig : config
+val defaultConfig: config
 let defaultConfig =
   let curves = CoreCrypto.([ECC_P521; ECC_P384; ECC_P256; ECC_X25519; ECC_X448]) in
   let ffdh = [FFDHE4096; FFDHE3072; FFDHE2048] in
@@ -79,6 +79,7 @@ let defaultConfig =
   cert_chain_file = "server.pem";
   private_key_file = "server.key";
 
+  non_blocking_read = false;
   enable_early_data = false;
   safe_renegotiation = true;
   safe_resumption = true;
