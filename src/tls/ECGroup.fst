@@ -77,11 +77,9 @@ let keygen g =
     let p = CoreCrypto.random 56 in
     KS_X448 (p, s)
   | _ ->
-    let b = IO.debug_print_string "ECGroup keygen call\n" in
     let params = params_of_group g false in
     let s = ec_gen_key params in
-    let b2 = IO.debug_print_string "CoreCrypto called\n" in
-    if b && b2 then KS_CC s else KS_CC s
+    KS_CC s
 
 (* Unused, implemented in CommonDH
 val dh_responder: #g:group -> s:share g -> ST (keyshare g * secret g)

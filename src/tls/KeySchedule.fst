@@ -38,13 +38,13 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
 
 #set-options "--lax"
 
-let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
+let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let kb = CommonDH.serialize_raw #g s in
   let kh = Platform.Bytes.hex_of_bytes kb in
-  IO.debug_print_string ("Share: "^kh^"\n")
+  dbg ("Share: "^kh^"\n")
 
 (********************************************
 *    Resumption PSK is disabled for now     *
