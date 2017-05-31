@@ -1064,7 +1064,6 @@ irreducible val computeServerMode:
   cfg: config ->
   co: offer ->
   serverRandom: TLSInfo.random ->
-  serverID: option sessionID ->
   St (result mode)
 let computeServerMode cfg co serverRandom serverID =
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
@@ -1109,7 +1108,7 @@ let computeServerMode cfg co serverRandom serverID =
               None // TODO: no HRR
               TLS_1p3
               serverRandom
-              serverID
+              None
               cs
               (Some j)
               serverExtensions
@@ -1123,7 +1122,7 @@ let computeServerMode cfg co serverRandom serverID =
               None // TODO: no HRR
               TLS_1p3
               serverRandom
-              serverID
+              None
               cs
               None // No PSKs, pure (EC)DHE
               serverExtensions
@@ -1136,88 +1135,111 @@ let computeServerMode cfg co serverRandom serverID =
       end
     end
   | Correct pv ->
-  // with TLS 1.2, we pick the first ciphersuite compatible with our credentials
-  // we could be a bit stricter and record wether the client is TLS
-  let nosa = fun (CipherSuite _ sa _) -> None? sa in
-  let sigfilter =
-    match Cert.lookup_chain cfg.cert_chain_file with
-    | Correct c  -> (
-      match Cert.endpoint_keytype c with
-      | Some kt -> (fun cs ->
-        match cs with
-        | CipherSuite _ sa _ ->
-          begin
-          match sa with
-          | Some sa ->
-            (match sa, kt with
-            | RSASIG, KeyRSA _ | RSAPSS, KeyRSA _
-            | ECDSA, KeyECDSA _ | DSA, KeyDSA _ -> true
+    let valid_ticket =
+      match find_sessionTicket co with
+      | None -> None
+      | Some t ->
+        // No tickets if client desn't send an SID (too messy)
+        if length co.ch_sessionID = 0 then None
+        else Ticket.check_ticket12 t
+      in
+    (match valid_ticket with
+    | Some (pv, cs, _) ->
+      Correct (Mode
+        co
+        None // TODO: no HRR
+        pv
+        serverRandom
+        (Some co.ch_sessionID)
+        cs
+        None
+        None // Extensions
+        None
+        None
+        None
+        None)
+    | _ ->
+      // with TLS 1.2, we pick the first ciphersuite compatible with our credentials
+      // we could be a bit stricter and record wether the client is TLS
+      let nosa = fun (CipherSuite _ sa _) -> None? sa in
+      let sigfilter =
+        match Cert.lookup_chain cfg.cert_chain_file with
+        | Correct c  -> (
+          match Cert.endpoint_keytype c with
+          | Some kt -> (fun cs ->
+            match cs with
+            | CipherSuite _ sa _ ->
+              begin
+              match sa with
+              | Some sa ->
+                (match sa, kt with
+                | RSASIG, KeyRSA _ | RSAPSS, KeyRSA _
+                | ECDSA, KeyECDSA _ | DSA, KeyDSA _ -> true
+                | _ -> false)
+              | _ -> false
+              end
             | _ -> false)
-          | _ -> false
-          end
-        | _ -> false)
-      | _ -> trace "WARNING: loaded wrong server cert"; nosa)
-    | _ -> trace "WARNING: cannot load server cert"; nosa in
-  // From https://tools.ietf.org/html/rfc5246#section-7.4.2:
-  // In order to negotiate correctly, the server MUST check any candidate
-  // cipher suites against the "signature_algorithms" extension before selecting them
-  // TODO: we're not doing this
-  let ccs = List.Tot.filter sigfilter co.ch_cipher_suites in
-  match negotiateCipherSuite cfg pv ccs with
-  | Error z -> Error z
-  | Correct (kex,sa,ae,cs) ->
-  // compute server extensions
-  match co.ch_extensions with
-  | None -> Error(AD_illegal_parameter, "Missing mandatory ClientHello extensions")
-  (* omitted details:
-              | SSL_3p0 ->
-                let cre =
-                  if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs ccs) then
-                     {ne_default with ne_secure_renegotiation = RI_Valid}
-                  else ne_default
-                in Correct (cre)
-             | _ -> Error... )) *)
-  | Some cexts ->
-    let serverExtensions = None in // To be computed in Handshake and filled later
-  // compression is null and non-negotiable; we just report client errors
-  let correct_compression_offer =
-    if is_client13 co
-    then co.ch_compressions = [NullCompression]
-    else List.Tot.existsb (fun c -> c = NullCompression) co.ch_compressions in
-  if not correct_compression_offer
-  then Error(AD_illegal_parameter, "Compression is deprecated") else
-  let scert =
-    match Cert.lookup_chain cfg.cert_chain_file with
-    | Correct cert -> Some (Cert.chain_up cert)
-    | Error z ->
-      trace ("No cert found: "^string_of_error z);
-      None
-  in
-  Correct (Mode
-    co
-    None // no HRR before TLS 1.3
-    pv
-    serverRandom
-    serverID
-    cs
-    None
-    serverExtensions
-    None // no server key share yet
-    None
-    scert
-    None // no client key share yet for 1.2
-  )
+          | _ -> trace "WARNING: loaded wrong server cert"; nosa)
+        | _ -> trace "WARNING: cannot load server cert"; nosa in
+      // From https://tools.ietf.org/html/rfc5246#section-7.4.2:
+      // In order to negotiate correctly, the server MUST check any candidate
+      // cipher suites against the "signature_algorithms" extension before selecting them
+      // TODO: we're not doing this
+      let ccs = List.Tot.filter sigfilter co.ch_cipher_suites in
+      match negotiateCipherSuite cfg pv ccs with
+      | Error z -> Error z
+      | Correct (kex,sa,ae,cs) ->
+      // compute server extensions
+      match co.ch_extensions with
+      | None -> Error(AD_illegal_parameter, "Missing mandatory ClientHello extensions")
+      (* omitted details:
+                  | SSL_3p0 ->
+                    let cre =
+                      if contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (list_valid_cs_is_list_cs ccs) then
+                         {ne_default with ne_secure_renegotiation = RI_Valid}
+                      else ne_default
+                    in Correct (cre)
+                 | _ -> Error... )) *)
+      | Some cexts ->
+        let serverExtensions = None in // To be computed in Handshake and filled later
+      // compression is null and non-negotiable; we just report client errors
+      let correct_compression_offer =
+        if is_client13 co
+        then co.ch_compressions = [NullCompression]
+        else List.Tot.existsb (fun c -> c = NullCompression) co.ch_compressions in
+      if not correct_compression_offer
+      then Error(AD_illegal_parameter, "Compression is deprecated") else
+      let scert =
+        match Cert.lookup_chain cfg.cert_chain_file with
+        | Correct cert -> Some (Cert.chain_up cert)
+        | Error z ->
+          trace ("No cert found: "^string_of_error z);
+          None
+      in
+      Correct (Mode
+        co
+        None // no HRR before TLS 1.3
+        pv
+        serverRandom
+        (Some (CoreCrypto.random 32))
+        cs
+        None
+        serverExtensions
+        None // no server key share yet
+        None
+        scert
+        None // no client key share yet for 1.2
+      ))
 
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
-  option sessionID ->
   St (result mode)
 let server_ClientHello #region ns offer sid =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
   match MR.m_read ns.state with
   | S_Init _ ->
-    match computeServerMode ns.cfg offer ns.nonce sid with
+    match computeServerMode ns.cfg offer ns.nonce with
     | Error z ->
       trace ("negotiation failed: "^string_of_error z);
       Error z
@@ -1246,7 +1268,7 @@ let server_ServerShare #region ns ks =
       None  // option (TI.cVerifyData*TI.sVerifyData)
       mode.n_pski
       ks
-      false // resume?
+      (mode.n_sessionID = Some mode.n_offer.ch_sessionID)
     with
     | Error z -> Error z
     | Correct sexts ->
