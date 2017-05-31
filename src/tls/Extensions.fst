@@ -393,6 +393,7 @@ noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_signature_algorithms of signatureSchemeList (* M, AF *) (* RFC 5246 *)
   | E_key_share of CommonDH.keyShare (* M, AF *)
   | E_pre_shared_key of psk (* M, AF *)
+  | E_session_ticket of bytes
   | E_early_data of earlyDataIndication
   | E_supported_versions of protocol_versions   (* M, AF *)
   | E_cookie of b:bytes {0 < length b /\ length b < 65536}  (* M *)
@@ -427,6 +428,7 @@ let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match
   | E_signature_algorithms _ -> "signature_algorithms"
   | E_key_share _ -> "key_share"
   | E_pre_shared_key _ -> "pre_shared_key"
+  | E_session_ticket _ -> "session_ticket"
   | E_early_data _ -> "early_data"
   | E_supported_versions _ -> "supported_versions"
   | E_cookie _ -> "cookie"
@@ -448,6 +450,7 @@ private let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: exten
   | E_signature_algorithms _, E_signature_algorithms _ -> true
   | E_key_share _, E_key_share _ -> true
   | E_pre_shared_key _, E_pre_shared_key _ -> true
+  | E_session_ticket _, E_session_ticket _ -> true
   | E_early_data _, E_early_data _ -> true
   | E_supported_versions _, E_supported_versions _ -> true
   | E_cookie _, E_cookie _ -> true
@@ -469,6 +472,7 @@ let extensionHeaderBytes #p ext =
   | E_server_name _            -> abyte2 (0x00z, 0x00z)
   | E_supported_groups _       -> abyte2 (0x00z, 0x0Az) // 10
   | E_signature_algorithms _   -> abyte2 (0x00z, 0x0Dz) // 13
+  | E_session_ticket _         -> abyte2 (0x00z, 0x23z) // 35
   | E_key_share _              -> abyte2 (0x00z, 0x28z) // 40
   | E_pre_shared_key _         -> abyte2 (0x00z, 0x29z) // 41
   | E_early_data _             -> abyte2 (0x00z, 0x2az) // 42
@@ -520,6 +524,7 @@ let rec extensionPayloadBytes = function
   | E_server_name l            -> vlbytes 2 (vlbytes 2 (serverNameBytes l)) // ClientHello
   | E_supported_groups l       -> vlbytes 2 (namedGroupsBytes l)
   | E_signature_algorithms sha -> vlbytes 2 (signatureSchemeListBytes sha)
+  | E_session_ticket b         -> vlbytes 2 b
   | E_key_share ks             -> vlbytes 2 (CommonDH.keyShareBytes ks)
   | E_pre_shared_key psk       ->
     (match psk with
@@ -560,7 +565,7 @@ let extensionBytes_is_injective
   let head2 = extensionHeaderBytes ext2 in
   let payload2 = extensionPayloadBytes ext2 in
   append_assoc head1 payload1 s1;
-  append_assoc head2 payload2 s2;  
+  append_assoc head2 payload2 s2;
   lemma_append_inj head1 (payload1 @| s1) head2 (payload2 @| s2);
   equal_extensionHeaderBytes_sameExt ext1 ext2;
   match ext1 with
@@ -844,6 +849,9 @@ let parseExtension role b =
       if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else
       mapResult (normallyNone E_signature_algorithms) (TLSConstants.parseSignatureSchemeList data)
 
+    | (0x00z, 0x23z) -> // session_ticket
+      Correct (E_session_ticket data, None)
+
     | (0x00z, 0x28z) ->
       mapResult (normallyNone E_key_share) (CommonDH.parseKeyShare (Client? role) data)
 
@@ -964,6 +972,7 @@ val prepareExtensions:
   protocolVersion ->
   protocolVersion ->
   k:valid_cipher_suites{List.Tot.length k < 256} ->
+  option string ->
   bool ->
   bool ->
   bool ->
@@ -976,7 +985,7 @@ val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions minpv pv cs sres sren edi sigAlgs namedGroups ri ks psks =
+let prepareExtensions minpv pv cs host sres sren edi sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -997,6 +1006,11 @@ let prepareExtensions minpv pv cs sres sren edi sigAlgs namedGroups ri ks psks =
       match pv, ks with
       | TLS_1p3, Some ks -> E_key_share ks::res
       | _,_ -> res
+    in
+    let res =
+      match host with
+      | Some dns -> E_server_name [SNI_DNS (utf8 dns)] :: res
+      | None -> res
     in
     // Include extended_master_secret when resuming
     let res = if sres then E_extended_ms :: res else res in
@@ -1209,7 +1223,8 @@ private val clientToServerExtension: protocolVersion
 let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   match cext with
   | E_key_share _ ->
-    Option.map E_key_share ks // ks should be in one of client's groups
+    if pv = TLS_1p3 then Option.map E_key_share ks // ks should be in one of client's groups
+    else None
   | E_server_name server_name_list ->
     begin
     // See https://tools.ietf.org/html/rfc6066
@@ -1229,7 +1244,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
     else
       Some (E_ec_point_format [ECP_UNCOMPRESSED])
   | E_pre_shared_key _ ->
-    if pski = None then None
+    if pski = None || pv <> TLS_1p3 then None
     else
       let x = Some?.v pski in
       begin
@@ -1241,7 +1256,10 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
     // REMARK: Purely informative, can only appear in EncryptedExtensions
     // Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
   // FIXME: properly select early_data and a psk index
-  | E_early_data b -> None //Some (E_early_data None)
+  | E_early_data b -> None // EE on server
+  | E_session_ticket b ->
+     if pv = TLS_1p3 || not cfg.enable_tickets then None
+     else Some (E_session_ticket empty_bytes)
   // TODO: handle all remaining cases
   | _ -> None
 

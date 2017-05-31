@@ -1732,6 +1732,7 @@ noeq type config = {
     check_client_version_in_pms_for_old_tls: bool;
     cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
     private_key_file: string;   // TEMPORARY
+    enable_tickets: bool;
 
     (* Common *)
     enable_early_data: bool;
