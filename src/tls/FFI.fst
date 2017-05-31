@@ -200,6 +200,7 @@ let ffiConfig version host =
   {defaultConfig with
     minVer = TLS_1p2;
     maxVer = v;
+	peer_name = host;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
     private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
@@ -314,3 +315,9 @@ val ffiSend: Connection.connection -> cbytes -> ML int
 let ffiSend c b =
   let msg = abytes b in
   write c msg
+  
+val ffiGetCert: Connection.connection -> ML cbytes
+let ffiGetCert c =
+  let cert = getCert c in
+  get_cbytes cert
+  

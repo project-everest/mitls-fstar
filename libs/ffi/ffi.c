@@ -27,7 +27,8 @@
   MITLS_FFI_ENTRY(Connect) \
   MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \
-  MITLS_FFI_ENTRY(Recv)
+  MITLS_FFI_ENTRY(Recv) \
+  MITLS_FFI_ENTRY(GetCert)
  
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -402,6 +403,28 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     CAMLreturnT(void*,p);
 }
 
+void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal1(result);
+    void *p = NULL;
+
+    *outmsg = NULL;
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    result = caml_callback_exn(*g_mitls_FFI_GetCert, state->fstar_state);
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        p = NULL;
+    } else {
+        // Return the certificate bytes
+        p = copypacket(result, cert_size);
+    }
+    caml_release_runtime_system();
+
+    CAMLreturnT(void*, p);
+}
 
 // Register the calling thread, so it can call miTLS.  Returns 1 for success, 0 for error.
 int MITLS_CALLCONV FFI_mitls_thread_register(void)

@@ -78,7 +78,9 @@ let coerceDH (g:CommonDH.group) (gx:CommonDH.share g) (gy:CommonDH.share g) b =
 type pms =
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
   | DHPMS: g:CommonDH.group -> CommonDH.share g -> CommonDH.share g -> dhpms -> pms
+  | DummyPMS
 
 let honestPMS = function
   | RSAPMS (pk, pv, pms) -> honestRSAPMS pk pv pms
   | DHPMS g gx gy pms -> honestDHPMS g gx gy pms
+  | DummyPMS -> false

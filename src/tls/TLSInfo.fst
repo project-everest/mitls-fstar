@@ -78,6 +78,7 @@ let defaultConfig =
   check_client_version_in_pms_for_old_tls = true;
   cert_chain_file = "server.pem";
   private_key_file = "server.key";
+  enable_tickets = true;
 
   non_blocking_read = false;
   enable_early_data = true;

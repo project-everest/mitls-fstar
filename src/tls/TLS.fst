@@ -453,6 +453,7 @@ let sendFragment c #i wo f =
        let pv = Handshake.version_of c.hs in
        lemma_repr_bytes_values (length payload);
        assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
+       trace ("Sending fragment of length " ^ string_of_int (length payload));
        let record = Record.makePacket ct (PlaintextID? i) pv payload in
        let r  = Transport.send c.tcp record in
        match r with
@@ -1193,7 +1194,8 @@ let readFragment c i =
   | Record.Received ct pv payload ->
     let es = MR.m_read (Handshake.es_of c.hs) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
-    //trace ("Epoch index: "^string_of_int j);
+    trace ("Read fragment at epoch index: " ^ string_of_int j ^
+           " of length " ^ string_of_int (length payload));
     if j < 0 then // payload is in plaintext
       let rg = Range.point (length payload) in
       Correct(Some (Content.mk_fragment i ct rg payload))
