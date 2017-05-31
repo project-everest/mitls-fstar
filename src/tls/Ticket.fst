@@ -32,9 +32,9 @@ let tid =
   ID13 (KeyID #li (ExpandedSecret (EarlySecretID (NoPSK h)) ApplicationTrafficSecret log))
 
 // ADL TODO: add config setting for ticket keys
-private let ticket_enc = AE.gen tid region
+private let ticket_enc = AE.gen region tid
 private let ticket_dec = AE.genReader region ticket_enc
-private let nonce = CC.random 12
+private let salt = CC.random 12
 private let ctr = ralloc region 0
 
 type ticket =
@@ -84,7 +84,7 @@ let create_ticket t =
   let plain = (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b) in
   let nb = bytes_of_int 12 !ctr in
   ctr := !ctr + 1;
-  let iv = xor 12 nb nonce in
+  let iv = xor 12 nb salt in
   let ae = AE.encrypt #tid #65535 ticket_enc iv empty_bytes plain in
   nb @| ae
 

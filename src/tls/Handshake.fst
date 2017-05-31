@@ -564,7 +564,7 @@ let server_ClientHello hs offer =
       | Error z -> InError z
       | Correct mode ->
         let ticket = {sticket_lifetime = FStar.UInt32.(uint_to_t 3600); sticket_ticket = tid; } in
-        let digestT = HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket);
+        let digestT = HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket) in
         let fink = KeySchedule.ks_12_finished_key hs.ks in
         let svd = TLSPRF.finished12 ha fink Server digestT in
         let digestServerFinished = HandshakeLog.send_CCS_tag #ha hs.log (Finished ({fin_vd = svd})) true in
@@ -660,10 +660,8 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
   let cs = mode.Nego.n_cipher_suite in
   let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
   let expected_cvd = TLSPRF.finished12 ha fink Client digestSF in
-  if equalBytes cvd expected_cvd
-  then
-    hs.state := S_Complete;
-    InAck false false
+  if equalBytes cvd expected_cvd then
+    (hs.state := S_Complete; InAck false false)
   else
     InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 

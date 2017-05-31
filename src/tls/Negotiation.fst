@@ -1065,7 +1065,7 @@ irreducible val computeServerMode:
   co: offer ->
   serverRandom: TLSInfo.random ->
   St (result mode)
-let computeServerMode cfg co serverRandom serverID =
+let computeServerMode cfg co serverRandom =
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
   match negotiate_version cfg co with
   | Error z -> Error z
