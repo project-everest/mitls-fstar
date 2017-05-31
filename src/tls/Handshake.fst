@@ -364,15 +364,10 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           (Some?.v mode.Nego.n_server_share)
           mode.Nego.n_pski in 
         register s hs_keys; // register new epoch
-        ( match Nego.zeroRTToffer mode.Nego.n_offer, Nego.zeroRTT mode with
-        | true, true -> (
-              trace "0RTT accepted"; 
-              Epochs.incr_reader s.epochs) // from -1 to 0 (unused) 
-        | true, false -> trace "0RTT refused"
+        (match Nego.zeroRTToffer mode.Nego.n_offer, Some? mode.Nego.n_pski with
+        | true, true ->  trace "0RTT potentially accepted (wait for EE to confirm)"
+        | true, false -> trace "No 0RTT possible because of PSK refused"
         | _ -> ());
-        //TODO check we cover 0rtt-accepted and 0rtt-refused cases
-        // we expect 0RTTing clients to check the mode after handshake completion.
-        //
         s.state := C_Wait_Finished1;
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
@@ -471,12 +466,14 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
         else (
           register hs app_keys; // ATKs are ready to use in both directions
           if Nego.zeroRTT mode then (
+            trace "Early data accepted";
             HandshakeLog.send hs.log EndOfEarlyData;
             HandshakeLog.send_signals hs.log (Some false) false;
             hs.state := C_Sent_EOED digestServerFinished ocr cfin_key;
             trace "queued AEAD; are we sending it??";
             InAck false false )
           else (
+            trace "Early data rejected";
             client_ClientFinished_13 hs digestServerFinished ocr cfin_key;
             InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
           )) // moving to C_Complete

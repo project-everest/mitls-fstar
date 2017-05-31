@@ -460,7 +460,9 @@ let zeroRTToffer o = Some? (find_early_data o)
 val zeroRTT: mode -> bool
 let zeroRTT mode =
   zeroRTToffer mode.n_offer &&
-  Some? mode.n_pski
+  Some? mode.n_pski &&
+  Some? mode.n_server_extensions &&
+  List.Tot.existsb E_early_data? (Some?.v mode.n_server_extensions)
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -941,7 +943,11 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
   | C_Mode mode ->
     let ccert = None in
     let scert = Some serverChain in
-    let sexts = mode.n_server_extensions in // TODO: add extensions from EE
+    let sexts =
+      match mode.n_server_extensions with
+      | None -> None
+      | Some exts -> Some (List.Tot.append exts ee)
+    in
     let mode = Mode
       mode.n_offer
       mode.n_hrr
@@ -950,7 +956,7 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
       mode.n_sessionID
       mode.n_cipher_suite
       mode.n_pski
-      mode.n_server_extensions
+      sexts
       mode.n_server_share
       ocr
       scert
