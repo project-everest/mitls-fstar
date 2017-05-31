@@ -44,7 +44,7 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
   =
   let kb = CommonDH.serialize_raw #g s in
   let kh = Platform.Bytes.hex_of_bytes kb in
-  IO.debug_print_string ("Share: "^kh^"\n")
+  dbg ("Share: "^kh^"\n")
 
 (********************************************
 *    Resumption PSK is disabled for now     *
