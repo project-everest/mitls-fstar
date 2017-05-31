@@ -1234,7 +1234,7 @@ let computeServerMode cfg co serverRandom =
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
   St (result mode)
-let server_ClientHello #region ns offer sid =
+let server_ClientHello #region ns offer =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
   trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
   match MR.m_read ns.state with
