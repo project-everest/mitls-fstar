@@ -415,19 +415,6 @@ let ks_server_12_init_dh ks cr pv cs ems g =
   st := S (S_12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |));
   CommonDH.pubshare our_share
 
-let ks_server_12_resume ks cr tid =
-  dbg "ks_server_12_resume";
-  let KS #region st = ks in
-  let S (S_Init sr) = !st in
-  let Some (pv, cs, pmsb) = Ticket.check_ticket12 tid in
-  dbg ("Recall PMS: "^(print_bytes pmsb));
-  let csr = cr @| sr in
-  let kef = kefAlg pv cs false in
-  let ms = TLSPRF.extract kef pmsb csr 48 in
-  dbg ("master secret:"^(print_bytes ms));
-  let msId = StandardMS PMS.DummyPMS csr kef in
-  st := S (S_12_has_MS csr (pv, cs, false) msId ms)
-
 val ks_server_13_init:
   ks:ks ->
   cr:random ->
@@ -647,7 +634,7 @@ let ks_12_finished_key ks =
  | S (S_12_has_MS _ _ _ ms) -> ms in
  TLSPRF.coerce ms
 
-let ks_12_pms ks =
+let ks_12_ms ks =
   let KS #region st = ks in
   match !st with
   | S (S_12_has_MS _ _ _ ms) -> ms
@@ -681,6 +668,18 @@ let ks_12_record_key ks =
   let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
   let r = StAE.genReader HyperHeap.root rw in
   StAEInstance r w
+
+let ks_server_12_resume ks cr tid =
+  dbg ("ks_server_12_resume Ticket = "^(print_bytes tid));
+  let KS #region st = ks in
+  let S (S_Init sr) = !st in
+  let Some (pv, cs, ms) = Ticket.check_ticket12 tid in
+  dbg ("Recall MS: "^(print_bytes ms));
+  let csr = cr @| sr in
+  let kef = kefAlg pv cs false in
+  let msId = StandardMS PMS.DummyPMS csr kef in
+  st := S (S_12_has_MS csr (pv, cs, true) msId ms);
+  ks_12_record_key ks
 
 (******************************************************************)
 

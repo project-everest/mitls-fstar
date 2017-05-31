@@ -559,10 +559,12 @@ let server_ClientHello hs offer =
       let ka = Nego.kexAlg mode in
       HandshakeLog.setParams hs.log pv ha (Some ka) None;
       let Some tid = Nego.find_sessionTicket offer in
-      KeySchedule.ks_server_12_resume hs.ks cr tid;
+      let adk = KeySchedule.ks_server_12_resume hs.ks cr tid in
+      register hs adk;
       (match Nego.server_ServerShare hs.nego None with
       | Error z -> InError z
       | Correct mode ->
+        HandshakeLog.send hs.log (serverHello mode);
         let ticket = {sticket_lifetime = FStar.UInt32.(uint_to_t 3600); sticket_ticket = tid; } in
         let digestT = HandshakeLog.send_tag #ha hs.log (NewSessionTicket ticket) in
         let fink = KeySchedule.ks_12_finished_key hs.ks in
@@ -685,7 +687,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
       let digestTicket =
         match Nego.find_sessionTicket mode.Nego.n_offer with
         | Some _ when cfg.enable_tickets ->
-          let ticket = Ticket.Ticket12 pv cs (KeySchedule.ks_12_pms hs.ks) in
+          let ticket = Ticket.Ticket12 pv cs (KeySchedule.ks_12_ms hs.ks) in
           let ticket = {
             sticket_lifetime = FStar.UInt32.(uint_to_t 3600);
             sticket_ticket = Ticket.create_ticket ticket;

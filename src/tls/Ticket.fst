@@ -35,10 +35,9 @@ let tid =
 private let ticket_enc = AE.gen region tid
 private let ticket_dec = AE.genReader region ticket_enc
 private let salt = CC.random 12
-private let ctr = ralloc region 0
 
 type ticket =
-| Ticket12: protocolVersion -> cs:cipherSuite{CipherSuite? cs} -> pms:bytes -> ticket
+| Ticket12: protocolVersion -> cs:cipherSuite{CipherSuite? cs} -> ms:bytes -> ticket
 | Ticket13: cs:cipherSuite{CipherSuite13? cs} -> li:logInfo -> pre_rmsId li -> rms:bytes -> ticket
 
 let check_ticket (b:bytes{length b <= 65551}) =
@@ -79,11 +78,10 @@ let check_ticket (b:bytes{length b <= 65551}) =
 
 let create_ticket t =
   let pv, cs, b = match t with
-    | Ticket12 pv cs pms -> pv, cs, pms
+    | Ticket12 pv cs ms -> pv, cs, ms
     | Ticket13 cs _ _ rms -> TLS_1p3, cs, rms in
   let plain = (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b) in
-  let nb = bytes_of_int 12 !ctr in
-  ctr := !ctr + 1;
+  let nb = CC.random 12 in
   let iv = xor 12 nb salt in
   let ae = AE.encrypt #tid #65535 ticket_enc iv empty_bytes plain in
   nb @| ae
@@ -105,5 +103,5 @@ let check_ticket13 b =
 
 let check_ticket12 b =
   match check_ticket b with
-  | Some (Ticket12 pv cs pms) -> Some (pv, cs, pms)
+  | Some (Ticket12 pv cs ms) -> Some (pv, cs, ms)
   | _ -> None
