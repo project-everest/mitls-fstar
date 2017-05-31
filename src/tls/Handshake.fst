@@ -779,7 +779,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
             ticket13_age_add = FStar.UInt32.(uint_to_t 0);
             ticket13_ticket = tb;
-            ticket13_extensions = [];
+            ticket13_extensions = [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 4096))];
           }));
           hs.state := S_Complete;
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
