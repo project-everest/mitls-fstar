@@ -109,9 +109,13 @@ private let rec server_read con: ML unit =
      end
     | r -> trace ("unexpected read result: "^string_of_ioresult_i #id r)
 
+private let rec server_loop rid sock config: ML unit =
+  let c = TLS.accept rid sock config in
+  server_read c;
+  server_loop rid sock config
+
 let server config host port =
  trace "*** Starting test TLS server ***";
  let sock = Platform.Tcp.listen host port in
  let rid = new_region root in
- let c = TLS.accept rid sock config in
- server_read c
+ server_loop rid sock config

@@ -1044,9 +1044,9 @@ let rec filter_psk (l:list Extensions.pskIdentity)
     match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->
-      (match PSK.psk_lookup id with
+      match PSK.psk_lookup id with
       | Some info -> (id, info) :: (filter_psk t)
-      | None -> filter_psk t)
+      | None -> (trace "WARNING: filtering a PSK"; filter_psk t)
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1108,7 +1108,7 @@ let computeServerMode cfg co serverRandom =
           in
           match kex with
           | PSK_EDH j ogx cs  ->
-            (trace "PSK_EDH";
+            (trace "Negotiated PSK_EDH key exchange";
             Correct (Mode
               co
               None // TODO: no HRR
@@ -1123,6 +1123,7 @@ let computeServerMode cfg co serverRandom =
               scert
               ogx))
           | JUST_EDH gx cs ->
+            (trace "Negotiated Pure EDH key exchange";
             Correct (Mode
               co
               None // TODO: no HRR
@@ -1135,7 +1136,7 @@ let computeServerMode cfg co serverRandom =
               None // no server key share yet
               None // TODO: n_client_cert_request
               scert
-              (Some gx))
+              (Some gx)))
           end
         end
       end
