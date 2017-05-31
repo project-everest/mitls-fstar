@@ -308,7 +308,7 @@ let ks_client_13_init ks pskl gl =
     let i, psk, h, ae = read_psk pskid in
     let pski = PSK.psk_info pskid in
     dbg ("Loaded pre-shared key "^(print_bytes pskid)^": "^(print_bytes psk));
-    let es : es i = HKDF.hkdf_extract h psk (H.zeroHash h) in
+    let es : es i = HKDF.hkdf_extract h (H.zeroHash h) psk in
     dbg ("Early secret: "^(print_bytes es));
     let ll, lb =
       if ApplicationPSK? i then ExtBinder, "ext binder"
@@ -455,7 +455,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
           (i, psk, h)
         in
       dbg ("Pre-shared key: "^(print_bytes psk));
-      let es = HKDF.hkdf_extract h psk (H.zeroHash h) in
+      let es = HKDF.hkdf_extract h (H.zeroHash h) psk in
       let ll, lb =
         if ApplicationPSK? i then ExtBinder, "ext binder"
         else ResBinder, "res binder" in
