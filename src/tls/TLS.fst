@@ -1182,11 +1182,12 @@ let readOne c i =
           if !c.state = Half Reader
           then ( // received a notify response; cleanly close the connection.
             c.state := Close;
-            Read (DataStream.Alert ad))
+            // ADL: changing to DataStream.Close to be consistent with the else branch
+            Read (DataStream.Close (* was: Alert ad *)))
           else ( // received first notification; immediately enqueue notify response [RFC 7.2.1]
             c.state := Half Writer;
             alertFlush c i AD_close_notify "notify response")  // NB we could ignore write errors here.
-        else (   //
+        else (
           if isFatal ad then disconnect c;
           Read (DataStream.Alert ad))
           // else we carry on; the user will know what to do
