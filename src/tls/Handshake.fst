@@ -558,7 +558,7 @@ let server_ClientHello hs offer =
       let ha = Nego.hashAlg mode in
       let ka = Nego.kexAlg mode in
       HandshakeLog.setParams hs.log pv ha (Some ka) None;
-      let Some (Extensions.E_session_ticket tid) = Nego.find_sessionTicket offer in
+      let Some tid = Nego.find_sessionTicket offer in
       KeySchedule.ks_server_12_resume hs.ks cr tid;
       (match Nego.server_ServerShare hs.nego None with
       | Error z -> InError z
@@ -663,7 +663,7 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
   if equalBytes cvd expected_cvd then
     (hs.state := S_Complete; InAck false false)
   else
-    InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
+    InError (AD_decode_error, "Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
 
 (* receive ClientFinish *)
 val server_ClientFinished:
