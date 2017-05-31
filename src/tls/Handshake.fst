@@ -365,7 +365,9 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           mode.Nego.n_pski in 
         register s hs_keys; // register new epoch
         (match Nego.zeroRTToffer mode.Nego.n_offer, Some? mode.Nego.n_pski with
-        | true, true ->  trace "0RTT potentially accepted (wait for EE to confirm)"
+        | true, true ->
+          (trace "0RTT potentially accepted (wait for EE to confirm)";
+          Epochs.incr_reader s.epochs)
         | true, false -> trace "No 0RTT possible because of PSK refused"
         | _ -> ());
         s.state := C_Wait_Finished1;
@@ -681,6 +683,8 @@ let server_ServerFinished_13 hs i =
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
     let eexts = List.Tot.filter Extensions.encryptedExtension exts in
+    // we synchronously increment the writer to skip epoch 0 in case we accepted 0RTT
+    if Nego.zeroRTT mode then Epochs.incr_writer hs.epochs;
     HandshakeLog.send hs.log (EncryptedExtensions eexts);
     let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
     // signing of the formatted session digest
@@ -690,8 +694,6 @@ let server_ServerFinished_13 hs i =
       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
     | Some signature ->
       begin
-      // we synchronously increment the writer to skip epoch 0 in case we accepted 0RTT
-      if Nego.zeroRTT mode then Epochs.incr_writer hs.epochs; 
       let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
       let svd = HMAC.UFCMA.mac sfin_key digestFinished in
