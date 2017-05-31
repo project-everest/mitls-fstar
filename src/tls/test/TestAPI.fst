@@ -87,7 +87,7 @@ private let rec server_read con: ML unit =
       trace ("Received data: "^(iutf8 db));
       let text = "You are connected to miTLS*!\r\n"
         ^ "This is the request you sent:\r\n\r\n" ^ (iutf8 db) in
-      let payload = utf8 ("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:"
+      let payload = utf8 ("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: "
         ^ (string_of_int (length (abytes text)))
         ^ "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" ^ text) in
       let id = TLS.currentId con Writer in
@@ -96,14 +96,14 @@ private let rec server_read con: ML unit =
       match TLS.write con f with
       | Written  ->
        begin
-        trace "Written; now closing";
-        match TLS.writeClose con with
-        | WriteClose -> (
-            let id = TLS.currentId con Reader in
-            match TLS.read con id with
-            | Read DataStream.Close -> trace "Received close_notify, closing socket. The test succeeds!"
-            | r -> trace ("improperly closed connection: "^string_of_ioresult_i #id r))
-        | w -> trace ("failed to close_notify")
+        trace "Closing down...";
+	match writeCloseNotify con with
+        | WriteClose ->
+          let id = TLS.currentId con Reader in
+          (match TLS.read con id with
+          | Read DataStream.Close -> trace "Received close_notify! Closing socket."
+          | _ -> trace "Peer did not send close_notify.")
+        | WriteError _ r -> trace ("Failed to close: "^r)
        end
       | w -> trace ("failed to write HTTP response")
      end

@@ -1234,13 +1234,13 @@ let readOne c i =
         if ad = AD_close_notify then
           if Closed? (snd !c.state)
           then ( // received a notify response; cleanly close the connection.
-            c.state := (Closed,Closed);
-            Read (DataStream.Close))
+            c.state := (Closed, Closed);
+            // ADL: changing to DataStream.Close to be consistent with the else branch
+            Read (DataStream.Close (* was: Alert ad *)))
           else ( // received first notification; immediately enqueue notify response [RFC 7.2.1]
             c.state := (Closed, snd !c.state);
-            alertFlush c i AD_close_notify "notify response")  // switching to (Closed,Closed)
-            // NB we could ignore write errors here.
-        else (   //
+            alertFlush c i AD_close_notify "notify response")  // NB we could ignore write errors here.
+        else (
           if isFatal ad then disconnect c;
           Read (DataStream.Alert ad))
           // else we carry on; the user will know what to do
