@@ -612,7 +612,7 @@ let server_ClientHello hs offer =
           let ha = Nego.hashAlg mode in
           let ka = Nego.kexAlg mode in
           HandshakeLog.setParams hs.log pv ha (Some ka) None;
-          let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
+          let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
           // these hashes are not always used
           let digestClientHelloBinders = HandshakeLog.hash_tag #ha hs.log in 
           let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
