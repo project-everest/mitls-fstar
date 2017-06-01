@@ -186,12 +186,12 @@ let rec tags_append_aux
 let tags_append a prior ms0 ms1 hs0 hs1 =
   Classical.move_requires (tags_append_aux a prior ms0 ms1 hs0) hs1
 
-noeq type hashState (prior parsed: list msg) =
-  | OpenHash: b:bytes { valid_transcript (prior @ parsed) /\ b = transcript_bytes (prior @ parsed) } -> hashState prior parsed
+noeq type hashState (prior: erased_transcript) (parsed: list msg) =
+  | OpenHash: b:bytes { valid_transcript (reveal_log prior @ parsed) /\ b = transcript_bytes (reveal_log prior @ parsed) } -> hashState prior parsed
   | FixedHash:
       a: Hashing.alg ->
-      state: accv a { valid_transcript (prior @ parsed) /\ Hashing.content state = transcript_bytes (prior @ parsed) } ->
-      hashes: list anyTag { tags a prior parsed hashes } ->
+      state: accv a { valid_transcript (reveal_log prior @ parsed) /\ Hashing.content state = transcript_bytes (reveal_log prior @ parsed) } ->
+      hashes: list anyTag { tags a (reveal_log prior) parsed hashes } ->
       hashState prior parsed
 
 noeq type state =
