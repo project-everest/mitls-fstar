@@ -555,6 +555,7 @@ int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, c
         state->status = SEC_E_OK;
     } else {
         _Print("Unsupported send state");
+        __debugbreak();
     }
 
     _Print("MITLS_send_callback - Copied %x of %x bytes", BytesCopy, (int)buffer_size);
@@ -574,6 +575,7 @@ int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, v
 
     _Print("Processing recv");
     if (state->fDeleteOnComplete) {
+AbortRecv:
         _Print("recv() returning failure, to abort a connection in progress.");
         return -1;
     }
@@ -587,6 +589,9 @@ int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, v
                 SetEvent(state->hOutputIsReady);
                 // Wait for the next InitializeSecurityContext() call to pass in new buffers.
                 WaitForSingleObject(state->hNextCallReady, INFINITE);
+                if (state->fDeleteOnComplete) {
+                    goto AbortRecv;
+                }
             }
             if (state->pInput->cBuffers != 2) {
                 _Print("Unexpected pInput->cBuffers %d", state->pInput->cBuffers);
@@ -628,17 +633,37 @@ int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, v
         }
         if (length < buffer_size) {
             _Print("Recv buffer is empty and %d more bytes are needed %s", buffer_size-length, (state->pOutputBuffer->cbBuffer) ? "continue needed" : "incomplete message");
-            state->pInput->pBuffers[0].BufferType = SECBUFFER_MISSING;
-            state->pInput->pBuffers[0].cbBuffer = (DWORD)buffer_size-(DWORD)length;
-            state->pInput->pBuffers[0].pvBuffer = NULL;
-            if (state->pOutputBuffer->cbBuffer) { // there are bytes waiting to be sent.  Ask the caller to send them and recv the reply
-                state->status = SEC_I_CONTINUE_NEEDED; 
-            } else { // there are no bytes waiting to be sent.  We need another recv first.
-                state->status = SEC_E_INCOMPLETE_MESSAGE;
+            bool fFound = false;
+            ULONG i;
+            for (i = 0; i < state->pInput->cBuffers; ++i) {
+                if (state->pInput->pBuffers[i].BufferType == SECBUFFER_EMPTY) {
+                    fFound = true;
+                    break;
+                }
             }
-            SetEvent(state->hOutputIsReady);
-            // Wait for the next InitializeSecurityContext() call to pass in new buffers.
-            WaitForSingleObject(state->hNextCallReady, INFINITE);
+            if (fFound) {
+                state->pInput->pBuffers[i].BufferType = SECBUFFER_MISSING;
+                state->pInput->pBuffers[i].cbBuffer = (DWORD)buffer_size - (DWORD)length;
+                state->pInput->pBuffers[i].pvBuffer = NULL;
+                if (state->pOutputBuffer->cbBuffer) { // there are bytes waiting to be sent.  Ask the caller to send them and recv the reply
+                    state->status = SEC_I_CONTINUE_NEEDED;
+                } else { // there are no bytes waiting to be sent.  We need another recv first.
+                    state->status = SEC_E_INCOMPLETE_MESSAGE;
+                }
+                SetEvent(state->hOutputIsReady);
+                // Wait for the next InitializeSecurityContext() call to pass in new buffers.
+                WaitForSingleObject(state->hNextCallReady, INFINITE);
+                if (state->fDeleteOnComplete) {
+                    goto AbortRecv;
+                }
+            } else {
+                // There were no SECBUFFER_EMPTY buffers in pInput.
+                _Print("No SECBUFFER_EMPTY were found.  Aborting.");
+                __debugbreak();
+                state->status = SEC_E_INVALID_PARAMETER;
+                SetEvent(state->hOutputIsReady);
+                return -1;
+            }
         } else {
             _Print("Recv buffer is empty and no extra bytes are needed");
             buf->BufferType = SECBUFFER_EMPTY;
@@ -657,6 +682,38 @@ int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, v
     _PrintBuffer(buffer, length);
 
     return (int)length;
+}
+
+SECURITY_STATUS ParseInputBufferDesc(PSecBufferDesc pInput)
+{
+    ULONG NewI = 0;
+    for (ULONG i = 0; i < pInput->cBuffers; ++i) {
+        switch (pInput->pBuffers[i].BufferType) {
+            case SECBUFFER_TOKEN:
+            case SECBUFFER_EMPTY:
+                // Preserve these buffers
+                if (NewI != i) {
+                    memcpy(&pInput->pBuffers[NewI], &pInput->pBuffers[i], sizeof(pInput->pBuffers[0]));
+                }
+                NewI++;
+                break;
+            case SECBUFFER_APPLICATION_PROTOCOLS:
+                // Skip these buffers
+                _Print("Skipping SECBUFFER_APPLICATION_PROTOCOLS");
+                break;
+            case SECBUFFER_TOKEN_BINDING:
+                // Skip these buffers
+                _Print("Skipping SECBUFFER_TOKEN_BINDING");
+                break;
+            default:
+                _Print("Unexpected BufferType at %u", i);
+                _PrintPSecBufferDesc(pInput);
+                __debugbreak();
+                return SEC_E_INVALID_PARAMETER;
+        }
+    }
+    pInput->cBuffers = NewI;
+    return SEC_E_OK;
 }
 
 
@@ -689,11 +746,31 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
     //__debugbreak();
     ConnectionState *state = NULL;
     TLS_WORK_ITEM *item = NULL;
+    SecBufferDesc InputCopy;
     
     PSecBuffer pOutputBuffer;
     SECURITY_STATUS st = ParseOutputBufferDesc(pOutput, fContextReq, &pOutputBuffer);
     if (st != SEC_E_OK) {
         return st;
+    }
+    if (pInput && pInput->cBuffers != 0) {
+        // Copy the pInput into a local variable so it can be mutated
+        InputCopy = *pInput;
+        const size_t cbSecBuffer = sizeof(SecBuffer)*InputCopy.cBuffers;
+        InputCopy.pBuffers = (PSecBuffer)_alloca(cbSecBuffer);
+        memcpy(InputCopy.pBuffers, pInput->pBuffers, cbSecBuffer);
+        pInput = &InputCopy;
+        SECURITY_STATUS st = ParseInputBufferDesc(pInput);
+        if (st != SEC_E_OK) {
+            return st;
+        }
+        if (InputCopy.cBuffers == 0) {
+            // All buffers were filtered out by ParseInputBufferDesc().  Return success
+            // but with no output buffer for the caller to transmit.  This may
+            // have been a SECBUFFER_APPLICATION_PROTOCOLS request that we filtered out.
+            _Print("ParseInputBufferDesc() filtered out all inputs, so returning succss/no-data");
+            pInput = NULL;
+        }
     }
     if (phContext == NULL) {
         _Print("MITLS_InitializeSecurityContextA - initial call");
@@ -1112,6 +1189,8 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
     // Note: schannel is documented as ignoring MessageSeqNo
     MessageSeqNo;
 
+    _Print("Encrypting: \"%s\"", pMessage->pBuffers[0].pvBuffer);
+
     if (fQOP) {
         _Print("ERROR:  EncryptMessage fQOP not supported"); // bugbug: implement support
         return SEC_E_QOP_NOT_SUPPORTED;
@@ -1147,6 +1226,7 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
 
     _Print("MITLS_EncryptMessage - waiting for item");
     WaitForSingleObject(item->hWorkItemCompleted, INFINITE);
+    _Print("MITLS_EncryptMessage - done");
 
     delete item;
     return state->status;
@@ -1183,6 +1263,7 @@ SECURITY_STATUS SEC_ENTRY MITLS_DecryptMessage(PCtxtHandle         phContext,
     if (pfQOP) {
         *pfQOP = 0;
     }
+    _Print("Decrypted: \"%s\"", pMessage->pBuffers[0].pvBuffer);
     return state->status;
 }
 

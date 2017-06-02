@@ -15,6 +15,8 @@
 #include <SubAuth.h> // for some NTSTATUS_ constants
 #include <minidrv.h> // for logging functions
 #include <schannel.h>
+#include <io.h>
+#include <fcntl.h>
 #include "mitls.h"
 
 HMODULE g_hModule;
@@ -365,7 +367,7 @@ SpiUnsealMessage(
 );
 
 SecurityFunctionTableW g_SecurityInterfaceTableW = {
-    SECURITY_SUPPORT_PROVIDER_INTERFACE_VERSION,
+    SECURITY_SUPPORT_PROVIDER_INTERFACE_VERSION_5,
     SpiEnumerateSecurityPackagesW,
     SpiQueryCredentialsAttributesW,
     SpiAcquireCredentialsHandleW,
@@ -404,7 +406,7 @@ SecurityFunctionTableW g_SecurityInterfaceTableW = {
 };
 
 SecurityFunctionTableA g_SecurityInterfaceTableA = {
-    SECURITY_SUPPORT_PROVIDER_INTERFACE_VERSION,
+    SECURITY_SUPPORT_PROVIDER_INTERFACE_VERSION_5,
     SpiEnumerateSecurityPackagesA,
     SpiQueryCredentialsAttributesA,
     SpiAcquireCredentialsHandleA,
@@ -1172,7 +1174,7 @@ SpiQueryContextAttributesExA(
     __in  unsigned long cbBuffer              // Length of buffer
 ) {
     VERBOSE(("%s\n", __FUNCTION__));
-    return SEC_E_UNSUPPORTED_FUNCTION;
+    return SpiQueryContextAttributesExW(phContext, ulAttribute, pBuffer, cbBuffer);
 }
 SECURITY_STATUS
 SEC_ENTRY
@@ -1184,6 +1186,59 @@ SpiQueryContextAttributesExW(
 )
 {
     VERBOSE(("%s\n", __FUNCTION__));
+    switch (ulAttribute) {
+    case SECPKG_ATTR_APPLICATION_PROTOCOL:
+        if (cbBuffer < sizeof(SecPkgContext_ApplicationProtocol)) {
+            return SEC_E_INVALID_PARAMETER;
+        } else {
+            SecPkgContext_ApplicationProtocol *p = (SecPkgContext_ApplicationProtocol*)pBuffer;
+            // Report that Nego wasn't supported, which wininet treats as success
+            p->ProtoNegoStatus = SecApplicationProtocolNegotiationStatus_None;
+            return SEC_E_OK;
+        }
+    case SECPKG_ATTR_TOKEN_BINDING:
+        if (cbBuffer < sizeof(SecPkgContext_TokenBinding)) {
+            return SEC_E_INVALID_PARAMETER;
+        } else {
+            SecPkgContext_TokenBinding *p = (SecPkgContext_TokenBinding*)pBuffer;
+            // Report that token binding wasn't supported, which wininet treats as success
+            p->MajorVersion = 0;
+            p->MinorVersion = 0;
+            return SEC_E_OK;
+        }
+    case SECPKG_ATTR_REMOTE_CERT_CONTEXT:
+    case SECPKG_ATTR_REMOTE_CERT_CHAIN:
+        if (cbBuffer < sizeof(PCCERT_CONTEXT*)) {
+            return SEC_E_INVALID_PARAMETER;
+        } else {
+            return MITLS_QueryContextAttributesW(phContext, ulAttribute, pBuffer);
+        }
+    case SECPKG_ATTR_CONNECTION_INFO:
+        if (cbBuffer < sizeof(SecPkgContext_ConnectionInfo)) {
+            return SEC_E_INVALID_PARAMETER;
+        } else {
+            return MITLS_QueryContextAttributesW(phContext, ulAttribute, pBuffer);
+        }
+    case SECPKG_ATTR_CIPHER_INFO:
+        if (cbBuffer < sizeof(SecPkgContext_CipherInfo)) {
+            return SEC_E_INVALID_PARAMETER;
+        } else {
+            return MITLS_QueryContextAttributesW(phContext, ulAttribute, pBuffer);
+        }
+    case SECPKG_ATTR_ENDPOINT_BINDINGS:
+        // Wininet ignores the output if the call fails.  It is non-fatal.
+        return SEC_E_INVALID_PARAMETER;
+    case SECPKG_ATTR_STREAM_SIZES:
+        if (cbBuffer < sizeof(SecPkgContext_StreamSizes)) {
+            return SEC_E_INVALID_PARAMETER;
+        } else {
+            return MITLS_QueryContextAttributesW(phContext, ulAttribute, pBuffer);
+        }
+    default:
+        VERBOSE(("Unsupported ulAttribute 0x%x\n", ulAttribute));
+        __debugbreak();
+        break;
+    }
     return SEC_E_UNSUPPORTED_FUNCTION;
 }
 

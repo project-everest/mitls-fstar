@@ -15,6 +15,7 @@
 #include <minidrv.h> // for logging functions
 #include "mitls.h"
 #include <schnlsp.h>
+#include <io.h>
 
 #if USE_DETOURS
 #include "detours.h"
@@ -26,6 +27,14 @@ INT giDebugLevel = DBG_VERBOSE;
 
 ACQUIRE_CREDENTIALS_HANDLE_FN_W Real_AcquireCredentialsHandleW = AcquireCredentialsHandleW;
 ACQUIRE_CREDENTIALS_HANDLE_FN_A Real_AcquireCredentialsHandleA = AcquireCredentialsHandleA;
+
+typedef int(__cdecl *fn_write)(
+    int fh,
+    const void *buf,
+    unsigned cnt
+);
+fn_write Real_write;
+
 
 SECURITY_STATUS SEC_ENTRY
 Mine_AcquireCredentialsHandleW(
@@ -45,7 +54,7 @@ Mine_AcquireCredentialsHandleW(
     _Out_opt_ PTimeStamp ptsExpiry                // (out) Lifetime (optional)
 )
 {
-    _PrintEnter("_AcquireCredentialsHandleW(%ls %ls %x %x %x %x %x %x %x\n",
+    _PrintEnter("_AcquireCredentialsHandleW(%ls %ls %x %x %x %x %x %x %x",
         (pszPrincipal == NULL) ? L"(NULL)" : pszPrincipal,
         (pszPackage == NULL) ? L"(NULL)" : pszPackage,
         fCredentialUse,
@@ -71,7 +80,7 @@ Mine_AcquireCredentialsHandleW(
         pvGetKeyArgument,
         phCredential,
         ptsExpiry);
-    _PrintExit("_AcquireCredentialsHandleW(,) -> %p %x\n", *phCredential, rv);
+    _PrintExit("_AcquireCredentialsHandleW(,) -> %p %x", *phCredential, rv);
     return rv;
 }
 
@@ -93,7 +102,7 @@ Mine_AcquireCredentialsHandleA(
     _Out_opt_ PTimeStamp ptsExpiry                // (out) Lifetime (optional)
 )
 {
-    _PrintEnter("_AcquireCredentialsHandleA(%s %s %x %x %x %x %x %x %x\n",
+    _PrintEnter("_AcquireCredentialsHandleA(%s %s %x %x %x %x %x %x %x",
         (pszPrincipal == NULL) ? "(NULL)" : pszPrincipal,
         (pszPackage == NULL) ? "(NULL)" : pszPackage,
         fCredentialUse,
@@ -119,10 +128,25 @@ Mine_AcquireCredentialsHandleA(
         pvGetKeyArgument,
         phCredential,
         ptsExpiry);
-    _PrintExit("_AcquireCredentialsHandleA(,) -> %p %x\n", *phCredential, rv);
+    _PrintExit("_AcquireCredentialsHandleA(,) -> %p %x", *phCredential, rv);
     return rv;
 }
 
+// This is only detoured in GUI processes where there is no stdout, so OCaml print calls
+// don't fail and lead to exceptions.
+int __cdecl Mine_write(
+    int fh,
+    const void *buf,
+    unsigned cnt
+)
+{
+    if (fh == 1) { // stdout
+        VERBOSE(("%*s\n", cnt, buf));
+        return cnt;
+    } else {
+        return Real_write(fh, buf, cnt);
+    }
+}
 
 
 VOID _PrintCommon(const CHAR *psz, va_list args)
@@ -304,11 +328,19 @@ bool AttachDetours(VOID)
     Real_AcquireCredentialsHandleA = (ACQUIRE_CREDENTIALS_HANDLE_FN_A)GetProcAddress(h, "AcquireCredentialsHandleA");
     Real_AcquireCredentialsHandleW = (ACQUIRE_CREDENTIALS_HANDLE_FN_W)GetProcAddress(h, "AcquireCredentialsHandleW");
 
+    if (GetStdHandle(STD_OUTPUT_HANDLE) == NULL) {
+        h = LoadLibraryW(L"msvcrt.dll");
+        Real_write = (fn_write)GetProcAddress(h, "_write");
+    }
+
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
 
     ATTACH(AcquireCredentialsHandleA);
     ATTACH(AcquireCredentialsHandleW);
+    if (Real_write) {
+        ATTACH(write);
+    }
 
     return DetourTransactionCommit() == NO_ERROR;
 }
@@ -320,6 +352,9 @@ bool DetachDetours(VOID)
 
     DETACH(AcquireCredentialsHandleA);
     DETACH(AcquireCredentialsHandleW);
+    if (Real_write) {
+        DETACH(write);
+    }
 
     return DetourTransactionCommit() == NO_ERROR;
 }
