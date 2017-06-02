@@ -401,7 +401,6 @@ let computeOffer r cfg resume nonce ks pskinfo =
     ch_sessionID = sid;
     ch_cipher_suites = cfg.ciphersuites;
     // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
-    ch_raw_cipher_suites = None;
     ch_compressions = cfg.compressions;
     ch_extensions = Some extensions
   }
@@ -420,8 +419,8 @@ let create region r cfg resume nonce =
 
 // a bit too restrictive: use a single Hash in any given offer
 val hashAlg: mode -> Hashing.Spec.alg
-let hashAlg m = //FIXME!
-  Hashing.Spec.SHA256
+let hashAlg m =
+  verifyDataHashAlg_of_ciphersuite m.n_cipher_suite
 
 val kexAlg: mode -> TLSConstants.kexAlg
 let kexAlg m =

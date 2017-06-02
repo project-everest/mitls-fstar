@@ -38,13 +38,13 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
 
 #set-options "--lax"
 
-let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
+let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let kb = CommonDH.serialize_raw #g s in
   let kh = Platform.Bytes.hex_of_bytes kb in
-  IO.debug_print_string ("Share: "^kh^"\n")
+  dbg ("Share: "^kh^"\n")
 
 (********************************************
 *    Resumption PSK is disabled for now     *
@@ -308,7 +308,7 @@ let ks_client_13_init ks pskl gl =
     let i, psk, h, ae = read_psk pskid in
     let pski = PSK.psk_info pskid in
     dbg ("Loaded pre-shared key "^(print_bytes pskid)^": "^(print_bytes psk));
-    let es : es i = HKDF.hkdf_extract h psk (H.zeroHash h) in
+    let es : es i = HKDF.hkdf_extract h (H.zeroHash h) psk in
     dbg ("Early secret: "^(print_bytes es));
     let ll, lb =
       if ApplicationPSK? i then ExtBinder, "ext binder"
@@ -415,19 +415,6 @@ let ks_server_12_init_dh ks cr pv cs ems g =
   st := S (S_12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |));
   CommonDH.pubshare our_share
 
-let ks_server_12_resume ks cr tid =
-  dbg "ks_server_12_resume";
-  let KS #region st = ks in
-  let S (S_Init sr) = !st in
-  let Some (pv, cs, pmsb) = Ticket.check_ticket12 tid in
-  dbg ("Recall PMS: "^(print_bytes pmsb));
-  let csr = cr @| sr in
-  let kef = kefAlg pv cs false in
-  let ms = TLSPRF.extract kef pmsb csr 48 in
-  dbg ("master secret:"^(print_bytes ms));
-  let msId = StandardMS PMS.DummyPMS csr kef in
-  st := S (S_12_has_MS csr (pv, cs, false) msId ms)
-
 val ks_server_13_init:
   ks:ks ->
   cr:random ->
@@ -468,7 +455,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
           (i, psk, h)
         in
       dbg ("Pre-shared key: "^(print_bytes psk));
-      let es = HKDF.hkdf_extract h psk (H.zeroHash h) in
+      let es = HKDF.hkdf_extract h (H.zeroHash h) psk in
       let ll, lb =
         if ApplicationPSK? i then ExtBinder, "ext binder"
         else ResBinder, "res binder" in
@@ -647,7 +634,7 @@ let ks_12_finished_key ks =
  | S (S_12_has_MS _ _ _ ms) -> ms in
  TLSPRF.coerce ms
 
-let ks_12_pms ks =
+let ks_12_ms ks =
   let KS #region st = ks in
   match !st with
   | S (S_12_has_MS _ _ _ ms) -> ms
@@ -681,6 +668,18 @@ let ks_12_record_key ks =
   let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
   let r = StAE.genReader HyperHeap.root rw in
   StAEInstance r w
+
+let ks_server_12_resume ks cr tid =
+  dbg ("ks_server_12_resume Ticket = "^(print_bytes tid));
+  let KS #region st = ks in
+  let S (S_Init sr) = !st in
+  let Some (pv, cs, ms) = Ticket.check_ticket12 tid in
+  dbg ("Recall MS: "^(print_bytes ms));
+  let csr = cr @| sr in
+  let kef = kefAlg pv cs false in
+  let msId = StandardMS PMS.DummyPMS csr kef in
+  st := S (S_12_has_MS csr (pv, cs, true) msId ms);
+  ks_12_record_key ks
 
 (******************************************************************)
 

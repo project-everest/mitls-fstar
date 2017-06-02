@@ -85,7 +85,7 @@ private let rec aux_server config sock : ML unit =
       trace ("Received data: "^(iutf8 db));
       let text = "You are connected to miTLS*!\r\n"
         ^ "This is the request you sent:\r\n\r\n" ^ (iutf8 db) in
-      let payload = utf8 ("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length:"
+      let payload = utf8 ("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: "
         ^ (string_of_int (length (abytes text)))
         ^ "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" ^ text) in
       let id = TLS.currentId con Writer in
@@ -94,11 +94,14 @@ private let rec aux_server config sock : ML unit =
       match TLS.write con f with
       | Written  ->
        begin
-        trace "Reading again\n";
-        let id = TLS.currentId con Reader in
-        match TLS.read con id with
-        | Read DataStream.Close -> trace "Received close_notify! Closing socket."
-        | _ -> trace "improperly closed connection."
+        trace "Closing down...";
+	match writeCloseNotify con with
+        | WriteClose ->
+          let id = TLS.currentId con Reader in
+          (match TLS.read con id with
+          | Read DataStream.Close -> trace "Received close_notify! Closing socket."
+          | _ -> trace "Peer did not send close_notify.")
+        | WriteError _ r -> trace ("Failed to close: "^r)
        end
       | _ -> trace "failed to write HTTP response."
      end
