@@ -617,7 +617,6 @@ let server_ClientHello hs offer =
           let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
           // these hashes are not always used
           let digestClientHelloBinders = HandshakeLog.hash_tag #ha hs.log in 
-          let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
           if mode.Nego.n_protocol_version = TLS_1p3
           then
             begin
@@ -629,6 +628,7 @@ let server_ClientHello hs offer =
               // - get 0RTT key from KS.
               // - do the signalling
               HandshakeLog.send_signals hs.log (Some false) false; // signal key change after writing ServerHello
+              let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
               trace "derive handshake keys";
               let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
               register hs hs_keys;

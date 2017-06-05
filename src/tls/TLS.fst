@@ -1109,8 +1109,7 @@ let string_of_ioresult_i (#i:id) = function
   | Read (DataStream.Data d) -> "Read "^string_of_int (length (DataStream.appBytes #i #Range.fragment_range d)) ^ " bytes of data"
   | Read DataStream.Close -> "Read Close"
   | Read (DataStream.Alert a) -> "Read Alert "^string_of_ad a
-  | Read (DataStream.Close) -> "Read Close"
-  | ReadError (Some o) txt -> "ReadError "^string_of_error(o,txt) 
+  | ReadError (Some o) txt -> "ReadError "^string_of_error(o,txt)
   | ReadError None txt -> "ReadError "^txt
   | CertQuery _ _ -> "CertQuery"
   | Update b -> "Update "^(if b then "writable" else "read-only")
