@@ -451,8 +451,9 @@ let sendFragment c #i wo f =
              begin
              (match wr with
               | StAE.Stream _ st ->
-                let key,salt = StreamAE.leak st in
-                trace ("Encrypting with key " ^ (print_bytes key))
+                if not (authId i) then
+                  let key,salt = StreamAE.leak #i st in
+                  trace ("Encrypting with key " ^ (print_bytes key))
               | _ -> ()
              );
 	     SD.encrypt wr f

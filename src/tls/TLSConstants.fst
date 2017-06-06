@@ -489,7 +489,7 @@ let pinverse_version x = ()
 // to be used *only* in ServerHello.version.
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let draft = 20z
-let versionBytes_draft: protocolVersion' -> Tot (lbytes 2) = function
+let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> abyte2 ( 127z, draft )
   | pv -> versionBytes pv
 val parseVersion_draft: pinverse_t versionBytes_draft
@@ -500,8 +500,11 @@ let parseVersion_draft v =
       then Correct TLS_1p3
       else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version")
-  | _ -> parseVersion v
-
+  | _ ->
+    match parseVersion v with
+    | Correct (UnknownVersion _ _) -> Error(AD_decode_error, "Parsed unknown version ")
+    | Correct pv -> Correct pv
+    | Error z -> Error z
 
 (** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =

@@ -286,7 +286,7 @@ val parseVersions:
   Tot (result (l:list TLSConstants.protocolVersion {FStar.Mul.( length b == 2 * List.Tot.length l)})) (decreases (length b))
 let rec parseVersions b =
   match length b with
-  | 0 -> let r = [] in assert_norm (List.Tot.length [] = 0); Correct r
+  | 0 -> let r = [] in assert_norm (List.Tot.length r == 0); Correct r
   | 1 -> Error (AD_decode_error, "malformed version list")
   | _ ->
     let b2, b' = split b 2 in
@@ -297,7 +297,7 @@ let rec parseVersions b =
       | Error z -> Error z
       | Correct vs -> (
           let r = v::vs in
-          assert_norm (List.Tot.length (v::vs) = 1 + List.Tot.length vs); // did not find usable length lemma in List.Tot
+          assert_norm (List.Tot.length (v::vs) == 1 + List.Tot.length vs);
           Correct r)
 
 val parseSupportedVersions: b:bytes{2 < length b /\ length b < 256} -> result protocol_versions

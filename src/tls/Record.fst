@@ -63,6 +63,8 @@ let parseHeader (h5:header) =
     | Correct ct ->
       match TLSConstants.parseVersion pv2 with
       | Error z -> Error z
+      | Correct (UnknownVersion _ _) ->
+        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Parsed unknown protocol version")
       | Correct pv ->
           let len = int_of_bytes len2 in
           if len <= 0 || len > max_TLSCiphertext_fragment_length 
