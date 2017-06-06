@@ -225,6 +225,7 @@ noeq type cke = {
 }
 
 type cv = {
+  cv_sig_scheme: TLSConstants.signatureScheme; 
   cv_sig: b:bytes{length b < 65536};
 }
 
@@ -1405,8 +1406,10 @@ let parseServerKeyExchange kex payload : result ske =
 (* Certificate Verify *)
 val certificateVerifyBytes: cv -> Tot (b:bytes{hs_msg_bytes HT_certificate_verify b})
 let certificateVerifyBytes cv =
-    lemma_repr_bytes_values (length cv.cv_sig);
-    messageBytes HT_certificate_verify cv.cv_sig
+    let sig_scheme_bytes = TLConstants.signatureSchemeBytes cv.cv_sig_scheme in 
+    lemma_repr_bytes_values (length (sig_scheme_bytes + cv.cv_sig));    
+    messageBytes HT_certificate_verify (sig_scheme_bytes @| cv.cv_sig)
+
 
 val certificateVerifyBytes_is_injective: c1:cv -> c2:cv ->
   Lemma (requires True)
