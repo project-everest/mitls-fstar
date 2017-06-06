@@ -46,12 +46,15 @@ let dualRole = function
   | Server -> Client
 
 (** Protocol version negotiated values *)
-type protocolVersion =
+type protocolVersion' =
   | SSL_3p0 // supported, with no security guarantees
   | TLS_1p0
   | TLS_1p1
   | TLS_1p2
   | TLS_1p3
+  | UnknownVersion: a:byte -> b:byte{a <> 3z \/ (b <> 0z /\ b <> 1z /\ b <> 2z /\ b <> 3z /\ b <> 4z)} -> protocolVersion'
+
+type protocolVersion = pv:protocolVersion'{~(UnknownVersion? pv)}
 
 (* Key exchange algorithms *)
 type kexAlg =
@@ -449,7 +452,7 @@ let rec compressionMethodsBytes cms =
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
 (** Serializing function for the protocol version *)
-val versionBytes: protocolVersion -> Tot (lbytes 2)
+val versionBytes: protocolVersion' -> Tot (lbytes 2)
 let versionBytes pv =
   match pv with
   | SSL_3p0 -> abyte2 ( 3z, 0z)
@@ -457,6 +460,7 @@ let versionBytes pv =
   | TLS_1p1 -> abyte2 ( 3z, 2z )
   | TLS_1p2 -> abyte2 ( 3z, 3z )
   | TLS_1p3 -> abyte2 ( 3z, 4z )
+  | UnknownVersion a b -> abyte2 ( a, b ) 
 
 (** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
@@ -467,8 +471,7 @@ let parseVersion v =
   | ( 3z, 2z ) -> Correct TLS_1p1
   | ( 3z, 3z ) -> Correct TLS_1p2
   | ( 3z, 4z ) -> Correct TLS_1p3
-  | ( 127z, _ ) -> Error(AD_decode_error, "Parsed TLS 1.3 draft#"^print_bytes v)
-  | _ -> Error(AD_decode_error, "Parsed unknown version "^print_bytes v)
+  | ( a,  b  ) -> Correct (UnknownVersion a b)
 
 val inverse_version: x:_ -> Lemma
   (requires True)
@@ -486,7 +489,7 @@ let pinverse_version x = ()
 // to be used *only* in ServerHello.version.
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
 let draft = 20z
-let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
+let versionBytes_draft: protocolVersion' -> Tot (lbytes 2) = function
   | TLS_1p3 -> abyte2 ( 127z, draft )
   | pv -> versionBytes pv
 val parseVersion_draft: pinverse_t versionBytes_draft
@@ -517,7 +520,7 @@ let string_of_pv = function
   | TLS_1p1 -> "1.1"
   | TLS_1p2 -> "1.2"
   | TLS_1p3 -> "1.3"
-
+  | UnknownVersion a b -> "Unknown protocol version: " ^ (print_bytes (abyte2 (a, b)))
 
 (* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
    have to be distinct from the 'correct' ones *)
