@@ -133,7 +133,8 @@ let _ =
     ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with maxVer = v;}), " sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)");
     ("-mv", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v;}), " sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)");
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
-    ("-0rtt", Arg.Unit (fun () -> config := {!config with enable_early_data = true;}), "enable early data (server support and client offer)");
+    ("-no_early_data", Arg.Unit (fun () -> config := {!config with enable_early_data = false;}), "Disable early data (server support and client offer)");
+    ("-async", Arg.Unit (fun () -> config := {!config with non_blocking_read = true;}), "enable non-blocking reads");
     ("-psk", Arg.String (fun s -> load_psk s), " L:K add an entry in the PSK database at label L with key K (in hex), associtated with the fist current -cipher");
     ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with --psk). Client only.");
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");

@@ -491,8 +491,13 @@ let unknown_extensions_unknown
 
 type extension = extension' unknown_extensions_unknown
 
-private let testKnownExt : extension = E_extended_ms
-private let testUnknownExt : extension = E_unknown_extension (abyte2 (0x01z, 0x18z), empty_bytes)
+val encryptedExtension: extension -> bool
+let encryptedExtension ext =
+  match ext with
+  | E_server_name _
+  | E_supported_groups _
+  | E_early_data _ -> true
+  | _ -> false
 
 private
 let equal_extensionHeaderBytes_sameExt
@@ -1228,9 +1233,8 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | E_server_name server_name_list ->
     begin
     // See https://tools.ietf.org/html/rfc6066
-    match pv, List.Tot.tryFind SNI_DNS? server_name_list with
-    | TLS_1p3, _   -> None // TODO: SNI goes in EncryptedExtensions in TLS 1.3
-    | _, Some name -> Some (E_server_name []) // Acknowledge client's choice
+    match List.Tot.tryFind SNI_DNS? server_name_list with
+    | Some name -> Some (E_server_name []) // Acknowledge client's choice
     | _ -> None
     end
   | E_extended_ms ->
@@ -1252,11 +1256,14 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
         Some (E_pre_shared_key (ServerPSK (UInt16.uint_to_t x)))
       end
   | E_supported_groups named_group_list ->
-    None
-    // REMARK: Purely informative, can only appear in EncryptedExtensions
-    // Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
-  // FIXME: properly select early_data and a psk index
-  | E_early_data b -> None // EE on server
+    if pv = TLS_1p3 then
+      // REMARK: Purely informative, can only appear in EncryptedExtensions
+      Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
+    else None
+  | E_early_data b -> // EE
+    if cfg.enable_early_data then
+      Some (E_early_data None)
+    else None
   | E_session_ticket b ->
      if pv = TLS_1p3 || not cfg.enable_tickets then None
      else Some (E_session_ticket empty_bytes)

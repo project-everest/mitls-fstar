@@ -1735,6 +1735,7 @@ noeq type config = {
     enable_tickets: bool;
 
     (* Common *)
+    non_blocking_read: bool;
     enable_early_data: bool;
     safe_renegotiation: bool;   // demands this extension when renegotiating
     peer_name: option string;   // The expected name to match against the peer certificate
