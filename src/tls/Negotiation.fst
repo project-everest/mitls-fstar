@@ -954,9 +954,13 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
     let validSig =
       match kexAlg mode, optServerCert, optCertVerify, digest with
       | Kex_ECDHE, Some c, Some cv, Some digest ->
-        let tbs = to_be_signed mode.n_protocol_version Server None digest in
-        let chain = Cert.chain_down c in
-        verify cv.cv_sig_scheme chain tbs cv.cv_sig
+        // TODO ensure that valid_offer mandates signature extensions for 1.3
+        let Some sal = find_signature_algorithms mode.n_offer in
+        if List.Tot.mem cv.cv_sig_scheme sal then
+          let tbs = to_be_signed mode.n_protocol_version Server None digest in
+          let chain = Cert.chain_down c in
+          verify cv.cv_sig_scheme chain tbs cv.cv_sig
+        else false // The server signed with an algorithm we did not offer
       | _ -> false in
     trace ("Signature 1.3: " ^ (if validSig then "Valid" else "Invalid"));
     let mode = Mode
