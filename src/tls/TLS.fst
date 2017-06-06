@@ -447,8 +447,16 @@ let sendFragment c #i wo f =
 	   | None    -> 
 	     assert (PlaintextID? i);
 	     Content.repr i f
-	   | Some wr -> 
-	     SD.encrypt wr f 
+	   | Some wr ->
+             begin
+             (match wr with
+              | StAE.Stream _ st ->
+                let key,salt = StreamAE.leak st in
+                trace ("Encrypting with key " ^ (print_bytes key))
+              | _ -> ()
+             );
+	     SD.encrypt wr f
+             end
        in
        let pv = Handshake.version_of c.hs in
        lemma_repr_bytes_values (length payload);
@@ -1256,7 +1264,7 @@ let readOne c i =
         | Handshake.InAck next_keys complete ->
             if complete
             then (c.state := (Open, Open); Complete)
-            //else if next_keys then (trace "0RTT?"; c.state := (Open,snd c.state); Update #i false) 
+            //else if next_keys then (trace "0RTT?"; c.state := (Open, snd !c.state); Update false)
             else ReadAgain
             (* // TODO: additional sanity checks.
             ( match !c.state with
@@ -1320,20 +1328,19 @@ let rec read c i =
           // We must report *some* update, but then what to do with the data??
 
         else
-    
-    // nothing written; now we can read
-    // note that the reader index is unchanged
-    let result = readOne c i in (
-    trace ("readOne "^string_of_ioresult_i result); 
-    match result with
-    // TODO: specify which results imply that c.state & epochs are unchanged
-    | ReadAgain             -> read c i
-    | ReadAgainFinishing    -> read c i //was: readAllFinishing c
-    | ReadError x y         -> ReadError x y
-    | CertQuery q adv       -> CertQuery q adv
-    | Read delta            -> Read delta
-    | Complete              -> Complete // In TLS 1.2 client and TLS 1.3 server it makes sense to complete upon reading (e.g. reading ServerFinished in 1.2) instead of going through another roundtrip with the handshake with an extra state to Complete in writeHandshake
-    )
+        // nothing written; now we can read
+        // note that the reader index is unchanged
+        let result = readOne c i in (
+        trace ("readOne "^string_of_ioresult_i result);
+        match result with
+        // TODO: specify which results imply that c.state & epochs are unchanged
+        | ReadAgain             -> read c i
+        | ReadAgainFinishing    -> read c i //was: readAllFinishing c
+        | ReadError x y         -> ReadError x y
+        | CertQuery q adv       -> CertQuery q adv
+        | Read delta            -> Read delta
+        | Complete              -> Complete // In TLS 1.2 client and TLS 1.3 server it makes sense to complete upon reading (e.g. reading ServerFinished in 1.2) instead of going through another roundtrip with the handshake with an extra state to Complete in writeHandshake
+        )
 
 
 (* 16-05-28 WIP
