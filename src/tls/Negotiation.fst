@@ -549,7 +549,7 @@ let getSigningKey #a #region #role ns =
   Signature.lookup_key #a ns.cfg.private_key_file
 
 val sign: #region:rgn -> #role:TLSConstants.role -> t region role -> bytes ->
-  ST (option bytes)
+  ST (option HandshakeMessages.cv)
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> True))
 let sign #region #role ns tbs =
@@ -567,7 +567,8 @@ let sign #region #role ns tbs =
     | Some skey ->
       let sigv = Signature.sign #a ha skey tbs in
       lemma_repr_bytes_values (length sigv);
-      if length sigv >= 2 && length sigv < 65536 then Some (signatureSchemeBytes scheme @| vlbytes 2 sigv)
+      if length sigv >= 2 && length sigv < 65536 then
+        Some ({cv_sig_scheme = scheme; cv_sig = sigv})
       else None
     end
 
@@ -945,13 +946,17 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
   match MR.m_read ns.state with
   | C_Mode mode ->
     let ccert = None in
-    let sexts = List.Tot.append mode.n_server_extensions ee in
+    let sexts =
+      match mode.n_server_extensions, ee with
+      | Some el, ee -> Some (List.Tot.append el ee)
+      | None, [] -> None
+      | None, ee -> Some ee in
     let validSig =
       match kexAlg mode, optServerCert, optCertVerify, digest with
       | Kex_ECDHE, Some c, Some cv, Some digest ->
         let tbs = to_be_signed mode.n_protocol_version Server None digest in
         let chain = Cert.chain_down c in
-        verify sa chain tbs cv.cv_sig
+        verify cv.cv_sig_scheme chain tbs cv.cv_sig
       | _ -> false in
     trace ("Signature 1.3: " ^ (if validSig then "Valid" else "Invalid"));
     let mode = Mode

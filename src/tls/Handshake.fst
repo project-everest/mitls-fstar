@@ -552,7 +552,7 @@ let server_ServerHelloDone hs =
       InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
     | Some signature ->
       begin
-      let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+      let ske = {ske_kex_s = kex_s; ske_sig = signature.cv_sig} in
       HandshakeLog.send hs.log (Certificate ({crt_chain = Cert.chain_down chain}));
       HandshakeLog.send hs.log (ServerKeyExchange ske);
       HandshakeLog.send hs.log ServerHelloDone;
@@ -756,7 +756,7 @@ let server_ServerFinished_13 hs i =
       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
     | Some signature ->
       begin
-      let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
+      let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify (signature)) in
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
       let svd = HMAC.UFCMA.mac sfin_key digestFinished in
       let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
