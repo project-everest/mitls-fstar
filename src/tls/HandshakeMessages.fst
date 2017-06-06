@@ -1406,7 +1406,7 @@ let parseServerKeyExchange kex payload : result ske =
 (* Certificate Verify *)
 val certificateVerifyBytes: cv -> Tot (b:bytes{hs_msg_bytes HT_certificate_verify b})
 let certificateVerifyBytes cv =
-    let sig_scheme_bytes = TLConstants.signatureSchemeBytes cv.cv_sig_scheme in 
+    let sig_scheme_bytes = TLSConstants.signatureSchemeBytes cv.cv_sig_scheme in 
     lemma_repr_bytes_values (length (sig_scheme_bytes + cv.cv_sig));    
     messageBytes HT_certificate_verify (sig_scheme_bytes @| cv.cv_sig)
 
