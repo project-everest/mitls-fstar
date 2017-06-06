@@ -935,18 +935,25 @@ let client_ServerKeyExchange #region ns crt ske ocr =
 
 val clientComplete_13: #region:rgn -> t region Client ->
   HandshakeMessages.ee ->
-  ocr: option HandshakeMessages.cr13 ->
-  serverCert: Cert.chain13 ->
-  cv: HandshakeMessages.cv ->
-  digest: bytes{length digest <= 32} ->
+  optCertRequest: option HandshakeMessages.cr13 ->
+  optServerCert: option Cert.chain13 -> // Not sent with PSK
+  optCertVerify: option HandshakeMessages.cv -> // Not sent with PSK
+  digest: option (b:bytes{length b <= 32}) ->
   St (result mode) // it needs to be computed, whether returned or not
-let clientComplete_13 #region ns ee ocr serverChain cv digest =
+let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify digest =
   trace "Nego.clientComplete_13";
   match MR.m_read ns.state with
   | C_Mode mode ->
     let ccert = None in
-    let scert = Some serverChain in
-    let sexts = mode.n_server_extensions in // TODO: add extensions from EE
+    let sexts = List.Tot.append mode.n_server_extensions ee in
+    let validSig =
+      match kexAlg mode, optServerCert, optCertVerify, digest with
+      | Kex_ECDHE, Some c, Some cv, Some digest ->
+        let tbs = to_be_signed mode.n_protocol_version Server None digest in
+        let chain = Cert.chain_down c in
+        verify sa chain tbs cv.cv_sig
+      | _ -> false in
+    trace ("Signature 1.3: " ^ (if validSig then "Valid" else "Invalid"));
     let mode = Mode
       mode.n_offer
       mode.n_hrr
@@ -957,8 +964,8 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
       mode.n_pski
       mode.n_server_extensions
       mode.n_server_share
-      ocr
-      scert
+      optCertRequest
+      optServerCert
       mode.n_client_share
     in
     MR.m_write ns.state (C_Complete mode ccert);
