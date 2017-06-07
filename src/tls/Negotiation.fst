@@ -585,9 +585,10 @@ val verify: signatureScheme -> list Cert.cert -> bytes -> bytes ->
   (ensures (fun h0 _ h1 -> True))
 let verify scheme chain tbs sigv =
   let (sa,ha) = sigHashAlg_of_signatureScheme scheme in
+  trace ("Verifying signature using " ^ (string_of_signatureScheme scheme));
   let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
   match Signature.get_chain_public_key #a chain with
-  | None -> false
+  | None -> (trace "WARNING: couldn't get public key from chain"; false)
   | Some pk -> Signature.verify #a ha pk tbs sigv
 
 
@@ -879,7 +880,7 @@ let to_be_signed pv role csr tbs =
         | Client -> "TLS 1.3, client CertificateVerify"  in
       pad @| abytes ctx @| abyte 0z @| tbs
   | TLS_1p2, Some csr -> csr @| tbs
-  | _, _ -> tbs
+  | _, Some csr -> csr @| tbs
 
 val client_ServerKeyExchange: #region:rgn -> t region Client ->
   serverCert:HandshakeMessages.crt ->
