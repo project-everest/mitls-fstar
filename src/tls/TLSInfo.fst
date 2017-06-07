@@ -81,7 +81,7 @@ let defaultConfig =
   enable_tickets = true;
 
   non_blocking_read = false;
-  enable_early_data = true;
+  enable_early_data = false;
   safe_renegotiation = true;
   safe_resumption = true;
   peer_name = None; // Disables hostname validation
