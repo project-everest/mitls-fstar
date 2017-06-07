@@ -198,7 +198,7 @@ let ffiConfig version host =
   {defaultConfig with
     minVer = TLS_1p2;
     maxVer = v;
-	peer_name = host;
+	peer_name = Some host;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
     private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
