@@ -67,9 +67,9 @@ typedef struct _ConnectionState {
 
     // Arguments passed to InitializeSecurityContext
     MITLS_CredHandle *cred;
-    PSecBufferDesc pInput;
     PSecBufferDesc pOutput;
     PSecBuffer pOutputBuffer;
+    bool OutputBufferBusy;
     unsigned long fContextReq;
     SECURITY_STATUS status;
 
@@ -77,6 +77,7 @@ typedef struct _ConnectionState {
     // caller's SECBUFFER_TOKEN SecBuffer, but as it is incrementally read from,
     // the buffer pointer and length can change.
     SecBuffer ActualInputToken;
+    DWORD cbInputConsumed; // to support SEC_E_INCOMPLETE_MESSAGE
 
     bool fShuttingDownConnection;
     bool fDeleteOnComplete;
@@ -104,6 +105,7 @@ typedef struct _TLS_DISCONNECT_WORK_ITEM {
 
 typedef struct _TLS_WORK_ITEM {
     TLS_WORK_ITEM_TYPE Type;
+    DWORD ThreadId; // thread ID of the thread that queued this work item
     HANDLE hWorkItemCompleted; // bugbug: this is leaked.  This needs to be a class with a destructor
 
     union {
@@ -216,8 +218,8 @@ void ProcessSend(TLS_SEND_WORK_ITEM* item)
     // Reality is far different.  WinInet passes just 3:  TOKEN/DATA/TOKEN
 
     // Send the application data, the plaintext, to miTLS
-    PVOID pvBuffer = state->pInput->pBuffers[1].pvBuffer;
-    DWORD cbBuffer = state->pInput->pBuffers[1].cbBuffer;
+    PVOID pvBuffer = state->ActualInputToken.pvBuffer;
+    DWORD cbBuffer = state->ActualInputToken.cbBuffer;
 
     char *outmsg;
     char *errmsg;
@@ -239,6 +241,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
     char *outmsg;
     char *errmsg;
     size_t cbReceived;
+
     VOID *pvReceived = pfnFFI_mitls_receive(state->state, &cbReceived, &outmsg, &errmsg);
     MITLS_ProcessMessages(outmsg, errmsg);
     if (pvReceived == NULL) {
@@ -247,21 +250,49 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
         state->status = SEC_E_INTERNAL_ERROR;
         return;
     }
-    // Copy the data from pvReceived into the output packet
-    // Into a SECBUFFER_DATA of the right length
-    for (unsigned long i = 0; i < state->pOutput->cBuffers; ++i) {
-        PSecBuffer b = &state->pOutput->pBuffers[i];
-        if (b->BufferType == SECBUFFER_DATA) {
-            _Print("ProcessRecv %d bytes into buffer at %p length %d", (DWORD)cbReceived, b->pvBuffer, b->cbBuffer);
-            if (cbReceived > b->cbBuffer) {
-                cbReceived = b->cbBuffer;
-            }
-            memcpy(b->pvBuffer, pvReceived, cbReceived);
-            b->cbBuffer = (DWORD)cbReceived;
+
+    void* OutputBuffer = NULL;
+    size_t cbOutputBuffer = 0;
+    for (ULONG i = 0; i < state->pOutput->cBuffers; ++i) {
+        if (state->pOutput->pBuffers[i].BufferType == SECBUFFER_DATA) {
+            OutputBuffer = state->pOutput->pBuffers[i].pvBuffer;
+            cbOutputBuffer = state->pOutput->pBuffers[i].cbBuffer;
             break;
         }
     }
-    
+    if (!OutputBuffer) {
+        _Print("Couldn't find a SECBUFFER_DATA to write into!");
+        pfnFFI_mitls_free_packet(pvReceived);
+        state->status = SEC_E_INTERNAL_ERROR;
+        return;
+    } else if (cbOutputBuffer < cbReceived) {
+        cbReceived = cbOutputBuffer;
+    }
+
+    // Copy the data from pvReceived into the output packet
+    // Into a SECBUFFER_DATA of the right length
+    if (state->pOutput->cBuffers) {
+        state->pOutput->pBuffers[0].BufferType = SECBUFFER_STREAM_HEADER;
+        state->pOutput->pBuffers[0].cbBuffer = 0;
+        state->pOutput->pBuffers[0].pvBuffer = NULL;
+        if (state->pOutput->cBuffers > 1) {
+            state->pOutput->pBuffers[1].BufferType = SECBUFFER_DATA;
+            state->pOutput->pBuffers[1].cbBuffer = (ULONG)cbReceived;
+            state->pOutput->pBuffers[1].pvBuffer = OutputBuffer;
+            memcpy(OutputBuffer, pvReceived, cbReceived);
+            if (state->pOutput->cBuffers > 2) {
+                state->pOutput->pBuffers[2].BufferType = SECBUFFER_STREAM_TRAILER;
+                state->pOutput->pBuffers[2].cbBuffer = 0;
+                state->pOutput->pBuffers[2].pvBuffer = NULL;
+                if (state->pOutput->cBuffers > 3 && state->ActualInputToken.cbBuffer) {
+                    state->pOutput->pBuffers[3].BufferType = SECBUFFER_EXTRA;
+                    state->pOutput->pBuffers[3].cbBuffer = state->ActualInputToken.cbBuffer;
+                    state->pOutput->pBuffers[3].pvBuffer = state->ActualInputToken.pvBuffer;
+                }
+            }
+        }
+    }
+
     pfnFFI_mitls_free_packet(pvReceived);
     state->status = SEC_E_OK;
 }
@@ -271,6 +302,9 @@ void ProcessDisconnect(TLS_DISCONNECT_WORK_ITEM* item)
     ConnectionState *state = item->state;
 
     pfnFFI_mitls_close(state->state);
+    delete item;
+    state->item = NULL;
+    state->state = NULL;
     state->status = SEC_E_OK;
 }
 
@@ -297,24 +331,30 @@ DWORD WINAPI MITLS_Threadproc(
             switch (item->Type) {
             case TLS_CONNECT:
                 ProcessConnect(&item->Connect);
+                SetEvent(item->hWorkItemCompleted);
                 break;
             case TLS_SEND:
                 ProcessSend(&item->Send);
+                SetEvent(item->hWorkItemCompleted);
                 break;
             case TLS_RECV:
                 ProcessRecv(&item->Recv);
+                SetEvent(item->hWorkItemCompleted);
                 break;
             case TLS_DISCONNECT:
                 ProcessDisconnect(&item->Disconnect);
+                SetEvent(item->hWorkItemCompleted);
                 break;
             case TLS_EXIT_THREAD:
                 pfnFFI_mitls_thread_unregister();
+                delete item;
+                state->item = NULL;
                 return 0;
             default:
                 _Print("Unknown queue item type");
                 break;
             }
-            SetEvent(item->hWorkItemCompleted);
+
             // The thread that queued the item is responsible for freeing it
         }
     }
@@ -409,15 +449,10 @@ void MITLS_ProcessMessages(char *outmsg, char *errmsg)
     }
 }
 
-void _PrintPSecBufferDesc(PSecBufferDesc p, bool fDump)
+void _PrintPSecBuffer(PSecBuffer b , bool fDump)
 {
-    if (!p) {
-        return;
-    }
-    for (ULONG i = 0; i < p->cBuffers; ++i) {
-        const char *BufferType = "UNKNOWN";
-        switch (p->pBuffers[i].BufferType & (~SECBUFFER_ATTRMASK))
-        {
+    const char *BufferType = "UNKNOWN";
+    switch (b->BufferType & (~SECBUFFER_ATTRMASK)) {
         case SECBUFFER_ALERT: BufferType = "SECBUFFER_ALERT"; break;
         case SECBUFFER_CHANNEL_BINDINGS: BufferType = "SECBUFFER_CHANNEL_BINDINGS"; break;
         case SECBUFFER_CHANGE_PASS_RESPONSE: BufferType = "SECBUFFER_CHANGE_PASS_RESPONSE"; break;
@@ -440,11 +475,21 @@ void _PrintPSecBufferDesc(PSecBufferDesc p, bool fDump)
         case SECBUFFER_PRESHARED_KEY: BufferType = "SECBUFFER_PRESHARED_KEY"; break;
         case SECBUFFER_PRESHARED_KEY_IDENTITY: BufferType = "SECBUFFER_PRESHARED_KEY_IDENTITY"; break;
         default: BufferType = "UNKNOWN"; break;
-        }
-        _Print("%s(%d) %p %d", BufferType, p->pBuffers[i].BufferType, p->pBuffers[i].pvBuffer, p->pBuffers[i].cbBuffer);
-        if (fDump && (p->pBuffers[i].BufferType & 0xfff) == SECBUFFER_DATA) {
-            _PrintDump((SOCKET)0, (PCHAR)p->pBuffers[i].pvBuffer, p->pBuffers[i].cbBuffer);
-        }
+    }
+    _Print("%s(%d) %p %d", BufferType, b->BufferType, b->pvBuffer, b->cbBuffer);
+    if (fDump && (b->BufferType & 0xfff) != SECBUFFER_EMPTY) {
+        _PrintDump((SOCKET)0, (PCHAR)b->pvBuffer, b->cbBuffer);
+    }
+}
+
+void _PrintPSecBufferDesc(const char *label, PSecBufferDesc p, bool fDump)
+{
+    _Print("PSecBufferDesc %p: %s", p, label);
+    if (!p) {
+        return;
+    }
+    for (ULONG i = 0; i < p->cBuffers; ++i) {
+        _PrintPSecBuffer(&p->pBuffers[i], fDump);
     }
 }
 
@@ -502,18 +547,54 @@ ParseOutputBufferDesc(
 int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size)
 {
     ConnectionState *state = CONTAINING_RECORD(callbacks, ConnectionState, callbacks);
-    ULONG BytesCopy = ~0u;
 
     _Print("MITLS wants to send %p %d", buffer, (int)buffer_size);
     _PrintBuffer(buffer, (int)buffer_size);
 
-    if (state->item->Type == TLS_CONNECT || state->item->Type == TLS_DISCONNECT) { // InitializeSecurityContext()
-        PSecBuffer pOutToken;
+    if (state->fDeleteOnComplete) {
+        _Print("TLS connection has been terminated.  Ignore writes.");
+        return (int)buffer_size;
+    }
 
-        pOutToken = state->pOutputBuffer;
-        const int max_buffer_size = 16384;
-        if (pOutToken->pvBuffer == NULL) {
-            PVOID pv = LocalAlloc(LMEM_FIXED, max(buffer_size, max_buffer_size));
+    if (state->item->Type == TLS_SEND) {
+        const char *pb = (const char*)buffer;
+        size_t cb = buffer_size;
+        for (ULONG i = 0; cb && i < state->pOutput->cBuffers; ++i) {
+            size_t cbcopy = min(cb, state->pOutput->pBuffers[i].cbBuffer);
+            memcpy(state->pOutput->pBuffers[i].pvBuffer, pb, cbcopy);
+            state->pOutput->pBuffers[i].cbBuffer = (DWORD)cbcopy;
+            pb += cbcopy;
+            cb -= cbcopy;
+        }
+        if (cb) {
+            _Print("Insufficient buffer space in pOutput");
+            state->status = SEC_E_BUFFER_TOO_SMALL;
+            return -1;
+        }
+        return (int)buffer_size;
+    }
+    // Else InitializeSecurityContext
+
+    if (state->OutputBufferBusy) {
+        // bugbug: this is a mess.  Need to keep a write pointer into pOutputBuffer and move it along
+        size_t newsize = state->pOutputBuffer->cbBuffer + buffer_size;
+        PVOID pv = LocalAlloc(LMEM_FIXED, newsize);
+        if (!pv) {
+            state->status = SEC_E_INSUFFICIENT_MEMORY;
+            return -1;
+        }
+        memcpy(pv, state->pOutputBuffer->pvBuffer, state->pOutputBuffer->cbBuffer);
+        memcpy((void*)((size_t)pv + state->pOutputBuffer->cbBuffer), buffer, buffer_size);
+        state->pOutputBuffer->cbBuffer = (DWORD)newsize;
+        LocalFree(state->pOutputBuffer->pvBuffer);
+        state->pOutputBuffer->pvBuffer = pv;
+        _Print("MITLS_send_callback - append success");
+        return (int)buffer_size;
+    }
+    PSecBuffer pOutToken = state->pOutputBuffer;
+    if (pOutToken->pvBuffer == NULL) {
+        if (state->fContextReq & ISC_REQ_ALLOCATE_MEMORY) {
+            PVOID pv = LocalAlloc(LMEM_FIXED, buffer_size);
             if (!pv) {
                 state->status = SEC_E_INSUFFICIENT_MEMORY;
                 return -1;
@@ -521,50 +602,29 @@ int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, c
             pOutToken->pvBuffer = pv;
             pOutToken->cbBuffer = (ULONG)buffer_size;
             _Print("MITLS_send_callback - allocated a buffer at %p", pv);
-            BytesCopy = min((ULONG)buffer_size, pOutToken->cbBuffer);
-            memcpy(pOutToken->pvBuffer, buffer, BytesCopy);
-        } else if (state->fContextReq & ISC_REQ_ALLOCATE_MEMORY) {
-            if (pOutToken->cbBuffer + buffer_size < max_buffer_size) {
-                memcpy((void*)((size_t)pOutToken->pvBuffer + (size_t)pOutToken->cbBuffer), buffer, buffer_size);
-                pOutToken->cbBuffer += (DWORD)buffer_size;
-                _Print("MITLS_send_callback - appended to buffer at %p", pOutToken->pvBuffer);
-                BytesCopy = (ULONG)buffer_size;
-            } else {
-                _Print("MITLS_send_callback - insufficient space in the buffer!");
-                return -1;
-            }
         } else {
-            BytesCopy = min((ULONG)buffer_size, pOutToken->cbBuffer);
-            memcpy(pOutToken->pvBuffer, buffer, BytesCopy);
-            _Print("MITLS_send_callback - wrote into preallocated buffer");
+            _Print("MITLS_send_callback - NULL pvBuffer and ISC_REQ_ALLOCATE_MEMORY not set");
+            state->status = SEC_E_INTERNAL_ERROR;
+            return -1;
         }
-        state->status = SEC_I_CONTINUE_NEEDED;
-    }
-    else if (state->item->Type == TLS_SEND) { // EncryptMessage()
-        BytesCopy = 0;
-        for (unsigned long i = 0; i < state->pInput->cBuffers; i++) {
-            ULONG BufferBytes = min(state->pInput->pBuffers[i].cbBuffer, (ULONG)buffer_size);
-            _Print("Copying %d bytes into buffer #%u", BufferBytes, i);
-
-            memcpy(state->pInput->pBuffers[i].pvBuffer, buffer, BufferBytes);
-            state->pInput->pBuffers[i].cbBuffer = BufferBytes;
-            buffer_size -= (size_t)BufferBytes;
-            buffer = (const void*)((size_t)buffer + BufferBytes);
-            BytesCopy += BufferBytes;
-        }
-        state->status = SEC_E_OK;
-    } else {
-        _Print("Unsupported send state");
+    } else if (pOutToken->cbBuffer < buffer_size) {
+        _Print("MITLS_send_callback - insufficient pOutputBuffer to store the token");
         __debugbreak();
+        state->status = SEC_E_INTERNAL_ERROR;
+        return -1;
     }
+    memcpy(pOutToken->pvBuffer, buffer, buffer_size);
+    pOutToken->BufferType = SECBUFFER_DATA; // indicate that the buffer contains data  bugbug: this might be overwriting SECBUFFER_TOKEN
+    pOutToken->cbBuffer = (DWORD)buffer_size;
+    state->OutputBufferBusy = true;
 
-    _Print("MITLS_send_callback - Copied %x of %x bytes", BytesCopy, (int)buffer_size);
+    _Print("MITLS_send_callback - success");
     // Don't set hOuputReady yet - wait until the MITLS_recv_callback is called by
     // miTLS, in expectation of receiving the reply.  Or in an error case, the MITLS
     // Connect() call may return, at which point, this event should be set too.
     //SetEvent(state->hOutputIsReady);
 
-    return BytesCopy;
+    return (int)buffer_size;
 }
 
 int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size)
@@ -573,129 +633,90 @@ int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, v
 
     _Print("MITLS wants to recv %p %d", buffer, (int)buffer_size);
 
-    _Print("Processing recv");
     if (state->fDeleteOnComplete) {
-AbortRecv:
+    AbortRecv:
         _Print("recv() returning failure, to abort a connection in progress.");
         return -1;
     }
-    if (state->ActualInputToken.BufferType == SECBUFFER_EMPTY) {
-        // Need to fill the internal actual-input buffer with the 
-        // calling app's pInput buffer.
-        if (state->item->Type == TLS_CONNECT) { // InitializeSecurityContext()
-            if (state->pInput == NULL) {
-                _Print("Call to InitializeSecurityContext - continue needed");
-                state->status = SEC_I_CONTINUE_NEEDED; 
-                SetEvent(state->hOutputIsReady);
-                // Wait for the next InitializeSecurityContext() call to pass in new buffers.
-                WaitForSingleObject(state->hNextCallReady, INFINITE);
-                if (state->fDeleteOnComplete) {
-                    goto AbortRecv;
-                }
-            }
-            if (state->pInput->cBuffers != 2) {
-                _Print("Unexpected pInput->cBuffers %d", state->pInput->cBuffers);
-                return -1;
-            }
-            else if (state->pInput->pBuffers[0].BufferType != SECBUFFER_TOKEN ||
-                state->pInput->pBuffers[1].BufferType != SECBUFFER_EMPTY) {
-                _Print("Unexpected BufferTypes");
-                _PrintPSecBufferDesc(state->pInput);
-                __debugbreak();
-                return -1;
-            }
 
-            memcpy(&state->ActualInputToken, &state->pInput->pBuffers[0], sizeof(SecBuffer));
-        } 
-        else if (state->item->Type == TLS_RECV) { // DecryptMessage()
-            for (unsigned long i = 0; i < state->pOutput->cBuffers; ++i) {
-                if (state->pOutput->pBuffers[i].BufferType == SECBUFFER_DATA) {
-                    memcpy(&state->ActualInputToken, &state->pOutput->pBuffers[i], sizeof(SecBuffer));
-                    break;
-                }
-            }
-        } 
-        else {
-            _Print("Unsupported recv state");
-        }
-    }
-    PSecBuffer buf = &state->ActualInputToken;
-    _Print("Recv secbuffer: %p %d", buf->pvBuffer, buf->cbBuffer);
-    size_t length = min(buffer_size, (size_t)buf->cbBuffer);
-    memcpy(buffer, buf->pvBuffer, length);
-    buf->pvBuffer = (void*)((size_t)buf->pvBuffer + length);
-    buf->cbBuffer -= (unsigned long)length;
-    if (buf->cbBuffer == 0) {
-        if (state->item->Type == TLS_CONNECT) {
-            state->pInput->pBuffers[1].BufferType = SECBUFFER_EMPTY;
-            state->pInput->pBuffers[1].cbBuffer = 0;
-            state->pInput->pBuffers[1].pvBuffer = NULL;
-        }
-        if (length < buffer_size) {
-            _Print("Recv buffer is empty and %d more bytes are needed %s", buffer_size-length, (state->pOutputBuffer->cbBuffer) ? "continue needed" : "incomplete message");
-            bool fFound = false;
-            ULONG i;
-            for (i = 0; i < state->pInput->cBuffers; ++i) {
-                if (state->pInput->pBuffers[i].BufferType == SECBUFFER_EMPTY) {
-                    fFound = true;
-                    break;
-                }
-            }
-            if (fFound) {
-                state->pInput->pBuffers[i].BufferType = SECBUFFER_MISSING;
-                state->pInput->pBuffers[i].cbBuffer = (DWORD)buffer_size - (DWORD)length;
-                state->pInput->pBuffers[i].pvBuffer = NULL;
-                if (state->pOutputBuffer->cbBuffer) { // there are bytes waiting to be sent.  Ask the caller to send them and recv the reply
-                    state->status = SEC_I_CONTINUE_NEEDED;
-                } else { // there are no bytes waiting to be sent.  We need another recv first.
-                    state->status = SEC_E_INCOMPLETE_MESSAGE;
-                }
-                SetEvent(state->hOutputIsReady);
-                // Wait for the next InitializeSecurityContext() call to pass in new buffers.
-                WaitForSingleObject(state->hNextCallReady, INFINITE);
-                if (state->fDeleteOnComplete) {
-                    goto AbortRecv;
-                }
-            } else {
-                // There were no SECBUFFER_EMPTY buffers in pInput.
-                _Print("No SECBUFFER_EMPTY were found.  Aborting.");
-                __debugbreak();
-                state->status = SEC_E_INVALID_PARAMETER;
-                SetEvent(state->hOutputIsReady);
-                return -1;
-            }
-        } else {
-            _Print("Recv buffer is empty and no extra bytes are needed");
-            buf->BufferType = SECBUFFER_EMPTY;
-            buf->pvBuffer = NULL;
-            state->pInput = NULL;
-        }
-    } else {
-        if (state->item->Type == TLS_CONNECT) {
-            state->pInput->pBuffers[1].BufferType = SECBUFFER_EXTRA;
-            state->pInput->pBuffers[1].cbBuffer = buf->cbBuffer;
-            state->pInput->pBuffers[1].pvBuffer = buf->pvBuffer;
+    if (state->OutputBufferBusy) {
+        _Print("But first, send the current output buffer");
+        _PrintPSecBuffer(state->pOutputBuffer);
+        state->status = SEC_I_CONTINUE_NEEDED;
+        SetEvent(state->hOutputIsReady);
+        WaitForSingleObject(state->hNextCallReady, INFINITE);
+        if (state->fDeleteOnComplete) {
+            goto AbortRecv;
         }
     }
 
-    _Print("Received %d bytes OK - caller requested max of %d", (int)length, (int)buffer_size);
-    _PrintBuffer(buffer, length);
+    while (state->ActualInputToken.cbBuffer < buffer_size) {
+        if (state->OutputBufferBusy) {
+            _Print("Unexpected send() inside a recv() loop");
+            __debugbreak();
+        }
 
-    return (int)length;
+        state->ActualInputToken.BufferType = SECBUFFER_MISSING;
+        state->ActualInputToken.cbBuffer = (DWORD)(buffer_size - state->ActualInputToken.cbBuffer);
+        state->ActualInputToken.pvBuffer = NULL;
+        state->status = SEC_E_INCOMPLETE_MESSAGE;
+        _Print("Recv is out of buffers.  Requesting %d more", state->ActualInputToken.cbBuffer);
+        SetEvent(state->hOutputIsReady);
+        // Wait for the next InitializeSecurityContext() call to pass in new buffers.
+        WaitForSingleObject(state->hNextCallReady, INFINITE);
+        if (state->fDeleteOnComplete) {
+            goto AbortRecv;
+        }
+        _Print("Back from reciving more data");
+        if (state->ActualInputToken.cbBuffer < state->cbInputConsumed) {
+            _Print("New buffer is smaller than the consumed input!");
+            __debugbreak();
+        }
+        state->ActualInputToken.pvBuffer = (void*)((size_t)state->ActualInputToken.pvBuffer + state->cbInputConsumed);
+        state->ActualInputToken.cbBuffer -= (ULONG)state->cbInputConsumed;
+        state->ActualInputToken.BufferType = SECBUFFER_EXTRA;
+    }
+    _Print("Recv from buffer");
+    _PrintPSecBuffer(&state->ActualInputToken);
+
+    // Fill in the data
+    memcpy(buffer, state->ActualInputToken.pvBuffer, buffer_size);
+
+    state->ActualInputToken.pvBuffer = (void*)((size_t)state->ActualInputToken.pvBuffer + buffer_size);
+    state->ActualInputToken.cbBuffer -= (ULONG)buffer_size;
+    state->ActualInputToken.BufferType = SECBUFFER_EXTRA;
+    state->cbInputConsumed += (DWORD)buffer_size;
+
+    _Print("Received OK");
+    _PrintBuffer(buffer, buffer_size);
+
+    return (int)buffer_size;
 }
 
-SECURITY_STATUS ParseInputBufferDesc(PSecBufferDesc pInput)
+SECURITY_STATUS ParseInputBufferDesc(PSecBufferDesc pInput, ULONG DataBufferType, PSecBuffer pActualInput)
 {
-    ULONG NewI = 0;
+    pActualInput->BufferType = SECBUFFER_EMPTY;
+    pActualInput->cbBuffer = 0;
+    pActualInput->pvBuffer = NULL;
+
+    if (pInput == NULL) {
+        return SEC_E_OK;
+    }
+
     for (ULONG i = 0; i < pInput->cBuffers; ++i) {
+        if (pInput->pBuffers[i].BufferType == DataBufferType) {
+            memcpy(pActualInput, &pInput->pBuffers[i], sizeof(*pActualInput));
+        }
         switch (pInput->pBuffers[i].BufferType) {
             case SECBUFFER_TOKEN:
+                break;
+            case SECBUFFER_DATA:
+                break;
             case SECBUFFER_EMPTY:
-                // Preserve these buffers
-                if (NewI != i) {
-                    memcpy(&pInput->pBuffers[NewI], &pInput->pBuffers[i], sizeof(pInput->pBuffers[0]));
-                }
-                NewI++;
+                break;
+            case SECBUFFER_STREAM_HEADER:
+                break;
+            case SECBUFFER_STREAM_TRAILER:
                 break;
             case SECBUFFER_APPLICATION_PROTOCOLS:
                 // Skip these buffers
@@ -707,12 +728,11 @@ SECURITY_STATUS ParseInputBufferDesc(PSecBufferDesc pInput)
                 break;
             default:
                 _Print("Unexpected BufferType at %u", i);
-                _PrintPSecBufferDesc(pInput);
+                _PrintPSecBufferDesc("pInput", pInput);
                 __debugbreak();
                 return SEC_E_INVALID_PARAMETER;
         }
     }
-    pInput->cBuffers = NewI;
     return SEC_E_OK;
 }
 
@@ -746,34 +766,21 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
     //__debugbreak();
     ConnectionState *state = NULL;
     TLS_WORK_ITEM *item = NULL;
-    SecBufferDesc InputCopy;
     
     PSecBuffer pOutputBuffer;
     SECURITY_STATUS st = ParseOutputBufferDesc(pOutput, fContextReq, &pOutputBuffer);
     if (st != SEC_E_OK) {
         return st;
     }
-    if (pInput && pInput->cBuffers != 0) {
-        // Copy the pInput into a local variable so it can be mutated
-        InputCopy = *pInput;
-        const size_t cbSecBuffer = sizeof(SecBuffer)*InputCopy.cBuffers;
-        InputCopy.pBuffers = (PSecBuffer)_alloca(cbSecBuffer);
-        memcpy(InputCopy.pBuffers, pInput->pBuffers, cbSecBuffer);
-        pInput = &InputCopy;
-        SECURITY_STATUS st = ParseInputBufferDesc(pInput);
-        if (st != SEC_E_OK) {
-            return st;
-        }
-        if (InputCopy.cBuffers == 0) {
-            // All buffers were filtered out by ParseInputBufferDesc().  Return success
-            // but with no output buffer for the caller to transmit.  This may
-            // have been a SECBUFFER_APPLICATION_PROTOCOLS request that we filtered out.
-            _Print("ParseInputBufferDesc() filtered out all inputs, so returning succss/no-data");
-            pInput = NULL;
-        }
+    SecBuffer ActualInput;
+    st = ParseInputBufferDesc(pInput, SECBUFFER_TOKEN, &ActualInput);
+    if (st != SEC_E_OK) {
+        return st;
     }
     if (phContext == NULL) {
         _Print("MITLS_InitializeSecurityContextA - initial call");
+        _PrintPSecBufferDesc("pInput", pInput);
+        _PrintPSecBufferDesc("pOutput", pOutput);
         MITLS_CredHandle *cred;
         if (phCredential) {
             cred = (MITLS_CredHandle*)phCredential->dwUpper;
@@ -791,9 +798,11 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         state->cred = cred;
         state->status = SEC_E_INTERNAL_ERROR;
         state->fContextReq = fContextReq;
-        state->pInput = pInput; // Note that miTLS ignores these... they may be SECBUFFER_APPLICATION_PROTOCOLS or SECBUFFER_TOKEN_BINDING
+        state->ActualInputToken = ActualInput;
+        state->cbInputConsumed = 0;
         state->pOutput = pOutput;
         state->pOutputBuffer = pOutputBuffer;
+        state->OutputBufferBusy = false;
         state->ActualInputToken.BufferType = SECBUFFER_EMPTY;
         state->ActualInputToken.pvBuffer = NULL;
         state->ActualInputToken.cbBuffer = 0;
@@ -806,6 +815,7 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         item = new TLS_WORK_ITEM();
         state->item = item;
         item->Type = TLS_CONNECT;
+        item->ThreadId = GetCurrentThreadId();
         item->hWorkItemCompleted = CreateEventW(NULL, FALSE, FALSE, NULL);
         item->Connect.HostName = pszTargetName;
         item->Connect.state = state;
@@ -819,11 +829,14 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
     }
     else {
         _Print("MITLS_InitializeSecurityContextA - continuing call");
+        _PrintPSecBufferDesc("pInput", pInput);
+        _PrintPSecBufferDesc("pOutput", pOutput);
         state = (ConnectionState*)phContext->dwUpper;
         if (state->fShuttingDownConnection) {
             item = new TLS_WORK_ITEM();
             state->item = item;
             item->Type = TLS_DISCONNECT;
+            item->ThreadId = GetCurrentThreadId();
             item->hWorkItemCompleted = CreateEventW(NULL, FALSE, FALSE, NULL);
             item->Disconnect.state = state;
             EnterCriticalSection(&state->queueLock);
@@ -840,12 +853,14 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
             item = state->item;
             //state->status = SEC_E_INTERNAL_ERROR;
             state->fContextReq = fContextReq;
-            state->pInput = pInput;
+            state->ActualInputToken = ActualInput;
             state->pOutput = pOutput;
             state->pOutputBuffer = pOutputBuffer;
-            state->ActualInputToken.BufferType = SECBUFFER_EMPTY;
+            state->OutputBufferBusy = false;
+            state->ActualInputToken = ActualInput;
 
             // Unblock MITLS_recv_callback
+            _Print("Unblock nextCallReady %p from InitializeSecurityContext resume", state->hNextCallReady);
             SetEvent(state->hNextCallReady);
         }
     }
@@ -856,6 +871,11 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
     HANDLE h[2] = { item->hWorkItemCompleted, state->hOutputIsReady };
     WaitForMultipleObjects(ARRAYSIZE(h), h, FALSE, INFINITE);
 
+    *pfContextAttr = ISC_REQ_SEQUENCE_DETECT|
+        ISC_RET_SEQUENCE_DETECT|
+        ISC_RET_CONFIDENTIALITY|
+        ISC_RET_ALLOCATED_MEMORY;
+
     if (state->status == SEC_E_OK) {
         // Finished the work item
         _Print("MITLS_InitializeSecurityContextA - returning SEC_E_OK");
@@ -863,16 +883,37 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         phNewContext->dwLower = 0;
         phNewContext->dwUpper = (ULONG_PTR)state;
         delete item;
-        state->pInput = state->pOutput = NULL;
+        state->item = NULL;
+        state->ActualInputToken.BufferType = SECBUFFER_EMPTY;
+        state->ActualInputToken.cbBuffer = 0;
+        state->ActualInputToken.pvBuffer = NULL;
+        state->cbInputConsumed = 0;
+        state->pOutput = NULL;
+        state->OutputBufferBusy = false;
         state->item = NULL;
         return state->status;
     }
     else  {
         // Work item is still in progress, but there is data ready to send
+        if (pInput && state->ActualInputToken.BufferType != SECBUFFER_EMPTY && state->ActualInputToken.cbBuffer != 0) {
+            for (ULONG i = 0; i < pInput->cBuffers; ++i) {
+                if (pInput->pBuffers[i].BufferType == SECBUFFER_EMPTY) {
+                    _Print("Updating pInput with fresh ActualInputToken");
+                    memcpy(&pInput->pBuffers[i], &state->ActualInputToken, sizeof(SecBuffer));
+                    break;
+                }
+            }
+        }
         _Print("MITLS_InitializeSecurityContextA - returning %x", state->status);
+        _PrintPSecBufferDesc("pInput", pInput);
+        _PrintPSecBufferDesc("pOuptut", pOutput);
         if (phNewContext) {
             phNewContext->dwLower = 0;
             phNewContext->dwUpper = (ULONG_PTR)state;
+        }
+        if (state->status != SEC_E_INCOMPLETE_MESSAGE) {
+            _Print("Resetting cbInputConsumed");
+            state->cbInputConsumed = 0;
         }
         return state->status;
     }
@@ -1189,8 +1230,6 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
     // Note: schannel is documented as ignoring MessageSeqNo
     MessageSeqNo;
 
-    _Print("Encrypting: \"%s\"", pMessage->pBuffers[0].pvBuffer);
-
     if (fQOP) {
         _Print("ERROR:  EncryptMessage fQOP not supported"); // bugbug: implement support
         return SEC_E_QOP_NOT_SUPPORTED;
@@ -1204,20 +1243,27 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
     if (pMessage->cBuffers < 3) {
         _Print("ERROR: Not enough input buffers to encrypt");
         return SEC_E_DECRYPT_FAILURE;
-    } else if (pMessage->pBuffers[1].BufferType != SECBUFFER_DATA) {
-        _Print("ERROR: No SECBUFFER_DATA to encrypt");
-        return SEC_E_DECRYPT_FAILURE;
+    }
+    SecBuffer ActualInput;
+    SECURITY_STATUS st = ParseInputBufferDesc(pMessage, SECBUFFER_DATA, &ActualInput);
+    if (st != SEC_E_OK) {
+        return st;
     }
 
     ConnectionState *state = (ConnectionState*)phContext->dwUpper;
-    state->pInput = pMessage;
-    state->ActualInputToken.BufferType = SECBUFFER_EMPTY;
+    state->ActualInputToken = ActualInput;
+    state->cbInputConsumed = 0;
     TLS_WORK_ITEM *item = new TLS_WORK_ITEM();
     state->item = item;
+    state->pOutputBuffer = NULL;
+    state->OutputBufferBusy = false;
+    state->pOutput = pMessage;
     item->Type = TLS_SEND;
+    item->ThreadId = GetCurrentThreadId();
     item->hWorkItemCompleted = CreateEventW(NULL, FALSE, FALSE, NULL);
     item->Send.state = state;
-    SetEvent(state->hNextCallReady);
+    //_Print("Unblock nextCallReady %p from EncryptMessage", state->hNextCallReady);
+    //SetEvent(state->hNextCallReady);
 
     EnterCriticalSection(&state->queueLock);
     state->mitlsQueue.push(item);
@@ -1229,42 +1275,77 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
     _Print("MITLS_EncryptMessage - done");
 
     delete item;
+    state->item = NULL;
     return state->status;
 }
 
+//  On entry, pMessage is an array of 4 elements:  SECBUFFER_DATA, and 3 SECBUFFER_EMPTY
+//  On return, those are replaced by header, data, trailer, and extra
 SECURITY_STATUS SEC_ENTRY MITLS_DecryptMessage(PCtxtHandle         phContext,
     PSecBufferDesc      pMessage,
     unsigned long       MessageSeqNo,
-    unsigned long *     pfQOP)
-{
+    unsigned long *     pfQOP) {
     // Note: schannel is documented as ignoring MessageSeqNo
     MessageSeqNo;
 
-    ConnectionState *state = (ConnectionState*)phContext->dwUpper;
-    TLS_WORK_ITEM *item = new TLS_WORK_ITEM();
-    state->item = item;
-    state->ActualInputToken.BufferType = SECBUFFER_EMPTY;
-    state->pOutput = pMessage;
-    state->ActualInputToken.BufferType = SECBUFFER_EMPTY;
-    item->Type = TLS_RECV;
-    item->hWorkItemCompleted = CreateEventW(NULL, FALSE, FALSE, NULL);
-    item->Recv.state = state;
-    SetEvent(state->hNextCallReady);
+    SecBuffer ActualInput;
+    SECURITY_STATUS st = ParseInputBufferDesc(pMessage, SECBUFFER_DATA, &ActualInput);
+    if (st != SEC_E_OK) {
+        return st;
+    }
 
-    EnterCriticalSection(&state->queueLock);
-    state->mitlsQueue.push(item);
-    LeaveCriticalSection(&state->queueLock);
-    SetEvent(state->hqueueReady);
+    ConnectionState *state = (ConnectionState*)phContext->dwUpper;
+    state->ActualInputToken = ActualInput;
+    state->pOutput = pMessage;
+    state->OutputBufferBusy = false;
+    state->ActualInputToken.BufferType = SECBUFFER_EMPTY;
+    TLS_WORK_ITEM *item = state->item;
+    if (!item)  {
+        item = new TLS_WORK_ITEM();
+        item->ThreadId = GetCurrentThreadId();
+        item->Type = TLS_RECV;
+        item->hWorkItemCompleted = CreateEventW(NULL, FALSE, FALSE, NULL);
+        item->Recv.state = state;
+        state->item = item;
+        state->cbInputConsumed = 0;
+
+        EnterCriticalSection(&state->queueLock);
+        state->mitlsQueue.push(item);
+        LeaveCriticalSection(&state->queueLock);
+        SetEvent(state->hqueueReady);
+    } else if (item->Type != TLS_RECV) {
+        _Print("Error!  Unexpected item type for continuation");
+        __debugbreak();
+    } else {
+        _Print("Unblock nextCallReady %p from DecryptMessage", state->hNextCallReady);
+        SetEvent(state->hNextCallReady);
+    }
 
     _Print("MITLS_DecryptMessage - waiting for item");
-    WaitForSingleObject(item->hWorkItemCompleted, INFINITE);
-
-    delete item;
-    if (pfQOP) {
-        *pfQOP = 0;
+    HANDLE h[2] = { item->hWorkItemCompleted, state->hOutputIsReady };
+    WaitForMultipleObjects(ARRAYSIZE(h), h, FALSE, INFINITE);
+    if (state->status == SEC_E_OK) {
+        delete item;
+        state->item = NULL;
+        if (pfQOP) {
+            *pfQOP = 0;
+        }
+        _Print("Decrypted: %x", state->status);
+        return state->status;
+    } else {
+        _Print("Not yet decrypted: %x", state->status);
+        // Work item is still in progress, but there is data ready to send
+        if (state->ActualInputToken.BufferType != SECBUFFER_EMPTY && state->ActualInputToken.cbBuffer != 0) {
+            for (ULONG i = 0; i < pMessage->cBuffers; ++i) {
+                if (pMessage->pBuffers[i].BufferType == SECBUFFER_EMPTY) {
+                    _Print("Updating pMessage with fresh ActualInputToken");
+                    memcpy(&pMessage->pBuffers[i], &state->ActualInputToken, sizeof(SecBuffer));
+                    break;
+                }
+            }
+        }
+        return state->status;
     }
-    _Print("Decrypted: \"%s\"", pMessage->pBuffers[0].pvBuffer);
-    return state->status;
 }
 
 
@@ -1281,12 +1362,14 @@ MITLS_DeleteSecurityContext(
         // InitializeSecurity is in progress
         //__debugbreak();
         state->fDeleteOnComplete = true;
+        _Print("Unblock nextCallReady %p from DeleteSecurityContext", state->hNextCallReady);
         SetEvent(state->hNextCallReady);
     }
     else {
         _Print("Deleting a SecurityContext for an idle connection");
          TLS_WORK_ITEM *item = new TLS_WORK_ITEM();
          item->Type = TLS_EXIT_THREAD;
+         item->ThreadId = GetCurrentThreadId();
          EnterCriticalSection(&state->queueLock);
          state->mitlsQueue.push(item);
          LeaveCriticalSection(&state->queueLock);

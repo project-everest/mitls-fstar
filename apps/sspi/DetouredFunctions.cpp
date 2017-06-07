@@ -141,7 +141,23 @@ int __cdecl Mine_write(
 )
 {
     if (fh == 1) { // stdout
-        VERBOSE(("%*s\n", cnt, buf));
+        const char *b = (char*)buf;
+        unsigned i = cnt;
+        char tmp[256];
+        while (i) {
+            unsigned amt = min(sizeof(tmp)-1, i);
+            memcpy(tmp, b, amt);
+            for (size_t j = 0; j < amt; ++j) {
+                if (tmp[j] == 10) {
+                    tmp[j] = ' ';
+                }
+            }
+            tmp[amt] = '\0';
+
+            VERBOSE(("%x {%*s}\n", GetCurrentThreadId(), amt, tmp));
+            b += amt;
+            i -= amt;
+        }
         return cnt;
     } else {
         return Real_write(fh, buf, cnt);
@@ -160,7 +176,7 @@ VOID _PrintEnter(const CHAR *psz, ...)
 {
     DWORD dwErr = GetLastError();
 
-    CHAR szBuf[128];
+    CHAR szBuf[1024];
     sprintf_s(szBuf, "%x Enter %s", GetCurrentThreadId(), psz);
     va_list  args;
     va_start(args, psz);
@@ -172,7 +188,7 @@ VOID _PrintExit(const CHAR *psz, ...)
 {
     DWORD dwErr = GetLastError();
 
-    CHAR szBuf[128];
+    CHAR szBuf[1024];
     sprintf_s(szBuf, "%x Leave %s", GetCurrentThreadId(), psz);
     va_list  args;
     va_start(args, psz);
@@ -184,7 +200,7 @@ VOID _Print(const CHAR *psz, ...)
 {
     DWORD dwErr = GetLastError();
 
-    CHAR szBuf[128];
+    CHAR szBuf[1024];
     sprintf_s(szBuf, "%x %s", GetCurrentThreadId(), psz);
     va_list  args;
     va_start(args, psz);

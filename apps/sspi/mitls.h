@@ -10,7 +10,8 @@ VOID _PrintDump(SOCKET socket, PCHAR pszData, INT cbData);
 VOID _PrintEnter(PCSTR psz, ...);
 VOID _PrintExit(PCSTR psz, ...);
 VOID _Print(PCSTR psz, ...);
-void _PrintPSecBufferDesc(PSecBufferDesc p, bool fDump = false);
+void _PrintPSecBuffer(PSecBuffer b, bool fDump = false);
+void _PrintPSecBufferDesc(const char *label, PSecBufferDesc p, bool fDump = false);
 
 #define MITLS_NAME_W  L"Everest miTLS"
 #define MITLS_NAME_A   "Everest miTLS"
