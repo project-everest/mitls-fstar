@@ -438,7 +438,8 @@ let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
   let (| finId, cfin_key |) = cfin_key in
   let cvd = HMAC.UFCMA.mac cfin_key digest in
   Epochs.incr_writer hs.epochs; // to HSK
-  HandshakeLog.send hs.log (Finished ({fin_vd = cvd}));
+  let digest_CF = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
+  KeySchedule.ks_client_13_cf hs.ks digest_CF; // For Post-HS
   Epochs.incr_reader hs.epochs; // to ATK
   HandshakeLog.send_signals hs.log true true; //was: Epochs.incr_writer hs.epochs
   hs.state := C_Complete // full_mode (cvd,svd); do we still need to keep those?
@@ -448,15 +449,16 @@ val client_ServerFinished_13:
   s: hs ->
   ee: HandshakeMessages.ee ->
   ocr: option HandshakeMessages.cr13 ->
-  c: HandshakeMessages.crt13 ->
-  cv: HandshakeMessages.cv ->
+  oc: option HandshakeMessages.crt13 ->
+  ocv: option HandshakeMessages.cv ->
   svd: bytes ->
-  digestCert: Hashing.anyTag ->
+  digestCert: option Hashing.anyTag ->
   digestCertVerify: Hashing.anyTag ->
   digestServerFinished: Hashing.anyTag ->
   St incoming
-let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVerify digestServerFinished =
-    match Nego.clientComplete_13 hs.nego ee ocr c.crt_chain13 cv digestCert with
+let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertVerify digestServerFinished =
+    let oc = match oc with | None -> None | Some c -> Some c.crt_chain13 in
+    match Nego.clientComplete_13 hs.nego ee ocr oc ocv digestCert with
     | Error z -> InError z
     | Correct mode ->
         // ADL: 4th returned value is the exporter master secret.
@@ -478,6 +480,35 @@ let client_ServerFinished_13 hs ee ocr c cv (svd:bytes) digestCert digestCertVer
             client_ClientFinished_13 hs digestServerFinished ocr cfin_key;
             InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
           )) // moving to C_Complete
+
+// Process an incoming ticket (1.3)
+let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
+  : St incoming =
+  let tid = utf8 (iutf8 st13.ticket13_ticket) in
+  trace ("Received ticket: "^(hex_of_bytes tid));
+  let (| li, rmsId, rms |) = KeySchedule.ks_client_13_rms hs.ks in
+  trace ("Recall RMS: "^(hex_of_bytes rms));
+  let mode = Nego.getMode hs.nego in
+  let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
+  let t_ext = st13.ticket13_extensions in
+  let ed = Some? (List.Tot.find Extensions.E_early_data? t_ext) in
+  let pskInfo = PSK.({
+    is_ticket = true;
+    time_created = 0; // TODO
+    allow_early_data = ed;
+    allow_dhe_resumption = true;
+    allow_psk_resumption = true;
+    early_ae = ae; early_hash = h;
+    identities = (empty_bytes, empty_bytes); // TODO certs
+  }) in
+  // Store ticket in PSK database
+  PSK.coerce_psk tid pskInfo rms;
+  let c = PSK.psk_info tid in
+  trace PSK.("Ticket = "^(if c.is_ticket then "true" else "false")^", ED="^(if c.allow_early_data then "true" else "false"));
+  let cfg = Nego.local_config hs.nego in
+  // Fixme: instead, we should return a signal to the application with the ticket
+  if Some? (cfg.peer_name) then Ticket.extend (Some?.v cfg.peer_name) tid;
+  InAck false false
 
 let client_ServerFinished hs f digestClientFinished =
     let sfin_key = KeySchedule.ks_12_finished_key hs.ks in
@@ -521,7 +552,7 @@ let server_ServerHelloDone hs =
       InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
     | Some signature ->
       begin
-      let ske = {ske_kex_s = kex_s; ske_sig = signature} in
+      let ske = {ske_kex_s = kex_s; ske_signed_params = signature} in
       HandshakeLog.send hs.log (Certificate ({crt_chain = Cert.chain_down chain}));
       HandshakeLog.send hs.log (ServerKeyExchange ske);
       HandshakeLog.send hs.log ServerHelloDone;
@@ -725,7 +756,7 @@ let server_ServerFinished_13 hs i =
       Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
     | Some signature ->
       begin
-      let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify ({cv_sig = signature})) in
+      let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify (signature)) in
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
       let svd = HMAC.UFCMA.mac sfin_key digestFinished in
       let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
@@ -856,13 +887,19 @@ let rec recv_fragment (hs:hs) #i rg f =
       | C_Wait_ServerHelloDone, [Certificate c; ServerKeyExchange ske; CertificateRequest cr; ServerHelloDone], [] ->
         client_ServerHelloDone hs c ske (Some cr)
 
-      | C_Wait_Finished1, [EncryptedExtensions ee; Certificate13 c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
-        client_ServerFinished_13 hs ee None c cv f.fin_vd digestCert digestCertVerify digestServerFinished
+      | C_Wait_Finished1, [EncryptedExtensions ee; Certificate13 c; CertificateVerify cv; Finished f],
+                          [_; digestCert; digestCertVerify; digestServerFinished] ->
+        client_ServerFinished_13 hs ee None (Some c) (Some cv) f.fin_vd
+                                 (Some digestCert) digestCertVerify digestServerFinished
 
-      | C_Wait_Finished1, [EncryptedExtensions ee; CertificateRequest13 cr; Certificate13 c; CertificateVerify cv; Finished f], [digestCert; digestCertVerify; digestServerFinished] ->
-        client_ServerFinished_13 hs ee (Some cr) c cv f.fin_vd digestCert digestCertVerify digestServerFinished
+      | C_Wait_Finished1, [EncryptedExtensions ee; CertificateRequest13 cr; Certificate13 c; CertificateVerify cv; Finished f],
+                          [_; digestCert; digestCertVerify; digestServerFinished] ->
+        client_ServerFinished_13 hs ee (Some cr) (Some c) (Some cv) f.fin_vd
+                                 (Some digestCert) digestCertVerify digestServerFinished
 
-      // we'll have other variants for resumption, shc as ([EncryptedExtensions ee; Finished f], [...])
+      | C_Wait_Finished1, [EncryptedExtensions ee; Finished f],
+                          [digestEE; digestServerFinished] ->
+       client_ServerFinished_13 hs ee None None None f.fin_vd None digestEE digestServerFinished
 
       | C_Wait_Finished2 digestClientFinished, [Finished f], [digestServerFinished] ->
         client_ServerFinished hs f digestClientFinished
@@ -898,6 +935,9 @@ let rec recv_fragment (hs:hs) #i rg f =
       | S_Wait_Finished2 (true, digestServerFinished),
         [EndOfEarlyData; Certificate13 c; CertificateVerify cv; Finished f], [digestSigned; digestCertVerify; digestClientFinished] ->
         server_ClientFinished_13 hs f.fin_vd digestCertVerify digestClientFinished (Some (c, cv, digestSigned))
+
+      | C_Complete, [NewSessionTicket13 st13], [] ->
+        client_NewSessionTicket_13 hs st13
 
       // are we missing the case with a Certificate but no CertificateVerify?
       | _,  _, _ ->

@@ -208,10 +208,15 @@ noeq type kex_s_priv =
 | KEX_S_PRIV_DHE of (g:CommonDH.group & CommonDH.keyshare g)
 | KEX_S_PRIV_RSA of CoreCrypto.rsa_key
 
+// REMARK: The signature algorithm field is absent in digitally-signed structs in TLS < 1.2
+type signature = {
+  sig_algorithm: option signatureScheme;
+  sig_signature: b:bytes{length b < 65536}
+}
+
 noeq type ske = {
   ske_kex_s: kex_s;
-//  ske_sigval: option bytes;
-  ske_sig : b:bytes{length b < 65536}
+  ske_signed_params: signature
 }
 
 type kex_c =
@@ -224,9 +229,7 @@ noeq type cke = {
   cke_kex_c: kex_c
 }
 
-type cv = {
-  cv_sig: b:bytes{length b < 65536};
-}
+type cv = sig:signature
 
 noeq type sc = {
   sc_configuration_id: configurationId;
@@ -356,20 +359,20 @@ let parseMessage buf =
 
 (** A.4.1 Hello Messages *)
 
-val list_valid_to_valid_list: l:valid_cipher_suites -> Tot (l':list (c:cipherSuite{validCipherSuite c}){List.Tot.length l = List.Tot.length l'})
+#reset-options
+val list_valid_to_valid_list: l:valid_cipher_suites -> Tot (l':list (c:cipherSuite{validCipherSuite c}){List.Tot.length l == List.Tot.length l'})
 let rec list_valid_to_valid_list l =
-  assume false;
   match l with
-  | hd::tl ->
-    hd::(list_valid_to_valid_list tl)
-  | _ -> []
+  | hd::tl -> hd::(list_valid_to_valid_list tl)
+  | [] -> []
 
-val valid_list_to_list_valid: l':list (c:cipherSuite{validCipherSuite c}) -> Tot (l:valid_cipher_suites{List.Tot.length l = List.Tot.length l'})
+val valid_list_to_list_valid: l':list (c:cipherSuite{validCipherSuite c}) -> Tot (l:valid_cipher_suites{List.Tot.length l == List.Tot.length l'})
 let rec valid_list_to_list_valid l =
   assume false;
   match l with
   | hd::tl -> hd::(valid_list_to_list_valid tl)
-  | _ -> []
+  | [] -> []
+#reset-options "--z3rlimit 600 --initial_fuel 0 --max_fuel 0 --initial_ifuel 0 --max_ifuel 0"
 
 val messageBytes_extra:
   ht:handshakeType ->
@@ -445,32 +448,31 @@ let optionExtensionsBytes exts =
     extensionsBytes ext
   | None -> empty_bytes
 
+#reset-options
 val list_valid_to_valid_list_lemma: cs1:valid_cipher_suites{List.Tot.length cs1 < 256} ->
   cs2:valid_cipher_suites{List.Tot.length cs2 < 256} ->
   Lemma (requires True)
-  (ensures (list_valid_to_valid_list cs1 = list_valid_to_valid_list cs2 ==> cs1 = cs2))
+  (ensures (list_valid_to_valid_list cs1 == list_valid_to_valid_list cs2 ==> cs1 == cs2))
 let rec list_valid_to_valid_list_lemma cs1 cs2 =
-  admit () // TODO: FIXME (also in definition of list_valid_to_valid_list)
-(*
   match cs1, cs2 with
   | [], [] -> ()
   | hd::tl, hd'::tl' -> list_valid_to_valid_list_lemma tl tl'
   | _ -> ()
-*)
 
 val cipherSuiteBytes_is_injective: cs:valid_cipher_suite -> cs':valid_cipher_suite ->
   Lemma (requires True)
   (ensures (Seq.equal (cipherSuiteBytes cs) (cipherSuiteBytes cs') ==> cs = cs'))
 let cipherSuiteBytes_is_injective cs cs' =
   admit(); // JK: TODO: list the issue in cipherSuiteBytes where there are possible
-     // collisions between the serialization of unknown cipher suites and known ones
-  cut(Some? (cipherSuiteBytesOpt cs) /\ Some? (cipherSuiteBytesOpt cs'));
-  if cs <> cs' then (
+           // collisions between the serialization of unknown cipher suites and known ones
+  //assume (not (UnknownCipherSuite? cs) /\ not (UnknownCipherSuite? cs'));
+  cut (Some? (cipherSuiteBytesOpt cs) /\ Some? (cipherSuiteBytesOpt cs'));
+  if cs <> cs' then
     match cipherSuiteBytesOpt cs, cipherSuiteBytesOpt cs' with
-    | Some a, Some b -> assert((Seq.index a 0 <> Seq.index b 0) \/ Seq.index a 1 <> Seq.index b 1)
-    | _, _ -> ()
-    );
-  ()
+    | Some a, Some b ->
+      let a1, a2 = cbyte2 a in
+      let b1, b2 = cbyte2 b in
+      assert (a1 <> b1 \/ a2 <> b2)
 
 #reset-options "--z3rlimit 600" // necessary to reset fuel
 
@@ -643,8 +645,6 @@ val clientHelloBytes_is_injective: msg1:ch -> msg2:ch ->
 let clientHelloBytes_is_injective msg1 msg2 =
   clientHelloBytes_is_injective_strong msg1 empty_bytes msg2 empty_bytes
 
-// TR: verifies up to this point
-
 (* JK: to work around a subtyping difficulty in parseClientHello *)
 val coercion_helper: o:option (list extension){Some? o ==>  List.Tot.length (Some?.v o) < 256}
    -> Tot (option (l:list extension{List.Tot.length l < 256}))
@@ -652,6 +652,8 @@ let coercion_helper e =
   match e with
   | None -> None
   | Some li -> cut (List.Tot.length li < 256); Some li
+
+// TR: verifies up to this point
 
 (* This function adds a "first connection" renegotiation info *)
 (*    extension to the client hello when parsing it. The cipher suite *)
@@ -1332,11 +1334,72 @@ let parseClientKeyExchange kex data =
             | Error(z) -> Error(z)
         else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
+(* Signature *)
+
+val signatureBytes: signature -> b:bytes{length b < 65540}
+let signatureBytes sig =
+  lemma_repr_bytes_values (length sig.sig_signature);
+  let sig_bytes = vlbytes2 sig.sig_signature in
+  match sig.sig_algorithm with
+  | None -> sig_bytes
+  | Some sigalg ->
+    let sig_algorithm_bytes = signatureSchemeBytes sigalg in
+    sig_algorithm_bytes @| sig_bytes
+
+val signatureBytes_is_injective: sig1:signature -> sig2:signature ->
+  Lemma (requires (None? sig1.sig_algorithm == None? sig2.sig_algorithm))
+  (ensures (Seq.equal (signatureBytes sig1) (signatureBytes sig2) ==> sig1 == sig2))
+let signatureBytes_is_injective sig1 sig2 =
+  if signatureBytes sig1 = signatureBytes sig2 then
+    begin
+    lemma_repr_bytes_values (length sig1.sig_signature);
+    lemma_repr_bytes_values (length sig2.sig_signature);
+    match sig1.sig_algorithm, sig2.sig_algorithm with
+    | None, None -> lemma_vlbytes_inj 2 sig1.sig_signature sig2.sig_signature
+    | Some sigalg1, Some sigalg2 ->
+      begin
+      lemma_append_inj (signatureSchemeBytes sigalg1)
+                       (vlbytes2 sig1.sig_signature)
+                       (signatureSchemeBytes sigalg2)
+                       (vlbytes2 sig2.sig_signature);
+      signatureSchemeBytes_is_injective sigalg1 sigalg2;
+      lemma_vlbytes_inj 2 sig1.sig_signature sig2.sig_signature
+      end
+    end
+
+val parseSignature: pv:protocolVersion -> data:bytes -> result (sig:signature{Seq.equal (signatureBytes sig) data})
+let parseSignature pv data =
+  if pv `geqPV` TLS_1p2 then
+    if length data >= 4 then
+      let alg, sig = split data 2 in
+      match parseSignatureScheme alg with
+      | Correct sigalg ->
+        begin
+        match vlparse 2 sig with
+        | Correct sigv ->
+          lemma_repr_bytes_values (length sigv);
+          Correct ({sig_algorithm = Some sigalg; sig_signature = sigv})
+        | _ ->
+          Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: incorrect signature length")
+        end
+      | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: invalid signature scheme")
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: message too short")
+  else
+    if length data >= 2 then
+      match vlparse 2 data with
+      | Correct sigv ->
+        lemma_repr_bytes_values (length sigv);
+        Correct ({sig_algorithm = None; sig_signature = sigv})
+      | _ ->
+        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: incorrect signature length")
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Signature: message too short")
+
+
 (* ServerKeyExchange *)
 
 open CoreCrypto
 
-val kex_s_to_bytes: kex_s -> Tot (b:bytes{length b < 16777216 - 65536}) // JK: required for serverKeyExxchangeBytes
+val kex_s_to_bytes: kex_s -> Tot (b:bytes{length b < 16777216 - 65540}) // JK: required for serverKeyExxchangeBytes
 let kex_s_to_bytes kex =
   admit(); // JK: TODO
   match kex with
@@ -1346,26 +1409,27 @@ let kex_s_to_bytes kex =
 (* JK: TODO, or rewrite the functions altogether *)
 assume val commonDH_serialize_is_injective: #g:CommonDH.group -> k1:CommonDH.pre_share g -> k2:CommonDH.pre_share g ->
   Lemma (requires True)
-  (ensures (Seq.equal (CommonDH.serialize k1) (CommonDH.serialize k2) ==> k1 = k2))
+  (ensures (Seq.equal (CommonDH.serialize k1) (CommonDH.serialize k2) ==> k1 == k2))
 
 (* JK: TODO: missing the proper serialization for RSA so not injective for now *)
 (* Actually false for now *)
 assume val kex_s_to_bytes_is_injective: k1:kex_s -> k2:kex_s ->
   Lemma (requires True)
-  (ensures (Seq.equal (kex_s_to_bytes k1) (kex_s_to_bytes k2) ==> k1 = k2))
+  (ensures (Seq.equal (kex_s_to_bytes k1) (kex_s_to_bytes k2) ==> k1 == k2))
 
 val serverKeyExchangeBytes: ske -> Tot (b:bytes{hs_msg_bytes HT_server_key_exchange b})
 let serverKeyExchangeBytes ske =
-    let kexB = kex_s_to_bytes ske.ske_kex_s in
-    let payload = kexB @| ske.ske_sig in
-    lemma_repr_bytes_values (length payload);
-    messageBytes HT_server_key_exchange payload
+  let kexB = kex_s_to_bytes ske.ske_kex_s in
+  let sigB = signatureBytes ske.ske_signed_params in
+  let payload = kexB @| sigB in
+  lemma_repr_bytes_values (length payload);
+  messageBytes HT_server_key_exchange payload
 
 (* JK: TODO, currently not injective and missing an extra argument compared to the
    parsing function: the kex algorithm *)
 assume val serverKeyExchangeBytes_is_injective: s1:ske -> s2:ske ->
   Lemma (requires True)
-  (ensures (Seq.equal (serverKeyExchangeBytes s1) (serverKeyExchangeBytes s2) ==> s1 = s2))
+  (ensures (Seq.equal (serverKeyExchangeBytes s1) (serverKeyExchangeBytes s2) ==> s1 == s2))
 (* let serverKeyExchangeBytes_is_injective s1 s2 =  *)
   (* if serverKeyExchangeBytes s1 = serverKeyExchangeBytes s2 then ( *)
   (*   let kexB1 = kex_s_to_bytes s1.ske_kex_s in *)
@@ -1380,59 +1444,73 @@ assume val serverKeyExchangeBytes_is_injective: s1:ske -> s2:ske ->
 
 (* val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} ->  *)
 (*     Tot (result (s:ske{Seq.equal (serverKeyExchangeBytes s) (messageBytes HT_server_key_exchange b)})) *)
-val parseServerKeyExchange: kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> Tot (result ske)
-let parseServerKeyExchange kex payload : result ske =
-    match kex with
-    | Kex_DH -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | Kex_RSA -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-    | Kex_DHE ->
-       (match CommonDH.parse_partial false payload with
-  | Correct (k,sign) ->
-    if length sign < 65536 then
-          Correct ({ske_kex_s = KEX_S_DHE k;
-                    ske_sig = sign})
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-        | Error z -> Error z)
-    | Kex_ECDHE ->
-       (match CommonDH.parse_partial true payload with
-  | Correct (k,sign) ->
-    if length sign < 65536 then
-          Correct ({ske_kex_s = KEX_S_DHE k;
-                    ske_sig = sign})
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-        | Error z -> Error z)
+val parseServerKeyExchange: pv:protocolVersion -> kex:kexAlg -> b:bytes{repr_bytes(length b) <= 3} -> result ske
+let parseServerKeyExchange pv kex payload =
+  match kex with
+  | Kex_DHE ->
+    begin
+    match CommonDH.parse_partial false payload with
+    | Correct (k, sigv) ->
+      begin
+      match parseSignature pv sigv with
+      | Correct sig ->
+        Correct ({ske_kex_s = KEX_S_DHE k; ske_signed_params = sig})
+      | Error z -> Error z
+      end
+    | Error z -> Error z
+    end
+  | Kex_ECDHE ->
+    begin
+    match CommonDH.parse_partial true payload with
+    | Correct (k, sigv) ->
+      begin
+      match parseSignature pv sigv with
+      | Correct sig ->
+        Correct ({ske_kex_s = KEX_S_DHE k; ske_signed_params = sig})
+      | Error z -> Error z
+      end
+    | Error z -> Error z
+    end
+  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "ServerKeyExchange: Unexpected Key Exchange")
+
 
 (* Certificate Verify *)
-val certificateVerifyBytes: cv -> Tot (b:bytes{hs_msg_bytes HT_certificate_verify b})
+
+val certificateVerifyBytes: cv -> b:bytes{hs_msg_bytes HT_certificate_verify b}
 let certificateVerifyBytes cv =
-    lemma_repr_bytes_values (length cv.cv_sig);
-    messageBytes HT_certificate_verify cv.cv_sig
+  let sigB = signatureBytes cv in
+  lemma_repr_bytes_values (length sigB);
+  messageBytes HT_certificate_verify sigB
 
 val certificateVerifyBytes_is_injective: c1:cv -> c2:cv ->
-  Lemma (requires True)
-  (ensures (Seq.equal (certificateVerifyBytes c1) (certificateVerifyBytes c2) ==> c1 = c2))
+  Lemma (requires (None? c1.sig_algorithm == None? c2.sig_algorithm))
+  (ensures (Seq.equal (certificateVerifyBytes c1) (certificateVerifyBytes c2) ==> c1 == c2))
 let certificateVerifyBytes_is_injective c1 c2 =
-  if certificateVerifyBytes c1 = certificateVerifyBytes c2 then (
-    lemma_repr_bytes_values (length c1.cv_sig);
-    lemma_repr_bytes_values (length c2.cv_sig);
-    messageBytes_is_injective HT_certificate_verify c1.cv_sig HT_certificate_verify c2.cv_sig
-  )
+  if certificateVerifyBytes c1 = certificateVerifyBytes c2 then
+    begin
+    let sig1 = signatureBytes c1 in
+    let sig2 = signatureBytes c2 in
+    lemma_repr_bytes_values (length sig1);
+    lemma_repr_bytes_values (length sig2);
+    signatureBytes_is_injective c1 c2;
+    messageBytes_is_injective HT_certificate_verify sig1 HT_certificate_verify sig2
+    end
 
-(* JK: FIXME: information on data's length is redundant, but simpler for now to have both
-   in the spec *)
-val parseCertificateVerify: data:bytes{repr_bytes(length data) <= 3} ->
-    Tot (result (c:cv{Seq.equal (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)}))
-let parseCertificateVerify data =
-  if length data < 65536 then Correct ({cv_sig = data}) else error "CertificateVerify too large"
+val parseCertificateVerify: pv:protocolVersion -> data:bytes{repr_bytes(length data) <= 3} ->
+  result (c:cv{Seq.equal (certificateVerifyBytes c) (messageBytes HT_certificate_verify data)})
+let parseCertificateVerify pv data =
+  match parseSignature pv data with
+  | Correct sig -> Correct sig
+  | Error z -> Error z
 
 val finishedBytes: fin -> Tot (b:bytes{hs_msg_bytes HT_finished b})
 let finishedBytes fin =
-    lemma_repr_bytes_values (length fin.fin_vd);
-    messageBytes HT_finished fin.fin_vd
+  lemma_repr_bytes_values (length fin.fin_vd);
+  messageBytes HT_finished fin.fin_vd
 
 val finishedBytes_is_injective: f1:fin -> f2:fin ->
   Lemma (requires True)
-  (ensures (Seq.equal (finishedBytes f1) (finishedBytes f2) ==> f1 = f2))
+  (ensures (Seq.equal (finishedBytes f1) (finishedBytes f2) ==> f1 == f2))
 let finishedBytes_is_injective f1 f2 =
   if finishedBytes f1 = finishedBytes f2 then (
     lemma_repr_bytes_values (length f1.fin_vd);
@@ -1441,31 +1519,32 @@ let finishedBytes_is_injective f1 f2 =
   )
 
 #reset-options
-//#set-options "--lax"
 
-val parseFinished: data:bytes{repr_bytes(length data)<=3} ->
-    Tot (result(f:fin{Seq.equal (finishedBytes f) (messageBytes HT_finished data)}))
+val parseFinished: data:bytes{repr_bytes(length data) <= 3} ->
+  result(f:fin{Seq.equal (finishedBytes f) (messageBytes HT_finished data)})
 let parseFinished data =
   if length data < 65536 then Correct ({fin_vd = data}) else error "Finished too large"
 
 
 (* Session ticket *)
+
 val sessionTicketBytes: sticket -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
-val sessionTicketBytes13: sticket13 -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
 let sessionTicketBytes t =
-    let payload =
-      bytes_of_int 4 (UInt32.v t.sticket_lifetime) @|
-      (vlbytes 2 t.sticket_ticket) in
-    lemma_repr_bytes_values (length payload);
-    messageBytes HT_session_ticket payload
+  let payload =
+    bytes_of_int 4 (UInt32.v t.sticket_lifetime) @|
+    (vlbytes 2 t.sticket_ticket) in
+  lemma_repr_bytes_values (length payload);
+  messageBytes HT_session_ticket payload
+
+val sessionTicketBytes13: sticket13 -> Tot (b:bytes{hs_msg_bytes HT_session_ticket b})
 let sessionTicketBytes13 t =
-    let payload =
-      bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @|
-      bytes_of_int 4 (UInt32.v t.ticket13_age_add) @|
-      vlbytes 2 t.ticket13_ticket @|
-      extensionsBytes t.ticket13_extensions in
-    lemma_repr_bytes_values (length payload);
-    messageBytes HT_session_ticket payload
+  let payload =
+    bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @|
+    bytes_of_int 4 (UInt32.v t.ticket13_age_add) @|
+    vlbytes 2 t.ticket13_ticket @|
+    extensionsBytes t.ticket13_extensions in
+  lemma_repr_bytes_values (length payload);
+  messageBytes HT_session_ticket payload
 
 (* TODO generalize, with adequate condition of s1 and s2:
 val sessionTicketBytes_is_injective: p:protocolVersion -> s1:sticket -> s2:sticket ->
@@ -1706,31 +1785,60 @@ let parseNextProtocol payload =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 *)
 let associated_to_pv (pv:option protocolVersion) (msg:hs_msg) : GTot bool  =
-  if Certificate? msg || ClientKeyExchange? msg then Some? pv else true
-
-let valid_hs_msg_prop (pv: option protocolVersion) (msg: hs_msg): GTot bool =
-  associated_to_pv pv msg && (
   match msg with
-  | EncryptedExtensions ee -> repr_bytes (length (extensionsBytes ee)) <= 3
-  | ServerHello sh -> (
+  | ServerKeyExchange _ | CertificateRequest _ | CertificateVerify _ -> Some? pv
+  | _ -> true
+
+let valid_hs_msg_prop (pv:option protocolVersion) (msg:hs_msg): GTot bool =
+  associated_to_pv pv msg && (
+  match msg, pv with
+  | EncryptedExtensions ee, _ -> repr_bytes (length (extensionsBytes ee)) <= 3
+  | ServerHello sh, _ -> (
       if sh.sh_protocol_version = TLS_1p3
       then (None? sh.sh_sessionID && None? sh.sh_compression)
       else (Some? sh.sh_sessionID && Some? sh.sh_compression))
-  | Certificate13 crt -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
-  | Certificate crt -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
+  | Certificate13 crt, _ -> length (Cert.certificateListBytes13 crt.crt_chain13) < 16777212
+  | Certificate crt, _ -> length (Cert.certificateListBytes crt.crt_chain) < 16777212
+  | ServerKeyExchange ske, Some pv ->
+    if pv `geqPV` TLS_1p2 then Some? ske.ske_signed_params.sig_algorithm
+    else  None? ske.ske_signed_params.sig_algorithm
+  | CertificateVerify cv, Some pv ->
+    if pv `geqPV` TLS_1p2 then Some? cv.sig_algorithm
+    else  None? cv.sig_algorithm
   | _ -> true )
 
-let valid_hs_msg (pv: option protocolVersion): Type0 = msg: hs_msg{
-  valid_hs_msg_prop pv msg
-}
-
+let valid_hs_msg (pv:option protocolVersion): Type0 = msg: hs_msg{valid_hs_msg_prop pv msg}
 
 let parsed = function
   | Binders _ | MessageHash _ -> false
   | _ -> true
 
+(*
+let hs_msg_bytes (ht:handshakeType) (b:bytes) =
+  length b >= 4
+  /\ (let b' = snd (split b 4) in
+    /\ repr_bytes (length b') <= 3
+    /\ b = messageBytes ht b')
+*)
+
+val endOfEarlyDataBytes: b:lbytes 4{hs_msg_bytes HT_end_of_early_data b}
+let endOfEarlyDataBytes =
+  lemma_repr_bytes_values 0;
+  messageBytes HT_end_of_early_data empty_bytes
+
+val keyUpdateBytes: u:bool -> b:lbytes 5{hs_msg_bytes HT_key_update b}
+let keyUpdateBytes u =
+  lemma_repr_bytes_values 1;
+  messageBytes HT_key_update (abyte (if u then 1z else 0z))
+
+//FIXME: Implement CertificateRequest in TLS 1.3
+val certificateRequestBytes13: cr13 -> b:lbytes 4{hs_msg_bytes HT_certificate_request b}
+let certificateRequestBytes13 cr =
+  lemma_repr_bytes_values 0;
+  messageBytes HT_certificate_request empty_bytes
+
 val handshakeMessageBytes:
-  pvo: option protocolVersion ->
+  pvo:option protocolVersion ->
   msg:valid_hs_msg pvo ->
   Tot (b:bytes {parsed msg ==> (exists (ht:handshakeType). hs_msg_bytes ht b)})
 let handshakeMessageBytes pvo = function
@@ -1749,16 +1857,17 @@ let handshakeMessageBytes pvo = function
   | CertificateVerify cv -> certificateVerifyBytes cv
   | HelloRequest -> helloRequestBytes
   | HelloRetryRequest hrr -> helloRetryRequestBytes hrr
-  | EndOfEarlyData -> messageBytes HT_end_of_early_data empty_bytes
-  | CertificateRequest13 c -> messageBytes HT_certificate_request empty_bytes //TBC
-  | KeyUpdate b -> messageBytes HT_key_update (abyte (if b then 1z else 0z))
+  | EndOfEarlyData -> endOfEarlyDataBytes
+  | CertificateRequest13 cr -> certificateRequestBytes13 cr
+  | KeyUpdate u -> keyUpdateBytes u
   // these two are not actual HS messages
   | Binders bs -> bindersBytes bs //
   | MessageHash h -> h // not
 
 
 val splitHandshakeMessage: b:bytes{exists (ht:handshakeType). hs_msg_bytes ht b} ->
-  Tot (t:(handshakeType * bytes){repr_bytes (length (snd t)) <= 3 /\ b = (htBytes (fst t) @| (vlbytes 3 (snd t)))})
+  t:(handshakeType * bytes)
+    {repr_bytes (length (snd t)) <= 3 /\ b == (htBytes (fst t) @| (vlbytes 3 (snd t)))}
 let splitHandshakeMessage b =
   let htbytes, payload = split b 1 in
   let lenbytes,data = split payload 3 in
@@ -1776,7 +1885,7 @@ let splitHandshakeMessage b =
 //17-05-05 update this proof, relying on pv to disambiguate messages with the same header
 val handshakeMessageBytes_is_injective: pv:option protocolVersion -> msg1:valid_hs_msg pv -> msg2:valid_hs_msg pv ->
   Lemma (requires True)
-  (ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2) ==> msg1 = msg2))
+  (ensures (Seq.equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2) ==> msg1 == msg2))
 let handshakeMessageBytes_is_injective pv msg1 msg2 =
   if handshakeMessageBytes pv msg1 = handshakeMessageBytes pv msg2 then (
     let bytes1 = handshakeMessageBytes pv msg1 in
@@ -1803,11 +1912,10 @@ let handshakeMessageBytes_is_injective pv msg1 msg2 =
     //| HT_next_protocol -> nextProtocolBytes_is_injective (NextProtocol?._0 msg1) (NextProtocol?._0 msg2)
   )
 
-val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg pv) -> Tot bytes
-let rec handshakeMessagesBytes pv hsl =
-    match hsl with
-    | [] -> empty_bytes
-    | h::t -> handshakeMessageBytes pv h @| handshakeMessagesBytes pv t
+val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg pv) -> bytes
+let rec handshakeMessagesBytes pv = function
+  | [] -> empty_bytes
+  | h::t -> handshakeMessageBytes pv h @| handshakeMessagesBytes pv t
 
 #reset-options
 
@@ -1966,24 +2074,26 @@ let parseBoolean (body: bytes): result bool =
   else error "not a boolean"
 
 let parseHandshakeMessage pv kex hstype body =
-  if length body >= 16777216 then error "message too large" else (
-  lemma_repr_bytes_values (length body);
-  match hstype,pv,kex with
-    | HT_hello_request,_,_       -> parseEmptyMessage HelloRequest body
-//  | HT_client_hello,_,_        -> mapResult ClientHello (parseClientHello body)
-    | HT_server_hello,_,_        -> mapResult ServerHello (parseServerHello body)
-    | HT_session_ticket, Some TLS_1p3,_      -> mapResult NewSessionTicket13 (parseSessionTicket13 body)
-    | HT_session_ticket, Some _,_      -> mapResult NewSessionTicket (parseSessionTicket body)
-    | HT_hello_retry_request,_,_ -> mapResult HelloRetryRequest (parseHelloRetryRequest body)
-    | HT_encrypted_extensions,_,_ -> mapResult EncryptedExtensions (parseEncryptedExtensions body)
-    | HT_certificate, Some TLS_1p3,_         -> mapResult Certificate13 (parseCertificate13 body)
-    | HT_certificate, Some _,_         -> mapResult Certificate (parseCertificate body)
-    | HT_server_key_exchange,_,Some kex -> mapResult ServerKeyExchange (parseServerKeyExchange kex body)
+  if length body >= 16777216 then error "message too large" else
+    begin
+    lemma_repr_bytes_values (length body);
+    match hstype,pv,kex with
+    | HT_hello_request,_,_              -> parseEmptyMessage HelloRequest body
+  //| HT_client_hello,_,_               -> mapResult ClientHello (parseClientHello body)
+    | HT_server_hello,_,_               -> mapResult ServerHello (parseServerHello body)
+    | HT_session_ticket, Some TLS_1p3,_ -> mapResult NewSessionTicket13 (parseSessionTicket13 body)
+    | HT_session_ticket, Some _,_       -> mapResult NewSessionTicket (parseSessionTicket body)
+    | HT_hello_retry_request,_,_        -> mapResult HelloRetryRequest (parseHelloRetryRequest body)
+    | HT_encrypted_extensions,_,_       -> mapResult EncryptedExtensions (parseEncryptedExtensions body)
+    | HT_certificate, Some TLS_1p3,_    -> mapResult Certificate13 (parseCertificate13 body)
+    | HT_certificate, Some _,_          -> mapResult Certificate (parseCertificate body)
+    | HT_server_key_exchange,Some pv,Some kex -> mapResult ServerKeyExchange (parseServerKeyExchange pv kex body)
     | HT_certificate_request,Some TLS_1p3,_ -> mapResult CertificateRequest13 (parseCertificateRequest13 body)
     | HT_certificate_request,Some pv,_ -> mapResult CertificateRequest (parseCertificateRequest pv body)
-    | HT_server_hello_done,_,_   -> parseEmptyMessage ServerHelloDone body
-    | HT_certificate_verify,_,_  -> mapResult CertificateVerify (parseCertificateVerify body)
+    | HT_server_hello_done,_,_          -> parseEmptyMessage ServerHelloDone body
+    | HT_certificate_verify,Some pv,_   -> mapResult CertificateVerify (parseCertificateVerify pv body)
     | HT_client_key_exchange,Some pv,Some kex -> mapResult ClientKeyExchange (parseClientKeyExchange kex body)
-    | HT_finished,_,_            -> mapResult Finished (parseFinished body)
-    | HT_key_update,_,_ -> mapResult KeyUpdate (parseBoolean body)
-    | _ -> error "unexpected message" )
+    | HT_finished,_,_                   -> mapResult Finished (parseFinished body)
+    | HT_key_update,_,_                 -> mapResult KeyUpdate (parseBoolean body)
+    | _                                 -> error "unexpected message"
+    end

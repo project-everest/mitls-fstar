@@ -5,6 +5,7 @@ open TLSInfo
 let args = ref []
 let role = ref Client
 let ffi  = ref false
+let reconnect = ref false
 let config = ref {defaultConfig with
   minVer = TLS_1p2;
   maxVer = TLS_1p3;
@@ -89,7 +90,7 @@ let setng x =
 let offered_psk = ref []
 let loaded_psk : (string list) ref = ref []
 
-let load_psk x =
+let load_psk is_ticket x =
   let id, key = BatString.split x ":" in
   if List.mem id !loaded_psk then failwith ("Cannot load more than one PSK with label "^id);
   loaded_psk := id :: !loaded_psk;
@@ -100,6 +101,7 @@ let load_psk x =
     | CipherSuite13(ae,h) -> ae, h
     | _ -> failwith "the first ciphersuite must be 1.3 to load with PSK" in
   let pskInfo = {
+    PSK.is_ticket = is_ticket;
     PSK.time_created = Prims.parse_int "0";
     PSK.allow_early_data = true;
     PSK.allow_dhe_resumption = true;
@@ -134,14 +136,16 @@ let _ =
     ("-mv", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v;}), " sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)");
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
     ("-0rtt", Arg.Unit (fun () -> config := {!config with enable_early_data = true;}), "enable early data (server support and client offer)");
-    ("-psk", Arg.String (fun s -> load_psk s), " L:K add an entry in the PSK database at label L with key K (in hex), associtated with the fist current -cipher");
-    ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with --psk). Client only.");
+    ("-psk", Arg.String (fun s -> load_psk false s), " L:K add an entry in the PSK database at label L with key K (in hex), associated with the fist current -cipher");
+    ("-ticket", Arg.String (fun s -> load_psk true s), " T:K add ticket T in the PSK database with RMS K (in hex), associated with the fist current -cipher");
+    ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with -psk or -ticket, client only)");
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
     ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2 (client only)");
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
+    ("-reconnect", Arg.Unit (fun () -> reconnect := true), "reconnect at the end of the session, using received ticket (client only)");
     ("-groups", Arg.String setng, "colon-separated list of named groups; see above for valid values");
     ("-cert", Arg.String (fun s -> config := {!config with cert_chain_file = s}), "PEM file containing certificate chain to send");
     ("-key", Arg.String (fun s -> config := {!config with private_key_file = s}), "PEM file containing private key of endpoint certificate in chain");
@@ -150,13 +154,23 @@ let _ =
 
   let (host, port) = match List.rev !args with
     | host :: port :: _ ->
-       config := {!config with peer_name = Some host;};
-       host, int_of_string port
-    | host :: _ -> host, 443
-    | _ -> (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443 in
+       if !role = Client then config := {!config with peer_name = Some host;};
+       (host, int_of_string port)
+    | host :: _ ->
+       if !role = Client then config := {!config with peer_name = Some host;};
+       (host, 443)
+    | _ ->
+       (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443
+    in
 
   match !role, !config.maxVer with
   | Client, _ when !ffi    -> TestFFI.client !config host (Z.of_int port)
   | Server, _ when !ffi    -> TestFFI.server !config host (Z.of_int port)
-  | Client, _ -> TestAPI.client !config host (Z.of_int port) (!offered_psk)
+  | Client, _ ->
+    (let _ = TestAPI.client !config host (Z.of_int port) (!offered_psk) in
+    match !reconnect, !config.peer_name with
+    | true, Some h ->
+      let t = match Ticket.lookup h with None -> [] | Some t -> [t] in
+      TestAPI.client !config host (Z.of_int port) t
+    | _ -> ())
   | Server, _ -> TestAPI.server !config host (Z.of_int port)

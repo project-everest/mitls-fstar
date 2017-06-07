@@ -16,9 +16,18 @@ open TLSInfo
 
 module CC = CoreCrypto
 module AE = AEADOpenssl
+module MM = MonotoneMap
 #set-options "--lax"
 
+type hostname = string
+type tlabel (h:hostname) = bytes
 private let region:rgn = new_region tls_tables_region
+private let tickets : MM.t region hostname tlabel (fun _ -> True) =
+  MM.alloc #region #hostname #tlabel #(fun _ -> True)
+
+let lookup h = MM.lookup tickets h
+let extend h t = MM.extend tickets h t
+
 let tid =
   assume false;
   let h = Hashing.Spec.SHA256 in
@@ -41,6 +50,22 @@ type ticket =
 | Ticket12: protocolVersion -> cs:cipherSuite{CipherSuite? cs} -> ms:bytes -> ticket
 | Ticket13: cs:cipherSuite{CipherSuite13? cs} -> li:logInfo -> pre_rmsId li -> rms:bytes -> ticket
 
+let dummy_rmsid ae h =
+  let li = {
+    li_sh_cr = CC.random 32;
+    li_sh_sr = CC.random 32;
+    li_sh_ae = AEAD ae h;
+    li_sh_hash = h;
+    li_sh_psk = None;
+  } in
+  let li = LogInfo_CF ({
+    li_cf_sf = ({ li_sf_sh = li; li_sf_certificate = None; });
+    li_cf_certificate = None;
+  }) in
+  let log : hashed_log li = empty_bytes in
+  let i : rmsId li = RMSID (ASID (Salt (EarlySecretID (NoPSK h)))) log in
+  (| li, i |)
+
 let check_ticket (b:bytes{length b <= 65551}) =
   if length b < 28 then None else
   let (nb, b) = split b 12 in
@@ -61,19 +86,7 @@ let check_ticket (b:bytes{length b <= 65551}) =
         | Correct cs, Correct rms ->
           match pv, cs with
           | TLS_1p3, CipherSuite13 ae h ->
-            let li = {
-              li_sh_cr = CC.random 32;
-              li_sh_sr = CC.random 32;
-              li_sh_ae = AEAD ae h;
-              li_sh_hash = h;
-              li_sh_psk = None;
-            } in
-            let li = LogInfo_CF ({
-              li_cf_sf = ({ li_sf_sh = li; li_sf_certificate = None; });
-              li_cf_certificate = None;
-            }) in
-            let log : hashed_log li = empty_bytes in
-            let rmsId = RMSID (ASID (Salt (EarlySecretID (NoPSK h)))) log in
+            let (| li, rmsId |) = dummy_rmsid ae h in
             Some (Ticket13 cs li rmsId rms)
           | TLS_1p2, CipherSuite _ _ _ -> Some (Ticket12 pv cs rms)
 
@@ -92,6 +105,7 @@ let check_ticket13 b =
   | Some (Ticket13 cs li _ _) ->
     let CipherSuite13 ae h = cs in
     Some PSK.({
+      is_ticket = true;
       time_created = 0;
       allow_early_data = true;
       allow_dhe_resumption = true;

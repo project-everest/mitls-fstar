@@ -32,9 +32,7 @@ let rec read_loop con r : ML unit =
   | ReadError _ t ->
     trace ("ReadError: "^t^"\n")
   | Read (DataStream.Close) ->
-    trace "Got close_notify, closing connection...\n";
-    let _ = TLS.writeCloseNotify con in
-    ()
+    trace "Got close_notify, clean closure.\n"
   | Read (DataStream.Alert a)->
     trace ("Got alert: "^(string_of_ad a)^"\n");
     trace "Closing connection.\n";

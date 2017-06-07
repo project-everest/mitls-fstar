@@ -30,6 +30,7 @@ module HS = FStar.HyperStack
 //  - we store in the table the PSK context and compromise status
 
 type pskInfo = {
+  is_ticket: bool;
   time_created: int;
   allow_early_data: bool;      // New draft 13 flag
   allow_dhe_resumption: bool;  // New draft 13 flag

@@ -92,7 +92,13 @@ let read_psk (i:PSK.pskid)
   =
   let i = utf8 (iutf8 i) in // FIXME Platform.Bytes !!
   let c = PSK.psk_info i in
-  (ApplicationPSK i c.early_hash, PSK.psk_value i, c.early_hash, c.early_ae)
+  let id =
+    if c.is_ticket then
+      let (| li, rmsid |) = Ticket.dummy_rmsid c.early_ae c.early_hash in
+      ResumptionPSK #li rmsid
+    else
+      ApplicationPSK i c.early_hash in
+  (id, PSK.psk_value i, c.early_hash, c.early_ae)
 
 // Resumption context
 let rec esId_rc : (esId -> St bytes) =
@@ -315,7 +321,7 @@ let ks_client_13_init ks pskl gl =
       else ResBinder, "res binder" in
     let bId = Binder i ll in
     let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
-    dbg ("Binder key: "^(print_bytes bk));
+    dbg ("Binder key["^lb^"]: "^(print_bytes bk));
     let bk = finished_13 h bk in
     dbg ("Binder Finished key: "^(print_bytes bk));
     let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
@@ -347,7 +353,7 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
    li_ch0_cr = cr;
    li_ch0_ed_ae = AEAD (PSK.pskInfo_ae pski) h;
    li_ch0_ed_hash = h;
-   li_ch0_ed_psk = ApplicationPSK?.i i; }) in
+   li_ch0_ed_psk = empty_bytes; }) in
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID i) ClientEarlyTrafficSecret log in
   let ets = HKDF.derive_secret h es "c e traffic" log in
@@ -1000,6 +1006,19 @@ let ks_client_13_cf ks (log:bytes) : ST unit
   let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
   dbg ("Resumption master secret: "^(print_bytes rms));
   st := C (C_13_postHS alpha rekey_info (| li, rmsId, rms |))
+
+let ks_client_13_rms ks : ST (li:logInfo & i:rmsId li & rms i)
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    C? kss /\ C_13_postHS? (C?.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid st = ks in
+    modifies_none h0 h1)
+  =
+  dbg "ks_client_13_rms";
+  let KS #region st = ks in
+  let C (C_13_postHS _ _ rmsi) = !st in
+  rmsi
 
 (******************************************************************)
 

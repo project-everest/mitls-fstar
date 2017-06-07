@@ -549,7 +549,7 @@ let getSigningKey #a #region #role ns =
   Signature.lookup_key #a ns.cfg.private_key_file
 
 val sign: #region:rgn -> #role:TLSConstants.role -> t region role -> bytes ->
-  ST (option bytes)
+  ST (option HandshakeMessages.signature)
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> True))
 let sign #region #role ns tbs =
@@ -567,7 +567,9 @@ let sign #region #role ns tbs =
     | Some skey ->
       let sigv = Signature.sign #a ha skey tbs in
       lemma_repr_bytes_values (length sigv);
-      if length sigv >= 2 && length sigv < 65536 then Some (signatureSchemeBytes scheme @| vlbytes 2 sigv)
+      if length sigv >= 2 && length sigv < 65536 then
+        let alg = if mode.n_protocol_version `geqPV` TLS_1p2 then Some scheme else None in
+        Some ({sig_algorithm = alg; sig_signature = sigv})
       else None
     end
 
@@ -870,27 +872,13 @@ let to_be_signed pv role csr tbs =
         | Server -> "TLS 1.3, server CertificateVerify"
         | Client -> "TLS 1.3, client CertificateVerify"  in
       pad @| abytes ctx @| abyte 0z @| tbs
-  | _, Some csr -> csr @| tbs
-
-(** Note that in TLS < 1.2 SKE doesn't include the signature scheme *)
-val signatureScheme_of_ske: bytes -> option (signatureScheme * bytes)
-let signatureScheme_of_ske signature =
-  if length signature > 4 then
-   let sa, sigv = split signature 2 in
-   match vlsplit 2 sigv with
-   | Correct (sigv, eof) ->
-     begin
-     match length eof, parseSignatureScheme sa with
-     | 0, Correct sa -> Some (sa, sigv)
-     | _, _ -> None
-     end
-   | Error _ -> None
-  else None
+  | TLS_1p2, Some csr -> csr @| tbs
+  | _, _ -> tbs
 
 val client_ServerKeyExchange: #region:rgn -> t region Client ->
-  serverCert: HandshakeMessages.crt ->
+  serverCert:HandshakeMessages.crt ->
   HandshakeMessages.ske ->
-  ocr: option HandshakeMessages.cr ->
+  ocr:option HandshakeMessages.cr ->
   St (result mode)
 let client_ServerKeyExchange #region ns crt ske ocr =
   match MR.m_read ns.state with
@@ -904,30 +892,32 @@ let client_ServerKeyExchange #region ns crt ske ocr =
          Cert.validate_chain crt.crt_chain true ns.cfg.peer_name ns.cfg.ca_file
       then
         let ske_tbs = kex_s_to_bytes ske.ske_kex_s in
-        match signatureScheme_of_ske ske.ske_sig with
+        let sa =
+          match ske.ske_signed_params.sig_algorithm with
+          | None -> signatureScheme_of_mode mode [] // TLS < 1.2
+          | Some sa' -> // TLS 1.2 or 1.3
+            match signatureScheme_of_mode mode [sa'] with
+            | None -> None
+            | Some sa -> if sa = sa' then Some sa else None
+        in
+        match sa with
         | None ->
-          Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SKE message")
-        | Some (sa', sigv) ->
+          Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
+        | Some sa ->
           begin
-          match signatureScheme_of_mode mode [sa'] with
-          | None -> Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm negotiation failed")
-          | Some sa ->
-            if sa <> sa' then
-              Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Signature algorithm in ServerKeyexchange message cannot be negotiated")
-            else
-              let csr = ns.nonce @| mode.n_server_random in
-              let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-              let chain = Cert.chain_down scert in
-              let valid = verify sa chain tbs sigv in
-              trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
-              if not valid then
-                Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
-              else
-                let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
-                let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr (Some scert) gx in
-                let ccert = None in // TODO
-                MR.m_write ns.state (C_WaitFinished2 mode ccert);
-                Correct mode
+          let csr = ns.nonce @| mode.n_server_random in
+          let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
+          let chain = Cert.chain_down scert in
+          let valid = verify sa chain tbs ske.ske_signed_params.sig_signature in
+          trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
+          if not valid then
+            Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
+          else
+            let Mode offer hrr pv sr sid cs pski sext _ _ _ gx = mode in
+            let mode = Mode offer hrr pv sr sid cs pski sext (Some gy) ocr (Some scert) gx in
+            let ccert = None in // TODO
+            MR.m_write ns.state (C_WaitFinished2 mode ccert);
+            Correct mode
           end
        else
          Error (AD_certificate_unknown_fatal, perror __SOURCE_FILE__ __LINE__ "Certificate validation failed")
@@ -935,18 +925,33 @@ let client_ServerKeyExchange #region ns crt ske ocr =
 
 val clientComplete_13: #region:rgn -> t region Client ->
   HandshakeMessages.ee ->
-  ocr: option HandshakeMessages.cr13 ->
-  serverCert: Cert.chain13 ->
-  cv: HandshakeMessages.cv ->
-  digest: bytes{length digest <= 32} ->
+  optCertRequest: option HandshakeMessages.cr13 ->
+  optServerCert: option Cert.chain13 -> // Not sent with PSK
+  optCertVerify: option HandshakeMessages.cv -> // Not sent with PSK
+  digest: option (b:bytes{length b <= 32}) ->
   St (result mode) // it needs to be computed, whether returned or not
-let clientComplete_13 #region ns ee ocr serverChain cv digest =
+let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify digest =
   trace "Nego.clientComplete_13";
   match MR.m_read ns.state with
   | C_Mode mode ->
     let ccert = None in
-    let scert = Some serverChain in
-    let sexts = mode.n_server_extensions in // TODO: add extensions from EE
+    let sexts =
+      match mode.n_server_extensions, ee with
+      | Some el, ee -> Some (List.Tot.append el ee)
+      | None, [] -> None
+      | None, ee -> Some ee in
+    let validSig =
+      match kexAlg mode, optServerCert, optCertVerify, digest with
+      | Kex_ECDHE, Some c, Some cv, Some digest ->
+        // TODO ensure that valid_offer mandates signature extensions for 1.3
+        let Some sal = find_signature_algorithms mode.n_offer in
+        if List.Tot.mem (Some?.v cv.sig_algorithm) sal then
+          let tbs = to_be_signed mode.n_protocol_version Server None digest in
+          let chain = Cert.chain_down c in
+          verify (Some?.v cv.sig_algorithm) chain tbs cv.sig_signature
+        else false // The server signed with an algorithm we did not offer
+      | _ -> false in
+    trace ("Signature 1.3: " ^ (if validSig then "Valid" else "Invalid"));
     let mode = Mode
       mode.n_offer
       mode.n_hrr
@@ -957,8 +962,8 @@ let clientComplete_13 #region ns ee ocr serverChain cv digest =
       mode.n_pski
       mode.n_server_extensions
       mode.n_server_share
-      ocr
-      scert
+      optCertRequest
+      optServerCert
       mode.n_client_share
     in
     MR.m_write ns.state (C_Complete mode ccert);
