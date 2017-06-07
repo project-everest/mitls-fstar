@@ -46,7 +46,7 @@ let client config host port =
   let tcp = Platform.Tcp.connect host port in 
   let request = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in 
   let send x = trace_tcp "send"; Platform.Tcp.send tcp x in
-  let recv x = trace_tcp "recv"; Platform.Tcp.recv tcp x in
+  let recv x = trace_tcp "recv"; Platform.Tcp.recv_async tcp x in
   match connect send recv config with 
   | c, 0 -> (
     trace "Read OK, sending HTTP request..."; (
@@ -65,8 +65,8 @@ let client config host port =
 
 //let aux_server config client : ML unit = pr ("Success")
 let single_server config client : ML unit =
-  let send x = let b = trace_tcp ":send\n" in Platform.Tcp.send client x in
-  let recv x = let b = trace_tcp ":recv\n" in Platform.Tcp.recv client x in
+  let send x = trace_tcp "send"; Platform.Tcp.send client x in
+  let recv x = trace_tcp "recv"; Platform.Tcp.recv_async client x in
   match FFI.accept_connected send recv config with
   | c, 0 ->
     begin

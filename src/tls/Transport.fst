@@ -10,16 +10,15 @@ open Platform.Error
 open TLSError
 
 // make this type abstract? 
-noeq type t = 
-  { snd: bytes -> EXT (optResult string unit);
-    rcv: max:nat -> EXT (optResult string (b:bytes {length b <= max})); 
-    } 
+noeq type t = { 
+  snd: bytes -> EXT (optResult string unit);
+  rcv: max:nat -> EXT (recv_result max) }
 
 let callbacks send recv = { snd = send; rcv = recv } 
 
 // platform implementation
 
-let wrap tcp: t = callbacks (send tcp) (recv tcp)
+let wrap tcp: t = callbacks (send tcp) (recv_async tcp)
 type tcpListener = tcpListener
 
 let listen domain port : ML tcpListener = listen domain port
@@ -40,20 +39,25 @@ let test (tcp:t) (data:bytes) =
   assert (h0==h1)
   
 
-// reading till we get enough bytes
 
-private val really_read_rec: b:bytes -> t -> l:nat -> EXT (result (lbytes (l+length b)))
+// for now we get a runtime error in case of partial write on an asynchronous socket
 
+
+// forces read to complete, even if the socket is non-blocking.
+// this may cause spinning.
+
+private val really_read_rec: b:bytes -> t -> l:nat -> EXT (recv_result (l+length b))
 let rec really_read_rec prev tcp len = 
     if len = 0 
-    then Correct prev
+    then Received prev
     else 
       match recv tcp len with
-      | Correct b -> 
+      | RecvWouldBlock -> really_read_rec prev tcp len
+      | Received b -> 
             let lb = length b in
-            if lb = len then Correct(prev @| b)
-            else if lb = 0 then Error(AD_internal_error,"TCP close") //16-07-24 otherwise we loop...
+      	    if lb = len then Received(prev @| b)
+      	    else if lb = 0 then RecvError "TCP close" //16-07-24 otherwise we loop...
             else really_read_rec (prev @| b) tcp (len - lb)
-      | Error e -> Error(AD_internal_error,e)
+      | RecvError e -> RecvError e
 
 let really_read = really_read_rec empty_bytes

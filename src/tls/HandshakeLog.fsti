@@ -109,6 +109,13 @@ let rec tags (a:alg) (prior: list msg) (ms: list msg) (hs:list anyTag) : Tot Typ
 
 val tags_append: a:alg -> prior: list msg -> ms0: list msg -> ms1: list msg -> hs0: list anyTag -> hs1: list anyTag -> Lemma (tags a prior ms0 hs0 /\ tags a (prior@ms0) ms1 hs1 ==> tags a prior (ms0 @ ms1) (hs0 @ hs1))
 
+(*
+type usage =
+  | HandshakeOnly
+  | Writable
+  | Complete // always usable for writing appdata
+*)
+
 (* STATE *)
 
 val log: Type0
@@ -221,11 +228,11 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
     hashed a bs /\ h == hash a bs ))
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
-val send_signals: s:log -> outgoing_next_keys:bool -> outgoing_complete:bool -> ST unit
-  (requires fun h0 ->
+val send_signals: s:log -> next_keys:option bool -> complete:bool -> ST unit
+  (requires fun h0 -> 
     writing h0 s /\
-    (outgoing_next_keys \/ outgoing_complete))
-  (ensures fun h0 _ h1 ->
+    (Some? next_keys || complete))
+  (ensures fun h0 _ h1 -> 
     modifies_one s h0 h1 /\
     hashAlg h0 s == hashAlg h1 s /\
     transcript h0 s == transcript h1 s)
@@ -244,13 +251,17 @@ open Range // for now
 type fragment (i:id) = ( rg: frange i & rbytes rg )
 //let out_msg i rg b : msg i = (|rg, b|)
 
+type next_keys_use = bool * bool
+// the first boolean indicates whether the key is already usable for AppData
+// (this changes e.g. after receiving TLS 1.2 Finished messages)
+// the second boolean indicates whether to send a CCS message before the change
+
 // What the HS asks the record layer to do, in that order.
 type outgoing (i:id) (* initial index *) =
   | Outgoing:
       send_first: option (fragment i) -> // HS fragment to be sent;  (with current id)
-      send_ccs  : bool               -> // CCS fragment to be sent; (with current id)
-      next_keys : bool               -> // the writer index increases;
-      complete  : bool               -> // the handshake is complete!
+      next_keys : option (next_keys_use) -> // the writer index increases; the boolean indicates whether appdata is currently enabled
+      complete: bool                        -> // the handshake is complete!
       outgoing i
 
 

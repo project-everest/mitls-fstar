@@ -465,7 +465,9 @@ let zeroRTToffer o = Some? (find_early_data o)
 val zeroRTT: mode -> bool
 let zeroRTT mode =
   zeroRTToffer mode.n_offer &&
-  Some? mode.n_pski
+  Some? mode.n_pski &&
+  Some? mode.n_server_extensions &&
+  List.Tot.existsb E_early_data? (Some?.v mode.n_server_extensions)
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -960,7 +962,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
       mode.n_sessionID
       mode.n_cipher_suite
       mode.n_pski
-      mode.n_server_extensions
+      sexts
       mode.n_server_share
       optCertRequest
       optServerCert
@@ -973,7 +975,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
 (* SERVER *)
 
 type cs13 offer =
-  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
+  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite -> cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
 
 // Work around #1016
@@ -1028,7 +1030,7 @@ let compute_cs13 cfg o psks shares =
     (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites)
     o.ch_cipher_suites in
 
-  let psk_kex = true in
+  let psk_kex = Cons? psks in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex)
 
 // Registration and filtering of DH shares
@@ -1042,9 +1044,9 @@ let rec filter_psk (l:list Extensions.pskIdentity)
     match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->
-      (match PSK.psk_lookup id with
+      match PSK.psk_lookup id with
       | Some info -> (id, info) :: (filter_psk t)
-      | None -> filter_psk t)
+      | None -> (trace "WARNING: filtering a PSK"; filter_psk t)
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1106,7 +1108,7 @@ let computeServerMode cfg co serverRandom =
           in
           match kex with
           | PSK_EDH j ogx cs  ->
-            (trace "PSK_EDH";
+            (trace "Negotiated PSK_EDH key exchange";
             Correct (Mode
               co
               None // TODO: no HRR
@@ -1121,6 +1123,7 @@ let computeServerMode cfg co serverRandom =
               scert
               ogx))
           | JUST_EDH gx cs ->
+            (trace "Negotiated Pure EDH key exchange";
             Correct (Mode
               co
               None // TODO: no HRR
@@ -1133,7 +1136,7 @@ let computeServerMode cfg co serverRandom =
               None // no server key share yet
               None // TODO: n_client_cert_request
               scert
-              (Some gx))
+              (Some gx)))
           end
         end
       end
@@ -1277,7 +1280,7 @@ let server_ServerShare #region ns ks =
     | Error z -> Error z
     | Correct sexts ->
       begin
-      trace ("including server extensions " ^ string_of_option_extensions sexts);
+      trace ("including server extensions (SH + EE) " ^ string_of_option_extensions sexts);
       let mode = Mode
         mode.n_offer
         mode.n_hrr
@@ -1295,7 +1298,6 @@ let server_ServerShare #region ns ks =
       MR.m_write ns.state (S_Mode mode);
       Correct mode
       end
-
 
 //17-03-30 where is it used?
 type hs_id = {
