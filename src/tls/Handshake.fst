@@ -349,10 +349,8 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
     let ha = Nego.hashAlg mode in
     let ka = Nego.kexAlg mode in
     HandshakeLog.setParams s.log pv ha (Some ka) None (*?*);
-    match pv, ka with
-    | TLS_1p3, Kex_DHE //, Some gy
-    | TLS_1p3, Kex_ECDHE //, Some gy
-    ->
+    match pv with
+    | TLS_1p3 ->
       begin
         trace "Running TLS 1.3";
         let digest = HandshakeLog.hash_tag #ha s.log in
@@ -373,8 +371,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
         Epochs.incr_reader s.epochs; // Client 1.3 HSK switch to handshake key for decrypting EE etc...
         InAck true false // Client 1.3 HSK
       end
-    | TLS_1p3, _ -> InError(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Unsupported group negotiated")
-    | _, _ ->
+    | _ ->
       begin
         trace "Running classic TLS";
         s.state := C_Wait_ServerHelloDone;

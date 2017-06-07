@@ -425,7 +425,11 @@ let hashAlg m =
 val kexAlg: mode -> TLSConstants.kexAlg
 let kexAlg m =
   if m.n_protocol_version = TLS_1p3 then
-    Kex_ECDHE // FIXME: inspect extensions
+    (match m.n_pski with
+    | None -> Kex_ECDHE
+    | Some _ ->
+      if Some? m.n_server_share then Kex_PSK_ECDHE
+      else Kex_PSK)
   else
     let CipherSuite kex _ _ = m.n_cipher_suite in
     kex
@@ -944,7 +948,12 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
       | None, ee -> Some ee in
     let validSig =
       match kexAlg mode, optServerCert, optCertVerify, digest with
-      | Kex_ECDHE, Some c, Some cv, Some digest ->
+      // ADL: for now we tolerate signatures even with PSK key exchanges, as we
+      // see nothing wrong with the extra security from the signature as long as
+      // the cert and signature verify.
+      // Use the commented line below to allow signatures only in non-PSK handshakes
+      // | Kex_ECDHE, Some c, Some cv, Some digest ->
+      | _, Some c, Some cv, Some digest ->
         // TODO ensure that valid_offer mandates signature extensions for 1.3
         let Some sal = find_signature_algorithms mode.n_offer in
         if List.Tot.mem (Some?.v cv.sig_algorithm) sal then
@@ -952,25 +961,29 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
           let chain = Cert.chain_down c in
           verify (Some?.v cv.sig_algorithm) chain tbs cv.sig_signature
         else false // The server signed with an algorithm we did not offer
+      | Kex_PSK_ECDHE, None, None, None
+      | Kex_PSK, None, None, None -> true // PSK
       | _ -> false in
     trace ("Signature 1.3: " ^ (if validSig then "Valid" else "Invalid"));
-    let mode = Mode
-      mode.n_offer
-      mode.n_hrr
-      mode.n_protocol_version
-      mode.n_server_random
-      mode.n_sessionID
-      mode.n_cipher_suite
-      mode.n_pski
-      sexts
-      mode.n_server_share
-      optCertRequest
-      optServerCert
-      mode.n_client_share
-    in
-    MR.m_write ns.state (C_Complete mode ccert);
-    Correct mode
-
+    if validSig then
+      let mode = Mode
+        mode.n_offer
+        mode.n_hrr
+        mode.n_protocol_version
+        mode.n_server_random
+        mode.n_sessionID
+        mode.n_cipher_suite
+        mode.n_pski
+        sexts
+        mode.n_server_share
+        optCertRequest
+        optServerCert
+        mode.n_client_share
+      in
+      MR.m_write ns.state (C_Complete mode ccert);
+      Correct mode
+    else
+      Error(AD_bad_certificate_fatal, "Failed to validate signature or certificate")
 
 (* SERVER *)
 
