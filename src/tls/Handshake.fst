@@ -552,7 +552,7 @@ let server_ServerHelloDone hs =
       InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
     | Some signature ->
       begin
-      let ske = {ske_kex_s = kex_s; ske_sig = signature.cv_sig} in
+      let ske = {ske_kex_s = kex_s; ske_signed_params = signature} in
       HandshakeLog.send hs.log (Certificate ({crt_chain = Cert.chain_down chain}));
       HandshakeLog.send hs.log (ServerKeyExchange ske);
       HandshakeLog.send hs.log ServerHelloDone;
