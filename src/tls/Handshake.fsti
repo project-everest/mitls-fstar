@@ -146,8 +146,8 @@ let next_fragment_ensures (#i:TLSInfo.id) (s:hs) h0 (result: result (HandshakeLo
     Seq.length (logT s h1) >= Seq.length (logT s h0) /\
     ( let open Platform.Error in
       match result with
-      | Correct (HandshakeLog.Outgoing frg ccs nextKeys complete) ->
-          w1 == (if nextKeys then w0 + 1 else w0) /\
+      | Correct (HandshakeLog.Outgoing frg nextKeys complete) ->
+          w1 == (if Some? nextKeys then w0 + 1 else w0) /\
           (b2t complete ==> r1 = w1 /\ Seq.indexable (logT s h1) w1 (*/\ completed (eT s Writer h1)*) )
       | _ -> True )
 

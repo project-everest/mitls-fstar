@@ -425,7 +425,11 @@ let hashAlg m =
 val kexAlg: mode -> TLSConstants.kexAlg
 let kexAlg m =
   if m.n_protocol_version = TLS_1p3 then
-    Kex_ECDHE // FIXME: inspect extensions
+    (match m.n_pski with
+    | None -> Kex_ECDHE
+    | Some _ ->
+      if Some? m.n_server_share then Kex_PSK_ECDHE
+      else Kex_PSK)
   else
     let CipherSuite kex _ _ = m.n_cipher_suite in
     kex
@@ -465,7 +469,9 @@ let zeroRTToffer o = Some? (find_early_data o)
 val zeroRTT: mode -> bool
 let zeroRTT mode =
   zeroRTToffer mode.n_offer &&
-  Some? mode.n_pski
+  Some? mode.n_pski &&
+  Some? mode.n_server_extensions &&
+  List.Tot.existsb E_early_data? (Some?.v mode.n_server_extensions)
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -579,9 +585,10 @@ val verify: signatureScheme -> list Cert.cert -> bytes -> bytes ->
   (ensures (fun h0 _ h1 -> True))
 let verify scheme chain tbs sigv =
   let (sa,ha) = sigHashAlg_of_signatureScheme scheme in
+  trace ("Verifying signature using " ^ (string_of_signatureScheme scheme));
   let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
   match Signature.get_chain_public_key #a chain with
-  | None -> false
+  | None -> (trace "WARNING: couldn't get public key from chain"; false)
   | Some pk -> Signature.verify #a ha pk tbs sigv
 
 
@@ -873,7 +880,7 @@ let to_be_signed pv role csr tbs =
         | Client -> "TLS 1.3, client CertificateVerify"  in
       pad @| abytes ctx @| abyte 0z @| tbs
   | TLS_1p2, Some csr -> csr @| tbs
-  | _, _ -> tbs
+  | _, Some csr -> csr @| tbs
 
 val client_ServerKeyExchange: #region:rgn -> t region Client ->
   serverCert:HandshakeMessages.crt ->
@@ -942,7 +949,12 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
       | None, ee -> Some ee in
     let validSig =
       match kexAlg mode, optServerCert, optCertVerify, digest with
-      | Kex_ECDHE, Some c, Some cv, Some digest ->
+      // ADL: for now we tolerate signatures even with PSK key exchanges, as we
+      // see nothing wrong with the extra security from the signature as long as
+      // the cert and signature verify.
+      // Use the commented line below to allow signatures only in non-PSK handshakes
+      // | Kex_ECDHE, Some c, Some cv, Some digest ->
+      | _, Some c, Some cv, Some digest ->
         // TODO ensure that valid_offer mandates signature extensions for 1.3
         let Some sal = find_signature_algorithms mode.n_offer in
         if List.Tot.mem (Some?.v cv.sig_algorithm) sal then
@@ -950,30 +962,34 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
           let chain = Cert.chain_down c in
           verify (Some?.v cv.sig_algorithm) chain tbs cv.sig_signature
         else false // The server signed with an algorithm we did not offer
+      | Kex_PSK_ECDHE, None, None, None
+      | Kex_PSK, None, None, None -> true // PSK
       | _ -> false in
     trace ("Signature 1.3: " ^ (if validSig then "Valid" else "Invalid"));
-    let mode = Mode
-      mode.n_offer
-      mode.n_hrr
-      mode.n_protocol_version
-      mode.n_server_random
-      mode.n_sessionID
-      mode.n_cipher_suite
-      mode.n_pski
-      mode.n_server_extensions
-      mode.n_server_share
-      optCertRequest
-      optServerCert
-      mode.n_client_share
-    in
-    MR.m_write ns.state (C_Complete mode ccert);
-    Correct mode
-
+    if validSig then
+      let mode = Mode
+        mode.n_offer
+        mode.n_hrr
+        mode.n_protocol_version
+        mode.n_server_random
+        mode.n_sessionID
+        mode.n_cipher_suite
+        mode.n_pski
+        sexts
+        mode.n_server_share
+        optCertRequest
+        optServerCert
+        mode.n_client_share
+      in
+      MR.m_write ns.state (C_Complete mode ccert);
+      Correct mode
+    else
+      Error(AD_bad_certificate_fatal, "Failed to validate signature or certificate")
 
 (* SERVER *)
 
 type cs13 offer =
-  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite ->  cs13 offer
+  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite -> cs13 offer
   | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
 
 // Work around #1016
@@ -1028,7 +1044,7 @@ let compute_cs13 cfg o psks shares =
     (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites)
     o.ch_cipher_suites in
 
-  let psk_kex = true in
+  let psk_kex = Cons? psks in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex)
 
 // Registration and filtering of DH shares
@@ -1042,9 +1058,9 @@ let rec filter_psk (l:list Extensions.pskIdentity)
     match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->
-      (match PSK.psk_lookup id with
+      match PSK.psk_lookup id with
       | Some info -> (id, info) :: (filter_psk t)
-      | None -> filter_psk t)
+      | None -> (trace "WARNING: filtering a PSK"; filter_psk t)
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1106,7 +1122,7 @@ let computeServerMode cfg co serverRandom =
           in
           match kex with
           | PSK_EDH j ogx cs  ->
-            (trace "PSK_EDH";
+            (trace "Negotiated PSK_EDH key exchange";
             Correct (Mode
               co
               None // TODO: no HRR
@@ -1121,6 +1137,7 @@ let computeServerMode cfg co serverRandom =
               scert
               ogx))
           | JUST_EDH gx cs ->
+            (trace "Negotiated Pure EDH key exchange";
             Correct (Mode
               co
               None // TODO: no HRR
@@ -1133,7 +1150,7 @@ let computeServerMode cfg co serverRandom =
               None // no server key share yet
               None // TODO: n_client_cert_request
               scert
-              (Some gx))
+              (Some gx)))
           end
         end
       end
@@ -1277,7 +1294,7 @@ let server_ServerShare #region ns ks =
     | Error z -> Error z
     | Correct sexts ->
       begin
-      trace ("including server extensions " ^ string_of_option_extensions sexts);
+      trace ("including server extensions (SH + EE) " ^ string_of_option_extensions sexts);
       let mode = Mode
         mode.n_offer
         mode.n_hrr
@@ -1295,7 +1312,6 @@ let server_ServerShare #region ns ks =
       MR.m_write ns.state (S_Mode mode);
       Correct mode
       end
-
 
 //17-03-30 where is it used?
 type hs_id = {
