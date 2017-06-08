@@ -146,7 +146,7 @@ let parse_handshake_message bytes =
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0c' ->
 	 print_string "Parsing server key exchange message...\n";
-	 (match parseServerKeyExchange !kex msg with
+	 (match parseServerKeyExchange !pv !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
              
              let _,ske_bytes = split (serverKeyExchangeBytes(ch)) (Z.of_int 4) in
@@ -175,7 +175,7 @@ let parse_handshake_message bytes =
 	 else print_string "...FAILED\n"
       | '\x0f' ->
 	 print_string "Parsing certificate verify message...\n";
-	 (match parseCertificateVerify msg with
+	 (match parseCertificateVerify !pv msg with
 	 | Correct(ch) -> print_string "...OK\n";
              let _,cv_bytes = split (certificateVerifyBytes(ch)) (Z.of_int 4) in
 	     if equalBytes cv_bytes msg then ((print_string "Serializing certificate verify...\n...OK\n")) else
