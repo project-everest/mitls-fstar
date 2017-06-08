@@ -227,12 +227,14 @@ type ioresult_w =
     | WriteAgainClosing   // we are tearing down the connection & must still send an alert
 *)
 
+#set-options "--initial_ifuel 1 --max_ifuel 1"
 let string_of_ioresult_w = function
   | Written -> "Written"
   | WriteClose -> "WriteClose"
   | WriteError (Some a) s -> "WriteError: "^string_of_error (a,s)
   | WriteError None s -> "WriteError: "^s
   | WrittenHS nw c -> "WrittenHS "^(match nw with | Some true -> "new-writable " | Some false -> "new-hanshake-only " | None -> "")^(if c then "complete" else "")
+#set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
 
 type ioresult_o = r:ioresult_w { Written? r \/ WriteError? r }
 

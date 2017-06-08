@@ -76,9 +76,7 @@ let matches i p (Entry _ p') = p = p'
 
 val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
   (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 ->
-    h0 == h1 /\
-    (b ==> good i p)))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b ==> good i p)))
 
 let verify i rd p t =
   let x = HMAC.tls_macVerify a rd.key p t  in
