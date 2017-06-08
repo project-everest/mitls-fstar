@@ -36,8 +36,8 @@ extern void MITLS_CALLCONV FFI_mitls_close(/* in */ mitls_state *state);
 
 // Callbacks from miTLS to the host application, to send and receive TCP
 struct _FFI_mitls_callbacks;
-typedef int (*MITLS_CALLCONV pfn_FFI_send)(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
-typedef int (*MITLS_CALLCONV pfn_FFI_recv)(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
+typedef int (MITLS_CALLCONV *pfn_FFI_send)(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
+typedef int (MITLS_CALLCONV *pfn_FFI_recv)(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
 struct _FFI_mitls_callbacks {
     pfn_FFI_send send;
     pfn_FFI_recv recv;
@@ -48,6 +48,9 @@ extern int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbac
 
 // Act as a TLS server to a client
 extern int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+
+// Retrieve the server certificate after FFI_mitls_connect() completes
+extern void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg);
 
 // Send a message
 extern int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size,

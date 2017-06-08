@@ -186,12 +186,12 @@ let rec tags_append_aux
 let tags_append a prior ms0 ms1 hs0 hs1 =
   Classical.move_requires (tags_append_aux a prior ms0 ms1 hs0) hs1
 
-noeq type hashState (prior parsed: list msg) =
-  | OpenHash: b:bytes { valid_transcript (prior @ parsed) /\ b = transcript_bytes (prior @ parsed) } -> hashState prior parsed
+noeq type hashState (prior: erased_transcript) (parsed: list msg) =
+  | OpenHash: b:bytes { valid_transcript (reveal_log prior @ parsed) /\ b = transcript_bytes (reveal_log prior @ parsed) } -> hashState prior parsed
   | FixedHash:
       a: Hashing.alg ->
-      state: accv a { valid_transcript (prior @ parsed) /\ Hashing.content state = transcript_bytes (prior @ parsed) } ->
-      hashes: list anyTag { tags a prior parsed hashes } ->
+      state: accv a { valid_transcript (reveal_log prior @ parsed) /\ Hashing.content state = transcript_bytes (reveal_log prior @ parsed) } ->
+      hashes: list anyTag { tags a (reveal_log prior) parsed hashes } ->
       hashState prior parsed
 
 noeq type state =
@@ -199,10 +199,9 @@ noeq type state =
     transcript: erased_transcript ->
 
     outgoing: bytes -> // outgoing data, alrady formatted and hashed
-    outgoing_ccs: option bytes ->
-    outgoing_next_keys: bool ->
+    outgoing_next_keys: option (bool * option bytes)->
     outgoing_complete: bool ->
-
+    
     incoming: bytes -> // received fragments; untrusted; not yet hashed or parsed
     parsed: list msg{valid_transcript (reveal_log transcript @ parsed)} ->
                        // partial incoming flight, hashed & parsed, with selected intermediate tags
@@ -250,8 +249,8 @@ let transcript h t =
     reveal_log ((HS.sel h t).transcript)
 
 let create reg pv =
-    let l = State empty_hs_transcript empty_bytes None false false
-              empty_bytes [] (OpenHash empty_bytes)
+    let l = State empty_hs_transcript empty_bytes None false
+              empty_bytes [] (OpenHash empty_bytes) 
       pv None None in
     let st = ralloc reg l in
     st
@@ -268,7 +267,7 @@ let setParams l pv ha kexo dho =
       assume (tags ha (reveal_log st.transcript) st.parsed []); // TODO: FIXME: should this be part of OpenHash?
       let hs = FixedHash ha acc [] in
       recall l;
-      l := State st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+      l := State st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed hs (Some pv) kexo dho
 
 // TR: verifies up to this point
@@ -302,7 +301,7 @@ let send l m =
     in
   let o = st.outgoing @| mb in
   let t = extend_hs_transcript st.transcript m in
-  l := State t o st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+  l := State t o st.outgoing_next_keys st.outgoing_complete
                 st.incoming st.parsed h st.pv st.kex st.dh_group
 
 let hash_tag #a l =
@@ -336,7 +335,7 @@ let send_tag #a l m =
     in
   let o = st.outgoing @| mb in
   let t = extend_hs_transcript st.transcript m in
-  l := State t o st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+  l := State t o st.outgoing_next_keys st.outgoing_complete
        st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
@@ -354,18 +353,22 @@ let send_CCS_tag #a l m cf =
       (FixedHash a acc hl,tg)
     in
   let t = extend_hs_transcript st.transcript m in
-  let c = match st.outgoing_ccs with
-     | None -> Some mb in
-  l := State t st.outgoing c true cf
-       st.incoming st.parsed h st.pv st.kex st.dh_group;
+  let nk =
+    match st.outgoing_next_keys with
+    | None -> Some (false, Some mb) in
+  l := State t st.outgoing nk cf st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
 // TODO require or check that both flags are clear before the call
-let send_signals l outgoing_next_keys1 outgoing_complete1 =
-  let State transcript outgoing outgoing_ccs outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in
-  if outgoing_next_keys0 && outgoing_next_keys1 then trace "WARNING: dirty next flag";
-  if outgoing_complete0 && outgoing_complete1 then trace "WARNING: dirty complete flag";
-  l := State transcript outgoing outgoing_ccs outgoing_next_keys1 outgoing_complete1  incoming parsed hashes pv kex dh_group
+let send_signals l next_keys1 complete1 =
+  let State transcript outgoing outgoing_next_keys0 outgoing_complete0 incoming parsed hashes pv kex dh_group = !l in
+  if outgoing_next_keys0 <> None then trace "WARNING: dirty next-key flag -- use send_CCS instead";
+  if outgoing_complete0 then trace "WARNING: dirty complete flag";
+  let outgoing_next_keys1 =
+    match next_keys1 with
+    | Some b -> Some (b, None)
+    | None -> None in
+  l := State transcript outgoing outgoing_next_keys1 complete1  incoming parsed hashes pv kex dh_group
 
 let next_fragment l (i:id) =
   let st = !l in
@@ -387,18 +390,19 @@ let next_fragment l (i:id) =
     if length outgoing' = 0
     then (
       // send signals only after flushing the output buffer
-      let send_ccs, outgoing' = match st.outgoing_ccs with
-      | Some finishedFragment -> true, finishedFragment
-      | None -> false, outgoing' in
-      l := State
-              st.transcript outgoing'  None false false
+      let next_keys1, outgoing1 = match st.outgoing_next_keys with
+      | Some(b, Some finishedFragment) -> Some(b, true), finishedFragment
+      | Some(b, None) -> Some(b, false), outgoing'
+      | None -> None, outgoing' in
+      l := State 
+              st.transcript outgoing1  None false
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment send_ccs st.outgoing_next_keys st.outgoing_complete )
+      Outgoing fragment next_keys1 st.outgoing_complete )
     else (
-      l := State
-              st.transcript outgoing' st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+      l := State 
+              st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment false false false )
+      Outgoing fragment None false )
 
 (* RECEIVE *)
 
@@ -480,7 +484,7 @@ let receive l mb =
   | Error z -> Error z
   | Correct (false,r,[],[]) -> (
        l := State
-         st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+         st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
          r st.parsed st.hashes st.pv st.kex st.dh_group;
        Correct None )
   | Correct(eof,r,ml,bl) ->
@@ -493,12 +497,12 @@ let receive l mb =
           | FixedHash a ac htl -> FixedHash a ac [], htl
           | OpenHash _ -> hs,[] in
         l := State
-          nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+          nt st.outgoing st.outgoing_next_keys st.outgoing_complete
           r [] hs st.pv st.kex st.dh_group;
         Correct (Some (ml,tl)))
       else (
-        l := State
-          st.transcript st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+        l := State 
+          st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
           r ml hs st.pv st.kex st.dh_group;
         Correct None )
 
@@ -522,7 +526,7 @@ let receive_CCS #a l =
       let hs': hashState nt [] = FixedHash a acc [] in
       let h = Hashing.finalize #a acc in
       l := State
-          nt st.outgoing st.outgoing_ccs st.outgoing_next_keys st.outgoing_complete
+          nt st.outgoing st.outgoing_next_keys st.outgoing_complete
           st.incoming [] hs' st.pv st.kex st.dh_group;
       Correct (st.parsed, tl, h)
     end

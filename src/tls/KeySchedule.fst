@@ -38,13 +38,13 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
 
 #set-options "--lax"
 
-let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST bool
+let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let kb = CommonDH.serialize_raw #g s in
   let kh = Platform.Bytes.hex_of_bytes kb in
-  IO.debug_print_string ("Share: "^kh^"\n")
+  dbg ("Share: "^kh^"\n")
 
 (********************************************
 *    Resumption PSK is disabled for now     *
@@ -92,7 +92,13 @@ let read_psk (i:PSK.pskid)
   =
   let i = utf8 (iutf8 i) in // FIXME Platform.Bytes !!
   let c = PSK.psk_info i in
-  (ApplicationPSK i c.early_hash, PSK.psk_value i, c.early_hash, c.early_ae)
+  let id =
+    if c.is_ticket then
+      let (| li, rmsid |) = Ticket.dummy_rmsid c.early_ae c.early_hash in
+      ResumptionPSK #li rmsid
+    else
+      ApplicationPSK i c.early_hash in
+  (id, PSK.psk_value i, c.early_hash, c.early_ae)
 
 // Resumption context
 let rec esId_rc : (esId -> St bytes) =
@@ -139,7 +145,8 @@ type rekeyId (li:logInfo) = i:expandId li{
 abstract type rekey_secrets #li (i:expandId li) =
   H.tag (expandId_hash i) * H.tag (expandId_hash i)
 
-abstract type rms #li (i:rmsId li) = H.tag (rmsId_hash i)
+// Leaked to HS for tickets
+(*abstract*) type rms #li (i:rmsId li) = H.tag (rmsId_hash i)
 
 type ems #li (i:exportId li) = H.tag (exportId_hash i)
 
@@ -204,7 +211,7 @@ type ks_server_state =
 | S_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams i ) ->
                 ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->  ks_server_state
 | S_13_postHS: alpha:ks_alpha13 -> ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->
-                ( li:logInfo & i:rmsId li & rms i ) -> ks_server_state
+                ks_server_state
 | S_Done
 
 // Reflecting state separation from HS
@@ -314,7 +321,7 @@ let ks_client_13_init ks pskl gl =
       else ResBinder, "res binder" in
     let bId = Binder i ll in
     let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
-    dbg ("Binder key: "^(print_bytes bk));
+    dbg ("Binder key["^lb^"]: "^(print_bytes bk));
     let bk = finished_13 h bk in
     dbg ("Binder Finished key: "^(print_bytes bk));
     let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) rid bk in
@@ -346,7 +353,7 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
    li_ch0_cr = cr;
    li_ch0_ed_ae = AEAD (PSK.pskInfo_ae pski) h;
    li_ch0_ed_hash = h;
-   li_ch0_ed_psk = ApplicationPSK?.i i; }) in
+   li_ch0_ed_psk = empty_bytes; }) in
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID i) ClientEarlyTrafficSecret log in
   let ets = HKDF.derive_secret h es "c e traffic" log in
@@ -442,8 +449,18 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let esId, es, bk =
     match pskid with
     | Some id ->
-      dbg ("Using negotiated PSK: "^(print_bytes id));
-      let i, psk, h, _ = read_psk id in
+      dbg ("Using negotiated PSK identity: "^(print_bytes id));
+      let i, psk, h : esId * bytes * Hashing.Spec.alg =
+        match Ticket.check_ticket id with
+        | Some (Ticket.Ticket13 cs li rmsId rms) ->
+          let i = ResumptionPSK #li rmsId in
+          let CipherSuite13 _ h = cs in
+          (i, rms, h)
+        | None ->
+          let i, psk, h, _ = read_psk id in
+          (i, psk, h)
+        in
+      dbg ("Pre-shared key: "^(print_bytes psk));
       let es = HKDF.hkdf_extract h (H.zeroHash h) psk in
       let ll, lb =
         if ApplicationPSK? i then ExtBinder, "ext binder"
@@ -457,7 +474,9 @@ let ks_server_13_init ks cr cs pskid g_gx =
       i, es, Some (| bId, bk |)
     | None ->
       dbg "No PSK selected.";
-      NoPSK h, HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h), None
+      let esId = NoPSK h in
+      let es : es esId = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
+      esId, es, None
     in
   dbg ("Computed early secret: "^(print_bytes es));
   let saltId = Salt (EarlySecretID esId) in
@@ -621,6 +640,11 @@ let ks_12_finished_key ks =
  | S (S_12_has_MS _ _ _ ms) -> ms in
  TLSPRF.coerce ms
 
+let ks_12_ms ks =
+  let KS #region st = ks in
+  match !st with
+  | S (S_12_has_MS _ _ _ ms) -> ms
+
 private val ks_12_record_key: ks:ks -> St recordInstance
 let ks_12_record_key ks =
   dbg "ks_12_record_key";
@@ -650,6 +674,18 @@ let ks_12_record_key ks =
   let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
   let r = StAE.genReader HyperHeap.root rw in
   StAEInstance r w
+
+let ks_server_12_resume ks cr tid =
+  dbg ("ks_server_12_resume Ticket = "^(print_bytes tid));
+  let KS #region st = ks in
+  let S (S_Init sr) = !st in
+  let Some (pv, cs, ms) = Ticket.check_ticket12 tid in
+  dbg ("Recall MS: "^(print_bytes ms));
+  let csr = cr @| sr in
+  let kef = kefAlg pv cs false in
+  let msId = StandardMS PMS.DummyPMS csr kef in
+  st := S (S_12_has_MS csr (pv, cs, true) msId ms);
+  ks_12_record_key ks
 
 (******************************************************************)
 
@@ -923,6 +959,30 @@ let ks_server_13_sf ks (log:bytes)
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |));
   StAEInstance r w, (| li, emsId, ems |)
 
+let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    S? kss /\ S_13_wait_CF? (S?.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+  =
+  dbg ("ks_server_13_cf hashed_log = "^(print_bytes log));
+  let KS #region st = ks in
+  let S (S_13_wait_CF alpha cfk (| asId, ams |) rekey_info) = !st in
+  let (ae, h) = alpha in
+
+  // TODO loginfo CF
+  let (| li, _, _ |) = rekey_info in
+  let log : hashed_log li = log in
+  let rmsId : rmsId li = RMSID asId log in
+
+  let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
+  dbg ("Resumption master secret: "^(print_bytes rms));
+  st := S (S_13_postHS alpha rekey_info);
+  (| li, rmsId, rms |)
+
 // Handshake must call this when ClientFinished goes into log
 let ks_client_13_cf ks (log:bytes) : ST unit
   (requires fun h0 ->
@@ -946,6 +1006,19 @@ let ks_client_13_cf ks (log:bytes) : ST unit
   let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
   dbg ("Resumption master secret: "^(print_bytes rms));
   st := C (C_13_postHS alpha rekey_info (| li, rmsId, rms |))
+
+let ks_client_13_rms ks : ST (li:logInfo & i:rmsId li & rms i)
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    C? kss /\ C_13_postHS? (C?.s kss))
+  (ensures fun h0 r h1 ->
+    let KS #rid st = ks in
+    modifies_none h0 h1)
+  =
+  dbg "ks_client_13_rms";
+  let KS #region st = ks in
+  let C (C_13_postHS _ _ rmsi) = !st in
+  rmsi
 
 (******************************************************************)
 

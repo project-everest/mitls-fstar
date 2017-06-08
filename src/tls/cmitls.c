@@ -26,7 +26,7 @@ int option_port;
 	STRING_OPTION("-v", version, "sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)") \
 	STRING_OPTION("-mv", minversion, "sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)") \
 	BOOL_OPTION("-s", isserver, "run as server instead of client") \
-	BOOL_OPTION("-0rtt", 0rtt, "enable early data (server support and client offer)") \
+	BOOL_OPTION("-no_early_data", 0rtt, "disable early data (server support and client offer)") \
 	STRING_OPTION("-psk", psk, "L:K add an entry in the PSK database at label L with key K (in hex), associtated with the fist current -cipher") \
 	STRING_OPTION("-offerpsk", offerpsk, "offer the given PSK identifier(s) (must be loaded first with --psk). Client only.") \
 	BOOL_OPTION("-verify", verify, "enforce peer certificate validation") \

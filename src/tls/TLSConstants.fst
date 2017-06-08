@@ -46,12 +46,15 @@ let dualRole = function
   | Server -> Client
 
 (** Protocol version negotiated values *)
-type protocolVersion =
+type protocolVersion' =
   | SSL_3p0 // supported, with no security guarantees
   | TLS_1p0
   | TLS_1p1
   | TLS_1p2
   | TLS_1p3
+  | UnknownVersion: a:byte -> b:byte{a <> 3z \/ (b <> 0z /\ b <> 1z /\ b <> 2z /\ b <> 3z /\ b <> 4z)} -> protocolVersion'
+
+type protocolVersion = pv:protocolVersion'{~(UnknownVersion? pv)}
 
 (* Key exchange algorithms *)
 type kexAlg =
@@ -449,7 +452,7 @@ let rec compressionMethodsBytes cms =
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
 (** Serializing function for the protocol version *)
-val versionBytes: protocolVersion -> Tot (lbytes 2)
+val versionBytes: protocolVersion' -> Tot (lbytes 2)
 let versionBytes pv =
   match pv with
   | SSL_3p0 -> abyte2 ( 3z, 0z)
@@ -457,6 +460,7 @@ let versionBytes pv =
   | TLS_1p1 -> abyte2 ( 3z, 2z )
   | TLS_1p2 -> abyte2 ( 3z, 3z )
   | TLS_1p3 -> abyte2 ( 3z, 4z )
+  | UnknownVersion a b -> abyte2 ( a, b ) 
 
 (** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
@@ -467,8 +471,7 @@ let parseVersion v =
   | ( 3z, 2z ) -> Correct TLS_1p1
   | ( 3z, 3z ) -> Correct TLS_1p2
   | ( 3z, 4z ) -> Correct TLS_1p3
-  | ( 127z, _ ) -> Error(AD_decode_error, "Parsed TLS 1.3 draft#"^print_bytes v)
-  | _ -> Error(AD_decode_error, "Parsed unknown version "^print_bytes v)
+  | ( a,  b  ) -> Correct (UnknownVersion a b)
 
 val inverse_version: x:_ -> Lemma
   (requires True)
@@ -497,8 +500,11 @@ let parseVersion_draft v =
       then Correct TLS_1p3
       else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version")
-  | _ -> parseVersion v
-
+  | _ ->
+    match parseVersion v with
+    | Correct (UnknownVersion _ _) -> Error(AD_decode_error, "Parsed unknown version ")
+    | Correct pv -> Correct pv
+    | Error z -> Error z
 
 (** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =
@@ -517,7 +523,7 @@ let string_of_pv = function
   | TLS_1p1 -> "1.1"
   | TLS_1p2 -> "1.2"
   | TLS_1p3 -> "1.3"
-
+  | UnknownVersion a b -> "Unknown protocol version: " ^ (print_bytes (abyte2 (a, b)))
 
 (* JK: injectivity proof requires extra specification for the UnknownCipherSuite objects as they
    have to be distinct from the 'correct' ones *)
@@ -1732,8 +1738,10 @@ noeq type config = {
     check_client_version_in_pms_for_old_tls: bool;
     cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
     private_key_file: string;   // TEMPORARY
+    enable_tickets: bool;
 
     (* Common *)
+    non_blocking_read: bool;
     enable_early_data: bool;
     safe_renegotiation: bool;   // demands this extension when renegotiating
     peer_name: option string;   // The expected name to match against the peer certificate
