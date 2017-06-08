@@ -47,6 +47,9 @@ let css = [
   ("DHE-RSA-AES128-GCM-SHA256", TLS_DHE_RSA_WITH_AES_128_GCM_SHA256);
   ("DHE-RSA-CHACHA20-POLY1305-SHA256", TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
   ("ECDHE-RSA-AES256-SHA", TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA);
+  ("DHE-RSA-AES256-SHA", TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA);
+  ("ECDHE-RSA-AES128-SHA", TLS_DHE_RSA_WITH_AES_256_CBC_SHA);
+  ("DHE-RSA-AES128-SHA", TLS_DHE_RSA_WITH_AES_128_CBC_SHA);
 ]
 
 let sas = [
@@ -140,7 +143,6 @@ let _ =
     ("-psk", Arg.String (fun s -> load_psk false s), " L:K add an entry in the PSK database at label L with key K (in hex), associated with the fist current -cipher");
     ("-ticket", Arg.String (fun s -> load_psk true s), " T:K add ticket T in the PSK database with RMS K (in hex), associated with the fist current -cipher");
     ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with -psk or -ticket, client only)");
-    ("-async", Arg.Unit (fun () -> config := {!config with non_blocking_read = true;}), "enable non-blocking reads");
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
