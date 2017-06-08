@@ -76,13 +76,11 @@ let matches i p (Entry _ p') = p = p'
 
 val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
   (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 ->
-    h0 == h1 /\
-    (b ==> good i p)))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b ==> good i p)))
 
 let verify i rd p t =
-    let v = HashMAC.tls_macVerify a rd.key p t in
-    let l = !rd.log in
-    // We use the log to correct any verification errors
-    v &&
-    Some? (seq_find (matches i p) l)
+  let x = HMAC.tls_macVerify a rd.key p t  in
+  let l = !rd.log in
+  // We use the log to correct any verification errors
+  x &&
+  Some? (seq_find (matches i p) l)
