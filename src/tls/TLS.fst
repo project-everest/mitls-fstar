@@ -1117,6 +1117,7 @@ type ioresult_i (i:id) =
 //      // Nothing read yet, but we can't write anymore.
 
 let string_of_ioresult_i (#i:id) = function
+  | ReadWouldBlock -> "ReadWouldBlock"
   | Read (DataStream.Data d) -> "Read "^string_of_int (length (DataStream.appBytes #i #Range.fragment_range d)) ^ " bytes of data"
   | Read DataStream.Close -> "Read Close"
   | Read (DataStream.Alert a) -> "Read Alert "^string_of_ad a
@@ -1340,6 +1341,7 @@ let rec read c i =
         trace ("readOne "^string_of_ioresult_i result);
         match result with
         // TODO: specify which results imply that c.state & epochs are unchanged
+        | ReadWouldBlock        -> ReadWouldBlock
         | ReadAgain             -> read c i
         | ReadAgainFinishing    -> read c i //was: readAllFinishing c
         | ReadError x y         -> ReadError x y
