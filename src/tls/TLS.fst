@@ -874,144 +874,7 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 *)
   end
 
-(*16-05-29 BEGIN OLDER VARIANT
-
-val writeOne: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
-  (requires (fun h ->
-    send_requires c i h
-    /\ (let st = sel h c.state in
-       let j = iT c.hs Writer h in
-       j >= 0 ==> st=AD))) *) // CF 16-05-27 too strong
-(*  (ensures (fun h0 r h1 -> True)) *)
-(*     let st = sel h0 c.state in *)
-(*     let es = sel h0 c.hs.log in *)
-(*     let j = iT c.hs Writer h0  in *)
-(*     st_inv c h0 /\ *)
-(*     st_inv c h1 /\ *)
-(*     j == iT c.hs Writer h1 /\ *) //16-05-16 used to be =; see other instance above
-(*     (if j < 0 then PlaintextID? i /\ h0 = h1 else *)
-(*        let e = Seq.index es j in *)
-(*        i == epoch_id e /\ ( *)
-(*        let wr:writer i = writer_epoch e in *)
-(*        modifies (Set.singleton (C?.region c)) h0 h1 *)
-(* )))) *)
-
-
-let writeOne c i appdata =
-  allow_inversion (Handshake.outgoing i);
-  let h0 = ST.get() in
-  let wopt = current_writer c i in
-  // alerts are now sent immediately, so we now start with Handshake
-   match next_fragment i c.hs with
-    | Handshake.OutError (x,y) -> unrecoverable c y // a bit blunt
-    | Handshake.Outgoing om send_ccs next_keys complete ->
-
-      // we send handshake & CCS messages, and process key changes (TODO:restore precise checks and error handling)
-      match sendHandshake wopt om send_ccs with
-      | Error (_,y) -> unrecoverable c y
-      | _   ->
-        if next_keys           then c.state := BC; // much happening ghostly
-        let st = !c.state in
-        if complete && st = BC then c.state := AD; // much happening ghostly too
-        if complete
-	then WriteHSComplete
-        else if Some? om && send_ccs
-	then WriteAgain
-        else
-             // we finally attempt to send some application data; we may statically know that st = AD
-             match st, appdata with
-	     | AD, Some (rg,f) -> begin
-	       match sendFragment c wopt (Content.CT_Data rg f) with
-	       | Error (_,y) -> unrecoverable c y
-	       | _   -> Written (* Fairly, tell we're done, and we won't write more data *)
-	       end
-             | _ -> WriteDone // We are finishing a handshake. Tell we're done; the next read will complete it.
-
-
-
-let is_current_writer (#c:connection) (#i:id) (wopt:option (cwriter i c)) (h:HH.t) =
-  match wopt with
-  | None -> True
-  | Some w ->
-    iT c.hs Writer h >= 0
-    /\ (let epoch_i = eT c.hs Writer h in
-       w == Epoch?.w epoch_i)
-
-
-////////////////////////////////////////////////////////////////////////////////
-//NS reached up to here
-////////////////////////////////////////////////////////////////////////////////
-
-
-// in TLS 1.2 we send the Finished messages immediately after CCS
-// in TLS 1.3 we send e.g. ServerHello in plaintext then encrypted HS
-
-val writeAllFinishing: c:connection -> i:id -> ST ioresult_w
-  (requires (fun h ->
-    send_requires c i h)) //16-05-28 too strong: already includes incrementable.
-  (ensures (fun h0 r h1 ->
-    st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 /\
-    (WriteError? r \/ WriteClose? r \/ Written? r)
-  ))
-
-let rec writeAllFinishing c i =
-    assume false; //16-05-28
-    if no_seqn_overflow c Writer then
-    match writeOne c i None with
-    // we disable writing temporarily
-    | WriteAgain          -> writeAllFinishing c i
-//   | WriteDone           -> MustRead
-
-    // all other cases disable writing permanently
-//  | WriteAgainClosing   -> writeClosing c i
-    | WriteError x y      -> WriteError x y
-    | WriteClose           -> WriteClose // why would we do that?
-
-//  | MustRead            // excluded since responded only here
-//  | Written             // excluded since we are not sending AD
-//  | WriteAgainFinishing // excluded by the handshake logic (not easily proved)
-    | WriteHSComplete     // excluded since we need an incoming CCS (not easily proved)
-                          -> unexpected "[writeAllFinishing] writeOne returned wrong result"
-    else                    unexpected "[writeAllFinishing] seqn overflow"
-
-
-// called both by read (with no appData) and write (with some appData fragment)
-// returns to read  { WriteError, WriteClose, WriteDone, WriteHSComplete }
-// returns to write { WriteError, Written }
-// (TODO: write returns { WriteHSComplete, MustRead } in renegotiation)
-val writeAll: c:connection -> i:id -> appdata: option (rg:frange i & DataStream.fragment i rg) -> ST ioresult_w
-  (requires (fun h ->
-    send_requires c i h /\  //16-05-28 too strong: already includes incrementable.
-    (Some? appdata ==> sel h c.state = AD)))
-  (ensures (fun h0 r h1 ->
-    st_inv c h1 /\ modifies (Set.singleton c.region) h0 h1 /\
-    (None? appdata ==> WriteError? r \/ WriteDone? r \/ WriteHSComplete? r )))
-
-let rec writeAll c i appdata =
-    if no_seqn_overflow c Writer then
-    (assume false; // TODO
-    match writeOne c i appdata with
-    | WriteAgain          -> writeAll c i appdata
-//  | WriteAgainClosing   -> writeClosing c i // TODO, using updated epoch_id (epoch_w c)
-    | WriteAgainFinishing -> // next writer epoch!
-                            writeAllFinishing c i // TODO, using updated epoch_id (epoch_w c)
-    | WriteError x y      -> WriteError x y
-    | WriteClose           -> WriteClose
-    | WriteDone           -> WriteDone
-//  | MustRead            -> MustRead
-    | Written             -> Written
-    | _                   -> unexpected "[writeAll] writeOne returned wrong result")
-    else                    unexpected "[writeAll] seqn overflow"
-
-
-//Question: NS, BP, JL: Is it possible for write to return WriteAgain or a partially written data?
-// no: we always write the whole fragment or we get a fatal error.
-
-let write c i rg data = writeAll c i (Some (| rg, data |))
-
-END OLDER VARIANT *)
-
-
+// ADL: old variant in TLSOld.fst
 
 // Two API functions to close down the connection
 // [review function names]
@@ -1197,7 +1060,7 @@ val readFragment: c:connection -> i:id -> ST (result (option (Content.fragment i
             f == Seq.index frs n)
   ))))))
 
-let readFragment c i =
+let rec readFragment c i =
   assume false; // 16-05-19 can't prove POST.
   match Record.read c.tcp c.recv with
   | Record.ReadError e -> Error e
@@ -1221,10 +1084,18 @@ let readFragment c i =
         Error(AD_decryption_failed, "Invalid ciphertext length"))
       else
       match StAE.decrypt (reader_epoch e) (ct,payload) with
-      | None -> Error(AD_internal_error,"Decryption failure")
+      | None ->
+        trace "StAE decrypt failed.";
+        if StAE.tolerate_decrypt_failure #i rd then
+         begin
+          trace "Ignoring the decryption failure (rejected 0-RTT data)";
+          readFragment c i
+         end
+        else
+          Error(AD_decryption_failed, "Decryption failure")
       | Some f ->
-          trace "StAE decrypt correct.";
-          Correct (Some f)
+        trace "StAE decrypt correct.";
+        Correct (Some f)
 
 // We receive, decrypt, parse a record (ct,f); what to do with it?
 // i is the presumed reader, threaded from the application.

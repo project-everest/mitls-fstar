@@ -207,24 +207,25 @@ let ffiConfig version host =
   {defaultConfig with
     minVer = TLS_1p2;
     maxVer = v;
-	peer_name = Some host;
+	  peer_name = Some host;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
     private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
     safe_resumption = true;
     ciphersuites = cipherSuites_of_nameList [
-                    (* mitls.ml ciphersuites *)
+          (* mitls.ml ciphersuites *)
 		      TLS_AES_128_GCM_SHA256;
 		      TLS_AES_256_GCM_SHA384;
 		      TLS_CHACHA20_POLY1305_SHA256;
 		      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
 		      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
 		      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-                    (* default ciphersuites from TLSInfo.fst follow: *)
-                      TLS_RSA_WITH_AES_128_GCM_SHA256;
-                      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-                      ];
+          (* default ciphersuites from TLSInfo.fst follow: *)
+           TLS_RSA_WITH_AES_128_GCM_SHA256;
+           TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
+    ];
+    enable_early_data = true; // Test 0-RTT
   }
 
 val ffiSetCertChainFile: cfg:config -> f:string -> ML config
@@ -249,10 +250,19 @@ let rec findsetting f l = match l with
   | [] -> None
   | (s, i)::tl -> if s = f then Some i else findsetting f tl
 
+let rec updatecfg cfg l : ML config =
+  match l with
+  | [] -> cfg
+  | "EDI" :: t -> updatecfg ({cfg with enable_early_data = true;}) t
+  | r :: t -> failwith ("Unknown flag: "^r)
+
 val ffiSetCipherSuites: cfg:config -> x:string -> ML config
 let ffiSetCipherSuites cfg x =
+  let x :: t = String.split ['@'] x in
+  let cfg = updatecfg cfg t in
   let csl = String.split [':'] x in
-  let csl = List.map (fun x-> match findsetting x css with
+
+  let csl = List.map (fun x -> match findsetting x css with
     | None -> failwith ("Unknown ciphersuite: "^x)
     | Some a -> a
     ) csl in
