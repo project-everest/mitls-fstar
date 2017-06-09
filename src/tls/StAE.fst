@@ -93,6 +93,19 @@ let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn =
 type reader i = state i Reader
 type writer i = state i Writer
 
+// For 0-RTT: we ignore a failed decryption for the
+// handshake traffic key reader if the counter is 0
+let tolerate_decrypt_failure (#i:id) (r:reader i)
+  : ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  match r with
+  | StLHAE _ _ -> false
+  | Stream _ st ->
+    let ctr = MR.m_read (StreamAE.ctr st.StreamAE.counter) in
+    let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
+    ctr = 0 && ClientHandshakeTrafficSecret? t
 
 // our view to AE's ideal log (when idealized, ignoring ciphers) and counter
 // TODO: write down their joint monotonic specification: both are monotonic,

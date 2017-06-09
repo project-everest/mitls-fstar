@@ -809,16 +809,22 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
        if HMAC.UFCMA.verify cfin_key digestBeforeClientFinished f
        then (
           let (| li, rmsid, rms |) = KeySchedule.ks_server_13_cf hs.ks digestClientFinished in
+          let cfg = Nego.local_config hs.nego in
           let mode = Nego.getMode hs.nego in
           let cs = mode.Nego.n_cipher_suite in
           let ticket = Ticket.Ticket13 cs li rmsid rms in
           let tb = Ticket.create_ticket ticket in
           trace ("Sending ticket: "^(print_bytes tb));
+          let ticket_ext =
+            if cfg.enable_early_data then
+              [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 16384))]
+            else [] in
+
           HandshakeLog.send hs.log (NewSessionTicket13 ({
             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
             ticket13_age_add = FStar.UInt32.(uint_to_t 0);
             ticket13_ticket = tb;
-            ticket13_extensions = [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 4096))];
+            ticket13_extensions = ticket_ext;
           }));
           hs.state := S_Complete;
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
