@@ -324,13 +324,13 @@ let client_ClientHello hs i =
 
   // 0-RTT data
   (match Nego.find_early_data offer, nego_psk with
-  | Some _, (pskid, _) :: _ -> 
+  | Some _, (pskid, _) :: _ ->
       let Some (_, info0) = List.Tot.find (fun (x,_) -> equalBytes x pskid) pskinfo in
       let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash info0) hs.log in
       let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
       trace "setting up 0RTT";
       register hs edk;
-      HandshakeLog.send_signals hs.log (Some true) false 
+      HandshakeLog.send_signals hs.log (Some true) false
     // TODO enable client 0RTT
   | Some _, [] -> trace "statically excluded"
   | _ -> ());
@@ -359,7 +359,7 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
           mode.Nego.n_cipher_suite
           digest
           (Some?.v mode.Nego.n_server_share)
-          mode.Nego.n_pski in 
+          mode.Nego.n_pski in
         register s hs_keys; // register new epoch
         (match Nego.zeroRTToffer mode.Nego.n_offer, Some? mode.Nego.n_pski with
         | true, true ->
@@ -643,13 +643,13 @@ let server_ClientHello hs offer =
           HandshakeLog.setParams hs.log pv ha (Some ka) None;
           let ha = verifyDataHashAlg_of_ciphersuite mode.Nego.n_cipher_suite in
           // these hashes are not always used
-          let digestClientHelloBinders = HandshakeLog.hash_tag #ha hs.log in 
+          let digestClientHelloBinders = HandshakeLog.hash_tag #ha hs.log in
           let digestServerHello = HandshakeLog.send_tag #ha hs.log (serverHello mode) in
           if mode.Nego.n_protocol_version = TLS_1p3
           then
             begin
               if Nego.zeroRTT mode then (
-                let zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in 
+                let zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
                 register hs zero_keys
               );
               // TODO handle 0RTT accepted and 0RTT refused
@@ -749,7 +749,7 @@ let server_ServerFinished_13 hs i =
     // most of this should go to Nego
     trace "prepare Server Finished";
     let mode = Nego.getMode hs.nego in
-    let Some chain = mode.Nego.n_server_cert in
+    let kex = Nego.kexAlg mode in
     let pv = mode.Nego.n_protocol_version in
     let cs = mode.Nego.n_cipher_suite in
     let exts = Some?.v mode.Nego.n_server_extensions in
@@ -759,16 +759,25 @@ let server_ServerFinished_13 hs i =
     let eexts = List.Tot.filter Extensions.encryptedExtension exts in
     // we synchronously increment the writer to skip epoch 0 in case we accepted 0RTT
     if Nego.zeroRTT mode then Epochs.incr_writer hs.epochs;
-    HandshakeLog.send hs.log (EncryptedExtensions eexts);
-    let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
-    // signing of the formatted session digest
-    let tbs = Nego.to_be_signed pv Server None digestSig in
-    match Nego.sign hs.nego tbs with
-    | None ->
-      Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
-    | Some signature ->
-      begin
-      let digestFinished = HandshakeLog.send_tag #halg hs.log (CertificateVerify (signature)) in
+
+    let digestFinished =
+      match kex with
+      | Kex_ECDHE -> // [Certificate; CertificateVerify]
+        HandshakeLog.send hs.log (EncryptedExtensions eexts);
+        let Some chain = mode.Nego.n_server_cert in
+        let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
+        let tbs = Nego.to_be_signed pv Server None digestSig in
+        (match Nego.sign hs.nego tbs with
+        | None ->
+          Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
+        | Some signature ->
+          Correct (HandshakeLog.send_tag #halg hs.log (CertificateVerify (signature))))
+      | _ -> // PSK
+        Correct (HandshakeLog.send_tag #halg hs.log (EncryptedExtensions eexts))
+      in
+
+    match digestFinished with
+    | Correct digestFinished ->
       let (| sfinId, sfin_key |) = KeySchedule.ks_server_13_server_finished hs.ks in
       let svd = HMAC.UFCMA.mac sfin_key digestFinished in
       let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
@@ -778,9 +787,10 @@ let server_ServerFinished_13 hs i =
       register hs app_keys;
       HandshakeLog.send_signals hs.log (Some true) false;
       Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
+
       hs.state := S_Wait_Finished2 (Nego.zeroRTT mode, digestServerFinished);
       Correct(HandshakeLog.next_fragment hs.log i)
-      end
+    | Error z -> Error z
 
 (* receive ClientFinish 1.3 *)
 val server_ClientFinished_13: hs ->
