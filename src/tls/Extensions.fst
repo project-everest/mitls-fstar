@@ -174,7 +174,7 @@ let client_psk_parse b =
     match parsePskIdentities (vlbytes2 ids) with
     | Correct ids -> (
     	match parseBinderList binders_bytes with
-    	| Correct bl -> Correct (ClientPSK ids (length binders_bytes - 2), Some bl)
+    	| Correct bl -> Correct (ClientPSK ids (length binders_bytes), Some bl)
     	| Error z -> error "client_psk_parse_binders")
     | Error z -> error "client_psk_parse_ids")
 

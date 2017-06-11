@@ -286,7 +286,7 @@ noeq type hs_msg =
   | KeyUpdate of bool  // true when the sender is the requester
 
   // formatted, but never parsed as messages
-  | Binders of binders
+  | Binders of Extensions.binders
   | MessageHash of Hashing.Spec.anyTag
 //  | NextProtocol of np // ??
 

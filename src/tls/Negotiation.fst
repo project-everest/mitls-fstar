@@ -179,7 +179,7 @@ let find_clientPske o =
   | Some (Extensions.E_pre_shared_key psk) ->
     match psk with
     | ServerPSK _ -> None
-    | ClientPSK ids _ -> Some ids
+    | ClientPSK ids tlen -> Some (ids,tlen)
 
 let find_serverPske sh =
   match sh.sh_extensions with
@@ -201,7 +201,7 @@ let find_serverKeyShare sh =
 type pski (o:offer) = n:nat {
   o.ch_protocol_version = TLS_1p3 /\
   (match find_clientPske o with
-  | Some ids -> n < List.length ids
+  | Some (ids,_) -> n < List.length ids
   | _ -> False) }
 
 let find_supported_groups o =
@@ -810,7 +810,7 @@ let client_ServerHello #region ns sh =
           begin
           let pski =
             match find_clientPske offer, find_serverPske sh with
-            | Some ids, Some idx ->
+            | Some (ids,_), Some idx ->
               if idx < List.Tot.length ids then
                 Correct (Some idx) // REMARK: we can't check yet consistency with early_data in EE
               else
@@ -1094,7 +1094,7 @@ let computeServerMode cfg co serverRandom =
     // Filter and register offered PSKs
     let pske =
       match find_clientPske co with
-      | Some pske -> filter_psk pske
+      | Some (pske,_) -> filter_psk pske
       | None -> [] in
     let shares = register_shares (gs_of co) in
     match compute_cs13 cfg co pske shares with
@@ -1270,10 +1270,10 @@ let server_ClientHello #region ns offer =
       Correct m
 
 
-let share_of_serverKeyShare (ks:CommonDH.keyShare) : share =
-  let CommonDH.ServerKeyShare (CommonDH.Share g gy) = ks in (| g, gy |)
+let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
+  let CommonDH.Share g gy = ks in (| g, gy |)
 
-val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.keyShare ->
+val server_ServerShare: #region:rgn -> t region Server -> option CommonDH.serverKeyShare  ->
   St (result mode)
 let server_ServerShare #region ns ks =
   match MR.m_read ns.state with
@@ -1288,7 +1288,7 @@ let server_ServerShare #region ns ks =
       mode.n_cipher_suite
       None  // option (TI.cVerifyData*TI.sVerifyData)
       mode.n_pski
-      ks
+      (Option.map CommonDH.ServerKeyShare ks)
       (mode.n_sessionID = Some mode.n_offer.ch_sessionID)
     with
     | Error z -> Error z
