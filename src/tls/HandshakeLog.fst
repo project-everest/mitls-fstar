@@ -199,7 +199,7 @@ noeq type state =
     transcript: erased_transcript ->
 
     outgoing: bytes -> // outgoing data, alrady formatted and hashed
-    outgoing_next_keys: option (bool * option bytes)->
+    outgoing_next_keys: option (bool * option bytes * bool) -> // as next_keys_use, with next fragment after CCS
     outgoing_complete: bool ->
     
     incoming: bytes -> // received fragments; untrusted; not yet hashed or parsed
@@ -355,7 +355,7 @@ let send_CCS_tag #a l m cf =
   let t = extend_hs_transcript st.transcript m in
   let nk =
     match st.outgoing_next_keys with
-    | None -> Some (false, Some mb) in
+    | None -> Some (false, Some mb, false) in
   l := State t st.outgoing nk cf st.incoming st.parsed h st.pv st.kex st.dh_group;
   tg
 
@@ -366,7 +366,7 @@ let send_signals l next_keys1 complete1 =
   if outgoing_complete0 then trace "WARNING: dirty complete flag";
   let outgoing_next_keys1 =
     match next_keys1 with
-    | Some b -> Some (b, None)
+    | Some (enable_appdata,skip_0rtt) -> Some (enable_appdata, None, skip_0rtt)
     | None -> None in
   l := State transcript outgoing outgoing_next_keys1 complete1  incoming parsed hashes pv kex dh_group
 
@@ -391,13 +391,23 @@ let next_fragment l (i:id) =
     then (
       // send signals only after flushing the output buffer
       let next_keys1, outgoing1 = match st.outgoing_next_keys with
-      | Some(b, Some finishedFragment) -> Some(b, true), finishedFragment
-      | Some(b, None) -> Some(b, false), outgoing'
+      | Some(a, Some finishedFragment, z) -> 
+        (if a || z then trace "unexpected 1.2 signals");
+        Some({
+          out_appdata = a; 
+          out_ccs_first = true; 
+          out_skip_0RTT = z}), finishedFragment
+      | Some(a, None, z) -> 
+        Some({
+          out_appdata = a; 
+          out_ccs_first = false; 
+          out_skip_0RTT = z}), outgoing'
       | None -> None, outgoing' in
       l := State 
               st.transcript outgoing1  None false
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment next_keys1 st.outgoing_complete )
+      Outgoing fragment next_keys1 st.outgoing_complete 
+      )
     else (
       l := State 
               st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete

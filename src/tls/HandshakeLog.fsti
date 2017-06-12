@@ -228,7 +228,7 @@ val send_CCS_tag: #a:alg -> s:log -> m:msg -> complete:bool -> ST (tag a)
     hashed a bs /\ h == hash a bs ))
 
 // Setting signals 'drops' the writing state, to prevent further writings until the signals have been transmitted
-val send_signals: s:log -> next_keys:option bool -> complete:bool -> ST unit
+val send_signals: s:log -> next_keys:option (bool * bool) -> complete:bool -> ST unit
   (requires fun h0 -> 
     writing h0 s /\
     (Some? next_keys || complete))
@@ -251,16 +251,17 @@ open Range // for now
 type fragment (i:id) = ( rg: frange i & rbytes rg )
 //let out_msg i rg b : msg i = (|rg, b|)
 
-type next_keys_use = bool * bool
-// the first boolean indicates whether the key is already usable for AppData
-// (this changes e.g. after receiving TLS 1.2 Finished messages)
-// the second boolean indicates whether to send a CCS message before the change
+type next_keys_use = {
+  out_appdata: bool; // immediately enable sending AppData fragments 
+  out_ccs_first: bool; // send a CCS fragment *before* installing the new key 
+  out_skip_0RTT: bool; // skip void server-to-client 0RTT epoch
+}
 
 // What the HS asks the record layer to do, in that order.
 type outgoing (i:id) (* initial index *) =
   | Outgoing:
       send_first: option (fragment i) -> // HS fragment to be sent;  (with current id)
-      next_keys : option (next_keys_use) -> // the writer index increases; the boolean indicates whether appdata is currently enabled
+      next_keys : option next_keys_use -> // the writer index increases; details included
       complete: bool                        -> // the handshake is complete!
       outgoing i
 

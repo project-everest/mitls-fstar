@@ -343,7 +343,7 @@ let client_ClientHello hs i =
       let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
       trace "setting up 0RTT";
       register hs edk;
-      HandshakeLog.send_signals hs.log (Some true) false
+      HandshakeLog.send_signals hs.log (Some (true, false)) false
     // TODO enable client 0RTT
   | Some _, [] -> trace "statically excluded"
   | _ -> ());
@@ -446,11 +446,11 @@ let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
     | None -> digestServerFinished in
   let (| finId, cfin_key |) = cfin_key in
   let cvd = HMAC.UFCMA.mac cfin_key digest in
-  Epochs.incr_writer hs.epochs; // to HSK
+  // Epochs.incr_writer hs.epochs; // to HSK
   let digest_CF = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
   KeySchedule.ks_client_13_cf hs.ks digest_CF; // For Post-HS
   Epochs.incr_reader hs.epochs; // to ATK
-  HandshakeLog.send_signals hs.log (Some true) true; //was: Epochs.incr_writer hs.epochs
+  HandshakeLog.send_signals hs.log (Some (true, false)) true; //was: Epochs.incr_writer hs.epochs
   hs.state := C_Complete // full_mode (cvd,svd); do we still need to keep those?
 
 (* receive EncryptedExtension...ServerFinished for TLS 1.3, roughly mirroring client_ServerHelloDone *)
@@ -479,11 +479,10 @@ let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertV
         else (
           register hs app_keys; // ATKs are ready to use in both directions
           if Nego.zeroRTT mode then (
-            trace "Early data accepted";
+            trace "Early data accepted; emitting ";
             HandshakeLog.send hs.log EndOfEarlyData;
-            HandshakeLog.send_signals hs.log (Some false) false;
+            HandshakeLog.send_signals hs.log (Some (false, false)) false;
             hs.state := C_Sent_EOED digestServerFinished ocr cfin_key;
-            trace "queued AEAD; are we sending it??";
             InAck false false )
           else (
             trace "Early data rejected";
@@ -687,20 +686,21 @@ let server_ClientHello hs offer obinders =
         if pv = TLS_1p3
         then
           begin
-            if Nego.zeroRTT mode then (
+            let zeroing = Nego.zeroRTT mode in 
+            if zeroing  then (
               let zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
               register hs zero_keys
             );
             // TODO handle 0RTT accepted and 0RTT refused
             // - get 0RTT key from KS.
             // - do the signalling
-            HandshakeLog.send_signals hs.log (Some false) false; // signal key change after writing ServerHello
+            HandshakeLog.send_signals hs.log (Some (false, zeroing)) false; // signal key change after writing ServerHello
             trace "derive handshake keys";
             let hs_keys = KeySchedule.ks_server_13_sh hs.ks digestServerHello (* digestServerHello *)  in
             register hs hs_keys;
             // We will start using the HTKs later (after sending SH, and after receiving 0RTT traffic)
             hs.state := S_Sent_ServerHello;
-            InAck (Nego.zeroRTT mode) false
+            InAck zeroing false
           end
         else
           server_ServerHelloDone hs // sending our whole flight hopefully in a single packet.
@@ -796,9 +796,6 @@ let server_ServerFinished_13 hs i =
     let halg = verifyDataHashAlg_of_ciphersuite cs in // Same as sh_alg but different type FIXME
 
     let eexts = List.Tot.filter Extensions.encryptedExtension exts in
-    // we synchronously increment the writer to skip epoch 0 in case we accepted 0RTT
-    // NB we should do it earlier (incrementing from -1 to 1) so that TLS has the right index.
-    if Nego.zeroRTT mode then Epochs.incr_writer hs.epochs;
 
     let digestFinished =
       match kex with
@@ -825,7 +822,7 @@ let server_ServerFinished_13 hs i =
       // ADL this call also returns exporter master secret, which should be passed to application
       let app_keys, _ = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
       register hs app_keys;
-      HandshakeLog.send_signals hs.log (Some true) false;
+      HandshakeLog.send_signals hs.log (Some (true,false)) false;
       Epochs.incr_reader hs.epochs; // TODO when to increment the reader?
 
       hs.state := S_Wait_Finished2 (Nego.zeroRTT mode, digestServerFinished);

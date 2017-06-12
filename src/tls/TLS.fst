@@ -716,17 +716,22 @@ let rec writeHandshake h_init c new_writer =
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change
-      let new_writer, send_ccs =
+      let new_writer, send_ccs, skip_0rtt =
         match next_keys with
-        | Some (appdata,ccs) -> Some appdata, ccs
-        | None -> new_writer, false in
+        | Some u -> 
+          Some (u.HandshakeLog.out_appdata), 
+          u.HandshakeLog.out_ccs_first, 
+          u.HandshakeLog.out_skip_0RTT 
+        | None -> new_writer, false, false in
       trace ("HS.next_fragment returned "^
-        (if Some?om then "a fragment" else "nothing")^
+        (if Some? om then "a fragment" else "nothing")^
         (if send_ccs then "; CCS" else "")^
         (match next_keys with
           | None -> ""
-          | Some (true, _) -> "; next_keys (for all data)"
-          | Some (false,_) -> "; next_keys (for handshake only)")^
+          | Some u -> (
+            "; next_keys " ^
+            (if u.HandshakeLog.out_appdata then "(for all data)" else "(for handshake only") ^
+            (if u.HandshakeLog.out_skip_0RTT then " skipping 0RTT" else ""))) ^
         (if complete then "; complete" else ""));
       match sendHandshake wopt om send_ccs with
       // we may have sent an handshake message and/or a CCS message;
@@ -738,11 +743,12 @@ let rec writeHandshake h_init c new_writer =
           recall_current_writer c;
           let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
           if Some? next_keys then Epochs.incr_writer (Handshake.epochs_of c.hs); // much happening ghostly
+          if skip_0rtt then Epochs.incr_writer (Handshake.epochs_of c.hs); // merge the two ++?
           let (str,stw) = !c.state in
           if complete then c.state := (Open, Open)  // much happening ghostly too
           else
           ( match next_keys with
-            | Some(b, _) -> c.state := (str, (if b then Open else Ctrl))
+            | Some b -> c.state := (str, (if b.HandshakeLog.out_appdata then Open else Ctrl))
             | None -> () );
           if complete || new_writer = Some true || (None? om && not send_ccs)
           then WrittenHS new_writer complete // done, either to writable/completion or because there is nothing left to do
