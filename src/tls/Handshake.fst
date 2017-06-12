@@ -447,7 +447,7 @@ let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
     | None -> digestServerFinished in
   let (| finId, cfin_key |) = cfin_key in
   let cvd = HMAC.UFCMA.mac cfin_key digest in
-  // Epochs.incr_writer hs.epochs; // to HSK
+  if not (Nego.zeroRTT mode) then Epochs.incr_writer hs.epochs; // to HSK, 0-RTT case is treated in EOED logic
   let digest_CF = HandshakeLog.send_tag #ha hs.log (Finished ({fin_vd = cvd})) in
   KeySchedule.ks_client_13_cf hs.ks digest_CF; // For Post-HS
   Epochs.incr_reader hs.epochs; // to ATK
