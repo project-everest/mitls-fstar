@@ -480,10 +480,11 @@ let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertV
         else (
           register hs app_keys; // ATKs are ready to use in both directions
           if Nego.zeroRTT mode then (
-            trace "Early data accepted; emitting ";
-            HandshakeLog.send hs.log EndOfEarlyData;
+            trace "Early data accepted; emitting EOED.";
+            let ha = Nego.hashAlg mode in
+            let digestEOED = HandshakeLog.send_tag #ha hs.log EndOfEarlyData;
             HandshakeLog.send_signals hs.log (Some (false, false)) false;
-            hs.state := C_Sent_EOED digestServerFinished ocr cfin_key;
+            hs.state := C_Sent_EOED digestEOED ocr cfin_key;
             InAck false false )
           else (
             trace "Early data rejected";
