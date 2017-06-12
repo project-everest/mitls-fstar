@@ -2083,6 +2083,7 @@ let parseHandshakeMessage pv kex hstype body =
     | HT_server_hello,_,_               -> mapResult ServerHello (parseServerHello body)
     | HT_session_ticket, Some TLS_1p3,_ -> mapResult NewSessionTicket13 (parseSessionTicket13 body)
     | HT_session_ticket, Some _,_       -> mapResult NewSessionTicket (parseSessionTicket body)
+    | HT_end_of_early_data, Some TLS_1p3,_ -> parseEmptyMessage EndOfEarlyData body
     | HT_hello_retry_request,_,_        -> mapResult HelloRetryRequest (parseHelloRetryRequest body)
     | HT_encrypted_extensions,_,_       -> mapResult EncryptedExtensions (parseEncryptedExtensions body)
     | HT_certificate, Some TLS_1p3,_    -> mapResult Certificate13 (parseCertificate13 body)
