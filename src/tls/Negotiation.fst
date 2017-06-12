@@ -942,6 +942,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
   match MR.m_read ns.state with
   | C_Mode mode ->
     let ccert = None in
+    trace ("EE: "^(Extensions.string_of_extensions ee));
     let sexts =
       match mode.n_server_extensions, ee with
       | Some el, ee -> Some (List.Tot.append el ee)
