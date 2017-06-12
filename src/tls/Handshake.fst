@@ -482,7 +482,7 @@ let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertV
           if Nego.zeroRTT mode then (
             trace "Early data accepted; emitting EOED.";
             let ha = Nego.hashAlg mode in
-            let digestEOED = HandshakeLog.send_tag #ha hs.log EndOfEarlyData;
+            let digestEOED = HandshakeLog.send_tag #ha hs.log EndOfEarlyData in
             HandshakeLog.send_signals hs.log (Some (false, false)) false;
             hs.state := C_Sent_EOED digestEOED ocr cfin_key;
             InAck false false )
