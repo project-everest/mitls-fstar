@@ -375,6 +375,9 @@ let computeOffer r cfg resume nonce ks pskinfo =
     | Some sid, _ -> sid
     | None, _ -> empty_bytes
   in
+  // Don't offer EDI if there is no PSK of first PSK doesn't have ED enabled
+  let compatible_psk =
+    match pskinfo with | (_, i) :: _ -> i.PSK.allow_early_data | _ -> false in
   let extensions =
     Extensions.prepareExtensions
       cfg.minVer
@@ -383,7 +386,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       cfg.peer_name
       cfg.safe_resumption
       cfg.safe_renegotiation
-      cfg.enable_early_data
+      (compatible_psk && cfg.enable_early_data)
       cfg.signatureAlgorithms
       cfg.namedGroups
       None // : option (cVerifyData * sVerifyData)
