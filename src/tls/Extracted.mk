@@ -191,6 +191,8 @@ server13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA256
 server-psk::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
+server-0rtt:
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384 -0rtt
 cserver::
 	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
 cserver12::
@@ -204,6 +206,8 @@ client13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
 client-psk::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
+client-0rtt:
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 127.0.0.1 4443 -reconnect -0rtt
 client12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
 client::
@@ -220,3 +224,5 @@ cclient::
 .PHONY: test tls-ffi server server12 server13 client client12 client13 cserver cserver12 cserver13 cclient cclient12 cclient3
 
 .DEFAULT:
+
+/mitls.exe -mv 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA256 -0rtt
