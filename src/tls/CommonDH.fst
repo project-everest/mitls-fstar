@@ -17,10 +17,11 @@ open Platform.Error
 open CoreCrypto
 open Parse
 open TLSError
-open FStar.ST
+open FStar.HyperStack.ST
 
 module MR = FStar.Monotonic.RRef
 module MM = MonotoneMap
+module ST = FStar.HyperStack.ST
 
 (* A flag for runtime debugging of cDH data.
    The F* normalizer will erase debug prints at extraction

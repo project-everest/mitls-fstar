@@ -6,6 +6,7 @@ module PSK
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
+open FStar.HyperStack.ST
 
 open Platform.Bytes
 open Platform.Error
@@ -16,6 +17,7 @@ module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
+module ST = FStar.HyperStack.ST
 
 // *** PSK ***
 

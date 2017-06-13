@@ -4,6 +4,7 @@ module Hashing
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
+open FStar.HyperStack.ST
 
 open Platform.Bytes
 include Hashing.Spec

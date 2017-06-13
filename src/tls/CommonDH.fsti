@@ -8,7 +8,7 @@ open Platform.Bytes
 open Platform.Error
 open Parse
 open TLSError
-open FStar.ST
+open FStar.HyperStack.ST
 
 val group: t:Type0{hasEq t}
 val is_ec: group -> Tot bool

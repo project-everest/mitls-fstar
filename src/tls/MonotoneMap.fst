@@ -7,6 +7,7 @@ open FStar.Monotonic.RRef
 open FStar.HyperHeap
 
 open FStar.HyperStack
+open FStar.HyperStack.ST
 
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
@@ -58,7 +59,7 @@ let alloc (#r:rid) #a #b #inv
        (requires (fun h -> inv (empty_map a b)))
        (ensures (fun h0 x h1 ->
     inv (empty_map a b) /\
-     ST.ralloc_post r (empty_map a b) h0 (as_hsref x) h1))
+    ralloc_post r (empty_map a b) h0 (as_hsref x) h1))
   = grows_monotone #a #b;
     FStar.Monotonic.RRef.m_alloc r (empty_map a b)
 

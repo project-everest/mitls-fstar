@@ -14,7 +14,8 @@ hash algorithm etc.
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
-open FStar.All
+//NS, JP: TODO, this include should eventually move to TLSMem, when that module exists
+include FStar.HyperStack.All
 
 open FStar.Seq
 open Platform.Date

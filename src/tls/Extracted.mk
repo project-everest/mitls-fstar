@@ -44,14 +44,6 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	--include concrete-flags $<
 
-# Try to only rebuild fstarlib when necessary
-$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa: \
-		$(wildcard $(FSTAR_HOME)/ulib/*.fst) \
-		$(wildcard $(FSTAR_HOME)/ulib/ml/*.ml) \
-	       	$(wildcard $(FSTAR_HOME)/ulib/ml/extracted/*.ml) \
-		$(wildcard $(FSTAR_HOME)/ulib/ml/hyperstack/*.ml)
-	make -C $(FSTAR_HOME)/ulib/ml MEM=HST
-
 # Try to only rebuild CoreCrypto when necessary
 $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
 		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
@@ -92,7 +84,6 @@ $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 
 # We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
 mitls.cmxa: \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/LowCProvider.cmxa \
 	$(FFI_HOME)/FFICallbacks.cmxa \
@@ -100,17 +91,22 @@ mitls.cmxa: \
 	$(ODIR)/FFIRegister.cmx
 	ocamlfind ocamlopt $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
-mitls.exe: mitls.cmxa test/mitls.cmx
+.PHONY:$(FSTARLIB)
+
+FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+
+$(FSTARLIB):
+	$(MAKE) -C $(FSTAR_HOME)/ulib
+
+mitls.exe: mitls.cmxa test/mitls.cmx $(FSTARLIB)
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o  $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
 
-test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml
+test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml $(FSTARLIB)
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	mitls.cmxa \
@@ -129,9 +125,8 @@ test: test.out mitls.exe cmitls.exe
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
 
-$(LIBMITLS): mitls.cmxa
+$(LIBMITLS): mitls.cmxa $(FSTARLIB)
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
@@ -140,27 +135,24 @@ else
 UNAME_S = $(shell uname -s)
 LIBMITLS=libmitls.so
 ifeq ($(UNAME_S),Darwin)
-$(LIBMITLS): mitls.cmxa
+$(LIBMITLS): mitls.cmxa $(FSTARLIB)
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -ccopt -lasmrun -g mitls.cmxa -o libmitls.dylib
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -g mitls.cmxa -o $(LIBMITLS)
 else
-$(LIBMITLS): mitls.cmxa
+$(LIBMITLS): mitls.cmxa $(FSTARLIB)
     # pass "-z noexecstack" to better support Bash on Windows
     # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
     #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
     #   can result in heap corruptions and crashes.
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
-	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \

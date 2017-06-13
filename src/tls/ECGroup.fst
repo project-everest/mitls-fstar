@@ -9,7 +9,7 @@ open Platform.Error
 open CoreCrypto
 open TLSError
 open Parse
-open FStar.ST
+open FStar.HyperStack.ST
 
 module CC = CoreCrypto
 
