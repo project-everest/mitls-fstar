@@ -202,6 +202,12 @@ let ngs = [
   ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
 ]
 
+let aeads = [
+  ("AES128-GCM", CoreCrypto.AES_128_GCM);
+  ("AES256-GCM", CoreCrypto.AES_256_GCM);
+  ("CHACHA20-POLY1305", CoreCrypto.CHACHA20_POLY1305);
+]
+
 let ffiConfig version host =
   let v = s2pv version in
   {defaultConfig with
@@ -291,6 +297,15 @@ let ffiSetNamedGroups cfg x =
   { cfg with
   namedGroups = ngl
   }
+
+val ffiSetTicketKey: x:string -> ML bool
+let ffiSetTicketKey x =
+  match String.split [':'] x with
+  | [ae; key] ->
+    (match findsetting ae aeads with
+    | None -> false
+    | Some a -> TLS.set_ticket_key a (bytes_of_hex key))
+  | _ -> false
 
 type callbacks = FFICallbacks.callbacks
 

@@ -28,23 +28,38 @@ private let tickets : MM.t region hostname tlabel (fun _ -> True) =
 let lookup h = MM.lookup tickets h
 let extend h t = MM.extend tickets h t
 
-let tid =
+let ticketid (a:aeadAlg) : St (AE.id) =
   assume false;
   let h = Hashing.Spec.SHA256 in
   let li = LogInfo_CH0 ({
     li_ch0_cr = CC.random 32;
     li_ch0_ed_psk = empty_bytes;
-    li_ch0_ed_ae = AEAD CC.CHACHA20_POLY1305 h;
+    li_ch0_ed_ae = AEAD a h;
     li_ch0_ed_hash = h;
   }) in
   let log : hashed_log li = empty_bytes in
   ID13 (KeyID #li (ExpandedSecret (EarlySecretID (NoPSK h)) ApplicationTrafficSecret log))
 
-// ADL TODO: add config setting for ticket keys
-private let tk = utf8 "aaaabbbbccccddddeeeeffffgggghhhh"
-private let salt = bytes_of_hex "9fcb0332ab9cf358088cb242"
-private let ticket_enc = AE.coerce region tid tk
-private let ticket_dec = AE.genReader region ticket_enc
+type ticket_key =
+  | Key: i:AE.id -> iv:AE.iv i -> wr:AE.writer i -> rd:AE.reader i -> ticket_key
+
+private let ticket_enc
+  =
+  let id0 = ticketid CC.CHACHA20_POLY1305 in
+  let salt : AE.iv id0 = CoreCrypto.random (AE.ivlen id0) in
+  let key : AE.key id0 = CoreCrypto.random (AE.keylen id0) in
+  let wr = AE.coerce region id0 key in
+  let rd = AE.genReader region #id0 wr in
+  ralloc region (Key id0 salt wr rd)
+
+let set_ticket_key (a:aeadAlg) (kv:bytes) : St (bool) =
+  let tid = ticketid a in
+  if length kv = AE.keylen tid + AE.ivlen tid then
+    let k, s = split kv (AE.keylen tid) in
+    let wr = AE.coerce region tid k in
+    let rd = AE.genReader region wr in
+    ticket_enc := Key tid s wr rd; true
+  else false
 
 type ticket =
 | Ticket12: protocolVersion -> cs:cipherSuite{CipherSuite? cs} -> ms:bytes -> ticket
@@ -67,10 +82,11 @@ let dummy_rmsid ae h =
   (| li, i |)
 
 let check_ticket (b:bytes{length b <= 65551}) =
-  if length b < 28 then None else
-  let (nb, b) = split b 12 in
-  let iv = xor 12 nb salt in
-  match AE.decrypt #tid #65535 ticket_dec iv empty_bytes b with
+  let Key tid salt _ rd = !ticket_enc in
+  if length b < AE.ivlen tid + 7 then None else
+  let (nb, b) = split b (AE.ivlen tid) in
+  let iv = xor (AE.ivlen tid) nb salt in
+  match AE.decrypt #tid #65535 rd iv empty_bytes b with
   | None -> None
   | Some plain ->
     if length plain < 7 then None
@@ -91,13 +107,14 @@ let check_ticket (b:bytes{length b <= 65551}) =
           | TLS_1p2, CipherSuite _ _ _ -> Some (Ticket12 pv cs rms)
 
 let create_ticket t =
+  let Key tid salt wr _ = !ticket_enc in
   let pv, cs, b = match t with
     | Ticket12 pv cs ms -> pv, cs, ms
     | Ticket13 cs _ _ rms -> TLS_1p3, cs, rms in
   let plain = (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b) in
   let nb = CC.random 12 in
   let iv = xor 12 nb salt in
-  let ae = AE.encrypt #tid #65535 ticket_enc iv empty_bytes plain in
+  let ae = AE.encrypt #tid #65535 wr iv empty_bytes plain in
   nb @| ae
 
 let check_ticket13 b =

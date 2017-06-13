@@ -158,6 +158,7 @@ let rekey c ops       = Handshake.rekey       (C?.hs c) ops
 let request c ops     = Handshake.request     (C?.hs c) ops
 
 let get_mode c = (Handshake.get_mode (C?.hs c))
+let set_ticket_key (a:aeadAlg) (kv:bytes) = Ticket.set_ticket_key a kv
 
 (** current epochs ***)
 
@@ -718,10 +719,10 @@ let rec writeHandshake h_init c new_writer =
       //We also know that this only modifies the handshake region, so the delta logs didn't change
       let new_writer, send_ccs, skip_0rtt =
         match next_keys with
-        | Some u -> 
-          Some (u.HandshakeLog.out_appdata), 
-          u.HandshakeLog.out_ccs_first, 
-          u.HandshakeLog.out_skip_0RTT 
+        | Some u ->
+          Some (u.HandshakeLog.out_appdata),
+          u.HandshakeLog.out_ccs_first,
+          u.HandshakeLog.out_skip_0RTT
         | None -> new_writer, false, false in
       trace ("HS.next_fragment returned "^
         (if Some? om then "a fragment" else "nothing")^
