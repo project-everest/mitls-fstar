@@ -19,8 +19,8 @@ VERFLAGS = --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rli
 # must be processed sequentially,
 # but each subtarget alone can be built with parallelism enabled.
 all:
-	+$(MAKE) build
-	+$(MAKE) verify
+	$(MAKE) build
+	$(MAKE) verify
 
 build:
 	$(MAKE) mitls.exe
@@ -28,9 +28,9 @@ build:
 	$(MAKE) cmitls.exe 
 
 verify:
-	+$(MAKE) all-ver
-	+$(MAKE) tls-sanity
-	+$(MAKE) tls-lax
+	$(MAKE) all-ver
+	$(MAKE) tls-sanity
+	$(MAKE) tls-lax
 
 clean:
 	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *~ *.out $(ODIR) 
@@ -188,20 +188,20 @@ wc:
 	wc -l $(LIBFILES) *.fst *.fsti
 
 mitls.cmxa: $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx)
-	make -f Extracted.mk mitls.cmxa
+	$(MAKE) -f Extracted.mk mitls.cmxa
 
 mitls.exe: mitls.cmxa
-	make -f Extracted.mk mitls.exe
+	$(MAKE) -f Extracted.mk mitls.exe
 
 cmitls.o: cmitls.c
-	make -f Extracted.mk cmitls.o
+	$(MAKE) -f Extracted.mk cmitls.o
 cmitls.exe: cmitls.o
 	echo $(MAKECMDGOALS)
-	make -f Extracted.mk $(MAKECMDGOALS)
+	$(MAKE) -f Extracted.mk $(MAKECMDGOALS)
 
 test:
-	make -f Extracted.mk test
+	$(MAKE) -f Extracted.mk test
 
 # Some rules are only defined after extraction, and passed to the post-extraction Makefile (with ocamldep)
 .DEFAULT:
-	make -f Extracted.mk $(MAKECMDGOALS)
+	$(MAKE) -f Extracted.mk $(MAKECMDGOALS)

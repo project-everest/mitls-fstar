@@ -47,15 +47,15 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 # Try to only rebuild CoreCrypto when necessary
 $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
 		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
-	make -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml
+	$(MAKE) -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml
 
 # Try to only rebuild LowCProvider when necessary
 # Missing: not dependency on hacl-star/code/*
 $(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
-	make -C $(LCDIR)
+	$(MAKE) -C $(LCDIR)
 
 $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
-	make -C $(FFI_HOME)
+	$(MAKE) -C $(FFI_HOME)
 
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
