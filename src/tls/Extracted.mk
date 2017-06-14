@@ -106,13 +106,13 @@ mitls.exe: mitls.cmxa test/mitls.cmx
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o  $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
-	mitls.cmxa $(LCDIR)/../vale/asm/vale.a $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
+	mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
 
 test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/../vale/asm/vale.a $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	mitls.cmxa \
 	$(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
@@ -133,7 +133,7 @@ $(LIBMITLS): mitls.cmxa
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/../vale/asm/vale.a $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -output-obj -g mitls.cmxa -o $(LIBMITLS)
 else
@@ -144,13 +144,13 @@ $(LIBMITLS): mitls.cmxa
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/../vale/asm/vale.a $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -ccopt -lasmrun -g mitls.cmxa -o libmitls.dylib
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/../vale/asm/vale.a $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -g mitls.cmxa -o $(LIBMITLS)
 else
@@ -162,7 +162,7 @@ $(LIBMITLS): mitls.cmxa
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ulib/ml/fstarlib.cmxa \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/../vale/asm/vale.a $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o $(LIBMITLS) \
 	-ccopt "-Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker libmitls_version_script"
@@ -191,6 +191,8 @@ server13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA256
 server-psk::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
+server-0rtt::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384 -0rtt
 cserver::
 	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
 cserver12::
@@ -204,6 +206,8 @@ client13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
 client-psk::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
+client-0rtt::
+	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 127.0.0.1 4443 -reconnect -0rtt
 client12::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443 
 client::
@@ -220,3 +224,5 @@ cclient::
 .PHONY: test tls-ffi server server12 server13 client client12 client13 cserver cserver12 cserver13 cclient cclient12 cclient3
 
 .DEFAULT:
+
+/mitls.exe -mv 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 127.0.0.1 4443 -sigalgs ECDSA+SHA256 -0rtt

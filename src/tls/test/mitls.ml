@@ -47,6 +47,9 @@ let css = [
   ("DHE-RSA-AES128-GCM-SHA256", TLS_DHE_RSA_WITH_AES_128_GCM_SHA256);
   ("DHE-RSA-CHACHA20-POLY1305-SHA256", TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256);
   ("ECDHE-RSA-AES256-SHA", TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA);
+  ("DHE-RSA-AES256-SHA", TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA);
+  ("ECDHE-RSA-AES128-SHA", TLS_DHE_RSA_WITH_AES_256_CBC_SHA);
+  ("DHE-RSA-AES128-SHA", TLS_DHE_RSA_WITH_AES_128_CBC_SHA);
 ]
 
 let sas = [
@@ -71,6 +74,12 @@ let ngs = [
   ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
 ]
 
+let aeads = [
+  ("AES128-GCM", CoreCrypto.AES_128_GCM);
+  ("AES256-GCM", CoreCrypto.AES_256_GCM);
+  ("CHACHA20-POLY1305", CoreCrypto.CHACHA20_POLY1305);
+]
+
 let prn s (k, _) = s ^ k ^ ", "
 
 let setcs x =
@@ -87,6 +96,16 @@ let setng x =
   let ngl = BatString.nsplit x ":" in
   let ngl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^"; check --help for list")) ngl in
   config := {!config with namedGroups = ngl}
+
+let settk x =
+  try
+    match BatString.nsplit x ":" with
+    | [a; k] ->
+      let a = List.assoc a aeads in
+      if TLS.set_ticket_key a (Platform.Bytes.bytes_of_hex k) then ()
+      else failwith "Bad key"
+  with  
+  | _ -> failwith "Invalid ticket key syntax"
 
 let offered_psk = ref []
 let loaded_psk : (string list) ref = ref []
@@ -130,6 +149,8 @@ let help = "A TLS test client.\n\n"
  ^ (List.fold_left prn "" sas) ^ "\n"
  ^ "Named groups for colon-separated priority string:\n    "
  ^ (List.fold_left prn "" ngs) ^ "\n"
+ ^ "AEAD algorithms for ticket encryption:\n    "
+ ^ (List.fold_left prn "" aeads) ^ "\n"
 
 let _ =
   Arg.parse [
@@ -139,8 +160,8 @@ let _ =
     ("-0rtt", Arg.Unit (fun () -> config := {!config with enable_early_data = true;}), "enable early data (server support and client offer)");
     ("-psk", Arg.String (fun s -> load_psk false s), " L:K add an entry in the PSK database at label L with key K (in hex), associated with the fist current -cipher");
     ("-ticket", Arg.String (fun s -> load_psk true s), " T:K add ticket T in the PSK database with RMS K (in hex), associated with the fist current -cipher");
+    ("-ticketkey", Arg.String settk, " A:K use key K with AEAD encryption A for tickets. Key must include an IV (12 bytes)");
     ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with -psk or -ticket, client only)");
-    ("-async", Arg.Unit (fun () -> config := {!config with non_blocking_read = true;}), "enable non-blocking reads");
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");

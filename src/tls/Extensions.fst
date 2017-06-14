@@ -174,7 +174,7 @@ let client_psk_parse b =
     match parsePskIdentities (vlbytes2 ids) with
     | Correct ids -> (
     	match parseBinderList binders_bytes with
-    	| Correct bl -> Correct (ClientPSK ids (length binders_bytes - 2), Some bl)
+    	| Correct bl -> Correct (ClientPSK ids (length binders_bytes), Some bl)
     	| Error z -> error "client_psk_parse_binders")
     | Error z -> error "client_psk_parse_ids")
 
@@ -980,7 +980,7 @@ val prepareExtensions:
   option string ->
   bool ->
   bool ->
-  bool ->
+  bool -> // EDI (Nego checks that PSK is compatible)
   signatureSchemeList ->
   list valid_namedGroup ->
   option (cVerifyData * sVerifyData) ->
@@ -1046,9 +1046,8 @@ let prepareExtensions minpv pv cs host sres sren edi sigAlgs namedGroups ri ks p
           let h = PSK.pskInfo_hash pski in
           ctr + 1 + Hashing.Spec.tagLen h) 0 pskinfos in
         let pskidentities = List.Tot.map (fun x -> x, PSK.default_obfuscated_age) pskids in
-        let psk0 :: _ = pskinfos in
         let res =
-          if edi && psk0.PSK.allow_early_data then (E_early_data None) :: res // ADL: todo add to pskinfo
+          if edi then (E_early_data None) :: res
           else res in
         E_pre_shared_key (ClientPSK pskidentities binder_len) :: res // MUST BE LAST
       else res
@@ -1261,9 +1260,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
     else None
   | E_early_data b -> // EE
-    if cfg.enable_early_data then
-      Some (E_early_data None)
-    else None
+    if cfg.enable_early_data && pski = Some 0 then Some (E_early_data None) else None
   | E_session_ticket b ->
      if pv = TLS_1p3 || not cfg.enable_tickets then None
      else Some (E_session_ticket empty_bytes)

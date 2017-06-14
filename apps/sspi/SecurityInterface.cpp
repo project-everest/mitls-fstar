@@ -575,9 +575,18 @@ SECURITY_STATUS AttachIfNeeded(void)
         } else {
             FileName++; // Skip the '\\' character
         }
+        wchar_t *Star = wcschr(Var, L'*');
+        if (Star) {
+            size_t offset = Star - Var;
+            FileName[offset] = L'\0';
+            *Star = L'\0';
+        }
+        VERBOSE(("Comparing %S with %S", Var, FileName));
         if (_wcsicmp(Var, FileName) == 0) {
             ShouldLoad = true;
         }
+    } else {
+        VERBOSE(("MITLS_ATTACH_SP not set.  Unloading."));
     }
     if (!ShouldLoad) {
         // Refuse to load here, so that this process doesn't end up hanging onto a filesystem

@@ -26,17 +26,26 @@ unfold let trace = if api_debug then print else (fun _ -> ())
 let rec client_read con host: ML unit =
   let r = TLS.currentId con Reader in
   match TLS.read con r with
-  | Update true // aggressively using 0RTT 
+  | Update true -> // aggressively using 0RTT 
+    trace "Sending 0-RTT request...";
+    let payload = utf8 ("GET /0rtt HTTP/1.0\r\nConnection: keep-alive\r\nHost: "^host^"\r\n\r\n") in
+    let id = TLS.currentId con Writer in
+    let rg : Range.frange id = Range.point (length payload) in
+    let f = DataStream.appFragment id rg payload in
+    (match TLS.write con f with
+    | Written -> client_read con host
+    | WriteError _ t -> trace ("Write error:"^t)
+    | _ -> trace "unexpected ioresult_w")
   | Complete ->
-       trace "Read OK, sending HTTP request...";
-       let payload = utf8 ("GET /r HTTP/1.1\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
-       let id = TLS.currentId con Writer in
-       let rg : Range.frange id = Range.point (length payload) in
-       let f = DataStream.appFragment id rg payload in
-       (match TLS.write con f with
-       | Written -> client_read con host
-       | WriteError _ t -> trace ("Write error:"^t)
-       | _ -> trace "unexpected ioresult_w")
+    trace "Read OK, sending HTTP request...";
+    let payload = utf8 ("GET / HTTP/1.0\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
+    let id = TLS.currentId con Writer in
+    let rg : Range.frange id = Range.point (length payload) in
+    let f = DataStream.appFragment id rg payload in
+    (match TLS.write con f with
+    | Written -> client_read con host
+    | WriteError _ t -> trace ("Write error:"^t)
+    | _ -> trace "unexpected ioresult_w")
   | Read (DataStream.Data d) ->
     let db = DataStream.appBytes d in
     trace ("Received data: "^iutf8 db);

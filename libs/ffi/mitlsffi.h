@@ -22,6 +22,7 @@ extern void MITLS_CALLCONV FFI_mitls_cleanup(void);
 
 // Configure miTLS ahead of connecting
 extern int MITLS_CALLCONV FFI_mitls_configure(/* out */ mitls_state **state, const char *tls_version, const char *host_name, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *ticketkey);
 
 // Set configuration options ahead of connecting
 extern int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file);

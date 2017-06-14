@@ -1,7 +1,7 @@
 all: FFICallbacks.cmxa
 
 clean:
-	rm -rf dllFFICallbacks.dll FFICallbacks.a FFICallbacks.cmi FFICallbacks.cmx FFICallbacks.cmxa FFICallbacks.o libFFICallbacks.a FFIRegister.cmi FFIRegister.cmx FFIRegister.o
+	rm -rf dllFFICallbacks.dll FFICallbacks.a FFICallbacks.cmi FFICallbacks.cmx FFICallbacks.cmxa FFICallbacks.o libFFICallbacks.a FFIRegister.cmi FFIRegister.cmx FFIRegister.o *~
 
 FFICallbacks.cmo FFICallbacks.cmi: FFICallbacks.mli
 	ocamlfind c -package batteries,zarith -c FFICallbacks.mli

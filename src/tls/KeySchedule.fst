@@ -44,7 +44,7 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   =
   let kb = CommonDH.serialize_raw #g s in
   let kh = Platform.Bytes.hex_of_bytes kb in
-  dbg ("Share: "^kh^"\n")
+  dbg ("Share: "^kh)
 
 (********************************************
 *    Resumption PSK is disabled for now     *
@@ -1044,13 +1044,9 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
   let csr = cr @| sr in
   let alpha = (pv, cs, ems) in
   let gy, pmsb = CommonDH.dh_responder #g gx in
-  let () =
-    if Flags.debug_KS then
-      let _ = print_share gx in
-      let _ = print_share gy in
-      let _ = IO.debug_print_string ("PMS: "^(Platform.Bytes.print_bytes pmsb)^"\n") in
-      ()
-    else () in
+  let _ = print_share gx in
+  let _ = print_share gy in
+  dbg ("PMS: "^(print_bytes pmsb));
   let dhpmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
   let ns =
     if ems then
@@ -1058,10 +1054,7 @@ let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
     else
       let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48 in
-      let _ =
-        if Flags.debug_KS then
-           IO.debug_print_string ("master secret:"^(Platform.Bytes.print_bytes ms)^"\n")
-        else false in
+      dbg ("master secret: "^(print_bytes ms));
       let msId = StandardMS dhpmsId csr kef in
       C_12_has_MS csr alpha msId ms in
   st := C ns; gy

@@ -1,4 +1,5 @@
 let _ = Callback.register "MITLS_FFI_Config" FFI.ffiConfig;
+        Callback.register "MITLS_FFI_SetTicketKey" FFI.ffiSetTicketKey;
         Callback.register "MITLS_FFI_SetCertChainFile" FFI.ffiSetCertChainFile;
         Callback.register "MITLS_FFI_SetPrivateKeyFile" FFI.ffiSetPrivateKeyFile;
         Callback.register "MITLS_FFI_SetCAFile" FFI.ffiSetCAFile;

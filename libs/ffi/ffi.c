@@ -18,6 +18,7 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
+  MITLS_FFI_ENTRY(SetTicketKey) \
   MITLS_FFI_ENTRY(SetCertChainFile) \
   MITLS_FFI_ENTRY(SetPrivateKeyFile) \
   MITLS_FFI_ENTRY(SetCAFile) \
@@ -181,6 +182,26 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
 
 
     CAMLreturnT(int,ret);
+}
+
+int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *ticketkey)
+{
+    CAMLlocal2(ret, tkey);
+    tkey = caml_copy_string(ticketkey);
+    int res;
+
+    caml_acquire_runtime_system();
+    ret = caml_callback_exn(*g_mitls_FFI_SetTicketKey, tkey);
+
+    if (Is_exception_result(ret)) {
+      report_caml_exception(ret, NULL); // bugbug: pass in errmsg
+      res = 0;
+    } else {
+      res = Int_val(ret);
+    }
+
+    caml_release_runtime_system();
+    return res;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
