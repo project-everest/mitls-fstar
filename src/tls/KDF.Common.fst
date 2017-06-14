@@ -105,7 +105,7 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
   =
   let ha = (PRF?.hashAlg prf) i in
   if Flags.ideal_KEF then
-    let h0 = ST.get() in
+    let h0 = get() in
     cut((PRF?.pre prf) input (PRF?.log prf) h0);
     let log : ideal_log (PRF?.domain prf) (PRF?.range prf) (PRF?.r prf) = PRF?.log prf in
     MR.m_recall log;
@@ -113,22 +113,22 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
     | Some v -> v
     | None ->
       cut(MM.sel (MR.m_sel h0 log) input == None);
-      let h1 = ST.get() in
+      let h1 = get() in
       cut(h0 == h1);
       let key =
         if PRF?.honest_prf prf then random (Hashing.Spec.tagLen ha)
         else HKDF.hkdf_expand ha (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
-      let h2 = ST.get() in
+      let h2 = get() in
       assume(h2 == h1);
       cut((PRF?.pre prf) input (PRF?.log prf) h2);
-      let h5 = ST.get () in
+      let h5 = get () in
       let b = (PRF?.is_honest prf) input in
-      let h3 = ST.get() in
+      let h3 = get() in
       assume (h3 == h5); // Why?
       let output =
         if b then (PRF?.gen prf) input
         else (PRF?.coerce prf) input key in
-      let h4 = ST.get() in
+      let h4 = get() in
       assume(h0 == h4);
       cut(MM.sel (MR.m_sel h4 log) input == None);
       MM.extend log input output;

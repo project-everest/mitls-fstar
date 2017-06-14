@@ -221,7 +221,7 @@ val verify: #a:alg
        /\ Signed? (m_sel h0 (PK?.log pk))) ==> a.info t)))
 
 let verify #a h pk t s =
-  let h0 = ST.get() in
+  let h0 = get() in
   let log = PK?.log pk in
   m_recall log;
   let verified =
@@ -231,7 +231,7 @@ let verify #a h pk t s =
     | PK_DSA k   -> dsa_verify ho k t' s
     | PK_ECDSA k -> ecdsa_verify ho k t' s
   in
-  let h1 = ST.get() in
+  let h1 = get() in
   if int_cma a h then
     begin
     match m_read (PK?.log pk) with

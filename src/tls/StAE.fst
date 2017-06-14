@@ -348,12 +348,12 @@ let encrypt #i e f =
   match e with
   | StLHAE u s ->
     begin
-    let h0 = ST.get() in
+    let h0 = get() in
     let ct,rg = C.ct_rg i f in
     let ad = StatefulPlain.makeAD i ct in
     let seqn = MR.m_read (AEAD_GCM.ctr (StLHAE.counter s)) in
     let c = StLHAE.encrypt s ad rg f in
-    let h1 = ST.get() in
+    let h1 = get() in
     if authId i then
       begin
       lemma_repr_bytes_values seqn;
@@ -368,10 +368,10 @@ let encrypt #i e f =
     end
   | Stream u s ->
     begin
-    let h0 = ST.get() in
+    let h0 = get() in
     let l = frag_plain_len f in
     let c = Stream.encrypt s l f in
-    let h1 = ST.get() in
+    let h1 = get() in
     if authId i then
       begin
       lemma_fragments_snoc_commutes e h0 h1 (Stream.Entry l c f);
@@ -421,7 +421,7 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
 #set-options "--z3rlimit 100"
 
 let decrypt #i d (ct,c) =
-  let h0 = ST.get () in
+  let h0 = get () in
   recall_region (log_region d);
   match d with
   | Stream _ s ->

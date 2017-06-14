@@ -150,7 +150,7 @@ let is_honest i =
   if Flags.ideal_KEF then
    begin
     let log : ideal_log = share_log in
-    let h = ST.get () in
+    let h = get () in
     MR.m_recall log;
     MR.testify (MM.defined log i);
     cut(Some? (MM.sel (MR.m_sel h log) i));
@@ -168,7 +168,7 @@ let lemma_honest_or_dishonest (i:id) : ST unit
   if Flags.ideal_KEF then
    begin
     let log : ideal_log = share_log in
-    let h = ST.get () in
+    let h = get () in
     MR.m_recall log;
     MR.testify (MM.defined log i);
     cut(Some? (MM.sel (MR.m_sel h log) i));
@@ -192,7 +192,7 @@ let lemma_honest_and_dishonest (i:id)
   =
   if Flags.ideal_KEF then
    begin
-    let h = ST.get () in
+    let h = get () in
     let log : ideal_log = share_log in
     MR.m_recall log;
     MR.testify (MM.defined log i);

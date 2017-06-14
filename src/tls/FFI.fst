@@ -11,6 +11,7 @@ module FFI
 //       exceptions, notably for incomplete pattern matching
 
 open Platform.Bytes
+open Platform.Error
 
 open TLSConstants
 open TLSInfo
@@ -18,6 +19,8 @@ open Range
 open DataStream
 open TLS
 open FFICallbacks
+
+open FStar.HyperStack.All
 
 #set-options "--lax"
 
@@ -246,15 +249,17 @@ let ffiSetCAFile cfg f =
   ca_file = f;
   }
 
-let rec findsetting f l = match l with
-  | [] -> None
-  | (s, i)::tl -> if s = f then Some i else findsetting f tl
-
 let rec updatecfg cfg l : ML config =
   match l with
   | [] -> cfg
   | "EDI" :: t -> updatecfg ({cfg with enable_early_data = true;}) t
   | r :: t -> failwith ("Unknown flag: "^r)
+
+let has_invalid_setting (keys: list string) (vals: list (string * _)): Tot bool =
+  List.Tot.existsb (fun k -> List.Tot.assoc k vals = None) keys
+
+let filter_valid (keys: list string) (vals: list (string * _)) =
+  List.Tot.choose (fun x -> List.Tot.assoc x vals) keys
 
 val ffiSetCipherSuites: cfg:config -> x:string -> ML config
 let ffiSetCipherSuites cfg x =
@@ -262,39 +267,35 @@ let ffiSetCipherSuites cfg x =
   let cfg = updatecfg cfg t in
   let csl = String.split [':'] x in
 
-  let csl = List.map (fun x -> match findsetting x css with
-    | None -> failwith ("Unknown ciphersuite: "^x)
-    | Some a -> a
-    ) csl in
-  { cfg with
-  ciphersuites = cipherSuites_of_nameList csl
-  }
+  if has_invalid_setting csl css then
+    failwith ("Unknown ciphersuite among: " ^ x);
+  let csl = filter_valid csl css in
+
+  { cfg with ciphersuites = cipherSuites_of_nameList csl }
 
 val ffiSetSignatureAlgorithms: cfg:config -> x:string -> ML config
 let ffiSetSignatureAlgorithms cfg x =
   let sal = String.split [':'] x in
-  let sal = List.map (fun x-> match findsetting x sas with
-    | None -> failwith ("Unknown signature algorithm: "^x)
-    | Some a -> a
-  ) sal in
-  { cfg with
-  signatureAlgorithms = sal
-  }
+
+  if has_invalid_setting sal sas then
+    failwith ("Unknown signature algorithm among: " ^ x);
+  let sal = filter_valid sal sas in
+
+  { cfg with signatureAlgorithms = sal }
 
 val ffiSetNamedGroups: cfg:config -> x:string -> ML config
 let ffiSetNamedGroups cfg x =
   let ngl = String.split [':'] x in
-  let ngl = List.map (fun x-> match findsetting x ngs with
-    | None -> failwith ("Unknown named group: "^x)
-    | Some a -> a
-  ) ngl in
-  { cfg with
-  namedGroups = ngl
-  }
+
+  if has_invalid_setting ngl ngs then
+    failwith ("Unknown named group among: " ^ x);
+  let ngl = filter_valid ngl ngs in
+
+  { cfg with namedGroups = ngl }
 
 type callbacks = FFICallbacks.callbacks
 
-val sendTcpPacket: callbacks:callbacks -> buf:bytes -> Platform.Tcp.EXT (Platform.Error.optResult string unit)
+val sendTcpPacket: callbacks:callbacks -> buf:bytes -> EXT (Platform.Error.optResult string unit)
 let sendTcpPacket callbacks buf =
   let result = FFICallbacks.ocaml_send_tcp callbacks (get_cbytes buf) in
   if result < 0 then
@@ -302,7 +303,7 @@ let sendTcpPacket callbacks buf =
   else
     Platform.Error.Correct ()
 
-val recvTcpPacket: callbacks:callbacks -> max:nat -> Platform.Tcp.EXT (Platform.Tcp.recv_result max)
+val recvTcpPacket: callbacks:callbacks -> max:nat -> EXT (Platform.Tcp.recv_result max)
 let recvTcpPacket callbacks max =
   let (result,str) = FFICallbacks.recvcb callbacks max in
   if result then

@@ -233,12 +233,12 @@ let try_ms_derive (epoch_region:rgn) (i:AE.id)
 	   mc_inv h))
        (ensures (fun h0 w h1 ->
 	   mc_inv h1))
-  = let h0 = ST.get () in
+  = let h0 = get () in
     MR.m_recall conn_tab;
     MR.m_recall MS.ms_tab;
     let w = MasterSecret.derive epoch_region i in
     MR.m_recall (AE.ilog (StreamAE.State?.log w));
-    let h1 = ST.get () in
+    let h1 = get () in
     ms_derive_is_ok h0 h1 i w;
     w
 

@@ -24,6 +24,7 @@ module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
+module ST = FStar.HyperStack.ST
 module H = Hashing.Spec
 
 (* A flag for runtime debugging of computed keys.

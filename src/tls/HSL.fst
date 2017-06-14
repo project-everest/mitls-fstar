@@ -10,6 +10,7 @@ open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
 
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
+module ST = FStar.HyperStack.ST
 
 (* A dummy Handshake.Msg *) 
 
@@ -387,7 +388,7 @@ let client_process #a log (raw:bytes) c =
     ( assert(authentic a hash_ch_sh c s); 
       Result s)
       //17-02-05 nearly full automation!
-      //let h1 = ST.get() in 
+      //let h1 = get() in 
       //assert_norm([ClientHello c] @ [ServerHello s; Finished t] == [ClientHello c; ServerHello s; Finished t]);
       //assert(transcriptT h1 log == [ClientHello c] @ [ServerHello s; Finished t]);
       //assert(tags a [ClientHello c] [ServerHello s; Finished t] [hash_ch_sh]);

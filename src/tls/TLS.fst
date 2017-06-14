@@ -190,7 +190,7 @@ let no_seqn_overflow c rw =
     true
   else ( //indexable es j
     let e = es.(j) in
-    let h = ST.get() in
+    let h = get() in
     let _ = match rw with
     | Reader -> assume(StAE.incrementable (reader_epoch e) h)
     | Writer -> assume(StAE.incrementable (writer_epoch e) h) in
@@ -249,7 +249,7 @@ val disconnect: c: connection -> ST unit
 let disconnect c =
     Handshake.invalidateSession c.hs; //changes (HS?.region c.hs)
     c.state := (Closed,Closed);
-    let h = ST.get () in
+    let h = get () in
     assume (st_inv c h)
 
 // on some errors, we locally give up the connection
@@ -571,13 +571,13 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
        (ensures (fun h0 r h1 ->
 		sendFragment_inv wopt h1
 		/\ sendHandshake_post wopt om send_ccs h0 r h1))
-  =  let h0 = ST.get() in
+  =  let h0 = get() in
      trace "sendHandshake";
      let result0 = // first try to send handshake fragment, if any
          match om with
          | None             -> Correct()
          | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in
-     let h1 = ST.get() in
+     let h1 = get() in
      // then try to send CCS fragment, if requested
      match result0 with
      | Error e -> Error e
@@ -588,7 +588,7 @@ private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (o
          begin
 	   // Don't pad
 	   let frags = sendFragment c wopt (Content.CT_CCS #i (point 1)) in
-	   let h2 = ST.get() in
+	   let h2 = get() in
 	   begin
 	     match wopt with
 	     | Some wr ->
@@ -643,7 +643,7 @@ val next_fragment: i:id -> c:connection -> ST (result (HandshakeLog.outgoing i))
      indexable (Handshake.logT c.hs h0) w0 ==> (Handshake.logT c.hs h0).(w0) == (Handshake.logT c.hs h1).(w0))))
 let next_fragment i c =
   let s = c.hs in
-  let h0 = ST.get() in
+  let h0 = get() in
   let ilog = Handshake.es_of s in
   let w0 = Handshake.i s Writer in
   let _  = if w0 >= 0
@@ -1184,7 +1184,7 @@ let readOne c i =
 val read: connection -> i:id -> St (ioresult_i i)
 let rec read c i =
     assume false;//16-05-19
-    let h0 = ST.get() in
+    let h0 = get() in
     let st0 = !c.state in
     let r = writeHandshake h0 c None in
     match r with

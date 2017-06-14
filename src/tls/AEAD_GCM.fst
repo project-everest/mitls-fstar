@@ -190,7 +190,7 @@ let concrete_encrypt (#i:id) (e:writer i)
     length c = Range.targetLength i rg /\
     modifies_one (AEAD.log_region e.aead) h0 h1))
   =
-  let h = ST.get() in
+  let h = get() in
   let l = fst rg in
   let text = if safeId i then createBytes l 0z else repr i ad rg p in
   lemma_repr_bytes_values n;
@@ -240,7 +240,7 @@ val encrypt: #i:id -> e:writer i -> ad:adata i
 
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 3 --max_fuel 3 --initial_fuel 3"
 let encrypt #i e ad rg p =
-  let h0 = ST.get () in
+  let h0 = get () in
   let ctr = ctr e.counter in
   m_recall ctr;
   let n = m_read ctr in

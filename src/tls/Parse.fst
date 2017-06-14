@@ -12,6 +12,7 @@ open TLSError
 
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
+module ST = FStar.HyperStack.ST
 
 
 (** This file should be split in 3 different modules:

@@ -945,7 +945,7 @@ let rec recv_fragment (hs:hs) #i rg f =
       | InAck false false -> recv_fragment hs #i (0,0) empty_bytes // only case where the next incoming flight may already have been buffered.
       | r -> r  in
     trace "recv_fragment";
-    let h0 = ST.get() in
+    let h0 = get() in
     let flight = HandshakeLog.receive hs.log f in
     match flight with
     | Error z -> InError z

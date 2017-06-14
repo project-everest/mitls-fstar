@@ -223,7 +223,7 @@ val encrypt: #i:id -> e:writer i -> l:plainLen -> p:plain i l -> ST (cipher i l)
    i.e. all idealization is turned off *)
 #set-options "--z3rlimit 150 --max_ifuel 2 --initial_ifuel 0 --max_fuel 2 --initial_fuel 0"
 let encrypt #i e l p =
-  let h0 = ST.get() in
+  let h0 = get() in
   let ctr = ctr e.counter in
   m_recall ctr;
   let text = if safeId i then createBytes l 0z else repr i l p in

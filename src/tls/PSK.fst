@@ -144,7 +144,7 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
   let add : app_psk_entry i = (psk, ctx, true) in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
-  let h = ST.get () in
+  let h = get () in
   cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
   assume(MR.stable_on_t app_psk_table (honest_st i));
   MR.witness app_psk_table (honest_st i)
@@ -161,7 +161,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
   let add : app_psk_entry i = (k, ctx, false) in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
-  let h = ST.get () in
+  let h = get () in
   cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
   admit()
 
@@ -188,7 +188,7 @@ let verify_hash (i:pskid) (a:hash_alg) : ST bool
   MR.testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
   | Some x ->
-    let h = ST.get() in
+    let h = get() in
     cut(MM.contains app_psk_table i x h);
     cut(MM.value app_psk_table i h = x);
     let (_, ctx, _) = x in
