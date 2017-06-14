@@ -20,8 +20,11 @@ let ecdhe_traces = [
 
 let dhe_traces = [
     "tls-unique-trace-3.bin";
-    "client-auth-trace-1.bin";
-    "client-auth-trace-2.bin";
+  (* These last two traces are incorrect.
+   * The length of the first messages is longer than the whole trace.
+   *)
+  (* "client-auth-trace-1.bin"; *)
+  (* "client-auth-trace-2.bin"; *)
   ]
 
 let print_error error =
@@ -257,9 +260,9 @@ let rec parse_message bytes =
 	| '\x17' -> parse_application_data_message msg
         | _ -> print_string "Error: wrong content type\n" );
        parse_message bytes
-    | Error(z) -> print_string "Error : Failed to parse bytes length of message \n"
+    | Error(z) -> print_string "Error: Failed to parse length of message\n"
   else if length bytes = Z.zero then ()
-  else print_string "Error : Found some standalone bytes"
+  else print_string "Error: Found some trailing bytes"
 
 let parse_trace_file file =
   let fbytes = Bytes.create 1000000 in
@@ -267,7 +270,8 @@ let parse_trace_file file =
   if flag = 0 then print_string "Reached EOF\n"
   else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
   let bytes = Bytes.sub fbytes 0 flag in
-  let hs = { bl = [bytes]; max = flag; index = 0; length = flag; } in
+  let hs = bytes in
+  print_string (print_bytes hs);
   parse_handshake hs;
   print_string "\n********************************************\n"
 
