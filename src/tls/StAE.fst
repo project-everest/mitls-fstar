@@ -105,7 +105,7 @@ let tolerate_decrypt_failure (#i:id) (r:reader i)
   | Stream _ st ->
     let ctr = MR.m_read (StreamAE.ctr st.StreamAE.counter) in
     let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
-    ctr = 0 && ClientHandshakeTrafficSecret? t
+    0 = ctr && ClientHandshakeTrafficSecret? t
 
 // our view to AE's ideal log (when idealized, ignoring ciphers) and counter
 // TODO: write down their joint monotonic specification: both are monotonic,
