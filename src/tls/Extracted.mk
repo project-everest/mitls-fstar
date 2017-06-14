@@ -1,4 +1,5 @@
 include Makefile
+include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
 mlclean:
 	$(MAKE) -C $(FSTAR_HOME)/ulib/ml clean MEM=HST
@@ -40,28 +41,28 @@ $(ODIR)/Crypto_AEAD_%.ml: $(LLDIR)/aead/Crypto.AEAD.%.fst
 # Hacl flags: extract with concrete
 $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax --codegen OCaml \
-	--odir $(ODIR) $(NOEXTRACT) \
-	$(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
-	--include concrete-flags $<
+	  --odir $(ODIR) $(NOEXTRACT) \
+	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
+	  --include concrete-flags $<
 
 # Try to only rebuild CoreCrypto when necessary
 $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
-		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
+		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml $(FSTARLIB)
 	$(MAKE) -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml
 
 # Try to only rebuild LowCProvider when necessary
 # Missing: not dependency on hacl-star/code/*
-$(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
+$(LCDIR)/LowCProvider.cmxa: $(FSTARLIB) $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
 	$(MAKE) -C $(LCDIR)
 
-$(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
+$(FFI_HOME)/FFICallbacks.cmxa: $(FSTARLIB) $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
 	$(MAKE) -C $(FFI_HOME)
 
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
 %.cmi %.cmx: %.ml
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
 
 .depend-ML: \
@@ -84,14 +85,14 @@ $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 
 # We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
 mitls.cmxa: \
-	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/LowCProvider.cmxa \
-	$(FFI_HOME)/FFICallbacks.cmxa \
-	$(ODIR)/.deporder $(ODIR)/FFI.cmx \
-	$(ODIR)/FFIRegister.cmx
-	ocamlfind ocamlopt $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
+  $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+  $(LCDIR)/LowCProvider.cmxa \
+  $(FFI_HOME)/FFICallbacks.cmxa \
+  $(ODIR)/.deporder $(ODIR)/FFI.cmx \
+  $(ODIR)/FFIRegister.cmx $(FSTARLIB)
+	$(OCAMLOPT) $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
-.PHONY:$(FSTARLIB)
+.PHONY: $(FSTARLIB)
 
 FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
 
@@ -99,11 +100,11 @@ $(FSTARLIB):
 	$(MAKE) -C $(FSTAR_HOME)/ulib
 
 mitls.exe: mitls.cmxa test/mitls.cmx $(FSTARLIB)
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
-	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o  $(LCDIR)/LowCProvider.cmx \
-	$(FFI_HOME)/FFICallbacks.cmxa \
-	mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
+	  $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
+	  $(LCDIR)/lowc_stub.o  $(LCDIR)/LowCProvider.cmx \
+	  $(FFI_HOME)/FFICallbacks.cmxa \
+	  mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
 
 test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml $(FSTARLIB)
 	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
