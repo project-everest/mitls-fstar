@@ -185,24 +185,31 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
     CAMLreturnT(int,ret);
 }
 
-int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *ticketkey)
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_set_ticket_key(const char *ticketkey)
 {
-    CAMLlocal2(ret, tkey);
+    int ret;
+    CAMLparam0();
+    CAMLlocal2(r, tkey);
     tkey = caml_copy_string(ticketkey);
-    int res;
+    r = caml_callback_exn(*g_mitls_FFI_SetTicketKey, tkey);
 
-    caml_acquire_runtime_system();
-    ret = caml_callback_exn(*g_mitls_FFI_SetTicketKey, tkey);
-
-    if (Is_exception_result(ret)) {
-      report_caml_exception(ret, NULL); // bugbug: pass in errmsg
-      res = 0;
+    if (Is_exception_result(r)) {
+      report_caml_exception(r, NULL); // bugbug: pass in errmsg
+      ret = 0;
     } else {
-      res = Int_val(ret);
+      ret = Int_val(r);
     }
+    CAMLreturnT(int, ret);
+}
 
+int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *tk)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = ocaml_set_ticket_key(tk);
     caml_release_runtime_system();
-    return res;
+    return ret;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
@@ -255,6 +262,15 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     int ret;
     caml_acquire_runtime_system();
     ret = configure_common_caml(state, ng, g_mitls_FFI_SetNamedGroups);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, apl, g_mitls_FFI_SetALPN);
     caml_release_runtime_system();
     return ret;
 }

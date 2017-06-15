@@ -300,13 +300,13 @@ let ffiSetNamedGroups cfg x =
 
 val ffiSetALPN: cfg:config -> x:string -> ML config
 let ffiSetALPN cfg x =
-  let apl = String.split [':'] x in
+  let apl = if x = "" then [] else String.split [':'] x in
   if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
   let apl = List.map (fun x ->
     if String.length x < 256 then x
     else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
   ) apl in
-  { cfg with alpn = Some apl }
+  { cfg with alpn = if apl=[] then None else Some apl }
 
 val ffiSetTicketKey: x:string -> ML bool
 let ffiSetTicketKey x =
