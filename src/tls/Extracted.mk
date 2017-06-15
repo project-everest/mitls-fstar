@@ -78,9 +78,9 @@ $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(OD
 
 -include .depend-ML
 
-.PHONY: $(FSTARLIB)
-
 FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+
+.PHONY: $(FSTARLIB)
 
 $(FSTARLIB):
 	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
