@@ -1,8 +1,6 @@
 module TestKS
 
 open FStar.HyperHeap
-open FStar.HyperStack
-open FStar.ST
 
 open Platform.Bytes
 open TLSConstants
@@ -12,18 +10,22 @@ module CDH = CommonDH
 module CC = CoreCrypto
 module KS = KeySchedule
 
-let p = IO.print_string
-let pT = IO.debug_print_string
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("TestKS| "^s^"\n"))
 
-let main () : ML unit =
-  p "Starting KeySchedule tests (based on draft-ietf-tls-tls13-vectors-00).\n";
-  p " Replacing the keygen function in Curve25519... ";
+
+let main () =
+  print "Starting KeySchedule tests (based on draft-ietf-tls-tls13-vectors-00).\n";
+  print " Replacing the keygen function in Curve25519... ";
 
   // Called by CommonDH.keygen. Replaced with the test vector ephemerals
   Curve25519.rand := (
     let ctr = ralloc root 0 in
     let gen (n:nat) : ST (lbytes n) (requires fun h -> True) (ensures fun h0 _ h1 -> modifies_none h0 h1) =
-      let b = pT (" ...keygen call "^(string_of_int !ctr)^"... ") in
+      let b = print (" ...keygen call "^(string_of_int !ctr)^"... ") in
       let r =
        if !ctr = 0 then
         bytes_of_hex "00b4198a84ed6a7c218702891735239d40b7c665053303643d3c67f7458ecbc9"
@@ -33,14 +35,14 @@ let main () : ML unit =
       fst (split r n)
     in gen);
 
-  p "OK.\n Creating KS instances... ";
+  print "OK.\n Creating KS instances... ";
   let rc = new_region root in
   let rs = new_region root in
   let ksc, cr = KS.create #rc Client in
   let kss, sr = KS.create #rs Server in
-  p "OK.\n Generating client shares... ";
+  print "OK.\n Generating client shares... ";
   let (_, _, (CDH.Share g gx :: _)) = KS.ks_client_13_init ksc [] [SEC CC.ECC_X25519] in
-  p "OK.\n";
+  print "OK.\n";
   let b = KS.print_share #g gx in
   (*
   p "OK.\n Rewriting the shares in the state with the test ephemerals:\n";
@@ -53,9 +55,8 @@ let main () : ML unit =
   ksc.KS.state := KS.C (KS.C_13_wait_SH cr None None [gx]);
   *)
   let cs = CipherSuite13 CC.AES_128_GCM Hashing.Spec.SHA256 in
-  p " Generating server share... ";
+  print " Generating server share... ";
   let (Some (CDH.Share g gy), _) = KS.ks_server_13_init kss cr cs None (Some (|g, gx|)) in
-  p "OK.\n";
   let b = KS.print_share #g gy in
   let sh_log = bytes_of_hex "52c04472bdfe929772c98b91cf425f78f47659be9d4a7d68b9e29d162935e9b9" in
   let hsk = KS.ks_server_13_sh kss sh_log in

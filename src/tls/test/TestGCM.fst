@@ -15,6 +15,12 @@ open AEAD_GCM
 open StatefulLHAE
 open StAE
 
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("TestKS| "^s^"\n"))
+
 
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
@@ -61,12 +67,12 @@ let main () =
   | Some text' ->
     if (iutf8 text') <> (iutf8 text) then
       begin
-      IO.print_string ("GCM test: FAIL\n");
-      IO.print_string ("Unexpected output: " ^ (iutf8 text') ^ ",\nexpected = " ^ (iutf8 text) ^ "\n");
+      print ("GCM test: FAIL\n");
+      print ("Unexpected output: " ^ (iutf8 text') ^ ",\nexpected = " ^ (iutf8 text) ^ "\n");
       failwith "Error!"
       end
     else
-      IO.print_string ("GCM test: OK\n")
+      print ("GCM test: OK\n")
   | None ->
-    IO.print_string ("GCM test: FAIL\n");
+    print ("GCM test: FAIL\n");
     failwith "Error!"
