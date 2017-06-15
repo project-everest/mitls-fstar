@@ -10,6 +10,9 @@ open TLSError
 open TLSInfo
 open TLSConstants
 
+open FStar.HyperStack.All
+open FStar.HyperStack.ST
+
 open FFI
 
 (* A flag for runtime debugging of Handshake data.

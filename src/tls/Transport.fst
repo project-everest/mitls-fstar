@@ -2,7 +2,7 @@ module Transport
 
 // adding an indirection to TCP for applications that prefer to take control of their IOs.
 
-open FStar.All
+open FStar.HyperStack.All
 
 open Platform.Tcp 
 open Platform.Bytes
@@ -11,8 +11,8 @@ open TLSError
 
 // make this type abstract? 
 noeq type t = { 
-  snd: bytes -> EXT (optResult string unit);
-  rcv: max:nat -> EXT (recv_result max) }
+  snd: bytes -> ST (optResult string unit) (fun _ -> True) (fun h0 _ h1 -> h0 == h1);
+  rcv: max:nat -> ST (recv_result max) (fun _ -> True) (fun h0 _ h1 -> h0 == h1) }
 
 let callbacks send recv = { snd = send; rcv = recv } 
 
@@ -46,7 +46,8 @@ let test (tcp:t) (data:bytes) =
 // forces read to complete, even if the socket is non-blocking.
 // this may cause spinning.
 
-private val really_read_rec: b:bytes -> t -> l:nat -> EXT (recv_result (l+length b))
+private val really_read_rec: b:bytes -> t -> l:nat -> ST (recv_result (l+length b))
+  (fun _ -> True) (fun h0 _ h1 -> h0 == h1)
 let rec really_read_rec prev tcp len = 
     if len = 0 
     then Received prev
