@@ -40,7 +40,7 @@ record_fstar_version:
 
 .PHONY: all build verify init depend clean record_fstar_version test
 
-STDLIB_REALIZED=Pervasives Mul Float Char Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack ST All
+STDLIB_REALIZED=Pervasives Pervasives.Native Mul Float Char Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack ST All
 CODEGEN_LIBS=Platform
 # CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
 PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
@@ -57,8 +57,8 @@ FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $
 
 OCAMLPKG=-package batteries,stdint,fileutils,sqlite3,zarith,fstarlib
 OCAMLPATH=$(FSTAR_HOME)/bin
-OCAMLOPTS=$(OCAMLPKG) -linkpkg -g -thread -w -a
-OCAML_PATHS=test $(ODIR) $(FSTAR_HOME)/ucontrib/Platform/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/db $(LCDIR) $(FFI_HOME)
+OCAMLOPTS=$(OCAMLPKG) -thread -w -a
+OCAML_PATHS=test $(ODIR) $(FSTAR_HOME)/ulib/ml $(FSTAR_HOME)/ucontrib/Platform/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/db $(LCDIR) $(FFI_HOME)
 OCAML_INCLUDE_PATHS=$(addprefix -I ,$(OCAML_PATHS))
 
 # Since quite a few people forget to set that in their path... eventually,
