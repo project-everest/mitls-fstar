@@ -78,16 +78,16 @@ $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(OD
 
 -include .depend-ML
 
-$(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
-	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
-	@cp $(ODIR)/.tmp $(ODIR)/.deporder
-
 .PHONY: $(FSTARLIB)
 
 FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
 
 $(FSTARLIB):
 	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
+
+$(ODIR)/.deporder: $(FSTARLIB) $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
+	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
+	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 
 # We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
 mitls.cmxa: \
@@ -107,7 +107,7 @@ mitls.exe: mitls.cmxa test/mitls.cmx $(FSTARLIB)
 	  mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
 
 test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml $(FSTARLIB)
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	mitls.cmxa \
@@ -127,7 +127,7 @@ ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
 
 $(LIBMITLS): mitls.cmxa $(FSTARLIB)
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
@@ -137,12 +137,12 @@ UNAME_S = $(shell uname -s)
 LIBMITLS=libmitls.so
 ifeq ($(UNAME_S),Darwin)
 $(LIBMITLS): mitls.cmxa $(FSTARLIB)
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -ccopt -lasmrun -g mitls.cmxa -o libmitls.dylib
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
@@ -153,7 +153,7 @@ $(LIBMITLS): mitls.cmxa $(FSTARLIB)
     # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
     #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
     #   can result in heap corruptions and crashes.
-	ocamlfind ocamlopt $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
+	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
