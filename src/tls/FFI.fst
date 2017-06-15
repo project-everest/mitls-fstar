@@ -20,6 +20,7 @@ open DataStream
 open TLS
 open FFICallbacks
 
+open FStar.HyperStack.ST
 open FStar.HyperStack.All
 
 #set-options "--lax"

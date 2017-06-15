@@ -5,7 +5,7 @@ options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontri
 
 (* Split from KEF *)
 
-open FStar.All
+open FStar.HyperStack.All
 
 open Platform.Bytes
 open TLSConstants
