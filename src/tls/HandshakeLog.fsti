@@ -41,6 +41,7 @@ let tagged m =
   | EncryptedExtensions _ // For PSK handshake: [EE; Finished]
   | CertificateVerify _   // for ServerFinish payload in TLS 1.3
   | ClientKeyExchange _   // only for client signing
+  | NewSessionTicket _    // for server finished in TLS 1.2
   | Finished _ -> true    // for 2nd Finished
   | _ -> false
 // NB CCS is not explicitly handled here, but can trigger tagging and end-of-flights.

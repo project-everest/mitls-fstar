@@ -119,7 +119,7 @@ let create parent tcp role cfg resume =
 //    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
 //  ))
 let connect m0 tcp cfg         = create m0 tcp Client cfg (None, [])
-let resume  m0 tcp cfg sid psk = create m0 tcp Client cfg (sid, psk)
+let resume  m0 tcp cfg tid psk = create m0 tcp Client cfg (tid, psk)
 
 //val accept_connected: ns:Transport.t -> c:config -> ST connection
 //  (requires (fun h0 -> True))
@@ -127,7 +127,7 @@ let resume  m0 tcp cfg sid psk = create m0 tcp Client cfg (sid, psk)
 //    modifies Set.empty h0 h1 /\
 //    initial Server ns c None cn h1
 //  ))
-let accept_connected m0 tcp cfg = create m0 tcp Server cfg (None,[])
+let accept_connected m0 tcp cfg = create m0 tcp Server cfg (None, [])
 
 //* do we need accept and accept_connected?
 //val accept: Tcp.tcpListener -> c:config -> ST connection

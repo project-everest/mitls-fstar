@@ -78,13 +78,14 @@ let defaultConfig =
   check_client_version_in_pms_for_old_tls = true;
   cert_chain_file = "server.pem";
   private_key_file = "server.key";
-  enable_tickets = true;
 
   non_blocking_read = false;
   enable_early_data = false;
   safe_renegotiation = true;
   safe_resumption = true;
   peer_name = None; // Disables hostname validation
+  enable_tickets = true;
+  alpn = None;
   check_peer_certificate = true;
   ca_file = "CAFile.pem";
 
@@ -161,7 +162,7 @@ type abbrInfo =
 
 type resumeInfo (r:role) =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
-  o:option sessionID {r=Server ==> o=None} *
+  o:option bytes {r=Server ==> o=None} * // 1.2 ticket
   l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,

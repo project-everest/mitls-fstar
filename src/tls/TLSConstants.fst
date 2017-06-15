@@ -460,7 +460,7 @@ let versionBytes pv =
   | TLS_1p1 -> abyte2 ( 3z, 2z )
   | TLS_1p2 -> abyte2 ( 3z, 3z )
   | TLS_1p3 -> abyte2 ( 3z, 4z )
-  | UnknownVersion a b -> abyte2 ( a, b ) 
+  | UnknownVersion a b -> abyte2 ( a, b )
 
 (** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
@@ -1738,13 +1738,14 @@ noeq type config = {
     check_client_version_in_pms_for_old_tls: bool;
     cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
     private_key_file: string;   // TEMPORARY
-    enable_tickets: bool;
 
     (* Common *)
     non_blocking_read: bool;
     enable_early_data: bool;
     safe_renegotiation: bool;   // demands this extension when renegotiating
     peer_name: option string;   // The expected name to match against the peer certificate
+    alpn: option (list string); // ALPN offers (for client) or preferences (for server)
+    enable_tickets: bool;       // Client: offer ticket support; server: emit and accept tickets
     check_peer_certificate: bool; // To disable certificate validation
     ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
                       // on Cygwin /etc/ssl/certs/ca-bundle.crt

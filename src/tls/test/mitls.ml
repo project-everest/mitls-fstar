@@ -22,6 +22,7 @@ let config = ref {defaultConfig with
       TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
       TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
     ];
+  alpn = Some ["http/1.1"];
 }
 
 let s2pv = function
@@ -74,12 +75,6 @@ let ngs = [
   ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
 ]
 
-let aeads = [
-  ("AES128-GCM", CoreCrypto.AES_128_GCM);
-  ("AES256-GCM", CoreCrypto.AES_256_GCM);
-  ("CHACHA20-POLY1305", CoreCrypto.CHACHA20_POLY1305);
-]
-
 let prn s (k, _) = s ^ k ^ ", "
 
 let setcs x =
@@ -97,15 +92,9 @@ let setng x =
   let ngl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^"; check --help for list")) ngl in
   config := {!config with namedGroups = ngl}
 
-let settk x =
-  try
-    match BatString.nsplit x ":" with
-    | [a; k] ->
-      let a = List.assoc a aeads in
-      if TLS.set_ticket_key a (Platform.Bytes.bytes_of_hex k) then ()
-      else failwith "Bad key"
-  with  
-  | _ -> failwith "Invalid ticket key syntax"
+let setalpn x =
+  let al = BatString.nsplit x ":" in
+  config := {!config with alpn = Some al}
 
 let offered_psk = ref []
 let loaded_psk : (string list) ref = ref []
@@ -149,8 +138,6 @@ let help = "A TLS test client.\n\n"
  ^ (List.fold_left prn "" sas) ^ "\n"
  ^ "Named groups for colon-separated priority string:\n    "
  ^ (List.fold_left prn "" ngs) ^ "\n"
- ^ "AEAD algorithms for ticket encryption:\n    "
- ^ (List.fold_left prn "" aeads) ^ "\n"
 
 let _ =
   Arg.parse [
@@ -160,14 +147,14 @@ let _ =
     ("-0rtt", Arg.Unit (fun () -> config := {!config with enable_early_data = true;}), "enable early data (server support and client offer)");
     ("-psk", Arg.String (fun s -> load_psk false s), " L:K add an entry in the PSK database at label L with key K (in hex), associated with the fist current -cipher");
     ("-ticket", Arg.String (fun s -> load_psk true s), " T:K add ticket T in the PSK database with RMS K (in hex), associated with the fist current -cipher");
-    ("-ticketkey", Arg.String settk, " A:K use key K with AEAD encryption A for tickets. Key must include an IV (12 bytes)");
-    ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with -psk or -ticket, client only)");
+    ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with -psk or -ticket, 1.3 client only)");
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
     ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2 (client only)");
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
+    ("-alpn", Arg.String setalpn, "colon-separated list of application-level protocols");
     ("-reconnect", Arg.Unit (fun () -> reconnect := true), "reconnect at the end of the session, using received ticket (client only)");
     ("-groups", Arg.String setng, "colon-separated list of named groups; see above for valid values");
     ("-cert", Arg.String (fun s -> config := {!config with cert_chain_file = s}), "PEM file containing certificate chain to send");
@@ -190,10 +177,14 @@ let _ =
   | Client, _ when !ffi    -> TestFFI.client !config host (Z.of_int port)
   | Server, _ when !ffi    -> TestFFI.server !config host (Z.of_int port)
   | Client, _ ->
-    (let _ = TestAPI.client !config host (Z.of_int port) (!offered_psk) in
+    (let _ = TestAPI.client !config host (Z.of_int port) None (!offered_psk) in
     match !reconnect, !config.peer_name with
     | true, Some h ->
-      let t = match Ticket.lookup h with None -> [] | Some t -> [t] in
-      TestAPI.client !config host (Z.of_int port) t
+      let (opsk, ot12) =
+        match Ticket.lookup h with
+        | None -> !offered_psk, None
+        | Some (t, true) -> t :: !offered_psk, None
+        | Some (t, false) -> !offered_psk, Some t in
+      TestAPI.client !config host (Z.of_int port) ot12 opsk
     | _ -> ())
   | Server, _ -> TestAPI.server !config host (Z.of_int port)

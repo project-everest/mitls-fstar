@@ -25,6 +25,7 @@
   MITLS_FFI_ENTRY(SetCipherSuites) \
   MITLS_FFI_ENTRY(SetSignatureAlgorithms) \
   MITLS_FFI_ENTRY(SetNamedGroups) \
+  MITLS_FFI_ENTRY(SetALPN) \
   MITLS_FFI_ENTRY(Connect) \
   MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \

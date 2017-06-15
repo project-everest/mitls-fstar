@@ -90,7 +90,6 @@ let read_psk (i:PSK.pskid)
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
-  let i = utf8 (iutf8 i) in // FIXME Platform.Bytes !!
   let c = PSK.psk_info i in
   let id =
     if c.is_ticket then
@@ -643,7 +642,8 @@ let ks_12_finished_key ks =
 let ks_12_ms ks =
   let KS #region st = ks in
   match !st with
-  | S (S_12_has_MS _ _ _ ms) -> ms
+  | C (C_12_has_MS _ _ msId ms) -> (msId, ms)
+  | S (S_12_has_MS _ _ msId ms) -> (msId, ms)
 
 private val ks_12_record_key: ks:ks -> St recordInstance
 let ks_12_record_key ks =
@@ -675,16 +675,35 @@ let ks_12_record_key ks =
   let r = StAE.genReader HyperHeap.root rw in
   StAEInstance r w
 
-let ks_server_12_resume ks cr tid =
-  dbg ("ks_server_12_resume Ticket = "^(print_bytes tid));
+(* 1.2 resumption *)
+
+// We can potentially 1.2 resume from 1.2 or 1.3 ClientHello
+let ks_client_12_resume (ks:ks) (sr:random) (pv:protocolVersion) (cs:cipherSuite)
+  (ems:bool) (msId:TLSInfo.msId) (ms:bytes) : ST recordInstance
+  (requires fun h0 ->
+    let kss = sel h0 (KS?.state ks) in
+    C? kss /\ (C_12_Full_CH? (C?.s kss) \/ C_13_wait_SH? (C?.s kss)))
+  (ensures fun h0 r h1 ->
+    let KS #rid st = ks in
+    modifies (Set.singleton rid) h0 h1
+    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+  =
+  dbg "ks_client_12_resume";
+  let KS #rid st = ks in
+  let cr = match !st with
+    | C (C_12_Full_CH cr) -> cr
+    | C (C_13_wait_SH cr _ _) -> cr in
+  dbg ("Recall MS: "^(print_bytes ms));
+  st := C (C_12_has_MS (cr @| sr) (pv, cs, ems) msId ms);
+  ks_12_record_key ks
+
+let ks_server_12_resume (ks:ks) (cr:random) (pv:protocolVersion) (cs:cipherSuite)
+  (ems:bool) (msId:msId) (ms:bytes) =
+  dbg ("ks_server_12_resume");
   let KS #region st = ks in
   let S (S_Init sr) = !st in
-  let Some (pv, cs, ms) = Ticket.check_ticket12 tid in
   dbg ("Recall MS: "^(print_bytes ms));
-  let csr = cr @| sr in
-  let kef = kefAlg pv cs false in
-  let msId = StandardMS PMS.DummyPMS csr kef in
-  st := S (S_12_has_MS csr (pv, cs, true) msId ms);
+  st := S (S_12_has_MS (cr @| sr) (pv, cs, ems) msId ms);
   ks_12_record_key ks
 
 (******************************************************************)
@@ -731,6 +750,7 @@ let ks_server_12_cke_dh ks gy hashed_log =
   st := S (S_12_has_MS csr alpha msId ms);
   ks_12_record_key ks
 
+(**
 // Called after receiving server hello; server accepts resumption proposal
 // This function only checks the agility paramaters compared to the resumed sessionInfo
 // and returns to the handshake whether the resumption is permissible
@@ -749,6 +769,7 @@ let ks_client_12_resume ks sr pv cs =
   let csr = cr @| sr in
   let ems = si.extended_ms in
   st := C (C_12_has_MS csr (pv, cs, ems) msId ms)
+*)
 
 // The two functions below are similar but we decide not to factor them because:
 //   1. they use different arguemtns

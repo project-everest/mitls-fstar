@@ -370,23 +370,38 @@ val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:T
   -> ks:option CommonDH.keyShare -> list (PSK.pskid * PSK.pskInfo)
   -> Tot offer
 let computeOffer r cfg resume nonce ks pskinfo =
-  let sid =
-    match resume with
-    | Some sid, _ -> sid
-    | None, _ -> empty_bytes
-  in
+  let ticket12, sid =
+    match resume, cfg.enable_tickets, cfg.minVer with
+    | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
+    // Similar to what OpenSSL does, when we offer a 1.2 ticket
+    // we send the hash of the ticket as SID to disambiguate the state machine
+    | (Some t, _), true, _ ->
+      // FIXME Cannot compute hash in Tot
+      //let sid = Hashing.compute Hashing.Spec.SHA256 t
+      let sid = if length t <= 32 then t else fst (split t 32) in
+      Some t, sid
+    | (None, _), true, _ -> Some (empty_bytes), empty_bytes
+    | _ -> None, empty_bytes in
   // Don't offer EDI if there is no PSK of first PSK doesn't have ED enabled
   let compatible_psk =
-    match pskinfo with | (_, i) :: _ -> i.PSK.allow_early_data | _ -> false in
+    match pskinfo with
+    | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
+    | _ -> false in
+  let alpn =
+    match cfg.alpn with
+    | Some l -> Some (List.Tot.map utf8 l)
+    | None -> None in
   let extensions =
     Extensions.prepareExtensions
       cfg.minVer
       cfg.maxVer
       cfg.ciphersuites
       cfg.peer_name
+      alpn
       cfg.safe_resumption
       cfg.safe_renegotiation
       (compatible_psk && cfg.enable_early_data)
+      ticket12
       cfg.signatureAlgorithms
       cfg.namedGroups
       None // : option (cVerifyData * sVerifyData)
@@ -475,6 +490,19 @@ let zeroRTT mode =
   Some? mode.n_pski &&
   Some? mode.n_server_extensions &&
   List.Tot.existsb E_early_data? (Some?.v mode.n_server_extensions)
+
+val sendticket_12: mode -> bool
+let sendticket_12 mode =
+  Some? mode.n_server_extensions &&
+  List.Tot.existsb E_session_ticket? (Some?.v mode.n_server_extensions)
+
+val resume_12: mode -> bool
+let resume_12 mode =
+  mode.n_protocol_version <> TLS_1p3 &&
+  Some? (find_sessionTicket mode.n_offer) &&
+  length mode.n_offer.ch_sessionID > 0 &&
+  Some? mode.n_sessionID &&
+  equalBytes (Some?.v mode.n_sessionID) mode.n_offer.ch_sessionID
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -797,7 +825,7 @@ let client_ServerHello #region ns sh =
     let ssid = sh.sh_sessionID in
     let cext = offer.ch_extensions in
     let sig  = CoreCrypto.RSASIG in
-    let resume = false in
+    let resume = ssid = Some offer.ch_sessionID && length offer.ch_sessionID > 0 in
     trace ("processing server extensions "^string_of_option_extensions sext);
     if not (acceptableVersion ns.cfg spv sr) then
       Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Protocol version negotiation")
@@ -856,7 +884,7 @@ let client_ServerHello #region ns sh =
             None
             spv
             sr
-            None // (Some ssid)
+            ssid
             cs
             None // pski
             sext
@@ -1169,7 +1197,7 @@ let computeServerMode cfg co serverRandom =
         else Ticket.check_ticket12 t
       in
     (match valid_ticket with
-    | Some (pv, cs, _) ->
+    | Some (pv, cs, ems, _, _) ->
       Correct (Mode
         co
         None // TODO: no HRR

@@ -20,13 +20,20 @@ module MM = MonotoneMap
 #set-options "--lax"
 
 type hostname = string
-type tlabel (h:hostname) = bytes
+type tlabel (h:hostname) = t:bytes * tls13:bool
 private let region:rgn = new_region tls_tables_region
 private let tickets : MM.t region hostname tlabel (fun _ -> True) =
   MM.alloc #region #hostname #tlabel #(fun _ -> True)
 
-let lookup h = MM.lookup tickets h
-let extend h t = MM.extend tickets h t
+let lookup (h:hostname) = MM.lookup tickets h
+let extend (h:hostname) (t:tlabel h) = MM.extend tickets h t
+
+type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * msId * ms:bytes
+private let sessions12 : MM.t region bytes session12 (fun _ -> True) =
+  MM.alloc #region #bytes #session12 #(fun _ -> True)
+
+let s12_lookup (tid:bytes) = MM.lookup sessions12 tid
+let s12_extend (tid:bytes) (s:session12 tid) = MM.extend sessions12 tid s
 
 let ticketid (a:aeadAlg) : St (AE.id) =
   assume false;
@@ -61,10 +68,26 @@ let set_ticket_key (a:aeadAlg) (kv:bytes) : St (bool) =
     ticket_enc := Key tid s wr rd; true
   else false
 
+// TODO absolute bare bone for functionality
+// We should expand with certificates, mode, etc
 type ticket =
-| Ticket12: protocolVersion -> cs:cipherSuite{CipherSuite? cs} -> ms:bytes -> ticket
-| Ticket13: cs:cipherSuite{CipherSuite13? cs} -> li:logInfo -> pre_rmsId li -> rms:bytes -> ticket
+  // 1.2 ticket
+  | Ticket12:
+    pv: protocolVersion ->
+    cs: cipherSuite{CipherSuite? cs} ->
+    ems: bool ->
+    msId: msId ->
+    ms: bytes ->
+    ticket
+  // 1.3 RMS PSK
+  | Ticket13:
+    cs: cipherSuite{CipherSuite13? cs} ->
+    li: logInfo ->
+    rmsId: pre_rmsId li ->
+    rms: bytes ->
+    ticket
 
+// Currently we use dummy indexes until we can serialize them properly
 let dummy_rmsid ae h =
   let li = {
     li_sh_cr = CC.random 32;
@@ -81,15 +104,19 @@ let dummy_rmsid ae h =
   let i : rmsId li = RMSID (ASID (Salt (EarlySecretID (NoPSK h)))) log in
   (| li, i |)
 
+// Dummy msId TODO serialize and encrypt them properly
+let dummy_msId pv cs ems =
+  StandardMS PMS.DummyPMS (CC.random 64) (kefAlg pv cs ems)
+
 let check_ticket (b:bytes{length b <= 65551}) =
   let Key tid salt _ rd = !ticket_enc in
-  if length b < AE.ivlen tid + 7 then None else
+  if length b < AE.ivlen tid + AE.taglen tid + 8 then None else
   let (nb, b) = split b (AE.ivlen tid) in
   let iv = xor (AE.ivlen tid) nb salt in
   match AE.decrypt #tid #65535 rd iv empty_bytes b with
   | None -> None
   | Some plain ->
-    if length plain < 7 then None
+    if length plain < 8 then None
     else
       let (pvb, r) = split plain 2 in
       match parseVersion pvb with
@@ -104,12 +131,16 @@ let check_ticket (b:bytes{length b <= 65551}) =
           | TLS_1p3, CipherSuite13 ae h ->
             let (| li, rmsId |) = dummy_rmsid ae h in
             Some (Ticket13 cs li rmsId rms)
-          | TLS_1p2, CipherSuite _ _ _ -> Some (Ticket12 pv cs rms)
+          | TLS_1p2, CipherSuite _ _ _ ->
+            let (emsb, ms) = split rms 1 in
+            let ems = 0z <> cbyte emsb in
+            let msId = dummy_msId pv cs ems in
+            Some (Ticket12 pv cs ems msId ms)
 
 let create_ticket t =
   let Key tid salt wr _ = !ticket_enc in
   let pv, cs, b = match t with
-    | Ticket12 pv cs ms -> pv, cs, ms
+    | Ticket12 pv cs ems _ ms -> pv, cs, abyte (if ems then 1z else 0z) @| ms
     | Ticket13 cs _ _ rms -> TLS_1p3, cs, rms in
   let plain = (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b) in
   let nb = CC.random 12 in
@@ -135,5 +166,5 @@ let check_ticket13 b =
 
 let check_ticket12 b =
   match check_ticket b with
-  | Some (Ticket12 pv cs ms) -> Some (pv, cs, ms)
+  | Some (Ticket12 pv cs ems msId ms) -> Some (pv, cs, ems, msId, ms)
   | _ -> None
