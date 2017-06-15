@@ -61,7 +61,14 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(FSTARLIB) $(wildcard $(FFI_HOME)/*.ml) $(wildca
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
-%.cmi %.cmx: %.ml
+FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+
+.PHONY: $(FSTARLIB)
+
+$(FSTARLIB):
+	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
+
+%.cmi %.cmx: $(FSTARLIB) %.ml
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
 
@@ -77,13 +84,6 @@ $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(OD
 	OCAMLPATH=$(FSTAR_HOME)/bin ocamlfind dep -native -slash -all $(OCAMLPKG) $(OCAML_INCLUDE_PATHS) $(addsuffix /*.ml,$(OCAML_PATHS)) > .depend-ML
 
 -include .depend-ML
-
-FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
-
-.PHONY: $(FSTARLIB)
-
-$(FSTARLIB):
-	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
 
 $(ODIR)/.deporder: $(FSTARLIB) $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
