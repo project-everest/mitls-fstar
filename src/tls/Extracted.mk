@@ -45,6 +45,13 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  --include concrete-flags $<
 
+FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+
+.PHONY: $(FSTARLIB)
+
+$(FSTARLIB):
+	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
+
 # Try to only rebuild CoreCrypto when necessary
 $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
 		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml $(FSTARLIB)
@@ -61,14 +68,7 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(FSTARLIB) $(wildcard $(FFI_HOME)/*.ml) $(wildca
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
-FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
-
-.PHONY: $(FSTARLIB)
-
-$(FSTARLIB):
-	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
-
-%.cmi %.cmx: $(FSTARLIB) %.ml
+%.cmi %.cmx: %.ml
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
 
