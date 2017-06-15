@@ -74,7 +74,7 @@ $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(OD
 	$(ODIR)/FFI.ml \
 	$(ODIR)/TestAPI.ml \
 	$(ODIR)/TestFFI.ml
-	ocamlfind ocamldep -native -slash -all $(OCAMLPKG) $(OCAML_INCLUDE_PATHS) $(addsuffix /*.ml,$(OCAML_PATHS)) > .depend-ML
+	OCAMLPATH=$(FSTAR_HOME)/bin ocamlfind dep -native -slash -all $(OCAMLPKG) $(OCAML_INCLUDE_PATHS) $(addsuffix /*.ml,$(OCAML_PATHS)) > .depend-ML
 
 -include .depend-ML
 
@@ -97,13 +97,13 @@ mitls.cmxa: \
   $(FFI_HOME)/FFICallbacks.cmxa \
   $(ODIR)/.deporder $(ODIR)/FFI.cmx \
   $(ODIR)/FFIRegister.cmx
-	$(OCAMLOPT) $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
+	$(OCAMLOPT_BARE) $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
 mitls.exe: mitls.cmxa test/mitls.cmx $(FSTARLIB)
 	$(OCAMLOPT) -linkpkg $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
 	  $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	  $(LCDIR)/lowc_stub.o  \
-	  $(FFI_HOME)/FFICallbacks.cmxa \
+	  $(FFI_HOME)/FFICallbacks.cmxa $(LCDIR)/LowCProvider.cmxa \
 	  mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
 
 test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml $(FSTARLIB)
