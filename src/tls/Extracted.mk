@@ -102,14 +102,13 @@ mitls.cmxa: \
 mitls.exe: mitls.cmxa test/mitls.cmx $(FSTARLIB)
 	$(OCAMLOPT) -linkpkg $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
 	  $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	  $(LCDIR)/lowc_stub.o  \
 	  $(FFI_HOME)/FFICallbacks.cmxa $(LCDIR)/LowCProvider.cmxa \
 	  mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
 
 test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml $(FSTARLIB)
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	mitls.cmxa \
 	$(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
@@ -129,7 +128,7 @@ LIBMITLS=libmitls.dll
 $(LIBMITLS): mitls.cmxa $(FSTARLIB)
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -output-obj -g mitls.cmxa -o $(LIBMITLS)
 else
@@ -139,12 +138,12 @@ ifeq ($(UNAME_S),Darwin)
 $(LIBMITLS): mitls.cmxa $(FSTARLIB)
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -ccopt -lasmrun -g mitls.cmxa -o libmitls.dylib
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -g mitls.cmxa -o $(LIBMITLS)
 else
@@ -155,7 +154,7 @@ $(LIBMITLS): mitls.cmxa $(FSTARLIB)
     #   can result in heap corruptions and crashes.
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
-	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
+	$(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -output-obj -g mitls.cmxa -o $(LIBMITLS) \
 	-ccopt "-Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker libmitls_version_script"
