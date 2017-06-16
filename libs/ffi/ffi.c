@@ -186,13 +186,16 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
 }
 
 // The OCaml runtime system must be acquired before calling this
-static int ocaml_set_ticket_key(const char *ticketkey)
+static int ocaml_set_ticket_key(const char *alg, const char *ticketkey, size_t klen)
 {
     int ret;
     CAMLparam0();
-    CAMLlocal2(r, tkey);
-    tkey = caml_copy_string(ticketkey);
-    r = caml_callback_exn(*g_mitls_FFI_SetTicketKey, tkey);
+    CAMLlocal3(r, a, tkey);
+    tkey = caml_alloc_string(klen);
+    memcpy(String_val(tkey), ticketkey, klen);
+
+    a = caml_copy_string(alg);
+    r = caml_callback2_exn(*g_mitls_FFI_SetTicketKey, a, tkey);
 
     if (Is_exception_result(r)) {
       report_caml_exception(r, NULL); // bugbug: pass in errmsg
@@ -203,11 +206,11 @@ static int ocaml_set_ticket_key(const char *ticketkey)
     CAMLreturnT(int, ret);
 }
 
-int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *tk)
+int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
 {
     int ret;
     caml_acquire_runtime_system();
-    ret = ocaml_set_ticket_key(tk);
+    ret = ocaml_set_ticket_key(alg, tk, klen);
     caml_release_runtime_system();
     return ret;
 }

@@ -308,14 +308,11 @@ let ffiSetALPN cfg x =
   ) apl in
   { cfg with alpn = if apl=[] then None else Some apl }
 
-val ffiSetTicketKey: x:string -> ML bool
-let ffiSetTicketKey x =
-  match String.split [':'] x with
-  | [ae; key] ->
-    (match findsetting ae aeads with
-    | None -> false
-    | Some a -> TLS.set_ticket_key a (bytes_of_hex key))
-  | _ -> false
+val ffiSetTicketKey: a:string -> k:string -> ML bool
+let ffiSetTicketKey a k =
+  (match findsetting a aeads with
+  | None -> false
+  | Some a -> TLS.set_ticket_key a (abytes k))
 
 type callbacks = FFICallbacks.callbacks
 
