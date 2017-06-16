@@ -1174,6 +1174,7 @@ let readOne c i =
       begin
         trace "read Data fragment";
         match fst !c.state with
+        // FIXME June 15: too lax! we could accept appdata too early
         | _ -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
 //      | Open -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
 //      | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"
