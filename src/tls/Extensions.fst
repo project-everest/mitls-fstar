@@ -1019,7 +1019,7 @@ val prepareExtensions:
   k:valid_cipher_suites{List.Tot.length k < 256} ->
   option string -> // SNI
   option alpn -> // ALPN
-  bool ->
+  bool -> // EMS
   bool ->
   bool -> // EDI (Nego checks that PSK is compatible)
   option bytes -> // session_ticket
@@ -1032,7 +1032,7 @@ val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions minpv pv cs host alps sres sren edi ticket sigAlgs namedGroups ri ks psks =
+let prepareExtensions minpv pv cs host alps ems sren edi ticket sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -1070,7 +1070,7 @@ let prepareExtensions minpv pv cs host alps sres sren edi ticket sigAlgs namedGr
       | None -> res
     in
     // Include extended_master_secret when resuming
-    let res = if sres then E_extended_ms :: res else res in
+    let res = if ems then E_extended_ms :: res else res in
     let res = E_signature_algorithms sigAlgs :: res in
     let res =
       if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
@@ -1302,8 +1302,8 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       | Some name -> Some (E_server_name []) // Acknowledge client's choice
       | _ -> None)
   | E_extended_ms ->
-    if pv = TLS_1p3 then None
-    else Some E_extended_ms // REMARK: not depending on cfg.safe_resumption
+    if pv = TLS_1p3 || not cfg.extended_master_secret then None
+    else Some E_extended_ms
   | E_ec_point_format ec_point_format_list -> // REMARK: ignores client's list
     if pv = TLS_1p3 then None // No ec_point_format in TLS 1.3
     else Some (E_ec_point_format [ECP_UNCOMPRESSED])
@@ -1318,7 +1318,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | E_supported_groups named_group_list ->
     if pv = TLS_1p3 then
       // REMARK: Purely informative, can only appear in EncryptedExtensions
-      Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
+      Some (E_supported_groups (list_valid_ng_is_list_ng cfg.named_groups))
     else None
   | E_early_data b -> // EE
     if cfg.enable_early_data && pski = Some 0 then Some (E_early_data None) else None

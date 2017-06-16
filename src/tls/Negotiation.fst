@@ -371,7 +371,7 @@ val computeOffer: r:role -> cfg:config -> resume:TLSInfo.resumeInfo r -> nonce:T
   -> Tot offer
 let computeOffer r cfg resume nonce ks pskinfo =
   let ticket12, sid =
-    match resume, cfg.enable_tickets, cfg.minVer with
+    match resume, cfg.enable_tickets, cfg.min_version with
     | _, _, TLS_1p3 -> None, empty_bytes // Don't bother sending session_ticket
     // Similar to what OpenSSL does, when we offer a 1.2 ticket
     // we send the hash of the ticket as SID to disambiguate the state machine
@@ -393,33 +393,28 @@ let computeOffer r cfg resume nonce ks pskinfo =
     | None -> None in
   let extensions =
     Extensions.prepareExtensions
-      cfg.minVer
-      cfg.maxVer
-      cfg.ciphersuites
+      cfg.min_version
+      cfg.max_version
+      cfg.cipher_suites
       cfg.peer_name
       alpn
-      cfg.safe_resumption
+      cfg.extended_master_secret
       cfg.safe_renegotiation
       (compatible_psk && cfg.enable_early_data)
       ticket12
-      cfg.signatureAlgorithms
-      cfg.namedGroups
+      cfg.signature_algorithms
+      cfg.named_groups
       None // : option (cVerifyData * sVerifyData)
       ks
       pskinfo
   in
-  let compressions =
-    match cfg.compressions with
-    | [] -> [NullCompression]
-    | _  -> cfg.compressions
-  in
   {
-    ch_protocol_version = minPV TLS_1p2 cfg.maxVer; // legacy for 1.3
+    ch_protocol_version = minPV TLS_1p2 cfg.max_version; // legacy for 1.3
     ch_client_random = nonce;
     ch_sessionID = sid;
-    ch_cipher_suites = cfg.ciphersuites;
+    ch_cipher_suites = cfg.cipher_suites;
     // This file is reconstructed from ch_cipher_suites in HandshakeMessages.clientHelloBytes;
-    ch_compressions = cfg.compressions;
+    ch_compressions = [NullCompression];
     ch_extensions = Some extensions
   }
 
@@ -530,22 +525,22 @@ let getMode #region #role ns =
   | S_Complete mode _ ->
   mode
 
-(** Returns cfg.maxVersion or the negotiated version, when known *)
+(** Returns cfg.max_versionsion or the negotiated version, when known *)
 val version: #region:rgn -> #role:TLSConstants.role -> t region role ->
   ST protocolVersion
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let version #region #role ns =
   match MR.m_read ns.state with
-  | C_Init _ -> ns.cfg.maxVer
-  | C_Offer _ -> ns.cfg.maxVer
-  | C_HRR o _ -> ns.cfg.maxVer
-  | C_WaitFinished1 _ -> ns.cfg.maxVer
+  | C_Init _ -> ns.cfg.max_version
+  | C_Offer _ -> ns.cfg.max_version
+  | C_HRR o _ -> ns.cfg.max_version
+  | C_WaitFinished1 _ -> ns.cfg.max_version
   | C_Mode mode
   | C_WaitFinished2 mode _
   | C_Complete mode _ -> mode.n_protocol_version
-  | S_Init _ -> ns.cfg.maxVer
-  | S_HRR o _ -> ns.cfg.maxVer
+  | S_Init _ -> ns.cfg.max_version
+  | S_HRR o _ -> ns.cfg.max_version
   | S_ClientHello mode
   | S_Mode mode
   | S_Complete mode _ -> mode.n_protocol_version
@@ -591,7 +586,7 @@ val sign: #region:rgn -> #role:TLSConstants.role -> t region role -> bytes ->
   (ensures (fun h0 _ h1 -> True))
 let sign #region #role ns tbs =
   let mode = getMode ns in
-  match signatureScheme_of_mode mode ns.cfg.signatureAlgorithms with
+  match signatureScheme_of_mode mode ns.cfg.signature_algorithms with
   | None -> None
   | Some scheme ->
     begin
@@ -674,7 +669,7 @@ let negotiate_version cfg offer =
   match offered_versions TLS_1p0 offer with
   | Error z -> Error z
   | Correct vs ->
-    match List.Tot.find (fun v -> geqPV cfg.maxVer v && geqPV v cfg.minVer) vs with
+    match List.Tot.find (fun v -> geqPV cfg.max_version v && geqPV v cfg.min_version) vs with
     | Some v -> Correct v
     | None -> Error(AD_protocol_version, "protocol version negotiation: mismatch")
 
@@ -694,7 +689,7 @@ let negotiate l1 l2 =
 *)
 val negotiateCipherSuite: cfg:config -> pv:protocolVersion -> ccs:valid_cipher_suites -> Tot (result (TLSConstants.kexAlg * option TLSConstants.sigAlg * TLSConstants.aeAlg * valid_cipher_suite))
 let negotiateCipherSuite cfg pv ccs =
-  match negotiate ccs cfg.ciphersuites with
+  match negotiate ccs cfg.cipher_suites with
   | Some(CipherSuite kex sa ae) -> Correct(kex,sa,ae,CipherSuite kex sa ae)
   | None -> Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "Cipher suite negotiation failed")
 
@@ -716,7 +711,7 @@ let rec negotiateGroupKeyShare cfg pv exts =
         | None -> None
         | Some (Extensions.E_key_share (CommonDH.ClientKeyShare gl)) ->
             let filter (g, gx) =
-              List.Tot.mem g cfg.namedGroups &&
+              List.Tot.mem g cfg.named_groups &&
               ( (SEC? g && (kex = Kex_ECDHE || kex = Kex_PSK_ECDHE)) ||
                 (FFDHE? g && (kex = Kex_DHE || kex = Kex_PSK_DHE)) ) in
             Some(match List.Tot.filter filter gl)) in
@@ -729,7 +724,7 @@ let rec negotiateGroupKeyShare cfg pv exts =
     // todo support HRR depending on supported_groups
 
   else if kex = Kex_ECDHE && Some? supported then
-    let filter g = SEC? g && List.Tot.mem g cfg.namedGroups in
+    let filter g = SEC? g && List.Tot.mem g cfg.named_groups in
     let gs = List.Tot.filter
 
     Correct(Some (match List.Tot.filter filter gs), None)
@@ -751,7 +746,7 @@ let rec negotiateGroupKeyShare cfg pv exts =
     let filter x =
       (match kex with | Kex_DHE -> FFDHE? x | Kex_ECDHE -> SEC? x | _ -> false) in
     if kex = Kex_DHE || kex = Kex_ECDHE then
-      (match List.Tot.filter filter cfg.namedGroups with
+      (match List.Tot.filter filter cfg.named_groups with
       | gn :: _ -> Correct (Some gn, None)
       | [] -> Error(AD_decode_error, "no valid group is configured for the selected cipher suite"))
     else Correct(None, None)
@@ -777,9 +772,9 @@ val acceptableVersion: config -> protocolVersion -> TLSInfo.random -> Tot bool
 let acceptableVersion cfg pv sr =
   // we statically know that the offered versions are compatible with our config
   // (we may prove e.g. acceptableVersion pv ==> pv in offered_versions
-  geqPV pv cfg.minVer &&
-  geqPV cfg.maxVer pv &&
-  not (isSentinelRandomValue cfg.maxVer pv sr)
+  geqPV pv cfg.min_version &&
+  geqPV cfg.max_version pv &&
+  not (isSentinelRandomValue cfg.max_version pv sr)
 
 (** Confirms that the ciphersuite negotiated by the server was:
   - consistent with the client config;
@@ -791,8 +786,7 @@ let acceptableVersion cfg pv sr =
 *)
 val acceptableCipherSuite: config -> protocolVersion -> valid_cipher_suite -> Tot bool
 let acceptableCipherSuite cfg spv cs =
-  List.Tot.existsb (fun x -> x = cs) cfg.ciphersuites &&
-  not (isAnonCipherSuite cs) || cfg.allowAnonCipherSuite
+  List.Tot.existsb (fun x -> x = cs) cfg.cipher_suites
 
 let matching_share
   (cext:option (ce:list extension{List.Tot.length ce < 256})) (g:CommonDH.group) :
@@ -979,7 +973,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
       | Some el, ee -> Some (List.Tot.append el ee)
       | None, [] -> None
       | None, ee -> Some ee in
-    let validSig =
+    let validSig, validCert =
       match kexAlg mode, optServerCert, optCertVerify, digest with
       // ADL: for now we tolerate signatures even with PSK key exchanges, as we
       // see nothing wrong with the extra security from the signature as long as
@@ -989,16 +983,27 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
       | _, Some c, Some cv, Some digest ->
         // TODO ensure that valid_offer mandates signature extensions for 1.3
         let Some sal = find_signature_algorithms mode.n_offer in
-        if List.Tot.mem (Some?.v cv.sig_algorithm) sal then
-          let tbs = to_be_signed mode.n_protocol_version Server None digest in
-          let chain = Cert.chain_down c in
-          verify (Some?.v cv.sig_algorithm) chain tbs cv.sig_signature
-        else false // The server signed with an algorithm we did not offer
+        let chain = Cert.chain_down c in
+        let certok =
+          if ns.cfg.check_peer_certificate then
+            Cert.validate_chain chain true ns.cfg.peer_name ns.cfg.ca_file
+          else true in
+        let sigok =
+          if List.Tot.mem (Some?.v cv.sig_algorithm) sal then
+            let tbs = to_be_signed mode.n_protocol_version Server None digest in
+            verify (Some?.v cv.sig_algorithm) chain tbs cv.sig_signature
+          else false // The server signed with an algorithm we did not offer
+        in sigok, certok
       | Kex_PSK_ECDHE, None, None, None
-      | Kex_PSK, None, None, None -> true // PSK
-      | _ -> false in
+      | Kex_PSK, None, None, None -> true, true // PSK
+      // ADL: we may want to recall and revalidate the certificate in PSK
+      // (e.g. it may have expired)
+      | _ -> false, false in
+
     trace ("Signature 1.3: " ^ (if validSig then "Valid" else "Invalid"));
-    if validSig then
+    trace ("Certificate 1.3: " ^ (if validCert then "Valid" else "Invalid"));
+
+    if validSig && validCert then
       let mode = Mode
         mode.n_offer
         mode.n_hrr
@@ -1062,7 +1067,7 @@ let compute_cs13 cfg o psks shares =
     match find_supported_groups o with
     | None -> None
     | Some gs ->
-      match List.Tot.filter (fun g -> List.Tot.mem g cfg.namedGroups) gs with
+      match List.Tot.filter (fun g -> List.Tot.mem g cfg.named_groups) gs with
       | [] -> None
       | g::_ ->
         let Some g = CommonDH.group_of_namedGroup g in
@@ -1073,7 +1078,7 @@ let compute_cs13 cfg o psks shares =
 
   // pick acceptable record ciphersuites
   let ncs = List.Tot.filter
-    (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.ciphersuites)
+    (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites)
     o.ch_cipher_suites in
 
   let psk_kex = Cons? psks in
@@ -1139,7 +1144,7 @@ let computeServerMode cfg co serverRandom =
         Error(AD_handshake_failure, "Client didn't send signature_algorithm extension")
       | Some algs ->
         begin
-        match List.Tot.filter (fun alg -> List.Tot.mem alg cfg.signatureAlgorithms) algs with
+        match List.Tot.filter (fun alg -> List.Tot.mem alg cfg.signature_algorithms) algs with
         | [] -> Error(AD_handshake_failure, "signature algorithm negotiation failed")
         | alg :: _ ->
           begin

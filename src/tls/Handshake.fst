@@ -302,10 +302,10 @@ let client_ClientHello hs i =
   let _, pskids = resumeInfo_of hs in
 
   let shares, binderKeys, pskinfo =
-    match (config_of hs).maxVer  with
+    match (config_of hs).max_version  with
       | TLS_1p3 -> (* compute shares for groups in offer *)
         trace "offering ClientHello 1.3";
-        let bk, pski, shares = KeySchedule.ks_client_13_init hs.ks pskids (config_of hs).namedGroups in
+        let bk, pski, shares = KeySchedule.ks_client_13_init hs.ks pskids (config_of hs).offer_shares in
         Some shares, bk, pski
       | _ ->
         trace "offering ClientHello 1.2";
@@ -986,7 +986,7 @@ val version: s:hs -> Tot protocolVersion
 
 let create (parent:rid) cfg role resume =
   let r = new_region parent in
-  let log = HandshakeLog.create r None (* cfg.maxVer (Nego.hashAlg nego) *) in
+  let log = HandshakeLog.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
   let ks, nonce = KeySchedule.create #r role in
   let nego = Nego.create r role cfg resume nonce in

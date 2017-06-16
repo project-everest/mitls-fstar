@@ -211,27 +211,13 @@ let aeads = [
 let ffiConfig version host =
   let v = s2pv version in
   {defaultConfig with
-    minVer = TLS_1p2;
-    maxVer = v;
-	  peer_name = Some host;
+    min_version = TLS_1p2;
+    max_version = v;
+    peer_name = Some host;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
     private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
-    safe_resumption = true;
-    ciphersuites = cipherSuites_of_nameList [
-          (* mitls.ml ciphersuites *)
-		      TLS_AES_128_GCM_SHA256;
-		      TLS_AES_256_GCM_SHA384;
-		      TLS_CHACHA20_POLY1305_SHA256;
-		      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
-		      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
-		      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-          (* default ciphersuites from TLSInfo.fst follow: *)
-           TLS_RSA_WITH_AES_128_GCM_SHA256;
-           TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-    ];
-    enable_early_data = true; // Test 0-RTT
   }
 
 val ffiSetCertChainFile: cfg:config -> f:string -> ML config
@@ -273,7 +259,7 @@ let ffiSetCipherSuites cfg x =
     | Some a -> a
     ) csl in
   { cfg with
-  ciphersuites = cipherSuites_of_nameList csl
+  cipher_suites = cipherSuites_of_nameList csl
   }
 
 val ffiSetSignatureAlgorithms: cfg:config -> x:string -> ML config
@@ -284,7 +270,7 @@ let ffiSetSignatureAlgorithms cfg x =
     | Some a -> a
   ) sal in
   { cfg with
-  signatureAlgorithms = sal
+  signature_algorithms = sal
   }
 
 val ffiSetNamedGroups: cfg:config -> x:string -> ML config
@@ -295,7 +281,7 @@ let ffiSetNamedGroups cfg x =
     | Some a -> a
   ) ngl in
   { cfg with
-  namedGroups = ngl
+  named_groups = ngl
   }
 
 val ffiSetALPN: cfg:config -> x:string -> ML config

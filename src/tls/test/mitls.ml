@@ -7,21 +7,12 @@ let role = ref Client
 let ffi  = ref false
 let reconnect = ref false
 let config = ref {defaultConfig with
-  minVer = TLS_1p2;
-  maxVer = TLS_1p3;
+  min_version = TLS_1p2;
+  max_version = TLS_1p3;
   check_peer_certificate = false;
   cert_chain_file = "../../data/test_chain.pem";
   private_key_file = "../../data/server.key";
   ca_file = "../../data/CAFile.pem";
-  safe_resumption = true;
-  ciphersuites = cipherSuites_of_nameList
-    [ TLS_AES_128_GCM_SHA256;
-      TLS_AES_256_GCM_SHA384;
-      TLS_CHACHA20_POLY1305_SHA256;
-      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
-      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
-      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
-    ];
   alpn = Some ["http/1.1"];
 }
 
@@ -80,17 +71,17 @@ let prn s (k, _) = s ^ k ^ ", "
 let setcs x =
   let csl = BatString.nsplit x ":" in
   let csl = List.map (fun x->try List.assoc x css with Not_found -> failwith ("Unknown cipher suite "^x^" requested; check --help for list")) csl in
-  config := {!config with ciphersuites = cipherSuites_of_nameList csl}
+  config := {!config with cipher_suites = cipherSuites_of_nameList csl}
 
 let setsa x =
   let sal = BatString.nsplit x ":" in
   let sal = List.map (fun x->try List.assoc x sas with Not_found -> failwith ("Unknown signature algorithm "^x^"; check --help for list")) sal in
-  config := {!config with signatureAlgorithms = sal}
+  config := {!config with signature_algorithms = sal}
 
 let setng x =
   let ngl = BatString.nsplit x ":" in
   let ngl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^"; check --help for list")) ngl in
-  config := {!config with namedGroups = ngl}
+  config := {!config with named_groups = ngl}
 
 let setalpn x =
   let al = BatString.nsplit x ":" in
@@ -105,7 +96,7 @@ let load_psk is_ticket x =
   loaded_psk := id :: !loaded_psk;
   let id = Platform.Bytes.utf8 id in
   let key = Platform.Bytes.bytes_of_hex key in
-  let cipher = List.hd ((!config).ciphersuites) in
+  let cipher = List.hd ((!config).cipher_suites) in
   let (ae, h) = match cipher with
     | CipherSuite13(ae,h) -> ae, h
     | _ -> failwith "the first ciphersuite must be 1.3 to load with PSK" in
@@ -141,8 +132,8 @@ let help = "A TLS test client.\n\n"
 
 let _ =
   Arg.parse [
-    ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with maxVer = v;}), " sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)");
-    ("-mv", Arg.String (fun s -> let v = s2pv s in config := {!config with minVer = v;}), " sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)");
+    ("-v", Arg.String (fun s -> let v = s2pv s in config := {!config with max_version = v;}), " sets maximum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.3)");
+    ("-mv", Arg.String (fun s -> let v = s2pv s in config := {!config with min_version = v;}), " sets minimum protocol version to <1.0 | 1.1 | 1.2 | 1.3> (default: 1.2)");
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
     ("-0rtt", Arg.Unit (fun () -> config := {!config with enable_early_data = true;}), "enable early data (server support and client offer)");
     ("-psk", Arg.String (fun s -> load_psk false s), " L:K add an entry in the PSK database at label L with key K (in hex), associated with the fist current -cipher");
@@ -151,7 +142,7 @@ let _ =
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
-    ("-noems", Arg.Unit (fun () -> config := {!config with safe_resumption = false;}), "disable extended master secret in TLS <= 1.2 (client only)");
+    ("-noems", Arg.Unit (fun () -> config := {!config with extended_master_secret = false;}), "disable extended master secret support");
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
     ("-alpn", Arg.String setalpn, "colon-separated list of application-level protocols");
@@ -173,10 +164,10 @@ let _ =
        (if !role = Client then "127.0.0.1" else "0.0.0.0"), 443
     in
 
-  match !role, !config.maxVer with
-  | Client, _ when !ffi    -> TestFFI.client !config host (Z.of_int port)
-  | Server, _ when !ffi    -> TestFFI.server !config host (Z.of_int port)
-  | Client, _ ->
+  match !role with
+  | Client when !ffi -> TestFFI.client !config host (Z.of_int port)
+  | Server when !ffi -> TestFFI.server !config host (Z.of_int port)
+  | Client ->
     (let _ = TestAPI.client !config host (Z.of_int port) None (!offered_psk) in
     match !reconnect, !config.peer_name with
     | true, Some h ->
@@ -187,4 +178,4 @@ let _ =
         | Some (t, false) -> !offered_psk, Some t in
       TestAPI.client !config host (Z.of_int port) ot12 opsk
     | _ -> ())
-  | Server, _ -> TestAPI.server !config host (Z.of_int port)
+  | Server -> TestAPI.server !config host (Z.of_int port)
