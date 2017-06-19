@@ -118,7 +118,7 @@ let rec parseCertificateList13 b =
     match vlsplit 2 r with
     | Error _ -> Error(AD_bad_certificate_fatal, "not enough bytes (extension list)")
     | Correct (e,r) -> (
-      match parseExtensions Client (vlbytes 2 e) with
+      match parseExtensions EM_Certificate (vlbytes 2 e) with
       | Error z -> Error z 
       | Correct (exts,_) -> (
         match parseCertificateList13 r with

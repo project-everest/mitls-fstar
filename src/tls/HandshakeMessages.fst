@@ -158,7 +158,6 @@ noeq type sh = {
 noeq type hrr = {
   hrr_protocol_version: protocolVersion;
   hrr_cipher_suite: valid_cipher_suite;
-  hrr_named_group: namedGroup; // JK : is it the expected type here ?
   hrr_extensions: he:list extension{List.Tot.length he < 256};
 }
 
@@ -697,7 +696,7 @@ let parseClientHello data =
             | Error z -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse compression bytes")
             | Correct (cmBytes, extensions) ->
               let cm = parseCompressions cmBytes in
-               (match parseOptExtensions Client extensions with
+               (match parseOptExtensions EM_ClientHello extensions with
                 | Error z -> Error z
                 | Correct (exts, obinders) ->
                     if (match exts with
@@ -890,7 +889,7 @@ let parseServerHello data =
            (match parseCipherSuite csBytes with
             | Error z -> Error z
             | Correct cs ->
-              (match parseOptExtensions Server data with
+              (match parseOptExtensions EM_ServerHello data with
                | Error z -> Error z
                | Correct (exts, obinders) ->
                  if (match exts with
@@ -927,7 +926,7 @@ let parseServerHello data =
                        | UnknownCompression _ ->
                          Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "server selected a compression mode")
                        | NullCompression ->
-                          (match parseOptExtensions Server data with
+                          (match parseOptExtensions EM_ServerHello data with
                            | Error z -> Error z
                            | Correct (exts,obinders) ->
                              if (match exts with
@@ -1603,7 +1602,7 @@ let parseSessionTicket13 b =
           Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: dangling bytes")
         else
           begin
-          match parseExtensions Client (vlbytes 2 exts) with
+          match parseExtensions EM_NewSessionTicket (vlbytes 2 exts) with
           | Correct (exts,None) ->
             Correct ({ ticket13_lifetime = lifetime; ticket13_age_add = age;
                        ticket13_ticket = ticket;
@@ -1619,11 +1618,10 @@ let parseSessionTicket13 b =
 (* Hello retry request *)
 val helloRetryRequestBytes: hrr -> Tot (b:bytes{hs_msg_bytes HT_hello_retry_request b})
 let helloRetryRequestBytes hrr =
-  let pv = versionBytes hrr.hrr_protocol_version in
-  let cs_bytes = cipherSuiteBytes hrr.hrr_cipher_suite in
-  let ng = namedGroupBytes hrr.hrr_named_group in
-  let exts = extensionsBytes hrr.hrr_extensions in
-  let data = pv @| (cs_bytes @| (ng @| exts)) in
+  let pvb = versionBytes hrr.hrr_protocol_version in
+  let csb = cipherSuiteBytes hrr.hrr_cipher_suite in
+  let extb = extensionsBytes hrr.hrr_extensions in
+  let data = pvb @| csb @| extb in
   lemma_repr_bytes_values (length data);
   messageBytes HT_hello_retry_request data
 
@@ -1640,23 +1638,19 @@ let helloRetryRequestBytes_is_injective h1 h2 =
   if helloRetryRequestBytes h1 = helloRetryRequestBytes h2 then (
     let pv1 = versionBytes h1.hrr_protocol_version in
     let cs_bytes1 = cipherSuiteBytes h1.hrr_cipher_suite in
-    let ng1 = namedGroupBytes h1.hrr_named_group in
     let exts1 = extensionsBytes h1.hrr_extensions in
     let pv2 = versionBytes h2.hrr_protocol_version in
     let cs_bytes2 = cipherSuiteBytes h2.hrr_cipher_suite in
-    let ng2 = namedGroupBytes h2.hrr_named_group in
     let exts2 = extensionsBytes h2.hrr_extensions in
-    let data1 = pv1 @| (cs_bytes1 @| (ng1 @| exts1)) in
+    let data1 = pv1 @| cs_bytes1 @| exts1 in
     lemma_repr_bytes_values (length data1);
-    let data2 = pv2 @| (cs_bytes2 @| (ng2 @| exts2)) in
+    let data2 = pv2 @| cs_bytes2 @| exts2 in
     lemma_repr_bytes_values (length data2);
     messageBytes_is_injective HT_hello_retry_request data1 HT_hello_retry_request data2;
-    lemma_append_inj pv1 (cs_bytes1 @| (ng1 @| exts1)) pv2  (cs_bytes2 @| (ng2 @| exts2));
-    lemma_append_inj cs_bytes1 (ng1 @| exts1) cs_bytes2 (ng2 @| exts2);
-    lemma_append_inj ng1 exts1 ng2 exts2;
+    lemma_append_inj pv1 (cs_bytes1 @| exts1) pv2 (cs_bytes2 @| exts2);
+    lemma_append_inj cs_bytes1 exts1 cs_bytes2 exts2;
     versionBytes_is_injective h1.hrr_protocol_version h2.hrr_protocol_version;
     cipherSuiteBytes_is_injective h1.hrr_cipher_suite h2.hrr_cipher_suite;
-    namedGroupBytes_is_injective h1.hrr_named_group h2.hrr_named_group;
     extensionsBytes_is_injective h1.hrr_extensions h2.hrr_extensions
   )
 
@@ -1669,21 +1663,15 @@ let parseHelloRetryRequest b =
     | Correct(pv) ->
       (match parseCipherSuite cs with
       | Correct(cs) ->
-  if length data >= 2 then
-    let ng, data = split data 2 in
-    (match parseNamedGroup ng with
-    | Correct(ng) ->
-      (match parseExtensions Server data with
-      | Correct(exts,None) ->
-        if List.Tot.length exts < 256 then
-        Correct ({ hrr_protocol_version = pv;
-      hrr_cipher_suite = cs;
-      hrr_named_group = ng;
-      hrr_extensions = exts })
-    else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
-      | Error(z) -> Error(z))
-    | Error(z) -> Error(z))
-  else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
+        (match parseExtensions EM_HelloRetryRequest data with
+        | Correct(exts, None) ->
+          if List.Tot.length exts < 256 then
+            Correct ({
+              hrr_protocol_version = pv;
+              hrr_cipher_suite = cs;
+              hrr_extensions = exts; })
+          else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
+        | Error(z) -> Error(z))
       | Error(z) -> Error(z))
     | Error(z) -> Error(z))
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Wrong hello retry request format")
@@ -1706,10 +1694,10 @@ let encryptedExtensionsBytes_is_injective e1 e2 =
   extensionsBytes_is_injective e1 e2
 
 (* JK : TODO *)
-assume val lemma_extensionsBytes_length: r:role -> b:bytes ->
+assume val lemma_extensionsBytes_length: mt:ext_msg -> b:bytes ->
   Lemma (requires True)
   (ensures (
-    match parseExtensions r b with
+    match parseExtensions mt b with
     | Error _ -> True
     | Correct (ee, obinders) ->
     let len = match obinders with
@@ -1722,11 +1710,11 @@ assume val lemma_extensionsBytes_length: r:role -> b:bytes ->
 val parseEncryptedExtensions: b:bytes{repr_bytes(length b) <= 3} ->
     Tot (result valid_ee)
 let parseEncryptedExtensions payload  =
-  match parseExtensions Server payload with
+  match parseExtensions EM_EncryptedExtensions payload with
   | Error z -> Error z
   | Correct (exts,None) ->
     if List.Tot.length exts >= 256 then  error "too many extensions" else
-    ( lemma_extensionsBytes_length Server payload;
+    ( lemma_extensionsBytes_length EM_EncryptedExtensions payload;
       Correct exts)
 
 (*

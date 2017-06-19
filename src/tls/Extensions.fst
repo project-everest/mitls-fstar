@@ -20,6 +20,15 @@ open TLSConstants
 (*************************************************
  Define extension.
  *************************************************)
+// Extensions may appear in the following messages
+// The concrete message syntax
+ type ext_msg =
+   | EM_ClientHello
+   | EM_ServerHello
+   | EM_EncryptedExtensions
+   | EM_Certificate
+   | EM_NewSessionTicket
+   | EM_HelloRetryRequest
 
 (* As a static invariant, we record that any intermediate, parsed
 extension and extension lists can be formatted into bytes without
@@ -181,11 +190,12 @@ let client_psk_parse b =
 val server_psk_parse : bytes -> psk
 let server_psk_parse b = ServerPSK (UInt16.uint_to_t (int_of_bytes b))
 
-val parse_psk: role -> bytes -> result (psk * option binders)
-let parse_psk role b =
-  match role with
-  | Client -> client_psk_parse b
-  | Server -> Correct (server_psk_parse b, None)
+val parse_psk: ext_msg -> bytes -> result (psk * option binders)
+let parse_psk mt b =
+  match mt with
+  | EM_ClientHello -> client_psk_parse b
+  | EM_ServerHello -> Correct (server_psk_parse b, None)
+  | _ -> error "PSK extension cannot appear in this message type"
 #reset-options
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
@@ -359,8 +369,8 @@ let serverNameBytes l =
   in
   aux l
 
-private val parseServerName: r:role -> b:bytes -> Tot (result (list serverName))
-let parseServerName r b  =
+private val parseServerName: r:ext_msg -> b:bytes -> Tot (result (list serverName))
+let parseServerName mt b  =
   let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
     if equalBytes b empty_bytes then ExOK []
     else if length b >= 3 then
@@ -368,41 +378,42 @@ let parseServerName r b  =
       begin
       match vlsplit 2 v with
       | Error(x,y) ->
-	ExFail(x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
+	      ExFail(x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
       | Correct(cur, next) ->
-	begin
-	match aux next with
-	| ExFail(x,y) -> ExFail(x,y)
-	| ExOK l ->
-	  let cur =
-	    begin
-	    match cbyte ty with
-	    | 0z -> SNI_DNS(cur)
-	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
-	    end
-	  in
-	  let snidup: serverName -> Tot bool = fun x ->
-	    begin
-	    match x,cur with
-	    | SNI_DNS _, SNI_DNS _ -> true
-	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
-	    | _ -> false
-	    end
-	  in
-	  if List.Tot.existsb snidup l then
-	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
-	  else ExOK(cur :: l)
-	end
+      	begin
+      	match aux next with
+      	| ExFail(x,y) -> ExFail(x,y)
+      	| ExOK l ->
+      	  let cur =
+      	    begin
+      	    match cbyte ty with
+      	    | 0z -> SNI_DNS(cur)
+      	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
+      	    end
+      	  in
+      	  let snidup: serverName -> Tot bool = fun x ->
+      	    begin
+      	    match x,cur with
+      	    | SNI_DNS _, SNI_DNS _ -> true
+      	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
+      	    | _ -> false
+      	    end
+      	  in
+      	  if List.Tot.existsb snidup l then
+      	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
+      	  else ExOK(cur :: l)
+      	end
       end
     else ExFail(AD_decode_error, "Failed to parse SNI")
     in
-    match r with
-    | Server ->
+    match mt with
+    | EM_EncryptedExtensions
+    | EM_ServerHello ->
       if length b = 0 then correct []
       else
-	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
-	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
-    | Client ->
+      	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
+      	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
+    | EM_ClientHello ->
       if length b >= 2 then
 	begin
 	match vlparse 2 b with
@@ -474,7 +485,7 @@ let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension'
   | [] -> ""
 
 (** shallow equality *)
-private let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p) =
+let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p) =
   let q : extension' p * extension' p = e1, e2 in
   match q with
   | E_server_name _, E_server_name _ -> true
@@ -865,14 +876,21 @@ let parseEcpfList b =
       then correct l
       else error "uncompressed point format not supported"
 
+let parseKeyShare mt data =
+  let mt = match mt with
+    | EM_ClientHello -> CommonDH.KS_ClientHello
+    | EM_ServerHello -> CommonDH.KS_ServerHello
+    | EM_HelloRetryRequest -> CommonDH.KS_HRR in
+  CommonDH.parseKeyShare mt data
+
 (* We don't care about duplicates, not formally excluded. *)
 #set-options "--lax"
 
 let normallyNone ctor r =
     (ctor r, None)
 
-val parseExtension: role -> bytes -> result (extension * option binders)
-let parseExtension role b =
+val parseExtension: ext_msg -> bytes -> result (extension * option binders)
+let parseExtension mt b =
   if length b < 4 then error "extension type: not enough bytes" else
   let head, payload = split b 2 in
   match vlparse 2 payload with
@@ -880,8 +898,8 @@ let parseExtension role b =
   | Correct data -> (
     match cbyte2 head with
     | (0x00z, 0x00z) ->
-//      mapResult E_server_name (parseServerName role data)
-      mapResult (normallyNone E_server_name) (parseServerName role data)
+//      mapResult E_server_name (parseServerName mt data)
+      mapResult (normallyNone E_server_name) (parseServerName mt data)
     | (0x00z, 0x0Az) -> // supported groups
       if length data < 2 || length data >= 65538 then error "supported groups" else
       mapResult (normallyNone E_supported_groups) (Parse.parseNamedGroups data)
@@ -898,11 +916,11 @@ let parseExtension role b =
       Correct (E_session_ticket data, None)
 
     | (0x00z, 0x28z) ->
-      mapResult (normallyNone E_key_share) (CommonDH.parseKeyShare (Client? role) data)
+      mapResult (normallyNone E_key_share) (parseKeyShare mt data)
 
     | (0x00z, 0x29z) -> // PSK
       if length data < 2 then error "PSK"
-      else (match parse_psk role data with
+      else (match parse_psk mt data with
       | Error z -> Error z
       | Correct (psk, None) -> Correct (E_pre_shared_key psk, None)
       | Correct (psk, Some binders) -> Correct (E_pre_shared_key psk, Some binders))
@@ -938,8 +956,8 @@ let parseExtension role b =
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
 // SI: simplify binder accumulation code. (Binders should be the last in the list.)
-val parseExtensions: role -> b:bytes -> result (extensions * option binders)
-let parseExtensions role b =
+val parseExtensions: ext_msg -> b:bytes -> result (extensions * option binders)
+let parseExtensions mt b =
   let rec aux: b:bytes -> list extension * option binders
     -> Tot (result (list extension * option binders))
     (decreases (length b)) =
@@ -950,7 +968,7 @@ let parseExtensions role b =
       | Error(z) -> error "extension length"
       | Correct(ext, bytes) ->
       	(* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
-      	(match parseExtension role (ht @| vlbytes 2 ext) with
+      	(match parseExtension mt (ht @| vlbytes 2 ext) with
       	// SI:
       	| Correct (ext, Some binders) ->
       	  (match addOnce ext exts with // fails if the extension already is in the list
@@ -969,12 +987,12 @@ let parseExtensions role b =
 
 (* SI: API. Called by HandshakeMessages. *)
 // returns either Some,Some or None,
-val parseOptExtensions: r:role -> data:bytes -> result (option (list extension) * option binders)
-let parseOptExtensions r data =
+val parseOptExtensions: ext_msg -> data:bytes -> result (option (list extension) * option binders)
+let parseOptExtensions mt data =
   if length data = 0
   then Correct (None,None)
   else (
-    match parseExtensions r data with
+    match parseExtensions mt data with
     | Error z -> Error z
     | Correct (ee,obinders) -> Correct (Some ee, obinders))
 #reset-options

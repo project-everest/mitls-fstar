@@ -1053,6 +1053,7 @@ private let rec compute_cs13_aux (i:nat) (o:offer)
     choices @ (compute_cs13_aux (i+1) o psks g_gx ncs psk_kex)
 
 // returns a list of negotiable "core modes" for TLS 1.3
+// and an optional group and ciphersuite suitable for HRR
 // the key exchange can be derived from cs13
 // (we could stop after finding the first)
 val compute_cs13:
@@ -1060,29 +1061,31 @@ val compute_cs13:
   o: offer ->
   psks: list (PSK.pskid * PSK.pskInfo) ->
   shares: list share (* pre-registered *) ->
-  result (list (cs13 o))
+  result (list (cs13 o) * option (namedGroup * cs:cipherSuite))
 let compute_cs13 cfg o psks shares =
-  // pick the (potential) group to use for DHE/ECDHE
-  let g_gx: option share =
-    match find_supported_groups o with
-    | None -> None
-    | Some gs ->
-      match List.Tot.filter (fun g -> List.Tot.mem g cfg.named_groups) gs with
-      | [] -> None
-      | g::_ ->
-        let Some g = CommonDH.group_of_namedGroup g in
-        match List.Tot.filter (fun g_s -> dfst g_s = g) shares with
-        | [] -> None
-        | s :: _ -> Some s
-    in
-
   // pick acceptable record ciphersuites
   let ncs = List.Tot.filter
     (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites)
     o.ch_cipher_suites in
 
+  // pick the (potential) group to use for DHE/ECDHE
+  // also remember if there is a supported group with no share provided
+  // in case we want to to a HRR
+  let g_gx, g_hrr =
+    match find_supported_groups o with
+    | None -> None, None // No offered group, only PSK
+    | Some gs ->
+      match List.Tot.filter (fun g -> List.Tot.mem g cfg.named_groups) gs with
+      | [] -> None, None // No common group, only PSK
+      | gl ->
+        let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
+        let gl' = List.Tot.map (fun x -> Some?.v (CommonDH.group_of_namedGroup x)) gl in
+        let s = List.Tot.find (fun ((| g, _ |) : share) -> List.Tot.mem g gl') shares in
+        s, csg
+    in
+
   let psk_kex = Cons? psks in
-  Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex)
+  Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex, g_hrr)
 
 // Registration and filtering of DH shares
 let rec filter_psk (l:list Extensions.pskIdentity)
@@ -1107,6 +1110,9 @@ let rec register_shares (l:list pre_share)
   | (| g, gx |) :: t -> (| g, CommonDH.register #g gx |) :: (register_shares t)
 
 //17-03-30 still missing a few for servers.
+type serverMode =
+  | ServerHelloRetryRequest of hrr
+  | ServerMode of mode
 
 // TODO ADL: incorrect as written; CS nego depends on ext nego
 //   (e.g. in TLS 1.2 it's incorrect to select an EC cipher suite if
@@ -1121,7 +1127,7 @@ irreducible val computeServerMode:
   cfg: config ->
   co: offer ->
   serverRandom: TLSInfo.random ->
-  St (result mode)
+  St (result serverMode)
 let computeServerMode cfg co serverRandom =
   // for now, we set the version before negotiating the rest; this may lead to mismatches e.g. on tickets or certificates
   match negotiate_version cfg co with
@@ -1136,8 +1142,15 @@ let computeServerMode cfg co serverRandom =
     let shares = register_shares (gs_of co) in
     match compute_cs13 cfg co pske shares with
     | Error z -> Error z
-    | Correct [] -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
-    | Correct (kex :: _) ->
+    | Correct ([], None) -> Error(AD_handshake_failure, "ciphersuite negotiation failed")
+    | Correct ([], Some (ng, cs)) ->
+      let hrr = {
+        hrr_protocol_version = TLS_1p3;
+        hrr_cipher_suite = cs;
+        hrr_extensions = [Extensions.E_key_share (CommonDH.HRRKeyShare ng)]; // TODO cookie
+      } in
+      Correct(ServerHelloRetryRequest hrr)
+    | Correct (kex :: _, _) ->
       begin
       match find_signature_algorithms co with
       | None ->
@@ -1160,7 +1173,7 @@ let computeServerMode cfg co serverRandom =
           match kex with
           | PSK_EDH j ogx cs  ->
             (trace "Negotiated PSK_EDH key exchange";
-            Correct (Mode
+            Correct (ServerMode (Mode
               co
               None // TODO: no HRR
               TLS_1p3
@@ -1172,10 +1185,10 @@ let computeServerMode cfg co serverRandom =
               None // no server key share yet
               None // TODO: n_client_cert_request
               scert
-              ogx))
+              ogx)))
           | JUST_EDH gx cs ->
             (trace "Negotiated Pure EDH key exchange";
-            Correct (Mode
+            Correct (ServerMode(Mode
               co
               None // TODO: no HRR
               TLS_1p3
@@ -1187,7 +1200,7 @@ let computeServerMode cfg co serverRandom =
               None // no server key share yet
               None // TODO: n_client_cert_request
               scert
-              (Some gx)))
+              (Some gx))))
           end
         end
       end
@@ -1203,7 +1216,7 @@ let computeServerMode cfg co serverRandom =
       in
     (match valid_ticket with
     | Some (pv, cs, ems, _, _) ->
-      Correct (Mode
+      Correct (ServerMode (Mode
         co
         None // TODO: no HRR
         pv
@@ -1215,7 +1228,7 @@ let computeServerMode cfg co serverRandom =
         None
         None
         None
-        None)
+        None))
     | _ ->
       // with TLS 1.2, we pick the first ciphersuite compatible with our credentials
       // we could be a bit stricter and record wether the client is TLS
@@ -1274,7 +1287,7 @@ let computeServerMode cfg co serverRandom =
           trace ("No cert found: "^string_of_error z);
           None
       in
-      Correct (Mode
+      Correct (ServerMode (Mode
         co
         None // no HRR before TLS 1.3
         pv
@@ -1287,24 +1300,83 @@ let computeServerMode cfg co serverRandom =
         None
         scert
         None // no client key share yet for 1.2
-      ))
+      )))
+
+let string_of_ciphersuites csl =
+  List.Tot.fold_left (fun s cs -> s^"; "^(string_of_ciphersuite cs)) "" csl
 
 val server_ClientHello: #region:rgn -> t region Server ->
   HandshakeMessages.ch ->
-  St (result mode)
+  St (result serverMode)
 let server_ClientHello #region ns offer =
   trace ("offered client extensions "^string_of_option_extensions offer.ch_extensions);
+  trace ("offered cipher suites "^(string_of_ciphersuites offer.ch_cipher_suites));
   trace (string_of_result (List.Tot.fold_left (fun s pv -> s^" "^string_of_pv pv) "offered versions")  (offered_versions TLS_1p0 offer));
   match MR.m_read ns.state with
+  | S_HRR o1 hrr ->
+    let o2 = offer in
+    // We only send HRR for KeyShare
+    let [Extensions.E_key_share (CommonDH.HRRKeyShare ng)] = hrr.hrr_extensions in
+    if
+      o1.ch_protocol_version = o2.ch_protocol_version &&
+//      IO.debug_print_string ("PV OK" ^ (print_bytes o1.ch_client_random) ^ "==" ^ (print_bytes o2.ch_client_random)^"\n") &&
+      o1.ch_client_random = o2.ch_client_random &&
+//      IO.debug_print_string "CR OK" &&
+      o1.ch_sessionID = o2.ch_sessionID &&
+//      IO.debug_print_string "SID OK" &&
+      List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
+//      IO.debug_print_string "CS OK" &&
+      o1.ch_compressions = o2.ch_compressions &&
+//      IO.debug_print_string "Comp OK" &&
+      Some? o2.ch_extensions && Some? o1.ch_extensions &&
+//      IO.debug_print_string "Ext OK" &&
+      List.Tot.for_all (fun (e:Extensions.extension) ->
+        match e with
+        | Extensions.E_key_share (CommonDH.ClientKeyShare ecl) ->
+          let ecl = List.Tot.filter (fun (CommonDH.Share g _) -> IO.debug_print_string ("share:" ^ (CommonDH.string_of_group g))) ecl in
+          (match ecl with
+          | [CommonDH.Share g _] -> CommonDH.namedGroup_of_group g = Some ng
+          | _ -> false)
+        | Extensions.E_early_data _ -> false // Forbidden
+        // If we add cookie support we need to treat this case separately
+        // | Extensions.E_cookie c -> c = S_HRR?.cookie ns.state
+        | e ->
+          (match find_client_extension (Extensions.sameExt e) o1 with
+          | None -> false
+          // This allows the client to send less extensions,
+          // but the ones that are sent must be exactly the same
+          | Some e' ->
+            //FIXME: Extensions.E_pre_shared_key "may be updated" 4.1.2
+            equalBytes (extensionBytes e) (extensionBytes e'))
+        ) (Some?.v o2.ch_extensions)
+    then
+      let sm = computeServerMode ns.cfg offer ns.nonce in
+      match sm with
+      | Error z ->
+        trace ("negotiation failed: "^string_of_error z);
+        Error z
+      | Correct (ServerHelloRetryRequest hrr) ->
+        Error(AD_illegal_parameter, "client sent the same hello in response to hello retry")
+      | Correct(ServerMode m) ->
+        trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
+        MR.m_write ns.state (S_ClientHello m);
+        sm
+    else
+      Error(AD_illegal_parameter, "Inconsistant parameters between first and second client hello")
   | S_Init _ ->
-    match computeServerMode ns.cfg offer ns.nonce with
+    let sm = computeServerMode ns.cfg offer ns.nonce in
+    match sm with
     | Error z ->
       trace ("negotiation failed: "^string_of_error z);
       Error z
-    | Correct m ->
+    | Correct (ServerHelloRetryRequest hrr) ->
+      // record the initial offer and return the HRR to HS
+      MR.m_write ns.state (S_HRR offer hrr);
+      sm
+    | Correct (ServerMode m) ->
       trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
       MR.m_write ns.state (S_ClientHello m);
-      Correct m
+      sm
 
 
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =

@@ -688,9 +688,17 @@ let server_ClientHello hs offer obinders =
     else
 
     // Negotiation proceeds in two steps, first resumption / server share
+    // Note that only the nego state machine records HRR
+    // there is currently no S_Wait_CH2 state - the logic is all the same
+    // except for this call to Nego that ensures the two CH are consistent with
+    // the HRR group
     match Nego.server_ClientHello hs.nego offer with
     | Error z -> InError z
-    | Correct mode ->
+    | Correct (Nego.ServerHelloRetryRequest hrr) ->
+      HandshakeLog.send hs.log (HelloRetryRequest hrr);
+      // Note: no handshake state machine transition
+      InAck false false
+    | Correct (Nego.ServerMode mode) ->
 
     let pv = mode.Nego.n_protocol_version in
     let cr = mode.Nego.n_offer.ch_client_random in
