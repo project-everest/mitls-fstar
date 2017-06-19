@@ -45,22 +45,22 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  --include concrete-flags $<
 
-FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
+.PHONY: $(ULIB_ML)
 
-$(FSTARLIB):
-	$(MAKE) -C $(ULIB_ML)
+$(ULIB_ML):
+	$(MAKE) -C $@
 
 # Try to only rebuild CoreCrypto when necessary
 $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
-		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml $(FSTARLIB)
+		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
 	$(MAKE) -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml
 
 # Try to only rebuild LowCProvider when necessary
 # Missing: not dependency on hacl-star/code/*
-$(LCDIR)/LowCProvider.cmxa: $(FSTARLIB) $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
+$(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
 	$(MAKE) -C $(LCDIR)
 
-$(FFI_HOME)/FFICallbacks.cmxa: $(FSTARLIB) $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
+$(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
 	$(MAKE) -C $(FFI_HOME)
 
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
@@ -83,13 +83,12 @@ $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(OD
 
 -include .depend-ML
 
-$(ODIR)/.deporder: $(FSTARLIB) $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
+$(ODIR)/.deporder: $(ULIB_ML) $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
 	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 
 # We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
 mitls.cmxa: \
-  $(FSTARLIB) \
   $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(LCDIR)/LowCProvider.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa \
@@ -97,13 +96,13 @@ mitls.cmxa: \
   $(ODIR)/FFIRegister.cmx
 	$(OCAMLOPT_BARE) $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
-mitls.exe: mitls.cmxa test/mitls.cmx $(FSTARLIB)
+mitls.exe: mitls.cmxa test/mitls.cmx
 	$(OCAMLOPT) -linkpkg $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -I test/ -g \
 	  $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	  $(FFI_HOME)/FFICallbacks.cmxa $(LCDIR)/LowCProvider.cmxa \
 	  mitls.cmxa $(LCDIR)/libllcrypto.a test/mitls.cmx -o mitls.exe
 
-test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml $(FSTARLIB)
+test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
@@ -123,7 +122,7 @@ test: test.out mitls.exe cmitls.exe
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
 
-$(LIBMITLS): mitls.cmxa $(FSTARLIB)
+$(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
@@ -133,7 +132,7 @@ else
 UNAME_S = $(shell uname -s)
 LIBMITLS=libmitls.so
 ifeq ($(UNAME_S),Darwin)
-$(LIBMITLS): mitls.cmxa $(FSTARLIB)
+$(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
@@ -145,7 +144,7 @@ $(LIBMITLS): mitls.cmxa $(FSTARLIB)
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -runtime-variant _pic -ccopt -dynamiclib -g mitls.cmxa -o $(LIBMITLS)
 else
-$(LIBMITLS): mitls.cmxa $(FSTARLIB)
+$(LIBMITLS): mitls.cmxa
     # pass "-z noexecstack" to better support Bash on Windows
     # Use a version script to ensure that CoreCrypto calls to OpenSSL crypto are resolved by 
     #   libcrypt.a at link time, not against libcrypto*.so at run-time, as version mismatches
