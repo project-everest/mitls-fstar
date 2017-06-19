@@ -47,10 +47,8 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 
 FSTARLIB=$(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa
 
-.PHONY: $(FSTARLIB)
-
 $(FSTARLIB):
-	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
+	$(MAKE) -C $(ULIB_ML)
 
 # Try to only rebuild CoreCrypto when necessary
 $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
@@ -68,7 +66,7 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(FSTARLIB) $(wildcard $(FFI_HOME)/*.ml) $(wildca
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
-%.cmi %.cmx: %.ml
+%.cmi %.cmx: $(FSTARLIB) %.ml
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
 
