@@ -66,7 +66,7 @@ $(FFI_HOME)/FFICallbacks.cmxa: $(FSTARLIB) $(wildcard $(FFI_HOME)/*.ml) $(wildca
 $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
-%.cmi %.cmx: $(FSTARLIB) %.ml
+%.cmi %.cmx: %.ml
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
 
