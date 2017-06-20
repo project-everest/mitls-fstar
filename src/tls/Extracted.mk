@@ -83,7 +83,7 @@ $(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 
 # We don't pass -I $(ODIR) because it causes trouble on Windows about duplicate modules
-mitls.cmxa: \
+mitls.cmxa: .fstarlib \
   $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(LCDIR)/LowCProvider.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa \
