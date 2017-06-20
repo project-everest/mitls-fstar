@@ -461,7 +461,7 @@ let versionBytes pv =
   | TLS_1p1 -> abyte2 ( 3z, 2z )
   | TLS_1p2 -> abyte2 ( 3z, 3z )
   | TLS_1p3 -> abyte2 ( 3z, 4z )
-  | UnknownVersion a b -> abyte2 ( a, b ) 
+  | UnknownVersion a b -> abyte2 ( a, b )
 
 (** Parsing function for the protocol version *)
 val parseVersion: pinverse_t versionBytes
@@ -1720,44 +1720,34 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
-    minVer: protocolVersion;
-    maxVer: protocolVersion;
-    ciphersuites: x:valid_cipher_suites{List.Tot.length x < 256};
-    compressions: l:list compression{ List.Tot.length l > 0 /\ List.Tot.length l < 256 };
-    namedGroups: list valid_namedGroup;
-    signatureAlgorithms: signatureSchemeList;
-
-    (* Handshake specific options *)
+    min_version: protocolVersion;
+    max_version: protocolVersion;
+    cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
+    named_groups: list valid_namedGroup;
+    signature_algorithms: signatureSchemeList;
 
     (* Client side *)
-    honourHelloReq: bool;       // TLS_1p3: continues trying to comply with the server's choice.
-    allowAnonCipherSuite: bool; // a safeguard against proposing ciphersuites (not so useful?)
-    safe_resumption: bool;      // demands this extension when resuming
+    hello_retry: bool;          // honor hello retry requests from the server
+    offer_shares: list valid_namedGroup;
 
     (* Server side *)
-    request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
     check_client_version_in_pms_for_old_tls: bool;
-    cert_chain_file: string;    // TEMPORARY until the proper cert logic described above is implemented
-    private_key_file: string;   // TEMPORARY
-    enable_tickets: bool;
+    request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
+    cert_chain_file: string;     // TEMPORARY until the proper cert logic described above is implemented
+    private_key_file: string;    // TEMPORARY
 
     (* Common *)
     non_blocking_read: bool;
-    enable_early_data: bool;
-    safe_renegotiation: bool;   // demands this extension when renegotiating
-    peer_name: option string;   // The expected name to match against the peer certificate
+    enable_early_data: bool;      // 0-RTT offer (client) and support (server)
+    safe_renegotiation: bool;     // demands this extension when renegotiating
+    extended_master_secret: bool; // turn on RFC 7627 extended master secret support
+    enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
+
+    alpn: option (list string);   // ALPN offers (for client) or preferences (for server)
+    peer_name: option string;     // The expected name to match against the peer certificate
     check_peer_certificate: bool; // To disable certificate validation
-    ca_file: string;  // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
-                      // on Cygwin /etc/ssl/certs/ca-bundle.crt
-
-    (* Sessions database *)
-    sessionDBFileName: string;
-    sessionDBExpiry: timeSpan;
-
-    (* DH groups database *)
-    dhDBFileName: string;
-    dhDefaultGroupFileName: string;
-    dhPQMinLength: nat * nat;
+    ca_file: string;              // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
+                                  // on Cygwin /etc/ssl/certs/ca-bundle.crt
     }
 
 

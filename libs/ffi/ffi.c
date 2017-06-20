@@ -18,12 +18,14 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
+  MITLS_FFI_ENTRY(SetTicketKey) \
   MITLS_FFI_ENTRY(SetCertChainFile) \
   MITLS_FFI_ENTRY(SetPrivateKeyFile) \
   MITLS_FFI_ENTRY(SetCAFile) \
   MITLS_FFI_ENTRY(SetCipherSuites) \
   MITLS_FFI_ENTRY(SetSignatureAlgorithms) \
   MITLS_FFI_ENTRY(SetNamedGroups) \
+  MITLS_FFI_ENTRY(SetALPN) \
   MITLS_FFI_ENTRY(Connect) \
   MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \
@@ -183,6 +185,36 @@ static int configure_common_caml(/* in */ mitls_state *state, const char * str, 
     CAMLreturnT(int,ret);
 }
 
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_set_ticket_key(const char *alg, const char *ticketkey, size_t klen)
+{
+    int ret;
+    CAMLparam0();
+    CAMLlocal3(r, a, tkey);
+    tkey = caml_alloc_string(klen);
+    memcpy(String_val(tkey), ticketkey, klen);
+
+    a = caml_copy_string(alg);
+    r = caml_callback2_exn(*g_mitls_FFI_SetTicketKey, a, tkey);
+
+    if (Is_exception_result(r)) {
+      report_caml_exception(r, NULL); // bugbug: pass in errmsg
+      ret = 0;
+    } else {
+      ret = Int_val(r);
+    }
+    CAMLreturnT(int, ret);
+}
+
+int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = ocaml_set_ticket_key(alg, tk, klen);
+    caml_release_runtime_system();
+    return ret;
+}
+
 int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
 {
     int ret;
@@ -233,6 +265,15 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     int ret;
     caml_acquire_runtime_system();
     ret = configure_common_caml(state, ng, g_mitls_FFI_SetNamedGroups);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, apl, g_mitls_FFI_SetALPN);
     caml_release_runtime_system();
     return ret;
 }

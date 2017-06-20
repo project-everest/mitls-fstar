@@ -206,30 +206,22 @@ let ngs = [
   ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
 ]
 
+let aeads = [
+  ("AES128-GCM", CoreCrypto.AES_128_GCM);
+  ("AES256-GCM", CoreCrypto.AES_256_GCM);
+  ("CHACHA20-POLY1305", CoreCrypto.CHACHA20_POLY1305);
+]
+
 let ffiConfig version host =
   let v = s2pv version in
   {defaultConfig with
-    minVer = TLS_1p2;
-    maxVer = v;
-	  peer_name = Some host;
+    min_version = TLS_1p2;
+    max_version = v;
+    peer_name = Some host;
     check_peer_certificate = false;
     cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
     private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
     ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
-    safe_resumption = true;
-    ciphersuites = cipherSuites_of_nameList [
-          (* mitls.ml ciphersuites *)
-		      TLS_AES_128_GCM_SHA256;
-		      TLS_AES_256_GCM_SHA384;
-		      TLS_CHACHA20_POLY1305_SHA256;
-		      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
-		      TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
-		      TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-          (* default ciphersuites from TLSInfo.fst follow: *)
-           TLS_RSA_WITH_AES_128_GCM_SHA256;
-           TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-    ];
-    enable_early_data = true; // Test 0-RTT
   }
 
 val ffiSetCertChainFile: cfg:config -> f:string -> ML config
@@ -268,31 +260,51 @@ let ffiSetCipherSuites cfg x =
   let cfg = updatecfg cfg t in
   let csl = String.split [':'] x in
 
-  if has_invalid_setting csl css then
-    failwith ("Unknown ciphersuite among: " ^ x);
-  let csl = filter_valid csl css in
-
-  { cfg with ciphersuites = cipherSuites_of_nameList csl }
+  let csl = List.map (fun x -> match findsetting x css with
+    | None -> failwith ("Unknown ciphersuite: "^x)
+    | Some a -> a
+    ) csl in
+  { cfg with
+  cipher_suites = cipherSuites_of_nameList csl
+  }
 
 val ffiSetSignatureAlgorithms: cfg:config -> x:string -> ML config
 let ffiSetSignatureAlgorithms cfg x =
   let sal = String.split [':'] x in
-
-  if has_invalid_setting sal sas then
-    failwith ("Unknown signature algorithm among: " ^ x);
-  let sal = filter_valid sal sas in
-
-  { cfg with signatureAlgorithms = sal }
+  let sal = List.map (fun x-> match findsetting x sas with
+    | None -> failwith ("Unknown signature algorithm: "^x)
+    | Some a -> a
+  ) sal in
+  { cfg with
+  signature_algorithms = sal
+  }
 
 val ffiSetNamedGroups: cfg:config -> x:string -> ML config
 let ffiSetNamedGroups cfg x =
   let ngl = String.split [':'] x in
+  let ngl = List.map (fun x-> match findsetting x ngs with
+    | None -> failwith ("Unknown named group: "^x)
+    | Some a -> a
+  ) ngl in
+  { cfg with
+  named_groups = ngl
+  }
 
-  if has_invalid_setting ngl ngs then
-    failwith ("Unknown named group among: " ^ x);
-  let ngl = filter_valid ngl ngs in
+val ffiSetALPN: cfg:config -> x:string -> ML config
+let ffiSetALPN cfg x =
+  let apl = if x = "" then [] else String.split [':'] x in
+  if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
+  let apl = List.map (fun x ->
+    if String.length x < 256 then x
+    else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
+  ) apl in
+  { cfg with alpn = if apl=[] then None else Some apl }
 
-  { cfg with namedGroups = ngl }
+val ffiSetTicketKey: a:string -> k:string -> ML bool
+let ffiSetTicketKey a k =
+  (match findsetting a aeads with
+  | None -> false
+  | Some a -> TLS.set_ticket_key a (abytes k))
 
 type callbacks = FFICallbacks.callbacks
 

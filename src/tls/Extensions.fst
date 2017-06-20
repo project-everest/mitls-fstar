@@ -20,6 +20,15 @@ open TLSConstants
 (*************************************************
  Define extension.
  *************************************************)
+// Extensions may appear in the following messages
+// The concrete message syntax
+ type ext_msg =
+   | EM_ClientHello
+   | EM_ServerHello
+   | EM_EncryptedExtensions
+   | EM_Certificate
+   | EM_NewSessionTicket
+   | EM_HelloRetryRequest
 
 (* As a static invariant, we record that any intermediate, parsed
 extension and extension lists can be formatted into bytes without
@@ -181,11 +190,12 @@ let client_psk_parse b =
 val server_psk_parse : bytes -> psk
 let server_psk_parse b = ServerPSK (UInt16.uint_to_t (int_of_bytes b))
 
-val parse_psk: role -> bytes -> result (psk * option binders)
-let parse_psk role b =
-  match role with
-  | Client -> client_psk_parse b
-  | Server -> Correct (server_psk_parse b, None)
+val parse_psk: ext_msg -> bytes -> result (psk * option binders)
+let parse_psk mt b =
+  match mt with
+  | EM_ClientHello -> client_psk_parse b
+  | EM_ServerHello -> Correct (server_psk_parse b, None)
+  | _ -> error "PSK extension cannot appear in this message type"
 #reset-options
 
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.8
@@ -264,6 +274,39 @@ let ecpfListBytes l =
   let bl:bytes = vlbytes 1 al in
   bl
 
+(* ALPN *)
+
+type alpn_entry = b:bytes{0 < length b /\ length b < 256}
+type alpn = l:list alpn_entry{List.Tot.length l < 256}
+
+let rec alpnBytes_aux: l:alpn -> Tot (b:bytes{length b <= op_Multiply 256 (List.Tot.length l)})
+  = function
+  | [] -> empty_bytes
+  | protocol :: r ->
+    lemma_repr_bytes_values (length protocol);
+    vlbytes 1 protocol @| alpnBytes_aux r
+
+let alpnBytes (a:alpn) : b:bytes{length b < 65536} =
+  let r = alpnBytes_aux a in
+  lemma_repr_bytes_values (length r);
+  vlbytes 2 r
+
+let rec parseAlpn_aux (al:alpn) (b:bytes) : Tot (result alpn) =
+  if length b = 0 then Correct(al)
+  else
+    match vlsplit 1 b with
+    | Correct(cur, r) ->
+      assert false; // YIKES FIXME XXX
+      parseAlpn_aux (al @ [cur]) r
+    | Error(z) -> Error(z)
+
+let parseAlpn : pinverse_t alpnBytes = fun b ->
+  if length b >= 2 then
+    match vlparse 2 b with
+    | Correct l -> parseAlpn_aux [] l
+    | Error(z) -> Error(z)
+  else error "parseAlpn: extension is too short"
+
 (* PROTOCOL VERSIONS *)
 
 // The length exactly reflects the RFC format constraint <2..254>
@@ -326,8 +369,8 @@ let serverNameBytes l =
   in
   aux l
 
-private val parseServerName: r:role -> b:bytes -> Tot (result (list serverName))
-let parseServerName r b  =
+private val parseServerName: r:ext_msg -> b:bytes -> Tot (result (list serverName))
+let parseServerName mt b  =
   let rec aux: b:bytes -> Tot (canFail serverName) (decreases (length b)) = fun b ->
     if equalBytes b empty_bytes then ExOK []
     else if length b >= 3 then
@@ -335,41 +378,42 @@ let parseServerName r b  =
       begin
       match vlsplit 2 v with
       | Error(x,y) ->
-	ExFail(x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
+	      ExFail(x, "Failed to parse SNI length: "^ (Platform.Bytes.print_bytes b))
       | Correct(cur, next) ->
-	begin
-	match aux next with
-	| ExFail(x,y) -> ExFail(x,y)
-	| ExOK l ->
-	  let cur =
-	    begin
-	    match cbyte ty with
-	    | 0z -> SNI_DNS(cur)
-	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
-	    end
-	  in
-	  let snidup: serverName -> Tot bool = fun x ->
-	    begin
-	    match x,cur with
-	    | SNI_DNS _, SNI_DNS _ -> true
-	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
-	    | _ -> false
-	    end
-	  in
-	  if List.Tot.existsb snidup l then
-	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
-	  else ExOK(cur :: l)
-	end
+      	begin
+      	match aux next with
+      	| ExFail(x,y) -> ExFail(x,y)
+      	| ExOK l ->
+      	  let cur =
+      	    begin
+      	    match cbyte ty with
+      	    | 0z -> SNI_DNS(cur)
+      	    | v  -> SNI_UNKNOWN(int_of_bytes ty, cur)
+      	    end
+      	  in
+      	  let snidup: serverName -> Tot bool = fun x ->
+      	    begin
+      	    match x,cur with
+      	    | SNI_DNS _, SNI_DNS _ -> true
+      	    | SNI_UNKNOWN(a,_), SNI_UNKNOWN(b,_) -> a = b
+      	    | _ -> false
+      	    end
+      	  in
+      	  if List.Tot.existsb snidup l then
+      	    ExFail(AD_unrecognized_name, perror __SOURCE_FILE__ __LINE__ "Duplicate SNI type")
+      	  else ExOK(cur :: l)
+      	end
       end
     else ExFail(AD_decode_error, "Failed to parse SNI")
     in
-    match r with
-    | Server ->
+    match mt with
+    | EM_EncryptedExtensions
+    | EM_ServerHello ->
       if length b = 0 then correct []
       else
-	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
-	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
-    | Client ->
+      	let msg = "Failed to parse SNI list: should be empty in ServerHello, has size " ^ string_of_int (length b) in
+      	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ msg)
+    | EM_ClientHello ->
       if length b >= 2 then
 	begin
 	match vlparse 2 b with
@@ -382,8 +426,6 @@ let parseServerName r b  =
 	end
       else
 	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
-
-(* TODO: supported_groups and signature_algorithms *)
 
 // ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
@@ -400,6 +442,7 @@ noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_psk_key_exchange_modes of client_psk_kexes (* client-only; mandatory when proposing PSKs *)
   | E_extended_ms
   | E_ec_point_format of list point_format
+  | E_alpn of alpn
   | E_unknown_extension of ((x: lbytes 2 {p x}) * bytes) (* header, payload *)
 (*
 We do not yet support the extensions below (authenticated but ignored)
@@ -407,7 +450,6 @@ We do not yet support the extensions below (authenticated but ignored)
   | E_status_request
   | E_use_srtp
   | E_heartbeat
-  | E_application_layer_protocol_negotiation
   | E_signed_certifcate_timestamp
   | E_client_certificate_type
   | E_server_certificate_type
@@ -435,6 +477,7 @@ let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match
   | E_psk_key_exchange_modes _ -> "psk_key_exchange_modes"
   | E_extended_ms -> "extended_master_secret"
   | E_ec_point_format _ -> "ec_point_formats"
+  | E_alpn _ -> "alpn"
   | E_unknown_extension (n,_) -> print_bytes n
 
 let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension' p)) = match l with
@@ -442,7 +485,7 @@ let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension'
   | [] -> ""
 
 (** shallow equality *)
-private let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p) =
+let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p) =
   let q : extension' p * extension' p = e1, e2 in
   match q with
   | E_server_name _, E_server_name _ -> true
@@ -457,6 +500,7 @@ private let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: exten
   | E_psk_key_exchange_modes _, E_psk_key_exchange_modes _ -> true
   | E_extended_ms, E_extended_ms -> true
   | E_ec_point_format _, E_ec_point_format _ -> true
+  | E_alpn _, E_alpn _ -> true
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
@@ -481,6 +525,7 @@ let extensionHeaderBytes #p ext =
   | E_psk_key_exchange_modes _ -> abyte2 (0x00z, 0x2dz) // 45
   | E_extended_ms              -> abyte2 (0x00z, 0x17z) // 45
   | E_ec_point_format _        -> abyte2 (0x00z, 0x0Bz) // 11
+  | E_alpn _                   -> abyte2 (0x00z, 0x10z) // 16
   | E_unknown_extension (h,b)  -> h
 
 // 17-05-19: We constrain unknown extensions to have headers different from known extensions.
@@ -496,6 +541,7 @@ let encryptedExtension ext =
   match ext with
   | E_server_name _
   | E_supported_groups _
+  | E_alpn _
   | E_early_data _ -> true
   | _ -> false
 
@@ -545,6 +591,7 @@ let rec extensionPayloadBytes = function
   | E_psk_key_exchange_modes kex -> vlbytes 2 (client_psk_kexes_bytes kex)
   | E_extended_ms              -> vlbytes 2 empty_bytes
   | E_ec_point_format l        -> vlbytes 2 (ecpfListBytes l)
+  | E_alpn l                   -> vlbytes 2 (alpnBytes l)
   | E_unknown_extension (_,b)  -> vlbytes 2 b
 #reset-options
 
@@ -829,14 +876,21 @@ let parseEcpfList b =
       then correct l
       else error "uncompressed point format not supported"
 
+let parseKeyShare mt data =
+  let mt = match mt with
+    | EM_ClientHello -> CommonDH.KS_ClientHello
+    | EM_ServerHello -> CommonDH.KS_ServerHello
+    | EM_HelloRetryRequest -> CommonDH.KS_HRR in
+  CommonDH.parseKeyShare mt data
+
 (* We don't care about duplicates, not formally excluded. *)
 #set-options "--lax"
 
 let normallyNone ctor r =
     (ctor r, None)
 
-val parseExtension: role -> bytes -> result (extension * option binders)
-let parseExtension role b =
+val parseExtension: ext_msg -> bytes -> result (extension * option binders)
+let parseExtension mt b =
   if length b < 4 then error "extension type: not enough bytes" else
   let head, payload = split b 2 in
   match vlparse 2 payload with
@@ -844,8 +898,8 @@ let parseExtension role b =
   | Correct data -> (
     match cbyte2 head with
     | (0x00z, 0x00z) ->
-//      mapResult E_server_name (parseServerName role data)
-      mapResult (normallyNone E_server_name) (parseServerName role data)
+//      mapResult E_server_name (parseServerName mt data)
+      mapResult (normallyNone E_server_name) (parseServerName mt data)
     | (0x00z, 0x0Az) -> // supported groups
       if length data < 2 || length data >= 65538 then error "supported groups" else
       mapResult (normallyNone E_supported_groups) (Parse.parseNamedGroups data)
@@ -854,15 +908,19 @@ let parseExtension role b =
       if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else
       mapResult (normallyNone E_signature_algorithms) (TLSConstants.parseSignatureSchemeList data)
 
+    | (0x00z, 0x10z) -> // application_layer_protocol_negotiation
+      if length data < 2 ||  length data >= 65538 then error "application layer protocol negotiation" else
+      mapResult (normallyNone E_alpn) (parseAlpn data)
+
     | (0x00z, 0x23z) -> // session_ticket
       Correct (E_session_ticket data, None)
 
     | (0x00z, 0x28z) ->
-      mapResult (normallyNone E_key_share) (CommonDH.parseKeyShare (Client? role) data)
+      mapResult (normallyNone E_key_share) (parseKeyShare mt data)
 
     | (0x00z, 0x29z) -> // PSK
       if length data < 2 then error "PSK"
-      else (match parse_psk role data with
+      else (match parse_psk mt data with
       | Error z -> Error z
       | Correct (psk, None) -> Correct (E_pre_shared_key psk, None)
       | Correct (psk, Some binders) -> Correct (E_pre_shared_key psk, Some binders))
@@ -898,8 +956,8 @@ let parseExtension role b =
 
 //17-05-08 TODO precondition on bytes to prove length subtyping on the result
 // SI: simplify binder accumulation code. (Binders should be the last in the list.)
-val parseExtensions: role -> b:bytes -> result (extensions * option binders)
-let parseExtensions role b =
+val parseExtensions: ext_msg -> b:bytes -> result (extensions * option binders)
+let parseExtensions mt b =
   let rec aux: b:bytes -> list extension * option binders
     -> Tot (result (list extension * option binders))
     (decreases (length b)) =
@@ -910,7 +968,7 @@ let parseExtensions role b =
       | Error(z) -> error "extension length"
       | Correct(ext, bytes) ->
       	(* assume (Prims.precedes (Prims.LexCons b) (Prims.LexCons (ht @| vlbytes 2 ext))); *)
-      	(match parseExtension role (ht @| vlbytes 2 ext) with
+      	(match parseExtension mt (ht @| vlbytes 2 ext) with
       	// SI:
       	| Correct (ext, Some binders) ->
       	  (match addOnce ext exts with // fails if the extension already is in the list
@@ -929,12 +987,12 @@ let parseExtensions role b =
 
 (* SI: API. Called by HandshakeMessages. *)
 // returns either Some,Some or None,
-val parseOptExtensions: r:role -> data:bytes -> result (option (list extension) * option binders)
-let parseOptExtensions r data =
+val parseOptExtensions: ext_msg -> data:bytes -> result (option (list extension) * option binders)
+let parseOptExtensions mt data =
   if length data = 0
   then Correct (None,None)
   else (
-    match parseExtensions r data with
+    match parseExtensions mt data with
     | Error z -> Error z
     | Correct (ee,obinders) -> Correct (Some ee, obinders))
 #reset-options
@@ -977,10 +1035,12 @@ val prepareExtensions:
   protocolVersion ->
   protocolVersion ->
   k:valid_cipher_suites{List.Tot.length k < 256} ->
-  option string ->
-  bool ->
+  option string -> // SNI
+  option alpn -> // ALPN
+  bool -> // EMS
   bool ->
   bool -> // EDI (Nego checks that PSK is compatible)
+  option bytes -> // session_ticket
   signatureSchemeList ->
   list valid_namedGroup ->
   option (cVerifyData * sVerifyData) ->
@@ -990,7 +1050,7 @@ val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions minpv pv cs host sres sren edi sigAlgs namedGroups ri ks psks =
+let prepareExtensions minpv pv cs host alps ems sren edi ticket sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -1017,8 +1077,18 @@ let prepareExtensions minpv pv cs host sres sren edi sigAlgs namedGroups ri ks p
       | Some dns -> E_server_name [SNI_DNS (utf8 dns)] :: res
       | None -> res
     in
+    let res =
+      match alps with
+      | Some al -> E_alpn al :: res
+      | None -> res
+    in
+    let res =
+      match ticket with
+      | Some t -> E_session_ticket t :: res
+      | None -> res
+    in
     // Include extended_master_secret when resuming
-    let res = if sres then E_extended_ms :: res else res in
+    let res = if ems then E_extended_ms :: res else res in
     let res = E_signature_algorithms sigAlgs :: res in
     let res =
       if List.Tot.existsb isECDHECipherSuite (list_valid_cs_is_list_cs cs) then
@@ -1142,7 +1212,9 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
   match res with
   | Error z -> Error z
   | Correct l ->
-    match sExt with
+    if not (List.Tot.existsb (sameExt sExt) cExtL) then
+      Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent an unexpected extension")
+    else match sExt with
     (*
     | E_renegotiation_info sri ->
       if List.Tot.existsb E_renegotiation_info? cExtL then
@@ -1158,18 +1230,21 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
       end
       *)
     | E_server_name _ ->
-      if List.Tot.existsb E_server_name? cExtL then correct ()
-      else Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Server sent an unrequests SNI acknowledgement")
+      // RFC 6066, bottom of page 6
+      //When resuming a session, the server MUST NOT include a server_name extension in the server hello
+      if resuming then Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent SNI acknowledge in resumption")
+      else correct ()
+    | E_session_ticket _ -> correct ()
+    | E_alpn sal -> if List.Tot.length sal = 1 then correct ()
+      else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
     | E_extended_ms -> correct ()
-    | E_ec_point_format spf ->
-      if resuming then correct ()
-      else correct () //({l with ne_supported_point_formats = Some spf})
-    | E_key_share (CommonDH.ServerKeyShare sks) ->
-      Correct () // ({l with ne_keyShare = Some sks})
+    | E_ec_point_format spf -> correct () // Can be sent in resumption, apparently (RFC 4492, 5.2)
+    | E_key_share (CommonDH.ServerKeyShare sks) -> correct ()
     | E_supported_groups named_group_list ->
-      Correct () // ({l with ne_supported_groups = Some named_group_list})
-    | _ ->
-      Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "Server sent an unexpected extension")
+      if resuming then Error(AD_unsupported_extension, perror __SOURCE_FILE__ __LINE__ "server sent supported groups in resumption")
+      else correct ()
+    | e ->
+      Error(AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ ("unhandled server extension: "^(string_of_extension e)))
 
 val negotiateClientExtensions:
   protocolVersion ->
@@ -1229,23 +1304,27 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | E_key_share _ ->
     if pv = TLS_1p3 then Option.map E_key_share ks // ks should be in one of client's groups
     else None
+  | E_alpn cal ->
+    (match cfg.alpn with
+    | None -> None
+    | Some sal ->
+      let sal = List.Tot.map utf8 sal in
+      let common = List.Tot.filter (fun x -> List.Tot.mem x sal) cal in
+      match common with
+      | a :: _ -> Some (E_alpn [a])
+      | _ -> None)
   | E_server_name server_name_list ->
-    begin
-    // See https://tools.ietf.org/html/rfc6066
-    match List.Tot.tryFind SNI_DNS? server_name_list with
-    | Some name -> Some (E_server_name []) // Acknowledge client's choice
-    | _ -> None
-    end
+    if resuming then None // RFC 6066 page 6
+    else
+      (match List.Tot.tryFind SNI_DNS? server_name_list with
+      | Some name -> Some (E_server_name []) // Acknowledge client's choice
+      | _ -> None)
   | E_extended_ms ->
-    if pv = TLS_1p3 then
-      None
-    else
-      Some E_extended_ms // REMARK: not depending on cfg.safe_resumption
+    if pv = TLS_1p3 || not cfg.extended_master_secret then None
+    else Some E_extended_ms
   | E_ec_point_format ec_point_format_list -> // REMARK: ignores client's list
-    if resuming || pv = TLS_1p3 then
-      None // No ec_point_format in TLS 1.3
-    else
-      Some (E_ec_point_format [ECP_UNCOMPRESSED])
+    if pv = TLS_1p3 then None // No ec_point_format in TLS 1.3
+    else Some (E_ec_point_format [ECP_UNCOMPRESSED])
   | E_pre_shared_key _ ->
     if pski = None || pv <> TLS_1p3 then None
     else
@@ -1257,14 +1336,13 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | E_supported_groups named_group_list ->
     if pv = TLS_1p3 then
       // REMARK: Purely informative, can only appear in EncryptedExtensions
-      Some (E_supported_groups (list_valid_ng_is_list_ng cfg.namedGroups))
+      Some (E_supported_groups (list_valid_ng_is_list_ng cfg.named_groups))
     else None
   | E_early_data b -> // EE
     if cfg.enable_early_data && pski = Some 0 then Some (E_early_data None) else None
   | E_session_ticket b ->
      if pv = TLS_1p3 || not cfg.enable_tickets then None
-     else Some (E_session_ticket empty_bytes)
-  // TODO: handle all remaining cases
+     else Some (E_session_ticket empty_bytes) // TODO we may not always want to refresh the ticket
   | _ -> None
 
 (* SI: API. Called by Handshake. *)

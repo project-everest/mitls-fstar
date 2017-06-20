@@ -497,24 +497,30 @@ let parseServerKeyShare b = parseKeyShareEntry b
 let keyShareBytes = function
   | ClientKeyShare cks -> clientKeyShareBytes cks
   | ServerKeyShare sks -> serverKeyShareBytes sks
+  | HRRKeyShare ng -> namedGroupBytes ng
 
 (** Parsing function for a KeyShare *)
-let parseKeyShare is_client b =
-  if is_client then
-    begin
+let parseKeyShare msg b =
+  match msg with
+  | KS_HRR ->
+    if length b = 2 then
+      match parseNamedGroup b with
+      | Correct ng -> Correct (HRRKeyShare ng)
+      | Error z -> Error z
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "bad HRR key_share extension")
+  | KS_ClientHello ->
     if 2 <= length b && length b < 65538 then
       begin
       match parseClientKeyShare b with
       | Correct kse -> Correct (ClientKeyShare kse)
       | Error z -> Error z
       end
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
-    end
-  else
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse client key share list")
+  | KS_ServerHello ->
     if 4 <= length b then
       begin
       match parseServerKeyShare b with
       | Correct ks -> Correct (ServerKeyShare ks)
       | Error z -> Error z
       end
-    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse key share")
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse server key share")

@@ -18,82 +18,84 @@ open TLSConstants
 //open PMS
 //open Cert
 
+module CC = CoreCrypto
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module HH = FStar.HyperHeap
 
-
-val ec_ff_to_ng: list CoreCrypto.ec_curve -> list ffdhe -> Tot (list valid_namedGroup)
-let rec ec_ff_to_ng ecl ffl =
-  match ecl with
-  | ec::r -> (SEC ec) :: (ec_ff_to_ng r ffl)
-  | [] -> (match ffl with
-    | ff :: r -> (FFDHE ff) :: (ec_ff_to_ng ecl r)
-    | [] -> [])
-
-let default_cipherSuites =
-  [ TLS_RSA_WITH_AES_128_GCM_SHA256;
-    TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
-    TLS_DHE_DSS_WITH_AES_128_GCM_SHA256;
-    TLS_RSA_WITH_AES_128_CBC_SHA;
-    TLS_DHE_RSA_WITH_AES_128_CBC_SHA;
-    TLS_DHE_DSS_WITH_AES_128_CBC_SHA;
-    TLS_RSA_WITH_3DES_EDE_CBC_SHA
+let default_cipherSuites = [
+  TLS_AES_128_GCM_SHA256;
+  TLS_AES_256_GCM_SHA384;
+  TLS_CHACHA20_POLY1305_SHA256;
+  TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
+  TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
+  TLS_DHE_RSA_WITH_AES_128_GCM_SHA256;
+  TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;
+  TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;
+  TLS_DHE_RSA_WITH_AES_256_GCM_SHA384;
+  TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256;
+  TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256;
+  TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256;
   ]
 
-let default_signatureSchemes =
- [ ECDSA_SECP521R1_SHA512;
-   ECDSA_SECP384R1_SHA384;
-   ECDSA_SECP256R1_SHA256;
-   // Not yet implemented in Signature
-   //RSA_PSS_SHA512;
-   //RSA_PSS_SHA384;
-   //RSA_PSS_SHA256;
-   RSA_PKCS1_SHA512;
-   RSA_PKCS1_SHA384;
-   RSA_PKCS1_SHA256;
-   ECDSA_SHA1;
-   RSA_PKCS1_SHA1
- ]
+let default_signature_schemes = [
+  ECDSA_SECP521R1_SHA512;
+  ECDSA_SECP384R1_SHA384;
+  ECDSA_SECP256R1_SHA256;
+  // Not yet implemented in Signature
+  //RSA_PSS_SHA512;
+  //RSA_PSS_SHA384;
+  //RSA_PSS_SHA256;
+  RSA_PKCS1_SHA512;
+  RSA_PKCS1_SHA384;
+  RSA_PKCS1_SHA256;
+  ECDSA_SHA1;
+  RSA_PKCS1_SHA1
+  ]
+
+let default_groups = [
+  // SEC CC.ECC_X448
+  SEC CC.ECC_P521;
+  SEC CC.ECC_P384;
+  SEC CC.ECC_X25519;
+  SEC CC.ECC_P256;
+  FFDHE FFDHE4096;
+  FFDHE FFDHE3072;
+  FFDHE FFDHE2048;
+  ]
 
 val defaultConfig: config
 let defaultConfig =
-  let curves = CoreCrypto.([ECC_P521; ECC_P384; ECC_P256; ECC_X25519; ECC_X448]) in
-  let ffdh = [FFDHE4096; FFDHE3072; FFDHE2048] in
-  let groups = ec_ff_to_ng curves ffdh in
   assert_norm (List.Tot.length (cipherSuites_of_nameList default_cipherSuites) < 256);
-  assert_norm (List.Tot.length default_signatureSchemes < 65536/2);
+  assert_norm (List.Tot.length default_signature_schemes < 65536/2);
   {
-  minVer = TLS_1p0;
-  maxVer = TLS_1p2;
-  ciphersuites = cipherSuites_of_nameList default_cipherSuites;
-  compressions = [NullCompression];
-  namedGroups = groups;
-  signatureAlgorithms = default_signatureSchemes;
+  min_version = TLS_1p2;
+  max_version = TLS_1p3;
+  cipher_suites = cipherSuites_of_nameList default_cipherSuites;
+  named_groups = default_groups;
+  signature_algorithms = default_signature_schemes;
 
-  honourHelloReq = true;
-  allowAnonCipherSuite = false;
+  // Client
+  hello_retry = true;
+  offer_shares = [SEC CC.ECC_X25519];
 
-  request_client_certificate = false;
+  // Server
   check_client_version_in_pms_for_old_tls = true;
+  request_client_certificate = false;
   cert_chain_file = "server.pem";
   private_key_file = "server.key";
-  enable_tickets = true;
 
+  // Common
   non_blocking_read = false;
   enable_early_data = false;
   safe_renegotiation = true;
-  safe_resumption = true;
-  peer_name = None; // Disables hostname validation
+  extended_master_secret = true;
+  enable_tickets = true;
+
+  alpn = None;
+  peer_name = None;
   check_peer_certificate = true;
   ca_file = "CAFile.pem";
-
-  sessionDBFileName = "sessionDBFile.bin";
-  sessionDBExpiry = newTimeSpan 1 0 0 0; (*@ one day, as suggested by the RFC *)
-
-  dhDBFileName = DHDB.defaultFileName;
-  dhDefaultGroupFileName = "default-dh.pem";
-  dhPQMinLength = DHDB.defaultPQMinLength;
   }
 
 // -------------------------------------------------------------------
@@ -161,7 +163,7 @@ type abbrInfo =
 
 type resumeInfo (r:role) =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
-  o:option sessionID {r=Server ==> o=None} *
+  o:option bytes {r=Server ==> o=None} * // 1.2 ticket
   l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,

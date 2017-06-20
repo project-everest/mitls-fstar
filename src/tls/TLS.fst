@@ -119,7 +119,7 @@ let create parent tcp role cfg resume =
 //    //TODO: even if the server declines, we authenticate the client's intent to resume from this sid.
 //  ))
 let connect m0 tcp cfg         = create m0 tcp Client cfg (None, [])
-let resume  m0 tcp cfg sid psk = create m0 tcp Client cfg (sid, psk)
+let resume  m0 tcp cfg tid psk = create m0 tcp Client cfg (tid, psk)
 
 //val accept_connected: ns:Transport.t -> c:config -> ST connection
 //  (requires (fun h0 -> True))
@@ -127,7 +127,7 @@ let resume  m0 tcp cfg sid psk = create m0 tcp Client cfg (sid, psk)
 //    modifies Set.empty h0 h1 /\
 //    initial Server ns c None cn h1
 //  ))
-let accept_connected m0 tcp cfg = create m0 tcp Server cfg (None,[])
+let accept_connected m0 tcp cfg = create m0 tcp Server cfg (None, [])
 
 //* do we need accept and accept_connected?
 //val accept: Tcp.tcpListener -> c:config -> ST connection
@@ -158,6 +158,7 @@ let rekey c ops       = Handshake.rekey       (C?.hs c) ops
 let request c ops     = Handshake.request     (C?.hs c) ops
 
 let get_mode c = (Handshake.get_mode (C?.hs c))
+let set_ticket_key (a:aeadAlg) (kv:bytes) = Ticket.set_ticket_key a kv
 
 (** current epochs ***)
 
@@ -718,10 +719,10 @@ let rec writeHandshake h_init c new_writer =
       //We also know that this only modifies the handshake region, so the delta logs didn't change
       let new_writer, send_ccs, skip_0rtt =
         match next_keys with
-        | Some u -> 
-          Some (u.HandshakeLog.out_appdata), 
-          u.HandshakeLog.out_ccs_first, 
-          u.HandshakeLog.out_skip_0RTT 
+        | Some u ->
+          Some (u.HandshakeLog.out_appdata),
+          u.HandshakeLog.out_ccs_first,
+          u.HandshakeLog.out_skip_0RTT
         | None -> new_writer, false, false in
       trace ("HS.next_fragment returned "^
         (if Some? om then "a fragment" else "nothing")^
@@ -1173,6 +1174,7 @@ let readOne c i =
       begin
         trace "read Data fragment";
         match fst !c.state with
+        // FIXME June 15: too lax! we could accept appdata too early
         | _ -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
 //      | Open -> let f : DataStream.fragment i fragment_range = f in Read #i (DataStream.Data f)
 //      | _ -> alertFlush c i AD_unexpected_message "Application Data received in wrong state"

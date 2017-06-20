@@ -12,6 +12,7 @@ open FStar.HyperStack.ST
 
 val group: t:Type0{hasEq t}
 val is_ec: group -> Tot bool
+val string_of_group: group -> Tot string
 
 val pre_keyshare (g:group) : Tot (t:Type0{hasEq t})
 val pre_share (g:group) : Tot (t:Type0{hasEq t})
@@ -96,6 +97,7 @@ type serverKeyShare = keyShareEntry
 noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
+  | HRRKeyShare of namedGroup
 
 // the parsing/formatting moves to the private part of Extensions
 (** Serializing function for a KeyShareEntry *)
@@ -109,5 +111,7 @@ val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{ 4 <= length b })
 val parseServerKeyShare: pinverse_t serverKeyShareBytes
 val keyShareBytes: ks:keyShare -> Tot (b:bytes{
   ClientKeyShare? ks ==> (2 <= length b /\ length b < 65538) /\
-  ServerKeyShare? ks ==> (4 <= length b)})
-val parseKeyShare: bool -> bytes -> Tot (result keyShare)
+  ServerKeyShare? ks ==> (4 <= length b) /\
+  HRRKeyShare? ks ==> (2 = length b)})
+type ks_msg = | KS_ClientHello | KS_ServerHello | KS_HRR
+val parseKeyShare: ks_msg -> bytes -> Tot (result keyShare)
