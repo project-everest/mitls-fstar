@@ -387,17 +387,13 @@ let computeOffer r cfg resume nonce ks pskinfo =
     match pskinfo with
     | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
     | _ -> false in
-  let alpn =
-    match cfg.alpn with
-    | Some l -> Some (List.Tot.map utf8 l)
-    | None -> None in
   let extensions =
     Extensions.prepareExtensions
       cfg.min_version
       cfg.max_version
       cfg.cipher_suites
       cfg.peer_name
-      alpn
+      cfg.alpn
       cfg.extended_master_secret
       cfg.safe_renegotiation
       (compatible_psk && cfg.enable_early_data)
