@@ -276,9 +276,6 @@ let ecpfListBytes l =
 
 (* ALPN *)
 
-type alpn_entry = b:bytes{0 < length b /\ length b < 256}
-type alpn = l:list alpn_entry{List.Tot.length l < 256}
-
 let rec alpnBytes_aux: l:alpn -> Tot (b:bytes{length b <= op_Multiply 256 (List.Tot.length l)})
   = function
   | [] -> empty_bytes
@@ -291,20 +288,27 @@ let alpnBytes (a:alpn) : b:bytes{length b < 65536} =
   lemma_repr_bytes_values (length r);
   vlbytes 2 r
 
-let rec parseAlpn_aux (al:alpn) (b:bytes) : Tot (result alpn) =
+let rec parseAlpn_aux (al:alpn) (b:bytes) : Tot (result alpn) (decreases (length b)) =
   if length b = 0 then Correct(al)
   else
-    match vlsplit 1 b with
-    | Correct(cur, r) ->
-      assert false; // YIKES FIXME XXX
-      parseAlpn_aux (al @ [cur]) r
-    | Error(z) -> Error(z)
+    if List.Tot.length al < 255 then      
+      match vlsplit 1 b with
+      | Correct(cur, r) ->
+        if length cur > 0 then
+          begin
+          List.Tot.append_length al [cur];
+          parseAlpn_aux (al @ [cur]) r
+          end
+        else
+          error "illegal empty protocol name in ALPN extension"
+      | Error z -> Error z
+    else error "too many entries in protocol_name_list in ALPN extension"
 
 let parseAlpn : pinverse_t alpnBytes = fun b ->
   if length b >= 2 then
     match vlparse 2 b with
     | Correct l -> parseAlpn_aux [] l
-    | Error(z) -> Error(z)
+    | Error(z) -> Error z
   else error "parseAlpn: extension is too short"
 
 (* PROTOCOL VERSIONS *)
@@ -426,6 +430,7 @@ let parseServerName mt b  =
 	end
       else
 	Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse SNI list")
+    | _ -> error "SNI extension cannot appear in this message type"
 
 // ExtensionType and Extension Table in https://tlswg.github.io/tls13-spec/#rfc.section.4.2.
 // M=Mandatory, AF=mandatory for Application Features in https://tlswg.github.io/tls13-spec/#rfc.section.8.2.
@@ -877,17 +882,17 @@ let parseEcpfList b =
       else error "uncompressed point format not supported"
 
 let parseKeyShare mt data =
-  let mt = match mt with
-    | EM_ClientHello -> CommonDH.KS_ClientHello
-    | EM_ServerHello -> CommonDH.KS_ServerHello
-    | EM_HelloRetryRequest -> CommonDH.KS_HRR in
-  CommonDH.parseKeyShare mt data
+  match mt with
+  | EM_ClientHello -> CommonDH.(parseKeyShare KS_ClientHello data)
+  | EM_ServerHello -> CommonDH.(parseKeyShare KS_ServerHello data)
+  | EM_HelloRetryRequest -> CommonDH.(parseKeyShare KS_HRR data)
+  | _ -> error "key_share extension cannot appear in this message type"
 
 (* We don't care about duplicates, not formally excluded. *)
 #set-options "--lax"
 
 let normallyNone ctor r =
-    (ctor r, None)
+  (ctor r, None)
 
 val parseExtension: ext_msg -> bytes -> result (extension * option binders)
 let parseExtension mt b =
@@ -1308,7 +1313,6 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
     (match cfg.alpn with
     | None -> None
     | Some sal ->
-      let sal = List.Tot.map utf8 sal in
       let common = List.Tot.filter (fun x -> List.Tot.mem x sal) cal in
       match common with
       | a :: _ -> Some (E_alpn [a])

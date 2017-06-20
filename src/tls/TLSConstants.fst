@@ -1717,6 +1717,8 @@ type ServerCertificateRequest // something that determines this Handshake messag
 request_client_certificate: single_assign ServerCertificateRequest // uses this one, or asks the server; by default Some None.
 
 *)
+type alpn_entry = b:bytes{0 < length b /\ length b < 256}
+type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
@@ -1743,7 +1745,7 @@ noeq type config = {
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
 
-    alpn: option (list string);   // ALPN offers (for client) or preferences (for server)
+    alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
     peer_name: option string;     // The expected name to match against the peer certificate
     check_peer_certificate: bool; // To disable certificate validation
     ca_file: string;              // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)

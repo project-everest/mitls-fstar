@@ -53,7 +53,7 @@ let default_signature_schemes = [
   RSA_PKCS1_SHA1
   ]
 
-let default_groups = [
+let default_groups : list valid_namedGroup = [
   // SEC CC.ECC_X448
   SEC CC.ECC_P521;
   SEC CC.ECC_P384;
