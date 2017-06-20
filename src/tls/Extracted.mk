@@ -45,11 +45,6 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 	  $(addprefix --codegen-lib , $(CODEGEN_LIBS)) \
 	  --include concrete-flags $<
 
-.PHONY: $(ULIB_ML)
-
-$(ULIB_ML):
-	$(MAKE) -C $@
-
 # Try to only rebuild CoreCrypto when necessary
 $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
 		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
@@ -83,7 +78,7 @@ $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(OD
 
 -include .depend-ML
 
-$(ODIR)/.deporder: $(ULIB_ML) $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
+$(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
 	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
 	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 

@@ -187,7 +187,11 @@ tls-lax: record_fstar_version $(LIBFILES)
 wc:
 	wc -l $(LIBFILES) *.fst *.fsti
 
-mitls.cmxa: $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx)
+.fstarlib: $(FSTAR_HOME)/ulib/*.fst $(FSTAR_HOME)/ulib/ml/*.ml $(FSTAR_HOME)/ulib/ml/extracted/*.ml
+	touch .fstarlib
+	$(MAKE) -C $(FSTAR_HOME)/ulib/ml
+
+mitls.cmxa: .fstarlib $(wildcard *.fst) $(wildcard output/*.ml) $(wildcard output/*.cmx)
 	$(MAKE) -f Extracted.mk mitls.cmxa
 
 mitls.exe: mitls.cmxa
