@@ -105,7 +105,7 @@ let parseBinderList (b:bytes{2 <= length b}) : result binders =
       if length b >= 5 then
         match vlsplit 1 b with
         | Error z -> error "parseBinderList failed to parse a binder"
-	| Correct (binder, bytes) ->
+        | Correct (binder, bytes) ->
           if length binder < 32 then error "parseBinderList: binder too short"
           else (assume (length bytes < length b); aux bytes (binders @ [binder]))
       else error "parseBinderList: too few bytes"

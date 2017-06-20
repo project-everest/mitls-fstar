@@ -164,7 +164,7 @@ type abbrInfo =
 type resumeInfo (r:role) =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
   o:option bytes {r=Server ==> o=None} * // 1.2 ticket
-  l:list PSK.psk_identifier {r=Server ==> l = []} // assuming we do the PSK lookups locally
+  l:list PSK.pskid {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
 // i.e. the session is not resumable.
@@ -302,14 +302,14 @@ type logInfo_CH = {
 type logInfo_CH0 = {
   li_ch0_cr: crand;
   li_ch0_ed_psk: PSK.pskid;        // 0-RT PSK
-  li_ch0_ed_ae: a:aeAlg{AEAD? a};  // 0-RT AEAD alg
+  li_ch0_ed_ae: a:aeadAlg;  // 0-RT AEAD alg
   li_ch0_ed_hash: h:hash_alg;      // 0-RT hash
 }
 
 type logInfo_SH = {
   li_sh_cr: crand;
   li_sh_sr: srand;
-  li_sh_ae: a:aeAlg{AEAD? a}; // AEAD alg selected by the server
+  li_sh_ae: a:aeadAlg; // AEAD alg selected by the server
   li_sh_hash: h:hash_alg;     // Handshake hash selected by the server
   li_sh_psk: option PSK.pskid;// PSK selected by the server
 }
@@ -331,11 +331,17 @@ type logInfo =
 | LogInfo_SF of logInfo_SF
 | LogInfo_CF of logInfo_CF
 
-let logInfo_ae : x:logInfo{~(LogInfo_CH? x)} -> Tot (a:aeAlg{AEAD? a}) = function
+let logInfo_ae : x:logInfo{~(LogInfo_CH? x)} -> Tot (a:aeadAlg) = function
 | LogInfo_CH0 x -> x.li_ch0_ed_ae
 | LogInfo_SH x -> x.li_sh_ae
 | LogInfo_SF x -> x.li_sf_sh.li_sh_ae
 | LogInfo_CF x -> x.li_cf_sf.li_sf_sh.li_sh_ae
+
+let logInfo_hash : x:logInfo{~(LogInfo_CH? x)} -> Tot hash_alg = function
+| LogInfo_CH0 x -> x.li_ch0_ed_hash
+| LogInfo_SH x -> x.li_sh_hash
+| LogInfo_SF x -> x.li_sf_sh.li_sh_hash
+| LogInfo_CF x -> x.li_cf_sf.li_sf_sh.li_sh_hash
 
 let logInfo_nonce = function
 | LogInfo_CH x -> x.li_ch_cr
@@ -380,8 +386,8 @@ type binderLabel =
   | ResBinder
 
 type pre_esId : Type0 =
-  | ApplicationPSK: i:PSK.pskid -> ha:hash_alg{PSK.compatible_hash i ha} -> pre_esId
-  | ResumptionPSK: #li:logInfo -> i:pre_rmsId li -> pre_esId
+  | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
+  | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
 
 and pre_binderId =
@@ -438,7 +444,7 @@ val keyId_hash: i:pre_keyId -> Tot hash_alg (decreases i)
 val finishedId_hash: i:pre_finishedId -> Tot hash_alg (decreases i)
 
 let rec esId_hash = function
-  | ApplicationPSK pskid h -> h
+  | ApplicationPSK #h #ae pskid -> h
   | ResumptionPSK #li i -> rmsId_hash #li i
   | NoPSK h -> h
 
@@ -474,6 +480,11 @@ and keyId_hash = function
 
 and finishedId_hash = function
   | FinishedID #li i -> expandId_hash #li i
+
+// For 0-RTT
+let esId_ae = function
+  | ApplicationPSK #h #ae _ -> ae
+  | ResumptionPSK #li _ -> logInfo_ae li
 
 type valid_hlen (b:bytes) (h:hash_alg) =
   length b = Hashing.Spec.tagLen h
@@ -512,7 +523,7 @@ type valid (i:pre_index) =
   (match i with
   | I_ES i ->
     (match i with
-    | ApplicationPSK i _ -> PSK.registered_psk i
+    | ApplicationPSK i -> PSK.registered_psk i
     | ResumptionPSK #li i -> registered (I_RMS #li i)
     | NoPSK _ -> True)
   | I_BINDER (Binder i _) -> registered (I_ES i)
@@ -629,7 +640,7 @@ let encAlg_of_id = function
 
 val aeAlg_of_id: i:id { ~ (PlaintextID? i) } -> Tot aeAlg
 let aeAlg_of_id = function
-  | ID13 (KeyID #li _) -> logInfo_ae li
+  | ID13 (KeyID #li _) -> AEAD (logInfo_ae li) (logInfo_hash li)
   | ID12 pv _ _ ae _ _ _ -> ae
 
 let lemma_MtE (i:id{~(PlaintextID? i)})

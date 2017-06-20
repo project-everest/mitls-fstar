@@ -163,12 +163,13 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
   cut(MM.sel (MR.m_sel h app_psk_table) i == Some add);
   admit()
 
-let compatible_hash_st (i:pskid) (a:hash_alg) (h:mem) =
+let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MM.value app_psk_table i h in a = pskInfo_hash ctx))
+  (let (_,ctx,_) = MM.value app_psk_table i h in
+  ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
-let compatible_hash (i:pskid) (a:hash_alg) =
-  MR.witnessed (compatible_hash_st i a)
+let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
+  MR.witnessed (compatible_hash_ae_st i h a)
 
 let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
   (MM.defined app_psk_table i h /\
@@ -177,10 +178,10 @@ let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
 let compatible_info (i:pskid) (c:pskInfo) =
   MR.witnessed (compatible_info_st i c)
 
-let verify_hash (i:pskid) (a:hash_alg) : ST bool
+let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
   (requires (fun h0 -> True))
   (ensures (fun h0 b h1 ->
-    b ==> compatible_hash i a))
+    b ==> compatible_hash_ae i ha ae))
   =
   MR.m_recall app_psk_table;
   MR.testify (MM.defined app_psk_table i);
@@ -190,11 +191,11 @@ let verify_hash (i:pskid) (a:hash_alg) : ST bool
     cut(MM.contains app_psk_table i x h);
     cut(MM.value app_psk_table i h = x);
     let (_, ctx, _) = x in
-    if pskInfo_hash ctx = a then
+    if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
      begin
-      cut(compatible_hash_st i a h);
-      assume(MR.stable_on_t app_psk_table (compatible_hash_st i a));
-      MR.witness app_psk_table (compatible_hash_st i a);
+      cut(compatible_hash_ae_st i ha ae h);
+      assume(MR.stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
+      MR.witness app_psk_table (compatible_hash_ae_st i ha ae);
       true
      end
     else false

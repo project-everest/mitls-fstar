@@ -247,6 +247,48 @@ let clientHello offer = // pure; shared by Client and Server
 
 (* -------------------- Handshake Client ------------------------ *)
 
+type btag (binderKey: i:binderId & bk:KeySchedule.binderKey i) =
+  HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
+
+let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag bkey)
+    (requires fun h0 -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1)  // we'll need a complete spec to determine the transcript
+  =
+  let (| bid, bk |) = bkey in
+  let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
+  HMAC.UFCMA.mac bk digest_CH0
+
+let verify_binder hs (bkey: i:binderId & bk:KeySchedule.binderKey i) (tag:btag bkey) tlen: ST bool
+    (requires fun h0 -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  let (| bid, bk |) = bkey in
+  let digest_CH0 = HandshakeLog.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
+  HMAC.UFCMA.verify bk digest_CH0 tag
+
+// Compute and send the PSK binders if necessary
+// may be called both by client_ClientHello and client_HelloRetryRequest
+let client_Binders hs offer =
+  match Nego.find_clientPske offer with
+  | None -> () // No PSK, no binders
+  | Some (pskl, tlen) -> // Nego may filter the PSKs
+    let pskl = List.Tot.map (fun (id, _) -> id) pskl in
+    let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
+    let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
+    HandshakeLog.send hs.log (Binders binders);
+
+    // Nego ensures that EDI is not sent in a 2nd ClientHello
+    if Some? (Nego.find_early_data offer) then
+     begin
+      trace "setting up 0RTT";
+      let (| bid, _ |) :: _ = binderKeys in
+      let ha = binderId_hash bid in
+      let digest_CH = HandshakeLog.hash_tag #ha hs.log in
+      let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+      register hs edk;
+      HandshakeLog.send_signals hs.log (Some (true, false)) false
+     end
+
 val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
   (requires fun h0 ->
     let n = MR.m_sel h0 Nego.(s.nego.state) in
@@ -276,80 +318,48 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
           t = [ClientHello offer] ))
         | _ -> False )))
 
-type btag (binderKey: i:binderId & bk:KeySchedule.binderKey i) =
-  HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
-
-let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag bkey)
-    (requires fun h0 -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1)  // we'll need a complete spec to determine the transcript
-  =
-  let (| bid, bk |) = bkey in
-  let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
-  HMAC.UFCMA.mac bk digest_CH0
-
-let verify_binder hs (bkey: i:binderId & bk:KeySchedule.binderKey i) (tag:btag bkey) tlen: ST bool
-    (requires fun h0 -> True)
-    (ensures fun h0 _ h1 -> modifies_none h0 h1)
-  =
-  let (| bid, bk |) = bkey in
-  let digest_CH0 = HandshakeLog.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
-  HMAC.UFCMA.verify bk digest_CH0 tag
-
 let client_ClientHello hs i =
   (* Negotiation computes the list of groups from the configuration;
      KeySchedule computes and serializes the shares from these groups (calling into CommonDH)
      Messages should do the serialization (calling into CommonDH), but dependencies are tricky *)
-  let _, pskids = resumeInfo_of hs in
 
-  let shares, binderKeys, pskinfo =
-    match (config_of hs).max_version  with
-      | TLS_1p3 -> (* compute shares for groups in offer *)
-        trace "offering ClientHello 1.3";
-        let bk, pski, shares = KeySchedule.ks_client_13_init hs.ks pskids (config_of hs).offer_shares in
-        Some shares, bk, pski
-      | _ ->
-        trace "offering ClientHello 1.2";
-        let si = KeySchedule.ks_client_12_init hs.ks in
-        None, [], [] in
-  //
+  let groups =
+    match (config_of hs).max_version with
+    | TLS_1p3 ->
+      trace "offering ClientHello 1.3";
+      Some ((config_of hs).offer_shares)
+    | _ ->
+      trace "offering ClientHello 1.2"; None
+    in
+
+  // If groups = None, this is a 1.2 handshake
+  // Note that groups = Some [] is valid (e.g. to trigger HRR deliberately)
+  let shares = KeySchedule.ks_client_init hs.ks groups in
+
   // Compute & send the ClientHello offer
-  // for now we assume there is no filtering or reordering on the PSKs.
-  // TODO filter PKSs within Nego, not extensions!
-  let offer = Nego.client_ClientHello hs.nego shares pskinfo in (* compute offer from configuration *)
+  let offer = Nego.client_ClientHello hs.nego shares in
   HandshakeLog.send hs.log (ClientHello offer);
-  //
-  // Computing & sending the binders
-  let nego_psk =
-    (match Nego.find_clientPske offer with
-    | Some (pskl,tlen) ->
-      // for later: we only compute binders for PSK identities negotiated in ClientHello
-      //      let filter bk =
-      //        let (| Binder esId _, bk |) = bk in
-      //        let ApplicationPSK pskid _ = esId in
-      //        List.Tot.existsb (fun (x,_) -> equalBytes x pskid) pskl in
-      //      let nego_binders = List.Tot.filter filter binderKeys in
-      if List.Tot.length pskl <> List.Tot.length binderKeys then
-        trace "WARNING: PSK filtering";
-      let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
-      HandshakeLog.send hs.log (Binders binders);
-      pskl
-    | _ -> []) in
 
-  // 0-RTT data
-  (match Nego.find_early_data offer, nego_psk with
-  | Some _, (pskid, _) :: _ ->
-      let Some (_, info0) = List.Tot.find (fun (x,_) -> equalBytes x pskid) pskinfo in
-      let digest_CH = HandshakeLog.hash_tag #(PSK.pskInfo_hash info0) hs.log in
-      let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
-      trace "setting up 0RTT";
-      register hs edk;
-      HandshakeLog.send_signals hs.log (Some (true, false)) false
-    // TODO enable client 0RTT
-  | Some _, [] -> trace "statically excluded"
-  | _ -> ());
+  // Comptue and send PSK binders & 0-RTT signals
+  client_Binders hs offer;
 
-  hs.state := C_Wait_ServerHello; // we may still need to keep parts of ch
+  // we may still need to keep parts of ch
+  hs.state := C_Wait_ServerHello;
   Correct(HandshakeLog.next_fragment hs.log i)
+
+let client_HelloRetryRequest hs hrr =
+  match Nego.group_of_hrr hrr with
+  | None -> InError(AD_handshake_failure, "server did not specify the requested group")
+  | Some g ->
+    let s = KeySchedule.ks_client_13_hello_retry hs.ks g in
+    match Nego.client_HelloRetryRequest hs.nego hrr (| g, s |) with
+    | Error z -> InError z
+    | Correct(ch) ->
+      HandshakeLog.send hs.log (ClientHello ch);
+      client_Binders hs ch;
+      // Note: we stay in Wait_ServerHello
+      // Only the Nego state machine was moved by HRR
+      InAck false false
 
 // requires !hs.state = Wait_ServerHello
 // ensures TLS 1.3 ==> installed handshake keys
@@ -1047,6 +1057,10 @@ let rec recv_fragment (hs:hs) #i rg f =
     | Correct (Some (ms,ts)) ->
       match !hs.state, ms, ts with
       | C_Idle, _, _ -> InError (AD_unexpected_message, "Client hasn't sent hello yet")
+
+      | C_Wait_ServerHello, [HelloRetryRequest hrr], [] ->
+        client_HelloRetryRequest hs hrr
+
       | C_Wait_ServerHello, [ServerHello sh], [] ->
         recv_again (client_ServerHello hs sh)
 

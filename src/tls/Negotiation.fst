@@ -165,8 +165,8 @@ let find_signature_algorithms o : option signatureSchemeList =
 // finding the pre-shared keys in ClientHello
 let find_pske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
-  | None -> None
-  | Some (Extensions.E_pre_shared_key psks) -> Some psks
+  | Some (Extensions.E_pre_shared_key (Extensions.ClientPSK psks _)) -> Some psks
+  | _ -> None
 
 let find_sessionTicket o =
   match find_client_extension Extensions.E_session_ticket? o with
@@ -243,8 +243,8 @@ let find_early_data o =
 *)
 type retryInfo (offer:offer) =
   hrr *
-  list share (* we should actually keep the raw client extension content *) *
-  (list (PSK.pskid * Hashing.anyTag))
+  list pre_share (* we should actually keep the raw client extension content *) *
+  list Extensions.pskIdentity
 
 (**
   The final negotiated outcome, including key shares and long-term identities.
@@ -620,23 +620,71 @@ let verify scheme chain tbs sigv =
 
 (* CLIENT *)
 
+effect ST0 (a:Type) = ST a (fun _ -> True) (fun h0 _ h1 -> modifies_none h0 h1)
+val map_ST: ('a -> ST0 'b) -> list 'a -> ST0 (list 'b)
+let rec map_ST f x = match x with
+  | [] -> []
+  | a::tl -> f a :: map_ST f tl
+
 val client_ClientHello: #region:rgn -> t region Client
   -> option CommonDH.clientKeyShare
-  -> list (PSK.pskid * PSK.pskInfo)
   -> St offer
-let client_ClientHello #region ns oks pskinfo =
+let client_ClientHello #region ns oks =
   //17-04-22 fix this in the definition of offer?
   let oks' =
     match oks with
     | Some ks -> Some (CommonDH.ClientKeyShare ks)
-    | None -> None
-  in
+    | None -> None in
+  let _, pskid = ns.resume in
+  let pskinfo = map_ST (fun i -> (i, PSK.psk_info i)) pskid in
   match MR.m_read ns.state with
   | C_Init _ ->
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);
       offer
+
+let group_of_hrr hrr : option CommonDH.group =
+  match List.Tot.find (Extensions.E_key_share?) hrr.hrr_extensions with
+  | Some (Extensions.E_key_share (CommonDH.HRRKeyShare ng)) ->
+    CommonDH.group_of_namedGroup ng
+  | _ -> None
+
+let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
+  let { hrr_protocol_version = pv;
+        hrr_cipher_suite = cs;
+        hrr_extensions = el } = hrr in
+  match MR.m_read ns.state with
+  | C_Offer offer ->
+    let old_shares = gs_of offer in
+    let old_psk =
+      match find_pske offer with
+      | None -> []
+      | Some pskl -> pskl in
+    let (| g, gx |) = s in
+
+    (match group_of_hrr hrr, find_supported_groups offer with
+    | Some g', Some ngl ->
+      if g = g' && List.Tot.mem (Some?.v (CommonDH.namedGroup_of_group g')) ngl then
+       begin
+        // TODO early data not recorded in retryInfo
+        let ext' = List.Tot.choose (fun (e:Extensions.extension) ->
+          if Extensions.E_key_share? e then
+            Some (Extensions.E_key_share
+             (CommonDH.ClientKeyShare [CommonDH.Share g gx]))
+          else if Extensions.E_early_data? e then None
+          else Some e // TODO filter PSK
+          ) (Some?.v offer.ch_extensions) in
+
+        let offer' = {offer with ch_extensions = Some ext'} in
+        let ri = (hrr, old_shares, old_psk) in
+        MR.m_write ns.state (C_HRR offer' ri);
+        Correct(offer')
+       end
+      else
+        Error(AD_illegal_parameter, "server asked for an invalid group in HRR")
+    | _ ->
+      Error(AD_illegal_parameter, "only keyShare-based HRR is supported on client"))
 
 (**
   Checks that the protocol version in ClientHello is
@@ -811,6 +859,8 @@ val client_ServerHello: #region:rgn -> t region Client ->
   St (result mode) // it needs to be computed, whether returned or not
 let client_ServerHello #region ns sh =
   match MR.m_read ns.state with
+  | C_HRR offer _ // -> FIXME validation
+  //  .....
   | C_Offer offer ->
     let spv  = sh.sh_protocol_version in
     let sr   = sh.sh_server_random in
@@ -1319,35 +1369,29 @@ let server_ClientHello #region ns offer =
     let [Extensions.E_key_share (CommonDH.HRRKeyShare ng)] = hrr.hrr_extensions in
     if
       o1.ch_protocol_version = o2.ch_protocol_version &&
-//      IO.debug_print_string ("PV OK" ^ (print_bytes o1.ch_client_random) ^ "==" ^ (print_bytes o2.ch_client_random)^"\n") &&
-      o1.ch_client_random = o2.ch_client_random &&
-//      IO.debug_print_string "CR OK" &&
+      equalBytes o1.ch_client_random o2.ch_client_random &&
       o1.ch_sessionID = o2.ch_sessionID &&
-//      IO.debug_print_string "SID OK" &&
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
-//      IO.debug_print_string "CS OK" &&
       o1.ch_compressions = o2.ch_compressions &&
-//      IO.debug_print_string "Comp OK" &&
       Some? o2.ch_extensions && Some? o1.ch_extensions &&
-//      IO.debug_print_string "Ext OK" &&
       List.Tot.for_all (fun (e:Extensions.extension) ->
         match e with
         | Extensions.E_key_share (CommonDH.ClientKeyShare ecl) ->
-          let ecl = List.Tot.filter (fun (CommonDH.Share g _) -> IO.debug_print_string ("share:" ^ (CommonDH.string_of_group g))) ecl in
           (match ecl with
           | [CommonDH.Share g _] -> CommonDH.namedGroup_of_group g = Some ng
-          | _ -> false)
+          | _ -> (IO.debug_print_string "Bad key_share\n") && false)
         | Extensions.E_early_data _ -> false // Forbidden
         // If we add cookie support we need to treat this case separately
         // | Extensions.E_cookie c -> c = S_HRR?.cookie ns.state
         | e ->
           (match find_client_extension (Extensions.sameExt e) o1 with
-          | None -> false
+          | None -> (IO.debug_print_string "Extra extension\n") && false
           // This allows the client to send less extensions,
           // but the ones that are sent must be exactly the same
           | Some e' ->
             //FIXME: Extensions.E_pre_shared_key "may be updated" 4.1.2
-            equalBytes (extensionBytes e) (extensionBytes e'))
+            true) // FIXME
+            //equalBytes (extensionBytes e) (extensionBytes e'))
         ) (Some?.v o2.ch_extensions)
     then
       let sm = computeServerMode ns.cfg offer ns.nonce in
