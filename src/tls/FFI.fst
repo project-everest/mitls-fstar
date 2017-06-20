@@ -300,7 +300,7 @@ let ffiSetALPN cfg x =
   let apl = if x = "" then [] else String.split [':'] x in
   if List.Tot.length apl > 255 then failwith "ffiSetALPN: too many entries";
   let apl = map (fun x ->
-    if String.length x < 256 then x
+    if String.length x < 256 then utf8 x
     else failwith ("ffiSetALPN: protocol <"^x^"> is too long")
   ) apl in
   { cfg with alpn = if apl=[] then None else Some apl }
