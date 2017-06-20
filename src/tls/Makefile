@@ -172,20 +172,20 @@ FFI
 all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
 
 # Sanity check
-tls-sanity: record_fstar_version $(LIBFILES)
+tls-sanity: record_fstar_version
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
         --verify_module False \
 	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
 
-tls-lax: record_fstar_version $(LIBFILES)
+tls-lax: record_fstar_version
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax \
 	--include $(MITLS_HOME)/src/tls/concrete-flags \
 	TLS.fst
 
 wc:
-	wc -l $(LIBFILES) *.fst *.fsti
+	wc -l *.fst *.fsti
 
 .fstarlib: $(FSTAR_HOME)/ulib/*.fst $(FSTAR_HOME)/ulib/ml/*.ml $(wildcard $(FSTAR_HOME)/ulib/ml/extracted/*.ml)
 	touch .fstarlib
