@@ -41,7 +41,7 @@ let ticketid (a:aeadAlg) : St (AE.id) =
   let li = LogInfo_CH0 ({
     li_ch0_cr = CC.random 32;
     li_ch0_ed_psk = empty_bytes;
-    li_ch0_ed_ae = AEAD a h;
+    li_ch0_ed_ae = a;
     li_ch0_ed_hash = h;
   }) in
   let log : hashed_log li = empty_bytes in
@@ -92,7 +92,7 @@ let dummy_rmsid ae h =
   let li = {
     li_sh_cr = CC.random 32;
     li_sh_sr = CC.random 32;
-    li_sh_ae = AEAD ae h;
+    li_sh_ae = ae;
     li_sh_hash = h;
     li_sh_psk = None;
   } in
