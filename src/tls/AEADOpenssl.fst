@@ -1,8 +1,8 @@
 module AEADOpenssl
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
+open Mem
+open Mem
 open FStar.Seq
 open Platform.Bytes
 open CoreCrypto
@@ -61,7 +61,7 @@ noeq type state (i:id) (rw:rw) =
     #region: rgn ->
     #log_region:rgn{
        if rw = Writer then region = log_region
-       else HyperHeap.disjoint region log_region} ->
+       else Mem.disjoint region log_region} ->
     key: key i ->
     log: log_ref log_region i ->
     state i rw
@@ -104,7 +104,7 @@ type peered (#i:id) (w:writer i) =
   }
 
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (peered w)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region))
+  (requires (fun h0 -> Mem.disjoint parent w.region))
   (ensures (fun h0 r h1 ->
     modifies Set.empty h0 h1 /\
     extends r.region parent /\
@@ -160,7 +160,7 @@ let encrypt #i #l e iv ad p =
     aead_encrypt (alg i) (State?.key e) iv ad p
 
 type correct_decrypt (#i:id) (#l:plainlen) (r:reader i) (iv:iv i) (ad:adata i)
-                     (c:cipher i l) (po:option (plain i l)) (h:HyperStack.mem) =
+                     (c:cipher i l) (po:option (plain i l)) (h:Mem.mem) =
   (authId i ==>
     (defined_iv #i r iv h ==>
       (let Entry ad' p c' = MM.value (ilog r.log) iv h in

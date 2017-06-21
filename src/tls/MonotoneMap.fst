@@ -4,13 +4,13 @@ options:--use_hints --fstar_home ../../../FStar --detail_errors --include ../../
 (* A library for monotonic references to partial, dependent maps, with a whole-map invariant *)
 module MonotoneMap
 open FStar.Monotonic.RRef
-open FStar.HyperHeap
+open Mem
 
-open FStar.HyperStack
-open FStar.HyperStack.ST
+open Mem
+open Mem
 
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
+module HH = Mem
+module HS = Mem
 module MR = FStar.Monotonic.RRef
 
 (* Partial, dependent maps *)
@@ -96,7 +96,7 @@ let extend (#r:rid) (#a:eqtype) (#b:a -> Type) (#inv:(map' a b -> Type0)) (m:t r
       let hsref = as_hsref m in
             m_contains m h1
             /\ modifies (Set.singleton r) h0 h1
-            /\ modifies_rref r (Set.singleton (Heap.addr_of (HH.as_ref (HS.MkRef?.ref hsref)))) h0.h h1.h
+            /\ modifies_rref r (Set.singleton (Mem.as_addr hsref)) h0.h h1.h
             /\ m_sel h1 m == upd cur x y
             /\ witnessed (defined m x)
             /\ witnessed (contains m x y)))

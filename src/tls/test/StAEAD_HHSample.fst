@@ -1,6 +1,6 @@
 (*--build-config
-    options:--prims ../tls-ml/prims.fst --codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib Seq.Properties --verify_module StAEAD_HHSample --admit_fsi Seq.Base --admit_fsi StatefulPlain --admit_fsi LHAEPlain --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Map --admit_fsi Seq.Base --admit_fsi HyperHeap --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 10;
-    other-files:../../../FStar/lib/FStar.String.fst ../../../FStar/lib/FStar.List.fst ../../../FStar/lib/FStar.FunctionalExtensionality.fst ../../../FStar/lib/FStar.Classical.fst ../../../FStar/lib/FStar.Set.fsi ../../../FStar/lib/FStar.Set.fst ../../../FStar/lib/FStar.Heap.fst ../../../FStar/lib/FStar.ST.fst ../../../FStar/lib/map.fsi ../../../FStar/lib/hyperheap2.fsi ../../../FStar/lib/seq.fsi ../../../FStar/lib/FStar.Seq.Properties.fst ../../../FStar/lib/FStar.Int64.fst ../../../FStar/contrib/Platform/fst/Bytes.fst ../../../FStar/contrib/Platform/fst/Date.fst ../../../FStar/contrib/Platform/fst/Error.fst ../../../FStar/contrib/Platform/fst/Tcp.fst ../../../FStar/contrib/CoreCrypto/fst/CoreCrypto.fst ../../../FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.p.fst Nonce.p.fst TLSConstants.p.fst RSAKey.p.fst DHGroup.p.fst ECGroup.p.fst CommonDH.p.fst PMS.p.fst HASH.p.fst HMAC.p.fst ../tls-lax/Sig.p.fst UntrustedCert.p.fsti Cert.p.fsti TLSInfo.p.fst TLSExtensions.p.fst TLSPRF.p.fst Range.p.fst DataStream.p.fst StatefulPlain.p.fsti LHAEPlain.p.fst AEAD_GCM.fst StatefulLHAE.fst
+    options:--prims ../tls-ml/prims.fst --codegen-lib CoreCrypto --codegen-lib Platform --codegen-lib Classical --codegen-lib Seq.Properties --verify_module StAEAD_HHSample --admit_fsi Seq.Base --admit_fsi StatefulPlain --admit_fsi LHAEPlain --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi Map --admit_fsi Seq.Base --admit_fsi Mem --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 10;
+    other-files:../../../FStar/lib/FStar.String.fst ../../../FStar/lib/FStar.List.fst ../../../FStar/lib/FStar.FunctionalExtensionality.fst ../../../FStar/lib/FStar.Classical.fst ../../../FStar/lib/FStar.Set.fsi ../../../FStar/lib/FStar.Set.fst ../../../FStar/lib/Mem.fst ../../../FStar/lib/FStar.ST.fst ../../../FStar/lib/map.fsi ../../../FStar/lib/hyperheap2.fsi ../../../FStar/lib/seq.fsi ../../../FStar/lib/FStar.Seq.Properties.fst ../../../FStar/lib/FStar.Int64.fst ../../../FStar/contrib/Platform/fst/Bytes.fst ../../../FStar/contrib/Platform/fst/Date.fst ../../../FStar/contrib/Platform/fst/Error.fst ../../../FStar/contrib/Platform/fst/Tcp.fst ../../../FStar/contrib/CoreCrypto/fst/CoreCrypto.fst ../../../FStar/contrib/CoreCrypto/fst/DHDB.fst TLSError.p.fst Nonce.p.fst TLSConstants.p.fst RSAKey.p.fst DHGroup.p.fst ECGroup.p.fst CommonDH.p.fst PMS.p.fst HASH.p.fst HMAC.p.fst ../tls-lax/Sig.p.fst UntrustedCert.p.fsti Cert.p.fsti TLSInfo.p.fst TLSExtensions.p.fst TLSPRF.p.fst Range.p.fst DataStream.p.fst StatefulPlain.p.fsti LHAEPlain.p.fst AEAD_GCM.fst StatefulLHAE.fst
   --*)
 
 module StAEAD_HHSample
@@ -17,7 +17,7 @@ open StatefulPlain
 open AEAD_GCM
 open StatefulLHAE
 open Range
-open FStar.HyperHeap
+open Mem
 
 
 // keeping indexes constant for simplicity
@@ -77,7 +77,7 @@ val protect: inputs: list (fragment i ad rg) ->
        (*/\ (forall (n:nat) . (n <= List.length (sel h (StWriter.log ( wr () ) )) + List.length inputs ==> is_seqn n))*)
       ))
      (ensures (fun h0 (cs:list block)  h1 -> True
-       /\ HyperHeap.modifies (Set.singleton ( root )) h0 h1 //root was StWriter.region (wr () )
+       /\ Mem.modifies (Set.singleton ( root )) h0 h1 //root was StWriter.region (wr () )
        // both still missing type annotations
        // /\ inputs = List.mapT
        //   #(e: entry i) // { Entry?.ad e = ad /\ length (Entry?.c e) = clen })
@@ -151,11 +151,11 @@ val test: unit -> ST unit
   (ensures (fun _ _ _ -> True))
 
 // could also use some cutST
-assume val admitST: phi: (HyperHeap.t -> Type) -> ST (unit)
+assume val admitST: phi: (Mem.t -> Type) -> ST (unit)
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1 /\ phi h1 ))
 
-assume val cutST: phi: (HyperHeap.t -> Type) -> ST (unit)
+assume val cutST: phi: (Mem.t -> Type) -> ST (unit)
   (requires phi)
   (ensures (fun h0 _ h1 -> modifies Set.empty h0 h1 /\ phi h0 )) //MK: typo in StAEADSample.fst not quite sure what it should do.
 

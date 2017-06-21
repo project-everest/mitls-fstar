@@ -1,10 +1,10 @@
 ﻿(** computational assumption: collision resistance *)
 module Hashing.CRF
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
-open FStar.HyperStack.ST
+open Mem
+open Mem
+open Mem
+open Mem
 
 open Platform.Bytes
 open Hashing.Spec

@@ -1,8 +1,8 @@
 module TLS
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
+open Mem
+open Mem
 open FStar.Seq
 open FStar.Set
 
@@ -20,8 +20,8 @@ open Epochs
 //open Handshake
 open Connection
 
-module HH   = FStar.HyperHeap
-module HST  = FStar.HyperStack
+module HH   = Mem
+module HST  = Mem
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
 module DS   = DataStream
@@ -99,14 +99,14 @@ let create parent tcp role cfg resume =
 
 
 //TODO upgrade commented-out types imported from TLS.fsti
-// type initial (role: role) (ns:Transport.t) (c:config) (resume: option sessionID) (cn:connection) (h: HyperHeap.t) =
+// type initial (role: role) (ns:Transport.t) (c:config) (resume: option sessionID) (cn:connection) (h: Mem.t) =
 //     extends (c_rid cn) root /\ // we allocate a fresh, opaque region for the connection
 //     c_role cn   = role /\
 //     c_tcp cn    = ns /\
 //     c_resume cn = resume /\
 //     c_cfg cn = c /\
-//     HyperHeap.sel h (C.reading cn) = Init /\ // assuming Init epoch implicitly have no data sent/received
-//     HyperHeap.sel h (C.writing cn) = Init
+//     Mem.sel h (C.reading cn) = Init /\ // assuming Init epoch implicitly have no data sent/received
+//     Mem.sel h (C.writing cn) = Init
 
 // painful to specify?
 //* should we still return ConnectionInfo ?

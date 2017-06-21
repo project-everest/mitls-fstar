@@ -10,8 +10,8 @@ module TLSOutline
 // - each secure stream maintains a log of data (and warnings) written so far
 //   and the reader position in that log.
 
-open FStar.Heap
-open FStar.HyperHeap
+open Mem
+open Mem
 open FStar.Seq
  // for e.g. found
 open FStar.Monotonic.RRef
@@ -27,7 +27,7 @@ open TLSInfo
 
 // using DataStream 
 
-type hh = HyperHeap.t
+type hh = Mem.t
 
 
 type rid = r:rid{r<>root}
@@ -47,7 +47,7 @@ assume type is_initial_epoch: epoch -> Type //TODO: maybe this can be removed or
 //TODO: an API for the duality on ids
 
 //Do we need such a function? Perhaps a stateful one to record paired epochs
-// assume val partner: epoch -> HyperHeap.t -> Tot epoch
+// assume val partner: epoch -> Mem.t -> Tot epoch
 
 // connections may be partnered dynamically (ie, they are partnered by the assignment of partnered epochs to connections)
 assume type connection
@@ -59,7 +59,7 @@ assume val c_resume:  connection -> Tot (option sessionID)
 assume val c_config:  connection -> Tot config
 //properties of connections for specification purposes only
 assume val c_region:  connection -> Tot rid            //the region in which the connection is allocated
-assume val c_regionsT:connection -> hh -> Tot (Set.set HyperHeap.rid) //the dynamic set of regions of connection and the connection's current epochs
+assume val c_regionsT:connection -> hh -> Tot (Set.set Mem.rid) //the dynamic set of regions of connection and the connection's current epochs
 //TODO: define c_regionsT c h as the c_region c and all the regions of the (epochsT c) (not including the peer regions)
 
 assume type c_inv  :  connection -> hh -> Type          //the private connection invariant
@@ -131,7 +131,7 @@ type partnered_conn (c1:connection) (c2:connection) (h:hh) =
 
 (*** FRAMING INVARIANTS ***)
 assume val frame_c_inv: c:connection -> h0:hh -> h1:hh -> Lemma 
-  (requires (HyperHeap.equal_on (c_regionsT c h0) h0 h1
+  (requires (Mem.equal_on (c_regionsT c h0) h0 h1
 	     /\ c_log_inv h0
 	     /\ c_inv c h0))
   (ensures (c_log_inv h0

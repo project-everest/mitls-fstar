@@ -3,12 +3,12 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module CommonDH
 
-open FStar.HyperStack
+open Mem
 open Platform.Bytes
 open Platform.Error
 open Parse
 open TLSError
-open FStar.HyperStack.ST
+open Mem
 
 val group: t:Type0{hasEq t}
 val is_ec: group -> Tot bool

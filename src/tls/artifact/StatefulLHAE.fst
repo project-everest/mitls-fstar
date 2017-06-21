@@ -6,8 +6,8 @@ module StatefulLHAE
 // Stateful, agile, length-hiding authenticated encryption with additional data
 // (implemented by appending a fragment sequence number to the additional data)
 
-open FStar.Heap
-open FStar.HyperHeap
+open Mem
+open Mem
 open FStar.Seq
  // for e.g. found
 
@@ -59,7 +59,7 @@ opaque type matching (#i:gid) (r:reader i) (w:writer i) =
 
 type both (i:gid) = rw:(reader i * writer i){matching (fst rw) (snd rw)}
 
-type st_inv (#i:gid) (d:reader i) (e:writer i) (h:HyperHeap.t) =
+type st_inv (#i:gid) (d:reader i) (e:writer i) (h:Mem.t) =
     matching d e
   /\ Map.contains h (StReader.region d)
   /\ Let (sel h (AEAD_GCM.State?.log (StWriter.key e))) (fun aead ->
@@ -139,7 +139,7 @@ let coerce_writer r0 i kv iv =
   let log = ralloc r Seq.createEmpty in
   StWriter log (ralloc r 0) enc
 
-type st_enc_inv (#i:gid) (e:writer i) (h:HyperHeap.t) =
+type st_enc_inv (#i:gid) (e:writer i) (h:Mem.t) =
   exists (d:reader i). st_inv d e h
 
 let refs_in_e (#i:gid) (e:writer i) =
@@ -166,7 +166,7 @@ let encrypt i ad rg (StWriter #ii #r log seqn key) f =
   seqn := n + 1;
   c
 
-type st_dec_inv (#i:gid) (d:reader i) (h:HyperHeap.t) =
+type st_dec_inv (#i:gid) (d:reader i) (h:Mem.t) =
   exists (e:writer i). st_inv d e h
 
 type Let (#a:Type) (=x:a) (body:(y:a{y=x}) -> Type) = body x
@@ -181,7 +181,7 @@ val decrypt: #i:gid -> #ad:adata i -> rd:reader i
                modifies (Set.singleton (StReader.region rd)) h0 h1
              /\ modifies_rref (StReader.region rd) !{as_ref (StReader.seqn rd)} h0 h1
              /\ is_seqn (sel h0 (StReader.seqn rd) + 1)
-             /\ Heap.contains (Map.sel h0 (StReader.region rd)) (as_ref (StReader.log rd))
+             /\ Mem.contains (Map.sel h0 (StReader.region rd)) (as_ref (StReader.log rd))
              /\ Let (sel h0 (StReader.log rd))  (fun (log:seq (entry i){log=sel h0 (StReader.log rd)}) ->
                Let (sel h0 (StReader.seqn rd)) (fun (rctr:nat{rctr=sel h0 (StReader.seqn rd)}) ->
                authId i

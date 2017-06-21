@@ -1,7 +1,7 @@
 module Signature
 
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
+open Mem
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
@@ -187,7 +187,7 @@ val sign: #a:alg
         let log = PK?.log pk in
 	let log_ashsref = as_hsref log in
         modifies_one keyRegion h0 h1 /\
-        modifies_rref keyRegion (Set.singleton (Heap.addr_of (as_ref log_ashsref))) h0.h h1.h /\
+        modifies_rref keyRegion (Set.singleton (Mem.as_addr log_ashsref)) h0.h h1.h /\
         m_sel h1 log == st_update (m_sel h0 log) t
       else modifies Set.empty h0 h1))
 
@@ -277,7 +277,7 @@ val gen: a:alg -> All (skey a)
   (requires (fun h -> m_contains rkeys h))
   (ensures  (fun h0 (s:result (skey a)) h1 ->
 	         modifies_one keyRegion h0 h1
-               /\ modifies_rref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref rkeys)))) h0.h h1.h
+               /\ modifies_rref keyRegion (Set.singleton (Mem.as_addr (as_hsref rkeys))) h0.h h1.h
                /\ m_contains rkeys h1
 	       /\ (V? s ==>   witnessed (generated (| a, fst (V?.v s) |))
 			   /\ m_fresh (PK?.log (fst (V?.v s))) h0 h1
@@ -306,7 +306,7 @@ val leak: #a:alg -> s:skey a -> ST (public_repr * secret_repr)
   (requires (fun _ -> True))
   (ensures  (fun h0 r h1 ->
 	      modifies_one keyRegion h0 h1
-	      /\ modifies_rref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref (PK?.log (fst s)))))) h0.h h1.h
+	      /\ modifies_rref keyRegion (Set.singleton (Mem.as_addr (as_hsref (PK?.log (fst s))))) h0.h h1.h
 	      /\ Corrupt? (m_sel h1 (PK?.log (fst s)))
 	      /\ fst r == PK?.repr (fst s)))
 let leak #a (PK log pkr, skr) =
@@ -379,7 +379,7 @@ val lookup_key: #a:alg -> string -> ST (option (skey a))
     match o with
     | Some (p, skr) ->
       modifies_one keyRegion h0 h1 /\
-      modifies_rref keyRegion (Set.singleton (Heap.addr_of (as_ref (as_hsref rkeys)))) h0.h h1.h /\
+      modifies_rref keyRegion (Set.singleton (Mem.as_addr (as_hsref rkeys))) h0.h h1.h /\
       witnessed (generated (|a,p|))
     | None -> h0 == h1))
 let lookup_key #a keyfile =

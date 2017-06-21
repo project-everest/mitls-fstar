@@ -1,7 +1,7 @@
 module TestAPI
 
 open FStar.Seq
-open FStar.HyperHeap
+open Mem
 open Platform.Bytes
 open Platform.Error
 open TLSError

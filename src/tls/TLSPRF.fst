@@ -71,7 +71,7 @@ let coerce (k:bytes) : key = k
 
 val p_hash_int: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> int -> int -> bytes -> bytes -> ST bytes
   (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 _ h1 -> Mem.modifies Set.empty h0 h1))
 let rec p_hash_int alg secret seed len it aPrev acc =
   let aCur = HMAC.tls_mac alg secret aPrev in
   let pCur = HMAC.tls_mac alg secret (aCur @| seed) in

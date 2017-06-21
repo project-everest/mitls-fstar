@@ -3,16 +3,16 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module Parse
 
-open FStar.HyperStack.All
+open Mem
 
 open FStar.Seq
 open Platform.Bytes
 open Platform.Error
 open TLSError
 
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
-module ST = FStar.HyperStack.ST
+module HH = Mem
+module HS = Mem
+module ST = Mem
 
 
 (** This file should be split in 3 different modules:

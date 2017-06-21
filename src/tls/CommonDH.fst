@@ -11,17 +11,17 @@ share is for registered shares (for which is_honest is defined).
 *)
 ﻿module CommonDH
 
-open FStar.HyperStack
+open Mem
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open Parse
 open TLSError
-open FStar.HyperStack.ST
+open Mem
 
 module MR = FStar.Monotonic.RRef
 module MM = MonotoneMap
-module ST = FStar.HyperStack.ST
+module ST = Mem
 
 (* A flag for runtime debugging of cDH data.
    The F* normalizer will erase debug prints at extraction

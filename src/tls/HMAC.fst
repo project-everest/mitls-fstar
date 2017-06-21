@@ -15,14 +15,14 @@ type mac (a:macAlg) = lbytes (macSize a)
 val hmac: a:alg -> k:hkey a -> m:bytes -> 
   ST (t:tag a {t == Hashing.Spec.hmac a k m})
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 
 let hmac a k m = Hashing.OpenSSL.hmac a k m
 
 // consider providing it only in UFCMA
 val hmacVerify: a:alg -> k:hkey a -> m:data -> t:tag a -> ST (b:bool {b <==> (t == Hashing.Spec.hmac a k m)})
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 
 let hmacVerify a k p t =
     let result = hmac a k p in
@@ -47,7 +47,7 @@ let sslKeyedHashPads = function
 
 private val sslKeyedHash: a:alg {a = MD5 \/ a = SHA1} -> k:hkey a -> bytes -> ST (tag a)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 let sslKeyedHash a k p =
     let (inner, outer) = 
       match a with 
@@ -58,7 +58,7 @@ let sslKeyedHash a k p =
 
 private val sslKeyedHashVerify: a:alg {a = MD5 \/ a = SHA1} -> k:hkey a -> bytes -> t:tag a -> ST bool 
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 let sslKeyedHashVerify a k p t =
     let res = sslKeyedHash a k p in
     equalBytes res t
@@ -68,7 +68,7 @@ let sslKeyedHashVerify a k p t =
 
 val tls_mac: a:macAlg -> k:lbytes (macKeySize a) -> bytes -> ST (lbytes (macSize a))
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 let tls_mac a k d  =
     match a with
     | HMac     a -> hmac a  k d  
@@ -76,7 +76,7 @@ let tls_mac a k d  =
 
 val tls_macVerify: a:macAlg -> k:lbytes (macKeySize a) -> msg:bytes -> t:lbytes (macSize a) -> ST bool
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 let tls_macVerify a k d t =
     match a with
     | HMac alg -> hmacVerify alg k d t

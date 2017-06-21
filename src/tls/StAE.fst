@@ -7,15 +7,15 @@ module StAE
 // multiplexing StatefulLHAE and StreamAE with (some) length hiding
 // (for now, under-specifying ciphertexts lengths and values)
 
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
+open Mem
 open Platform.Bytes
 
 open TLSConstants
 open TLSInfo
 
-module HH   = FStar.HyperHeap
-module HS   = FStar.HyperStack
+module HH   = Mem
+module HS   = Mem
 module MR   = FStar.Monotonic.RRef
 module MS   = FStar.Monotonic.Seq
 module C    = Content
@@ -257,7 +257,7 @@ let fragments' #i #rw s = fun h -> fragments #i #rw s h
 (*------------------------------------------------------------------*)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
   let r = region #i #Writer w in
-  HH.modifies Set.empty h0.h h1.h /\
+  Mem.modifies Set.empty h0 h1 /\  (* was: HH.modifies Set.empty h0.h h1.h // TR: what about the tip? *)
   HH.extends r parent /\
   stronger_fresh_region r h0 h1 /\
   color r = color parent /\
@@ -277,7 +277,7 @@ let gen parent i =
 
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val genReader: parent:rgn -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 -> Mem.disjoint parent (region #i #Writer w))) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
                modifies Set.empty h0 h1 /\
                log_region r = region #i #Writer w /\
@@ -291,11 +291,11 @@ let genReader parent #i w =
   match w with
   | Stream _ w ->
     lemma_ID13 i;
-    assume(StreamAE.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
+    assume(StreamAE.(Mem.disjoint parent (AEADProvider.region #i w.aead)));
     Stream () (Stream.genReader parent #i w)
   | StLHAE _ w ->
     lemma_ID12 i;
-    assume(AEAD_GCM.(HyperHeap.disjoint parent (AEADProvider.region #i w.aead)));
+    assume(AEAD_GCM.(Mem.disjoint parent (AEADProvider.region #i w.aead)));
     StLHAE () (StLHAE.genReader parent #i w)
 
 

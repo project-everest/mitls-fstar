@@ -3,9 +3,9 @@
 (* Idealizing HMAC for the TLS 1.2 record layer 
     TODO: review indexing *) 
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
+open Mem
+open Mem
 open FStar.Seq
  // for e.g. found
 

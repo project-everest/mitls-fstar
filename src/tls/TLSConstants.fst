@@ -15,7 +15,7 @@ hash algorithm etc.
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
 //NS, JP: TODO, this include should eventually move to TLSMem, when that module exists
-include FStar.HyperStack.All
+include Mem
 
 open FStar.Seq
 open Platform.Date
@@ -24,8 +24,8 @@ open Platform.Error
 open TLSError
 //open CoreCrypto // avoid?!
 
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
+module HH = Mem
+module HS = Mem
 
 include Parse // carving out basic formatting code to break a dependency.
 

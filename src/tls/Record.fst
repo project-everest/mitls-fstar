@@ -121,12 +121,12 @@ type read_result =
       pv:protocolVersion ->
       b:bytes {length b <= max_TLSCiphertext_fragment_length} -> read_result
 
-val read: Transport.t -> s: HyperStack.ref input_state -> ST read_result
-  (requires fun h0 -> HyperStack.contains h0 s)
+val read: Transport.t -> s: Mem.ref input_state -> ST read_result
+  (requires fun h0 -> Mem.contains h0 s)
   (ensures fun h0 _ h1 -> 
-    let id = HyperStack.frameOf s in 
-    HyperStack.modifies_one id h0 h1 /\ 
-    HyperStack.modifies_ref id (Set.singleton (HyperStack.as_addr s)) h0 h1 )
+    let id = Mem.frameOf s in 
+    Mem.modifies_one id h0 h1 /\ 
+    Mem.modifies_ref id (Set.singleton (Mem.as_addr s)) h0 h1 )
 
 let rec read tcp state =
   let State len prior partial = !state in 

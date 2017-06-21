@@ -11,8 +11,8 @@ open TLSInfo
 open TLSConstants
 open HandshakeMessages
 
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
+module HH = Mem
+module HS = Mem
 module MR = FStar.Monotonic.RRef
 
 //16-05-31 these opens are implementation-only; overall we should open less

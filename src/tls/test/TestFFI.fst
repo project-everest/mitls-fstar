@@ -3,15 +3,15 @@ module TestFFI
 // a variant of TestAPI for testing FFI.fst
 
 open FStar.Seq
-open FStar.HyperHeap
+open Mem
 open Platform.Bytes
 open Platform.Error
 open TLSError
 open TLSInfo
 open TLSConstants
 
-open FStar.HyperStack.All
-open FStar.HyperStack.ST
+open Mem
+open Mem
 
 open FFI
 

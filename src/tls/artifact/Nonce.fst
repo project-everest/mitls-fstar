@@ -5,7 +5,7 @@ module Nonce
 open FStar.Seq
 open Platform.Bytes
 open Platform.Error
-open FStar.HyperHeap
+open Mem
 
 let ideal = true // controls idealization of random sample: collision-avoidance.
 

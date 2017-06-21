@@ -7,8 +7,8 @@ module AEAD0
 //16-09-10 adapted from StreamAE and AEAD_GCM.
 //16-09-10 consider sharing some AEAD?.Common.fst
 
-open FStar.Heap
-open FStar.HyperHeap
+open Mem
+open Mem
 open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
@@ -177,7 +177,7 @@ let mref_seqn (#l:rid) (#r:rid) (#i:id) (#k:key i) (#siv:staticIV i) (#log:maybe
 // kept concrete for log and counter, but the key and iv should be private.
 noeq type state (i:id) (rw:rw) =
   | State: #region: rgn
-         -> #log_region: rgn{if rw = Writer then region = log_region else HyperHeap.disjoint region log_region}
+         -> #log_region: rgn{if rw = Writer then region = log_region else Mem.disjoint region log_region}
          -> key: key i
          -> siv: staticIV i
          -> log: maybe_log log_region i key siv // kept only when idealizing
@@ -207,7 +207,7 @@ val gen: parent:rid -> i:id -> ST (writer i)
   (ensures  (genPost parent))
 
 val genReader: parent:rid -> #i:id -> w:writer i -> ST (reader i)
-  (requires (fun h0 -> HyperHeap.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
+  (requires (fun h0 -> Mem.disjoint parent w.region)) //16-04-25  we may need w.region's parent instead
   (ensures  (fun h0 (r:reader i) h1 ->
                modifies Set.empty h0 h1 /\
                r.log_region = w.region /\
@@ -280,7 +280,7 @@ val decrypt: #i:id -> d:reader i -> ad:adata i -> c:cipher i
     /\ (match res with
        | None -> modifies Set.empty h0 h1
        | _    -> modifies_one d.region h0 h1
-                /\ modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref (as_rref (ctr d.counter))))) h0 h1
+                /\ modifies_rref d.region (Set.singleton (Mem.addr_of (as_ref (as_rref (ctr d.counter))))) h0 h1
 	        /\ m_sel h1 (ctr d.counter) === j + 1)))
 
 (*

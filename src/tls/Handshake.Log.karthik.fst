@@ -4,9 +4,9 @@ options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontri
 module Handshake.Log
 
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
+open Mem
+open Mem
 open FStar.Seq
  // for e.g. found
 open FStar.Set
@@ -18,8 +18,8 @@ open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
+module HH = Mem
+module HS = Mem
 
 
 (* A flag for runtime debugging of handshakelog data.

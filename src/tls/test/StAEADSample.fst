@@ -1,8 +1,8 @@
 (*--build-config
-    options:--trace_error --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 100 --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi FStar.Heap --admit_fsi FStar.HyperHeap --admit_fsi FStar.Seq.Base --admit_fsi FStar.Char --admit_fsi FStar.Seq.Properties --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi StatefulLHAE --verify_module StAEADSample;
+    options:--trace_error --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 100 --admit_fsi FStar.Set --admit_fsi FStar.Map --admit_fsi Mem --admit_fsi Mem --admit_fsi FStar.Seq.Base --admit_fsi FStar.Char --admit_fsi FStar.Seq.Properties --admit_fsi SessionDB --admit_fsi UntrustedCert --admit_fsi DHDB --admit_fsi CoreCrypto --admit_fsi Cert --admit_fsi StatefulLHAE --verify_module StAEADSample;
 
     variables: CONTRIB=../../FStar/contrib;
-    other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi FStar.Heap.fst map.fsi FStar.List.Tot.Base.fst FStar.HyperHeap.fsi stHyperHeap.fst allHyperHeap.fst char.fsi FStar.String.fst FStar.List.Tot.Properties.fst FStar.List.Tot.fst FStar.List.fst seq.fsi FStar.Seq.Properties.fst $CONTRIB/Platform/fst/Bytes.fst $CONTRIB/Platform/fst/Date.fst $CONTRIB/Platform/fst/Error.fst $CONTRIB/Platform/fst/Tcp.fst $CONTRIB/CoreCrypto/fst/CoreCrypto.fst $CONTRIB/CoreCrypto/fst/DHDB.fst TLSError.fst Nonce.p.fst TLSConstants.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fst Cert.fst TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst
+    other-files:FStar.FunctionalExtensionality.fst FStar.Classical.fst FStar.Set.fsi Mem.fst map.fsi FStar.List.Tot.Base.fst Mem.fsi stMem.fst allMem.fst char.fsi FStar.String.fst FStar.List.Tot.Properties.fst FStar.List.Tot.fst FStar.List.fst seq.fsi FStar.Seq.Properties.fst $CONTRIB/Platform/fst/Bytes.fst $CONTRIB/Platform/fst/Date.fst $CONTRIB/Platform/fst/Error.fst $CONTRIB/Platform/fst/Tcp.fst $CONTRIB/CoreCrypto/fst/CoreCrypto.fst $CONTRIB/CoreCrypto/fst/DHDB.fst TLSError.fst Nonce.p.fst TLSConstants.fst RSAKey.fst DHGroup.p.fst ECGroup.fst CommonDH.fst PMS.p.fst HASH.fst HMAC.fst Sig.p.fst UntrustedCert.fst Cert.fst TLSInfo.fst Range.p.fst DataStream.fst Alert.fst Content.fst StatefulPlain.fst LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst
 --*)
 module StAEADSample
 
@@ -21,8 +21,8 @@ open StatefulPlain
 open AEAD_GCM
 open StatefulLHAE
 open Range
-open FStar.Heap
-open FStar.HyperHeap
+open Mem
+open Mem
 
 // dummies
 type fp_inv h = True
@@ -55,7 +55,7 @@ let both =
   // not sure how intermediate top-level bindings affect stateful invariants :(
   admit();
 *)
-  gen FStar.HyperHeap.root i
+  gen Mem.root i
 // how to gracefully bind both keys at toplevel?
 
 // we also need to know that the keys are in fp_log to recall their invariant
@@ -91,13 +91,13 @@ val protect: (inputs:list (plain i ad rg)) ->
      (requires (fun h ->
          fp_inv h
       /\ writer_in_fp wr h
-//      /\ (exists fpe. List.mem fpe (Heap.sel h fp) /\ FPEntry?.i fpe = i /\ FPEntry?.w fpe = wr)
+//      /\ (exists fpe. List.mem fpe (Mem.sel h fp) /\ FPEntry?.i fpe = i /\ FPEntry?.w fpe = wr)
       /\ (forall (n:nat) . (n <= Seq.length (sel h (StWriter.log wr)) + List.length inputs ==> is_seqn n))
       ))
      (ensures (fun h0 (cs:list block) h1 ->
         fp_inv h1
       /\ writer_in_fp wr h1
-//      /\ (exists fpe. List.mem fpe (Heap.sel h1 fp) /\ FPEntry?.i fpe = i /\ FPEntry?.w fpe = wr)
+//      /\ (exists fpe. List.mem fpe (Mem.sel h1 fp) /\ FPEntry?.i fpe = i /\ FPEntry?.w fpe = wr)
       // both still missing type annotations
       // /\ inputs = List.mapT
       //   #(e: entry i) // { Entry?.ad e = ad /\ length (Entry?.c e) = clen })

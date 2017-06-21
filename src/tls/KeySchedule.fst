@@ -3,9 +3,9 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module KeySchedule
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
+open Mem
+open Mem
 open FStar.Seq
 open FStar.Set
 
@@ -22,9 +22,9 @@ open PSK
 
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
-module ST = FStar.HyperStack.ST
+module HH = Mem
+module HS = Mem
+module ST = Mem
 module H = Hashing.Spec
 
 (* A flag for runtime debugging of computed keys.
@@ -250,7 +250,7 @@ val create: #rid:rid -> role -> ST (ks * random)
     stronger_fresh_region ks_region h0 h1
     /\ extends ks_region rid
     /\ modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref state))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr state)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let create #rid r =
   ST.recall_region rid;
@@ -291,7 +291,7 @@ val ks_client_init: ks:ks -> ogl: option (list valid_namedGroup)
     (None? ogl ==> None? ogxl) /\
     (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map group_of_cks (Some?.v ogxl))) /\
     modifies (Set.singleton rid) h0 h1 /\
-    modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_init ks ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
@@ -386,8 +386,8 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
   let id = ID13 (KeyID expandId) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce Mem.root id (ckv @| civ) in
+  let r = StAE.genReader Mem.root rw in
   let early_d = StAEInstance r rw in
   early_d
 
@@ -401,7 +401,7 @@ val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherS
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_12_init_dh ks cr pv cs ems g =
   dbg "ks_server_12_init_dh";
@@ -432,7 +432,7 @@ val ks_server_13_init:
     modifies (Set.singleton rid) h0 h1
     /\ (Some? bk <==> Some? pskid)
     /\ (Some? gy \/ Some? bk)
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_13_init ks cr cs pskid g_gx =
   dbg ("ks_server_init");
@@ -522,8 +522,8 @@ let ks_server_13_0rtt_key ks (log:bytes)
   let id = ID13 (KeyID expandId) in
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce Mem.root id (ckv @| civ) in
+  let r = StAE.genReader Mem.root rw in
   let early_d = StAEInstance r rw in
   early_d
 
@@ -534,7 +534,7 @@ val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_13_sh ks log =
   dbg ("ks_server_13_sh, hashed log = "^(print_bytes log));
@@ -569,9 +569,9 @@ let ks_server_13_sh ks log =
   let civ: StreamAE.iv id  = civ in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StAE.coerce HyperHeap.root id (skv @| siv) in
-  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce Mem.root id (skv @| siv) in
+  let rw = StAE.coerce Mem.root id (ckv @| civ) in
+  let r = StAE.genReader Mem.root rw in
 
   // Finished keys
   let cfkId = FinishedID c_expandId in
@@ -664,9 +664,9 @@ let ks_12_record_key ks =
     match role with
     | Client -> k1, iv1, k2, iv2
     | Server -> k2, iv2, k1, iv1 in
-  let w = StAE.coerce HyperHeap.root id (wk @| wiv) in
-  let rw = StAE.coerce HyperHeap.root id (rk @| riv) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce Mem.root id (wk @| wiv) in
+  let rw = StAE.coerce Mem.root id (rk @| riv) in
+  let r = StAE.genReader Mem.root rw in
   StAEInstance r w
 
 (* 1.2 resumption *)
@@ -680,7 +680,7 @@ let ks_client_12_resume (ks:ks) (sr:random) (pv:protocolVersion) (cs:cipherSuite
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   dbg "ks_client_12_resume";
   let KS #rid st = ks in
@@ -713,7 +713,7 @@ val ks_server_12_cke_dh: ks:ks -> gy:(g:CommonDH.group & CommonDH.share g) ->
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 let ks_server_12_cke_dh ks gy hashed_log =
   dbg "ks_server_12_cke_dh";
   let KS #region st = ks in
@@ -755,7 +755,7 @@ val ks_client_12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_resume ks sr pv cs =
   let KS #region st = ks in
@@ -786,7 +786,7 @@ val ks_client_13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 // ServerHello log breakpoint (client)
 let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
@@ -870,9 +870,9 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   let civ: StreamAE.iv id  = civ in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
-  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let w = StAE.coerce Mem.root id (ckv @| civ) in
+  let rw = StAE.coerce Mem.root id (skv @| siv) in
+  let r = StAE.genReader Mem.root rw in
   st := C (C_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |));
   StAEInstance r w
 
@@ -887,7 +887,7 @@ let ks_client_13_sf ks (log:bytes)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   dbg ("ks_client_13_sf hashed_log = "^(print_bytes log));
   let KS #region st = ks in
@@ -917,11 +917,11 @@ let ks_client_13_sf ks (log:bytes)
   assert_norm(peerId id = ID13 (KeyID s_expandId));
   let ckv: StreamAE.key id = ck in
   let civ: StreamAE.iv id  = civ in
-  let w = StAE.coerce HyperHeap.root id (ckv @| civ) in
+  let w = StAE.coerce Mem.root id (ckv @| civ) in
   let skv: StreamAE.key (peerId id) = sk in
   let siv: StreamAE.iv (peerId id)  = siv in
-  let rw = StAE.coerce HyperHeap.root id (skv @| siv) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce Mem.root id (skv @| siv) in
+  let r = StAE.genReader Mem.root rw in
 
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|));
   (sfk, cfk, StAEInstance r w, (| li, emsId, ems |))
@@ -934,7 +934,7 @@ let ks_server_13_sf ks (log:bytes)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   dbg ("ks_server_13_sf hashed_log = "^(print_bytes log));
   let KS #region st = ks in
@@ -964,11 +964,11 @@ let ks_server_13_sf ks (log:bytes)
   assert_norm(peerId id = ID13 (KeyID s_expandId));
   let skv: StreamAE.key id = sk in
   let siv: StreamAE.iv id  = siv in
-  let w = StAE.coerce HyperHeap.root id (skv @| siv) in
+  let w = StAE.coerce Mem.root id (skv @| siv) in
   let ckv: StreamAE.key (peerId id) = ck in
   let civ: StreamAE.iv (peerId id)  = civ in
-  let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
-  let r = StAE.genReader HyperHeap.root rw in
+  let rw = StAE.coerce Mem.root id (ckv @| civ) in
+  let r = StAE.genReader Mem.root rw in
 
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |));
   StAEInstance r w, (| li, emsId, ems |)
@@ -980,7 +980,7 @@ let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   dbg ("ks_server_13_cf hashed_log = "^(print_bytes log));
   let KS #region st = ks in
@@ -1005,7 +1005,7 @@ let ks_client_13_cf ks (log:bytes) : ST unit
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
   =
   dbg ("ks_client_13_cf hashed_log = "^(print_bytes log));
   let KS #region st = ks in
@@ -1047,7 +1047,7 @@ val ks_client_12_full_dh: ks:ks -> sr:random -> pv:protocolVersion ->
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_full_dh ks sr pv cs ems (|g,gx|) =
   let KS #region st = ks in
@@ -1082,7 +1082,7 @@ val ks_client_12_full_rsa: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipher
   (ensures fun h0 r h1 ->
     let KS #rid st = ks in
     modifies (Set.singleton rid) h0 h1
-    /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref rid (Set.singleton (Mem.as_addr st)) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_full_rsa ks sr pv cs ems pk =
   let KS #region st = ks in
@@ -1113,7 +1113,7 @@ val ks_client_12_set_session_hash: ks:ks -> h:bytes -> ST (TLSPRF.key * recordIn
     let st = sel h1 (KS?.state ks) in
     modifies (Set.singleton (KS?.region ks)) h0 h1 /\
     C? st /\ (C_12_has_MS? (C?.s st))
-    /\ modifies_rref (KS?.region ks) (Set.singleton (Heap.addr_of (as_ref (KS?.state ks)))) (HS.HS?.h h0) (HS.HS?.h h1))
+    /\ modifies_rref (KS?.region ks) (Set.singleton (Mem.as_addr (KS?.state ks))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_client_12_set_session_hash ks log =
   dbg ("ks_client_12_set_session_hash hashed_log = "^(print_bytes log));

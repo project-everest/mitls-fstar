@@ -9,8 +9,8 @@ open Connection
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
 module MonSeq = FStar.Monotonic.Seq
-module HH = FStar.HyperHeap
-module HST = FStar.HyperStack
+module HH = Mem
+module HST = Mem
 module MS = MasterSecret
 module N  = Nonce
 module I  = IdNonce
@@ -36,7 +36,9 @@ val frame_epoch_writer: s:hs -> h0:HST.mem -> h1:HST.mem ->
 		     Seq.indexable epochs j
 		   /\ epoch_regions_exist s h0 
 		   /\ (let e_j = Seq.index epochs j in
-		      HH.modifies_one (StAE.region (writer_epoch e_j)) (HST.HS?.h h0) (HST.HS?.h h1))))
+                     Mem.modifies_one (StAE.region (writer_epoch e_j)) h0 h1
+(* was:		      HH.modifies_one (StAE.region (writer_epoch e_j)) (HST.HS?.h h0) (HST.HS?.h h1) // TR: what about the tip? *)
+                     )))
 	(ensures (let epochs0 = logT s h0 in 
 		  let epochs1 = logT s h1 in 
 		  let j = iT s Writer h0 in 
@@ -187,8 +189,9 @@ val ms_derive_is_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id -> w:MS.writer i
 		 Map.contains (HST.HS?.h h1) (StreamAE.State?.region w)  /\ //the writer we're adding w is in an existing region
 		 is_epoch_rgn (StreamAE.State?.region w) /\     //that it is an epoch region
 		 is_epoch_rgn (HH.parent (StreamAE.State?.region w)) /\ //and it's parent is as well (needed for the ms_tab invariant)
-		 HH.modifies (Set.singleton tls_tables_region) (HST.HS?.h h0) (HST.HS?.h h1) /\ //we just changed the tls_tables_region
-		 HH.modifies_rref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HST.MkRef?.ref ms_tab_as_hsref)))) (HST.HS?.h h0) (HST.HS?.h h1) /\ //and within it, at most the ms_tab
+		 Mem.modifies (Set.singleton tls_tables_region) h0 h1 /\ //we just changed the tls_tables_region
+(* was:                 HH.modifies (Set.singleton tls_tables_region) (HST.HS?.h h0) (HST.HS?.h h1) // TR: what about the tip? *)
+		 HH.modifies_rref tls_tables_region (Set.singleton (Mem.as_addr ms_tab_as_hsref)) (HST.HS?.h h0) (HST.HS?.h h1) /\ //and within it, at most the ms_tab
 		 (old_ms == new_ms //either ms_tab didn't change at all  (because we found w in the table already)
 		  \/ (MM.sel old_ms i == None /\ //or, we had to generate a fresh writer w
 		     new_ms == MM.upd old_ms i w /\ //and we just added w to the table
@@ -291,8 +294,9 @@ val register_writer_in_epoch_ok: h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i}
 	      (forall e. epochs `Seq.contains` e ==> Epochs.epoch_id e <> i) /\            //i is fresh for c
  	      MM.sel mstab i == Some w /\ //we found the writer in the ms_tab
 	      MM.sel ctab (nonce_of_id i) == Some c /\ //we found the connection in the conn_table
-      	      HH.modifies_one (region_of c.hs) (HST.HS?.h h0) (HST.HS?.h h1) /\ //we just modified this connection's handshake region
-	      HH.modifies_rref (region_of c.hs) (Set.singleton (Heap.addr_of (HH.as_ref (HST.MkRef?.ref es_log_as_hsref)))) (HST.HS?.h h0) (HST.HS?.h h1) /\ //and within it, just the epochs log
+      	      Mem.modifies_one (region_of c.hs) h0 h1 /\ //we just modified this connection's handshake region
+(* was:       HH.modifies_one (region_of c.hs) (HST.HS?.h h0) (HST.HS?.h h1) // TR: what about the tip? *)
+	      HH.modifies_rref (region_of c.hs) (Set.singleton (Mem.as_addr es_log_as_hsref)) (HST.HS?.h h0) (HST.HS?.h h1) /\ //and within it, just the epochs log
 	      new_hs_log == Seq.snoc old_hs_log e))) //and we modified it by adding this epoch to it
 	  (ensures mc_inv h1) //we're back in the invariant
 let register_writer_in_epoch_ok h0 h1 i c e =
@@ -349,7 +353,8 @@ let register_writer_in_epoch_ok h0 h1 i c e =
 *)
 val mutate_registered_writer_ok : h0:HST.mem -> h1:HST.mem -> i:AE.id{authId i} -> w:MS.writer i -> c:r_conn (nonce_of_id i) -> Lemma
     (requires (mc_inv h0 /\                                       //initially in the invariant
-	       HH.modifies_one (StreamAE.State?.region w) (HST.HS?.h h0) (HST.HS?.h h1) /\ //we modified at most the writer's region
+               Mem.modifies_one (StreamAE.State?.region w) h0 h1 /\ //we modified at most the writer's region
+(* was:	       HH.modifies_one (StreamAE.State?.region w) (HST.HS?.h h0) (HST.HS?.h h1) // TR: what about the tip? *)
 	       registered i w c h0 /\                             //the writer is registered in c
 	       MM.sel (MR.m_sel h0 MS.ms_tab) i == Some w   /\     //the writer is logged in the ms_tab
 	       MM.sel (MR.m_sel h0 conn_tab) (nonce_of_id i) == Some c /\ //the connection is logged in the conn_table
@@ -388,8 +393,9 @@ let conn_hs_region_exists (c:connection) (h:HST.mem) =
 val add_connection_ok: h0:HST.mem -> h1:HST.mem -> i:id -> c:i_conn i -> Lemma
   (requires (let conn_tab_as_hsref = MR.as_hsref conn_tab in
              mc_inv h0 /\ //we're initially in the invariant
-	     HH.modifies (Set.singleton tls_tables_region) (HST.HS?.h h0) (HST.HS?.h h1) /\  //only modified some table
-	     HH.modifies_rref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HST.MkRef?.ref conn_tab_as_hsref)))) (HST.HS?.h h0) (HST.HS?.h h1) /\ //in fact, only conn_tab
+             Mem.modifies (Set.singleton tls_tables_region) h0 h1 /\  //only modified some table
+(*was:	     HH.modifies (Set.singleton tls_tables_region) (HST.HS?.h h0) (HST.HS?.h h1) // TR: what about the tip *)
+	     HH.modifies_rref tls_tables_region (Set.singleton (Mem.as_addr conn_tab_as_hsref)) (HST.HS?.h h0) (HST.HS?.h h1) /\ //in fact, only conn_tab
 	     conn_hs_region_exists c h0 /\ //we need to know that c is well-formed
 	     (let old_conn = MR.m_sel h0 conn_tab in
     	      let new_conn = MR.m_sel h1 conn_tab in

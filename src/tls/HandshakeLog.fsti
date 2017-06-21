@@ -5,12 +5,12 @@ module HandshakeLog
 open Platform.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :(
 
-open FStar.HyperStack
-open FStar.HyperStack.All
+open Mem
+open Mem
 open Hashing.CRF
 open HandshakeMessages // for pattern matching on messages
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
+module HH = Mem
+module HS = Mem
 
 open Platform.Error
 open TLSError

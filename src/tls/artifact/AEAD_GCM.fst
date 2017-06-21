@@ -5,8 +5,8 @@ module AEAD_GCM
 // AEAD-GCM mode for the TLS record layer, as specified in RFC 5288.
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
 
-open FStar.Heap
-open FStar.HyperHeap
+open Mem
+open Mem
 open FStar.Seq
  // for e.g. found
 

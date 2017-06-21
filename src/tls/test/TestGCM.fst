@@ -1,7 +1,7 @@
 module TestGCM
 
-open FStar.Heap
-open FStar.HyperHeap
+open Mem
+open Mem
 open FStar.IO
 
 open Platform.Bytes

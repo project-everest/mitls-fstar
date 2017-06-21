@@ -4,10 +4,10 @@ module Hashing.OpenSSL
 // for now we only support OpenSSL, so we skip multiplexing, Hashing.OpenSSL,  and fstis
 // (TODO: separate interface and implementation; disentangle from CoreCrypto)
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
-open FStar.HyperStack.ST
+open Mem
+open Mem
+open Mem
+open Mem
 
 open Platform.Bytes
 open Hashing.Spec

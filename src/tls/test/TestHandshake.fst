@@ -1,7 +1,7 @@
 module TestHandshake
 
 open FStar.Seq
-open FStar.HyperHeap
+open Mem
 open Platform.Bytes
 open Platform.Error
 open TLSError
@@ -11,7 +11,7 @@ open HandshakeMessages
 open HandshakeLog
 open Negotiation
 
-type record_t = HyperStack.ref Record.input_state
+type record_t = Mem.ref Record.input_state
 
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
