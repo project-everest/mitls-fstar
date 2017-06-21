@@ -8,7 +8,7 @@ open FStar.HyperStack
 // JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
  // for e.g. found
-open FStar.Set
+//open FStar.Set
  
 open Platform.Bytes
 open Platform.Error
@@ -27,7 +27,7 @@ module HH = FStar.HyperHeap
 
 // using also Range, DataStream, TLSFragment, Record
 
-
+(*
 type tlsState = 
 //| Early       // TLS 1.3 0RTT in 
 //| KeyUpdate   // TLS 1.3 after sending first KeyUpdate
@@ -37,24 +37,45 @@ type tlsState =
   | AD          // Application Data (duplex), once the connection is established
   | Half of rw  // the other direction is closed (reachable from BC?)
   | Close 
+// translation:
+// BC ~ Ctrl Ctrl
+// AD ~ Open Open
+// Half Read ~ Open Closed
+// Close ~ Closed Closed
+*)
 
-type c_rgn = region: TLSConstants.rgn { HH.disjoint region TLSConstants.tls_region } 
+type halfState =
+  | Ctrl
+  | Open
+  | Closed
+type tlsState = halfState * halfState // reader/writer
+
+let string_of_halfState = function
+  | Ctrl -> "Ctrl"
+  | Open -> "Open"
+  | Closed -> "Closed"
+let string_of_state (r,w) =
+  string_of_halfState r^"/"^string_of_halfState w
+
+type c_rgn = r:TLSConstants.rgn { HH.disjoint r TLSConstants.tls_region } 
 
 (*
  * AR: changing the type of state from rref to ref, with region captured in the refinement.
  *)
 noeq type connection = | C:
   #region: c_rgn ->
-  hs:      hs {extends (HS?.region hs) region /\ is_hs_rgn (HS?.region hs)} (* providing role, config, and uid *) ->
+  hs:      hs {extends (region_of hs) region /\ is_hs_rgn (region_of hs)} (* providing role, config, and uid *) ->
   tcp:     Transport.t ->
-  state:   ref tlsState{state.id = region} -> 
+  recv: ref Record.input_state{recv.id = region} -> // added for buffering non-blocking reads
+  state:   ref tlsState {state.id = region} -> 
   connection
 
-let c_role c   = c.hs.r
-let c_nonce c  = c.hs.nonce
-let c_cfg c    = c.hs.cfg
-let c_resume c : resume_id (c_role c) = c.hs.resume
-let c_log c    = c.hs.log
+// 17-04-08 helpful or not? 
+let c_role c = Handshake.role_of c.hs
+let c_nonce c = Handshake.random_of c.hs
+let c_cfg c = Handshake.config_of c.hs
+let c_resume c = Handshake.resumeInfo_of c.hs
+let c_log c = Handshake.epochs_of c.hs
 
 (* val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h))) *)
 (* let reader_epoch #region #peer e = Epoch?.r e *)
@@ -62,15 +83,11 @@ let c_log c    = c.hs.log
 (* val writer_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.writer (hsId e.h)) *)
 (* let writer_epoch #region #peer e = Handshake.writer_epoch e *)
 
-(***
-     WE WILL FOCUS VERIFICATION ON StreamAE and TLS-1.3 FOR NOW.
-     Ignores StatefulLHAE, which needs to be upgraded
- ***)
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
 type st_inv c h = hs_inv (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (HS?.region c.hs) (HS?.nonce c.hs)){
+val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (region_of c.hs) (random_of c.hs)){
   Epochs.epochs_inv es /\ es == logT c.hs h
 })
 let epochs c h = logT c.hs h
@@ -78,8 +95,9 @@ let epochs c h = logT c.hs h
 
 //16-05-30 unused?
 val frame_epochs: c:connection -> h0:HyperStack.mem -> h1:HyperStack.mem -> Lemma
-  (requires (Map.contains (HyperStack.HS?.h h0) (HS?.region c.hs)
-             /\ equal_on (Set.singleton (HS?.region c.hs)) (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)))
+  (requires (
+    Map.contains (HyperStack.HS?.h h0) (region_of c.hs) /\ 
+    equal_on (Set.singleton (region_of c.hs)) (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)))
   (ensures (epochs c h0 == epochs c h1))
 let frame_epochs c h0 h1 = ()
 
@@ -111,6 +129,10 @@ let epoch_i c h i = Seq.index (epochs c h) i
    Later, we generalize over k, using the ghost_lemma combinator to introduce the quantifier.
 *)
 
-val equal_on_disjoint: s1:set rid -> s2:set rid{disjoint_regions s1 s2} -> r:rid{mem r s1} -> h0:HyperStack.mem -> h1:HyperStack.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (HyperStack.HS?.h h0) (HyperStack.HS?.h h1))
+val equal_on_disjoint: 
+  s1:Set.set rid -> 
+  s2:Set.set rid{disjoint_regions s1 s2} -> 
+  r:rid{Set.mem r s1} -> 
+  h0:HyperStack.mem -> h1:HyperStack.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (HyperStack.HS?.h h0) (HyperStack.HS?.h h1))
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 

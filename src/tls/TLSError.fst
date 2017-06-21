@@ -1,6 +1,6 @@
 ﻿module TLSError
 
-(* TLS explicitly returns run-time errors: 
+(* TLS explicitly returns run-time errors:
    results carry either values or error descriptions *)
 
 type alertDescription =
@@ -37,6 +37,7 @@ type alertDescription =
     | AD_unrecognized_name
     | AD_missing_extension
     | AD_unsupported_extension
+    | AD_no_application_protocol
 
 let string_of_ad = function
     | AD_close_notify -> "AD_close_notify"
@@ -72,7 +73,7 @@ let string_of_ad = function
     | AD_unrecognized_name -> "AD_unrecognized_name"
     | AD_missing_extension -> "AD_missing_extension"
     | AD_unsupported_extension -> "AD_unsupported_extension"
-
+    | AD_no_application_protocol -> "AD_no_application_protocol"
 
 let isFatal ad =
     match ad with
@@ -98,40 +99,45 @@ let isFatal ad =
     | AD_internal_error
     | AD_user_cancelled_fatal
     | AD_missing_extension
-    | AD_unsupported_extension -> true
+    | AD_unsupported_extension
+    | AD_no_application_protocol -> true
     | _ -> false
 
 type error = alertDescription * string
 
+let string_of_error (a,s)= string_of_ad a^" ("^s^")"
+
 type result 'a = Platform.Error.optResult error 'a
 
-
 open Platform.Error
+let string_of_result f = function
+  | Error z -> "Error: "^string_of_error z
+  | Correct v -> f v
 
 
 val resT: r:result 'a { Platform.Error.Correct? r } -> Tot 'a
 let resT (Platform.Error.Correct v) = v
 
 val mapResult: ('a -> Tot 'b) -> result 'a -> Tot (result 'b)
-let mapResult f r = 
+let mapResult f r =
    (match r with
     | Error z -> Error z
     | Correct c -> Correct (f c))
 
 val bindResult: ('a -> Tot (result 'b)) -> result 'a -> Tot (result 'b)
-let bindResult f r = 
+let bindResult f r =
    (match r with
     | Error z -> Error z
     | Correct c -> f c)
 
 val resultMap: result 'a -> ('a -> Tot 'b) -> Tot (result 'b)
-let resultMap r f = 
+let resultMap r f =
    (match r with
     | Error z -> Error z
     | Correct c -> Correct (f c))
 
 val resultBind: result 'a -> ('a -> Tot (result 'b)) -> Tot (result 'b)
-let resultBind r f = 
+let resultBind r f =
    (match r with
     | Error z -> Error z
     | Correct c -> f c)

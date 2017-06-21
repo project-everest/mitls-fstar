@@ -1,30 +1,17 @@
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
 ﻿module DHGroup
 
-open FStar.HyperHeap
+open FStar.HyperStack
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError
-open TLSConstants
+open Parse
+open FStar.HyperStack.ST
 
 type params = dhp:CoreCrypto.dh_params{length dhp.dh_p < 65536 && length dhp.dh_g < 65536}
-
-type share = b:bytes{length b < 65536}
-
-type key = k:CoreCrypto.dh_key{
-  let dhp = k.dh_params in 
-  length dhp.dh_p < 65536 && length dhp.dh_g < 65536 /\
-  length k.dh_public <= length dhp.dh_p}
-
-type group =
-  | Named    of ffdhe
-  | Explicit of params
-
-type secret = bytes
-
-val share_of_key: key -> Tot (group * share)
-let share_of_key k =
-  (Explicit k.dh_params, k.dh_public)
 
 val make_ffdhe: (p:string{length (bytes_of_hex p) < 65536}) -> string -> Tot params
 let make_ffdhe p q =
@@ -65,6 +52,10 @@ abstract let ffdhe8192 =
   assume (length (bytes_of_hex p) < 65536);
   make_ffdhe p q
 
+type group =
+  | Named    of ffdhe
+  | Explicit of params
+
 val params_of_group: group -> Tot params
 let params_of_group = function
   | Named FFDHE2048 -> ffdhe2048
@@ -74,47 +65,74 @@ let params_of_group = function
   | Named FFDHE8192 -> ffdhe8192
   | Explicit params -> params
 
-val keygen: group -> St key
+type share (g:group) = b:bytes{
+  length b < 65536 /\
+  (let dhp = params_of_group g in length b <= length dhp.dh_p)}
+
+type keyshare (g:group) = k:CoreCrypto.dh_key{
+  let dhp = k.dh_params in
+  params_of_group g = dhp /\ Some? k.dh_private /\
+  length dhp.dh_p < 65536 && length dhp.dh_g < 65536 /\
+  length k.dh_public <= length dhp.dh_p}
+
+type secret (g:group) = bytes
+
+val pubshare: #g:group -> keyshare g -> Tot (share g)
+let pubshare #g k = k.dh_public
+
+val keygen: g:group -> ST (keyshare g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let keygen g =
   let params = params_of_group g in
   dh_gen_key params
 
-val dh_responder: key -> St (key * secret)
-let dh_responder gx =
-  let params = gx.dh_params in
-  let y = dh_gen_key params in
-  let shared = dh_agreement y gx.dh_public in
+(* Unused, implemented in CommonDH
+val dh_responder: #g:group -> share g -> ST (keyshare g * secret g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+let dh_responder #g gx =
+  let y = keygen g in
+  let shared = dh_agreement y gx in
   y, shared
+*)
 
-val dh_initiator: x:key{Some? x.dh_private} -> key -> St secret
-let dh_initiator x gy =
-  dh_agreement x gy.dh_public
+val dh_initiator: #g:group -> keyshare g -> share g -> ST (secret g)
+  (requires (fun h0 -> True))
+  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
+let dh_initiator #g x gy =
+  dh_agreement x gy
 
-val serialize: params -> share -> Tot bytes
-let serialize dhp dh_Y =
+val serialize: #g:group -> share g -> Tot (b:bytes{length b < 196612})
+let serialize #g dh_Y =
+  let dhp = params_of_group g in
   lemma_repr_bytes_values (length (dhp.dh_p));
   lemma_repr_bytes_values (length (dhp.dh_g));
   lemma_repr_bytes_values (length dh_Y);
-  let pb  = vlbytes 2 dhp.dh_p in 
+  let pb  = vlbytes 2 dhp.dh_p in
   let gb  = vlbytes 2 dhp.dh_g in
   let pkb = vlbytes 2 dh_Y in
   pb @| gb @| pkb
 
-val serialize_public: s:share -> len:nat{len < 65536 /\ length s <= len}
+val serialize_public: #g:group -> s:share g -> len:nat{len < 65536 /\ length s <= len}
   -> Tot (lbytes len)
-let serialize_public dh_Y len =
+let serialize_public #g dh_Y len =
   let padded_dh_Y = createBytes (len - length dh_Y) 0z @| dh_Y in
   lemma_repr_bytes_values len;
   padded_dh_Y
 
-val parse_public: p:bytes{2 <= length p} -> Tot (result share)
-let parse_public p =
+val parse_public: g:group -> p:bytes{2 <= length p} -> Tot (result (share g))
+let parse_public g p =
   match vlparse 2 p with
-  | Correct n -> lemma_repr_bytes_values (length n); Correct n
+  | Correct n ->
+    lemma_repr_bytes_values (length n);
+    let dhp = params_of_group g in
+    if length n <= length dhp.dh_p then Correct n
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "length of public share exceeds length of DH prime")
   | Error z -> Error z
 
-val parse_partial: bytes -> Tot (result (key * bytes))
-let parse_partial payload = 
+val parse_partial: bytes -> Tot (result ((g:group & share g) * bytes))
+let parse_partial payload =
   if length payload >= 2 then
     match vlsplit 2 payload with
     | Error(z) -> Error(z)
@@ -129,10 +147,9 @@ let parse_partial payload =
             | Correct(gy, rem) ->
               if length gy <= length p then
                 let dhp = {dh_p = p; dh_g = g; dh_q = None; safe_prime = false} in
-                let dhk = {dh_params = dhp; dh_public = gy; dh_private = None} in
                 lemma_repr_bytes_values (length p);
                 lemma_repr_bytes_values (length g);
-                Correct (dhk,rem)
+                Correct ((| Explicit dhp, gy |), rem)
               else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
           else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")

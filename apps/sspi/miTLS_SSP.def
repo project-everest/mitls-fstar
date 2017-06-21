@@ -1,5 +1,8 @@
 LIBRARY
 
 EXPORTS
-	InitSecurityInterfaceW = SpiInitSecurityInterface
+	InitSecurityInterfaceW = SpiInitSecurityInterfaceW
+	InitSecurityInterfaceA = SpiInitSecurityInterfaceA
+	DllRegisterServer       PRIVATE
+	DllUnregisterServer     PRIVATE
 

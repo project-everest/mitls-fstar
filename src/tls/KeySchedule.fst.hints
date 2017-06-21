@@ -1,65 +1,24 @@
 [
-  " ŒGdÀšü\u007föX\u0010ÿ9Ó\"R",
+  "\u001c\u0015ÿ$”RGs0Ç™¥³\u001esº",
   [
     [
-      "KeySchedule.print_share",
+      "KeySchedule.discard",
       1,
       0,
       1,
       [
         "@MaxIFuel_assumption", "@query", "equation_FStar.Heap.equal_dom",
         "equation_FStar.HyperStack.equal_stack_domains",
-        "fuel_guarded_inversion_FStar.HyperStack.mem"
+        "fuel_guarded_inversion_FStar.HyperStack.mem", "unit_typing"
       ],
       0
     ],
     [
-      "KeySchedule.keyLabel",
+      "KeySchedule.dbg",
       1,
       0,
       1,
-      [
-        "@query", "disc_equation_TLSInfo.ApplicationDataKey",
-        "disc_equation_TLSInfo.ApplicationRekey",
-        "disc_equation_TLSInfo.EarlyApplicationDataKey",
-        "disc_equation_TLSInfo.EarlyTrafficKey",
-        "disc_equation_TLSInfo.HandshakeKey",
-        "fuel_guarded_inversion_TLSInfo.keyTag"
-      ],
-      0
-    ],
-    [
-      "KeySchedule.psk",
-      1,
-      0,
-      1,
-      [ "@query", "assumption_Prims.HasEq_int" ],
-      0
-    ],
-    [
-      "KeySchedule.get_psk_info",
-      1,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_TLSInfo.ApplicationPSK",
-        "disc_equation_TLSInfo.ResumptionPSK", "equation_TLSInfo.esId",
-        "fuel_guarded_inversion_TLSInfo.pre_esId",
-        "refinement_interpretation_TLSInfo_Tm_refine_253615345eb73f0c9aad5f062606b249"
-      ],
-      0
-    ],
-    [
-      "KeySchedule.zH",
-      1,
-      0,
-      1,
-      [
-        "@query", "equation_CoreCrypto.hashSize",
-        "fuel_guarded_inversion_CoreCrypto.hash_alg",
-        "projection_inverse_BoxInt_proj_0"
-      ],
+      [ "@query", "equation_KeySchedule.ks_debug" ],
       0
     ]
   ]

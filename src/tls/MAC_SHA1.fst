@@ -15,14 +15,16 @@ open TLSError
 // idealizing HMAC
 // for concreteness; the rest of the module is parametric in a
 
-let a = HMAC CoreCrypto.SHA1
+let a = HMac Hashing.Spec.SHA1
 
 
 type id = i:id { ID12? i /\ ~(AEAD? (aeAlg_of_id i)) }
 
+let alg (i:id) = macAlg_of_id i
+
 type text = bytes
-type tag (i:id) = bytes
-type keyrepr (i:id) = bytes
+type tag (i:id) = lbytes (macSize (alg i))
+type keyrepr (i:id) = lbytes (macSize (alg i))
 type key (i:id) = keyrepr i
 
 assume type good (i:id) (b:bytes) : Type0 // TBD in Encode?
@@ -64,8 +66,7 @@ val mac: i:id -> wr:writer i -> p:bytes { good i p } -> ST (tag i)
  * AR: adding recall for wr.log similar to MAC and MAC_SHA256.
  *)
 let mac i wr p =
-  assume (HashMAC.is_tls_mac (macAlg_of_id i));
-  let t : tag i = HashMAC.tls_mac a wr.key p in
+  let t : tag i = HMAC.tls_mac a wr.key p in
   recall wr.log;
   wr.log := snoc !wr.log (Entry #i t p); // We log every authenticated texts, with their index and resulting tag
   t
@@ -75,12 +76,10 @@ let matches i p (Entry _ p') = p = p'
 
 val verify: i:id -> rd:reader i -> p:bytes -> t:tag i -> ST bool
   (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 ->
-    h0 == h1 /\
-    (b ==> good i p)))
+  (ensures (fun h0 b h1 -> modifies Set.empty h0 h1 /\ (b ==> good i p)))
 
 let verify i rd p t =
-  let x = HashMAC.tls_macVerify a rd.key p t  in
+  let x = HMAC.tls_macVerify a rd.key p t  in
   let l = !rd.log in
   // We use the log to correct any verification errors
   x &&

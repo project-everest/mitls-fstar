@@ -1,8 +1,11 @@
-﻿module PMS 
+(*--build-config
+options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
+--*)
+﻿module PMS
 
-(* Split from KEF *) 
+(* Split from KEF *)
 
-open FStar.All
+open FStar.HyperStack.All
 
 open Platform.Bytes
 open TLSConstants
@@ -12,40 +15,40 @@ let ideal = Flags.ideal_PMS // controls idealization of PMS.
 
 
 type rsarepr = bytes
-(*private*) 
+(*private*)
 type rsaseed = {seed: rsarepr}
 
-// To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type. 
-type rsapms = 
-//#if ideal 
-  | IdealRSAPMS of rsaseed 
+// To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type.
+type rsapms =
+//#if ideal
+  | IdealRSAPMS of rsaseed
 //#endif
   | ConcreteRSAPMS of rsarepr
 
 //#if ideal
 //this function is used to determine whether idealization should be performed
-let honestRSAPMS (pk:RSAKey.pk) (cv:TLSConstants.protocolVersion) pms = 
-  match pms with 
+let honestRSAPMS (pk:RSAKey.pk) (cv:TLSConstants.protocolVersion) pms =
+  match pms with
   | IdealRSAPMS(s)    -> true
   | ConcreteRSAPMS(s) -> false
-//#endif 
+//#endif
 
-let genRSA (pk:RSAKey.pk) (vc:protocolVersion): EXT rsapms = 
+let genRSA (pk:RSAKey.pk) (vc:protocolVersion): EXT rsapms =
     let verBytes = versionBytes vc in
     let rnd = CoreCrypto.random 46 in
     let pms = verBytes @| rnd in
-    if ideal && RSAKey.honest pk && RSAKey.strong vc then 
-        IdealRSAPMS({seed=pms}) 
-    else 
-        ConcreteRSAPMS(pms) 
+    if ideal && RSAKey.honest pk && RSAKey.strong vc then
+        IdealRSAPMS({seed=pms})
+    else
+        ConcreteRSAPMS(pms)
 
 let coerceRSA (pk:RSAKey.pk) (cv:protocolVersion) b = ConcreteRSAPMS(b)
-let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms = 
-  match pms with 
+let leakRSA (pk:RSAKey.pk) (cv:protocolVersion) pms =
+  match pms with
 //  #if ideal
   | IdealRSAPMS(_) -> Platform.Error.unexpected "pms is dishonest" //MK changed to unexpected from unreachable
 //  #endif
-  | ConcreteRSAPMS(b) -> b 
+  | ConcreteRSAPMS(b) -> b
 
 
 
@@ -56,36 +59,28 @@ type dhrepr = bytes
 (*private*) type dhseed = {seed: dhrepr}
 
 // To ideally avoid collisions concerns between Honest and Coerced pms we use a sum type.
-type dhpms = 
-//#if ideal 
-  | IdealDHPMS of dhseed 
+type dhpms =
+//#if ideal
+  | IdealDHPMS of dhseed
 //#endif
   | ConcreteDHPMS of dhrepr
 
 //#if ideal
-let honestDHPMS (p:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) pms = 
-  match pms with 
+let honestDHPMS (g:CommonDH.group) (gx:CommonDH.share g) (gy:CommonDH.share g) pms =
+  match pms with
   | IdealDHPMS(s)    -> true
-  | ConcreteDHPMS(s) -> false 
+  | ConcreteDHPMS(s) -> false
 //#endif
 
-(*
-let sampleDH dhp (gx:CommonDH.share) (gy:CommonDH.share) = 
-    let gz = DHGroup.genElement dhp in
-    #if ideal
-    IdealDHPMS({seed=gz}) 
-    #else
-    ConcreteDHPMS(gz)  
-    #endif
-*)
+let coerceDH (g:CommonDH.group) (gx:CommonDH.share g) (gy:CommonDH.share g) b =
+  ConcreteDHPMS(b)
 
-let coerceDH (dhp:CommonDH.params) (gx:CommonDH.share) (gy:CommonDH.share) b = 
-  ConcreteDHPMS(b) 
-
-type pms = 
+type pms =
   | RSAPMS of RSAKey.pk * protocolVersion * rsapms
-  | DHPMS of CommonDH.params * CommonDH.share * CommonDH.share * dhpms
+  | DHPMS: g:CommonDH.group -> CommonDH.share g -> CommonDH.share g -> dhpms -> pms
+  | DummyPMS
 
 let honestPMS = function
   | RSAPMS (pk, pv, pms) -> honestRSAPMS pk pv pms
-  | DHPMS (p, gx, gy, pms) -> honestDHPMS p gx gy pms
+  | DHPMS g gx gy pms -> honestDHPMS g gx gy pms
+  | DummyPMS -> false
