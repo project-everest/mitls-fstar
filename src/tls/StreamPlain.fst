@@ -62,7 +62,7 @@ let repr i len f =
   let payload = Content.repr i f in
   pad payload ct len
 
-private unfold let min (a:nat) (b:nat): nat = if a < b then a else b
+unfold let min (a:nat) (b:nat): nat = if a < b then a else b
 
 // Implementations MUST NOT send zero-length fragments of Handshake,
 // Alert, or ChangeCipherSpec content types. Zero-length fragments of

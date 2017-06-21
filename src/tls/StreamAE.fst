@@ -44,9 +44,6 @@ let lenCipher i (c:bytes { ltag i <= length c }) : nat = length c - ltag i
 type entry (i:id) =
   | Entry: l:plainLen -> c:cipher i l -> p:plain i l -> entry i
 
-private unfold let min (a:int) (b:int) = if a < b then a else b
-private unfold let max (a:int) (b:int) = if a < b then b else a
-
 // key materials (from the AEAD provider)
 type key (i:id) = AEAD.key i
 type iv  (i:id) = AEAD.salt i
@@ -262,19 +259,23 @@ val decrypt: #i:id -> d:reader i -> l:plainLen -> c:cipher i l
      l <= max_TLSPlaintext_fragment_length /\ // FIXME ADL: why is plainLen <= max_TLSCiphertext_fragment_length_13 ?? Fix StreamPlain!
      m_sel h0 (ctr d.counter) < max_ctr))
   (ensures  (fun h0 res h1 ->
-      let j = m_sel h0 (ctr d.counter) in
+      let j : nat = m_sel h0 (ctr d.counter) in
       (authId i ==>
     	(let log = m_sel h0 (ilog d.log) in
     	 if j < Seq.length log && matches l c (Seq.index log j)
     	 then res = Some (Entry?.p (Seq.index log j))
-    	 else res = None))
-       /\ (match res with
-         | None -> HH.modifies Set.empty h0.h h1.h
-         | _  ->
-                let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
-                HH.modifies_one d.region h0.h h1.h /\
-                modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h
-	              /\ m_sel h1 (ctr d.counter) === j + 1)))
+    	 else res = None)) /\
+      (match res with
+       | None -> HH.modifies Set.empty h0.h h1.h
+       | _ -> let ctr_counter_as_hsref = as_hsref (ctr d.counter) in
+             HH.modifies_one d.region h0.h h1.h /\
+             modifies_rref d.region (Set.singleton (Heap.addr_of (as_ref ctr_counter_as_hsref))) h0.h h1.h /\
+             m_sel h1 (ctr d.counter) === j + 1)))
+
+val strip_refinement: #a:Type -> #p:(a -> Type0) -> o:option (x:a{p x}) -> option a
+let strip_refinement #a #p = function
+  | None -> None
+  | Some x -> Some x
 
 #set-options "--z3rlimit 100 --initial_fuel 0 --initial_ifuel 1 --max_fuel 0 --max_ifuel 1"
 // decryption, idealized as a lookup of (c,ad) in the log for safe instances
@@ -296,7 +297,9 @@ let decrypt #i d l c =
       end
     else None
   else //concrete
-   let () = lemma_ID13 i; cut(AEAD.noncelen i = AEAD.iv_length i) in
+   begin
+   lemma_ID13 i;
+   assert (AEAD.noncelen i = AEAD.iv_length i);
    lemma_repr_bytes_values j;
    let nb = bytes_of_int (AEAD.noncelen i) j in
    let iv = AEAD.create_nonce d.aead nb in
@@ -304,11 +307,12 @@ let decrypt #i d l c =
    | None -> None
    | Some pr ->
      begin
-       assert (Platform.Bytes.length pr = l);
-       match mk_plain i l pr with
-       | Some p -> (m_write ctr (j + 1); Some p)
-       | None   -> None
+       assert (Platform.Bytes.length pr == l);
+       let p = strip_refinement (mk_plain i l pr) in
+       if Some? p then m_write ctr (j + 1);
+       p
      end
+   end
 
 (* TODO
 

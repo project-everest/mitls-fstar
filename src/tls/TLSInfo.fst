@@ -482,7 +482,8 @@ and finishedId_hash = function
   | FinishedID #li i -> expandId_hash #li i
 
 // For 0-RTT
-let esId_ae = function
+let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
+  match i with
   | ApplicationPSK #h #ae _ -> ae
   | ResumptionPSK #li _ -> logInfo_ae li
 

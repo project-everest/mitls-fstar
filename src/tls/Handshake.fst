@@ -347,7 +347,7 @@ let client_ClientHello hs i =
   hs.state := C_Wait_ServerHello;
   Correct(HandshakeLog.next_fragment hs.log i)
 
-let client_HelloRetryRequest hs hrr =
+let client_HelloRetryRequest (hs:hs) (hrr:hrr) : St incoming =
   match Nego.group_of_hrr hrr with
   | None -> InError(AD_handshake_failure, "server did not specify the requested group")
   | Some g ->
