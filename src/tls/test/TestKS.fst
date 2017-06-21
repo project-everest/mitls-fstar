@@ -41,7 +41,7 @@ let main () =
   let ksc, cr = KS.create #rc Client in
   let kss, sr = KS.create #rs Server in
   print "OK.\n Generating client shares... ";
-  let (_, _, (CDH.Share g gx :: _)) = KS.ks_client_13_init ksc [] [SEC CC.ECC_X25519] in
+  let Some (CDH.Share g gx :: _) = KS.ks_client_init ksc (Some [SEC CC.ECC_X25519]) in
   print "OK.\n";
   let b = KS.print_share #g gx in
   (*

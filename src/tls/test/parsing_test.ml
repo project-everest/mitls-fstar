@@ -271,7 +271,6 @@ let parse_trace_file file =
   else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
   let bytes = Bytes.sub fbytes 0 flag in
   let hs = bytes in
-  print_string (print_bytes hs);
   parse_handshake hs;
   print_string "\n********************************************\n"
 
