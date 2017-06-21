@@ -1,5 +1,5 @@
 [
-  "Væ\u001b8eIPÁ 5~RJÔ³\u0014",
+  "d»ƒAüVp)Ï\u0005\u001a\t~?\u0000ô",
   [
     [
       "PMS.rsaseed",
@@ -135,7 +135,31 @@
       ],
       0
     ],
-    null,
+    [
+      "PMS.pms",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_CoreCrypto.rsa_key_haseq",
+        "assumption_FStar.Pervasives.Native.tuple3_haseq",
+        "assumption_PMS.dhpms_haseq", "assumption_PMS.rsapms_haseq",
+        "assumption_TLSConstants.protocolVersion__haseq",
+        "equation_CommonDH.share", "equation_Platform.Bytes.bytes",
+        "equation_RSAKey.pk", "equation_TLSConstants.protocolVersion",
+        "function_token_typing_CommonDH.group",
+        "function_token_typing_RSAKey.pk",
+        "haseqCommonDH_Tm_refine_a8be441a33e9134acfea527361c50c75",
+        "haseqRSAKey_Tm_refine_a9bfc0fafe17f7581769be852314b8fc",
+        "haseqTLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514",
+        "kinding_PMS.rsapms@tok",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_kinding_TLSConstants_Tm_refine_523b5ab0afa2b70ba3fdd9fbd1d1a514",
+        "typing_CommonDH.pre_share"
+      ],
+      0
+    ],
     [ "PMS.uu___is_RSAPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
       "PMS.__proj__RSAPMS__item___0",
@@ -202,13 +226,16 @@
       ],
       0
     ],
+    [ "PMS.uu___is_DummyPMS", 1, 0, 1, [ "@query" ], 0 ],
     [
       "PMS.honestPMS",
       1,
       0,
       1,
       [
-        "@query", "disc_equation_PMS.DHPMS", "disc_equation_PMS.RSAPMS",
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_PMS.DummyPMS", "disc_equation_PMS.DHPMS",
+        "disc_equation_PMS.DummyPMS", "disc_equation_PMS.RSAPMS",
         "fuel_guarded_inversion_PMS.pms"
       ],
       0

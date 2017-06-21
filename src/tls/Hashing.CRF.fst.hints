@@ -1,5 +1,5 @@
 [
-  "1LIê\bfá\u001f\u000e+\u0011∑≈2;z",
+  "IÏÃò6'ŸﬂˇŒ§ÅÀ@œ\u0002",
   [
     [
       "Hashing.CRF.range",
@@ -226,24 +226,28 @@
         "equation_Parse.is_tls_rgn", "equation_Parse.rgn",
         "equation_Parse.tls_rgn", "equation_Platform.Bytes.byte",
         "equation_Platform.Bytes.bytes", "equation_Platform.Bytes.lbytes",
+        "equation_Prims._assert",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
         "function_token_typing_Parse.tls_region",
         "kinding_FStar.Char.char_@tok",
         "lemma_FStar.HyperStack.lemma_equal_stack_domains_trans",
-        "lemma_FStar.Seq.Base.lemma_eq_refl", "lemma_Prims.invertOption",
-        "primitive_Prims.op_disEquality", "proj_equation_Prims.Some_v",
+        "lemma_FStar.Pervasives.invertOption",
+        "lemma_FStar.Seq.Base.lemma_eq_refl",
+        "primitive_Prims.op_disEquality",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_Hashing.CRF.Computed__1",
         "projection_inverse_Hashing.CRF.Computed_a",
-        "projection_inverse_Prims.Some_v",
         "refinement_interpretation_Hashing.CRF_Tm_refine_228e476fe4dacc00600b178e87d54d2a",
         "refinement_interpretation_Hashing.CRF_Tm_refine_ea2e6a6a6c9334ddb006ee02a478c397",
         "refinement_interpretation_Parse_Tm_refine_a05a5ab3f9285490f386663bdbacab30",
         "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
         "refinement_interpretation_Platform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94",
         "token_correspondence_Hashing.CRF.domain", "true_interp",
+        "typing_FStar.Pervasives.Native.uu___is_None",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_Hashing.CRF.domain", "typing_Hashing.content",
-        "typing_Parse.is_tls_rgn", "typing_Prims.uu___is_None",
-        "typing_Prims.uu___is_Some"
+        "typing_Parse.is_tls_rgn"
       ],
       0
     ],
