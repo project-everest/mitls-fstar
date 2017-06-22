@@ -1,6 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 module HandshakeLog
 
 open FStar.Heap
@@ -201,7 +198,7 @@ noeq type state =
     outgoing: bytes -> // outgoing data, alrady formatted and hashed
     outgoing_next_keys: option (bool * option bytes * bool) -> // as next_keys_use, with next fragment after CCS
     outgoing_complete: bool ->
-    
+
     incoming: bytes -> // received fragments; untrusted; not yet hashed or parsed
     parsed: list msg{valid_transcript (reveal_log transcript @ parsed)} ->
                        // partial incoming flight, hashed & parsed, with selected intermediate tags
@@ -250,7 +247,7 @@ let transcript h t =
 
 let create reg pv =
     let l = State empty_hs_transcript empty_bytes None false
-              empty_bytes [] (OpenHash empty_bytes) 
+              empty_bytes [] (OpenHash empty_bytes)
       pv None None in
     let st = ralloc reg l in
     st
@@ -391,25 +388,25 @@ let next_fragment l (i:id) =
     then (
       // send signals only after flushing the output buffer
       let next_keys1, outgoing1 = match st.outgoing_next_keys with
-      | Some(a, Some finishedFragment, z) -> 
+      | Some(a, Some finishedFragment, z) ->
         (if a || z then trace "unexpected 1.2 signals");
         Some({
-          out_appdata = a; 
-          out_ccs_first = true; 
+          out_appdata = a;
+          out_ccs_first = true;
           out_skip_0RTT = z}), finishedFragment
-      | Some(a, None, z) -> 
+      | Some(a, None, z) ->
         Some({
-          out_appdata = a; 
-          out_ccs_first = false; 
+          out_appdata = a;
+          out_ccs_first = false;
           out_skip_0RTT = z}), outgoing'
       | None -> None, outgoing' in
-      l := State 
+      l := State
               st.transcript outgoing1  None false
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
-      Outgoing fragment next_keys1 st.outgoing_complete 
+      Outgoing fragment next_keys1 st.outgoing_complete
       )
     else (
-      l := State 
+      l := State
               st.transcript outgoing' st.outgoing_next_keys st.outgoing_complete
               st.incoming st.parsed st.hashes st.pv st.kex st.dh_group;
       Outgoing fragment None false )
@@ -469,7 +466,7 @@ val hashHandshakeMessages : t: erased_transcript ->
           ST (hashState t (p @ next))
   (requires (fun h0 -> True))
   (ensures (fun h0 t h1 -> modifies_none h0 h1))
-  
+
 let rec hashHandshakeMessages t p hs n nb =
     match n,nb with
     | [],[] -> hs
@@ -511,7 +508,7 @@ let receive l mb =
           r [] hs st.pv st.kex st.dh_group;
         Correct (Some (ml,tl)))
       else (
-        l := State 
+        l := State
           st.transcript st.outgoing st.outgoing_next_keys st.outgoing_complete
           r ml hs st.pv st.kex st.dh_group;
         Correct None )

@@ -1,11 +1,9 @@
-(*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
---*)
+(**
+Stateful, agile, length-hiding authenticated encryption with additional data
+Implemented by appending a fragment sequence number to the additional data of
+the underlying LHAE scheme
+*)
 module StatefulLHAE
-
-// Stateful, agile, length-hiding authenticated encryption with additional data
-// Implemented by appending a fragment sequence number to the additional data of
-// the underlying LHAE scheme
 
 open FStar.Heap
 open FStar.HyperHeap

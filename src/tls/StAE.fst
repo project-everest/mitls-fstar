@@ -1,11 +1,9 @@
-(*--build-config
-options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/crypto/spartan --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
---*)
+(**
+Authenticated encryptions of streams of TLS fragments (from Content)
+multiplexing StatefulLHAE and StreamAE with (some) length hiding
+(for now, under-specifying ciphertexts lengths and values)
+*)
 module StAE
-
-// Authenticated encryptions of streams of TLS fragments (from Content)
-// multiplexing StatefulLHAE and StreamAE with (some) length hiding
-// (for now, under-specifying ciphertexts lengths and values)
 
 open FStar.HyperHeap
 open FStar.HyperStack

@@ -1,13 +1,10 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 (**
- Shared state for secret expansion and salt expansion
- This file exists to break a cyclic module dependency:
- KDF.Salt.* operates on the same secrets as KDF.Expand
- but both cannot be implemented in a single module because
- of the cyclic dependency.
- *)
+Shared state for secret expansion and salt expansion
+This file exists to break a cyclic module dependency:
+KDF.Salt.* operates on the same secrets as KDF.Expand
+but both cannot be implemented in a single module because
+of the cyclic dependency.
+*)
 module KDF.Common
 
 open FStar.Heap

@@ -1,7 +1,4 @@
-(*--build-config
-options:--use_hints --fstar_home ../../../FStar --detail_errors --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/examples/low-level/crypto/real --include ../../../FStar/examples/low-level/LowCProvider/fst --include ../../../FStar/examples/low-level/crypto --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ideal-flags;
---*)
-(* A library for monotonic references to partial, dependent maps, with a whole-map invariant *)
+(** A library for monotonic references to partial, dependent maps, with a whole-map invariant *)
 module MonotoneMap
 open FStar.Monotonic.RRef
 open FStar.HyperHeap
@@ -119,7 +116,7 @@ let lookup #r #a #b #inv (m:t r a b inv) (x:a)
          contains m x (Some?.v y) h1 /\
          witnessed (defined m x) /\
          witnessed (contains m x (Some?.v y)))))
-= 
+=
   let y = sel (m_read m) x in
   match y with
     | None -> y
