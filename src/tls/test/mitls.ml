@@ -83,6 +83,11 @@ let setng x =
   let ngl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^"; check --help for list")) ngl in
   config := {!config with named_groups = ngl}
 
+let setog x =
+  let ogl = BatString.nsplit x ":" in
+  let ogl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^" for -share; check --help for list")) ogl in
+  config := {!config with offer_shares = ogl}
+
 let setalpn x =
   let al = BatString.nsplit x ":" in
   config := {!config with alpn = Some al}
@@ -147,7 +152,8 @@ let _ =
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
     ("-alpn", Arg.String setalpn, "colon-separated list of application-level protocols");
     ("-reconnect", Arg.Unit (fun () -> reconnect := true), "reconnect at the end of the session, using received ticket (client only)");
-    ("-groups", Arg.String setng, "colon-separated list of named groups; see above for valid values");
+    ("-groups", Arg.String setng, "colon-separated list of supported named groups; see above for valid values");
+    ("-shares", Arg.String setog, "colon-separated list of named groups to offer shares on, as a TLS 1.3 client");
     ("-cert", Arg.String (fun s -> config := {!config with cert_chain_file = s}), "PEM file containing certificate chain to send");
     ("-key", Arg.String (fun s -> config := {!config with private_key_file = s}), "PEM file containing private key of endpoint certificate in chain");
     ("-CAFile", Arg.String (fun s -> config := {!config with ca_file = s}), "set openssl root cert file to <path>")

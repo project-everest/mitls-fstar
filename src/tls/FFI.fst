@@ -241,7 +241,7 @@ let ffiSetCAFile cfg f =
   ca_file = f;
   }
 
-let rec findsetting f l = 
+let rec findsetting f l =
   match l with
   | [] -> None
   | (s, i)::tl -> if s = f then Some i else findsetting f tl
@@ -252,8 +252,8 @@ let rec updatecfg cfg l : ML config =
   | "EDI" :: t -> updatecfg ({cfg with enable_early_data = true;}) t
   | r :: t -> failwith ("Unknown flag: "^r)
 
-(** SZ: FStar.List opens FStar.All. 
-    Should we have a version that uses FStar.HyperStack.All? 
+(** SZ: FStar.List opens FStar.All.
+    Should we have a version that uses FStar.HyperStack.All?
 *)
 val map: ('a -> ML 'b) -> list 'a -> ML (list 'b)
 let rec map f x = match x with
@@ -286,13 +286,19 @@ let ffiSetSignatureAlgorithms cfg x =
 
 val ffiSetNamedGroups: cfg:config -> x:string -> ML config
 let ffiSetNamedGroups cfg x =
-  let ngl = String.split [':'] x in
-  let ngl = map (fun x -> match findsetting x ngs with
+  let ng_parse x = match findsetting x ngs with
     | None -> failwith ("Unknown named group: "^x)
-    | Some a -> a
-  ) ngl in
+    | Some a -> a in
+  let supported :: offered = String.split ['@'] x in
+  let ngl = String.split [':'] x in
+  let ngl = map ng_parse ngl in
+  let ogl = match offered with
+    | [] -> cfg.offer_shares
+    | [x] -> map ng_parse (String.split [':'] x)
+    | _ -> failwith "Use @G1:..:Gn to set groups on which to offer shares" in
   { cfg with
-  named_groups = ngl
+    named_groups = ngl;
+    offer_shares = ogl;
   }
 
 val ffiSetALPN: cfg:config -> x:string -> ML config
