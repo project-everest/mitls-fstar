@@ -3,7 +3,6 @@ open Platform.Bytes
 open Platform.Error
 
 open Mem
-open Mem
 open TLSConstants
 open TLSInfo
 

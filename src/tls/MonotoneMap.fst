@@ -6,9 +6,6 @@ module MonotoneMap
 open FStar.Monotonic.RRef
 open Mem
 
-open Mem
-open Mem
-
 module HH = Mem
 module HS = Mem
 module MR = FStar.Monotonic.RRef

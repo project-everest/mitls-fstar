@@ -8,7 +8,6 @@ module AEAD0
 //16-09-10 consider sharing some AEAD?.Common.fst
 
 open Mem
-open Mem
 open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq

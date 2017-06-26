@@ -8,8 +8,6 @@ module StatefulLHAE
 // the underlying LHAE scheme
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq

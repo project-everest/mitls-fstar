@@ -5,8 +5,6 @@ module Handshake.Log
 
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
  // for e.g. found
 open FStar.Set

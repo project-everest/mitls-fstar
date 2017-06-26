@@ -1,7 +1,6 @@
 module Alert
 
 open Mem
-open Mem
 open FStar.Seq
 
 open Platform.Error

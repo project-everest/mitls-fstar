@@ -22,7 +22,6 @@ open AEAD_GCM
 open StatefulLHAE
 open Range
 open Mem
-open Mem
 
 // dummies
 type fp_inv h = True

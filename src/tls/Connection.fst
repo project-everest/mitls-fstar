@@ -3,8 +3,6 @@ module Connection
 // Connections are top-level instances of TLS clients and servers
 
 open Mem
-open Mem
-open Mem
 // JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
  // for e.g. found

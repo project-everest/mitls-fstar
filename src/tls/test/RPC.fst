@@ -1,7 +1,6 @@
 module RPC
 
 open Mem
-open Mem
 open FStar.Monotonic.RRef
 open FStar.Seq
 

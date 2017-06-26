@@ -1,7 +1,6 @@
 module TestGCM
 
 open Mem
-open Mem
 open FStar.IO
 
 open Platform.Bytes

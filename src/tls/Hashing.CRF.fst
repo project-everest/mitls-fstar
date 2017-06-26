@@ -2,9 +2,6 @@
 module Hashing.CRF
 
 open Mem
-open Mem
-open Mem
-open Mem
 
 open Platform.Bytes
 open Hashing.Spec

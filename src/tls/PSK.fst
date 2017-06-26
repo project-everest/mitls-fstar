@@ -4,9 +4,6 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 module PSK
 
 open Mem
-open Mem
-open Mem
-open Mem
 
 open Platform.Bytes
 open Platform.Error

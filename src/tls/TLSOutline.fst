@@ -11,7 +11,6 @@ module TLSOutline
 //   and the reader position in that log.
 
 open Mem
-open Mem
 open FStar.Seq
  // for e.g. found
 open FStar.Monotonic.RRef

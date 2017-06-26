@@ -6,8 +6,6 @@ module AEAD_GCM
 // We support both AES_128_GCM and AES_256_GCM, differing only in their key sizes
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
 open Platform.Bytes
 open CoreCrypto

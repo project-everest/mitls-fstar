@@ -5,7 +5,6 @@ module Handshake
 
 // provisional
 open Mem
-open Mem
 
 open TLSConstants
 

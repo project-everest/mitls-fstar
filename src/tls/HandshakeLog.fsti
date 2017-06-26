@@ -6,7 +6,6 @@ open Platform.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :(
 
 open Mem
-open Mem
 open Hashing.CRF
 open HandshakeMessages // for pattern matching on messages
 module HH = Mem

@@ -1,7 +1,6 @@
 module Signature
 
 open Mem
-open Mem
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 

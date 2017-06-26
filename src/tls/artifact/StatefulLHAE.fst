@@ -7,7 +7,6 @@ module StatefulLHAE
 // (implemented by appending a fragment sequence number to the additional data)
 
 open Mem
-open Mem
 open FStar.Seq
  // for e.g. found
 

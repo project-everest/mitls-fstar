@@ -4,8 +4,6 @@
     TODO: review indexing *) 
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
  // for e.g. found
 

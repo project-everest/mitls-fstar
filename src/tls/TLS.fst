@@ -1,8 +1,6 @@
 module TLS
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
 open FStar.Set
 

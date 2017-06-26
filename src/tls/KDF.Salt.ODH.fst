@@ -5,8 +5,6 @@ options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontri
 module KDF.Salt.ODH
 
 open Mem
-open Mem
-open Mem
 
 open Platform.Bytes
 open Platform.Error

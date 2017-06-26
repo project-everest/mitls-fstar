@@ -6,9 +6,6 @@ module HMAC.UFCMA
 (* Idealizing HMAC for Finished message payloads and binders. *)
 
 open Mem
-open Mem
-open Mem
-open Mem
 open FStar.Seq
  // for e.g. found
 

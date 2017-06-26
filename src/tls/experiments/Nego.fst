@@ -1,8 +1,6 @@
 module Nego
 
 open Mem
-open Mem
-open Mem
 
 open Hashing
 open Signature

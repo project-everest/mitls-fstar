@@ -10,8 +10,6 @@
    it to its non-agile underlying algorithms, e.g. AES-CBC *)
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
 
 open Platform.Bytes

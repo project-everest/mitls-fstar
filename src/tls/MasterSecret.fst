@@ -1,7 +1,6 @@
 (* An experiment towards the PRF in KeySchedule, collapsing master and key derivation *)
 module MasterSecret (* : ST _ _ _ *)
 open Mem
-open Mem
 open TLSConstants
 open StreamAE
 open TLSInfo

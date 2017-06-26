@@ -3,7 +3,6 @@ options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontri
 --*)
 ﻿module DHGroup
 
-open Mem
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto

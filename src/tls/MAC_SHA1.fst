@@ -1,8 +1,6 @@
 ﻿module MAC_SHA1
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
  // for e.g. found
 

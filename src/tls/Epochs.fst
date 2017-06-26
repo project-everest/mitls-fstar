@@ -10,8 +10,6 @@ module Epochs
     (i.e. we only keep old epoch AE logs for specifying authentication)
 *)
 
-open Mem
-open Mem
 open FStar.Seq // DO NOT move further below, it would shadow `Mem.mem`
 open Mem
 open FStar.Monotonic.RRef

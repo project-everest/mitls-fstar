@@ -2,9 +2,6 @@
 module Hashing
 
 open Mem
-open Mem
-open Mem
-open Mem
 
 open Platform.Bytes
 include Hashing.Spec

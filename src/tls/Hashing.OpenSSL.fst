@@ -5,9 +5,6 @@ module Hashing.OpenSSL
 // (TODO: separate interface and implementation; disentangle from CoreCrypto)
 
 open Mem
-open Mem
-open Mem
-open Mem
 
 open Platform.Bytes
 open Hashing.Spec

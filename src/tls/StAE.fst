@@ -8,7 +8,6 @@ module StAE
 // (for now, under-specifying ciphertexts lengths and values)
 
 open Mem
-open Mem
 open Platform.Bytes
 
 open TLSConstants

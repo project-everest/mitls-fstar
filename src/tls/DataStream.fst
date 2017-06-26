@@ -7,8 +7,6 @@ module DataStream
 //* now generalized to include signals; rename to Stream?
 
 open Mem
-open Mem
-open Mem
 open FStar.Seq
 open Platform.Bytes
 open Platform.Error

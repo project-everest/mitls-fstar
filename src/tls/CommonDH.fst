@@ -11,7 +11,6 @@ share is for registered shares (for which is_honest is defined).
 *)
 ﻿module CommonDH
 
-open Mem
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
