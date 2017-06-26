@@ -104,6 +104,15 @@ test.out: mitls.cmxa $(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test
 	mitls.cmxa \
 	$(ODIR)/TestKS.ml $(ODIR)/TestDH.ml $(ODIR)/TestGCM.ml test/parsing_test.ml test/test_hkdf.ml test/test_main.ml -o test.out
 
+# Extend path for running cmitls.exe 
+ifeq ($(OS),Windows_NT)
+else
+ifeq ($(UNAME_S),Darwin)
+else
+CEXE_PATH=LD_LIBRARY_PATH=./
+endif
+endif
+
 test: test.out mitls.exe cmitls.exe
 	# Unit tests from test/test_main.ml
 	$(EXTRA_PATH) ./test.out
@@ -111,7 +120,7 @@ test: test.out mitls.exe cmitls.exe
 	./mitls.exe  -v 1.2 -ffi www.google.com
 	./mitls.exe  -v 1.2 www.microsoft.com
 	#./mitls.exe -v 1.3. www.google.com failing due to different draft versions
-	./cmitls.exe -v 1.2 www.google.com
+	$(CEXE_PATH) ./cmitls.exe -v 1.2 www.google.com
 
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
@@ -178,13 +187,13 @@ server-psk::
 server-0rtt::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384 -0rtt
 cserver::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
 cserver12::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 0.0.0.0 4443 -sigalgs RSA+SHA256
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.2 -v 1.2 -s -cert ../../data/server.crt -key ../../data/server.key 0.0.0.0 4443 -sigalgs RSA+SHA256
 cserver13::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.3 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
 cserver-psk::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.3 -v 1.3 -s -psk TestPSK:00 -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384
 
 client13::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443 
@@ -197,13 +206,13 @@ client12::
 client::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443
 cclient13::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.3 -v 1.3 127.0.0.1 4443
 cclient-psk::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.3 -v 1.3 -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.3 -v 1.3 -psk TestPSK:00 -offerpsk TestPSK 127.0.0.1 4443
 cclient12::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.2 -v 1.2 127.0.0.1 4443
 cclient::
-	OCAMLRUNPARAM=b ./cmitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443
+	OCAMLRUNPARAM=b $(CEXE_PATH) ./cmitls.exe -mv 1.2 -v 1.3 127.0.0.1 4443
 
 .PHONY: test tls-ffi server server12 server13 client client12 client13 cserver cserver12 cserver13 cclient cclient12 cclient3
 
