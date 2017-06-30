@@ -159,6 +159,11 @@ let find_signature_algorithms o : option signatureSchemeList =
   | None -> None
   | Some (Extensions.E_signature_algorithms algs) -> Some algs
 
+let find_quic_parameters o =
+  match find_client_extension Extensions.E_quic_parameters? o with
+  | Some (Extensions.E_quic_parameters qp) -> Some qp
+  | _ -> None
+
 // finding the pre-shared keys in ClientHello
 let find_pske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
@@ -384,6 +389,10 @@ let computeOffer r cfg resume nonce ks pskinfo =
     match pskinfo with
     | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
     | _ -> false in
+  let qp =
+    match cfg.quic_parameters with
+    | Some (qv::_, qp) -> Some (QuicParametersClient qv qv qp)
+    | _ -> None in
   let extensions =
     Extensions.prepareExtensions
       cfg.min_version
@@ -391,6 +400,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       cfg.cipher_suites
       cfg.peer_name
       cfg.alpn
+      qp
       cfg.extended_master_secret
       cfg.safe_renegotiation
       (compatible_psk && cfg.enable_early_data)

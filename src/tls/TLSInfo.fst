@@ -68,6 +68,7 @@ let defaultConfig =
   {
   min_version = TLS_1p2;
   max_version = TLS_1p3;
+  quic_parameters = None;
   cipher_suites = cipherSuites_of_nameList default_cipherSuites;
   named_groups = default_groups;
   signature_algorithms = default_signature_schemes;
@@ -409,6 +410,7 @@ and pre_rmsId (li:logInfo) =
   | RMSID: pre_asId -> hashed_log li -> pre_rmsId li
 
 and pre_exportId (li:logInfo) =
+  | EarlyExportID: pre_esId -> hashed_log li -> pre_exportId li
   | ExportID: pre_asId -> hashed_log li -> pre_exportId li
 
 and expandTag =
@@ -467,6 +469,7 @@ and rmsId_hash #li i = match i with
   | RMSID asId _ -> asId_hash asId
 
 and exportId_hash #li i = match i with
+  | EarlyExportID esId _ -> esId_hash esId
   | ExportID asId _ -> asId_hash asId
 
 and expandId_hash #li i = match i with
@@ -545,6 +548,7 @@ type valid (i:pre_index) =
     | RMSID i _ -> registered (I_AS i))
   | I_EXPORT #li i ->
     (match i with
+    | EarlyExportID i _ -> registered (I_ES i)
     | ExportID i _ -> registered (I_AS i))
   | I_EXPAND #li i ->
     (match i with

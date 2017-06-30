@@ -308,6 +308,179 @@ let parseAlpn : pinverse_t alpnBytes = fun b ->
     | Error(z) -> Error z
   else error "parseAlpn: extension is too short"
 
+(* QUIC parameters *)
+
+let quicVersionBytes (v:quicVersion) : Tot (lbytes 4) =
+  bytes_of_uint32 (match v with
+    | QuicVersion1 -> 1ul
+    | QuicCusomVersion n -> n)
+
+let rec quicVersionsBytes (vl:list quicVersion)
+  : Tot (b:bytes{length b <= op_Multiply 4 (List.Tot.length vl)})
+  (decreases (List.Tot.length vl))
+  = match vl with
+  | [] -> empty_bytes
+  | h::t -> quicVersionBytes h @| (quicVersionsBytes t)
+
+let quicParameterBytes : quicParameter -> b:bytes{length b < 256} = function
+  | Quic_initial_max_stream_data n ->
+    abyte2 (0z, 0z) @| vlbytes2 (bytes_of_uint32 n)
+  | Quic_initial_max_data n ->
+    abyte2 (0z, 1z) @| vlbytes2 (bytes_of_uint32 n)
+  | Quic_initial_max_stream_id n ->
+    abyte2 (0z, 2z) @| vlbytes2 (bytes_of_uint32 n)
+  | Quic_idle_timeout n ->
+    abyte2 (0z, 3z) @| vlbytes2 (bytes_of_uint16 n)
+  | Quic_truncate_connection_id ->
+    abyte2 (0z, 4z) @| vlbytes2 empty_bytes
+  | Quic_max_packet_size n ->
+    abyte2 (0z, 5z) @| vlbytes2 (bytes_of_uint16 n)
+  | Quic_custom_parameter (n,b) ->
+    bytes_of_uint16 n @| vlbytes2 b
+
+let rec quicParametersBytes_aux (pl:list quicParameter)
+  : Tot (b:bytes{length b <= op_Multiply (List.Tot.length pl) 256})
+  (decreases (List.Tot.length pl))
+  = match pl with
+  | [] -> empty_bytes
+  | p :: t -> quicParameterBytes p @| (quicParametersBytes_aux t)
+
+let quicParametersBytes = function
+  | QuicParametersClient nv iv p ->
+    quicVersionBytes nv @| quicVersionBytes iv @|
+    vlbytes2 (quicParametersBytes_aux p)
+  | QuicParametersServer sv p ->
+    vlbytes1 (quicVersionsBytes sv) @|
+    vlbytes2 (quicParametersBytes_aux p)
+
+let parseQuicVersion: pinverse_t quicVersionBytes = fun b ->
+  if length b = 4 then
+    let n = uint32_of_bytes b in
+    if n = 1ul then Correct QuicVersion1
+    else Correct (QuicCusomVersion n)
+  else error "invalid QUIC version"
+
+let parse_uint16 (b:bytes) : result UInt16.t =
+  if length b = 2 then
+    Correct (uint16_of_bytes b)
+  else error "invalid uint16 encoding"
+
+let parse_uint32 (b:bytes) : result UInt32.t =
+  if length b = 4 then Correct (uint32_of_bytes b)
+  else error "invalid uint32 encoding"
+
+let rec parseQuicParameters_aux (b:bytes)
+  : Tot (result (list quicParameter)) (decreases (length b))
+  =
+  if length b = 0 then Correct ([])
+  else if length b < 4 then error "parseQuicParameters_aux: no headers"
+  else
+    let (pt, pv) = split b 2 in
+    match vlsplit 2 pv with
+    | Error z -> error "parseQuicParameters_aux: bad variable length encoding"
+    | Correct (pv, rest) ->
+      let param =
+        match cbyte2 pt with
+        | (0z, 0z) ->
+          (match parse_uint32 pv with
+          | Correct n -> Correct (Quic_initial_max_stream_data n)
+          | _ -> error "bad initial_max_stream_data")
+        | (0z, 1z) ->
+          (match parse_uint32 pv with
+          | Correct n -> Correct (Quic_initial_max_data n)
+          | _ -> error "bad initial_max_data")
+        | (0z, 2z) ->
+          (match parse_uint32 pv with
+          | Correct n -> Correct (Quic_initial_max_stream_id n)
+          | _ -> error "initial_max_stream_id")
+        | (0z, 3z) ->
+          (match parse_uint16 pv with
+          | Correct n -> Correct (Quic_idle_timeout n)
+          | _ -> error "bad idle_timeout")
+        | (0z, 4z) -> Correct Quic_truncate_connection_id
+        | (0z, 5z) ->
+          (match parse_uint16 pv with
+          | Correct n -> Correct (Quic_max_packet_size n)
+          | _ -> error "bad max_packet_size")
+        | _ ->
+          let pt = uint16_of_bytes pt in
+          if length pv < 252 && UInt16.v pt > 5 then
+            Correct (Quic_custom_parameter (pt, pv))
+          else error "invalid unrecognized QUIC transport parameter"
+        in
+      // TODO tail recursive
+      (match param, parseQuicParameters_aux rest with
+      | Correct p, Correct tl -> Correct(p :: tl)
+      | Error z, _
+      | _, Error z -> Error z)
+
+let rec parseQuicVersions (b:bytes)
+  : Tot (result (list quicVersion)) (decreases (length b))
+  =
+  if length b = 0 then Correct []
+  else if length b < 4 then error "bad version list"
+  else
+    let v, b = split b 4 in
+    match parseQuicVersion v, parseQuicVersions b with
+    | Error z, _ | _, Error z -> Error z
+    | Correct v, Correct t -> Correct (v :: t)
+
+let parseQuicParameters_valid (b:bytes) : Tot (result valid_quicParameters) =
+  match parseQuicParameters_aux b with
+  | Error z -> Error z
+  | Correct qpl ->
+    if not (List.Tot.existsb Quic_initial_max_stream_data? qpl) then
+      error "parseQuicParameters: missing initial_max_stream_data"
+    else if not (List.Tot.existsb Quic_initial_max_data? qpl) then
+      error "parseQuicParameters: missing initial_max_data"
+    else if not (List.Tot.existsb Quic_initial_max_stream_id? qpl) then
+      error "parseQuicParameters: missing initial_max_stream_id"
+    else if not (List.Tot.existsb Quic_idle_timeout? qpl) then
+      error "parseQuicParameters: missing idle_timeout"
+    else if List.Tot.length qpl >= 256 then // ADL FIXME: this should be ruled out statically
+      error "parseQuicParameters: too many parameters"
+    else Correct(qpl)
+
+let parseQuicParameters (mt:ext_msg) (b:bytes) =
+  match mt with
+  | EM_ClientHello ->
+    if length b < 38 then error "parseQuicParameters: too short"
+    else
+     begin
+      let nv, b = split b 4 in
+      let iv, b = split b 4 in
+      match parseQuicVersion nv, parseQuicVersion iv with
+      | Error z, _ | _, Error z -> Error z
+      | Correct nv, Correct iv ->
+        match vlparse 2 b with
+        | Error z -> error "parseQuicParameters: bad client parameters"
+        | Correct pb ->
+          match parseQuicParameters_valid pb with
+          | Error z -> Error z
+          | Correct qpl -> Correct(QuicParametersClient nv iv qpl)
+     end
+  | EM_EncryptedExtensions ->
+   begin
+    if length b < 32 then error "parseQuicParameters: too short" else
+    match vlsplit 1 b with
+    | Error z -> error "parseQuicParameters: bad supported version list"
+    | Correct(vlb, b) ->
+      match parseQuicVersions vlb with
+      | Error z -> Error z
+      | Correct vl ->
+        if vl = [] || List.Tot.length vl >= 64 then
+          error "parseQuicParameters: bad supported version list"
+        else if length b < 32 then
+          error "parseQuicParameters: parameters too short"
+        else match vlparse 2 b with
+        | Error z -> error "parseQuicParameters: bad server parameters"
+        | Correct pb ->
+          match parseQuicParameters_valid pb with
+          | Error z -> Error z
+          | Correct qpl -> Correct(QuicParametersServer vl qpl)
+   end
+  | _ -> error "parseQuicParameters: extension appears in the wrong message type"
+
 (* PROTOCOL VERSIONS *)
 
 // The length exactly reflects the RFC format constraint <2..254>
@@ -445,6 +618,7 @@ noeq type extension' (p: (lbytes 2 -> GTot Type0)) =
   | E_extended_ms
   | E_ec_point_format of list point_format
   | E_alpn of alpn
+  | E_quic_parameters of quicParameters
   | E_unknown_extension of ((x: lbytes 2 {p x}) * bytes) (* header, payload *)
 (*
 We do not yet support the extensions below (authenticated but ignored)
@@ -480,6 +654,7 @@ let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match
   | E_extended_ms -> "extended_master_secret"
   | E_ec_point_format _ -> "ec_point_formats"
   | E_alpn _ -> "alpn"
+  | E_quic_parameters _ -> "quic_transport_parameters"
   | E_unknown_extension (n,_) -> print_bytes n
 
 let rec string_of_extensions (#p: (lbytes 2 -> GTot Type0)) (l: list (extension' p)) = match l with
@@ -503,6 +678,7 @@ let sameExt (#p: (lbytes 2 -> GTot Type0)) (e1: extension' p) (e2: extension' p)
   | E_extended_ms, E_extended_ms -> true
   | E_ec_point_format _, E_ec_point_format _ -> true
   | E_alpn _, E_alpn _ -> true
+  | E_quic_parameters _, E_quic_parameters _ -> true
   // same, if the header is the same: mimics the general behaviour
   | E_unknown_extension(h1,_), E_unknown_extension(h2,_) -> equalBytes h1 h2
   | _ -> false
@@ -518,6 +694,7 @@ let extensionHeaderBytes #p ext =
   | E_server_name _            -> abyte2 (0x00z, 0x00z)
   | E_supported_groups _       -> abyte2 (0x00z, 0x0Az) // 10
   | E_signature_algorithms _   -> abyte2 (0x00z, 0x0Dz) // 13
+  | E_quic_parameters _        -> abyte2 (0x00z, 0x1Az) // 26
   | E_session_ticket _         -> abyte2 (0x00z, 0x23z) // 35
   | E_key_share _              -> abyte2 (0x00z, 0x28z) // 40
   | E_pre_shared_key _         -> abyte2 (0x00z, 0x29z) // 41
@@ -544,6 +721,7 @@ let encryptedExtension ext =
   | E_server_name _
   | E_supported_groups _
   | E_alpn _
+  | E_quic_parameters _
   | E_early_data _ -> true
   | _ -> false
 
@@ -594,6 +772,7 @@ let rec extensionPayloadBytes = function
   | E_extended_ms              -> vlbytes 2 empty_bytes
   | E_ec_point_format l        -> vlbytes 2 (ecpfListBytes l)
   | E_alpn l                   -> vlbytes 2 (alpnBytes l)
+  | E_quic_parameters qp       -> vlbytes 2 (quicParametersBytes qp)
   | E_unknown_extension (_,b)  -> vlbytes 2 b
 #reset-options
 
@@ -914,6 +1093,10 @@ let parseExtension mt b =
       if length data < 2 ||  length data >= 65538 then error "application layer protocol negotiation" else
       mapResult (normallyNone E_alpn) (parseAlpn data)
 
+    | (0x00z, 0x1Az) -> // quic_transport_parameters
+      if length data < 2 || length data >= 65538 then error "quic transport parameters" else
+      mapResult (normallyNone E_quic_parameters) (parseQuicParameters mt data)
+
     | (0x00z, 0x23z) -> // session_ticket
       Correct (E_session_ticket data, None)
 
@@ -1039,6 +1222,7 @@ val prepareExtensions:
   k:valid_cipher_suites{List.Tot.length k < 256} ->
   option string -> // SNI
   option alpn -> // ALPN
+  option quicParameters ->
   bool -> // EMS
   bool ->
   bool -> // EDI (Nego checks that PSK is compatible)
@@ -1052,7 +1236,7 @@ val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions minpv pv cs host alps ems sren edi ticket sigAlgs namedGroups ri ks psks =
+let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -1082,6 +1266,11 @@ let prepareExtensions minpv pv cs host alps ems sren edi ticket sigAlgs namedGro
     let res =
       match alps with
       | Some al -> E_alpn al :: res
+      | None -> res
+    in
+    let res =
+      match qp with
+      | Some qp -> E_quic_parameters qp :: res
       | None -> res
     in
     let res =
@@ -1239,6 +1428,7 @@ let serverToNegotiatedExtension cfg cExtL cs ri resuming res sExt =
     | E_session_ticket _ -> correct ()
     | E_alpn sal -> if List.Tot.length sal = 1 then correct ()
       else Error(AD_illegal_parameter, perror __SOURCE_FILE__ __LINE__ "Multiple ALPN selected by server")
+    | E_quic_parameters (QuicParametersServer qvl qp) -> correct ()
     | E_extended_ms -> correct ()
     | E_ec_point_format spf -> correct () // Can be sent in resumption, apparently (RFC 4492, 5.2)
     | E_key_share (CommonDH.ServerKeyShare sks) -> correct ()
@@ -1314,6 +1504,12 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
       match common with
       | a :: _ -> Some (E_alpn [a])
       | _ -> None)
+  | E_quic_parameters (QuicParametersClient qv qvi qp) ->
+    (match cfg.quic_parameters, pv with
+    | Some (sqvl, sqp), TLS_1p3 ->
+      // TODO client parameter validation?
+      Some (E_quic_parameters (QuicParametersServer sqvl sqp))
+    | _ -> None)
   | E_server_name server_name_list ->
     if resuming then None // RFC 6066 page 6
     else

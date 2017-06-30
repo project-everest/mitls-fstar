@@ -349,7 +349,8 @@ let ks_client_13_hello_retry ks (g:CommonDH.group)
 
 // Derive the early data key from the first offered PSK
 // Only called if 0-RTT is enabled on the client
-let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
+let ks_client_13_ch ks (log:bytes)
+  : ST ((li:logInfo & i:exportId li & ems i) * recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SH? (C?.s kss))
@@ -374,6 +375,9 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
   let expandId : expandId li = ExpandedSecret (EarlySecretID i) ClientEarlyTrafficSecret log in
   let ets = HKDF.derive_secret h es "c e traffic" log in
   dbg ("Client early traffic secret: "^(print_bytes ets));
+  let expId : exportId li = EarlyExportID i log in
+  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log in
+  dbg ("Early exporter master secret: "^(print_bytes early_export));
 
   // Expand all keys from the derived early secret
   let (ck, civ) = keygen_13 h ets ae in
@@ -386,7 +390,7 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
   let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
-  early_d
+  (| li, expId, early_export |), early_d
 
 val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> ST (CommonDH.share g)
   (requires fun h0 ->

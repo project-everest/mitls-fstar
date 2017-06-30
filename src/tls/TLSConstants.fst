@@ -1716,10 +1716,47 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
+type quicParameter =
+  | Quic_initial_max_stream_data of UInt32.t
+  | Quic_initial_max_data of UInt32.t
+  | Quic_initial_max_stream_id of UInt32.t
+  | Quic_idle_timeout of UInt16.t
+  | Quic_truncate_connection_id
+  | Quic_max_packet_size of UInt16.t
+  | Quic_custom_parameter of (n:UInt16.t{UInt16.v n > 5}) * b:bytes{length b < 252}
+
+// TODO check for duplicates
+type valid_quicParameters =
+  l:list quicParameter{ List.Tot.length l < 256 /\
+    List.Tot.existsb Quic_initial_max_stream_data? l /\
+    List.Tot.existsb Quic_initial_max_data? l /\
+    List.Tot.existsb Quic_initial_max_stream_id? l /\
+    List.Tot.existsb Quic_idle_timeout? l}
+
+type quicVersion =
+  | QuicVersion1
+  | QuicCusomVersion of n:UInt32.t{UInt32.v n <> 1}
+
+type valid_quicVersions =
+  l:list quicVersion{l <> [] /\ List.Tot.length l < 64}
+
+// ADL would prefer to index this by extension message type
+type quicParameters =
+  | QuicParametersClient:
+    negotiated_version: quicVersion ->
+    initial_version: quicVersion ->
+    parameters: valid_quicParameters ->
+    quicParameters
+  | QuicParametersServer:
+    versions: valid_quicVersions ->
+    parameters: valid_quicParameters ->
+    quicParameters
+
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
+    quic_parameters: option (valid_quicVersions * valid_quicParameters);
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: list valid_namedGroup;
     signature_algorithms: signatureSchemeList;

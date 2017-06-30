@@ -202,6 +202,16 @@ let uint32_of_bytes b =
   lemma_repr_bytes_values n;
   UInt32.uint_to_t n
 
+let bytes_of_uint32 (n:UInt32.t) : Tot (lbytes 4) =
+  let n = UInt32.v n in
+  lemma_repr_bytes_values n;
+  bytes_of_int 4 n
+
+let bytes_of_uint16 (n:UInt16.t) : Tot (lbytes 2) =
+  let n = UInt16.v n in
+  lemma_repr_bytes_values n;
+  bytes_of_int 2 n
+
 (** End Module Format *)
 
 
