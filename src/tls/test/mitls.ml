@@ -92,6 +92,16 @@ let setalpn x =
   let al = BatString.nsplit x ":" in
   config := {!config with alpn = Some al}
 
+let setquic () =
+  config := {!config with
+    quic_parameters = Some ([QuicVersion1],[
+      Quic_initial_max_stream_data(65536);
+      Quic_initial_max_data(16777216);
+      Quic_initial_max_stream_id(256);
+      Quic_idle_timeout(60)
+    ])
+  }
+
 let offered_psk = ref []
 let loaded_psk : (string list) ref = ref []
 
@@ -151,6 +161,7 @@ let _ =
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
     ("-alpn", Arg.String setalpn, "colon-separated list of application-level protocols");
+    ("-quic", Arg.Unit setquic, "handle the QuicTransportParameters extension");
     ("-reconnect", Arg.Unit (fun () -> reconnect := true), "reconnect at the end of the session, using received ticket (client only)");
     ("-groups", Arg.String setng, "colon-separated list of supported named groups; see above for valid values");
     ("-shares", Arg.String setog, "colon-separated list of named groups to offer shares on, as a TLS 1.3 client");

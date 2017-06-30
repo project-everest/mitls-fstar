@@ -281,7 +281,8 @@ let client_Binders hs offer =
       let (| bid, _ |) :: _ = binderKeys in
       let ha = binderId_hash bid in
       let digest_CH = HandshakeLog.hash_tag #ha hs.log in
-      let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+      let early_exporter_secret, edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+      // ADL: pass the early exporter secret
       register hs edk;
       HandshakeLog.send_signals hs.log (Some (true, false)) false
      end
