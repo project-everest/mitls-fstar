@@ -7,6 +7,8 @@ module QUIC
 ///   recv may yield (not enough input)
 ///   send is guaranteed to succeed (large enough output buffer expected)
 ///
+/// See https://tools.ietf.org/html/draft-ietf-quic-tls-04
+/// 
 /// Relying on FFI for accessing configs, callbacks, etc.
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
 
@@ -70,30 +72,47 @@ let rec recv c =
   match read c i with 
   | Update false -> recv c // ignoring internal key changes
   | ReadWouldBlock -> TLS_would_block
-  | Update true -> TLS_secret0 // TODO 0RTT, 0.5RTT, or 1RTT depending on c.
+  | Update true -> (
+           let keys = Handshake.xkeys_of c.Connection.hs in 
+           trace (string_of_int (Seq.length keys)^" exporter keys available");
+           TLS_secret0 // TODO 0RTT, 0.5RTT, or 1RTT depending on c.
+           )
   | Complete -> TLS_complete
   | ReadError description txt -> TLS_error_local (errno description txt)
   | Read Close -> TLS_error_alert (errno (Some TLSError.AD_close_notify) "received close")
   | Read (Alert a) -> TLS_error_alert (errno (Some a) "received alert")
   | _ -> TLS_error_local (errno None "unexpected TLS read result")
 
-/// Creation (no I/O yet)
-/// 
-let connect send recv client_config : ML Connection.connection =
-  // we assume the configuration specifies the target SNI;
-  // otherwise we should check after Complete that it matches the authenticated certificate chain.
-  let tcp = Transport.callbacks send recv in
-  let here = new_region HyperHeap.root in
-  TLS.connect here tcp client_config
+let quic_check config = 
+  if config.min_version <> TLS_1p3 then trace "WARNING: not TLS 1.3";
+  if not config.non_blocking_read then trace "WARNING: reads are blocking";
+  if None? config.quic_parameters then trace "WARNING: missing parameters";
+  if None? config.alpn then trace "WARNING: missing ALPN"
 
-let accept send recv server_config : ML Connection.connection =
+/// New client and server connections (without any  I/O yet)
+/// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
+/// [config] is a client configuration for QUIC (see above)
+/// [psks] is a list of proposed pre-shared-key identifiers and tickets
+let connect send recv config psks: ML Connection.connection =
+  // we assume the configuration specifies the target SNI;
+  // otherwise we must check the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
   let here = new_region HyperHeap.root in
-  TLS.accept_connected here tcp server_config
+  quic_check config; 
+  TLS.resume here tcp config None psks
+
+/// [send] and [recv] are callbacks to operate on QUIC stream0 buffers
+/// [config] is a server configuration for QUIC (see above)
+/// tickets are managed internally
+let accept send recv config : ML Connection.connection =
+  let tcp = Transport.callbacks send recv in
+  let here = new_region HyperHeap.root in
+  quic_check config;
+  TLS.accept_connected here tcp config
 
 val ffiConnect: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiConnect config cb =
-  connect (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config
+  connect (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config []
 
 val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiAcceptConnected config cb =

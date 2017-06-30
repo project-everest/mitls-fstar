@@ -41,23 +41,34 @@ private let rec read c : ML QUIC.result = // auxiliary while loop for reading th
   | TLS_secret0 -> trace "secret0"; recv c
   | TLS_secret1 -> trace "secret1"; recv c
   | TLS_ticket -> trace "ticket"; recv c
-//| TLS_complete -> trace "complete"
-  | r -> r
+  | TLS_complete -> trace "complete"; TLS_complete
+  | r -> trace "???"; r
 
-let client config host port =
+let wrap tcp: St Transport.t = // a bit dodgy; measuring flight lengths
+  let n = ralloc root 0 in 
+  assume false; //17-06-30 framing...
+  { 
+  Transport.snd = (fun x -> 
+    trace_tcp ("send "^string_of_int (length x)^" bytes"); 
+    n := !n + length x; 
+    Platform.Tcp.send tcp x);
+  Transport.rcv = (fun x -> 
+    let w = !n in n:= 0; 
+    trace_tcp ("recv"^(if w>0 then " (after sending "^string_of_int w^" bytes)" else ""));
+    Platform.Tcp.recv_async tcp x); }
+  
+let client config host port offerpsk =
   trace "CLIENT"; 
   let tcp = Platform.Tcp.connect host port in 
   let request = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in 
-  let send x = trace_tcp "send"; Platform.Tcp.send tcp x in
-  let recv x = trace_tcp "recv"; Platform.Tcp.recv_async tcp x in
-  let c = QUIC.connect send recv config in
-  let _ = read c in 
+  let sr = wrap tcp in
+  let c = QUIC.connect sr.Transport.snd sr.Transport.rcv config offerpsk in 
+  let _ = read c in
   trace "OK\n"
 
-let single_server config client : ML unit =
-  let send x = trace_tcp "send"; Platform.Tcp.send client x in
-  let recv x = trace_tcp "recv"; Platform.Tcp.recv_async client x in
-  let c = QUIC.accept send recv config in
+let single_server config tcp : ML unit =
+  let sr = wrap tcp in
+  let c = QUIC.accept sr.Transport.snd sr.Transport.rcv config in
   let _ = read c in
   trace "OK\n"
  

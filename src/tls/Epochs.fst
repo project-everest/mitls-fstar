@@ -129,11 +129,13 @@ type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
 // we keep a sequence of allocated epochs,
 // together with counters for reading and writing
 //NS: probably need some anti-aliasing invariant of these three references
-//17-04-17 CF: consider switching to a single reference to a triple.
+//17-04-17 CF: consider switching to a single reference to a tuple
 noeq type epochs (r:rgn) (n:random) = | MkEpochs:
   es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
   read: epoch_ctr r es ->
-  write: epoch_ctr r es -> epochs r n
+  write: epoch_ctr r es -> 
+  exporter: MS.i_seq r KeySchedule.exportKey (fun s -> Seq.length s <= 2)  ->
+  epochs r n
 
 let containsT (#r:rgn) (#n:random) (es:epochs r n) (h:mem) =
     MS.i_contains (MkEpochs?.es es) h
@@ -182,7 +184,9 @@ val create: r:rgn -> n:random -> ST (epochs r n)
     (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ modifies_rref r Set.empty (HS.HS?.h h0) (HS.HS?.h h1)))
 let create (r:rgn) (n:random) =
   let (| esref, c1, c2 |) = alloc_log_and_ctrs #(epoch r n) #(epochs_inv #r #n) r in
-  MkEpochs esref c1 c2
+  let xkr = alloc_mref_iseq (fun s -> Seq.length s <= 2) r Seq.createEmpty in 
+  assume False; //17-06-30 TODO restore framing with extra field
+  MkEpochs esref c1 c2 xkr
 
 unfold let incr_pre #r #n (es:epochs r n) (proj:(es:epochs r n -> Tot (epoch_ctr r (MkEpochs?.es es)))) h : GTot Type0 =
   let ctr = proj es in
@@ -207,7 +211,7 @@ val add_epoch :
         let es_as_hsref = MR.as_hsref es in
         modifies_one r h0 h1 /\ modifies_rref r (Set.singleton (Heap.addr_of (as_ref es_as_hsref))) (HS.HS?.h h0) (HS.HS?.h h1) /\
         i_sel h1 es == Seq.snoc (i_sel h0 es) e)
-let add_epoch #r #n (MkEpochs es _ _) e = MS.i_write_at_end es e
+let add_epoch #r #n (MkEpochs es _ _ _) e = MS.i_write_at_end es e
 
 let get_epochs #r #n (es:epochs r n) = MkEpochs?.es es
 
@@ -236,10 +240,10 @@ let incr_writer #r #n (es:epochs r n) : ST unit
 
 
 val readerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
-let readerT #rid #n (MkEpochs es r w) (h:mem) = m_sel h r
+let readerT #rid #n (MkEpochs es r w _) (h:mem) = m_sel h r
 
 val writerT: #rid:rgn -> #n:random -> e:epochs rid n -> mem -> GTot (epoch_ctr_inv rid (get_epochs e))
-let writerT #rid #n (MkEpochs es r w) (h:mem) = m_sel h w
+let writerT #rid #n (MkEpochs es r w _) (h:mem) = m_sel h w
 
 unfold let get_ctr_post (#r:rgn) (#n:random) (es:epochs r n) (rw:rw) h0 (i:int) h1 =
   let epochs = MkEpochs?.es es in

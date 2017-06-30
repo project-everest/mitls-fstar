@@ -25,6 +25,7 @@ val resumeInfo_of: s:hs -> ST (TLSInfo.resumeInfo (role_of s))
 val get_mode: hs -> ST Negotiation.mode
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
+
 // annoyingly, we will need specification-level variants too.
 
 // 17-04-08 TODO unclear how abstract Epochs should be.
@@ -72,6 +73,11 @@ let eT s rw (h:HyperStack.mem {iT s rw h >= 0}) =
   Seq.index es j
 let readerT s h = eT s Reader h
 let writerT s h = eT s Writer h
+
+// returns the current exporter keys 
+val xkeys_of: s:hs -> ST (Seq.seq KeySchedule.exportKey) 
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> h0 == h1 /\ Seq.length r <= 2)
 
 
 type incoming =

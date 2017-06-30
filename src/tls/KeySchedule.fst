@@ -167,6 +167,8 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
            epich hs_rgn n
 *)
 
+type exportKey = (li:logInfo & i:exportId li & ems i)
+
 // Note from old miTLS (in TLSInfo.fst)
 // type id = {
 //  msId   : msId;            // the index of the master secret used for key derivation
@@ -349,8 +351,7 @@ let ks_client_13_hello_retry ks (g:CommonDH.group)
 
 // Derive the early data key from the first offered PSK
 // Only called if 0-RTT is enabled on the client
-let ks_client_13_ch ks (log:bytes)
-  : ST ((li:logInfo & i:exportId li & ems i) * recordInstance)
+let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SH? (C?.s kss))
@@ -378,6 +379,7 @@ let ks_client_13_ch ks (log:bytes)
   let expId : exportId li = EarlyExportID i log in
   let early_export : ems expId = HKDF.derive_secret h es "e exp master" log in
   dbg ("Early exporter master secret: "^(print_bytes early_export));
+  let exporter0 = (| li, expId, early_export |) in
 
   // Expand all keys from the derived early secret
   let (ck, civ) = keygen_13 h ets ae in
@@ -390,7 +392,7 @@ let ks_client_13_ch ks (log:bytes)
   let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
-  (| li, expId, early_export |), early_d
+  exporter0, early_d
 
 val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> ST (CommonDH.share g)
   (requires fun h0 ->
@@ -880,8 +882,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
 (******************************************************************)
 
 let ks_client_13_sf ks (log:bytes)
-  : ST (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) *
-        recordInstance * (li:logInfo & i:exportId li & ems i))
+  : ST (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) * recordInstance * exportKey)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SF? (C?.s kss))
@@ -908,6 +909,7 @@ let ks_client_13_sf ks (log:bytes)
   let emsId : exportId li = ExportID asId log in
   let ems = HKDF.derive_secret h ams "exp master" log in
   dbg ("exporter master secret: "^(print_bytes ems));
+  let exporter1 = (| li, emsId, ems |) in 
 
   let (ck,civ) = keygen_13 h cts ae in
   dbg ("application key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
@@ -925,7 +927,7 @@ let ks_client_13_sf ks (log:bytes)
   let r = StAE.genReader HyperHeap.root rw in
 
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|));
-  (sfk, cfk, StAEInstance r w, (| li, emsId, ems |))
+  (sfk, cfk, StAEInstance r w, exporter1)
 
 let ks_server_13_sf ks (log:bytes)
   : ST (recordInstance * (li:logInfo & i:exportId li & ems i))
@@ -955,7 +957,8 @@ let ks_server_13_sf ks (log:bytes)
   let emsId : exportId li = ExportID asId log in
   let ems = HKDF.derive_secret h ams "exp master" log in
   dbg ("exporter master secret: "^(print_bytes ems));
-
+  let exporter1 = (| li, emsId, ems |) in
+  
   let (ck,civ) = keygen_13 h cts ae in
   dbg ("application key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
   let (sk,siv) = keygen_13 h sts ae in
@@ -972,7 +975,7 @@ let ks_server_13_sf ks (log:bytes)
   let r = StAE.genReader HyperHeap.root rw in
 
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |));
-  StAEInstance r w, (| li, emsId, ems |)
+  StAEInstance r w, exporter1
 
 let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
   (requires fun h0 ->
