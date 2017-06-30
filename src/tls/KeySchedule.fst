@@ -494,7 +494,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
   gy, bk
 
 let ks_server_13_0rtt_key ks (log:bytes)
-  : ST (recordInstance)
+  ST ((li:logInfo & i:exportId li & ems i) * recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_13_wait_SH? (S?.s kss))
@@ -514,6 +514,9 @@ let ks_server_13_0rtt_key ks (log:bytes)
   let expandId : expandId li = ExpandedSecret (EarlySecretID esId) ClientEarlyTrafficSecret log in
   let ets = HKDF.derive_secret h es "c e traffic" log in
   dbg ("Client early traffic secret: "^(print_bytes ets));
+  let expId : exportId li = EarlyExportID i log in
+  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log in
+  dbg ("Early exporter master secret: "^(print_bytes early_export));
 
   // Expand all keys from the derived early secret
   let (ck,civ) = keygen_13 h ets ae in
@@ -526,7 +529,7 @@ let ks_server_13_0rtt_key ks (log:bytes)
   let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
-  early_d
+  (| li, expId, early_export |), early_d
 
 val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
   (requires fun h0 ->
