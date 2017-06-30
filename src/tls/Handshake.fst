@@ -800,7 +800,8 @@ let server_ClientHello hs offer obinders =
           begin
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
-              let zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
+              let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
+              // ADL: TODO register early exporter secret
               register hs zero_keys
             );
             // TODO handle 0RTT accepted and 0RTT refused
