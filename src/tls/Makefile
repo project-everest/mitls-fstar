@@ -116,7 +116,8 @@ Epochs \
 Connection \
 ConnInvariant \
 TLS \
-FFI
+FFI \
+QUIC
 
 # Lax-checking one file at a time
 %.fst-lax:
@@ -156,7 +157,7 @@ FFI
 
 # These rules are silent to avoid disturbing .fst-in etc
 .depend-TLS: # $(wildcard *.fst *.fsti)
-	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make FFI.fst > .depend-TLS
+	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make FFI.fst QUIC.fst > .depend-TLS
 .depend-HS: # $(wildcard *.fst *.fsti)
 	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make Handshake.fst > .depend-HS
 .depend-AEAD: # $(wildcard $(HACL_HOME)/secure_api/*/*.fst)

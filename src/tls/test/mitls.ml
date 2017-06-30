@@ -5,6 +5,7 @@ open TLSInfo
 let args = ref []
 let role = ref Client
 let ffi  = ref false
+let quic  = ref false
 let reconnect = ref false
 let config = ref {defaultConfig with
   min_version = TLS_1p2;
@@ -147,6 +148,7 @@ let _ =
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
     ("-ffi", Arg.Unit (fun () -> ffi := true), "test FFI instead of API");
+    ("-quic", Arg.Unit (fun () -> quic := true), "test QUIC API");
     ("-noems", Arg.Unit (fun () -> config := {!config with extended_master_secret = false;}), "disable extended master secret support");
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
@@ -173,6 +175,8 @@ let _ =
   match !role with
   | Client when !ffi -> TestFFI.client !config host (Z.of_int port)
   | Server when !ffi -> TestFFI.server !config host (Z.of_int port)
+  | Client when !quic -> TestQUIC.client !config host (Z.of_int port)
+  | Server when !quic -> TestQUIC.server !config host (Z.of_int port)
   | Client ->
     (let _ = TestAPI.client !config host (Z.of_int port) None (!offered_psk) in
     match !reconnect, !config.peer_name with

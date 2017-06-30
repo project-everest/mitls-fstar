@@ -552,13 +552,13 @@ let ks_server_13_sh ks log =
 
   // Derived handshake secret
   let cts = HKDF.derive_secret h hs "c hs traffic" log in
-  dbg ("client handshake traffic secret: "^(print_bytes cts));
+  dbg ("handshake traffic secret[C]: "^print_bytes cts);
   let sts = HKDF.derive_secret h hs "s hs traffic" log in
-  dbg ("server handshake traffic secret: "^(print_bytes sts));
+  dbg ("handshake traffic secret[S]: "^print_bytes sts);
   let (ck,civ) = keygen_13 h cts ae in
-  dbg ("handshake key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
+  dbg ("handshake key[C]: "^print_bytes ck^", IV="^print_bytes civ);
   let (sk,siv) = keygen_13 h sts ae in
-  dbg ("handshake key[S]: "^(print_bytes sk)^", IV="^(print_bytes siv));
+  dbg ("handshake key[S]: "^print_bytes sk^", IV="^print_bytes siv);
 
   // Handshake traffic keys
   let id = ID13 (KeyID c_expandId) in
@@ -574,9 +574,9 @@ let ks_server_13_sh ks log =
   let cfkId = FinishedID c_expandId in
   let sfkId = FinishedID s_expandId in
   let cfk1 = finished_13 h cts in
-  dbg ("client finished key: "^(print_bytes cfk1));
+  dbg ("finished key[C]: "^(print_bytes cfk1));
   let sfk1 = finished_13 h sts in
-  dbg ("server finished key: "^(print_bytes sfk1));
+  dbg ("finished key[S]: "^(print_bytes sfk1));
 
   let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
@@ -815,11 +815,11 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
 
   let saltId = Salt (EarlySecretID esId) in
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
-  dbg ("Handshake salt: "^(print_bytes salt));
+  dbg ("handshake salt: "^(print_bytes salt));
 
   let hsId = HSID_DHE saltId g gx gy in
   let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
-  dbg ("Handshake secret: "^(print_bytes hs));
+  dbg ("handshake secret: "^(print_bytes hs));
 
   let secretId = HandshakeSecretID hsId in
   let li = LogInfo_SH ({
@@ -834,9 +834,9 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
 
   let cts = HKDF.derive_secret h hs "c hs traffic" log in
-  dbg ("client handshake traffic secret: "^(print_bytes cts));
+  dbg ("handshake traffic secret[C]: "^(print_bytes cts));
   let sts = HKDF.derive_secret h hs "s hs traffic" log in
-  dbg ("server handshake traffic secret: "^(print_bytes sts));
+  dbg ("handshake traffic secret[S]: "^(print_bytes sts));
   let (ck,civ) = keygen_13 h cts ae in
   dbg ("handshake key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
   let (sk,siv) = keygen_13 h sts ae in
@@ -846,20 +846,20 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   let cfkId = FinishedID c_expandId in
   let sfkId = FinishedID s_expandId in
   let cfk1 = finished_13 h cts in
-  dbg ("client finished key: "^(print_bytes cfk1));
+  dbg ("finished key[C]: "^(print_bytes cfk1));
   let sfk1 = finished_13 h sts in
-  dbg ("server finished key: "^(print_bytes sfk1));
+  dbg ("finished key[S]: "^(print_bytes sfk1));
 
   let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
-  dbg ("Application salt: "^(print_bytes salt));
+  dbg ("application salt: "^(print_bytes salt));
 
   let asId = ASID saltId in
   let ams : ams asId = HKDF.hkdf_extract h salt (H.zeroHash h) in
-  dbg ("Application secret: "^(print_bytes ams));
+  dbg ("application secret: "^(print_bytes ams));
 
   let id = ID13 (KeyID c_expandId) in
   assert_norm(ID13 (KeyID s_expandId) = peerId id);
@@ -898,9 +898,9 @@ let ks_client_13_sf ks (log:bytes)
   let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
 
   let cts = HKDF.derive_secret h ams "c ap traffic" log in
-  dbg ("client application traffic secret: "^(print_bytes cts));
+  dbg ("application traffic secret[C]: "^(print_bytes cts));
   let sts = HKDF.derive_secret h ams "s ap traffic" log in
-  dbg ("server application traffic secret: "^(print_bytes sts));
+  dbg ("application traffic secret[S]: "^(print_bytes sts));
   let emsId : exportId li = ExportID asId log in
   let ems = HKDF.derive_secret h ams "exp master" log in
   dbg ("exporter master secret: "^(print_bytes ems));
