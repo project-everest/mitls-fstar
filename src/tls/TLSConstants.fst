@@ -1735,7 +1735,7 @@ type valid_quicParameters =
 
 type quicVersion =
   | QuicVersion1
-  | QuicCusomVersion of n:UInt32.t{UInt32.v n <> 1}
+  | QuicCustomVersion of n:UInt32.t{UInt32.v n <> 1}
 
 type valid_quicVersions =
   l:list quicVersion{l <> [] /\ List.Tot.length l < 64}
@@ -1751,6 +1751,29 @@ type quicParameters =
     versions: valid_quicVersions ->
     parameters: valid_quicParameters ->
     quicParameters
+
+let string_of_quicVersion = function
+  | QuicVersion1 -> "v1"
+  | QuicCustomVersion n -> "v"^UInt32.to_string n
+let string_of_quicParameter = function 
+  | Quic_initial_max_stream_data x -> "initial_max_stream_data="^UInt32.to_string x
+  | Quic_initial_max_data x -> "initial_max_data="^UInt32.to_string x
+  | Quic_initial_max_stream_id x -> "initial_max_stream="^UInt32.to_string x
+  | Quic_idle_timeout x -> "idle_timeout="^UInt16.to_string x
+  | Quic_truncate_connection_id -> "truncate_connection_id"
+  | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x 
+  | Quic_custom_parameter (n,b) -> "custom_parameter "^UInt16.to_string n^", "^print_bytes b
+let string_of_quicParameters = function
+  | Some (QuicParametersClient n i p)  -> 
+    "QUIC client parameters\n" ^
+    "negotiated version: "^string_of_quicVersion n^"\n"^
+    "initial version: "^string_of_quicVersion i^"\n"^
+    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+  | Some (QuicParametersServer v p) -> 
+    "QUIC server parameters\n" ^
+    List.Tot.fold_left (fun a v -> a^string_of_quicVersion v^" ") "versions: " v ^ "\n" ^
+    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+  | None -> "(none)"
 
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)

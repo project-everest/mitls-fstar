@@ -215,6 +215,7 @@ let register hs keys =
 
 val export: hs -> KeySchedule.exportKey -> St unit 
 let export hs xk = 
+  trace "exporting a key";
   Monotonic.Seq.i_write_at_end hs.epochs.exporter xk
 
 let xkeys_of hs = Monotonic.Seq.i_read hs.epochs.exporter
@@ -801,7 +802,7 @@ let server_ClientHello hs offer obinders =
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
               let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
-              // ADL: TODO register early exporter secret
+              export hs early_exporter_secret; 
               register hs zero_keys
             );
             // TODO handle 0RTT accepted and 0RTT refused

@@ -54,18 +54,45 @@ private let errno description txt: ST error
 
 /// TLS processing loop: we keep receiving and sending as long as we
 /// can read.  Does not handle TLS termination (unused by QUIC?)
-/// 
+///
+(*
+type result = { 
+  local_error: error;
+  peer_error: error;
+  secret0: bool; // the 0RTT key is available
+  secret1: bool; // the 1RTT key is available
+  refused0: bool ; // the server refused 0RTT
+  complete: bool; // the handshake is complete
+  ticket: bool; // a server ticket has been sent/received
+}
+*)  
+ 
 type result = 
-  | TLS_would_block // requires more input to continue
-  | TLS_error_local of error
-  | TLS_error_alert of error  
-  | TLS_secret0 // 0RTT exporter secret TODO
-  | TLS_secret1 // 1RTT exporter secret TODO
-  | TLS_ticket // server ticket TODO
-  | TLS_complete // signalling handshake completion
-  | TLS_refuse0 // TODO (still have to discard EOED)
- // do we ever need to return multiple signals?
+  | TLS_would_block // More input bytes are required to proceed
+  | TLS_error_local of error // A fatal error occurred locally
+  | TLS_error_alert of error  // The peer reported a fata error
 
+  // The client offered a connection with early data.  Secret0 is
+  // available, but note the client hasn't heard from the server yet.
+  | TLS_client_early: result
+
+  // The client completed the connection: the server is authenticated
+  // and both parties agree on the connection, including their QUIC
+  // parameters and whether early data is received or discarded.
+  //
+  // Secret1 and the server parameters & certificates are available.
+  | TLS_client_complete: accepted0: bool -> result
+
+  // The server accepted the connection, with or without early data.
+  // Secret0 (if early traffic is accepted), Secret1, and the client
+  // parameters are now available.
+  | TLS_server_accept: accepted0: bool -> result 
+
+  // The server now knows that the client agrees on the connection, and
+  // may have sent a resumption ticket (for future early data)
+  | TLS_server_complete 
+
+ 
 val recv: Connection.connection -> St result
 let rec recv c = 
   let i = currentId c Reader in 
@@ -73,11 +100,19 @@ let rec recv c =
   | Update false -> recv c // ignoring internal key changes
   | ReadWouldBlock -> TLS_would_block
   | Update true -> (
-           let keys = Handshake.xkeys_of c.Connection.hs in 
-           trace (string_of_int (Seq.length keys)^" exporter keys available");
-           TLS_secret0 // TODO 0RTT, 0.5RTT, or 1RTT depending on c.
-           )
-  | Complete -> TLS_complete
+       let keys = Handshake.xkeys_of c.Connection.hs in 
+       //trace ("update: "^string_of_int (Seq.length keys)^" exporter keys");
+       match Connection.c_role c, Seq.length keys with
+       | Client, 1 -> TLS_client_early
+       | Server, 1 -> TLS_server_accept false 
+       | Server, 2 -> TLS_server_accept true
+       | _ -> TLS_error_local (errno None "unexpected exporter keys"))
+  | Complete -> (
+       let keys = Handshake.xkeys_of c.Connection.hs in 
+       //trace ("complete: "^string_of_int (Seq.length keys)^" exporter keys");
+       match Connection.c_role c with
+       | Client -> TLS_client_complete (Negotiation.zeroRTT (Handshake.get_mode c.Connection.hs)) 
+       | Server -> TLS_server_complete )
   | ReadError description txt -> TLS_error_local (errno description txt)
   | Read Close -> TLS_error_alert (errno (Some TLSError.AD_close_notify) "received close")
   | Read (Alert a) -> TLS_error_alert (errno (Some a) "received alert")
@@ -118,3 +153,23 @@ val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connectio
 let ffiAcceptConnected config cb =
   accept (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config
 
+
+/// new QUIC-specific properties
+///
+let get_parameters c (r:role) = 
+  let mode = Handshake.get_mode c.Connection.hs in
+  if r = Client 
+  then Negotiation.find_quic_parameters mode.Negotiation.n_offer
+  else Negotiation.find_server_quic_parameters mode 
+
+// some basic sanity checks; 
+// we should export more, e.g. algorithms etc.
+let get_exporter c (mainSecret:bool): ML (option bytes) = 
+  let keys = Handshake.xkeys_of c.Connection.hs in 
+  if Seq.length keys = 0 then None
+  else
+    let i = if Seq.length keys = 2 && mainSecret then 1 else 0 in
+    let (|li,expId,b|) = Seq.index keys i in 
+    if mainSecret && ExportID? expId then Some b
+    else if not mainSecret && EarlyExportID? expId then Some b
+    else None

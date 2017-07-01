@@ -282,6 +282,16 @@ noeq type mode =
     // { both shares are in the same negotiated group }
     mode
 
+let find_server_extension filter m =
+  match m.n_server_extensions with
+  | None -> None
+  | Some es -> List.Tot.find filter es
+
+let find_server_quic_parameters m = 
+  match find_server_extension Extensions.E_quic_parameters? m with 
+  | Some (Extensions.E_quic_parameters qp) -> Some qp
+  | _ -> None
+
 let is_resumption12 m =
   m.n_protocol_version <> TLS_1p3  &&
   m.n_sessionID = Some (m.n_offer.ch_sessionID)

@@ -27,7 +27,7 @@ let rec client_read con host: ML unit =
   let r = TLS.currentId con Reader in
   match TLS.read con r with
   | Update true -> // aggressively using 0RTT
-    trace "Sending 0-RTT request...";
+    trace "sending 0-RTT request";
     let payload = utf8 ("GET /0rtt HTTP/1.0\r\nConnection: keep-alive\r\nHost: "^host^"\r\n\r\n") in
     let id = TLS.currentId con Writer in
     let rg : Range.frange id = Range.point (length payload) in
@@ -37,7 +37,7 @@ let rec client_read con host: ML unit =
     | WriteError _ t -> trace ("Write error:"^t)
     | _ -> trace "unexpected ioresult_w")
   | Complete ->
-    trace "Read OK, sending HTTP request...";
+    trace "read OK, sending HTTP request";
     let payload = utf8 ("GET / HTTP/1.0\r\nConnection: close\r\nHost: " ^ host ^ "\r\n\r\n") in
     let id = TLS.currentId con Writer in
     let rg : Range.frange id = Range.point (length payload) in
@@ -48,15 +48,15 @@ let rec client_read con host: ML unit =
     | _ -> trace "unexpected ioresult_w")
   | Read (DataStream.Data d) ->
     let db = DataStream.appBytes d in
-    trace ("Received data: "^iutf8 db);
+    trace ("received data: "^iutf8 db);
     client_read con host
   | ReadError _ t ->
     trace ("ReadError: "^t)
   | Read (DataStream.Close) ->
-    trace "Got close_notify, clean closure.\n"
+    trace "got close_notify, clean closure.\n"
   | Read (DataStream.Alert a)->
-    trace ("Got alert: "^(string_of_ad a)^"\n");
-    trace "Closing connection.\n";
+    trace ("Got alert: "^string_of_ad a);
+    trace "closing connection.\n";
     let _ = TLS.writeCloseNotify con in
     ()
   | other -> trace ("unexpected read result: "^string_of_ioresult_i #r other)
@@ -64,11 +64,9 @@ let rec client_read con host: ML unit =
 let client config host port offerticket offerpsk =
   trace "*** Starting miTLS client...";
   let tcp = Transport.connect host port in
-
   let rid = new_region root in
   let con = TLS.resume rid tcp config offerticket offerpsk in
   client_read con host
-
 
 private let rec server_read con: ML unit =
     // a somewhat generic server loop, with synchronous writing in-between reads.

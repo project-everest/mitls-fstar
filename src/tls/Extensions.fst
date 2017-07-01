@@ -313,7 +313,7 @@ let parseAlpn : pinverse_t alpnBytes = fun b ->
 let quicVersionBytes (v:quicVersion) : Tot (lbytes 4) =
   bytes_of_uint32 (match v with
     | QuicVersion1 -> 1ul
-    | QuicCusomVersion n -> n)
+    | QuicCustomVersion n -> n)
 
 let rec quicVersionsBytes (vl:list quicVersion)
   : Tot (b:bytes{length b <= op_Multiply 4 (List.Tot.length vl)})
@@ -357,7 +357,7 @@ let parseQuicVersion: pinverse_t quicVersionBytes = fun b ->
   if length b = 4 then
     let n = uint32_of_bytes b in
     if n = 1ul then Correct QuicVersion1
-    else Correct (QuicCusomVersion n)
+    else Correct (QuicCustomVersion n)
   else error "invalid QUIC version"
 
 let parse_uint16 (b:bytes) : result UInt16.t =
