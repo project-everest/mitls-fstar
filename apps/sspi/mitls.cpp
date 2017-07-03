@@ -21,6 +21,7 @@ extern "C" {
 typedef int  (MITLS_CALLCONV *tFFI_mitls_init)(void);
 typedef void (MITLS_CALLCONV *tFFI_mitls_cleanup)(void);
 typedef int  (MITLS_CALLCONV *tFFI_mitls_configure)(/* out */ mitls_state **state, const char *tls_version, const char *host_name, /* out */ char **outmsg, /* out */ char **errmsg);
+typedef int (MITLS_CALLCONV *tFFI_mitls_configure_cipher_suites)(/* in */ mitls_state *state, const char * cs);
 typedef void (MITLS_CALLCONV *tFFI_mitls_close)(/* in */ mitls_state *state);
 typedef int  (MITLS_CALLCONV *tFFI_mitls_connect)(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 typedef int (MITLS_CALLCONV *tFFI_mitls_send)(/* in */ mitls_state *state, const void* buffer, size_t buffer_size,
@@ -120,6 +121,7 @@ typedef struct _TLS_WORK_ITEM {
 tFFI_mitls_init pfnFFI_mitls_init;
 tFFI_mitls_cleanup pfnFFI_mitls_cleanup;
 tFFI_mitls_configure pfnFFI_mitls_configure;
+tFFI_mitls_configure_cipher_suites pfnFFI_mitls_configure_cipher_suites;
 tFFI_mitls_close pfnFFI_mitls_close;
 tFFI_mitls_connect pfnFFI_mitls_connect;
 tFFI_mitls_send pfnFFI_mitls_send;
@@ -175,6 +177,19 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
         _Print("MITLS Configure failed");
         state->status = SEC_E_INTERNAL_ERROR;
         return;
+    }
+
+    char cipher_suites[512];
+    DWORD dw = GetEnvironmentVariableA("MITLS_SCHANNEL_CIPHER_SUITES", cipher_suites, sizeof(cipher_suites));
+    if (dw > 0 && dw <  sizeof(cipher_suites)) {
+        _Print("Using cipher suites: %s", cipher_suites);
+        ret = pfnFFI_mitls_configure_cipher_suites(state->state, cipher_suites);
+        if (ret == 0) {
+            // Failed
+            _Print("MITLS configure_cipher_suites failed");
+            state->status = SEC_E_INTERNAL_ERROR;
+            return;
+        }
     }
 
     state->callbacks.send = MITLS_send_callback;
@@ -380,6 +395,11 @@ BOOL MITLS_Initialize(void)
     pfnFFI_mitls_configure = (tFFI_mitls_configure)GetProcAddress(hmitls, "FFI_mitls_configure");
     if (pfnFFI_mitls_configure == NULL) {
         _Print("Unable to bind to FFI_mitls_configure");
+        return FALSE;
+    }
+    pfnFFI_mitls_configure_cipher_suites = (tFFI_mitls_configure_cipher_suites)GetProcAddress(hmitls, "FFI_mitls_configure_cipher_suites");
+    if (pfnFFI_mitls_configure == NULL) {
+        _Print("Unable to bind to FFI_mitls_configure_cipher_suites");
         return FALSE;
     }
     pfnFFI_mitls_connect = (tFFI_mitls_connect)GetProcAddress(hmitls, "FFI_mitls_connect");
