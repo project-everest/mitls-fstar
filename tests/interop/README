@@ -1,3 +1,43 @@
+
+1. Build cutils.dll:
+	Windows: 
+	- Run Visual Studio Command Line Console
+	- goto cutils dir (pytester/cutils)
+	- Run `cl /LD cutils.c`
+	- This will generate cutils.dll
+	Linux:
+	- Run build.sh
+
+2. Get NSS source code from here: https://ftp.mozilla.org/pub/security/nss/releases/NSS_3_30_2_RTM/src/
+	2.1 Linux: Nothing special to be done.
+	2.2 Windows: Follow instructions here: https://developer.mozilla.org/en-US/docs/Mozilla/Developer_guide/Build_Instructions/Windows_Prerequisites
+		- Install Visual Studio 2015. Make sure to select "Programming Languages > Visual C++ > Common Tools for Visual C++ 2015"
+		- Install Rust from here: https://rustup.rs/
+		- Install MozillaBuild Package: https://ftp.mozilla.org/pub/mozilla.org/mozilla/libraries/win32/MozillaBuildSetup-Latest.exe
+		- Launch the build environment: c:\mozilla-build\start-shell-msvc2015.bat 
+
+
+3. Patch NSS to leak encryption keys
+	- Run `cp ./nss-patch/nss/lib/freebl/rijndael.c <path/to/nss/sources>/nss/lib/freebl/
+	- rebuild NSS by going to <path/to/nss/sources>/nss, and running `make nss_build_all`
+
+4. Create certificate store
+	4.1 Windows:
+	- cd certificates
+	- Look at builde_database.cmd, make sure NSS_PATH points to <path/to/nss/sources>/dist/WIN954.0_DBG.OBJ/bin/
+	- Run builde_database.cmd, set all passwords to be 12345678
+	4.2 Linux
+	- cd certificates
+	- Look at builde_database.cmd, make sure NSS_PATH points to <path/to/nss/sources>/dist/Linux4.8_x86_cc_glibc_PTH_64_DBG.OBJ/bin
+	- Run builde_database.sh, set all passwords to be 12345678
+
+4. Set path to shared objects
+	- Windows: set PATH=%PATH%;c:\dev\nss-3.30.2\dist\WIN954.0_DBG.OBJ\lib\
+	- Linux: export LD_LIBRARY_PATH=<path/to/nss/sources>/dist/Linux4.8_x86_cc_glibc_PTH_DBG.OBJ/lib/
+
+
+
+
 run command: 
 ------------
 python3 mitls-tester.py

@@ -1,5 +1,6 @@
 import unittest
 import struct
+import sys
 
 from ctypes import  CDLL, \
                     c_long, \
@@ -16,10 +17,13 @@ from ctypes import  CDLL, \
                     CFUNCTYPE, \
                     POINTER    
 
+import nss
+import cutils
 
 SIZE_OF_METHODS 		    = 288
 SIZE_OF_UINT16              = 2
 SIZE_OF_UINT32              = 4 
+SIZE_OF_UINT64              = 8 
 SIZE_OF_VOID_P              = 8
 SIZE_OF_PRNET_ADDR          = 112
 SIZE_OF_SOCKETOPTIONDATA    = 232
@@ -46,11 +50,18 @@ PR_SUCCESS          = 0
 
 NULL_PTR = c_voidp( None )
 
-
+# if sys.platform == "linux":
+#     NSS_PATH = "/home/user/dev/nss-3.30.2/dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/"
+#     NSPR_PATH = "/home/user/dev/nss-3.30.2/dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/libnspr4.so"
+# elif sys.platform == "win32": 
+#     NSS_PATH =  "c:/dev/nss-3.30.2/dist/WIN954.0_DBG.OBJ/lib/"
+#     NSPR_PATH = 'c:/dev/nss-3.30.2/dist/WIN954.0_DBG.OBJ/lib/nspr4.dll'
+# else:
+#     raise Exception( "Unknown operating system '%s'" % sys.platform )
 
 class PRDLL():
-    def __init__( self, nsprPath = "/home/user/dev/nss-3.30.2/nspr/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/pr/src/libnspr4.so" ):
-        self.nspr   = CDLL( nsprPath )
+    def __init__( self ):
+        self.nspr   = nss.GetObject( "nspr4" )
 
         self.nspr.PR_AllocFileDesc.restype  = c_voidp
         self.nspr.PR_AllocFileDesc.argtypes = [ c_int, c_voidp ]  # see nspr\pr\include\private\pprio.h
@@ -62,39 +73,50 @@ class PRDLL():
         self.nspr.PR_Connect.argtypes = [ c_voidp, c_voidp, c_int32 ]
 
         self.nspr.PR_Recv.restype = c_int32
+        self.nspr.PR_Recv.argtypes = [ c_voidp, c_voidp, c_int32, c_int32, c_int32 ]
+
+        self.nspr.PR_Send.restype = c_int32
+        self.nspr.PR_Send.argtypes = [ c_voidp, c_voidp, c_int32, c_int32, c_int32 ]
+
+        self.nspr.PR_Read.restype = c_int32
+        self.nspr.PR_Read.argtypes = [ c_voidp, c_voidp, c_int32 ]
+
+        self.nspr.PR_Write.restype = c_int32
+        self.nspr.PR_Write.argtypes = [ c_voidp, c_voidp, c_int32 ]
+        
 
 globalNSPR            = PRDLL()
 globalDescriptorTable = {}
 
 def ReadCallback( ctx, buffer, bufferSize ):
-    print( "ReadCallback" )
+    # print( "ReadCallback" )
 
     fileDescriptor = globalNSPR.nspr.PR_FileDesc2NativeHandle( c_voidp( ctx ) )
-    print( "fileDescriptor = %s" % fileDescriptor )
+    # print( "fileDescriptor = %s" % fileDescriptor )
 
-    return globalDescriptorTable[ fileDescriptor ].ReadCallback( buffer, bufferSize )
+    return globalDescriptorTable[ fileDescriptor ].ReadCallback( None, buffer, bufferSize )
 
 def WriteCallback( ctx, buffer, bufferSize ):
-    print( "ReadCallback" )
+    # print( "ReadCallback" )
 
     fileDescriptor = globalNSPR.nspr.PR_FileDesc2NativeHandle( c_voidp( ctx ) )
-    print( "fileDescriptor = %s" % fileDescriptor )
+    # print( "fileDescriptor = %s" % fileDescriptor )
 
-    return globalDescriptorTable[ fileDescriptor ].WriteCallback( buffer, bufferSize )
+    return globalDescriptorTable[ fileDescriptor ].WriteCallback( None, buffer, bufferSize )
 
 def RecvCallback( ctx, buffer, bufferSize, flags, timeout ):
-    print( "RecvCallback" )
+    # print( "RecvCallback" )
 
     fileDescriptor = globalNSPR.nspr.PR_FileDesc2NativeHandle( c_voidp( ctx ) )
-    print( "fileDescriptor = %s" % fileDescriptor )
+    # print( "fileDescriptor = %s" % fileDescriptor )
 
     return globalDescriptorTable[ fileDescriptor ].ReadCallback( None, buffer, bufferSize )
 
 def SendCallback( ctx, buffer, bufferSize, flags, timeout ):
-    print( "SendCallback" )
+    # print( "SendCallback" )
 
     fileDescriptor = globalNSPR.nspr.PR_FileDesc2NativeHandle( c_voidp( ctx ) )
-    print( "fileDescriptor = %s" % fileDescriptor )
+    # print( "fileDescriptor = %s" % fileDescriptor )
 
     return globalDescriptorTable[ fileDescriptor ].WriteCallback( None, buffer, bufferSize )
 
@@ -152,7 +174,7 @@ class PRWrapper():
     def __init__( self ):
         self.nspr   = globalNSPR.nspr
         
-        self.cutils = CDLL( "cutils/cutils.so" )
+        self.cutils = cutils.GetObject()
         self.cutils.getAddress.restype = c_voidp
 
         self.ReadCallback   = None
