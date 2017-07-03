@@ -18,13 +18,19 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
+  MITLS_FFI_ENTRY(SetTicketKey) \
   MITLS_FFI_ENTRY(SetCertChainFile) \
   MITLS_FFI_ENTRY(SetPrivateKeyFile) \
   MITLS_FFI_ENTRY(SetCAFile) \
+  MITLS_FFI_ENTRY(SetCipherSuites) \
+  MITLS_FFI_ENTRY(SetSignatureAlgorithms) \
+  MITLS_FFI_ENTRY(SetNamedGroups) \
+  MITLS_FFI_ENTRY(SetALPN) \
   MITLS_FFI_ENTRY(Connect) \
   MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \
-  MITLS_FFI_ENTRY(Recv)
+  MITLS_FFI_ENTRY(Recv) \
+  MITLS_FFI_ENTRY(GetCert)
  
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -49,7 +55,7 @@ typedef struct mitls_state {
 //
 //  Returns:  0 for error, nonzero for success
 //
-int  FFI_mitls_init(void)
+int MITLS_CALLCONV FFI_mitls_init(void)
 {
     char *Argv[2];
 
@@ -77,7 +83,7 @@ int  FFI_mitls_init(void)
     return 1; // success
 }
 
-void FFI_mitls_cleanup(void)
+void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
 #define MITLS_FFI_ENTRY(x) \
     g_mitls_FFI_##x = NULL;
@@ -112,106 +118,168 @@ static void report_caml_exception(value v, char **errmsg)
     }
 }
 
-// Called by the host app to configure miTLS ahead of creating a connection
-int FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
+// The OCaml runtime system must be acquired before calling this
+int FFI_mitls_configure_caml(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
     CAMLparam0();
     CAMLlocal3(config, version, host);
     int ret = 0;
 
-    *state = NULL;
-    *outmsg = NULL;
-    *errmsg = NULL;
-    
-    caml_acquire_runtime_system();
-    version = caml_copy_string(tls_version);  
+    version = caml_copy_string(tls_version);
     host = caml_copy_string(host_name);
     config = caml_callback2_exn(*g_mitls_FFI_Config, version, host);
     if (Is_exception_result(config)) {
         report_caml_exception(config, errmsg);
     } else {
         mitls_state * s;
-        
+
         // Allocate space on the heap, to store an OCaml value
         s = (mitls_state*)malloc(sizeof(mitls_state));
         if (s) {
             // Tell the OCaml GC about the heap address, so it is treated
             // as a GC root, keeping the config object live.
-            s->fstar_state = config; 
+            s->fstar_state = config;
             caml_register_generational_global_root(&s->fstar_state);
             *state = s;
             ret = 1;
         }
     }
-    caml_release_runtime_system();
 
-    CAMLreturnT(int,ret);
+    CAMLreturnT(int, ret);
 }
 
-int FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
+// Called by the host app to configure miTLS ahead of creating a connection
+int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name, char **outmsg, char **errmsg)
 {
-    CAMLparam0();
-    CAMLlocal2(config, camlfile);
-    int ret = 0;
+    int ret;
+
+    *state = NULL;
+    *outmsg = NULL;
+    *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    camlfile = caml_copy_string(file);
-    config = caml_callback2_exn(*g_mitls_FFI_SetCertChainFile, state->fstar_state, camlfile);
+    ret = FFI_mitls_configure_caml(state, tls_version, host_name, outmsg, errmsg);
+    caml_release_runtime_system();
+
+    return ret;
+}
+
+// Helper routine to set a string-based value in the config object
+// The OCaml runtime system must be acquired before calling this
+static int configure_common_caml(/* in */ mitls_state *state, const char * str, value* function)
+{
+    CAMLparam0();
+    CAMLlocal2(config, camlvalue);
+    int ret = 0;
+
+    camlvalue = caml_copy_string(str);
+    config = caml_callback2_exn(*function, state->fstar_state, camlvalue);
     if (Is_exception_result(config)) {
         report_caml_exception(config, NULL); // bugbug: pass in errmsg
     } else {
         state->fstar_state = config;
         ret = 1;
     }
-    caml_release_runtime_system();
+
 
     CAMLreturnT(int,ret);
 }
 
-int FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file)
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_set_ticket_key(const char *alg, const char *ticketkey, size_t klen)
 {
+    int ret;
     CAMLparam0();
-    CAMLlocal2(config, camlfile);
-    int ret = 0;
+    CAMLlocal3(r, a, tkey);
+    tkey = caml_alloc_string(klen);
+    memcpy(String_val(tkey), ticketkey, klen);
 
-    caml_acquire_runtime_system();
-    camlfile = caml_copy_string(file);
-    config = caml_callback2_exn(*g_mitls_FFI_SetPrivateKeyFile, state->fstar_state, camlfile);
-    if (Is_exception_result(config)) {
-        report_caml_exception(config, NULL); // bugbug: pass in errmsg
+    a = caml_copy_string(alg);
+    r = caml_callback2_exn(*g_mitls_FFI_SetTicketKey, a, tkey);
+
+    if (Is_exception_result(r)) {
+      report_caml_exception(r, NULL); // bugbug: pass in errmsg
+      ret = 0;
     } else {
-        state->fstar_state = config;
-        ret = 1;
+      ret = Int_val(r);
     }
-    caml_release_runtime_system();
-
-    CAMLreturnT(int,ret);
+    CAMLreturnT(int, ret);
 }
 
-int FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
+int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, size_t klen)
 {
-    CAMLparam0();
-    CAMLlocal2(config, camlfile);
-    int ret = 0;
-
+    int ret;
     caml_acquire_runtime_system();
-    camlfile = caml_copy_string(file);
-    config = caml_callback2_exn(*g_mitls_FFI_SetCAFile, state->fstar_state, camlfile);
-    if (Is_exception_result(config)) {
-        report_caml_exception(config, NULL); // bugbug: pass in errmsg
-    } else {
-        state->fstar_state = config;
-        ret = 1;
-    }
+    ret = ocaml_set_ticket_key(alg, tk, klen);
     caml_release_runtime_system();
-
-    CAMLreturnT(int,ret);
+    return ret;
 }
 
+int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, file, g_mitls_FFI_SetCertChainFile);
+    caml_release_runtime_system();
+    return ret;
+}
 
+int MITLS_CALLCONV FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, file, g_mitls_FFI_SetPrivateKeyFile);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, file, g_mitls_FFI_SetCAFile);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, cs, g_mitls_FFI_SetCipherSuites);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, sa, g_mitls_FFI_SetSignatureAlgorithms);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, ng, g_mitls_FFI_SetNamedGroups);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = configure_common_caml(state, apl, g_mitls_FFI_SetALPN);
+    caml_release_runtime_system();
+    return ret;
+}
 
 // Called by the host app to free a mitls_state allocated by FFI_mitls_configure()
-void FFI_mitls_close(mitls_state *state)
+void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
 {
     if (state) {
         caml_acquire_runtime_system();
@@ -222,12 +290,12 @@ void FFI_mitls_close(mitls_state *state)
     }
 }
 
-void FFI_mitls_free_msg(char *msg)
+void MITLS_CALLCONV FFI_mitls_free_msg(char *msg)
 {
     free(msg);
 }
 
-void FFI_mitls_free_packet(void *packet)
+void MITLS_CALLCONV FFI_mitls_free_packet(void *packet)
 {
     free(packet);
 }
@@ -236,7 +304,7 @@ void * copypacket(value packet, /* out */ size_t *packet_size)
 {
     void *p;
     mlsize_t size;
-        
+
     size = caml_string_length(packet);
     p = malloc(size);
     if (p) {
@@ -256,7 +324,7 @@ CAMLprim value ocaml_send_tcp(value cookie, value bytes)
     char *localbuffer;
 
     CAMLparam2(cookie, bytes);
-    
+
     callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
     buffer = Bp_val(bytes);
     buffer_size = caml_string_length(bytes);
@@ -269,7 +337,7 @@ CAMLprim value ocaml_send_tcp(value cookie, value bytes)
     // runtime_system lock has been re-aquired.
     retval = (*callbacks->send)(callbacks, localbuffer, buffer_size);
     caml_acquire_runtime_system();
-    
+
     CAMLreturn(Val_int(retval));
 }
 
@@ -281,9 +349,9 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     ssize_t retval;
     struct _FFI_mitls_callbacks *callbacks;
     char *localbuffer;
-    
+
     CAMLparam2(cookie, bytes);
-    
+
     callbacks = (struct _FFI_mitls_callbacks *)ValueToPtr(cookie);
     buffer_size = caml_string_length(bytes);
     localbuffer = (char*)alloca(buffer_size);
@@ -296,29 +364,24 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     
     buffer = Bp_val(bytes);
     memcpy(buffer, localbuffer, buffer_size);
-    
+
     CAMLreturn(Val_int(retval));
 }
 
-// Called by the host app to create a TLS connection.
-int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal1(result);
     int ret;
-    
-    *outmsg = NULL;
-    *errmsg = NULL;
-    
-    caml_acquire_runtime_system();
+
     result = caml_callback2_exn(*g_mitls_FFI_Connect, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
         ret = 0;
     } else {
         // Connect returns back (Connection.connection * int)
-        value connection = Field(result,0);
-        ret = Int_val(Field(result,1));
+        value connection = Field(result, 0);
+        ret = Int_val(Field(result, 1));
         if (ret == 0) {
             caml_modify_generational_global_root(&state->fstar_state, connection);
             ret = 1;
@@ -326,29 +389,37 @@ int FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_sta
             ret = 0;
         }
     }
-    caml_release_runtime_system();
-    CAMLreturnT(int,ret);
+    CAMLreturnT(int, ret);
 }
 
-// Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
-int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+// Called by the host app to create a TLS connection.
+int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+{
+    int ret;
+    
+    *outmsg = NULL;
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    ret = FFI_mitls_connect_caml(callbacks, state, outmsg, errmsg);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int FFI_mitls_accept_connected_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal1(result);
     int ret;
 
-    *outmsg = NULL;
-    *errmsg = NULL;
-
-    caml_acquire_runtime_system();
     result = caml_callback2_exn(*g_mitls_FFI_AcceptConnected, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
         ret = 0;
     } else {
         // AcceptConnected returns back (Connection.connection * int)
-        value connection = Field(result,0);
-        ret = Int_val(Field(result,1));
+        value connection = Field(result, 0);
+        ret = Int_val(Field(result, 1));
         if (ret == 0) {
             caml_modify_generational_global_root(&state->fstar_state, connection);
             ret = 1;
@@ -356,24 +427,34 @@ int FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ 
             ret = 0;
         }
     }
-    caml_release_runtime_system();
-    CAMLreturnT(int,ret);
+    CAMLreturnT(int, ret);
 }
 
-// Called by the host app transmit a packet
-int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
+// Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
+int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
-    CAMLparam0();
-    CAMLlocal2(buffer_value, result);
-    int ret = 0;
+    int ret;
 
     *outmsg = NULL;
     *errmsg = NULL;
-    
+
     caml_acquire_runtime_system();
+    ret = FFI_mitls_accept_connected_caml(callbacks, state, outmsg, errmsg);
+    caml_release_runtime_system();
+    return ret;
+}
+
+
+
+int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal2(buffer_value, result);
+    int ret;
+
     buffer_value = caml_alloc_string(buffer_size);
     memcpy(Bp_val(buffer_value), buffer, buffer_size);
-    
+
     result = caml_callback2_exn(*g_mitls_FFI_Send, state->fstar_state, buffer_value);
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
@@ -381,22 +462,30 @@ int FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffe
     } else {
         ret = 1;
     }
-    caml_release_runtime_system();
-    
-    CAMLreturnT(int,ret);
+
+    CAMLreturnT(int, ret);
 }
 
-// Called by the host app to receive a packet
-void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+// Called by the host app transmit a packet
+int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
-    CAMLparam0();
-    CAMLlocal1(result);
-    void *p = NULL;
+    int ret;
 
     *outmsg = NULL;
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
+    ret = FFI_mitls_send_caml(state, buffer, buffer_size, outmsg, errmsg);
+    caml_release_runtime_system();
+    return ret;
+}
+
+void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal1(result);
+    void *p = NULL;
+
     result = caml_callback_exn(*g_mitls_FFI_Recv, state->fstar_state);
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
@@ -405,20 +494,63 @@ void * FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_s
         // Return the plaintext data
         p = copypacket(result, packet_size);
     }
-    caml_release_runtime_system();
-    
-    CAMLreturnT(void*,p);
+
+    CAMLreturnT(void*, p);
 }
 
+// Called by the host app to receive a packet
+void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
+{
+    void *p;
+
+    *outmsg = NULL;
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    p = FFI_mitls_receive_caml(state, packet_size, outmsg, errmsg);
+    caml_release_runtime_system();
+    return p;
+}
+
+void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg) 
+{
+    CAMLparam0();
+    CAMLlocal1(result);
+    void *p = NULL;
+
+    result = caml_callback_exn(*g_mitls_FFI_GetCert, state->fstar_state);
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        p = NULL;
+    } else {
+        // Return the certificate bytes
+        p = copypacket(result, cert_size);
+    }
+
+    CAMLreturnT(void*, p);
+}
+
+void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
+{
+    void *p;
+
+    *outmsg = NULL;
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    p = FFI_mitls_get_cert_caml(state, cert_size, outmsg, errmsg);
+    caml_release_runtime_system();
+    return p;
+}
 
 // Register the calling thread, so it can call miTLS.  Returns 1 for success, 0 for error.
-int FFI_mitls_thread_register(void)
+int MITLS_CALLCONV FFI_mitls_thread_register(void)
 {
     return caml_c_thread_register();
 }
 
 // Unregister the calling thread, so it can no longer call miTLS.  Returns 1 for success, 0 for error.
-int FFI_mitls_thread_unregister(void)
+int MITLS_CALLCONV FFI_mitls_thread_unregister(void)
 {
     return caml_c_thread_unregister();
 }

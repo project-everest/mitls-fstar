@@ -1,5 +1,5 @@
 [
-  "y*=_ÅÝv’ö´¡¢\u001cg\u0013A",
+  "ÝÆÀ\u007f>ñyâ)÷Z% êG\u0001",
   [
     [ "TLSError.uu___is_AD_close_notify", 1, 0, 1, [ "@query" ], 0 ],
     [ "TLSError.uu___is_AD_unexpected_message", 1, 0, 1, [ "@query" ], 0 ],
@@ -105,20 +105,26 @@
     [ "TLSError.uu___is_AD_missing_extension", 1, 0, 1, [ "@query" ], 0 ],
     [ "TLSError.uu___is_AD_unsupported_extension", 1, 0, 1, [ "@query" ], 0 ],
     [
+      "TLSError.uu___is_AD_no_application_protocol",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0
+    ],
+    [
       "TLSError.string_of_ad",
       1,
       0,
       1,
       [
-        "@query", "constructor_distinct_TLSError.AD_export_restriction",
-        "constructor_distinct_TLSError.AD_insufficient_security",
-        "constructor_distinct_TLSError.AD_internal_error",
+        "@MaxIFuel_assumption", "@query",
         "constructor_distinct_TLSError.AD_missing_extension",
+        "constructor_distinct_TLSError.AD_no_application_protocol",
+        "constructor_distinct_TLSError.AD_no_renegotiation",
         "constructor_distinct_TLSError.AD_protocol_version",
-        "constructor_distinct_TLSError.AD_unrecognized_name",
         "constructor_distinct_TLSError.AD_unsupported_extension",
         "constructor_distinct_TLSError.AD_user_cancelled_fatal",
-        "constructor_distinct_TLSError.AD_user_cancelled_warning",
         "disc_equation_TLSError.AD_access_denied",
         "disc_equation_TLSError.AD_bad_certificate_fatal",
         "disc_equation_TLSError.AD_bad_certificate_warning",
@@ -140,6 +146,7 @@
         "disc_equation_TLSError.AD_insufficient_security",
         "disc_equation_TLSError.AD_internal_error",
         "disc_equation_TLSError.AD_missing_extension",
+        "disc_equation_TLSError.AD_no_application_protocol",
         "disc_equation_TLSError.AD_no_certificate",
         "disc_equation_TLSError.AD_no_renegotiation",
         "disc_equation_TLSError.AD_protocol_version",
@@ -157,6 +164,23 @@
       0
     ],
     [ "TLSError.isFatal", 1, 0, 1, [ "@query" ], 0 ],
+    [ "TLSError.string_of_error", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "TLSError.string_of_result",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_Platform.Error.Correct",
+        "disc_equation_Platform.Error.Error", "equation_TLSError.error",
+        "function_token_typing_TLSError.error",
+        "lemma_Platform.Error.invertOptResult",
+        "typing_Platform.Error.uu___is_Correct",
+        "typing_Platform.Error.uu___is_Error", "uvar_typing_30390"
+      ],
+      0
+    ],
     [
       "TLSError.resT",
       1,

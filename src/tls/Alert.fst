@@ -12,7 +12,7 @@ open TLSConstants
 open TLSInfo
 open Range
 
-//16-05-29 not much protocol left; consider merging with TLSError 
+//16-05-29 not much protocol left; consider merging with TLSError
 
 (* Conversions *)
 
@@ -52,10 +52,11 @@ let alertBytes ad =
     | AD_unrecognized_name ->                  abyte2 (2z, 112z)
     | AD_missing_extension ->                  abyte2 (2z, 109z)
     | AD_unsupported_extension ->              abyte2 (2z, 110z)
+    | AD_no_application_protocol ->            abyte2 (2z, 120z)
 
 #set-options "--z3rlimit 64"
 
-val parse: b:lbytes 2 -> Tot 
+val parse: b:lbytes 2 -> Tot
   (r: result alertDescription { forall ad. (r = Correct ad ==> b == alertBytes ad) })
 let parse b =
     let b1,b2 = cbyte2 b in
@@ -101,7 +102,7 @@ let parse b =
 (*** alert protocol ***)
 
 // TLS 1.2 and earlier miTLS supported alert fragmentation;
-// TLS 1.3 and miTLS* forbid it (a slight deviation from TLS 1.2): 
+// TLS 1.3 and miTLS* forbid it (a slight deviation from TLS 1.2):
 // each alert fragment carries exactly a 2-byte alert.
 
 // outgoing buffer: either empty or a complete alert
@@ -119,7 +120,7 @@ private type state = | State:
 let region s = s.region
 
 val init: r0:rid -> ST state
-  (requires (fun h -> True)) 
+  (requires (fun h -> True))
   (ensures (fun h0 s h1 ->
     modifies Set.empty h0 h1 /\
     extends (State?.region s) r0 /\
@@ -134,9 +135,9 @@ val send : s:state -> ad:alertDescription{isFatal ad} -> ST unit
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> modifies_one (region s) h0 h1))
 let send (State b) (ad:alertDescription{isFatal ad}) =
-    if !b = None 
+    if !b = None
     then b := Some (alertBytes ad)
- 
+
     (* alert generation is underspecified, so we just ignore subsequent requests *)
     (* FIXED? We should only send fatal alerts. Right now we'll interpret any sent alert
        as fatal, and so will close the connection afterwards. *)
@@ -148,16 +149,16 @@ val next_fragment: s:state -> ST (option alertDescription)
   (requires (fun _ -> True))
   (ensures (fun h0 r h1 -> modifies_one (State?.region s) h0 h1))
 
-let next_fragment (State b) =  
-  match !b with 
-  | None -> None 
-  | Some f -> b:= None; 
+let next_fragment (State b) =
+  match !b with
+  | None -> None
+  | Some f -> b:= None;
              (match parse f with | Correct ad -> Some ad | Error _ -> None)
 
 // ---------------- incoming alerts -------------------
 
 // no more recv_fragment as alerts are now parsed by Content.
 
-let reset s = s.outgoing := None   // we silently discard any unsent alert. 
+let reset s = s.outgoing := None   // we silently discard any unsent alert.
 
 *)

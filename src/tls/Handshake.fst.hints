@@ -1,0 +1,32 @@
+[
+  "†“W7+…‡ÉÚ9„\u000f}\u0006ìk",
+  [
+    [
+      "Handshake.discard",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Heap.equal_dom",
+        "equation_FStar.HyperStack.equal_stack_domains",
+        "fuel_guarded_inversion_FStar.HyperStack.mem", "unit_typing"
+      ],
+      0
+    ],
+    [
+      "Handshake.trace",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Heap.equal_dom",
+        "equation_FStar.HyperHeap.test0",
+        "equation_FStar.HyperStack.equal_stack_domains",
+        "equation_Prims._assert",
+        "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "function_token_typing_FStar.HyperHeap.test0"
+      ],
+      0
+    ]
+  ]
+]

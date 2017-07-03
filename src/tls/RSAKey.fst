@@ -3,6 +3,7 @@ module RSAKey
 
 open CoreCrypto
 open Platform.Bytes
+open FStar.HyperStack.All
 
 module TC = TLSConstants
 

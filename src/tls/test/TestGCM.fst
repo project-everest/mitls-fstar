@@ -15,17 +15,23 @@ open AEAD_GCM
 open StatefulLHAE
 open StAE
 
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("TestKS| "^s^"\n"))
+
 
 private let pre_id (role:role) =
   let cr  = createBytes 32 0z in
   let sr  = createBytes 32 0z in
-  let kdf = PRF_TLS_1p2 kdf_label (HMAC CoreCrypto.SHA256) in
-  let gx  = CommonDH.keygen (CommonDH.ECDH CoreCrypto.ECC_P256) in
-  let g   = CommonDH.key_params gx in
-  let gy, gxy = CommonDH.dh_responder gx in
-  let pms = PMS.DHPMS (g, (CommonDH.share_of_key gx), (CommonDH.share_of_key gy), (PMS.ConcreteDHPMS gxy)) in
+  let kdf = PRF_TLS_1p2 kdf_label (HMac Hashing.Spec.SHA256) in
+  let Some g = CommonDH.group_of_namedGroup (SEC CoreCrypto.ECC_P256) in
+  let gx  = CommonDH.keygen g in
+  let gy, gxy = CommonDH.dh_responder #g (CommonDH.pubshare gx) in
+  let pms = PMS.DHPMS g (CommonDH.pubshare gx) gy (PMS.ConcreteDHPMS gxy) in
   let msid = StandardMS pms (cr @| sr) kdf in
-  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM CoreCrypto.SHA256) cr sr role
+  ID12 TLS_1p2 msid kdf (AEAD CoreCrypto.AES_256_GCM Hashing.Spec.SHA256) cr sr role
 
 private let id = pre_id Client
 
@@ -61,12 +67,12 @@ let main () =
   | Some text' ->
     if (iutf8 text') <> (iutf8 text) then
       begin
-      IO.print_string ("GCM test: FAIL\n");
-      IO.print_string ("Unexpected output: " ^ (iutf8 text') ^ ",\nexpected = " ^ (iutf8 text) ^ "\n");
+      print ("GCM test: FAIL\n");
+      print ("Unexpected output: " ^ (iutf8 text') ^ ",\nexpected = " ^ (iutf8 text) ^ "\n");
       failwith "Error!"
       end
     else
-      IO.print_string ("GCM test: OK\n")
+      print ("GCM test: OK\n")
   | None ->
-    IO.print_string ("GCM test: FAIL\n");
+    print ("GCM test: FAIL\n");
     failwith "Error!"

@@ -21,13 +21,13 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "equation_FStar.HyperStack.is_above", "equation_TLSConstants.rgn",
-        "equation_TLSConstants.tls_rgn",
-        "function_token_typing_TLSConstants.tls_tables_region",
+        "equation_FStar.HyperStack.is_above", "equation_Parse.rgn",
+        "equation_Parse.tls_rgn",
+        "function_token_typing_Parse.tls_tables_region",
         "lemma_FStar.HyperHeap.lemma_includes_refl",
-        "refinement_interpretation_TLSConstants_Tm_refine_1dcea2bb7a27f529fe74f933251818a3",
-        "refinement_interpretation_TLSConstants_Tm_refine_a05a5ab3f9285490f386663bdbacab30",
-        "refinement_interpretation_TLSConstants_Tm_refine_cf48a0b0f0401633a2d7556681f50219"
+        "refinement_interpretation_Parse_Tm_refine_1dcea2bb7a27f529fe74f933251818a3",
+        "refinement_interpretation_Parse_Tm_refine_a05a5ab3f9285490f386663bdbacab30",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e"
       ],
       0
     ],
@@ -39,9 +39,7 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color",
-        "equation_TLSConstants.tls_tables_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
@@ -56,9 +54,7 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color",
-        "equation_TLSConstants.tls_tables_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
@@ -73,9 +69,7 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color",
-        "equation_TLSConstants.tls_tables_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
@@ -107,37 +101,38 @@
       0,
       1,
       [
-        "@query", "equation_FStar.HyperStack.is_above",
+        "@MaxIFuel_assumption", "@query",
+        "FStar.Heap_interpretation_Tm_arrow_76a60dab4e3b3182a3b4dae5a57cfb2d",
+        "IdNonce_interpretation_Tm_arrow_054218dafc90d8ec3e41130864725ef9",
+        "MonotoneMap_interpretation_Tm_arrow_ad6ed04607353828c6de35cfdfda103d",
+        "MonotoneMap_interpretation_Tm_arrow_b6dbf7d83905ef7927e79d93e76860aa",
+        "equation_Curve25519.scalar", "equation_FStar.HyperStack.is_above",
         "equation_FStar.HyperStack.modifies",
         "equation_FStar.HyperStack.modifies_ref",
         "equation_FStar.Monotonic.RRef.as_hsref",
         "equation_FStar.Monotonic.RRef.reln",
         "equation_FStar.Monotonic.RRef.rid", "equation_IdNonce.id_of_nonce",
         "equation_MonotoneMap.map", "equation_MonotoneMap.t",
-        "equation_Nonce.random", "equation_Prims.l_True",
-        "equation_TLSConstants.rgn", "equation_TLSConstants.tls_region",
-        "equation_TLSConstants.tls_rgn",
-        "equation_TLSConstants.tls_tables_region", "equation_TLSInfo.random",
+        "equation_Parse.rgn", "equation_Parse.tls_rgn",
+        "equation_Prims.l_True", "equation_Prims.nat",
+        "equation_TLSInfo.random",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
+        "function_token_typing_Curve25519.scalar",
         "function_token_typing_IdNonce.n_id",
         "function_token_typing_IdNonce.nonce_id_table",
         "function_token_typing_MonotoneMap.grows",
-        "function_token_typing_Nonce.random",
-        "function_token_typing_TLSConstants.tls_tables_region",
-        "interpretation_Tm_arrow_054218dafc90d8ec3e41130864725ef9",
-        "interpretation_Tm_arrow_76a60dab4e3b3182a3b4dae5a57cfb2d",
-        "interpretation_Tm_arrow_ad6ed04607353828c6de35cfdfda103d",
-        "interpretation_Tm_arrow_b6dbf7d83905ef7927e79d93e76860aa",
+        "function_token_typing_Parse.tls_tables_region",
         "lemma_FStar.HyperHeap.lemma_includes_refl",
         "proj_equation_FStar.HyperStack.MkRef_id",
-        "refinement_interpretation_Tm_refine_5147a8417e9377cccf9ef6d0ad0a0d90",
-        "refinement_interpretation_Tm_refine_5a09de1efe4b8e150cfdaeaf95d864d4",
-        "refinement_interpretation_Tm_refine_a05a5ab3f9285490f386663bdbacab30",
-        "refinement_interpretation_Tm_refine_ad28dd96578cc7340932338691d549ee",
-        "refinement_interpretation_Tm_refine_cf48a0b0f0401633a2d7556681f50219",
-        "refinement_interpretation_Tm_refine_f3541dc4dd2e5cd1d49dfd99af20aa66",
-        "typing_FStar.Monotonic.RRef.as_hsref", "typing_MonotoneMap.map",
-        "typing_Tm_abs_e3e39e8f71b50a0bd550a41359352219"
+        "refinement_interpretation_FStar.Monotonic.RRef_Tm_refine_429bd1ca0043366011f545ba05f78215",
+        "refinement_interpretation_FStar.Monotonic.RRef_Tm_refine_5a09de1efe4b8e150cfdaeaf95d864d4",
+        "refinement_interpretation_MonotoneMap_Tm_refine_190971c40057bc3cbae086409b5117ed",
+        "refinement_interpretation_Parse_Tm_refine_1dcea2bb7a27f529fe74f933251818a3",
+        "refinement_interpretation_Parse_Tm_refine_a05a5ab3f9285490f386663bdbacab30",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
+        "typing_FStar.Monotonic.RRef.as_hsref",
+        "typing_IdNonce_Tm_abs_e3e39e8f71b50a0bd550a41359352219",
+        "typing_MonotoneMap.map"
       ],
       0
     ],
@@ -149,10 +144,9 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Minus",
-        "projection_inverse_BoxBool_proj_0",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
       0
@@ -178,10 +172,9 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Minus",
-        "projection_inverse_BoxBool_proj_0",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
       0
@@ -194,9 +187,7 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color",
-        "equation_TLSConstants.tls_tables_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
@@ -209,10 +200,12 @@
       0,
       1,
       [
-        "@query", "disc_equation_Prims.None", "disc_equation_Prims.Some",
-        "equation_IdNonce.id_of_nonce", "lemma_Prims.invertOption",
-        "proj_equation_Prims.Some_v", "projection_inverse_BoxBool_proj_0",
-        "typing_IdNonce.n_id"
+        "@query", "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_IdNonce.n_id", "equation_MonotoneMap.sel",
+        "equation_Prims.l_True", "equation_TLSInfo.random",
+        "lemma_FStar.Pervasives.invertOption",
+        "projection_inverse_BoxBool_proj_0", "typing_IdNonce.n_id"
       ],
       0
     ],
@@ -222,11 +215,14 @@
       0,
       1,
       [
-        "@query", "disc_equation_Prims.None", "disc_equation_Prims.Some",
-        "equation_IdNonce.id_of_nonce", "equation_MonotoneMap.sel",
-        "equation_TLSInfo.random", "lemma_Prims.invertOption",
-        "proj_equation_Prims.Some_v", "projection_inverse_BoxBool_proj_0",
-        "typing_IdNonce.n_id"
+        "@query", "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_IdNonce.id_of_nonce", "equation_IdNonce.n_id",
+        "equation_MonotoneMap.contains", "equation_MonotoneMap.sel",
+        "equation_TLSInfo.random", "lemma_FStar.Pervasives.invertOption",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_BoxBool_proj_0",
+        "token_correspondence_IdNonce.n_id", "typing_IdNonce.n_id"
       ],
       0
     ],
@@ -238,9 +234,7 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color",
-        "equation_TLSConstants.tls_tables_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
@@ -295,9 +289,7 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color",
-        "equation_TLSConstants.tls_tables_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
@@ -312,9 +304,7 @@
       [
         "@query", "equation_FStar.HyperStack.is_eternal_color",
         "equation_FStar.HyperStack.is_eternal_region",
-        "equation_TLSConstants.is_tls_rgn",
-        "equation_TLSConstants.tls_color",
-        "equation_TLSConstants.tls_tables_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"

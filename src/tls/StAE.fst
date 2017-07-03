@@ -93,6 +93,19 @@ let log_region (#i:id) (#rw:rw) (s:state i rw): Tot rgn =
 type reader i = state i Reader
 type writer i = state i Writer
 
+// For 0-RTT: we ignore a failed decryption for the
+// handshake traffic key reader if the counter is 0
+let tolerate_decrypt_failure (#i:id) (r:reader i)
+  : ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  match r with
+  | StLHAE _ _ -> false
+  | Stream _ st ->
+    let ctr = MR.m_read (StreamAE.ctr st.StreamAE.counter) in
+    let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
+    0 = ctr && ClientHandshakeTrafficSecret? t
 
 // our view to AE's ideal log (when idealized, ignoring ciphers) and counter
 // TODO: write down their joint monotonic specification: both are monotonic,
@@ -236,9 +249,10 @@ let reads (s:Set.set rid) (a:Type) =
     f: (h:mem -> GTot a){forall h1 h2. (HH.equal_on s h1.h h2.h /\ Set.subset s (Map.domain h1.h))
 				  ==> f h1 == f h2}
 
+(*
 val fragments' : #i:id -> #rw:rw -> s:state i rw{ authId i } -> Tot (reads (Set.singleton (log_region s)) (frags i))
-let fragments' #i #rw s = fragments s
-
+let fragments' #i #rw s = fun h -> fragments #i #rw s h
+*)
 
 (*------------------------------------------------------------------*)
 let genPost (#i:id) parent h0 (w:writer i) h1 =
@@ -334,12 +348,12 @@ let encrypt #i e f =
   match e with
   | StLHAE u s ->
     begin
-    let h0 = ST.get() in
+    let h0 = get() in
     let ct,rg = C.ct_rg i f in
     let ad = StatefulPlain.makeAD i ct in
     let seqn = MR.m_read (AEAD_GCM.ctr (StLHAE.counter s)) in
     let c = StLHAE.encrypt s ad rg f in
-    let h1 = ST.get() in
+    let h1 = get() in
     if authId i then
       begin
       lemma_repr_bytes_values seqn;
@@ -354,10 +368,10 @@ let encrypt #i e f =
     end
   | Stream u s ->
     begin
-    let h0 = ST.get() in
+    let h0 = get() in
     let l = frag_plain_len f in
     let c = Stream.encrypt s l f in
-    let h1 = ST.get() in
+    let h1 = get() in
     if authId i then
       begin
       lemma_fragments_snoc_commutes e h0 h1 (Stream.Entry l c f);
@@ -407,7 +421,7 @@ val decrypt: #i:id -> d:reader i -> c:C.decrypted i
 #set-options "--z3rlimit 100"
 
 let decrypt #i d (ct,c) =
-  let h0 = ST.get () in
+  let h0 = get () in
   recall_region (log_region d);
   match d with
   | Stream _ s ->

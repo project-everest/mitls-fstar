@@ -2,11 +2,13 @@
 open TLSConstants
 open Platform.Bytes
 open Platform.Error
+open FStar.HyperStack.ST
 
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
+module ST = FStar.HyperStack.ST
 
 type random = lbytes 32
 

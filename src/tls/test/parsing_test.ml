@@ -4,6 +4,7 @@ open Platform.Error
 open HandshakeMessages
 open TLSError
 open TLSConstants
+open Parse
 
 (* State variables *)
 let pv = ref TLS_1p2
@@ -19,8 +20,11 @@ let ecdhe_traces = [
 
 let dhe_traces = [
     "tls-unique-trace-3.bin";
-    "client-auth-trace-1.bin";
-    "client-auth-trace-2.bin";
+  (* These last two traces are incorrect.
+   * The length of the first messages is longer than the whole trace.
+   *)
+  (* "client-auth-trace-1.bin"; *)
+  (* "client-auth-trace-2.bin"; *)
   ]
 
 let print_error error =
@@ -73,7 +77,7 @@ let parse_handshake_message bytes =
 	 (match parseClientHello msg with
 	  | Correct(ch) ->
 	     print_string "...OK\n";
-             let _,ch_bytes = split (clientHelloBytes(ch)) (Z.of_int 4) in
+             let _,ch_bytes = split (clientHelloBytes (fst ch)) (Z.of_int 4) in
 	     if equalBytes ch_bytes msg then (print_string "Serializing client hello...\n...OK\n") else
 	       (print_string "Serializing client hello...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -97,7 +101,7 @@ let parse_handshake_message bytes =
 	 print_string "Parsing session ticket message...\n";
 	 (match parseSessionTicket msg with
 	 | Correct(st) -> print_string "...OK\n";
-             let _,st_bytes = split (sessionTicketBytes(st)) (Z.of_int 4) in
+             let _,st_bytes = split (sessionTicketBytes st) (Z.of_int 4) in
 	     if equalBytes st_bytes msg then (print_string "Serializing session ticket...\n...OK\n") else
 	       (print_string "Serializing session ticket...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -130,13 +134,13 @@ let parse_handshake_message bytes =
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0b' ->
 	 print_string "Parsing certificate message...\n";
-	 (match parseCertificate !pv msg with
+	 (match parseCertificate msg with
 	  | Correct(ch) -> print_string "...OK\n";
                            print_string "Running chain validation (no hostname)...";
                            let {crt_chain = chain } = ch in
                            let r = Cert.validate_chain chain false None "../../data/CAFile.pem" in
                            print_string (if r then (cert := List.hd chain; "OK\n") else "FAILED\n");
-             let _,cert_bytes = split (certificateBytes !pv ch) (Z.of_int 4) in
+             let _,cert_bytes = split (certificateBytes ch) (Z.of_int 4) in
 	     if equalBytes cert_bytes msg then ()
              else (
               print_string "WARNING: not an inverse of parsing. ";
@@ -145,7 +149,7 @@ let parse_handshake_message bytes =
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x0c' ->
 	 print_string "Parsing server key exchange message...\n";
-	 (match parseServerKeyExchange !kex msg with
+	 (match parseServerKeyExchange !pv !kex msg with
 	  | Correct(ch) -> print_string "...OK\n";
              
              let _,ske_bytes = split (serverKeyExchangeBytes(ch)) (Z.of_int 4) in
@@ -174,7 +178,7 @@ let parse_handshake_message bytes =
 	 else print_string "...FAILED\n"
       | '\x0f' ->
 	 print_string "Parsing certificate verify message...\n";
-	 (match parseCertificateVerify msg with
+	 (match parseCertificateVerify !pv msg with
 	 | Correct(ch) -> print_string "...OK\n";
              let _,cv_bytes = split (certificateVerifyBytes(ch)) (Z.of_int 4) in
 	     if equalBytes cv_bytes msg then ((print_string "Serializing certificate verify...\n...OK\n")) else
@@ -185,9 +189,9 @@ let parse_handshake_message bytes =
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x10' ->
 	 print_string "Parsing client key exchange message...\n";
-	 (match parseClientKeyExchange !pv !kex msg with
+	 (match parseClientKeyExchange !kex msg with
 	 | Correct(ch) -> print_string "...OK\n";
-             let _,cke_bytes = split (clientKeyExchangeBytes (!pv) (ch)) (Z.of_int 4) in
+             let _,cke_bytes = split (clientKeyExchangeBytes ch) (Z.of_int 4) in
 	     if equalBytes cke_bytes msg then (print_string "Serializing client key exchange...\n...OK\n") else
 	       (print_string "Serializing client key exchange...\nWARNING: not an inverse of parsing. ";
 		print_string ("Got:\n" ^ Platform.Bytes.print_bytes msg ^ "\n");
@@ -206,6 +210,7 @@ let parse_handshake_message bytes =
 
 	 | Error(z) -> print_string "...FAILED\n")
       | '\x18' -> print_string "Error: ignored key update message\n"
+                (*
       | '\x43' ->
 	 print_string "Parsing next protocol message...\n";
          (match parseNextProtocol msg with
@@ -218,6 +223,7 @@ let parse_handshake_message bytes =
 
 
 	  | Error(_) -> print_string "...FAILED\n")
+                 *)
       | _ -> print_string ("Error: parsed an unknown handshake type: " ^ (Platform.Bytes.print_bytes bytes) ^ "\n")
   else print_string "Error: HS message too small to retrieve handshake type + length from it\n"
 
@@ -254,9 +260,9 @@ let rec parse_message bytes =
 	| '\x17' -> parse_application_data_message msg
         | _ -> print_string "Error: wrong content type\n" );
        parse_message bytes
-    | Error(z) -> print_string "Error : Failed to parse bytes length of message \n"
+    | Error(z) -> print_string "Error: Failed to parse length of message\n"
   else if length bytes = Z.zero then ()
-  else print_string "Error : Found some standalone bytes"
+  else print_string "Error: Found some trailing bytes"
 
 let parse_trace_file file =
   let fbytes = Bytes.create 1000000 in
@@ -264,7 +270,7 @@ let parse_trace_file file =
   if flag = 0 then print_string "Reached EOF\n"
   else print_string ("Read " ^ (string_of_int flag) ^ " characters\n");
   let bytes = Bytes.sub fbytes 0 flag in
-  let hs = { bl = [bytes]; max = flag; index = 0; length = flag; } in
+  let hs = bytes in
   parse_handshake hs;
   print_string "\n********************************************\n"
 
