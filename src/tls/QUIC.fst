@@ -173,3 +173,19 @@ let get_exporter c (mainSecret:bool): ML (option bytes) =
     if mainSecret && ExportID? expId then Some b
     else if not mainSecret && EarlyExportID? expId then Some b
     else None
+
+let ffiConfig max_stream_data max_data max_stream_id idle_timeout max_packet_size host =
+  {defaultConfig with
+    min_version = TLS_1p3;
+	max_version = TLS_1p3;
+	peer_name = Some host;
+	check_peer_certificate = false;
+    non_blocking_read = true;
+	// max_packet_size is currently ignored
+    quic_parameters = Some ([QuicVersion1],[
+      Quic_initial_max_stream_data(max_stream_data);
+      Quic_initial_max_data(max_data);
+      Quic_initial_max_stream_id(max_stream_id);
+      Quic_idle_timeout(idle_timeout)
+    ])
+  }

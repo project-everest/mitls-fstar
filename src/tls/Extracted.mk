@@ -172,10 +172,13 @@ cmitls.exe: cmitls.o $(LIBMITLS)
 
 serverQ::
 	OCAMLRUNPARAM=b ./mitls.exe -quic -mv 1.3 -v 1.3 -0rtt -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA256
+cserverQ::
+	OCAMLRUNPARAM=b ./cmitls.exe -quic -mv 1.3 -v 1.3 -0rtt -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA256
 
 clientQ::
 	OCAMLRUNPARAM=b ./mitls.exe -quic -mv 1.3 -v 1.3 127.0.0.1 4443 -reconnect -0rtt
-
+cclientQ::
+	OCAMLRUNPARAM=b ./cmitls.exe -quic -mv 1.3 -v 1.3 127.0.0.1 4443 -reconnect -0rtt
 
 server::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384

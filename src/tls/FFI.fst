@@ -311,6 +311,12 @@ let ffiSetALPN cfg x =
   ) apl in
   { cfg with alpn = if apl=[] then None else Some apl }
 
+val ffiSetEarlyData: cfg:config -> x:bool -> ML config
+let ffiSetEarlyData cfg x =
+  { cfg with
+  enable_early_data = x;
+  }
+
 val ffiSetTicketKey: a:string -> k:string -> ML bool
 let ffiSetTicketKey a k =
   (match findsetting a aeads with
