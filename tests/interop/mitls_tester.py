@@ -640,7 +640,7 @@ class MITLSTester(unittest.TestCase):
                                                        PARENT_NODE    : node.Name,
                                                        SWAP_ITEMS     : AttrDict( { 'index1' : i, 'index2' : i + 1 } ) }) )
 
-        pprint( shuffleManipulations )
+        # pprint( shuffleManipulations )
         return shuffleManipulations
 
     def TraverseBFSAndGenerateManipulations( self, topTreeLayer, manipulationFactory ):
@@ -668,12 +668,12 @@ class MITLSTester(unittest.TestCase):
         return manipulations
 
     def test_ReorderPieces_onWire( self ):
-        return 
+        # return 
         
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
         self.RunSingleTest()
-        keysMonitor.StopMonitorStdoutForLeakedKeys()
+        
         
 
         #################################
@@ -686,17 +686,30 @@ class MITLSTester(unittest.TestCase):
         tlsParser = TLSParser()
         msg0      = originalTranscript[ 0 ]
         for manipulation in manipulations:
-            print( "###############################################")
-            pprint( manipulation )
-            print( "==================== Original Message =====================")
-            tlsParser.PrintMsg( msg0 )
+            memorySocket.FlushBuffers()
+            memorySocket.tlsParser = tlsparser.TLSParser()
 
-            print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
-            manipulatedMsg = tlsParser.ManipulateMsg( msg0, manipulation )
-            rawMsg         = tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+            exceptionThrown = False
+            try:
+                self.RunSingleTest( msgManipulators = [ manipulation ] )
+            except:
+                exceptionThrown = True
+                traceback.print_exc()
+
+            self.assertTrue( exceptionThrown == True )
+
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+            # print( "###############################################")
+            # pprint( manipulation )
+            # print( "==================== Original Message =====================")
+            # tlsParser.PrintMsg( msg0 )
+
+            # print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
+            # manipulatedMsg = tlsParser.ManipulateMsg( msg0, manipulation )
+            # rawMsg         = tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
             
-            # The following will print the message as a side effect
-            parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
+            # # The following will print the message as a side effect
+            # parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
         
     def RemoveItemAndSplit( self, itemList, itemToRemove ):
