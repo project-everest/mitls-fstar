@@ -10,6 +10,7 @@ import datetime
 import re
 import traceback
 
+from functools import partial
 from pprint import pprint
 from ctypes import  CDLL, \
                     c_long, \
@@ -39,7 +40,15 @@ from tlsparser import   MemorySocket,                \
                         SWAP_ITEMS,                  \
                         HANDSHAKE_TYPE_CLIENT_HELLO, \
                         CIPHER_SUITES,               \
-                        DIRECTION     
+                        DIRECTION,                   \
+                        RECORD_TYPE,                 \
+                        NAME,                        \
+                        HANDSHAKE_MSG,               \
+                        RAW_CONTENTS,                \
+                        RAW_RECORD,                  \
+                        INTERPRETATION,              \
+                        RECORD,                      \
+                        KEY_SHARE_ENTRY
 
 
 SUCCESS                     = 1
@@ -84,6 +93,8 @@ SUPPORTED_NAMED_GROUPS = [
                             "FFDHE3072",                 # OK         
                             "FFDHE2048",                 # OK         
 ]
+
+PIECES_THAT_CANT_BE_SHUFFLED = [ KEY_SHARE_ENTRY ]
 
 class MITLSError( Exception ):
     def __init__( self, msg ):
@@ -421,9 +432,9 @@ class MonitorLeakedKeys():
         return re.findall('..', hexEncodedInContiniousString )
 
     def MonitorStdoutForLeakedKeys_thread( self, logFileName ):
-        PATTERN = r"key\[.\]:(.+), IV=(.+)"
+        PATTERN = r"key\[(.)\]:(.+), IV=(.+)"
 
-        MSG_FILENAME    = "keys-mitls.%d"
+        MSG_FILENAME    = "%s-keys-mitls.%d"
         timestamp       = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S.%f')
         keysDir         = tlsparser.LEAKED_KEYS_DIR + "/" + timestamp
         
@@ -443,15 +454,17 @@ class MonitorLeakedKeys():
                 if result is None:
                     continue
 
-                rawKey = result.groups()[ 0 ].strip()
-                rawIV  = result.groups()[ 1 ].strip()
+                entity = result.groups()[ 0 ].strip()
+                rawKey = result.groups()[ 1 ].strip()
+                rawIV  = result.groups()[ 2 ].strip()
                 IV  = "".join( map( lambda x: "0x%s, " % x , self.ChopStringToBytes( rawIV ) ) )
                 key = "".join( map( lambda x: "0x%s, " % x , self.ChopStringToBytes( rawKey ) ) )
 
-                with open( keyFilePath % keyIdx, "w" ) as keyFile:
+                filePath = keyFilePath % (entity, keyIdx)
+                with open( filePath, "w" ) as keyFile:
                     keyFile.write( "IV: %s\n" % IV )
                     keyFile.write( "KEY: %s\n" % key )
-                    sys.stderr.write( "Dumped key to %s\n" % ( keyFilePath % keyIdx ) )
+                    sys.stderr.write( "Dumped key to %s\n" % filePath )
                     keyIdx += 1
 
 
@@ -597,23 +610,93 @@ class MITLSTester(unittest.TestCase):
         return 
         manipulation = AttrDict( { HANDSHAKE_TYPE : HANDSHAKE_TYPE_CLIENT_HELLO,
                                    PARENT_NODE    : CIPHER_SUITES,
-                                   SWAP_ITEMS     : AttrDict( { 'index1' : 0, 'index2' : 1 } ) })
+                                   SWAP_ITEMS     : AttrDict( { 'index1' : 1, 'index2' : 2 } ) })
         
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
-
-        
 
         exceptionThrown = False
         try:
             self.RunSingleTest( msgManipulators = [ manipulation ] )
         except:
             exceptionThrown = True
+            traceback.print_exc()
 
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
         self.assertTrue( exceptionThrown == True )
+
+        for msg in  memorySocket.tlsParser.transcript:
+            print( "Direction: %s, type = %s" % (msg[ DIRECTION ], msg[ RECORD_TYPE ] ) )
+
+    def CreateShuffleChildrenManipulations( self, node, handshakeType ):
+        shuffleManipulations = []
+        if node.Name in PIECES_THAT_CANT_BE_SHUFFLED:
+            return shuffleManipulations
+
+        numberOfChildren = len( node.Interpretation )
+        for i in range( numberOfChildren - 1 ):
+            shuffleManipulations.append( AttrDict( {   HANDSHAKE_TYPE : handshakeType,
+                                                       PARENT_NODE    : node.Name,
+                                                       SWAP_ITEMS     : AttrDict( { 'index1' : i, 'index2' : i + 1 } ) }) )
+
+        pprint( shuffleManipulations )
+        return shuffleManipulations
+
+    def TraverseBFSAndGenerateManipulations( self, topTreeLayer, manipulationFactory ):
+        manipulations = []
+
+        # BFS traverse over msg tree:
+        # First go over all nodes in currentLayer, collecting their children in nextLayer.
+        # Then move to next depth layer by swapping currentLayer <-- nextLayer
+        currentLayer  = topTreeLayer
+        while True:
+            nextLayer = []
+            for node in currentLayer:
+                if TLSParser.IsTerminalPiece( node ):
+                    continue
+
+                manipulations += manipulationFactory( node ) 
+                for piece in node.Interpretation:
+                    nextLayer.append( piece )
         
+            if len( nextLayer ) == 0:
+                break  
+            #else:   
+            currentLayer = nextLayer
+
+        return manipulations
+
+    def test_ReorderPieces_onWire( self ):
+        return 
+        
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+        self.RunSingleTest()
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+        
+
+        #################################
+        originalTranscript  = memorySocket.tlsParser.transcript
+        topTreeLayer        = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
+                                                                                                handshakeType = handshakeType )   )
+        ###########################
+        tlsParser = TLSParser()
+        msg0      = originalTranscript[ 0 ]
+        for manipulation in manipulations:
+            print( "###############################################")
+            pprint( manipulation )
+            print( "==================== Original Message =====================")
+            tlsParser.PrintMsg( msg0 )
+
+            print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
+            manipulatedMsg = tlsParser.ManipulateMsg( msg0, manipulation )
+            rawMsg         = tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+            
+            # The following will print the message as a side effect
+            parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
         
     def RemoveItemAndSplit( self, itemList, itemToRemove ):
@@ -879,12 +962,12 @@ if __name__ == '__main__':
     sys.argv[1:] = args.unittest_args
 
     # SI: these should be args. 
-    runClientServerTest        = True
+    # runClientServerTest        = True
     # runMockClientAndServer     = True
     # runFindMsgDifferences      = True
-    runCipherSuites            = True
-    runSignatureAlgorithms     = True
-    runNamedGroups             = True
+    # runCipherSuites            = True
+    # runSignatureAlgorithms     = True
+    # runNamedGroups             = True
     # runCipherSuites_commonSuiteIsHighest = True
 
     unittest.main()

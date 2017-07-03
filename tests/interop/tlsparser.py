@@ -1087,32 +1087,59 @@ class TLSParser():
         return handshakeMsg
 
     def RebuildRawContentFromInterpretation( self, node ):
+        # pprint( node )
         rawBody = b""
+        header  = b""
+
         for item in node.Interpretation:
             rawBody += item.RawContents
 
-        extraBytes = len( node.RawContents ) - len( rawBody )
+        if node.Name in EXTENSION_TYPE_NAMES.values():
+            SIZEOF_EXTENSION_TYPE = SIZE_OF_UINT16
+            SIZEOF_EXTENSION_SIZE = SIZE_OF_UINT16
+            
+            #The following is the extraBytes after substructing the ExtensionType and OpaqueExtensionSize
+            extraBytes =    len( node.RawContents ) - \
+                            SIZEOF_EXTENSION_TYPE -   \
+                            SIZEOF_EXTENSION_SIZE -   \
+                            len( rawBody )
+
+            extensionType       = node.RawContents[ : SIZEOF_EXTENSION_TYPE ]
+            opaqueExtensionSize = struct.pack( ">H", len( rawBody ) + extraBytes )
+
+            header = extensionType + opaqueExtensionSize
+        else:
+            extraBytes = len( node.RawContents ) - len( rawBody )
+
         if extraBytes == 0:
-            return rawBody
+            return header + rawBody
+
+        if extraBytes == 1:
+            rawSize = bytes( [ len( rawBody ) ] )
+            return header + rawSize + rawBody
 
         if extraBytes == 2:
             rawSize = struct.pack( ">H", len( rawBody ) )
-            return rawSize + rawBody
+            return header + rawSize + rawBody
+
+        
 
         raise TLSParserError( "Unexpeded extraBytes = %d" % extraBytes )
 
     def FindNodeWithName( self, msg, nodeName ):
+        routeToNode = []
         # DFS search for nodeName:
-        for item in msg:
+        for item in msg:            
             if item[ NAME ] == nodeName:
-                return item
+                return item, routeToNode
 
-            if INTERPRETATION in item.keys():
-                node = self.FindNodeWithName( item.Interpretation, nodeName )
+            if not self.IsTerminalPiece( item ):
+                node, subrouteToNode = self.FindNodeWithName( item.Interpretation, nodeName )                
                 if node != None:
-                    return node
+                    routeToNode += [ item ] + subrouteToNode
+                    return node, routeToNode
 
-        return None
+        return None, None
 
     def ManipulateAndReconstruct( self, originalMsg ):
         # Run manipulation in order on originalMsg. If any manipulation was performed
@@ -1149,20 +1176,32 @@ class TLSParser():
 
         if PARENT_NODE in manipulation.keys():
             parentNodeName = manipulation[ PARENT_NODE ]
-            node = self.FindNodeWithName( handshakeMsgToManipulate[ HANDSHAKE_MSG ], manipulation[ PARENT_NODE ] )
+            node, routeToNode = self.FindNodeWithName( handshakeMsgToManipulate[ HANDSHAKE_MSG ], manipulation[ PARENT_NODE ] )
 
             if SWAP_ITEMS in manipulation.keys():
                 swapIDs = manipulation[ SWAP_ITEMS ]
                 items   = node.Interpretation
                 items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ]
-                node.RawContents = self.RebuildRawContentFromInterpretation( node )
+
+                nodesToRebuild = routeToNode + [ node ]
+                nodesToRebuild.reverse()
+                # pprint( nodesToRebuild )
+                for modifiedNode in nodesToRebuild:
+                    # origSize = len( modifiedNode.RawContents )
+                    # origContent = modifiedNode.RawContents[ : ]
+                    modifiedNode.RawContents = self.RebuildRawContentFromInterpretation( modifiedNode )
+                    # newSize = len( modifiedNode.RawContents )
+                    # print( "################## %s: origSize = %d, newSize = %d" % ( modifiedNode.Name, origSize, newSize ))
+                    # self.VisuallyCompareBuffers( origContent, modifiedNode.RawContents )
            
+        # pprint( msg )
         return msg
 
     def SetMsgManipulators( self, msgManipulators ):
         self.msgManipulators = msgManipulators
 
-    def IsTerminalPiece( self, piece ):
+    @staticmethod
+    def IsTerminalPiece( piece ):
         if INTERPRETATION not in piece.keys():
             return True
 
@@ -1233,9 +1272,9 @@ class TLSParser():
             raise TLSParserError( errMsg )
 
     def CompareHandshakeMsg( self, handshakeMsg1, handshakeMsg2 ):
-        PIECE_NAME              = 0 
-        PIECE_RAW_VALUE         = 1
-        PIECE_INTERPRETATION    = 2
+        # PIECE_NAME              = 0 
+        # PIECE_RAW_VALUE         = 1
+        # PIECE_INTERPRETATION    = 2
 
         self.VerifyEqual( handshakeMsg1[ HANDSHAKE_TYPE ],    handshakeMsg2[ HANDSHAKE_TYPE ] )
         
@@ -1249,25 +1288,25 @@ class TLSParser():
             PREFIX1 = "---->"
             PREFIX2 = "----" + PREFIX1
 
-            self.VerifyEqual( piece1[ PIECE_NAME ], piece2[ PIECE_NAME ] )
-            sys.stdout.write( Green( "Comparing " ) + Yellow( "%-20s" % piece1[ PIECE_NAME ] ) + ": " )
-            if piece1[ PIECE_RAW_VALUE ] == piece2[ PIECE_RAW_VALUE ]:
+            self.VerifyEqual( piece1.Name, piece2.Name )
+            sys.stdout.write( Green( "Comparing " ) + Yellow( "%-20s" % piece1.Name ) + ": " )
+            if piece1.RawContents == piece2.RawContents:
                 sys.stdout.write( Blue( "SAME" ) + "\n" )
             else: 
                 sys.stdout.write( Blue( "DIFFERENT" ) + "\n")
-                self.VisuallyCompareBuffers( piece1[ PIECE_RAW_VALUE ], piece2[ PIECE_RAW_VALUE ], PREFIX1 )
+                self.VisuallyCompareBuffers( piece1.RawContents, piece2.RawContents, PREFIX1 )
 
-            if  len( piece1 ) > PIECE_INTERPRETATION and type( piece1[ PIECE_INTERPRETATION ] ) == list :
-                for content1, content2 in zip( piece1[ PIECE_INTERPRETATION ], piece2[ PIECE_INTERPRETATION ] ) :
+            if  INTERPRETATION in piece1.keys() and type( piece1.Interpretation ) == list :
+                for content1, content2 in zip( piece1.Interpretation, piece2.Interpretation ) :
                     if type( content1 ) == tuple:
-                        sys.stdout.write( "------------------- Comparing " + Yellow( "%s" % content1[ PIECE_NAME ]))
+                        sys.stdout.write( "------------------- Comparing " + Yellow( "%s" % content1.Name))
 
                         if piece1[ PIECE_NAME ] == EXTENSIONS:
-                            sys.stdout.write( Yellow( " %s\n" % self.GetExtensionName( content1[ PIECE_NAME ])))
+                            sys.stdout.write( Yellow( " %s\n" % self.GetExtensionName( content1.Name)))
                         else:
                             print( "" )
 
-                        self.VisuallyCompareBuffers( content1[ PIECE_RAW_VALUE ], content2[ PIECE_RAW_VALUE ], PREFIX2 )                    
+                        self.VisuallyCompareBuffers( content1.RawContents, content2.RawContents, PREFIX2 )                    
 
 
 
@@ -1529,7 +1568,7 @@ class TLSParser():
         while len( self.recentBytes ) >= TLS_RECORD_HEADER_SIZE:         
             msg             = self.ParseMsgHeader( direction )
             totalRecordSize = TLS_RECORD_HEADER_SIZE + msg[ LENGTH ]
-            pprint( msg )
+            # pprint( msg )
             if len( self.recentBytes ) >= totalRecordSize:
                 self.ParseMsgBody( msg )
                 self.TrunctateConsumedBytes()
