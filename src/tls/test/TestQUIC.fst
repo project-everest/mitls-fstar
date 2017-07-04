@@ -35,7 +35,7 @@ unfold val trace_tcp: s:string -> ST unit
 unfold let trace_tcp = if Flags.debug_QUIC then print_tcp else (fun _ -> ())
 
 // auxiliary reading loop (brittle when using TCP)
-private let rec recv_until c p: ML unit = 
+private let rec recv_until c (test: QUIC.result -> St bool): St bool = 
   let r = recv c in
   trace (match r with
   | TLS_would_block -> "would block"
@@ -46,8 +46,9 @@ private let rec recv_until c p: ML unit =
   | TLS_server_accept true -> "server accepts with early data {secret0, secret1}"
   | TLS_server_accept false -> "server accepts without early data {secret1}"
   | TLS_server_complete -> "server completes" );
-  if p r then () else recv_until c p
-  
+  if TLS_error_local? r || TLS_error_alert? r then false 
+  else if test r then true 
+  else recv_until c test
 
 let wrap tcp: St Transport.t = // a bit dodgy; measuring flight lengths
   let n = ralloc root 0 in  // counting flight lengths
@@ -61,8 +62,14 @@ let wrap tcp: St Transport.t = // a bit dodgy; measuring flight lengths
   Transport.rcv = (fun x -> 
     let w = !n in n:= 0; 
     trace_tcp ("recv"^(if w>0 then " (after sending "^string_of_int w^" bytes)" else ""));
-    a := not !a; if !a then Platform.Tcp.RecvWouldBlock else 
-    Platform.Tcp.recv_async tcp x); }
+    a := not !a;  
+    let r = 
+      if !a then Platform.Tcp.RecvWouldBlock else Platform.Tcp.recv_async tcp x in
+    trace_tcp ("recv "^(match r with 
+      | Platform.Tcp.Received b -> string_of_int (length b)^" bytes" 
+      | Platform.Tcp.RecvWouldBlock -> "would block"));
+    r
+    ); }
 
 let dump c = 
   trace "OK\n";
@@ -72,32 +79,32 @@ let dump c =
   if Some? secret1 then trace ("main secret:  "^print_bytes (Some?.v secret1));
   trace (string_of_quicParameters (get_parameters c Client));
   trace (string_of_quicParameters (get_parameters c Server))
- 
+
+let ticketed c = 
+  match (Connection.c_cfg c).peer_name with 
+  | Some n -> Some? (Ticket.lookup n)
+  | None -> false 
+
 let client config host port offerpsk =
   trace "CLIENT"; 
   let tcp = Platform.Tcp.connect host port in 
-  let request = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in 
+  Platform.Tcp.set_nonblock tcp;
   let sr = wrap tcp in
   let c = QUIC.connect sr.Transport.snd sr.Transport.rcv config offerpsk in 
-
-  // brittle, as we need to read the ticket without blocking on TCP read.
-  recv_until c TLS_client_complete? ; 
-  recv_until c TLS_would_block? ; // ticket sending
-  recv_until c TLS_would_block? ;
-  recv_until c TLS_would_block? ;
+  if recv_until c TLS_client_complete? then 
+  if recv_until c (fun r -> ticketed c) then 
   dump c
 
 let single_server config tcp : ML unit =
   let sr = wrap tcp in
   let c = QUIC.accept sr.Transport.snd sr.Transport.rcv config in
-
-  // brittle, as we need to write the ticket without blocking on TCP read.
-  recv_until c TLS_server_complete? ;
-  recv_until c TLS_would_block? ;  // ticket sending 
+  if recv_until c TLS_server_complete? then 
+  if recv_until c (fun r -> true) then // ticket sending; a bit lame
   dump c
  
 let rec aux_server config sock : ML unit =
  let client = Platform.Tcp.accept sock in
+ Platform.Tcp.set_nonblock client;
  let _ = single_server config client in
  aux_server config sock
 
