@@ -35,19 +35,20 @@ unfold val trace_tcp: s:string -> ST unit
 unfold let trace_tcp = if Flags.debug_QUIC then print_tcp else (fun _ -> ())
 
 // auxiliary reading loop (brittle when using TCP)
-private let rec recv_until c (test: QUIC.result -> St bool): St bool = 
+private let rec recv_until c (test: QUIC.resultcode -> St bool): St bool = 
   let r = recv c in
-  trace (match r with
+  trace (match r.code with
   | TLS_would_block -> "would block"
-  | TLS_error_local e -> "fatal error "^print_bytes e
-  | TLS_error_alert e -> "received fatal alert "^print_bytes e
-  | TLS_client_early -> "client offers early data {secret0}"
-  | TLS_client_complete b -> "client completes {secret1}: the server "^(if b then "receives" else "ignores")^" early data"
-  | TLS_server_accept true -> "server accepts with early data {secret0, secret1}"
-  | TLS_server_accept false -> "server accepts without early data {secret1}"
+  | TLS_error_local -> "fatal error "^UInt16.to_string r.error
+  | TLS_error_alert -> "received fatal alert "^UInt16.to_string r.error
+  | TLS_client_early_data -> "client offers early data {secret0}"
+  | TLS_client_complete -> "client completes {secret1}; the server is ignoring early data"
+  | TLS_client_complete_with_early_data -> "client completes {secret1}: the server is reading early data"
+  | TLS_server_accept -> "server accepts without early data {secret1}"
+  | TLS_server_accept_with_early_data -> "server accepts with early data {secret0; secret1}"
   | TLS_server_complete -> "server completes" );
-  if TLS_error_local? r || TLS_error_alert? r then false 
-  else if test r then true 
+  if TLS_error_local? r.code || TLS_error_alert? r.code then false 
+  else if test r.code then true 
   else recv_until c test
 
 let wrap tcp: St Transport.t = // a bit dodgy; measuring flight lengths
@@ -63,13 +64,14 @@ let wrap tcp: St Transport.t = // a bit dodgy; measuring flight lengths
     let w = !n in n:= 0; 
     trace_tcp ("recv"^(if w>0 then " (after sending "^string_of_int w^" bytes)" else ""));
     a := not !a;  
-    let r = 
-      if !a then Platform.Tcp.RecvWouldBlock else Platform.Tcp.recv_async tcp x in
+    let r = if !a then 
+      Platform.Tcp.RecvWouldBlock else 
+      Platform.Tcp.recv_async tcp x in
     trace_tcp ("recv "^(match r with 
-      | Platform.Tcp.Received b -> string_of_int (length b)^" bytes" 
-      | Platform.Tcp.RecvWouldBlock -> "would block"));
-    r
-    ); }
+    | Platform.Tcp.RecvWouldBlock -> "would block"
+    | Platform.Tcp.Received b -> string_of_int (length b)^" bytes"
+    | Platform.Tcp.RecvError s -> "error: "^s));
+    r ); }
 
 let dump c = 
   trace "OK\n";
@@ -91,14 +93,14 @@ let client config host port offerpsk =
   Platform.Tcp.set_nonblock tcp;
   let sr = wrap tcp in
   let c = QUIC.connect sr.Transport.snd sr.Transport.rcv config offerpsk in 
-  if recv_until c TLS_client_complete? then 
+  if recv_until c (fun c -> TLS_client_complete? c || TLS_client_complete_with_early_data? c) then 
   if recv_until c (fun r -> ticketed c) then 
   dump c
 
 let single_server config tcp : ML unit =
   let sr = wrap tcp in
   let c = QUIC.accept sr.Transport.snd sr.Transport.rcv config in
-  if recv_until c TLS_server_complete? then 
+  if recv_until c (fun c -> TLS_server_complete? c) then 
   if recv_until c (fun r -> true) then // ticket sending; a bit lame
   dump c
  
