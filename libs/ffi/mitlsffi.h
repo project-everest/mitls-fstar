@@ -10,6 +10,7 @@
 #endif
 
 typedef struct mitls_state mitls_state;
+typedef struct quic_state quic_state;
 
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success
@@ -93,21 +94,17 @@ typedef enum {
 } FFI_quic_result;
 
 // pass 0 to leave any of the configuration values undefined
-extern int MITLS_CALLCONV FFI_mitls_quic_configure(/* out */ mitls_state **state,
+extern int MITLS_CALLCONV FFI_mitls_quic_configure(/* out */ quic_state *state,
                                                    const unsigned int max_stream_data,
                                                    const unsigned int max_data,
                                                    const unsigned int max_stream_id,
                                                    const unsigned short idle_timeout,
-                                                   const unsigned short max_packet_size,
                                                    const char *host_name,
-                                                   /* out */ char **outmsg, /* out */ char **errmsg);
-extern int MITLS_CALLCONV FFI_mitls_quic_create_client(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
-extern int MITLS_CALLCONV FFI_mitls_quic_create_server(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
-extern FFI_quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+                                                   /* out */ char **errmsg);
 
-extern int MITLS_CALLCONV FFI_mitls_quic_get_parameters(/* in */ mitls_state *state);
+extern FFI_quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *state, /*in*/ char* in_buffer, /*inout*/ size_t *pInBufLen, /*out*/ outBuf, /*inout*/ size_t *pOutBufLen, /* out */ char **errmsg);
 
-// call FFI_mitls_free_packet() to free a secret.  Returns NULL if there is no secret.
-extern void* MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ mitls_state *state, int main_secret, /* out */ size_t *secret_length, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_get_parameters(/* in */ quic_state *state);
+extern void* MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int main_secret, /* out */ size_t *secret_length, /* out */ char **outmsg, /* out */ char **errmsg);
 
 #endif // HEADER_MITLS_FFI_H

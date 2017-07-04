@@ -594,19 +594,77 @@ int MITLS_CALLCONV FFI_mitls_thread_unregister(void)
 /*************************************************************************
 * QUIC FFI
 **************************************************************************/
+
+// ADL yikes!! can't we just expose the mitls_state to the callback??
+#define CONTAINING_RECORD(address, type, field) ((type *)((char*)(address) - (size_t)(&((type *)0)->field)))
+
+typedef struct quic_state {
+   value fstar_state; // a GC root representing an F*-side state object
+   struct _FFI_mitls_callbacks ffi_callbacks;
+   bool is_server;
+   char* in_buffer;
+   size_t in_buffer_size;
+   size_t in_buffer_used;
+   char* out_buffer;
+   size_t out_buffer_size;
+   size_t out_buffer_used;
+} quic_state;
+
+ int MITLS_CALLCONV QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
+ {
+   quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
+   if(!s->out_buffer) return -1;
+
+   // ADL FIXME very lacking in error management
+   if(buffer_size <= s->out_buffer_size - s->out_buffer_used)
+   {
+     memcpy(s->out_buffer, buffer, buffer_size);
+     s->out_buffer += buffer_size;
+     s->out_buffer_used += buffer_size;
+     return buffer_size;
+   }
+
+   return -1;
+ }
+
+ int MITLS_CALLCONV QUIC_recv(struct _FFI_mitls_callbacks *cb, void *buffer, size_t len)
+ {
+   quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
+   if(!s->in_buffer) return -1;
+
+   if(len > s->in_buffer_size - s->in_buffer_used)
+     len = s->in_buffer_size - s->in_buffer_used; // may be 0
+
+   memcpy(buffer, s->in_buffer, len);
+   s->in_buffer += len;
+   s->in_buffer_used += len;
+   return len;
+ }
+
+
 // The OCaml runtime system must be acquired before calling this
-static int FFI_mitls_quic_configure_caml(/* out */ mitls_state **state,
+static int FFI_mitls_quic_create_caml(/* out */ quic_state *state,
+                                            bool is_server,
                                             const unsigned int max_stream_data,
                                             const unsigned int max_data,
                                             const unsigned int max_stream_id,
                                             const unsigned short idle_timeout,
-                                            const unsigned short max_packet_size,
                                             const char *host_name,
-                                            /* out */ char **outmsg, /* out */ char **errmsg)
+                                            /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal2(config, host);
     int ret = 0;
+
+    state->ffi_callbacks.send = QUIC_send;
+    state->ffi_callbacks.recv = QUIC_recv;
+    state->is_server = !!is_server;
+    state->in_buffer = NULL;
+    state->in_buffer_size = 0;
+    state->in_buffer_used = 0;
+    state->out_buffer = NULL;
+    state->out_buffer_size = 0;
+    state->out_buffer_used = 0;
 
     host = caml_copy_string(host_name);
     value args[] = {
@@ -812,5 +870,3 @@ void *MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ mitls_state *state, in
 
     return ret;
 }
-
-
