@@ -1,16 +1,41 @@
 [
-  "•\u0007½\b\u001d\u0005\u0003VÓ4y\f=«:ã",
+  "Å\u0013âZEØ\u001b}h¶I­\u0018M\u0016µ",
   [
     [
-      "Connection.tlsState",
+      "Connection.string_of_halfState",
       1,
       0,
       1,
-      [ "@query", "assumption_TLSConstants.rw_haseq" ],
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Connection.Closed",
+        "constructor_distinct_Connection.Ctrl",
+        "constructor_distinct_Connection.Open",
+        "disc_equation_Connection.Closed", "disc_equation_Connection.Ctrl",
+        "disc_equation_Connection.Open",
+        "fuel_guarded_inversion_Connection.halfState"
+      ],
+      0
+    ],
+    [ "Connection.string_of_state", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Connection.connection",
+      1,
+      0,
+      1,
+      [ "@query", "assumption_FStar.HyperHeap.HasEq_rid" ],
       0
     ],
     [
       "Connection.connection",
+      2,
+      0,
+      1,
+      [ "@query", "assumption_FStar.HyperHeap.HasEq_rid" ],
+      0
+    ],
+    [
+      "Connection.__proj__C__item__recv",
       1,
       0,
       1,
