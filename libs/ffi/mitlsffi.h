@@ -32,6 +32,7 @@ extern int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state
 extern int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa);
 extern int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng);
 extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl);
+extern int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, int enable_early_data);
 
 // Close a miTLS session - either after configure or connect
 extern void MITLS_CALLCONV FFI_mitls_close(/* in */ mitls_state *state);
@@ -57,9 +58,9 @@ extern void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* o
 // Send a message
 extern int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size,
                             /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
-                                    
+
 // Receive a message
-extern void *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, 
+extern void *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size,
                                /* out */ char **outmsg, /* out */ char **errmsg);     // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
 
 // Free a packet returned FFI_mitls_receive();
@@ -73,5 +74,40 @@ extern int MITLS_CALLCONV FFI_mitls_thread_register(void);
 
 // Unregister the calling thread, so it can no longer call miTLS.  Returns 1 for success, 0 for error.
 extern int MITLS_CALLCONV FFI_mitls_thread_unregister(void);
+
+/*************************************************************************
+* QUIC FFI
+**************************************************************************/
+// bugbug: what about offered_psk to create_client()?
+// bugbug: rich results from process
+
+typedef enum {
+    TLS_would_block = 0,
+    TLS_error_local = 1,
+    TLS_error_alert = 2,
+    TLS_client_early = 3,
+    TLS_client_complete = 4,
+    TLS_server_accept = 5,
+    TLS_server_complete = 6,
+    TLS_error_other = 0xffff
+} FFI_quic_result;
+
+// pass 0 to leave any of the configuration values undefined
+extern int MITLS_CALLCONV FFI_mitls_quic_configure(/* out */ mitls_state **state,
+                                                   const unsigned int max_stream_data,
+                                                   const unsigned int max_data,
+                                                   const unsigned int max_stream_id,
+                                                   const unsigned short idle_timeout,
+                                                   const unsigned short max_packet_size,
+                                                   const char *host_name,
+                                                   /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_create_client(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_create_server(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+extern FFI_quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+
+extern int MITLS_CALLCONV FFI_mitls_quic_get_parameters(/* in */ mitls_state *state);
+
+// call FFI_mitls_free_packet() to free a secret.  Returns NULL if there is no secret.
+extern void* MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ mitls_state *state, int main_secret, /* out */ size_t *secret_length, /* out */ char **outmsg, /* out */ char **errmsg);
 
 #endif // HEADER_MITLS_FFI_H

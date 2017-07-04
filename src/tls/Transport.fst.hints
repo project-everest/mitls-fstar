@@ -1,9 +1,46 @@
 [
-  "-é¤\u001f\u0014cûˆ=w*œ]^Úª",
+  "t·Â\"Á™ñý·õôÝ\n…PA",
   [
-    [ "Transport.wrap", 1, 0, 1, [ "@query" ], 0 ],
-    [ "Transport.listen", 1, 0, 1, [ "@query" ], 0 ],
-    [ "Transport.test", 1, 0, 1, [ "@query" ], 0 ],
+    [ "Transport.__proj__Mkt__item__rcv", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "Transport.wrap",
+      1,
+      0,
+      1,
+      [
+        "@query", "equation_FStar.Heap.equal_dom",
+        "equation_FStar.HyperStack.equal_stack_domains"
+      ],
+      0
+    ],
+    [
+      "Transport.listen",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "data_typing_intro_FStar.Pervasives.V@tok",
+        "equation_Transport.tcpListener",
+        "function_token_typing_Platform.Tcp.tcpListener"
+      ],
+      0
+    ],
+    [
+      "Transport.test",
+      1,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_f8666440faa91836cc5a13998af863fc",
+        "data_typing_intro_FStar.Pervasives.V@tok",
+        "equation_FStar.HyperHeap.test0", "equation_Prims._assert",
+        "function_token_typing_FStar.HyperHeap.test0",
+        "function_token_typing_Prims.unit", "unit_typing"
+      ],
+      0
+    ],
     [
       "Transport.really_read_rec",
       1,
@@ -24,33 +61,24 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "data_elim_FStar.HyperStack.HS",
-        "disc_equation_Platform.Error.Correct",
-        "disc_equation_Platform.Error.Error", "equation_FStar.Char.char",
-        "equation_FStar.Heap.equal_dom", "equation_FStar.HyperHeap.t",
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Platform.Tcp.Received",
+        "disc_equation_Platform.Tcp.RecvError",
+        "disc_equation_Platform.Tcp.RecvWouldBlock",
+        "equation_FStar.Char.char", "equation_FStar.Heap.equal_dom",
         "equation_FStar.HyperStack.equal_stack_domains",
-        "equation_FStar.HyperStack.hh", "equation_FStar.HyperStack.is_in",
         "equation_Platform.Bytes.byte", "equation_Platform.Bytes.bytes",
         "equation_Platform.Bytes.length",
         "equation_Platform.Bytes.op_At_Bar", "equation_Prims.nat",
-        "equation_TLSError.result",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
-        "function_token_typing_FStar.HyperHeap.root",
-        "function_token_typing_Prims.string", "int_inversion", "int_typing",
-        "kinding_FStar.Char.char_@tok",
+        "fuel_guarded_inversion_Platform.Tcp.recv_result", "int_inversion",
+        "int_typing", "kinding_FStar.Char.char_@tok",
         "lemma_FStar.Seq.Base.lemma_len_append",
-        "lemma_Platform.Error.invertOptResult",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_Subtraction",
-        "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_FStar.HyperStack_Tm_refine_f724abd6de992fc2f861487694296e1a",
-        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Transport_Tm_refine_5c85dd0d6096e5b83e2e864cc6ad02d6",
-        "refinement_kinding_Transport_Tm_refine_5c85dd0d6096e5b83e2e864cc6ad02d6",
-        "typing_FStar.HyperStack.is_in", "typing_Platform.Bytes.length",
-        "typing_Platform.Error.uu___is_Error"
+        "projection_inverse_Platform.Tcp.Received__0",
+        "refinement_interpretation_Platform.Tcp_Tm_refine_5c85dd0d6096e5b83e2e864cc6ad02d6",
+        "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0
     ],
