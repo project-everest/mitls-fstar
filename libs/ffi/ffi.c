@@ -613,7 +613,7 @@ typedef struct quic_state {
 
  int MITLS_CALLCONV QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
  {
-   printf("CALLBACK: send %d", buffer_size);
+   //printf("CALLBACK: send %d\n", buffer_size);
    // ADL YIKES
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
    if(!s->out_buffer) return -1;
@@ -632,7 +632,7 @@ typedef struct quic_state {
 
  int MITLS_CALLCONV QUIC_recv(struct _FFI_mitls_callbacks *cb, void *buffer, size_t len)
  {
-   printf("CALLBACK: recv %d", len);
+   //printf("CALLBACK: recv %d\n", len);
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
    if(!s->in_buffer) return -1;
 
@@ -677,25 +677,15 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       Int_val(cfg->qp.idle_timeout),
       host
     };
+
     result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 5, args);
     if (Is_exception_result(result)) {
       report_caml_exception(result, errmsg);
       CAMLreturnT(int,0);
     }
 
-    state->fstar_state = result;
-    caml_register_generational_global_root(&state->fstar_state);
+    // config
     mitls_state ms = {.fstar_state = result};
-
-    result = caml_callback2_exn(
-      cfg->is_server ? *g_mitls_FFI_QuicCreateServer : *g_mitls_FFI_QuicCreateClient,
-      state->fstar_state,
-      PtrToValue(&state->ffi_callbacks));
-
-    if (Is_exception_result(result)) {
-      report_caml_exception(result, errmsg);
-      CAMLreturnT(int, 0);
-    }
 
     // ADL: any of these calls may fail. Need better errors to figure out which
     if(cfg->certificate_chain_file)
@@ -753,6 +743,19 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
          *errmsg = "FFI_mitls_quic_create_caml: can't enable early_data";
          CAMLreturnT(int, 0);
        }
+
+    result = caml_callback2_exn(
+      cfg->is_server ? *g_mitls_FFI_QuicCreateServer : *g_mitls_FFI_QuicCreateClient,
+      ms.fstar_state, // config
+      PtrToValue(&state->ffi_callbacks));
+
+    if (Is_exception_result(result)) {
+      report_caml_exception(result, errmsg);
+      CAMLreturnT(int, 0);
+    }
+
+    state->fstar_state = result;
+    caml_modify_generational_global_root(&state->fstar_state, result);
 
     CAMLreturnT(int, 1);
 }

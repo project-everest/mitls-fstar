@@ -64,11 +64,15 @@ int main(int argc, char **argv)
   char *c_buffer = malloc(16*1024);
   size_t clen = 0;
 
- 
-  clen = 2048;
-  rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
-  slen = 2048;
-  rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
+  do{ 
+    clen = 2048;
+    printf("CALL client\n");
+    rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
+    slen = 2048;
+    printf("CALL server\n");
+    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
+    printf("Client return=%d, Server return=%d\n");
+  } while(rc != TLS_client_complete && rs != TLS_server_complete);
 
 
   FFI_mitls_cleanup();
