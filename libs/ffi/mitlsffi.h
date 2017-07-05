@@ -83,28 +83,70 @@ extern int MITLS_CALLCONV FFI_mitls_thread_unregister(void);
 // bugbug: rich results from process
 
 typedef enum {
-    TLS_would_block = 0,
-    TLS_error_local = 1,
-    TLS_error_alert = 2,
-    TLS_client_early = 3,
-    TLS_client_complete = 4,
-    TLS_server_accept = 5,
-    TLS_server_complete = 6,
-    TLS_error_other = 0xffff
-} FFI_quic_result;
+  TLS_would_block = 0,
+  TLS_error_local = 1,
+  TLS_error_alert = 2,
+  TLS_client_early = 3,
+  TLS_client_complete = 4,
+  TLS_server_accept = 5,
+  TLS_server_complete = 6,
+  TLS_error_other = 0xffff
+} quic_result;
+
+typedef enum {
+  TLS_hash_MD5 = 0,
+  TLS_hash_SHA1 = 1,
+  TLS_hash_SHA224 = 2,
+  TLS_hash_SHA256 = 3,
+  TLS_hash_SHA384 = 4,
+  TLS_hash_SHA512 = 5
+} quic_hash;
+
+typedef enum {
+  TLS_aead_AES_128_GCM = 0,
+  TLS_aead_AES_256_GCM = 1,
+  TLS_aead_CHACHA20_POLY1305 = 2
+} quic_aead;
+
+// Agile secret with static allocation
+typedef struct {
+  quic_hash hash;
+  quic_aead ae;
+  char secret[64]; // Max possible size, flat allocation
+} quic_secret;
+
+typedef struct {
+  unsigned int max_stream_data;
+  unsigned int max_data;
+  unsigned int max_stream_id;
+  unsigned short idle_timeout;
+} quic_transport_parameters;
+
+typedef struct {
+  // NULL terminated hostname (sent in SNI and used to validate certificate)
+  int is_server;
+  char *host_name; // Client only, sent in SNI
+  quic_transport_parameters qp;
+  char *certificate_chain_file; // Server only
+  char *private_key_file; // Server only
+  char *ca_file; // Client only
+  char *cipher_suites; // Colon separated list of ciphersuite or NULL
+  char *signature_algorithms; // Colon separated list of signature schemes or NULL
+  char *named_groups; // Colon separated list of Diffie-Hellman groups
+  char *ticket_enc_alg; // one of "AES128-GCM" "AES256-GCM" "CHACHA20-POLY1305", or NULL
+  char *ticket_key; // If NULL a random key will be sampled
+  size_t ticket_key_len; // Should be 28 or 44, concatenation of key and static IV
+  int enable_0rtt; // Probably true for QUIC
+} quic_config;
+
+typedef struct quic_key quic_key;
 
 // pass 0 to leave any of the configuration values undefined
-extern int MITLS_CALLCONV FFI_mitls_quic_configure(/* out */ quic_state *state,
-                                                   const unsigned int max_stream_data,
-                                                   const unsigned int max_data,
-                                                   const unsigned int max_stream_id,
-                                                   const unsigned short idle_timeout,
-                                                   const char *host_name,
-                                                   /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state *state, quic_config *cfg, /* out */ char **errmsg);
 
-extern FFI_quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *state, /*in*/ char* in_buffer, /*inout*/ size_t *pInBufLen, /*out*/ outBuf, /*inout*/ size_t *pOutBufLen, /* out */ char **errmsg);
+extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *state, /*in*/ char* inBuf, /*inout*/ size_t *pInBufLen, /*out*/ char *outBuf, /*inout*/ size_t *pOutBufLen, /* out */ char **errmsg);
 
-extern int MITLS_CALLCONV FFI_mitls_quic_get_parameters(/* in */ quic_state *state);
-extern void* MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int main_secret, /* out */ size_t *secret_length, /* out */ char **outmsg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_get_transport_parameters(/* in */ quic_state *state, /*out*/ quic_transport_parameters *qp);
+extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret, char **errmsg);
 
 #endif // HEADER_MITLS_FFI_H

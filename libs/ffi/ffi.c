@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <memory.h>
 #include <unistd.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <sys/cdefs.h>
 #if __APPLE__
@@ -601,7 +602,7 @@ int MITLS_CALLCONV FFI_mitls_thread_unregister(void)
 typedef struct quic_state {
    value fstar_state; // a GC root representing an F*-side state object
    struct _FFI_mitls_callbacks ffi_callbacks;
-   bool is_server;
+   int is_server;
    char* in_buffer;
    size_t in_buffer_size;
    size_t in_buffer_used;
@@ -612,10 +613,11 @@ typedef struct quic_state {
 
  int MITLS_CALLCONV QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
  {
+   // ADL YIKES
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
    if(!s->out_buffer) return -1;
 
-   // ADL FIXME very lacking in error management
+   // ADL FIXME better error management
    if(buffer_size <= s->out_buffer_size - s->out_buffer_used)
    {
      memcpy(s->out_buffer, buffer, buffer_size);
@@ -643,22 +645,14 @@ typedef struct quic_state {
 
 
 // The OCaml runtime system must be acquired before calling this
-static int FFI_mitls_quic_create_caml(/* out */ quic_state *state,
-                                            bool is_server,
-                                            const unsigned int max_stream_data,
-                                            const unsigned int max_data,
-                                            const unsigned int max_stream_id,
-                                            const unsigned short idle_timeout,
-                                            const char *host_name,
-                                            /* out */ char **errmsg)
+static int FFI_mitls_quic_create_caml(quic_state *state, quic_config *cfg, char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal2(config, host);
-    int ret = 0;
+    CAMLlocal2(result, host);
 
     state->ffi_callbacks.send = QUIC_send;
     state->ffi_callbacks.recv = QUIC_recv;
-    state->is_server = !!is_server;
+    state->is_server = cfg->is_server;
     state->in_buffer = NULL;
     state->in_buffer_size = 0;
     state->in_buffer_used = 0;
@@ -666,131 +660,138 @@ static int FFI_mitls_quic_create_caml(/* out */ quic_state *state,
     state->out_buffer_size = 0;
     state->out_buffer_used = 0;
 
-    host = caml_copy_string(host_name);
+    host = caml_copy_string(cfg->host_name);
     value args[] = {
-        Int_val(max_stream_data),
-        Int_val(max_data),
-        Int_val(max_stream_id),
-        Int_val(idle_timeout),
-        Int_val(max_packet_size),
-        host
+      Int_val(cfg->qp.max_stream_data),
+      Int_val(cfg->qp.max_data),
+      Int_val(cfg->qp.max_stream_id),
+      Int_val(cfg->qp.idle_timeout),
+      host
     };
-    config = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 6, args);
-    if (Is_exception_result(config)) {
-        report_caml_exception(config, errmsg);
-    } else {
-        mitls_state * s;
-
-        // Allocate space on the heap, to store an OCaml value
-        s = (mitls_state*)malloc(sizeof(mitls_state));
-        if (s) {
-            // Tell the OCaml GC about the heap address, so it is treated
-            // as a GC root, keeping the config object live.
-            s->fstar_state = config;
-            caml_register_generational_global_root(&s->fstar_state);
-            *state = s;
-            ret = 1;
-        }
-    }
-
-    CAMLreturnT(int, ret);
-}
-
-int MITLS_CALLCONV FFI_mitls_quic_configure(/* out */ mitls_state **state,
-                                            const unsigned int max_stream_data,
-                                            const unsigned int max_data,
-                                            const unsigned int max_stream_id,
-                                            const unsigned short idle_timeout,
-                                            const unsigned short max_packet_size,
-                                            const char *host_name,
-                                            /* out */ char **outmsg, /* out */ char **errmsg)
-{
-    int ret;
-
-    *outmsg = NULL;
-    *errmsg = NULL;
-
-    caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_configure_caml(state, max_stream_data, max_data, max_stream_id, idle_timeout, max_packet_size, host_name, outmsg, errmsg);
-    caml_release_runtime_system();
-
-    return ret;
-}
-
-// The OCaml runtime system must be acquired before calling this
-static int FFI_mitls_quic_create_client_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
-{
-    CAMLparam0();
-    CAMLlocal1(result);
-    int ret = 0;
-
-    result = caml_callback2_exn(*g_mitls_FFI_QuicCreateClient, state->fstar_state, PtrToValue(callbacks));
+    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 5, args);
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
-        ret = 0;
-    } else {
-        // QuicCreateClient returns back Connection.connection
-        caml_modify_generational_global_root(&state->fstar_state, result);
-        ret = 1;
+      report_caml_exception(result, errmsg);
+      CAMLreturnT(int,0);
     }
-    CAMLreturnT(int, ret);
-}
 
-int MITLS_CALLCONV FFI_mitls_quic_create_client(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
-{
-    int ret;
+    state->fstar_state = result;
+    caml_register_generational_global_root(&state->fstar_state);
+    mitls_state ms = {.fstar_state = result};
 
-    *outmsg = NULL;
-    *errmsg = NULL;
+    result = caml_callback2_exn(
+      cfg->is_server ? *g_mitls_FFI_QuicCreateServer : *g_mitls_FFI_QuicCreateClient,
+      state->fstar_state,
+      PtrToValue(&state->ffi_callbacks));
 
-    caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_create_client_caml(callbacks, state, outmsg, errmsg);
-    caml_release_runtime_system();
-
-    return ret;
-}
-
-// The OCaml runtime system must be acquired before calling this
-static int FFI_mitls_quic_create_server_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
-{
-    CAMLparam0();
-    CAMLlocal1(result);
-    int ret = 0;
-
-    result = caml_callback2_exn(*g_mitls_FFI_QuicCreateServer, state->fstar_state, PtrToValue(callbacks));
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
-        ret = 0;
-    } else {
-        // QuicCreateServer returns back Connection.connection
-        caml_modify_generational_global_root(&state->fstar_state, result);
-        ret = 1;
+      report_caml_exception(result, errmsg);
+      CAMLreturnT(int, 0);
     }
-    CAMLreturnT(int, ret);
+
+    // ADL: any of these calls may fail. Need better errors to figure out which
+    if(cfg->certificate_chain_file)
+      if(!configure_common_caml(&ms, cfg->certificate_chain_file, g_mitls_FFI_SetCertChainFile))
+      {
+        *errmsg = "FFI_mitls_quic_create_caml: certificate chain file";
+        CAMLreturnT(int, 0);
+      }
+
+    if(cfg->private_key_file)
+       if(!configure_common_caml(&ms, cfg->private_key_file, g_mitls_FFI_SetPrivateKeyFile))
+       {
+         *errmsg = "FFI_mitls_quic_create_caml: private key file";
+         CAMLreturnT(int, 0);
+       }
+
+    if(cfg->ca_file)
+       if(!configure_common_caml(&ms, cfg->ca_file, g_mitls_FFI_SetCAFile))
+       {
+         *errmsg = "FFI_mitls_quic_create_caml: CA file";
+         CAMLreturnT(int, 0);
+       }
+
+    if(cfg->cipher_suites)
+       if(!configure_common_caml(&ms, cfg->cipher_suites, g_mitls_FFI_SetCipherSuites))
+       {
+         *errmsg = "FFI_mitls_quic_create_caml: cipher suite list";
+         CAMLreturnT(int, 0);
+       }
+
+    if(cfg->named_groups)
+       if(!configure_common_caml(&ms, cfg->named_groups, g_mitls_FFI_SetNamedGroups))
+       {
+         *errmsg = "FFI_mitls_quic_create_caml: supported groups list";
+         CAMLreturnT(int, 0);
+       }
+
+    if(cfg->signature_algorithms)
+       if(!configure_common_caml(&ms, cfg->signature_algorithms, g_mitls_FFI_SetSignatureAlgorithms))
+       {
+         *errmsg = "FFI_mitls_quic_create_caml: signature algorithms list";
+         CAMLreturnT(int, 0);
+       }
+
+    if(cfg->ticket_enc_alg && cfg->ticket_key)
+       if(!ocaml_set_ticket_key(cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
+       {
+         *errmsg = "FFI_mitls_quic_create_caml: set ticket key";
+         CAMLreturnT(int, 0);
+       }
+
+    if(cfg->enable_0rtt)
+       if(!configure_common_bool_caml(&ms, 1, g_mitls_FFI_SetEarlyData))
+       {
+         *errmsg = "FFI_mitls_quic_create_caml: can't enable early_data";
+         CAMLreturnT(int, 0);
+       }
+
+    CAMLreturnT(int, 1);
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_create_server(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state *state, quic_config *cfg, /* out */ char **errmsg)
 {
     int ret;
-
-    *outmsg = NULL;
-    *errmsg = NULL;
-
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_create_server_caml(callbacks, state, outmsg, errmsg);
+    ret = FFI_mitls_quic_create_caml(state, cfg, errmsg);
     caml_release_runtime_system();
 
     return ret;
 }
 
+/*
+NTSTATUS
+QuicTlsRecv(
+    _In_                            PQUIC_TLS   pTLS,
+    _In_reads_bytes_(inBufLen)      PUCHAR      inBuf,
+    _Inout_                         PUINT32     pInBufLen,
+    _Out_writes_bytes_(outBufLen)   PUCHAR      outBuf,
+    _Inout_                         PUINT32     pOutBufLen
+    );
+*/
+
 // The OCaml runtime system must be acquired before calling this
-static FFI_quic_result FFI_mitls_quic_process_caml(/* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+static quic_result FFI_mitls_quic_process_caml(
+  /* in */ quic_state *state,
+  /*in*/ char* inBuf,
+  /*inout*/ size_t *pInBufLen,
+  /*out*/ char *outBuf,
+  /*inout*/ size_t *pOutBufLen,
+  /* out */ char **errmsg)
 {
     CAMLparam0();
     CAMLlocal1(result);
-    FFI_quic_result ret = TLS_error_other;
+    quic_result ret = TLS_error_other;
+
+    // Update the buffers for the QUIC_* callbacks
+    state->in_buffer = inBuf;
+    state->in_buffer_used = 0;
+    state->in_buffer_size = *pInBufLen;
+    state->out_buffer = outBuf;
+    state->out_buffer_used = 0;
+    state->out_buffer_size = *pOutBufLen;
 
     result = caml_callback_exn(*g_mitls_FFI_QuicProcess, state->fstar_state);
+
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
         ret = TLS_error_other;
@@ -799,73 +800,101 @@ static FFI_quic_result FFI_mitls_quic_process_caml(/* in */ mitls_state *state, 
         // bugbug: is this the correct mapping to an integer?
         int tmp = Int_val(result);
         if (tmp <= TLS_server_complete) {
-            ret = (FFI_quic_result)tmp;
+            ret = (quic_result) tmp;
         } else {
             ret = TLS_error_other;
         }
+
+        *pInBufLen = state->in_buffer_used;
+        *pOutBufLen = state->out_buffer_used;
     }
-    CAMLreturnT(FFI_quic_result, ret);
+
+    CAMLreturnT(quic_result, ret);
 }
 
-FFI_quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+quic_result MITLS_CALLCONV FFI_mitls_quic_process(
+  /* in */ quic_state *state,
+  /*in*/ char* inBuf,
+  /*inout*/ size_t *pInBufLen,
+  /*out*/ char *outBuf,
+  /*inout*/ size_t *pOutBufLen,
+  /* out */ char **errmsg)
 {
-    FFI_quic_result ret;
-
-    *outmsg = NULL;
+    quic_result ret;
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_process_caml(state, outmsg, errmsg);
+    ret = FFI_mitls_quic_process_caml(state, inBuf, pInBufLen, outBuf, pOutBufLen, errmsg);
     caml_release_runtime_system();
 
     return ret;
 }
 
-static int FFI_mitls_quic_get_parameters_caml(/* in */ mitls_state *state)
+static int FFI_mitls_quic_get_parameters_caml(/* in */ quic_state *state, quic_transport_parameters *qp)
 {
     // bugbug: implement.  Need to pass role as a parameter, and sort out
     //         the return type.
     return 0;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_get_parameters(/* in */ mitls_state *state)
+int MITLS_CALLCONV FFI_mitls_quic_get_parameters(/* in */ quic_state *state, quic_transport_parameters *qp)
 {
     int ret;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_parameters_caml(state);
+    ret = FFI_mitls_quic_get_parameters_caml(state, qp);
     caml_release_runtime_system();
 
     return ret;
 }
 
-static void* FFI_mitls_quic_get_exporter_caml(/* in */ mitls_state *state, int main_secret, /* out */ size_t *secret_length, /* out */ char **outmsg, /* out */ char **errmsg)
+#define Val_none Val_int(0)
+#define Some_val(v) Field(v,0)
+
+static int FFI_mitls_quic_get_exporter_caml(
+  /* in */ quic_state *state,
+  int early,
+  quic_secret *secret,
+  /* out */ char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal1(result);
-    void *p = NULL;
+    CAMLlocal2(result, tmp);
 
     result = caml_callback_exn(*g_mitls_FFI_QuicGetExporter, state->fstar_state);
+
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
-        p = NULL;
-    } else {
-        // Return the secret bytes
-        p = copypacket(result, secret_length);
+        CAMLreturnT(int, 0);
     }
 
-    CAMLreturnT(void*, p);
+    // Secret not available
+    if(result == Val_none)
+    {
+      *errmsg = "the requested secret is not yet available";
+      CAMLreturnT(int, 0);
+    }
+
+    result = Some_val(result);
+    secret->hash = Int_val(Field(result, 0));
+    secret->ae = Int_val(Field(result, 1));
+    tmp = Field(result, 2);
+    size_t len = caml_string_length(tmp);
+    assert(len <= 64);
+    memcpy(secret->secret, String_val(tmp), len);
+
+    CAMLreturnT(int, 1);
 }
 
-void *MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ mitls_state *state, int main_secret, /* out */ size_t *secret_length, /* out */ char **outmsg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
+  /* in */ quic_state *state,
+  int early,
+  quic_secret *secret,
+  /* out */ char **errmsg)
 {
-    void *ret;
-
-    *outmsg = NULL;
-    *errmsg = NULL;
+    int ret;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_exporter_caml(state, main_secret, secret_length, outmsg, errmsg);
+    ret = FFI_mitls_quic_get_exporter_caml(state, early, secret, errmsg);
     caml_release_runtime_system();
 
     return ret;
