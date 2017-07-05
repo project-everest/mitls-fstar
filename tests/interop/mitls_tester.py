@@ -639,6 +639,18 @@ class MITLSTester(unittest.TestCase):
         # pprint( shuffleManipulations )
         return shuffleManipulations
 
+    def CreateTopLevelShuffleManipulations( self, record, direction ):
+        shuffleManipulations = []
+
+        numberOfChildren = len( record )
+        for i in range( numberOfChildren - 1 ):
+            shuffleManipulations.append( AttrDict( {   DIRECTION      : direction,
+                                                       PARENT_NODE    : RECORD,
+                                                       SWAP_ITEMS     : AttrDict( { 'index1' : i, 'index2' : i + 1 } ) }) )
+
+        # pprint( shuffleManipulations )
+        return shuffleManipulations
+
     def TraverseBFSAndGenerateManipulations( self, topTreeLayer, manipulationFactory ):
         manipulations = []
 
@@ -736,7 +748,7 @@ class MITLSTester(unittest.TestCase):
                                                                                                 handshakeType = handshakeType )   )
         experiments = []
         for manipulation in manipulations:
-            pprint( manipulation )
+            # pprint( manipulation )
             exceptionThrown = False
             try:
                 preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
@@ -754,10 +766,9 @@ class MITLSTester(unittest.TestCase):
 
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
-        # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
-        # pprint( keysToFiles )
-        pprint( experiments )
-
+        # # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
+        # # pprint( keysToFiles )
+        # pprint( experiments )
 
         # for manipulation in manipulations:
         #     pprint( manipulation )
@@ -775,7 +786,39 @@ class MITLSTester(unittest.TestCase):
         #     # The following will print the message as a side effect
         #     parsedManipulatedMsg = memorySocket.tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ], ivAndKey = msg2[ IV_AND_KEY ] )
 
+    def test_ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire( self ):    
+        if "ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire" not in testsToRun:
+            return  
         
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+        self.RunSingleTest()
+
+        originalTranscript  = memorySocket.tlsParser.transcript
+        topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        manipulations       = self.CreateTopLevelShuffleManipulations( originalTranscript[ 2 ][ RECORD ], Direction.SERVER_TO_CLIENT )
+        
+        experiments = []
+        for manipulation in manipulations:
+            exceptionThrown = False
+            try:
+                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
+                self.RunSingleTest( msgManipulators = [ manipulation ] )
+            except:
+                exceptionThrown = True
+                traceback.print_exc()
+            
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
+            time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
+
+            self.assertTrue( exceptionThrown == True )
+            self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 0 )
+
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+
     def RemoveItemAndSplit( self, itemList, itemToRemove ):
         otherItems = itemList[ : ]
         otherItems.remove( itemToRemove )
@@ -1051,6 +1094,7 @@ if __name__ == '__main__':
                    # "CipherSuites_commonSuiteIsHighest",
                    # "ReorderPieces_ClientHello_onWire",
                    "ReorderPieces_ServerEncryptedHello_onWire",
+                   # "ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire"
                    ]
 
     unittest.main()

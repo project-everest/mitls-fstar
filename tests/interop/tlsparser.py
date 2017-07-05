@@ -458,6 +458,7 @@ class Alert():
     close_notify                    =   0
     unexpected_message              =   10
     bad_record_mac                  =   20
+    decryption_failed_RESERVED      =   21
     record_overflow                 =   22
     handshake_failure               =   40
     bad_certificate                 =   42
@@ -489,6 +490,7 @@ class Alert():
         0   :   'close_notify',
         10  :   'unexpected_message',
         20  :   'bad_record_mac',
+        21  :   'decryption_failed_RESERVED',
         22  :   'record_overflow',
         40  :   'handshake_failure',
         42  :   'bad_certificate',
@@ -1200,9 +1202,21 @@ class TLSParser():
         if ALERT in msg.keys():
             return None
 
-        msg                      = deepcopy( msg )
-        handshakeMsgToManipulate = None
+        msg = deepcopy( msg )
+        
+        if manipulation[ PARENT_NODE ] == RECORD and manipulation[ DIRECTION ] == msg[ DIRECTION ]:
+            if SWAP_ITEMS in manipulation.keys():
+                swapIDs = manipulation[ SWAP_ITEMS ]
+                items   = msg[ RECORD ]
 
+                if swapIDs.index1 >= len( items ) or swapIDs.index2 >= len( items ):
+                    return None
+
+                items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ] 
+
+                return msg
+        # else:
+        handshakeMsgToManipulate = None
         if HANDSHAKE_TYPE in manipulation.keys():
             for handshakeMsg in msg[ RECORD ]:
                 if handshakeMsg[ HANDSHAKE_TYPE ] == manipulation[ HANDSHAKE_TYPE ]:
@@ -1210,7 +1224,7 @@ class TLSParser():
         
         if handshakeMsgToManipulate is None:
             return None
-
+        # else:             
         if PARENT_NODE in manipulation.keys():
             parentNodeName = manipulation[ PARENT_NODE ]
             node, routeToNode = self.FindNodeWithName( handshakeMsgToManipulate[ HANDSHAKE_MSG ], manipulation[ PARENT_NODE ] )
@@ -1614,6 +1628,14 @@ class TLSParser():
             self.transcript.append( msg )
 
         return msg
+
+    def GetAlerts( self ):
+        alerts = []
+        for msg in self.transcript:
+            if ALERT in msg.keys():
+                alerts.append( msg )
+
+        return alerts
 
     @staticmethod
     def FormatBuffer( buffer, prefix = "", lineSeperator = "\n" ):
