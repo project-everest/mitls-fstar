@@ -48,7 +48,8 @@ from tlsparser import   MemorySocket,                \
                         RAW_RECORD,                  \
                         INTERPRETATION,              \
                         RECORD,                      \
-                        KEY_SHARE_ENTRY
+                        KEY_SHARE_ENTRY,             \
+                        IV_AND_KEY
 
 
 SUCCESS                     = 1
@@ -535,11 +536,13 @@ class MITLSTester(unittest.TestCase):
 
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
+
+        preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
         try:
             self.RunSingleTest()
         finally:
             keysMonitor.StopMonitorStdoutForLeakedKeys()
-
+            
         if config.LOG_LEVEL < logging.ERROR:
             pprint( memorySocket.tlsParser.transcript )
             for msg in memorySocket.tlsParser.transcript:
@@ -547,8 +550,8 @@ class MITLSTester(unittest.TestCase):
                 # if tlsparser.IV_AND_KEY in msg.keys():
                 #     pprint( msg[ tlsparser.IV_AND_KEY ])
 
-            keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
-            pprint( keysToFiles )
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            pprint( keysAndFiles )
 
         self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
@@ -669,7 +672,6 @@ class MITLSTester(unittest.TestCase):
         handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
         manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
                                                                                                 handshakeType = handshakeType )   )
-        ###########################
         experiments = []
         for manipulation in manipulations:
             exceptionThrown = False
@@ -681,12 +683,7 @@ class MITLSTester(unittest.TestCase):
                 exceptionThrown = True
                 traceback.print_exc()
             finally:
-                postExperimentKeys  = memorySocket.tlsParser.FindMatchingKeys()
-                experimentKeys      = set( postExperimentKeys ) - set( preExistingKeys )
-                keysAndFiles        = {}
-                for k in experimentKeys:
-                    keysAndFiles[ k ] = postExperimentKeys[ k ]
-
+                keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
                 experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
 
             self.assertTrue( exceptionThrown == True )
@@ -695,63 +692,75 @@ class MITLSTester(unittest.TestCase):
 
         # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
         # pprint( keysToFiles )
-        # pprint( experiments )
+        pprint( experiments )
 
-            # msg0      = originalTranscript[ 0 ]
-            # tlsParser = TLSParser()
-            # print( "###############################################")
-            # pprint( manipulation )
-            # print( "==================== Original Message =====================")
-            # tlsParser.PrintMsg( msg0 )
+        # for manipulation in manipulations:
+        #     msg0      = originalTranscript[ 0 ]
+        #     tlsParser = TLSParser()
+        #     print( "###############################################")
+        #     pprint( manipulation )
+        #     print( "==================== Original Message =====================")
+        #     tlsParser.PrintMsg( msg0 )
 
-            # print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
-            # manipulatedMsg = tlsParser.ManipulateMsg( msg0, manipulation )
-            # rawMsg         = tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+        #     print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
+        #     manipulatedMsg = tlsParser.ManipulateMsg( msg0, manipulation )
+        #     rawMsg         = tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
             
-            # # The following will print the message as a side effect
-            # parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
+        #     # The following will print the message as a side effect
+        #     parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
-    # def test_ReorderPieces_ServerEncryptedHello_onWire( self ):
-    #     if "ReorderCipherSuites_onWire" not in testsToRun:
-    #         return  
+    def test_ReorderPieces_ServerEncryptedHello_onWire( self ):
+        if "ReorderPieces_ServerEncryptedHello_onWire" not in testsToRun:
+            return  
         
-    #     keysMonitor = MonitorLeakedKeys()
-    #     keysMonitor.MonitorStdoutForLeakedKeys()
-    #     self.RunSingleTest()
-        
-    #     originalTranscript  = memorySocket.tlsParser.transcript
-    #     topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
-    #     handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
-    #     manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
-    #                                                                                             handshakeType = handshakeType )   )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+        self.RunSingleTest()
 
-    #     keysMonitor.StopMonitorStdoutForLeakedKeys()
-    #     ###########################
-    #     for manipulation in manipulations:
-    #     #     exceptionThrown = False
-    #     #     try:
-    #     #         self.RunSingleTest( msgManipulators = [ manipulation ] )
-    #     #     except:
-    #     #         exceptionThrown = True
-    #     #         traceback.print_exc()
+        originalTranscript  = memorySocket.tlsParser.transcript
+        topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
+                                                                                                handshakeType = handshakeType )   )
+        experiments = []
+        for manipulation in manipulations:
+            pprint( manipulation )
+            exceptionThrown = False
+            try:
+                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
+                self.RunSingleTest( msgManipulators = [ manipulation ] )
+            except:
+                exceptionThrown = True
+                traceback.print_exc()
+            finally:
+                keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+                experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
+                time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
 
-    #     #     self.assertTrue( exceptionThrown == True )
+            self.assertTrue( exceptionThrown == True )
 
-    #     # keysMonitor.StopMonitorStdoutForLeakedKeys()
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
 
-    #         msg2      = originalTranscript[ 2 ]
-    #         tlsParser = TLSParser()
-    #         print( "###############################################")
-    #         pprint( manipulation )
-    #         print( "==================== Original Message =====================")
-    #         tlsParser.PrintMsg( msg2 )
+        # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
+        # pprint( keysToFiles )
+        pprint( experiments )
 
-    #         print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
-    #         manipulatedMsg = tlsParser.ManipulateMsg( msg2, manipulation )
-    #         rawMsg         = memorySocket.tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+
+        # for manipulation in manipulations:
+        #     pprint( manipulation )
+        #     msg2      = originalTranscript[ 2 ]
+        #     tlsParser = TLSParser()
+        #     print( "###############################################")
+        #     pprint( manipulation )
+        #     print( "==================== Original Message =====================")
+        #     tlsParser.PrintMsg( msg2 )
+
+        #     print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
+        #     manipulatedMsg = tlsParser.ManipulateMsg( msg2, manipulation )
+        #     rawMsg         = memorySocket.tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
             
-    #         # The following will print the message as a side effect
-    #         parsedManipulatedMsg = memorySocket.tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
+        #     # The following will print the message as a side effect
+        #     parsedManipulatedMsg = memorySocket.tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ], ivAndKey = msg2[ IV_AND_KEY ] )
 
         
     def RemoveItemAndSplit( self, itemList, itemToRemove ):
@@ -1027,7 +1036,8 @@ if __name__ == '__main__':
                    # "SignatureAlgorithms" ,
                    # "NamedGroups"         ,
                    # "CipherSuites_commonSuiteIsHighest",
-                   "ReorderPieces_ClientHello_onWire",
+                   # "ReorderPieces_ClientHello_onWire",
+                   "ReorderPieces_ServerEncryptedHello_onWire",
                    ]
 
     unittest.main()

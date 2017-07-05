@@ -597,7 +597,7 @@ class TLSParser():
         if typeNumber in Alert.AlertByValue.keys():
             return Alert.AlertByValue[ typeNumber ]
 
-        return "unknown_alert"
+        return "unknown_alert - %d" % typeNumber
     
     def ConsumeByte( self, expectedValue = None ):
         value = struct.unpack( "B", self.recentBytes[ self.curretPosition: self.curretPosition + SIZE_OF_UINT8 ] )[0]
@@ -922,7 +922,7 @@ class TLSParser():
         return handshake
 
     def ParseKeyFile( self, keyFilePath ):
-        self.log.debug( "ParseKeyFile: parsing %s" % keyFilePath )
+        # self.log.debug( "ParseKeyFile: parsing %s" % keyFilePath )
 
         HEX_RADIX = 16
         
@@ -967,6 +967,14 @@ class TLSParser():
 
         return keysToFiles
 
+    def FindNewKeys( self, preExistingKeys ):
+        postExperimentKeys  = self.FindMatchingKeys()
+        newKeys             = set( postExperimentKeys ) - set( preExistingKeys )
+        keysAndFiles        = {}
+        for k in newKeys:
+            keysAndFiles[ k ] = postExperimentKeys[ k ]
+
+        return keysAndFiles
 
     def GetLeakedKeys( self, dirPath ):
         allRuns = glob.glob( dirPath + "/*" )
@@ -1025,12 +1033,15 @@ class TLSParser():
         # ivAndKey.Key was never used before to decrypt message                    
         return ivAndKey.IV
 
-    def DecryptMsgBody_tryToDecrypt( self, ivsAndKeys, cipherText, tag ):
+    def DecryptMsgBody_tryToDecrypt( self, ivsAndKeys, cipherText, tag, automaticallyAdvanceIV ):
         plaintext        = None
         correctIVAndKey  = None
         for secret in ivsAndKeys:
             try:
-                nextIV = self.GetCurrentIV( secret )
+                if automaticallyAdvanceIV:
+                    nextIV = self.GetCurrentIV( secret )
+                else:
+                    nextIV = secret.IV
 
                 if self.state.selectedCipherSuite in AES_128_GCM_FAMILY:
                     plaintext = Cryptor.AES_GCM_Decrypt( nextIV, secret.Key, cipherText, tag )
@@ -1049,20 +1060,26 @@ class TLSParser():
 
         return plaintext, correctIVAndKey
 
-    def DecryptMsgBody( self, rawRecord ):
+    def DecryptMsgBody( self, rawRecord, fixedIVAndKey ):
         SIZE_OF_AES_GCM_TAG                 = 16 
         WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS = 0.2
 
         cipherText  = rawRecord[ : -SIZE_OF_AES_GCM_TAG ]
         tag         = rawRecord[ -SIZE_OF_AES_GCM_TAG : ]
-        ivsAndKeys  = self.GetLeakedKeys( LEAKED_KEYS_DIR )
+        
+        if fixedIVAndKey != None:
+            ivsAndKeys              = [ fixedIVAndKey ] 
+            automaticallyAdvanceIV  = False
+        else:
+            ivsAndKeys              = self.GetLeakedKeys( LEAKED_KEYS_DIR )
+            automaticallyAdvanceIV  = True
 
-        plaintext, ivAndKey = self.DecryptMsgBody_tryToDecrypt( ivsAndKeys, cipherText, tag )
+        plaintext, ivAndKey = self.DecryptMsgBody_tryToDecrypt( ivsAndKeys, cipherText, tag, automaticallyAdvanceIV )
 
         if( plaintext == None ):
             time.sleep( WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS )
             ivsAndKeys          = self.GetLeakedKeys( LEAKED_KEYS_DIR )
-            plaintext, ivAndKey = self.DecryptMsgBody_tryToDecrypt( ivsAndKeys, cipherText, tag )
+            plaintext, ivAndKey = self.DecryptMsgBody_tryToDecrypt( ivsAndKeys, cipherText, tag, automaticallyAdvanceIV )
 
         if plaintext == None:
             errMsg = "Can't decrypt meesage"
@@ -1167,7 +1184,7 @@ class TLSParser():
 
         for manipulation in self.msgManipulators:
             manipulatedMsg = self.ManipulateMsg( msg, manipulation ) 
-            if msg != None:
+            if manipulatedMsg != None:
                 msg              = manipulatedMsg #prepare for next potential manipulation
                 isMsgManipulated = True
 
@@ -1180,9 +1197,12 @@ class TLSParser():
         return None
 
     def ManipulateMsg( self, msg, manipulation ):
-        msg = deepcopy( msg )
+        if ALERT in msg.keys():
+            return None
 
+        msg                      = deepcopy( msg )
         handshakeMsgToManipulate = None
+
         if HANDSHAKE_TYPE in manipulation.keys():
             for handshakeMsg in msg[ RECORD ]:
                 if handshakeMsg[ HANDSHAKE_TYPE ] == manipulation[ HANDSHAKE_TYPE ]:
@@ -1211,7 +1231,7 @@ class TLSParser():
                     # print( "################## %s: origSize = %d, newSize = %d" % ( modifiedNode.Name, origSize, newSize ))
                     # self.VisuallyCompareBuffers( origContent, modifiedNode.RawContents )
            
-        # pprint( msg )
+        # pprint( "msg after manipulation = %s" % msg )
         return msg
 
     def SetMsgManipulators( self, msgManipulators ):
@@ -1496,12 +1516,12 @@ class TLSParser():
 
         return reconstructedRawRecord
         
-    def ParseAlert( self, rawAlert ):
+    def ConsumeAlert( self ):
         alert                 = AttrDict()
-        alert[ RAW_CONTENTS ] = rawAlert
+        alert[ RAW_CONTENTS ] = self.ConsumeRawBytes( SIZE_OF_UINT16 )
 
-        alertLevelID          = rawAlert[ 0 ]
-        alertDescriptionID    = rawAlert[ 1 ]
+        alertLevelID          = alert[ RAW_CONTENTS ][ 0 ]
+        alertDescriptionID    = alert[ RAW_CONTENTS ][ 1 ]
 
         if alertLevelID == 1:
             alert.Level = "warning"
@@ -1517,7 +1537,7 @@ class TLSParser():
     def IsAlertMsg( self, msg ):
         return ALERT in msg.keys()
 
-    def ParseMsgBody( self, msg ):
+    def ParseMsgBody( self, msg, fixedIVAndKey ):
         totalRecordSize     = TLS_RECORD_HEADER_SIZE + msg[ LENGTH ]
         msg[ RAW_RECORD ]   = self.PeekRawBytes( totalRecordSize - TLS_RECORD_HEADER_SIZE, TLS_RECORD_HEADER_SIZE )
 
@@ -1525,15 +1545,13 @@ class TLSParser():
             msg[ RECORD ] = [ self.ParseHandshakeMsg() ]
             self.VerifyEqual( self.curretPosition, totalRecordSize )
             # pprint( msg )
-            if config.LOG_LEVEL < logging.ERROR:
-                self.PrintMsg( msg )
             self.ReconstructRecordAndCompareToOriginal( msg )
 
         elif msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA:
             encryptedMsgBody             = self.ConsumeRawBytes( msg[ LENGTH ] ) 
             self.VerifyBuffersEquall( encryptedMsgBody, msg[ RAW_RECORD ][ TLS_RECORD_HEADER_SIZE: ] )
 
-            rawDecryptedRecord, ivAndKey  = self.DecryptMsgBody( encryptedMsgBody ) 
+            rawDecryptedRecord, ivAndKey  = self.DecryptMsgBody( encryptedMsgBody, fixedIVAndKey ) 
             msg[ DECRYPTED_RECORD_TYPE ] = rawDecryptedRecord[ -1 ]
             msg[ DECRYPTED_RECORD      ] = rawDecryptedRecord[ : -1 ]
             msg[ IV_AND_KEY            ] = ivAndKey
@@ -1546,25 +1564,28 @@ class TLSParser():
                 msg[ RECORD ], _ = self.ConsumeHeadlessList( len( msg[ DECRYPTED_RECORD ] ), self.ConsumeHandshake )
                 self.VerifyEqual( self.curretPosition, len( msg[ DECRYPTED_RECORD ] ) )
             elif msg[ DECRYPTED_RECORD_TYPE ] == TLS_RECORD_TYPE_ALERT:
-                msg[ ALERT ] = self.ParseAlert( msg[ DECRYPTED_RECORD ] )
-                self.log.error( "Received ALERT: %s" % str( msg[ ALERT ] ) )
+                msg[ ALERT ] = self.ConsumeAlert()
+                self.log.error( "Received ALERT inside app data: %s" % str( msg[ ALERT ] ) )
+                # pprint( msg )
+                # raise TLSParserError( "Received alert inside app data" )
             elif msg[ DECRYPTED_RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA:
                 msg[ RECORD ] = self.ConsumeRawBytes( len( msg[ DECRYPTED_RECORD ] ) )
             else:
                 raise TLSParserError( "Unknown DECRYPTED_RECORD_TYPE %d" % msg[ DECRYPTED_RECORD_TYPE ] )
             # pprint(msg)
 
-            if config.LOG_LEVEL < logging.ERROR:
-                self.PrintMsg( msg )
-
             if not self.IsAlertMsg( msg ):
                 self.ReconstructRecordAndCompareToOriginal( msg )
 
         elif msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_ALERT:
-            msg[ ALERT ] = self.ParseAlert( msg[ RAW_RECORD ][ TLS_RECORD_HEADER_SIZE : ] )
+            # msg[ ALERT ] = self.ParseAlert( msg[ RAW_RECORD ][ TLS_RECORD_HEADER_SIZE : ] )
+            msg[ ALERT ] = self.ConsumeAlert()
             self.log.error( "Received ALERT: %s" % str( msg[ ALERT ] ) )
         else:
             raise TLSParserError( "Unknown RECORD_TYPE %d" % msg[ RECORD_TYPE ] )
+
+        if config.LOG_LEVEL < logging.ERROR:
+                self.PrintMsg( msg )
 
         return msg
 
@@ -1576,7 +1597,7 @@ class TLSParser():
         self.recentBytes    = self.recentBytes[ self.curretPosition : ]
         self.curretPosition = 0
 
-    def Digest( self, bytes, direction, printPacket = False ):
+    def Digest( self, bytes, direction, printPacket = False, ivAndKey = None ):
         if config.LOG_LEVEL < logging.ERROR and printPacket:
             sys.stdout.write( Green( self.FormatBuffer( bytes ) )  + "\n" )
 
@@ -1587,7 +1608,7 @@ class TLSParser():
             totalRecordSize = TLS_RECORD_HEADER_SIZE + msg[ LENGTH ]
             # pprint( msg )
             if len( self.recentBytes ) >= totalRecordSize:
-                self.ParseMsgBody( msg )
+                self.ParseMsgBody( msg, fixedIVAndKey = ivAndKey )
                 self.TrunctateConsumedBytes()
                 
             self.transcript.append( msg )
@@ -1813,14 +1834,18 @@ class MemorySocket():
     def SendToClient( self, ctx, buffer, bufferSize ):
         self.log.debug( "SendToClient bufferSize = %d" % bufferSize ) 
         pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )
-        
-        self.tlsParser.Digest( pyBuffer[ : ], Direction.SERVER_TO_CLIENT )
+        msg      = self.tlsParser.Digest( pyBuffer[ : ], Direction.SERVER_TO_CLIENT )
        
         if self.logMsgs:
             self.log.debug( "SendToClient -->\n" + TLSParser.FormatBuffer( pyBuffer ) ) 
 
-        self.serverToClientPipe += pyBuffer
-        return bufferSize
+        manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
+        if manipulatedWireFrame != None:
+            self.serverToClientPipe += manipulatedWireFrame
+            return len( manipulatedWireFrame )
+        else:            
+            self.serverToClientPipe += pyBuffer
+            return bufferSize
 
     #Used by client to read from server:
     def ReadFromServer( self, ctx, buffer, bufferSize  ):
