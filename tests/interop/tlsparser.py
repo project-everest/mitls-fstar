@@ -951,6 +951,23 @@ class TLSParser():
 
         return iv, key
 
+    def FindMatchingKeys( self ):
+        ivsAndKeys  = self.GetLeakedKeys( LEAKED_KEYS_DIR )
+        keys        = map( lambda x: x.Key, ivsAndKeys )
+        keys        = set( keys )
+
+        keysToFiles = {}
+        for k in keys:
+            filesWithKey = []
+            for leakedSecret in ivsAndKeys:
+                if leakedSecret.Key == k:
+                    filesWithKey.append( leakedSecret.File )
+
+            keysToFiles[ k ] = filesWithKey
+
+        return keysToFiles
+
+
     def GetLeakedKeys( self, dirPath ):
         allRuns = glob.glob( dirPath + "/*" )
         allRuns.sort()
@@ -970,7 +987,7 @@ class TLSParser():
             for keyFilePath in allKeyFiles:
                 iv, key   = self.ParseKeyFile( keyFilePath )                
                 timestamp = os.path.getmtime( keyFilePath )
-                keyMaterial = AttrDict( { 'IV' : iv, 'Key' : key } )
+                keyMaterial = AttrDict( { 'IV' : iv, 'Key' : key, "File" : keyFilePath } )
                 ivsAndKeys.append( keyMaterial )
 
         return ivsAndKeys
