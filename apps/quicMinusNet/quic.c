@@ -12,6 +12,15 @@
 #endif
 #include "mitlsffi.h"
 
+void dump(unsigned char buffer[], size_t len)
+{
+  int i; 
+  for(i=0; i<len; i++) {
+    printf("%02x",buffer[i]);
+    if (i % 32 == 31 || i == len-1) printf("\n");
+  }
+}
+
 int main(int argc, char **argv)
 {
   char *errmsg;
@@ -43,6 +52,7 @@ int main(int argc, char **argv)
 
   FFI_mitls_init();
 
+  printf("server create\n");
   if(!FFI_mitls_quic_create(&server, &config, &errmsg))
   {
     printf("quic_create server failed: %s\n", errmsg);
@@ -52,29 +62,52 @@ int main(int argc, char **argv)
   config.is_server = 0;
   config.host_name = "localhost";
 
+  printf("client create\n");
   if(!FFI_mitls_quic_create(&client, &config, &errmsg))
   {
     printf("quic_create client failed: %s\n", errmsg);
     return -1;
   }
 
-  // server write buffer
-  char *s_buffer = malloc(16*1024);
+  // server writer buffer (cumulative)
   size_t slen = 0;
-  char *c_buffer = malloc(16*1024);
+  size_t smax = 8*1024; // too much; we use < 1KB
+  char *s_buffer = malloc(smax);
+
+  // client write buffer (cumulative)
   size_t clen = 0;
+  size_t cmax = 8*1024; // too much; we use < 1KB
+  char *c_buffer = malloc(clen); // 
 
-  do{ 
-    clen = 2048;
-    printf("CALL client\n");
+
+  do{
+    c_buffer += clen; // assuming miTLS never returns a larger clen
+    cmax -= clen;
+    clen = cmax;
+
+    printf("client call clen=%4d slen=%4d\n", clen, slen);
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
-    slen = 2048;
-    printf("CALL server\n");
-    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
-    printf("Client return=%d, Server return=%d\n");
-  } while(rc != TLS_client_complete && rs != TLS_server_complete);
+    printf("client done clen=%4d slen=%4d rc=%d\n", clen, slen, rc);
+    dump(c_buffer, clen);
+    
+    s_buffer += slen; // assuming miTLS never returns a larger clen
+    smax -= slen;
+    slen = smax;
+    
+    /* clen -= 12; // simulating fragmentation */
+    /* printf("server call clen=%4d slen=%4d\n", clen, slen); */
+    /* rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg); */
+    /* printf("server done clen=%4d slen=%4d rc=%d\n", clen, slen, rc); */
+    /* clen += 12; */
 
+    printf("server call clen=%4d slen=%4d\n", clen, slen);
+    rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
+    printf("server done clen=%4d slen=%4d rc=%d\n", clen, slen, rc);
+    dump(s_buffer, slen);
+  }
+  while(rc != TLS_client_complete && rs != TLS_server_complete);
 
   FFI_mitls_cleanup();
+  printf("Ok\n");
   return 0;
 }
