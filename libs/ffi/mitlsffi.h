@@ -142,11 +142,12 @@ typedef struct {
 typedef struct quic_key quic_key;
 
 // pass 0 to leave any of the configuration values undefined
-extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state *state, quic_config *cfg, /* out */ char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg);
 
 extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *state, /*in*/ char* inBuf, /*inout*/ size_t *pInBufLen, /*out*/ char *outBuf, /*inout*/ size_t *pOutBufLen, /* out */ char **errmsg);
 
 extern int MITLS_CALLCONV FFI_mitls_quic_get_transport_parameters(/* in */ quic_state *state, /*out*/ quic_transport_parameters *qp);
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret, char **errmsg);
+extern void MITLS_CALLCONV FFI_mitls_quic_free(/* in */ quic_state *state);
 
 #endif // HEADER_MITLS_FFI_H

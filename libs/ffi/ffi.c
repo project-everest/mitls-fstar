@@ -613,6 +613,7 @@ typedef struct quic_state {
 
  int MITLS_CALLCONV QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
  {
+   printf("CALLBACK: send %d", buffer_size);
    // ADL YIKES
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
    if(!s->out_buffer) return -1;
@@ -631,6 +632,7 @@ typedef struct quic_state {
 
  int MITLS_CALLCONV QUIC_recv(struct _FFI_mitls_callbacks *cb, void *buffer, size_t len)
  {
+   printf("CALLBACK: recv %d", len);
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
    if(!s->in_buffer) return -1;
 
@@ -645,10 +647,17 @@ typedef struct quic_state {
 
 
 // The OCaml runtime system must be acquired before calling this
-static int FFI_mitls_quic_create_caml(quic_state *state, quic_config *cfg, char **errmsg)
+static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **errmsg)
 {
     CAMLparam0();
     CAMLlocal2(result, host);
+
+    quic_state* state = malloc(sizeof(quic_state));
+    if(!state) {
+      *errmsg = "failed to allocate QUIC state";
+      CAMLreturnT(int, 0);
+    }
+    *st = state;
 
     state->ffi_callbacks.send = QUIC_send;
     state->ffi_callbacks.recv = QUIC_recv;
@@ -748,7 +757,7 @@ static int FFI_mitls_quic_create_caml(quic_state *state, quic_config *cfg, char 
     CAMLreturnT(int, 1);
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state *state, quic_config *cfg, /* out */ char **errmsg)
+int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg)
 {
     int ret;
     caml_acquire_runtime_system();
@@ -898,4 +907,15 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
     caml_release_runtime_system();
 
     return ret;
+}
+
+void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
+{
+    if (state) {
+        caml_acquire_runtime_system();
+        caml_remove_generational_global_root(&state->fstar_state);
+        caml_release_runtime_system();
+        state->fstar_state = 0;
+        free(state);
+    }
 }
