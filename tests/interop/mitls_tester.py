@@ -49,7 +49,9 @@ from tlsparser import   MemorySocket,                \
                         INTERPRETATION,              \
                         RECORD,                      \
                         KEY_SHARE_ENTRY,             \
-                        IV_AND_KEY
+                        IV_AND_KEY,                  \
+                        EXTENSION_TYPE_NAMES,        \
+                        EXTENSION_TYPE_SUPPORTED_VERSIONS
 
 
 SUCCESS                     = 1
@@ -95,7 +97,9 @@ SUPPORTED_NAMED_GROUPS = [
                             "FFDHE2048",                 # OK         
 ]
 
-PIECES_THAT_CANT_BE_SHUFFLED = [ KEY_SHARE_ENTRY ]
+PIECES_THAT_CANT_BE_SHUFFLED = [ KEY_SHARE_ENTRY, 
+                                 EXTENSION_TYPE_NAMES[ EXTENSION_TYPE_SUPPORTED_VERSIONS ] # because a potential bug was found
+                                 ]
 
 class MITLSError( Exception ):
     def __init__( self, msg ):
@@ -674,6 +678,7 @@ class MITLSTester(unittest.TestCase):
                                                                                                 handshakeType = handshakeType )   )
         experiments = []
         for manipulation in manipulations:
+            pprint( manipulation )
             exceptionThrown = False
             try:
                 print( "##############################################")
@@ -682,11 +687,18 @@ class MITLSTester(unittest.TestCase):
             except:
                 exceptionThrown = True
                 traceback.print_exc()
-            finally:
-                keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
-                experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
+            
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
 
+            # Asserts:
             self.assertTrue( exceptionThrown == True )
+
+            CLIENT_AND_SERVER_DISAGREE_ON_KEYS = 1
+            for k in keysAndFiles.keys():
+                self.assertTrue( len( keysAndFiles[ k ] ) == CLIENT_AND_SERVER_DISAGREE_ON_KEYS  ) 
+
+            self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 0 )
 
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
@@ -732,12 +744,13 @@ class MITLSTester(unittest.TestCase):
             except:
                 exceptionThrown = True
                 traceback.print_exc()
-            finally:
-                keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
-                experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
-                time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
+            
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
+            time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
 
             self.assertTrue( exceptionThrown == True )
+            self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 2 )
 
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
