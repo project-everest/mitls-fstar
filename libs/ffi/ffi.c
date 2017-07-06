@@ -746,7 +746,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
        }
 
     if(cfg->enable_0rtt)
-       if(!configure_common_bool_caml(&ms, 1, g_mitls_FFI_SetEarlyData))
+       if(!configure_common_bool_caml(&ms, Val_true, g_mitls_FFI_SetEarlyData))
        {
          *errmsg = "FFI_mitls_quic_create_caml: can't enable early_data";
          CAMLreturnT(int, 0);
