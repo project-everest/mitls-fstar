@@ -144,7 +144,7 @@ typedef struct {
   // only used by the client
   char *host_name; // Client only, sent in SNI
   char *ca_file; // Client only
-  quic_ticket server_ticket; 
+  quic_ticket ticket; 
 
   // only used by the server
   char *certificate_chain_file; // Server only

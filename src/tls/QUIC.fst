@@ -156,9 +156,13 @@ let accept send recv config : ML Connection.connection =
   quic_check config;
   TLS.accept_connected here tcp config
 
-val ffiConnect: config:config -> (*TODO: ticket: option bytes -> *) callbacks:FFI.callbacks -> ML Connection.connection
-let ffiConnect config (*ticket*) cb =
-  connect (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config [] //TODO: (match ticket with | Some t -> [t] | None -> [])
+val ffiConnect: config:config -> ticket: bytes -> callbacks:FFI.callbacks -> ML Connection.connection
+let ffiConnect config ticket cb =
+  connect 
+    (FFI.sendTcpPacket cb) 
+    (FFI.recvTcpPacket cb) 
+    config 
+    (if length ticket = 0 then [] else [ticket])
 
 val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiAcceptConnected config cb =
