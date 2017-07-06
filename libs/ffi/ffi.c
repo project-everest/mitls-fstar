@@ -309,7 +309,7 @@ static int configure_common_bool_caml(/* in */ mitls_state *state, value b, valu
 int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, int enable_early_data)
 {
     int ret;
-    value b = (enable_early_data) ? Val_true : Val_false;
+    value b = enable_early_data ? Val_true : Val_false;
     caml_acquire_runtime_system();
     ret = configure_common_bool_caml(state, b, g_mitls_FFI_SetEarlyData);
     caml_release_runtime_system();

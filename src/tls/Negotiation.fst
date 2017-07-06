@@ -394,7 +394,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       Some t, sid
     | (None, _), true, _ -> Some (empty_bytes), empty_bytes
     | _ -> None, empty_bytes in
-  // Don't offer EDI if there is no PSK of first PSK doesn't have ED enabled
+  // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
   let compatible_psk =
     match pskinfo with
     | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
@@ -652,6 +652,12 @@ let client_ClientHello #region ns oks =
   let pskinfo = map_ST (fun i -> (i, PSK.psk_info i)) pskid in
   match MR.m_read ns.state with
   | C_Init _ ->
+      trace(if 
+    (match pskinfo with
+    | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
+    | _ -> false)
+      then "compatible" else "");
+      trace(if ns.cfg.enable_early_data then "enabled" else "");
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);
