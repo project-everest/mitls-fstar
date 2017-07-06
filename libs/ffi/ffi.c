@@ -613,7 +613,7 @@ typedef struct quic_state {
 
  int MITLS_CALLCONV QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
  {
-   //printf("CALLBACK: send %d\n", buffer_size);
+   printf("CALLBACK: send %d\n", buffer_size);
    // ADL YIKES
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
    if(!s->out_buffer) return -1;
@@ -621,8 +621,7 @@ typedef struct quic_state {
    // ADL FIXME better error management
    if(buffer_size <= s->out_buffer_size - s->out_buffer_used)
    {
-     memcpy(s->out_buffer, buffer, buffer_size);
-     s->out_buffer += buffer_size;
+     memcpy(s->out_buffer + s->out_buffer_used, buffer, buffer_size);
      s->out_buffer_used += buffer_size;
      return buffer_size;
    }
@@ -632,15 +631,14 @@ typedef struct quic_state {
 
  int MITLS_CALLCONV QUIC_recv(struct _FFI_mitls_callbacks *cb, void *buffer, size_t len)
  {
-   //printf("CALLBACK: recv %d\n", len);
+   printf("CALLBACK: recv %d\n", len);
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
    if(!s->in_buffer) return -1;
 
    if(len > s->in_buffer_size - s->in_buffer_used)
      len = s->in_buffer_size - s->in_buffer_used; // may be 0
 
-   memcpy(buffer, s->in_buffer, len);
-   s->in_buffer += len;
+   memcpy(buffer, s->in_buffer + s->in_buffer_used, len);
    s->in_buffer_used += len;
    return len;
  }
