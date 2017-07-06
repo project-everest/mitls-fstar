@@ -119,6 +119,11 @@ let rec recv c =
                   then {code=TLS_client_complete_with_early_data; error=0us;}
                   else {code=TLS_client_complete; error=0us;}
        | Server      -> {code=TLS_server_complete; error=0us;})
+         (* we could read once more to flush any ticket.
+                      let i = currentId c Reader in
+                      match read c i with 
+                      | ReadWouldBlock -> {code=TLS_server_complete; error=0us;}
+                      | _ -> {code=TLS_error_local; error=errno None "bad ticket delivery";} *)
   | ReadError a txt  -> {code=TLS_error_local; error=errno a txt;}
   | Read Close       -> {code=TLS_error_alert; error=errno (Some TLSError.AD_close_notify) "received close";}
   | Read (Alert a)   -> {code=TLS_error_alert; error=errno (Some a) "received alert";}
