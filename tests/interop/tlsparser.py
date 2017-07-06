@@ -1258,7 +1258,7 @@ class TLSParser():
 
             return msg
 
-        raise TLSParserError( "Can't execute manipulation %s" % manipulation )
+        return None
 
     def ManipulateMsg( self, msg, manipulation ):
         if ALERT in msg.keys():

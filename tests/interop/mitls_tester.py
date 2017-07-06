@@ -695,31 +695,36 @@ class MITLSTester(unittest.TestCase):
         handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
         manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
                                                                                                 handshakeType = handshakeType )   )
-        experiments = []
-        for manipulation in manipulations:
-            pprint( manipulation )
-            exceptionThrown = False
-            try:
-                print( "##############################################")
-                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
-                self.RunSingleTest( msgManipulators = [ manipulation ] )
-            except:
-                exceptionThrown = True
-                traceback.print_exc()
-            
-            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
-            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
 
-            # Asserts:
-            self.assertTrue( exceptionThrown == True )
-
-            CLIENT_AND_SERVER_DISAGREE_ON_KEYS = 1
-            for k in keysAndFiles.keys():
-                self.assertTrue( len( keysAndFiles[ k ] ) == CLIENT_AND_SERVER_DISAGREE_ON_KEYS  ) 
-
-            self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 0 )
-
+        experiments = self.RunManipulationTest( manipulations, numExpectedSharedKeys = 0, numExpectedAlerts = 0 )
         keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+        pprint( experiments )
+        # experiments = []
+        # for manipulation in manipulations:
+        #     pprint( manipulation )
+        #     exceptionThrown = False
+        #     try:
+        #         print( "##############################################")
+        #         preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
+        #         self.RunSingleTest( msgManipulators = [ manipulation ] )
+        #     except:
+        #         exceptionThrown = True
+        #         traceback.print_exc()
+            
+        #     keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+        #     experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
+
+        #     # Asserts:
+        #     self.assertTrue( exceptionThrown == True )
+
+        #     CLIENT_AND_SERVER_DISAGREE_ON_KEYS = 1
+        #     for k in keysAndFiles.keys():
+        #         self.assertTrue( len( keysAndFiles[ k ] ) == CLIENT_AND_SERVER_DISAGREE_ON_KEYS  ) 
+
+        #     self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 0 )
+
+        # keysMonitor.StopMonitorStdoutForLeakedKeys()
 
         # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
         # pprint( keysToFiles )
@@ -760,7 +765,7 @@ class MITLSTester(unittest.TestCase):
             alerts                     = list( map( lambda msg : msg[ ALERT ][ 'Type' ], memorySocket.tlsParser.GetAlerts() ) )
 
             thisExperiment = AttrDict( {'Manipulation'         : manipulation, 
-                                        'Keys'                 : keysAndFiles, 
+                                        # 'Keys'                 : keysAndFiles, 
                                         'SuccessfulSharedKeys' : numKeysWithMoreThanOneFile,
                                         'Alerts'            : alerts } )
             experiments.append( thisExperiment )
@@ -866,28 +871,11 @@ class MITLSTester(unittest.TestCase):
         handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
         manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
                                                                                                 handshakeType = handshakeType )   )
-        experiments = []
-        for manipulation in manipulations:
-            # pprint( manipulation )
-            exceptionThrown = False
-            try:
-                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
-                self.RunSingleTest( msgManipulators = [ manipulation ] )
-            except:
-                exceptionThrown = True
-                traceback.print_exc()
-            
-            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
-            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
-            time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
+        try:
+            experiments = self.RunManipulationTest( manipulations, numExpectedSharedKeys = 2 )
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
 
-            self.assertTrue( exceptionThrown == True )
-            self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 2 )
-
-        keysMonitor.StopMonitorStdoutForLeakedKeys()
-
-        # # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
-        # # pprint( keysToFiles )
         pprint( experiments )
 
         # for manipulation in manipulations:
@@ -916,24 +904,12 @@ class MITLSTester(unittest.TestCase):
         handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
         manipulations       = self.CreateTopLevelShuffleManipulations( originalTranscript[ 2 ][ RECORD ], Direction.SERVER_TO_CLIENT )
         
-        experiments = []
-        for manipulation in manipulations:
-            exceptionThrown = False
-            try:
-                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
-                self.RunSingleTest( msgManipulators = [ manipulation ] )
-            except:
-                exceptionThrown = True
-                traceback.print_exc()
-            
-            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
-            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
-            time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
+        try:
+            experiments = self.RunManipulationTest( manipulations, numExpectedSharedKeys = 2 )
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
 
-            self.assertTrue( exceptionThrown == True )
-            self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 0 )
-
-        keysMonitor.StopMonitorStdoutForLeakedKeys()
+        pprint( experiments )
 
     def test_ServerEncryptedHello_extractToPlaintext( self ):
         keysMonitor = MonitorLeakedKeys()
@@ -941,9 +917,6 @@ class MITLSTester(unittest.TestCase):
         self.RunSingleTest()
 
         originalTranscript  = memorySocket.tlsParser.transcript
-        # topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
-        # handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
-        # manipulations       = ????
         
         handshakesToExtarct = [ HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS,
                                 HANDSHAKE_TYPE_CERTIFICATE         ,
@@ -956,28 +929,12 @@ class MITLSTester(unittest.TestCase):
                                                PARENT_NODE              : RECORD,
                                                EXTRACT_TO_PLAINTEXT     : True,
                                                HANDSHAKE_TYPE           : handshakeType }) )
-        experiments = []
-        for manipulation in manipulations:
-            # pprint( manipulation )
-            exceptionThrown = False
-            try:
-                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
-                self.RunSingleTest( msgManipulators = [ manipulation ] )
-            except:
-                exceptionThrown = True
-                traceback.print_exc()
+
+        try:
+            experiments = self.RunManipulationTest( manipulations, numExpectedSharedKeys = 2 )
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
             
-            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
-            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
-            time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
-
-        #     self.assertTrue( exceptionThrown == True )
-        #     self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 2 )
-
-        keysMonitor.StopMonitorStdoutForLeakedKeys()
-
-        # # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
-        # # pprint( keysToFiles )
         pprint( experiments )
 
         # for manipulation in manipulations:
@@ -1249,17 +1206,22 @@ if __name__ == '__main__':
     # SI: these should be args. 
     suite = unittest.TestSuite()
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
-    # suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_onWire" ) )
-    # suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
+    # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire" ) )
+    suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_ServerHello_onWire" ) )
-    suite.addTest( MITLSTester( "test_SkipPieces_EncryptedServerHello_onWire" ) )
+    # suite.addTest( MITLSTester( "test_SkipPieces_EncryptedServerHello_onWire" ) )
+    
     # suite.addTest( MITLSTester() )
+    # suite.addTest( MITLSTester() )
+    # suite.addTest( MITLSTester() )
+    # suite.addTest( MITLSTester() )
+    
      
     runner=unittest.TextTestRunner()
     runner.run(suite)
