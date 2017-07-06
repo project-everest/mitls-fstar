@@ -57,7 +57,9 @@ from tlsparser import   MemorySocket,                       \
                         HANDSHAKE_TYPE_CERTIFICATE         ,\
                         HANDSHAKE_TYPE_CERTIFICATE_REQUEST ,\
                         HANDSHAKE_TYPE_CERTIFICATE_VERIFY  ,\
-                        HANDSHAKE_TYPE_FINISHED            
+                        HANDSHAKE_TYPE_FINISHED,            \
+                        REMOVE_ITEM
+
 
 
 SUCCESS                     = 1
@@ -106,6 +108,7 @@ SUPPORTED_NAMED_GROUPS = [
 PIECES_THAT_CANT_BE_SHUFFLED = [ KEY_SHARE_ENTRY, 
                                  EXTENSION_TYPE_NAMES[ EXTENSION_TYPE_SUPPORTED_VERSIONS ] # because a potential bug was found
                                  ]
+PIECES_THAT_CANT_BE_SKIPPED  = [ KEY_SHARE_ENTRY ]                                 
 
 class MITLSError( Exception ):
     def __init__( self, msg ):
@@ -630,6 +633,20 @@ class MITLSTester(unittest.TestCase):
         # pprint( shuffleManipulations )
         return shuffleManipulations
 
+    def CreateSkipPieceManipulations( self, node, handshakeType ):
+        skipManipulations = []
+        if node.Name in PIECES_THAT_CANT_BE_SKIPPED:
+            return skipManipulations
+
+        numberOfChildren = len( node.Interpretation )
+        for i in range( numberOfChildren ):
+            skipManipulations.append( AttrDict( {  HANDSHAKE_TYPE : handshakeType,
+                                                   PARENT_NODE    : node.Name,
+                                                   REMOVE_ITEM    : i } ) )
+
+        # pprint( shuffleManipulations )
+        return skipManipulations
+
     def CreateTopLevelShuffleManipulations( self, record, direction ):
         shuffleManipulations = []
 
@@ -721,6 +738,66 @@ class MITLSTester(unittest.TestCase):
         #     # The following will print the message as a side effect
         #     parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
+    def RunManipulationTest( self, manipulations, numExpectedSharedKeys, assertExceptionThrown = True, numExpectedAlerts = None ):
+        experiments = []
+        for manipulation in manipulations:
+            self.log.debug( "manipulation = %s" % manipulation)
+
+            exceptionThrown = False
+            try:
+                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
+                self.RunSingleTest( msgManipulators = [ manipulation ] )
+            except:
+                exceptionThrown = True
+                traceback.print_exc()
+            
+            keysAndFiles               = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            numFilesPerKey             = map( lambda key : len( keysAndFiles[ key ] ), keysAndFiles.keys() )
+            numKeysWithMoreThanOneFile = sum( i > 1 for i in numFilesPerKey )
+            thisExperiment = AttrDict( {'Manipulation'         : manipulation, 
+                                        'Keys'                 : keysAndFiles, 
+                                        'SuccessfulSharedKeys' : numKeysWithMoreThanOneFile,
+                                        'NumAlerts'            : len( memorySocket.tlsParser.GetAlerts() ) } )
+            experiments.append( thisExperiment )
+
+            # Asserts:
+            if assertExceptionThrown:
+                self.assertTrue( exceptionThrown == True )
+            if numExpectedAlerts != None:
+                self.assertTrue( thisExperiment.NumAlerts == numExpectedAlerts )
+
+            self.assertTrue( thisExperiment.SuccessfulSharedKeys == numExpectedSharedKeys ) 
+
+        return experiments
+
+    def test_SkipPieces_ClientHello_onWire( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+        self.RunSingleTest()
+        
+        originalTranscript  = memorySocket.tlsParser.transcript
+        topTreeLayer        = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateSkipPieceManipulations,  
+                                                                                                handshakeType = handshakeType )   )
+        experiments = self.RunManipulationTest( manipulations, numExpectedSharedKeys = 0 )
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+        pprint( experiments )
+
+        # for manipulation in manipulations:
+        #     msg0      = originalTranscript[ 0 ]
+        #     tlsParser = TLSParser()
+        #     print( "###############################################")
+        #     pprint( manipulation )
+        #     print( "==================== Original Message =====================")
+        #     tlsParser.PrintMsg( msg0 )
+        #     memorySocket.tlsParser.SetMsgManipulators( [ manipulation ] )
+        #     print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
+        #     rawMsg = memorySocket.tlsParser.ManipulateAndReconstruct( msg0 )
+        #     # The following will print the message as a side effect
+        #     parsedManipulatedMsg = tlsParser.Digest( rawMsg, msg0[ DIRECTION ] )
+
     def test_ReorderPieces_ServerEncryptedHello_onWire( self ):
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
@@ -753,7 +830,7 @@ class MITLSTester(unittest.TestCase):
 
         # # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
         # # pprint( keysToFiles )
-        # pprint( experiments )
+        pprint( experiments )
 
         # for manipulation in manipulations:
         #     pprint( manipulation )
@@ -1118,10 +1195,10 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
-    suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
-    suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_onWire" ) )
-    suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
-    # suite.addTest( MITLSTester() )
+    # suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
+    # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_onWire" ) )
+    # suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
+    suite.addTest( MITLSTester( "test_SkipPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester() )
     # suite.addTest( MITLSTester() )
     # suite.addTest( MITLSTester() )

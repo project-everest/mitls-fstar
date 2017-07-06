@@ -401,6 +401,7 @@ IV_AND_KEY              = "IV and Key"
 PARENT_NODE             = "ParentNode"
 SWAP_ITEMS              = "SwapItems"
 EXTRACT_TO_PLAINTEXT    = "ExtractToPlaintext"
+REMOVE_ITEM             = "RemoveItem"
 
 LEAKED_KEYS_DIR     = "leaked_keys"
 
@@ -1132,8 +1133,7 @@ class TLSParser():
 
         return handshakeMsg
 
-    def RebuildRawContentFromInterpretation( self, node ):
-        # pprint( node )
+    def RebuildRawContentFromInterpretation( self, node, bytesRemoved ):
         rawBody = b""
         header  = b""
 
@@ -1146,6 +1146,7 @@ class TLSParser():
             
             #The following is the extraBytes after substructing the ExtensionType and OpaqueExtensionSize
             extraBytes =    len( node.RawContents ) - \
+                            bytesRemoved            - \
                             SIZEOF_EXTENSION_TYPE -   \
                             SIZEOF_EXTENSION_SIZE -   \
                             len( rawBody )
@@ -1155,7 +1156,7 @@ class TLSParser():
 
             header = extensionType + opaqueExtensionSize
         else:
-            extraBytes = len( node.RawContents ) - len( rawBody )
+            extraBytes = len( node.RawContents ) - len( rawBody ) - bytesRemoved
 
         if extraBytes == 0:
             return header + rawBody
@@ -1167,8 +1168,6 @@ class TLSParser():
         if extraBytes == 2:
             rawSize = struct.pack( ">H", len( rawBody ) )
             return header + rawSize + rawBody
-
-        
 
         raise TLSParserError( "Unexpeded extraBytes = %d" % extraBytes )
 
@@ -1231,7 +1230,32 @@ class TLSParser():
         msg[ LENGTH      ] = -1 
 
         return msg
-        
+    
+    def ManipulateMsg_TopLevel( self, msg, manipulation ):
+        if SWAP_ITEMS in manipulation.keys():
+            swapIDs = manipulation[ SWAP_ITEMS ]
+            items   = msg[ RECORD ]
+
+            if swapIDs.index1 >= len( items ) or swapIDs.index2 >= len( items ):
+                return None
+
+            items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ] 
+
+            return msg
+        # else:
+        handshakeMsgToExtract = None
+        if EXTRACT_TO_PLAINTEXT in manipulation.keys() and msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA:
+            for handshakeMsg in msg[ RECORD ]:
+                if handshakeMsg[ HANDSHAKE_TYPE ] == manipulation[ HANDSHAKE_TYPE ]:
+                    handshakeMsgToExtract = handshakeMsg
+
+            msg[ RECORD ].remove( handshakeMsgToExtract )
+            msg[ EXTRACT_TO_PLAINTEXT ] = self.CreateHandshakeRecord( handshakeMsgToExtract, msg[ DIRECTION ] )
+
+            return msg
+
+        raise TLSParserError( "Can't execute manipulation %s" % manipulation )
+
     def ManipulateMsg( self, msg, manipulation ):
         if ALERT in msg.keys():
             return None
@@ -1239,27 +1263,8 @@ class TLSParser():
         msg = deepcopy( msg )
         
         if manipulation[ PARENT_NODE ] == RECORD and manipulation[ DIRECTION ] == msg[ DIRECTION ]:
-            if SWAP_ITEMS in manipulation.keys():
-                swapIDs = manipulation[ SWAP_ITEMS ]
-                items   = msg[ RECORD ]
-
-                if swapIDs.index1 >= len( items ) or swapIDs.index2 >= len( items ):
-                    return None
-
-                items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ] 
-
-                return msg
-            # else:
-            handshakeMsgToExtract = None
-            if EXTRACT_TO_PLAINTEXT in manipulation.keys() and msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA:
-                for handshakeMsg in msg[ RECORD ]:
-                    if handshakeMsg[ HANDSHAKE_TYPE ] == manipulation[ HANDSHAKE_TYPE ]:
-                        handshakeMsgToExtract = handshakeMsg
-
-                msg[ RECORD ].remove( handshakeMsgToExtract )
-                msg[ EXTRACT_TO_PLAINTEXT ] = self.CreateHandshakeRecord( handshakeMsgToExtract, msg[ DIRECTION ] )
-
-                return msg
+            return self.ManipulateMsg_TopLevel( msg, manipulation )
+          
         # else:
         handshakeMsgToManipulate = None
         if HANDSHAKE_TYPE in manipulation.keys():
@@ -1269,27 +1274,30 @@ class TLSParser():
         
         if handshakeMsgToManipulate is None:
             return None
-        # else:             
+        # else:      
         if PARENT_NODE in manipulation.keys():
-            parentNodeName = manipulation[ PARENT_NODE ]
-            node, routeToNode = self.FindNodeWithName( handshakeMsgToManipulate[ HANDSHAKE_MSG ], manipulation[ PARENT_NODE ] )
+            parentNodeName      = manipulation[ PARENT_NODE ]
+            node, routeToNode   = self.FindNodeWithName( handshakeMsgToManipulate[ HANDSHAKE_MSG ], manipulation[ PARENT_NODE ] )
+            bytesRemoved        = 0
 
             if SWAP_ITEMS in manipulation.keys():
                 swapIDs = manipulation[ SWAP_ITEMS ]
                 items   = node.Interpretation
                 items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ]
+            
+            elif REMOVE_ITEM in manipulation.keys():
+                itemIDToRemove  = manipulation[ REMOVE_ITEM ]
+                items           = node.Interpretation
+                bytesRemoved    = len( items[ itemIDToRemove ].RawContents )
 
-                nodesToRebuild = routeToNode + [ node ]
-                nodesToRebuild.reverse()
-                # pprint( nodesToRebuild )
-                for modifiedNode in nodesToRebuild:
-                    # origSize = len( modifiedNode.RawContents )
-                    # origContent = modifiedNode.RawContents[ : ]
-                    modifiedNode.RawContents = self.RebuildRawContentFromInterpretation( modifiedNode )
-                    # newSize = len( modifiedNode.RawContents )
-                    # print( "################## %s: origSize = %d, newSize = %d" % ( modifiedNode.Name, origSize, newSize ))
-                    # self.VisuallyCompareBuffers( origContent, modifiedNode.RawContents )
-           
+                del items[ itemIDToRemove ]
+
+            nodesToRebuild = routeToNode + [ node ]
+            nodesToRebuild.reverse()
+            # pprint( nodesToRebuild )
+            for modifiedNode in nodesToRebuild:
+                modifiedNode.RawContents = self.RebuildRawContentFromInterpretation( modifiedNode, bytesRemoved )
+
         # pprint( "msg after manipulation = %s" % msg )
         return msg
 
