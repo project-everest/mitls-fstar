@@ -184,7 +184,7 @@ int main(int argc, char **argv)
     FFI_mitls_quic_get_exporter(server, 0, qs, &errmsg);
     printf("                        server returns %s clen=%d slen=%d\n", quic_result_string(rs), clen, slen);
     printf("                        secret="); dump(qs->secret, 32);
-    printf("                  <---- ServerHello;(EncyrptedExtensions; Certificate; CertVerify; Finished)[%4d]\n\n",slen);
+    printf("                  <---- ServerHello;(EncryptedExtensions; Certificate; CertVerify; Finished)[%4d]\n\n",slen);
 
     c_buffer += clen; cmax -= clen; clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
@@ -260,7 +260,7 @@ int main(int argc, char **argv)
     printf("                        early secret="); dump(qs->secret, 32);
     FFI_mitls_quic_get_exporter(server, 0, qs, &errmsg);
     printf("                        secret="); dump(qs->secret, 32);
-    printf("                  <---- ServerHello;(EncyrptedExtensions; Certificate; CertVerify; Finished)[%4d]\n\n",slen);
+    printf("                  <---- ServerHello;(EncryptedExtensions; Certificate; CertVerify; Finished)[%4d]\n\n",slen);
 
     c_buffer += clen; cmax -= clen; clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
