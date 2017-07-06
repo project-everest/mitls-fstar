@@ -35,11 +35,11 @@ int main(int argc, char **argv)
       .max_stream_id = 16,
       .idle_timeout = 60
     },
-    .certificate_chain_file = "../../data/test_chain.pem",
-    .private_key_file = "../../data/server.key",
+    .certificate_chain_file = "../../data/server-ecdsa.crt",
+    .private_key_file = "../../data/server-ecdsa.key",
     .ca_file = "../../data/CAFile.pem",
     .cipher_suites = NULL, // Use defaults
-    .signature_algorithms = NULL,
+    .signature_algorithms = "ECDSA+SHA256",
     .named_groups = "X25519",
     .ticket_enc_alg = NULL,
     .ticket_key = NULL,
@@ -78,7 +78,8 @@ int main(int argc, char **argv)
   size_t clen = 0;
   size_t cmax = 8*1024; // too much; we use < 1KB
   char *c_buffer = malloc(clen); // 
-
+  int client_complete = 0;
+  int server_complete = 0;
 
   do{
     c_buffer += clen; // assuming miTLS never returns a larger clen
@@ -89,7 +90,13 @@ int main(int argc, char **argv)
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     printf("client done clen=%4d slen=%4d rc=%d\n", clen, slen, rc);
     dump(c_buffer, clen);
-    
+  
+    client_complete |= rc == TLS_client_complete || rc == TLS_client_complete_with_early_data;
+    if(rc == TLS_error_other || rc == TLS_error_local || rc == TLS_error_alert){
+      printf("Stopping due to error code. Msg: %s\n", errmsg);
+      break;
+    }
+
     s_buffer += slen; // assuming miTLS never returns a larger clen
     smax -= slen;
     slen = smax;
@@ -100,12 +107,21 @@ int main(int argc, char **argv)
     /* printf("server done clen=%4d slen=%4d rc=%d\n", clen, slen, rc); */
     /* clen += 12; */
 
-    printf("server call clen=%4d slen=%4d\n", clen, slen);
+    printf(" *** START SERVER clen=%4d slen=%4d\n", clen, slen);
     rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
-    printf("server done clen=%4d slen=%4d rc=%d\n", clen, slen, rc);
+    printf(" *** END SERVER clen=%4d slen=%4d rs=%d\n", clen, slen, rs);
+    printf("  === Server output ===\n");
     dump(s_buffer, slen);
+    printf("  =====================\n");
+
+    server_complete |= rs == TLS_server_complete;
+    if(rs == TLS_error_other || rs == TLS_error_local || rs == TLS_error_alert){
+      printf("Stopping due to error code. Msg: %s\n", errmsg);
+      break;
+    }
+
   }
-  while(rc != TLS_client_complete && rs != TLS_server_complete);
+  while(!client_complete || !server_complete);
 
   FFI_mitls_cleanup();
   printf("Ok\n");

@@ -611,11 +611,13 @@ typedef struct quic_state {
    size_t out_buffer_used;
 } quic_state;
 
- int MITLS_CALLCONV QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
+ int QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
  {
-   printf("CALLBACK: send %d\n", buffer_size);
-   // ADL YIKES
+//   FILE *fp = fopen("send_log", "a");
+//   fprintf(fp, "CALLBACK: send %u\n", buffer_size);
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
+//   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
+//   fclose(fp);
    if(!s->out_buffer) return -1;
 
    // ADL FIXME better error management
@@ -629,11 +631,15 @@ typedef struct quic_state {
    return -1;
  }
 
- int MITLS_CALLCONV QUIC_recv(struct _FFI_mitls_callbacks *cb, void *buffer, size_t len)
+ int QUIC_recv(struct _FFI_mitls_callbacks *cb, void *buffer, size_t len)
  {
-   printf("CALLBACK: recv %d\n", len);
+//   FILE *fp = fopen("recv_log", "a");
+//   fprintf(fp, "CALLBACK: recv %u\n", len);
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
-   if(!s->in_buffer) return -1;
+//   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
+//   fclose(fp);
+
+   if(!s->in_buffer || buffer == NULL) return -1;
 
    if(len > s->in_buffer_size - s->in_buffer_used)
      len = s->in_buffer_size - s->in_buffer_used; // may be 0
@@ -650,6 +656,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     CAMLparam0();
     CAMLlocal2(result, host);
 
+    *st = NULL;
     quic_state* state = malloc(sizeof(quic_state));
     if(!state) {
       *errmsg = "failed to allocate QUIC state";
@@ -683,6 +690,8 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     }
 
     // config
+    state->fstar_state = result;
+    caml_register_generational_global_root(&state->fstar_state);
     mitls_state ms = {.fstar_state = result};
 
     // ADL: any of these calls may fail. Need better errors to figure out which
@@ -752,7 +761,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       CAMLreturnT(int, 0);
     }
 
-    state->fstar_state = result;
+    // Replace config with connection in state->fstar_state
     caml_modify_generational_global_root(&state->fstar_state, result);
 
     CAMLreturnT(int, 1);
@@ -806,11 +815,10 @@ static quic_result FFI_mitls_quic_process_caml(
         report_caml_exception(result, errmsg);
         ret = TLS_error_other;
     } else {
-        // QuicProcess returns back QUIC.result
-        // bugbug: is this the correct mapping to an integer?
-        int tmp = Int_val(result);
-        if (tmp <= TLS_server_complete) {
-            ret = (quic_result) tmp;
+        int rc = Int_val(Field(result, 0));
+        int errorcode = Int_val(Field(result, 1));
+        if (rc <= TLS_server_complete) {
+            ret = (quic_result) rc;
         } else {
             ret = TLS_error_other;
         }

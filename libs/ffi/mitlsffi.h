@@ -88,8 +88,10 @@ typedef enum {
   TLS_error_alert = 2,
   TLS_client_early = 3,
   TLS_client_complete = 4,
-  TLS_server_accept = 5,
-  TLS_server_complete = 6,
+  TLS_client_complete_with_early_data = 5,
+  TLS_server_accept = 6,
+  TLS_server_accept_with_early_data = 7,
+  TLS_server_complete = 8,
   TLS_error_other = 0xffff
 } quic_result;
 
