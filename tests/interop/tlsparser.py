@@ -400,7 +400,7 @@ SIGNATURE               = "Signature"
 IV_AND_KEY              = "IV and Key"
 PARENT_NODE             = "ParentNode"
 SWAP_ITEMS              = "SwapItems"
-
+EXTRACT_TO_PLAINTEXT    = "ExtractToPlaintext"
 
 LEAKED_KEYS_DIR     = "leaked_keys"
 
@@ -905,23 +905,24 @@ class TLSParser():
 
         return helloRetry
 
-    def ParseHandshakeMsg( self ):
-        handshake                   = {}
-        handshake[ HANDSHAKE_TYPE ] = self.ConsumeByte()
-        handshake[ LENGTH ]         = self.ConsumeTrippleByteSize()
+    # def ParseHandshakeMsg( self ):
+    #     handshake                   = {}
+    #     handshake[ HANDSHAKE_TYPE ] = self.ConsumeByte()
+    #     handshake[ LENGTH ]         = self.ConsumeTrippleByteSize()
 
-        if handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_CLIENT_HELLO:
-            handshake[ HANDSHAKE_MSG ] = self.ParseClientHello()
+    #     if handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_CLIENT_HELLO:
+    #         handshake[ HANDSHAKE_MSG ] = self.ParseClientHello()
 
-        elif handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_SERVER_HELLO:
-            handshake[ HANDSHAKE_MSG ] = self.ParseServerHello()
+    #     elif handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_SERVER_HELLO:
+    #         handshake[ HANDSHAKE_MSG ] = self.ParseServerHello()
 
-        elif handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_HELLO_RETRY_REQUEST:
-            handshake[ HANDSHAKE_MSG ] = self.ParseHelloRetry()
-        else:
-            raise TLSParserError( "Unknown handshake type: %d" % handshake[ HANDSHAKE_TYPE ] )
+    #     elif handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_HELLO_RETRY_REQUEST:
+    #         handshake[ HANDSHAKE_MSG ] = self.ParseHelloRetry()
+    #     else:
+    #         handshake[ HANDSHAKE_MSG ] = self.ConsumeHandshake()????
+    #         # raise TLSParserError( "Unknown handshake type: %d" % handshake[ HANDSHAKE_TYPE ] )
 
-        return handshake
+    #     return handshake
 
     def ParseKeyFile( self, keyFilePath ):
         # self.log.debug( "ParseKeyFile: parsing %s" % keyFilePath )
@@ -1098,7 +1099,16 @@ class TLSParser():
         rawHandshakeMsg = self.PeekRawBytes( handshakeMsg[ LENGTH  ] )
         startPosition   = self.curretPosition
 
-        if handshakeMsg[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS:
+        if handshakeMsg[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_CLIENT_HELLO:
+            handshakeMsg[ HANDSHAKE_MSG ] = self.ParseClientHello()
+
+        elif handshakeMsg[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_SERVER_HELLO:
+            handshakeMsg[ HANDSHAKE_MSG ] = self.ParseServerHello()
+
+        elif handshakeMsg[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_HELLO_RETRY_REQUEST:
+            handshakeMsg[ HANDSHAKE_MSG ] = self.ParseHelloRetry()
+
+        elif handshakeMsg[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS:
             extensions, rawExtensions = self.ConsumeList(   SIZE_OF_UINT16, 
                                                 partial( self.ConsumeExtension, 
                                                          msgType = handshakeMsg[ HANDSHAKE_TYPE ] ) )
@@ -1191,13 +1201,37 @@ class TLSParser():
                 isMsgManipulated = True
 
         if isMsgManipulated:
+            wireMsg      = b""
+            plainTextMsg = None
+            if EXTRACT_TO_PLAINTEXT in manipulatedMsg.keys():
+                plainTextMsg = manipulatedMsg[ EXTRACT_TO_PLAINTEXT ]
+                wireMsg     += self.ReconstructRecordAndCompareToOriginal( plainTextMsg, doCompare = False )
+
+            wireMsg += self.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+
             if config.LOG_LEVEL < logging.ERROR:
                 print( "================== Manipulated Message =====================" )
+                
+                if plainTextMsg != None:
+                    self.PrintMsg( plainTextMsg )
+
                 self.PrintMsg( msg )
-            return self.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+
+            return wireMsg
         # else:
         return None
 
+
+    def CreateHandshakeRecord( self, handshakeMsg, direction ):
+        msg = {}
+        msg[ RECORD      ] = [ handshakeMsg ]
+        msg[ RECORD_TYPE ] = TLS_RECORD_TYPE_HANDSHAKE
+        msg[ PROTOCOL    ] = self.TLS_1_3_MAGIC
+        msg[ DIRECTION   ] = direction
+        msg[ LENGTH      ] = -1 
+
+        return msg
+        
     def ManipulateMsg( self, msg, manipulation ):
         if ALERT in msg.keys():
             return None
@@ -1213,6 +1247,17 @@ class TLSParser():
                     return None
 
                 items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ] 
+
+                return msg
+            # else:
+            handshakeMsgToExtract = None
+            if EXTRACT_TO_PLAINTEXT in manipulation.keys() and msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA:
+                for handshakeMsg in msg[ RECORD ]:
+                    if handshakeMsg[ HANDSHAKE_TYPE ] == manipulation[ HANDSHAKE_TYPE ]:
+                        handshakeMsgToExtract = handshakeMsg
+
+                msg[ RECORD ].remove( handshakeMsgToExtract )
+                msg[ EXTRACT_TO_PLAINTEXT ] = self.CreateHandshakeRecord( handshakeMsgToExtract, msg[ DIRECTION ] )
 
                 return msg
         # else:
@@ -1495,9 +1540,7 @@ class TLSParser():
         PIECE_NAME              = 0
         RAW_CONTENTS            = 1
         PIECE_INTERPRETATION    = 2
-
-        # pprint.pprint( parsedMsg )
-        
+        # pprint( parsedMsg )
         if self.IsMsgContainsOnlyAppData( parsedMsg ):
             reconstructedRawRecord = parsedMsg[ RECORD ]
         else:
@@ -1556,7 +1599,7 @@ class TLSParser():
         msg[ RAW_RECORD ]   = self.PeekRawBytes( totalRecordSize - TLS_RECORD_HEADER_SIZE, TLS_RECORD_HEADER_SIZE )
 
         if msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_HANDSHAKE:
-            msg[ RECORD ] = [ self.ParseHandshakeMsg() ]
+            msg[ RECORD ] = [ self.ConsumeHandshake() ]
             self.VerifyEqual( self.curretPosition, totalRecordSize )
             # pprint( msg )
             self.ReconstructRecordAndCompareToOriginal( msg )

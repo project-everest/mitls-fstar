@@ -31,27 +31,29 @@ from ctypes import  CDLL, \
 import argparse 
 import config
 import tlsparser
-from tlsparser import   MemorySocket,                \
-                        TLSParser,                   \
-                        Direction,                   \
-                        AttrDict,                    \
-                        HANDSHAKE_TYPE,              \
-                        PARENT_NODE,                 \
-                        SWAP_ITEMS,                  \
-                        HANDSHAKE_TYPE_CLIENT_HELLO, \
-                        CIPHER_SUITES,               \
-                        DIRECTION,                   \
-                        RECORD_TYPE,                 \
-                        NAME,                        \
-                        HANDSHAKE_MSG,               \
-                        RAW_CONTENTS,                \
-                        RAW_RECORD,                  \
-                        INTERPRETATION,              \
-                        RECORD,                      \
-                        KEY_SHARE_ENTRY,             \
-                        IV_AND_KEY,                  \
-                        EXTENSION_TYPE_NAMES,        \
-                        EXTENSION_TYPE_SUPPORTED_VERSIONS
+from tlsparser import   MemorySocket,                       \
+                        TLSParser,                          \
+                        Direction,                          \
+                        AttrDict,                           \
+                        HANDSHAKE_TYPE,                     \
+                        PARENT_NODE,                        \
+                        SWAP_ITEMS,                         \
+                        HANDSHAKE_TYPE_CLIENT_HELLO,        \
+                        CIPHER_SUITES,                      \
+                        DIRECTION,                          \
+                        RECORD_TYPE,                        \
+                        NAME,                               \
+                        HANDSHAKE_MSG,                      \
+                        RAW_CONTENTS,                       \
+                        RAW_RECORD,                         \
+                        INTERPRETATION,                     \
+                        RECORD,                             \
+                        KEY_SHARE_ENTRY,                    \
+                        IV_AND_KEY,                         \
+                        EXTENSION_TYPE_NAMES,               \
+                        EXTENSION_TYPE_SUPPORTED_VERSIONS,  \
+                        EXTRACT_TO_PLAINTEXT,               \
+                        HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS               
 
 
 SUCCESS                     = 1
@@ -818,6 +820,65 @@ class MITLSTester(unittest.TestCase):
 
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
+    def test_ServerEncryptedHello_extractToPlaintext( self ):
+        if "ServerEncryptedHello_extractToPlaintext" not in testsToRun:
+            return  
+        
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+        self.RunSingleTest()
+
+        originalTranscript  = memorySocket.tlsParser.transcript
+        # topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        # handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        # manipulations       = ????
+        manipulations = [ AttrDict( {  DIRECTION                : Direction.SERVER_TO_CLIENT,
+                                       PARENT_NODE              : RECORD,
+                                       EXTRACT_TO_PLAINTEXT     : True,
+                                       HANDSHAKE_TYPE           : HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS }) ]
+        experiments = []
+        for manipulation in manipulations:
+            # pprint( manipulation )
+            exceptionThrown = False
+            try:
+                preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
+                self.RunSingleTest( msgManipulators = [ manipulation ] )
+            except:
+                exceptionThrown = True
+                traceback.print_exc()
+            
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
+            time.sleep(0.5) # allow stdout to be flushed and read by keysMonitor
+
+        #     self.assertTrue( exceptionThrown == True )
+        #     self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 2 )
+
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+        # # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
+        # # pprint( keysToFiles )
+        pprint( experiments )
+
+        # for manipulation in manipulations:
+        #     pprint( manipulation )
+        #     msg2      = originalTranscript[ 2 ]
+        #     # memorySocket.tlsParser = TLSParser()
+        #     memorySocket.tlsParser.SetMsgManipulators( [ manipulation ] )
+        #     print( "###############################################")
+        #     pprint( manipulation )
+        #     print( "==================== Original Message =====================")
+        #     memorySocket.tlsParser.PrintMsg( msg2 )
+
+        #     print( "==================== Manipulated Message  =====================")
+        #     rawMsg = memorySocket.tlsParser.ManipulateAndReconstruct( msg2 )
+        #     # rawMsg         = memorySocket.tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+            
+        #     memorySocket.tlsParser.SetMsgManipulators( [] )
+        #     # The following will print the message as a side effect
+        #     print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
+        #     parsedManipulatedMsg = memorySocket.tlsParser.Digest( rawMsg, msg2[ DIRECTION ], ivAndKey = msg2[ IV_AND_KEY ] )
+
 
     def RemoveItemAndSplit( self, itemList, itemToRemove ):
         otherItems = itemList[ : ]
@@ -1093,8 +1154,9 @@ if __name__ == '__main__':
                    # "NamedGroups"         ,
                    # "CipherSuites_commonSuiteIsHighest",
                    # "ReorderPieces_ClientHello_onWire",
-                   "ReorderPieces_ServerEncryptedHello_onWire",
-                   # "ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire"
+                   # "ReorderPieces_ServerEncryptedHello_onWire",
+                   # "ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire",
+                   "ServerEncryptedHello_extractToPlaintext",
                    ]
 
     unittest.main()
