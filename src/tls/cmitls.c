@@ -162,6 +162,53 @@ void PrintErrors(char *out_msg, char *err_msg)
     }
 }
 
+int ConfigureQuic(quic_state **pstate)
+{
+    char *err_msg;
+    int r;
+    quic_state *state;
+    quic_config quic_cfg;
+    
+    *pstate = NULL;
+    if (!option_quic) {
+        printf("Call Configure() instead of ConfigureQuic(), for TLS connections.\n");
+        return 4;
+    }
+    
+    memset(&quic_cfg, 0, sizeof(quic_cfg));
+    quic_cfg.is_server = (option_isserver) ? 1 : 0;
+    quic_cfg.qp.max_stream_data = 65536;
+    quic_cfg.qp.max_data = 16777216;
+    quic_cfg.qp.max_stream_id = 256;
+    quic_cfg.qp.idle_timeout = 60;
+    quic_cfg.cipher_suites = option_ciphers;
+    quic_cfg.signature_algorithms = option_sigalgs;
+    quic_cfg.named_groups = option_groups;
+    quic_cfg.enable_0rtt = (option_0rtt) ? 1 : 0;
+    
+    if (option_isserver) {
+        quic_cfg.certificate_chain_file = option_cert;
+        quic_cfg.private_key_file = option_key;
+        quic_cfg.ticket_enc_alg = NULL;
+        quic_cfg.ticket_key = NULL;
+        quic_cfg.ticket_key_len = 0;
+    } else { // client
+        quic_cfg.host_name = option_hostname;
+        quic_cfg.ca_file = option_cafile;
+        //quic_cfg.server_ticket.len
+        //quic_cfg.server_ticket.ticket
+    }
+    
+    r = FFI_mitls_quic_create(&state, &quic_cfg, &err_msg);
+    PrintErrors(NULL, err_msg);
+    if (r == 0) {
+        printf("FFI_mitls_quic_create() failed.\n");
+        return 2;
+    }
+    *pstate = state;
+    return 0;
+}
+
 int Configure(mitls_state **pstate)
 {
     char *out_msg;
@@ -172,17 +219,11 @@ int Configure(mitls_state **pstate)
     *pstate = NULL;
 
     if (option_quic) {
-        r = FFI_mitls_quic_configure(&state,
-        65536, // max_stream_data
-        16777216, // max_data
-        256, // max_stream_id
-        60, // idle_timeout
-        0, // max_packet_size (use default value)
-        option_hostname,
-        &out_msg, &err_msg);
-    } else {
-        r = FFI_mitls_configure(&state, option_version, option_hostname, &out_msg, &err_msg);
+        printf("Call ConfigureQuic() instead of Configure(), for QUIC connections.\n");
+        return 4;
     }
+    
+    r = FFI_mitls_configure(&state, option_version, option_hostname, &out_msg, &err_msg);
     PrintErrors(out_msg, err_msg);
     if (r == 0) {
         printf("FFI_mitls_configure(%s,%s) failed.\n", option_version, option_hostname);
@@ -407,27 +448,51 @@ int TestServer()
     return 0;
 }
 
-// auxiliary reading loop (brittle when using TCP)
-void quic_recv_until(mitls_state *state, int p)
-{
-    int r;
+typedef int (*quic_result_check)(quic_result r);
 
+// auxiliary reading loop (brittle when using TCP)
+void quic_recv_until(quic_state *state, SOCKET fd, quic_result_check check)
+{
+    quic_result r;
+    char inbuf[8192];
+    size_t inbufsize;
+    char outbuf[8192];
+    size_t outbufsize;
+    int sockresult;
+
+    inbufsize = 0;
     do {
-        char *out_msg;
         char *err_msg;
-        r = FFI_mitls_quic_process(state, &out_msg, &err_msg);
-        PrintErrors(out_msg, err_msg);
+        r = FFI_mitls_quic_process(state, inbuf, &inbufsize, outbuf, &outbufsize, &err_msg);
+        PrintErrors(NULL, err_msg);
         switch (r) {
         case TLS_would_block: printf("would block\n"); break;
-        case TLS_error_local: printf("fatal error\n"); break; // bugbug: print 'e'
-        case TLS_error_alert: printf("received fatal alert\n"); break; // bugbug: print 'e'
-        case TLS_client_early: printf("client offers early data\n"); break; // bugbug: print 'secret0'
-        case TLS_client_complete: printf("client completes X: the server Y early data\n"); break; // bugbug: secret1, b
-        case TLS_server_accept: printf("server accepts X early data\n"); break; // bugbug: secret0/secret1 and true/false
+        case TLS_error_local: printf("fatal error\n"); break;
+        case TLS_error_alert: printf("received fatal alert\n"); break;
+        case TLS_client_early: printf("client offers early data\n"); break;
+        case TLS_client_complete: printf("client completes {secret1}; the server is ignoring early data\n"); break;
+        case TLS_client_complete_with_early_data: printf("client offers early data {secret0}"); break;
+        case TLS_server_accept: printf("server accepts X early data\n"); break;
+        case TLS_server_accept_with_early_data: printf("server accepts with early data {secret0; secret1}\n"); break;
         case TLS_server_complete: printf("server completes\n"); break;
+        case TLS_error_other: printf("other miTLS error\n"); break;
         default: printf("Unknown return %d from FFI_mitls_quic_process\n", r); return;
         }
-    } while (r != p);
+        if (outbufsize) {
+            sockresult = send(fd, outbuf, (int)outbufsize, 0);
+            if (sockresult != outbufsize) {
+                printf("Socket send failed\n");
+                return;
+            }
+        }
+        if (inbufsize) {
+            sockresult = recv(fd, inbuf, inbufsize, 0);
+            if (sockresult != inbufsize) {
+                printf("Socket recv failed\n");
+                return;
+            }
+        }
+    } while ((*check)(r));
 }
 
 void print_bytes(const void *buf, size_t len)
@@ -439,40 +504,82 @@ void print_bytes(const void *buf, size_t len)
     }
 }
 
-void quic_dump(mitls_state *state)
+// Indexed by quic_hash enum
+const char *hash_names[] = 
+{
+    "MD5", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512"
+};
+
+// Indexed by quic_aead enum
+const char *aead_names[] =
+{
+    "AES_128_GCM", "AES_256_GCM", "CHACHA20_POLY1305"
+};
+
+void print_secret(quic_secret *s)
+{
+    printf("{%s %s ", hash_names[s->hash], aead_names[s->ae]);
+    print_bytes(s->secret, sizeof(s->secret));
+    printf("}");
+}
+
+void quic_dump(quic_state *state)
 {
     printf("OK\n");
-    void* secret0;
-    void* secret1;
-    size_t secret0_size;
-    size_t secret1_size;
-    char *out_msg;
+    quic_secret secret0;
+    quic_secret secret1;
+    int ret0;
+    int ret1;
     char *err_msg;
 
-    secret0 = FFI_mitls_quic_get_exporter(state, 0, &secret0_size, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
-    secret1 = FFI_mitls_quic_get_exporter(state, 1, &secret1_size, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
+    ret0 = FFI_mitls_quic_get_exporter(state, 0, &secret0, &err_msg);
+    PrintErrors(NULL, err_msg);
+    ret1 = FFI_mitls_quic_get_exporter(state, 1, &secret1, &err_msg);
+    PrintErrors(NULL, err_msg);
 
-    if (secret0) {
+    if (ret0) {
         printf("early secret: ");
-        print_bytes(secret0, secret0_size);
+        print_secret(&secret0);
         printf("\n");
     }
-    if (secret1) {
+    if (ret1) {
         printf("main secret: ");
-        print_bytes(secret1, secret1_size);
+        print_secret(&secret1);
         printf("\n");
     }
-    FFI_mitls_free_packet(secret0);
-    FFI_mitls_free_packet(secret1);
-
     // bugbug: dump get_parameters of state for Client and Server  via FFI_mitls_quic_get_parameters()
+}
+
+int check_client_complete(quic_result r)
+{
+    if (r == TLS_client_complete || r == TLS_client_complete_with_early_data) {
+        return 1;
+    }
+    return 0;
+}
+
+int check_is_ticketed(quic_result r)
+{
+    // bugbug: implement
+    return 1;
+}
+
+int check_server_complete(quic_result r)
+{
+    if (r == TLS_server_complete) {
+        return 1;
+    }
+    return 0;
+}
+
+int check_true(quic_result r)
+{
+    return 1;
 }
 
 int TestQuicClient(void)
 {
-    mitls_state *state;
+    quic_state *state;
     SOCKET sockfd;
     struct hostent *peer;
     struct sockaddr_in addr;
@@ -503,56 +610,27 @@ int TestQuicClient(void)
         return 1;
     }
 
-    r = Configure(&state);
+    r = ConfigureQuic(&state);
     if (r != 0) {
         return 1;
     }
 
-    ctx.cb.send = SendCallback;
-    ctx.cb.recv = RecvCallback;
-    ctx.sockfd = sockfd;
-    r = FFI_mitls_quic_create_client(&ctx.cb, state, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
-    if (r == 0) {
-        printf("FFI_mitls_quic_create_client() failed\n");
-        return 1;
-    }
-
-    quic_recv_until(state, TLS_client_complete);
-    quic_recv_until(state, TLS_would_block); // ticket_sending
-    quic_recv_until(state, TLS_would_block);
-    quic_recv_until(state, TLS_would_block);
+    quic_recv_until(state, sockfd, check_client_complete);
+    quic_recv_until(state, sockfd, check_is_ticketed);
     quic_dump(state);
 
     return 0;
 }
 
 #define MAX_RECEIVED_REQUEST_LENGTH  (65536) // 64kb
-int SingleQuicServer(mitls_state *state, SOCKET clientfd)
+int SingleQuicServer(quic_state *state, SOCKET clientfd)
 {
-    callback_context ctx;
-    char *out_msg;
-    char *err_msg;
-    void *db;
-    size_t db_length;
-    int r;
-
-    ctx.cb.send = SendCallback;
-    ctx.cb.recv = RecvCallback;
-    ctx.sockfd = clientfd;
-    r = FFI_mitls_quic_create_server(&ctx.cb, state, &out_msg, &err_msg);
-    PrintErrors(out_msg, err_msg);
-    if (r == 0) {
-        printf("FFI_mitls_quic_create_server() failed\n");
-        return 1;
-    }
-
     // brittle, as we need to write the ticket without blocking on TCP read.
-    quic_recv_until(state, TLS_server_complete);
-    quic_recv_until(state, TLS_would_block);
+    quic_recv_until(state, clientfd, check_server_complete);
+    quic_recv_until(state, clientfd, check_true);
     quic_dump(state);
 
-    FFI_mitls_close(state);
+    FFI_mitls_quic_free(state);
     return 0;
 }
 
@@ -561,7 +639,7 @@ int TestQuicServer(void)
     SOCKET sockfd;
     struct hostent *host;
     struct sockaddr_in addr;
-    mitls_state *state;
+    quic_state *state;
 
     printf("SERVER\n");
 
@@ -600,7 +678,7 @@ int TestQuicServer(void)
             closesocket(sockfd);
             return 1;
         }
-        if (Configure(&state) != 0) {
+        if (ConfigureQuic(&state) != 0) {
             return 1;
         }
         if (SingleQuicServer(state, clientsockfd)) {

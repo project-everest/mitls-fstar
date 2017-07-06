@@ -660,7 +660,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     *st = NULL;
     quic_state* state = malloc(sizeof(quic_state));
     if(!state) {
-      *errmsg = "failed to allocate QUIC state";
+      *errmsg = strdup("failed to allocate QUIC state");
       CAMLreturnT(int, 0);
     }
     *st = state;
@@ -699,56 +699,56 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     if(cfg->certificate_chain_file)
       if(!configure_common_caml(&ms, cfg->certificate_chain_file, g_mitls_FFI_SetCertChainFile))
       {
-        *errmsg = "FFI_mitls_quic_create_caml: certificate chain file";
+        *errmsg = strdup("FFI_mitls_quic_create_caml: certificate chain file");
         CAMLreturnT(int, 0);
       }
 
     if(cfg->private_key_file)
        if(!configure_common_caml(&ms, cfg->private_key_file, g_mitls_FFI_SetPrivateKeyFile))
        {
-         *errmsg = "FFI_mitls_quic_create_caml: private key file";
+         *errmsg = strdup("FFI_mitls_quic_create_caml: private key file");
          CAMLreturnT(int, 0);
        }
 
     if(cfg->ca_file)
        if(!configure_common_caml(&ms, cfg->ca_file, g_mitls_FFI_SetCAFile))
        {
-         *errmsg = "FFI_mitls_quic_create_caml: CA file";
+         *errmsg = strdup("FFI_mitls_quic_create_caml: CA file");
          CAMLreturnT(int, 0);
        }
 
     if(cfg->cipher_suites)
        if(!configure_common_caml(&ms, cfg->cipher_suites, g_mitls_FFI_SetCipherSuites))
        {
-         *errmsg = "FFI_mitls_quic_create_caml: cipher suite list";
+         *errmsg = strdup("FFI_mitls_quic_create_caml: cipher suite list");
          CAMLreturnT(int, 0);
        }
 
     if(cfg->named_groups)
        if(!configure_common_caml(&ms, cfg->named_groups, g_mitls_FFI_SetNamedGroups))
        {
-         *errmsg = "FFI_mitls_quic_create_caml: supported groups list";
+         *errmsg = strdup("FFI_mitls_quic_create_caml: supported groups list");
          CAMLreturnT(int, 0);
        }
 
     if(cfg->signature_algorithms)
        if(!configure_common_caml(&ms, cfg->signature_algorithms, g_mitls_FFI_SetSignatureAlgorithms))
        {
-         *errmsg = "FFI_mitls_quic_create_caml: signature algorithms list";
+         *errmsg = strdup("FFI_mitls_quic_create_caml: signature algorithms list");
          CAMLreturnT(int, 0);
        }
 
     if(cfg->ticket_enc_alg && cfg->ticket_key)
        if(!ocaml_set_ticket_key(cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
        {
-         *errmsg = "FFI_mitls_quic_create_caml: set ticket key";
+         *errmsg = strdup("FFI_mitls_quic_create_caml: set ticket key");
          CAMLreturnT(int, 0);
        }
 
     if(cfg->enable_0rtt)
        if(!configure_common_bool_caml(&ms, 1, g_mitls_FFI_SetEarlyData))
        {
-         *errmsg = "FFI_mitls_quic_create_caml: can't enable early_data";
+         *errmsg = strdup("FFI_mitls_quic_create_caml: can't enable early_data");
          CAMLreturnT(int, 0);
        }
 
@@ -771,6 +771,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
 int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg)
 {
     int ret;
+    *errmsg = NULL;
     caml_acquire_runtime_system();
     ret = FFI_mitls_quic_create_caml(state, cfg, errmsg);
     caml_release_runtime_system();
@@ -890,7 +891,7 @@ static int FFI_mitls_quic_get_exporter_caml(
     // Secret not available
     if(result == Val_none)
     {
-      *errmsg = "the requested secret is not yet available";
+      *errmsg = strdup("the requested secret is not yet available");
       CAMLreturnT(int, 0);
     }
 
@@ -913,6 +914,7 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
 {
     int ret;
 
+    *errmsg = NULL;
     caml_acquire_runtime_system();
     ret = FFI_mitls_quic_get_exporter_caml(state, early, secret, errmsg);
     caml_release_runtime_system();
@@ -938,7 +940,7 @@ static int FFI_mitls_quic_get_ticket_caml(
 
     if(result == Val_none)
     {
-      *errmsg = "no ticket available";
+      *errmsg = strdup("no ticket available");
       CAMLreturnT(int, 0);
     }
 
@@ -948,7 +950,7 @@ static int FFI_mitls_quic_get_ticket_caml(
     // Ticket too large
     if (len > MAX_TICKET_LEN)
     {
-      *errmsg = "the ticket is too large";
+      *errmsg = strdup("the ticket is too large");
       CAMLreturnT(int, 0);
     }
 
@@ -963,6 +965,8 @@ int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
   /* out */ char **errmsg)
 {
     int ret;
+    
+    *errmsg = NULL;
 
     caml_acquire_runtime_system();
     ret = FFI_mitls_quic_get_ticket_caml(state, ticket, errmsg);
@@ -977,7 +981,7 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
         caml_acquire_runtime_system();
         caml_remove_generational_global_root(&state->fstar_state);
         caml_release_runtime_system();
-        state->fstar_state = NULL;
+        state->fstar_state = 0;
         free(state);
     }
 }
