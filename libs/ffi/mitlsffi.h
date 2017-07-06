@@ -117,6 +117,12 @@ typedef struct {
   char secret[64]; // Max possible size, flat allocation
 } quic_secret;
 
+#define MAX_TICKET_LEN 1020
+typedef struct {
+  size_t len;
+  char ticket[MAX_TICKET_LEN];
+} quic_ticket;
+  
 typedef struct {
   unsigned int max_stream_data;
   unsigned int max_data;
@@ -124,24 +130,30 @@ typedef struct {
   unsigned short idle_timeout;
 } quic_transport_parameters;
 
+typedef struct quic_key quic_key;
+
 typedef struct {
   // NULL terminated hostname (sent in SNI and used to validate certificate)
   int is_server;
-  char *host_name; // Client only, sent in SNI
   quic_transport_parameters qp;
-  char *certificate_chain_file; // Server only
-  char *private_key_file; // Server only
-  char *ca_file; // Client only
   char *cipher_suites; // Colon separated list of ciphersuite or NULL
   char *signature_algorithms; // Colon separated list of signature schemes or NULL
   char *named_groups; // Colon separated list of Diffie-Hellman groups
+  int enable_0rtt; // Probably true for QUIC
+
+  // only used by the client
+  char *host_name; // Client only, sent in SNI
+  char *ca_file; // Client only
+  quic_ticket server_ticket; 
+
+  // only used by the server
+  char *certificate_chain_file; // Server only
+  char *private_key_file; // Server only
   char *ticket_enc_alg; // one of "AES128-GCM" "AES256-GCM" "CHACHA20-POLY1305", or NULL
   char *ticket_key; // If NULL a random key will be sampled
   size_t ticket_key_len; // Should be 28 or 44, concatenation of key and static IV
-  int enable_0rtt; // Probably true for QUIC
 } quic_config;
 
-typedef struct quic_key quic_key;
 
 // pass 0 to leave any of the configuration values undefined
 extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_config *cfg, /* out */ char **errmsg);
@@ -150,6 +162,7 @@ extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *st
 
 extern int MITLS_CALLCONV FFI_mitls_quic_get_transport_parameters(/* in */ quic_state *state, /*out*/ quic_transport_parameters *qp);
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret, char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_get_ticket(/* in */ quic_state *state, /*out*/ quic_ticket *ticket , /* out */ char **errmsg);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(/* in */ quic_state *state);
 
 #endif // HEADER_MITLS_FFI_H

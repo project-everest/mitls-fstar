@@ -151,9 +151,9 @@ let accept send recv config : ML Connection.connection =
   quic_check config;
   TLS.accept_connected here tcp config
 
-val ffiConnect: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
-let ffiConnect config cb =
-  connect (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config []
+val ffiConnect: config:config -> (*TODO: ticket: option bytes -> *) callbacks:FFI.callbacks -> ML Connection.connection
+let ffiConnect config (*ticket*) cb =
+  connect (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config [] //TODO: (match ticket with | Some t -> [t] | None -> [])
 
 val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiAcceptConnected config cb =
@@ -183,6 +183,12 @@ let get_exporter c (early:bool)
     | false, ExportID _ _ -> Some (h, ae, b)
     | true, EarlyExportID _ _ -> Some (h, ae, b)
     | _ -> None
+
+// client-side: get 
+let get_ticket c: ML (option bytes) = 
+    match (Connection.c_cfg c).peer_name with
+    | Some n -> Option.map fst (Ticket.lookup n)
+    | None -> None
 
 let ffiConfig max_stream_data max_data max_stream_id idle_timeout host =
   { defaultConfig with

@@ -19,3 +19,4 @@ let _ = Callback.register "MITLS_FFI_Config" FFI.ffiConfig;
         Callback.register "MITLS_FFI_QuicProcess" QUIC.recv;
         Callback.register "MITLS_FFI_QuicGetParameters" QUIC.get_parameters;
         Callback.register "MITLS_FFI_QuicGetExporter" QUIC.get_exporter;
+        Callback.register "MITLS_FFI_QuicGetTicket" QUIC.get_ticket;

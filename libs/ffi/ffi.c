@@ -38,7 +38,8 @@
   MITLS_FFI_ENTRY(QuicCreateServer) \
   MITLS_FFI_ENTRY(QuicProcess) \
   MITLS_FFI_ENTRY(QuicGetParameters) \
-  MITLS_FFI_ENTRY(QuicGetExporter)
+  MITLS_FFI_ENTRY(QuicGetExporter) \
+  MITLS_FFI_ENTRY(QuicGetTicket)
 
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -914,6 +915,56 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
 
     caml_acquire_runtime_system();
     ret = FFI_mitls_quic_get_exporter_caml(state, early, secret, errmsg);
+    caml_release_runtime_system();
+
+    return ret;
+}
+
+static int FFI_mitls_quic_get_ticket_caml(
+  /* in */ quic_state *state,
+  /* out */ quic_ticket *ticket,
+  /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal2(result, tmp);
+
+    result = caml_callback_exn(*g_mitls_FFI_QuicGetTicket,
+                                state->fstar_state);
+
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        CAMLreturnT(int, 0);
+    }
+    if(result == Val_none)
+      {
+        *errmsg = "the requested ticket is not available";
+        CAMLreturnT(int, 0);
+      }
+    result = Some_val(result);
+    tmp = Field(result, 0);
+    size_t len = caml_string_length(tmp);
+
+    // Ticket too large
+    if (len > MAX_TICKET_LEN)
+      {
+        *errmsg = "the ticket is too large";
+        CAMLreturnT(int, 0);
+      }
+    
+    ticket->len = len;
+    memcpy(ticket->ticket, String_val(tmp), len);
+    CAMLreturnT(int, 1);
+}
+
+int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
+  /* in */ quic_state *state,
+  quic_ticket *ticket,
+  /* out */ char **errmsg)
+{
+    int ret;
+
+    caml_acquire_runtime_system();
+    ret = FFI_mitls_quic_get_ticket_caml(state, ticket, errmsg);
     caml_release_runtime_system();
 
     return ret;
