@@ -478,8 +478,6 @@ class MonitorLeakedKeys():
                     sys.stderr.write( "Dumped key to %s\n" % filePath )
                     keyIdx += 1
 
-testsToRun = []
-
 class MITLSTester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(MITLSTester, self).__init__(*args, **kwargs)
@@ -541,9 +539,6 @@ class MITLSTester(unittest.TestCase):
         return serverThread
 
     def test_MITLS_ClientAndServer( self ):
-        if "ClientServerTest" not in testsToRun:
-            return
-
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -569,67 +564,57 @@ class MITLSTester(unittest.TestCase):
         # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
         return memorySocket.tlsParser.transcript
 
-    def test_ReorderCipherSuites( self ):
-        if "ReorderCipherSuites" not in testsToRun:
-            return
-        global testsToRun
-        orig_testsToRun = testsToRun[ : ]
-        testsToRun.append( "ClientServerTest" )
-        try:
-            transcript               = self.test_MITLS_ClientAndServer()
-            msg0                     = transcript[ 0 ]
-            msg1                     = transcript[ 1 ]
+    # def test_ReorderCipherSuites( self ):
+    #     testsToRun.append( "ClientServerTest" )
+    #     transcript               = self.test_MITLS_ClientAndServer()
+    #     msg0                     = transcript[ 0 ]
+    #     msg1                     = transcript[ 1 ]
 
-            manipulation = AttrDict( { HANDSHAKE_TYPE : HANDSHAKE_TYPE_CLIENT_HELLO,
-                                       PARENT_NODE    : CIPHER_SUITES,
-                                       SWAP_ITEMS     : AttrDict( { 'index1' : 0, 'index2' : -1 } ) })
-            tlsParser = tlsparser.TLSParser()
-            manipulatedMsg = tlsParser.ManipulateMsg( msg1, manipulation )
-            self.assertTrue( manipulatedMsg == None )
+    #     manipulation = AttrDict( { HANDSHAKE_TYPE : HANDSHAKE_TYPE_CLIENT_HELLO,
+    #                                PARENT_NODE    : CIPHER_SUITES,
+    #                                SWAP_ITEMS     : AttrDict( { 'index1' : 0, 'index2' : -1 } ) })
+    #     tlsParser = tlsparser.TLSParser()
+    #     manipulatedMsg = tlsParser.ManipulateMsg( msg1, manipulation )
+    #     self.assertTrue( manipulatedMsg == None )
 
-            manipulatedMsg = tlsParser.ManipulateMsg( msg0, manipulation )
+    #     manipulatedMsg = tlsParser.ManipulateMsg( msg0, manipulation )
 
-            print( "==================== Original Message =====================")
-            tlsParser.PrintMsg( msg0 )
+    #     print( "==================== Original Message =====================")
+    #     tlsParser.PrintMsg( msg0 )
 
-            # print( "==================== Manipulated Message =====================")
-            # tlsParser.PrintMsg( manipulatedMsg )
+    #     # print( "==================== Manipulated Message =====================")
+    #     # tlsParser.PrintMsg( manipulatedMsg )
 
-            print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
-            rawMsg = tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
-            
-            # The following will print the message as a side effect
-            parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
-
-            # tlsParser.PrintMsg( parsedManipulatedMsg )
+    #     print( "==================== Manipulated Message after reconstructing and re-parsing =====================")
+    #     rawMsg = tlsParser.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
         
-        finally:
-            testsToRun = orig_testsToRun
+    #     # The following will print the message as a side effect
+    #     parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
-    def test_ReorderCipherSuites_onWire( self ):
-        if "ReorderCipherSuites_onWire" not in testsToRun:
-            return 
+    #     # tlsParser.PrintMsg( parsedManipulatedMsg )
 
-        manipulation = AttrDict( { HANDSHAKE_TYPE : HANDSHAKE_TYPE_CLIENT_HELLO,
-                                   PARENT_NODE    : CIPHER_SUITES,
-                                   SWAP_ITEMS     : AttrDict( { 'index1' : 1, 'index2' : 2 } ) })
+
+    # def test_ReorderCipherSuites_onWire( self ):
+    #     manipulation = AttrDict( { HANDSHAKE_TYPE : HANDSHAKE_TYPE_CLIENT_HELLO,
+    #                                PARENT_NODE    : CIPHER_SUITES,
+    #                                SWAP_ITEMS     : AttrDict( { 'index1' : 1, 'index2' : 2 } ) })
         
-        keysMonitor = MonitorLeakedKeys()
-        keysMonitor.MonitorStdoutForLeakedKeys()
+    #     keysMonitor = MonitorLeakedKeys()
+    #     keysMonitor.MonitorStdoutForLeakedKeys()
 
-        exceptionThrown = False
-        try:
-            self.RunSingleTest( msgManipulators = [ manipulation ] )
-        except:
-            exceptionThrown = True
-            traceback.print_exc()
+    #     exceptionThrown = False
+    #     try:
+    #         self.RunSingleTest( msgManipulators = [ manipulation ] )
+    #     except:
+    #         exceptionThrown = True
+    #         traceback.print_exc()
 
-        keysMonitor.StopMonitorStdoutForLeakedKeys()
+    #     keysMonitor.StopMonitorStdoutForLeakedKeys()
 
-        self.assertTrue( exceptionThrown == True )
+    #     self.assertTrue( exceptionThrown == True )
 
-        for msg in  memorySocket.tlsParser.transcript:
-            print( "Direction: %s, type = %s" % (msg[ DIRECTION ], msg[ RECORD_TYPE ] ) )
+    #     for msg in  memorySocket.tlsParser.transcript:
+    #         print( "Direction: %s, type = %s" % (msg[ DIRECTION ], msg[ RECORD_TYPE ] ) )
 
     def CreateShuffleChildrenManipulations( self, node, handshakeType ):
         shuffleManipulations = []
@@ -682,9 +667,6 @@ class MITLSTester(unittest.TestCase):
         return manipulations
 
     def test_ReorderPieces_ClientHello_onWire( self ):
-        if "ReorderPieces_ClientHello_onWire" not in testsToRun:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
         self.RunSingleTest()
@@ -740,9 +722,6 @@ class MITLSTester(unittest.TestCase):
         #     parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
     def test_ReorderPieces_ServerEncryptedHello_onWire( self ):
-        if "ReorderPieces_ServerEncryptedHello_onWire" not in testsToRun:
-            return  
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
         self.RunSingleTest()
@@ -793,9 +772,6 @@ class MITLSTester(unittest.TestCase):
         #     parsedManipulatedMsg = memorySocket.tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ], ivAndKey = msg2[ IV_AND_KEY ] )
 
     def test_ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire( self ):    
-        if "ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire" not in testsToRun:
-            return  
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
         self.RunSingleTest()
@@ -825,9 +801,6 @@ class MITLSTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_ServerEncryptedHello_extractToPlaintext( self ):
-        if "ServerEncryptedHello_extractToPlaintext" not in testsToRun:
-            return  
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
         self.RunSingleTest()
@@ -933,9 +906,6 @@ class MITLSTester(unittest.TestCase):
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
 
     def test_NamedGroups( self ):
-        if "NamedGroups" not in testsToRun:
-            return 
-
         self.log.info( "test_NamedGroups" )
         
         keysMonitor = MonitorLeakedKeys()
@@ -955,9 +925,6 @@ class MITLSTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_SignatureAlgorithms( self ):
-        if "SignatureAlgorithms" not in testsToRun:
-            return 
-
         self.log.info( "test_SignatureAlgorithms" )
         
         keysMonitor = MonitorLeakedKeys()
@@ -977,9 +944,6 @@ class MITLSTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_CipherSuites( self ):
-        if "CipherSuites" not in testsToRun:
-            return 
-
         self.log.info( "test_CipherSuites" )
         
         keysMonitor = MonitorLeakedKeys()
@@ -999,9 +963,6 @@ class MITLSTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_CipherSuites_commonSuiteIsHighest( self ):
-        if "CipherSuites_commonSuiteIsHighest" not in testsToRun:
-            return 
-
         self.log.info( "test_CipherSuites_commonSuiteIsHighest" )
         
 
@@ -1056,9 +1017,6 @@ class MITLSTester(unittest.TestCase):
         return msg
 
     def test_MITLS_MockClientAndServer( self ):
-        if "MITLS_MockClientAndServer" not in testsToRun:
-            return 
-
         hostName = "test_server.com"
 
         memorySocket.tlsParser = tlsparser.TLSParser()
@@ -1088,9 +1046,6 @@ class MITLSTester(unittest.TestCase):
         pprint( originalServerResponse )
 
     def test_MITLS_FindMsgDifferences( self ):
-        if "MITLS_FindMsgDifferences" not in testsToRun:
-            return 
-
         hostName = "test_server.com"
 
         keysMonitor = MonitorLeakedKeys()
@@ -1157,21 +1112,21 @@ if __name__ == '__main__':
     sys.argv[1:] = args.unittest_args
 
     # SI: these should be args. 
-    testsToRun = [ 
-                   # "ClientServerTest"    ,
-                   # "MockClientAndServer" ,
-                   # "FindMsgDifferences"  ,
-                   # "CipherSuites"        ,
-                   # "SignatureAlgorithms" ,
-                   # "NamedGroups"         ,
-                   # "CipherSuites_commonSuiteIsHighest",
-                   # "ReorderPieces_ClientHello_onWire",
-                   # "ReorderPieces_ServerEncryptedHello_onWire",
-                   # "ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire",
-                   "ServerEncryptedHello_extractToPlaintext",
-                   ]
-
-    unittest.main()
-
+    suite = unittest.TestSuite()
+    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    # suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
+    # suite.addTest( MITLSTester( "test_CipherSuites" ) )
+    # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
+    # suite.addTest( MITLSTester( "test_NamedGroups" ) )
+    suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
+    suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_onWire" ) )
+    suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
+    # suite.addTest( MITLSTester() )
+    # suite.addTest( MITLSTester() )
+    # suite.addTest( MITLSTester() )
+    # suite.addTest( MITLSTester() )
+     
+    runner=unittest.TextTestRunner()
+    runner.run(suite)
 
 
