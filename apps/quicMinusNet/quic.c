@@ -22,18 +22,12 @@ void dump(unsigned char buffer[], size_t len)
 }
 
 char *quic_result_string(quic_result r){
-  switch(r) {
-    case TLS_would_block: return "would_block";
-    case TLS_error_local: return "error_local";
-    case TLS_error_alert: return "error_alert";
-    case TLS_client_early: return "client_early";
-    case TLS_client_complete: return "client_complete";
-    case TLS_client_complete_with_early_data: return "client_complete_ED";
-    case TLS_server_accept: return "server_accept";
-    case TLS_server_accept_with_early_data: return "server_accept_ED";
-    case TLS_server_complete: return "server_complete";
-    default: return "other_error";
-  }
+  static char *codes[10] = {
+    "would_block", "error_local", "error_alert", "client_early",
+    "client_complete", "client_complete_ED", "server_accept",
+    "server_accept_ED", "server_complete", "other_error" };
+  if(r < 9) return codes[r];
+  return codes[9];
 }
 
 int main(int argc, char **argv)
@@ -75,7 +69,7 @@ int main(int argc, char **argv)
   // client write buffer (cumulative)
   size_t clen = 0;
   size_t cmax = 8*1024; // too much; we use < 1KB
-  char *c_buffer = malloc(clen); //
+  char *c_buffer = malloc(clen);
   
   // buffer for secrets and tickets
   quic_secret *qs = malloc(sizeof(quic_secret));
@@ -210,14 +204,18 @@ int main(int argc, char **argv)
     clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     assert(rc == TLS_would_block);
-    FFI_mitls_quic_get_ticket(client, qt, &errmsg);
     printf("client done clen=%4d slen=%4d r=%s\n", clen, slen, quic_result_string(rc));
-    printf("session session is "); dump(qt->ticket, qt->len);
+
+    if(FFI_mitls_quic_get_ticket(client, qt, &errmsg))
+    {
+      printf("session ticket: \n");
+      dump(qt->ticket, qt->len);
+    }
+    else printf("Failed to get ticket: %s\n", errmsg);
   }
 
-  FFI_mitls_cleanup();
-  free(qs);
-  free(qt);
+  FFI_mitls_quic_free(server);
+  FFI_mitls_quic_free(client);
 
   printf("Ok\n");
   return 0;

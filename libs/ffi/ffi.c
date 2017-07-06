@@ -935,24 +935,25 @@ static int FFI_mitls_quic_get_ticket_caml(
         report_caml_exception(result, errmsg);
         CAMLreturnT(int, 0);
     }
+
     if(result == Val_none)
-      {
-        *errmsg = "the requested ticket is not available";
-        CAMLreturnT(int, 0);
-      }
-    result = Some_val(result);
-    tmp = Field(result, 0);
-    size_t len = caml_string_length(tmp);
+    {
+      *errmsg = "no ticket available";
+      CAMLreturnT(int, 0);
+    }
+
+    result = Some_val(result); // OCaml string
+    size_t len = caml_string_length(result);
 
     // Ticket too large
     if (len > MAX_TICKET_LEN)
-      {
-        *errmsg = "the ticket is too large";
-        CAMLreturnT(int, 0);
-      }
-    
+    {
+      *errmsg = "the ticket is too large";
+      CAMLreturnT(int, 0);
+    }
+
     ticket->len = len;
-    memcpy(ticket->ticket, String_val(tmp), len);
+    memcpy(ticket->ticket, String_val(result), len);
     CAMLreturnT(int, 1);
 }
 
@@ -972,11 +973,11 @@ int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
 
 void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
 {
-    if (state) {
+    if (state != NULL) {
         caml_acquire_runtime_system();
         caml_remove_generational_global_root(&state->fstar_state);
         caml_release_runtime_system();
-        state->fstar_state = 0;
+        state->fstar_state = NULL;
         free(state);
     }
 }

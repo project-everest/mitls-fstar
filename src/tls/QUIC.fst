@@ -189,11 +189,11 @@ let get_exporter c (early:bool)
     | true, EarlyExportID _ _ -> Some (h, ae, b)
     | _ -> None
 
-// client-side: get 
-let get_ticket c: ML (option bytes) = 
-    match (Connection.c_cfg c).peer_name with
-    | Some n -> Option.map fst (Ticket.lookup n)
-    | None -> None
+// client-side: get
+let get_ticket c: ML (option bytes) =
+  match (Connection.c_cfg c).peer_name with
+  | Some n -> Option.map fst (Ticket.lookup n)
+  | None -> None
 
 let ffiConfig max_stream_data max_data max_stream_id idle_timeout host =
   { defaultConfig with
