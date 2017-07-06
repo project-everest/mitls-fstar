@@ -313,6 +313,7 @@ let ffiSetALPN cfg x =
 
 val ffiSetEarlyData: cfg:config -> x:bool -> ML config
 let ffiSetEarlyData cfg x =
+  trace ("setting early data to "^(if x then "true" else "false"));
   { cfg with
   enable_early_data = x;
   }

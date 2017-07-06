@@ -309,7 +309,7 @@ static int configure_common_bool_caml(/* in */ mitls_state *state, value b, valu
 int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, int enable_early_data)
 {
     int ret;
-    value b = (enable_early_data) ? Val_true : Val_false;
+    value b = enable_early_data ? Val_true : Val_false;
     caml_acquire_runtime_system();
     ret = configure_common_bool_caml(state, b, g_mitls_FFI_SetEarlyData);
     caml_release_runtime_system();
@@ -655,7 +655,7 @@ typedef struct quic_state {
 static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal2(result, host);
+    CAMLlocal3(result, host,tticket);
 
     *st = NULL;
     quic_state* state = malloc(sizeof(quic_state));
@@ -746,17 +746,27 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
        }
 
     if(cfg->enable_0rtt)
-       if(!configure_common_bool_caml(&ms, 1, g_mitls_FFI_SetEarlyData))
+       if(!configure_common_bool_caml(&ms, Val_true, g_mitls_FFI_SetEarlyData))
        {
          *errmsg = strdup("FFI_mitls_quic_create_caml: can't enable early_data");
          CAMLreturnT(int, 0);
        }
 
-    result = caml_callback2_exn(
-      cfg->is_server ? *g_mitls_FFI_QuicCreateServer : *g_mitls_FFI_QuicCreateClient,
-      ms.fstar_state, // config
-      PtrToValue(&state->ffi_callbacks));
-
+    if(cfg->is_server) 
+      result = caml_callback2_exn(
+                                  *g_mitls_FFI_QuicCreateServer,
+                                  ms.fstar_state, // config
+                                  PtrToValue(&state->ffi_callbacks));
+    else {
+      tticket = caml_alloc_string(cfg->ticket.len);
+      memcpy(String_val(tticket), cfg->ticket.ticket, cfg->ticket.len);
+      value args[] = {
+        ms.fstar_state, // config
+        tticket,
+        PtrToValue(&state->ffi_callbacks) };
+      result = caml_callbackN_exn(*g_mitls_FFI_QuicCreateClient, 3, args);
+    }
+    
     if (Is_exception_result(result)) {
       report_caml_exception(result, errmsg);
       CAMLreturnT(int, 0);

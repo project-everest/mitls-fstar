@@ -119,6 +119,11 @@ let rec recv c =
                   then {code=TLS_client_complete_with_early_data; error=0us;}
                   else {code=TLS_client_complete; error=0us;}
        | Server      -> {code=TLS_server_complete; error=0us;})
+         (* we could read once more to flush any ticket.
+                      let i = currentId c Reader in
+                      match read c i with 
+                      | ReadWouldBlock -> {code=TLS_server_complete; error=0us;}
+                      | _ -> {code=TLS_error_local; error=errno None "bad ticket delivery";} *)
   | ReadError a txt  -> {code=TLS_error_local; error=errno a txt;}
   | Read Close       -> {code=TLS_error_alert; error=errno (Some TLSError.AD_close_notify) "received close";}
   | Read (Alert a)   -> {code=TLS_error_alert; error=errno (Some a) "received alert";}
@@ -151,9 +156,13 @@ let accept send recv config : ML Connection.connection =
   quic_check config;
   TLS.accept_connected here tcp config
 
-val ffiConnect: config:config -> (*TODO: ticket: option bytes -> *) callbacks:FFI.callbacks -> ML Connection.connection
-let ffiConnect config (*ticket*) cb =
-  connect (FFI.sendTcpPacket cb) (FFI.recvTcpPacket cb) config [] //TODO: (match ticket with | Some t -> [t] | None -> [])
+val ffiConnect: config:config -> ticket: bytes -> callbacks:FFI.callbacks -> ML Connection.connection
+let ffiConnect config ticket cb =
+  connect 
+    (FFI.sendTcpPacket cb) 
+    (FFI.recvTcpPacket cb) 
+    config 
+    (if length ticket = 0 then [] else [ticket])
 
 val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiAcceptConnected config cb =
