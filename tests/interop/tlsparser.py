@@ -1169,6 +1169,10 @@ class TLSParser():
             rawSize = struct.pack( ">H", len( rawBody ) )
             return header + rawSize + rawBody
 
+        if extraBytes == 3:
+            rawSize = struct.pack( ">I", len( rawBody ))[  -SIZE_OF_UINT24 : ]
+            return header + rawSize + rawBody
+
         raise TLSParserError( "Unexpeded extraBytes = %d" % extraBytes )
 
     def FindNodeWithName( self, msg, nodeName ):
@@ -1274,6 +1278,7 @@ class TLSParser():
         
         if handshakeMsgToManipulate is None:
             return None
+        
         # else:      
         if PARENT_NODE in manipulation.keys():
             parentNodeName      = manipulation[ PARENT_NODE ]
