@@ -21,6 +21,21 @@ void dump(unsigned char buffer[], size_t len)
   }
 }
 
+char *quic_result_string(quic_result r){
+  switch(r) {
+    case TLS_would_block: return "would_block";
+    case TLS_error_local: return "error_local";
+    case TLS_error_alert: return "error_alert";
+    case TLS_client_early: return "client_early";
+    case TLS_client_complete: return "client_complete";
+    case TLS_client_complete_with_early_data: return "client_complete_ED";
+    case TLS_server_accept: return "server_accept";
+    case TLS_server_accept_with_early_data: return "server_accept_ED";
+    case TLS_server_complete: return "server_complete";
+    default: return "other_error";
+  }
+}
+
 int main(int argc, char **argv)
 {
   char *errmsg;
@@ -88,7 +103,7 @@ int main(int argc, char **argv)
 
     printf("client call clen=%4d slen=%4d\n", clen, slen);
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
-    printf("client done clen=%4d slen=%4d rc=%d\n", clen, slen, rc);
+    printf("client done clen=%4d slen=%4d r=%s\n", clen, slen, quic_result_string(rc));
     dump(c_buffer, clen);
   
     client_complete |= rc == TLS_client_complete || rc == TLS_client_complete_with_early_data;
@@ -109,7 +124,7 @@ int main(int argc, char **argv)
 
     printf(" *** START SERVER clen=%4d slen=%4d\n", clen, slen);
     rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
-    printf(" *** END SERVER clen=%4d slen=%4d rs=%d\n", clen, slen, rs);
+    printf(" *** END SERVER clen=%4d slen=%4d r=%s\n", clen, slen, quic_result_string(rs));
     printf("  === Server output ===\n");
     dump(s_buffer, slen);
     printf("  =====================\n");
