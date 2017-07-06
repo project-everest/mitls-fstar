@@ -53,7 +53,11 @@ from tlsparser import   MemorySocket,                       \
                         EXTENSION_TYPE_NAMES,               \
                         EXTENSION_TYPE_SUPPORTED_VERSIONS,  \
                         EXTRACT_TO_PLAINTEXT,               \
-                        HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS               
+                        HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS,\
+                        HANDSHAKE_TYPE_CERTIFICATE         ,\
+                        HANDSHAKE_TYPE_CERTIFICATE_REQUEST ,\
+                        HANDSHAKE_TYPE_CERTIFICATE_VERIFY  ,\
+                        HANDSHAKE_TYPE_FINISHED            
 
 
 SUCCESS                     = 1
@@ -832,10 +836,18 @@ class MITLSTester(unittest.TestCase):
         # topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
         # handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
         # manipulations       = ????
-        manipulations = [ AttrDict( {  DIRECTION                : Direction.SERVER_TO_CLIENT,
-                                       PARENT_NODE              : RECORD,
-                                       EXTRACT_TO_PLAINTEXT     : True,
-                                       HANDSHAKE_TYPE           : HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS }) ]
+        
+        handshakesToExtarct = [ HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS,
+                                HANDSHAKE_TYPE_CERTIFICATE         ,
+                                HANDSHAKE_TYPE_CERTIFICATE_VERIFY  ,
+                                HANDSHAKE_TYPE_FINISHED            ]
+
+        manipulations = []
+        for handshakeType in handshakesToExtarct:
+            manipulations.append( AttrDict( {  DIRECTION                : Direction.SERVER_TO_CLIENT,
+                                               PARENT_NODE              : RECORD,
+                                               EXTRACT_TO_PLAINTEXT     : True,
+                                               HANDSHAKE_TYPE           : handshakeType }) )
         experiments = []
         for manipulation in manipulations:
             # pprint( manipulation )
