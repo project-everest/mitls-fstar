@@ -138,7 +138,20 @@ int main(int argc, char **argv)
   }
   while(!client_complete || !server_complete);
 
+  quic_secret *qs = malloc(sizeof(quic_secret));
+  memset(qs, 0, sizeof(quic_secret));
+
+  FFI_mitls_quic_get_exporter(server, 0, qs, &errmsg);
+  printf("   === Server exporter secret ===\n");
+  dump(qs->secret, 64);
+  FFI_mitls_quic_get_exporter(client, 0, qs, &errmsg);
+  printf("   === Client exporter secret ===\n");
+  dump(qs->secret, 64);
+  printf("   ==============================\n");
+
   FFI_mitls_cleanup();
+  free(qs);
+
   printf("Ok\n");
   return 0;
 }

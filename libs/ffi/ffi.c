@@ -878,7 +878,8 @@ static int FFI_mitls_quic_get_exporter_caml(
     CAMLparam0();
     CAMLlocal2(result, tmp);
 
-    result = caml_callback_exn(*g_mitls_FFI_QuicGetExporter, state->fstar_state);
+    result = caml_callback2_exn(*g_mitls_FFI_QuicGetExporter,
+                                state->fstar_state, early ? Val_true : Val_false);
 
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
