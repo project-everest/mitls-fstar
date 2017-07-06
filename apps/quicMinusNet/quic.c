@@ -200,13 +200,14 @@ int main(int argc, char **argv)
     printf("server done clen=%4d slen=%4d r=%s\n", clen, slen, quic_result_string(rs));
 
     // NB calling the server again to get the ticket
+    c_buffer += clen; cmax -= clen; clen = 0;
     s_buffer += slen; smax -= slen; slen = smax;
     rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
     assert(rs == TLS_would_block);
     printf("server done clen=%4d slen=%4d r=%s\n", clen, slen, quic_result_string(rs));
     printf("                  <---- {Ticket}[%4d]\n\n", slen);
 
-    c_buffer += clen; cmax -= clen; clen = cmax;
+    clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     assert(rc == TLS_would_block);
     FFI_mitls_quic_get_ticket(client, qt, &errmsg);
