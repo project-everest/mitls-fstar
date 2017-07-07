@@ -28,6 +28,7 @@ from ctypes import  CDLL,           \
                     sizeof,         \
                     c_voidp,        \
                     c_uint8,        \
+                    c_uint16,       \
                     c_uint32,        \
                     c_int16,           \
                     c_int32,           \
@@ -63,7 +64,25 @@ SECWOULDBLOCK           = -2
 SECFAILURE              = -1
 SECSUCCESS              = 0
 
+class NamedGroups_NSS:
+    ssl_grp_ec_secp256r1 = 23
+    ssl_grp_ec_secp384r1 = 24
+    ssl_grp_ec_secp521r1 = 25
+    ssl_grp_ec_curve25519 = 29
+    ssl_grp_ffdhe_2048 = 256
+    ssl_grp_ffdhe_3072 = 257
+    ssl_grp_ffdhe_4096 = 258
 
+
+SUPPORTED_NAMED_GROUPS_MAPPING_TO_NSS = {
+                            "P-521"         :   NamedGroups_NSS.ssl_grp_ec_secp521r1    , # a.k.a secp521r1   # OK                         
+                            "P-384"         :   NamedGroups_NSS.ssl_grp_ec_secp384r1    , # a.k.a secp384r1   # OK                         
+                            "P-256"         :   NamedGroups_NSS.ssl_grp_ec_secp256r1    , # a.k.a secp256r1   # OK                         
+                            "X25519"        :   NamedGroups_NSS.ssl_grp_ec_curve25519   ,                    # OK     
+                            "FFDHE4096"     :   NamedGroups_NSS.ssl_grp_ffdhe_4096      ,                 # OK         
+                            "FFDHE3072"     :   NamedGroups_NSS.ssl_grp_ffdhe_3072      ,                 # OK         
+                            "FFDHE2048"     :   NamedGroups_NSS.ssl_grp_ffdhe_2048      ,                 # OK         
+}
 
 globalNSPR              = PRDLL()
 globalCUtils            = cutils.GetObject()
@@ -444,8 +463,23 @@ class NSS():
 
         self.acceptConnectionSucceeded = True
 
+    def SSL_NamedGroupConfig( self, sslSocket, supportedNamedGroups ):
+        if supportedNamedGroups == None:
+            return
+
+        self.log.debug( "SSL_NamedGroupConfig; supportedNamedGroups = %s" % ( supportedNamedGroups ) )
+        self.libssl3.SSL_NamedGroupConfig.restype  = c_int32
+        self.libssl3.SSL_NamedGroupConfig.argtypes = [ c_voidp, c_voidp, c_uint32 ]
+
+        namedGroups = ( c_uint16 * len( supportedNamedGroups ) )()
+        for i in range( len( namedGroups ) ):
+            namedGroups[ i ] = c_uint16( SUPPORTED_NAMED_GROUPS_MAPPING_TO_NSS[ supportedNamedGroups[ i ] ] )
+
+        result = self.libssl3.SSL_NamedGroupConfig( c_voidp( sslSocket ), namedGroups, c_uint32( len( namedGroups ) ) )
+        self.VerifyResult( "SSL_NamedGroupConfig", result )
+
     # For client side
-    def Connect( self ):
+    def Connect( self, supportedNamedGroups = None ):
         self.log.debug( "Connect" )
         self.InitializeSSLClientSocket()
         
@@ -470,7 +504,7 @@ class NSS():
         # SSL_ENABLE_0RTT_DATA
         # SSL_REQUIRE_DH_NAMED_GROUPS
         
-        # skipping SSL_NamedGroupConfig
+        self.SSL_NamedGroupConfig( self.clientSSLSocket, supportedNamedGroups )
         self.SSL_AuthCertificateHook()
         self.SSL_GetClientAuthDataHook()
         self.SSL_HandshakeCallback()
@@ -516,10 +550,6 @@ class NSS():
         return result
 
 #########################################################################
-skipClientServerTest        = False
-skipMockClientAndServer     = False
-skipFindMsgDifferences      = False
-
 class NSSTester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(NSSTester, self).__init__(*args, **kwargs)
@@ -553,8 +583,6 @@ class NSSTester(unittest.TestCase):
         # time.sleep(3)
 
     def test_NSS_ClientAndServer( self ):
-        if skipClientServerTest:
-            return
         hostName = "test_server.com"
 
         memorySocket = MemorySocket()
@@ -570,7 +598,7 @@ class NSSTester(unittest.TestCase):
 
         time.sleep( 0.1 )
 
-        self.tlsClient.Connect()
+        self.tlsClient.Connect( supportedNamedGroups = [ "P-521" ] )
         self.tlsClient.Send( b"Client->Server\x00" ) 
         self.tlsClient.dataReceived = self.tlsClient.Recv()
 
@@ -591,9 +619,6 @@ class NSSTester(unittest.TestCase):
         # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
 
     def test_MITLS_MockClientAndServer( self ):
-        if skipMockClientAndServer:
-            return
-
         self.tlsServer = NSS( "server" )
         # self.tlsClient = NSS( "client" )
 
@@ -632,8 +657,6 @@ class NSSTester(unittest.TestCase):
         #     memorySocket.tlsParser.PrintMsg( msg )
 
     def test_NSS_FindMsgDifferences( self ):
-        if skipFindMsgDifferences:
-            return
         hostName = "test_server.com"
 
         transcripts = []
@@ -665,14 +688,10 @@ class NSSTester(unittest.TestCase):
             memorySocket.tlsParser.CompareMsgs( msg1, msg2 )
 
 if __name__ == '__main__':
-    skipClientServerTest        = True
-    skipMockClientAndServer     = True
-    skipFindMsgDifferences      = True
-
-    skipClientServerTest        = False
-    # skipMockClientAndServer     = False
-    # skipFindMsgDifferences      = False
-
-
-
-    unittest.main()
+    suite = unittest.TestSuite()
+    suite.addTest( NSSTester( 'test_NSS_ClientAndServer' ) )
+    # suite.addTest( NSSTester( '' ) )
+    
+    
+    runner=unittest.TextTestRunner()
+    runner.run(suite)

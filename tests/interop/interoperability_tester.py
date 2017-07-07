@@ -14,15 +14,15 @@ import mitls_tester
 import tlsparser
 import config
 
-runMITLS_NSS_test                   = False
-runMITLS_NSS_CipherSuites           = False
-runMITLS_NSS_SignatureAlgorithms    = False
-runMITLS_NSS_NamedGroups            = False
-runNSS_MITLS_CipherSuites           = False
-runNSS_MITLS_SignatureAlgorithms    = False
-runNSS_MITLS_NamedGroups            = False
-runMITLS_NSS_parameters_matrix      = False
-runNSS_MITLS_parameters_matrix      = False
+# runMITLS_NSS_test                   = False
+# runMITLS_NSS_CipherSuites           = False
+# runMITLS_NSS_SignatureAlgorithms    = False
+# runMITLS_NSS_NamedGroups            = False
+# runNSS_MITLS_CipherSuites           = False
+# runNSS_MITLS_SignatureAlgorithms    = False
+# runNSS_MITLS_NamedGroups            = False
+# runMITLS_NSS_parameters_matrix      = False
+# runNSS_MITLS_parameters_matrix      = False
 
 DATA_CLIENT_TO_SERVER = b"Client->Server\x00"
 DATA_SERVER_TO_CLIENT = b"Server->Client\x00"
@@ -55,9 +55,6 @@ class InterOperabilityTester(unittest.TestCase):
         self.log.addHandler(consoleHandler) 
 
     def test_MITLSClient_NSS_server( self ):
-        if not runMITLS_NSS_test:
-            return
-
         hostName = "test_server.com"
 
         self.tlsServer = NSS( "server" )
@@ -133,7 +130,7 @@ class InterOperabilityTester(unittest.TestCase):
         self.tlsClient = NSS( "client" )
         self.tlsClient.InitClient( memorySocket, hostName )
 
-        self.tlsClient.Connect()
+        self.tlsClient.Connect( supportedNamedGroups )
 
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Recv()
@@ -155,9 +152,6 @@ class InterOperabilityTester(unittest.TestCase):
             
 
     def test_MITLS_NSS_CipherSuites( self ):
-        if not runMITLS_NSS_CipherSuites:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -181,9 +175,6 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_NSS_MITLS_CipherSuites( self ):
-        if not runNSS_MITLS_CipherSuites:
-            return
-        
         knownGoodSignatureAlgorithm = [ 'ECDSA+SHA256' ]
         knownGoodNamedGroup         = [ "X25519" ]
 
@@ -207,9 +198,6 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_NSS_MITLS_SignatureAlgorithms( self ):
-        if not runNSS_MITLS_SignatureAlgorithms:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -228,9 +216,6 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_MITLS_NSS_SignatureAlgorithms( self ):
-        if not runMITLS_NSS_SignatureAlgorithms:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -249,9 +234,6 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_NSS_MITLS_NamedGroups( self ):
-        if not runNSS_MITLS_NamedGroups:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -271,9 +253,6 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_MITLS_NSS_NamedGroups( self ):
-        if not runMITLS_NSS_NamedGroups:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -292,9 +271,6 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_MITLS_NSS_parameters_matrix( self ):
-        if not runMITLS_NSS_parameters_matrix:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -306,6 +282,7 @@ class InterOperabilityTester(unittest.TestCase):
                         logFile.write( "%-40s, %-40s, %-40s, " % ( cipherSuite, algorithm, group ) )
                         memorySocket.FlushBuffers()
                         memorySocket.tlsParser = tlsparser.TLSParser()
+                        memorySocket.tlsParser.DeleteLeakedKeys()
                         try:
                             self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
                                                             supportedSignatureAlgorithms = [ algorithm ],
@@ -318,9 +295,6 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_NSS_MITLS_parameters_matrix( self ):
-        if not runNSS_MITLS_parameters_matrix:
-            return
-        
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -351,17 +325,21 @@ if __name__ == '__main__':
     mitls_tester.HandleMITLSArguments( args )
 
     memorySocket.log.setLevel( config.LOG_LEVEL )    
-    
-    # SI: reset args, else unittest.main complains of flags not being valid.
-    sys.argv[1:] = args.unittest_args
 
-    # runMITLS_NSS_test                   = True
-    # runMITLS_NSS_CipherSuites           = True 
-    # runMITLS_NSS_SignatureAlgorithms    = True
-    # runMITLS_NSS_NamedGroups            = True
-    # runNSS_MITLS_CipherSuites           = True
-    # runNSS_MITLS_SignatureAlgorithms    = True
-    # runNSS_MITLS_NamedGroups            = True
-    runMITLS_NSS_parameters_matrix      = True
-    runNSS_MITLS_parameters_matrix      = True
-    unittest.main()
+    suite = unittest.TestSuite()
+    # suite.addTest( InterOperabilityTester( "test_MITLSClient_NSS_server" ) )
+    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
+    suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+
+    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_SignatureAlgorithms" ) )
+    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_NamedGroups" ) )
+    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_CipherSuites" ) )
+    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_SignatureAlgorithms" ) )
+    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_NamedGroups" ) )
+    
+    
+    # suite.addTest( InterOperabilityTester( "" ) )
+    
+    runner=unittest.TextTestRunner()
+    runner.run(suite)
+
