@@ -1274,7 +1274,8 @@ class TLSParser():
         return None
 
     def ManipulateMsg( self, msg, manipulation ):
-        if ALERT in msg.keys():
+        if  ALERT in msg.keys() or \
+            self.IsMsgContainsOnlyAppData( msg ):
             return None
 
         msg = deepcopy( msg )
@@ -1301,6 +1302,23 @@ class TLSParser():
             if SWAP_ITEMS in manipulation.keys():
                 swapIDs = manipulation[ SWAP_ITEMS ]
                 items   = node.Interpretation
+                
+                if max( swapIDs.index1, swapIDs.index2 ) >= len( items ):
+                    logMsg = "Can't swap indices %d <--> %d, because %s has only only %d children" % ( swapIDs.index1, swapIDs.index2, node.Name, len( items ) )
+                    self.log.warning( logMsg )
+                    manipulation[ "Description" ] = "Skipped manipulation: " + logMsg
+                    return None
+
+                if  TLSParser.IsTerminalPiece( node.Interpretation[ swapIDs.index1 ] ) and \
+                    TLSParser.IsTerminalPiece( node.Interpretation[ swapIDs.index2 ] ):
+                    index1Name = node.Interpretation[ swapIDs.index1 ].Interpretation
+                    index2Name = node.Interpretation[ swapIDs.index2 ].Interpretation
+                else:
+                    index1Name = node.Interpretation[ swapIDs.index1 ].Name
+                    index2Name = node.Interpretation[ swapIDs.index2 ].Name
+                
+                manipulation[ "Description" ] = "Swapping  children of %s: %s <--> %s" % ( node.Name, index1Name, index2Name )
+
                 items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ]
             
             elif REMOVE_ITEM in manipulation.keys():
@@ -1686,6 +1704,7 @@ class TLSParser():
 
         self.recentBytes += bytes
 
+        msgs = []
         while len( self.recentBytes ) >= TLS_RECORD_HEADER_SIZE:         
             msg             = self.ParseMsgHeader( direction )
             totalRecordSize = TLS_RECORD_HEADER_SIZE + msg[ LENGTH ]
@@ -1694,9 +1713,11 @@ class TLSParser():
                 self.ParseMsgBody( msg, fixedIVAndKey = ivAndKey )
                 self.TrunctateConsumedBytes()
                 
+            msgs.append( msg )
             self.transcript.append( msg )
 
-        return msg
+        print( "####################3 len( msgs ) = %d" % len( msgs ) )
+        return msgs
 
     def GetAlerts( self ):
         alerts = []
@@ -1883,18 +1904,17 @@ class MemorySocket():
         self.log.debug( "SendToServer bufferSize = %d" % bufferSize ) 
         
         pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )        
-        msg      = self.tlsParser.Digest( pyBuffer[ : ], Direction.CLIENT_TO_SERVER )
+        msgs     = self.tlsParser.Digest( pyBuffer[ : ], Direction.CLIENT_TO_SERVER )
 
         # if self.logMsgs:
         #     self.log.debug( "SendToServer -->\n" + TLSParser.FormatBuffer( pyBuffer ) ) 
-
-        manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
-        if manipulatedWireFrame != None:
-            self.clientToServerPipe += manipulatedWireFrame
-            return len( manipulatedWireFrame )
-        else:            
-            self.clientToServerPipe += pyBuffer
-            return bufferSize
+        for msg in msgs:
+            manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
+            if manipulatedWireFrame != None:
+                self.clientToServerPipe += manipulatedWireFrame    
+            else:            
+                self.clientToServerPipe += msg[ RAW_RECORD ]
+        return bufferSize
 
     #Used by server to read from client:
     def ReadFromClient( self, ctx, buffer, bufferSize ):
@@ -1918,25 +1938,42 @@ class MemorySocket():
         # "flush" bytes read:
         self.clientToServerPipe = self.clientToServerPipe[ bytesToReturn : ]
 
-        self.log.debug( "ReadFromClient: returned %d bytes" % bytesToReturn )
+        self.log.debug( "ReadFromClient: returned %d bytes; (%d bytes left for future reads)" % (bytesToReturn, len( self.clientToServerPipe ) ) )
         return bytesToReturn
 
     #Used by server to send to client:
     def SendToClient( self, ctx, buffer, bufferSize ):
         self.log.debug( "SendToClient bufferSize = %d" % bufferSize ) 
         pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )
-        msg      = self.tlsParser.Digest( pyBuffer[ : ], Direction.SERVER_TO_CLIENT )
+        msgs     = self.tlsParser.Digest( pyBuffer[ : ], Direction.SERVER_TO_CLIENT )
        
         if self.logMsgs:
             self.log.debug( "SendToClient -->\n" + TLSParser.FormatBuffer( pyBuffer ) ) 
 
-        manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
-        if manipulatedWireFrame != None:
-            self.serverToClientPipe += manipulatedWireFrame
-            return len( manipulatedWireFrame )
-        else:            
-            self.serverToClientPipe += pyBuffer
-            return bufferSize
+        for msg in msgs:
+            manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
+
+            if manipulatedWireFrame != None:
+                self.serverToClientPipe += manipulatedWireFrame    
+                if len( manipulatedWireFrame ) != len(  msg[ RAW_RECORD ] ):
+                    self.log.warning( "len( manipulatedWireFrame ) != len(  msg[ RAW_RECORD ] ): %d != %d" % (len( manipulatedWireFrame ) , len(  msg[ RAW_RECORD ] )) )
+            else:    
+                self.serverToClientPipe += msg[ RAW_RECORD ]
+        
+        return bufferSize
+
+        # manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
+        # if manipulatedWireFrame != None:
+        #     self.serverToClientPipe += manipulatedWireFrame
+
+
+        #     if len( manipulatedWireFrame ) != bufferSize:
+        #         self.log.error( "len( manipulatedWireFrame ) != bufferSize: %d != %d" % (len( manipulatedWireFrame ) , bufferSize) )
+        #     return bufferSize
+        #     # return len( manipulatedWireFrame )
+        # else:            
+        #     self.serverToClientPipe += pyBuffer
+        #     return bufferSize
 
     #Used by client to read from server:
     def ReadFromServer( self, ctx, buffer, bufferSize  ):
@@ -1960,5 +1997,5 @@ class MemorySocket():
         # "flush" bytes:
         self.serverToClientPipe = self.serverToClientPipe[ bytesToReturn : ]
 
-        self.log.debug( "ReadFromServer: returned %d bytes" % bytesToReturn )
+        self.log.debug( "ReadFromServer: returned %d bytes; ; (%d bytes left for future reads)" % (bytesToReturn, len( self.serverToClientPipe )) )
         return bytesToReturn

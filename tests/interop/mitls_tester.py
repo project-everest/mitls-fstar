@@ -9,7 +9,7 @@ import subprocess
 import datetime
 import re
 import traceback
-
+from copy      import deepcopy
 from functools import partial
 from pprint import pprint, pformat
 from ctypes import  CDLL, \
@@ -60,7 +60,8 @@ from tlsparser import   MemorySocket,                       \
                         HANDSHAKE_TYPE_FINISHED,            \
                         REMOVE_ITEM,                        \
                         ALERT,                              \
-                        CERT_ENTRY
+                        CERT_ENTRY,                         \
+                        TLS_RECORD_TYPE_APP_DATA
 
 
 
@@ -630,18 +631,18 @@ class MITLSTester(unittest.TestCase):
 
         numberOfChildren = len( node.Interpretation )
         for i in range( numberOfChildren - 1 ):
-            if  TLSParser.IsTerminalPiece( node.Interpretation[ i ] ) and \
-                TLSParser.IsTerminalPiece( node.Interpretation[ i + 1 ] ):
-                index1Name = node.Interpretation[ i ].Interpretation
-                index2Name = node.Interpretation[ i + 1 ].Interpretation
-            else:
-                index1Name = node.Interpretation[ i ].Name
-                index2Name = node.Interpretation[ i + 1 ].Name
+            # if  TLSParser.IsTerminalPiece( node.Interpretation[ i ] ) and \
+            #     TLSParser.IsTerminalPiece( node.Interpretation[ i + 1 ] ):
+            #     index1Name = node.Interpretation[ i ].Interpretation
+            #     index2Name = node.Interpretation[ i + 1 ].Interpretation
+            # else:
+            #     index1Name = node.Interpretation[ i ].Name
+            #     index2Name = node.Interpretation[ i + 1 ].Name
 
             shuffleManipulations.append( AttrDict( {   HANDSHAKE_TYPE : handshakeType,
                                                        PARENT_NODE    : node.Name,
                                                        SWAP_ITEMS     : AttrDict( { 'index1' : i, 'index2' : i + 1 } ),
-                                                       "Description"  : "Swapping  children of %s: %s <--> %s" % ( node.Name, index1Name, index2Name ), 
+                                                       # "Description"  : "Swapping  children of %s: %s <--> %s" % ( node.Name, index1Name, index2Name ), 
                                                        }) )
 
         # pprint( shuffleManipulations )
@@ -711,49 +712,28 @@ class MITLSTester(unittest.TestCase):
 
         return manipulations
 
-    def test_ReorderPieces_ClientHello_onWire( self ):
-        keysMonitor = MonitorLeakedKeys()
-        keysMonitor.MonitorStdoutForLeakedKeys()
-        self.RunSingleTest()
+    def GetServerEncryptedHelloReorderManipulations( self, runHandshake = None ):
+        if runHandshake is  None:
+            runHandshake = self.RunSingleTest
+       
+        runHandshake()
         
         originalTranscript  = memorySocket.tlsParser.transcript
-        topTreeLayer        = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
-        handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
         manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
                                                                                                 handshakeType = handshakeType )   )
 
-        experiments = self.RunManipulationTest( manipulations, numExpectedSharedKeys = 0, numExpectedAlerts = 0 )
+        return manipulations
+
+    def test_ReorderPieces_ClientHello_onWire( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+        
+        manipulations = self.GetClientHelloReorderManipulations()
+        experiments   = self.RunManipulationTest( manipulations, numExpectedSharedKeys = 0, numExpectedAlerts = 0 )
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
-        pprint( experiments )
-        # experiments = []
-        # for manipulation in manipulations:
-        #     pprint( manipulation )
-        #     exceptionThrown = False
-        #     try:
-        #         print( "##############################################")
-        #         preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
-        #         self.RunSingleTest( msgManipulators = [ manipulation ] )
-        #     except:
-        #         exceptionThrown = True
-        #         traceback.print_exc()
-            
-        #     keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
-        #     experiments.append( AttrDict( { 'Manipulation' : manipulation, 'Keys' : keysAndFiles } ) )
-
-        #     # Asserts:
-        #     self.assertTrue( exceptionThrown == True )
-
-        #     CLIENT_AND_SERVER_DISAGREE_ON_KEYS = 1
-        #     for k in keysAndFiles.keys():
-        #         self.assertTrue( len( keysAndFiles[ k ] ) == CLIENT_AND_SERVER_DISAGREE_ON_KEYS  ) 
-
-        #     self.assertTrue( len( memorySocket.tlsParser.GetAlerts() ) == 0 )
-
-        # keysMonitor.StopMonitorStdoutForLeakedKeys()
-
-        # keysToFiles = memorySocket.tlsParser.FindMatchingKeys()
-        # pprint( keysToFiles )
         pprint( experiments )
 
         # for manipulation in manipulations:
@@ -796,22 +776,27 @@ class MITLSTester(unittest.TestCase):
             keysAndFiles               = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
             numFilesPerKey             = map( lambda key : len( keysAndFiles[ key ] ), keysAndFiles.keys() )
             numKeysWithMoreThanOneFile = sum( i > 1 for i in numFilesPerKey )
-            alerts                     = list( map( lambda msg : msg[ ALERT ][ 'Type' ], memorySocket.tlsParser.GetAlerts() ) )
+
+            IsMsgEncrypted             = lambda msg : " (encrypted)" if ( msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA ) else ""
+            alerts                     = list( map( lambda msg : "%s%s: %s" % ( msg[ DIRECTION ], 
+                                                                                IsMsgEncrypted( msg ), 
+                                                                                msg[ ALERT ][ 'Type' ]), 
+                                                     memorySocket.tlsParser.GetAlerts() ) )
 
             thisExperiment = AttrDict( {'Manipulation'         : manipulation, 
                                         'Keys'                 : keysAndFiles, 
                                         'NumKeys'              : len( keysAndFiles.keys() ),
                                         'SuccessfulSharedKeys' : numKeysWithMoreThanOneFile,
-                                        'Alerts'            : alerts } )
-            experiments.append( thisExperiment )
+                                        'Alerts'               : alerts } )
+            experiments.append( deepcopy( thisExperiment ) )
 
             # Asserts:
             if assertExceptionThrown:
                 self.assertTrue( exceptionThrown == True )
             if numExpectedAlerts != None:
                 self.assertTrue( len( thisExperiment.Alerts ) == numExpectedAlerts )
-
-            self.assertTrue( thisExperiment.SuccessfulSharedKeys == numExpectedSharedKeys, msg = pformat( thisExperiment ) ) 
+            if numExpectedSharedKeys != None:
+                self.assertTrue( thisExperiment.SuccessfulSharedKeys == numExpectedSharedKeys, msg = pformat( thisExperiment ) ) 
 
             # # allow stdout to be flushed and read by keysMonitor
             # time.sleep(0.5) 
@@ -1240,11 +1225,11 @@ if __name__ == '__main__':
 
     # SI: these should be args. 
     suite = unittest.TestSuite()
-    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
-    suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
+    # suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire" ) )
     # suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
