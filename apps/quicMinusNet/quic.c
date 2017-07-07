@@ -44,7 +44,7 @@ int main(int argc, char **argv)
       .max_stream_id = 16,
       .idle_timeout = 60
     },
-    .ticket = {
+    .server_ticket = {
       .len = 0,
       .ticket = {0} }
     ,
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
       }
     config.is_server = 0;
     config.host_name = "localhost";
-    config.ticket = *qt;
+    config.server_ticket = *qt;
     
     printf("client create\n");
     if(!FFI_mitls_quic_create(&client, &config, &errmsg))

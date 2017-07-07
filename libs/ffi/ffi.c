@@ -758,8 +758,8 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
                                   ms.fstar_state, // config
                                   PtrToValue(&state->ffi_callbacks));
     else {
-      tticket = caml_alloc_string(cfg->ticket.len);
-      memcpy(String_val(tticket), cfg->ticket.ticket, cfg->ticket.len);
+      tticket = caml_alloc_string(cfg->server_ticket.len);
+      memcpy(String_val(tticket), cfg->server_ticket.ticket, cfg->server_ticket.len);
       value args[] = {
         ms.fstar_state, // config
         tticket,
