@@ -726,6 +726,38 @@ class MITLSTester(unittest.TestCase):
 
         return manipulations
 
+    def GetServerReorderHandshakesManipulations( self, runHandshake = None ):
+        if runHandshake is  None:
+            runHandshake = self.RunSingleTest
+       
+        runHandshake()
+        
+        originalTranscript  = memorySocket.tlsParser.transcript
+        topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 2 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        manipulations       = self.CreateTopLevelShuffleManipulations( originalTranscript[ 2 ][ RECORD ], Direction.SERVER_TO_CLIENT )
+
+        return manipulations
+
+    def GetServerSkipPiecesManipulations( self, runHandshake = None ):
+        if runHandshake is  None:
+            runHandshake = self.RunSingleTest
+       
+        runHandshake()
+        
+        originalTranscript  = memorySocket.tlsParser.transcript
+        numHandshakes       = len( originalTranscript[ 2 ][ RECORD ] )
+
+        manipulations = []
+        for handshakeIdx in range( numHandshakes ):
+            topTreeLayer        = originalTranscript[ 2 ][ RECORD ][ handshakeIdx ][ HANDSHAKE_MSG ] 
+            handshakeType       = originalTranscript[ 2 ][ RECORD ][ handshakeIdx ][ HANDSHAKE_TYPE ]
+            manipulations      += self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateSkipPieceManipulations,  
+                                                                                                    handshakeType = handshakeType )   )
+
+        return manipulations
+
+
     def test_ReorderPieces_ClientHello_onWire( self ):
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
@@ -913,6 +945,8 @@ class MITLSTester(unittest.TestCase):
             
         #     # The following will print the message as a side effect
         #     parsedManipulatedMsg = memorySocket.tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ], ivAndKey = msg2[ IV_AND_KEY ] )
+
+
 
     def test_ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire( self ):    
         keysMonitor = MonitorLeakedKeys()

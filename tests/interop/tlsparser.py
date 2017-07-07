@@ -1256,6 +1256,10 @@ class TLSParser():
             if swapIDs.index1 >= len( items ) or swapIDs.index2 >= len( items ):
                 return None
 
+            pprint(  items[ swapIDs.index1 ] )
+            handshakeName1 = self.GetHandshakeType( items[ swapIDs.index1 ][ HANDSHAKE_TYPE ] )
+            handshakeName2 = self.GetHandshakeType( items[ swapIDs.index2 ][ HANDSHAKE_TYPE ] )
+            manipulation[ "Description" ] = "Swapping %s <--> %s" % ( handshakeName1, handshakeName2 )
             items[ swapIDs.index1 ], items[ swapIDs.index2 ] = items[ swapIDs.index2 ], items[ swapIDs.index1 ] 
 
             return msg
@@ -1324,8 +1328,20 @@ class TLSParser():
             elif REMOVE_ITEM in manipulation.keys():
                 itemIDToRemove  = manipulation[ REMOVE_ITEM ]
                 items           = node.Interpretation
+                if itemIDToRemove >= len( items ):
+                    logMsg = "Can't delete from %s at location %d there only only %d children" % ( node.Name, itemIDToRemove, len( items ) )
+                    self.log.warning( logMsg )
+                    manipulation[ "Description" ] = "Skipped manipulation: " + logMsg
+                    return None
+
                 bytesRemoved    = len( items[ itemIDToRemove ].RawContents )
 
+                if  TLSParser.IsTerminalPiece( node.Interpretation[ itemIDToRemove ] ):
+                    name = node.Interpretation[ itemIDToRemove].Interpretation
+                else:
+                    name = node.Interpretation[ itemIDToRemove ].Name
+                    
+                manipulation[ "Description" ] = "Removing %s from %s" % ( name, node.Name )
                 del items[ itemIDToRemove ]
 
             nodesToRebuild = routeToNode + [ node ]
@@ -1715,8 +1731,7 @@ class TLSParser():
                 
             msgs.append( msg )
             self.transcript.append( msg )
-
-        print( "####################3 len( msgs ) = %d" % len( msgs ) )
+        
         return msgs
 
     def GetAlerts( self ):
@@ -1961,19 +1976,6 @@ class MemorySocket():
                 self.serverToClientPipe += msg[ RAW_RECORD ]
         
         return bufferSize
-
-        # manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
-        # if manipulatedWireFrame != None:
-        #     self.serverToClientPipe += manipulatedWireFrame
-
-
-        #     if len( manipulatedWireFrame ) != bufferSize:
-        #         self.log.error( "len( manipulatedWireFrame ) != bufferSize: %d != %d" % (len( manipulatedWireFrame ) , bufferSize) )
-        #     return bufferSize
-        #     # return len( manipulatedWireFrame )
-        # else:            
-        #     self.serverToClientPipe += pyBuffer
-        #     return bufferSize
 
     #Used by client to read from server:
     def ReadFromServer( self, ctx, buffer, bufferSize  ):
