@@ -74,7 +74,7 @@ SUPPORTED_CIPHER_SUITES = [
                             "TLS_AES_128_GCM_SHA256",               # OK
                             "TLS_AES_256_GCM_SHA384",               # OK
                             "TLS_CHACHA20_POLY1305_SHA256",         # OK
-                            # "TLS_AES_128_CCM_SHA256",               # NOT ok: errmsg = "b'Failure("not linked to openSSL yet")'"                                    
+                            # # "TLS_AES_128_CCM_SHA256",               # NOT ok: errmsg = "b'Failure("not linked to openSSL yet")'"                                    
                             # "TLS_AES_128_CCM_8_SHA256",             # NOT ok: errmsg = "b'Failure("not linked to openSSL yet")'"                                    
                             # "ECDHE-RSA-AES256-GCM-SHA384",          # NOT OK: NGO| negotiation failed: AD_handshake_failure (ciphersuite negotiation failed)    
                             # "ECDHE-RSA-AES128-GCM-SHA256",          # NOT OK: NGO| negotiation failed: AD_handshake_failure (ciphersuite negotiation failed)    
@@ -87,9 +87,9 @@ SUPPORTED_CIPHER_SUITES = [
                             # "DHE-RSA-CHACHA20-POLY1305-SHA256",     # NOT OK: NGO| negotiation failed: AD_handshake_failure (ciphersuite negotiation failed)    
  ]
 SUPPORTED_SIGNATURE_ALGORITHMS = [ 
-                                    'ECDSA+SHA512',  # OK 
-                                    'ECDSA+SHA384',  # OK     
                                     'ECDSA+SHA256',  # OK     
+                                    'ECDSA+SHA384',  # OK     
+                                    'ECDSA+SHA512',  # OK 
                                     # 'ECDSA+SHA1',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm
                                     # 'RSA+SHA384',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm     
                                     # 'RSA+SHA512',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm     
@@ -101,7 +101,7 @@ SUPPORTED_NAMED_GROUPS = [
                             "P-384", # a.k.a secp384r1   # OK                         
                             "P-256", # a.k.a secp256r1   # OK                         
                             "X25519",                    # OK     
-                            "X448",                      # NOT OK    TLS| StAE decrypt failed.; TLS| Ignoring the decryption failure (rejected 0-RTT data) 
+                            # "X448",                      # NOT OK    TLS| StAE decrypt failed.; TLS| Ignoring the decryption failure (rejected 0-RTT data) 
                             "FFDHE4096",                 # OK         
                             "FFDHE3072",                 # OK         
                             "FFDHE2048",                 # OK         
@@ -431,6 +431,7 @@ class MonitorLeakedKeys():
 
     def MonitorStdoutForLeakedKeys( self ):
         LOG_FILE = "log.txt"
+        os.remove( LOG_FILE )
         tee      = subprocess.Popen(["tee", LOG_FILE ], stdin=subprocess.PIPE)
         os.dup2(tee.stdin.fileno(), sys.stdout.fileno())
         # os.dup2(tee.stdin.fileno(), sys.stderr.fileno())
@@ -448,9 +449,9 @@ class MonitorLeakedKeys():
         return re.findall('..', hexEncodedInContiniousString )
 
     def MonitorStdoutForLeakedKeys_thread( self, logFileName ):
-        PATTERN = r"key\[(.)\]:(.+), IV=(.+)"
+        PATTERN = r"(\S+) key\[(.)\]:(.+), IV=(.+)"
 
-        MSG_FILENAME    = "%s-keys-mitls.%d"
+        MSG_FILENAME    = "%s-%s-keys-mitls.%d"
         timestamp       = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S.%f')
         keysDir         = tlsparser.LEAKED_KEYS_DIR + "/" + timestamp
         
@@ -470,13 +471,14 @@ class MonitorLeakedKeys():
                 if result is None:
                     continue
 
-                entity = result.groups()[ 0 ].strip()
-                rawKey = result.groups()[ 1 ].strip()
-                rawIV  = result.groups()[ 2 ].strip()
+                purpose = result.groups()[ 0 ].strip()
+                entity  = result.groups()[ 1 ].strip()
+                rawKey  = result.groups()[ 2 ].strip()
+                rawIV   = result.groups()[ 3 ].strip()
                 IV  = "".join( map( lambda x: "0x%s, " % x , self.ChopStringToBytes( rawIV ) ) )
                 key = "".join( map( lambda x: "0x%s, " % x , self.ChopStringToBytes( rawKey ) ) )
 
-                filePath = keyFilePath % (entity, keyIdx)
+                filePath = keyFilePath % (purpose, entity, keyIdx)
                 with open( filePath, "w" ) as keyFile:
                     keyFile.write( "IV: %s\n" % IV )
                     keyFile.write( "KEY: %s\n" % key )
@@ -628,9 +630,19 @@ class MITLSTester(unittest.TestCase):
 
         numberOfChildren = len( node.Interpretation )
         for i in range( numberOfChildren - 1 ):
+            if  TLSParser.IsTerminalPiece( node.Interpretation[ i ] ) and \
+                TLSParser.IsTerminalPiece( node.Interpretation[ i + 1 ] ):
+                index1Name = node.Interpretation[ i ].Interpretation
+                index2Name = node.Interpretation[ i + 1 ].Interpretation
+            else:
+                index1Name = node.Interpretation[ i ].Name
+                index2Name = node.Interpretation[ i + 1 ].Name
+
             shuffleManipulations.append( AttrDict( {   HANDSHAKE_TYPE : handshakeType,
                                                        PARENT_NODE    : node.Name,
-                                                       SWAP_ITEMS     : AttrDict( { 'index1' : i, 'index2' : i + 1 } ) }) )
+                                                       SWAP_ITEMS     : AttrDict( { 'index1' : i, 'index2' : i + 1 } ),
+                                                       "Description"  : "Swapping  children of %s: %s <--> %s" % ( node.Name, index1Name, index2Name ), 
+                                                       }) )
 
         # pprint( shuffleManipulations )
         return shuffleManipulations
@@ -682,6 +694,20 @@ class MITLSTester(unittest.TestCase):
                 break  
             #else:   
             currentLayer = nextLayer
+
+        return manipulations
+
+    def GetClientHelloReorderManipulations( self, runHandshake = None ):
+        if runHandshake is  None:
+            runHandshake = self.RunSingleTest
+       
+        runHandshake()
+        
+        originalTranscript  = memorySocket.tlsParser.transcript
+        topTreeLayer        = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
+                                                                                                handshakeType = handshakeType )   )
 
         return manipulations
 
@@ -745,7 +771,15 @@ class MITLSTester(unittest.TestCase):
         #     # The following will print the message as a side effect
         #     parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
-    def RunManipulationTest( self, manipulations, numExpectedSharedKeys, assertExceptionThrown = True, numExpectedAlerts = None ):
+    def RunManipulationTest(    self, 
+                                manipulations, 
+                                numExpectedSharedKeys, 
+                                assertExceptionThrown   = True, 
+                                numExpectedAlerts       = None,
+                                runTestFunction         = None ):
+        if runTestFunction is None:
+            runTestFunction = self.RunSingleTest
+
         experiments = []
         for manipulation in manipulations:
             self.log.debug( "manipulation = %s" % manipulation)
@@ -753,19 +787,20 @@ class MITLSTester(unittest.TestCase):
             exceptionThrown = False
             try:
                 preExistingKeys     = memorySocket.tlsParser.FindMatchingKeys()
-                self.RunSingleTest( msgManipulators = [ manipulation ] )
+                runTestFunction( msgManipulators = [ manipulation ] )
             except:
                 exceptionThrown = True
                 traceback.print_exc()
 
-            time.sleep(0.5) #wait for messages to reach transcript
+            time.sleep( 1 ) #wait for messages to reach transcript
             keysAndFiles               = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
             numFilesPerKey             = map( lambda key : len( keysAndFiles[ key ] ), keysAndFiles.keys() )
             numKeysWithMoreThanOneFile = sum( i > 1 for i in numFilesPerKey )
             alerts                     = list( map( lambda msg : msg[ ALERT ][ 'Type' ], memorySocket.tlsParser.GetAlerts() ) )
 
             thisExperiment = AttrDict( {'Manipulation'         : manipulation, 
-                                        # 'Keys'                 : keysAndFiles, 
+                                        'Keys'                 : keysAndFiles, 
+                                        'NumKeys'              : len( keysAndFiles.keys() ),
                                         'SuccessfulSharedKeys' : numKeysWithMoreThanOneFile,
                                         'Alerts'            : alerts } )
             experiments.append( thisExperiment )
@@ -1209,10 +1244,10 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
-    # suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
+    suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire" ) )
-    suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
+    # suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_ServerHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_EncryptedServerHello_onWire" ) )

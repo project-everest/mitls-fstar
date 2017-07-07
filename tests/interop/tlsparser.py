@@ -540,6 +540,7 @@ Identity = lambda x: x #identity function
 
 class TLSParser():
     TLS_1_3_MAGIC   = b"\x03\x01"
+    NUM_RECENT_DIRS = 3
 
     def __init__( self ):
         self.recentBytes     = b""
@@ -980,11 +981,23 @@ class TLSParser():
 
         return keysAndFiles
 
+    def DeleteLeakedKeys( self, dirPath = LEAKED_KEYS_DIR ):
+        allRuns = glob.glob( dirPath + "/*" )
+        allRuns.sort()
+
+        mostRecentDirs =  allRuns[ -self.NUM_RECENT_DIRS: ]
+        for dirPath in mostRecentDirs:
+            self.log.debug( "Deleting keys in %s" % dirPath )
+
+            allKeyFiles   = glob.glob( dirPath + "/*" )
+            for keyFilePath in allKeyFiles:
+                os.remove( keyFilePath )
+
     def GetLeakedKeys( self, dirPath ):
         allRuns = glob.glob( dirPath + "/*" )
         allRuns.sort()
 
-        mostRecentDirs =  allRuns[ -2: ]
+        mostRecentDirs =  allRuns[ -self.NUM_RECENT_DIRS: ]
         ivsAndKeys     = []
         for dirPath in mostRecentDirs:
             self.log.debug( "Extracting keys from %s" % dirPath )

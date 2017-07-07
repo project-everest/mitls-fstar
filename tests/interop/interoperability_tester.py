@@ -7,6 +7,7 @@ import argparse
 import sys
 import logging 
 
+from pprint       import pprint
 from mitls_tester import MITLS, MonitorLeakedKeys, memorySocket
 from nss_tester   import NSS
 
@@ -83,7 +84,12 @@ class InterOperabilityTester(unittest.TestCase):
     def RunSingleTest_MITLS_NSS(self, 
                                 supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
                                 supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
-                                supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS ):
+                                supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
+                                msgManipulators                 = [] ):
+        memorySocket.FlushBuffers()
+        memorySocket.tlsParser = tlsparser.TLSParser()
+        memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
+
         self.tlsServer = NSS( "server" )
         self.tlsServer.InitServer( memorySocket )
 
@@ -161,8 +167,7 @@ class InterOperabilityTester(unittest.TestCase):
         with open( "cipher_suites_MITLS_NSS.txt", "w" ) as logFile:
             for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
                 logFile.write( "cipherSuite = %-40s" % cipherSuite )
-                memorySocket.FlushBuffers()
-                memorySocket.tlsParser = tlsparser.TLSParser()
+
                 try:
                     self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
                                                     supportedSignatureAlgorithms = knownGoodSignatureAlgorithm,
@@ -222,8 +227,7 @@ class InterOperabilityTester(unittest.TestCase):
         with open( "signature_algorithms_MITLS_NSS.txt", "w" ) as logFile:
             for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
                 logFile.write( "algorithm = %-40s" % algorithm )
-                memorySocket.FlushBuffers()
-                memorySocket.tlsParser = tlsparser.TLSParser()
+
                 try:
                     self.RunSingleTest_MITLS_NSS( supportedSignatureAlgorithms = [ algorithm ])
                     logFile.write( "OK\n" )
@@ -259,8 +263,7 @@ class InterOperabilityTester(unittest.TestCase):
         with open( "named_groups_MITLS_NSS.txt", "w" ) as logFile:
             for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
                 logFile.write( "group = %-40s" % group )
-                memorySocket.FlushBuffers()
-                memorySocket.tlsParser = tlsparser.TLSParser()
+
                 try:
                     self.RunSingleTest_MITLS_NSS( supportedNamedGroups = [ group ] )
                     logFile.write( "OK\n" )
@@ -280,8 +283,7 @@ class InterOperabilityTester(unittest.TestCase):
                 for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
                     for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
                         logFile.write( "%-40s, %-40s, %-40s, " % ( cipherSuite, algorithm, group ) )
-                        memorySocket.FlushBuffers()
-                        memorySocket.tlsParser = tlsparser.TLSParser()
+
                         memorySocket.tlsParser.DeleteLeakedKeys()
                         try:
                             self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
@@ -317,6 +319,29 @@ class InterOperabilityTester(unittest.TestCase):
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
+    def test_CompareResponses_ReorderPieces_ClientHello( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        mitlsExperiments = []
+        NSSExperiments   = []
+        try:
+            mitlsTester                     = mitls_tester.MITLSTester()
+            clientHelloReorderManipulations = mitlsTester.GetClientHelloReorderManipulations( mitlsTester.RunSingleTest )
+            mitlsExperiments                = mitlsTester.RunManipulationTest(  clientHelloReorderManipulations, 
+                                                                                numExpectedSharedKeys   = 0, 
+                                                                                runTestFunction         = mitlsTester.RunSingleTest )
+
+
+            NSSExperiments                  = mitlsTester.RunManipulationTest(  clientHelloReorderManipulations, 
+                                                                                numExpectedSharedKeys   = 0, 
+                                                                                runTestFunction         = self.RunSingleTest_MITLS_NSS )
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+        pprint( mitlsExperiments )
+        pprint( NSSExperiments )
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     mitls_tester.ConfigureMITLSArguments( parser )
@@ -329,7 +354,10 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
     # suite.addTest( InterOperabilityTester( "test_MITLSClient_NSS_server" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
-    suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+
+    suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
+
 
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_SignatureAlgorithms" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_NamedGroups" ) )
