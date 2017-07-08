@@ -1,6 +1,6 @@
 module TestKS
 
-open FStar.HyperHeap
+open Mem
 
 open Platform.Bytes
 open TLSConstants

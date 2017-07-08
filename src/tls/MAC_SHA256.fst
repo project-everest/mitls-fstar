@@ -1,8 +1,6 @@
 ﻿module MAC_SHA256
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
 open FStar.Seq
  // for e.g. found
 

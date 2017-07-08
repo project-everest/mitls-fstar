@@ -2,7 +2,7 @@ module Transport
 
 // adding an indirection to TCP for applications that prefer to take control of their IOs.
 
-open FStar.HyperStack.All
+open Mem
 
 open Platform.Tcp 
 open Platform.Bytes

@@ -30,7 +30,7 @@ HKDF-Extract(salt, IKM) -> PRK
 
 val hkdf_extract: ha:hash_alg -> salt:hkey ha -> ikm:bytes -> ST (tag ha)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 
 let hkdf_extract ha salt ikm = HMAC.hmac ha salt ikm
 
@@ -43,7 +43,7 @@ private val hkdf_expand_int: ha:hash_alg
   -> prev:bytes
   -> ST (b:bytes{len - curr <= length b}) (decreases (max 0 (len - curr)))
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 
 private let rec hkdf_expand_int ha prk info len count curr prev =
   if curr < len && count + 1 < 256 then
@@ -88,7 +88,7 @@ val hkdf_expand: ha:hash_alg
   -> len: nat{len <= op_Multiply 255 (tagLen ha)}
   -> ST (lbytes len)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 
 let hkdf_expand ha prk info len =
   lemma_repr_bytes_values len;
@@ -124,7 +124,7 @@ val hkdf_expand_label: ha: hash_alg
   -> len: nat{len <= op_Multiply 255 (tagLen ha)}
   -> ST (lbytes len)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
+  (ensures (fun h0 t h1 -> Mem.modifies Set.empty h0 h1))
 
 let hkdf_expand_label ha prk label hv len =
   let label_bytes = tls13_prefix @| abytes label in

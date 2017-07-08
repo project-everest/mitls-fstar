@@ -3,9 +3,7 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module HandshakeLog
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
 open FStar.Seq
  // for e.g. found
 open FStar.Set
@@ -17,8 +15,8 @@ open TLSInfo
 open HandshakeMessages
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
+module HH = Mem
+module HS = Mem
 
 
 (* A flag for runtime debugging of handshakelog data.

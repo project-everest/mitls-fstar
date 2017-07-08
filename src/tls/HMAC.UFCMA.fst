@@ -5,10 +5,7 @@ module HMAC.UFCMA
 
 (* Idealizing HMAC for Finished message payloads and binders. *)
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
-open FStar.HyperStack.All
+open Mem
 open FStar.Seq
  // for e.g. found
 

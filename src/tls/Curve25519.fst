@@ -3,11 +3,8 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module Curve25519
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
 open FStar.Seq
-open FStar.HyperStack.ST
+open Mem
 
 open Platform.Bytes
 open Platform.Error

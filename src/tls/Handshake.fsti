@@ -4,8 +4,7 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 module Handshake
 
 // provisional
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
 
 open TLSConstants
 
@@ -35,8 +34,8 @@ val get_mode: hs -> ST Negotiation.mode
 let epochs_t_of (s:hs) = Seq.seq (Epochs.epoch (region_of s) (random_of s))
 val epochs_of: s:hs -> Tot (Epochs.epochs (region_of s) (random_of s))
 
-// val logT: s:hs ->  h:HyperStack.mem -> GTot (epochs_t_of s)
-let logT (s:hs) (h:HyperStack.mem) = Epochs.epochsT (epochs_of s) h
+// val logT: s:hs ->  h:Mem.mem -> GTot (epochs_t_of s)
+let logT (s:hs) (h:Mem.mem) = Epochs.epochsT (epochs_of s) h
 
 let non_empty h s = Seq.length (logT s h) > 0
 
@@ -44,12 +43,12 @@ let logIndex (#t:Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log 
 
 val completed: #region:rgn -> #nonce:TLSInfo.random -> Epochs.epoch region nonce -> Type0
 
-val hs_inv: s:hs -> HyperStack.mem -> Type0
+val hs_inv: s:hs -> Mem.mem -> Type0
 
 let es_of (s:hs) = Epochs.((epochs_of s).es)
 
 // returns the current counters, with a precise refinement
-let iT (s:hs) rw (h:HyperStack.mem): GTot (Epochs.epoch_ctr_inv (region_of s) (es_of s)) =
+let iT (s:hs) rw (h:Mem.mem): GTot (Epochs.epoch_ctr_inv (region_of s) (es_of s)) =
   match rw with
   | Reader -> Epochs.readerT (epochs_of s) h
   | Writer -> Epochs.writerT (epochs_of s) h
@@ -68,7 +67,7 @@ let i (s:hs) (rw:rw) : ST int
   | Writer -> Epochs.get_writer (epochs_of s)
 
 // returns the current epoch for reading or writing
-let eT s rw (h:HyperStack.mem {iT s rw h >= 0}) =
+let eT s rw (h:Mem.mem {iT s rw h >= 0}) =
   let es = logT s h in
   let j = iT s rw h in
   assume(j < Seq.length es); //17-04-08 added verification hint; assumed for now.
@@ -102,13 +101,13 @@ val create: r0:rid -> cfg:config -> r:role -> resume:TLSInfo.resumeInfo r -> ST 
     // HS?.cfg s = cfg /\
     logT s h1 == Seq.createEmpty ))
 
-let mods s h0 h1 = HyperStack.modifies_one (region_of s) h0 h1
+let mods s h0 h1 = Mem.modifies_one (region_of s) h0 h1
 
 let modifies_internal h0 s h1 =
     hs_inv s h1 /\
     mods s h0 h1
     // can't say it abstractly:
-    // modifies_rref (region_of s)  !{as_ref s.state} (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)
+    // modifies_rref (region_of s)  !{as_ref s.state} (Mem.HS?.h h0) (Mem.HS?.h h1)
 
 // Idle client starts a full handshake on the current connection
 val rehandshake: s:hs -> config -> ST bool
@@ -163,7 +162,7 @@ val next_fragment: s:hs -> i:TLSInfo.id -> ST (result (HandshakeLog.outgoing i))
 
 (* ----------------------- Incoming ----------------------- *)
 
-let recv_ensures (s:hs) (h0:HyperStack.mem) (result:incoming) (h1:HyperStack.mem) =
+let recv_ensures (s:hs) (h0:Mem.mem) (result:incoming) (h1:Mem.mem) =
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
     let r0 = iT s Reader h0 in

@@ -3,10 +3,7 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module PSK
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
-open FStar.HyperStack.ST
+open Mem
 
 open Platform.Bytes
 open Platform.Error
@@ -15,9 +12,9 @@ open TLSConstants
 
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
-module ST = FStar.HyperStack.ST
+module HH = Mem
+module HS = Mem
+module ST = Mem
 
 // *** PSK ***
 

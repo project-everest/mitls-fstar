@@ -6,8 +6,7 @@ module LHAE
    for all "aeAlg" constructions: MtE, MacOnly, GCM;
    used by StatefulLHAE, parameterized by LHAEPlain. *)
 
-open FStar.Heap
-open FStar.HyperHeap
+open Mem
 open FStar.Seq
 
 open Platform.Bytes

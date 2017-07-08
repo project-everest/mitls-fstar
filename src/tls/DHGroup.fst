@@ -3,13 +3,12 @@ options:--use_hints --fstar_home ../../../FStar --include ../../../FStar/ucontri
 --*)
 ﻿module DHGroup
 
-open FStar.HyperStack
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError
 open Parse
-open FStar.HyperStack.ST
+open Mem
 
 type params = dhp:CoreCrypto.dh_params{length dhp.dh_p < 65536 && length dhp.dh_g < 65536}
 

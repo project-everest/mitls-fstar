@@ -20,7 +20,7 @@ open DataStream
 open TLS
 open FFICallbacks
 
-open FStar.HyperStack.All
+open Mem
 
 #set-options "--lax"
 
@@ -78,7 +78,7 @@ let connect send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
-  let here = new_region HyperHeap.root in
+  let here = new_region Mem.root in
   let c = TLS.connect here tcp config_1 in
   let rec read_loop c : ML int =
     let i = currentId c Reader in
@@ -103,7 +103,7 @@ let accept_connected send recv config_1 : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
-  let here = new_region HyperHeap.root in
+  let here = new_region Mem.root in
   let c = TLS.accept_connected here tcp config_1 in
   let rec read_loop c : ML int =
     let i = currentId c Reader in
@@ -253,7 +253,7 @@ let rec updatecfg cfg l : ML config =
   | r :: t -> failwith ("Unknown flag: "^r)
 
 (** SZ: FStar.List opens FStar.All. 
-    Should we have a version that uses FStar.HyperStack.All? 
+    Should we have a version that uses Mem? 
 *)
 val map: ('a -> ML 'b) -> list 'a -> ML (list 'b)
 let rec map f x = match x with

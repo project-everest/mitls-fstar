@@ -3,9 +3,7 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
 --*)
 module Handshake
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
 open FStar.Seq
 open FStar.Set
 open Platform.Error
@@ -18,7 +16,7 @@ open HandshakeMessages // for the message syntax
 open HandshakeLog // for Outgoing
 open Epochs
 
-module HH = FStar.HyperHeap
+module HH = Mem
 module MR = FStar.Monotonic.RRef
 module MS = FStar.Monotonic.Seq
 module Nego = Negotiation
@@ -90,7 +88,7 @@ noeq type hs' = | HS:
   log: HandshakeLog.t {HandshakeLog.region_of log = region} ->
   ks: KeySchedule.ks (*region*) ->
   epochs: epochs region (Nego.nonce nego) ->
-  state: ref machineState {state.HyperStack.id = region} -> // state machine; should be opaque and depend on r.
+  state: ref machineState {state.Mem.id = region} -> // state machine; should be opaque and depend on r.
   hs'
 
 let hs = hs' //17-04-08 interface limitation
@@ -106,10 +104,10 @@ let get_mode (s:hs) = Nego.getMode s.nego
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant
-let inv (s:hs) (h:HyperStack.mem) =
+let inv (s:hs) (h:Mem.mem) =
   // let context = Negotiation.context h hs.nego in
   let transcript = HandshakeLog.transcript h hs.log in
-  match HyperStack.sel h s.state with
+  match Mem.sel h s.state with
   | C_Wait_ServerHello ->
       hs.role = Client /\
       transcript = [clientHello hs.nonce offer] /\
@@ -123,7 +121,7 @@ let inv (s:hs) (h:HyperStack.mem) =
 
 
 let stateType (s:hs) = seq (epoch s.region (nonce s)) * machineState
-let stateT (s:hs) (h:HyperStack.mem) : GTot (stateType s) = (logT s h, sel h s.state)
+let stateT (s:hs) (h:Mem.mem) : GTot (stateType s) = (logT s h, sel h s.state)
 
 let forall_epochs (s:hs) h (p:(epoch s.region (nonce s) -> Type)) =
   (let es = logT s h in
@@ -170,36 +168,36 @@ let completed #rgn #nonce e = True
 
 assume val hs_invT : s:hs -> epochs:seq (epoch s.region (nonce s)) -> machineState -> Type0
 
-let hs_inv (s:hs) (h: HyperStack.mem) = True
+let hs_inv (s:hs) (h: Mem.mem) = True
 (* 17-04-08 TODO deal with inferred logic qualifiers
   hs_invT s (logT s h) (sel h (HS?.state s))  //An abstract invariant of HS-internal state
   /\ Epochs.containsT s.epochs h                //Nothing deep about these next two, since they can always
-  /\ HyperHeap.contains_ref s.state.ref (HyperStack.HS?.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
+  /\ Mem.contains_ref s.state.ref (Mem.HS?.h h)                 //be recovered by 'recall'; carrying them in the invariant saves the trouble
 
 //A framing lemma with a very trivial proof, because of the way stateT abstracts the state-dependent parts
 *)
 
 #set-options "--lax"
-let frame_iT_trivial  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem)
+let frame_iT_trivial  (s:hs) (rw:rw) (h0:Mem.mem) (h1:Mem.mem)
   : Lemma (stateT s h0 = stateT s h1  ==>  iT s rw h0 = iT s rw h1)
   = ()
 
 //Here's a framing on stateT connecting it to the region discipline
-let frame_stateT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
+let frame_stateT  (s:hs) (rw:rw) (h0:Mem.mem) (h1:Mem.mem) (mods:Set.set rid)
   : Lemma
     (requires
-      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
-      Map.contains (HyperStack.HS?.h h0) s.region /\
+      HH.modifies_just mods (Mem.HS?.h h0) (Mem.HS?.h h1) /\
+      Map.contains (Mem.HS?.h h0) s.region /\
       not (Set.mem s.region mods))
     (ensures stateT s h0 = stateT s h1)
   = ()
 
 //This is probably the framing lemma that a client of this module will want to use
-let frame_iT  (s:hs) (rw:rw) (h0:HyperStack.mem) (h1:HyperStack.mem) (mods:Set.set rid)
+let frame_iT  (s:hs) (rw:rw) (h0:Mem.mem) (h1:Mem.mem) (mods:Set.set rid)
   : Lemma
     (requires
-      HH.modifies_just mods (HyperStack.HS?.h h0) (HyperStack.HS?.h h1) /\
-      Map.contains (HyperStack.HS?.h h0) s.region /\
+      HH.modifies_just mods (Mem.HS?.h h0) (Mem.HS?.h h1) /\
+      Map.contains (Mem.HS?.h h0) s.region /\
       not (Set.mem s.region mods))
     (ensures stateT s h0 = stateT s h1 /\ iT s rw h0 = iT s rw h1)
 =
@@ -293,14 +291,14 @@ val client_ClientHello: s:hs -> i:id -> ST (result (HandshakeLog.outgoing i))
   (requires fun h0 ->
     let n = MR.m_sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
-    let k = HyperStack.sel h0 s.ks.KeySchedule.state in
+    let k = Mem.sel h0 s.ks.KeySchedule.state in
     match n with
     | Nego.C_Init nonce -> k = KeySchedule.(C (C_Init nonce)) /\ t = []
     | _ -> False )
   (ensures fun h0 r h1 ->
     let n = MR.m_sel h0 Nego.(s.nego.state) in
     let t = transcript h0 s.log in
-    let k = HyperStack.sel h1 s.ks.KeySchedule.state in
+    let k = Mem.sel h1 s.ks.KeySchedule.state in
     ( Correct? r ==>
       ( match n with
         | Nego.C_Offer offer -> (

@@ -2,9 +2,7 @@ module Connection
 
 // Connections are top-level instances of TLS clients and servers
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
 // JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
  // for e.g. found
@@ -23,7 +21,7 @@ open Epochs
 open Handshake
 
 module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
+module HH = Mem
 
 // using also Range, DataStream, TLSFragment, Record
 
@@ -87,17 +85,17 @@ let c_log c = Handshake.epochs_of c.hs
 type st_inv c h = hs_inv (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HyperStack.mem -> GTot (es:seq (epoch (region_of c.hs) (random_of c.hs)){
+val epochs : c:connection -> h:Mem.mem -> GTot (es:seq (epoch (region_of c.hs) (random_of c.hs)){
   Epochs.epochs_inv es /\ es == logT c.hs h
 })
 let epochs c h = logT c.hs h
 
 
 //16-05-30 unused?
-val frame_epochs: c:connection -> h0:HyperStack.mem -> h1:HyperStack.mem -> Lemma
+val frame_epochs: c:connection -> h0:Mem.mem -> h1:Mem.mem -> Lemma
   (requires (
-    Map.contains (HyperStack.HS?.h h0) (region_of c.hs) /\ 
-    equal_on (Set.singleton (region_of c.hs)) (HyperStack.HS?.h h0) (HyperStack.HS?.h h1)))
+    Map.contains (Mem.HS?.h h0) (region_of c.hs) /\ 
+    equal_on (Set.singleton (region_of c.hs)) (Mem.HS?.h h0) (Mem.HS?.h h1)))
   (ensures (epochs c h0 == epochs c h1))
 let frame_epochs c h0 h1 = ()
 
@@ -133,6 +131,6 @@ val equal_on_disjoint:
   s1:Set.set rid -> 
   s2:Set.set rid{disjoint_regions s1 s2} -> 
   r:rid{Set.mem r s1} -> 
-  h0:HyperStack.mem -> h1:HyperStack.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (HyperStack.HS?.h h0) (HyperStack.HS?.h h1))
+  h0:Mem.mem -> h1:Mem.mem{modifies (Set.singleton r) h0 h1} -> Lemma (equal_on s2 (Mem.HS?.h h0) (Mem.HS?.h h1))
 let equal_on_disjoint s1 s2 r h0 h1 = ()
 

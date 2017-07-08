@@ -10,9 +10,7 @@ options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 
  *)
 module KDF.Common
 
-open FStar.Heap
-open FStar.HyperHeap
-open FStar.HyperStack
+open Mem
 
 open Platform.Bytes
 open Platform.Error
@@ -22,8 +20,8 @@ open TLSInfo
 
 module MM = MonotoneMap
 module MR = FStar.Monotonic.RRef
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
+module HH = Mem
+module HS = Mem
 
 (*)
 (* Source index is a secret index *)

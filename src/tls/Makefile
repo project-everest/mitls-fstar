@@ -72,6 +72,7 @@ endif
 # should be added here.
 
 VERIFY= \
+Mem \
 Flags \
 MonotoneMap \
 TLSError \

@@ -8,9 +8,9 @@ open FStar.Ghost // after HH so as not to shadow reveal :(
 open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
 
-module HH = FStar.HyperHeap
-module HS = FStar.HyperStack
-module ST = FStar.HyperStack.ST
+module HH = Mem
+module HS = Mem
+module ST = Mem
 
 (* A dummy Handshake.Msg *) 
 
@@ -305,7 +305,7 @@ let pre_lemma_authentic (a:alg) (c:offer) (h:tag a) (c':offer) (s':offer): ST un
 //				 (ensures (fun h0' r h1' -> h0' = h1' /\ h0' && fst r))
 let st_forall_intro (#a:Type0) (#b:(a -> Type0))
 		    (#pre:(a -> st_pre))
-		    (#post:(x:a -> FStar.HyperStack.mem -> st_post (b x)))
+		    (#post:(x:a -> Mem.mem -> st_post (b x)))
 		    ($f: (x:a -> ST (b x)  //this should really be StTot
 				   (pre x)
 				   (post x)))
@@ -315,7 +315,7 @@ let st_forall_intro (#a:Type0) (#b:(a -> Type0))
 //st_forall_intro_2: arity 2 version, provable from the one above
 let st_forall_intro_2 (#a:Type0) (#b:(a -> Type0)) (#c:(x:a -> b x -> Type0))
 		     (#pre:(x:a -> y:b x -> st_pre))
-		     (#post:(x:a -> y:b x -> FStar.HyperStack.mem -> st_post (c x y)))
+		     (#post:(x:a -> y:b x -> Mem.mem -> st_post (c x y)))
 		     ($f: (x:a -> y:b x -> ST (c x y)  //this should really be StTot
 					    (pre x y)
 					    (post x y)))
@@ -324,8 +324,8 @@ let st_forall_intro_2 (#a:Type0) (#b:(a -> Type0)) (#c:(x:a -> b x -> Type0))
 	 st_forall_intro #_ #_ #_ #(post x) (f x) in //NS: not sure why we need the explicit instantiation of post
      FStar.Classical.forall_intro lem
 
-//FStar.HyperStack should prove that mem is inhabited to eliminate one of the quantifiers below
-assume val some_mem : FStar.HyperStack.mem
+//Mem should prove that mem is inhabited to eliminate one of the quantifiers below
+assume val some_mem : Mem.mem
 
 //This is a lifting of pre_lemma_authentic from an ST function to quantified Lemma
 let st_lemma_authentic (a:alg) (c:offer) (h:tag a) : Lemma

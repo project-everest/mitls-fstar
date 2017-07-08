@@ -7,7 +7,7 @@ open TLSInfo
 open StatefulLHAE
 
 
-let r = HyperHeap.root
+let r = Mem.root
 
 private let mk_id pv aeAlg =
   let er = createBytes 32 (Char.char_of_int 0) in
@@ -70,13 +70,13 @@ private let fake_aead pv aeAlg key iv plain =
   // StatefulLHAE.writer -> StatefulLHAE.state
   let w: writer id =
     assume (~(authId id));
-    let seqn: HyperStack.ref seqn_t = ralloc r 1 in
+    let seqn: Mem.ref seqn_t = ralloc r 1 in
     let st: AEAD_GCM.state id Writer =
       // The calls to [unsafe_coerce] are here because we're breaking
       // abstraction, as both [key] and [iv] are declared as private types.
       let key: AEAD_GCM.key id = bytes_of_hex key |> unsafe_coerce in
       let iv: AEAD_GCM.iv id = bytes_of_hex iv |> unsafe_coerce in
-      (* let log: HyperStack.rref _ = ralloc r Seq.createEmpty in *)
+      (* let log: Mem.rref _ = ralloc r Seq.createEmpty in *)
       let counter = ralloc r 0 in
       AEAD_GCM.coerce r id key iv
     in
@@ -105,12 +105,12 @@ private let fake_cbc pv aeAlg seqn key iv plain macKey =
   // ENC.encryptor -> ENC.state
   let w: ENC.encryptor id =
     let key: ENC.key id = bytes_of_hex key in
-    let log: HyperStack.ref _ = ralloc r Seq.createEmpty in
+    let log: Mem.ref _ = ralloc r Seq.createEmpty in
     let state: ENC.localState r id =
       let iv: ENC.iv id = bytes_of_hex iv in
       ENC.OldBlockState id iv
     in
-    let state: HyperStack.ref (ENC.localState r id) = ralloc r state in
+    let state: Mem.ref (ENC.localState r id) = ralloc r state in
     ENC.StateB #id #Writer #r #r key state log
   in
 
