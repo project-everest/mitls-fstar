@@ -1278,6 +1278,8 @@ class TLSParser():
             msg[ RECORD ].remove( handshakeMsgToExtract )
             msg[ EXTRACT_TO_PLAINTEXT ] = self.CreateHandshakeRecord( handshakeMsgToExtract, msg[ DIRECTION ] )
 
+            manipulation[ "Description" ] = "Extracting %s to plaintext" % ( self.GetHandshakeType( handshakeMsgToExtract[ HANDSHAKE_TYPE ] ) )
+
             return msg
 
         return None

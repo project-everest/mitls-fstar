@@ -757,6 +757,20 @@ class MITLSTester(unittest.TestCase):
 
         return manipulations
 
+    def GetServerExtractPiecesToPlaintextManipulations( self ):
+        handshakesToExtarct = [ HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS,
+                                HANDSHAKE_TYPE_CERTIFICATE         ,
+                                HANDSHAKE_TYPE_CERTIFICATE_VERIFY  ,
+                                HANDSHAKE_TYPE_FINISHED            ]
+
+        manipulations = []
+        for handshakeType in handshakesToExtarct:
+            manipulations.append( AttrDict( {  DIRECTION                : Direction.SERVER_TO_CLIENT,
+                                               PARENT_NODE              : RECORD,
+                                               EXTRACT_TO_PLAINTEXT     : True,
+                                               HANDSHAKE_TYPE           : handshakeType }) )
+
+        return manipulations
 
     def test_ReorderPieces_ClientHello_onWire( self ):
         keysMonitor = MonitorLeakedKeys()
@@ -840,7 +854,7 @@ class MITLSTester(unittest.TestCase):
             alerts                     = list( map( lambda msg : "%s%s: %s" % ( msg[ DIRECTION ], 
                                                                                 IsMsgEncrypted( msg ), 
                                                                                 msg[ ALERT ][ 'Type' ]), 
-                                                     memorySocket.tlsParser.GetAlerts() ) )
+                                                     memorySocket.tlsParser.GetAlerts() ) )            
             abbreviatedTranscript      = self.GetAbbreviatedTranscript( memorySocket.tlsParser.transcript )
 
             thisExperiment = AttrDict( {'Manipulation'         : manipulation, 
@@ -998,8 +1012,6 @@ class MITLSTester(unittest.TestCase):
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
         self.RunSingleTest()
-
-        originalTranscript  = memorySocket.tlsParser.transcript
         
         handshakesToExtarct = [ HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS,
                                 HANDSHAKE_TYPE_CERTIFICATE         ,

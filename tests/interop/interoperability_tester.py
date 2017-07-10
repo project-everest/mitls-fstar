@@ -385,14 +385,14 @@ class InterOperabilityTester(unittest.TestCase):
                                                                     assertExceptionThrown   = False )
 
 
-            NSSExperiments       = mitlsTester.RunManipulationTest( reorderManipulations, 
-                                                                    numExpectedSharedKeys   = None, # prevent assertion failure on numExpectedSharedKeys
-                                                                    runTestFunction         = self.RunSingleTest_MITLS_NSS,
-                                                                    assertExceptionThrown   = False ) 
             # NSSExperiments       = mitlsTester.RunManipulationTest( reorderManipulations, 
             #                                                         numExpectedSharedKeys   = None, # prevent assertion failure on numExpectedSharedKeys
-            #                                                         runTestFunction         = self.RunSingleTest_NSS_MITLS,
+            #                                                         runTestFunction         = self.RunSingleTest_MITLS_NSS,
             #                                                         assertExceptionThrown   = False ) 
+            NSSExperiments       = mitlsTester.RunManipulationTest( reorderManipulations, 
+                                                                    numExpectedSharedKeys   = None, # prevent assertion failure on numExpectedSharedKeys
+                                                                    runTestFunction         = self.RunSingleTest_NSS_MITLS,
+                                                                    assertExceptionThrown   = False ) 
         finally:
             keysMonitor.StopMonitorStdoutForLeakedKeys()
 
@@ -463,6 +463,36 @@ class InterOperabilityTester(unittest.TestCase):
 
         self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_SkipServerResponsePieces.csv" )
 
+    def test_CompareResponses_ExtractToPlaintext( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        mitlsExperiments = []
+        NSSExperiments   = []
+        try:
+            mitlsTester                     = mitls_tester.MITLSTester()
+
+            skipManipulations    = mitlsTester.GetServerExtractPiecesToPlaintextManipulations()
+            mitlsExperiments     = mitlsTester.RunManipulationTest( skipManipulations, 
+                                                                    numExpectedSharedKeys   = None, 
+                                                                    runTestFunction         = mitlsTester.RunSingleTest,
+                                                                    assertExceptionThrown   = False )
+            # NSSExperiments       = mitlsTester.RunManipulationTest( skipManipulations, 
+            #                                                         numExpectedSharedKeys   = None, # prevent assertion failure on numExpectedSharedKeys
+            #                                                         runTestFunction         = self.RunSingleTest_MITLS_NSS,
+            #                                                         assertExceptionThrown   = False ) 
+            NSSExperiments       = mitlsTester.RunManipulationTest( skipManipulations, 
+                                                                    numExpectedSharedKeys   = None, # prevent assertion failure on numExpectedSharedKeys
+                                                                    runTestFunction         = self.RunSingleTest_NSS_MITLS,
+                                                                    assertExceptionThrown   = False ) 
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+        pprint( mitlsExperiments )
+        pprint( NSSExperiments )
+
+        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_ExtractToPlaintext.csv" )
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     mitls_tester.ConfigureMITLSArguments( parser )
@@ -481,6 +511,7 @@ if __name__ == '__main__':
     suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )
     suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderServerHandshakes" ) )
     suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipServerResponsePieces" ) )
+    suite.addTest( InterOperabilityTester( "test_CompareResponses_ExtractToPlaintext" ) )
 
 
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_SignatureAlgorithms" ) )
