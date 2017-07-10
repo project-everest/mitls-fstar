@@ -783,6 +783,33 @@ class MITLSTester(unittest.TestCase):
         #     # The following will print the message as a side effect
         #     parsedManipulatedMsg = tlsParser.Digest( rawMsg, manipulatedMsg[ DIRECTION ] )
 
+    def GetAbbreviatedTranscript( self, transcript ):
+        abbreviatedTranscript = []
+        for msg in transcript:
+            isEncrypted = ""
+            if msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA:
+                isEncrypted = "(Enc)"
+
+            if msg[ DIRECTION ] == Direction.CLIENT_TO_SERVER:
+                direction = "-%s-> " % isEncrypted
+            else:
+                direction = "<-%s- " % isEncrypted
+
+            if ALERT in msg.keys():
+                content = "Alert( %s );" % msg[ ALERT ][ 'Type' ]
+            
+            elif TLSParser.IsMsgContainsOnlyAppData( msg ):
+                content = "<app data>;"
+
+            else:
+                content = ""
+                for handshakeMsg in msg[ RECORD ]:
+                    content += TLSParser.GetHandshakeType( handshakeMsg[ HANDSHAKE_TYPE ] ) + ";"
+
+            abbreviatedTranscript.append( direction + content )
+
+        return abbreviatedTranscript
+
     def RunManipulationTest(    self, 
                                 manipulations, 
                                 numExpectedSharedKeys, 
@@ -814,12 +841,14 @@ class MITLSTester(unittest.TestCase):
                                                                                 IsMsgEncrypted( msg ), 
                                                                                 msg[ ALERT ][ 'Type' ]), 
                                                      memorySocket.tlsParser.GetAlerts() ) )
+            abbreviatedTranscript      = self.GetAbbreviatedTranscript( memorySocket.tlsParser.transcript )
 
             thisExperiment = AttrDict( {'Manipulation'         : manipulation, 
                                         'Keys'                 : keysAndFiles, 
                                         'NumKeys'              : len( keysAndFiles.keys() ),
                                         'SuccessfulSharedKeys' : numKeysWithMoreThanOneFile,
-                                        'Alerts'               : alerts } )
+                                        'Alerts'               : alerts,
+                                        'Transcript'           : abbreviatedTranscript } )
             experiments.append( deepcopy( thisExperiment ) )
 
             # Asserts:

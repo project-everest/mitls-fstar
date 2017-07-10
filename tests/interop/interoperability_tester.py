@@ -338,19 +338,36 @@ class InterOperabilityTester(unittest.TestCase):
         pprint( mitlsExperiments )
         pprint( NSSExperiments )
 
-        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments )
+        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_ReorderPieces_ClientHello.csv" )
 
-    def PrintMsgManipulationComparison( self, mitlsExperiments, NSSExperiments ):
-        resultsText = "miTLS$ NSS$ miTLS alerts$ nssAlerts$ miTLS shared keys$ NSS shared keys\n"
+    def PrintMultilineList( self, items ):
+        result = '"'
+        for item in items:
+            result += item + "\n"
+
+        result = result.strip() + '"'
+
+        return result
+
+    def PrintMsgManipulationComparison( self, mitlsExperiments, NSSExperiments, reportFilePath = None ):
+        resultsText = "miTLS$ NSS$ miTLS alerts$ nssAlerts$ miTLS shared keys$ NSS shared keys$miTLS transcript$ NSS transcript\n"
         for mitlsRun, nssRun in zip( mitlsExperiments, NSSExperiments ):
             resultsText += "%s$ %s$ " % (mitlsRun[ 'Manipulation' ][ 'Description' ], nssRun[ 'Manipulation' ][ 'Description' ] ) 
-            resultsText += "%s$ %s$ " % (mitlsRun[ 'Alerts' ],                        nssRun[ 'Alerts' ] ) 
+            resultsText += "%s$ %s$ " % ( self.PrintMultilineList( mitlsRun[ 'Alerts' ] ),                    
+                                          self.PrintMultilineList( nssRun[ 'Alerts' ] )  )
             resultsText += "%s$ %s$ " % (mitlsRun[ 'SuccessfulSharedKeys' ],          nssRun[ 'SuccessfulSharedKeys' ] ) 
+            resultsText += "%s$ %s$ " % ( self.PrintMultilineList( mitlsRun[ 'Transcript' ] ),                    
+                                          self.PrintMultilineList( nssRun[ 'Transcript' ] )  )
             resultsText += "\n"
 
         resultsText = resultsText.replace( ",", ";" ).replace( "$", "," )
 
-        print( resultsText )    
+        if reportFilePath is None:
+            print( resultsText )
+            return
+        # else:
+        with open( reportFilePath, "w" ) as reportFile:
+            reportFile.write( resultsText + "\n" )            
 
     def test_CompareResponses_ReorderPieces_ServerEncryptedHello( self ):
         keysMonitor = MonitorLeakedKeys()
@@ -382,7 +399,7 @@ class InterOperabilityTester(unittest.TestCase):
         pprint( mitlsExperiments )
         pprint( NSSExperiments )
 
-        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments )
+        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_ReorderPieces_ServerEncryptedHello.csv" )
 
     def test_CompareResponses_ReorderServerHandshakes( self ):
         keysMonitor = MonitorLeakedKeys()
@@ -414,7 +431,7 @@ class InterOperabilityTester(unittest.TestCase):
         pprint( mitlsExperiments )
         pprint( NSSExperiments )
 
-        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments )
+        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_ReorderServerHandshakes.csv" )
 
     def test_CompareResponses_SkipServerResponsePieces( self ):
         keysMonitor = MonitorLeakedKeys()
@@ -444,7 +461,7 @@ class InterOperabilityTester(unittest.TestCase):
         pprint( mitlsExperiments )
         pprint( NSSExperiments )
 
-        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments )
+        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_SkipServerResponsePieces.csv" )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

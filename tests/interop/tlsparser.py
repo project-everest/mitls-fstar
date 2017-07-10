@@ -573,7 +573,8 @@ class TLSParser():
 
         return "unknown_type"
 
-    def GetHandshakeType( self, typeNumber ):
+    @staticmethod
+    def GetHandshakeType( typeNumber ):
         if typeNumber in HANDSHAKE_TYPE_NAME.keys():
             return HANDSHAKE_TYPE_NAME[ typeNumber ]
 
@@ -1217,13 +1218,17 @@ class TLSParser():
                 isMsgManipulated = True
 
         if isMsgManipulated:
+            self.transcript.pop()
+
             wireMsg      = b""
             plainTextMsg = None
             if EXTRACT_TO_PLAINTEXT in manipulatedMsg.keys():
                 plainTextMsg = manipulatedMsg[ EXTRACT_TO_PLAINTEXT ]
                 wireMsg     += self.ReconstructRecordAndCompareToOriginal( plainTextMsg, doCompare = False )
+                self.transcript.append( plainTextMsg )
 
             wireMsg += self.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
+            self.transcript.append( manipulatedMsg )
 
             if config.LOG_LEVEL < logging.ERROR:
                 print( "================== Manipulated Message =====================" )
@@ -1592,7 +1597,8 @@ class TLSParser():
 
         return reconstructedRawRecord
 
-    def IsMsgContainsOnlyAppData( self, msg ):
+    @staticmethod
+    def IsMsgContainsOnlyAppData( msg ):
         return DECRYPTED_RECORD_TYPE in msg.keys() and \
                msg[ DECRYPTED_RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA
 
