@@ -1092,6 +1092,11 @@ class MITLSTester(unittest.TestCase):
         self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
 
+    @staticmethod
+    def WriteToMultipleSinks( sinks, msg ):
+        for sink in sinks:
+            sink.write( msg )
+
     def test_NamedGroups( self ):
         self.log.info( "test_NamedGroups" )
         
@@ -1129,6 +1134,36 @@ class MITLSTester(unittest.TestCase):
                     logFile.write( "FAILED\n" )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+    def test_parameters_matrix( self ):
+        sys.stderr.write( "Running test_parameters_matrix\n" )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        with open( "parameters_matrix_MITLS_MITLS.txt", "w" ) as logFile:
+            outputSinks = [ sys.stderr, logFile ]
+            self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
+            for cipherSuite in SUPPORTED_CIPHER_SUITES:
+                for algorithm in SUPPORTED_SIGNATURE_ALGORITHMS:
+                    for group in SUPPORTED_NAMED_GROUPS:
+                        self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
+                        memorySocket.tlsParser.DeleteLeakedKeys()
+                        try:
+                            startTime = time.time()
+                            self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                                                supportedSignatureAlgorithms = [ algorithm ],
+                                                supportedNamedGroups         = [ group ] )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                        except Exception as err: 
+                            print( traceback.format_tb( err.__traceback__ ) )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                        finally:
+                            totalTime = time.time() - startTime
+                            self.WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+              
+        keysMonitor.StopMonitorStdoutForLeakedKeys()    
 
     def test_CipherSuites( self ):
         self.log.info( "test_CipherSuites" )
@@ -1289,7 +1324,7 @@ def HandleMITLSArguments( args ):
         memorySocket.tlsParser.log.setLevel( config.LOG_LEVEL )
 
 
-
+from output_redirector import stdout_redirector
 if __name__ == '__main__':
     # SI: argparse seems not to complete before unitest.main starts running? 
     # usage = "usage: %prog [options] arg"
@@ -1298,13 +1333,16 @@ if __name__ == '__main__':
     
     args   = parser.parse_args()
     HandleMITLSArguments( args )
+    memorySocket.log.setLevel( config.LOG_LEVEL )   
 
     # SI: reset args, else unittest.main complains of flags not being valid.
     sys.argv[1:] = args.unittest_args
 
     # SI: these should be args. 
     suite = unittest.TestSuite()
-    suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    
+    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
@@ -1322,7 +1360,13 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester() )
     
      
-    runner=unittest.TextTestRunner()
-    runner.run(suite)
+    runner = unittest.TextTestRunner()
+    
+    if args.supress_output:
+        devNull = open( "/dev/null", "wb" )
+        with stdout_redirector( devNull ):
+            runner.run(suite)
+    else:
+        runner.run(suite)
 
 
