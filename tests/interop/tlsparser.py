@@ -733,7 +733,8 @@ class TLSParser():
         rawKeyShare  = self.PeekRawBytes( keyShareSize, SIZE_OF_UINT16 )
         keyShare     = self.ConsumeRawBytes( keyShareSize )
         keyShareEntry.append( AttrDict( { NAME           : KEY_SHARE,
-                                          RAW_CONTENTS   : keyShare } ) )
+                                          RAW_CONTENTS   : keyShare,
+                                          INTERPRETATION : "<key share>" } ) )
 
         
         return AttrDict( { NAME           : KEY_SHARE_ENTRY,
@@ -788,8 +789,15 @@ class TLSParser():
         rawVersionID = self.ConsumeRawBytes( SIZE_OF_UINT16 )
         versionID    = self.ParseShort( rawVersionID )
 
+        versionName = "<unknown version>"
+        if versionID == 0x0303:
+            versionName = "TLS-1.2"
+        elif versionID == 0x7f14:
+            versionName = "TLS-1.3-draft-20"
+
         return AttrDict( { NAME           : VERSION_ID,
-                           RAW_CONTENTS   : rawVersionID } )
+                           RAW_CONTENTS   : rawVersionID,
+                           INTERPRETATION : versionName } )
 
     def ConsumeExtension( self, msgType ):
         extensionType = self.ConsumeShort()

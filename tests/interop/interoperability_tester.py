@@ -324,6 +324,7 @@ class InterOperabilityTester(unittest.TestCase):
         try:
             mitlsTester                     = mitls_tester.MITLSTester()
             clientHelloReorderManipulations = mitlsTester.GetClientHelloReorderManipulations( mitlsTester.RunSingleTest )
+            
             mitlsExperiments                = mitlsTester.RunManipulationTest(  clientHelloReorderManipulations, 
                                                                                 numExpectedSharedKeys   = 0, 
                                                                                 runTestFunction         = mitlsTester.RunSingleTest )
@@ -508,10 +509,10 @@ if __name__ == '__main__':
     # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
 
     suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
-    suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )
-    suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderServerHandshakes" ) )
-    suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipServerResponsePieces" ) )
-    suite.addTest( InterOperabilityTester( "test_CompareResponses_ExtractToPlaintext" ) )
+    # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )
+    # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderServerHandshakes" ) )
+    # suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipServerResponsePieces" ) )
+    # suite.addTest( InterOperabilityTester( "test_CompareResponses_ExtractToPlaintext" ) )
 
 
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_SignatureAlgorithms" ) )

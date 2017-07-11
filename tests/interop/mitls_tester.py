@@ -109,7 +109,7 @@ SUPPORTED_NAMED_GROUPS = [
 ]
 
 PIECES_THAT_CANT_BE_SHUFFLED = [ KEY_SHARE_ENTRY, 
-                                 EXTENSION_TYPE_NAMES[ EXTENSION_TYPE_SUPPORTED_VERSIONS ] # because a potential bug was found
+                                 #EXTENSION_TYPE_NAMES[ EXTENSION_TYPE_SUPPORTED_VERSIONS ] # because a potential bug was found
                                  ]
 PIECES_THAT_CANT_BE_SKIPPED  = [ KEY_SHARE_ENTRY, CERT_ENTRY ]                                 
 
@@ -631,14 +631,6 @@ class MITLSTester(unittest.TestCase):
 
         numberOfChildren = len( node.Interpretation )
         for i in range( numberOfChildren - 1 ):
-            # if  TLSParser.IsTerminalPiece( node.Interpretation[ i ] ) and \
-            #     TLSParser.IsTerminalPiece( node.Interpretation[ i + 1 ] ):
-            #     index1Name = node.Interpretation[ i ].Interpretation
-            #     index2Name = node.Interpretation[ i + 1 ].Interpretation
-            # else:
-            #     index1Name = node.Interpretation[ i ].Name
-            #     index2Name = node.Interpretation[ i + 1 ].Name
-
             shuffleManipulations.append( AttrDict( {   HANDSHAKE_TYPE : handshakeType,
                                                        PARENT_NODE    : node.Name,
                                                        SWAP_ITEMS     : AttrDict( { 'index1' : i, 'index2' : i + 1 } ),
