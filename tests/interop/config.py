@@ -15,7 +15,7 @@ LOG_LEVEL = logging.DEBUG
 
 def set_log_level( logLevel ):
 	global LOG_LEVEL
-	print( "set_log_level( %d )" % logLevel )
+	# print( "set_log_level( %d )" % logLevel )
 	LOG_LEVEL = logLevel
 
 def set_mitls_so_path( filename ):

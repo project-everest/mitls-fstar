@@ -277,6 +277,7 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_MITLS_NSS_parameters_matrix( self ):
+        sys.stderr.write( "Running test_MITLS_NSS_parameters_matrix\n" )
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -306,23 +307,31 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_NSS_MITLS_parameters_matrix( self ):
+        sys.stderr.write( "Running test_NSS_MITLS_parameters_matrix\n" )
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
         with open( "parameters_matrix_NSS_MITLS.txt", "w" ) as logFile:
-            logFile.write( "%-40s, %-40s, %-40s, %-10s\n" % ("CipherSuite", "SignatureAlgorithm", "NamedGroup", "PassFail") )
+            outputSinks = [ sys.stderr, logFile ]
+            self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
             for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
                 for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
                     for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
-                        logFile.write( "%-40s, %-40s, %-40s, " % ( cipherSuite, algorithm, group ) )
+                        self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
                         try:
+                            startTime = time.time()
                             self.RunSingleTest_NSS_MITLS(   supportedCipherSuites        = [ cipherSuite ],
                                                             supportedSignatureAlgorithms = [ algorithm ],
                                                             supportedNamedGroups         = [ group ] )
-                            logFile.write( "%-10s\n" % "OK" )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
-                            traceback.print_tb(err.__traceback__)
-                            logFile.write( "%-10s\n" % "FAILED" )
+                            print( traceback.format_tb( err.__traceback__ ) )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                        finally:
+                            totalTime = time.time() - startTime
+                            self.WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
@@ -521,7 +530,8 @@ if __name__ == '__main__':
 
     suite = unittest.TestSuite()    
     suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
-    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+    suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+    
 
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )

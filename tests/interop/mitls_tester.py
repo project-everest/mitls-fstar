@@ -433,8 +433,14 @@ class MonitorLeakedKeys():
     def MonitorStdoutForLeakedKeys( self ):
         LOG_FILE = "log.txt"
         os.remove( LOG_FILE )
-        tee      = subprocess.Popen(["tee", LOG_FILE ], stdin=subprocess.PIPE)
+        tee      = subprocess.Popen(["tee", LOG_FILE ], stdin=subprocess.PIPE )
         os.dup2(tee.stdin.fileno(), sys.stdout.fileno())
+
+        
+        # sys.stdout.close()
+        # sys.stderr.close()
+        # os.dup2(tee.stdout.fileno(), devNull)
+
         # os.dup2(tee.stdin.fileno(), sys.stderr.fileno())
 
         self.keepLookingForKeys = True
@@ -482,9 +488,11 @@ class MonitorLeakedKeys():
                 filePath = keyFilePath % (purpose, entity, keyIdx)
                 with open( filePath, "w" ) as keyFile:
                     keyFile.write( "IV: %s\n" % IV )
-                    keyFile.write( "KEY: %s\n" % key )
-                    sys.stderr.write( "Dumped key to %s\n" % filePath )
+                    keyFile.write( "KEY: %s\n" % key )                    
                     keyIdx += 1
+
+                    if config.LOG_LEVEL < logging.ERROR:
+                    	sys.stdout.write( "Dumped key to %s\n" % filePath )
 
 class MITLSTester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
@@ -1262,7 +1270,7 @@ class MITLSTester(unittest.TestCase):
             memorySocket.tlsParser.CompareMsgs( msg1, msg2 )
 
 def ConfigureMITLSArguments( parser ):
-    parser.add_argument("-s", "--supress_output", help="turn off verbosity", action='store_false' )
+    parser.add_argument("-s", "--supress_output", help="turn off verbosity", action='store_true' )
     parser.add_argument("--mitls_so_path", help="full path_to_libmitls.so")
     parser.add_argument("--srv_cert_path", help="full path_to_server_cert_file")
     parser.add_argument("--srv_key_path",  help="full path_to_server_key_path")
@@ -1274,9 +1282,13 @@ def HandleMITLSArguments( args ):
     if args.mitls_so_path:
         config.set_mitls_so_path(args.mitls_so_path)
 
-    if not args.supress_output:
+    if args.supress_output:
         SUPRESS_ALL_LOGS = 100
         config.set_log_level( SUPRESS_ALL_LOGS )
+
+        memorySocket.tlsParser.log.setLevel( config.LOG_LEVEL )
+
+
 
 if __name__ == '__main__':
     # SI: argparse seems not to complete before unitest.main starts running? 
