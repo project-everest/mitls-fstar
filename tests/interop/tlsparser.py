@@ -37,6 +37,8 @@ import config
 
 LOG_TRANSMITTED_BYTES       = False
 
+WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS = 0.2
+
 class TLSParserError( Exception ):
     def __init__( self, msg ):
         Exception.__init__( self, msg )
@@ -88,9 +90,6 @@ class Terminal():
     @staticmethod
     def ColorText( color, text, originalColor = COLORS.WHITE ):
         return Terminal.GetColorSequence( color ) + text + Terminal.GetColorSequence( originalColor )
-    # @staticmethod
-    # def SetColor( foreground, background = COLORS.DEFAULT, attribute = COLORS.NORMAL ):
-    #     sys.stdout.write( Terminal.GetColorSequence( foreground, background, attribute ) )
 
 def Red( text, originalColor = COLORS.WHITE ):
     if sys.platform == "win32":
@@ -916,52 +915,46 @@ class TLSParser():
 
         return helloRetry
 
-    # def ParseHandshakeMsg( self ):
-    #     handshake                   = {}
-    #     handshake[ HANDSHAKE_TYPE ] = self.ConsumeByte()
-    #     handshake[ LENGTH ]         = self.ConsumeTrippleByteSize()
+    def ParseKeyFile_parseContent( self, keyFile ):
+        HEX_RADIX = 16
+        iv        = None
+        key       = None
 
-    #     if handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_CLIENT_HELLO:
-    #         handshake[ HANDSHAKE_MSG ] = self.ParseClientHello()
+        while iv is None or key is None:
+            line           = keyFile.readline()
+            header, values = line.split( ":" )
+            splitValues    = values.split( "," )
+            
+            #remove last empty object, if it exists:
+            if len( splitValues[ -1 ].strip() ) == 0:
+                splitValues = splitValues[ : -1 ]
 
-    #     elif handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_SERVER_HELLO:
-    #         handshake[ HANDSHAKE_MSG ] = self.ParseServerHello()
+            data = bytearray( map( lambda x: int( x, HEX_RADIX ), splitValues ) )
 
-    #     elif handshake[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_HELLO_RETRY_REQUEST:
-    #         handshake[ HANDSHAKE_MSG ] = self.ParseHelloRetry()
-    #     else:
-    #         handshake[ HANDSHAKE_MSG ] = self.ConsumeHandshake()????
-    #         # raise TLSParserError( "Unknown handshake type: %d" % handshake[ HANDSHAKE_TYPE ] )
+            if header.strip().upper() == "KEY":
+                key = bytes( data )
+            elif header.strip().upper() == "IV":
+                iv  = bytes( data )
+            else:
+                errMsg = "Error loading leaked keys from file %s, Ivalid header: %s" % ( keyFilePath, header )
+                self.log.error( errMsg )
+                raise TLSParserError( errMsg )
 
-    #     return handshake
+        return iv, key
 
     def ParseKeyFile( self, keyFilePath ):
-        # self.log.debug( "ParseKeyFile: parsing %s" % keyFilePath )
+        MAX_RETRIES = 3
 
-        HEX_RADIX = 16
-        
-        iv  = None
-        key = None
         with open( keyFilePath, "r" ) as keyFile:
-            while iv is None or key is None:
-                line           = keyFile.readline()
-                header, values = line.split( ":" )
-                splitValues    = values.split( "," )
-                
-                #remove last empty object, if it exists:
-                if len( splitValues[ -1 ].strip() ) == 0:
-                    splitValues = splitValues[ : -1 ]
+            tryIndex = 0
+            try:
+                iv, key = self.ParseKeyFile_parseContent( keyFile )
+            except:
+                tryIndex += 1
+                if tryIndex >= MAX_RETRIES:
+                    raise
 
-                data = bytearray( map( lambda x: int( x, HEX_RADIX ), splitValues ) )
-
-                if header.strip().upper() == "KEY":
-                    key = bytes( data )
-                elif header.strip().upper() == "IV":
-                    iv  = bytes( data )
-                else:
-                    errMsg = "Error loading leaked keys from file %s, Ivalid header: %s" % ( keyFilePath, header )
-                    self.log.error( errMsg )
-                    raise TLSParserError( errMsg )
+                time.sleep( WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS )
 
         return iv, key
 
@@ -1088,7 +1081,6 @@ class TLSParser():
 
     def DecryptMsgBody( self, rawRecord, fixedIVAndKey ):
         SIZE_OF_AES_GCM_TAG                 = 16 
-        WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS = 0.2
 
         cipherText  = rawRecord[ : -SIZE_OF_AES_GCM_TAG ]
         tag         = rawRecord[ -SIZE_OF_AES_GCM_TAG : ]
@@ -1443,17 +1435,12 @@ class TLSParser():
             raise TLSParserError( errMsg )
 
     def CompareHandshakeMsg( self, handshakeMsg1, handshakeMsg2 ):
-        # PIECE_NAME              = 0 
-        # PIECE_RAW_VALUE         = 1
-        # PIECE_INTERPRETATION    = 2
-
         self.VerifyEqual( handshakeMsg1[ HANDSHAKE_TYPE ],    handshakeMsg2[ HANDSHAKE_TYPE ] )
         
         sys.stdout.write(   Green( HANDSHAKE_TYPE + ": " ) +  
                             Yellow( "%-20s (%d); "  
                                 % ( self.GetHandshakeType( handshakeMsg1[ HANDSHAKE_TYPE ] ), handshakeMsg1[ HANDSHAKE_TYPE ]  )  ) + 
                              "\n" )
-        # self.VerifyEqual( handshakeMsg1[ HANDSHAKE_ME ],    handshakeMsg2[ HANDSHAKE_TYPE ] )
 
         for piece1, piece2 in zip( handshakeMsg1[ HANDSHAKE_MSG ], handshakeMsg2[ HANDSHAKE_MSG ] ):
             PREFIX1 = "---->"
@@ -1699,19 +1686,15 @@ class TLSParser():
             elif msg[ DECRYPTED_RECORD_TYPE ] == TLS_RECORD_TYPE_ALERT:
                 msg[ ALERT ] = self.ConsumeAlert()
                 self.log.error( "Received ALERT inside app data: %s" % str( msg[ ALERT ] ) )
-                # pprint( msg )
-                # raise TLSParserError( "Received alert inside app data" )
             elif msg[ DECRYPTED_RECORD_TYPE ] == TLS_RECORD_TYPE_APP_DATA:
                 msg[ RECORD ] = self.ConsumeRawBytes( len( msg[ DECRYPTED_RECORD ] ) )
             else:
                 raise TLSParserError( "Unknown DECRYPTED_RECORD_TYPE %d" % msg[ DECRYPTED_RECORD_TYPE ] )
-            # pprint(msg)
 
             if not self.IsAlertMsg( msg ):
                 self.ReconstructRecordAndCompareToOriginal( msg )
 
         elif msg[ RECORD_TYPE ] == TLS_RECORD_TYPE_ALERT:
-            # msg[ ALERT ] = self.ParseAlert( msg[ RAW_RECORD ][ TLS_RECORD_HEADER_SIZE : ] )
             msg[ ALERT ] = self.ConsumeAlert()
             self.log.error( "Received ALERT: %s" % str( msg[ ALERT ] ) )
         else:
@@ -1872,13 +1855,6 @@ class FileSocket():
         with open( nextFilePath, "wb" ) as msgFile:
             msgFile.write( pyBuffer )
 
-        # pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )
-        
-        # self.tlsParser.Digest( pyBuffer[ : ], Direction.SERVER_TO_CLIENT )
-        # if self.logMsgs:
-        #     self.log.debug( "SendToClient -->\n" + TLSParser.FormatBuffer( pyBuffer ) ) 
-
-        # self.serverToClientPipe += pyBuffer
         return bufferSize
 
     #Used by server to read from client:
@@ -1893,7 +1869,6 @@ class FileSocket():
             self.ReadBytesFromFile( self.client, nextFilePath )
             self.currentFileID += 1 
 
-        print( "buffer = %s, bufferSize = %s" % ( buffer, bufferSize ))
         maxBytesToRead = min( bufferSize, self.BytesLeftToRead( self.client ) )
         self.cutils.DoMemcpy( c_voidp( buffer ), c_voidp( self.client.bufferAddr.value + self.client.offset ), c_uint32( maxBytesToRead ) )
         self.client.offset += maxBytesToRead    
@@ -1915,7 +1890,6 @@ class MemorySocket():
 
     def SetupLogger( self ):
         self.log = logging.getLogger( 'MemorySocket' )
-        print( "MemorySocket setLevel( %d)" % config.LOG_LEVEL )
         self.log.setLevel( config.LOG_LEVEL )
 
         formatter      = logging.Formatter('%(asctime)s %(name)-20s %(levelname)-10s %(message)s')
@@ -1937,8 +1911,6 @@ class MemorySocket():
         pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )        
         msgs     = self.tlsParser.Digest( pyBuffer[ : ], Direction.CLIENT_TO_SERVER )
 
-        # if self.logMsgs:
-        #     self.log.debug( "SendToServer -->\n" + TLSParser.FormatBuffer( pyBuffer ) ) 
         for msg in msgs:
             manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
             if manipulatedWireFrame != None:

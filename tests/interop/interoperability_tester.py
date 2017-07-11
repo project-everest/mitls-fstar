@@ -15,15 +15,7 @@ import mitls_tester
 import tlsparser
 import config
 
-# runMITLS_NSS_test                   = False
-# runMITLS_NSS_CipherSuites           = False
-# runMITLS_NSS_SignatureAlgorithms    = False
-# runMITLS_NSS_NamedGroups            = False
-# runNSS_MITLS_CipherSuites           = False
-# runNSS_MITLS_SignatureAlgorithms    = False
-# runNSS_MITLS_NamedGroups            = False
-# runMITLS_NSS_parameters_matrix      = False
-# runNSS_MITLS_parameters_matrix      = False
+WriteToMultipleSinks = mitls_tester.MITLSTester.WriteToMultipleSinks
 
 DATA_CLIENT_TO_SERVER = b"Client->Server\x00"
 DATA_SERVER_TO_CLIENT = b"Server->Client\x00"
@@ -54,11 +46,6 @@ class InterOperabilityTester(unittest.TestCase):
 
         self.log.handlers = []
         self.log.addHandler(consoleHandler) 
-
-    @staticmethod
-    def WriteToMultipleSinks( sinks, msg ):
-        for sink in sinks:
-            sink.write( msg )
 
     def test_MITLSClient_NSS_server( self ):
         hostName = "test_server.com"
@@ -283,12 +270,12 @@ class InterOperabilityTester(unittest.TestCase):
 
         with open( "parameters_matrix_MITLS_NSS.txt", "w" ) as logFile:
             outputSinks = [ sys.stderr, logFile ]
-            self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+            WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
 
             for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
                 for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
                     for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
-                        self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+                        WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
 
                         memorySocket.tlsParser.DeleteLeakedKeys()
                         try:
@@ -296,13 +283,13 @@ class InterOperabilityTester(unittest.TestCase):
                             self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
                                                             supportedSignatureAlgorithms = [ algorithm ],
                                                             supportedNamedGroups         = [ group ] )
-                            self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
                             print( traceback.format_tb( err.__traceback__ ) )
-                            self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
                         finally:
                             totalTime = time.time() - startTime
-                            self.WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+                            WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
@@ -313,25 +300,25 @@ class InterOperabilityTester(unittest.TestCase):
 
         with open( "parameters_matrix_NSS_MITLS.txt", "w" ) as logFile:
             outputSinks = [ sys.stderr, logFile ]
-            self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+            WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
 
             for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
                 for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
                     for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
-                        self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+                        WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
 
                         try:
                             startTime = time.time()
                             self.RunSingleTest_NSS_MITLS(   supportedCipherSuites        = [ cipherSuite ],
                                                             supportedSignatureAlgorithms = [ algorithm ],
                                                             supportedNamedGroups         = [ group ] )
-                            self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
                             print( traceback.format_tb( err.__traceback__ ) )
-                            self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
                         finally:
                             totalTime = time.time() - startTime
-                            self.WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+                            WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
@@ -348,7 +335,6 @@ class InterOperabilityTester(unittest.TestCase):
             mitlsExperiments                = mitlsTester.RunManipulationTest(  clientHelloReorderManipulations, 
                                                                                 numExpectedSharedKeys   = 0, 
                                                                                 runTestFunction         = mitlsTester.RunSingleTest )
-
 
             NSSExperiments                  = mitlsTester.RunManipulationTest(  clientHelloReorderManipulations, 
                                                                                 numExpectedSharedKeys   = 0, 
@@ -551,7 +537,6 @@ if __name__ == '__main__':
     
     runner=unittest.TextTestRunner()
 
-    # print( "args.supress_output = %s" % args.supress_output )
     if args.supress_output:
         devNull = open( "/dev/null", "wb" )
         with stdout_redirector( devNull ):
