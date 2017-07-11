@@ -55,6 +55,11 @@ class InterOperabilityTester(unittest.TestCase):
         self.log.handlers = []
         self.log.addHandler(consoleHandler) 
 
+    @staticmethod
+    def WriteToMultipleSinks( sinks, msg ):
+        for sink in sinks:
+            sink.write( msg )
+
     def test_MITLSClient_NSS_server( self ):
         hostName = "test_server.com"
 
@@ -276,21 +281,27 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor.MonitorStdoutForLeakedKeys()
 
         with open( "parameters_matrix_MITLS_NSS.txt", "w" ) as logFile:
-            logFile.write( "%-40s, %-40s, %-40s, %-10s\n" % ("CipherSuite", "SignatureAlgorithm", "NamedGroup", "PassFail") )
+            outputSinks = [ sys.stderr, logFile ]
+            self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
             for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
                 for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
                     for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
-                        logFile.write( "%-40s, %-40s, %-40s, " % ( cipherSuite, algorithm, group ) )
+                        self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
 
                         memorySocket.tlsParser.DeleteLeakedKeys()
                         try:
+                            startTime = time.time()
                             self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
                                                             supportedSignatureAlgorithms = [ algorithm ],
                                                             supportedNamedGroups         = [ group ] )
-                            logFile.write( "%-10s\n" % "OK" )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
-                            traceback.print_tb(err.__traceback__)
-                            logFile.write( "%-10s\n" % "FAILED" )
+                            print( traceback.format_tb( err.__traceback__ ) )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                        finally:
+                            totalTime = time.time() - startTime
+                            self.WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
@@ -494,6 +505,9 @@ class InterOperabilityTester(unittest.TestCase):
 
         self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_ExtractToPlaintext.csv" )
 
+
+from output_redirector import stdout_redirector
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     mitls_tester.ConfigureMITLSArguments( parser )
@@ -503,18 +517,19 @@ if __name__ == '__main__':
 
     memorySocket.log.setLevel( config.LOG_LEVEL )    
 
-    suite = unittest.TestSuite()
-    # suite.addTest( InterOperabilityTester( "test_MITLSClient_NSS_server" ) )
-    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
+
+
+    suite = unittest.TestSuite()    
+    suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
 
-    suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
+    # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderServerHandshakes" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipServerResponsePieces" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ExtractToPlaintext" ) )
 
-
+    # suite.addTest( InterOperabilityTester( "test_MITLSClient_NSS_server" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_SignatureAlgorithms" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_NamedGroups" ) )
     # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_CipherSuites" ) )
@@ -525,5 +540,12 @@ if __name__ == '__main__':
     # suite.addTest( InterOperabilityTester( "" ) )
     
     runner=unittest.TextTestRunner()
-    runner.run(suite)
+
+    # print( "args.supress_output = %s" % args.supress_output )
+    if args.supress_output:
+        devNull = open( "/dev/null", "wb" )
+        with stdout_redirector( devNull ):
+            runner.run(suite)
+    else:
+        runner.run(suite)
 
