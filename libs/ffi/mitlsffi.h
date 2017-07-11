@@ -122,15 +122,13 @@ typedef struct {
   size_t len;
   char ticket[MAX_TICKET_LEN];
 } quic_ticket;
-  
+
 typedef struct {
   unsigned int max_stream_data;
   unsigned int max_data;
   unsigned int max_stream_id;
   unsigned short idle_timeout;
 } quic_transport_parameters;
-
-typedef struct quic_key quic_key;
 
 typedef struct {
   // NULL terminated hostname (sent in SNI and used to validate certificate)
