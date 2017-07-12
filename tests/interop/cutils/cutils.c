@@ -77,6 +77,6 @@ __declspec(dllexport)
 #endif
 void* DoMemcpy( void* dest, void* src, size_t size )
 {
-	printf("########## %s in %s: %d; dest = %p; src = %p; size = %d\n", __FILE__, __FUNCTION__, __LINE__, dest, src, size );
+	printf("########## %s in %s: %d; dest = %p; src = %p; size = %zd\n", __FILE__, __FUNCTION__, __LINE__, dest, src, size );
 	return memcpy( dest, src, size );
 }
