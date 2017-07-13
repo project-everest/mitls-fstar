@@ -31,7 +31,7 @@ void dump_parameters(quic_transport_parameters *qp)
   printf("  max_data        = %d\n", qp->max_data);
   printf("  max_stream_id   = %d\n", qp->max_stream_id);
   printf("  idle_timeout    = %d\n", qp->idle_timeout);
-  printf("  other parameters= "); dump(qp->others, qp->others_len);
+  if (qp->others_len) printf("  other parameters= "); dump(qp->others, qp->others_len); 
 }
 
 char *quic_result_string(quic_result r){
@@ -344,16 +344,25 @@ int main(int argc, char **argv)
     }
     else printf("Failed to get ticket: %s\n", errmsg);
 
-    quic_transport_parameters peer;
-    if (FFI_mitls_quic_get_peer_parameters(client, &peer, &errmsg) 
+    dump_parameters(&(config.qp));
+
+    /*
+    quic_transport_parameters peer[1];
+    if (FFI_mitls_quic_get_peer_parameters(server, peer, &errmsg)) 
       {
-        printf("Client received server parameters: %d %d %d %d %d\n");
-        
+        printf("Server received client parameters:\n");
+        dump_parameters(peer);
       }
     else printf("Failed to get peer parameter: %s\n", errmsg);
-    
+    if (FFI_mitls_quic_get_peer_parameters(client, peer, &errmsg))
+      {
+        printf("Client received server parameters:\n");
+        dump_parameters(peer);
+      }
+    else printf("Failed to get peer parameter: %s\n", errmsg);
+    */
   }
-
+    
   FFI_mitls_quic_free(server);
   FFI_mitls_quic_free(client);
 
