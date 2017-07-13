@@ -1,30 +1,33 @@
 FSTAR_HOME ?= ../../../FStar
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
-
-
-
+HACL_HOME ?= ../../../hacl-star
 
 
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
+LIBQC=libquiccrypto.dll
 else
 LIBMITLS=libmitls.so
+LIBQC=libquiccrypto.so
 endif
-
 
 all: quic.exe
 
 clean:
 	rm -rf *.o *.exe *.dll *~
 
-../../src/tls/libmitls.dll:
+../../src/tls/$(LIBMITLS):
 	make -C ../../src/tls tls-ffi
 
-libmitls.dll: ../../src/tls/libmitls.dll
-	cp ../../src/tls/libmitls.dll .
+$(HACL_HOME)/secure_api/QuicProvider/$(LIBQC):
+	make -C $(HACL_HOME)/secure_api/QuicProvider
 
-libmitls.so: ../../src/tls/libmitls.so
-	cp ../../src/tls/libmitls.so .
+$(LIBMITLS): ../../src/tls/$(LIBMITLS)
+	cp ../../src/tls/$(LIBMITLS) .
 
-quic.exe: quic.c $(LIBMITLS)
-	gcc -fPIC -I ../../libs/ffi -L. quic.c -lmitls -o quic.exe
+$(LIBQC): $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC)
+	cp $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC) .
+
+quic.exe: quic.c $(LIBMITLS) $(LIBQC)
+	$(CC) -fPIC -I ../../libs/ffi -I $(HACL_HOME)/secure_api/QuicProvider -L. quic.c -lmitls -lquiccrypto -o quic.exe
+
