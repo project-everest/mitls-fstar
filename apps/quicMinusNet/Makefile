@@ -1,11 +1,12 @@
 FSTAR_HOME ?= ../../../FStar
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 HACL_HOME ?= ../../../hacl-star
-
+MARCH?=x86_64
 
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
 LIBQC=libquiccrypto.dll
+CC=$(MARCH)-w64-mingw32-gcc
 else
 LIBMITLS=libmitls.so
 LIBQC=libquiccrypto.so

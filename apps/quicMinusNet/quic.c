@@ -46,7 +46,6 @@ char *quic_result_string(quic_result r){
 int main(int argc, char **argv)
 {
   char *errmsg;
-  quic_result rc, rs;
 
   quic_config config = {
     .is_server = 1,
@@ -74,24 +73,22 @@ int main(int argc, char **argv)
     .enable_0rtt = 1
   };
 
-  quic_state *server;
-  quic_state *client;
+  quic_result rc, rs;
+  quic_state *server = NULL, *client = NULL;
+  quic_secret qs = {0}, qs_early = {0};
+  quic_ticket qt = {0};
 
   FFI_mitls_init();
 
   // server writer buffer (cumulative)
   size_t slen = 0;
-  size_t smax = 8*1024; // too much; we use < 1KB
-  char *s_buffer = malloc(smax);
+  size_t smax = 8*1024;
+  char _sbuf[smax], *s_buffer = _sbuf;
 
   // client write buffer (cumulative)
   size_t clen = 0;
-  size_t cmax = 8*1024; // too much; we use < 1KB
-  char *c_buffer = malloc(cmax);
-
-  // buffer for secrets and tickets
-  quic_secret *qs = malloc(sizeof(quic_secret));
-  quic_ticket *qt = malloc(sizeof(quic_ticket));
+  size_t cmax = 8*1024;
+  char _cbuf[cmax], *c_buffer = _cbuf;
 
   if (argc == 1) {
       // GENERIC HANDSHAKE TEST (NO 0RTT)
@@ -115,7 +112,7 @@ int main(int argc, char **argv)
           return -1;
         }
 
-      do{
+      do {
         c_buffer += clen; // assuming miTLS never returns a larger clen
         cmax -= clen;
         clen = cmax;
@@ -155,20 +152,20 @@ int main(int argc, char **argv)
       }
       while(!client_complete || !server_complete);
 
-      quic_secret qs_exporter = {0}, qs_client = {0}, qs_server = {0};
-      FFI_mitls_quic_get_exporter(client, 0, &qs_exporter, &errmsg);
-      FFI_mitls_quic_get_exporter(server, 0, &qs_server, &errmsg);
-      if(memcmp(qs_exporter.secret, qs_server.secret, 64))
+      FFI_mitls_quic_get_exporter(client, 0, &qs, &errmsg);
+      FFI_mitls_quic_get_exporter(server, 0, &qs_early, &errmsg);
+      if(memcmp(qs_early.secret, qs.secret, 64))
       {
         printf("  *** ERROR: exporter secrets do not match! ***\n");
         return 1;
       }
 
       printf("   === Exporter secret ===\n");
-      dump(qs_exporter.secret, 32);
+      dump(qs.secret, 32);
 
-      quic_crypto_tls_derive_secret(&qs_client, &qs_exporter, "EXPORTER-QUIC client 1-RTT Secret");
-      quic_crypto_tls_derive_secret(&qs_server, &qs_exporter, "EXPORTER-QUIC server 1-RTT Secret");
+      quic_secret qs_client = {0}, qs_server = {0};
+      quic_crypto_tls_derive_secret(&qs_client, &qs, "EXPORTER-QUIC client 1-RTT Secret");
+      quic_crypto_tls_derive_secret(&qs_server, &qs, "EXPORTER-QUIC server 1-RTT Secret");
 
       printf("   === QUIC 1-RTT secrets ===\n");
       printf("C: "); dump(qs_client.secret, 32);
@@ -233,17 +230,17 @@ int main(int argc, char **argv)
     s_buffer += slen; smax -= slen; slen = smax;
     rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
     assert(rs == TLS_server_accept);
-    FFI_mitls_quic_get_exporter(server, 0, qs, &errmsg);
+    FFI_mitls_quic_get_exporter(server, 0, &qs, &errmsg);
     printf("                        server returns %s clen=%d slen=%d\n", quic_result_string(rs), clen, slen);
-    printf("                        secret="); dump(qs->secret, 32);
+    printf("                        secret="); dump(qs.secret, 32);
     printf("                  <---- ServerHello;(EncryptedExtensions; Certificate; CertVerify; Finished)[%4d]\n\n",slen);
 
     c_buffer += clen; cmax -= clen; clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     assert(rc == TLS_client_complete);
-    FFI_mitls_quic_get_exporter(client, 0, qs, &errmsg);
+    FFI_mitls_quic_get_exporter(client, 0, &qs, &errmsg);
     printf("client returns %s clen=%d slen=%d\n", quic_result_string(rc), clen, slen);
-    printf("secret="); dump(qs->secret, 32);
+    printf("secret="); dump(qs.secret, 32);
     printf("(Finished) [%4d] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
@@ -264,10 +261,10 @@ int main(int argc, char **argv)
     assert(rc == TLS_would_block);
     printf("client returns clen=%d slen=%d status=%s\n", clen, slen, quic_result_string(rc));
 
-    if(FFI_mitls_quic_get_ticket(client, qt, &errmsg))
+    if(FFI_mitls_quic_get_ticket(client, &qt, &errmsg))
     {
       printf("new ticket: \n");
-      dump(qt->ticket, qt->len);
+      dump(qt.ticket, qt.len);
     }
     else printf("Failed to get ticket: %s\n", errmsg);
 
@@ -286,7 +283,7 @@ int main(int argc, char **argv)
       }
     config.is_server = 0;
     config.host_name = "localhost";
-    config.server_ticket = *qt;
+    config.server_ticket = qt;
 
     printf("client create\n");
     if(!FFI_mitls_quic_create(&client, &config, &errmsg))
@@ -300,26 +297,26 @@ int main(int argc, char **argv)
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     printf("client returns %s clen=%d slen=%d\n", quic_result_string(rc), clen, slen);
     assert(rc == TLS_client_early);
-    FFI_mitls_quic_get_exporter(client, 1, qs, &errmsg);
-    printf("early secret="); dump(qs->secret, 32);
+    FFI_mitls_quic_get_exporter(client, 1, &qs_early, &errmsg);
+    printf("early secret="); dump(qs_early.secret, 32);
     printf("ClientHello[%4d] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
     rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
     assert(rs == TLS_server_accept_with_early_data);
     printf("                        server returns %s clen=%d slen=%d\n", quic_result_string(rs), clen, slen);
-    FFI_mitls_quic_get_exporter(server, 1, qs, &errmsg);
-    printf("                        early secret="); dump(qs->secret, 32);
-    FFI_mitls_quic_get_exporter(server, 0, qs, &errmsg);
-    printf("                        secret="); dump(qs->secret, 32);
+    FFI_mitls_quic_get_exporter(server, 1, &qs_early, &errmsg);
+    printf("                        early secret="); dump(qs_early.secret, 32);
+    FFI_mitls_quic_get_exporter(server, 0, &qs, &errmsg);
+    printf("                        secret="); dump(qs.secret, 32);
     printf("                  <---- ServerHello;(EncryptedExtensions; Certificate; CertVerify; Finished)[%4d]\n\n",slen);
 
     c_buffer += clen; cmax -= clen; clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     assert(rc == TLS_client_complete_with_early_data);
-    FFI_mitls_quic_get_exporter(client, 0, qs, &errmsg);
+    FFI_mitls_quic_get_exporter(client, 0, &qs, &errmsg);
     printf("client returns %s clen=%d slen=%d\n", quic_result_string(rc), clen, slen);
-    printf("secret="); dump(qs->secret, 32);
+    printf("secret="); dump(qs.secret, 32);
     printf("(Finished) [%4d] ---->\n\n",clen);
 
     s_buffer += slen; smax -= slen; slen = smax;
@@ -340,10 +337,10 @@ int main(int argc, char **argv)
     assert(rc == TLS_would_block);
     printf("client returns clen=%d slen=%d status=%s\n", clen, slen, quic_result_string(rc));
 
-    if(FFI_mitls_quic_get_ticket(client, qt, &errmsg))
+    if(FFI_mitls_quic_get_ticket(client, &qt, &errmsg))
     {
       printf("new ticket:\n");
-      dump(qt->ticket, qt->len);
+      dump(qt.ticket, qt.len);
     }
     else printf("Failed to get ticket: %s\n", errmsg);
 
