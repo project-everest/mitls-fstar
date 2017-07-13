@@ -681,10 +681,10 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     host = caml_copy_string(cfg->host_name);
                               
     value args[] = {
-      Int_val(cfg->qp.max_stream_data),
-      Int_val(cfg->qp.max_data),
-      Int_val(cfg->qp.max_stream_id),
-      Int_val(cfg->qp.idle_timeout),
+      Val_int(cfg->qp.max_stream_data),
+      Val_int(cfg->qp.max_data),
+      Val_int(cfg->qp.max_stream_id),
+      Val_int(cfg->qp.idle_timeout),
       others,
       host
     };
@@ -877,18 +877,7 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
   CAMLlocal2(result, tmp);
 
   result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
-
-  if (Is_exception_result(result)) {
-    report_caml_exception(result, errmsg);
-    CAMLreturnT(int, 0);
-  }
-  if(result == Val_none)
-    {
-      *errmsg = strdup("no parameters available");
-      CAMLreturnT(int, 0);
-    }
   
-  result = Some_val(result);
   tmp = Field(result, 4);
   size_t len = caml_string_length(tmp); 
   qp->max_stream_data = Int_val(Field(result, 0));
@@ -897,7 +886,8 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
   qp->idle_timeout = Int_val(Field(result, 3));
   qp->others_len = len;
   memcpy(qp->others, String_val(tmp), len);
-  return 0;
+
+  CAMLreturnT(int, 1);
 }
 
 int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(

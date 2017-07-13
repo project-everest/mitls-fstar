@@ -27,11 +27,11 @@ void dump(unsigned char buffer[], size_t len)
 
 void dump_parameters(quic_transport_parameters *qp)
 {
-  printf("  max_stream_data = %d\n", qp->max_stream_data);
-  printf("  max_data        = %d\n", qp->max_data);
-  printf("  max_stream_id   = %d\n", qp->max_stream_id);
-  printf("  idle_timeout    = %d\n", qp->idle_timeout);
-  if (qp->others_len) printf("  other parameters= "); dump(qp->others, qp->others_len); 
+  printf("max_stream_data = %d\n", qp->max_stream_data);
+  printf("max_data        = %d\n", qp->max_data);
+  printf("max_stream_id   = %d\n", qp->max_stream_id);
+  printf("idle_timeout    = %d\n", qp->idle_timeout);
+  if (qp->others_len) printf("custom parameters "); dump(qp->others, qp->others_len); 
 }
 
 char *quic_result_string(quic_result r){
@@ -47,17 +47,30 @@ int main(int argc, char **argv)
 {
   char *errmsg;
 
-  quic_config config = {
-    .is_server = 1,
-    .host_name = "",
-    .qp = {
+  quic_transport_parameters client_qp =
+    {
+      .max_stream_data = 32000,
+      .max_data = 64000,
+      .max_stream_id = 32,
+      .idle_timeout = 120,
+      .others_len = 0,
+      .others = { 0 }
+    };
+  quic_transport_parameters server_qp =
+    {
       .max_stream_data = 16000,
       .max_data = 32000,
       .max_stream_id = 16,
       .idle_timeout = 60,
+      // an example well-formed custom parameter
       .others_len = 9,
-      .others = { 9,9,0,5,10,11,12,13,14,0 }
-    },
+      .others = { 255,255,0,5,10,11,12,13,14,0 }
+    };
+    
+  quic_config config = {
+    .is_server = 1,
+    .host_name = "",
+    .qp = server_qp,
     .server_ticket = {
       .len = 0,
       .ticket = {0} } ,
@@ -104,6 +117,7 @@ int main(int argc, char **argv)
         }
       config.is_server = 0;
       config.host_name = "localhost";
+      config.qp = client_qp;
 
       printf("client create\n");
       if(!FFI_mitls_quic_create(&client, &config, &errmsg))
@@ -152,12 +166,28 @@ int main(int argc, char **argv)
       }
       while(!client_complete || !server_complete);
 
+      // showing how to get the peer's parameters
+      // (available with the main exporter secret)
+      quic_transport_parameters peer[1];
+      if (FFI_mitls_quic_get_peer_parameters(server, peer, &errmsg)) 
+        {
+          printf("   === server received client parameters === \n");
+          dump_parameters(peer);
+        }
+      else printf("Failed to get peer parameter: %s\n", errmsg);
+      if (FFI_mitls_quic_get_peer_parameters(client, peer, &errmsg))
+        {
+          printf("   === client received server parameters === \n");
+          dump_parameters(peer);
+        }
+      else printf("Failed to get peer parameter: %s\n", errmsg);
+      
       FFI_mitls_quic_get_exporter(client, 0, &qs, &errmsg);
       FFI_mitls_quic_get_exporter(server, 0, &qs_early, &errmsg);
       if(memcmp(qs_early.secret, qs.secret, 64))
-      {
-        printf("  *** ERROR: exporter secrets do not match! ***\n");
-        return 1;
+        {
+          printf("  *** ERROR: exporter secrets do not match! ***\n");
+          return 1;
       }
 
       printf("   === Exporter secret ===\n");
@@ -198,6 +228,9 @@ int main(int argc, char **argv)
 
       quic_crypto_free_key(k_client);
       quic_crypto_free_key(k_server);
+
+
+      
   }
 
   if (argc == 2) {
@@ -213,6 +246,7 @@ int main(int argc, char **argv)
       }
     config.is_server = 0;
     config.host_name = "localhost";
+    config.qp = client_qp;
 
     printf("client create\n");
     if(!FFI_mitls_quic_create(&client, &config, &errmsg))
@@ -275,6 +309,8 @@ int main(int argc, char **argv)
 
     config.is_server = 1;
     config.host_name = "";
+    config.qp = server_qp;
+
     printf("server create\n");
     if(!FFI_mitls_quic_create(&server, &config, &errmsg))
       {
@@ -283,6 +319,7 @@ int main(int argc, char **argv)
       }
     config.is_server = 0;
     config.host_name = "localhost";
+    config.qp = client_qp;
     config.server_ticket = qt;
 
     printf("client create\n");
@@ -343,24 +380,6 @@ int main(int argc, char **argv)
       dump(qt.ticket, qt.len);
     }
     else printf("Failed to get ticket: %s\n", errmsg);
-
-    dump_parameters(&(config.qp));
-
-    quic_transport_parameters peer[1];
-    /*
-    if (FFI_mitls_quic_get_peer_parameters(server, peer, &errmsg)) 
-      {
-        printf("Server received client parameters:\n");
-        dump_parameters(peer);
-      }
-    else printf("Failed to get peer parameter: %s\n", errmsg);
-    if (FFI_mitls_quic_get_peer_parameters(client, peer, &errmsg))
-      {
-        printf("Client received server parameters:\n");
-        dump_parameters(peer);
-      }
-    else printf("Failed to get peer parameter: %s\n", errmsg);
-    */
   }
     
   FFI_mitls_quic_free(server);
