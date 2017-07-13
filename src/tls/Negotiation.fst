@@ -159,7 +159,7 @@ let find_signature_algorithms o : option signatureSchemeList =
   | None -> None
   | Some (Extensions.E_signature_algorithms algs) -> Some algs
 
-let find_quic_parameters o =
+let find_quic_parameters o: option TLSConstants.quicParameters =
   match find_client_extension Extensions.E_quic_parameters? o with
   | Some (Extensions.E_quic_parameters qp) -> Some qp
   | _ -> None

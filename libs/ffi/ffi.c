@@ -37,7 +37,7 @@
   MITLS_FFI_ENTRY(QuicCreateClient) \
   MITLS_FFI_ENTRY(QuicCreateServer) \
   MITLS_FFI_ENTRY(QuicProcess) \
-  MITLS_FFI_ENTRY(QuicGetParameters) \
+  MITLS_FFI_ENTRY(QuicGetPeerParameters) \
   MITLS_FFI_ENTRY(QuicGetExporter) \
   MITLS_FFI_ENTRY(QuicGetTicket)
 
@@ -655,7 +655,7 @@ typedef struct quic_state {
 static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal3(result, host,tticket);
+    CAMLlocal4(result, host, others, tticket);
 
     *st = NULL;
     quic_state* state = malloc(sizeof(quic_state));
@@ -675,16 +675,21 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     state->out_buffer_size = 0;
     state->out_buffer_used = 0;
 
+    others = caml_alloc_string(cfg->qp.others_len);
+    memcpy(String_val(others), cfg->qp.others, cfg->qp.others_len);
+
     host = caml_copy_string(cfg->host_name);
+                              
     value args[] = {
       Int_val(cfg->qp.max_stream_data),
       Int_val(cfg->qp.max_data),
       Int_val(cfg->qp.max_stream_id),
       Int_val(cfg->qp.idle_timeout),
+      others,
       host
     };
 
-    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 5, args);
+    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 6, args);
     if (Is_exception_result(result)) {
       report_caml_exception(result, errmsg);
       CAMLreturnT(int,0);
@@ -860,26 +865,54 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     return ret;
 }
 
-static int FFI_mitls_quic_get_parameters_caml(/* in */ quic_state *state, quic_transport_parameters *qp)
+#define Val_none Val_int(0)
+#define Some_val(v) Field(v,0)
+
+static int FFI_mitls_quic_get_peer_parameters_caml(
+  /* in */ quic_state *state,
+  quic_transport_parameters *qp,
+  /* out */ char **errmsg)
 {
-    // bugbug: implement.  Need to pass role as a parameter, and sort out
-    //         the return type.
-    return 0;
+  CAMLparam0();
+  CAMLlocal2(result, tmp);
+
+  result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
+
+  if (Is_exception_result(result)) {
+    report_caml_exception(result, errmsg);
+    CAMLreturnT(int, 0);
+  }
+  if(result == Val_none)
+    {
+      *errmsg = strdup("no parameters available");
+      CAMLreturnT(int, 0);
+    }
+  
+  result = Some_val(result);
+  tmp = Field(result, 4);
+  size_t len = caml_string_length(tmp); 
+  qp->max_stream_data = Int_val(Field(result, 0));
+  qp->max_data = Int_val(Field(result, 1));
+  qp->max_stream_id = Int_val(Field(result, 2));
+  qp->idle_timeout = Int_val(Field(result, 3));
+  qp->others_len = len;
+  memcpy(qp->others, String_val(tmp), len);
+  return 0;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_get_parameters(/* in */ quic_state *state, quic_transport_parameters *qp)
+int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
+  /* in */ quic_state *state,
+  /* out */ quic_transport_parameters *qp,
+  /* out */ char **errmsg)
 {
     int ret;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_parameters_caml(state, qp);
+    ret = FFI_mitls_quic_get_peer_parameters_caml(state, qp,errmsg);
     caml_release_runtime_system();
 
     return ret;
 }
-
-#define Val_none Val_int(0)
-#define Some_val(v) Field(v,0)
 
 static int FFI_mitls_quic_get_exporter_caml(
   /* in */ quic_state *state,

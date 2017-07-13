@@ -42,12 +42,13 @@ int main(int argc, char **argv)
       .max_stream_data = 16000,
       .max_data = 32000,
       .max_stream_id = 16,
-      .idle_timeout = 60
+      .idle_timeout = 60,
+      .others_len = 0,
+      .others = {0}
     },
     .server_ticket = {
       .len = 0,
-      .ticket = {0} }
-    ,
+      .ticket = {0} } ,
     .certificate_chain_file = "../../data/server-ecdsa.crt",
     .private_key_file = "../../data/server-ecdsa.key",
     .ca_file = "../../data/CAFile.pem",

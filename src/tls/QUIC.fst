@@ -171,11 +171,36 @@ let ffiAcceptConnected config cb =
 
 /// new QUIC-specific properties
 ///
-let get_parameters c (r:role) =
+let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
   let mode = Handshake.get_mode c.Connection.hs in
   if r = Client
   then Negotiation.find_quic_parameters mode.Negotiation.n_offer
   else Negotiation.find_server_quic_parameters mode
+
+// extracting some QUIC parameters to C (a bit ad hoc)
+val ffi_parameters: option TLSConstants.quicParameters -> ML (int * int * int * int * bytes)  
+let ffi_parameters qpo = 
+  match qpo with 
+  | None -> failwith "no parameters available" 
+  | Some (QuicParametersClient _ _ qp) 
+  | Some (QuicParametersServer _ qp) ->  (
+      ( match (List.Tot.find Quic_initial_max_stream_data? qp) with 
+        | Some (Quic_initial_max_stream_data v) -> UInt32.v v 
+        | None -> failwith "no Quic_initial_max_stream_data"), 
+      ( match (List.Tot.find Quic_initial_max_data? qp) with 
+        | Some (Quic_initial_max_data v) -> UInt32.v v 
+        | None -> failwith "no Quic_initial_max_data"), 
+      ( match (List.Tot.find Quic_initial_max_stream_id? qp) with 
+        | Some (Quic_initial_max_stream_id v) -> UInt32.v v 
+        | None -> failwith "no Quic_initial_max_stream_id"), 
+      ( match (List.Tot.find Quic_idle_timeout? qp) with 
+        | Some (Quic_idle_timeout v) -> UInt16.v v 
+        | None -> failwith "no Quic_idle_timeout"), 
+      Extensions.quicParametersBytes_aux (List.Tot.filter Quic_custom_parameter?  qp))
+
+let get_peer_parameters c = 
+  let r = TLSConstants.dualRole (Connection.c_role c) in 
+  ffi_parameters (get_parameters c r)
 
 // some basic sanity checks
 let get_exporter c (early:bool)
@@ -199,7 +224,21 @@ let get_ticket c: ML (option bytes) =
   | Some n -> Option.map fst (Ticket.lookup n)
   | None -> None
 
-let ffiConfig max_stream_data max_data max_stream_id idle_timeout host =
+let ffiConfig 
+  max_stream_data 
+  max_data 
+  max_stream_id 
+  idle_timeout 
+  (others: bytes)
+  (host: string)  =
+  let others = 
+    match Extensions.parseQuicParameters_aux others 
+    with 
+    | Error z -> trace "WARNING: ill-formed custom parameters "; []
+    | Correct qpl ->
+      if not (List.Tot.for_all Quic_custom_parameter? qpl) then (trace "WARNING: not a custom parameter"; [])
+      else qpl  
+    in
   { defaultConfig with
     min_version = TLS_1p3;
     max_version = TLS_1p3;
@@ -210,5 +249,4 @@ let ffiConfig max_stream_data max_data max_stream_id idle_timeout host =
     Quic_initial_max_stream_data max_stream_data;
     Quic_initial_max_data max_data;
     Quic_initial_max_stream_id max_stream_id;
-    Quic_idle_timeout idle_timeout
-    ]) }
+    Quic_idle_timeout idle_timeout] @ others) }
