@@ -138,8 +138,6 @@ typedef struct {
   char others[MAX_OTHERS_LEN]; 
 } quic_transport_parameters;
 
-typedef struct quic_key quic_key;
-
 typedef struct {
   // NULL terminated hostname (sent in SNI and used to validate certificate)
   int is_server;
@@ -169,7 +167,7 @@ extern int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, qu
 extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *state, /*in*/ char* inBuf, /*inout*/ size_t *pInBufLen, /*out*/ char *outBuf, /*inout*/ size_t *pOutBufLen, /* out */ char **errmsg);
 
 extern int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(/* in */ quic_state *state, /*out*/ quic_transport_parameters *qp, /* out */ char **errmsg);
-extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret, char **errmsg);
+extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret, /* out */ char **errmsg);
 extern int MITLS_CALLCONV FFI_mitls_quic_get_ticket(/* in */ quic_state *state, /*out*/ quic_ticket *ticket , /* out */ char **errmsg);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(/* in */ quic_state *state);
 
