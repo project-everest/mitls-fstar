@@ -55,8 +55,8 @@ int main(int argc, char **argv)
       .max_data = 32000,
       .max_stream_id = 16,
       .idle_timeout = 60,
-      .others_len = 0,
-      .others = {0}
+      .others_len = 9,
+      .others = { 9,9,0,5,10,11,12,13,14,0 }
     },
     .server_ticket = {
       .len = 0,
@@ -346,8 +346,8 @@ int main(int argc, char **argv)
 
     dump_parameters(&(config.qp));
 
-    /*
     quic_transport_parameters peer[1];
+    /*
     if (FFI_mitls_quic_get_peer_parameters(server, peer, &errmsg)) 
       {
         printf("Server received client parameters:\n");

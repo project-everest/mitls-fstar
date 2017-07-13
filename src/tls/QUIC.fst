@@ -178,23 +178,23 @@ let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
   else Negotiation.find_server_quic_parameters mode
 
 // extracting some QUIC parameters to C (a bit ad hoc)
-val ffi_parameters: option TLSConstants.quicParameters -> ML (int * int * int * int * bytes)  
+val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.t * UInt32.t * UInt16.t * bytes)  
 let ffi_parameters qpo = 
   match qpo with 
   | None -> failwith "no parameters available" 
   | Some (QuicParametersClient _ _ qp) 
   | Some (QuicParametersServer _ qp) ->  (
       ( match (List.Tot.find Quic_initial_max_stream_data? qp) with 
-        | Some (Quic_initial_max_stream_data v) -> UInt32.v v 
+        | Some (Quic_initial_max_stream_data v) -> v 
         | None -> failwith "no Quic_initial_max_stream_data"), 
       ( match (List.Tot.find Quic_initial_max_data? qp) with 
-        | Some (Quic_initial_max_data v) -> UInt32.v v 
+        | Some (Quic_initial_max_data v) -> v 
         | None -> failwith "no Quic_initial_max_data"), 
       ( match (List.Tot.find Quic_initial_max_stream_id? qp) with 
-        | Some (Quic_initial_max_stream_id v) -> UInt32.v v 
+        | Some (Quic_initial_max_stream_id v) -> v 
         | None -> failwith "no Quic_initial_max_stream_id"), 
       ( match (List.Tot.find Quic_idle_timeout? qp) with 
-        | Some (Quic_idle_timeout v) -> UInt16.v v 
+        | Some (Quic_idle_timeout v) -> v 
         | None -> failwith "no Quic_idle_timeout"), 
       Extensions.quicParametersBytes_aux (List.Tot.filter Quic_custom_parameter?  qp))
 
