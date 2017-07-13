@@ -1,7 +1,11 @@
+
+
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "mitlsffi.h"
 
 #ifdef _WIN32
 __declspec(dllexport) 
@@ -14,17 +18,54 @@ void* getAddress( void* pointer ){
 __declspec(dllexport) 
 #endif
 char* duplicateString( char* source, uint32_t size /* including terminating NULL */ ) {
-	printf("########## %s in %s: %d; size = %d, source = %s \n", __FILE__, __FUNCTION__, __LINE__, size, source	 );
+	// printf("########## %s in %s: %d; size = %d, source = %s \n", __FILE__, __FUNCTION__, __LINE__, size, source	 );
 	char *dest = malloc( size );
 	
 	if( NULL == dest )
 		return NULL;
 
 	memcpy( dest, source, size );
-	printf("########## %s in %s: %d; dest = %s \n", __FILE__, __FUNCTION__, __LINE__, dest	 );
+	// printf("########## %s in %s: %d; dest = %s \n", __FILE__, __FUNCTION__, __LINE__, dest	 );
 	return dest;
 }
 
+char* DuplicateString_unsafe( char *source )
+{
+  return duplicateString( source, strlen( source ) + 1 );
+}
+
+quic_config* QuicConfigCreate( char* serverCertPath,
+                                char* serverKeyPath,
+                                char* serverCAPath,
+                                char* supportedCipherSuites,
+                                char* supportedSignatureAlgorithms,
+                                char* supportedNamedGroups,
+                                char* hostName,
+                                uint32_t isServer  )
+{
+    quic_config *config = malloc( sizeof( quic_config )) ;
+    memset( config, 0, sizeof(config));
+
+    config->is_server               = isServer;
+    config->host_name               = DuplicateString_unsafe( hostName);
+    config->qp.max_stream_data      = 16000;
+    config->qp.max_data             = 32000;
+    config->qp.max_stream_id        = 16;
+    config->qp.idle_timeout         = 60;
+    config->server_ticket.len       = 0;
+    config->certificate_chain_file  = DuplicateString_unsafe( serverCertPath                );
+    config->private_key_file        = DuplicateString_unsafe( serverKeyPath                 );
+    config->ca_file                 = DuplicateString_unsafe( serverCAPath                  );
+    config->cipher_suites           = DuplicateString_unsafe( supportedCipherSuites         );
+    config->signature_algorithms    = DuplicateString_unsafe( supportedSignatureAlgorithms  );
+    config->named_groups            = DuplicateString_unsafe( supportedNamedGroups          );
+    config->ticket_enc_alg          = NULL;
+    config->ticket_key              = NULL;
+    config->ticket_key_len          = 0;
+    config->enable_0rtt             = 1;
+
+    return config;
+}
 
 
 
@@ -77,6 +118,6 @@ __declspec(dllexport)
 #endif
 void* DoMemcpy( void* dest, void* src, size_t size )
 {
-	printf("########## %s in %s: %d; dest = %p; src = %p; size = %d\n", __FILE__, __FUNCTION__, __LINE__, dest, src, size );
+	printf("########## %s in %s: %d; dest = %p; src = %p; size = %ld\n", __FILE__, __FUNCTION__, __LINE__, dest, src, size );
 	return memcpy( dest, src, size );
 }

@@ -2,4 +2,4 @@
 
 set -e
 
-gcc -shared -fPIC cutils.c -o cutils.so
+gcc -shared -fPIC cutils.c -I../../../libs/ffi/  -o cutils.so

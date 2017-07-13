@@ -25,7 +25,8 @@ from ctypes import  CDLL, \
                     c_uint32, \
                     c_uint64, \
                     CFUNCTYPE, \
-                    POINTER                  
+                    POINTER,   \
+                    addressof                  
 
 
 import argparse 
@@ -35,6 +36,7 @@ from tlsparser import   MemorySocket,                       \
                         TLSParser,                          \
                         Direction,                          \
                         AttrDict,                           \
+                        GetKey,								\
                         HANDSHAKE_TYPE,                     \
                         PARENT_NODE,                        \
                         SWAP_ITEMS,                         \
@@ -121,7 +123,16 @@ def CString( pythonString ):
     NULL_BYTE = b"\0"
     return c_char_p( bytes( pythonString, "ascii" ) + NULL_BYTE )
 
-
+QUICResult = AttrDict( {'TLS_would_block' 						: 0,
+						'TLS_error_local' 						: 1,
+						'TLS_error_alert' 						: 2,
+						'TLS_client_early' 						: 3,
+						'TLS_client_complete' 					: 4,
+						'TLS_client_complete_with_early_data' 	: 5,
+						'TLS_server_accept' 					: 6,
+						'TLS_server_accept_with_early_data' 	: 7,
+						'TLS_server_complete' 					: 8,
+						'TLS_error_other' 						: 0xffff, } )
 
 memorySocket = MemorySocket()
 
@@ -152,6 +163,8 @@ GLOBAL_MITLS_INITIALIZED = False
 
 
 class MITLS():
+    MAX_BUFFER_SIZE = 8 * 1024 #see QuicWin.cpp
+
     def __init__( self, name = "", sharedObjectPath = config.MITLS_SO_PATH  ):
         self.SetupLogger( name )
         self.log.info( "Initilizaed with sharedObjectPath = %s" % os.path.abspath( sharedObjectPath ) )
@@ -209,13 +222,27 @@ class MITLS():
         return result
 
     def PrintMsgIfNotNull( self, outmsg, errmsg ):
-        if outmsg.value != None:
+        if outmsg != None and outmsg.value != None:
             self.log.error( 'outmsg = "%s"' % outmsg.value )
             self.miTLS.FFI_mitls_free_msg( outmsg )
 
         if errmsg.value != None:
             self.log.error( 'errmsg = "%s"' % errmsg.value )
             self.miTLS.FFI_mitls_free_msg( errmsg )
+
+    def FFI_mitls_quic_create( self, quicConfig ):
+        self.log.debug( "FFI_mitls_quic_create" )
+        quicState = c_voidp()
+        errmsg    = c_char_p()
+
+        self.miTLS.FFI_mitls_quic_create.restype = c_int
+        ret = self.miTLS.FFI_mitls_quic_create( byref( quicState ),
+        										quicConfig,
+                                                byref( errmsg ) )
+        self.PrintMsgIfNotNull( None, errmsg )
+        self.VerifyResult( "FFI_mitls_quic_create", ret )
+
+        return quicState
 
     def FFI_mitls_configure( self, hostName = "" ):
         self.log.debug( "FFI_mitls_configure" )
@@ -281,6 +308,53 @@ class MITLS():
         ret = self.miTLS.FFI_mitls_configure_named_groups( self.mitls_state, CString( namedGroupsString ) )
         self.VerifyResult( "FFI_mitls_configure_named_groups", ret )
 
+    def InitQUIC( 	self,
+    				isServer,
+    			  	hostName 						= None, 
+	                supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
+	                supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
+	                supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
+        self.cutils.QuicConfigCreate.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_uint32 ]
+        self.cutils.QuicConfigCreate.restype  = c_voidp
+        self.quicConfig = self.cutils.QuicConfigCreate( CString( config.SERVER_CERT_PATH ),
+        												CString( config.SERVER_KEY_PATH  ),
+        												CString( config.SERVER_CA_PATH   ),
+        												CString( ":".join( supportedCipherSuites 		) ),
+        												CString( ":".join( supportedSignatureAlgorithms ) ),
+        												CString( ":".join( supportedNamedGroups 		) ),
+        												CString( hostName ),
+        												c_uint32( isServer ) )
+        self.mitlsQuicState = self.FFI_mitls_quic_create( self.quicConfig )
+
+        self.clientToServer = ( c_uint8 * self.MAX_BUFFER_SIZE )()
+        self.serverToClient = ( c_uint8 * self.MAX_BUFFER_SIZE )()
+
+    def InitQUICClient( self, 
+	                    hostName, 
+	                    supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
+	                    supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
+	                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
+        self.log.debug( "InitQUICClient" )
+        isServer = 0
+        self.InitQUIC( 	isServer, 
+        				hostName,
+			        	supportedCipherSuites,       
+						supportedSignatureAlgorithms,
+						supportedNamedGroups 			)
+
+    def InitQUICServer( self, 
+	                    supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
+	                    supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
+	                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
+        self.log.debug( "InitQUICServer" )
+        isServer = 1
+        hostName = ""
+        self.InitQUIC( 	isServer, 
+        				hostName,
+			        	supportedCipherSuites,       
+						supportedSignatureAlgorithms,
+						supportedNamedGroups 			)
+
     def InitServer( self, 
                     supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                     supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
@@ -294,7 +368,7 @@ class MITLS():
         self.FFI_mitls_configure_cipher_suites              ( supportedCipherSuites )
         self.FFI_mitls_configure_signature_algorithms       ( supportedSignatureAlgorithms )
         self.FFI_mitls_configure_named_groups               ( supportedNamedGroups )
-
+            
     def InitClient( self, 
                     hostName, 
                     supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
@@ -339,6 +413,56 @@ class MITLS():
 
         return FFI_mitls_callbacks
 
+    def FFI_mitls_quic_process( self, inputCBuffer, inputSize, outputCBuffer ):
+        inputSize_c = c_uint64( inputSize )
+        bytesToSend = c_uint64( len( outputCBuffer ) )
+        errmsg      = c_char_p() 
+
+        self.miTLS.FFI_mitls_quic_process.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_voidp ]
+        self.miTLS.FFI_mitls_quic_process.restype  = c_uint32
+        ret = self.miTLS.FFI_mitls_quic_process( 	self.mitlsQuicState, 
+        											inputCBuffer, 
+        											byref( inputSize_c ),
+        											outputCBuffer,
+        											byref( bytesToSend ),
+        											byref( errmsg ) )
+        self.PrintMsgIfNotNull( None, errmsg )
+
+        if ret == QUICResult.TLS_error_other or \
+           ret == QUICResult.TLS_error_local or \
+           ret == QUICResult.TLS_error_alert:
+           errMsg = "FFI_mitls_quic_process returned error code: 0x%x" % ret
+           self.log.error( errMsg )
+           raise MITLSError( errMsg )
+
+        self.log.debug( "FFI_mitls_quic_process --> %s" % GetKey( QUICResult, ret, "<unknown error code %d>" % ret))
+        return bytesToSend.value, ret
+
+    def AcceptQUICConnection( self, earlyData = None ):
+        try:
+            self.log.debug( "AcceptQUICConnection" )
+            self.acceptConnectionSucceeded 	= False
+            outmsg                   		= c_char_p()
+            errmsg                   		= c_char_p() 
+            
+            self.FFI_mitls_thread_register()
+
+            lastResult = -1
+            while lastResult != QUICResult.TLS_server_complete:
+            	bytesRead 			       = memorySocket.ReadFromClient( None, addressof( self.clientToServer ), len( self.clientToServer ) )
+            	numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.clientToServer, bytesRead, self.serverToClient )
+
+            	if numBytesToSend > 0:
+            		memorySocket.SendToClient( None, addressof( self.serverToClient ), numBytesToSend )
+            
+            self.log.debug( "AcceptQUICConnection done!")
+            
+            self.acceptConnectionSucceeded = True
+
+        except Exception as err: 
+            traceback.print_tb(err.__traceback__)
+            raise
+    
     def AcceptConnection( self, applicationData = None ):
         try:
             self.log.debug( "AcceptConnection" )
@@ -391,6 +515,27 @@ class MITLS():
         self.log.debug( "Received from Client: %s\n" % pyBuffer ) 
 
         return pyBuffer
+
+    # For client side
+    def QUICConnect( self ):
+        self.log.debug( "QUICConnect" )
+
+        bytesRead  				   = 0
+        numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.serverToClient, bytesRead, self.clientToServer )
+
+        if numBytesToSend > 0:
+        	memorySocket.SendToServer( None, addressof( self.clientToServer ), numBytesToSend )
+        else:
+        	raise MITLSError( "QUICConnect: FFI_mitls_quic_process doesn't want to send anything")
+
+        while lastResult != QUICResult.TLS_client_complete and lastResult != QUICResult.TLS_client_complete_with_early_data:
+        	bytesRead 				   = memorySocket.ReadFromServer( None, addressof( self.serverToClient ), len( self.serverToClient ) )        	
+        	numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.serverToClient, bytesRead, self.clientToServer )	
+
+        	if numBytesToSend > 0:
+        		memorySocket.SendToServer( None, addressof( self.clientToServer ), numBytesToSend )
+
+        self.log.debug( "QUICConnect completed!" )
 
     # For client side
     def Connect( self ):
@@ -539,6 +684,21 @@ class MITLSTester(unittest.TestCase):
         self.tlsClient = MITLS( "client" )
         self.tlsClient.InitClient( hostName )
 
+    def StartQUICServerThread( 	self, 
+	                            supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
+	                            supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
+	                            supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
+	                            applicationData                 = None ):
+        self.tlsServer = MITLS( "QUIC-server" )
+        self.tlsServer.InitQUICServer(  supportedCipherSuites, 
+	                                    supportedSignatureAlgorithms, 
+	                                    supportedNamedGroups )
+        
+        serverThread   = threading.Thread(target = self.tlsServer.AcceptQUICConnection, args = [ applicationData ] )
+        serverThread.start()
+
+        return serverThread
+
     def StartServerThread(  self, 
                             supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                             supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
@@ -553,6 +713,30 @@ class MITLSTester(unittest.TestCase):
         serverThread.start()
 
         return serverThread
+
+    def test_MITLS_QUIC_ClientAndServer( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+        try:
+            self.RunSingleQUICTest()
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+            
+        if config.LOG_LEVEL < logging.ERROR:
+            pprint( memorySocket.tlsParser.transcript )
+            for msg in memorySocket.tlsParser.transcript:
+                memorySocket.tlsParser.PrintMsg( msg )
+
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            pprint( keysAndFiles )
+
+        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
+        return memorySocket.tlsParser.transcript
 
     def test_MITLS_ClientAndServer( self ):
         keysMonitor = MonitorLeakedKeys()
@@ -1061,6 +1245,36 @@ class MITLSTester(unittest.TestCase):
 
         return listA, listB
 
+    def RunSingleQUICTest( 	self , 
+	                        supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
+	                        supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
+	                        supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
+	                        applicationData                 = None,
+	                        msgManipulators                 = [] ):
+        memorySocket.FlushBuffers()
+        memorySocket.tlsParser = tlsparser.TLSParser()
+        memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
+        serverThread = self.StartQUICServerThread(  supportedCipherSuites,
+                                                    supportedSignatureAlgorithms,
+                                                    supportedNamedGroups,
+                                                    applicationData )
+
+        self.tlsClient = MITLS( "client" )
+        self.tlsClient.InitQUICClient(  "test_server.com", 
+                                        supportedCipherSuites,
+                                        supportedSignatureAlgorithms,
+                                        supportedNamedGroups )
+        self.tlsClient.QUICConnect()
+        # self.tlsClient.Send( b"Client->Server\x00" )            
+        # self.tlsClient.dataReceived = self.tlsClient.Receive()
+
+        serverThread.join()
+        if self.tlsServer.acceptConnectionSucceeded == False:
+            raise Exception( "QUIC Server failed to connect" )
+
+        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
     def RunSingleTest(  self, 
                         supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                         supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
@@ -1342,7 +1556,8 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
-    suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
+    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
