@@ -32,13 +32,31 @@ directory named Detours, under the current directory.
 Installing
 ==========
 Copy the miTLS_SSP.dll to a directory on the machine which does not contain
-any spaces in the pathname.  Then use regedit to modify
+any spaces in the pathname.  Make sure libmitls.dll and its Cygwin and mingw32
+dependencies are on your PATH.
+
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\tls;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
+
+Then from an elevated command prompt, run:
+  regsvr32 miTLS_SSP.dll
+
+This modifies
 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders.   The
 value is "SecurityProviders" and it is a space-delimited set of DLL names.
 Append a space and the fully qualified path to miTLS_SSP.dll.
 
+Uninstalling
+============
+From an elevated command prompt, run:
+   regsvr32 /u miTLS_SSP.dll
+
 Using
 =====
+Make sure libmitls.dll and its Cygwin and mingw32 dependencies are on your 
+PATH.
+
+set PATH=c:\users\barrybo\everest\mitls-fstar\src\tls;C:\cygwin64\usr\x86_64-w64-mingw32\sys-root\mingw\bin;%PATH%
+
 Once the registry key is present, Windows sspicli.dll, loaded into Windows
 applications, will enumerate the SecurityProviders key and load all of the
 providers into memory.
@@ -54,3 +72,6 @@ powershell.exe") with no path component.  The name is case insensitive.
 
 The provider will default to TLS 1.2 for all connections.  To override, also
 set MITLS_SCHANNEL_VERSION to a string, "1.2" or "1.3".
+
+Set MITLS_SCHANNEL_CIPHER_SUITES to override the default cipher suites.
+
