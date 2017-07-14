@@ -1,3 +1,4 @@
+FSTAR_HOME ?= ../../../FStar
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
 all: FFICallbacks.cmxa

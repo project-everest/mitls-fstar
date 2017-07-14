@@ -1,6 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 module TLSInfo
 
 #set-options "--max_fuel 3 --initial_fuel 3 --max_ifuel 1 --initial_ifuel 1"
@@ -71,6 +68,7 @@ let defaultConfig =
   {
   min_version = TLS_1p2;
   max_version = TLS_1p3;
+  quic_parameters = None;
   cipher_suites = cipherSuites_of_nameList default_cipherSuites;
   named_groups = default_groups;
   signature_algorithms = default_signature_schemes;
@@ -412,6 +410,7 @@ and pre_rmsId (li:logInfo) =
   | RMSID: pre_asId -> hashed_log li -> pre_rmsId li
 
 and pre_exportId (li:logInfo) =
+  | EarlyExportID: pre_esId -> hashed_log li -> pre_exportId li
   | ExportID: pre_asId -> hashed_log li -> pre_exportId li
 
 and expandTag =
@@ -470,6 +469,7 @@ and rmsId_hash #li i = match i with
   | RMSID asId _ -> asId_hash asId
 
 and exportId_hash #li i = match i with
+  | EarlyExportID esId _ -> esId_hash esId
   | ExportID asId _ -> asId_hash asId
 
 and expandId_hash #li i = match i with
@@ -548,6 +548,7 @@ type valid (i:pre_index) =
     | RMSID i _ -> registered (I_AS i))
   | I_EXPORT #li i ->
     (match i with
+    | EarlyExportID i _ -> registered (I_ES i)
     | ExportID i _ -> registered (I_AS i))
   | I_EXPAND #li i ->
     (match i with

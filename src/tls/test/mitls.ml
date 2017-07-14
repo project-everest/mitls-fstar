@@ -5,6 +5,7 @@ open TLSInfo
 let args = ref []
 let role = ref Client
 let ffi  = ref false
+let quic  = ref false
 let reconnect = ref false
 let config = ref {defaultConfig with
   min_version = TLS_1p2;
@@ -83,9 +84,26 @@ let setng x =
   let ngl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^"; check --help for list")) ngl in
   config := {!config with named_groups = ngl}
 
+let setog x =
+  let ogl = BatString.nsplit x ":" in
+  let ogl = List.map (fun x->try List.assoc x ngs with Not_found -> failwith ("Unknown named group "^x^" for -share; check --help for list")) ogl in
+  config := {!config with offer_shares = ogl}
+
 let setalpn x =
   let al = BatString.nsplit x ":" in
   config := {!config with alpn = Some al}
+
+let setquic () =
+  quic := true;
+  config := {!config with
+    non_blocking_read = true;
+    quic_parameters = Some ([QuicVersion1],[
+      Quic_initial_max_stream_data(65536);
+      Quic_initial_max_data(16777216);
+      Quic_initial_max_stream_id(256);
+      Quic_idle_timeout(60)
+    ])
+  }
 
 let offered_psk = ref []
 let loaded_psk : (string list) ref = ref []
@@ -116,7 +134,7 @@ let offer_psk x =
   let ids = BatString.nsplit x ":" in
   let add_psk y =
     if List.mem y !loaded_psk then
-      offered_psk := (Platform.Bytes.utf8 y) :: !offered_psk
+      offered_psk := Platform.Bytes.utf8 y :: !offered_psk
     else
       failwith ("Cannot offer PSK with label "^y^" without loading it first")
     in
@@ -137,7 +155,7 @@ let _ =
     ("-s", Arg.Unit (fun () -> role := Server), "run as server instead of client");
     ("-0rtt", Arg.Unit (fun () -> config := {!config with enable_early_data = true;}), "enable early data (server support and client offer)");
     ("-psk", Arg.String (fun s -> load_psk false s), " L:K add an entry in the PSK database at label L with key K (in hex), associated with the fist current -cipher");
-    ("-ticket", Arg.String (fun s -> load_psk true s), " T:K add ticket T in the PSK database with RMS K (in hex), associated with the fist current -cipher");
+    ("-ticket", Arg.String (fun s -> load_psk true s), " T:K add ticket T in the PSK database with RMS K (in hex), associated with the first current -cipher");
     ("-offerpsk", Arg.String (fun s -> offer_psk s), "offer the given PSK identifier(s) (must be loaded first with -psk or -ticket, 1.3 client only)");
     ("-tlsapi", Arg.Unit (fun () -> ()), "run through the TLS API (legacy, always on)");
     ("-verify", Arg.Unit (fun () -> config := {!config with check_peer_certificate = true;}), "enforce peer certificate validation");
@@ -146,8 +164,10 @@ let _ =
     ("-ciphers", Arg.String setcs, "colon-separated list of cipher suites; see above for valid values");
     ("-sigalgs", Arg.String setsa, "colon-separated list of signature algorithms; see above for valid values");
     ("-alpn", Arg.String setalpn, "colon-separated list of application-level protocols");
+    ("-quic", Arg.Unit setquic, "test QUIC API, using the QuicTransportParameters extension");
     ("-reconnect", Arg.Unit (fun () -> reconnect := true), "reconnect at the end of the session, using received ticket (client only)");
-    ("-groups", Arg.String setng, "colon-separated list of named groups; see above for valid values");
+    ("-groups", Arg.String setng, "colon-separated list of supported named groups; see above for valid values");
+    ("-shares", Arg.String setog, "colon-separated list of named groups to offer shares on, as a TLS 1.3 client");
     ("-cert", Arg.String (fun s -> config := {!config with cert_chain_file = s}), "PEM file containing certificate chain to send");
     ("-key", Arg.String (fun s -> config := {!config with private_key_file = s}), "PEM file containing private key of endpoint certificate in chain");
     ("-CAFile", Arg.String (fun s -> config := {!config with ca_file = s}), "set openssl root cert file to <path>")
@@ -165,17 +185,30 @@ let _ =
     in
 
   match !role with
-  | Client when !ffi -> TestFFI.client !config host (Z.of_int port)
-  | Server when !ffi -> TestFFI.server !config host (Z.of_int port)
   | Client ->
-    (let _ = TestAPI.client !config host (Z.of_int port) None (!offered_psk) in
-    match !reconnect, !config.peer_name with
-    | true, Some h ->
-      let (opsk, ot12) =
-        match Ticket.lookup h with
-        | None -> !offered_psk, None
-        | Some (t, true) -> t :: !offered_psk, None
-        | Some (t, false) -> !offered_psk, Some t in
-      TestAPI.client !config host (Z.of_int port) ot12 opsk
-    | _ -> ())
-  | Server -> TestAPI.server !config host (Z.of_int port)
+     if !ffi then
+       TestFFI.client !config host (Z.of_int port)
+     else (
+       ( if !quic then
+           TestQUIC.client !config host (Z.of_int port) !offered_psk
+         else 
+           TestAPI.client !config host (Z.of_int port) None !offered_psk);
+       match !reconnect, !config.peer_name with
+       | true, Some h ->
+          let (opsk, ot12) =
+            match Ticket.lookup h with
+            | None -> !offered_psk, None
+            | Some (t, true) -> t :: !offered_psk, None
+            | Some (t, false) -> !offered_psk, Some t in
+          if !quic then
+            TestQUIC.client !config host (Z.of_int port) opsk
+          else
+            TestAPI.client !config host (Z.of_int port) ot12 opsk 
+       | _ -> ())
+  | Server ->
+     if !quic then
+       TestQUIC.server !config host (Z.of_int port)
+     else if !ffi then
+       TestFFI.server !config host (Z.of_int port)
+     else
+       TestAPI.server !config host (Z.of_int port)

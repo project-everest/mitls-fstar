@@ -1,6 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 module KeySchedule
 
 open FStar.Heap
@@ -169,6 +166,8 @@ type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
            r:recordInstance hs_rgn n ->
            epich hs_rgn n
 *)
+
+type exportKey = (li:logInfo & i:exportId li & ems i)
 
 // Note from old miTLS (in TLSInfo.fst)
 // type id = {
@@ -352,7 +351,7 @@ let ks_client_13_hello_retry ks (g:CommonDH.group)
 
 // Derive the early data key from the first offered PSK
 // Only called if 0-RTT is enabled on the client
-let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
+let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SH? (C?.s kss))
@@ -376,12 +375,15 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID i) ClientEarlyTrafficSecret log in
   let ets = HKDF.derive_secret h es "c e traffic" log in
-  dbg ("Client early traffic secret: "^(print_bytes ets));
+  dbg ("Client early traffic secret:     "^print_bytes ets);
+  let expId : exportId li = EarlyExportID i log in
+  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log in
+  dbg ("Early exporter master secret:    "^print_bytes early_export);
+  let exporter0 = (| li, expId, early_export |) in
 
   // Expand all keys from the derived early secret
   let (ck, civ) = keygen_13 h ets ae in
-  dbg ("Client 0-RTT key: "^(print_bytes ck));
-  dbg ("Client 0-RTT IV: "^(print_bytes civ));
+  dbg ("Client 0-RTT key:                "^print_bytes ck^", IV="^print_bytes civ);
 
   let id = ID13 (KeyID expandId) in
   let ckv: StreamAE.key id = ck in
@@ -389,7 +391,7 @@ let ks_client_13_ch ks (log:bytes) : ST (recordInstance)
   let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
-  early_d
+  exporter0, early_d
 
 val ks_server_12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> ST (CommonDH.share g)
   (requires fun h0 ->
@@ -460,9 +462,9 @@ let ks_server_13_init ks cr cs pskid g_gx =
         else ResBinder, "res binder" in
       let bId = Binder i ll in
       let bk = HKDF.derive_secret h es lb (H.emptyHash h) in
-      dbg ("Binder key: "^(print_bytes bk));
+      dbg ("binder key:                      "^print_bytes bk);
       let bk = finished_13 h bk in
-      dbg ("Binder Finished key: "^(print_bytes bk));
+      dbg ("binder Finished key:             "^print_bytes bk);
       let bk : binderKey bId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
       i, es, Some (| bId, bk |)
     | None ->
@@ -471,10 +473,10 @@ let ks_server_13_init ks cr cs pskid g_gx =
       let es : es esId = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
       esId, es, None
     in
-  dbg ("Computed early secret: "^(print_bytes es));
+  dbg ("Computed early secret:           "^print_bytes es);
   let saltId = Salt (EarlySecretID esId) in
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
-  dbg ("Handshake salt: "^(print_bytes salt));
+  dbg ("Handshake salt:                  "^print_bytes salt);
   let gy, hsId, hs =
     match g_gx with
     | Some (| g, gx |) ->
@@ -488,12 +490,12 @@ let ks_server_13_init ks cr cs pskid g_gx =
       let hs : hs hsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
       None, hsId, hs
     in
-  dbg ("Handshake secret: "^(print_bytes hs));
+  dbg ("Handshake secret:                "^print_bytes hs);
   st := S (S_13_wait_SH (ae, h) cr sr (| esId, es |) (| hsId, hs |));
   gy, bk
 
 let ks_server_13_0rtt_key ks (log:bytes)
-  : ST (recordInstance)
+  : ST ((li:logInfo & i:exportId li & ems i) * recordInstance)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     S? kss /\ S_13_wait_SH? (S?.s kss))
@@ -512,12 +514,14 @@ let ks_server_13_0rtt_key ks (log:bytes)
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID esId) ClientEarlyTrafficSecret log in
   let ets = HKDF.derive_secret h es "c e traffic" log in
-  dbg ("Client early traffic secret: "^(print_bytes ets));
+  dbg ("Client early traffic secret:     "^print_bytes ets);
+  let expId : exportId li = EarlyExportID esId log in
+  let early_export : ems expId = HKDF.derive_secret h es "e exp master" log in
+  dbg ("Early exporter master secret:    "^print_bytes early_export);
 
   // Expand all keys from the derived early secret
   let (ck,civ) = keygen_13 h ets ae in
-  dbg ("Client 0-RTT key: "^(print_bytes ck));
-  dbg ("Client 0-RTT IV: "^(print_bytes civ));
+  dbg ("Client 0-RTT key:                "^print_bytes ck^", IV="^print_bytes civ);
 
   let id = ID13 (KeyID expandId) in
   let ckv: StreamAE.key id = ck in
@@ -525,7 +529,7 @@ let ks_server_13_0rtt_key ks (log:bytes)
   let rw = StAE.coerce HyperHeap.root id (ckv @| civ) in
   let r = StAE.genReader HyperHeap.root rw in
   let early_d = StAEInstance r rw in
-  early_d
+  (| li, expId, early_export |), early_d
 
 val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
   (requires fun h0 ->
@@ -537,7 +541,7 @@ val ks_server_13_sh: ks:ks -> log:bytes -> ST (recordInstance)
     /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
 let ks_server_13_sh ks log =
-  dbg ("ks_server_13_sh, hashed log = "^(print_bytes log));
+  dbg ("ks_server_13_sh, hashed log = "^print_bytes log);
   let KS #region st = ks in
   let S (S_13_wait_SH (ae, h) cr sr _ (| hsId, hs |)) = !st in
   let secretId = HandshakeSecretID hsId in
@@ -555,13 +559,13 @@ let ks_server_13_sh ks log =
 
   // Derived handshake secret
   let cts = HKDF.derive_secret h hs "c hs traffic" log in
-  dbg ("client handshake traffic secret: "^(print_bytes cts));
+  dbg ("handshake traffic secret[C]:     "^print_bytes cts);
   let sts = HKDF.derive_secret h hs "s hs traffic" log in
-  dbg ("server handshake traffic secret: "^(print_bytes sts));
+  dbg ("handshake traffic secret[S]:     "^print_bytes sts);
   let (ck,civ) = keygen_13 h cts ae in
-  dbg ("handshake key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
+  dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
   let (sk,siv) = keygen_13 h sts ae in
-  dbg ("handshake key[S]: "^(print_bytes sk)^", IV="^(print_bytes siv));
+  dbg ("handshake key[S]: "^print_bytes sk^", IV="^print_bytes siv);
 
   // Handshake traffic keys
   let id = ID13 (KeyID c_expandId) in
@@ -577,21 +581,21 @@ let ks_server_13_sh ks log =
   let cfkId = FinishedID c_expandId in
   let sfkId = FinishedID s_expandId in
   let cfk1 = finished_13 h cts in
-  dbg ("client finished key: "^(print_bytes cfk1));
+  dbg ("finished key[C]:                 "^print_bytes cfk1);
   let sfk1 = finished_13 h sts in
-  dbg ("server finished key: "^(print_bytes sfk1));
+  dbg ("finished key[S]:                 "^print_bytes sfk1);
 
   let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
-  dbg ("Application salt: "^(print_bytes salt));
+  dbg ("Application salt:                "^print_bytes salt);
 
   // Replace handshake secret with application master secret
   let amsId = ASID saltId in
   let ams : ams amsId = HKDF.hkdf_extract h salt (H.zeroHash h) in
-  dbg ("Application secret: "^(print_bytes ams));
+  dbg ("Application secret:              "^print_bytes ams);
 
   st := S (S_13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
   StAEInstance r w
@@ -808,21 +812,21 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
     match esl, accept_psk with
     | l, Some n ->
       let Some (| i, es |) : option (i:esId & es i) = List.Tot.nth l n in
-      dbg ("Recalling PSK early secret: "^(print_bytes es));
+      dbg ("recallPSK early secret:          "^print_bytes es);
       i, es
     | _, None ->
       let es = HKDF.hkdf_extract h (H.zeroHash h) (H.zeroHash h) in
-      dbg ("No PSK negotiated. Early secret: "^(print_bytes es));
+      dbg ("no PSK negotiated. Early secret: "^print_bytes es);
       NoPSK h, es
   in
 
   let saltId = Salt (EarlySecretID esId) in
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
-  dbg ("Handshake salt: "^(print_bytes salt));
+  dbg ("handshake salt:                  "^print_bytes salt);
 
   let hsId = HSID_DHE saltId g gx gy in
   let hs : hs hsId = HKDF.hkdf_extract h salt gxy in
-  dbg ("Handshake secret: "^(print_bytes hs));
+  dbg ("handshake secret:                "^print_bytes hs);
 
   let secretId = HandshakeSecretID hsId in
   let li = LogInfo_SH ({
@@ -837,32 +841,32 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
   let s_expandId = ExpandedSecret secretId ServerHandshakeTrafficSecret log in
 
   let cts = HKDF.derive_secret h hs "c hs traffic" log in
-  dbg ("client handshake traffic secret: "^(print_bytes cts));
+  dbg ("handshake traffic secret[C]:     "^print_bytes cts);
   let sts = HKDF.derive_secret h hs "s hs traffic" log in
-  dbg ("server handshake traffic secret: "^(print_bytes sts));
+  dbg ("handshake traffic secret[S]:     "^print_bytes sts);
   let (ck,civ) = keygen_13 h cts ae in
-  dbg ("handshake key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
+  dbg ("handshake key[C]:                "^print_bytes ck^", IV="^print_bytes civ);
   let (sk,siv) = keygen_13 h sts ae in
-  dbg ("handshake key[S]: "^(print_bytes sk)^", IV="^(print_bytes siv));
+  dbg ("handshake key[S]:                "^print_bytes sk^", IV="^print_bytes siv);
 
   // Finished keys
   let cfkId = FinishedID c_expandId in
   let sfkId = FinishedID s_expandId in
   let cfk1 = finished_13 h cts in
-  dbg ("client finished key: "^(print_bytes cfk1));
+  dbg ("finished key[C]: "^(print_bytes cfk1));
   let sfk1 = finished_13 h sts in
-  dbg ("server finished key: "^(print_bytes sfk1));
+  dbg ("finished key[S]: "^(print_bytes sfk1));
 
   let cfk1 : fink cfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
   let sfk1 : fink sfkId = HMAC.UFCMA.coerce (HMAC.UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
-  dbg ("Application salt: "^(print_bytes salt));
+  dbg ("application salt:                "^print_bytes salt);
 
   let asId = ASID saltId in
   let ams : ams asId = HKDF.hkdf_extract h salt (H.zeroHash h) in
-  dbg ("Application secret: "^(print_bytes ams));
+  dbg ("application secret:              "^print_bytes ams);
 
   let id = ID13 (KeyID c_expandId) in
   assert_norm(ID13 (KeyID s_expandId) = peerId id);
@@ -879,8 +883,7 @@ let ks_client_13_sh ks sr cs log (| g, gy|) accept_psk =
 (******************************************************************)
 
 let ks_client_13_sf ks (log:bytes)
-  : ST (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) *
-        recordInstance * (li:logInfo & i:exportId li & ems i))
+  : ST (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) * recordInstance * exportKey)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SF? (C?.s kss))
@@ -901,17 +904,18 @@ let ks_client_13_sf ks (log:bytes)
   let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
 
   let cts = HKDF.derive_secret h ams "c ap traffic" log in
-  dbg ("client application traffic secret: "^(print_bytes cts));
+  dbg ("application traffic secret[C]:   "^print_bytes cts);
   let sts = HKDF.derive_secret h ams "s ap traffic" log in
-  dbg ("server application traffic secret: "^(print_bytes sts));
+  dbg ("application traffic secret[S]:   "^print_bytes sts);
   let emsId : exportId li = ExportID asId log in
   let ems = HKDF.derive_secret h ams "exp master" log in
-  dbg ("exporter master secret: "^(print_bytes ems));
+  dbg ("exporter master secret:          "^print_bytes ems);
+  let exporter1 = (| li, emsId, ems |) in 
 
   let (ck,civ) = keygen_13 h cts ae in
-  dbg ("application key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
+  dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
   let (sk,siv) = keygen_13 h sts ae in
-  dbg ("application key[S]: "^(print_bytes sk)^", IV="^(print_bytes siv));
+  dbg ("application key[S]:              "^print_bytes sk^", IV="^print_bytes siv);
 
   let id = ID13 (KeyID c_expandId) in
   assert_norm(peerId id = ID13 (KeyID s_expandId));
@@ -924,7 +928,7 @@ let ks_client_13_sf ks (log:bytes)
   let r = StAE.genReader HyperHeap.root rw in
 
   st := C (C_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|));
-  (sfk, cfk, StAEInstance r w, (| li, emsId, ems |))
+  (sfk, cfk, StAEInstance r w, exporter1)
 
 let ks_server_13_sf ks (log:bytes)
   : ST (recordInstance * (li:logInfo & i:exportId li & ems i))
@@ -936,7 +940,7 @@ let ks_server_13_sf ks (log:bytes)
     modifies (Set.singleton rid) h0 h1
     /\ modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
   =
-  dbg ("ks_server_13_sf hashed_log = "^(print_bytes log));
+  dbg ("ks_server_13_sf hashed_log = "^print_bytes log);
   let KS #region st = ks in
   let S (S_13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
   let FinishedID #li _ = dfst cfk in // TODO loginfo
@@ -948,17 +952,18 @@ let ks_server_13_sf ks (log:bytes)
   let s_expandId = ExpandedSecret secretId ClientApplicationTrafficSecret log in
 
   let cts = HKDF.derive_secret h ams "c ap traffic" log in
-  dbg ("client application traffic secret: "^(print_bytes cts));
+  dbg ("application traffic secret[C]:   "^print_bytes cts);
   let sts = HKDF.derive_secret h ams "s ap traffic" log in
-  dbg ("server application traffic secret: "^(print_bytes sts));
+  dbg ("application traffic secret[S]:   "^print_bytes sts);
   let emsId : exportId li = ExportID asId log in
   let ems = HKDF.derive_secret h ams "exp master" log in
-  dbg ("exporter master secret: "^(print_bytes ems));
-
+  dbg ("exporter master secret:          "^print_bytes ems);
+  let exporter1 = (| li, emsId, ems |) in
+  
   let (ck,civ) = keygen_13 h cts ae in
-  dbg ("application key[C]: "^(print_bytes ck)^", IV="^(print_bytes civ));
+  dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
   let (sk,siv) = keygen_13 h sts ae in
-  dbg ("application key[S]: "^(print_bytes sk)^", IV="^(print_bytes siv));
+  dbg ("application key[S]:              "^print_bytes sk^", IV="^print_bytes siv);
 
   let id = ID13 (KeyID c_expandId) in
   assert_norm(peerId id = ID13 (KeyID s_expandId));
@@ -971,7 +976,7 @@ let ks_server_13_sf ks (log:bytes)
   let r = StAE.genReader HyperHeap.root rw in
 
   st := S (S_13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |));
-  StAEInstance r w, (| li, emsId, ems |)
+  StAEInstance r w, exporter1
 
 let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
   (requires fun h0 ->
@@ -993,7 +998,7 @@ let ks_server_13_cf ks (log:bytes) : ST (li:logInfo & i:rmsId li & rms i)
   let rmsId : rmsId li = RMSID asId log in
 
   let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
-  dbg ("Resumption master secret: "^(print_bytes rms));
+  dbg ("resumption master secret:        "^print_bytes rms);
   st := S (S_13_postHS alpha rekey_info);
   (| li, rmsId, rms |)
 
@@ -1018,7 +1023,7 @@ let ks_client_13_cf ks (log:bytes) : ST unit
   let rmsId : rmsId li = RMSID asId log in
 
   let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
-  dbg ("Resumption master secret: "^(print_bytes rms));
+  dbg ("resumption master secret:        "^print_bytes rms);
   st := C (C_13_postHS alpha rekey_info (| li, rmsId, rms |))
 
 let ks_client_13_rms ks : ST (li:logInfo & i:rmsId li & rms i)

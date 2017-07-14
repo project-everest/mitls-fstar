@@ -1,8 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
-module TLSConstants
-
 (**
 This file implements type representations and parsing functions
 for the different values negotiated during the TLS
@@ -11,6 +6,7 @@ hash algorithm etc.
 
 @summary Module for main constants
 *)
+module TLSConstants
 
 #set-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1"
 
@@ -1720,10 +1716,70 @@ request_client_certificate: single_assign ServerCertificateRequest // uses this 
 type alpn_entry = b:bytes{0 < length b /\ length b < 256}
 type alpn = l:list alpn_entry{List.Tot.length l < 256}
 
+type quicParameter =
+  | Quic_initial_max_stream_data of UInt32.t
+  | Quic_initial_max_data of UInt32.t
+  | Quic_initial_max_stream_id of UInt32.t
+  | Quic_idle_timeout of UInt16.t
+  | Quic_truncate_connection_id
+  | Quic_max_packet_size of UInt16.t
+  | Quic_custom_parameter of (n:UInt16.t{UInt16.v n > 5}) * b:bytes{length b < 252}
+
+// TODO check for duplicates
+type valid_quicParameters =
+  l:list quicParameter{ List.Tot.length l < 256 /\
+    List.Tot.existsb Quic_initial_max_stream_data? l /\
+    List.Tot.existsb Quic_initial_max_data? l /\
+    List.Tot.existsb Quic_initial_max_stream_id? l /\
+    List.Tot.existsb Quic_idle_timeout? l}
+
+type quicVersion =
+  | QuicVersion1
+  | QuicCustomVersion of n:UInt32.t{UInt32.v n <> 1}
+
+type valid_quicVersions =
+  l:list quicVersion{l <> [] /\ List.Tot.length l < 64}
+
+// ADL would prefer to index this by extension message type
+type quicParameters =
+  | QuicParametersClient:
+    negotiated_version: quicVersion ->
+    initial_version: quicVersion ->
+    parameters: valid_quicParameters ->
+    quicParameters
+  | QuicParametersServer:
+    versions: valid_quicVersions ->
+    parameters: valid_quicParameters ->
+    quicParameters
+
+let string_of_quicVersion = function
+  | QuicVersion1 -> "v1"
+  | QuicCustomVersion n -> "v"^UInt32.to_string n
+let string_of_quicParameter = function 
+  | Quic_initial_max_stream_data x -> "initial_max_stream_data="^UInt32.to_string x
+  | Quic_initial_max_data x -> "initial_max_data="^UInt32.to_string x
+  | Quic_initial_max_stream_id x -> "initial_max_stream="^UInt32.to_string x
+  | Quic_idle_timeout x -> "idle_timeout="^UInt16.to_string x
+  | Quic_truncate_connection_id -> "truncate_connection_id"
+  | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x 
+  | Quic_custom_parameter (n,b) -> "custom_parameter "^UInt16.to_string n^", "^print_bytes b
+let string_of_quicParameters = function
+  | Some (QuicParametersClient n i p)  -> 
+    "QUIC client parameters\n" ^
+    "negotiated version: "^string_of_quicVersion n^"\n"^
+    "initial version: "^string_of_quicVersion i^"\n"^
+    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+  | Some (QuicParametersServer v p) -> 
+    "QUIC server parameters\n" ^
+    List.Tot.fold_left (fun a v -> a^string_of_quicVersion v^" ") "versions: " v ^ "\n" ^
+    List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
+  | None -> "(none)"
+
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
+    quic_parameters: option (valid_quicVersions * valid_quicParameters);
     cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     named_groups: list valid_namedGroup;
     signature_algorithms: signatureSchemeList;

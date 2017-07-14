@@ -1,6 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 module Handshake
 
 // provisional
@@ -28,6 +25,7 @@ val resumeInfo_of: s:hs -> ST (TLSInfo.resumeInfo (role_of s))
 val get_mode: hs -> ST Negotiation.mode
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
+
 // annoyingly, we will need specification-level variants too.
 
 // 17-04-08 TODO unclear how abstract Epochs should be.
@@ -75,6 +73,11 @@ let eT s rw (h:HyperStack.mem {iT s rw h >= 0}) =
   Seq.index es j
 let readerT s h = eT s Reader h
 let writerT s h = eT s Writer h
+
+// returns the current exporter keys 
+val xkeys_of: s:hs -> ST (Seq.seq KeySchedule.exportKey) 
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> h0 == h1 /\ Seq.length r <= 2)
 
 
 type incoming =

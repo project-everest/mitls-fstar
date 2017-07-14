@@ -1,6 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 module Handshake
 
 open FStar.Heap
@@ -216,6 +213,13 @@ let register hs keys =
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
+val export: hs -> KeySchedule.exportKey -> St unit 
+let export hs xk = 
+  trace "exporting a key";
+  Monotonic.Seq.i_write_at_end hs.epochs.exporter xk
+
+let xkeys_of hs = Monotonic.Seq.i_read hs.epochs.exporter
+  
 (* ------- Pure functions between offer/mode and their message encodings -------- *)
 
 (*
@@ -284,7 +288,8 @@ let client_Binders hs offer =
       let (| bid, _ |) :: _ = binderKeys in
       let ha = binderId_hash bid in
       let digest_CH = HandshakeLog.hash_tag #ha hs.log in
-      let edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+      let early_exporter_secret, edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
+      export hs early_exporter_secret; 
       register hs edk;
       HandshakeLog.send_signals hs.log (Some (true, false)) false
      end
@@ -515,6 +520,7 @@ let client_ServerFinished_13 hs ee ocr oc ocv (svd:bytes) digestCert digestCertV
         if not (HMAC.UFCMA.verify sfin_key digestCertVerify svd)
         then InError (AD_decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
         else (
+          export hs exporter_master_secret;
           register hs app_keys; // ATKs are ready to use in both directions
           if Nego.zeroRTT mode then (
             trace "Early data accepted; emitting EOED.";
@@ -795,7 +801,8 @@ let server_ClientHello hs offer obinders =
           begin
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
-              let zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
+              let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
+              export hs early_exporter_secret; 
               register hs zero_keys
             );
             // TODO handle 0RTT accepted and 0RTT refused
@@ -925,8 +932,8 @@ let server_ServerFinished_13 hs i =
       let svd = HMAC.UFCMA.mac sfin_key digestFinished in
       let digestServerFinished = HandshakeLog.send_tag #halg hs.log (Finished ({fin_vd = svd})) in
       // we need to call KeyScheduke twice, to pass this digest
-      // ADL this call also returns exporter master secret, which should be passed to application
-      let app_keys, _ = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
+      let app_keys, exporter_master_secret = KeySchedule.ks_server_13_sf hs.ks digestServerFinished in
+      export hs exporter_master_secret;
       register hs app_keys;
       HandshakeLog.send_signals hs.log (Some (true,false)) false;
       Epochs.incr_reader hs.epochs; // TODO when to increment the reader?

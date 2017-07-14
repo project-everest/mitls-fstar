@@ -72,13 +72,15 @@ $(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(OD
 	$(ODIR)/HandshakeLog.ml \
 	$(ODIR)/Handshake.ml \
 	$(ODIR)/FFI.ml \
+	$(ODIR)/QUIC.ml \
 	$(ODIR)/TestAPI.ml \
-	$(ODIR)/TestFFI.ml
+	$(ODIR)/TestFFI.ml \
+	$(ODIR)/TestQUIC.ml
 	OCAMLPATH=$(FSTAR_HOME)/bin ocamlfind dep -native -slash -all $(OCAMLPKG) $(OCAML_INCLUDE_PATHS) $(addsuffix /*.ml,$(OCAML_PATHS)) > .depend-ML
 
 -include .depend-ML
 
-$(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx
+$(ODIR)/.deporder: $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx $(ODIR)/TestAPI.cmx $(ODIR)/TestFFI.cmx $(ODIR)/TestQUIC.cmx
 	@echo "=== Note: ML dependencies may be outdated. If you have a link-time error, run 'make mlclean' ==="
 	@cp $(ODIR)/.tmp $(ODIR)/.deporder
 
@@ -87,7 +89,7 @@ mitls.cmxa: \
   $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(LCDIR)/LowCProvider.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa \
-  $(ODIR)/.deporder $(ODIR)/FFI.cmx \
+  $(ODIR)/.deporder $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx \
   $(ODIR)/FFIRegister.cmx
 	$(OCAMLOPT_BARE) $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
@@ -175,6 +177,17 @@ cmitls.exe: cmitls.o $(LIBMITLS)
 	$(NATIVE_C_COMPILER) -g -o cmitls.exe cmitls.o $(LIBMITLS) $(NATIVE_C_LIBRARIES)
 
 # our interactive tests; the baseline is make client{|12|13} vs make server 
+
+
+serverQ::
+	OCAMLRUNPARAM=b ./mitls.exe -quic -mv 1.3 -v 1.3 -0rtt -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA256
+cserverQ::
+	OCAMLRUNPARAM=b ./cmitls.exe -quic -mv 1.3 -v 1.3 -0rtt -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA256
+
+clientQ::
+	OCAMLRUNPARAM=b ./mitls.exe -quic -mv 1.3 -v 1.3 127.0.0.1 4443 -reconnect -0rtt
+cclientQ::
+	OCAMLRUNPARAM=b ./cmitls.exe -quic -mv 1.3 -v 1.3 127.0.0.1 4443 -reconnect -0rtt
 
 server::
 	OCAMLRUNPARAM=b ./mitls.exe -mv 1.2 -v 1.3 -s -cert ../../data/server-ecdsa.crt -key ../../data/server-ecdsa.key 0.0.0.0 4443 -sigalgs ECDSA+SHA384

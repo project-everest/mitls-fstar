@@ -18,21 +18,6 @@ extern "C" {
 #include "..\..\libs\ffi\mitlsffi.h"
 }
 
-typedef int  (MITLS_CALLCONV *tFFI_mitls_init)(void);
-typedef void (MITLS_CALLCONV *tFFI_mitls_cleanup)(void);
-typedef int  (MITLS_CALLCONV *tFFI_mitls_configure)(/* out */ mitls_state **state, const char *tls_version, const char *host_name, /* out */ char **outmsg, /* out */ char **errmsg);
-typedef void (MITLS_CALLCONV *tFFI_mitls_close)(/* in */ mitls_state *state);
-typedef int  (MITLS_CALLCONV *tFFI_mitls_connect)(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
-typedef int (MITLS_CALLCONV *tFFI_mitls_send)(/* in */ mitls_state *state, const void* buffer, size_t buffer_size,
-    /* out */ char **outmsg, /* out */ char **errmsg); // Returns NULL for failure, or a TCP packet to be sent then freed with FFI_mitls_free_packet()
-typedef void *(MITLS_CALLCONV *tFFI_mitls_receive)(/* in */ mitls_state *state, /* out */ size_t *packet_size,
-    /* out */ char **outmsg, /* out */ char **errmsg);     // Returns NULL for failure, a plaintext packet to be freed with FFI_mitls_free_packet()
-typedef void (MITLS_CALLCONV *tFFI_mitls_free_packet)(void* packet);
-typedef void (MITLS_CALLCONV *tFFI_mitls_free_msg)(char *msg);
-typedef int (MITLS_CALLCONV *tFFI_mitls_thread_register)(void);
-typedef int (MITLS_CALLCONV *tFFI_mitls_thread_unregister)(void);
-typedef void *(MITLS_CALLCONV *tFFI_mitls_get_cert)(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg);
-
 void MITLS_ProcessMessages(char *outmsg, char *errmsg);
 int MITLS_CALLCONV MITLS_send_callback(struct _FFI_mitls_callbacks *callbacks, const void *buffer, size_t buffer_size);
 int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, void *buffer, size_t buffer_size);
@@ -69,6 +54,7 @@ typedef struct _ConnectionState {
     MITLS_CredHandle *cred;
     PSecBufferDesc pOutput;
     PSecBuffer pOutputBuffer;
+    PSecBuffer pApplicationProtocols;
     bool OutputBufferBusy;
     unsigned long fContextReq;
     SECURITY_STATUS status;
@@ -117,19 +103,6 @@ typedef struct _TLS_WORK_ITEM {
 
 } TLS_WORK_ITEM;
 
-tFFI_mitls_init pfnFFI_mitls_init;
-tFFI_mitls_cleanup pfnFFI_mitls_cleanup;
-tFFI_mitls_configure pfnFFI_mitls_configure;
-tFFI_mitls_close pfnFFI_mitls_close;
-tFFI_mitls_connect pfnFFI_mitls_connect;
-tFFI_mitls_send pfnFFI_mitls_send;
-tFFI_mitls_receive pfnFFI_mitls_receive;
-tFFI_mitls_free_packet pfnFFI_mitls_free_packet;
-tFFI_mitls_free_msg pfnFFI_mitls_free_msg;
-tFFI_mitls_thread_register pfnFFI_mitls_thread_register;
-tFFI_mitls_thread_unregister pfnFFI_mitls_thread_unregister;
-tFFI_mitls_get_cert pfnFFI_mitls_get_cert;
-
 const char *_formats[] = {
     "",
     " %2.2x",
@@ -161,6 +134,15 @@ BOOL MITLS_IsMITLSHandle(PSecHandle h)
     return TRUE;
 }
 
+SEC_APPLICATION_PROTOCOL_LIST *GetNextList(SEC_APPLICATION_PROTOCOL_LIST *pList)
+{
+    SEC_APPLICATION_PROTOCOL_LIST *pNext;
+
+    pNext = (SEC_APPLICATION_PROTOCOL_LIST*)((size_t)pList + pList->ProtocolListSize + sizeof(*pList) - sizeof(pList->ProtocolList));
+
+    return pNext;
+}
+
 void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
 {
     ConnectionState *state = item->state;
@@ -168,7 +150,7 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
     char *outmsg;
     char *errmsg;
     _Print("FFI_mitls_configure - TlsVersion=%s hostname=%s", state->cred->TlsVersion, item->HostName);
-    int ret = pfnFFI_mitls_configure(&state->state, state->cred->TlsVersion, item->HostName, &outmsg, &errmsg);
+    int ret = FFI_mitls_configure(&state->state, state->cred->TlsVersion, item->HostName, &outmsg, &errmsg);
     MITLS_ProcessMessages(outmsg, errmsg);
     if (ret == 0) {
         // Failed
@@ -177,9 +159,51 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
         return;
     }
 
+    char cipher_suites[512];
+    DWORD dw = GetEnvironmentVariableA("MITLS_SCHANNEL_CIPHER_SUITES", cipher_suites, sizeof(cipher_suites));
+    if (dw > 0 && dw <  sizeof(cipher_suites)) {
+        _Print("Using cipher suites: %s", cipher_suites);
+        ret = FFI_mitls_configure_cipher_suites(state->state, cipher_suites);
+        if (ret == 0) {
+            // Failed
+            _Print("MITLS configure_cipher_suites failed");
+            state->status = SEC_E_INTERNAL_ERROR;
+            return;
+        }
+    }
+
+    if (state->pApplicationProtocols) {
+        SEC_APPLICATION_PROTOCOLS  *pProtocols = (SEC_APPLICATION_PROTOCOLS *)state->pApplicationProtocols->pvBuffer;
+        SEC_APPLICATION_PROTOCOL_LIST *pListStart = &pProtocols->ProtocolLists[0];
+        SEC_APPLICATION_PROTOCOL_LIST *pListEnd = (SEC_APPLICATION_PROTOCOL_LIST*)((size_t)pListStart + pProtocols->ProtocolListsSize);
+            
+        for (SEC_APPLICATION_PROTOCOL_LIST *pList = pListStart; pList < pListEnd;pList = GetNextList(pList)) {
+            switch (pList->ProtoNegoExt) {
+            case SecApplicationProtocolNegotiationExt_ALPN:
+                ret = FFI_mitls_configure_alpn(state->state, (const char*)pList->ProtocolList);
+                if (ret == 0) {
+                    _Print("FFI_mitls_configure_alpn failed");
+                    state->status = SEC_E_INTERNAL_ERROR;
+                    return;
+                }
+                break;
+            case SecApplicationProtocolNegotiationExt_NPN:
+                _Print("NPN extention is not supported by miTLS - ignoring");
+                break;
+            case SecApplicationProtocolNegotiationExt_None:
+                // Ignore.  Applications sometimes allocate space for multiple extensions
+                // then only fill in one, leaving the rest set to _None.
+                break;
+            default:
+                _Print("Unknown/unsupported Application Protocol Extension %d - ignoring.", pList->ProtoNegoExt);
+                break;
+            }
+        }
+    }
+
     state->callbacks.send = MITLS_send_callback;
     state->callbacks.recv = MITLS_recv_callback;
-    ret = pfnFFI_mitls_connect(&state->callbacks, state->state, &outmsg, &errmsg);
+    ret = FFI_mitls_connect(&state->callbacks, state->state, &outmsg, &errmsg);
     MITLS_ProcessMessages(outmsg, errmsg);
     if (ret == 0) {
         // Failed
@@ -189,7 +213,7 @@ void ProcessConnect(TLS_CONNECT_WORK_ITEM* item)
     }
     _Print("FFI_mitls_get_cert");
     size_t cb;
-    void *pb = pfnFFI_mitls_get_cert(state->state, &cb, &outmsg, &errmsg);
+    void *pb = FFI_mitls_get_cert(state->state, &cb, &outmsg, &errmsg);
     MITLS_ProcessMessages(outmsg, errmsg);
     if (pb == NULL) {
         _Print("Failed to get the peer certificate");
@@ -223,7 +247,7 @@ void ProcessSend(TLS_SEND_WORK_ITEM* item)
 
     char *outmsg;
     char *errmsg;
-    int ret = pfnFFI_mitls_send(state->state, pvBuffer, cbBuffer, &outmsg, &errmsg);
+    int ret = FFI_mitls_send(state->state, pvBuffer, cbBuffer, &outmsg, &errmsg);
     MITLS_ProcessMessages(outmsg, errmsg);
     if (ret == 0) {
         // Failed
@@ -242,7 +266,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
     char *errmsg;
     size_t cbReceived;
 
-    VOID *pvReceived = pfnFFI_mitls_receive(state->state, &cbReceived, &outmsg, &errmsg);
+    VOID *pvReceived = FFI_mitls_receive(state->state, &cbReceived, &outmsg, &errmsg);
     MITLS_ProcessMessages(outmsg, errmsg);
     if (pvReceived == NULL) {
         // Failed
@@ -262,7 +286,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
     }
     if (!OutputBuffer) {
         _Print("Couldn't find a SECBUFFER_DATA to write into!");
-        pfnFFI_mitls_free_packet(pvReceived);
+        FFI_mitls_free_packet(pvReceived);
         state->status = SEC_E_INTERNAL_ERROR;
         return;
     } else if (cbOutputBuffer < cbReceived) {
@@ -293,7 +317,7 @@ void ProcessRecv(TLS_RECV_WORK_ITEM* item)
         }
     }
 
-    pfnFFI_mitls_free_packet(pvReceived);
+    FFI_mitls_free_packet(pvReceived);
     state->status = SEC_E_OK;
 }
 
@@ -301,7 +325,7 @@ void ProcessDisconnect(TLS_DISCONNECT_WORK_ITEM* item)
 {
     ConnectionState *state = item->state;
 
-    pfnFFI_mitls_close(state->state);
+    FFI_mitls_close(state->state);
     delete item;
     state->item = NULL;
     state->state = NULL;
@@ -314,7 +338,7 @@ DWORD WINAPI MITLS_Threadproc(
 {
     ConnectionState *state = (ConnectionState*)lpThreadParameter;
 
-    pfnFFI_mitls_thread_register();
+    FFI_mitls_thread_register();
 
     for (;;) {
         WaitForSingleObject(state->hqueueReady, INFINITE);
@@ -346,7 +370,7 @@ DWORD WINAPI MITLS_Threadproc(
                 SetEvent(item->hWorkItemCompleted);
                 break;
             case TLS_EXIT_THREAD:
-                pfnFFI_mitls_thread_unregister();
+                FFI_mitls_thread_unregister();
                 delete item;
                 state->item = NULL;
                 return 0;
@@ -362,73 +386,7 @@ DWORD WINAPI MITLS_Threadproc(
 
 BOOL MITLS_Initialize(void)
 {
-    HMODULE hmitls = LoadLibraryW(L"libmitls.dll");
-    if (!hmitls) {
-        _Print("Unable to load libmitls - gle=%d", GetLastError());
-        return FALSE;
-    }
-    pfnFFI_mitls_init = (tFFI_mitls_init)GetProcAddress(hmitls, "FFI_mitls_init");
-    if (pfnFFI_mitls_init == NULL) {
-        _Print("Unable to bind to FFI_mitls_init");
-        return FALSE;
-    }
-    pfnFFI_mitls_cleanup = (tFFI_mitls_cleanup)GetProcAddress(hmitls, "FFI_mitls_cleanup");
-    if (pfnFFI_mitls_cleanup == NULL) {
-        _Print("Unable to bind to FFI_mitls_cleanup");
-        return FALSE;
-    }
-    pfnFFI_mitls_configure = (tFFI_mitls_configure)GetProcAddress(hmitls, "FFI_mitls_configure");
-    if (pfnFFI_mitls_configure == NULL) {
-        _Print("Unable to bind to FFI_mitls_configure");
-        return FALSE;
-    }
-    pfnFFI_mitls_connect = (tFFI_mitls_connect)GetProcAddress(hmitls, "FFI_mitls_connect");
-    if (pfnFFI_mitls_connect == NULL) {
-        _Print("Unable to bind to FFI_mitls_connect");
-        return FALSE;
-    }
-    pfnFFI_mitls_close = (tFFI_mitls_close)GetProcAddress(hmitls, "FFI_mitls_close");
-    if (pfnFFI_mitls_close == NULL) {
-        _Print("Unable to bind to FFI_mitls_close");
-        return FALSE;
-    }
-    pfnFFI_mitls_send = (tFFI_mitls_send)GetProcAddress(hmitls, "FFI_mitls_send");
-    if (pfnFFI_mitls_send == NULL) {
-        _Print("Unable to bind to FFI_mitls_send");
-        return FALSE;
-    }
-    pfnFFI_mitls_receive = (tFFI_mitls_receive)GetProcAddress(hmitls, "FFI_mitls_receive");
-    if (pfnFFI_mitls_receive == NULL) {
-        _Print("Unable to bind to FFI_mitls_receive");
-        return FALSE;
-    }
-    pfnFFI_mitls_free_packet = (tFFI_mitls_free_packet)GetProcAddress(hmitls, "FFI_mitls_free_packet");
-    if (pfnFFI_mitls_free_packet == NULL) {
-        _Print("Unable to bind to FFI_mitls_free_packet");
-        return FALSE;
-    }
-    pfnFFI_mitls_free_msg = (tFFI_mitls_free_msg)GetProcAddress(hmitls, "FFI_mitls_free_msg");
-    if (pfnFFI_mitls_free_msg == NULL) {
-        _Print("Unable to bind to FFI_mitls_free_msg");
-        return FALSE;
-    }
-    pfnFFI_mitls_thread_register = (tFFI_mitls_thread_register)GetProcAddress(hmitls, "FFI_mitls_thread_register");
-    if (pfnFFI_mitls_thread_register == NULL) {
-        _Print("Unable to bind to FFI_mitls_thread_register");
-        return FALSE;
-    }
-    pfnFFI_mitls_thread_unregister = (tFFI_mitls_thread_unregister)GetProcAddress(hmitls, "FFI_mitls_thread_unregister");
-    if (pfnFFI_mitls_thread_unregister == NULL) {
-        _Print("Unable to bind to FFI_mitls_thread_unregister");
-        return FALSE;
-    }
-    pfnFFI_mitls_get_cert = (tFFI_mitls_get_cert)GetProcAddress(hmitls, "FFI_mitls_get_cert");
-    if (pfnFFI_mitls_get_cert == NULL) {
-        _Print("Unable to bind to FFI_mitls_get_cert");
-        return FALSE;
-    }
-
-    int ret = pfnFFI_mitls_init();
+    int ret = FFI_mitls_init();
     if (ret == 0) {
         _Print("mitls_init failed.  Unable to continue");
         return FALSE;
@@ -441,11 +399,11 @@ void MITLS_ProcessMessages(char *outmsg, char *errmsg)
 {
     if (outmsg) {
         _Print("mitls: %s", outmsg);
-        pfnFFI_mitls_free_msg(outmsg);
+        FFI_mitls_free_msg(outmsg);
     }
     if (errmsg) {
         _Print("mitls: ERROR %s", errmsg);
-        pfnFFI_mitls_free_msg(errmsg);
+        FFI_mitls_free_msg(errmsg);
     }
 }
 
@@ -693,11 +651,13 @@ int MITLS_CALLCONV MITLS_recv_callback(struct _FFI_mitls_callbacks *callbacks, v
     return (int)buffer_size;
 }
 
-SECURITY_STATUS ParseInputBufferDesc(PSecBufferDesc pInput, ULONG DataBufferType, PSecBuffer pActualInput)
+SECURITY_STATUS ParseInputBufferDesc(PSecBufferDesc pInput, ULONG DataBufferType, PSecBuffer pActualInput, PSecBuffer* ppApplicationProtocols)
 {
     pActualInput->BufferType = SECBUFFER_EMPTY;
     pActualInput->cbBuffer = 0;
     pActualInput->pvBuffer = NULL;
+    
+    *ppApplicationProtocols = NULL;
 
     if (pInput == NULL) {
         return SEC_E_OK;
@@ -719,8 +679,7 @@ SECURITY_STATUS ParseInputBufferDesc(PSecBufferDesc pInput, ULONG DataBufferType
             case SECBUFFER_STREAM_TRAILER:
                 break;
             case SECBUFFER_APPLICATION_PROTOCOLS:
-                // Skip these buffers
-                _Print("Skipping SECBUFFER_APPLICATION_PROTOCOLS");
+                *ppApplicationProtocols = &pInput->pBuffers[i];
                 break;
             case SECBUFFER_TOKEN_BINDING:
                 // Skip these buffers
@@ -773,7 +732,8 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         return st;
     }
     SecBuffer ActualInput;
-    st = ParseInputBufferDesc(pInput, SECBUFFER_TOKEN, &ActualInput);
+    PSecBuffer pApplicationProtocols;
+    st = ParseInputBufferDesc(pInput, SECBUFFER_TOKEN, &ActualInput, &pApplicationProtocols);
     if (st != SEC_E_OK) {
         return st;
     }
@@ -807,6 +767,7 @@ SEC_ENTRY MITLS_InitializeSecurityContextA(
         state->ActualInputToken.pvBuffer = NULL;
         state->ActualInputToken.cbBuffer = 0;
         state->fDeleteOnComplete = false;
+        state->pApplicationProtocols = pApplicationProtocols;
 
         // The documentation indicates that the input buffers must be NULL on first call.  However,
         // Wininet passes a list, which may be empty, or contain SECBUFFER_TOKEN_BINDING and/or
@@ -1245,7 +1206,8 @@ SECURITY_STATUS SEC_ENTRY MITLS_EncryptMessage(PCtxtHandle         phContext,
         return SEC_E_DECRYPT_FAILURE;
     }
     SecBuffer ActualInput;
-    SECURITY_STATUS st = ParseInputBufferDesc(pMessage, SECBUFFER_DATA, &ActualInput);
+    PSecBuffer pApplicationProtocols;
+    SECURITY_STATUS st = ParseInputBufferDesc(pMessage, SECBUFFER_DATA, &ActualInput, &pApplicationProtocols);
     if (st != SEC_E_OK) {
         return st;
     }
@@ -1289,7 +1251,8 @@ SECURITY_STATUS SEC_ENTRY MITLS_DecryptMessage(PCtxtHandle         phContext,
     MessageSeqNo;
 
     SecBuffer ActualInput;
-    SECURITY_STATUS st = ParseInputBufferDesc(pMessage, SECBUFFER_DATA, &ActualInput);
+    PSecBuffer pApplicationProtocols;
+    SECURITY_STATUS st = ParseInputBufferDesc(pMessage, SECBUFFER_DATA, &ActualInput, &pApplicationProtocols);
     if (st != SEC_E_OK) {
         return st;
     }

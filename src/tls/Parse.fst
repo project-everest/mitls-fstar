@@ -1,6 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 module Parse
 
 open FStar.HyperStack.All
@@ -204,6 +201,16 @@ let uint32_of_bytes b =
   assert_norm (pow2 32 == 4294967296);
   lemma_repr_bytes_values n;
   UInt32.uint_to_t n
+
+let bytes_of_uint32 (n:UInt32.t) : Tot (lbytes 4) =
+  let n = UInt32.v n in
+  lemma_repr_bytes_values n;
+  bytes_of_int 4 n
+
+let bytes_of_uint16 (n:UInt16.t) : Tot (lbytes 2) =
+  let n = UInt16.v n in
+  lemma_repr_bytes_values n;
+  bytes_of_int 2 n
 
 (** End Module Format *)
 

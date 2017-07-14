@@ -1,6 +1,3 @@
-(*--build-config
-options:--fstar_home ../../../FStar --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection --use_hints --include ../../../FStar/ucontrib/CoreCrypto/fst/ --include ../../../FStar/ucontrib/Platform/fst/ --include ../../../hacl-star/secure_api/LowCProvider/fst --include ../../../kremlin/kremlib --include ../../../hacl-star/specs --include ../../../hacl-star/code/lib/kremlin --include ../../../hacl-star/code/bignum --include ../../../hacl-star/code/experimental/aesgcm --include ../../../hacl-star/code/poly1305 --include ../../../hacl-star/code/salsa-family --include ../../../hacl-star/secure_api/test --include ../../../hacl-star/secure_api/utils --include ../../../hacl-star/secure_api/vale --include ../../../hacl-star/secure_api/uf1cma --include ../../../hacl-star/secure_api/prf --include ../../../hacl-star/secure_api/aead --include ../../libs/ffi --include ../../../FStar/ulib/hyperstack --include ../../src/tls/ideal-flags;
---*)
 module Negotiation
 
 open Platform.Error
@@ -162,6 +159,11 @@ let find_signature_algorithms o : option signatureSchemeList =
   | None -> None
   | Some (Extensions.E_signature_algorithms algs) -> Some algs
 
+let find_quic_parameters o: option TLSConstants.quicParameters =
+  match find_client_extension Extensions.E_quic_parameters? o with
+  | Some (Extensions.E_quic_parameters qp) -> Some qp
+  | _ -> None
+
 // finding the pre-shared keys in ClientHello
 let find_pske o =
   match find_client_extension Extensions.E_pre_shared_key? o with
@@ -280,6 +282,16 @@ noeq type mode =
     // { both shares are in the same negotiated group }
     mode
 
+let find_server_extension filter m =
+  match m.n_server_extensions with
+  | None -> None
+  | Some es -> List.Tot.find filter es
+
+let find_server_quic_parameters m = 
+  match find_server_extension Extensions.E_quic_parameters? m with 
+  | Some (Extensions.E_quic_parameters qp) -> Some qp
+  | _ -> None
+
 let is_resumption12 m =
   m.n_protocol_version <> TLS_1p3  &&
   m.n_sessionID = Some (m.n_offer.ch_sessionID)
@@ -382,11 +394,15 @@ let computeOffer r cfg resume nonce ks pskinfo =
       Some t, sid
     | (None, _), true, _ -> Some (empty_bytes), empty_bytes
     | _ -> None, empty_bytes in
-  // Don't offer EDI if there is no PSK of first PSK doesn't have ED enabled
+  // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
   let compatible_psk =
     match pskinfo with
     | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
     | _ -> false in
+  let qp =
+    match cfg.quic_parameters with
+    | Some (qv::_, qp) -> Some (QuicParametersClient qv qv qp)
+    | _ -> None in
   let extensions =
     Extensions.prepareExtensions
       cfg.min_version
@@ -394,6 +410,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
       cfg.cipher_suites
       cfg.peer_name
       cfg.alpn
+      qp
       cfg.extended_master_secret
       cfg.safe_renegotiation
       (compatible_psk && cfg.enable_early_data)
@@ -635,6 +652,12 @@ let client_ClientHello #region ns oks =
   let pskinfo = map_ST (fun i -> (i, PSK.psk_info i)) pskid in
   match MR.m_read ns.state with
   | C_Init _ ->
+      trace(if 
+    (match pskinfo with
+    | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
+    | _ -> false)
+      then "compatible" else "");
+      trace(if ns.cfg.enable_early_data then "enabled" else "");
       let offer = computeOffer Client ns.cfg ns.resume ns.nonce oks' pskinfo in
       trace ("offering client extensions "^string_of_option_extensions offer.ch_extensions);
       MR.m_write ns.state (C_Offer offer);

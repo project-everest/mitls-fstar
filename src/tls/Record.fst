@@ -131,7 +131,7 @@ val read: Transport.t -> s: HyperStack.ref input_state -> ST read_result
 let rec read tcp state =
   let State len prior partial = !state in 
   match Transport.recv tcp len with 
-  | Platform.Tcp.RecvWouldBlock -> ReadWouldBlock
+  | Platform.Tcp.RecvWouldBlock -> trace "WouldBlock"; ReadWouldBlock
   | Platform.Tcp.RecvError e -> ReadError (AD_internal_error, e) 
   | Platform.Tcp.Received fresh -> (
     let data = prior @| fresh in 
