@@ -438,6 +438,11 @@ class MITLS():
         self.log.debug( "FFI_mitls_quic_process --> %s" % GetKey( QUICResult, ret, "<unknown error code %d>" % ret))
         return bytesToSend.value, ret
 
+    def AssertEquel( self, valueA, valueB, msg ):
+        if valueA != valueB:
+            self.log.error( msg )
+            raise MITLSError( msg )
+
     def AcceptQUICConnection( self, earlyData = None ):
         try:
             self.log.debug( "AcceptQUICConnection" )
@@ -455,6 +460,13 @@ class MITLS():
             	if numBytesToSend > 0:
             		memorySocket.SendToClient( None, addressof( self.serverToClient ), numBytesToSend )
             
+            # # Send session ticket:
+            # bytesRead = 0
+            # numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.clientToServer, bytesRead, self.serverToClient )            
+            # self.AssertEquel( numBytesToSend, 0, "Expeted FFI_mitls_quic_process to have bytes to send (session ticket)" )
+            # self.AssertEquel( lastResult, QUICResult.TLS_would_block, "Expected FFI_mitls_quic_process returned %d instead of TLS_would_block (%d)" % ( lastResult, QUICResult.TLS_would_block ) )
+            # memorySocket.SendToClient( None, addressof( self.serverToClient ), numBytesToSend )
+
             self.log.debug( "AcceptQUICConnection done!")
             
             self.acceptConnectionSucceeded = True
@@ -725,7 +737,7 @@ class MITLSTester(unittest.TestCase):
             keysMonitor.StopMonitorStdoutForLeakedKeys()
             
         if config.LOG_LEVEL < logging.ERROR:
-            pprint( memorySocket.tlsParser.transcript )
+            # pprint( memorySocket.tlsParser.transcript )
             for msg in memorySocket.tlsParser.transcript:
                 memorySocket.tlsParser.PrintMsg( msg )
 
@@ -1259,7 +1271,7 @@ class MITLSTester(unittest.TestCase):
                                                     supportedNamedGroups,
                                                     applicationData )
 
-        self.tlsClient = MITLS( "client" )
+        self.tlsClient = MITLS( "QUIC-client" )
         self.tlsClient.InitQUICClient(  "test_server.com", 
                                         supportedCipherSuites,
                                         supportedSignatureAlgorithms,
@@ -1354,7 +1366,7 @@ class MITLSTester(unittest.TestCase):
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
-        with open( "parameters_matrix_MITLS_MITLS.txt", "w" ) as logFile:
+        with open( "parameters_matrix_MITLS_MITLS.csv", "w" ) as logFile:
             outputSinks = [ sys.stderr, logFile ]
             self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
 
@@ -1556,8 +1568,8 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
-    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
+    suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
@@ -1568,11 +1580,6 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester( "test_SkipPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_ServerHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_EncryptedServerHello_onWire" ) )
-    
-    # suite.addTest( MITLSTester() )
-    # suite.addTest( MITLSTester() )
-    # suite.addTest( MITLSTester() )
-    # suite.addTest( MITLSTester() )
     
      
     runner = unittest.TextTestRunner()

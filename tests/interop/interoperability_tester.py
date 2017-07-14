@@ -268,7 +268,7 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
-        with open( "parameters_matrix_MITLS_NSS.txt", "w" ) as logFile:
+        with open( "parameters_matrix_MITLS_NSS.csv", "w" ) as logFile:
             outputSinks = [ sys.stderr, logFile ]
             WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
 
@@ -298,7 +298,7 @@ class InterOperabilityTester(unittest.TestCase):
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
-        with open( "parameters_matrix_NSS_MITLS.txt", "w" ) as logFile:
+        with open( "parameters_matrix_NSS_MITLS.csv", "w" ) as logFile:
             outputSinks = [ sys.stderr, logFile ]
             WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
 

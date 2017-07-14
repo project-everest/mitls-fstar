@@ -346,6 +346,7 @@ EXTENSION_TYPE_NAMES = {
     23 : "EXTENDED_MASTER_SECRET",
     24 : "TOKEN_BINDING",
     25 : "CACHED_INFO",
+    26 : "QUIC_TRANSPORT_PARAMETERS",
     35 : "SESSIONTICKET",
     40 : "KEY_SHARE",
     41 : "PRE_SHARED_KEY",
@@ -583,7 +584,7 @@ class TLSParser():
         if typeNumber in EXTENSION_TYPE_NAMES.keys():
             return EXTENSION_TYPE_NAMES[ typeNumber ]
 
-        return "unknown_extension"
+        return "unknown_extension (%d)" % typeNumber
     
     def GetCipherSuiteName( self, suiteID ):
         if suiteID in CIPHER_SUITES_NAMES.keys():
