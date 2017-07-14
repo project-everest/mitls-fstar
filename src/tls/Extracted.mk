@@ -58,7 +58,7 @@ $(LCDIR)/LowCProvider.cmi $(LCDIR)/LowCProvider.cmx $(LCDIR)/LowCProvider.cmxa: 
 $(FFI_HOME)/FFICallbacks.cmi $(FFI_HOME)/FFICallbacks.cmx $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
 	$(MAKE) -C $(FFI_HOME)
 
-$(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx
+$(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
 %.cmi %.cmx: %.ml
