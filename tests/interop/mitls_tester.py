@@ -726,6 +726,36 @@ class MITLSTester(unittest.TestCase):
 
         return serverThread
 
+    def test_QUIC_parameters_matrix( self ):
+        sys.stderr.write( "Running test_QUIC_parameters_matrix\n" )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        with open( "parameters_matrix_QUIC.csv", "w" ) as logFile:
+            outputSinks = [ sys.stderr, logFile ]
+            self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
+            for cipherSuite in SUPPORTED_CIPHER_SUITES:
+                for algorithm in SUPPORTED_SIGNATURE_ALGORITHMS:
+                    for group in SUPPORTED_NAMED_GROUPS:
+                        self.WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
+                        memorySocket.tlsParser.DeleteLeakedKeys()
+                        try:
+                            startTime = time.time()
+                            self.RunSingleQUICTest( supportedCipherSuites        = [ cipherSuite ],
+                                                    supportedSignatureAlgorithms = [ algorithm ],
+                                                    supportedNamedGroups         = [ group ] )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                        except Exception as err: 
+                            print( traceback.format_tb( err.__traceback__ ) )
+                            self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                        finally:
+                            totalTime = time.time() - startTime
+                            self.WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+              
+        keysMonitor.StopMonitorStdoutForLeakedKeys()    
+
     def test_MITLS_QUIC_ClientAndServer( self ):
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
@@ -1569,6 +1599,7 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
+    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
     suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
