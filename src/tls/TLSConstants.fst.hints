@@ -1,5 +1,5 @@
 [
-  "Ô{µyáÝg\u0016_üþ‚\u0018-ã“",
+  "ÐÐHÈoË¥–ýÓ\u000e(eÏìš",
   [
     [ "TLSConstants.uu___is_Reader", 1, 0, 1, [ "@query" ], 0 ],
     [ "TLSConstants.uu___is_Writer", 1, 0, 1, [ "@query" ], 0 ],
@@ -4695,6 +4695,352 @@
         "typing_Parse.is_tls_rgn", "typing_Platform.Bytes.length",
         "typing_Platform.Bytes.split", "typing_Platform.Error.uu___is_Error",
         "well-founded-ordering-on-nat"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.quicParameter",
+      1,
+      1,
+      2,
+      [
+        "@query", "assumption_FStar.Pervasives.Native.tuple2_haseq",
+        "assumption_FStar.UInt16.t__haseq",
+        "assumption_FStar.UInt32.t__haseq",
+        "assumption_Platform.Bytes.HasEq_bytes", "equation_FStar.UInt16.t",
+        "equation_FStar.UInt32.t", "equation_Platform.Bytes.bytes",
+        "haseqTLSConstants_Tm_refine_6009ec715a5121a3596167999d7c6648",
+        "haseqTLSConstants_Tm_refine_f719af6863d52d8d2dfe6d491b696451",
+        "refinement_kinding_TLSConstants_Tm_refine_6009ec715a5121a3596167999d7c6648",
+        "refinement_kinding_TLSConstants_Tm_refine_f719af6863d52d8d2dfe6d491b696451"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.uu___is_Quic_initial_max_stream_data",
+      1,
+      1,
+      2,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__Quic_initial_max_stream_data__item___0",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Quic_initial_max_stream_data",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_a1a91f8686e7e12cadedd6bd2aa5ba5b"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.uu___is_Quic_initial_max_data",
+      1,
+      1,
+      2,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__Quic_initial_max_data__item___0",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Quic_initial_max_data",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_741fea2987c9e9c0dd500eeba4fa5702"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.uu___is_Quic_initial_max_stream_id",
+      1,
+      1,
+      2,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__Quic_initial_max_stream_id__item___0",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Quic_initial_max_stream_id",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_0cb3720f6a37b47daea61ba3a2176cfa"
+      ],
+      0
+    ],
+    [ "TLSConstants.uu___is_Quic_idle_timeout", 1, 1, 2, [ "@query" ], 0 ],
+    [
+      "TLSConstants.__proj__Quic_idle_timeout__item___0",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Quic_idle_timeout",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_d7ea814bcd0f13aff640775afde2a006"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.uu___is_Quic_truncate_connection_id",
+      1,
+      1,
+      2,
+      [ "@query" ],
+      0
+    ],
+    [ "TLSConstants.uu___is_Quic_max_packet_size", 1, 1, 2, [ "@query" ], 0 ],
+    [
+      "TLSConstants.__proj__Quic_max_packet_size__item___0",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Quic_max_packet_size",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_0d274537698611910c191d380ece4e79"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.uu___is_Quic_custom_parameter",
+      1,
+      1,
+      2,
+      [ "@query" ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__Quic_custom_parameter__item___0",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Quic_custom_parameter",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_2096aed79a4298640f82eacb2186217a"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.quicVersion",
+      1,
+      1,
+      2,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "TLSConstants.quicVersion",
+      2,
+      1,
+      2,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "TLSConstants.quicVersion",
+      3,
+      1,
+      2,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "TLSConstants.quicVersion",
+      4,
+      1,
+      2,
+      [
+        "@query", "assumption_FStar.UInt32.t__haseq",
+        "equation_FStar.UInt32.t",
+        "haseqTLSConstants_Tm_refine_f83268e11bec64140c7c4a732f8c508c"
+      ],
+      0
+    ],
+    [ "TLSConstants.uu___is_QuicVersion1", 1, 1, 2, [ "@query" ], 0 ],
+    [ "TLSConstants.uu___is_QuicCustomVersion", 1, 1, 2, [ "@query" ], 0 ],
+    [
+      "TLSConstants.__proj__QuicCustomVersion__item___0",
+      1,
+      1,
+      2,
+      [ "@query", "assumption_Prims.HasEq_int" ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__QuicCustomVersion__item___0",
+      2,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.QuicCustomVersion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_d33bb8202c3af0999492d314d731a9ee"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.valid_quicVersions",
+      1,
+      1,
+      2,
+      [
+        "@query", "assumption_Prims.list_haseq",
+        "assumption_TLSConstants.quicVersion_haseq",
+        "kinding_TLSConstants.quicVersion@tok"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.quicParameters",
+      1,
+      1,
+      2,
+      [
+        "@query", "assumption_Prims.list_haseq",
+        "assumption_TLSConstants.quicParameter_haseq",
+        "assumption_TLSConstants.quicVersion_haseq",
+        "equation_TLSConstants.valid_quicParameters",
+        "equation_TLSConstants.valid_quicVersions",
+        "haseqTLSConstants_Tm_refine_5950bd1c33a28c80db184cc9aff07e7e",
+        "haseqTLSConstants_Tm_refine_964ab75e4aca2ba7511e19e03f1c25bd",
+        "kinding_TLSConstants.quicParameter@tok",
+        "kinding_TLSConstants.quicVersion@tok"
+      ],
+      0
+    ],
+    [ "TLSConstants.uu___is_QuicParametersClient", 1, 1, 2, [ "@query" ], 0 ],
+    [
+      "TLSConstants.__proj__QuicParametersClient__item__negotiated_version",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.QuicParametersClient",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_b5110dc7af06762017692abc2496d38b"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__QuicParametersClient__item__initial_version",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.QuicParametersClient",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_b5110dc7af06762017692abc2496d38b"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__QuicParametersClient__item__parameters",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.QuicParametersClient",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_b5110dc7af06762017692abc2496d38b"
+      ],
+      0
+    ],
+    [ "TLSConstants.uu___is_QuicParametersServer", 1, 1, 2, [ "@query" ], 0 ],
+    [
+      "TLSConstants.__proj__QuicParametersServer__item__versions",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.QuicParametersServer",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_d6725e15f093ca48b5f92f9cc5795a63"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.__proj__QuicParametersServer__item__parameters",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.QuicParametersServer",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_TLSConstants_Tm_refine_d6725e15f093ca48b5f92f9cc5795a63"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.string_of_quicVersion",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.QuicCustomVersion",
+        "disc_equation_TLSConstants.QuicVersion1",
+        "fuel_guarded_inversion_TLSConstants.quicVersion"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.string_of_quicParameter",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Quic_custom_parameter",
+        "disc_equation_TLSConstants.Quic_idle_timeout",
+        "disc_equation_TLSConstants.Quic_initial_max_data",
+        "disc_equation_TLSConstants.Quic_initial_max_stream_data",
+        "disc_equation_TLSConstants.Quic_initial_max_stream_id",
+        "disc_equation_TLSConstants.Quic_max_packet_size",
+        "disc_equation_TLSConstants.Quic_truncate_connection_id",
+        "fuel_guarded_inversion_TLSConstants.quicParameter"
+      ],
+      0
+    ],
+    [
+      "TLSConstants.string_of_quicParameters",
+      1,
+      1,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "data_elim_FStar.Pervasives.Native.Some",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "disc_equation_TLSConstants.QuicParametersClient",
+        "disc_equation_TLSConstants.QuicParametersServer",
+        "fuel_guarded_inversion_TLSConstants.quicParameters",
+        "kinding_TLSConstants.quicParameters@tok",
+        "lemma_FStar.Pervasives.invertOption",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0
     ],

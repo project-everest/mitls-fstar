@@ -756,7 +756,7 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
         "constructor_distinct_TLSConstants.MtE",
         "constructor_distinct_Tm_unit",
         "data_typing_intro_FStar.Pervasives.V@tok",
@@ -767,8 +767,8 @@
         "disc_equation_TLSConstants.Stream", "disc_equation_TLSInfo.ID12",
         "disc_equation_TLSInfo.PlaintextID", "equation_Prims.nat",
         "equation_Range.cipherRangeClass", "equation_Range.fixedPadSize",
-        "equation_Range.id2", "equation_Range.minimalPadding",
-        "equation_Range.range",
+        "equation_Range.id2", "equation_Range.maxPadSize",
+        "equation_Range.minimalPadding", "equation_Range.range",
         "equation_TLSConstants.max_TLSPlaintext_fragment_length",
         "equation_TLSInfo.aeAlg_of_id",
         "fuel_guarded_inversion_FStar.HyperStack.mem",
@@ -778,7 +778,6 @@
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
         "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
         "proj_equation_TLSConstants.MtE__0",
         "proj_equation_TLSInfo.ID12_aeAlg",
         "projection_inverse_BoxBool_proj_0",
@@ -787,10 +786,9 @@
         "refinement_interpretation_Range_Tm_refine_781ddd923ad4b001eac781d100c60bdc",
         "refinement_interpretation_Range_Tm_refine_9eec96cf9e7424057db89d430151765e",
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
-        "refinement_interpretation_TLSInfo_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
         "refinement_kinding_Range_Tm_refine_781ddd923ad4b001eac781d100c60bdc",
         "typing_FStar.Pervasives.Native.fst", "typing_Range.fixedPadSize",
-        "typing_TLSInfo.aeAlg_of_id"
+        "typing_Range.maxPadSize"
       ],
       0
     ],
