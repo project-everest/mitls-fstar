@@ -127,6 +127,7 @@ test: test.out mitls.exe cmitls.exe
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
+LIBMITLS_LIB=libmitls.lib
 
 $(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
@@ -134,9 +135,21 @@ $(LIBMITLS): mitls.cmxa
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -output-obj -g mitls.cmxa -o $(LIBMITLS)
+
+ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+LIB_MACHINE=x64
+else
+LIB_MACHINE=x86
+endif
+
+$(LIBMITLS_LIB): $(LIBMITLS)
+	dumpbin.exe /nologo /exports $(LIBMITLS) |  awk -F " " 'BEGIN {print "LIBRARY libmitls"; print "EXPORTS";} $$4 ~/FFI_mitls/{print $$4}' > libmitls.def
+	lib.exe /nologo /def:libmitls.def /out:$(LIBMITLS_LIB) /machine:$(LIB_MACHINE)
+
 else
 UNAME_S = $(shell uname -s)
 LIBMITLS=libmitls.so
+LIBMITLS_LIB=
 ifeq ($(UNAME_S),Darwin)
 $(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
@@ -164,7 +177,7 @@ $(LIBMITLS): mitls.cmxa
 endif
 endif
 
-tls-ffi: $(LIBMITLS)
+tls-ffi: $(LIBMITLS) $(LIBMITLS_LIB)
 
 # ask OCaml about the name of the native C compiler.  This will be mingw on Windows.
 NATIVE_C_COMPILER=$(shell ocamlfind opt -config | grep native_c_compiler | sed -e "s/native_c_compiler: //")
