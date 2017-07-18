@@ -64,7 +64,7 @@ class BIOWrapperError( Exception ):
         Exception.__init__( self, msg )
 
 def BIO_set_fd( bio, fd, flags ):
-    print( "BIO_set_fd; bio = %s, fd = %s, flags = %s" % ( bio, fd, flags ))
+    # print( "BIO_set_fd; bio = %s, fd = %s, flags = %s" % ( bio, fd, flags ))
     BIO_C_SET_FD = c_int( 104 )
 
     globalLibSSL.BIO_int_ctrl.restype  = c_long
@@ -73,7 +73,7 @@ def BIO_set_fd( bio, fd, flags ):
     return globalLibSSL.BIO_int_ctrl( bio, BIO_C_SET_FD, c_long( flags ), c_int( fd ) )
 
 def WriteConverterCallbak( bio, buffer, bufferSize, written ):
-    print( "WriteConverterCallbak; fileDescriptor = %s" % bio )
+    # print( "WriteConverterCallbak; fileDescriptor = %s" % bio )
     bytesWritten      = ( c_long * 1 ).from_address( written )
     bioWrapper        = globalDescriptorTable[ bio ]
     bytesWritten[ 0 ] = bioWrapper.WriteCallback( None, buffer, bufferSize )
@@ -81,7 +81,7 @@ def WriteConverterCallbak( bio, buffer, bufferSize, written ):
     return OPENSSL_SUCCESS
 
 def ReadConverterCallbak( bio, buffer, bufferSize, readbytes ):
-    print( "ReadConverterCallbak" )
+    # print( "ReadConverterCallbak" )
  
     bytesRead = ( c_long * 1 ).from_address( readbytes )
 
@@ -100,25 +100,21 @@ def PutsCallback( bio, str ):
     raise BIOWrapperError( "Unexpected call" )
 
 def SockCtrlCallback( bio, cmd, num, ptr ):
-    print( "SockCtrlCallback: bio = %s, cmd = %s, num = %s, ptr = %s" % ( bio, cmd, num, ptr ) )
+    # print( "SockCtrlCallback: bio = %s, cmd = %s, num = %s, ptr = %s" % ( bio, cmd, num, ptr ) )
 
     globalCUtils.sock_ctrl.restype  = c_long
     globalCUtils.sock_ctrl.argtypes = [ c_voidp, c_int, c_long, c_voidp ]
     return globalCUtils.sock_ctrl( bio, c_int( cmd ), c_long( num ), ptr )
 
 def SockNewCallback( bio ):
-    print( "SockNewCallback" )
+    # print( "SockNewCallback" )
 
-    # fileDescriptor = BIO_get_fd( c_voidp( bio ) )
-    print( "fileDescriptor = %s" % bio )
     globalDescriptorTable[ bio ] = None
 
     globalCUtils.sock_new.restype =    c_int
     globalCUtils.sock_new.argtypes = [ c_voidp ]
 
     return globalCUtils.sock_new( bio )
-
-    # raise BIOWrapperError( "Unexpected call" )
 
 def SockFreeCallback( bio ):
     print( "SockFreeCallback" )

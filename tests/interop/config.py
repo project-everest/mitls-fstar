@@ -9,7 +9,8 @@ SERVER_CERT_PATH            = "../../../everest/mitls-fstar/data/server-ecdsa.cr
 SERVER_KEY_PATH             = "../../../everest/mitls-fstar/data/server-ecdsa.key"
 SERVER_CA_PATH              = "../../../everest/mitls-fstar/data/ca.crt"
 
-OPENSSL_PATH = '../../../everest/FStar/ucontrib/CoreCrypto/ml/openssl/libcrypto.so'
+MITLS_OPENSSL_PATH 			= '../../../everest/FStar/ucontrib/CoreCrypto/ml/openssl/libcrypto.so'
+OPENSSL_PATH 				= '/home/user/dev/git/openssl/openssl/libssl.so'
 
 LOG_LEVEL = logging.DEBUG
 

@@ -169,12 +169,10 @@ class OpenSSL():
 
         self.libssl.SSL_new.restype  = c_voidp
         self.libssl.SSL_new.argtypes = [ c_voidp ]
-        print( "############## SSL_new")
         self.serverSSLSocket = self.libssl.SSL_new( self.context )
         if self.serverSSLSocket is None:
             raise OpenSSLError( "SSL_new returned NULL" )
 
-        print( "############## SSL_set_bio")
         self.libssl.SSL_set_bio.restype  = None
         self.libssl.SSL_set_bio.argtypes = [ c_voidp, c_voidp, c_voidp ]
         self.libssl.SSL_set_bio( self.serverSSLSocket, self.serverMemorySocket.bioObject, self.serverMemorySocket.bioObject )
@@ -187,12 +185,10 @@ class OpenSSL():
 
         self.libssl.SSL_new.restype  = c_voidp
         self.libssl.SSL_new.argtypes = [ c_voidp ]
-        print( "############## SSL_new")
         self.clientSSLSocket = self.libssl.SSL_new( self.context )
         if self.clientSSLSocket is None:
             raise OpenSSLError( "SSL_new returned NULL" )
 
-        print( "############## SSL_set_bio")
         self.libssl.SSL_set_bio.restype  = None
         self.libssl.SSL_set_bio.argtypes = [ c_voidp, c_voidp, c_voidp ]
         self.libssl.SSL_set_bio( self.clientSSLSocket, self.clientMemorySocket.bioObject, self.clientMemorySocket.bioObject )
@@ -234,12 +230,12 @@ class OpenSSL():
         self.InitializeSSLServerSocket()
 
         self.SSL_accept()
-        # self.dataReceived = self.Recv()
+        self.dataReceived = self.Recv()
 
-        # if applicationData != None:
-        #     self.Send( applicationData )
+        if applicationData != None:
+            self.Send( applicationData )
 
-        # self.acceptConnectionSucceeded = True
+        self.acceptConnectionSucceeded = True
 
     def SSL_connect( self ):
         self.log.debug( "SSL_connect" )
@@ -256,6 +252,63 @@ class OpenSSL():
 
         self.SSL_connect()
 
+    def Send( self, buffer ):
+        self.log.debug( "Send: %s" % buffer )
+        buffer      = bytearray( buffer )
+        cBuffer     = ( c_uint8 * len( buffer ) ).from_buffer( buffer )
+        
+        if self.clientSSLSocket != None:
+            sslSocket = self.clientSSLSocket
+        else:
+            sslSocket = self.serverSSLSocket
+
+        self.libssl.SSL_write.restype  = c_int
+        self.libssl.SSL_write.argtypes = [ c_voidp, c_voidp, c_int ]
+
+        result = self.libssl.SSL_write( sslSocket, cBuffer, c_int( len( buffer ) ) )
+        self.log.info( "SSL_write returned %d" % result)
+
+        return result
+
+    def Recv( self ):
+        self.log.debug( "Recv" )
+
+        SSL_ERROR_WANT_READ  = 2
+        
+        bufferSize  = 1024
+        buffer      = bytearray( bufferSize )
+        cBuffer     = ( c_uint8 * bufferSize ).from_buffer( buffer )
+        
+        if self.clientSSLSocket != None:
+            sslSocket = self.clientSSLSocket
+        else:
+            sslSocket = self.serverSSLSocket
+
+        self.libssl.SSL_read.restype  = c_int
+        self.libssl.SSL_read.argtypes = [ c_voidp, c_voidp, c_int ]
+
+        errorCode           = SSL_ERROR_WANT_READ;
+        numRetries          = 2
+        while errorCode == SSL_ERROR_WANT_READ and numRetries > 0: 
+            numRetries -= 1
+
+            bytesReceived = self.libssl.SSL_read( sslSocket, cBuffer, c_int( bufferSize ) )
+            self.log.info( "SSL_read returned %d" % bytesReceived)
+            if bytesReceived > 0:
+                break
+
+            errorCode = self.SSL_get_error( sslSocket, bytesReceived );
+
+        if bytesReceived > 0:
+            return bytearray( cBuffer[ : bytesReceived ] )
+        #else:
+        return b""
+
+    def SSL_get_error( self, sslSocket, result ):
+        self.libssl.SSL_get_error.restype  = c_int
+        self.libssl.SSL_get_error.argtypes = [ c_voidp, c_int ]
+
+        return self.libssl.SSL_get_error( sslSocket, c_int( result ) )
 
 #########################################################################
 
@@ -288,22 +341,23 @@ class OpenSSLTester(unittest.TestCase):
         time.sleep( 0.1 )
 
         self.tlsClient.Connect()
-        # self.tlsClient.Send( b"Client->Server\x00" ) 
-        # self.tlsClient.dataReceived = self.tlsClient.Recv()
+        self.tlsClient.Send( b"Client->Server\x00" ) 
+        # time.sleep( 0.1 )
+        self.tlsClient.dataReceived = self.tlsClient.Recv()
 
         serverThread.join()
 
-        # # We're done, report transcript:
-        # # pprint( memorySocket.tlsParser.transcript )
+        # We're done, report transcript:
+        # pprint( memorySocket.tlsParser.transcript )
 
-        # if config.LOG_LEVEL < logging.ERROR:
-        #     for msg in memorySocket.tlsParser.transcript:
-        #         memorySocket.tlsParser.PrintMsg( msg )
-        #         # if tlsparser.IV_AND_KEY in msg.keys():
-        #         #     pprint( msg[ tlsparser.IV_AND_KEY ])
+        if config.LOG_LEVEL < logging.ERROR:
+            for msg in memorySocket.tlsParser.transcript:
+                memorySocket.tlsParser.PrintMsg( msg )
+                # if tlsparser.IV_AND_KEY in msg.keys():
+                #     pprint( msg[ tlsparser.IV_AND_KEY ])
 
-        #     print( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
-        #     print( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+        print( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        print( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
 
         # # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
 
