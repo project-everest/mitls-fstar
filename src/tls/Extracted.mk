@@ -141,10 +141,11 @@ LIB_MACHINE=x64
 else
 LIB_MACHINE=x86
 endif
+VC_TOOLS=$(VS140COMNTOOLS)\..\..\vc\bin
 
 $(LIBMITLS_LIB): $(LIBMITLS)
-	dumpbin.exe /nologo /exports $(LIBMITLS) |  awk -F " " 'BEGIN {print "LIBRARY libmitls"; print "EXPORTS";} $$4 ~/FFI_mitls/{print $$4}' > libmitls.def
-	lib.exe /nologo /def:libmitls.def /out:$(LIBMITLS_LIB) /machine:$(LIB_MACHINE)
+	"$(VC_TOOLS)/dumpbin.exe" /nologo /exports $(LIBMITLS) |  awk -F " " 'BEGIN {print "LIBRARY libmitls"; print "EXPORTS";} $$4 ~/FFI_mitls/{print $$4}' > libmitls.def
+	"$(VC_TOOLS)/lib.exe" /nologo /def:libmitls.def /out:$(LIBMITLS_LIB) /machine:$(LIB_MACHINE)
 
 else
 UNAME_S = $(shell uname -s)
