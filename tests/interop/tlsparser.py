@@ -233,6 +233,8 @@ TLS_DHE_DSS_WITH_AES_128_GCM_SHA256     = 0x00A2
 TLS_DHE_RSA_WITH_AES_128_GCM_SHA256     = 0x009E
 TLS_DHE_RSA_WITH_AES_256_GCM_SHA384     = 0x009F
 
+TLS_EMPTY_RENEGOTIATION_INFO_SCSV       = 0x00FF
+
 AES_128_GCM_FAMILY = [ TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384 ]
 
 CIPHER_SUITES_NAMES = {
@@ -279,6 +281,7 @@ CIPHER_SUITES_NAMES = {
     TLS_AES_128_CCM_8_SHA256                : "TLS_AES_128_CCM_8_SHA256",
     TLS_DHE_RSA_WITH_CHACHA20_POLY1305      : "TLS_DHE_RSA_WITH_CHACHA20_POLY1305",
     TLS_DHE_RSA_WITH_AES_256_GCM_SHA384     : "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+    TLS_EMPTY_RENEGOTIATION_INFO_SCSV       : "TLS_EMPTY_RENEGOTIATION_INFO_SCSV",
 }
 
 # https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
@@ -794,6 +797,8 @@ class TLSParser():
             versionName = "TLS-1.2"
         elif versionID == 0x7f14:
             versionName = "TLS-1.3-draft-20"
+        elif versionID == 0x7f15:
+            versionName = "TLS-1.3-draft-21"
 
         return AttrDict( { NAME           : VERSION_ID,
                            RAW_CONTENTS   : rawVersionID,

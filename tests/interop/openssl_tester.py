@@ -5,15 +5,23 @@ import time
 import threading
 import sys
 import glob
+import traceback
+import argparse
 
 import tlsparser
 import cutils
 import config
 
 from pprint import pprint
-from tlsparser import MemorySocket, TLSParser, CString
-from bio_wrapper import BIOWrapper
+from tlsparser          import MemorySocket, TLSParser, CString
+from bio_wrapper        import BIOWrapper
+from output_redirector  import stdout_redirector
 
+import mitls_tester
+
+from mitls_tester import memorySocket
+
+WriteToMultipleSinks = mitls_tester.MITLSTester.WriteToMultipleSinks
 
 from ctypes import  CDLL,           \
                     c_long,         \
@@ -39,6 +47,9 @@ globalCUtils            = cutils.GetObject()
 
 OPENSSL_SUCCESS = 1
 TLS1_3_VERSION  = 0x0304
+
+DATA_CLIENT_TO_SERVER = b"Client->Server\x00"
+DATA_SERVER_TO_CLIENT = b"Server->Client\x00"
 
 class OpenSSLError( Exception ):
     def __init__( self, msg ):
@@ -142,21 +153,44 @@ class OpenSSL():
         result = self.libssl.SSL_CTX_use_PrivateKey_file( self.context, CString( config.SERVER_KEY_PATH ), SSL_FILETYPE_PEM )
         self.VerifyResult( "SSL_CTX_use_certificate_file", result )
 
-    def InitServer( self, memorySocket ):
+    def SSL_CTX_set_cipher_list( self, supportedCipherSuites ):
+        self.libssl.SSL_CTX_set_cipher_list.restype = c_int
+        self.libssl.SSL_CTX_set_cipher_list.argtypes = [ c_voidp, c_voidp ]
+        
+        cipherSuitesString = ":".join( supportedCipherSuites )
+        cipherSuitesString = cipherSuitesString.replace( "_", "-" )
+        cipherSuitesString = cipherSuitesString.replace( "TLS", "TLS13" )
+        print( "############# self.context = %s; cipherSuitesString = %s" % ( self.context, cipherSuitesString ))
+        ret = self.libssl.SSL_CTX_set_cipher_list( self.context, CString( cipherSuitesString ) )
+        self.VerifyResult( "SSL_CTX_set_cipher_list", ret )
+
+
+    def InitServer( self, 
+                    memorySocket,
+                    supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
+                    supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
+                    supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS  ):
         self.log.debug( "InitServer" )
 
         self.context = self.CreateServerContext()
         self.ConfigureTLS1_3()
         self.SetCertificateAndPrivateKey()
+        self.SSL_CTX_set_cipher_list( supportedCipherSuites )
         # self.ConfigureSignatureAlgorithms()
 
         self.memorySocket = memorySocket
 
-    def InitClient( self, memorySocket, hostName ):
+    def InitClient( self, 
+                    memorySocket, 
+                    hostName, 
+                    supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
+                    supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
+                    supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS ):
         self.log.debug( "InitClient" )
 
         self.context = self.CreateClientContext()
         self.ConfigureTLS1_3()
+        self.SSL_CTX_set_cipher_list( supportedCipherSuites )
         # self.ConfigureSignatureAlgorithms()
 
         self.memorySocket = memorySocket
@@ -361,10 +395,110 @@ class OpenSSLTester(unittest.TestCase):
 
         # # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
 
+
+    def StartServerThread(  self, 
+                            supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
+                            supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
+                            supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
+                            applicationData                 = None ):
+        self.tlsServer = OpenSSL( "server" )
+        self.tlsServer.InitServer(  memorySocket,
+                                    supportedCipherSuites, 
+                                    supportedSignatureAlgorithms, 
+                                    supportedNamedGroups )
+        
+        serverThread   = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
+        serverThread.start()
+
+        return serverThread
+
+    def RunSingleTest(  self, 
+                        supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
+                        supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
+                        supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
+                        msgManipulators                 = [] ):
+
+        memorySocket.FlushBuffers()
+        memorySocket.tlsParser = tlsparser.TLSParser()
+        memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
+        serverThread = self.StartServerThread(  supportedCipherSuites,
+                                                supportedSignatureAlgorithms,
+                                                supportedNamedGroups,
+                                                DATA_SERVER_TO_CLIENT )
+
+        self.tlsClient = OpenSSL( "client" )
+        self.tlsClient.InitClient(  memorySocket,
+                                    "test_server.com", 
+                                    supportedCipherSuites,
+                                    supportedSignatureAlgorithms,
+                                    supportedNamedGroups )
+        self.tlsClient.Connect()
+        self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
+        self.tlsClient.dataReceived = self.tlsClient.Recv()
+
+        serverThread.join()
+        if self.tlsServer.acceptConnectionSucceeded == False:
+            raise Exception( "Server failed to connect" )
+
+        if self.tlsClient.dataReceived != DATA_SERVER_TO_CLIENT:
+            raise Exception( "self.tlsClient.dataReceived = %s, instead of expected %s" % ( self.tlsClient.dataReceived, DATA_SERVER_TO_CLIENT ) )           
+
+        if self.tlsServer.dataReceived != DATA_CLIENT_TO_SERVER:
+            raise Exception( "self.tlsServer.dataReceived = %s, instead of expected %s" % ( self.tlsServer.dataReceived, DATA_CLIENT_TO_SERVER ) )
+            
+        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+    def test_parameters_matrix( self ):
+        sys.stderr.write( "Running test_parameters_matrix\n" )
+
+        with open( "parameters_matrix_OPENSSL_OPENSSL.csv", "w" ) as logFile:
+            outputSinks = [ sys.stderr, logFile ]
+            WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
+            algorithm = 'ECDSA+SHA256'
+            group     = "X25519"
+            for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
+                # for algorithm in SUPPORTED_SIGNATURE_ALGORITHMS:
+                #     for group in SUPPORTED_NAMED_GROUPS:
+                WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
+                memorySocket.tlsParser.DeleteLeakedKeys()
+                try:
+                    startTime = time.time()
+                    self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                                        supportedSignatureAlgorithms = [ algorithm ],
+                                        supportedNamedGroups         = [ group ] )
+                    WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                except Exception as err: 
+                    print( traceback.format_tb( err.__traceback__ ) )
+                    WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                    raise
+                finally:
+                    totalTime = time.time() - startTime
+                    WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+              
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    mitls_tester.ConfigureMITLSArguments( parser )
+
+    args   = parser.parse_args()
+    mitls_tester.HandleMITLSArguments( args )
+
+    memorySocket.log.setLevel( config.LOG_LEVEL )    
+
     suite = unittest.TestSuite()
-    suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
+    # suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
+    suite.addTest( OpenSSLTester( 'test_parameters_matrix' ) )
     # suite.addTest( NSSTester( '' ) )
     
     runner=unittest.TextTestRunner()
-    runner.run(suite)
+    
+    if args.supress_output:
+        devNull = open( "/dev/null", "wb" )
+        with stdout_redirector( devNull ):
+            runner.run(suite)
+    else:
+        runner.run(suite)
+
