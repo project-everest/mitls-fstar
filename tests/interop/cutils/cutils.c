@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "bio_lcl.h"
+#include "openssl/bio.h"
 
 #include "mitlsffi.h"
 
@@ -120,4 +122,67 @@ void* DoMemcpy( void* dest, void* src, size_t size )
 {
 	printf("########## %s in %s: %d; dest = %p; src = %p; size = %ld\n", __FILE__, __FUNCTION__, __LINE__, dest, src, size );
 	return memcpy( dest, src, size );
+}
+
+int sock_new(BIO *bi)
+{
+    bi->init = 0;
+    bi->num = 0;
+    bi->ptr = NULL;
+    bi->flags = 0;
+    return (1);
+}
+
+int sock_free(BIO *a)
+{
+    if (a == NULL)
+        return (0);
+    if (a->shutdown) {
+        if (a->init) {
+            printf("########## %s in %s: %d; closing fake socket %d\n", __FILE__, __FUNCTION__, __LINE__, a->num );
+            // BIO_closesocket(a->num);
+        }
+        a->init = 0;
+        a->flags = 0;
+    }
+    return (1);
+}
+
+long sock_ctrl(BIO *b, int cmd, long num, void *ptr)
+{
+    printf("########## %s in %s: %d;\n", __FILE__, __FUNCTION__, __LINE__ );
+    long ret = 1;
+    int *ip;
+
+    switch (cmd) {
+    case BIO_C_SET_FD:
+        sock_free(b);
+        b->num = *((int *)ptr);
+        b->shutdown = (int)num;
+        b->init = 1;
+        break;
+    case BIO_C_GET_FD:
+        if (b->init) {
+            ip = (int *)ptr;
+            if (ip != NULL)
+                *ip = b->num;
+            ret = b->num;
+        } else
+            ret = -1;
+        break;
+    case BIO_CTRL_GET_CLOSE:
+        ret = b->shutdown;
+        break;
+    case BIO_CTRL_SET_CLOSE:
+        b->shutdown = (int)num;
+        break;
+    case BIO_CTRL_DUP:
+    case BIO_CTRL_FLUSH:
+        ret = 1;
+        break;
+    default:
+        ret = 0;
+        break;
+    }
+    return (ret);
 }

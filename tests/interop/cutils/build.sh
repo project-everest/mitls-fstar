@@ -2,4 +2,13 @@
 
 set -e
 
-gcc -shared -fPIC cutils.c -I../../../libs/ffi/  -o cutils.so
+OPENSSL_PATH=/home/user/dev/git/openssl/openssl/
+
+gcc -shared -fPIC cutils.c 				\
+		-I../../../libs/ffi/ 			\
+		-I$OPENSSL_PATH/crypto/bio/ 	\
+		-I$OPENSSL_PATH/crypto/include 	\
+		-I$OPENSSL_PATH/include/ 		\
+		-I$OPENSSL_PATH 				\
+		-o cutils.so
+

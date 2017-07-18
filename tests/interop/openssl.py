@@ -33,7 +33,7 @@ class OpenSSLTagMismatchError( OpenSSLError ):
 	pass
 
 class OpenSSL():
-	def __init__( self, sharedObjectPath = config.OPENSSL_PATH  ):
+	def __init__( self, sharedObjectPath = config.MITLS_OPENSSL_PATH  ):
 		self.SetupLogger()
 		self.openssl = CDLL( sharedObjectPath )  
 
@@ -240,7 +240,7 @@ class OpenSSL():
 
 class TestOpenSSL(unittest.TestCase):
 	def setUp(self):		
-		self.openssl = OpenSSL( config.OPENSSL_PATH )
+		self.openssl = OpenSSL( config.MITLS_OPENSSL_PATH )
 
 	def tearDown(self):
 		pass
