@@ -160,10 +160,31 @@ class OpenSSL():
         cipherSuitesString = ":".join( supportedCipherSuites )
         cipherSuitesString = cipherSuitesString.replace( "_", "-" )
         cipherSuitesString = cipherSuitesString.replace( "TLS", "TLS13" )
-        print( "############# self.context = %s; cipherSuitesString = %s" % ( self.context, cipherSuitesString ))
+        
         ret = self.libssl.SSL_CTX_set_cipher_list( self.context, CString( cipherSuitesString ) )
         self.VerifyResult( "SSL_CTX_set_cipher_list", ret )
 
+    def SSL_CTX_set1_groups_list( self, supportedNamedGroups ):
+        SSL_CTRL_SET_GROUPS_LIST = 92
+
+        self.libssl.SSL_CTX_ctrl.restype = c_long
+        self.libssl.SSL_CTX_ctrl.argtypes = [ c_voidp, c_int, c_long, c_voidp ]
+        
+        namedGroupsString = ":".join( supportedNamedGroups )
+        
+        ret = self.libssl.SSL_CTX_ctrl( self.context, c_int( SSL_CTRL_SET_GROUPS_LIST ), c_long( 0 ), CString( namedGroupsString ) )
+        self.VerifyResult( "SSL_CTX_set1_groups_list (implemented via SSL_CTX_ctrl)", ret )
+
+    def SSL_CTX_set1_sigalgs_list( self, supportedSignatureAlgorithms ):
+        SSL_CTRL_SET_SIGALGS_LIST = 98
+
+        self.libssl.SSL_CTX_ctrl.restype = c_long
+        self.libssl.SSL_CTX_ctrl.argtypes = [ c_voidp, c_int, c_long, c_voidp ]
+        
+        signatureAlgorithmsString = ":".join( supportedSignatureAlgorithms )
+        
+        ret = self.libssl.SSL_CTX_ctrl( self.context, c_int( SSL_CTRL_SET_SIGALGS_LIST ), c_long( 0 ), CString( signatureAlgorithmsString ) )
+        self.VerifyResult( "SSL_CTX_set1_sigalgs_list (implemented via SSL_CTX_ctrl)", ret )
 
     def InitServer( self, 
                     memorySocket,
@@ -175,8 +196,9 @@ class OpenSSL():
         self.context = self.CreateServerContext()
         self.ConfigureTLS1_3()
         self.SetCertificateAndPrivateKey()
-        self.SSL_CTX_set_cipher_list( supportedCipherSuites )
-        # self.ConfigureSignatureAlgorithms()
+        self.SSL_CTX_set_cipher_list  ( supportedCipherSuites )
+        self.SSL_CTX_set1_groups_list ( supportedNamedGroups )
+        self.SSL_CTX_set1_sigalgs_list( supportedSignatureAlgorithms )
 
         self.memorySocket = memorySocket
 
@@ -191,7 +213,9 @@ class OpenSSL():
         self.context = self.CreateClientContext()
         self.ConfigureTLS1_3()
         self.SSL_CTX_set_cipher_list( supportedCipherSuites )
-        # self.ConfigureSignatureAlgorithms()
+        self.SSL_CTX_set1_groups_list( supportedNamedGroups )
+        self.SSL_CTX_set1_sigalgs_list( supportedSignatureAlgorithms )
+        
 
         self.memorySocket = memorySocket
 
@@ -261,15 +285,18 @@ class OpenSSL():
         self.log.debug( "AcceptConnection" )
         self.acceptConnectionSucceeded = False
 
-        self.InitializeSSLServerSocket()
+        try:
+            self.InitializeSSLServerSocket()
 
-        self.SSL_accept()
-        self.dataReceived = self.Recv()
+            self.SSL_accept()
+            self.dataReceived = self.Recv()
 
-        if applicationData != None:
-            self.Send( applicationData )
+            if applicationData != None:
+                self.Send( applicationData )
 
-        self.acceptConnectionSucceeded = True
+            self.acceptConnectionSucceeded = True
+        except Exception as err: 
+            print( traceback.format_tb( err.__traceback__ ) )
 
     def SSL_connect( self ):
         self.log.debug( "SSL_connect" )
@@ -359,30 +386,12 @@ class OpenSSLTester(unittest.TestCase):
         pass
 
     def test_ClientAndServer( self ):
-        hostName = "test_server.com"
-
-        memorySocket = MemorySocket()
-
-        self.tlsServer = OpenSSL( "server" )
-        self.tlsClient = OpenSSL( "client" )
-
-        self.tlsServer.InitServer( memorySocket )
-        self.tlsClient.InitClient( memorySocket, hostName )
-
-        serverThread = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ b"Server->Client\x00" ] )
-        serverThread.start()
-
-        time.sleep( 0.1 )
-
-        self.tlsClient.Connect()
-        self.tlsClient.Send( b"Client->Server\x00" ) 
-        # time.sleep( 0.1 )
-        self.tlsClient.dataReceived = self.tlsClient.Recv()
-
-        serverThread.join()
-
-        # We're done, report transcript:
-        # pprint( memorySocket.tlsParser.transcript )
+        cipherSuite = "TLS_AES_128_GCM_SHA256"
+        algorithm = 'ECDSA+SHA256'
+        group     = "X25519"
+        self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                            supportedSignatureAlgorithms = [ algorithm ],
+                            supportedNamedGroups         = [ group ] )
 
         if config.LOG_LEVEL < logging.ERROR:
             for msg in memorySocket.tlsParser.transcript:
@@ -390,11 +399,10 @@ class OpenSSLTester(unittest.TestCase):
                 # if tlsparser.IV_AND_KEY in msg.keys():
                 #     pprint( msg[ tlsparser.IV_AND_KEY ])
 
-        print( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
-        print( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+        # print( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # print( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
 
-        # # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
-
+        # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
 
     def StartServerThread(  self, 
                             supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
@@ -456,28 +464,26 @@ class OpenSSLTester(unittest.TestCase):
             outputSinks = [ sys.stderr, logFile ]
             WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
 
-            algorithm = 'ECDSA+SHA256'
-            group     = "X25519"
             for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
-                # for algorithm in SUPPORTED_SIGNATURE_ALGORITHMS:
-                #     for group in SUPPORTED_NAMED_GROUPS:
-                WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+                for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
+                    for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
+                        WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
 
-                memorySocket.tlsParser.DeleteLeakedKeys()
-                try:
-                    startTime = time.time()
-                    self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
-                                        supportedSignatureAlgorithms = [ algorithm ],
-                                        supportedNamedGroups         = [ group ] )
-                    WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
-                except Exception as err: 
-                    print( traceback.format_tb( err.__traceback__ ) )
-                    WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
-                    raise
-                finally:
-                    totalTime = time.time() - startTime
-                    WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
-              
+                        memorySocket.tlsParser.DeleteLeakedKeys()
+                        try:
+                            startTime = time.time()
+                            self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                                                supportedSignatureAlgorithms = [ algorithm ],
+                                                supportedNamedGroups         = [ group ] )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                        except Exception as err: 
+                            print( traceback.format_tb( err.__traceback__ ) )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                            # raise
+                        finally:
+                            totalTime = time.time() - startTime
+                            WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+                  
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -489,8 +495,8 @@ if __name__ == '__main__':
     memorySocket.log.setLevel( config.LOG_LEVEL )    
 
     suite = unittest.TestSuite()
-    # suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
-    suite.addTest( OpenSSLTester( 'test_parameters_matrix' ) )
+    suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
+    # suite.addTest( OpenSSLTester( 'test_parameters_matrix' ) )
     # suite.addTest( NSSTester( '' ) )
     
     runner=unittest.TextTestRunner()
