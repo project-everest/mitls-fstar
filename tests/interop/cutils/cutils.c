@@ -27,7 +27,7 @@ char* duplicateString( char* source, uint32_t size /* including terminating NULL
 		return NULL;
 
 	memcpy( dest, source, size );
-	// printf("########## %s in %s: %d; dest = %s \n", __FILE__, __FUNCTION__, __LINE__, dest	 );
+	
 	return dest;
 }
 
@@ -46,7 +46,7 @@ quic_config* QuicConfigCreate( char* serverCertPath,
                                 uint32_t isServer  )
 {
     quic_config *config = malloc( sizeof( quic_config )) ;
-    memset( config, 0, sizeof(config));
+    memset( config, 0, sizeof(quic_config));
 
     config->is_server               = isServer;
     config->host_name               = DuplicateString_unsafe( hostName);

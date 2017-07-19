@@ -1,4 +1,10 @@
 
+miTLS Prequisites
+-----------------
+Make sure to compile libmitls with debug prints of the key material. This can be done by editing mitls-fstar/src/tls/concrete-flags/Flags.fst, setting “inline_for_extraction let debug_KS = true”
+
+Building tests
+--------------
 1. Build cutils.dll:
 	Windows: 
 	- Run Visual Studio Command Line Console
