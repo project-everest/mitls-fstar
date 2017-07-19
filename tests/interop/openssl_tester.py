@@ -251,27 +251,6 @@ class OpenSSL():
         self.libssl.SSL_set_bio.argtypes = [ c_voidp, c_voidp, c_voidp ]
         self.libssl.SSL_set_bio( self.clientSSLSocket, self.clientMemorySocket.bioObject, self.clientMemorySocket.bioObject )
 
-    # def Recv( self ):
-    #     self.log.debug( "Recv" )
-    #     bufferSize  = 1024
-    #     buffer      = bytearray( bufferSize )
-    #     cBuffer     = ( c_uint8 * bufferSize ).from_buffer( buffer )
-    #     # flags       = c_int32( 0 )
-    #     # timeout     = c_int32( 0 )
-        
-    #     if self.clientSSLSocket != None:
-    #         sslSocket = self.clientSSLSocket
-    #     else:
-    #         sslSocket = self.serverSSLSocket
-
-    #     bytesReceived = self.nspr.PR_Recv( sslSocket, cBuffer, c_int32( bufferSize ), flags, timeout )
-    #     self.log.info( "PR_Recv returned %d" % bytesReceived)
-
-    #     if bytesReceived > 0:
-    #         return bytearray( cBuffer[ : bytesReceived ] )
-    #     #else:
-    #     return b""
-
     def SSL_accept( self ):
         self.log.debug( "SSL_accept" )
         self.libssl.SSL_accept.restype  = c_int
@@ -296,7 +275,7 @@ class OpenSSL():
 
             self.acceptConnectionSucceeded = True
         except Exception as err: 
-            print( traceback.format_tb( err.__traceback__ ) )
+            pprint( traceback.format_tb( err.__traceback__ ) )
 
     def SSL_connect( self ):
         self.log.debug( "SSL_connect" )
