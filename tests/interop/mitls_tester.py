@@ -231,14 +231,17 @@ class MITLS():
             self.miTLS.FFI_mitls_free_msg( errmsg )
 
     def FFI_mitls_quic_create( self, quicConfig ):
-        self.log.debug( "FFI_mitls_quic_create" )
+        self.log.debug( "FFI_mitls_quic_create; quicConfig = 0x%x" % quicConfig )
+
         quicState = c_voidp()
         errmsg    = c_char_p()
 
-        self.miTLS.FFI_mitls_quic_create.restype = c_int
+        self.miTLS.FFI_mitls_quic_create.restype  = c_int
+        self.miTLS.FFI_mitls_quic_create.argtypes = [ c_voidp, c_voidp, c_voidp ]
         ret = self.miTLS.FFI_mitls_quic_create( byref( quicState ),
         										quicConfig,
                                                 byref( errmsg ) )
+        self.log.debug( "FFI_mitls_quic_create --> %s" % quicState )
         self.PrintMsgIfNotNull( None, errmsg )
         self.VerifyResult( "FFI_mitls_quic_create", ret )
 
@@ -253,6 +256,7 @@ class MITLS():
         errmsg      = c_char_p()
 
         self.miTLS.FFI_mitls_configure.restype = c_int
+        self.miTLS.FFI_mitls_configure.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp, c_voidp ]
         ret = self.miTLS.FFI_mitls_configure(   byref( mitls_state ),
                                                 tls_version,
                                                 host_name,
@@ -549,6 +553,38 @@ class MITLS():
 
         self.log.debug( "QUICConnect completed!" )
 
+    def FFI_mitls_quic_free( self ):
+        self.log.debug( "FFI_mitls_quic_free" )
+        self.miTLS.FFI_mitls_quic_free.argtypes = [ c_voidp ]
+        self.miTLS.FFI_mitls_quic_free.restype  = None
+
+        self.miTLS.FFI_mitls_quic_free( self.mitlsQuicState )
+
+    def QUICCleanup( self ):
+        self.FFI_mitls_quic_free()
+
+    def GetQUICSecret( self, isEarlyData = False ):
+        SIZEOF_QUIC_SECRET = 72
+
+        early = c_int( 0 )
+        if isEarlyData:
+            early = c_int( 1 )
+        
+        quicSecret   = bytearray( SIZEOF_QUIC_SECRET )
+        quicSecret_c = ( c_uint8 * SIZEOF_QUIC_SECRET ).from_buffer( quicSecret )
+
+        self.miTLS.FFI_mitls_quic_get_exporter.restype  = c_int
+        self.miTLS.FFI_mitls_quic_get_exporter.argtypes = [ c_voidp, c_int, c_voidp, c_voidp ]
+        errmsg                                          = c_char_p() 
+        ret = self.miTLS.FFI_mitls_quic_get_exporter(   self.mitlsQuicState,
+                                                        early,
+                                                        quicSecret_c,
+                                                        byref( errmsg ) )
+        self.PrintMsgIfNotNull( None, errmsg )
+        self.VerifyResult( "FFI_mitls_quic_get_exporter", ret )
+
+        return quicSecret
+
     # For client side
     def Connect( self ):
         self.log.debug( "Connect" )
@@ -754,6 +790,7 @@ class MITLSTester(unittest.TestCase):
                         finally:
                             totalTime = time.time() - startTime
                             self.WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+                            time.sleep(0.2)
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()    
 
@@ -1312,8 +1349,23 @@ class MITLSTester(unittest.TestCase):
         # self.tlsClient.dataReceived = self.tlsClient.Receive()
 
         serverThread.join()
+        
+        clientSecret = self.tlsClient.GetQUICSecret( isEarlyData = False )
+        serverSecret = self.tlsServer.GetQUICSecret( isEarlyData = False )
+
+        # print( "============= client secret ===============")
+        # print( TLSParser.FormatBuffer( clientSecret ))
+        # print( "============= server secret ===============")
+        # print( TLSParser.FormatBuffer( serverSecret ))
+
+        self.tlsClient.QUICCleanup()
+        self.tlsServer.QUICCleanup()
+
         if self.tlsServer.acceptConnectionSucceeded == False:
             raise Exception( "QUIC Server failed to connect" )
+
+        if clientSecret != serverSecret:
+            raise Exception( "QUIC secrets are different" )
 
         # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
@@ -1353,6 +1405,7 @@ class MITLSTester(unittest.TestCase):
     def WriteToMultipleSinks( sinks, msg ):
         for sink in sinks:
             sink.write( msg )
+            sink.flush()
 
     def test_NamedGroups( self ):
         self.log.info( "test_NamedGroups" )
@@ -1600,8 +1653,8 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
-    suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
+    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
