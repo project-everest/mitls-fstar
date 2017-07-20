@@ -23,7 +23,7 @@ module MM = MonotoneMap
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> tag a -> range
-private type domain = fun (Computed a t) -> b:bytes { Seq.equal (hash a b) t }
+private type domain c = (let Computed a t = c in b:bytes { Seq.equal (hash a b) t })
 
 private let inv (f:MM.map' range domain) = True // a bit overkill? 
 private let table = MM.alloc #TLSConstants.tls_tables_region #range #domain #inv
@@ -95,4 +95,3 @@ let test a b0 b1 =
   // ...and to apply a stateful lemma
   crf_injective a b0 (b1 @| b1);
   if h = h' then assert(crf a ==> Seq.equal b0 (b1 @| b1))
-  

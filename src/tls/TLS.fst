@@ -757,10 +757,7 @@ let rec writeHandshake h_init c new_writer =
           then (
             let h = get () in
             let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
-            let _ =
-              let s = c.hs in
-              let es = Handshake.logT s h in
-              assume (j_ < Seq.length es) in  //NS: weird; not sure why this is not provable
+            assume (j_ < Seq.length (Handshake.logT c.hs h)); //NS: weird; not sure why this is not provable
             writeHandshake h_init c new_writer)
           else writeHandshake h_init c new_writer)
 
