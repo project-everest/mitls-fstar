@@ -4,7 +4,7 @@ import time
 import struct
 import glob
 import logging
-
+import traceback
 import datetime
 import os
 from copy      import deepcopy
@@ -40,6 +40,10 @@ LOG_TRANSMITTED_BYTES       = False
 WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS = 0.2
 
 class TLSParserError( Exception ):
+    def __init__( self, msg ):
+        Exception.__init__( self, msg )
+
+class TLSParserDecryptionError( TLSParserError ):
     def __init__( self, msg ):
         Exception.__init__( self, msg )
 
@@ -617,7 +621,8 @@ class TLSParser():
 
         return value
 
-    def ParseShort( self, rawShort ):
+    @staticmethod
+    def ParseShort( rawShort ):
         return struct.unpack( ">H", rawShort )[0]
 
     def ConsumeShort( self, expectedValue = None  ):
@@ -1108,7 +1113,7 @@ class TLSParser():
         if plaintext == None:
             errMsg = "Can't decrypt meesage"
             self.log.error( errMsg )
-            raise TLSParserError( errMsg )
+            raise TLSParserDecryptionError( errMsg )
 
         return plaintext, ivAndKey
 
@@ -1531,13 +1536,16 @@ class TLSParser():
             sys.stdout.write( Green( "Comparing handshake message ") + Blue( "%d; " % idx ) )
             self.CompareHandshakeMsg( handshakeMsg1, handshakeMsg2 )
 
-    def PrintMsg( self, msg ):
-        # pprint( msg )
+    def PrintMsgHeader( self, msg ):
         sys.stdout.write(   Red( msg[ DIRECTION ] + "  " ) + 
                             Green( RECORD_TYPE + ": " ) + Yellow( "%-18s (0x%x)" ) % 
                                 ( self.GetTLSRecordMsgType( msg[ RECORD_TYPE ] ), msg[ RECORD_TYPE ] ) + 
                             Green( " length: ")   + Blue( "%5d" % msg[ LENGTH ] ) + 
                             Green( " protocol: ") + Magenta( str( msg[ PROTOCOL ] ) ) + ";\n")
+
+    def PrintMsg( self, msg ):
+        # pprint( msg )
+        self.PrintMsgHeader( msg )
 
         if ALERT in msg.keys():
             alert = msg[ ALERT ]
@@ -1545,9 +1553,13 @@ class TLSParser():
             
         elif self.IsMsgContainsOnlyAppData( msg ):
             print( Green( "App data: " ) + Magenta( str( msg[ RECORD ] ) ) )
-        else:    
+        
+        elif RECORD in msg.keys():
             for singleMsg in msg[ RECORD ]:
                 self.PrintSingleMsg( singleMsg )
+        
+        else:
+            print( Red( "<Can't decrypt record!>" ) ) 
         
     def VerifyBuffersEquall( self, buffer1, buffer2 ):
         if len( buffer1 ) != len( buffer2 ):
@@ -1721,6 +1733,7 @@ class TLSParser():
 
     def Digest( self, bytes, direction, printPacket = False, ivAndKey = None ):
         if config.LOG_LEVEL < logging.ERROR and printPacket:
+            print( direction )
             sys.stdout.write( Green( self.FormatBuffer( bytes ) )  + "\n" )
 
         self.recentBytes += bytes
@@ -1731,10 +1744,18 @@ class TLSParser():
             totalRecordSize = TLS_RECORD_HEADER_SIZE + msg[ LENGTH ]
             # pprint( msg )
             if len( self.recentBytes ) >= totalRecordSize:
-                self.ParseMsgBody( msg, fixedIVAndKey = ivAndKey )
-                self.TrunctateConsumedBytes()
-                
-            msgs.append( msg )
+                try:
+                    self.ParseMsgBody( msg, fixedIVAndKey = ivAndKey )
+                except TLSParserDecryptionError as err:
+                    pprint( traceback.format_tb( err.__traceback__ ) )
+                    print( err )
+                    self.PrintMsg( msg )
+                    # exception is silenced
+                    
+                finally:
+                    self.TrunctateConsumedBytes()                
+                    msgs.append( msg )
+
             self.transcript.append( msg )
         
         return msgs

@@ -68,6 +68,7 @@ from tlsparser import   MemorySocket,                       \
 
 
 SUCCESS                     = 1
+SIZEOF_QUIC_TICKET          = 1032
 NULL_BYTE                   = b"\0"
 TLS_VERSION_1_3             = b"1.3" + NULL_BYTE
 # SERVER_KEY_PATH             = "/home/user/dev/microsoft-git/Everest/tests/pytester/certificates/rsa_certificates/test_server.key"
@@ -169,9 +170,10 @@ class MITLS():
         self.SetupLogger( name )
         self.log.info( "Initilizaed with sharedObjectPath = %s" % os.path.abspath( sharedObjectPath ) )
         self.log.info( "")
-        self.miTLS          = CDLL( sharedObjectPath ) 
-        self.cutils         = CDLL( "cutils/cutils.so" )
-        self.mitls_state    = None 
+        self.miTLS              = CDLL( sharedObjectPath ) 
+        self.cutils             = CDLL( "cutils/cutils.so" )
+        self.mitls_state        = None 
+        self.quicEarlySecret    = None
 
         global GLOBAL_MITLS_INITIALIZED
         if GLOBAL_MITLS_INITIALIZED == False:
@@ -317,9 +319,17 @@ class MITLS():
     			  	hostName 						= None, 
 	                supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
 	                supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
-	                supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
-        self.cutils.QuicConfigCreate.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_uint32 ]
+	                supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
+                    quicSessionTicket              = None ):
+        self.cutils.QuicConfigCreate.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_voidp, c_uint32, c_voidp ]
         self.cutils.QuicConfigCreate.restype  = c_voidp
+
+        
+        if quicSessionTicket is None:
+            quicTicket_c = c_voidp( None )
+        else:
+            quicTicket_c = ( c_uint8 * SIZEOF_QUIC_TICKET ).from_buffer( quicSessionTicket )
+        
         self.quicConfig = self.cutils.QuicConfigCreate( CString( config.SERVER_CERT_PATH ),
         												CString( config.SERVER_KEY_PATH  ),
         												CString( config.SERVER_CA_PATH   ),
@@ -327,7 +337,8 @@ class MITLS():
         												CString( ":".join( supportedSignatureAlgorithms ) ),
         												CString( ":".join( supportedNamedGroups 		) ),
         												CString( hostName ),
-        												c_uint32( isServer ) )
+        												c_uint32( isServer ),
+                                                        quicTicket_c )
         self.mitlsQuicState = self.FFI_mitls_quic_create( self.quicConfig )
 
         self.clientToServer = ( c_uint8 * self.MAX_BUFFER_SIZE )()
@@ -337,14 +348,16 @@ class MITLS():
 	                    hostName, 
 	                    supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
 	                    supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
-	                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
+	                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
+                        quicSessionTicket              = None  ):
         self.log.debug( "InitQUICClient" )
         isServer = 0
         self.InitQUIC( 	isServer, 
         				hostName,
 			        	supportedCipherSuites,       
 						supportedSignatureAlgorithms,
-						supportedNamedGroups 			)
+						supportedNamedGroups,
+                        quicSessionTicket 			)
 
     def InitQUICServer( self, 
 	                    supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
@@ -439,11 +452,16 @@ class MITLS():
            self.log.error( errMsg )
            raise MITLSError( errMsg )
 
-        self.log.debug( "FFI_mitls_quic_process --> %s" % GetKey( QUICResult, ret, "<unknown error code %d>" % ret))
+        self.log.debug( "FFI_mitls_quic_process --> %-25s; %d bytes to send" % (GetKey( QUICResult, ret, "<unknown error code %d>" % ret), bytesToSend.value ))
         return bytesToSend.value, ret
 
-    def AssertEquel( self, valueA, valueB, msg ):
+    def AssertEqual( self, valueA, valueB, msg ):
         if valueA != valueB:
+            self.log.error( msg )
+            raise MITLSError( msg )
+
+    def AssertGreater( self, valueA, valueB, msg ):
+        if valueA <= valueB:
             self.log.error( msg )
             raise MITLSError( msg )
 
@@ -458,18 +476,22 @@ class MITLS():
 
             lastResult = -1
             while lastResult != QUICResult.TLS_server_complete:
-            	bytesRead 			       = memorySocket.ReadFromClient( None, addressof( self.clientToServer ), len( self.clientToServer ) )
-            	numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.clientToServer, bytesRead, self.serverToClient )
+                bytesRead 			       = memorySocket.ReadFromClient( None, addressof( self.clientToServer ), len( self.clientToServer ) )
+                numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.clientToServer, bytesRead, self.serverToClient )
 
-            	if numBytesToSend > 0:
-            		memorySocket.SendToClient( None, addressof( self.serverToClient ), numBytesToSend )
+                if numBytesToSend > 0:
+                    memorySocket.SendToClient( None, addressof( self.serverToClient ), numBytesToSend )
+
+                if lastResult == QUICResult.TLS_server_accept_with_early_data:
+                    self.quicEarlySecret = self.GetQUICSecret( isEarlyData = True )
+                
             
-            # # Send session ticket:
-            # bytesRead = 0
-            # numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.clientToServer, bytesRead, self.serverToClient )            
-            # self.AssertEquel( numBytesToSend, 0, "Expeted FFI_mitls_quic_process to have bytes to send (session ticket)" )
-            # self.AssertEquel( lastResult, QUICResult.TLS_would_block, "Expected FFI_mitls_quic_process returned %d instead of TLS_would_block (%d)" % ( lastResult, QUICResult.TLS_would_block ) )
-            # memorySocket.SendToClient( None, addressof( self.serverToClient ), numBytesToSend )
+            # Send session ticket:
+            bytesRead = 0
+            numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.clientToServer, bytesRead, self.serverToClient )            
+            self.AssertGreater( numBytesToSend, 0, "Expeted FFI_mitls_quic_process to have bytes to send (session ticket)" )
+            self.AssertEqual  ( lastResult, QUICResult.TLS_would_block, "FFI_mitls_quic_process returned %d instead of TLS_would_block (%d)" % ( lastResult, QUICResult.TLS_would_block ) )
+            memorySocket.SendToClient( None, addressof( self.serverToClient ), numBytesToSend )
 
             self.log.debug( "AcceptQUICConnection done!")
             
@@ -532,12 +554,31 @@ class MITLS():
 
         return pyBuffer
 
+    def FFI_mitls_quic_get_ticket( self ):
+        self.miTLS.FFI_mitls_quic_get_ticket.restype  = c_int
+        self.miTLS.FFI_mitls_quic_get_ticket.argtypes = [ c_voidp, c_voidp, c_voidp ]
+        errmsg                                        = c_char_p() 
+
+        quicTicket   = bytearray( SIZEOF_QUIC_TICKET )
+        quicTicket_c = ( c_uint8 * SIZEOF_QUIC_TICKET ).from_buffer( quicTicket )
+
+        ret = self.miTLS.FFI_mitls_quic_get_ticket( self.mitlsQuicState,
+                                                    quicTicket_c,
+                                                    byref( errmsg ) )
+        self.PrintMsgIfNotNull( None, errmsg )
+        self.VerifyResult( "FFI_mitls_quic_get_ticket", ret )
+
+        return quicTicket
+
     # For client side
     def QUICConnect( self ):
         self.log.debug( "QUICConnect" )
 
         bytesRead  				   = 0
         numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.serverToClient, bytesRead, self.clientToServer )
+        
+        if lastResult == QUICResult.TLS_client_early:
+            self.quicEarlySecret = self.GetQUICSecret( isEarlyData = True )
 
         if numBytesToSend > 0:
         	memorySocket.SendToServer( None, addressof( self.clientToServer ), numBytesToSend )
@@ -545,13 +586,23 @@ class MITLS():
         	raise MITLSError( "QUICConnect: FFI_mitls_quic_process doesn't want to send anything")
 
         while lastResult != QUICResult.TLS_client_complete and lastResult != QUICResult.TLS_client_complete_with_early_data:
-        	bytesRead 				   = memorySocket.ReadFromServer( None, addressof( self.serverToClient ), len( self.serverToClient ) )        	
-        	numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.serverToClient, bytesRead, self.clientToServer )	
+            bytesRead 				   = memorySocket.ReadFromServer( None, addressof( self.serverToClient ), len( self.serverToClient ) )        	
+            numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.serverToClient, bytesRead, self.clientToServer )	
 
-        	if numBytesToSend > 0:
-        		memorySocket.SendToServer( None, addressof( self.clientToServer ), numBytesToSend )
+            if numBytesToSend > 0:
+                memorySocket.SendToServer( None, addressof( self.clientToServer ), numBytesToSend )
+
+        #Get session ticket
+        bytesRead                  = memorySocket.ReadFromServer( None, addressof( self.serverToClient ), len( self.serverToClient ) )  
+        numBytesToSend, lastResult = self.FFI_mitls_quic_process( self.serverToClient, bytesRead, self.clientToServer )            
+        self.AssertEqual( numBytesToSend, 0, "Expeted FFI_mitls_quic_process to have bytes to send (session ticket)" )
+        self.AssertEqual( lastResult, QUICResult.TLS_would_block, "FFI_mitls_quic_process returned %d instead of TLS_would_block (%d)" % ( lastResult, QUICResult.TLS_would_block ) )
+
+        quicSessionTicket = self.FFI_mitls_quic_get_ticket()        
 
         self.log.debug( "QUICConnect completed!" )
+
+        return quicSessionTicket
 
     def FFI_mitls_quic_free( self ):
         self.log.debug( "FFI_mitls_quic_free" )
@@ -785,7 +836,8 @@ class MITLSTester(unittest.TestCase):
                                                     supportedNamedGroups         = [ group ] )
                             self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
-                            print( traceback.format_tb( err.__traceback__ ) )
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            print( err )
                             self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
                         finally:
                             totalTime = time.time() - startTime
@@ -807,6 +859,38 @@ class MITLSTester(unittest.TestCase):
         if config.LOG_LEVEL < logging.ERROR:
             # pprint( memorySocket.tlsParser.transcript )
             for msg in memorySocket.tlsParser.transcript:
+                memorySocket.tlsParser.PrintMsg( msg )
+
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            pprint( keysAndFiles )
+
+        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
+        return memorySocket.tlsParser.transcript
+
+    def test_MITLS_QUIC_ClientAndServer_sessionResumption( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+        try:
+            sessionTicket   = self.RunSingleQUICTest(  ) 
+            firstSession    = memorySocket.tlsParser.transcript[ : ]
+            self.RunSingleQUICTest( quicSessionTicket = sessionTicket ) 
+            entireTranscipt = firstSession + memorySocket.tlsParser.transcript
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+            
+        print( "============= client EARLY secret ===============")
+        print( TLSParser.FormatBuffer( self.tlsClient.quicEarlySecret ))
+        print( "============= server EARLY secret ===============")
+        print( TLSParser.FormatBuffer( self.tlsServer.quicEarlySecret ))
+
+        if config.LOG_LEVEL < logging.ERROR:
+            # pprint( memorySocket.tlsParser.transcript )
+            for msg in entireTranscipt:
                 memorySocket.tlsParser.PrintMsg( msg )
 
             keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
@@ -1330,7 +1414,8 @@ class MITLSTester(unittest.TestCase):
 	                        supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
 	                        supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
 	                        applicationData                 = None,
-	                        msgManipulators                 = [] ):
+	                        msgManipulators                 = [],
+                            quicSessionTicket              = None ):
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
@@ -1343,8 +1428,9 @@ class MITLSTester(unittest.TestCase):
         self.tlsClient.InitQUICClient(  "test_server.com", 
                                         supportedCipherSuites,
                                         supportedSignatureAlgorithms,
-                                        supportedNamedGroups )
-        self.tlsClient.QUICConnect()
+                                        supportedNamedGroups,
+                                        quicSessionTicket )
+        quicSessionTicket = self.tlsClient.QUICConnect()
         # self.tlsClient.Send( b"Client->Server\x00" )            
         # self.tlsClient.dataReceived = self.tlsClient.Receive()
 
@@ -1357,6 +1443,8 @@ class MITLSTester(unittest.TestCase):
         # print( TLSParser.FormatBuffer( clientSecret ))
         # print( "============= server secret ===============")
         # print( TLSParser.FormatBuffer( serverSecret ))
+        # print( "============= client ticket ===============")
+        # print( TLSParser.FormatBuffer( self.tlsClient.quicSessionTicket ) )
 
         self.tlsClient.QUICCleanup()
         self.tlsServer.QUICCleanup()
@@ -1367,8 +1455,11 @@ class MITLSTester(unittest.TestCase):
         if clientSecret != serverSecret:
             raise Exception( "QUIC secrets are different" )
 
-        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
-        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+        if self.tlsClient.quicEarlySecret != None:
+            if self.tlsClient.quicEarlySecret != self.tlsServer.quicEarlySecret:
+                raise Exception( "QUIC EARLY secrets are different" )                
+
+        return quicSessionTicket
 
     def RunSingleTest(  self, 
                         supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
@@ -1653,7 +1744,10 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
+
+    
+    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )

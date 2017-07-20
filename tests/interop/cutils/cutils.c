@@ -36,14 +36,15 @@ char* DuplicateString_unsafe( char *source )
   return duplicateString( source, strlen( source ) + 1 );
 }
 
-quic_config* QuicConfigCreate( char* serverCertPath,
-                                char* serverKeyPath,
-                                char* serverCAPath,
-                                char* supportedCipherSuites,
-                                char* supportedSignatureAlgorithms,
-                                char* supportedNamedGroups,
-                                char* hostName,
-                                uint32_t isServer  )
+quic_config* QuicConfigCreate(  char*        serverCertPath,
+                                char*        serverKeyPath,
+                                char*        serverCAPath,
+                                char*        supportedCipherSuites,
+                                char*        supportedSignatureAlgorithms,
+                                char*        supportedNamedGroups,
+                                char*        hostName,
+                                uint32_t     isServer,
+                                quic_ticket *server_ticket  )
 {
     quic_config *config = malloc( sizeof( quic_config )) ;
     memset( config, 0, sizeof(quic_config));
@@ -65,6 +66,10 @@ quic_config* QuicConfigCreate( char* serverCertPath,
     config->ticket_key              = NULL;
     config->ticket_key_len          = 0;
     config->enable_0rtt             = 1;
+
+    if( server_ticket != NULL ) {
+        config->server_ticket       = *server_ticket;
+    }
 
     return config;
 }
