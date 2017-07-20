@@ -420,6 +420,31 @@ class InterOperabilityTester(unittest.TestCase):
 
         self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_ReorderPieces_ClientHello.csv" )
 
+    def test_CompareResponses_SkipPieces_ClientHello( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        mitlsExperiments = []
+        NSSExperiments   = []
+        try:
+            mitlsTester                     = mitls_tester.MITLSTester()
+            clientHelloSkipManipulations    = mitlsTester.GetClientHelloSkipManipulations( mitlsTester.RunSingleTest )
+            
+            mitlsExperiments                = mitlsTester.RunManipulationTest(  clientHelloSkipManipulations, 
+                                                                                numExpectedSharedKeys   = 0, 
+                                                                                runTestFunction         = mitlsTester.RunSingleTest )
+
+            NSSExperiments                  = mitlsTester.RunManipulationTest(  clientHelloSkipManipulations, 
+                                                                                numExpectedSharedKeys   = 0, 
+                                                                                runTestFunction         = self.RunSingleTest_MITLS_NSS )
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+        pprint( mitlsExperiments )
+        pprint( NSSExperiments )
+
+        self.PrintMsgManipulationComparison( mitlsExperiments, NSSExperiments, "manipulationTest_CompareResponses_SkipPieces_ClientHello.csv" )
+
     def PrintMultilineList( self, items ):
         result = '"'
         for item in items:
@@ -594,6 +619,7 @@ if __name__ == '__main__':
     
 
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
+    # suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderServerHandshakes" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipServerResponsePieces" ) )

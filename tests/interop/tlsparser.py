@@ -1297,6 +1297,7 @@ class TLSParser():
 
         for manipulation in self.msgManipulators:
             manipulatedMsg = self.ManipulateMsg( msg, manipulation ) 
+            self.log.debug( "Manipulation: " + manipulation[ "Description" ] )
             if manipulatedMsg != None:
                 msg              = manipulatedMsg #prepare for next potential manipulation
                 isMsgManipulated = True
@@ -1805,7 +1806,7 @@ class TLSParser():
         self.recentBytes    = self.recentBytes[ self.curretPosition : ]
         self.curretPosition = 0
 
-    def Digest( self, bytes, direction, printPacket = True, ivAndKey = None ):
+    def Digest( self, bytes, direction, printPacket = False, ivAndKey = None ):
         if config.LOG_LEVEL < logging.ERROR and printPacket:
             print( direction )
             sys.stdout.write( Green( self.FormatBuffer( bytes ) )  + "\n" )

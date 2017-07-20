@@ -1060,6 +1060,20 @@ class MITLSTester(unittest.TestCase):
 
         return manipulations
 
+    def GetClientHelloSkipManipulations( self, runHandshake = None ):
+        if runHandshake is  None:
+            runHandshake = self.RunSingleTest
+       
+        runHandshake()
+        
+        originalTranscript  = memorySocket.tlsParser.transcript
+        topTreeLayer        = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
+        handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
+        manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateSkipPieceManipulations,  
+                                                                                                handshakeType = handshakeType )   )
+
+        return manipulations
+
     def GetServerEncryptedHelloReorderManipulations( self, runHandshake = None ):
         if runHandshake is  None:
             runHandshake = self.RunSingleTest
@@ -1742,12 +1756,13 @@ if __name__ == '__main__':
     # SI: these should be args. 
     suite = unittest.TestSuite()
     
-    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
+    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
+    # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
 
     
-    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
+    
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
