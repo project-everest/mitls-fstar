@@ -152,6 +152,7 @@ SIZE_OF_PROTOCOL        = 2
 SIZE_OF_UINT8           = 1
 SIZE_OF_UINT16          = 2
 SIZE_OF_UINT24          = 3
+SIZE_OF_UINT32          = 4
 TLS_RECORD_HEADER_SIZE  = SIZE_OF_TYPE + SIZE_OF_PROTOCOL + SIZE_OF_UINT16
 
 TLS_RECORD_TYPE_ALERT      = 21
@@ -409,6 +410,14 @@ PARENT_NODE             = "ParentNode"
 SWAP_ITEMS              = "SwapItems"
 EXTRACT_TO_PLAINTEXT    = "ExtractToPlaintext"
 REMOVE_ITEM             = "RemoveItem"
+PSK_IDENTITIES          = "PSK_Identities"           
+PSK_BINDERS             = "PSK_Binder"       
+TICKET_AGE              = "TicketAge"       
+PSK_IDENTITY            = "PSK_Identity"           
+PSK_OPAQUE_IDENTITY     = "PSK Opaque Identity"           
+BINDER                  = "Binder"   
+PSK                     = "Preshared Key"
+PSK_SELECTED_IDENTITY   = "Selected PSK"
 
 LEAKED_KEYS_DIR     = "leaked_keys"
 
@@ -645,6 +654,16 @@ class TLSParser():
 
         return value
 
+    def ConsumeWord( self, expectedValue = None  ):
+        value = struct.unpack( ">I", self.recentBytes[ self.curretPosition: self.curretPosition + SIZE_OF_UINT32 ] )[0]
+        self.curretPosition     += SIZE_OF_UINT32
+
+        if expectedValue is not None:
+            if value != expectedValue:
+                raise TLSParserError( "value == %d instead of expected %d" % ( value, expectedValue ) )
+
+        return value
+
     def PeekRawBytes( self, numBytes, attachPreviousBytes = 0 ):
         if self.curretPosition - attachPreviousBytes < 0:
             raise TLSParserError( "Can't attach %d previous bytes" % attachPreviousBytes )
@@ -763,6 +782,58 @@ class TLSParser():
         #else:
         raise TLSParserError( "Unexpected handshakeType %d" % handshakeType )
 
+    def ConsumePSKIdentity( self ):
+        pskIdentity = []
+        opaqueIdentity, rawIdentity = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeByte )
+        pskIdentity.append( AttrDict( { NAME            : PSK_OPAQUE_IDENTITY, 
+                                        RAW_CONTENTS    : rawIdentity, 
+                                        INTERPRETATION  : bytes( opaqueIdentity ) }) )
+
+        # rawTicketAge = self.PeekRawBytes( SIZE_OF_UINT32 )
+        # ticketAge    = self.ConsumeWord()
+        rawTicketAge = self.ConsumeRawBytes( SIZE_OF_UINT32 )
+        pskIdentity.append( AttrDict( { NAME            : TICKET_AGE, 
+                                        RAW_CONTENTS    : rawTicketAge, 
+                                        INTERPRETATION  : ( rawTicketAge ) }) )
+
+        return AttrDict( {  NAME            : PSK_IDENTITY, 
+                            RAW_CONTENTS    : rawIdentity + rawTicketAge, 
+                            INTERPRETATION  : pskIdentity })
+
+    def ConsumePSKBinder( self ):
+        opaqueBinder, rawOpaqueBinder = self.ConsumeList( SIZE_OF_UINT8, self.ConsumeByte )
+        binderEntry = AttrDict( {   NAME            : BINDER, 
+                                    RAW_CONTENTS    : rawOpaqueBinder, 
+                                    INTERPRETATION  : bytes( opaqueBinder ) })
+
+        return binderEntry 
+
+    def ConsumePreSharedKey( self, msgType ):
+        preSharedKey = []
+
+        if msgType == HANDSHAKE_TYPE_CLIENT_HELLO:
+            identities, rawIdentities = self.ConsumeList( SIZE_OF_UINT16, self.ConsumePSKIdentity )
+            preSharedKey.append( AttrDict( {  NAME           : PSK_IDENTITIES,
+                                              RAW_CONTENTS   : rawIdentities,
+                                              INTERPRETATION : identities  } )  )
+
+            binders,    rawBinders    = self.ConsumeList( SIZE_OF_UINT16, self.ConsumePSKBinder )
+            preSharedKey.append( AttrDict( {  NAME           : PSK_BINDERS,
+                                              RAW_CONTENTS   : rawBinders,
+                                              INTERPRETATION : binders  } )  )
+
+            return AttrDict( {  NAME           : PSK,
+                                RAW_CONTENTS   : rawIdentities + rawBinders,
+                                INTERPRETATION : preSharedKey  } )
+
+        elif msgType == HANDSHAKE_TYPE_SERVER_HELLO:
+            selectedIdentity = AttrDict( {  NAME           : PSK_SELECTED_IDENTITY,
+                                            RAW_CONTENTS   : self.ConsumeRawBytes( SIZE_OF_UINT16 ) } )
+
+            return selectedIdentity
+        else:
+            raise TLSParserError( "Unexpected msgType = %s" % msgType )
+
     def ConsumeCipherSuite( self ):
         rawSignatureScheme = self.PeekRawBytes( SIZE_OF_UINT16 )
         cipherSuiteID      = self.ConsumeShort() 
@@ -822,6 +893,8 @@ class TLSParser():
             extension, _ = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeSignatureScheme)
         elif extensionType == EXTENSION_TYPE_SUPPORTED_GROUPS:
             extension, _ = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeSupportedGroup)
+        elif extensionType == EXTENSION_TYPE_PRE_SHARED_KEY:
+            extension = [ self.ConsumePreSharedKey( msgType ) ]
         else:
             extension = self.ConsumeRawBytes( extensionSize )
 
@@ -1376,6 +1449,7 @@ class TLSParser():
 
     @staticmethod
     def IsTerminalPiece( piece ):
+        # pprint( piece )
         if INTERPRETATION not in piece.keys():
             return True
 
@@ -1559,7 +1633,7 @@ class TLSParser():
                 self.PrintSingleMsg( singleMsg )
         
         else:
-            print( Red( "<Can't decrypt record!>" ) ) 
+            print( Red( "<Can't decrypt record!>:" + Magenta( str( msg[ RAW_RECORD ] ) ) ) )
         
     def VerifyBuffersEquall( self, buffer1, buffer2 ):
         if len( buffer1 ) != len( buffer2 ):
@@ -1731,7 +1805,7 @@ class TLSParser():
         self.recentBytes    = self.recentBytes[ self.curretPosition : ]
         self.curretPosition = 0
 
-    def Digest( self, bytes, direction, printPacket = False, ivAndKey = None ):
+    def Digest( self, bytes, direction, printPacket = True, ivAndKey = None ):
         if config.LOG_LEVEL < logging.ERROR and printPacket:
             print( direction )
             sys.stdout.write( Green( self.FormatBuffer( bytes ) )  + "\n" )
