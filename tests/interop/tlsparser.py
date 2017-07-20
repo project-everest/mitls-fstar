@@ -418,6 +418,11 @@ PSK_OPAQUE_IDENTITY     = "PSK Opaque Identity"
 BINDER                  = "Binder"   
 PSK                     = "Preshared Key"
 PSK_SELECTED_IDENTITY   = "Selected PSK"
+TICKET_LIFETIME         = "ticket_lifetime"
+TICKET_AGE_ADD          = "ticket_age_add"
+TICKET                  = "ticket"
+NEW_SESSION_TICKET      = "NewSessionTicket"
+MAX_EARLY_DATA_SIZE     = "max_early_data_size"
 
 LEAKED_KEYS_DIR     = "leaked_keys"
 
@@ -706,6 +711,26 @@ class TLSParser():
                                         INTERPRETATION  : bytes( opaqueSignatureAsList ) } ) )
         return certVerify
 
+    def ConsumeNewSessionTicket( self ):
+        newSessionTicket  = []
+
+        rawTicketLifeTime = self.PeekRawBytes( SIZE_OF_UINT32 )
+        ticketLifeTime    = self.ConsumeWord()
+        newSessionTicket.append( AttrDict( { NAME : TICKET_LIFETIME, RAW_CONTENTS : rawTicketLifeTime, INTERPRETATION : str( ticketLifeTime ) }) )
+
+        rawTicketAgeAdd = self.PeekRawBytes( SIZE_OF_UINT32 )
+        ticketAgeAdd    = self.ConsumeWord()
+        newSessionTicket.append( AttrDict( { NAME : TICKET_AGE_ADD, RAW_CONTENTS : rawTicketAgeAdd, INTERPRETATION : str( ticketAgeAdd ) }) )
+
+        ticket, rawTicket = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeByte )
+        newSessionTicket.append( AttrDict( { NAME : TICKET, RAW_CONTENTS : rawTicket, INTERPRETATION : bytes( ticket ) }) )
+
+        extensionList, rawExtensions = self.ConsumeList( SIZE_OF_UINT16, partial(   self.ConsumeExtension, 
+                                                                                    msgType = HANDSHAKE_TYPE_NEW_SESSION_TICKET ) )
+        newSessionTicket.append( AttrDict( { NAME : EXTENSIONS, RAW_CONTENTS : rawExtensions, INTERPRETATION : extensionList }) )
+
+        return newSessionTicket
+
     def ConsumeSingleCertificate( self ):
         singleCertEntry = []
 
@@ -880,6 +905,13 @@ class TLSParser():
                            RAW_CONTENTS   : rawVersionID,
                            INTERPRETATION : versionName } )
 
+    def ConsumeEarlyDataExtension( self, msgType ):
+        rawMaxEarlyDataSize = self.PeekRawBytes( SIZE_OF_UINT32 )
+        maxEarlyDataSize    = self.ConsumeWord()
+
+        return AttrDict( {  NAME            : MAX_EARLY_DATA_SIZE, 
+                            RAW_CONTENTS    : rawMaxEarlyDataSize, 
+                            INTERPRETATION  : str( maxEarlyDataSize ) } ) 
     def ConsumeExtension( self, msgType ):
         extensionType = self.ConsumeShort()
         extensionSize = self.ConsumeShort()
@@ -895,6 +927,8 @@ class TLSParser():
             extension, _ = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeSupportedGroup)
         elif extensionType == EXTENSION_TYPE_PRE_SHARED_KEY:
             extension = [ self.ConsumePreSharedKey( msgType ) ]
+        elif extensionType == EXTENSION_TYPE_EARLY_DATA and msgType == HANDSHAKE_TYPE_NEW_SESSION_TICKET:
+            extension = [ self.ConsumeEarlyDataExtension( msgType ) ]
         else:
             extension = self.ConsumeRawBytes( extensionSize )
 
@@ -1221,6 +1255,10 @@ class TLSParser():
         elif handshakeMsg[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_CERTIFICATE_VERIFY:
             certificateVerify = self.ConsumeCertificateVerify()
             handshakeMsg[ HANDSHAKE_MSG  ] = [ AttrDict( { NAME : CERTIFICATE_VERIFY, RAW_CONTENTS : rawHandshakeMsg, INTERPRETATION : certificateVerify } )]
+
+        elif handshakeMsg[ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_NEW_SESSION_TICKET:
+            newSessionTicket = self.ConsumeNewSessionTicket()
+            handshakeMsg[ HANDSHAKE_MSG  ] = [ AttrDict( { NAME : NEW_SESSION_TICKET, RAW_CONTENTS : rawHandshakeMsg, INTERPRETATION : newSessionTicket } )]
            
         else:
             _ = self.ConsumeRawBytes( handshakeMsg[ LENGTH  ] )
