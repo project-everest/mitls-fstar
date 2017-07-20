@@ -66,6 +66,9 @@ class OpenSSL():
         self.clientSSLSocket = None
         self.serverSSLSocket = None 
 
+    def Cleanup( self ):
+        pass
+
     def SetupLogger( self, name ):
         self.log = logging.getLogger( 'OpenSSL-%s' % name )
         self.log.setLevel( config.LOG_LEVEL )

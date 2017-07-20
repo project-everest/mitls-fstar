@@ -1335,7 +1335,6 @@ class TLSParser():
 
         for manipulation in self.msgManipulators:
             manipulatedMsg = self.ManipulateMsg( msg, manipulation ) 
-            self.log.debug( "Manipulation: " + manipulation[ "Description" ] )
             if manipulatedMsg != None:
                 msg              = manipulatedMsg #prepare for next potential manipulation
                 isMsgManipulated = True
