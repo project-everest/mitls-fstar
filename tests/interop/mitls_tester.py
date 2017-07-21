@@ -101,10 +101,10 @@ SUPPORTED_SIGNATURE_ALGORITHMS = [
                                     # 'RSA+SHA1',      # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm                            
 ]
 SUPPORTED_NAMED_GROUPS = [
+                            "X25519",                    # OK 
                             "P-521", # a.k.a secp521r1   # OK                         
                             "P-384", # a.k.a secp384r1   # OK                         
                             "P-256", # a.k.a secp256r1   # OK                         
-                            "X25519",                    # OK     
                             # "X448",                      # NOT OK    TLS| StAE decrypt failed.; TLS| Ignoring the decryption failure (rejected 0-RTT data) 
                             "FFDHE4096",                 # OK         
                             "FFDHE3072",                 # OK         
@@ -913,7 +913,7 @@ class MITLSTester(unittest.TestCase):
             keysMonitor.StopMonitorStdoutForLeakedKeys()
             
         if config.LOG_LEVEL < logging.ERROR:
-            pprint( memorySocket.tlsParser.transcript )
+            # pprint( memorySocket.tlsParser.transcript )
             for msg in memorySocket.tlsParser.transcript:
                 memorySocket.tlsParser.PrintMsg( msg )
                 # if tlsparser.IV_AND_KEY in msg.keys():
@@ -1756,14 +1756,15 @@ if __name__ == '__main__':
     # SI: these should be args. 
     suite = unittest.TestSuite()
     
-    suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
 
     
     
-    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )

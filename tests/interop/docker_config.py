@@ -10,7 +10,7 @@ SERVER_KEY_PATH             = "./mitls-dependencies/server-ecdsa.key"
 SERVER_CA_PATH              = "./mitls-dependencies/ca.crt"
 
 MITLS_OPENSSL_PATH 			= './mitls-dependencies/libcrypto.so'
-OPENSSL_PATH 				= '/home/user/dev/git/openssl/openssl/libssl.so'
+OPENSSL_PATH 				= './openssl-dependencies/libssl.so'
 
 LOG_LEVEL = logging.DEBUG
 

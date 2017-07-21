@@ -614,7 +614,7 @@ if __name__ == '__main__':
 
     suite = unittest.TestSuite()    
     suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
-    suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_parameters_matrix" ) )
     
 

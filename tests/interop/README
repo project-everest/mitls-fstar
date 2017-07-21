@@ -32,39 +32,67 @@ Building tests
 4. Create certificate store
 	4.1 Windows:
 	- cd certificates
-	- Look at builde_database.cmd, make sure NSS_PATH points to <path/to/nss/sources>/dist/WIN954.0_DBG.OBJ/bin/
+	- Look at builde_database.cmd, make sure NSS_PATH points to <path/to/nss/sources>/dist/WIN954.0_DBG.OBJ/lib/
 	- Run builde_database.cmd, set all passwords to be 12345678
 	4.2 Linux
 	- cd certificates
-	- Look at builde_database.cmd, make sure NSS_PATH points to <path/to/nss/sources>/dist/Linux4.8_x86_cc_glibc_PTH_64_DBG.OBJ/bin
+	- Look at builde_database.cmd, make sure NSS_PATH points to <path/to/nss/sources>/dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib
 	- Run builde_database.sh, set all passwords to be 12345678
 
 4. Set path to shared objects
 	- Windows: set PATH=%PATH%;c:\dev\nss-3.30.2\dist\WIN954.0_DBG.OBJ\lib\
-	- Linux: export LD_LIBRARY_PATH=<path/to/nss/sources>/dist/Linux4.8_x86_cc_glibc_PTH_DBG.OBJ/lib/
+	- Linux: export LD_LIBRARY_PATH=<path/to/nss/sources>dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/
 
 
 
 Building Docker Image:
 ----------------------
-
 1. The Docker build script (Dockerfile) assumes the following files exists:
   - dependencies/mitls-dependencies/ca.crt				- server CA certificate, can be found at everest/mitls-fstar/data/
   - dependencies/mitls-dependencies/server-ecdsa.crt	- server certificate, can be found at everest/mitls-fstar/data/				
   - dependencies/mitls-dependencies/server-ecdsa.key	- server private key, can be found at everest/mitls-fstar/data/
   - dependencies/mitls-dependencies/libcrypto.so		- crypto library used by miTLS, and used by the framework for CHACHA20, can be found at everest/FStar/ucontrib/CoreCrypto/ml/openssl/
-  - dependencies/mitls-dependencies/libmitls.so			- miTLS library, built with “inline_for_extraction let debug_KS = true”, at file mitls-fstar/src/tls/concrete-flags/Flags.fst						
-  				
+  - dependencies/mitls-dependencies/libmitls.so			- miTLS library, built with “inline_for_extraction let debug_KS = true”, at file mitls-fstar/src/tls/concrete-flags/Flags.fst	
+  - cutils/cutils.so 									- Helper utils, see "Building Tests" in this file on how to build.		
+
+  NSS binaries, found at <path/to/nss/sources>/dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/
+  - dependencies/nss-dependencies/libfreebl3.so
+  - dependencies/nss-dependencies/libfreeblpriv3.so
+  - dependencies/nss-dependencies/libgtest1.so
+  - dependencies/nss-dependencies/libnspr4.so
+  - dependencies/nss-dependencies/libnss3.so
+  - dependencies/nss-dependencies/libnssckbi.so
+  - dependencies/nss-dependencies/libnssdbm3.so
+  - dependencies/nss-dependencies/libnsssysinit.so
+  - dependencies/nss-dependencies/libnssutil3.so
+  - dependencies/nss-dependencies/libplc4.so
+  - dependencies/nss-dependencies/libplds4.so
+  - dependencies/nss-dependencies/libsmime3.so
+  - dependencies/nss-dependencies/libsoftokn3.so
+  - dependencies/nss-dependencies/libsqlite3.so
+  - dependencies/nss-dependencies/libssl3.so
+
+  NSS certificate store (can be recreated by running ./certificates/build_database.sh)
+  - certificates/db/cert8.db			
+  - certificates/db/key3.db
+  - certificates/db/secmod.db
+	
 2. To build the docker image, run: `docker build -t <docker_image_label> .`
 	For instance: `docker build -t mitls_test .`
 
 
 3. IMPORTANT NOTE: Sometimes docker containers have DNS resolving issues. A good solution for this can be found in https://robinwinslow.uk/2016/06/23/fix-docker-networking-dns/. Long story short, do the following steps if the Docker build process seems hanging:
 	3.1 Figure out your DNS server by running `nmcli dev show | grep 'IP4.DNS'`
-	3.2 Create /etc/docker/daemon.json with the folowing content (replace the :
+	3.2 Create /etc/docker/daemon.json with the folowing content:
 	```
 	{
     	"dns": ["<your DNS IP GOES here, e.g. 8.8.8.8>", "<optional extra DNS IP>"]    
+	}
+	```
+	For instance, if the DNS resolver IP is 10.50.10.50:
+	```
+	{
+    	"dns": [ "10.50.10.50" ]
 	}
 	```
 	3.3 Run `sudo service docker restart`
