@@ -3,6 +3,7 @@ miTLS Prequisites
 -----------------
 Make sure to compile libmitls with debug prints of the key material. This can be done by editing mitls-fstar/src/tls/concrete-flags/Flags.fst, setting “inline_for_extraction let debug_KS = true”
 
+
 Building tests
 --------------
 1. Build cutils.dll:
@@ -12,6 +13,7 @@ Building tests
 	- Run `cl /LD cutils.c`
 	- This will generate cutils.dll
 	Linux:
+	- Update build.sh with path to OpenSSL sources which supports TLS 1.3
 	- Run build.sh
 
 2. Get NSS source code from here: https://ftp.mozilla.org/pub/security/nss/releases/NSS_3_30_2_RTM/src/
@@ -42,6 +44,32 @@ Building tests
 	- Linux: export LD_LIBRARY_PATH=<path/to/nss/sources>/dist/Linux4.8_x86_cc_glibc_PTH_DBG.OBJ/lib/
 
 
+
+Building Docker Image:
+----------------------
+
+1. The Docker build script (Dockerfile) assumes the following files exists:
+  - dependencies/mitls-dependencies/ca.crt				- server CA certificate, can be found at everest/mitls-fstar/data/
+  - dependencies/mitls-dependencies/server-ecdsa.crt	- server certificate, can be found at everest/mitls-fstar/data/				
+  - dependencies/mitls-dependencies/server-ecdsa.key	- server private key, can be found at everest/mitls-fstar/data/
+  - dependencies/mitls-dependencies/libcrypto.so		- crypto library used by miTLS, and used by the framework for CHACHA20, can be found at everest/FStar/ucontrib/CoreCrypto/ml/openssl/
+  - dependencies/mitls-dependencies/libmitls.so			- miTLS library, built with “inline_for_extraction let debug_KS = true”, at file mitls-fstar/src/tls/concrete-flags/Flags.fst						
+  				
+2. To build the docker image, run: `docker build -t <docker_image_label> .`
+	For instance: `docker build -t mitls_test .`
+
+
+3. IMPORTANT NOTE: Sometimes docker containers have DNS resolving issues. A good solution for this can be found in https://robinwinslow.uk/2016/06/23/fix-docker-networking-dns/. Long story short, do the following steps if the Docker build process seems hanging:
+	3.1 Figure out your DNS server by running `nmcli dev show | grep 'IP4.DNS'`
+	3.2 Create /etc/docker/daemon.json with the folowing content (replace the :
+	```
+	{
+    	"dns": ["<your DNS IP GOES here, e.g. 8.8.8.8>", "<optional extra DNS IP>"]    
+	}
+	```
+	3.3 Run `sudo service docker restart`
+
+4. Run the Docker image by: `docker run  -it  mytest005 bash`
 
 
 run command: 
