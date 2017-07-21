@@ -51,7 +51,7 @@ private let errno description txt: ST error
     | Some ad -> " "^TLSError.string_of_ad ad
     | None    -> "")^": "^txt);
   let b2 = Alert.alertBytes (match description with | Some a -> a | None -> TLSError.AD_internal_error) in
-  Parse.uint16_of_bytes b2
+  XParse.uint16_of_bytes b2
 
 /// TLS processing loop: we keep receiving and sending as long as we
 /// can read.  Does not handle TLS termination (unused by QUIC?)
