@@ -22,6 +22,7 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
+  MITLS_FFI_ENTRY(GetTicket) \
   MITLS_FFI_ENTRY(SetTicketKey) \
   MITLS_FFI_ENTRY(SetCertChainFile) \
   MITLS_FFI_ENTRY(SetPrivateKeyFile) \
@@ -36,13 +37,12 @@
   MITLS_FFI_ENTRY(Send) \
   MITLS_FFI_ENTRY(Recv) \
   MITLS_FFI_ENTRY(GetCert) \
+  MITLS_FFI_ENTRY(GetExporter) \
   MITLS_FFI_ENTRY(QuicConfig) \
   MITLS_FFI_ENTRY(QuicCreateClient) \
   MITLS_FFI_ENTRY(QuicCreateServer) \
   MITLS_FFI_ENTRY(QuicProcess) \
-  MITLS_FFI_ENTRY(QuicGetPeerParameters) \
-  MITLS_FFI_ENTRY(QuicGetExporter) \
-  MITLS_FFI_ENTRY(QuicGetTicket)
+  MITLS_FFI_ENTRY(QuicGetPeerParameters)
 
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -553,6 +553,106 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     return p;
 }
 
+
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_get_ticket(
+  /* in */ mitls_state *state,
+  /* out */ quic_ticket *ticket,
+  /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal2(result, tmp);
+
+    result = caml_callback_exn(*g_mitls_FFI_GetTicket,
+                                state->fstar_state);
+
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        CAMLreturnT(int, 0);
+    }
+
+    if(result == Val_none)
+    {
+      *errmsg = strdup("no ticket available");
+      CAMLreturnT(int, 0);
+    }
+
+    result = Some_val(result); // OCaml string
+    tmp = Field(result, 1); // encoded local session
+    size_t slen = caml_string_length(tmp);
+    result = Field(result, 0); // Server ticket
+    size_t tlen = caml_string_length(result);
+
+    // Ticket too large
+    if (tlen > MAX_TICKET_LEN || slen > MAX_SESSION_LEN)
+    {
+      *errmsg = strdup("the ticket is too large");
+      CAMLreturnT(int, 0);
+    }
+
+    ticket->ticket_len = tlen;
+    memcpy(ticket->ticket, String_val(result), tlen);
+    ticket->session_len = slen;
+    memcpy(ticket->session, String_val(tmp), slen);
+
+    CAMLreturnT(int, 1);
+}
+
+int MITLS_CALLCONV FFI_mitls_get_ticket(mitls_state *state, mitls_ticket *ticket, char **errmsg)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = ocaml_get_ticket(state, ticket, errmsg);
+    caml_release_runtime_system();
+    return ret;
+}
+
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_get_exporter(
+  /* in */ mitls_state *state,
+  int early,
+  mitls_secret *secret,
+  /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal2(result, tmp);
+
+    result = caml_callback2_exn(*g_mitls_FFI_GetExporter,
+                                state->fstar_state,
+                                early ? Val_true : Val_false);
+
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        CAMLreturnT(int, 0);
+    }
+
+    // Secret not available
+    if(result == Val_none)
+    {
+      *errmsg = strdup("the requested secret is not yet available");
+      CAMLreturnT(int, 0);
+    }
+
+    result = Some_val(result);
+    secret->hash = Int_val(Field(result, 0));
+    secret->ae = Int_val(Field(result, 1));
+    tmp = Field(result, 2);
+    size_t len = caml_string_length(tmp);
+    assert(len <= 64);
+    memcpy(secret->secret, String_val(tmp), len);
+
+    CAMLreturnT(int, 1);
+}
+
+int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
+{
+  int ret;
+  caml_acquire_runtime_system();
+  ret = ocaml_get_exporter(state, early, secret, errmsg);
+  caml_release_runtime_system();
+  return ret;
+}
+
 static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
@@ -921,41 +1021,6 @@ int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
     return ret;
 }
 
-static int FFI_mitls_quic_get_exporter_caml(
-  /* in */ quic_state *state,
-  int early,
-  quic_secret *secret,
-  /* out */ char **errmsg)
-{
-    CAMLparam0();
-    CAMLlocal2(result, tmp);
-
-    result = caml_callback2_exn(*g_mitls_FFI_QuicGetExporter,
-                                state->fstar_state, early ? Val_true : Val_false);
-
-    if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
-        CAMLreturnT(int, 0);
-    }
-
-    // Secret not available
-    if(result == Val_none)
-    {
-      *errmsg = strdup("the requested secret is not yet available");
-      CAMLreturnT(int, 0);
-    }
-
-    result = Some_val(result);
-    secret->hash = Int_val(Field(result, 0));
-    secret->ae = Int_val(Field(result, 1));
-    tmp = Field(result, 2);
-    size_t len = caml_string_length(tmp);
-    assert(len <= 64);
-    memcpy(secret->secret, String_val(tmp), len);
-
-    CAMLreturnT(int, 1);
-}
-
 int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
   /* in */ quic_state *state,
   int early,
@@ -963,56 +1028,14 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
   /* out */ char **errmsg)
 {
     int ret;
-
+    mitls_state tls_state = {.fstar_state = state->fstar_state};
     *errmsg = NULL;
+
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_exporter_caml(state, early, secret, errmsg);
+    ret = ocaml_get_exporter(&tls_state, early, secret, errmsg);
     caml_release_runtime_system();
 
     return ret;
-}
-
-static int FFI_mitls_quic_get_ticket_caml(
-  /* in */ quic_state *state,
-  /* out */ quic_ticket *ticket,
-  /* out */ char **errmsg)
-{
-    CAMLparam0();
-    CAMLlocal2(result, tmp);
-
-    result = caml_callback_exn(*g_mitls_FFI_QuicGetTicket,
-                                state->fstar_state);
-
-    if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
-        CAMLreturnT(int, 0);
-    }
-
-    if(result == Val_none)
-    {
-      *errmsg = strdup("no ticket available");
-      CAMLreturnT(int, 0);
-    }
-
-    result = Some_val(result); // OCaml string
-    tmp = Field(result, 1); // encoded local session
-    size_t slen = caml_string_length(tmp);
-    result = Field(result, 0); // Server ticket
-    size_t tlen = caml_string_length(result);
-
-    // Ticket too large
-    if (tlen > MAX_TICKET_LEN || slen > MAX_SESSION_LEN)
-    {
-      *errmsg = strdup("the ticket is too large");
-      CAMLreturnT(int, 0);
-    }
-
-    ticket->ticket_len = tlen;
-    memcpy(ticket->ticket, String_val(result), tlen);
-    ticket->session_len = slen;
-    memcpy(ticket->session, String_val(tmp), slen);
-
-    CAMLreturnT(int, 1);
 }
 
 int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
@@ -1021,11 +1044,11 @@ int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
   /* out */ char **errmsg)
 {
     int ret;
-
+    mitls_state tls_state = {.fstar_state = state->fstar_state};
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_ticket_caml(state, ticket, errmsg);
+    ret = ocaml_get_ticket(&tls_state, ticket, errmsg);
     caml_release_runtime_system();
 
     return ret;

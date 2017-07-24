@@ -172,7 +172,9 @@ let ffiConnect config ticket cb =
           trace ("installing ticket "^(print_bytes t)^" in PSK database");
           let CipherSuite13 ae h = cs in
           PSK.coerce_psk t PSK.({
-            is_ticket = true;
+            // TODO(adl) store in session info
+            // N.B. FFi.ffiGetTicket returns the PSK - no need to derive RMS again
+            ticket_nonce = Some empty_bytes;
             time_created = 0;
             // FIXME(adl): we should preserve the server flag somewhere
             allow_early_data = config.enable_early_data;
@@ -180,6 +182,7 @@ let ffiConnect config ticket cb =
             allow_psk_resumption = true;
             early_ae = ae;
             early_hash = h;
+            // TODO(adl) store identities
             identities = (empty_bytes, empty_bytes)
           }) rms);
         [t]
@@ -226,45 +229,6 @@ let ffi_parameters qpo =
 let get_peer_parameters c =
   let r = TLSConstants.dualRole (Connection.c_role c) in
   ffi_parameters (get_parameters c r)
-
-// some basic sanity checks
-let get_exporter c (early:bool)
-  : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
-  =
-  let keys = Handshake.xkeys_of c.Connection.hs in
-  if Seq.length keys = 0 then None
-  else
-    let i = if Seq.length keys = 2 && not early then 1 else 0 in
-    let (| li, expId, b|) = Seq.index keys i in
-    let h = exportId_hash expId in
-    let ae = logInfo_ae li in
-    match early, expId with
-    | false, ExportID _ _ -> Some (h, ae, b)
-    | true, EarlyExportID _ _ -> Some (h, ae, b)
-    | _ -> None
-
-// client-side: get
-// ADL july 24: now returns both the ticket and the
-// entry in the PSK database to allow inter-process ticket reuse
-// Beware! this exports crypto materials!
-let get_ticket c: ML (option (ticket:bytes * rms:bytes)) =
-  match (Connection.c_cfg c).peer_name with
-  | Some n ->
-    (match Ticket.lookup n with
-    | Some (t, true) ->
-      (match PSK.psk_lookup t with
-      | None -> None
-      | Some ctx ->
-        let ae = ctx.PSK.early_ae in
-        let h = ctx.PSK.early_hash in
-        let pskb = PSK.psk_value t in
-        // FIXME(adl): serialize rmsId
-        let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-        let si = Ticket.serialize (Ticket.Ticket13
-          (CipherSuite13 ae h) li rmsid pskb) in
-        Some (t, si))
-    | _ -> None)
-  | None -> None
 
 let ffiConfig
   max_stream_data

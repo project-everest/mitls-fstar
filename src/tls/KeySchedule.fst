@@ -90,7 +90,7 @@ let read_psk (i:PSK.pskid)
   =
   let c = PSK.psk_info i in
   let id =
-    if c.is_ticket then
+    if Some? c.ticket_nonce then
       let (| li, rmsid |) = Ticket.dummy_rmsid c.early_ae c.early_hash in
       ResumptionPSK #li rmsid
     else
@@ -448,9 +448,12 @@ let ks_server_13_init ks cr cs pskid g_gx =
       let i, psk, h : esId * bytes * Hashing.Spec.alg =
         match Ticket.check_ticket id with
         | Some (Ticket.Ticket13 cs li rmsId rms) ->
+          dbg ("Ticket RMS: "^(print_bytes rms));
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ h = cs in
-          (i, rms, h)
+          let nonce, _ = split id 12 in
+          let psk = HKDF.derive_secret h rms "resumption" nonce in
+          (i, psk, h)
         | None ->
           let i, pski, psk = read_psk id in
           (i, psk, pski.early_hash)
@@ -910,7 +913,7 @@ let ks_client_13_sf ks (log:bytes)
   let emsId : exportId li = ExportID asId log in
   let ems = HKDF.derive_secret h ams "exp master" log in
   dbg ("exporter master secret:          "^print_bytes ems);
-  let exporter1 = (| li, emsId, ems |) in 
+  let exporter1 = (| li, emsId, ems |) in
 
   let (ck,civ) = keygen_13 h cts ae in
   dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
@@ -959,7 +962,7 @@ let ks_server_13_sf ks (log:bytes)
   let ems = HKDF.derive_secret h ams "exp master" log in
   dbg ("exporter master secret:          "^print_bytes ems);
   let exporter1 = (| li, emsId, ems |) in
-  
+
   let (ck,civ) = keygen_13 h cts ae in
   dbg ("application key[C]:              "^print_bytes ck^", IV="^print_bytes civ);
   let (sk,siv) = keygen_13 h sts ae in
@@ -1026,7 +1029,9 @@ let ks_client_13_cf ks (log:bytes) : ST unit
   dbg ("resumption master secret:        "^print_bytes rms);
   st := C (C_13_postHS alpha rekey_info (| li, rmsId, rms |))
 
-let ks_client_13_rms ks : ST (li:logInfo & i:rmsId li & rms i)
+// Generate a PSK out of the current RMS and incoming ticket nonce
+// May be called several times if server sends multiple tickets
+let ks_client_13_rms_psk ks (nonce:bytes) : ST (bytes)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_postHS? (C?.s kss))
@@ -1037,7 +1042,9 @@ let ks_client_13_rms ks : ST (li:logInfo & i:rmsId li & rms i)
   dbg "ks_client_13_rms";
   let KS #region st = ks in
   let C (C_13_postHS _ _ rmsi) = !st in
-  rmsi
+  let (| li, rmsId, rms |) = rmsi in
+  dbg ("Recall RMS: "^(hex_of_bytes rms));
+  HKDF.derive_secret (rmsId_hash rmsId) rms "resumption" nonce
 
 (******************************************************************)
 

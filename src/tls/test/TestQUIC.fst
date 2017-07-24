@@ -75,8 +75,8 @@ let wrap tcp: St Transport.t = // a bit dodgy; measuring flight lengths
 
 let dump c =
   trace "OK\n";
-  let secret0 = get_exporter c true in
-  let secret1 = get_exporter c false in
+  let secret0 = FFI.ffiGetExporter c true in
+  let secret1 = FFI.ffiGetExporter c false in
   (match secret0 with | Some (_, _, b) -> trace ("early secret: "^print_bytes b) | _ -> ());
   (match secret1 with | Some (_, _, b) -> trace ("exporter secret: "^print_bytes b) | _ -> ());
   trace (string_of_quicParameters (get_parameters c Client));

@@ -290,11 +290,11 @@ let ffiSetNamedGroups cfg x =
     | None -> failwith ("Unknown named group: "^x)
     | Some a -> a in
   let supported :: offered = String.split ['@'] x in
-  let ngl = String.split [':'] x in
+  let ngl = String.split [':'] supported in
   let ngl = map ng_parse ngl in
   let ogl = match offered with
-    | [] -> cfg.offer_shares
-    | [x] -> map ng_parse (String.split [':'] x)
+    | [] -> ngl
+    | [og] -> map ng_parse (String.split [':'] og)
     | _ -> failwith "Use @G1:..:Gn to set groups on which to offer shares" in
   { cfg with
     named_groups = ngl;
@@ -365,7 +365,45 @@ let ffiSend c b =
   let msg = abytes b in
   write c msg
 
+// ADL july 24: now returns both the ticket and the
+// entry in the PSK database to allow inter-process ticket reuse
+// Beware! this exports crypto materials!
+let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
+  match (Connection.c_cfg c).peer_name with
+  | Some n ->
+    (match Ticket.lookup n with
+    | Some (t, true) ->
+      (match PSK.psk_lookup t with
+      | None -> None
+      | Some ctx ->
+        let ae = ctx.PSK.early_ae in
+        let h = ctx.PSK.early_hash in
+        let pskb = PSK.psk_value t in
+        // FIXME(adl): serialize rmsId
+        let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
+        let si = Ticket.serialize (Ticket.Ticket13
+          (CipherSuite13 ae h) li rmsid pskb) in
+        Some (t, si))
+    | _ -> None)
+  | None -> None
+
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =
   let cert = getCert c in
   get_cbytes cert
+
+// some basic sanity checks
+let ffiGetExporter (c:Connection.connection) (early:bool)
+  : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
+  =
+  let keys = Handshake.xkeys_of c.Connection.hs in
+  if Seq.length keys = 0 then None
+  else
+    let i = if Seq.length keys = 2 && not early then 1 else 0 in
+    let (| li, expId, b|) = Seq.index keys i in
+    let h = exportId_hash expId in
+    let ae = logInfo_ae li in
+    match early, expId with
+    | false, ExportID _ _ -> Some (h, ae, b)
+    | true, EarlyExportID _ _ -> Some (h, ae, b)
+    | _ -> None

@@ -119,7 +119,7 @@ let load_psk is_ticket x =
     | CipherSuite13(ae,h) -> ae, h
     | _ -> failwith "the first ciphersuite must be 1.3 to load with PSK" in
   let pskInfo = {
-    PSK.is_ticket = is_ticket;
+    PSK.ticket_nonce = if is_ticket then Some Platform.Bytes.empty_bytes else None;
     PSK.time_created = Prims.parse_int "0";
     PSK.allow_early_data = true;
     PSK.allow_dhe_resumption = true;

@@ -154,8 +154,9 @@ let check_ticket13 b =
   match check_ticket b with
   | Some (Ticket13 cs li _ _) ->
     let CipherSuite13 ae h = cs in
+    let nonce, _ = split b 12 in
     Some PSK.({
-      is_ticket = true;
+      ticket_nonce = Some nonce;
       time_created = 0;
       allow_early_data = true;
       allow_dhe_resumption = true;
