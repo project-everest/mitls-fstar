@@ -55,7 +55,6 @@ quic_config* QuicConfigCreate(  char*        serverCertPath,
     config->qp.max_data             = 32000;
     config->qp.max_stream_id        = 16;
     config->qp.idle_timeout         = 60;
-    config->server_ticket.len       = 0;
     config->certificate_chain_file  = DuplicateString_unsafe( serverCertPath                );
     config->private_key_file        = DuplicateString_unsafe( serverKeyPath                 );
     config->ca_file                 = DuplicateString_unsafe( serverCAPath                  );

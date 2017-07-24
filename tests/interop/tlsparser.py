@@ -421,6 +421,7 @@ PSK_SELECTED_IDENTITY   = "Selected PSK"
 TICKET_LIFETIME         = "ticket_lifetime"
 TICKET_AGE_ADD          = "ticket_age_add"
 TICKET                  = "ticket"
+TICKET_NONCE            = "ticket_nonce"
 NEW_SESSION_TICKET      = "NewSessionTicket"
 MAX_EARLY_DATA_SIZE     = "max_early_data_size"
 
@@ -721,6 +722,9 @@ class TLSParser():
         rawTicketAgeAdd = self.PeekRawBytes( SIZE_OF_UINT32 )
         ticketAgeAdd    = self.ConsumeWord()
         newSessionTicket.append( AttrDict( { NAME : TICKET_AGE_ADD, RAW_CONTENTS : rawTicketAgeAdd, INTERPRETATION : str( ticketAgeAdd ) }) )
+
+        nonce, rawNonce = self.ConsumeList( SIZE_OF_UINT8, self.ConsumeByte )
+        newSessionTicket.append( AttrDict( { NAME : TICKET_NONCE, RAW_CONTENTS : rawNonce, INTERPRETATION : bytes( nonce ) }) )
 
         ticket, rawTicket = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeByte )
         newSessionTicket.append( AttrDict( { NAME : TICKET, RAW_CONTENTS : rawTicket, INTERPRETATION : bytes( ticket ) }) )

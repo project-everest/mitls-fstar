@@ -68,7 +68,7 @@ from tlsparser import   MemorySocket,                       \
 
 
 SUCCESS                     = 1
-SIZEOF_QUIC_TICKET          = 1032
+SIZEOF_QUIC_TICKET          = 1296
 NULL_BYTE                   = b"\0"
 TLS_VERSION_1_3             = b"1.3" + NULL_BYTE
 # SERVER_KEY_PATH             = "/home/user/dev/microsoft-git/Everest/tests/pytester/certificates/rsa_certificates/test_server.key"
@@ -701,7 +701,8 @@ class MonitorLeakedKeys():
         return re.findall('..', hexEncodedInContiniousString )
 
     def MonitorStdoutForLeakedKeys_thread( self, logFileName ):
-        PATTERN = r"(\S+) key\[(.)\]:(.+), IV=(.+)"
+        PATTERN  = r"(\S+) key\[(.)\]:(.+), IV=(.+)"
+        PATTERN2 = r"(\S+) (0-RTT) key:(.+), IV=(.+)"
 
         MSG_FILENAME    = "%s-%s-keys-mitls.%d"
         timestamp       = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S.%f')
@@ -720,6 +721,8 @@ class MonitorLeakedKeys():
                     continue
 
                 result = re.search( PATTERN, line )
+                if result is None:
+                    result = re.search( PATTERN2, line )
                 if result is None:
                     continue
 
@@ -1758,13 +1761,10 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    suite.addTest( MITLSTester('test_parameters_matrix' ) )
-    suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
-    # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
+    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
 
-    
-    
-    
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )
     # suite.addTest( MITLSTester( "test_NamedGroups" ) )
