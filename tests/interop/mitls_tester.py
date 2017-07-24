@@ -106,9 +106,9 @@ SUPPORTED_NAMED_GROUPS = [
                             "P-384", # a.k.a secp384r1   # OK                         
                             "P-256", # a.k.a secp256r1   # OK                         
                             # "X448",                      # NOT OK    TLS| StAE decrypt failed.; TLS| Ignoring the decryption failure (rejected 0-RTT data) 
-                            "FFDHE4096",                 # OK         
-                            "FFDHE3072",                 # OK         
-                            "FFDHE2048",                 # OK         
+                            # "FFDHE4096",                 # OK         
+                            # "FFDHE3072",                 # OK         
+                            # "FFDHE2048",                 # OK         
 ]
 
 PIECES_THAT_CANT_BE_SHUFFLED = [ KEY_SHARE_ENTRY, 
@@ -503,7 +503,7 @@ class MITLS():
     
     def AcceptConnection( self, applicationData = None ):
         try:
-            self.log.debug( "AcceptConnection" )
+            self.log.debug( "AcceptConnection; mitls_state = %s" % self.mitls_state )
             self.acceptConnectionSucceeded = False
             outmsg                   = c_char_p()
             errmsg                   = c_char_p() 
@@ -528,8 +528,9 @@ class MITLS():
                 self.Send( applicationData )
 
         except Exception as err: 
-            traceback.print_tb(err.__traceback__)
-            raise
+            pprint( traceback.format_tb( err.__traceback__ ) )
+            pprint( err )
+            # raise
             # silence exception
 
     def Receive( self ):
@@ -655,7 +656,7 @@ class MITLS():
         self.VerifyResult( "FFI_mitls_connect", ret )
 
     def Send( self, payload ):
-        self.log.debug( "Send: %s" % payload )
+        self.log.debug( "Send: %s; self.mitls_state = %s" % (payload, self.mitls_state  ) )
         outmsg                              = c_char_p( 0 )
         errmsg                              = c_char_p( 0 ) 
         self.miTLS.FFI_mitls_send.restype   = c_int

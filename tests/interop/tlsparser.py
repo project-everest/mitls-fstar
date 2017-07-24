@@ -63,6 +63,21 @@ class AttrDict(dict):
 
         return cp
 
+from threading import Lock
+globalLocak = Lock()
+def synchronized(lock):
+    '''Synchronization decorator.'''
+
+    def wrap(f):
+        def new_function(*args, **kw):
+            lock.acquire()
+            try:
+                return f(*args, **kw)
+            finally:
+                lock.release()
+        return new_function
+    return wrap
+
 def GetKey( dictionary, valueToSearch, defaultResponse ):
     if valueToSearch not in dictionary.values():
         return defaultResponse
@@ -1847,7 +1862,10 @@ class TLSParser():
         self.recentBytes    = self.recentBytes[ self.curretPosition : ]
         self.curretPosition = 0
 
+    @synchronized( globalLocak )
     def Digest( self, bytes, direction, printPacket = False, ivAndKey = None ):
+        if self.curretPosition != 0:
+            raise TLSParserError( "%s: self.curretPosition = %s" % (self, self.curretPosition) )
         if config.LOG_LEVEL < logging.ERROR and printPacket:
             print( direction )
             sys.stdout.write( Green( self.FormatBuffer( bytes ) )  + "\n" )
