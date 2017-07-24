@@ -377,7 +377,7 @@ class InterOperabilityTester(unittest.TestCase):
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
     def test_MITLS_OPENSSL_parameters_matrix( self ):
-        sys.stderr.write( "Running test_MITLS_NSS_parameters_matrix\n" )
+        sys.stderr.write( "Running test_MITLS_OPENSSL_parameters_matrix\n" )
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
@@ -687,7 +687,7 @@ if __name__ == '__main__':
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
     suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_parameters_matrix" ) )
-    # suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_parameters_matrix" ) )
+    suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_parameters_matrix" ) )
     
 
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
