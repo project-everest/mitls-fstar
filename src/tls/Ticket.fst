@@ -105,6 +105,28 @@ let dummy_rmsid ae h =
 let dummy_msId pv cs ems =
   StandardMS PMS.DummyPMS (CC.random 64) (kefAlg pv cs ems)
 
+let parse (b:bytes) =
+  if length b < 8 then None
+  else
+    let (pvb, r) = split b 2 in
+    match parseVersion pvb with
+    | Error _ -> None
+    | Correct pv ->
+      let (csb, r) = split r 2 in
+      match parseCipherSuite csb, vlparse 2 r with
+      | Error _, _ -> None
+      | _, Error _ -> None
+      | Correct cs, Correct rms ->
+        match pv, cs with
+        | TLS_1p3, CipherSuite13 ae h ->
+          let (| li, rmsId |) = dummy_rmsid ae h in
+          Some (Ticket13 cs li rmsId rms)
+        | TLS_1p2, CipherSuite _ _ _ ->
+          let (emsb, ms) = split rms 1 in
+          let ems = 0z <> cbyte emsb in
+          let msId = dummy_msId pv cs ems in
+          Some (Ticket12 pv cs ems msId ms)
+
 let check_ticket (b:bytes{length b <= 65551}) =
   let Key tid salt _ rd = !ticket_enc in
   if length b < AE.ivlen tid + AE.taglen tid + 8 then None else
@@ -112,34 +134,17 @@ let check_ticket (b:bytes{length b <= 65551}) =
   let iv = xor (AE.ivlen tid) nb salt in
   match AE.decrypt #tid #65535 rd iv empty_bytes b with
   | None -> None
-  | Some plain ->
-    if length plain < 8 then None
-    else
-      let (pvb, r) = split plain 2 in
-      match parseVersion pvb with
-      | Error _ -> None
-      | Correct pv ->
-        let (csb, r) = split r 2 in
-        match parseCipherSuite csb, vlparse 2 r with
-        | Error _, _ -> None
-        | _, Error _ -> None
-        | Correct cs, Correct rms ->
-          match pv, cs with
-          | TLS_1p3, CipherSuite13 ae h ->
-            let (| li, rmsId |) = dummy_rmsid ae h in
-            Some (Ticket13 cs li rmsId rms)
-          | TLS_1p2, CipherSuite _ _ _ ->
-            let (emsb, ms) = split rms 1 in
-            let ems = 0z <> cbyte emsb in
-            let msId = dummy_msId pv cs ems in
-            Some (Ticket12 pv cs ems msId ms)
+  | Some plain -> parse plain
 
-let create_ticket t =
-  let Key tid salt wr _ = !ticket_enc in
+let serialize t =
   let pv, cs, b = match t with
     | Ticket12 pv cs ems _ ms -> pv, cs, abyte (if ems then 1z else 0z) @| ms
     | Ticket13 cs _ _ rms -> TLS_1p3, cs, rms in
-  let plain = (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b) in
+  (versionBytes pv) @| (cipherSuiteBytes cs) @| (vlbytes 2 b)
+
+let create_ticket t =
+  let Key tid salt wr _ = !ticket_enc in
+  let plain = serialize t in
   let nb = CC.random 12 in
   let iv = xor 12 nb salt in
   let ae = AE.encrypt #tid #65535 wr iv empty_bytes plain in

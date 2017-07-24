@@ -118,13 +118,16 @@ typedef struct {
 } quic_secret;
 
 #define MAX_TICKET_LEN 1020
+#define MAX_SESSION_LEN 256
 typedef struct {
-  size_t len;
+  size_t ticket_len;
   char ticket[MAX_TICKET_LEN];
+  size_t session_len;
+  char session[MAX_SESSION_LEN];
 } quic_ticket;
 
 // This length is somehow arbitrary
-#define MAX_OTHERS_LEN 1024 
+#define MAX_OTHERS_LEN 1024
 
 typedef struct {
   unsigned int max_stream_data;
@@ -135,7 +138,7 @@ typedef struct {
   // The custom parameters are still in RFC wire format:
   // a sequence of (descriptor: 2; len: 2; data: len) bytes
   size_t others_len;
-  char others[MAX_OTHERS_LEN]; 
+  char others[MAX_OTHERS_LEN];
 } quic_transport_parameters;
 
 typedef struct {
@@ -144,13 +147,13 @@ typedef struct {
   quic_transport_parameters qp;
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
   const char *signature_algorithms; // Colon separated list of signature schemes or NULL
-  const char *named_groups; // Colon separated list of Diffie-Hellman groups
+  const char *named_groups; // Colon separated list of Diffie-Hellman groups or NULL
   int enable_0rtt; // Probably true for QUIC
 
   // only used by the client
   const char *host_name; // Client only, sent in SNI
-  const char *ca_file; // Client only
-  quic_ticket server_ticket; 
+  const char *ca_file; // Client only, used to validate server certificate
+  quic_ticket server_ticket;
 
   // only used by the server
   const char *certificate_chain_file; // Server only

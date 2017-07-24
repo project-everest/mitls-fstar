@@ -121,7 +121,7 @@ let rec recv c =
        | Server      -> {code=TLS_server_complete; error=0us;})
          (* we could read once more to flush any ticket.
                       let i = currentId c Reader in
-                      match read c i with 
+                      match read c i with
                       | ReadWouldBlock -> {code=TLS_server_complete; error=0us;}
                       | _ -> {code=TLS_error_local; error=errno None "bad ticket delivery";} *)
   | ReadError a txt  -> {code=TLS_error_local; error=errno a txt;}
@@ -156,13 +156,38 @@ let accept send recv config : ML Connection.connection =
   quic_check config;
   TLS.accept_connected here tcp config
 
-val ffiConnect: config:config -> ticket: bytes -> callbacks:FFI.callbacks -> ML Connection.connection
+// Ticket also includes the serialized session,
+// if it is not in the PSK database it will be installed
+// (allowing resumption across miTLS client processes)
+val ffiConnect: config:config -> ticket: option (bytes * bytes) -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiConnect config ticket cb =
-  connect 
-    (FFI.sendTcpPacket cb) 
-    (FFI.recvTcpPacket cb) 
-    config 
-    (if length ticket = 0 then [] else [ticket])
+  let pskids =
+    match ticket with
+    | Some (t, si) ->
+      (match Ticket.parse si with
+      | Some (Ticket.Ticket13 cs li rmsId rms) ->
+        (match PSK.psk_lookup t with
+        | Some _ -> trace ("input ticket "^(print_bytes t)^" is in PSK database")
+        | None ->
+          trace ("installing ticket "^(print_bytes t)^" in PSK database");
+          let CipherSuite13 ae h = cs in
+          PSK.coerce_psk t PSK.({
+            is_ticket = true;
+            time_created = 0;
+            // FIXME(adl): we should preserve the server flag somewhere
+            allow_early_data = config.enable_early_data;
+            allow_dhe_resumption = true;
+            allow_psk_resumption = true;
+            early_ae = ae;
+            early_hash = h;
+            identities = (empty_bytes, empty_bytes)
+          }) rms);
+        [t]
+      | _ -> failwith ("QUIC: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
+    | None -> [] in
+  let send = FFI.sendTcpPacket cb in
+  let recv = FFI.recvTcpPacket cb in
+  connect send recv config pskids
 
 val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiAcceptConnected config cb =
@@ -178,28 +203,28 @@ let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
   else Negotiation.find_server_quic_parameters mode
 
 // extracting some QUIC parameters to C (a bit ad hoc)
-val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.t * UInt32.t * UInt16.t * bytes)  
-let ffi_parameters qpo = 
-  match qpo with 
-  | None -> failwith "no parameters available" 
-  | Some (QuicParametersClient _ _ qp) 
+val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.t * UInt32.t * UInt16.t * bytes)
+let ffi_parameters qpo =
+  match qpo with
+  | None -> failwith "no parameters available"
+  | Some (QuicParametersClient _ _ qp)
   | Some (QuicParametersServer _ qp) ->  (
-      ( match (List.Tot.find Quic_initial_max_stream_data? qp) with 
-        | Some (Quic_initial_max_stream_data v) -> v 
-        | None -> failwith "no Quic_initial_max_stream_data"), 
-      ( match (List.Tot.find Quic_initial_max_data? qp) with 
-        | Some (Quic_initial_max_data v) -> v 
-        | None -> failwith "no Quic_initial_max_data"), 
-      ( match (List.Tot.find Quic_initial_max_stream_id? qp) with 
-        | Some (Quic_initial_max_stream_id v) -> v 
-        | None -> failwith "no Quic_initial_max_stream_id"), 
-      ( match (List.Tot.find Quic_idle_timeout? qp) with 
-        | Some (Quic_idle_timeout v) -> v 
-        | None -> failwith "no Quic_idle_timeout"), 
+      ( match (List.Tot.find Quic_initial_max_stream_data? qp) with
+        | Some (Quic_initial_max_stream_data v) -> v
+        | None -> failwith "no Quic_initial_max_stream_data"),
+      ( match (List.Tot.find Quic_initial_max_data? qp) with
+        | Some (Quic_initial_max_data v) -> v
+        | None -> failwith "no Quic_initial_max_data"),
+      ( match (List.Tot.find Quic_initial_max_stream_id? qp) with
+        | Some (Quic_initial_max_stream_id v) -> v
+        | None -> failwith "no Quic_initial_max_stream_id"),
+      ( match (List.Tot.find Quic_idle_timeout? qp) with
+        | Some (Quic_idle_timeout v) -> v
+        | None -> failwith "no Quic_idle_timeout"),
       Extensions.quicParametersBytes_aux (List.Tot.filter Quic_custom_parameter?  qp))
 
-let get_peer_parameters c = 
-  let r = TLSConstants.dualRole (Connection.c_role c) in 
+let get_peer_parameters c =
+  let r = TLSConstants.dualRole (Connection.c_role c) in
   ffi_parameters (get_parameters c r)
 
 // some basic sanity checks
@@ -219,25 +244,42 @@ let get_exporter c (early:bool)
     | _ -> None
 
 // client-side: get
-let get_ticket c: ML (option bytes) =
+// ADL july 24: now returns both the ticket and the
+// entry in the PSK database to allow inter-process ticket reuse
+// Beware! this exports crypto materials!
+let get_ticket c: ML (option (ticket:bytes * rms:bytes)) =
   match (Connection.c_cfg c).peer_name with
-  | Some n -> Option.map fst (Ticket.lookup n)
+  | Some n ->
+    (match Ticket.lookup n with
+    | Some (t, true) ->
+      (match PSK.psk_lookup t with
+      | None -> None
+      | Some ctx ->
+        let ae = ctx.PSK.early_ae in
+        let h = ctx.PSK.early_hash in
+        let pskb = PSK.psk_value t in
+        // FIXME(adl): serialize rmsId
+        let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
+        let si = Ticket.serialize (Ticket.Ticket13
+          (CipherSuite13 ae h) li rmsid pskb) in
+        Some (t, si))
+    | _ -> None)
   | None -> None
 
-let ffiConfig 
-  max_stream_data 
-  max_data 
-  max_stream_id 
-  idle_timeout 
+let ffiConfig
+  max_stream_data
+  max_data
+  max_stream_id
+  idle_timeout
   (others: bytes)
   (host: string)  =
-  let others = 
-    match Extensions.parseQuicParameters_aux others 
-    with 
+  let others =
+    match Extensions.parseQuicParameters_aux others
+    with
     | Error z -> trace "WARNING: ill-formed custom parameters "; []
     | Correct qpl ->
       if not (List.Tot.for_all Quic_custom_parameter? qpl) then (trace "WARNING: not a custom parameter"; [])
-      else qpl  
+      else qpl
     in
   { defaultConfig with
     min_version = TLS_1p3;

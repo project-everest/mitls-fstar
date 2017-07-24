@@ -1,3 +1,4 @@
+#define __USE_MINGW_ANSI_STDIO 1
 #include <stdio.h>
 #include <memory.h>
 #include <unistd.h>
@@ -31,7 +32,7 @@ void dump_parameters(quic_transport_parameters *qp)
   printf("max_data        = %d\n", qp->max_data);
   printf("max_stream_id   = %d\n", qp->max_stream_id);
   printf("idle_timeout    = %d\n", qp->idle_timeout);
-  if (qp->others_len) printf("custom parameters "); dump(qp->others, qp->others_len); 
+  if (qp->others_len) printf("custom parameters "); dump(qp->others, qp->others_len);
 }
 
 char *quic_result_string(quic_result r){
@@ -46,6 +47,8 @@ char *quic_result_string(quic_result r){
 int main(int argc, char **argv)
 {
   char *errmsg;
+  size_t test = 12345;
+  printf("HEX %zu\n", test);
 
   quic_transport_parameters client_qp =
     {
@@ -66,14 +69,16 @@ int main(int argc, char **argv)
       .others_len = 9,
       .others = { 255,255,0,5,10,11,12,13,14,0 }
     };
-    
+
   quic_config config = {
     .is_server = 1,
     .host_name = "",
     .qp = server_qp,
     .server_ticket = {
-      .len = 0,
-      .ticket = {0} } ,
+      .ticket_len = 0,
+      .ticket = {0},
+      .session_len = 0,
+      .session = {0} } ,
     .certificate_chain_file = "../../data/server-ecdsa.crt",
     .private_key_file = "../../data/server-ecdsa.key",
     .ca_file = "../../data/CAFile.pem",
@@ -169,7 +174,7 @@ int main(int argc, char **argv)
       // showing how to get the peer's parameters
       // (available with the main exporter secret)
       quic_transport_parameters peer[1];
-      if (FFI_mitls_quic_get_peer_parameters(server, peer, &errmsg)) 
+      if (FFI_mitls_quic_get_peer_parameters(server, peer, &errmsg))
         {
           printf("   === server received client parameters === \n");
           dump_parameters(peer);
@@ -181,7 +186,7 @@ int main(int argc, char **argv)
           dump_parameters(peer);
         }
       else printf("Failed to get peer parameter: %s\n", errmsg);
-      
+
       FFI_mitls_quic_get_exporter(client, 0, &qs, &errmsg);
       FFI_mitls_quic_get_exporter(server, 0, &qs_early, &errmsg);
       if(memcmp(qs_early.secret, qs.secret, 64))
@@ -230,7 +235,7 @@ int main(int argc, char **argv)
       quic_crypto_free_key(k_server);
 
 
-      
+
   }
 
   if (argc == 2) {
@@ -298,7 +303,9 @@ int main(int argc, char **argv)
     if(FFI_mitls_quic_get_ticket(client, &qt, &errmsg))
     {
       printf("new ticket: \n");
-      dump(qt.ticket, qt.len);
+      dump(qt.ticket, qt.ticket_len);
+      printf("associated session info and RMS: \n");
+      dump(qt.session, qt.session_len);
     }
     else printf("Failed to get ticket: %s\n", errmsg);
 
@@ -377,11 +384,13 @@ int main(int argc, char **argv)
     if(FFI_mitls_quic_get_ticket(client, &qt, &errmsg))
     {
       printf("new ticket:\n");
-      dump(qt.ticket, qt.len);
+      dump(qt.ticket, qt.ticket_len);
+      printf("associated session info and RMS: \n");
+      dump(qt.session, qt.session_len);
     }
     else printf("Failed to get ticket: %s\n", errmsg);
   }
-    
+
   FFI_mitls_quic_free(server);
   FFI_mitls_quic_free(client);
 
