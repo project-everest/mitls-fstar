@@ -679,6 +679,9 @@ class MonitorLeakedKeys():
         LOG_FILE = "log.txt"
         if os.path.exists(LOG_FILE):
             os.remove( LOG_FILE )
+            f = open( LOG_FILE, "w" )
+            f.close()
+
         tee      = subprocess.Popen(["tee", LOG_FILE ], stdin=subprocess.PIPE )
         os.dup2(tee.stdin.fileno(), sys.stdout.fileno())
 
