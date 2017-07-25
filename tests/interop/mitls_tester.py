@@ -120,9 +120,10 @@ class MITLSError( Exception ):
     def __init__( self, msg ):
         Exception.__init__( self, msg )
 
-def CString( pythonString ):
-    NULL_BYTE = b"\0"
-    return c_char_p( bytes( pythonString, "ascii" ) + NULL_BYTE )
+from tlsparser import CString
+# def CString( pythonString ):
+#     NULL_BYTE = b"\0"
+#     return c_char_p( bytes( pythonString, "ascii" ) + NULL_BYTE )
 
 QUICResult = AttrDict( {'TLS_would_block' 						: 0,
 						'TLS_error_local' 						: 1,
@@ -374,16 +375,16 @@ class MITLS():
 
     def InitServer( self, 
                     supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
-                    supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
+                    serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ -1 ],
                     supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
         self.log.debug( "InitServer" )
 
         self.mitls_state = self.FFI_mitls_configure()
-        self.FFI_mitls_configure_cert_chain_file            ( config.SERVER_CERT_PATH )
-        self.FFI_mitls_configure_private_key_file           ( config.SERVER_KEY_PATH )
+        self.FFI_mitls_configure_cert_chain_file            ( config.SERVER_CERT_PATH[ serverSignatureAlgorithm ] )
+        self.FFI_mitls_configure_private_key_file           ( config.SERVER_KEY_PATH[ serverSignatureAlgorithm ] )
         self.FFI_mitls_configure_ca_file                    ( config.SERVER_CA_PATH )
+        self.FFI_mitls_configure_signature_algorithms       ( [ serverSignatureAlgorithm ] )
         self.FFI_mitls_configure_cipher_suites              ( supportedCipherSuites )
-        self.FFI_mitls_configure_signature_algorithms       ( supportedSignatureAlgorithms )
         self.FFI_mitls_configure_named_groups               ( supportedNamedGroups )
             
     def InitClient( self, 
@@ -498,7 +499,8 @@ class MITLS():
             self.acceptConnectionSucceeded = True
 
         except Exception as err: 
-            traceback.print_tb(err.__traceback__)
+            pprint( traceback.format_tb( err.__traceback__ ) )
+            pprint( err )
             raise
     
     def AcceptConnection( self, applicationData = None ):
@@ -808,12 +810,12 @@ class MITLSTester(unittest.TestCase):
 
     def StartServerThread(  self, 
                             supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
-                            supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
+                            serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                             supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
                             applicationData                 = None ):
         self.tlsServer = MITLS( "server" )
         self.tlsServer.InitServer(  supportedCipherSuites, 
-                                    supportedSignatureAlgorithms, 
+                                    serverSignatureAlgorithm, 
                                     supportedNamedGroups )
         
         serverThread   = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
@@ -915,7 +917,7 @@ class MITLSTester(unittest.TestCase):
 
         preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
         try:
-            self.RunSingleTest()
+            self.RunSingleTest( applicationData = b"Server->Client\x00" )
         finally:
             keysMonitor.StopMonitorStdoutForLeakedKeys()
             
@@ -1487,13 +1489,14 @@ class MITLSTester(unittest.TestCase):
                         supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
                         supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
                         applicationData                 = None,
-                        msgManipulators                 = [] ):
+                        msgManipulators                 = [],
+                        serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ -1 ] ):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
         serverThread = self.StartServerThread(  supportedCipherSuites,
-                                                supportedSignatureAlgorithms,
+                                                serverSignatureAlgorithm,
                                                 supportedNamedGroups,
                                                 applicationData )
 
@@ -1576,10 +1579,15 @@ class MITLSTester(unittest.TestCase):
                             startTime = time.time()
                             self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
                                                 supportedSignatureAlgorithms = [ algorithm ],
-                                                supportedNamedGroups         = [ group ] )
+                                                supportedNamedGroups         = [ group ],
+                                                serverSignatureAlgorithm     = algorithm, )
                             self.WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+
+                            # for msg in memorySocket.tlsParser.transcript:
+                            #     memorySocket.tlsParser.PrintMsg( msg )
                         except Exception as err: 
-                            print( traceback.format_tb( err.__traceback__ ) )
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            pprint( err )
                             self.WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
                         finally:
                             totalTime = time.time() - startTime
@@ -1763,11 +1771,11 @@ if __name__ == '__main__':
     # SI: these should be args. 
     suite = unittest.TestSuite()
     
-    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
-    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
+    # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
 
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )
     # suite.addTest( MITLSTester( "test_SignatureAlgorithms" ) )

@@ -13,12 +13,14 @@ import config
 
 from pprint import pprint
 from tlsparser import MemorySocket, TLSParser, FileSocket
+import mitls_tester
 from pr_wrapper import PRWrapper, PRDLL
 
 
 from ctypes import  CDLL,           \
                     c_long,         \
                     c_int,          \
+                    c_uint,         \
                     c_float,        \
                     c_double,       \
                     c_char_p,       \
@@ -73,6 +75,14 @@ class NamedGroups_NSS:
     ssl_grp_ffdhe_3072 = 257
     ssl_grp_ffdhe_4096 = 258
 
+from tlsparser import SignatureScheme
+
+MAP_SIGNATURE_SCHEMES = {
+    'ECDSA+SHA256' : SignatureScheme.ecdsa_secp256r1_sha256,
+    'ECDSA+SHA384' : SignatureScheme.ecdsa_secp384r1_sha384,
+    'ECDSA+SHA512' : SignatureScheme.ecdsa_secp521r1_sha512,
+}
+
 
 SUPPORTED_NAMED_GROUPS_MAPPING_TO_NSS = {
                             "P-521"         :   NamedGroups_NSS.ssl_grp_ec_secp521r1    , # a.k.a secp521r1   # OK                         
@@ -91,9 +101,10 @@ class NSSError( Exception ):
     def __init__( self, msg ):
         Exception.__init__( self, msg )
 
-def CString( pythonString ):
-    NULL_BYTE = b"\0"
-    return c_char_p( bytes( pythonString, "ascii" ) + NULL_BYTE )
+from tlsparser import CString
+# def CString( pythonString ):
+#     NULL_BYTE = b"\0"
+#     return c_char_p( bytes( pythonString, "ascii" ) + NULL_BYTE )
 
 def CStringAsVoidP( pythonString ):
     NULL_BYTE = b"\0"
@@ -352,7 +363,23 @@ class NSS():
                                                         NO_CONTEXT )
         self.VerifyResult( "SSL_HandshakeCallback", result )
 
+    def SSL_SignatureSchemePrefSet( self, supportedSignatureAlgorithms ):
+        self.log.debug( "SSL_SignatureSchemePrefSet( %s )" % supportedSignatureAlgorithms )
+        supportedSignatureAlgorithms.reverse()
+        self.libssl3.SSL_SignatureSchemePrefSet.restype = c_int32
+        self.libssl3.SSL_SignatureSchemePrefSet.argtypes   = [ c_voidp, c_voidp, c_uint ]
+
+        signatureSchemes = ( c_uint32 * len( supportedSignatureAlgorithms ) )()
+        for i in range( len( supportedSignatureAlgorithms ) ):
+            signatureSchemes[ i ] = MAP_SIGNATURE_SCHEMES[ supportedSignatureAlgorithms[ i ] ]
+
+        result = self.libssl3.SSL_SignatureSchemePrefSet(   self.clientSSLSocket, 
+                                                            signatureSchemes,
+                                                            c_uint( len( supportedSignatureAlgorithms ) ) )
+        self.VerifyResult( "SSL_SignatureSchemePrefSet", result )
+
     def CallSSLConnect( self ):
+        self.log.debug( "CallSSLConnect" )
         timeout = c_int32( 0 )
         addr    = c_voidp( None )
         result = self.nspr.PR_Connect( self.clientSSLSocket, addr, timeout )
@@ -478,8 +505,10 @@ class NSS():
         result = self.libssl3.SSL_NamedGroupConfig( c_voidp( sslSocket ), namedGroups, c_uint32( len( namedGroups ) ) )
         self.VerifyResult( "SSL_NamedGroupConfig", result )
 
+
+
     # For client side
-    def Connect( self, supportedNamedGroups = None ):
+    def Connect( self, supportedNamedGroups = None, supportedSignatureAlgorithms = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS ):
         self.log.debug( "Connect" )
         self.InitializeSSLClientSocket()
         
@@ -508,6 +537,7 @@ class NSS():
         self.SSL_AuthCertificateHook()
         self.SSL_GetClientAuthDataHook()
         self.SSL_HandshakeCallback()
+        self.SSL_SignatureSchemePrefSet( supportedSignatureAlgorithms )
         # skipping SSL_SetURL
         self.CallSSLConnect()
 

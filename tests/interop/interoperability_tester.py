@@ -205,10 +205,10 @@ class InterOperabilityTester(unittest.TestCase):
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
         hostName     = "test_server.com"
         mitlsTester  = mitls_tester.MITLSTester()
-        serverThread = mitlsTester.StartServerThread(   supportedCipherSuites,
-                                                        supportedSignatureAlgorithms,
-                                                        supportedNamedGroups,
-                                                        applicationData = DATA_SERVER_TO_CLIENT )
+        serverThread = mitlsTester.StartServerThread(   supportedCipherSuites    = supportedCipherSuites,
+                                                        supportedNamedGroups     = supportedNamedGroups,
+                                                        applicationData          = DATA_SERVER_TO_CLIENT,
+                                                        serverSignatureAlgorithm = supportedSignatureAlgorithms[ 0 ], )
 
         time.sleep( 0.2 )
 
@@ -458,7 +458,8 @@ class InterOperabilityTester(unittest.TestCase):
                                                             supportedNamedGroups         = [ group ] )
                             WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
-                            print( traceback.format_tb( err.__traceback__ ) )
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            pprint( err )
                             WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
                         finally:
                             totalTime = time.time() - startTime
@@ -685,9 +686,9 @@ if __name__ == '__main__':
 
     suite = unittest.TestSuite()    
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
-    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
-    suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_parameters_matrix" ) )
-    suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_parameters_matrix" ) )
+    suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_parameters_matrix" ) )
     
 
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )

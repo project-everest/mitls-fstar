@@ -1944,6 +1944,9 @@ class TLSParser():
         return self.Digest( rawMsg, direction )
 
 def CString( pythonString ):
+    if type( pythonString ) != str:
+        raise Exception( "type( pythonString ) = %s, but expected 'str'" % type( pythonString ) )
+        
     NULL_BYTE = b"\0"
     return c_char_p( bytes( pythonString, "ascii" ) + NULL_BYTE )
 
