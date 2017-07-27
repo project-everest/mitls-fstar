@@ -161,36 +161,9 @@ let accept send recv config : ML Connection.connection =
 // (allowing resumption across miTLS client processes)
 val ffiConnect: config:config -> ticket: option (bytes * bytes) -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiConnect config ticket cb =
-  let pskids =
-    match ticket with
-    | Some (t, si) ->
-      (match Ticket.parse si with
-      | Some (Ticket.Ticket13 cs li rmsId rms) ->
-        (match PSK.psk_lookup t with
-        | Some _ -> trace ("input ticket "^(print_bytes t)^" is in PSK database")
-        | None ->
-          trace ("installing ticket "^(print_bytes t)^" in PSK database");
-          let CipherSuite13 ae h = cs in
-          PSK.coerce_psk t PSK.({
-            // TODO(adl) store in session info
-            // N.B. FFi.ffiGetTicket returns the PSK - no need to derive RMS again
-            ticket_nonce = Some empty_bytes;
-            time_created = 0;
-            // FIXME(adl): we should preserve the server flag somewhere
-            allow_early_data = config.enable_early_data;
-            allow_dhe_resumption = true;
-            allow_psk_resumption = true;
-            early_ae = ae;
-            early_hash = h;
-            // TODO(adl) store identities
-            identities = (empty_bytes, empty_bytes)
-          }) rms);
-        [t]
-      | _ -> failwith ("QUIC: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
-    | None -> [] in
   let send = FFI.sendTcpPacket cb in
   let recv = FFI.recvTcpPacket cb in
-  connect send recv config pskids
+  connect send recv config (FFI.install_ticket config ticket)
 
 val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiAcceptConnected config cb =

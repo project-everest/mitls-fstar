@@ -74,12 +74,12 @@ private let errno description txt : ML int =
   | None    -> -1 ))
 
 
-let connect send recv config_1 : ML (Connection.connection * int) =
+let connect send recv config_1 psks : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
   let here = new_region HyperHeap.root in
-  let c = TLS.connect here tcp config_1 in
+  let c = TLS.resume here tcp config_1 None psks in
   let rec read_loop c : ML int =
     let i = currentId c Reader in
     match read c i with
@@ -87,7 +87,7 @@ let connect send recv config_1 : ML (Connection.connection * int) =
     | ReadError description txt -> errno description txt
     | Update false -> read_loop c
     | Update true -> 0 // 0-RTT: ready to send early data
-    | _ -> failwith "FFI: Unexpected TLS read signal in accept_connected"
+    | _ -> failwith "FFI: Unexpected TLS read signal in connect"
     in
   let firstResult = read_loop c in
   c, firstResult
@@ -345,9 +345,38 @@ let recvTcpPacket callbacks max =
   else
     Platform.Tcp.RecvError ("socket recv failure")
 
-val ffiConnect: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
-let ffiConnect config cb =
-  connect (sendTcpPacket cb) (recvTcpPacket cb) config
+let install_ticket config ticket : ML (list PSK.psk_identifier) =
+  match ticket with
+  | Some (t, si) ->
+    (match Ticket.parse si with
+    | Some (Ticket.Ticket13 cs li rmsId rms) ->
+      (match PSK.psk_lookup t with
+      | Some _ ->
+        trace ("input ticket "^(print_bytes t)^" is in PSK database")
+      | None ->
+        trace ("installing ticket "^(print_bytes t)^" in PSK database");
+        let CipherSuite13 ae h = cs in
+        PSK.coerce_psk t PSK.({
+          // TODO(adl) store in session info
+          // N.B. FFi.ffiGetTicket returns the PSK - no need to derive RMS again
+          ticket_nonce = Some empty_bytes;
+          time_created = 0;
+          // FIXME(adl): we should preserve the server flag somewhere
+          allow_early_data = config.enable_early_data;
+          allow_dhe_resumption = true;
+          allow_psk_resumption = true;
+          early_ae = ae;
+          early_hash = h;
+          // TODO(adl) store identities
+          identities = (empty_bytes, empty_bytes)
+        }) rms);
+      [t]
+    | _ -> failwith ("QUIC: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
+  | None -> []
+
+val ffiConnect: config -> callbacks -> option (bytes * bytes) -> ML (Connection.connection * int)
+let ffiConnect config cb ticket =
+  connect (sendTcpPacket cb) (recvTcpPacket cb) config (install_ticket config ticket)
 
 val ffiAcceptConnected: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
 let ffiAcceptConnected config cb =

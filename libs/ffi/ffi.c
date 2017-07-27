@@ -409,13 +409,36 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     CAMLreturn(Val_int(retval));
 }
 
-static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal1(result);
+    CAMLlocal4(result, tticket, session, oticket);
     int ret;
 
-    result = caml_callback2_exn(*g_mitls_FFI_Connect, state->fstar_state, PtrToValue(callbacks));
+    // ticket: option (bytes * bytes)
+    if(ticket->ticket_len > 0) {
+      tticket = caml_alloc_string(ticket->ticket_len);
+      memcpy(String_val(tticket), ticket->ticket, ticket->ticket_len);
+      session = caml_alloc_string(ticket->session_len);
+      memcpy(String_val(session), ticket->session, ticket->session_len);
+      result = caml_alloc_tuple(2);
+      Store_field(result, 0, tticket);
+      Store_field(result, 1, session);
+
+      oticket = caml_alloc(1, 0);
+      Store_field(oticket, 0, result);
+    }
+    else {
+      oticket = Val_none;
+    }
+
+    value args[] = {
+      state->fstar_state,
+      PtrToValue(callbacks),
+      oticket
+    };
+
+    result = caml_callbackN_exn(*g_mitls_FFI_Connect, 3, args);
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
         ret = 0;
@@ -437,12 +460,24 @@ static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in 
 int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
+    mitls_ticket ticket = {0};
 
     *outmsg = NULL;
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_connect_caml(callbacks, state, outmsg, errmsg);
+    ret = FFI_mitls_connect_caml(callbacks, state, &ticket, errmsg);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_resume(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
+{
+    int ret;
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    ret = FFI_mitls_connect_caml(callbacks, state, ticket, errmsg);
     caml_release_runtime_system();
     return ret;
 }
