@@ -143,17 +143,19 @@ class OpenSSL():
     	self.SSL_CTX_set_min_proto_version( TLS1_3_VERSION )
     	self.SSL_CTX_set_max_proto_version( TLS1_3_VERSION )
 
-    def SetCertificateAndPrivateKey( self ):
+    def SetCertificateAndPrivateKey( self, serverSignatureAlgorithm ):
         SSL_FILETYPE_PEM 								  = c_int( 1 )
         self.libssl.SSL_CTX_use_certificate_file.restype  = c_int
         self.libssl.SSL_CTX_use_certificate_file.argtypes = [ c_voidp, c_voidp, c_int ]
         self.libssl.SSL_CTX_use_PrivateKey_file.restype   = c_int
         self.libssl.SSL_CTX_use_PrivateKey_file.argtypes  = [ c_voidp, c_voidp, c_int ]
 
-        result = self.libssl.SSL_CTX_use_certificate_file( self.context, CString( config.SERVER_CERT_PATH ), SSL_FILETYPE_PEM )
+        self.log.debug( "Calling SSL_CTX_use_certificate_file( '%s' )" % config.SERVER_CERT_PATH[ serverSignatureAlgorithm ] )
+        result = self.libssl.SSL_CTX_use_certificate_file( self.context, CString( config.SERVER_CERT_PATH[ serverSignatureAlgorithm ] ), SSL_FILETYPE_PEM )
         self.VerifyResult( "SSL_CTX_use_certificate_file", result )
 
-        result = self.libssl.SSL_CTX_use_PrivateKey_file( self.context, CString( config.SERVER_KEY_PATH ), SSL_FILETYPE_PEM )
+        self.log.debug( "Calling SSL_CTX_use_PrivateKey_file( '%s' )" % config.SERVER_KEY_PATH[ serverSignatureAlgorithm ] )
+        result = self.libssl.SSL_CTX_use_PrivateKey_file( self.context, CString( config.SERVER_KEY_PATH[ serverSignatureAlgorithm ] ), SSL_FILETYPE_PEM )
         self.VerifyResult( "SSL_CTX_use_certificate_file", result )
 
     def SSL_CTX_set_cipher_list( self, supportedCipherSuites ):
@@ -192,16 +194,16 @@ class OpenSSL():
     def InitServer( self, 
                     memorySocket,
                     supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
-                    supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
+                    serverSignatureAlgorithm        = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                     supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS  ):
         self.log.debug( "InitServer" )
 
         self.context = self.CreateServerContext()
         self.ConfigureTLS1_3()
-        self.SetCertificateAndPrivateKey()
+        self.SetCertificateAndPrivateKey( serverSignatureAlgorithm )
         self.SSL_CTX_set_cipher_list  ( supportedCipherSuites )
         self.SSL_CTX_set1_groups_list ( supportedNamedGroups )
-        self.SSL_CTX_set1_sigalgs_list( supportedSignatureAlgorithms )
+        # self.SSL_CTX_set1_sigalgs_list( supportedSignatureAlgorithms )
 
         self.memorySocket = memorySocket
 
@@ -279,6 +281,7 @@ class OpenSSL():
             self.acceptConnectionSucceeded = True
         except Exception as err: 
             pprint( traceback.format_tb( err.__traceback__ ) )
+            pprint( err )
 
     def SSL_connect( self ):
         self.log.debug( "SSL_connect" )
@@ -388,13 +391,13 @@ class OpenSSLTester(unittest.TestCase):
 
     def StartServerThread(  self, 
                             supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
-                            supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
+                            serverSignatureAlgorithm        = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                             supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
                             applicationData                 = None ):
         self.tlsServer = OpenSSL( "server" )
         self.tlsServer.InitServer(  memorySocket,
                                     supportedCipherSuites, 
-                                    supportedSignatureAlgorithms, 
+                                    serverSignatureAlgorithm, 
                                     supportedNamedGroups )
         
         serverThread   = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
@@ -406,13 +409,14 @@ class OpenSSLTester(unittest.TestCase):
                         supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
                         supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
                         supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
-                        msgManipulators                 = [] ):
+                        msgManipulators                 = [],
+                        serverSignatureAlgorithm        = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ], ):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
         serverThread = self.StartServerThread(  supportedCipherSuites,
-                                                supportedSignatureAlgorithms,
+                                                serverSignatureAlgorithm,
                                                 supportedNamedGroups,
                                                 DATA_SERVER_TO_CLIENT )
 
@@ -456,10 +460,15 @@ class OpenSSLTester(unittest.TestCase):
                             startTime = time.time()
                             self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
                                                 supportedSignatureAlgorithms = [ algorithm ],
-                                                supportedNamedGroups         = [ group ] )
+                                                supportedNamedGroups         = [ group ],
+                                                serverSignatureAlgorithm     = algorithm )
                             WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+
+                            for msg in memorySocket.tlsParser.transcript:
+                                memorySocket.tlsParser.PrintMsg( msg )
                         except Exception as err: 
-                            print( traceback.format_tb( err.__traceback__ ) )
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            pprint( err )
                             WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
                             # raise
                         finally:

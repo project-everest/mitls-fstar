@@ -393,7 +393,8 @@ class MITLS():
     def InitServer( self, 
                     supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                     serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
-                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
+                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
+                    allowEarlyData                  = False ):
         self.log.debug( "InitServer" )
 
         self.mitls_state = self.FFI_mitls_configure()
@@ -403,7 +404,7 @@ class MITLS():
         self.FFI_mitls_configure_signature_algorithms       ( [ serverSignatureAlgorithm ] )
         self.FFI_mitls_configure_cipher_suites              ( supportedCipherSuites )
         self.FFI_mitls_configure_named_groups               ( supportedNamedGroups )
-        # self.FFI_mitls_configure_early_data                 ( allowEarlyData )
+        self.FFI_mitls_configure_early_data                 ( allowEarlyData )
         
     def InitClient( self, 
                     hostName, 
@@ -710,7 +711,7 @@ class MITLS():
         errmsg                                = c_char_p() 
         self.miTLS.FFI_mitls_resume.restype  = c_int
         self.miTLS.FFI_mitls_resume.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp ]
-        
+
         ticket_c = ( c_uint8 * SIZEOF_TICKET ).from_buffer( sessionTicket )
         ret = self.miTLS.FFI_mitls_resume(  self.FFI_mitls_callbacks,
                                             self.mitls_state,
@@ -729,7 +730,7 @@ class MITLS():
         else:
             self.FFI_mitls_resume( sessionTicket )
         
-        self.log.debug( "QUICConnect completed!" )
+        self.log.debug( "Connect completed!" )
 
         return sessionTicket
 
@@ -888,11 +889,13 @@ class MITLSTester(unittest.TestCase):
                             supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                             serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                             supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
-                            applicationData                 = None ):
+                            applicationData                 = None,
+                            allowEarlyData                  = False ):
         self.tlsServer = MITLS( "server" )
-        self.tlsServer.InitServer(  supportedCipherSuites, 
-                                    serverSignatureAlgorithm, 
-                                    supportedNamedGroups )
+        self.tlsServer.InitServer(  supportedCipherSuites    = supportedCipherSuites, 
+                                    serverSignatureAlgorithm = serverSignatureAlgorithm, 
+                                    supportedNamedGroups     = supportedNamedGroups,
+                                    allowEarlyData           = allowEarlyData    )
         
         serverThread   = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
         serverThread.start()
@@ -1009,6 +1012,38 @@ class MITLSTester(unittest.TestCase):
 
         self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
+        return memorySocket.tlsParser.transcript
+
+    def test_MITLS_ClientAndServer_SessionResumptionWithEarlyData( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+        try:
+            sessionTicket   = self.RunSingleTest()
+            firstSession    = memorySocket.tlsParser.transcript[ : ]
+            self.RunSingleTest( sessionTicket = sessionTicket, allowEarlyData = True ) 
+            entireTranscipt = firstSession + memorySocket.tlsParser.transcript
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+            
+        # print( "============= client EARLY secret ===============")
+        # print( TLSParser.FormatBuffer( self.tlsClient.quicEarlySecret ))
+        # print( "============= server EARLY secret ===============")
+        # print( TLSParser.FormatBuffer( self.tlsServer.quicEarlySecret ))
+
+        if config.LOG_LEVEL < logging.ERROR:
+            # pprint( memorySocket.tlsParser.transcript )
+            for msg in entireTranscipt:
+                memorySocket.tlsParser.PrintMsg( msg )
+
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            pprint( keysAndFiles )
+
+        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
 
         # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
         return memorySocket.tlsParser.transcript
@@ -1596,26 +1631,27 @@ class MITLSTester(unittest.TestCase):
                         supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                         supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
                         supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
-                        applicationData                 = None,
+                        applicationData                 = b"Server->Client\x00",
                         msgManipulators                 = [],
                         serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
-                        sessionTicket                   = None):
+                        sessionTicket                   = None,
+                        allowEarlyData                  = False):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
-        serverThread = self.StartServerThread(  supportedCipherSuites,
-                                                serverSignatureAlgorithm,
-                                                supportedNamedGroups,
-                                                applicationData )
+        serverThread = self.StartServerThread(  supportedCipherSuites    = supportedCipherSuites,
+                                                serverSignatureAlgorithm = serverSignatureAlgorithm,
+                                                supportedNamedGroups     = supportedNamedGroups,
+                                                applicationData          = applicationData,
+                                                allowEarlyData           = allowEarlyData )
 
         self.tlsClient = MITLS( "client" )
         self.tlsClient.InitClient(  "test_server.com", 
                                     supportedCipherSuites           = supportedCipherSuites,
                                     supportedSignatureAlgorithms    = supportedSignatureAlgorithms,
                                     supportedNamedGroups            = supportedNamedGroups,
-                                    # allowEarlyData                  = allowEarlyData,
-                                     )
+                                    allowEarlyData                  = allowEarlyData )
         self.tlsClient.Connect( sessionTicket )
         self.tlsClient.Send( b"Client->Server\x00" )            
         self.tlsClient.dataReceived = self.tlsClient.Receive()
@@ -1901,10 +1937,11 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumption" ) )
+    suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
     
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
 
-    suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
 

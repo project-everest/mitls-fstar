@@ -3,7 +3,7 @@ from ctypes import CDLL
 
 if sys.platform == "linux":
     # NSS_PATH = "/home/user/dev/nss-3.30.2/dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/"
-    NSS_PATH = "/home/user/dev/nightly-nss/dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/"
+    NSS_PATH = "/home/user/dev/nightly-nss/dist/Linux4.10_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/"
     SHARED_OBJECT_TEMPLATE = "lib%s.so"   
 elif sys.platform == "win32": 
     NSS_PATH =  "c:/dev/nss-3.30.2/dist/WIN954.0_DBG.OBJ/lib/"
