@@ -213,13 +213,13 @@ let register hs keys =
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
-val export: hs -> KeySchedule.exportKey -> St unit 
-let export hs xk = 
+val export: hs -> KeySchedule.exportKey -> St unit
+let export hs xk =
   trace "exporting a key";
   Monotonic.Seq.i_write_at_end hs.epochs.exporter xk
 
 let xkeys_of hs = Monotonic.Seq.i_read hs.epochs.exporter
-  
+
 (* ------- Pure functions between offer/mode and their message encodings -------- *)
 
 (*
