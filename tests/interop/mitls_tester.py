@@ -69,6 +69,9 @@ from tlsparser import   MemorySocket,                       \
 
 SUCCESS                     = 1
 SIZEOF_QUIC_TICKET          = 1296
+SIZEOF_TICKET               = SIZEOF_QUIC_TICKET
+SIZEOF_QUIC_SECRET          = 72
+SIZEOF_SECRET               = SIZEOF_QUIC_SECRET
 NULL_BYTE                   = b"\0"
 TLS_VERSION_1_3             = b"1.3" + NULL_BYTE
 # SERVER_KEY_PATH             = "/home/user/dev/microsoft-git/Everest/tests/pytester/certificates/rsa_certificates/test_server.key"
@@ -317,6 +320,18 @@ class MITLS():
         ret = self.miTLS.FFI_mitls_configure_named_groups( self.mitls_state, CString( namedGroupsString ) )
         self.VerifyResult( "FFI_mitls_configure_named_groups", ret )
 
+    def FFI_mitls_configure_early_data( self, allowEarlyData ):
+        self.log.debug( 'FFI_mitls_configure_early_data; allowEarlyData = "%s"' % allowEarlyData )
+        
+        allowEarlyData_c = c_int( 0 )
+        if allowEarlyData:
+            allowEarlyData_c = c_int( 1 )
+
+        self.miTLS.FFI_mitls_configure_early_data.restype  = c_int
+        self.miTLS.FFI_mitls_configure_early_data.argtypes = [ c_voidp, c_int ]
+        ret = self.miTLS.FFI_mitls_configure_early_data( self.mitls_state, allowEarlyData_c )
+        self.VerifyResult( "FFI_mitls_configure_early_data", ret )
+
     def InitQUIC( 	self,
     				isServer,
     			  	hostName 						= None, 
@@ -388,18 +403,21 @@ class MITLS():
         self.FFI_mitls_configure_signature_algorithms       ( [ serverSignatureAlgorithm ] )
         self.FFI_mitls_configure_cipher_suites              ( supportedCipherSuites )
         self.FFI_mitls_configure_named_groups               ( supportedNamedGroups )
-            
+        # self.FFI_mitls_configure_early_data                 ( allowEarlyData )
+        
     def InitClient( self, 
                     hostName, 
                     supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                     supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
-                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
+                    supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
+                    allowEarlyData                  = False ):
         self.log.debug( "InitClient" )
 
         self.mitls_state = self.FFI_mitls_configure( hostName )
         self.FFI_mitls_configure_cipher_suites              ( supportedCipherSuites )
         self.FFI_mitls_configure_signature_algorithms       ( supportedSignatureAlgorithms )
         self.FFI_mitls_configure_named_groups               ( supportedNamedGroups )
+        self.FFI_mitls_configure_early_data                 ( allowEarlyData )
 
     def GetClientCallbacks( self ):
         # Callbacks are defined in mitls.h:
@@ -559,6 +577,22 @@ class MITLS():
 
         return pyBuffer
 
+    def FFI_mitls_get_ticket( self ):
+        self.miTLS.FFI_mitls_get_ticket.restype  = c_int
+        self.miTLS.FFI_mitls_get_ticket.argtypes = [ c_voidp, c_voidp, c_voidp ]
+        errmsg                                   = c_char_p() 
+
+        ticket   = bytearray( SIZEOF_TICKET )
+        ticket_c = ( c_uint8 * SIZEOF_TICKET ).from_buffer( ticket )
+
+        ret = self.miTLS.FFI_mitls_get_ticket(  self.mitls_state,
+                                                ticket_c,
+                                                byref( errmsg ) )
+        self.PrintMsgIfNotNull( None, errmsg )
+        self.VerifyResult( "FFI_mitls_get_ticket", ret )
+
+        return ticket
+
     def FFI_mitls_quic_get_ticket( self ):
         self.miTLS.FFI_mitls_quic_get_ticket.restype  = c_int
         self.miTLS.FFI_mitls_quic_get_ticket.argtypes = [ c_voidp, c_voidp, c_voidp ]
@@ -620,8 +654,6 @@ class MITLS():
         self.FFI_mitls_quic_free()
 
     def GetQUICSecret( self, isEarlyData = False ):
-        SIZEOF_QUIC_SECRET = 72
-
         early = c_int( 0 )
         if isEarlyData:
             early = c_int( 1 )
@@ -641,14 +673,29 @@ class MITLS():
 
         return quicSecret
 
-    # For client side
-    def Connect( self ):
-        self.log.debug( "Connect" )
+    def GetSecret( self, isEarlyData = False ):
+        early = c_int( 0 )
+        if isEarlyData:
+            early = c_int( 1 )
+        
+        secret   = bytearray( SIZEOF_SECRET )
+        secret_c = ( c_uint8 * SIZEOF_SECRET ).from_buffer( secret )
 
-        outmsg                   = c_char_p()
-        errmsg                   = c_char_p() 
-        self.FFI_mitls_callbacks = self.GetClientCallbacks()
+        self.miTLS.FFI_mitls_get_exporter.restype  = c_int
+        self.miTLS.FFI_mitls_get_exporter.argtypes = [ c_voidp, c_int, c_voidp, c_voidp ]
+        errmsg                                     = c_char_p() 
+        ret = self.miTLS.FFI_mitls_get_exporter(   self.mitls_state,
+                                                    early,
+                                                    secret_c,
+                                                    byref( errmsg ) )
+        self.PrintMsgIfNotNull( None, errmsg )
+        self.VerifyResult( "FFI_mitls_get_exporter", ret )
 
+        return secret
+
+    def FFI_mitls_connect( self ):
+        outmsg                                = c_char_p()
+        errmsg                                = c_char_p() 
         self.miTLS.FFI_mitls_connect.restype  = c_int
         self.miTLS.FFI_mitls_connect.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp ]
 
@@ -658,6 +705,33 @@ class MITLS():
                                             byref( errmsg ) )
         self.PrintMsgIfNotNull( outmsg, errmsg )
         self.VerifyResult( "FFI_mitls_connect", ret )
+
+    def FFI_mitls_resume( self, sessionTicket ):
+        errmsg                                = c_char_p() 
+        self.miTLS.FFI_mitls_resume.restype  = c_int
+        self.miTLS.FFI_mitls_resume.argtypes = [ c_voidp, c_voidp, c_voidp, c_voidp ]
+        
+        ticket_c = ( c_uint8 * SIZEOF_TICKET ).from_buffer( sessionTicket )
+        ret = self.miTLS.FFI_mitls_resume(  self.FFI_mitls_callbacks,
+                                            self.mitls_state,
+                                            ticket_c,
+                                            byref( errmsg ) )
+        self.PrintMsgIfNotNull( None, errmsg )
+        self.VerifyResult( "FFI_mitls_resume", ret )
+
+    # For client side
+    def Connect( self, sessionTicket ):
+        self.log.debug( "Connect" )
+        self.FFI_mitls_callbacks = self.GetClientCallbacks()
+
+        if sessionTicket is None:
+            self.FFI_mitls_connect()
+        else:
+            self.FFI_mitls_resume( sessionTicket )
+        
+        self.log.debug( "QUICConnect completed!" )
+
+        return sessionTicket
 
     def Send( self, payload ):
         self.log.debug( "Send: %s; self.mitls_state = %s" % (payload, self.mitls_state  ) )
@@ -935,6 +1009,38 @@ class MITLSTester(unittest.TestCase):
 
         self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
+        return memorySocket.tlsParser.transcript
+
+    def test_MITLS_ClientAndServer_SessionResumption( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+        try:
+            sessionTicket   = self.RunSingleTest() 
+            firstSession    = memorySocket.tlsParser.transcript[ : ]
+            self.RunSingleTest( sessionTicket = sessionTicket ) 
+            entireTranscipt = firstSession + memorySocket.tlsParser.transcript
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+            
+        # print( "============= client EARLY secret ===============")
+        # print( TLSParser.FormatBuffer( self.tlsClient.quicEarlySecret ))
+        # print( "============= server EARLY secret ===============")
+        # print( TLSParser.FormatBuffer( self.tlsServer.quicEarlySecret ))
+
+        if config.LOG_LEVEL < logging.ERROR:
+            # pprint( memorySocket.tlsParser.transcript )
+            for msg in entireTranscipt:
+                memorySocket.tlsParser.PrintMsg( msg )
+
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            pprint( keysAndFiles )
+
+        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
 
         # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
         return memorySocket.tlsParser.transcript
@@ -1492,7 +1598,8 @@ class MITLSTester(unittest.TestCase):
                         supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
                         applicationData                 = None,
                         msgManipulators                 = [],
-                        serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ -1 ] ):
+                        serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
+                        sessionTicket                   = None):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
@@ -1504,16 +1611,35 @@ class MITLSTester(unittest.TestCase):
 
         self.tlsClient = MITLS( "client" )
         self.tlsClient.InitClient(  "test_server.com", 
-                                    supportedCipherSuites,
-                                    supportedSignatureAlgorithms,
-                                    supportedNamedGroups )
-        self.tlsClient.Connect()
+                                    supportedCipherSuites           = supportedCipherSuites,
+                                    supportedSignatureAlgorithms    = supportedSignatureAlgorithms,
+                                    supportedNamedGroups            = supportedNamedGroups,
+                                    # allowEarlyData                  = allowEarlyData,
+                                     )
+        self.tlsClient.Connect( sessionTicket )
         self.tlsClient.Send( b"Client->Server\x00" )            
         self.tlsClient.dataReceived = self.tlsClient.Receive()
+        sessionTicket = self.tlsClient.FFI_mitls_get_ticket()   
 
         serverThread.join()
+
+        clientSecret = self.tlsClient.GetSecret( isEarlyData = False )
+        serverSecret = self.tlsServer.GetSecret( isEarlyData = False )
+
         if self.tlsServer.acceptConnectionSucceeded == False:
             raise Exception( "Server failed to connect" )
+
+        if clientSecret != serverSecret:
+            raise Exception( "TLS secrets are different" )
+
+        # if allowEarlyData:
+        #     clientEarlySecret = self.tlsClient.GetSecret( isEarlyData = True )
+        #     serverEarlySecret = self.tlsServer.GetSecret( isEarlyData = True )
+
+        #     if clientEarlySecret != serverEarlySecret:
+        #         raise Exception( "TLS EARLY secrets are different" )                
+                
+        return sessionTicket
 
         self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
@@ -1773,9 +1899,12 @@ if __name__ == '__main__':
     # SI: these should be args. 
     suite = unittest.TestSuite()
     
-    suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
+    # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumption" ) )
+    
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
+
+    suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
 
