@@ -12,18 +12,49 @@ void mk_random_bytes(random_bytes arr) {
     }
 }
 
+typedef int sessionID;
+
+// Not sure about this one
+typedef uint8_t valid_cipher_suite[32];
+
+void mk_cipher_suite(valid_cipher_suite cipher) {
+    int i = 0;
+    for (; i < 32; i++) {
+        cipher[i] = rand() % 256;
+    }
+}
+
+void mk_cipher_suites(valid_cipher_suite * arr) {
+    int i = 0;
+    for (; i < 256; i++) {
+        mk_cipher_suite(arr[i]);
+    }
+}
+
+typedef int compression;
+
+void mk_compressions(compression * arr) {
+    int i = 0;
+    for (; i < 256; i++) {
+        arr[i] = rand();
+    }
+}
+
 typedef struct offer {
   // ch_protocol_version: protocolVersion;  // max supported version up to TLS_1p2 (TLS 1.3 uses the supported_versions extension)
   random_bytes ch_client_random;
-  // h_sessionID: sessionID;
-  // ch_cipher_suites: k:valid_cipher_suites{List.Tot.length k < 256};
-  // ch_compressions: cl:list compression{List.Tot.length cl > 0 /\ List.Tot.length cl < 256};
+  sessionID h_sessionID;
+  valid_cipher_suite ch_cipher_suites[256];
+  compression ch_compressions[256];
   // ch_extensions: option (ce:list extension{List.Tot.length ce < 256});
 } offer;
 
-// TODO: initialize
 offer mk_offer() {
     offer o;
+    mk_random_bytes(o.ch_client_random);
+    o.h_sessionID = 10;
+    mk_cipher_suites(o.ch_cipher_suites);
+    mk_compressions(o.ch_compressions);
     return o;
 }
 
@@ -163,9 +194,45 @@ negotationContext write_state(negotationContext ctxt, negotationState st) {
 // A synthetic set of state transition functions.
 negotationContext c_init_to_c_offer(negotationContext ctxt) {
     negotationState st = read_state(ctxt);
-
+    // probably need to use st here or it will be optimized away
+    st = mk_client_offer();
+    write_state(ctxt, st);
+    return ctxt;
 }
 
-void nego_baseline() {
+negotationContext c_offer_to_c_mode(negotationContext ctxt) {
+    negotationState st = read_state(ctxt);
+    // // probably need to use st here or it will be optimized away
+    // st = mk_client_offer();
+    write_state(ctxt, st);
+    return ctxt;
+}
 
+// let ns_step (#r:role) (#cfg:config) (#resume:resumeInfo r)
+//   (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
+//   match ns, ns' with
+//   | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
+//   | C_Offer offer, C_Mode mode -> mode.n_offer == offer
+//   | C_Offer _, C_Complete _ _ -> True
+//   | C_Mode _, C_WaitFinished2 _ _ -> True
+//   | C_Mode _, C_Complete _ _ -> True
+//   | S_Init _, S_ClientHello _ -> True
+//   | S_ClientHello _, S_Mode _ -> True
+//   | _, _ -> ns == ns'
+
+
+negotationContext c_offer_to_c_complete(negotationContext ctxt) {
+    negotationState st = read_state(ctxt);
+    // // probably need to use st here or it will be optimized away
+    // st = mk_client_offer();
+    write_state(ctxt, st);
+    return ctxt;
+}
+
+void nego_baseline(int iterations) {
+    for (int i = 0; i < iterations; i++) {
+        negotationContext ctxt = mk_context();
+        // Move through client state transitions.
+        ctxt = c_init_to_c_offer(ctxt);
+    }
 }
