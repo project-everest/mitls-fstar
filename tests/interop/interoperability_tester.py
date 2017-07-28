@@ -83,9 +83,9 @@ class InterOperabilityTester(unittest.TestCase):
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
 
         self.tlsServer = MITLS( "server" )
-        self.tlsServer.InitServer(  supportedCipherSuites,
-                                    supportedSignatureAlgorithms,
-                                    supportedNamedGroups )
+        self.tlsServer.InitServer(  supportedCipherSuites    = supportedCipherSuites,
+                                    serverSignatureAlgorithm = supportedSignatureAlgorithms[ 0 ],
+                                    supportedNamedGroups     = supportedNamedGroups )
 
         applicationData = DATA_SERVER_TO_CLIENT
         serverThread    = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
@@ -125,9 +125,9 @@ class InterOperabilityTester(unittest.TestCase):
 
         self.tlsServer = OpenSSL( "server" )
         self.tlsServer.InitServer(  memorySocket,
-                                    supportedCipherSuites,
-                                    supportedSignatureAlgorithms,
-                                    supportedNamedGroups )
+                                    supportedCipherSuites    = supportedCipherSuites,
+                                    serverSignatureAlgorithm = supportedSignatureAlgorithms[ 0 ],
+                                    supportedNamedGroups     = supportedNamedGroups )
 
         applicationData = DATA_SERVER_TO_CLIENT
         serverThread    = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
@@ -166,7 +166,7 @@ class InterOperabilityTester(unittest.TestCase):
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
 
         self.tlsServer = NSS( "server" )
-        self.tlsServer.InitServer( memorySocket )
+        self.tlsServer.InitServer( memorySocket, serverSignatureAlgorithm = supportedSignatureAlgorithms[ 0 ] )
 
         applicationData = DATA_SERVER_TO_CLIENT
         serverThread    = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
@@ -193,7 +193,6 @@ class InterOperabilityTester(unittest.TestCase):
 
         if self.tlsServer.dataReceived != DATA_CLIENT_TO_SERVER:
             raise Exception( "self.tlsServer.dataReceived = %s, instead of expected %s" % ( self.tlsServer.dataReceived, DATA_CLIENT_TO_SERVER ) )
-            
 
     def RunSingleTest_NSS_MITLS(self, 
                                 supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
@@ -253,7 +252,8 @@ class InterOperabilityTester(unittest.TestCase):
                                                     supportedNamedGroups         = knownGoodNamedGroup)
                     logFile.write( "OK\n" )
                 except Exception as err: 
-                    traceback.print_exc()
+                    pprint( traceback.format_tb( err.__traceback__ ) )
+                    pprint( err )
                     logFile.write( "FAILED\n" )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
@@ -274,7 +274,8 @@ class InterOperabilityTester(unittest.TestCase):
                                                     supportedNamedGroups         = knownGoodNamedGroup )
                     logFile.write( "OK\n" )
                 except Exception as err: 
-                    traceback.print_exc()
+                    pprint( traceback.format_tb( err.__traceback__ ) )
+                    pprint( err )
                     logFile.write( "FAILED\n" )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
@@ -290,7 +291,8 @@ class InterOperabilityTester(unittest.TestCase):
                     self.RunSingleTest_NSS_MITLS( supportedSignatureAlgorithms = [ algorithm ])
                     logFile.write( "OK\n" )
                 except Exception as err: 
-                    traceback.print_tb(err.__traceback__)
+                    pprint( traceback.format_tb( err.__traceback__ ) )
+                    pprint( err )
                     logFile.write( "FAILED\n" )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
@@ -307,7 +309,8 @@ class InterOperabilityTester(unittest.TestCase):
                     self.RunSingleTest_MITLS_NSS( supportedSignatureAlgorithms = [ algorithm ])
                     logFile.write( "OK\n" )
                 except Exception as err: 
-                    traceback.print_tb(err.__traceback__)
+                    pprint( traceback.format_tb( err.__traceback__ ) )
+                    pprint( err )
                     logFile.write( "FAILED\n" )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
@@ -324,7 +327,8 @@ class InterOperabilityTester(unittest.TestCase):
                     self.RunSingleTest_NSS_MITLS( supportedNamedGroups = [ group ] )
                     logFile.write( "OK\n" )
                 except Exception as err: 
-                    traceback.print_tb(err.__traceback__)
+                    pprint( traceback.format_tb( err.__traceback__ ) )
+                    pprint( err )
                     logFile.write( "FAILED\n" )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
@@ -341,7 +345,8 @@ class InterOperabilityTester(unittest.TestCase):
                     self.RunSingleTest_MITLS_NSS( supportedNamedGroups = [ group ] )
                     logFile.write( "OK\n" )
                 except Exception as err: 
-                    traceback.print_tb(err.__traceback__)
+                    pprint( traceback.format_tb( err.__traceback__ ) )
+                    pprint( err )
                     logFile.write( "FAILED\n" )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
@@ -429,11 +434,13 @@ class InterOperabilityTester(unittest.TestCase):
                                                             supportedNamedGroups         = [ group ] )
                             WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
-                            print( traceback.format_tb( err.__traceback__ ) )
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            pprint( err )
                             WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
                         finally:
                             totalTime = time.time() - startTime
                             WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
@@ -685,8 +692,8 @@ if __name__ == '__main__':
 
 
     suite = unittest.TestSuite()    
-    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
-    suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
+    suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_parameters_matrix" ) )
     

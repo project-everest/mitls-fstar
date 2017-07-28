@@ -94,6 +94,8 @@ SUPPORTED_SIGNATURE_ALGORITHMS = [
                                     'ECDSA+SHA256',  # OK     
                                     'ECDSA+SHA384',  # OK     
                                     'ECDSA+SHA512',  # OK 
+
+                                    
                                     # 'ECDSA+SHA1',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm
                                     # 'RSA+SHA384',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm     
                                     # 'RSA+SHA512',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm     
@@ -375,7 +377,7 @@ class MITLS():
 
     def InitServer( self, 
                     supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
-                    serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ -1 ],
+                    serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                     supportedNamedGroups            = SUPPORTED_NAMED_GROUPS ):
         self.log.debug( "InitServer" )
 

@@ -44,7 +44,8 @@ SERVER_CERT_PATH            = "/home/user/dev/git/everest/mitls-fstar/data/serve
 SERVER_KEY_PATH             = "/home/user/dev/git/everest/mitls-fstar/data/server-ecdsa.key"
 
 KEY_DATABASE_PATH           = "./certificates/db"
-CERTIFICATE_NAME            = "ecdsa.cert.mitls.org - Organization"
+# CERTIFICATE_NAME            = "ecdsa.cert.mitls.org - Organization"
+CERTIFICATE_NAME            = "test_server.com - CAorg"
 DATABASE_PASSWORD           = "12345678"
 
 NULL_BYTE                   = b"\0"
@@ -236,6 +237,7 @@ class NSS():
         result = self.libnss3.PK11_SetPasswordFunc( self.cutils.getAddress( self.getPasswordCallback ) )
 
     def NSS_Initialize( self, dataBasePath ):
+        self.log.debug( "NSS_Initialize; database path = %s" % dataBasePath )
         SECMOD_DB           = "secmod.db" 
         NSS_INIT_READONLY   = 0x1
         certPrefix          = c_char_p( None )
@@ -252,12 +254,14 @@ class NSS():
                                                 NSS_INIT_READONLY )
         self.VerifyResult( "NSS_Initialize", result )
 
-    def InitServer( self, memorySocket ):
+    def InitServer( self, 
+                    memorySocket, 
+                    serverSignatureAlgorithm  = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ] ):
         self.log.debug( "InitServer" )
 
         self.SSL_ConfigServerSessionIDCache()
         self.PK11_SetPasswordFunc()
-        self.NSS_Initialize( KEY_DATABASE_PATH )
+        self.NSS_Initialize( config.NSS_KEY_DATABASE_PATH[ serverSignatureAlgorithm ] )
 
         self.memorySocket = memorySocket
         
@@ -386,6 +390,7 @@ class NSS():
         self.VerifyResult( "PR_Connect", result )
         
     def PK11_FindCertFromNickname( self, certificateName ):
+        self.log.debug( "PK11_FindCertFromNickname; certificateName = %s" % certificateName )
         NULL                = 0
         PW_PLAINTEXT        = 2 # see secutil.h
         certificateName_c   = CString( certificateName )
