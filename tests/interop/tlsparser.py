@@ -168,7 +168,11 @@ SIZE_OF_UINT8           = 1
 SIZE_OF_UINT16          = 2
 SIZE_OF_UINT24          = 3
 SIZE_OF_UINT32          = 4
+SIZE_OF_128_BIT_KEY     = 16
+SIZE_OF_256_BIT_KEY     = 32
 TLS_RECORD_HEADER_SIZE  = SIZE_OF_TYPE + SIZE_OF_PROTOCOL + SIZE_OF_UINT16
+
+
 
 TLS_RECORD_TYPE_ALERT      = 21
 TLS_RECORD_TYPE_HANDSHAKE  = 22
@@ -997,6 +1001,7 @@ class TLSParser():
         cipherSuite = self.ConsumeCipherSuite()        
         serverHello.append( cipherSuite )
         self.state.selectedCipherSuite = self.ParseShort( cipherSuite.RawContents )
+        self.log.debug( "selectedCipherSuite = %s" % self.state.selectedCipherSuite )
         ################# Extensions:
         extensions, rawExtensions = self.ConsumeList( SIZE_OF_UINT16, 
                                                       partial(  self.ConsumeExtension, 
@@ -1193,23 +1198,28 @@ class TLSParser():
         plaintext        = None
         correctIVAndKey  = None
         for secret in ivsAndKeys:
-            try:
-                if automaticallyAdvanceIV:
-                    nextIV = self.GetCurrentIV( secret )
-                else:
-                    nextIV = secret.IV
+            if automaticallyAdvanceIV:
+                nextIV = self.GetCurrentIV( secret )
+            else:
+                nextIV = secret.IV
 
-                if self.state.selectedCipherSuite in AES_128_GCM_FAMILY:
-                    plaintext = Cryptor.AES_GCM_Decrypt( nextIV, secret.Key, cipherText, tag )
-
-                elif self.state.selectedCipherSuite == TLS_CHACHA20_POLY1305_SHA256:
-                    plaintext = self.openssl.Decrypt_CHACHA20Poly1305( secret.Key, nextIV, cipherText, tag )
-
-                else:
-                    raise TLSParserError( "Unknown selectedCipherSuite %s" % self.state.selectedCipherSuite)
-
+            try: # AES_GCM
+                plaintext       = Cryptor.AES_GCM_Decrypt( nextIV, secret.Key, cipherText, tag )
                 correctIVAndKey = AttrDict( { 'Key' : secret.Key[ : ], 'IV' : nextIV[:]} )
-                
+                if len( secret.Key ) == SIZE_OF_128_BIT_KEY:
+                    self.state.selectedCipherSuite = TLS_AES_128_GCM_SHA256
+                elif len( secret.Key ) == SIZE_OF_256_BIT_KEY:
+                    self.state.selectedCipherSuite = TLS_AES_256_GCM_SHA384
+                else:
+                    raise TLSParserError( "Size of key should be either 16 or 32 bytes, but instead len( secret.Key ) = %d" % len( secret.Key ))
+                break
+            except (cryptography.exceptions.InvalidTag, OpenSSLError):
+                pass
+
+            try: # CHACHA20POLY
+                plaintext       = self.openssl.Decrypt_CHACHA20Poly1305( secret.Key, nextIV, cipherText, tag )
+                correctIVAndKey = AttrDict( { 'Key' : secret.Key[ : ], 'IV' : nextIV[:]} )
+                self.state.selectedCipherSuite = TLS_CHACHA20_POLY1305_SHA256
                 break
             except (cryptography.exceptions.InvalidTag, OpenSSLError):
                 pass

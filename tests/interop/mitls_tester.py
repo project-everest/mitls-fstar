@@ -79,8 +79,8 @@ TLS_VERSION_1_3             = b"1.3" + NULL_BYTE
 # SERVER_SIGNATURE_ALGORITHM  = "ECDSA+SHA384"
 SUPPORTED_CIPHER_SUITES = [  
                             "TLS_AES_128_GCM_SHA256",               # OK
-                            "TLS_AES_256_GCM_SHA384",               # OK
-                            "TLS_CHACHA20_POLY1305_SHA256",         # OK
+                            # "TLS_AES_256_GCM_SHA384",               # OK
+                            # "TLS_CHACHA20_POLY1305_SHA256",         # OK
                             # # "TLS_AES_128_CCM_SHA256",               # NOT ok: errmsg = "b'Failure("not linked to openSSL yet")'"                                    
                             # "TLS_AES_128_CCM_8_SHA256",             # NOT ok: errmsg = "b'Failure("not linked to openSSL yet")'"                                    
                             # "ECDHE-RSA-AES256-GCM-SHA384",          # NOT OK: NGO| negotiation failed: AD_handshake_failure (ciphersuite negotiation failed)    
@@ -95,8 +95,8 @@ SUPPORTED_CIPHER_SUITES = [
  ]
 SUPPORTED_SIGNATURE_ALGORITHMS = [ 
                                     'ECDSA+SHA256',  # OK     
-                                    'ECDSA+SHA384',  # OK     
-                                    'ECDSA+SHA512',  # OK 
+                                    # 'ECDSA+SHA384',  # OK     
+                                    # 'ECDSA+SHA512',  # OK 
 
                                     
                                     # 'ECDSA+SHA1',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm
@@ -107,9 +107,9 @@ SUPPORTED_SIGNATURE_ALGORITHMS = [
 ]
 SUPPORTED_NAMED_GROUPS = [
                             "X25519",                    # OK 
-                            "P-521", # a.k.a secp521r1   # OK                         
-                            "P-384", # a.k.a secp384r1   # OK                         
-                            "P-256", # a.k.a secp256r1   # OK                         
+                            # "P-521", # a.k.a secp521r1   # OK                         
+                            # "P-384", # a.k.a secp384r1   # OK                         
+                            # "P-256", # a.k.a secp256r1   # OK                         
                             # "X448",                      # NOT OK    TLS| StAE decrypt failed.; TLS| Ignoring the decryption failure (rejected 0-RTT data) 
                             # "FFDHE4096",                 # OK         
                             # "FFDHE3072",                 # OK         
@@ -348,8 +348,9 @@ class MITLS():
         else:
             quicTicket_c = ( c_uint8 * SIZEOF_QUIC_TICKET ).from_buffer( quicSessionTicket )
         
-        self.quicConfig = self.cutils.QuicConfigCreate( CString( config.SERVER_CERT_PATH ),
-        												CString( config.SERVER_KEY_PATH  ),
+        serverSignatureAlgorithm = supportedSignatureAlgorithms[ 0 ]
+        self.quicConfig = self.cutils.QuicConfigCreate( CString( config.SERVER_CERT_PATH[ serverSignatureAlgorithm ] ),
+        												CString( config.SERVER_KEY_PATH[ serverSignatureAlgorithm ]  ),
         												CString( config.SERVER_CA_PATH   ),
         												CString( ":".join( supportedCipherSuites 		) ),
         												CString( ":".join( supportedSignatureAlgorithms ) ),
@@ -579,6 +580,7 @@ class MITLS():
         return pyBuffer
 
     def FFI_mitls_get_ticket( self ):
+        self.log.debug( "FFI_mitls_get_ticket" )
         self.miTLS.FFI_mitls_get_ticket.restype  = c_int
         self.miTLS.FFI_mitls_get_ticket.argtypes = [ c_voidp, c_voidp, c_voidp ]
         errmsg                                   = c_char_p() 
@@ -591,6 +593,8 @@ class MITLS():
                                                 byref( errmsg ) )
         self.PrintMsgIfNotNull( None, errmsg )
         self.VerifyResult( "FFI_mitls_get_ticket", ret )
+
+        # print( TLSParser.FormatBuffer( ticket ))
 
         return ticket
 
@@ -721,7 +725,7 @@ class MITLS():
         self.VerifyResult( "FFI_mitls_resume", ret )
 
     # For client side
-    def Connect( self, sessionTicket ):
+    def Connect( self, sessionTicket = None ):
         self.log.debug( "Connect" )
         self.FFI_mitls_callbacks = self.GetClientCallbacks()
 
@@ -1022,7 +1026,7 @@ class MITLSTester(unittest.TestCase):
 
         preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
         try:
-            sessionTicket   = self.RunSingleTest()
+            sessionTicket   = self.RunSingleTest( allowEarlyData = True )
             firstSession    = memorySocket.tlsParser.transcript[ : ]
             self.RunSingleTest( sessionTicket = sessionTicket, allowEarlyData = True ) 
             entireTranscipt = firstSession + memorySocket.tlsParser.transcript
@@ -1653,8 +1657,10 @@ class MITLSTester(unittest.TestCase):
                                     supportedNamedGroups            = supportedNamedGroups,
                                     allowEarlyData                  = allowEarlyData )
         self.tlsClient.Connect( sessionTicket )
-        self.tlsClient.Send( b"Client->Server\x00" )            
+        self.tlsClient.Send( b"Client->Server(1)\x00" )            
         self.tlsClient.dataReceived = self.tlsClient.Receive()
+        self.tlsClient.Send( b"Client->Server(2)\x00" )       
+        self.tlsClient.dataReceived += self.tlsClient.Receive()     
         sessionTicket = self.tlsClient.FFI_mitls_get_ticket()   
 
         serverThread.join()
@@ -1675,10 +1681,12 @@ class MITLSTester(unittest.TestCase):
         #     if clientEarlySecret != serverEarlySecret:
         #         raise Exception( "TLS EARLY secrets are different" )                
                 
-        return sessionTicket
-
         self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        return sessionTicket
+
+        
 
     @staticmethod
     def WriteToMultipleSinks( sinks, msg ):

@@ -219,7 +219,7 @@ class OpenSSL():
 		return iv, ciphertext, tag
 
 	def Decrypt_CHACHA20Poly1305( self, key, iv, ciphertext, tag ):
-		self.log.debug( "Decrypt_CHACHA20Poly1305" )
+		# self.log.debug( "Decrypt_CHACHA20Poly1305" )
 
 		if len( tag ) != SIZE_OF_CHACHA_TAG:
 			raise OpenSSLError( "Bad tag size")
