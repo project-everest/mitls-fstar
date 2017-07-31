@@ -66,22 +66,22 @@ void c_mode_to_c_hrr(negotationContext ctxt) {
 
 void s_init_to_s_client_hello(negotationContext ctxt) {
     negotationState st = read_state(ctxt);
-    // // probably need to use st here or it will be optimized away
-    // st = mk_client_offer();
+    ns_live(st);
+    st = mk_server_client_hello();
     write_state(ctxt, st);
 }
 
 void s_client_hello_to_s_mode(negotationContext ctxt) {
     negotationState st = read_state(ctxt);
-    // // probably need to use st here or it will be optimized away
-    // st = mk_client_offer();
+    ns_live(st);
+    st = mk_server_mode(st.server_hello_field.n_mode);
     write_state(ctxt, st);
 }
 
 void s_client_hello_to_s_complete(negotationContext ctxt) {
     negotationState st = read_state(ctxt);
-    // // probably need to use st here or it will be optimized away
-    // st = mk_client_offer();
+    ns_live(st);
+    st = mk_server_complete(st.server_mode_field.n_mode);
     write_state(ctxt, st);
 }
 

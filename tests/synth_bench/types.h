@@ -83,7 +83,7 @@ typedef enum negotationState_tag {
     C_Complete,
     S_Init,
     S_HRR,
-    S_CientHello,
+    S_ClientHello,
     S_Mode,
     S_Complete
 } negotationState_tag;
@@ -163,6 +163,11 @@ negotationState mk_client_init();
 negotationState mk_client_offer();
 negotationState mk_client_mode(offer n_offer);
 negotationState mk_client_complete(mode n_mode);
+negotationState mk_client_hrr(offer n_offer);
+negotationState mk_server_init();
+negotationState mk_server_client_hello();
+negotationState mk_server_mode(mode);
+negotationState mk_server_complete(mode);
 
 // negotationState mk_h rr
 

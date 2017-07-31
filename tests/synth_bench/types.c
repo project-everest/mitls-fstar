@@ -87,9 +87,39 @@ negotationState mk_client_complete(mode n_mode) {
     return st;
 }
 
-negotationState mk_client_(offer n_offer) {
+negotationState mk_client_hrr(offer n_offer) {
     negotationState st;
     st.tag = C_Complete;
-    st.c_mode_field.n_mode = mk_mode(n_offer);
+    st.c_hrr_field.n_offer = n_offer;
+    // TODO: fix me st.n_hrr
+    return st;
+}
+
+negotationState mk_server_init() {
+    negotationState st;
+    st.tag = S_Init;
+    mk_random_bytes(st.server_init_field.n_server_random);
+    return st;
+}
+
+negotationState mk_server_client_hello() {
+    negotationState st;
+    st.tag = S_ClientHello;
+    st.server_hello_field.n_mode = mk_mode(mk_offer());
+    return st;
+}
+
+negotationState mk_server_mode(mode m) {
+    negotationState st;
+    st.tag = S_Mode;
+    st.server_mode_field.n_mode = m;
+    return st;
+}
+
+negotationState mk_server_complete(mode m) {
+    negotationState st;
+    st.tag = S_Complete;
+    st.server_complete_field.n_mode = m;
+    //TODO FILL IN COMPLETE FIELDS
     return st;
 }
