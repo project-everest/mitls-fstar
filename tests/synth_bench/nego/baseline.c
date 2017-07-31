@@ -62,8 +62,14 @@ typedef int retryInfo;
 typedef int mode;
 typedef int cert;
 
-// do we need these?
+// TODO: flesh out config
 typedef int config;
+
+//TODO: flesh out config
+config mk_config() {
+    return 0;
+}
+
 typedef int resumeInfo;
 
 typedef enum negotationState_tag {
@@ -169,7 +175,7 @@ negotationState mk_client_offer() {
 }
 
 typedef struct negotationContext {
-    // config cfg; Do we care about this?
+    config cfg;
     // resumeInfo resume;
     // random_bytes nonce;
     negotationState * state;
@@ -177,8 +183,8 @@ typedef struct negotationContext {
 
 negotationContext mk_context() {
     negotationContext ctxt;
+    ctxt.cfg = mk_config();
     ctxt.state = (negotationState*)(malloc(sizeof(negotationState)));
-    // ctxt.cfg = 0;
     return ctxt;
 }
 
@@ -200,39 +206,53 @@ negotationContext c_init_to_c_offer(negotationContext ctxt) {
     return ctxt;
 }
 
-negotationContext c_offer_to_c_mode(negotationContext ctxt) {
+void c_offer_to_c_mode(negotationContext ctxt) {
     negotationState st = read_state(ctxt);
     // // probably need to use st here or it will be optimized away
     // st = mk_client_offer();
     write_state(ctxt, st);
-    return ctxt;
 }
 
-// let ns_step (#r:role) (#cfg:config) (#resume:resumeInfo r)
-//   (ns:negotiationState r cfg resume) (ns':negotiationState r cfg resume) =
-//   match ns, ns' with
-//   | C_Init nonce, C_Offer offer -> nonce == offer.ch_client_random
-//   | C_Offer offer, C_Mode mode -> mode.n_offer == offer
-//   | C_Offer _, C_Complete _ _ -> True
-//   | C_Mode _, C_WaitFinished2 _ _ -> True
-//   | C_Mode _, C_Complete _ _ -> True
-//   | S_Init _, S_ClientHello _ -> True
-//   | S_ClientHello _, S_Mode _ -> True
-//   | _, _ -> ns == ns'
-
-
-negotationContext c_offer_to_c_complete(negotationContext ctxt) {
+void c_offer_to_c_complete(negotationContext ctxt) {
     negotationState st = read_state(ctxt);
     // // probably need to use st here or it will be optimized away
     // st = mk_client_offer();
     write_state(ctxt, st);
-    return ctxt;
+}
+
+void c_mode_to_c_wait_finished2(negotationContext ctxt) {
+    negotationState st = read_state(ctxt);
+    // // probably need to use st here or it will be optimized away
+    // st = mk_client_offer();
+    write_state(ctxt, st);
+}
+
+void c_mode_to_complete(negotationContext ctxt) {
+    negotationState st = read_state(ctxt);
+    // // probably need to use st here or it will be optimized away
+    // st = mk_client_offer();
+    write_state(ctxt, st);
+}
+
+void s_init_to_s_client_Hello(negotationContext ctxt) {
+    negotationState st = read_state(ctxt);
+    // // probably need to use st here or it will be optimized away
+    // st = mk_client_offer();
+    write_state(ctxt, st);
+}
+
+void s_client_hello_to_s_mode(negotationContext ctxt) {
+    negotationState st = read_state(ctxt);
+    // // probably need to use st here or it will be optimized away
+    // st = mk_client_offer();
+    write_state(ctxt, st);
 }
 
 void nego_baseline(int iterations) {
     for (int i = 0; i < iterations; i++) {
         negotationContext ctxt = mk_context();
         // Move through client state transitions.
-        ctxt = c_init_to_c_offer(ctxt);
+        c_init_to_c_offer(ctxt);
+        c_offer_to_c_mode(ctxt);
     }
 }
