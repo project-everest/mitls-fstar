@@ -585,7 +585,7 @@ class MITLS():
     def TryToGetSessionTicket( self ):
         sessionTicket = None
         try:
-            sessionTicket = self.tlsClient.FFI_mitls_get_ticket()  
+            sessionTicket = self.FFI_mitls_get_ticket()  
         except MITLSError:
             pass
 
@@ -2002,7 +2002,7 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumption" ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
-    suite.addTest( MITLSTester( "test_ReorderPieces_0RTT_delay_EndOfEarlyData" ) )
+    # suite.addTest( MITLSTester( "test_ReorderPieces_0RTT_delay_EndOfEarlyData" ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
 
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )

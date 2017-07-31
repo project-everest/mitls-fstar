@@ -1523,7 +1523,8 @@ class TLSParser():
             return True
 
         if (type( piece.Interpretation ) is str) or \
-           (type( piece.Interpretation ) is bytes):
+           (type( piece.Interpretation ) is bytes) or \
+           (type( piece.Interpretation ) is bytearray):
             return True
 
         return False
