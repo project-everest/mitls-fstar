@@ -41,6 +41,7 @@ from tlsparser import   MemorySocket,                       \
                         PARENT_NODE,                        \
                         SWAP_ITEMS,                         \
                         HANDSHAKE_TYPE_CLIENT_HELLO,        \
+                        HANDSHAKE_TYPE_END_OF_EARLY_DATA,   \
                         CIPHER_SUITES,                      \
                         DIRECTION,                          \
                         RECORD_TYPE,                        \
@@ -551,6 +552,8 @@ class MITLS():
             if applicationData != None:
                 self.Send( applicationData )
 
+            self.dataReceived += self.Receive() #induces sending session ticket
+
         except Exception as err: 
             pprint( traceback.format_tb( err.__traceback__ ) )
             pprint( err )
@@ -1028,6 +1031,48 @@ class MITLSTester(unittest.TestCase):
 
         # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
         return memorySocket.tlsParser.transcript
+
+    def DelayEndOfEarlyDataMsg( self, msg ):
+        if TLSParser.IsMsgContainsOnlyAppData( msg ) or TLSParser.IsAlertMsg( msg ):
+            return None 
+
+        if msg[ RECORD ][ 0 ][ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_END_OF_EARLY_DATA:
+            return 1
+        # else:
+        return None
+
+    def test_ReorderPieces_0RTT_delay_EndOfEarlyData( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+        try:
+            sessionTicket   = self.RunSingleTest( allowEarlyData = True )
+            firstSession    = memorySocket.tlsParser.transcript[ : ]
+            self.RunSingleTest( sessionTicket = sessionTicket, allowEarlyData = True, msgDelays = [ self.DelayEndOfEarlyDataMsg ] ) 
+            entireTranscipt = firstSession + memorySocket.tlsParser.transcript
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+            
+        # print( "============= client EARLY secret ===============")
+        # print( TLSParser.FormatBuffer( self.tlsClient.quicEarlySecret ))
+        # print( "============= server EARLY secret ===============")
+        # print( TLSParser.FormatBuffer( self.tlsServer.quicEarlySecret ))
+
+        if config.LOG_LEVEL < logging.ERROR:
+            # pprint( memorySocket.tlsParser.transcript )
+            for msg in entireTranscipt:
+                memorySocket.tlsParser.PrintMsg( msg )
+
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            pprint( keysAndFiles )
+
+        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
+        return memorySocket.tlsParser.transcript
+
 
     def test_MITLS_ClientAndServer_SessionResumptionWithEarlyData( self ):
         keysMonitor = MonitorLeakedKeys()
@@ -1648,11 +1693,13 @@ class MITLSTester(unittest.TestCase):
                         msgManipulators                 = [],
                         serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                         sessionTicket                   = None,
-                        allowEarlyData                  = False):
+                        allowEarlyData                  = False,
+                        msgDelays                       = [] ):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
+        memorySocket.SetMsgDelays( msgDelays )
         serverThread = self.StartServerThread(  supportedCipherSuites    = supportedCipherSuites,
                                                 serverSignatureAlgorithm = serverSignatureAlgorithm,
                                                 supportedNamedGroups     = supportedNamedGroups,
@@ -1955,8 +2002,8 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumption" ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
-    
-    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
+    suite.addTest( MITLSTester( "test_ReorderPieces_0RTT_delay_EndOfEarlyData" ) )
+    # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
 
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
@@ -1968,6 +2015,7 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester( "test_ReorderPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_ServerEncryptedHello_shuffleHandshakesOrder_onWire" ) )
+
     # suite.addTest( MITLSTester( "test_ServerEncryptedHello_extractToPlaintext" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_ClientHello_onWire" ) )
     # suite.addTest( MITLSTester( "test_SkipPieces_ServerHello_onWire" ) )

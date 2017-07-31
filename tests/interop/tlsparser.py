@@ -443,6 +443,7 @@ TICKET                  = "ticket"
 TICKET_NONCE            = "ticket_nonce"
 NEW_SESSION_TICKET      = "NewSessionTicket"
 MAX_EARLY_DATA_SIZE     = "max_early_data_size"
+DELAY_COUNT             = "DelayMsgCount"
 
 LEAKED_KEYS_DIR     = "leaked_keys"
 
@@ -1369,17 +1370,18 @@ class TLSParser():
                 isMsgManipulated = True
 
         if isMsgManipulated:
-            self.transcript.pop()
+            # self.transcript.pop()
 
-            wireMsg      = b""
-            plainTextMsg = None
+            wireMsg         = b""
+            manipulatedMsgs = []
+            plainTextMsg    = None
             if EXTRACT_TO_PLAINTEXT in manipulatedMsg.keys():
                 plainTextMsg = manipulatedMsg[ EXTRACT_TO_PLAINTEXT ]
                 wireMsg     += self.ReconstructRecordAndCompareToOriginal( plainTextMsg, doCompare = False )
-                self.transcript.append( plainTextMsg )
+                manipulatedMsgs.append( plainTextMsg )
 
             wireMsg += self.ReconstructRecordAndCompareToOriginal( manipulatedMsg, doCompare = False )
-            self.transcript.append( manipulatedMsg )
+            manipulatedMsgs.append( manipulatedMsg )
 
             if config.LOG_LEVEL < logging.ERROR:
                 print( "================== Manipulated Message =====================" )
@@ -1389,9 +1391,9 @@ class TLSParser():
 
                 self.PrintMsg( msg )
 
-            return wireMsg
+            return wireMsg, manipulatedMsgs
         # else:
-        return None
+        return None, []
 
 
     def CreateHandshakeRecord( self, handshakeMsg, direction ):
@@ -1813,7 +1815,8 @@ class TLSParser():
 
         return alert
 
-    def IsAlertMsg( self, msg ):
+    @staticmethod
+    def IsAlertMsg( msg ):
         return ALERT in msg.keys()
 
     def ParseMsgBody( self, msg, fixedIVAndKey ):
@@ -1900,7 +1903,7 @@ class TLSParser():
                     self.TrunctateConsumedBytes()                
                     msgs.append( msg )
 
-            self.transcript.append( msg )
+            # self.transcript.append( msg )
         
         return msgs
 
@@ -2059,6 +2062,9 @@ class MemorySocket():
         self.readTimeout        = readTimeout
         self.logMsgs            = logMsgs
         self.tlsParser          = TLSParser()
+        self.pendingMsgs        = []
+        self.readyMsgs          = []
+        self.msgDelays          = []
 
         self.SetupLogger()
 
@@ -2078,19 +2084,37 @@ class MemorySocket():
         self.clientToServerPipe = bytearray()
         self.serverToClientPipe = bytearray()
 
+    def ManipulateAndTransmitMsg( self, msg ):
+        manipulatedWireFrame, manipulatedMsgs = self.tlsParser.ManipulateAndReconstruct( msg )
+
+        if manipulatedWireFrame != None:
+            if msg[ DIRECTION ] == Direction.CLIENT_TO_SERVER:
+                self.clientToServerPipe += manipulatedWireFrame    
+            else:
+                self.serverToClientPipe += manipulatedWireFrame    
+
+            # self.tlsParser.transcript.pop()
+            self.tlsParser.transcript += manipulatedMsgs
+        
+        else:          
+            print( "############################ TRANSMITTING #######################")  
+            self.tlsParser.PrintMsg( msg )
+            if msg[ DIRECTION ] == Direction.CLIENT_TO_SERVER:
+                self.clientToServerPipe += msg[ RAW_RECORD ]    
+            else:
+                self.serverToClientPipe += msg[ RAW_RECORD ] 
+
+            self.tlsParser.transcript.append( msg )
+
     #Used by client to send to server:
     def SendToServer( self, ctx, buffer, bufferSize ):
         self.log.debug( "SendToServer bufferSize = %d" % bufferSize ) 
         
         pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )        
-        msgs     = self.tlsParser.Digest( pyBuffer[ : ], Direction.CLIENT_TO_SERVER )
+        newMsgs  = self.tlsParser.Digest( pyBuffer[ : ], Direction.CLIENT_TO_SERVER )
 
-        for msg in msgs:
-            manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
-            if manipulatedWireFrame != None:
-                self.clientToServerPipe += manipulatedWireFrame    
-            else:            
-                self.clientToServerPipe += msg[ RAW_RECORD ]
+        self.HandleNewMessages( newMsgs )
+
         return bufferSize
 
     #Used by server to read from client:
@@ -2118,25 +2142,54 @@ class MemorySocket():
         self.log.debug( "ReadFromClient: returned %d bytes; (%d bytes left for future reads)" % (bytesToReturn, len( self.clientToServerPipe ) ) )
         return bytesToReturn
 
+    def MovePendingMsgsToReadyMsgs( self ):
+        for msg in self.pendingMsgs:
+            msg[ DELAY_COUNT ] -= 1
+
+            if msg[ DELAY_COUNT ] == 0:
+                self.readyMsgs.append( msg )
+                self.pendingMsgs.remove( msg )
+            
+    def SetMsgDelays( self, msgDelays ):
+        self.msgDelays = msgDelays 
+
+    def ShouldMessageBeDelayed( self, msg ):
+        for calcDelayFunction in self.msgDelays:
+            delayAmount = calcDelayFunction( msg )
+            if delayAmount != None:
+                return delayAmount
+
+        # if self.tlsParser.IsMsgContainsOnlyAppData( msg ) or self.tlsParser.IsAlertMsg( msg ):
+        #     return 0
+
+        # pprint( msg )
+        # if msg[ RECORD ][ 0 ][ HANDSHAKE_TYPE ] == HANDSHAKE_TYPE_END_OF_EARLY_DATA:
+        #     return 0
+
+        return 0
+
+    def HandleNewMessages( self, newMsgs ):
+        for msg in newMsgs:
+            msg[ DELAY_COUNT ] = self.ShouldMessageBeDelayed( msg )
+            if msg[ DELAY_COUNT ] == 0:
+                self.readyMsgs.append( msg )
+            else:
+                self.pendingMsgs.append( msg )
+
+        while len( self.readyMsgs ) > 0:
+            self.ManipulateAndTransmitMsg( self.readyMsgs[ 0 ] )
+            self.readyMsgs = self.readyMsgs[ 1: ]
+
+            self.MovePendingMsgsToReadyMsgs()
+
     #Used by server to send to client:
     def SendToClient( self, ctx, buffer, bufferSize ):
         self.log.debug( "SendToClient bufferSize = %d" % bufferSize ) 
         pyBuffer = bytearray( ( c_uint8 * bufferSize ).from_address( buffer ) )
-        msgs     = self.tlsParser.Digest( pyBuffer[ : ], Direction.SERVER_TO_CLIENT )
-       
-        if self.logMsgs:
-            self.log.debug( "SendToClient -->\n" + TLSParser.FormatBuffer( pyBuffer ) ) 
+        newMsgs  = self.tlsParser.Digest( pyBuffer[ : ], Direction.SERVER_TO_CLIENT )
 
-        for msg in msgs:
-            manipulatedWireFrame = self.tlsParser.ManipulateAndReconstruct( msg )
+        self.HandleNewMessages( newMsgs )
 
-            if manipulatedWireFrame != None:
-                self.serverToClientPipe += manipulatedWireFrame    
-                if len( manipulatedWireFrame ) != len(  msg[ RAW_RECORD ] ):
-                    self.log.warning( "len( manipulatedWireFrame ) != len(  msg[ RAW_RECORD ] ): %d != %d" % (len( manipulatedWireFrame ) , len(  msg[ RAW_RECORD ] )) )
-            else:    
-                self.serverToClientPipe += msg[ RAW_RECORD ]
-        
         return bufferSize
 
     #Used by client to read from server:
