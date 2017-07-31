@@ -139,14 +139,14 @@ class Cryptor():
     @staticmethod
     def AES_GCM_Decrypt( iv, key, cipherText, tag ):
         decryptor = Cipher( algorithms.AES(key),
-                            modes.GCM(iv, tag),
+                            modes.GCM(iv, bytes( tag ) ),
                             backend=default_backend()
                             ).decryptor()
 
         AAD = b"" #no additional authenticated data
         decryptor.authenticate_additional_data( AAD )
         
-        return decryptor.update(cipherText) + decryptor.finalize()
+        return decryptor.update( bytes( cipherText ) ) + decryptor.finalize()
 
     @staticmethod
     def AES_GCM_Encrypt( iv, key, plaintext ):        

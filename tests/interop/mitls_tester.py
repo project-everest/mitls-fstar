@@ -79,8 +79,8 @@ TLS_VERSION_1_3             = b"1.3" + NULL_BYTE
 # SERVER_SIGNATURE_ALGORITHM  = "ECDSA+SHA384"
 SUPPORTED_CIPHER_SUITES = [  
                             "TLS_AES_128_GCM_SHA256",               # OK
-                            # "TLS_AES_256_GCM_SHA384",               # OK
-                            # "TLS_CHACHA20_POLY1305_SHA256",         # OK
+                            "TLS_AES_256_GCM_SHA384",               # OK
+                            "TLS_CHACHA20_POLY1305_SHA256",         # OK
                             # # "TLS_AES_128_CCM_SHA256",               # NOT ok: errmsg = "b'Failure("not linked to openSSL yet")'"                                    
                             # "TLS_AES_128_CCM_8_SHA256",             # NOT ok: errmsg = "b'Failure("not linked to openSSL yet")'"                                    
                             # "ECDHE-RSA-AES256-GCM-SHA384",          # NOT OK: NGO| negotiation failed: AD_handshake_failure (ciphersuite negotiation failed)    
@@ -95,8 +95,8 @@ SUPPORTED_CIPHER_SUITES = [
  ]
 SUPPORTED_SIGNATURE_ALGORITHMS = [ 
                                     'ECDSA+SHA256',  # OK     
-                                    # 'ECDSA+SHA384',  # OK     
-                                    # 'ECDSA+SHA512',  # OK 
+                                    'ECDSA+SHA384',  # OK     
+                                    'ECDSA+SHA512',  # OK 
 
                                     
                                     # 'ECDSA+SHA1',    # NOT OK: FFI| returning error: AD_handshake_failure no compatible signature algorithm
@@ -107,9 +107,9 @@ SUPPORTED_SIGNATURE_ALGORITHMS = [
 ]
 SUPPORTED_NAMED_GROUPS = [
                             "X25519",                    # OK 
-                            # "P-521", # a.k.a secp521r1   # OK                         
-                            # "P-384", # a.k.a secp384r1   # OK                         
-                            # "P-256", # a.k.a secp256r1   # OK                         
+                            "P-521", # a.k.a secp521r1   # OK                         
+                            "P-384", # a.k.a secp384r1   # OK                         
+                            "P-256", # a.k.a secp256r1   # OK                         
                             # "X448",                      # NOT OK    TLS| StAE decrypt failed.; TLS| Ignoring the decryption failure (rejected 0-RTT data) 
                             # "FFDHE4096",                 # OK         
                             # "FFDHE3072",                 # OK         
@@ -578,6 +578,15 @@ class MITLS():
         self.log.debug( "Received from Client: %s\n" % pyBuffer ) 
 
         return pyBuffer
+
+    def TryToGetSessionTicket( self ):
+        sessionTicket = None
+        try:
+            sessionTicket = self.tlsClient.FFI_mitls_get_ticket()  
+        except MITLSError:
+            pass
+
+        return sessionTicket
 
     def FFI_mitls_get_ticket( self ):
         self.log.debug( "FFI_mitls_get_ticket" )
@@ -1945,9 +1954,9 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumption" ) )
-    suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
+    # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
     
-    # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
+    suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
 
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )

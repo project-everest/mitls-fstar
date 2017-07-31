@@ -237,7 +237,6 @@ class NSS():
         result = self.libnss3.PK11_SetPasswordFunc( self.cutils.getAddress( self.getPasswordCallback ) )
 
     def NSS_Initialize( self, dataBasePath ):
-        self.log.debug( "NSS_Initialize; database path = %s" % dataBasePath )
         SECMOD_DB           = "secmod.db" 
         NSS_INIT_READONLY   = 0x1
         certPrefix          = c_char_p( None )
@@ -390,7 +389,6 @@ class NSS():
         self.VerifyResult( "PR_Connect", result )
         
     def PK11_FindCertFromNickname( self, certificateName ):
-        self.log.debug( "PK11_FindCertFromNickname; certificateName = %s" % certificateName )
         NULL                = 0
         PW_PLAINTEXT        = 2 # see secutil.h
         certificateName_c   = CString( certificateName )
@@ -454,7 +452,7 @@ class NSS():
         self.VerifyResult( "SSL_ResetHandshake", result )
 
     # For server side:
-    def AcceptConnection( self, applicationData = None ):
+    def AcceptConnection( self, applicationData = None, enableSessionTickets = True ):
         self.log.debug( "AcceptConnection" )
         self.acceptConnectionSucceeded = False
 
@@ -466,7 +464,7 @@ class NSS():
         
         self.SSL_OptionSet( self.serverSSLSocket, SSL_ROLLBACK_DETECTION,       True )
         self.SSL_OptionSet( self.serverSSLSocket, SSL_NO_LOCKS,                 True )
-        self.SSL_OptionSet( self.serverSSLSocket, SSL_ENABLE_SESSION_TICKETS,   False )
+        self.SSL_OptionSet( self.serverSSLSocket, SSL_ENABLE_SESSION_TICKETS,   enableSessionTickets )
         self.SSL_OptionSet( self.serverSSLSocket, SSL_ENABLE_DEFLATE,           False);
         # skipping SSL_SNISocketConfigHook
         # skipping SSL_ENABLE_SERVER_DHE option
@@ -513,7 +511,10 @@ class NSS():
 
 
     # For client side
-    def Connect( self, supportedNamedGroups = None, supportedSignatureAlgorithms = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS ):
+    def Connect(    self, 
+                    supportedNamedGroups         = None, 
+                    supportedSignatureAlgorithms = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS, 
+                    enableSessionTickets         = True ):
         self.log.debug( "Connect" )
         self.InitializeSSLClientSocket()
         
@@ -524,15 +525,17 @@ class NSS():
         self.ForceTLS_13( self.clientSSLSocket )
 
         disableLocking              = False
-        enableSessionTickets        = False
+        # enableSessionTickets        = True
         enableFalseStart            = False
         enableCertStatus            = False # enable cert status (OCSP stapling).
         enableSignedCertTimestamps  = False
+
         self.SSL_OptionSet( self.clientSSLSocket, SSL_NO_LOCKS,                 disableLocking )
         self.SSL_OptionSet( self.clientSSLSocket, SSL_ENABLE_SESSION_TICKETS,   enableSessionTickets )
         self.SSL_OptionSet( self.clientSSLSocket, SSL_ENABLE_FALSE_START,       enableFalseStart )
         self.SSL_OptionSet( self.clientSSLSocket, SSL_ENABLE_OCSP_STAPLING,     enableCertStatus )
         self.SSL_OptionSet( self.clientSSLSocket, SSL_ENABLE_OCSP_STAPLING,     enableSignedCertTimestamps )
+        
         # Other options:
         # SSL_ENABLE_EXTENDED_MASTER_SECRET
         # SSL_ENABLE_0RTT_DATA
@@ -628,12 +631,13 @@ class NSSTester(unittest.TestCase):
         self.tlsServer.InitServer( memorySocket )
         self.tlsClient.InitClient( memorySocket, hostName )
 
-        serverThread = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ b"Server->Client\x00" ] )
+        enableSessionTickets = True
+        serverThread = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ b"Server->Client\x00", enableSessionTickets ] )
         serverThread.start()
 
         time.sleep( 0.1 )
 
-        self.tlsClient.Connect( supportedNamedGroups = [ "P-521" ] )
+        self.tlsClient.Connect( supportedNamedGroups = [ "P-521" ] , enableSessionTickets = True)
         self.tlsClient.Send( b"Client->Server\x00" ) 
         self.tlsClient.dataReceived = self.tlsClient.Recv()
 

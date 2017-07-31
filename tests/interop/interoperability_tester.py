@@ -118,7 +118,9 @@ class InterOperabilityTester(unittest.TestCase):
                                     supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
                                     supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
                                     supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
-                                    msgManipulators                 = [] ):
+                                    msgManipulators                 = [],
+                                    sessionTicket                   = None,
+                                    allowEarlyData                  = True ):
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
@@ -136,13 +138,15 @@ class InterOperabilityTester(unittest.TestCase):
         time.sleep( 0.1 )
 
         self.tlsClient = MITLS( "client" )
-        self.tlsClient.InitClient(  "test_server.com", 
-                                    supportedCipherSuites,
-                                    supportedSignatureAlgorithms,
-                                    supportedNamedGroups )
-        self.tlsClient.Connect()
+        self.tlsClient.InitClient(  hostName                        = "test_server.com", 
+                                    supportedCipherSuites           = supportedCipherSuites,
+                                    supportedSignatureAlgorithms    = supportedSignatureAlgorithms,
+                                    supportedNamedGroups            = supportedNamedGroups,
+                                    allowEarlyData                  = allowEarlyData                   )
+        self.tlsClient.Connect( sessionTicket )
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Receive()
+        sessionTicket = self.tlsClient.TryToGetSessionTicket()  
     
         serverThread.join()
 
@@ -154,35 +158,45 @@ class InterOperabilityTester(unittest.TestCase):
 
         if self.tlsServer.dataReceived != DATA_CLIENT_TO_SERVER:
             raise Exception( "self.tlsServer.dataReceived = %s, instead of expected %s" % ( self.tlsServer.dataReceived, DATA_CLIENT_TO_SERVER ) )
+
+        if sessionTicket is None:
+            raise Exception( "Didn't get session ticket" )      
             
+        return sessionTicket      
 
     def RunSingleTest_MITLS_NSS(self, 
                                 supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
                                 supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
                                 supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
-                                msgManipulators                 = [] ):
+                                msgManipulators                 = [],
+                                allowEarlyData                  = False,
+                                sessionTicket                   = None ):
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
 
         self.tlsServer = NSS( "server" )
-        self.tlsServer.InitServer( memorySocket, serverSignatureAlgorithm = supportedSignatureAlgorithms[ 0 ] )
+        self.tlsServer.InitServer(  memorySocket, 
+                                    serverSignatureAlgorithm = supportedSignatureAlgorithms[ 0 ] )
 
-        applicationData = DATA_SERVER_TO_CLIENT
-        serverThread    = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
+        applicationData         = DATA_SERVER_TO_CLIENT
+        enableSessionTickets    = allowEarlyData
+        serverThread    = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData, enableSessionTickets ] )
         serverThread.start()
 
         time.sleep( 0.1 )
 
         self.tlsClient = MITLS( "client" )
-        self.tlsClient.InitClient(  "test_server.com", 
-                                    supportedCipherSuites,
-                                    supportedSignatureAlgorithms,
-                                    supportedNamedGroups )
-        self.tlsClient.Connect()
+        self.tlsClient.InitClient(  hostName = "test_server.com", 
+                                    supportedCipherSuites        = supportedCipherSuites,
+                                    supportedSignatureAlgorithms = supportedSignatureAlgorithms,
+                                    supportedNamedGroups         = supportedNamedGroups,
+                                    allowEarlyData               = allowEarlyData   )
+        self.tlsClient.Connect( sessionTicket )
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Receive()
-    
+        sessionTicket = self.tlsClient.TryToGetSessionTicket()
+        
         serverThread.join()
 
         if self.tlsServer.acceptConnectionSucceeded == False:
@@ -193,6 +207,11 @@ class InterOperabilityTester(unittest.TestCase):
 
         if self.tlsServer.dataReceived != DATA_CLIENT_TO_SERVER:
             raise Exception( "self.tlsServer.dataReceived = %s, instead of expected %s" % ( self.tlsServer.dataReceived, DATA_CLIENT_TO_SERVER ) )
+
+        # if sessionTicket is None:
+        #     raise Exception( "Didn't get session ticket" )     
+
+        return sessionTicket
 
     def RunSingleTest_NSS_MITLS(self, 
                                 supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
@@ -381,6 +400,82 @@ class InterOperabilityTester(unittest.TestCase):
                             WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
+    
+    
+    def test_MITLS_NSS_0RTT_parameters_matrix( self ):
+        sys.stderr.write( "Running test_MITLS_NSS_0RTT_parameters_matrix\n" )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        with open( "parameters_matrix_MITLS_NSS_0RTT.csv", "w" ) as logFile:
+            outputSinks = [ sys.stderr, logFile ]
+            WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
+            for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
+                for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
+                    for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
+                        WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
+                        memorySocket.tlsParser.DeleteLeakedKeys()
+                        try:
+                            startTime = time.time()
+                            sessionTicket = self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
+                                                                            supportedSignatureAlgorithms = [ algorithm ],
+                                                                            supportedNamedGroups         = [ group ],
+                                                                            allowEarlyData               = True )
+                            self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
+                                                            supportedSignatureAlgorithms = [ algorithm ],
+                                                            supportedNamedGroups         = [ group ],
+                                                            sessionTicket                = sessionTicket,
+                                                            allowEarlyData               = True )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                        except Exception as err: 
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            pprint( err )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                        finally:
+                            totalTime = time.time() - startTime
+                            WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+              
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+    def test_MITLS_OPENSSL_0RTT_parameters_matrix( self ):
+        sys.stderr.write( "Running test_MITLS_OPENSSL_0RTT_parameters_matrix\n" )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        with open( "parameters_matrix_MITLS_OPENSSL_0RTT.csv", "w" ) as logFile:
+            outputSinks = [ sys.stderr, logFile ]
+            WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
+            for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
+                for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
+                    for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
+                        WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
+                        memorySocket.tlsParser.DeleteLeakedKeys()
+                        try:
+                            startTime = time.time()
+                            sessionTicket = self.RunSingleTest_MITLS_OPENSSL(   supportedCipherSuites        = [ cipherSuite ],
+                                                                                supportedSignatureAlgorithms = [ algorithm ],
+                                                                                supportedNamedGroups         = [ group ],
+                                                                                allowEarlyData               = True )
+                            self.RunSingleTest_MITLS_OPENSSL(   supportedCipherSuites        = [ cipherSuite ],
+                                                                supportedSignatureAlgorithms = [ algorithm ],
+                                                                supportedNamedGroups         = [ group ],
+                                                                sessionTicket                = sessionTicket,
+                                                                allowEarlyData               = True )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                        except Exception as err: 
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            pprint( err )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                        finally:
+                            totalTime = time.time() - startTime
+                            WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+              
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+
     def test_MITLS_OPENSSL_parameters_matrix( self ):
         sys.stderr.write( "Running test_MITLS_OPENSSL_parameters_matrix\n" )
         keysMonitor = MonitorLeakedKeys()
@@ -431,7 +526,8 @@ class InterOperabilityTester(unittest.TestCase):
                             startTime = time.time()
                             self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
                                                             supportedSignatureAlgorithms = [ algorithm ],
-                                                            supportedNamedGroups         = [ group ] )
+                                                            supportedNamedGroups         = [ group ],
+                                                            allowEarlyData               = False )
                             WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
                         except Exception as err: 
                             pprint( traceback.format_tb( err.__traceback__ ) )
@@ -692,11 +788,12 @@ if __name__ == '__main__':
 
 
     suite = unittest.TestSuite()    
-    suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_parameters_matrix" ) )
-    
+    # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_0RTT_parameters_matrix" ) )
+    suite.addTest( InterOperabilityTester( "test_MITLS_NSS_0RTT_parameters_matrix" ) )
 
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipPieces_ClientHello" ) )
