@@ -33,7 +33,36 @@ typedef struct offer {
 offer mk_offer();
 
 typedef int retryInfo;
-typedef int mode;
+
+typedef struct mode {
+    offer n_offer;
+    // n_hrr: option (retryInfo n_offer) ->  // optional HRR roundtrip
+
+    // // more from SH (both TLS 1.2 and TLS 1.3)
+    // n_protocol_version: protocolVersion ->
+    // n_server_random: TLSInfo.random ->
+    // n_sessionID: option sessionID {n_sessionID = None <==> n_protocol_version = TLS_1p3} ->
+    // n_cipher_suite: cipherSuite ->
+
+    // // redundant with the server extension response?
+    // n_pski: option (pski n_offer) -> // only for TLS 1.3, result of a tricky stateful computation
+
+    // // concatenating SH and EE extensions for 1.3, in wire order.
+    // n_server_extensions: option (se:list extension{List.Tot.length se < 256}) ->
+
+    // // more from SKE in ...ServerHelloDone (1.2) or SH (1.3)
+    // n_server_share: option share ->
+
+    // // more from either ...ServerHelloDone (1.2) or ServerFinished (1.3)
+    // n_client_cert_request: option HandshakeMessages.cr ->
+    // n_server_cert: option Cert.chain13 ->
+
+    // // more from either CH+SH (1.3) or CKE (1.2)
+    // n_client_share: option share ->
+} mode;
+
+mode mk_mode(offer n_offer);
+
 typedef int cert;
 
 // TODO: flesh out config
@@ -131,8 +160,11 @@ typedef struct negotationState {
 } negotationState;
 
 negotationState mk_client_init();
-
 negotationState mk_client_offer();
+negotationState mk_client_mode(offer n_offer);
+negotationState mk_client_complete(mode n_mode);
+
+// negotationState mk_h rr
 
 typedef struct negotationContext {
     config cfg;

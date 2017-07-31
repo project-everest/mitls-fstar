@@ -65,3 +65,31 @@ negotationContext mk_context() {
     ctxt.state = (negotationState*)(malloc(sizeof(negotationState)));
     return ctxt;
 }
+
+// TODO: flesh out
+mode mk_mode(offer n_offer) {
+    mode m;
+    m.n_offer = n_offer;
+    return m;
+}
+
+negotationState mk_client_mode(offer n_offer) {
+    negotationState st;
+    st.tag = C_Mode;
+    st.c_mode_field.n_mode = mk_mode(n_offer);
+    return st;
+}
+
+negotationState mk_client_complete(mode n_mode) {
+    negotationState st;
+    st.tag = C_Complete;
+    st.c_mode_field.n_mode = n_mode;
+    return st;
+}
+
+negotationState mk_client_(offer n_offer) {
+    negotationState st;
+    st.tag = C_Complete;
+    st.c_mode_field.n_mode = mk_mode(n_offer);
+    return st;
+}
