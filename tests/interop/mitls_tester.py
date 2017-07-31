@@ -313,11 +313,15 @@ class MITLS():
         ret = self.miTLS.FFI_mitls_configure_cipher_suites( self.mitls_state, CString( cipherSuitesString ) )
         self.VerifyResult( "FFI_mitls_configure_cipher_suites", ret )
 
-    def FFI_mitls_configure_named_groups( self, namedGroups ):
-        self.log.debug( 'FFI_mitls_configure_named_groups; namedGroups = "%s"' % namedGroups )
+    def FFI_mitls_configure_named_groups( self, namedGroups, namedGroupsToOffer = [] ):
+        self.log.debug( 'FFI_mitls_configure_named_groups; namedGroups = "%s"; namedGroupsToOffer = "%s"' % ( namedGroups, namedGroupsToOffer ) )
         self.miTLS.FFI_mitls_configure_named_groups.restype = c_int
 
         namedGroupsString = ":".join( namedGroups )
+        if len( namedGroupsToOffer ) != 0:
+            namedGroupsString += "@" + ":".join( namedGroupsToOffer )
+        self.log.debug( 'namedGroupsString = "%s"' % namedGroupsString )
+
         ret = self.miTLS.FFI_mitls_configure_named_groups( self.mitls_state, CString( namedGroupsString ) )
         self.VerifyResult( "FFI_mitls_configure_named_groups", ret )
 
@@ -413,13 +417,14 @@ class MITLS():
                     supportedCipherSuites           = SUPPORTED_CIPHER_SUITES,
                     supportedSignatureAlgorithms    = SUPPORTED_SIGNATURE_ALGORITHMS,
                     supportedNamedGroups            = SUPPORTED_NAMED_GROUPS,
-                    allowEarlyData                  = False ):
+                    allowEarlyData                  = False,
+                    namedGroupsToOffer              = [] ):
         self.log.debug( "InitClient" )
 
         self.mitls_state = self.FFI_mitls_configure( hostName )
         self.FFI_mitls_configure_cipher_suites              ( supportedCipherSuites )
         self.FFI_mitls_configure_signature_algorithms       ( supportedSignatureAlgorithms )
-        self.FFI_mitls_configure_named_groups               ( supportedNamedGroups )
+        self.FFI_mitls_configure_named_groups               ( supportedNamedGroups, namedGroupsToOffer )
         self.FFI_mitls_configure_early_data                 ( allowEarlyData )
 
     def GetClientCallbacks( self ):
@@ -1002,6 +1007,35 @@ class MITLSTester(unittest.TestCase):
 
         # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
+        return memorySocket.tlsParser.transcript
+
+
+    def test_MITLS_ClientAndServer_HelloRetry( self ):
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+        try:
+            self.RunSingleTest( applicationData      = b"Server->Client\x00", 
+                                supportedNamedGroups = SUPPORTED_NAMED_GROUPS[ : -1 ],
+                                namedGroupsToOffer   = [ SUPPORTED_NAMED_GROUPS[ -1 ] ] )
+        finally:
+            keysMonitor.StopMonitorStdoutForLeakedKeys()
+            
+        if config.LOG_LEVEL < logging.ERROR:
+            # pprint( memorySocket.tlsParser.transcript )
+            for msg in memorySocket.tlsParser.transcript:
+                memorySocket.tlsParser.PrintMsg( msg )
+                # if tlsparser.IV_AND_KEY in msg.keys():
+                #     pprint( msg[ tlsparser.IV_AND_KEY ])
+
+            keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+            pprint( keysAndFiles )
+
+        self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
 
         # TLSParser.DumpTranscript( memorySocket.tlsParser.transcript )
         return memorySocket.tlsParser.transcript
@@ -1694,7 +1728,8 @@ class MITLSTester(unittest.TestCase):
                         serverSignatureAlgorithm        = SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                         sessionTicket                   = None,
                         allowEarlyData                  = False,
-                        msgDelays                       = [] ):
+                        msgDelays                       = [],
+                        namedGroupsToOffer              = [] ):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
@@ -1711,7 +1746,8 @@ class MITLSTester(unittest.TestCase):
                                     supportedCipherSuites           = supportedCipherSuites,
                                     supportedSignatureAlgorithms    = supportedSignatureAlgorithms,
                                     supportedNamedGroups            = supportedNamedGroups,
-                                    allowEarlyData                  = allowEarlyData )
+                                    allowEarlyData                  = allowEarlyData,
+                                    namedGroupsToOffer              = namedGroupsToOffer )
         self.tlsClient.Connect( sessionTicket )
         self.tlsClient.Send( b"Client->Server(1)\x00" )            
         self.tlsClient.dataReceived = self.tlsClient.Receive()
@@ -2004,6 +2040,7 @@ if __name__ == '__main__':
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_0RTT_delay_EndOfEarlyData" ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
+    suite.addTest( MITLSTester('test_MITLS_ClientAndServer_HelloRetry' ) )
 
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
