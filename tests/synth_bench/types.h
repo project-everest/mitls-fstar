@@ -64,9 +64,40 @@ typedef struct mode {
 mode mk_mode(offer n_offer);
 
 typedef int cert;
+typedef int protocolVersion;
 
-// TODO: flesh out config
-typedef int config;
+typedef struct config {
+    protocolVersion min_version;
+    protocolVersion max_version;
+    // quic_parameters: option (valid_quicVersions * valid_quicParameters);
+    // cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
+    // named_groups: list valid_namedGroup;
+    // signature_algorithms: signatureSchemeList;
+
+    // (* Client side *)
+    // hello_retry: bool;          // honor hello retry requests from the server
+    // offer_shares: list valid_namedGroup;
+
+    // (* Server side *)
+    // check_client_version_in_pms_for_old_tls: bool;
+    // request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
+    // cert_chain_file: string;     // TEMPORARY until the proper cert logic described above is implemented
+    // private_key_file: string;    // TEMPORARY
+
+    // (* Common *)
+    // non_blocking_read: bool;
+    // enable_early_data: bool;      // 0-RTT offer (client) and support (server)
+    // safe_renegotiation: bool;     // demands this extension when renegotiating
+    // extended_master_secret: bool; // turn on RFC 7627 extended master secret support
+    //enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
+
+    // alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
+    // peer_name: option string;     // The expected name to match against the peer certificate
+    // check_peer_certificate: bool; // To disable certificate validation
+    // ca_file: string;              // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
+                                  // on Cygwin /etc/ssl/certs/ca-bundle.crt
+} config;
+
 
 //TODO: flesh out config
 config mk_config();
@@ -163,6 +194,7 @@ negotationState mk_client_init();
 negotationState mk_client_offer();
 negotationState mk_client_mode(offer n_offer);
 negotationState mk_client_complete(mode n_mode);
+negotationState mk_client_wait2(mode n_mode);
 negotationState mk_client_hrr(offer n_offer);
 negotationState mk_server_init();
 negotationState mk_server_client_hello();

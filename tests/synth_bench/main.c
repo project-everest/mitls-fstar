@@ -1,15 +1,17 @@
 #include "bench.h"
 
 void nego_baseline(int);
+void nego_const_ptr_ctxt(int);
 
-#define ITERATIONS 100000
-#define BENCHES 1
+#define ITERATIONS 10000
+#define BENCHES 2
 
 int main() {
-    benchmark baseline = mk_benchmark("baseline", ITERATIONS, nego_baseline);
-    benchmark bs[BENCHES] = { baseline };
+    benchmark bs[BENCHES] = {
+        mk_benchmark("baseline", ITERATIONS, nego_baseline),
+        mk_benchmark("const_ctxt_ptr", ITERATIONS, nego_const_ptr_ctxt),
+    };
     printf("Starting ...\n");
     printf(MARKER);
     run_benchmarks(BENCHES, bs);
-    // printf(MARKER);
 }

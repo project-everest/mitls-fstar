@@ -40,7 +40,9 @@ offer mk_offer() {
 
 //TODO: flesh out config
 config mk_config() {
-    return 0;
+    config cfg;
+    return cfg;
+    //return 0;
 }
 
 negotationState mk_client_init() {
@@ -92,6 +94,14 @@ negotationState mk_client_hrr(offer n_offer) {
     st.tag = C_Complete;
     st.c_hrr_field.n_offer = n_offer;
     // TODO: fix me st.n_hrr
+    return st;
+}
+
+negotationState mk_client_wait2(mode n_mode) {
+    negotationState st;
+    st.tag = C_Complete;
+    st.c_wait_finished2_field.n_partial_mode = n_mode;
+    // TODO: fix me client_cert
     return st;
 }
 
