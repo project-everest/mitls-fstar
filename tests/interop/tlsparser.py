@@ -585,12 +585,13 @@ class TLSParser():
     NUM_RECENT_DIRS = 3
 
     def __init__( self ):
-        self.recentBytes     = b""
-        self.curretPosition  = 0
-        self.transcript      = []
-        self.state           = AttrDict()
-        self.openssl         = OpenSSL()
-        self.msgManipulators = []
+        self.recentBytes        = b""
+        self.curretPosition     = 0
+        self.transcript         = []
+        self.originalTranscript = []
+        self.state              = AttrDict()
+        self.openssl            = OpenSSL()
+        self.msgManipulators    = []
 
         self.SetupLogger()
 
@@ -1183,7 +1184,7 @@ class TLSParser():
     def GetCurrentIV( self, ivAndKey ):
         nonce               = None
         nextSequenceNumber  = 0
-        for msg in self.transcript:
+        for msg in self.originalTranscript:
             if IV_AND_KEY in msg.keys() and ivAndKey.Key == msg[ IV_AND_KEY ].Key:
                 nextSequenceNumber += 1
                 if nonce == None: # The first IV to be used is actually the nonce
@@ -1904,7 +1905,7 @@ class TLSParser():
                     self.TrunctateConsumedBytes()                
                     msgs.append( msg )
 
-            # self.transcript.append( msg )
+            self.originalTranscript.append( msg )
         
         return msgs
 
