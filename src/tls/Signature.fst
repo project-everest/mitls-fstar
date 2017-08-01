@@ -260,11 +260,11 @@ val genrepr: a:alg
   -> All (public_repr * secret_repr)
     (requires (fun h -> True))
     (ensures  (fun h0 k h1 ->
-      V? k ==>
+      modifies Set.empty h0 h1 /\
+      (V? k ==>
       (let (pk,sk) = V?.v k in
-        modifies Set.empty h0 h1
-	/\ sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
-	/\ sigAlg_of_public_repr pk == a.core)))
+	   sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
+	/\ sigAlg_of_public_repr pk == a.core))))
 
 let genrepr a =
   match a.core with
@@ -373,6 +373,7 @@ let get_chain_public_key #a c =
 private val foo: o:option (k:CoreCrypto.key{has_priv k}) -> Tot (option CoreCrypto.key)
 let foo o = match o with | None -> None | Some k -> Some k
 
+#reset-options "--z3rlimit 40"
 val lookup_key: #a:alg -> string -> ST (option (skey a))
   (requires (fun _ -> True))
   (ensures  (fun h0 o h1 ->
