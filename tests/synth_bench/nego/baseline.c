@@ -12,12 +12,11 @@ negotationContext write_state(negotationContext ctxt, negotationState st) {
 }
 
 // A synthetic set of state transition functions.
-negotationContext c_init_to_c_offer(negotationContext ctxt) {
+void c_init_to_c_offer(negotationContext ctxt) {
     negotationState st = read_state(ctxt);
     ns_live(st);
     st = mk_client_offer();
     write_state(ctxt, st);
-    return ctxt;
 }
 
 void c_offer_to_c_mode(negotationContext ctxt) {

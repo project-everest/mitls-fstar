@@ -69,6 +69,7 @@ typedef int protocolVersion;
 typedef struct config {
     protocolVersion min_version;
     protocolVersion max_version;
+    int padding[2024];
     // quic_parameters: option (valid_quicVersions * valid_quicParameters);
     // cipher_suites: x:valid_cipher_suites{List.Tot.length x < 256};
     // named_groups: list valid_namedGroup;
