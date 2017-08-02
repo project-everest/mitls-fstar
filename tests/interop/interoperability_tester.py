@@ -170,7 +170,8 @@ class InterOperabilityTester(unittest.TestCase):
                                 supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
                                 msgManipulators                 = [],
                                 allowEarlyData                  = False,
-                                sessionTicket                   = None ):
+                                sessionTicket                   = None,
+                                namedGroupsToOffer              = [] ):
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
@@ -181,7 +182,7 @@ class InterOperabilityTester(unittest.TestCase):
 
         applicationData         = DATA_SERVER_TO_CLIENT
         enableSessionTickets    = allowEarlyData
-        serverThread    = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData, enableSessionTickets ] )
+        serverThread    = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData, enableSessionTickets, supportedNamedGroups ] )
         serverThread.start()
 
         time.sleep( 0.1 )
@@ -191,7 +192,8 @@ class InterOperabilityTester(unittest.TestCase):
                                     supportedCipherSuites        = supportedCipherSuites,
                                     supportedSignatureAlgorithms = supportedSignatureAlgorithms,
                                     supportedNamedGroups         = supportedNamedGroups,
-                                    allowEarlyData               = allowEarlyData   )
+                                    allowEarlyData               = allowEarlyData,
+                                    namedGroupsToOffer           = namedGroupsToOffer )
         self.tlsClient.Connect( sessionTicket )
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Receive()
@@ -506,6 +508,33 @@ class InterOperabilityTester(unittest.TestCase):
                             WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
+    def test_MITLS_NSS_HelloRetry( self ):
+        sys.stderr.write( "Running test_MITLS_NSS_HelloRetry\n" )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        # with open( "parameters_matrix_MITLS_NSS.csv", "w" ) as logFile:
+            # outputSinks = [ sys.stderr, logFile ]
+            # WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
+            # for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
+            #     for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
+            #         for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
+            #             WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
+        # memorySocket.tlsParser.DeleteLeakedKeys()
+        try:
+            preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+            self.RunSingleTest_MITLS_NSS(  supportedNamedGroups = mitls_tester.SUPPORTED_NAMED_GROUPS[ : -1 ],
+                                           namedGroupsToOffer   = [ mitls_tester.SUPPORTED_NAMED_GROUPS[ -1 ] ] )
+        except Exception as err: 
+            pprint( traceback.format_tb( err.__traceback__ ) )
+            pprint( err )       
+        
+        keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+        pprint( keysAndFiles ) 
+              
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
 
     def test_MITLS_NSS_parameters_matrix( self ):
         sys.stderr.write( "Running test_MITLS_NSS_parameters_matrix\n" )
@@ -792,9 +821,10 @@ if __name__ == '__main__':
     # suite.addTest( InterOperabilityTester( "test_NSS_MITLS_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_parameters_matrix" ) )
-    # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_0RTT_parameters_matrix" ) )
-    suite.addTest( InterOperabilityTester( "test_MITLS_NSS_0RTT_parameters_matrix" ) )
+    suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_0RTT_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_0RTT_parameters_matrix" ) )
 
+    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_HelloRetry" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )
