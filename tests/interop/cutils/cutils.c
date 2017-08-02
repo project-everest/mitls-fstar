@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include "bio_lcl.h"
 #include "openssl/bio.h"
+#include "openssl/evp.h"
+#include "openssl/hmac.h"
 
 #include "mitlsffi.h"
 
@@ -189,4 +191,31 @@ long sock_ctrl(BIO *b, int cmd, long num, void *ptr)
         break;
     }
     return (ret);
+}
+
+
+
+int ssl_tlsext_ticket_key_cb(SSL *s, unsigned char key_name[16], unsigned char *iv, EVP_CIPHER_CTX *ctx, HMAC_CTX *hctx, int enc)
+{
+    printf("########## %s in %s: %d; \n", __FILE__, __FUNCTION__, __LINE__ );
+    memcpy(key_name, "MITLS_TESTER_KEY__________", 16);
+    unsigned char *AES_KEY  = "ABCDEFGHIJKLMNOP";
+    unsigned char *HMAC_KEY = "ABCDEFGHIJKLMNOP";
+
+    if (enc) { /* create new session */
+        for( int i = 0; i < EVP_MAX_IV_LENGTH; ++i ) {
+            iv[ i ] = i;
+        }
+  
+      EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, AES_KEY, iv);
+      HMAC_Init_ex(hctx, HMAC_KEY, 16, EVP_sha256(), NULL);
+
+      return 1;
+
+    } else { /* retrieve session */
+      HMAC_Init_ex(hctx, HMAC_KEY, 16, EVP_sha256(), NULL);
+      EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, AES_KEY, iv );
+
+      return 1;
+    }
 }

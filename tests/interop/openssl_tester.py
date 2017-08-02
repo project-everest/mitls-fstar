@@ -180,6 +180,17 @@ class OpenSSL():
         ret = self.libssl.SSL_CTX_ctrl( self.context, c_int( SSL_CTRL_SET_GROUPS_LIST ), c_long( 0 ), CString( namedGroupsString ) )
         self.VerifyResult( "SSL_CTX_set1_groups_list (implemented via SSL_CTX_ctrl)", ret )
 
+    def SSL_CTX_set_tlsext_ticket_key_cb( self, callbackAddress ):
+        SSL_CTRL_SET_TLSEXT_TICKET_KEY_CB  = 72
+        self.log.debug( "SSL_CTX_set_tlsext_ticket_key_cb; callbackAddress = 0x%x" % callbackAddress )
+
+        self.libssl.SSL_CTX_callback_ctrl.restype  = c_long
+        self.libssl.SSL_CTX_callback_ctrl.argtypes = [ c_voidp, c_int, c_voidp ]
+        result = self.libssl.SSL_CTX_callback_ctrl(     self.context, 
+                                                        c_int( SSL_CTRL_SET_TLSEXT_TICKET_KEY_CB ), 
+                                                        callbackAddress )
+        self.VerifyResult( "SSL_CTX_set_tlsext_ticket_key_cb (via SSL_CTX_callback_ctrl)", result )
+
     def SSL_CTX_set1_sigalgs_list( self, supportedSignatureAlgorithms ):
         SSL_CTRL_SET_SIGALGS_LIST = 98
 
@@ -203,6 +214,7 @@ class OpenSSL():
         self.SetCertificateAndPrivateKey( serverSignatureAlgorithm )
         self.SSL_CTX_set_cipher_list  ( supportedCipherSuites )
         self.SSL_CTX_set1_groups_list ( supportedNamedGroups )
+        self.SSL_CTX_set_tlsext_ticket_key_cb( globalCUtils.getAddress( globalCUtils.ssl_tlsext_ticket_key_cb ) )
         # self.SSL_CTX_set1_sigalgs_list( supportedSignatureAlgorithms )
 
         self.memorySocket = memorySocket
@@ -264,6 +276,54 @@ class OpenSSL():
         result = self.libssl.SSL_accept( self.serverSSLSocket )
         self.VerifyResult( "SSL_accept", result )
 
+    def GetSession( self ):
+        self.log.debug( "GetSession" )
+
+        self.libssl.SSL_get_session.restype  = c_voidp
+        self.libssl.SSL_get_session.argtypes = [ c_voidp ]
+
+        if self.clientSSLSocket != None: 
+            session = self.libssl.SSL_get_session( self.clientSSLSocket )
+        elif self.serverSSLSocket != None:
+            session = self.libssl.SSL_get_session( self.serverSSLSocket )
+        else:
+            raise OpenSSLError( "Neither client nor server" )
+
+        if session == 0:
+            raise OpenSSLError( "GetSession returned NULL" )
+
+        self.log.debug( "session = 0x%x" % session )
+        return session
+
+    def SerializeSession( self, sslSession ):
+        serializedSession       = c_voidp( None )
+
+        self.libssl.i2d_SSL_SESSION.restype = c_int
+        self.libssl.i2d_SSL_SESSION.argtypes = [ c_voidp, c_voidp ]
+        serializedSessionSize = self.libssl.i2d_SSL_SESSION( sslSession, byref( serializedSession ) )
+        if serializedSessionSize <= 0:
+            raise OpenSSLError( "i2d_SSL_SESSION returned %d" % serializedSessionSize )
+
+        self.log.debug( "serializedSession = %s; serializedSessionSize = %s" % ( serializedSession, serializedSessionSize ) )
+        
+        if serializedSession == None:
+            raise OpenSSLError( "i2d_SSL_SESSION returned NULL ticket" )
+
+        return bytearray( ( c_uint8 * serializedSessionSize ).from_address( serializedSession.value ) )
+
+    def GetSessionTicket( self ):
+        self.log.debug( "GetSessionTicket" )
+        if self.clientSSLSocket is None:
+            raise OpenSSLError( "Must be client to get session ticket" )
+
+        sslSession              = self.GetSession() #SSL_get_session
+        serializedSession       = self.SerializeSession( sslSession )
+
+         # This is not a "ticket" in TLS terms, but rather a "session" in OpenSSL terms.
+        ticket = serializedSession
+
+        return ticket
+
       # For server side:
     def AcceptConnection( self, applicationData = None ):
         self.log.debug( "AcceptConnection" )
@@ -291,10 +351,39 @@ class OpenSSL():
         result = self.libssl.SSL_connect( self.clientSSLSocket )
         self.VerifyResult( "SSL_connect", result )
 
+    def DeserializeSession( self, serializedSession ):
+        self.log.debug( "DeserializeSession: len( serializedSession ) = %d" % len( serializedSession ) )
+        serializedSession_c = c_voidp( addressof( ( c_uint8 * len( serializedSession ) ).from_buffer( serializedSession ) ) )
+
+        session = c_voidp( None )
+        self.libssl.d2i_SSL_SESSION.restype  = c_voidp
+        self.libssl.d2i_SSL_SESSION.argtypes = [ c_voidp, c_voidp, c_long ] 
+        returnedSession = self.libssl.d2i_SSL_SESSION( byref( session ), byref( serializedSession_c ), c_long( len( serializedSession ) ) )
+        self.log.debug( "session = %s" % session)
+        if returnedSession is None or returnedSession != session.value:
+            raise OpenSSLError( "d2i_SSL_SESSION returned invalid value (returnedSession = %s)" % returnedSession )
+
+        return session
+
+    def SetSessionTicket( self, sessionTicket ):
+        self.log.debug( "SetSessionTicket" )
+        if self.clientSSLSocket is None:
+            raise OpenSSLError( "Must be client to set a ticket" )
+
+        sslSession = self.DeserializeSession( sessionTicket )
+        
+        self.libssl.SSL_set_session.restype  = c_int
+        self.libssl.SSL_set_session.argtypes = [ c_voidp, c_voidp ]
+        result = self.libssl.SSL_set_session( self.clientSSLSocket, sslSession )
+        self.VerifyResult( "SSL_set_session", result ) 
+
      # For client side
-    def Connect( self, supportedNamedGroups = None ):
+    def Connect( self, supportedNamedGroups = None, sessionTicket = None ):
         self.log.debug( "Connect" )
         self.InitializeSSLClientSocket()
+
+        if sessionTicket != None:
+            self.SetSessionTicket( sessionTicket )
 
         self.SSL_connect()
 
@@ -362,6 +451,7 @@ class OpenSSL():
 class OpenSSLTester(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(OpenSSLTester, self).__init__(*args, **kwargs)
+        self.SetupLogger()
 
     def setUp( self ):
         self.tlsServer = None
@@ -369,6 +459,37 @@ class OpenSSLTester(unittest.TestCase):
 
     def tearDown( self ):
         pass
+
+    def SetupLogger( self ):
+        self.log = logging.getLogger( 'OpenSSLTester' )
+        self.log.setLevel( config.LOG_LEVEL )
+
+        formatter      = logging.Formatter('%(asctime)s %(name)-20s %(levelname)-10s %(message)s')
+        consoleHandler = logging.StreamHandler()
+        consoleHandler.setLevel( config.LOG_LEVEL )
+        consoleHandler.setFormatter(formatter)
+
+        self.log.handlers = []
+        self.log.addHandler(consoleHandler) 
+
+    def test_ClientAndServer_sessionResumption( self ):
+        cipherSuite = "TLS_AES_128_GCM_SHA256"
+        algorithm = 'ECDSA+SHA256'
+        group     = "X25519"
+        sessionTicket = self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                                            supportedSignatureAlgorithms = [ algorithm ],
+                                            supportedNamedGroups         = [ group ] )
+        transcript1 = memorySocket.tlsParser.transcript[ : ]
+        # pprint( "sessionTicket = %s" % sessionTicket )
+        self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                            supportedSignatureAlgorithms = [ algorithm ],
+                            supportedNamedGroups         = [ group ],
+                            sessionTicket                = sessionTicket )
+        transcript2 = memorySocket.tlsParser.transcript[ : ]
+
+        if config.LOG_LEVEL < logging.ERROR:
+            for msg in (transcript1 + transcript2):
+                memorySocket.tlsParser.PrintMsg( msg )
 
     def test_ClientAndServer( self ):
         cipherSuite = "TLS_AES_128_GCM_SHA256"
@@ -381,6 +502,7 @@ class OpenSSLTester(unittest.TestCase):
         if config.LOG_LEVEL < logging.ERROR:
             for msg in memorySocket.tlsParser.transcript:
                 memorySocket.tlsParser.PrintMsg( msg )
+
                 # if tlsparser.IV_AND_KEY in msg.keys():
                 #     pprint( msg[ tlsparser.IV_AND_KEY ])
 
@@ -410,7 +532,8 @@ class OpenSSLTester(unittest.TestCase):
                         supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
                         supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
                         msgManipulators                 = [],
-                        serverSignatureAlgorithm        = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ], ):
+                        serverSignatureAlgorithm        = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
+                        sessionTicket                   = None ):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
@@ -426,9 +549,11 @@ class OpenSSLTester(unittest.TestCase):
                                     supportedCipherSuites,
                                     supportedSignatureAlgorithms,
                                     supportedNamedGroups )
-        self.tlsClient.Connect()
+        self.tlsClient.Connect( sessionTicket = sessionTicket )
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Recv()
+
+        sessionTicket = self.tlsClient.GetSessionTicket()
 
         serverThread.join()
         if self.tlsServer.acceptConnectionSucceeded == False:
@@ -440,8 +565,10 @@ class OpenSSLTester(unittest.TestCase):
         if self.tlsServer.dataReceived != DATA_CLIENT_TO_SERVER:
             raise Exception( "self.tlsServer.dataReceived = %s, instead of expected %s" % ( self.tlsServer.dataReceived, DATA_CLIENT_TO_SERVER ) )
             
-        # self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
-        # self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+        self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
+        self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+
+        return sessionTicket
 
     def test_parameters_matrix( self ):
         sys.stderr.write( "Running test_parameters_matrix\n" )
@@ -486,7 +613,8 @@ if __name__ == '__main__':
     memorySocket.log.setLevel( config.LOG_LEVEL )    
 
     suite = unittest.TestSuite()
-    suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
+    # suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
+    suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption' ) )
     # suite.addTest( OpenSSLTester( 'test_parameters_matrix' ) )
     # suite.addTest( NSSTester( '' ) )
     

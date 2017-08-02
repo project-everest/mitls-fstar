@@ -10,5 +10,6 @@ gcc -shared -fPIC cutils.c 				\
 		-I$OPENSSL_PATH/crypto/include 	\
 		-I$OPENSSL_PATH/include/ 		\
 		-I$OPENSSL_PATH 				\
+		$OPENSSL_PATH/libcrypto.so 		\
 		-o cutils.so
 
