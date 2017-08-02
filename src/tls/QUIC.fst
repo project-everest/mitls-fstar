@@ -209,7 +209,12 @@ let ffiConfig
   max_stream_id
   idle_timeout
   (others: bytes)
+  (versions: list UInt32.t)
   (host: string)  =
+  let ver = List.Tot.map (fun (n:UInt32.t) ->
+    match UInt32.v n with
+    | 1 -> QuicVersion1
+    | _ -> QuicCustomVersion n) versions in
   let others =
     match Extensions.parseQuicParameters_aux others
     with
@@ -224,8 +229,9 @@ let ffiConfig
     peer_name = Some host;
     check_peer_certificate = false;
     non_blocking_read = true;
-    quic_parameters = Some ([QuicVersion1],[
-    Quic_initial_max_stream_data max_stream_data;
-    Quic_initial_max_data max_data;
-    Quic_initial_max_stream_id max_stream_id;
-    Quic_idle_timeout idle_timeout] @ others) }
+    quic_parameters = Some (ver, [
+      Quic_initial_max_stream_data max_stream_data;
+      Quic_initial_max_data max_data;
+      Quic_initial_max_stream_id max_stream_id;
+      Quic_idle_timeout idle_timeout] @ others)
+  }

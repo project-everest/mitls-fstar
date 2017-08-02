@@ -1,5 +1,7 @@
 #ifndef HEADER_MITLS_FFI_H
 #define HEADER_MITLS_FFI_H
+#include <stdint.h>
+#include <unistd.h>
 
 #if defined(_MSC_VER)  // Visual Studio - always use __cdecl keyword
   #define MITLS_CALLCONV __cdecl
@@ -158,6 +160,8 @@ typedef struct {
 typedef struct {
   // NULL terminated hostname (sent in SNI and used to validate certificate)
   int is_server;
+  uint32_t *supported_versions;
+  size_t supported_versions_len;
   quic_transport_parameters qp;
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
   const char *signature_algorithms; // Colon separated list of signature schemes or NULL

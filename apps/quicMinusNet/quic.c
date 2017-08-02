@@ -47,8 +47,6 @@ char *quic_result_string(quic_result r){
 int main(int argc, char **argv)
 {
   char *errmsg;
-  size_t test = 12345;
-  printf("HEX %zu\n", test);
 
   quic_transport_parameters client_qp =
     {
@@ -72,6 +70,8 @@ int main(int argc, char **argv)
 
   quic_config config = {
     .is_server = 1,
+    .supported_versions = (uint32_t[]){0xff000004, 0xff000003},
+    .supported_versions_len = 2,
     .host_name = "",
     .qp = server_qp,
     .server_ticket = {

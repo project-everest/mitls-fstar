@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <memory.h>
-#include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
 #include <sys/cdefs.h>
@@ -16,9 +15,6 @@
 #include <caml/threads.h>
 #include <caml/printexc.h>
 #include "mitlsffi.h"
-
-#define Val_none Val_int(0)
-#define Some_val(v) Field(v,0)
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
@@ -55,6 +51,19 @@ MITLS_FFI_LIST
 _Static_assert(sizeof(size_t) <= sizeof(value), "OCaml value isn't large enough to hold a C pointer");
 #define PtrToValue(p) Val_long(((size_t)p)>>1)
 #define ValueToPtr(v) ((void*)((Long_val(v)<<1)))
+
+#define Val_none Val_int(0)
+#define Some_val(v) Field(v,0)
+
+static value Val_some(value mlvalue) {
+    CAMLparam1(mlvalue);
+    CAMLlocal1(aout);
+
+    aout = caml_alloc(1, 0);
+    Store_field(aout, 0, mlvalue);
+
+    CAMLreturn(aout);
+}
 
 typedef struct mitls_state {
     value fstar_state;    // a GC root representing an F*-side state object
@@ -788,12 +797,30 @@ typedef struct quic_state {
    return len;
  }
 
+static value ocaml_alloc_version_list(uint32_t *list, size_t len)
+{
+  CAMLparam0 ();
+  CAMLlocal2 (result, r);
+
+  uint32_t default_ver = 0xff000004; // DRAFT 4
+  if(!list || !len){ list = &default_ver; len = 1; }
+  result = Val_int(0);
+
+  for(size_t i = 0; i < len; i++) {
+    r = caml_alloc_small(2, 0);
+    Field(r, 0) = Val_int(list[i]);
+    Field(r, 1) = result;
+    result = r;
+  }
+
+  return result;
+}
 
 // The OCaml runtime system must be acquired before calling this
 static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal3(result, host, others);
+    CAMLlocal4(result, host, others, versions);
     CAMLlocal3(tticket, session, oticket);
 
     *st = NULL;
@@ -816,7 +843,6 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
 
     others = caml_alloc_string(cfg->qp.others_len);
     memcpy(String_val(others), cfg->qp.others, cfg->qp.others_len);
-
     host = caml_copy_string(cfg->host_name);
 
     value args[] = {
@@ -825,10 +851,11 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       Val_int(cfg->qp.max_stream_id),
       Val_int(cfg->qp.idle_timeout),
       others,
+      ocaml_alloc_version_list(cfg->supported_versions, cfg->supported_versions_len),
       host
     };
 
-    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 6, args);
+    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 7, args);
     if (Is_exception_result(result)) {
       report_caml_exception(result, errmsg);
       CAMLreturnT(int,0);
