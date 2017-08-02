@@ -444,6 +444,7 @@ TICKET_NONCE            = "ticket_nonce"
 NEW_SESSION_TICKET      = "NewSessionTicket"
 MAX_EARLY_DATA_SIZE     = "max_early_data_size"
 DELAY_COUNT             = "DelayMsgCount"
+PSK_MODE                = "PSK_Mode"
 
 LEAKED_KEYS_DIR     = "leaked_keys"
 
@@ -572,6 +573,9 @@ NamedGroups = AttrDict( {'secp256r1'    : 0x0017,
                          'ffdhe4096 '   : 0x0102,
                          'ffdhe6144'    : 0x0103,
                          'ffdhe8192'    : 0x0104, } )
+
+PSKModes = AttrDict( {  'psk_ke'        : 0,
+                        'psk_dhe_ke'    : 1, } )
 
 class Direction():
     CLIENT_TO_SERVER = "Client-to-Server"
@@ -914,6 +918,16 @@ class TLSParser():
 
         return parsedPiece
 
+    def ConsumePSKMode( self ):
+        rawPSKMode  = self.PeekRawBytes( SIZE_OF_UINT8 )
+        pskMode     = self.ConsumeByte() 
+
+        parsedPiece = AttrDict( { NAME           : PSK_MODE,
+                                  RAW_CONTENTS   : rawPSKMode,
+                                  INTERPRETATION : GetKey( PSKModes, pskMode, "unkown PSK mode %d" % pskMode )   } )
+
+        return parsedPiece
+
     def ConsumeSupportedVersion( self ):
         rawVersionID = self.ConsumeRawBytes( SIZE_OF_UINT16 )
         versionID    = self.ParseShort( rawVersionID )
@@ -950,6 +964,8 @@ class TLSParser():
             extension, _ = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeSignatureScheme)
         elif extensionType == EXTENSION_TYPE_SUPPORTED_GROUPS:
             extension, _ = self.ConsumeList( SIZE_OF_UINT16, self.ConsumeSupportedGroup)
+        elif extensionType == EXTENSION_TYPE_PSK_KEY_EXCHANGE_MODES:
+            extension, _ = self.ConsumeList( SIZE_OF_UINT8, self.ConsumePSKMode)
         elif extensionType == EXTENSION_TYPE_PRE_SHARED_KEY:
             extension = [ self.ConsumePreSharedKey( msgType ) ]
         elif extensionType == EXTENSION_TYPE_EARLY_DATA and msgType == HANDSHAKE_TYPE_NEW_SESSION_TICKET:
