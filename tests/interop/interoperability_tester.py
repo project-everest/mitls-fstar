@@ -240,6 +240,10 @@ class InterOperabilityTester(unittest.TestCase):
         
         serverThread.join()
 
+        if config.LOG_LEVEL < logging.ERROR:
+            for msg in memorySocket.tlsParser.transcript:
+                memorySocket.tlsParser.PrintMsg( msg )
+
         if self.tlsServer.acceptConnectionSucceeded == False:
             raise Exception( "Server failed to connect" )
 
@@ -258,7 +262,8 @@ class InterOperabilityTester(unittest.TestCase):
                                 supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
                                 supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
                                 supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
-                                msgManipulators                 = [] ):
+                                msgManipulators                 = [],
+                                namedGroupsToOffer              = None ):
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
@@ -272,9 +277,11 @@ class InterOperabilityTester(unittest.TestCase):
         time.sleep( 0.2 )
 
         self.tlsClient = NSS( "client" )
-        self.tlsClient.InitClient( memorySocket, hostName )
+        self.tlsClient.InitClient( memorySocket, hostName  )
 
-        self.tlsClient.Connect( supportedNamedGroups )
+        if namedGroupsToOffer != None:
+            namedGroupsToOffer = namedGroupsToOffer + supportedNamedGroups
+        self.tlsClient.Connect( supportedNamedGroups = namedGroupsToOffer )
 
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Recv()
@@ -552,6 +559,43 @@ class InterOperabilityTester(unittest.TestCase):
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
 
+    def test_MITLS_NSS_SessionResumption_parameters_matrix( self ):
+        sys.stderr.write( "Running test_MITLS_NSS_SessionResumption_parameters_matrix\n" )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        with open( "parameters_matrix_MITLS_NSS_SessionResumption.csv", "w" ) as logFile:
+            outputSinks = [ sys.stderr, logFile ]
+            WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
+
+            for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
+                for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
+                    for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
+                        WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
+
+                        memorySocket.tlsParser.DeleteLeakedKeys()
+                        try:
+                            startTime = time.time()
+                            sessionTicket = self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
+                                                                                supportedSignatureAlgorithms = [ algorithm ],
+                                                                                supportedNamedGroups         = [ group ],
+                                                                                allowEarlyData               = True )
+                            self.RunSingleTest_MITLS_NSS(   supportedCipherSuites        = [ cipherSuite ],
+                                                                supportedSignatureAlgorithms = [ algorithm ],
+                                                                supportedNamedGroups         = [ group ],
+                                                                sessionTicket                = sessionTicket,
+                                                                allowEarlyData               = False )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % ("OK,") )
+                        except Exception as err: 
+                            pprint( traceback.format_tb( err.__traceback__ ) )
+                            pprint( err )
+                            WriteToMultipleSinks( outputSinks, "%-15s" % "FAILED," )
+                        finally:
+                            totalTime = time.time() - startTime
+                            WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
+              
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+
     def test_MITLS_OPENSSL_SessionResumption_parameters_matrix( self ):
         sys.stderr.write( "Running test_MITLS_OPENSSL_SessionResumption_parameters_matrix\n" )
         keysMonitor = MonitorLeakedKeys()
@@ -660,21 +704,32 @@ class InterOperabilityTester(unittest.TestCase):
                             WriteToMultipleSinks( outputSinks, "%-6f\n" % totalTime )
               
         keysMonitor.StopMonitorStdoutForLeakedKeys()
+
+    def test_NSS_MITLS_HelloRetry( self ):
+        sys.stderr.write( "Running test_MITLS_NSS_HelloRetry\n" )
+        keysMonitor = MonitorLeakedKeys()
+        keysMonitor.MonitorStdoutForLeakedKeys()
+
+        try:
+            preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
+            supportedNamedGroups = mitls_tester.SUPPORTED_NAMED_GROUPS[ : -1 ]
+            namedGroupsToOffer   = [ mitls_tester.SUPPORTED_NAMED_GROUPS[ -1 ] ]
+            self.RunSingleTest_NSS_MITLS(  supportedNamedGroups = supportedNamedGroups,
+                                           namedGroupsToOffer   = namedGroupsToOffer )
+        except Exception as err: 
+            pprint( traceback.format_tb( err.__traceback__ ) )
+            pprint( err )       
+        
+        keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
+        pprint( keysAndFiles ) 
+              
+        keysMonitor.StopMonitorStdoutForLeakedKeys()
+
     def test_MITLS_NSS_HelloRetry( self ):
         sys.stderr.write( "Running test_MITLS_NSS_HelloRetry\n" )
         keysMonitor = MonitorLeakedKeys()
         keysMonitor.MonitorStdoutForLeakedKeys()
 
-        # with open( "parameters_matrix_MITLS_NSS.csv", "w" ) as logFile:
-            # outputSinks = [ sys.stderr, logFile ]
-            # WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s %-15s%-6s\n" % ("CipherSuite,", "SignatureAlgorithm,", "NamedGroup,", "PassFail,", "Time (seconds)") )
-
-            # for cipherSuite in mitls_tester.SUPPORTED_CIPHER_SUITES:
-            #     for algorithm in mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS:
-            #         for group in mitls_tester.SUPPORTED_NAMED_GROUPS:
-            #             WriteToMultipleSinks( outputSinks, "%-30s %-20s %-20s " % ( cipherSuite+",", algorithm+",", group+"," ) )
-
-        # memorySocket.tlsParser.DeleteLeakedKeys()
         try:
             preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
             self.RunSingleTest_MITLS_NSS(  supportedNamedGroups = mitls_tester.SUPPORTED_NAMED_GROUPS[ : -1 ],
@@ -977,12 +1032,15 @@ if __name__ == '__main__':
     # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_SessionResumption_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_SessionResumption_parameters_matrix" ) )
     # suite.addTest( InterOperabilityTester( "test_MITLS_OPENSSL_0RTT_parameters_matrix" ) )
-    suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_0RTT_parameters_matrix" ) )
+    # suite.addTest( InterOperabilityTester( "test_OPENSSL_MITLS_0RTT_parameters_matrix" ) )
+
+    # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_SessionResumption_parameters_matrix" ) )
 
 
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_0RTT_parameters_matrix" ) )
 
     # suite.addTest( InterOperabilityTester( "test_MITLS_NSS_HelloRetry" ) )
+    suite.addTest( InterOperabilityTester( "test_NSS_MITLS_HelloRetry" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_SkipPieces_ClientHello" ) )
     # suite.addTest( InterOperabilityTester( "test_CompareResponses_ReorderPieces_ServerEncryptedHello" ) )

@@ -366,6 +366,16 @@ class NSS():
                                                         NO_CONTEXT )
         self.VerifyResult( "SSL_HandshakeCallback", result )
 
+    def SSL_SendAdditionalKeyShares( self, numKeyShares ):
+        self.log.debug( "SSL_SendAdditionalKeyShares( %s )" % numKeyShares )
+        
+        self.libssl3.SSL_SendAdditionalKeyShares.restype = c_int32
+        self.libssl3.SSL_SendAdditionalKeyShares.argtypes   = [ c_voidp, c_uint ]
+
+        result = self.libssl3.SSL_SendAdditionalKeyShares(   self.clientSSLSocket, 
+                                                            c_uint( numKeyShares ) )
+        self.VerifyResult( "SSL_SendAdditionalKeyShares", result )    
+
     def SSL_SignatureSchemePrefSet( self, supportedSignatureAlgorithms ):
         self.log.debug( "SSL_SignatureSchemePrefSet( %s )" % supportedSignatureAlgorithms )
         supportedSignatureAlgorithms.reverse()
@@ -452,7 +462,10 @@ class NSS():
         self.VerifyResult( "SSL_ResetHandshake", result )
 
     # For server side:
-    def AcceptConnection( self, applicationData = None, enableSessionTickets = True ):
+    def AcceptConnection(   self, 
+                            applicationData      = None, 
+                            enableSessionTickets = True, 
+                            supportedNamedGroups = mitls_tester.SUPPORTED_NAMED_GROUPS ):
         self.log.debug( "AcceptConnection" )
         self.acceptConnectionSucceeded = False
 
@@ -474,6 +487,8 @@ class NSS():
         # skipping SSL_ENABLE_EXTENDED_MASTER_SECRET option
 
         self.SSL_ConfigServerCert()
+
+        self.SSL_NamedGroupConfig( self.serverSSLSocket, supportedNamedGroups )
 
         # skipping SSL_ENABLE_FDX option
         # skipping SSL_NO_CACHE option
@@ -497,13 +512,15 @@ class NSS():
         if supportedNamedGroups == None:
             return
 
+        # supportedNamedGroups.reverse()    
+
         self.log.debug( "SSL_NamedGroupConfig; supportedNamedGroups = %s" % ( supportedNamedGroups ) )
         self.libssl3.SSL_NamedGroupConfig.restype  = c_int32
         self.libssl3.SSL_NamedGroupConfig.argtypes = [ c_voidp, c_voidp, c_uint32 ]
 
-        namedGroups = ( c_uint16 * len( supportedNamedGroups ) )()
+        namedGroups = ( c_uint32 * len( supportedNamedGroups ) )()
         for i in range( len( namedGroups ) ):
-            namedGroups[ i ] = c_uint16( SUPPORTED_NAMED_GROUPS_MAPPING_TO_NSS[ supportedNamedGroups[ i ] ] )
+            namedGroups[ i ] = SUPPORTED_NAMED_GROUPS_MAPPING_TO_NSS[ supportedNamedGroups[ i ] ]
 
         result = self.libssl3.SSL_NamedGroupConfig( c_voidp( sslSocket ), namedGroups, c_uint32( len( namedGroups ) ) )
         self.VerifyResult( "SSL_NamedGroupConfig", result )
@@ -541,11 +558,14 @@ class NSS():
         # SSL_ENABLE_0RTT_DATA
         # SSL_REQUIRE_DH_NAMED_GROUPS
         
-        self.SSL_NamedGroupConfig( self.clientSSLSocket, supportedNamedGroups )
+        
         self.SSL_AuthCertificateHook()
         self.SSL_GetClientAuthDataHook()
         self.SSL_HandshakeCallback()
         self.SSL_SignatureSchemePrefSet( supportedSignatureAlgorithms )
+        self.SSL_SendAdditionalKeyShares( 0 )
+        self.SSL_NamedGroupConfig( self.clientSSLSocket, supportedNamedGroups )
+        
         # skipping SSL_SetURL
         self.CallSSLConnect()
 
@@ -632,12 +652,15 @@ class NSSTester(unittest.TestCase):
         self.tlsClient.InitClient( memorySocket, hostName )
 
         enableSessionTickets = True
-        serverThread = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ b"Server->Client\x00", enableSessionTickets ] )
+        applicationData      = b"Server->CLient\x00"
+        supportedNamedGroups = mitls_tester.SUPPORTED_NAMED_GROUPS
+        serverThread = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData, enableSessionTickets, supportedNamedGroups ] )
         serverThread.start()
 
         time.sleep( 0.1 )
 
-        self.tlsClient.Connect( supportedNamedGroups = [ "P-521" ] , enableSessionTickets = True)
+        supportedNamedGroups = mitls_tester.SUPPORTED_NAMED_GROUPS
+        self.tlsClient.Connect( supportedNamedGroups = supportedNamedGroups , enableSessionTickets = True)
         self.tlsClient.Send( b"Client->Server\x00" ) 
         self.tlsClient.dataReceived = self.tlsClient.Recv()
 
