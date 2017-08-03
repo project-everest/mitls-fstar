@@ -51,9 +51,20 @@ TLS1_3_VERSION  = 0x0304
 DATA_CLIENT_TO_SERVER = b"Client->Server\x00"
 DATA_SERVER_TO_CLIENT = b"Server->Client\x00"
 
+EARLY_DATA_CLIENT_TO_SERVER = b"Early-" + DATA_CLIENT_TO_SERVER
+
 class OpenSSLError( Exception ):
     def __init__( self, msg ):
         Exception.__init__( self, msg )
+
+class EarlyDataStatus:
+    SSL_EARLY_DATA_NOT_SENT = 0
+    SSL_EARLY_DATA_REJECTED = 1
+    SSL_EARLY_DATA_ACCEPTED = 2
+
+    SSL_READ_EARLY_DATA_ERROR   = 0
+    SSL_READ_EARLY_DATA_SUCCESS = 1
+    SSL_READ_EARLY_DATA_FINISH  = 2
 
 class OpenSSL():
     def __init__( self, name = "" ):
@@ -324,19 +335,57 @@ class OpenSSL():
 
         return ticket
 
+    def ReadEarlyData( self, verifyNoMoreData = False ):
+        self.log.debug( "ReadEarlyData" )
+        if self.serverSSLSocket is None:
+            raise OpenSSLError( "Must be server to read early data. 0.5RTT not imlemented yet." ) #Technically, can also be client for 0.5RTT, but that's not implemented yet
+
+        maxEarlyData = 1024
+        cBuffer      = ( c_uint8 * maxEarlyData )()
+        bytesRead    = c_long( 0 )
+
+        self.libssl.SSL_read_early_data.restype  = c_int
+        self.libssl.SSL_read_early_data.argtypes = [ c_voidp, c_voidp, c_long, c_voidp ]
+        result = self.libssl.SSL_read_early_data(   self.serverSSLSocket,
+                                                    cBuffer,
+                                                    c_long( maxEarlyData ),
+                                                    byref( bytesRead ) )
+        if result != EarlyDataStatus.SSL_READ_EARLY_DATA_SUCCESS and \
+           result != EarlyDataStatus.SSL_READ_EARLY_DATA_FINISH:
+                raise OpenSSLError( "SSL_read_early_data returned %d" % result)
+        if verifyNoMoreData:
+            self.VerifyResult( "SSL_read_early_data", result, expectedValue = EarlyDataStatus.SSL_READ_EARLY_DATA_FINISH )
+
+        earlyData = bytes( cBuffer[ 0 : bytesRead.value ] )
+        self.log.debug( "Read %d bytes: %s" % ( bytesRead.value, earlyData ) )
+        
+        return earlyData
+        
       # For server side:
-    def AcceptConnection( self, applicationData = None ):
+    def AcceptConnection( self, applicationData = None, allowEarlyData = False ):
         self.log.debug( "AcceptConnection" )
         self.acceptConnectionSucceeded = False
 
         try:
             self.InitializeSSLServerSocket()
 
+            self.dataReceived = b""
+            # gotEarlyData      = False
+            if allowEarlyData:
+                self.dataReceived += self.ReadEarlyData() 
+                self.log.debug( "Got early data: %s" % self.dataReceived )
+                gotEarlyData = ( len( self.dataReceived ) > 0 )
+
             self.SSL_accept()
-            self.dataReceived = self.Recv()
+            self.dataReceived += self.Recv()
 
             if applicationData != None:
                 self.Send( applicationData )
+
+            # if gotEarlyData:
+            #     earlyDataLeftovers = self.ReadEarlyData( verifyNoMoreData = True )
+            #     if len( earlyDataLeftovers ) > 0:
+            #         raise OpenSSLError( "Didn't expect to receive additional early data: %s" % earlyDataLeftovers)
 
             self.acceptConnectionSucceeded = True
         except Exception as err: 
@@ -377,15 +426,67 @@ class OpenSSL():
         result = self.libssl.SSL_set_session( self.clientSSLSocket, sslSession )
         self.VerifyResult( "SSL_set_session", result ) 
 
+    def GetMaxEarlyData( self ):
+        self.log.debug( "GetMaxEarlyData" )
+        if self.clientSSLSocket is None:
+            raise OpenSSLError( "Must be client to send early data" )
+
+        self.libssl.SSL_SESSION_get_max_early_data.restype  = c_uint32
+        self.libssl.SSL_SESSION_get_max_early_data.argtypes = [ c_voidp ]
+        maxEarlyData = self.libssl.SSL_SESSION_get_max_early_data( self.GetSession() )
+        
+        self.log.debug( "maxEarlyData = %s" % maxEarlyData )
+        return maxEarlyData
+
+    def GetEarlyDataStatus( self, expectedValue = None ):
+        self.log.debug( "GetEarlyDataStatus" )
+
+        sslSocket = self.clientSSLSocket
+        if self.clientSSLSocket is None:
+            sslSocket = self.serverSSLSocket
+
+        self.libssl.SSL_get_early_data_status.restype  = c_int
+        self.libssl.SSL_get_early_data_status.argtypes = [ c_voidp ]
+        status = self.libssl.SSL_get_early_data_status( sslSocket )
+
+        if expectedValue != None:
+            self.VerifyResult( "SSL_get_early_data_status", status, expectedValue = expectedValue )
+
+    def SendEarlyData( self, earlyData ):
+        self.log.debug( "SendEarlyData" )
+        if self.clientSSLSocket is None:
+            raise OpenSSLError( "Must be client to send early data" )
+
+        if self.GetMaxEarlyData() <= 0:
+            raise OpenSSLError( "Can't send early data" )
+
+        buffer  = bytearray( earlyData )
+        cBuffer = ( c_uint8 * len( earlyData ) ).from_buffer( buffer )
+        written = c_long( 0 )
+
+        self.libssl.SSL_write_early_data.restype  = c_int
+        self.libssl.SSL_write_early_data.argtypes = [ c_voidp, c_voidp, c_long, c_voidp ]
+        result = self.libssl.SSL_write_early_data(  self.clientSSLSocket,
+                                                     cBuffer,
+                                                     c_long( len( earlyData ) ),
+                                                     byref( written ) )
+        self.VerifyResult( "SSL_write_early_data", result )
+
      # For client side
-    def Connect( self, supportedNamedGroups = None, sessionTicket = None ):
+    def Connect( self, supportedNamedGroups = None, sessionTicket = None, earlyData = None ):
         self.log.debug( "Connect" )
         self.InitializeSSLClientSocket()
 
         if sessionTicket != None:
             self.SetSessionTicket( sessionTicket )
 
+        if earlyData != None:
+            self.SendEarlyData( earlyData )
+
         self.SSL_connect()
+
+        if earlyData != None:
+            self.GetEarlyDataStatus( expectedValue = EarlyDataStatus.SSL_EARLY_DATA_ACCEPTED )
 
     def Send( self, buffer ):
         self.log.debug( "Send: %s" % buffer )
@@ -472,6 +573,26 @@ class OpenSSLTester(unittest.TestCase):
         self.log.handlers = []
         self.log.addHandler(consoleHandler) 
 
+    def test_ClientAndServer_sessionResumption_0RTT( self ):
+        cipherSuite = "TLS_AES_128_GCM_SHA256"
+        algorithm = 'ECDSA+SHA256'
+        group     = "X25519"
+        sessionTicket = self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                                            supportedSignatureAlgorithms = [ algorithm ],
+                                            supportedNamedGroups         = [ group ] )
+        transcript1 = memorySocket.tlsParser.transcript[ : ]
+        # pprint( "sessionTicket = %s" % sessionTicket )
+        self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
+                            supportedSignatureAlgorithms = [ algorithm ],
+                            supportedNamedGroups         = [ group ],
+                            sessionTicket                = sessionTicket,
+                            allowEarlyData               = True )
+        transcript2 = memorySocket.tlsParser.transcript[ : ]
+
+        if config.LOG_LEVEL < logging.ERROR:
+            for msg in (transcript1 + transcript2):
+                memorySocket.tlsParser.PrintMsg( msg )
+
     def test_ClientAndServer_sessionResumption( self ):
         cipherSuite = "TLS_AES_128_GCM_SHA256"
         algorithm = 'ECDSA+SHA256'
@@ -515,14 +636,15 @@ class OpenSSLTester(unittest.TestCase):
                             supportedCipherSuites           = mitls_tester.SUPPORTED_CIPHER_SUITES,
                             serverSignatureAlgorithm        = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
                             supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
-                            applicationData                 = None ):
+                            applicationData                 = None,
+                            allowEarlyData                  = False ):
         self.tlsServer = OpenSSL( "server" )
         self.tlsServer.InitServer(  memorySocket,
                                     supportedCipherSuites, 
                                     serverSignatureAlgorithm, 
                                     supportedNamedGroups )
         
-        serverThread   = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData ] )
+        serverThread   = threading.Thread(target = self.tlsServer.AcceptConnection, args = [ applicationData, allowEarlyData ] )
         serverThread.start()
 
         return serverThread
@@ -533,15 +655,17 @@ class OpenSSLTester(unittest.TestCase):
                         supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
                         msgManipulators                 = [],
                         serverSignatureAlgorithm        = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS[ 0 ],
-                        sessionTicket                   = None ):
+                        sessionTicket                   = None,
+                        allowEarlyData                  = True ):
 
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
-        serverThread = self.StartServerThread(  supportedCipherSuites,
-                                                serverSignatureAlgorithm,
-                                                supportedNamedGroups,
-                                                DATA_SERVER_TO_CLIENT )
+        serverThread = self.StartServerThread(  supportedCipherSuites       = supportedCipherSuites,
+                                                serverSignatureAlgorithm    = serverSignatureAlgorithm,
+                                                supportedNamedGroups        = supportedNamedGroups,
+                                                applicationData             = DATA_SERVER_TO_CLIENT,
+                                                allowEarlyData              = allowEarlyData     )
 
         self.tlsClient = OpenSSL( "client" )
         self.tlsClient.InitClient(  memorySocket,
@@ -549,7 +673,13 @@ class OpenSSLTester(unittest.TestCase):
                                     supportedCipherSuites,
                                     supportedSignatureAlgorithms,
                                     supportedNamedGroups )
-        self.tlsClient.Connect( sessionTicket = sessionTicket )
+        earlyData          = None
+        serverExpectedData = DATA_CLIENT_TO_SERVER
+        if allowEarlyData and sessionTicket != None:
+            earlyData          = EARLY_DATA_CLIENT_TO_SERVER
+            serverExpectedData = EARLY_DATA_CLIENT_TO_SERVER + DATA_CLIENT_TO_SERVER
+
+        self.tlsClient.Connect( sessionTicket = sessionTicket, earlyData = earlyData )
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Recv()
 
@@ -562,8 +692,9 @@ class OpenSSLTester(unittest.TestCase):
         if self.tlsClient.dataReceived != DATA_SERVER_TO_CLIENT:
             raise Exception( "self.tlsClient.dataReceived = %s, instead of expected %s" % ( self.tlsClient.dataReceived, DATA_SERVER_TO_CLIENT ) )           
 
-        if self.tlsServer.dataReceived != DATA_CLIENT_TO_SERVER:
-            raise Exception( "self.tlsServer.dataReceived = %s, instead of expected %s" % ( self.tlsServer.dataReceived, DATA_CLIENT_TO_SERVER ) )
+
+        if self.tlsServer.dataReceived != serverExpectedData:
+            raise Exception( "self.tlsServer.dataReceived = %s, instead of expected %s" % ( self.tlsServer.dataReceived, serverExpectedData ) )
             
         self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
         self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
@@ -614,7 +745,8 @@ if __name__ == '__main__':
 
     suite = unittest.TestSuite()
     # suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
-    suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption' ) )
+    # suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption' ) )
+    suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption_0RTT' ) )
     # suite.addTest( OpenSSLTester( 'test_parameters_matrix' ) )
     # suite.addTest( NSSTester( '' ) )
     
