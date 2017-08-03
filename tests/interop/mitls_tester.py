@@ -40,8 +40,10 @@ from tlsparser import   MemorySocket,                       \
                         HANDSHAKE_TYPE,                     \
                         PARENT_NODE,                        \
                         SWAP_ITEMS,                         \
+                        EXTENSIONS,                         \
                         HANDSHAKE_TYPE_CLIENT_HELLO,        \
                         HANDSHAKE_TYPE_END_OF_EARLY_DATA,   \
+                        HANDSHAKE_TYPE_HELLO_RETRY_REQUEST, \
                         CIPHER_SUITES,                      \
                         DIRECTION,                          \
                         RECORD_TYPE,                        \
@@ -583,7 +585,7 @@ class MITLS():
         # self.log.debug( "Receive: payloadPointer = %s" % payloadPointer)
 
         pyBuffer = bytearray( ( c_uint8 * length.value ).from_address( payloadPointer ) )
-        self.log.debug( "Received from Client: %s\n" % pyBuffer ) 
+        self.log.debug( "Received: %s\n" % pyBuffer ) 
 
         return pyBuffer
 
@@ -1018,9 +1020,15 @@ class MITLSTester(unittest.TestCase):
 
         preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
         try:
+            # manipulation = AttrDict( {  HANDSHAKE_TYPE : HANDSHAKE_TYPE_HELLO_RETRY_REQUEST,
+            #                             PARENT_NODE     : EXTENSIONS,
+            #                             REMOVE_ITEM     : 0 } )
+            
             self.RunSingleTest( applicationData      = b"Server->Client\x00", 
                                 supportedNamedGroups = SUPPORTED_NAMED_GROUPS[ : -1 ],
-                                namedGroupsToOffer   = [ SUPPORTED_NAMED_GROUPS[ -1 ] ] )
+                                namedGroupsToOffer   = [ SUPPORTED_NAMED_GROUPS[ -1 ] ],
+                                # msgManipulators      = [ manipulation ],
+                                 )
         finally:
             keysMonitor.StopMonitorStdoutForLeakedKeys()
             
@@ -2037,10 +2045,10 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumption" ) )
-    # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
+    suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_0RTT_delay_EndOfEarlyData" ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
-    suite.addTest( MITLSTester('test_MITLS_ClientAndServer_HelloRetry' ) )
+    # suite.addTest( MITLSTester('test_MITLS_ClientAndServer_HelloRetry' ) )
 
     # suite.addTest( MITLSTester('test_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
