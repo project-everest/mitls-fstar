@@ -58,8 +58,8 @@ NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)
 RAW_HACL_INCLUDES=$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead
 RAW_FSTAR_INCLUDE_PATHS=$(CDIR) $(PDIR) $(LCDIR)/fst $(RAW_HACL_INCLUDES) $(FFI_HOME)
 
-HACL_INCLUDES=$(addprefix --include, RAW_HACL_INCLUDES)
-FSTAR_INCLUDE_PATHS=$(addprefix --include, RAW_FSTAR_INCLUDE_PATHS)
+HACL_INCLUDES=$(addprefix --include, $(RAW_HACL_INCLUDES))
+FSTAR_INCLUDE_PATHS=$(addprefix --include, $(RAW_FSTAR_INCLUDE_PATHS))
 KRML_INCLUDE_PATHS=$(addprefix -I ,$(RAW_FSTAR_INCLUDE_PATHS))
 
 OCAMLPKG=-package batteries,stdint,fileutils,sqlite3,zarith,fstarlib
