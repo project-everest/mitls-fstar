@@ -81,19 +81,19 @@ let binderListBytes bs =
     | b::t ->
       let bt = aux t in
       assert(length bt <= op_Multiply (List.Tot.length bl - 1) 256);
-      let b0 = Parse.vlbytes1 b in
+      let b0 = TLSParse.vlbytes1 b in
       assert(length b0 <= 256);
       b0 @| (aux t) in
   match bs with
   | h::t ->
     let b = aux t in
-    let b0 = Parse.vlbytes1 h in
+    let b0 = TLSParse.vlbytes1 h in
     assert(length b0 >= 33);
     b0 @| b
 
 let bindersBytes (bs:binders): b:bytes{length b >= 35 /\ length b <= 65537} =
   let b = binderListBytes bs in
-  Parse.vlbytes2 b
+  TLSParse.vlbytes2 b
 
 let parseBinderList (b:bytes{2 <= length b}) : result binders =
   let rec (aux: b:bytes -> list binder -> Tot (result (list binder)) (decreases (length b))) =
@@ -1083,7 +1083,7 @@ let parseExtension mt b =
       mapResult (normallyNone E_server_name) (parseServerName mt data)
     | (0x00z, 0x0Az) -> // supported groups
       if length data < 2 || length data >= 65538 then error "supported groups" else
-      mapResult (normallyNone E_supported_groups) (Parse.parseNamedGroups data)
+      mapResult (normallyNone E_supported_groups) (TLSParse.parseNamedGroups data)
 
     | (0x00z, 0x0Dz) -> // sigAlgs
       if length data < 2 ||  length data >= 65538 then error "supported signature algorithms" else

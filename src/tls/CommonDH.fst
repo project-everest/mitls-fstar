@@ -12,7 +12,7 @@ open FStar.HyperStack
 open Platform.Bytes
 open Platform.Error
 open CoreCrypto
-open Parse
+open TLSParse
 open TLSError
 open FStar.HyperStack.ST
 

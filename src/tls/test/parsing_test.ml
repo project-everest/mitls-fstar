@@ -4,7 +4,7 @@ open Platform.Error
 open HandshakeMessages
 open TLSError
 open TLSConstants
-open Parse
+open TLSParse
 
 (* State variables *)
 let pv = ref TLS_1p2
