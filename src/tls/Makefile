@@ -5,9 +5,11 @@ HACL_HOME ?= ../../../hacl-star
 FFI_HOME ?= $(MITLS_HOME)/libs/ffi
 MARCH ?= x86_64
 ODIR ?= output
+KRML_DIR ?= krml_output
 
 FSTARFLAGS = --fstar_home $(FSTAR_HOME) $(OTHERFLAGS)
 FSTAR = $(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
+KRML = $(KREMLIN_HOME)/krml
 
 HINTS_ENABLED ?= --use_hints
 VERFLAGS = --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
@@ -25,7 +27,7 @@ all:
 build:
 	$(MAKE) mitls.exe
 	$(MAKE) tls-ffi
-	$(MAKE) cmitls.exe 
+	$(MAKE) cmitls.exe
 
 verify:
 	$(MAKE) all-ver
@@ -52,8 +54,13 @@ LCDIR=$(LLDIR)/LowCProvider
 # Modules that are implemented in ML or C
 NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)) $(PLATFORM_REALIZED) CoreCrypto DHDB LowCProvider FFICallbacks)
 
-HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
-FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $(HACL_INCLUDES) --include $(FFI_HOME)
+# Should unify this with kremlin stuff
+RAW_HACL_INCLUDES=$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead
+RAW_FSTAR_INCLUDE_PATHS=$(CDIR) $(PDIR) $(LCDIR)/fst $(RAW_HACL_INCLUDES) $(FFI_HOME)
+
+HACL_INCLUDES=$(addprefix --include, RAW_HACL_INCLUDES)
+FSTAR_INCLUDE_PATHS=$(addprefix --include, RAW_FSTAR_INCLUDE_PATHS)
+KRML_INCLUDE_PATHS=$(addprefix -I ,$(RAW_FSTAR_INCLUDE_PATHS))
 
 OCAMLPKG=-package batteries,stdint,fileutils,sqlite3,zarith,fstarlib
 OCAMLPATH=$(FSTAR_HOME)/bin
@@ -127,7 +134,7 @@ QUIC
 	$(basename $@).fst
 
 # Verifying one file at a time
-# @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m"; 
+# @echo -e  "\e[1;34m"Verifying $(basename $(notdir $@)) "\e[0m";
 %.fst-ver:
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
@@ -143,13 +150,13 @@ QUIC
 	$(basename $@).fsti
 
 # Targets to get F* arguments in interactive mode
-%.fst-in: 
+%.fst-in:
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
 	--verify_module $(basename $(notdir $@))
 
-%.fsti-in: 
+%.fsti-in:
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
@@ -204,6 +211,8 @@ cmitls.exe: cmitls.o
 	echo $(MAKECMDGOALS)
 	$(MAKE) -f Extracted.mk $(MAKECMDGOALS)
 
+kremlin: .fstarlib
+	$(MAKE) -f Extracted.mk kremlin
 test:
 	$(MAKE) -f Extracted.mk test
 
