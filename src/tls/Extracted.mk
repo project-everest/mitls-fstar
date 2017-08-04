@@ -46,24 +46,25 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 	  --include concrete-flags $<
 
 # Try to only rebuild CoreCrypto when necessary
-$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
+$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
 		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
 	$(MAKE) -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml
 
 # Try to only rebuild LowCProvider when necessary
-# Missing: not dependency on hacl-star/code/*
-$(LCDIR)/LowCProvider.cmi $(LCDIR)/LowCProvider.cmx $(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
+# Missing: dependency on hacl-star/code/*
+$(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
 	$(MAKE) -C $(LCDIR)
 
-$(FFI_HOME)/FFICallbacks.cmi $(FFI_HOME)/FFICallbacks.cmx $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
+$(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
 	$(MAKE) -C $(FFI_HOME)
 
-$(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx
+$(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
-%.cmi %.cmx: %.ml
+%.cmx: %.ml
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
+%.cmi: %.cmx
 
 .depend-ML: \
 	$(ODIR)/Flag.ml \
