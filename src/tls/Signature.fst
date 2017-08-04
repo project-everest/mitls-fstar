@@ -265,7 +265,7 @@ val genrepr: a:alg
       modifies Set.empty h0 h1 /\
       (V? k ==>
         (let (pk,sk) = V?.v k in
-   	  /\ sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
+   	    sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
 	  /\ sigAlg_of_public_repr pk == a.core))))
 
 let genrepr a =
