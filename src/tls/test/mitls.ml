@@ -54,6 +54,9 @@ let sas = [
   ("ECDSA+SHA384", ECDSA_SECP384R1_SHA384);
   ("ECDSA+SHA256", ECDSA_SECP256R1_SHA256);
   ("ECDSA+SHA1",   ECDSA_SHA1);
+  ("RSAPSS+SHA512",   RSA_PSS_SHA512);
+  ("RSAPSS+SHA384",   RSA_PSS_SHA384);
+  ("RSAPSS+SHA256",   RSA_PSS_SHA256);
 ]
 
 let ngs = [
@@ -119,7 +122,7 @@ let load_psk is_ticket x =
     | CipherSuite13(ae,h) -> ae, h
     | _ -> failwith "the first ciphersuite must be 1.3 to load with PSK" in
   let pskInfo = {
-    PSK.is_ticket = is_ticket;
+    PSK.ticket_nonce = if is_ticket then Some Platform.Bytes.empty_bytes else None;
     PSK.time_created = Prims.parse_int "0";
     PSK.allow_early_data = true;
     PSK.allow_dhe_resumption = true;
@@ -191,7 +194,7 @@ let _ =
      else (
        ( if !quic then
            TestQUIC.client !config host (Z.of_int port) !offered_psk
-         else 
+         else
            TestAPI.client !config host (Z.of_int port) None !offered_psk);
        match !reconnect, !config.peer_name with
        | true, Some h ->
@@ -203,7 +206,7 @@ let _ =
           if !quic then
             TestQUIC.client !config host (Z.of_int port) opsk
           else
-            TestAPI.client !config host (Z.of_int port) ot12 opsk 
+            TestAPI.client !config host (Z.of_int port) ot12 opsk
        | _ -> ())
   | Server ->
      if !quic then

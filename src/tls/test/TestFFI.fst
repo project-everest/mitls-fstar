@@ -50,7 +50,7 @@ let client config host port =
   let request = "GET / HTTP/1.1\r\nHost: " ^ host ^ "\r\n\r\n" in 
   let send x = trace_tcp "send"; Platform.Tcp.send tcp x in
   let recv x = trace_tcp "recv"; Platform.Tcp.recv_async tcp x in
-  match connect send recv config with 
+  match connect send recv config [] with 
   | c, 0 -> (
     trace "Read OK, sending HTTP request..."; (
     match write c (utf8 request) with

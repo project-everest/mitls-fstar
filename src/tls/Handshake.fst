@@ -213,13 +213,13 @@ let register hs keys =
       Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h keys in // just coercion
     Epochs.add_epoch hs.epochs ep // actually extending the epochs log
 
-val export: hs -> KeySchedule.exportKey -> St unit 
-let export hs xk = 
+val export: hs -> KeySchedule.exportKey -> St unit
+let export hs xk =
   trace "exporting a key";
   Monotonic.Seq.i_write_at_end hs.epochs.exporter xk
 
 let xkeys_of hs = Monotonic.Seq.i_read hs.epochs.exporter
-  
+
 (* ------- Pure functions between offer/mode and their message encodings -------- *)
 
 (*
@@ -289,7 +289,7 @@ let client_Binders hs offer =
       let ha = binderId_hash bid in
       let digest_CH = HandshakeLog.hash_tag #ha hs.log in
       let early_exporter_secret, edk = KeySchedule.ks_client_13_ch hs.ks digest_CH in
-      export hs early_exporter_secret; 
+      export hs early_exporter_secret;
       register hs edk;
       HandshakeLog.send_signals hs.log (Some (true, false)) false
      end
@@ -572,14 +572,12 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   : St incoming =
   let tid = utf8 (iutf8 st13.ticket13_ticket) in
   trace ("Received ticket: "^(hex_of_bytes tid));
-  let (| li, rmsId, rms |) = KeySchedule.ks_client_13_rms hs.ks in
-  trace ("Recall RMS: "^(hex_of_bytes rms));
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
   let t_ext = st13.ticket13_extensions in
   let ed = Some? (List.Tot.find Extensions.E_early_data? t_ext) in
   let pskInfo = PSK.({
-    is_ticket = true;
+    ticket_nonce = Some st13.ticket13_nonce;
     time_created = 0; // TODO
     allow_early_data = ed;
     allow_dhe_resumption = true;
@@ -587,10 +585,11 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
     early_ae = ae; early_hash = h;
     identities = (empty_bytes, empty_bytes); // TODO certs
   }) in
+  let psk = KeySchedule.ks_client_13_rms_psk hs.ks st13.ticket13_nonce in
   // Store ticket in PSK database
-  PSK.coerce_psk tid pskInfo rms;
+  PSK.coerce_psk tid pskInfo psk;
   let c = PSK.psk_info tid in
-  trace PSK.("Ticket = "^(if c.is_ticket then "true" else "false")^", ED="^(if c.allow_early_data then "true" else "false"));
+  trace PSK.("Ticket = "^(if Some? c.ticket_nonce then "true" else "false")^", ED="^(if c.allow_early_data then "true" else "false"));
   let cfg = Nego.local_config hs.nego in
   // Fixme: instead, we should return a signal to the application with the ticket
   if Some? (cfg.peer_name) then Ticket.extend (Some?.v cfg.peer_name) (tid, true);
@@ -802,7 +801,7 @@ let server_ClientHello hs offer obinders =
             let zeroing = Nego.zeroRTT mode in
             if zeroing  then (
               let early_exporter_secret, zero_keys = KeySchedule.ks_server_13_0rtt_key hs.ks digestClientHelloBinders in
-              export hs early_exporter_secret; 
+              export hs early_exporter_secret;
               register hs zero_keys
             );
             // TODO handle 0RTT accepted and 0RTT refused
@@ -980,12 +979,15 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
               [Extensions.E_early_data (Some (FStar.UInt32.uint_to_t 16384))]
             else [] in
 
+          let tnonce, _ = split tb 12 in
           HandshakeLog.send hs.log (NewSessionTicket13 ({
             ticket13_lifetime = FStar.UInt32.(uint_to_t 3600);
             ticket13_age_add = FStar.UInt32.(uint_to_t 0);
+            ticket13_nonce = tnonce;
             ticket13_ticket = tb;
             ticket13_extensions = ticket_ext;
           }));
+
           hs.state := S_Complete;
           Epochs.incr_reader hs.epochs; // finally start reading with AKTs
           InAck true true  // Server 1.3 ATK

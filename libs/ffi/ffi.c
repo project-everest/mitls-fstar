@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <memory.h>
-#include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
 #include <sys/cdefs.h>
@@ -19,6 +18,7 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
+  MITLS_FFI_ENTRY(GetTicket) \
   MITLS_FFI_ENTRY(SetTicketKey) \
   MITLS_FFI_ENTRY(SetCertChainFile) \
   MITLS_FFI_ENTRY(SetPrivateKeyFile) \
@@ -33,13 +33,12 @@
   MITLS_FFI_ENTRY(Send) \
   MITLS_FFI_ENTRY(Recv) \
   MITLS_FFI_ENTRY(GetCert) \
+  MITLS_FFI_ENTRY(GetExporter) \
   MITLS_FFI_ENTRY(QuicConfig) \
   MITLS_FFI_ENTRY(QuicCreateClient) \
   MITLS_FFI_ENTRY(QuicCreateServer) \
   MITLS_FFI_ENTRY(QuicProcess) \
-  MITLS_FFI_ENTRY(QuicGetPeerParameters) \
-  MITLS_FFI_ENTRY(QuicGetExporter) \
-  MITLS_FFI_ENTRY(QuicGetTicket)
+  MITLS_FFI_ENTRY(QuicGetPeerParameters)
 
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -52,6 +51,19 @@ MITLS_FFI_LIST
 _Static_assert(sizeof(size_t) <= sizeof(value), "OCaml value isn't large enough to hold a C pointer");
 #define PtrToValue(p) Val_long(((size_t)p)>>1)
 #define ValueToPtr(v) ((void*)((Long_val(v)<<1)))
+
+#define Val_none Val_int(0)
+#define Some_val(v) Field(v,0)
+
+static value Val_some(value mlvalue) {
+    CAMLparam1(mlvalue);
+    CAMLlocal1(aout);
+
+    aout = caml_alloc(1, 0);
+    Store_field(aout, 0, mlvalue);
+
+    CAMLreturn(aout);
+}
 
 typedef struct mitls_state {
     value fstar_state;    // a GC root representing an F*-side state object
@@ -406,13 +418,36 @@ CAMLprim value ocaml_recv_tcp(value cookie, value bytes)
     CAMLreturn(Val_int(retval));
 }
 
-static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
+static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal1(result);
+    CAMLlocal4(result, tticket, session, oticket);
     int ret;
 
-    result = caml_callback2_exn(*g_mitls_FFI_Connect, state->fstar_state, PtrToValue(callbacks));
+    // ticket: option (bytes * bytes)
+    if(ticket->ticket_len > 0) {
+      tticket = caml_alloc_string(ticket->ticket_len);
+      memcpy(String_val(tticket), ticket->ticket, ticket->ticket_len);
+      session = caml_alloc_string(ticket->session_len);
+      memcpy(String_val(session), ticket->session, ticket->session_len);
+      result = caml_alloc_tuple(2);
+      Store_field(result, 0, tticket);
+      Store_field(result, 1, session);
+
+      oticket = caml_alloc(1, 0);
+      Store_field(oticket, 0, result);
+    }
+    else {
+      oticket = Val_none;
+    }
+
+    value args[] = {
+      state->fstar_state,
+      PtrToValue(callbacks),
+      oticket
+    };
+
+    result = caml_callbackN_exn(*g_mitls_FFI_Connect, 3, args);
     if (Is_exception_result(result)) {
         report_caml_exception(result, errmsg);
         ret = 0;
@@ -434,12 +469,24 @@ static int FFI_mitls_connect_caml(struct _FFI_mitls_callbacks *callbacks, /* in 
 int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
+    mitls_ticket ticket = {0};
 
     *outmsg = NULL;
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_connect_caml(callbacks, state, outmsg, errmsg);
+    ret = FFI_mitls_connect_caml(callbacks, state, &ticket, errmsg);
+    caml_release_runtime_system();
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_resume(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg)
+{
+    int ret;
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    ret = FFI_mitls_connect_caml(callbacks, state, ticket, errmsg);
     caml_release_runtime_system();
     return ret;
 }
@@ -550,6 +597,106 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     return p;
 }
 
+
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_get_ticket(
+  /* in */ mitls_state *state,
+  /* out */ quic_ticket *ticket,
+  /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal2(result, tmp);
+
+    result = caml_callback_exn(*g_mitls_FFI_GetTicket,
+                                state->fstar_state);
+
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        CAMLreturnT(int, 0);
+    }
+
+    if(result == Val_none)
+    {
+      *errmsg = strdup("no ticket available");
+      CAMLreturnT(int, 0);
+    }
+
+    result = Some_val(result); // OCaml string
+    tmp = Field(result, 1); // encoded local session
+    size_t slen = caml_string_length(tmp);
+    result = Field(result, 0); // Server ticket
+    size_t tlen = caml_string_length(result);
+
+    // Ticket too large
+    if (tlen > MAX_TICKET_LEN || slen > MAX_SESSION_LEN)
+    {
+      *errmsg = strdup("the ticket is too large");
+      CAMLreturnT(int, 0);
+    }
+
+    ticket->ticket_len = tlen;
+    memcpy(ticket->ticket, String_val(result), tlen);
+    ticket->session_len = slen;
+    memcpy(ticket->session, String_val(tmp), slen);
+
+    CAMLreturnT(int, 1);
+}
+
+int MITLS_CALLCONV FFI_mitls_get_ticket(mitls_state *state, mitls_ticket *ticket, char **errmsg)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = ocaml_get_ticket(state, ticket, errmsg);
+    caml_release_runtime_system();
+    return ret;
+}
+
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_get_exporter(
+  /* in */ mitls_state *state,
+  int early,
+  mitls_secret *secret,
+  /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal2(result, tmp);
+
+    result = caml_callback2_exn(*g_mitls_FFI_GetExporter,
+                                state->fstar_state,
+                                early ? Val_true : Val_false);
+
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        CAMLreturnT(int, 0);
+    }
+
+    // Secret not available
+    if(result == Val_none)
+    {
+      *errmsg = strdup("the requested secret is not yet available");
+      CAMLreturnT(int, 0);
+    }
+
+    result = Some_val(result);
+    secret->hash = Int_val(Field(result, 0));
+    secret->ae = Int_val(Field(result, 1));
+    tmp = Field(result, 2);
+    size_t len = caml_string_length(tmp);
+    assert(len <= 64);
+    memcpy(secret->secret, String_val(tmp), len);
+
+    CAMLreturnT(int, 1);
+}
+
+int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
+{
+  int ret;
+  caml_acquire_runtime_system();
+  ret = ocaml_get_exporter(state, early, secret, errmsg);
+  caml_release_runtime_system();
+  return ret;
+}
+
 static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     CAMLparam0();
@@ -650,12 +797,31 @@ typedef struct quic_state {
    return len;
  }
 
+static value ocaml_alloc_version_list(const uint32_t *list, size_t len)
+{
+  CAMLparam0 ();
+  CAMLlocal2 (result, r);
+
+  uint32_t default_ver[] = {0xff000005}; // DRAFT 5
+  if(!list || !len){ list = default_ver; len = 1; }
+  result = Val_int(0);
+
+  for(size_t i = 0; i < len; i++) {
+    r = caml_alloc_small(2, 0);
+    Field(r, 0) = Val_int(list[len - i - 1]);
+    Field(r, 1) = result;
+    result = r;
+  }
+
+  return result;
+}
 
 // The OCaml runtime system must be acquired before calling this
 static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **errmsg)
 {
     CAMLparam0();
-    CAMLlocal4(result, host, others, tticket);
+    CAMLlocal4(result, host, others, versions);
+    CAMLlocal3(tticket, session, oticket);
 
     *st = NULL;
     quic_state* state = malloc(sizeof(quic_state));
@@ -678,18 +844,22 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     others = caml_alloc_string(cfg->qp.others_len);
     memcpy(String_val(others), cfg->qp.others, cfg->qp.others_len);
 
-    host = caml_copy_string(cfg->host_name);
-                              
+    if(cfg->host_name)
+      host = caml_copy_string(cfg->host_name);
+    else
+      host = caml_alloc_string(0);
+
     value args[] = {
       Val_int(cfg->qp.max_stream_data),
       Val_int(cfg->qp.max_data),
       Val_int(cfg->qp.max_stream_id),
       Val_int(cfg->qp.idle_timeout),
       others,
+      ocaml_alloc_version_list(cfg->supported_versions, cfg->supported_versions_len),
       host
     };
 
-    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 6, args);
+    result = caml_callbackN_exn(*g_mitls_FFI_QuicConfig, 7, args);
     if (Is_exception_result(result)) {
       report_caml_exception(result, errmsg);
       CAMLreturnT(int,0);
@@ -757,21 +927,37 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
          CAMLreturnT(int, 0);
        }
 
-    if(cfg->is_server) 
+    if(cfg->is_server)
       result = caml_callback2_exn(
                                   *g_mitls_FFI_QuicCreateServer,
                                   ms.fstar_state, // config
                                   PtrToValue(&state->ffi_callbacks));
     else {
-      tticket = caml_alloc_string(cfg->server_ticket.len);
-      memcpy(String_val(tticket), cfg->server_ticket.ticket, cfg->server_ticket.len);
+
+      // Create ticket:option (t:bytes * si:bytes)
+      if(cfg->server_ticket.ticket_len > 0) {
+        tticket = caml_alloc_string(cfg->server_ticket.ticket_len);
+        memcpy(String_val(tticket), cfg->server_ticket.ticket, cfg->server_ticket.ticket_len);
+        session = caml_alloc_string(cfg->server_ticket.session_len);
+        memcpy(String_val(session), cfg->server_ticket.session, cfg->server_ticket.session_len);
+        result = caml_alloc_tuple(2);
+        Store_field(result, 0, tticket);
+        Store_field(result, 1, session);
+
+        oticket = caml_alloc(1, 0);
+        Store_field(oticket, 0, result);
+      }
+      else {
+        oticket = Val_none;
+      }
+
       value args[] = {
         ms.fstar_state, // config
-        tticket,
+        oticket,
         PtrToValue(&state->ffi_callbacks) };
       result = caml_callbackN_exn(*g_mitls_FFI_QuicCreateClient, 3, args);
     }
-    
+
     if (Is_exception_result(result)) {
       report_caml_exception(result, errmsg);
       CAMLreturnT(int, 0);
@@ -865,9 +1051,6 @@ quic_result MITLS_CALLCONV FFI_mitls_quic_process(
     return ret;
 }
 
-#define Val_none Val_int(0)
-#define Some_val(v) Field(v,0)
-
 static int FFI_mitls_quic_get_peer_parameters_caml(
   /* in */ quic_state *state,
   quic_transport_parameters *qp,
@@ -877,9 +1060,9 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
   CAMLlocal2(result, tmp);
 
   result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
-  
+
   tmp = Field(result, 4);
-  size_t len = caml_string_length(tmp); 
+  size_t len = caml_string_length(tmp);
   qp->max_stream_data = Int_val(Field(result, 0));
   qp->max_data = Int_val(Field(result, 1));
   qp->max_stream_id = Int_val(Field(result, 2));
@@ -904,41 +1087,6 @@ int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
     return ret;
 }
 
-static int FFI_mitls_quic_get_exporter_caml(
-  /* in */ quic_state *state,
-  int early,
-  quic_secret *secret,
-  /* out */ char **errmsg)
-{
-    CAMLparam0();
-    CAMLlocal2(result, tmp);
-
-    result = caml_callback2_exn(*g_mitls_FFI_QuicGetExporter,
-                                state->fstar_state, early ? Val_true : Val_false);
-
-    if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
-        CAMLreturnT(int, 0);
-    }
-
-    // Secret not available
-    if(result == Val_none)
-    {
-      *errmsg = strdup("the requested secret is not yet available");
-      CAMLreturnT(int, 0);
-    }
-
-    result = Some_val(result);
-    secret->hash = Int_val(Field(result, 0));
-    secret->ae = Int_val(Field(result, 1));
-    tmp = Field(result, 2);
-    size_t len = caml_string_length(tmp);
-    assert(len <= 64);
-    memcpy(secret->secret, String_val(tmp), len);
-
-    CAMLreturnT(int, 1);
-}
-
 int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
   /* in */ quic_state *state,
   int early,
@@ -946,50 +1094,14 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
   /* out */ char **errmsg)
 {
     int ret;
-
+    mitls_state tls_state = {.fstar_state = state->fstar_state};
     *errmsg = NULL;
+
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_exporter_caml(state, early, secret, errmsg);
+    ret = ocaml_get_exporter(&tls_state, early, secret, errmsg);
     caml_release_runtime_system();
 
     return ret;
-}
-
-static int FFI_mitls_quic_get_ticket_caml(
-  /* in */ quic_state *state,
-  /* out */ quic_ticket *ticket,
-  /* out */ char **errmsg)
-{
-    CAMLparam0();
-    CAMLlocal2(result, tmp);
-
-    result = caml_callback_exn(*g_mitls_FFI_QuicGetTicket,
-                                state->fstar_state);
-
-    if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
-        CAMLreturnT(int, 0);
-    }
-
-    if(result == Val_none)
-    {
-      *errmsg = strdup("no ticket available");
-      CAMLreturnT(int, 0);
-    }
-
-    result = Some_val(result); // OCaml string
-    size_t len = caml_string_length(result);
-
-    // Ticket too large
-    if (len > MAX_TICKET_LEN)
-    {
-      *errmsg = strdup("the ticket is too large");
-      CAMLreturnT(int, 0);
-    }
-
-    ticket->len = len;
-    memcpy(ticket->ticket, String_val(result), len);
-    CAMLreturnT(int, 1);
 }
 
 int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
@@ -998,11 +1110,11 @@ int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
   /* out */ char **errmsg)
 {
     int ret;
-    
+    mitls_state tls_state = {.fstar_state = state->fstar_state};
     *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_ticket_caml(state, ticket, errmsg);
+    ret = ocaml_get_ticket(&tls_state, ticket, errmsg);
     caml_release_runtime_system();
 
     return ret;
