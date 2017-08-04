@@ -8,7 +8,7 @@ open Platform.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
-open TLSParse
+open XParse
 open TLSInfo
 
 module CC = CoreCrypto

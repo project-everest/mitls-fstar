@@ -57,14 +57,14 @@ let sas = [
 ]
 
 let ngs = [
-  ("P-521", TLSParse.SEC CoreCrypto.ECC_P521);
-  ("P-384", TLSParse.SEC CoreCrypto.ECC_P384);
-  ("P-256", TLSParse.SEC CoreCrypto.ECC_P256);
-  ("X25519", TLSParse.SEC CoreCrypto.ECC_X25519);
-  ("X448",  TLSParse.SEC CoreCrypto.ECC_X448);
-  ("FFDHE4096", TLSParse.FFDHE TLSParse.FFDHE4096);
-  ("FFDHE3072", TLSParse.FFDHE TLSParse.FFDHE3072);
-  ("FFDHE2048", TLSParse.FFDHE TLSParse.FFDHE2048);
+  ("P-521", XParse.SEC CoreCrypto.ECC_P521);
+  ("P-384", XParse.SEC CoreCrypto.ECC_P384);
+  ("P-256", XParse.SEC CoreCrypto.ECC_P256);
+  ("X25519", XParse.SEC CoreCrypto.ECC_X25519);
+  ("X448",  XParse.SEC CoreCrypto.ECC_X448);
+  ("FFDHE4096", XParse.FFDHE XParse.FFDHE4096);
+  ("FFDHE3072", XParse.FFDHE XParse.FFDHE3072);
+  ("FFDHE2048", XParse.FFDHE XParse.FFDHE2048);
 ]
 
 let prn s (k, _) = s ^ k ^ ", "
