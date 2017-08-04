@@ -4,7 +4,7 @@ open FStar.HyperHeap
 
 open Platform.Bytes
 open TLSConstants
-open XParse
+open Parse
 
 module CDH = CommonDH
 module CC = CoreCrypto
