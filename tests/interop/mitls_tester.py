@@ -1105,6 +1105,8 @@ class MITLSTester(unittest.TestCase):
             # pprint( memorySocket.tlsParser.transcript )
             for msg in entireTranscipt:
                 memorySocket.tlsParser.PrintMsg( msg )
+                # if tlsparser.IV_AND_KEY in msg.keys():
+                #     pprint( msg[ tlsparser.IV_AND_KEY ])
 
             keysAndFiles = memorySocket.tlsParser.FindNewKeys( preExistingKeys )
             pprint( keysAndFiles )
@@ -2045,13 +2047,13 @@ if __name__ == '__main__':
     
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer' ) )
     # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumption" ) )
-    suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
+    # suite.addTest( MITLSTester( "test_MITLS_ClientAndServer_SessionResumptionWithEarlyData" ) )
     # suite.addTest( MITLSTester( "test_ReorderPieces_0RTT_delay_EndOfEarlyData" ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer' ) )
     # suite.addTest( MITLSTester('test_MITLS_ClientAndServer_HelloRetry' ) )
 
-    # suite.addTest( MITLSTester('test_parameters_matrix' ) )
-    # suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_parameters_matrix' ) )
+    suite.addTest( MITLSTester('test_QUIC_parameters_matrix' ) )
     # suite.addTest( MITLSTester('test_MITLS_QUIC_ClientAndServer_sessionResumption' ) )
 
     # suite.addTest( MITLSTester( "test_CipherSuites" ) )

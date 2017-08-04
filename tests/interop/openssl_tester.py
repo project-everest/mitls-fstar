@@ -181,6 +181,7 @@ class OpenSSL():
         self.VerifyResult( "SSL_CTX_set_cipher_list", ret )
 
     def SSL_CTX_set1_groups_list( self, supportedNamedGroups ):
+        self.log.debug( "SSL_CTX_set1_groups_list( %s )" % supportedNamedGroups )
         SSL_CTRL_SET_GROUPS_LIST = 92
 
         self.libssl.SSL_CTX_ctrl.restype = c_long
@@ -618,7 +619,7 @@ class OpenSSLTester(unittest.TestCase):
         group     = "X25519"
         self.RunSingleTest( supportedCipherSuites        = [ cipherSuite ],
                             supportedSignatureAlgorithms = [ algorithm ],
-                            supportedNamedGroups         = [ group ] )
+                            supportedNamedGroups         = mitls_tester.SUPPORTED_NAMED_GROUPS )
 
         if config.LOG_LEVEL < logging.ERROR:
             for msg in memorySocket.tlsParser.transcript:
@@ -744,9 +745,9 @@ if __name__ == '__main__':
     memorySocket.log.setLevel( config.LOG_LEVEL )    
 
     suite = unittest.TestSuite()
-    # suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
+    suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
     # suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption' ) )
-    suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption_0RTT' ) )
+    # suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption_0RTT' ) )
     # suite.addTest( OpenSSLTester( 'test_parameters_matrix' ) )
     # suite.addTest( NSSTester( '' ) )
     
