@@ -90,7 +90,8 @@ mitls.cmxa: \
   $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(LCDIR)/LowCProvider.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa \
-  $(ODIR)/.deporder $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx \
+  $(ODIR)/.deporder \
+  $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx \
   $(ODIR)/FFIRegister.cmx
 	$(OCAMLOPT_BARE) $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
