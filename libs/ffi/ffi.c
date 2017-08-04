@@ -797,7 +797,7 @@ typedef struct quic_state {
    return len;
  }
 
-static value ocaml_alloc_version_list(uint32_t *list, size_t len)
+static value ocaml_alloc_version_list(const uint32_t *list, size_t len)
 {
   CAMLparam0 ();
   CAMLlocal2 (result, r);
@@ -843,7 +843,11 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
 
     others = caml_alloc_string(cfg->qp.others_len);
     memcpy(String_val(others), cfg->qp.others, cfg->qp.others_len);
-    host = caml_copy_string(cfg->host_name);
+
+    if(cfg->host_name)
+      host = caml_copy_string(cfg->host_name);
+    else
+      host = caml_alloc_string(0);
 
     value args[] = {
       Val_int(cfg->qp.max_stream_data),

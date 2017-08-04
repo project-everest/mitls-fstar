@@ -54,6 +54,9 @@ let sas = [
   ("ECDSA+SHA384", ECDSA_SECP384R1_SHA384);
   ("ECDSA+SHA256", ECDSA_SECP256R1_SHA256);
   ("ECDSA+SHA1",   ECDSA_SHA1);
+  ("RSAPSS+SHA512",   RSA_PSS_SHA512);
+  ("RSAPSS+SHA384",   RSA_PSS_SHA384);
+  ("RSAPSS+SHA256",   RSA_PSS_SHA256);
 ]
 
 let ngs = [
@@ -191,7 +194,7 @@ let _ =
      else (
        ( if !quic then
            TestQUIC.client !config host (Z.of_int port) !offered_psk
-         else 
+         else
            TestAPI.client !config host (Z.of_int port) None !offered_psk);
        match !reconnect, !config.peer_name with
        | true, Some h ->
@@ -203,7 +206,7 @@ let _ =
           if !quic then
             TestQUIC.client !config host (Z.of_int port) opsk
           else
-            TestAPI.client !config host (Z.of_int port) ot12 opsk 
+            TestAPI.client !config host (Z.of_int port) ot12 opsk
        | _ -> ())
   | Server ->
      if !quic then

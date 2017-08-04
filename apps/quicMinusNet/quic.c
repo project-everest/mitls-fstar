@@ -70,8 +70,8 @@ int main(int argc, char **argv)
 
   quic_config config = {
     .is_server = 1,
-    .supported_versions = (uint32_t[]){0xff000004, 0xff000003},
-    .supported_versions_len = 2,
+    .supported_versions = NULL,
+    .supported_versions_len = 0,
     .host_name = "",
     .qp = server_qp,
     .server_ticket = {

@@ -33,7 +33,7 @@ verify:
 	$(MAKE) tls-lax
 
 clean:
-	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *~ *.out $(ODIR) .fstarlib
+	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *.lib *~ *.out $(ODIR) .fstarlib
 
 record_fstar_version:
 	$(FSTAR) --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > $(MITLS_HOME)/.fstar_version

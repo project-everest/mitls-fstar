@@ -160,7 +160,7 @@ typedef struct {
 typedef struct {
   // NULL terminated hostname (sent in SNI and used to validate certificate)
   int is_server;
-  uint32_t *supported_versions;
+  const uint32_t *supported_versions;
   size_t supported_versions_len;
   quic_transport_parameters qp;
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
@@ -169,7 +169,7 @@ typedef struct {
   int enable_0rtt; // Probably true for QUIC
 
   // only used by the client
-  const char *host_name; // Client only, sent in SNI
+  const char *host_name; // Client only, sent in SNI. Can pass NULL for server
   const char *ca_file; // Client only, used to validate server certificate
   quic_ticket server_ticket;
 
