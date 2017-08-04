@@ -802,11 +802,11 @@ static value ocaml_alloc_version_list(const uint32_t *list, size_t len)
   CAMLparam0 ();
   CAMLlocal2 (result, r);
 
-  uint32_t default_ver = 0xff000004; // DRAFT 4
+  uint32_t default_ver = 0xff000005; // DRAFT 5
   if(!list || !len){ list = &default_ver; len = 1; }
   result = Val_int(0);
 
-  for(size_t i = 0; i < len; i++) {
+  for(size_t i = len-1; i >= 0; i--) {
     r = caml_alloc_small(2, 0);
     Field(r, 0) = Val_int(list[i]);
     Field(r, 1) = result;
