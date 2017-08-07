@@ -287,8 +287,8 @@ let find_server_extension filter m =
   | None -> None
   | Some es -> List.Tot.find filter es
 
-let find_server_quic_parameters m = 
-  match find_server_extension Extensions.E_quic_parameters? m with 
+let find_server_quic_parameters m =
+  match find_server_extension Extensions.E_quic_parameters? m with
   | Some (Extensions.E_quic_parameters qp) -> Some qp
   | _ -> None
 
@@ -652,7 +652,7 @@ let client_ClientHello #region ns oks =
   let pskinfo = map_ST (fun i -> (i, PSK.psk_info i)) pskid in
   match MR.m_read ns.state with
   | C_Init _ ->
-      trace(if 
+      trace(if
     (match pskinfo with
     | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
     | _ -> false)
@@ -1156,7 +1156,7 @@ let compute_cs13 cfg o psks shares =
   let psk_kex = Cons? psks in
   Correct (compute_cs13_aux 0 o psks g_gx ncs psk_kex, g_hrr)
 
-// Registration and filtering of DH shares
+// Registration and filtering of PSK identities
 let rec filter_psk (l:list Extensions.pskIdentity)
   : St (list (PSK.pskid * PSK.pskInfo))
   =

@@ -46,24 +46,25 @@ $(ODIR)/Flag.ml: $(LLDIR)/test/Flag.fst
 	  --include concrete-flags $<
 
 # Try to only rebuild CoreCrypto when necessary
-$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmi $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmx $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
+$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa: \
 		$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.ml
 	$(MAKE) -C $(FSTAR_HOME)/ucontrib/CoreCrypto/ml
 
 # Try to only rebuild LowCProvider when necessary
-# Missing: not dependency on hacl-star/code/*
-$(LCDIR)/LowCProvider.cmi $(LCDIR)/LowCProvider.cmx $(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
+# Missing: dependency on hacl-star/code/*
+$(LCDIR)/LowCProvider.cmxa: $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa $(wildcard $(LLDIR)/*/*.fst)
 	$(MAKE) -C $(LCDIR)
 
-$(FFI_HOME)/FFICallbacks.cmi $(FFI_HOME)/FFICallbacks.cmx $(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
+$(FFI_HOME)/FFICallbacks.cmxa: $(wildcard $(FFI_HOME)/*.ml) $(wildcard $(FFI_HOME)/*.c)
 	$(MAKE) -C $(FFI_HOME)
 
-$(ODIR)/FFIRegister.cmi $(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx
+$(ODIR)/FFIRegister.cmx: $(FFI_HOME)/FFIRegister.ml $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $(FFI_HOME)/FFIRegister.ml -o $(ODIR)/FFIRegister.cmx
 
-%.cmi %.cmx: %.ml
+%.cmx: %.ml
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) -c $<
 	@[ -f $(ODIR)/.deporder ] || echo "$(subst .ml,.cmx,$<) " >> $(ODIR)/.tmp
+%.cmi: %.cmx
 
 .depend-ML: \
 	$(ODIR)/Flag.ml \
@@ -89,7 +90,8 @@ mitls.cmxa: \
   $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
   $(LCDIR)/LowCProvider.cmxa \
   $(FFI_HOME)/FFICallbacks.cmxa \
-  $(ODIR)/.deporder $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx \
+  $(ODIR)/.deporder \
+  $(ODIR)/FFI.cmx $(ODIR)/QUIC.cmx \
   $(ODIR)/FFIRegister.cmx
 	$(OCAMLOPT_BARE) $(addprefix -I ,$(filter-out $(ODIR),$(OCAML_PATHS))) -a `cat $(ODIR)/.deporder` $(ODIR)/FFIRegister.cmx -o mitls.cmxa
 
@@ -127,7 +129,6 @@ test: test.out mitls.exe cmitls.exe
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
-LIBMITLS_LIB=libmitls.lib
 
 $(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
@@ -135,22 +136,9 @@ $(LIBMITLS): mitls.cmxa
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -output-obj -g mitls.cmxa -o $(LIBMITLS)
-
-ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
-LIB_MACHINE=x64
-else
-LIB_MACHINE=x86
-endif
-VC_TOOLS=$(VS140COMNTOOLS)\..\..\vc\bin
-
-$(LIBMITLS_LIB): $(LIBMITLS)
-	"$(VC_TOOLS)/dumpbin.exe" /nologo /exports $(LIBMITLS) |  awk -F " " 'BEGIN {print "LIBRARY libmitls"; print "EXPORTS";} $$4 ~/FFI_mitls/{print $$4}' > libmitls.def
-	"$(VC_TOOLS)/lib.exe" /nologo /def:libmitls.def /out:$(LIBMITLS_LIB) /machine:$(LIB_MACHINE)
-
 else
 UNAME_S = $(shell uname -s)
 LIBMITLS=libmitls.so
-LIBMITLS_LIB=
 ifeq ($(UNAME_S),Darwin)
 $(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
@@ -178,7 +166,7 @@ $(LIBMITLS): mitls.cmxa
 endif
 endif
 
-tls-ffi: $(LIBMITLS) $(LIBMITLS_LIB)
+tls-ffi: $(LIBMITLS)
 
 # ask OCaml about the name of the native C compiler.  This will be mingw on Windows.
 NATIVE_C_COMPILER=$(shell ocamlfind opt -config | grep native_c_compiler | sed -e "s/native_c_compiler: //")

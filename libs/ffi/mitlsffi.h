@@ -1,5 +1,7 @@
 #ifndef HEADER_MITLS_FFI_H
 #define HEADER_MITLS_FFI_H
+#include <stdint.h>
+#include <unistd.h>
 
 #if defined(_MSC_VER)  // Visual Studio - always use __cdecl keyword
   #define MITLS_CALLCONV __cdecl
@@ -11,6 +13,37 @@
 
 typedef struct mitls_state mitls_state;
 typedef struct quic_state quic_state;
+
+#define MAX_TICKET_LEN 1020
+#define MAX_SESSION_LEN 256
+typedef struct {
+  size_t ticket_len;
+  char ticket[MAX_TICKET_LEN];
+  size_t session_len;
+  char session[MAX_SESSION_LEN];
+} mitls_ticket;
+
+typedef enum {
+  TLS_hash_MD5 = 0,
+  TLS_hash_SHA1 = 1,
+  TLS_hash_SHA224 = 2,
+  TLS_hash_SHA256 = 3,
+  TLS_hash_SHA384 = 4,
+  TLS_hash_SHA512 = 5
+} mitls_hash;
+
+typedef enum {
+  TLS_aead_AES_128_GCM = 0,
+  TLS_aead_AES_256_GCM = 1,
+  TLS_aead_CHACHA20_POLY1305 = 2
+} mitls_aead;
+
+// Agile secret with static allocation
+typedef struct {
+  mitls_hash hash;
+  mitls_aead ae;
+  char secret[64]; // Max possible size, flat allocation
+} mitls_secret;
 
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success
@@ -50,8 +83,17 @@ struct _FFI_mitls_callbacks {
 // Connect to a TLS server
 extern int MITLS_CALLCONV FFI_mitls_connect(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
 
+// Resume a previously-established ticket
+extern int MITLS_CALLCONV FFI_mitls_resume(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* in */ mitls_ticket *ticket, /* out */ char **errmsg);
+
 // Act as a TLS server to a client
 extern int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
+
+// Get the session ticket for resumption - returns 1 if a ticket has been successfuly stored
+extern int MITLS_CALLCONV FFI_mitls_get_ticket(mitls_state *state, mitls_ticket *ticket, char **errmsg);
+
+// Get the exporter secret (set early to true for the early exporter secret). Returns 1 if a secret was written
+extern int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg);
 
 // Retrieve the server certificate after FFI_mitls_connect() completes
 extern void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg);
@@ -95,36 +137,13 @@ typedef enum {
   TLS_error_other = 0xffff
 } quic_result;
 
-typedef enum {
-  TLS_hash_MD5 = 0,
-  TLS_hash_SHA1 = 1,
-  TLS_hash_SHA224 = 2,
-  TLS_hash_SHA256 = 3,
-  TLS_hash_SHA384 = 4,
-  TLS_hash_SHA512 = 5
-} quic_hash;
-
-typedef enum {
-  TLS_aead_AES_128_GCM = 0,
-  TLS_aead_AES_256_GCM = 1,
-  TLS_aead_CHACHA20_POLY1305 = 2
-} quic_aead;
-
-// Agile secret with static allocation
-typedef struct {
-  quic_hash hash;
-  quic_aead ae;
-  char secret[64]; // Max possible size, flat allocation
-} quic_secret;
-
-#define MAX_TICKET_LEN 1020
-typedef struct {
-  size_t len;
-  char ticket[MAX_TICKET_LEN];
-} quic_ticket;
+typedef mitls_hash quic_hash;
+typedef mitls_aead quic_aead;
+typedef mitls_secret quic_secret;
+typedef mitls_ticket quic_ticket;
 
 // This length is somehow arbitrary
-#define MAX_OTHERS_LEN 1024 
+#define MAX_OTHERS_LEN 1024
 
 typedef struct {
   unsigned int max_stream_data;
@@ -135,22 +154,24 @@ typedef struct {
   // The custom parameters are still in RFC wire format:
   // a sequence of (descriptor: 2; len: 2; data: len) bytes
   size_t others_len;
-  char others[MAX_OTHERS_LEN]; 
+  char others[MAX_OTHERS_LEN];
 } quic_transport_parameters;
 
 typedef struct {
   // NULL terminated hostname (sent in SNI and used to validate certificate)
   int is_server;
+  const uint32_t *supported_versions;
+  size_t supported_versions_len;
   quic_transport_parameters qp;
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
   const char *signature_algorithms; // Colon separated list of signature schemes or NULL
-  const char *named_groups; // Colon separated list of Diffie-Hellman groups
+  const char *named_groups; // Colon separated list of Diffie-Hellman groups or NULL
   int enable_0rtt; // Probably true for QUIC
 
   // only used by the client
-  const char *host_name; // Client only, sent in SNI
-  const char *ca_file; // Client only
-  quic_ticket server_ticket; 
+  const char *host_name; // Client only, sent in SNI. Can pass NULL for server
+  const char *ca_file; // Client only, used to validate server certificate
+  quic_ticket server_ticket;
 
   // only used by the server
   const char *certificate_chain_file; // Server only

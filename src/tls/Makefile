@@ -33,14 +33,14 @@ verify:
 	$(MAKE) tls-lax
 
 clean:
-	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *~ *.out $(ODIR) .fstarlib
+	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *.lib *~ *.out $(ODIR) .fstarlib
 
 record_fstar_version:
 	$(FSTAR) --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > $(MITLS_HOME)/.fstar_version
 
 .PHONY: all build verify init depend clean record_fstar_version test
 
-STDLIB_REALIZED=Pervasives Pervasives.Native Mul Float Char UInt Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast Int.Cast.Full BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack HyperStack.ST HyperStack.All ST All Monotonic.RRef Monotonic.Seq Seq.Base Seq.Properties BitVector Math.Lib
+STDLIB_REALIZED=Pervasives Pervasives.Native Mul Float Char UInt Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast Int.Cast.Full BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack HyperStack.ST HyperStack.All ST All Monotonic.RRef Monotonic.Seq Monotonic.HyperHeap Monotonic.HyperStack Seq.Base Seq.Properties BitVector Math.Lib
 CODEGEN_LIBS=Platform
 # CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
 PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
@@ -55,7 +55,7 @@ NOEXTRACT=$(addprefix --no_extract ,Prims $(addprefix FStar., $(STDLIB_REALIZED)
 HACL_INCLUDES=$(addprefix --include ,$(KREMLIN_HOME)/kremlib $(HACL_HOME)/specs $(HACL_HOME)/code/lib/kremlin $(HACL_HOME)/code/bignum $(HACL_HOME)/code/experimental/aesgcm $(HACL_HOME)/code/poly1305 $(HACL_HOME)/code/salsa-family $(LLDIR)/test $(LLDIR)/utils $(LLDIR)/vale $(LLDIR)/uf1cma $(LLDIR)/prf $(LLDIR)/aead)
 FSTAR_INCLUDE_PATHS=--include $(CDIR) --include $(PDIR) --include $(LCDIR)/fst $(HACL_INCLUDES) --include $(FFI_HOME)
 
-OCAMLPKG=-package batteries,stdint,fileutils,sqlite3,zarith,fstarlib
+OCAMLPKG=-package batteries,stdint,fileutils,zarith,fstarlib
 OCAMLPATH=$(FSTAR_HOME)/bin
 OCAMLOPTS=$(OCAMLPKG) -thread -w -a
 OCAML_PATHS=test $(ODIR) $(FSTAR_HOME)/ucontrib/Platform/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml $(FSTAR_HOME)/ucontrib/CoreCrypto/ml/db $(LCDIR) $(FFI_HOME)

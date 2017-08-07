@@ -389,7 +389,7 @@ val add_connection_ok: h0:HST.mem -> h1:HST.mem -> i:id -> c:i_conn i -> Lemma
   (requires (let conn_tab_as_hsref = MR.as_hsref conn_tab in
              mc_inv h0 /\ //we're initially in the invariant
 	     HH.modifies (Set.singleton tls_tables_region) (HST.HS?.h h0) (HST.HS?.h h1) /\  //only modified some table
-	     HH.modifies_rref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HST.MkRef?.ref conn_tab_as_hsref)))) (HST.HS?.h h0) (HST.HS?.h h1) /\ //in fact, only conn_tab
+	     HST.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HST.MkRef?.ref conn_tab_as_hsref)))) h0 h1 /\ //in fact, only conn_tab
 	     conn_hs_region_exists c h0 /\ //we need to know that c is well-formed
 	     (let old_conn = MR.m_sel h0 conn_tab in
     	      let new_conn = MR.m_sel h1 conn_tab in
@@ -401,8 +401,6 @@ val add_connection_ok: h0:HST.mem -> h1:HST.mem -> i:id -> c:i_conn i -> Lemma
 let add_connection_ok h0 h1 i c =
     cut (let conn_tab_as_hsref = MR.as_hsref conn_tab in
          HH.contains_ref (HST.MkRef?.ref conn_tab_as_hsref) (HST.HS?.h h1));
-    let old_ms = MR.m_sel h0 MS.ms_tab in
-    let new_ms = MR.m_sel h1 MS.ms_tab in
     let old_conn = MR.m_sel h0 conn_tab in
     let new_conn = MR.m_sel h1 conn_tab in
     let hs_region_exists : n:random -> Lemma

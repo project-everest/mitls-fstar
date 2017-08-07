@@ -23,7 +23,8 @@ module MM = MonotoneMap
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> tag a -> range
-private type domain = fun (Computed a t) -> b:bytes { Seq.equal (hash a b) t }
+private let  domain : range -> Type =
+    fun (Computed a t) -> b:bytes { Seq.equal (hash a b) t }
 
 private let inv (f:MM.map' range domain) = True // a bit overkill? 
 private let table = MM.alloc #TLSConstants.tls_tables_region #range #domain #inv
@@ -33,10 +34,10 @@ private let table = MM.alloc #TLSConstants.tls_tables_region #range #domain #inv
 // (not sure how to manage that table)
 
 //val hashed: a:alg -> b:bytes -> Type
-abstract type hashed (a:alg) (b:bytes) = 
+abstract type hashed (a:alg) (b:bytes) =
   crf a ==> (
-    let h = hash a b in 
-    let b: domain (Computed a h) = b in 
+    let h = hash a b in
+    let b: domain (Computed a h) = b in
     MR.witnessed (MM.contains table (Computed a h) b))
 
 val crf_injective (a:alg) (b0:bytes) (b1:bytes): ST unit  // should be STTot
@@ -46,45 +47,45 @@ let crf_injective a b0 b1 =
   if crf a then (
     MR.m_recall table;
     let f = MR.m_read table in
-    let h0 = hash a b0 in 
-    let h1 = hash a b1 in 
+    let h0 = hash a b0 in
+    let h1 = hash a b1 in
     MR.testify(MM.contains table (Computed a h0) b0);
     MR.testify(MM.contains table (Computed a h1) b1);
   ())
 
-private val stop: s:string -> ST 'a 
+private val stop: s:string -> ST 'a
   (requires (fun h -> True))
   (ensures (fun h0 r h1 -> False))
-let rec stop (s:string) = stop s 
+let rec stop (s:string) = stop s
 
 include Hashing
 
 val finalize: #a:alg -> v:accv a -> ST (tag a)
   (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> 
-    let b = content v in 
+  (ensures (fun h0 t h1 ->
+    let b = content v in
 //17-04-12 broken by our switch to haclstar? older comment: precise enough? unclear where it goes in hacl*
-// modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\ 
-    t = hash a b /\ hashed a b 
+// modifies (Set.as_set [TLSConstants.tls_tables_region]) h0 h1 /\
+    t = hash a b /\ hashed a b
   ))
 
-let finalize #a v = 
-  let h = Hashing.finalize v in 
+let finalize #a v =
+  let h = Hashing.finalize v in
   if crf a then (
-    let x = Computed a h in 
-    let b = Hashing.content v in 
-    match MM.lookup table x with 
+    let x = Computed a h in
+    let b = Hashing.content v in
+    match MM.lookup table x with
       | None -> MM.extend table x b
       | Some b' -> if b <> b' then stop "hash collision detected");
   h
 
 #set-options "--z3rlimit 100"
 // sanity check
-private val test: a:alg -> b0:bytes -> b1:bytes -> St unit 
-let test a b0 b1 = 
+private val test: a:alg -> b0:bytes -> b1:bytes -> St unit
+let test a b0 b1 =
   // we need to record *both* computations
-  let h = finalize (extend (start a) b0) in 
-  let h' = finalize (extend (extend (start a) b1) b1) in 
+  let h = finalize (extend (start a) b0) in
+  let h' = finalize (extend (extend (start a) b1) b1) in
 
   // ...and, annoyingly, to normalize concatenations
   assert(Seq.equal (empty_bytes @| b0) b0);
@@ -95,4 +96,3 @@ let test a b0 b1 =
   // ...and to apply a stateful lemma
   crf_injective a b0 (b1 @| b1);
   if h = h' then assert(crf a ==> Seq.equal b0 (b1 @| b1))
-  

@@ -40,26 +40,28 @@ inline_for_extraction let int_cma (a:alg) (h:hashAlg{List.Tot.mem h a.digest}) :
   else false
 
 type public_repr =
-  | PK_RSA   of rsa_key
-  | PK_DSA   of dsa_key
+  | PK_RSA: rsa_key -> bool -> public_repr
+  | PK_DSA of dsa_key
   | PK_ECDSA of ec_key
 
 type secret_repr =
-  | SK_RSA   of k:rsa_key{has_priv (KeyRSA k)}
+  | SK_RSA: k:rsa_key{has_priv (KeyRSA k)} -> bool -> secret_repr
   | SK_DSA   of k:dsa_key{has_priv (KeyDSA k)}
   | SK_ECDSA of k:ec_key{has_priv (KeyECDSA k)}
 
 let sigAlg_of_secret_repr sk =
   match sk with
-  | SK_RSA k   -> RSASIG // Ignore RSA-PSS
-  | SK_DSA k   -> DSA
-  | SK_ECDSA k -> ECDSA
+  | SK_RSA _ true  -> RSAPSS
+  | SK_RSA _ false -> RSASIG
+  | SK_DSA _       -> DSA
+  | SK_ECDSA _     -> ECDSA
 
 let sigAlg_of_public_repr pk =
   match pk with
-  | PK_RSA k   -> RSASIG // Ignore RSA-PSS
-  | PK_DSA k   -> DSA
-  | PK_ECDSA k -> ECDSA
+  | PK_RSA _ true  -> RSAPSS
+  | PK_RSA _ false -> RSASIG
+  | PK_DSA _       -> DSA
+  | PK_ECDSA _     -> ECDSA
 
 private val sig_digest: hashAlg -> bytes -> ST (option CoreCrypto.hash_alg * bytes)
   (requires (fun h0 -> True))
@@ -68,7 +70,7 @@ let sig_digest h t =
   match h with
   | NULL    -> None, t
   | MD5SHA1 -> None, Hashing.compute_MD5SHA1 t
-  | Hash h  -> Some (Hashing.OpenSSL.toCC h), t  // CF: ugly conversion between hashAlgs. 
+  | Hash h  -> Some (Hashing.OpenSSL.toCC h), t  // CF: ugly conversion between hashAlgs.
 
 
 (* ------------------------------------------------------------------------ *)
@@ -202,7 +204,7 @@ let sign #a h s t =
   end;
   let ho,t' = sig_digest h t in
   match sk with
-  | SK_RSA k   -> rsa_sign ho k t'
+  | SK_RSA k b -> rsa_sign ho k b t'
   | SK_DSA k   -> dsa_sign ho k t'
   | SK_ECDSA k -> ecdsa_sign ho k t'
 
@@ -227,7 +229,7 @@ let verify #a h pk t s =
   let verified =
     let ho,t' = sig_digest h t in
     match PK?.repr pk with
-    | PK_RSA k   -> rsa_verify ho k t' s
+    | PK_RSA k b -> rsa_verify ho k b t' s
     | PK_DSA k   -> dsa_verify ho k t' s
     | PK_ECDSA k -> ecdsa_verify ho k t' s
   in
@@ -260,18 +262,18 @@ val genrepr: a:alg
   -> All (public_repr * secret_repr)
     (requires (fun h -> True))
     (ensures  (fun h0 k h1 ->
-      V? k ==>
-      (let (pk,sk) = V?.v k in
-        modifies Set.empty h0 h1
-	/\ sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
-	/\ sigAlg_of_public_repr pk == a.core)))
+      modifies Set.empty h0 h1 /\
+      (V? k ==>
+        (let (pk,sk) = V?.v k in
+   	    sigAlg_of_public_repr pk == sigAlg_of_secret_repr sk
+	  /\ sigAlg_of_public_repr pk == a.core))))
 
 let genrepr a =
   match a.core with
-  | RSASIG -> let k = rsa_gen_key 2048 in (PK_RSA k, SK_RSA k)
+  | RSAPSS -> let k = rsa_gen_key 2048 in (PK_RSA k true, SK_RSA k true)
+  | RSASIG -> let k = rsa_gen_key 2048 in (PK_RSA k false, SK_RSA k false)
   | DSA    -> let k = dsa_gen_key 1024 in (PK_DSA k, SK_DSA k)
   | ECDSA  -> let k = ec_gen_key ({curve = ECC_P256; point_compression = false}) in (PK_ECDSA k, SK_ECDSA k)
-  | RSAPSS -> failwith "Signature.genrepr: RSA-PSS unsupported"
 
 val gen: a:alg -> All (skey a)
   (requires (fun h -> m_contains rkeys h))
@@ -353,8 +355,11 @@ let get_chain_public_key #a c =
   | cert::_ ->
     begin
     match sa, CoreCrypto.get_key_from_cert cert with
+    | RSAPSS, Some (KeyRSA k)   ->
+      let (|_,pk|) = endorse #a (PK_RSA k true) in
+      Some pk
     | RSASIG, Some (KeyRSA k)   ->
-      let (|_,pk|) = endorse #a (PK_RSA k) in
+      let (|_,pk|) = endorse #a (PK_RSA k false) in
       Some pk
     | DSA,    Some (KeyDSA k)   ->
       let (|_,pk|) = endorse #a (PK_DSA k) in
@@ -373,6 +378,7 @@ let get_chain_public_key #a c =
 private val foo: o:option (k:CoreCrypto.key{has_priv k}) -> Tot (option CoreCrypto.key)
 let foo o = match o with | None -> None | Some k -> Some k
 
+#reset-options "--z3rlimit 100"
 val lookup_key: #a:alg -> string -> ST (option (skey a))
   (requires (fun _ -> True))
   (ensures  (fun h0 o h1 ->
@@ -387,7 +393,8 @@ let lookup_key #a keyfile =
   let sa = a.core in
   let key =
     match sa, foo (CoreCrypto.load_key keyfile) with
-    | RSASIG, Some (KeyRSA k)   -> Some (PK_RSA k, SK_RSA k)
+    | RSAPSS, Some (KeyRSA k)   -> Some (PK_RSA k true, SK_RSA k true)
+    | RSASIG, Some (KeyRSA k)   -> Some (PK_RSA k false, SK_RSA k false)
     | DSA,    Some (KeyDSA k)   -> Some (PK_DSA k, SK_DSA k)
     | ECDSA,  Some (KeyECDSA k) -> Some (PK_ECDSA k, SK_ECDSA k)
     | _, _ -> None
@@ -420,7 +427,7 @@ let lookup_key #a keyfile =
 
 
 #reset-options
-#set-options "--initial_fuel 2 --max_fuel 2 --detail_errors"
+#set-options "--initial_fuel 2 --max_fuel 2"
 
 val test: bytes -> bytes -> All unit
   (requires (fun h -> m_contains rkeys h))
