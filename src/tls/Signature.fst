@@ -378,7 +378,7 @@ let get_chain_public_key #a c =
 private val foo: o:option (k:CoreCrypto.key{has_priv k}) -> Tot (option CoreCrypto.key)
 let foo o = match o with | None -> None | Some k -> Some k
 
-#reset-options "--z3rlimit 40"
+#reset-options "--z3rlimit 100"
 val lookup_key: #a:alg -> string -> ST (option (skey a))
   (requires (fun _ -> True))
   (ensures  (fun h0 o h1 ->
@@ -427,7 +427,7 @@ let lookup_key #a keyfile =
 
 
 #reset-options
-#set-options "--initial_fuel 2 --max_fuel 2 --detail_errors"
+#set-options "--initial_fuel 2 --max_fuel 2"
 
 val test: bytes -> bytes -> All unit
   (requires (fun h -> m_contains rkeys h))
