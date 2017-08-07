@@ -79,7 +79,8 @@ Building Docker Image:
 	
 2. To build the docker image, run: `docker build -t <docker_image_label> .`
 	For instance: `docker build -t mitls_test .`
-
+	* If you downloaded a prepared image, you can load it by `docker load -i <path to image tar file>`
+	* To export your built docker image: `docker save --output="<filename>.tar" mitls_test`
 
 3. IMPORTANT NOTE: Sometimes docker containers have DNS resolving issues. A good solution for this can be found in https://robinwinslow.uk/2016/06/23/fix-docker-networking-dns/. Long story short, do the following steps if the Docker build process seems hanging:
 	3.1 Figure out your DNS server by running `nmcli dev show | grep 'IP4.DNS'`
@@ -97,7 +98,7 @@ Building Docker Image:
 	```
 	3.3 Run `sudo service docker restart`
 
-4. Run the Docker image by: `docker run  -it  mytest005 bash`
+4. Run the Docker image by: `docker run  -it  mitls_test bash`
 
 
 run command: 

@@ -51,7 +51,7 @@ class OpenSSL():
 
 
 	def CreateCipherContext( self ):
-		self.log.debug( "CreateCipherContext" )
+		# self.log.debug( "CreateCipherContext" )
 		self.openssl.EVP_CIPHER_CTX_new.restype = c_voidp
 		ctx = c_voidp( self.openssl.EVP_CIPHER_CTX_new() )
 		
@@ -63,7 +63,7 @@ class OpenSSL():
 		return ctx
 
 	def Init_CHACHA20Poly1305( self, ctx, key, iv, isEncrypt = True ):
-		self.log.debug( "Init_CHACHA20Poly1305" )
+		# self.log.debug( "Init_CHACHA20Poly1305" )
 
 		self.openssl.EVP_chacha20_poly1305.restype = c_void_p
 		mechanism =  c_void_p( self.openssl.EVP_chacha20_poly1305 ()  )
@@ -86,7 +86,7 @@ class OpenSSL():
 				raise OpenSSLError( logMsg )
 
 	def EVP_EncryptUpdate( self, ctx, plaintext ):
-		self.log.debug( "EVP_EncryptUpdate" )
+		# self.log.debug( "EVP_EncryptUpdate" )
 
 		ciphertext_c 	 = ( c_uint8 * len( plaintext ) )()
 		ciphertextLength = c_uint32()
@@ -109,7 +109,7 @@ class OpenSSL():
 		return bytearray( ciphertext_c )
 
 	def EVP_DecryptUpdate( self, ctx, ciphertext ):
-		self.log.debug( "EVP_EncryptUpdate" )
+		# self.log.debug( "EVP_EncryptUpdate" )
 
 		plaintext 	  = ( c_uint8 * len( ciphertext ) )()
 		plaintextSize = c_uint32()
@@ -132,7 +132,7 @@ class OpenSSL():
 		return bytearray( plaintext )
 
 	def EVP_EncryptFinal_ex( self, ctx ):
-		self.log.debug( "EVP_EncryptFinal_ex" )
+		# self.log.debug( "EVP_EncryptFinal_ex" )
 
 		dummyOut 	= c_uint32()
 
@@ -150,7 +150,7 @@ class OpenSSL():
 			raise OpenSSLError( logMsg )
 
 	def EVP_DecryptFinal_ex( self, ctx ):
-		self.log.debug( "EVP_DecryptFinal_ex" )
+		# self.log.debug( "EVP_DecryptFinal_ex" )
 
 		dummyOut 	= c_uint32()
 
@@ -195,7 +195,7 @@ class OpenSSL():
 			raise OpenSSLError( logMsg )
 
 	def Encrypt_CHACHA20Poly1305( self, plaintext, key, iv = None ):
-		self.log.debug( "Encrypt_CHACHA20Poly1305" )
+		# self.log.debug( "Encrypt_CHACHA20Poly1305" )
 		if iv != None and len( iv ) != SIZE_OF_CHACHA_DEFAULT_IV:
 			raise OpenSSLError( "Bad iv size")
 

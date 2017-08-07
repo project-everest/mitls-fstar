@@ -271,7 +271,7 @@ class InterOperabilityTester(unittest.TestCase):
                                 supportedSignatureAlgorithms    = mitls_tester.SUPPORTED_SIGNATURE_ALGORITHMS,
                                 supportedNamedGroups            = mitls_tester.SUPPORTED_NAMED_GROUPS,
                                 msgManipulators                 = [],
-                                namedGroupsToOffer              = None ):
+                                namedGroupsToOffer              = [] ):
         memorySocket.FlushBuffers()
         memorySocket.tlsParser = tlsparser.TLSParser()
         memorySocket.tlsParser.SetMsgManipulators( msgManipulators )
@@ -287,9 +287,9 @@ class InterOperabilityTester(unittest.TestCase):
         self.tlsClient = NSS( "client" )
         self.tlsClient.InitClient( memorySocket, hostName  )
 
-        if namedGroupsToOffer != None:
-            namedGroupsToOffer = namedGroupsToOffer + supportedNamedGroups
-        self.tlsClient.Connect( supportedNamedGroups = namedGroupsToOffer )
+        if len( namedGroupsToOffer ) > 0:
+            supportedNamedGroups = namedGroupsToOffer + supportedNamedGroups
+        self.tlsClient.Connect( supportedNamedGroups = supportedNamedGroups )
 
         self.tlsClient.Send( DATA_CLIENT_TO_SERVER )            
         self.tlsClient.dataReceived = self.tlsClient.Recv()

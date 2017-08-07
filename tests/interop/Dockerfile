@@ -18,7 +18,7 @@ COPY openssl_tester.py 			/tls-tests
 COPY bio_wrapper.py 			/tls-tests
 COPY output_redirector.py 		/tls-tests/
 COPY dependencies 				/tls-tests/
-COPY certificates/db/			/tls-tests/certificates/db/
+COPY certificates/ecdsa/        /tls-tests/certificates/ecdsa/
 COPY cutils/cutils.so 			/tls-tests/cutils/
 
 # Install any needed packages specified in requirements.txt
