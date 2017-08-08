@@ -163,6 +163,8 @@ typedef struct {
   const uint32_t *supported_versions;
   size_t supported_versions_len;
   quic_transport_parameters qp;
+
+  const char *alpn; // Colon separated list of application-level protocols, or NULL
   const char *cipher_suites; // Colon separated list of ciphersuite or NULL
   const char *signature_algorithms; // Colon separated list of signature schemes or NULL
   const char *named_groups; // Colon separated list of Diffie-Hellman groups or NULL

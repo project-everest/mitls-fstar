@@ -918,6 +918,13 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
          CAMLreturnT(int, 0);
        }
 
+    if(cfg->alpn)
+      if(!configure_common_caml(&ms, cfg->alpn, g_mitls_FFI_SetALPN))
+      {
+        *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set application-level protocols");
+        CAMLreturnT(int, 0);
+      }
+
     if(cfg->ticket_enc_alg && cfg->ticket_key)
        if(!ocaml_set_ticket_key(cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))
        {
