@@ -745,9 +745,9 @@ if __name__ == '__main__':
     memorySocket.log.setLevel( config.LOG_LEVEL )    
 
     suite = unittest.TestSuite()
-    suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
+    # suite.addTest( OpenSSLTester( 'test_ClientAndServer' ) )
     # suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption' ) )
-    # suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption_0RTT' ) )
+    suite.addTest( OpenSSLTester( 'test_ClientAndServer_sessionResumption_0RTT' ) )
     # suite.addTest( OpenSSLTester( 'test_parameters_matrix' ) )
     # suite.addTest( NSSTester( '' ) )
     

@@ -1105,18 +1105,19 @@ class TLSParser():
     def ParseKeyFile( self, keyFilePath ):
         MAX_RETRIES = 3
 
-        with open( keyFilePath, "r" ) as keyFile:
-            tryIndex = 0
-            try:
-                iv, key = self.ParseKeyFile_parseContent( keyFile )
-            except:
-                tryIndex += 1
-                if tryIndex >= MAX_RETRIES:
-                    raise
+        tryIndex = 0
+        while tryIndex < MAX_RETRIES:
+            tryIndex += 1
+            with open( keyFilePath, "r" ) as keyFile:
+                try:
+                    iv, key = self.ParseKeyFile_parseContent( keyFile )
+                except:
+                    if tryIndex >= MAX_RETRIES:
+                        raise
 
-                time.sleep( WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS )
+                    time.sleep( WAIT_FOR_KEYS_TO_BE_LEAKEDD_SECONDS )
 
-        return iv, key
+            return iv, key
 
     def FindMatchingKeys( self ):
         ivsAndKeys  = self.GetLeakedKeys( LEAKED_KEYS_DIR )
@@ -1937,7 +1938,7 @@ class TLSParser():
     def FormatBuffer( buffer, prefix = "", lineSeperator = "\n" ):
         humanReadableBuffer = prefix
         for i, byte in enumerate( buffer ):
-          humanReadableBuffer += "0x%2X, " % byte 
+          humanReadableBuffer += "0x%02X, " % byte 
           if ( i + 1 ) % 8 == 0:
               humanReadableBuffer += lineSeperator
               if i + 1 < len( buffer ):

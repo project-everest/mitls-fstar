@@ -1054,7 +1054,7 @@ class MITLSTester(unittest.TestCase):
 
         preExistingKeys = memorySocket.tlsParser.FindMatchingKeys()
         try:
-            self.RunSingleTest( applicationData = b"Server->Client\x00" )
+            self.RunSingleTest( applicationData = b"Server->Client\x00", namedGroupsToOffer = [ SUPPORTED_NAMED_GROUPS[ 0 ]] )
         finally:
             keysMonitor.StopMonitorStdoutForLeakedKeys()
             
@@ -1305,12 +1305,12 @@ class MITLSTester(unittest.TestCase):
             runHandshake = self.RunSingleTest
        
         runHandshake()
-        
         originalTranscript  = memorySocket.tlsParser.transcript
         topTreeLayer        = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_MSG ] 
         handshakeType       = originalTranscript[ 0 ][ RECORD ][ 0 ][ HANDSHAKE_TYPE ]
-        manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, partial(  self.CreateShuffleChildrenManipulations,  
-                                                                                                handshakeType = handshakeType )   )
+        manipulations       = self.TraverseBFSAndGenerateManipulations( topTreeLayer, 
+                                                                        partial(  self.CreateShuffleChildrenManipulations,  
+                                                                                  handshakeType = handshakeType )   )
 
         return manipulations
 
@@ -1759,10 +1759,8 @@ class MITLSTester(unittest.TestCase):
                                     allowEarlyData                  = allowEarlyData,
                                     namedGroupsToOffer              = namedGroupsToOffer )
         self.tlsClient.Connect( sessionTicket )
-        self.tlsClient.Send( b"Client->Server(1)\x00" )            
+        self.tlsClient.Send( b"Client->Server(1)\x00" )                    
         self.tlsClient.dataReceived = self.tlsClient.Receive()
-        self.tlsClient.Send( b"Client->Server(2)\x00" )       
-        self.tlsClient.dataReceived += self.tlsClient.Receive()     
         sessionTicket = self.tlsClient.FFI_mitls_get_ticket()   
 
         serverThread.join()
@@ -1783,8 +1781,8 @@ class MITLSTester(unittest.TestCase):
         #     if clientEarlySecret != serverEarlySecret:
         #         raise Exception( "TLS EARLY secrets are different" )                
                 
-        self.log.debug( "self.tlsServer.dataReceived = %s" % self.tlsServer.dataReceived )
-        self.log.debug( "self.tlsClient.dataReceived = %s" % self.tlsClient.dataReceived )
+        self.log.debug( "self.tlsServer.dataReceived = (%d bytes) %s" %( len( self.tlsServer.dataReceived ), self.tlsServer.dataReceived) )
+        self.log.debug( "self.tlsClient.dataReceived = (%d bytes) %s" % ( len( self.tlsClient.dataReceived ), self.tlsClient.dataReceived) )
 
         return sessionTicket
 
