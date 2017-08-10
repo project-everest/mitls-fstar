@@ -3,13 +3,15 @@ module Parse
 open FStar.HyperStack.All
 
 open FStar.Seq
-open Platform.Bytes
+//open Platform.Bytes
 open Platform.Error
 open TLSError
+open FStar.Bytes
 
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
+module B = FStar.Bytes
 
 
 (** This file should be split in 3 different modules:
@@ -86,6 +88,7 @@ val vlbytes_trunc: lSize:nat -> b:bytes ->
 let vlbytes_trunc lSize b extra =
   bytes_of_int lSize (length b + extra) @| b
 
+
 let vlbytes_trunc_injective
   (lSize: nat)
   (b1: bytes)
@@ -95,21 +98,23 @@ let vlbytes_trunc_injective
   (extra2: nat { repr_bytes (length b2 + extra2) <= lSize } )
   (s2: bytes)
 : Lemma
-  (requires (Seq.equal (vlbytes_trunc lSize b1 extra1 @| s1) (vlbytes_trunc lSize b2 extra2 @| s2)))
+  (requires (vlbytes_trunc lSize b1 extra1 @| s1 = vlbytes_trunc lSize b2 extra2 @| s2))
   (ensures (length b1 + extra1 == length b2 + extra2 /\ b1 @| s1 == b2 @| s2))
 = let l1 = bytes_of_int lSize (length b1 + extra1) in
   let l2 = bytes_of_int lSize (length b2 + extra2) in
-  Seq.append_assoc l1 b1 s1;
-  Seq.append_assoc l2 b2 s2;
-  Seq.lemma_append_inj l1 (b1 @| s1) l2 (b2 @| s2);
+  B.append_assoc l1 b1 s1;
+  B.append_assoc l2 b2 s2;
+  B.lemma_append_inj l1 (b1 @| s1) l2 (b2 @| s2);
   int_of_bytes_of_int lSize (length b1 + extra1);
   int_of_bytes_of_int lSize (length b2 + extra2)
+
+
 
 (** Lemmas associated to bytes manipulations *)
 val lemma_vlbytes_len : i:nat -> b:bytes{repr_bytes (length b) <= i}
   -> Lemma (ensures (length (vlbytes i b) = i + length b))
 let lemma_vlbytes_len i b = ()
-
+(*
 val lemma_vlbytes_inj_strong : i:nat
   -> b:bytes{repr_bytes (length b) <= i}
   -> s:bytes
@@ -145,25 +150,27 @@ let vlbytes_length_lemma n a b =
   assert(Seq.equal lenb (bytes_of_int n (length b)));
   int_of_bytes_of_int n (length a); int_of_bytes_of_int n (length b)
 
-
+*)
 #set-options "--max_ifuel 1 --initial_ifuel 1 --max_fuel 0 --initial_fuel 0"   //need to reason about length
 
-
+(*
 val vlsplit: lSize:nat{lSize <= 4}
   -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:(bytes * bytes){
                     repr_bytes (length (fst b)) <= lSize
                   /\ Seq.equal vlb (vlbytes lSize (fst b) @| (snd b))}))
+
 let vlsplit lSize vlb =
   let (vl,b) = Platform.Bytes.split vlb lSize in
   let l = int_of_bytes vl in
   if l <= length b
   then Correct(Platform.Bytes.split b l)
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
-
+*)
 
 val vlparse: lSize:nat{lSize <= 4} -> vlb:bytes{lSize <= length vlb}
   -> Tot (result (b:bytes{repr_bytes (length b) <= lSize /\ Seq.equal vlb (vlbytes lSize b)}))
+
 let vlparse lSize vlb =
   let vl,b = split vlb lSize in
   if int_of_bytes vl = length b
