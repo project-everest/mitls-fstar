@@ -7,6 +7,13 @@ open XParse
 open TLSError
 open FStar.HyperStack.ST
 
+// tmp hack for depenency analysis bug
+module Req_FSTMRRef = FStar.Monotonic.RRef
+module Req_MM = MonotoneMap
+module IO = FStar.IO
+module Req_DHGroup = DHGroup
+module Req_ECGroup = ECGroup
+
 val group: t:Type0{hasEq t}
 val is_ec: group -> Tot bool
 val string_of_group: group -> Tot string
