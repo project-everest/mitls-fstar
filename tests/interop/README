@@ -24,12 +24,12 @@ Building tests
 		- Install MozillaBuild Package: https://ftp.mozilla.org/pub/mozilla.org/mozilla/libraries/win32/MozillaBuildSetup-Latest.exe
 		- Launch the build environment: c:\mozilla-build\start-shell-msvc2015.bat 
 
-
 3. Patch NSS to leak encryption keys
 	- Run `cp ./nss-patch/nss/lib/freebl/rijndael.c <path/to/nss/sources>/nss/lib/freebl/
 	- rebuild NSS by going to <path/to/nss/sources>/nss, and running `make nss_build_all`
 
-4. Create certificate store
+4. Create certificate store 
+	The repository already contain a certificate store. To rebuild from scratch, follow these instructions.
 	4.1 Windows:
 	- cd certificates
 	- Look at builde_database.cmd, make sure NSS_PATH points to <path/to/nss/sources>/dist/WIN954.0_DBG.OBJ/lib/
@@ -42,6 +42,11 @@ Building tests
 4. Set path to shared objects
 	- Windows: set PATH=%PATH%;c:\dev\nss-3.30.2\dist\WIN954.0_DBG.OBJ\lib\
 	- Linux: export LD_LIBRARY_PATH=<path/to/nss/sources>dist/Linux4.8_x86_64_cc_glibc_PTH_64_DBG.OBJ/lib/
+
+5. Build OpenSSL 
+	5.1 Get the sources:  git clone git://git.openssl.org/openssl.git
+    5.2 Patch sources to leak encryption keys: cp <mitls-fstar-dir>/tests/interop/openssl/leak-keays-patch/* <openssl-path>/
+    5.3 Make: `cd openssl; ./config enable-tls1_3; make`
 
 
 
@@ -113,3 +118,4 @@ SERVER_CERT_PATH            = "../../../everest/mitls-fstar/data/server-ecdsa.cr
 SERVER_KEY_PATH             = "../../../everest/mitls-fstar/data/server-ecdsa.key"
 
 Test of simple handshake is implemented in "testClientAndServer" function.
+
