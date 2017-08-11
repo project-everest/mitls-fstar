@@ -115,7 +115,7 @@ CEXE_PATH=LD_LIBRARY_PATH=./
 endif
 endif
 
-KRML_FILES = TLSError.fst XParse.fst Hashing.Spec.fst TLSConstants.fst MonotoneMap.fst Nonce.fst \
+KRML_FILES = TLSError.fst Parse.fst Hashing.Spec.fst TLSConstants.fst MonotoneMap.fst Nonce.fst \
 RSAKey.fst Curve25519.fst ECGroup.fst DHGroup.fst CommonDH.fst PMS.fst PSK.fst \
 Extensions.fst Cert.fst TLSInfo.fst AEADOpenssl.fst Crypto.Indexing.fst AEADProvider.fst \
 Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StreamAE.fst StatefulPlain.fst \
