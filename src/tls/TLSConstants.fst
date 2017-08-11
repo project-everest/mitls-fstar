@@ -23,7 +23,7 @@ open TLSError
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 
-include XParse // carving out basic formatting code to break a dependency.
+include Parse // carving out basic formatting code to break a dependency.
 
 
 
@@ -176,8 +176,8 @@ type signatureScheme =
   | RSA_PSS_SHA384
   | RSA_PSS_SHA512
   // EdDSA algorithms
-  //| ED25519
-  //| ED448
+  //  | ED25519_SHA512
+  //  | ED448_SHAKE256
   // Legacy algorithms
   | RSA_PKCS1_SHA1
   | RSA_PKCS1_MD5SHA1 // Only used internally, with codepoint 0xFFFF (PRIVATE_USE)
@@ -201,8 +201,8 @@ let is_handshake13_signatureScheme = function
   | ECDSA_SECP256R1_SHA256
   | ECDSA_SECP384R1_SHA384
   | ECDSA_SECP521R1_SHA512
-//| ED25519
-//| ED448
+  //| ED25519_SHA512
+  //| ED448_SHAKE256
   | RSA_PSS_SHA256
   | RSA_PSS_SHA384
   | RSA_PSS_SHA512 -> true
@@ -219,8 +219,8 @@ let signatureSchemeBytes = function
   | RSA_PSS_SHA256         -> abyte2 (0x08z, 0x04z)
   | RSA_PSS_SHA384         -> abyte2 (0x08z, 0x05z)
   | RSA_PSS_SHA512         -> abyte2 (0x08z, 0x06z)
-  //| ED25519                -> abyte2 (0x08z, 0x07z)
-  //| ED448                  -> abyte2 (0x08z, 0x08z)
+  //| ED25519_SHA512         -> abyte2 (0x08z, 0x07z)
+  //| ED448_SHAKE256         -> abyte2 (0x08z, 0x08z)
   | RSA_PKCS1_SHA1         -> abyte2 (0x02z, 0x01z)
   | RSA_PKCS1_MD5SHA1      -> abyte2 (0xFFz, 0xFFz)
   | ECDSA_SHA1             -> abyte2 (0x02z, 0x03z)
@@ -252,8 +252,8 @@ let parseSignatureScheme b =
   | (0x08z, 0x04z) -> Correct RSA_PSS_SHA256
   | (0x08z, 0x05z) -> Correct RSA_PSS_SHA384
   | (0x08z, 0x06z) -> Correct RSA_PSS_SHA512
-  //| (0x08z, 0x07z) -> Correct ED25519
-  //| (0x08z, 0x08z) -> Correct ED448
+  //| (0x08z, 0x07z) -> Correct ED25519_SHA512
+  //| (0x08z, 0x08z) -> Correct ED448_SHAKE256
   | (0x02z, 0x01z) -> Correct RSA_PKCS1_SHA1
   | (0xFFz, 0xFFz) -> Correct RSA_PKCS1_MD5SHA1
   | (0x02z, 0x03z) -> Correct ECDSA_SHA1
@@ -287,9 +287,9 @@ let sigHashAlg_of_signatureScheme =
   | RSA_PSS_SHA256         -> (RSAPSS, Hash SHA256)
   | RSA_PSS_SHA384         -> (RSAPSS, Hash SHA384)
   | RSA_PSS_SHA512         -> (RSAPSS, Hash SHA512)
-  //| ED25519                -> (EdDSA,  Hash SHA512)
-  //| ED448                  -> (EdDSA,  Hash SHA512)
-  | RSA_PKCS1_SHA1         -> (RSASIG,    Hash SHA1)
+//  | ED25519_SHA512         -> (EdDSA,  Hash SHA512)
+//  | ED448_SHAKE256         -> (EdDSA,  Hash SHAKE256)
+  | RSA_PKCS1_SHA1         -> (RSASIG, Hash SHA1)
   | RSA_PKCS1_MD5SHA1      -> (RSASIG, MD5SHA1)
   | ECDSA_SHA1             -> (ECDSA,  Hash SHA1)
   | DSA_SHA1               -> (DSA,    Hash SHA1)
@@ -311,8 +311,8 @@ let signatureScheme_of_sigHashAlg sa ha =
   | (RSAPSS, Hash SHA256) -> RSA_PSS_SHA256
   | (RSAPSS, Hash SHA384) -> RSA_PSS_SHA384
   | (RSAPSS, Hash SHA512) -> RSA_PSS_SHA512
-  //| ED25519               -> (EdDSA,  Hash SHA512)
-  //| ED448                 -> (EdDSA,  Hash SHA512)
+  //| (EdDSA,  Hash SHA512) -> ED25519_SHA512
+  //| (EdDSA,  Hash SHAKE256) -> ED448_SHAKE256
   | (RSASIG, Hash SHA1)   -> RSA_PKCS1_SHA1
   | (ECDSA,  Hash SHA1)   -> ECDSA_SHA1
   | (DSA,    Hash SHA1)   -> DSA_SHA1
@@ -482,10 +482,10 @@ val pinverse_version: x:_ -> Lemma
   [SMTPat (versionBytes (Correct?._0 (parseVersion x)))]
 let pinverse_version x = ()
 
-// DRAFT#20
+// DRAFT#21
 // to be used *only* in ServerHello.version.
 // https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
-let draft = 20z
+let draft = 21z
 let versionBytes_draft: protocolVersion -> Tot (lbytes 2) = function
   | TLS_1p3 -> abyte2 ( 127z, draft )
   | pv -> versionBytes pv
@@ -1755,21 +1755,21 @@ type quicParameters =
 let string_of_quicVersion = function
   | QuicVersion1 -> "v1"
   | QuicCustomVersion n -> "v"^UInt32.to_string n
-let string_of_quicParameter = function 
+let string_of_quicParameter = function
   | Quic_initial_max_stream_data x -> "initial_max_stream_data="^UInt32.to_string x
   | Quic_initial_max_data x -> "initial_max_data="^UInt32.to_string x
   | Quic_initial_max_stream_id x -> "initial_max_stream="^UInt32.to_string x
   | Quic_idle_timeout x -> "idle_timeout="^UInt16.to_string x
   | Quic_truncate_connection_id -> "truncate_connection_id"
-  | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x 
+  | Quic_max_packet_size x -> "max_packet_size="^UInt16.to_string x
   | Quic_custom_parameter (n,b) -> "custom_parameter "^UInt16.to_string n^", "^print_bytes b
 let string_of_quicParameters = function
-  | Some (QuicParametersClient n i p)  -> 
+  | Some (QuicParametersClient n i p)  ->
     "QUIC client parameters\n" ^
     "negotiated version: "^string_of_quicVersion n^"\n"^
     "initial version: "^string_of_quicVersion i^"\n"^
     List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
-  | Some (QuicParametersServer v p) -> 
+  | Some (QuicParametersServer v p) ->
     "QUIC server parameters\n" ^
     List.Tot.fold_left (fun a v -> a^string_of_quicVersion v^" ") "versions: " v ^ "\n" ^
     List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p

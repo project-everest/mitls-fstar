@@ -169,6 +169,7 @@ type sticket = {
 noeq type sticket13 = {
   ticket13_lifetime: UInt32.t;
   ticket13_age_add: UInt32.t;
+  ticket13_nonce: b:bytes{length b > 0 /\ length b < 256};
   ticket13_ticket: b:bytes{length b < 65535};
   ticket13_extensions: es: list extension;
 }
@@ -1538,6 +1539,7 @@ let sessionTicketBytes13 t =
   let payload =
     bytes_of_int 4 (UInt32.v t.ticket13_lifetime) @|
     bytes_of_int 4 (UInt32.v t.ticket13_age_add) @|
+    vlbytes 1 t.ticket13_nonce @|
     vlbytes 2 t.ticket13_ticket @|
     extensionsBytes t.ticket13_extensions in
   lemma_repr_bytes_values (length payload);
@@ -1591,26 +1593,35 @@ let parseSessionTicket13 b =
     let age = int_of_bytes ageB in
     lemma_repr_bytes_values age;
     let age = UInt32.uint_to_t age in
-    match vlsplit 2 rest with
-    | Correct (ticket, rest) ->
-      begin
-      match vlsplit 2 rest with
-      | Correct (exts, eof) ->
-        if length eof > 0 then
-          Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: dangling bytes")
-        else
+    match vlsplit 1 rest with
+    | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid nonce (check draft version 21 or greater)")
+    | Correct(nonce, rest) ->
+      if length nonce = 0 then
+        Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: empty nonce")
+      else begin
+        match vlsplit 2 rest with
+        | Correct (ticket, rest) ->
           begin
-          match parseExtensions EM_NewSessionTicket (vlbytes 2 exts) with
-          | Correct (exts,None) ->
-            Correct ({ ticket13_lifetime = lifetime; ticket13_age_add = age;
-                       ticket13_ticket = ticket;
-                       ticket13_extensions = exts})
-          | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid extensions")
+          match vlsplit 2 rest with
+          | Correct (exts, eof) ->
+            if length eof > 0 then
+              Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: dangling bytes")
+            else
+              begin
+              match parseExtensions EM_NewSessionTicket (vlbytes 2 exts) with
+              | Correct (exts,None) ->
+                Correct ({ ticket13_lifetime = lifetime;
+                           ticket13_age_add = age;
+                           ticket13_nonce = nonce;
+                           ticket13_ticket = ticket;
+                           ticket13_extensions = exts})
+              | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: invalid extensions")
+              end
+          | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
           end
-      | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
+        | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
+        end
       end
-    | Error _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "NewSessionTicket13: incorrect length")
-    end
 
 
 (* Hello retry request *)

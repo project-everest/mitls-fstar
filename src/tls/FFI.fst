@@ -74,12 +74,12 @@ private let errno description txt : ML int =
   | None    -> -1 ))
 
 
-let connect send recv config_1 : ML (Connection.connection * int) =
+let connect send recv config_1 psks : ML (Connection.connection * int) =
   // we assume the configuration specifies the target SNI;
   // otherwise we should check after Complete that it matches the authenticated certificate chain.
   let tcp = Transport.callbacks send recv in
   let here = new_region HyperHeap.root in
-  let c = TLS.connect here tcp config_1 in
+  let c = TLS.resume here tcp config_1 None psks in
   let rec read_loop c : ML int =
     let i = currentId c Reader in
     match read c i with
@@ -87,7 +87,7 @@ let connect send recv config_1 : ML (Connection.connection * int) =
     | ReadError description txt -> errno description txt
     | Update false -> read_loop c
     | Update true -> 0 // 0-RTT: ready to send early data
-    | _ -> failwith "FFI: Unexpected TLS read signal in accept_connected"
+    | _ -> failwith "FFI: Unexpected TLS read signal in connect"
     in
   let firstResult = read_loop c in
   c, firstResult
@@ -195,14 +195,14 @@ let sas = [
 ]
 
 let ngs = [
-  ("P-521", XParse.SEC CoreCrypto.ECC_P521);
-  ("P-384", XParse.SEC CoreCrypto.ECC_P384);
-  ("P-256", XParse.SEC CoreCrypto.ECC_P256);
-  ("X25519", XParse.SEC CoreCrypto.ECC_X25519);
-  ("X448",  XParse.SEC CoreCrypto.ECC_X448);
-  ("FFDHE4096", XParse.FFDHE XParse.FFDHE4096);
-  ("FFDHE3072", XParse.FFDHE XParse.FFDHE3072);
-  ("FFDHE2048", XParse.FFDHE XParse.FFDHE2048);
+  ("P-521", Parse.SEC CoreCrypto.ECC_P521);
+  ("P-384", Parse.SEC CoreCrypto.ECC_P384);
+  ("P-256", Parse.SEC CoreCrypto.ECC_P256);
+  ("X25519", Parse.SEC CoreCrypto.ECC_X25519);
+  ("X448",  Parse.SEC CoreCrypto.ECC_X448);
+  ("FFDHE4096", Parse.FFDHE Parse.FFDHE4096);
+  ("FFDHE3072", Parse.FFDHE Parse.FFDHE3072);
+  ("FFDHE2048", Parse.FFDHE Parse.FFDHE2048);
 ]
 
 let aeads = [
@@ -290,11 +290,11 @@ let ffiSetNamedGroups cfg x =
     | None -> failwith ("Unknown named group: "^x)
     | Some a -> a in
   let supported :: offered = String.split ['@'] x in
-  let ngl = String.split [':'] x in
+  let ngl = String.split [':'] supported in
   let ngl = map ng_parse ngl in
   let ogl = match offered with
-    | [] -> cfg.offer_shares
-    | [x] -> map ng_parse (String.split [':'] x)
+    | [] -> ngl
+    | [og] -> map ng_parse (String.split [':'] og)
     | _ -> failwith "Use @G1:..:Gn to set groups on which to offer shares" in
   { cfg with
     named_groups = ngl;
@@ -345,9 +345,38 @@ let recvTcpPacket callbacks max =
   else
     Platform.Tcp.RecvError ("socket recv failure")
 
-val ffiConnect: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
-let ffiConnect config cb =
-  connect (sendTcpPacket cb) (recvTcpPacket cb) config
+let install_ticket config ticket : ML (list PSK.psk_identifier) =
+  match ticket with
+  | Some (t, si) ->
+    (match Ticket.parse si with
+    | Some (Ticket.Ticket13 cs li rmsId rms) ->
+      (match PSK.psk_lookup t with
+      | Some _ ->
+        trace ("input ticket "^(print_bytes t)^" is in PSK database")
+      | None ->
+        trace ("installing ticket "^(print_bytes t)^" in PSK database");
+        let CipherSuite13 ae h = cs in
+        PSK.coerce_psk t PSK.({
+          // TODO(adl) store in session info
+          // N.B. FFi.ffiGetTicket returns the PSK - no need to derive RMS again
+          ticket_nonce = Some empty_bytes;
+          time_created = 0;
+          // FIXME(adl): we should preserve the server flag somewhere
+          allow_early_data = config.enable_early_data;
+          allow_dhe_resumption = true;
+          allow_psk_resumption = true;
+          early_ae = ae;
+          early_hash = h;
+          // TODO(adl) store identities
+          identities = (empty_bytes, empty_bytes)
+        }) rms);
+      [t]
+    | _ -> failwith ("QUIC: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
+  | None -> []
+
+val ffiConnect: config -> callbacks -> option (bytes * bytes) -> ML (Connection.connection * int)
+let ffiConnect config cb ticket =
+  connect (sendTcpPacket cb) (recvTcpPacket cb) config (install_ticket config ticket)
 
 val ffiAcceptConnected: config:config -> callbacks:callbacks -> ML (Connection.connection * int)
 let ffiAcceptConnected config cb =
@@ -365,7 +394,45 @@ let ffiSend c b =
   let msg = abytes b in
   write c msg
 
+// ADL july 24: now returns both the ticket and the
+// entry in the PSK database to allow inter-process ticket reuse
+// Beware! this exports crypto materials!
+let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
+  match (Connection.c_cfg c).peer_name with
+  | Some n ->
+    (match Ticket.lookup n with
+    | Some (t, true) ->
+      (match PSK.psk_lookup t with
+      | None -> None
+      | Some ctx ->
+        let ae = ctx.PSK.early_ae in
+        let h = ctx.PSK.early_hash in
+        let pskb = PSK.psk_value t in
+        // FIXME(adl): serialize rmsId
+        let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
+        let si = Ticket.serialize (Ticket.Ticket13
+          (CipherSuite13 ae h) li rmsid pskb) in
+        Some (t, si))
+    | _ -> None)
+  | None -> None
+
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =
   let cert = getCert c in
   get_cbytes cert
+
+// some basic sanity checks
+let ffiGetExporter (c:Connection.connection) (early:bool)
+  : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
+  =
+  let keys = Handshake.xkeys_of c.Connection.hs in
+  if Seq.length keys = 0 then None
+  else
+    let i = if Seq.length keys = 2 && not early then 1 else 0 in
+    let (| li, expId, b|) = Seq.index keys i in
+    let h = exportId_hash expId in
+    let ae = logInfo_ae li in
+    match early, expId with
+    | false, ExportID _ _ -> Some (h, ae, b)
+    | true, EarlyExportID _ _ -> Some (h, ae, b)
+    | _ -> None

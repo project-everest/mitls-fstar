@@ -51,7 +51,7 @@ private let errno description txt: ST error
     | Some ad -> " "^TLSError.string_of_ad ad
     | None    -> "")^": "^txt);
   let b2 = Alert.alertBytes (match description with | Some a -> a | None -> TLSError.AD_internal_error) in
-  XParse.uint16_of_bytes b2
+  Parse.uint16_of_bytes b2
 
 /// TLS processing loop: we keep receiving and sending as long as we
 /// can read.  Does not handle TLS termination (unused by QUIC?)
@@ -121,7 +121,7 @@ let rec recv c =
        | Server      -> {code=TLS_server_complete; error=0us;})
          (* we could read once more to flush any ticket.
                       let i = currentId c Reader in
-                      match read c i with 
+                      match read c i with
                       | ReadWouldBlock -> {code=TLS_server_complete; error=0us;}
                       | _ -> {code=TLS_error_local; error=errno None "bad ticket delivery";} *)
   | ReadError a txt  -> {code=TLS_error_local; error=errno a txt;}
@@ -156,13 +156,14 @@ let accept send recv config : ML Connection.connection =
   quic_check config;
   TLS.accept_connected here tcp config
 
-val ffiConnect: config:config -> ticket: bytes -> callbacks:FFI.callbacks -> ML Connection.connection
+// Ticket also includes the serialized session,
+// if it is not in the PSK database it will be installed
+// (allowing resumption across miTLS client processes)
+val ffiConnect: config:config -> ticket: option (bytes * bytes) -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiConnect config ticket cb =
-  connect 
-    (FFI.sendTcpPacket cb) 
-    (FFI.recvTcpPacket cb) 
-    config 
-    (if length ticket = 0 then [] else [ticket])
+  let send = FFI.sendTcpPacket cb in
+  let recv = FFI.recvTcpPacket cb in
+  connect send recv config (FFI.install_ticket config ticket)
 
 val ffiAcceptConnected: config:config -> callbacks:FFI.callbacks -> ML Connection.connection
 let ffiAcceptConnected config cb =
@@ -178,66 +179,49 @@ let get_parameters c (r:role): ML (option TLSConstants.quicParameters) =
   else Negotiation.find_server_quic_parameters mode
 
 // extracting some QUIC parameters to C (a bit ad hoc)
-val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.t * UInt32.t * UInt16.t * bytes)  
-let ffi_parameters qpo = 
-  match qpo with 
-  | None -> failwith "no parameters available" 
-  | Some (QuicParametersClient _ _ qp) 
+val ffi_parameters: option TLSConstants.quicParameters -> ML (UInt32.t * UInt32.t * UInt32.t * UInt16.t * bytes)
+let ffi_parameters qpo =
+  match qpo with
+  | None -> failwith "no parameters available"
+  | Some (QuicParametersClient _ _ qp)
   | Some (QuicParametersServer _ qp) ->  (
-      ( match (List.Tot.find Quic_initial_max_stream_data? qp) with 
-        | Some (Quic_initial_max_stream_data v) -> v 
-        | None -> failwith "no Quic_initial_max_stream_data"), 
-      ( match (List.Tot.find Quic_initial_max_data? qp) with 
-        | Some (Quic_initial_max_data v) -> v 
-        | None -> failwith "no Quic_initial_max_data"), 
-      ( match (List.Tot.find Quic_initial_max_stream_id? qp) with 
-        | Some (Quic_initial_max_stream_id v) -> v 
-        | None -> failwith "no Quic_initial_max_stream_id"), 
-      ( match (List.Tot.find Quic_idle_timeout? qp) with 
-        | Some (Quic_idle_timeout v) -> v 
-        | None -> failwith "no Quic_idle_timeout"), 
+      ( match (List.Tot.find Quic_initial_max_stream_data? qp) with
+        | Some (Quic_initial_max_stream_data v) -> v
+        | None -> failwith "no Quic_initial_max_stream_data"),
+      ( match (List.Tot.find Quic_initial_max_data? qp) with
+        | Some (Quic_initial_max_data v) -> v
+        | None -> failwith "no Quic_initial_max_data"),
+      ( match (List.Tot.find Quic_initial_max_stream_id? qp) with
+        | Some (Quic_initial_max_stream_id v) -> v
+        | None -> failwith "no Quic_initial_max_stream_id"),
+      ( match (List.Tot.find Quic_idle_timeout? qp) with
+        | Some (Quic_idle_timeout v) -> v
+        | None -> failwith "no Quic_idle_timeout"),
       Extensions.quicParametersBytes_aux (List.Tot.filter Quic_custom_parameter?  qp))
 
-let get_peer_parameters c = 
-  let r = TLSConstants.dualRole (Connection.c_role c) in 
+let get_peer_parameters c =
+  let r = TLSConstants.dualRole (Connection.c_role c) in
   ffi_parameters (get_parameters c r)
 
-// some basic sanity checks
-let get_exporter c (early:bool)
-  : ML (option (Hashing.Spec.alg * aeadAlg * bytes))
-  =
-  let keys = Handshake.xkeys_of c.Connection.hs in
-  if Seq.length keys = 0 then None
-  else
-    let i = if Seq.length keys = 2 && not early then 1 else 0 in
-    let (| li, expId, b|) = Seq.index keys i in
-    let h = exportId_hash expId in
-    let ae = logInfo_ae li in
-    match early, expId with
-    | false, ExportID _ _ -> Some (h, ae, b)
-    | true, EarlyExportID _ _ -> Some (h, ae, b)
-    | _ -> None
-
-// client-side: get
-let get_ticket c: ML (option bytes) =
-  match (Connection.c_cfg c).peer_name with
-  | Some n -> Option.map fst (Ticket.lookup n)
-  | None -> None
-
-let ffiConfig 
-  max_stream_data 
-  max_data 
-  max_stream_id 
-  idle_timeout 
+let ffiConfig
+  max_stream_data
+  max_data
+  max_stream_id
+  idle_timeout
   (others: bytes)
+  (versions: list UInt32.t)
   (host: string)  =
-  let others = 
-    match Extensions.parseQuicParameters_aux others 
-    with 
+  let ver = List.Tot.map (fun (n:UInt32.t) ->
+    match UInt32.v n with
+    | 1 -> QuicVersion1
+    | _ -> QuicCustomVersion n) versions in
+  let others =
+    match Extensions.parseQuicParameters_aux others
+    with
     | Error z -> trace "WARNING: ill-formed custom parameters "; []
     | Correct qpl ->
       if not (List.Tot.for_all Quic_custom_parameter? qpl) then (trace "WARNING: not a custom parameter"; [])
-      else qpl  
+      else qpl
     in
   { defaultConfig with
     min_version = TLS_1p3;
@@ -245,8 +229,9 @@ let ffiConfig
     peer_name = Some host;
     check_peer_certificate = false;
     non_blocking_read = true;
-    quic_parameters = Some ([QuicVersion1],[
-    Quic_initial_max_stream_data max_stream_data;
-    Quic_initial_max_data max_data;
-    Quic_initial_max_stream_id max_stream_id;
-    Quic_idle_timeout idle_timeout] @ others) }
+    quic_parameters = Some (ver, [
+      Quic_initial_max_stream_data max_stream_data;
+      Quic_initial_max_data max_data;
+      Quic_initial_max_stream_id max_stream_id;
+      Quic_idle_timeout idle_timeout] @ others)
+  }

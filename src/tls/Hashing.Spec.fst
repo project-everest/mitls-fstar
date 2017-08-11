@@ -10,12 +10,15 @@ type alg = // CoreCrypto.hash_alg
   | SHA256
   | SHA384
   | SHA512
+//  | SHAKE128 of (n:nat{n >= 8})
+//  | SHAKE256 of (n:nat{n >= 16})
 // see e.g. https://en.wikipedia.org/wiki/SHA-1 for a global comparison and lengths
 
 // length of the input blocks, in bytes (used for specifying the outer hash loop)
 let blockLen = function
   | MD5 | SHA1 | SHA224 | SHA256 -> 64
   | SHA384 | SHA512 -> 128
+//  | SHAKE128 _ -> 168 | SHAKE256 _ -> 136
 
 // length of the resulting tag, in bytes (replicating CoreCrypto.hashSize)
 let tagLen (a:alg) : Tot (n:nat{n <= 64}) =
@@ -26,6 +29,8 @@ let tagLen (a:alg) : Tot (n:nat{n <= 64}) =
   | SHA256 -> 32
   | SHA384 -> 48 // truncated SHA512
   | SHA512 -> 64
+//  | SHAKE128 d -> d
+//  | SHAKE256 d -> d
 type tag (a:alg) = lbytes (tagLen a)
 
 // The hash of the empty string, used in KS
