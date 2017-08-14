@@ -1072,6 +1072,10 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
   CAMLlocal2(result, tmp);
 
   result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
+  if (Is_exception_result(result)) {
+    report_caml_exception(result, errmsg);
+    CAMLreturnT(int, 0);
+  }
 
   tmp = Field(result, 4);
   size_t len = caml_string_length(tmp);
