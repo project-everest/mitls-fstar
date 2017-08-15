@@ -140,7 +140,6 @@ noeq type epochs (r:rgn) (n:random) = | MkEpochs:
 let containsT (#r:rgn) (#n:random) (es:epochs r n) (h:mem) =
     MS.i_contains (MkEpochs?.es es) h
 
-#reset-options "--z3rlimit 225"
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
   ST (is:MS.i_seq r a p & c1:epoch_ctr r is & c2:epoch_ctr r is)
     (requires (fun h -> p Seq.createEmpty))
@@ -152,6 +151,9 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
       m_contains c1 h1 /\
       m_contains c2 h1 /\
       i_sel h1 is == Seq.createEmpty)))
+
+#set-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
+
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
   let is = alloc_mref_iseq p r init in
