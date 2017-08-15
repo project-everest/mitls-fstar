@@ -69,6 +69,8 @@ typedef struct mitls_state {
     value fstar_state;    // a GC root representing an F*-side state object
 } mitls_state;
 
+static int isRegistered;
+
 //
 // Initialize miTLS.
 //
@@ -78,6 +80,10 @@ typedef struct mitls_state {
 //
 int MITLS_CALLCONV FFI_mitls_init(void)
 {
+    if (isRegistered) {
+        return FFI_mitls_thread_register();
+    }
+
     char *Argv[2];
 
     // Build a stub argv[] to satisfy caml_Startup()
@@ -101,15 +107,14 @@ int MITLS_CALLCONV FFI_mitls_init(void)
     // Release it, so other threads can call into OCaml.
     caml_release_runtime_system();
 
+    isRegistered = 1;
+
     return 1; // success
 }
 
 void MITLS_CALLCONV FFI_mitls_cleanup(void)
 {
-#define MITLS_FFI_ENTRY(x) \
-    g_mitls_FFI_##x = NULL;
- MITLS_FFI_LIST
- #undef MITLS_FFI_ENTRY
+    // Nothing to do.  The OCaml runtime has no graceful shutdown.
 }
 
 // Input:  v - an OCaml exception
@@ -912,6 +917,13 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
          *errmsg = strdup("FFI_mitls_quic_create_caml: signature algorithms list");
          CAMLreturnT(int, 0);
        }
+
+    if(cfg->alpn)
+      if(!configure_common_caml(&ms, cfg->alpn, g_mitls_FFI_SetALPN))
+      {
+        *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set application-level protocols");
+        CAMLreturnT(int, 0);
+      }
 
     if(cfg->ticket_enc_alg && cfg->ticket_key)
        if(!ocaml_set_ticket_key(cfg->ticket_enc_alg, cfg->ticket_key, cfg->ticket_key_len))

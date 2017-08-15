@@ -23,10 +23,10 @@ module MM = MonotoneMap
 
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> tag a -> range
-private let  domain : range -> Type =
-    fun (Computed a t) -> b:bytes { Seq.equal (hash a b) t }
+private type domain (r:range) =
+  b:bytes {(let Computed a t = r in Seq.equal (hash a b) t)}
 
-private let inv (f:MM.map' range domain) = True // a bit overkill? 
+private let inv (f:MM.map' range domain) = True // a bit overkill?
 private let table = MM.alloc #TLSConstants.tls_tables_region #range #domain #inv
 
 // witnessing that we hashed this particular content (for collision detection)

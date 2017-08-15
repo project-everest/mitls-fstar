@@ -126,8 +126,7 @@ let string_of_signatureScheme = function
   | DSA_SHA256             -> "DSA_SHA256"
   | DSA_SHA384             -> "DSA_SHA384"
   | DSA_SHA512             -> "DSA_SHA512"
-  | OBSOLETE codepoint     -> "OBSOLETE " ^ (print_bytes codepoint)
-  | PRIVATE_USE codepoint  -> "PRIVATE_USE " ^ (print_bytes codepoint)
+  | SIG_UNKNOWN codepoint  -> "UNKNOWN " ^ (print_bytes codepoint)
 
 
 (* Negotiation: HELLO sub-module *)

@@ -73,6 +73,7 @@ int main(int argc, char **argv)
     .supported_versions = NULL,
     .supported_versions_len = 0,
     .host_name = "",
+    .alpn = "hq-05",
     .qp = server_qp,
     .server_ticket = {
       .ticket_len = 0,
