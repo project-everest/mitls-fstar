@@ -189,11 +189,13 @@ type signatureScheme =
   | DSA_SHA512
   | SIG_UNKNOWN of (codepoint: lbytes 2 {
       let v = int_of_bytes codepoint in
-          v <> 0x0401 /\ v <> 0x0501 /\ v <> 0x0601 /\ v <> 0x0403
+         v <> 0x0401 /\ v <> 0x0501 /\ v <> 0x0601 /\ v <> 0x0403
        /\ v <> 0x0503 /\ v <> 0x0603 /\ v <> 0x0804 /\ v <> 0x0805
-       /\ v <> 0x0806 /\ v <> 0x0807 /\ v <> 0x0808 /\ v <> 0x0201
+       /\ v <> 0x0806
+       // /\ v <> 0x0807 /\ v <> 0x0808
+       /\ v <> 0x0201
        /\ v <> 0x0203 /\ v <> 0x0202 /\ v <> 0x0402 /\ v <> 0x0502
-       /\ v <> 0x0602})
+       /\ v <> 0x0602 /\ v <> 0xFFFF })
 
 let is_handshake13_signatureScheme = function
   | ECDSA_SECP256R1_SHA256
@@ -258,7 +260,16 @@ let parseSignatureScheme b =
   | (0x04z, 0x02z) -> Correct DSA_SHA256
   | (0x05z, 0x02z) -> Correct DSA_SHA384
   | (0x06z, 0x02z) -> Correct DSA_SHA512
-  | (x, y) -> Correct (SIG_UNKNOWN b)
+  | (x, y) ->
+    let v = int_of_bytes b in
+    if v <> 0x0401 && v <> 0x0501 && v <> 0x0601 && v <> 0x0403
+       && v <> 0x0503 && v <> 0x0603 && v <> 0x0804 && v <> 0x0805
+       && v <> 0x0806 && v <> 0x0201 && v <> 0xFFFF && v <> 0x0203
+       && v <> 0x0202 && v <> 0x0402 && v <> 0x0502 && v <> 0x0602
+    then
+      Correct (SIG_UNKNOWN b)
+    else // Unreachable
+      Error(AD_decode_error, "Parsed invalid SignatureScheme " ^ print_bytes b)
 
 val sigHashAlg_of_signatureScheme:
   scheme:signatureScheme{~(SIG_UNKNOWN? scheme)} -> sigAlg * hashAlg
