@@ -187,15 +187,15 @@ type signatureScheme =
   | DSA_SHA256
   | DSA_SHA384
   | DSA_SHA512
-  | OBSOLETE of (codepoint:lbytes 2 {
+  | SIG_UNKNOWN of (codepoint: lbytes 2 {
       let v = int_of_bytes codepoint in
-      (0x0000 <= v /\ v <= 0x0100) \/
-      (0x0204 <= v /\ v <= 0x0400) \/
-      (0x0404 <= v /\ v <= 0x0500) \/
-      (0x0504 <= v /\ v <= 0x0600) \/
-      (0x0604 <= v /\ v <= 0x06FF) })
-  | PRIVATE_USE of (codepoint:lbytes 2 {
-      let v = int_of_bytes codepoint in 0xFE00 <= v /\ v < 0xFFFF})
+         v <> 0x0401 /\ v <> 0x0501 /\ v <> 0x0601 /\ v <> 0x0403
+       /\ v <> 0x0503 /\ v <> 0x0603 /\ v <> 0x0804 /\ v <> 0x0805
+       /\ v <> 0x0806
+       // /\ v <> 0x0807 /\ v <> 0x0808
+       /\ v <> 0x0201
+       /\ v <> 0x0203 /\ v <> 0x0202 /\ v <> 0x0402 /\ v <> 0x0502
+       /\ v <> 0x0602 /\ v <> 0xFFFF })
 
 let is_handshake13_signatureScheme = function
   | ECDSA_SECP256R1_SHA256
@@ -228,15 +228,14 @@ let signatureSchemeBytes = function
   | DSA_SHA256             -> abyte2 (0x04z, 0x02z)
   | DSA_SHA384             -> abyte2 (0x05z, 0x02z)
   | DSA_SHA512             -> abyte2 (0x06z, 0x02z)
-  | OBSOLETE codepoint     -> codepoint
-  | PRIVATE_USE codepoint  -> codepoint
+  | SIG_UNKNOWN codepoint  -> codepoint
 
 let signatureSchemeBytes_is_injective
   (s1 s2: signatureScheme)
 : Lemma
   (requires (Seq.equal (signatureSchemeBytes s1) (signatureSchemeBytes s2)))
   (ensures (s1 == s2))
-= if (OBSOLETE? s1 || PRIVATE_USE? s1) = (OBSOLETE? s2 || PRIVATE_USE? s2)
+= if (SIG_UNKNOWN? s1) = (SIG_UNKNOWN? s2)
   then ()
   else assume (s1 == s2) // TODO: strengthen int_of_bytes vs. abyte2
 
@@ -262,18 +261,18 @@ let parseSignatureScheme b =
   | (0x05z, 0x02z) -> Correct DSA_SHA384
   | (0x06z, 0x02z) -> Correct DSA_SHA512
   | (x, y) ->
-     let v = int_of_bytes b in
-     if (0x0000 <= v && v <= 0x0100) ||
-        (0x0204 <= v && v <= 0x0400) ||
-        (0x0404 <= v && v <= 0x0500) ||
-        (0x0504 <= v && v <= 0x0600) ||
-        (0x0604 <= v && v <= 0x06FF)
-     then Correct (OBSOLETE b)
-     else if 0xFE00 <= v && v < 0xFFFF then Correct (PRIVATE_USE b)
-     else Error(AD_decode_error, "Parsed invalid SignatureScheme " ^ print_bytes b)
+    let v = int_of_bytes b in
+    if v <> 0x0401 && v <> 0x0501 && v <> 0x0601 && v <> 0x0403
+       && v <> 0x0503 && v <> 0x0603 && v <> 0x0804 && v <> 0x0805
+       && v <> 0x0806 && v <> 0x0201 && v <> 0xFFFF && v <> 0x0203
+       && v <> 0x0202 && v <> 0x0402 && v <> 0x0502 && v <> 0x0602
+    then
+      Correct (SIG_UNKNOWN b)
+    else // Unreachable
+      Error(AD_decode_error, "Parsed invalid SignatureScheme " ^ print_bytes b)
 
 val sigHashAlg_of_signatureScheme:
-  scheme:signatureScheme{~(PRIVATE_USE? scheme) /\ ~(OBSOLETE? scheme)} -> sigAlg * hashAlg
+  scheme:signatureScheme{~(SIG_UNKNOWN? scheme)} -> sigAlg * hashAlg
 let sigHashAlg_of_signatureScheme =
   let open CoreCrypto in
   let open Hashing.Spec in
@@ -322,7 +321,7 @@ let signatureScheme_of_sigHashAlg sa ha =
   | (RSASIG, MD5SHA1)     -> RSA_PKCS1_MD5SHA1
   | _ -> // Map everything else to OBSOLETE 0x0000
     lemma_repr_bytes_values 0x0000; int_of_bytes_of_int 2 0x0000;
-    OBSOLETE (bytes_of_int 2 0x0000)
+    SIG_UNKNOWN (bytes_of_int 2 0)
 
 (** Encryption key sizes *)
 let encKeySize =

@@ -566,47 +566,35 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       else frags1==frags0')))))
 
 #reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-private let sendHandshake (#c:connection) (#i:id) (wopt:option (cwriter i c)) (om:option (HandshakeLog.fragment i)) (send_ccs:bool)
-  : ST (result unit)
-       (requires (sendFragment_inv wopt))
-       (ensures (fun h0 r h1 ->
-		sendFragment_inv wopt h1
-		/\ sendHandshake_post wopt om send_ccs h0 r h1))
-  =  let h0 = get() in
-     trace "sendHandshake";
-     let result0 = // first try to send handshake fragment, if any
-         match om with
-         | None             -> Correct()
-         | Some (| rg, f |) -> sendFragment c wopt (Content.CT_Handshake rg f) in
-     let h1 = get() in
-     // then try to send CCS fragment, if requested
-     match result0 with
-     | Error e -> Error e
-     | _ ->
-       if not send_ccs
-       then result0
-       else
-         begin
-	   // Don't pad
-	   let frags = sendFragment c wopt (Content.CT_CCS #i (point 1)) in
-	   let h2 = get() in
-	   begin
-	     match wopt with
-	     | Some wr ->
-	       begin
-	       lemma_modifies_just_trans (HST.HS?.h h0) (HST.HS?.h h1) (HST.HS?.h h2)
-	         (Set.singleton (StAE.region wr))
-		 (Set.singleton (StAE.region wr));
-	         cut (modifies_just (Set.singleton (StAE.region wr)) (HST.HS?.h h0) (HST.HS?.h h2))
-	       end
-	     | None ->
-	       begin
-	       lemma_modifies_just_trans (HST.HS?.h h0) (HST.HS?.h h1) (HST.HS?.h h2) Set.empty Set.empty;
-	       cut (modifies_just (Set.empty) (HST.HS?.h h0) (HST.HS?.h h2))
-	       end
-	   end;
-	   frags
-	 end
+#set-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants"
+
+private let sendHandshake
+  (#c:connection)
+  (#i:id)
+  (wopt:option (cwriter i c))
+  (om:option (HandshakeLog.fragment i))
+  (send_ccs:bool) :
+  ST (result unit)
+     (requires (sendFragment_inv wopt))
+     (ensures  (fun h0 r h1 ->
+                sendFragment_inv wopt h1 /\
+                sendHandshake_post wopt om send_ccs h0 r h1))
+  = trace "sendHandshake";
+    // first try to send handshake fragment, if any
+    // then try to send CCS fragment, if requested
+    match om, send_ccs with
+    | Some (| rg, f |), false -> sendFragment c wopt (Content.CT_Handshake rg f)
+    | Some (| rg, f |), true ->
+      let result = sendFragment c wopt (Content.CT_Handshake rg f) in
+      begin
+      match result with
+      | Error _ -> result
+      | _       -> sendFragment c wopt (Content.CT_CCS (point 1))
+      end
+    | _, true  -> sendFragment c wopt (Content.CT_CCS (point 1))
+    | _ -> Correct ()
+
+#reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
 
 ////////////////////////////////////////////////////////////////////////////////
 // writeHandshake and helpers: repeatedly sending handshake messages
