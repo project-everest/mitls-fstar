@@ -6,6 +6,7 @@ type callbacks = Prims.int
 
 assume val ocaml_send_tcp: callbacks -> cbytes -> Tot int
 assume val ocaml_recv_tcp: callbacks -> cbytes -> Tot int
+assume val ocaml_ticket_cb: callbacks -> string -> bytes -> bytes -> EXT unit
 
 (* under the covers, recv invokes String.Substring, which may throw an exception
    due to invalid parameters.  But the recv codepath never does that.  However,

@@ -17,7 +17,7 @@
 // Crypto library
 #include "quic_provider.h"
 
-void dump(unsigned char buffer[], size_t len)
+void dump(const unsigned char *buffer, size_t len)
 {
   int i;
   for(i=0; i<len; i++) {
@@ -33,6 +33,22 @@ void dump_parameters(quic_transport_parameters *qp)
   printf("max_stream_id   = %d\n", qp->max_stream_id);
   printf("idle_timeout    = %d\n", qp->idle_timeout);
   if (qp->others_len) printf("custom parameters "); dump(qp->others, qp->others_len);
+}
+
+mitls_ticket *qt = NULL;
+
+void ticket_cb(const char *sni, const mitls_ticket *ticket)
+{
+  printf("\n ##### New session ticket received! #####\n  Host: %s\n  Ticket:\n", sni);
+  qt = malloc(sizeof(mitls_ticket));
+  qt->ticket = malloc(ticket->ticket_len);
+  qt->session = malloc(ticket->session_len);
+  qt->ticket_len = ticket->ticket_len;
+  qt->session_len = ticket->session_len;
+  memcpy((void*)qt->ticket, ticket->ticket, qt->ticket_len);
+  memcpy((void*)qt->session, ticket->session, qt->session_len);
+  dump(qt->ticket, qt->ticket_len);
+  printf(" ##########################################\n");
 }
 
 char *quic_result_string(quic_result r){
@@ -75,11 +91,8 @@ int main(int argc, char **argv)
     .host_name = "",
     .alpn = "hq-05",
     .qp = server_qp,
-    .server_ticket = {
-      .ticket_len = 0,
-      .ticket = {0},
-      .session_len = 0,
-      .session = {0} } ,
+    .server_ticket = NULL,
+    .ticket_callback = ticket_cb,
     .certificate_chain_file = "../../data/server-ecdsa.crt",
     .private_key_file = "../../data/server-ecdsa.key",
     .ca_file = "../../data/CAFile.pem",
@@ -95,7 +108,6 @@ int main(int argc, char **argv)
   quic_result rc, rs;
   quic_state *server = NULL, *client = NULL;
   quic_secret qs = {0}, qs_early = {0};
-  quic_ticket qt = {0};
 
   FFI_mitls_init();
 
@@ -294,23 +306,20 @@ int main(int argc, char **argv)
     rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
     assert(rs == TLS_would_block);
     printf("                        server returns %s clen=%d slen=%d\n", quic_result_string(rs), clen, slen);
-    printf("                  <---- {Ticket}[%4d]\n\n", slen);
+    printf("                  <---- {Ticket}[%4d]\n", slen);
 
     clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     assert(rc == TLS_would_block);
     printf("client returns clen=%d slen=%d status=%s\n", clen, slen, quic_result_string(rc));
 
-    if(FFI_mitls_quic_get_ticket(client, &qt, &errmsg))
-    {
-      printf("new ticket: \n");
-      dump(qt.ticket, qt.ticket_len);
-      printf("associated session info and RMS: \n");
-      dump(qt.session, qt.session_len);
-    }
-    else printf("Failed to get ticket: %s\n", errmsg);
-
     printf("\n     TICKET-BASED RESUMPTION\n\n");
+
+    if(qt == NULL)
+    {
+      printf("ERROR: no ticket received!\n");
+      return -1;
+    }
 
     FFI_mitls_quic_free(server);
     FFI_mitls_quic_free(client);
@@ -375,21 +384,12 @@ int main(int argc, char **argv)
     rs = FFI_mitls_quic_process(server, c_buffer, &clen, s_buffer, &slen, &errmsg);
     assert(rs == TLS_would_block);
     printf("                        server returns %s clen=%d slen=%d\n", quic_result_string(rs), clen, slen);
-    printf("                  <---- {Ticket}[%4d]\n\n", slen);
+    printf("                  <---- {Ticket}[%4d]\n", slen);
 
     clen = cmax;
     rc = FFI_mitls_quic_process(client, s_buffer, &slen, c_buffer, &clen, &errmsg);
     assert(rc == TLS_would_block);
     printf("client returns clen=%d slen=%d status=%s\n", clen, slen, quic_result_string(rc));
-
-    if(FFI_mitls_quic_get_ticket(client, &qt, &errmsg))
-    {
-      printf("new ticket:\n");
-      dump(qt.ticket, qt.ticket_len);
-      printf("associated session info and RMS: \n");
-      dump(qt.session, qt.session_len);
-    }
-    else printf("Failed to get ticket: %s\n", errmsg);
   }
 
   FFI_mitls_quic_free(server);

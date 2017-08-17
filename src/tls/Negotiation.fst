@@ -396,7 +396,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
   // Don't offer EDI if there is no PSK or first PSK doesn't have ED enabled
   let compatible_psk =
     match pskinfo with
-    | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
+    | (_, i) :: _ -> i.allow_early_data // Must be the first PSK
     | _ -> false in
   let qp =
     match cfg.quic_parameters with
@@ -653,7 +653,7 @@ let client_ClientHello #region ns oks =
   | C_Init _ ->
       trace(if
     (match pskinfo with
-    | (_, i) :: _ -> i.PSK.allow_early_data // Must be the first PSK
+    | (_, i) :: _ -> i.allow_early_data // Must be the first PSK
     | _ -> false)
       then "compatible" else "");
       trace(if ns.cfg.enable_early_data then "enabled" else "");
@@ -1110,7 +1110,7 @@ private let rec compute_cs13_aux (i:nat) (o:offer)
     let choices =
       match List.Tot.index psks i, psk_kex with
       | (id, info), true ->
-        let cs = CipherSuite13 info.PSK.early_ae info.PSK.early_hash in
+        let cs = CipherSuite13 info.early_ae info.early_hash in
         if List.Tot.mem cs ncs then
          (match find_client_extension Extensions.E_psk_key_exchange_modes? o with
          | Some (Extensions.E_psk_key_exchange_modes (Extensions.PSK_KE :: _)) -> [PSK_EDH i None cs]
