@@ -46,13 +46,9 @@
 MITLS_FFI_LIST
 #undef MITLS_FFI_ENTRY
 
-// Pass a C pointer into F* and recover it back.  OCaml limits integers to 2^30/2^62
-// so shift right by 1 before conversion to OCaml.  The low bit must be 0 in order to
-// meet structure alignment rules, so this is not lossy.
-_Static_assert(sizeof(size_t) <= sizeof(value), "OCaml value isn't large enough to hold a C pointer");
-// FIXME(adl)
-//#define PtrToValue(p) Val_long(((size_t)p)>>1)
-//#define ValueToPtr(v) ((void*)((Long_val(v)<<1)))
+// We store C pointers in garbage-collected int64, which
+// is guaranteed to hold 64 bits (unlike int which holds 63 at best)
+_Static_assert(sizeof(size_t) <= 8, "OCaml int64 cannot hold a C pointer on this platform");
 #define PtrToValue(p) caml_copy_int64((size_t)p)
 #define ValueToPtr(v) (void*)(Int64_val(v))
 
