@@ -16,6 +16,16 @@ module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
+// SESSION TICKET DATABASE
+type hostname = string
+type tlabel (h:hostname) = t:bytes * tls13:bool
+private let tregion:rgn = new_region tls_tables_region
+private let tickets : MM.t tregion hostname tlabel (fun _ -> True) =
+  MM.alloc #tregion #hostname #tlabel #(fun _ -> True)
+
+let lookup (h:hostname) = MM.lookup tickets h
+let extend (h:hostname) (t:tlabel h) = MM.extend tickets h t
+
 // *** PSK ***
 
 // The constraints for PSK indexes are:
@@ -28,16 +38,8 @@ module ST = FStar.HyperStack.ST
 //  - for tickets, the encrypted serialized state is the PSK identifier
 //  - we store in the table the PSK context and compromise status
 
-type pskInfo = {
-  ticket_nonce: option bytes;
-  time_created: int;
-  allow_early_data: bool;      // New draft 13 flag
-  allow_dhe_resumption: bool;  // New draft 13 flag
-  allow_psk_resumption: bool;  // New draft 13 flag
-  early_ae: aeadAlg;
-  early_hash: Hashing.Spec.alg;  //CF could be more specific and use Hashing.alg
-  identities: bytes * bytes;
-}
+// The pskInfo type has been moved to TLSConstants as it appears in config
+// for the new ticket callback API
 
 let pskInfo_hash pi = pi.early_hash
 let pskInfo_ae pi = pi.early_ae

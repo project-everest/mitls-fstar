@@ -1434,45 +1434,6 @@ val pinverse_configurationId: x:_ -> Lemma
   [SMTPat (configurationIdBytes (Correct?._0 (parseConfigurationId x)))]
 let pinverse_configurationId x = ()
 
-
-(** EarlyData type definition *)
-type earlyDataType =
-  | ClientAuthentication
-  | EarlyData
-  | ClientAuthenticationAndData
-
-(** Serializing function for Early Data values *)
-val earlyDataTypeBytes: earlyDataType -> Tot (lbytes 1)
-let earlyDataTypeBytes edt =
-  match edt with
-  | ClientAuthentication        -> abyte 1z
-  | EarlyData                   -> abyte 2z
-  | ClientAuthenticationAndData -> abyte 3z
-
-(** Parsing function for Early Data values *)
-val parseEarlyDataType: pinverse_t earlyDataTypeBytes
-let parseEarlyDataType b =
-  match cbyte b with
-  | 1z -> Correct ClientAuthentication
-  | 2z -> Correct EarlyData
-  | 3z -> Correct ClientAuthenticationAndData
-  | _  -> Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse early data type")
-
-
-(** Lemmas for Early Data parsing/serializing inversions *)
-val inverse_earlyDataType: x:_ -> Lemma
-  (requires True)
-  (ensures lemma_inverse_g_f earlyDataTypeBytes parseEarlyDataType x)
-  [SMTPat (parseEarlyDataType (earlyDataTypeBytes x))]
-let inverse_earlyDataType x = ()
-
-val pinverse_earlyDataType: x:_ -> Lemma
-  (requires True)
-  (ensures (lemma_pinverse_f_g Seq.equal earlyDataTypeBytes parseEarlyDataType x))
-  [SMTPat (earlyDataTypeBytes (Correct?._0 (parseEarlyDataType x)))]
-let pinverse_earlyDataType x = ()
-
-
 // TODO: replace with more precise types when available
 (** Configuration Extension definition *)
 noeq type configurationExtension =
@@ -1774,6 +1735,24 @@ let string_of_quicParameters = function
     List.Tot.fold_left (fun a p -> a^string_of_quicParameter p^"\n") "" p
   | None -> "(none)"
 
+type pskInfo = {
+  ticket_nonce: option bytes;
+  time_created: int;
+  allow_early_data: bool;      // New draft 13 flag
+  allow_dhe_resumption: bool;  // New draft 13 flag
+  allow_psk_resumption: bool;  // New draft 13 flag
+  early_ae: aeadAlg;
+  early_hash: hash_alg;
+  identities: bytes * bytes;
+}
+
+// FIXME(adl): we have to put strong framing on this callback as it may call into C
+// The framing has to be assumed in cross-runtime
+type ticket_cb =
+  (sni:bytes -> ticket:bytes -> pski:pskInfo -> psk:bytes -> ST unit
+    (requires fun _ -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1))
+
 noeq type config = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
@@ -1799,6 +1778,7 @@ noeq type config = {
     safe_renegotiation: bool;     // demands this extension when renegotiating
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
+    ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
     peer_name: option string;     // The expected name to match against the peer certificate

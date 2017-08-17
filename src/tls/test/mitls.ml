@@ -199,7 +199,7 @@ let _ =
        match !reconnect, !config.peer_name with
        | true, Some h ->
           let (opsk, ot12) =
-            match Ticket.lookup h with
+            match PSK.lookup h with
             | None -> !offered_psk, None
             | Some (t, true) -> t :: !offered_psk, None
             | Some (t, false) -> !offered_psk, Some t in

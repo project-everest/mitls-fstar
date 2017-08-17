@@ -1,4 +1,6 @@
 type callbacks = Z.t
+
+external ocaml_ticket_cb: callbacks -> string -> string -> string -> unit = "ocaml_ticket_cb"
 external _ocaml_send_tcp: callbacks -> string -> int = "ocaml_send_tcp"
 external _ocaml_recv_tcp: callbacks -> string -> int = "ocaml_recv_tcp"
 
