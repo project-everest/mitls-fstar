@@ -555,7 +555,7 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (os
     let cfg = Nego.local_config hs.nego in
     if Some? (cfg.peer_name) then // TODO refine
      begin
-      Ticket.extend (Some?.v cfg.peer_name) (tid, false);
+      PSK.extend (Some?.v cfg.peer_name) (tid, false);
       let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
       let pv = mode.Nego.n_protocol_version in
       let cs = mode.Nego.n_cipher_suite in
@@ -586,13 +586,9 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
     identities = (empty_bytes, empty_bytes); // TODO certs
   }) in
   let psk = KeySchedule.ks_client_13_rms_psk hs.ks st13.ticket13_nonce in
-  // Store ticket in PSK database
-  PSK.coerce_psk tid pskInfo psk;
-  let c = PSK.psk_info tid in
-  trace PSK.("Ticket = "^(if Some? c.ticket_nonce then "true" else "false")^", ED="^(if c.allow_early_data then "true" else "false"));
   let cfg = Nego.local_config hs.nego in
-  // Fixme: instead, we should return a signal to the application with the ticket
-  if Some? (cfg.peer_name) then Ticket.extend (Some?.v cfg.peer_name) (tid, true);
+  if Some? (cfg.peer_name) then
+    cfg.ticket_callback (Some?.v cfg.peer_name) tid pskInfo psk;
   InAck false false
 
 let client_ServerFinished hs f digestClientFinished =

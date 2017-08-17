@@ -1231,7 +1231,7 @@ val prepareExtensions:
   list valid_namedGroup ->
   option (cVerifyData * sVerifyData) ->
   option CommonDH.keyShare ->
-  list (PSK.pskid * PSK.pskInfo) ->
+  list (PSK.pskid * pskInfo) ->
   l:list extension{List.Tot.length l < 256}
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
@@ -1292,15 +1292,15 @@ let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs named
       else res
     in
     let res =
-      let filter = (fun (_,x) -> x.PSK.allow_psk_resumption || x.PSK.allow_dhe_resumption) in
+      let filter = (fun (_,x) -> x.allow_psk_resumption || x.allow_dhe_resumption) in
       if pv = TLS_1p3 && List.Tot.filter filter psks <> [] then
-        let (pskids, pskinfos) : list PSK.pskid * list PSK.pskInfo = List.Tot.split psks in
+        let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
         let psk_kex = [] in
         let psk_kex =
-          if List.Tot.existsb (fun x -> x.PSK.allow_psk_resumption) pskinfos
+          if List.Tot.existsb (fun x -> x.allow_psk_resumption) pskinfos
           then PSK_KE :: psk_kex else psk_kex in
         let psk_kex =
-          if List.Tot.existsb (fun x -> x.PSK.allow_dhe_resumption) pskinfos
+          if List.Tot.existsb (fun x -> x.allow_dhe_resumption) pskinfos
           then PSK_DHE_KE :: psk_kex else psk_kex in
         let res = E_psk_key_exchange_modes psk_kex :: res in
         let binder_len = List.Tot.fold_left (fun ctr pski ->

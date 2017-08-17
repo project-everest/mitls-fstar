@@ -411,10 +411,8 @@ let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
         let ae = ctx.PSK.early_ae in
         let h = ctx.PSK.early_hash in
         let pskb = PSK.psk_value t in
-        // FIXME(adl): serialize rmsId
         let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-        let si = Ticket.serialize (Ticket.Ticket13
-          (CipherSuite13 ae h) li rmsid pskb) in
+        let si = Ticket.serialize (Ticket.Ticket13 (CipherSuite13 ae h) li rmsid psk) in
         Some (t, si))
     | _ -> None)
   | None -> None

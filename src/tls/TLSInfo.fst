@@ -60,6 +60,14 @@ let default_groups : list valid_namedGroup = [
   FFDHE FFDHE2048;
   ]
 
+// By default we use an in-memory ticket table
+// and the in-memory internal PSK database
+val defaultTicketCB: ticket_cb
+let defaultTicketCB sni ticket pskInfo psk =
+  assume false; // FIXME(adl) have to assume modifies_none...
+  PSK.coerce_psk ticket pskInfo psk;
+  PSK.extend (iutf8 sni) (ticket, true)
+
 val defaultConfig: config
 let defaultConfig =
   assert_norm (List.Tot.length (cipherSuites_of_nameList default_cipherSuites) < 256);
@@ -88,6 +96,7 @@ let defaultConfig =
   safe_renegotiation = true;
   extended_master_secret = true;
   enable_tickets = true;
+  ticket_callback = defaultTicketCB;
 
   alpn = None;
   peer_name = None;
