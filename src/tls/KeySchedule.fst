@@ -84,7 +84,7 @@ abstract let psk (i:esId) =
   b:bytes{length b = H.tagLen (esId_hash i)}
 
 let read_psk (i:PSK.pskid)
-  : ST (esId * PSK.pskInfo * PSK.app_psk i)
+  : ST (esId * pskInfo * PSK.app_psk i)
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =

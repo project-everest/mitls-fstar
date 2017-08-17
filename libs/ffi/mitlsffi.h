@@ -14,13 +14,11 @@
 typedef struct mitls_state mitls_state;
 typedef struct quic_state quic_state;
 
-#define MAX_TICKET_LEN 1020
-#define MAX_SESSION_LEN 256
 typedef struct {
   size_t ticket_len;
-  char ticket[MAX_TICKET_LEN];
+  const char *ticket;
   size_t session_len;
-  char session[MAX_SESSION_LEN];
+  const char *session;
 } mitls_ticket;
 
 typedef enum {
@@ -45,6 +43,8 @@ typedef struct {
   char secret[64]; // Max possible size, flat allocation
 } mitls_secret;
 
+typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(const char *sni, const mitls_ticket *ticket);
+
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success
 
@@ -67,6 +67,7 @@ extern int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitl
 extern int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng);
 extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl);
 extern int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, int enable_early_data);
+extern int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(mitls_state *state, pfn_FFI_ticket_cb ticket_cb);
 
 // Close a miTLS session - either after configure or connect
 extern void MITLS_CALLCONV FFI_mitls_close(/* in */ mitls_state *state);
@@ -88,9 +89,6 @@ extern int MITLS_CALLCONV FFI_mitls_resume(struct _FFI_mitls_callbacks *callback
 
 // Act as a TLS server to a client
 extern int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg);
-
-// Get the session ticket for resumption - returns 1 if a ticket has been successfuly stored
-extern int MITLS_CALLCONV FFI_mitls_get_ticket(mitls_state *state, mitls_ticket *ticket, char **errmsg);
 
 // Get the exporter secret (set early to true for the early exporter secret). Returns 1 if a secret was written
 extern int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg);
@@ -173,7 +171,8 @@ typedef struct {
   // only used by the client
   const char *host_name; // Client only, sent in SNI. Can pass NULL for server
   const char *ca_file; // Client only, used to validate server certificate
-  quic_ticket server_ticket;
+  const quic_ticket *server_ticket; // May be NULL
+  pfn_FFI_ticket_cb ticket_callback; // May be NULL
 
   // only used by the server
   const char *certificate_chain_file; // Server only
@@ -191,7 +190,6 @@ extern quic_result MITLS_CALLCONV FFI_mitls_quic_process(/* in */ quic_state *st
 
 extern int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(/* in */ quic_state *state, /*out*/ quic_transport_parameters *qp, /* out */ char **errmsg);
 extern int MITLS_CALLCONV FFI_mitls_quic_get_exporter(/* in */ quic_state *state, int early, /* out */ quic_secret *secret, /* out */ char **errmsg);
-extern int MITLS_CALLCONV FFI_mitls_quic_get_ticket(/* in */ quic_state *state, /*out*/ quic_ticket *ticket , /* out */ char **errmsg);
 extern void MITLS_CALLCONV FFI_mitls_quic_free(/* in */ quic_state *state);
 
 #endif // HEADER_MITLS_FFI_H

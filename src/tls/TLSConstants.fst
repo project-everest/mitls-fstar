@@ -1749,7 +1749,7 @@ type pskInfo = {
 // FIXME(adl): we have to put strong framing on this callback as it may call into C
 // The framing has to be assumed in cross-runtime
 type ticket_cb =
-  (sni:bytes -> ticket:bytes -> pski:pskInfo -> psk:bytes -> ST unit
+  (sni:string -> ticket:bytes -> pski:pskInfo -> psk:bytes -> ST unit
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1))
 

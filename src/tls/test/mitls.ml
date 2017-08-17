@@ -122,14 +122,14 @@ let load_psk is_ticket x =
     | CipherSuite13(ae,h) -> ae, h
     | _ -> failwith "the first ciphersuite must be 1.3 to load with PSK" in
   let pskInfo = {
-    PSK.ticket_nonce = if is_ticket then Some Platform.Bytes.empty_bytes else None;
-    PSK.time_created = Prims.parse_int "0";
-    PSK.allow_early_data = true;
-    PSK.allow_dhe_resumption = true;
-    PSK.allow_psk_resumption = true;
-    PSK.early_ae = ae;
-    PSK.early_hash = h;
-    PSK.identities = Platform.Bytes.empty_bytes, Platform.Bytes.empty_bytes;
+    ticket_nonce = if is_ticket then Some (CoreCrypto.random (Z.of_int 8)) else None;
+    time_created = Prims.parse_int "0";
+    allow_early_data = true;
+    allow_dhe_resumption = true;
+    allow_psk_resumption = true;
+    early_ae = ae;
+    early_hash = h;
+    identities = Platform.Bytes.empty_bytes, Platform.Bytes.empty_bytes;
    } in
   PSK.coerce_psk id pskInfo key
 

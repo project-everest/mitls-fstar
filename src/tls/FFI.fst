@@ -397,9 +397,14 @@ let ffiSend c b =
   let msg = abytes b in
   write c msg
 
+let ffiSetTicketCallback (cfg:config) (cb:ticket_cb) =
+  trace "Setting a new ticket callback.";
+  {cfg with ticket_callback = cb}
+
 // ADL july 24: now returns both the ticket and the
 // entry in the PSK database to allow inter-process ticket reuse
 // Beware! this exports crypto materials!
+(*
 let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
   match (Connection.c_cfg c).peer_name with
   | Some n ->
@@ -416,6 +421,14 @@ let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
         Some (t, si))
     | _ -> None)
   | None -> None
+*)
+
+let ffiTicketCallback (cb:callbacks) (sni:string) (ticket:bytes) (ctx:pskInfo) (psk:bytes) =
+  let ae = ctx.early_ae in
+  let h = ctx.early_hash in
+  let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
+  let si = Ticket.serialize (Ticket.Ticket13 (CipherSuite13 ae h) li rmsid psk) in
+  ocaml_ticket_cb cb sni ticket si
 
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =

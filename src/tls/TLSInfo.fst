@@ -66,7 +66,7 @@ val defaultTicketCB: ticket_cb
 let defaultTicketCB sni ticket pskInfo psk =
   assume false; // FIXME(adl) have to assume modifies_none...
   PSK.coerce_psk ticket pskInfo psk;
-  PSK.extend (iutf8 sni) (ticket, true)
+  PSK.extend sni (ticket, true)
 
 val defaultConfig: config
 let defaultConfig =

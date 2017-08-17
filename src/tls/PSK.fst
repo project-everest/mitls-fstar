@@ -16,6 +16,10 @@ module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
+// Has been moved because it appears in config for
+// the ticket callback
+type pskInfo = TLSConstants.pskInfo
+
 // SESSION TICKET DATABASE
 type hostname = string
 type tlabel (h:hostname) = t:bytes * tls13:bool

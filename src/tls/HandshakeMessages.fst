@@ -229,15 +229,6 @@ noeq type cke = {
 
 type cv = sig:signature
 
-noeq type sc = {
-  sc_configuration_id: configurationId;
-  sc_expiration_date: lbytes 4; // SZ: TODO: Use UInt32.t
-  sc_named_group: namedGroup;
-  sc_server_key: kex_c; // JK : use another type ?
-  sc_early_data_type: earlyDataType;
-  sc_configuration_extensions: (l:list configurationExtension{List.Tot.length l < 65536});
-}
-
 //17-03-11 Finished payload, carrying a fixed-length MAC; share with binders?
 type fin = {
   fin_vd: b:bytes{length b < 65536};

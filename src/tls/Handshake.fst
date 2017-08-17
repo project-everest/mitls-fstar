@@ -587,8 +587,9 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   }) in
   let psk = KeySchedule.ks_client_13_rms_psk hs.ks st13.ticket13_nonce in
   let cfg = Nego.local_config hs.nego in
-  if Some? (cfg.peer_name) then
-    cfg.ticket_callback (Some?.v cfg.peer_name) tid pskInfo psk;
+  let _ = match cfg.peer_name with
+    | Some sni -> cfg.ticket_callback sni tid pskInfo psk
+    | None -> () in
   InAck false false
 
 let client_ServerFinished hs f digestClientFinished =
