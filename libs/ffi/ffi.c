@@ -306,29 +306,31 @@ int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const c
 
 // Called by Handshake when receiving a new ticket (1.3)
 // and a ticket callback was configured in the FFI
-CAMLprim value ocaml_ticket_cb(value fp, value sni, value ticket, value session)
+CAMLprim value ocaml_ticket_cb(value st, value fp, value sni, value ticket, value session)
 {
-  CAMLparam4(fp, sni, ticket, session);
+  CAMLparam5(st, fp, sni, ticket, session);
   pfn_FFI_ticket_cb cb = (pfn_FFI_ticket_cb)ValueToPtr(fp);
   mitls_ticket t;
   t.ticket_len = caml_string_length(ticket);
   t.session_len = caml_string_length(session);
   t.ticket = String_val(ticket);
   t.session = String_val(session);
-  cb(String_val(sni), &t);
+  cb((void*)ValueToPtr(st), String_val(sni), &t);
   CAMLreturn(Val_unit);
 }
 
-static int ocaml_set_ticket_callback(/* in */ mitls_state *state, pfn_FFI_ticket_cb ticket_cb)
+static int ocaml_set_ticket_callback(/* in */ mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb)
 {
     CAMLparam0();
-    CAMLlocal3(config, cb, ocb);
+    CAMLlocal4(config, cb, cbs, ocb);
     int ret = 0;
 
     cb = PtrToValue(ticket_cb); // Address of the C callback
+    cbs = PtrToValue(cb_state); // Callback state
+
     // This is a partial application of ocaml_ticket_cb, defined above
     // ocb is a string -> string -> string -> unit function that represents calling ticket_cb from OCaml
-    ocb = caml_callback_exn(*g_mitls_FFI_TicketCallback, cb);
+    ocb = caml_callback2_exn(*g_mitls_FFI_TicketCallback, cbs, cb);
 
     if (!Is_exception_result(ocb)) {
       config = caml_callback2_exn(*g_mitls_FFI_SetTicketCallback, state->fstar_state, ocb);
@@ -338,14 +340,14 @@ static int ocaml_set_ticket_callback(/* in */ mitls_state *state, pfn_FFI_ticket
       }
     }
 
-    CAMLreturnT(int,ret);
+    CAMLreturnT(int, ret);
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *state, pfn_FFI_ticket_cb ticket_cb)
+int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb)
 {
     int ret;
     caml_acquire_runtime_system();
-    ret = ocaml_set_ticket_callback(state, ticket_cb);
+    ret = ocaml_set_ticket_callback(state, cb_state, ticket_cb);
     caml_release_runtime_system();
     return ret;
 }
@@ -932,7 +934,7 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
        }
 
     if(cfg->ticket_callback)
-      if(!ocaml_set_ticket_callback(&ms, cfg->ticket_callback))
+      if(!ocaml_set_ticket_callback(&ms, cfg->callback_state, cfg->ticket_callback))
       {
         *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set ticket callback");
         CAMLreturnT(int, 0);

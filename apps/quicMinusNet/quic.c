@@ -37,9 +37,9 @@ void dump_parameters(quic_transport_parameters *qp)
 
 mitls_ticket *qt = NULL;
 
-void ticket_cb(const char *sni, const mitls_ticket *ticket)
+void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
 {
-  printf("\n ##### New session ticket received! #####\n  Host: %s\n  Ticket:\n", sni);
+  printf("\n ##### New session ticket received! #####\n  Callback state: %s\n  Host: %s\n  Ticket:\n", (char*)st, sni);
   qt = malloc(sizeof(mitls_ticket));
   qt->ticket = malloc(ticket->ticket_len);
   qt->session = malloc(ticket->session_len);
@@ -48,7 +48,7 @@ void ticket_cb(const char *sni, const mitls_ticket *ticket)
   memcpy((void*)qt->ticket, ticket->ticket, qt->ticket_len);
   memcpy((void*)qt->session, ticket->session, qt->session_len);
   dump(qt->ticket, qt->ticket_len);
-  printf(" ##########################################\n");
+  printf(" ########################################\n");
 }
 
 char *quic_result_string(quic_result r){
@@ -92,6 +92,7 @@ int main(int argc, char **argv)
     .alpn = "hq-05",
     .qp = server_qp,
     .server_ticket = NULL,
+    .callback_state = "Hello world!",
     .ticket_callback = ticket_cb,
     .certificate_chain_file = "../../data/server-ecdsa.crt",
     .private_key_file = "../../data/server-ecdsa.key",
