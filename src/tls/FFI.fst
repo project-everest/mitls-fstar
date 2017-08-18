@@ -423,12 +423,12 @@ let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
   | None -> None
 *)
 
-let ffiTicketCallback (cb:callbacks) (sni:string) (ticket:bytes) (ctx:pskInfo) (psk:bytes) =
+let ffiTicketCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (ticket:bytes) (ctx:pskInfo) (psk:bytes) =
   let ae = ctx.early_ae in
   let h = ctx.early_hash in
   let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
   let si = Ticket.serialize (Ticket.Ticket13 (CipherSuite13 ae h) li rmsid psk) in
-  ocaml_ticket_cb cb sni ticket si
+  ocaml_ticket_cb cb_state cb sni ticket si
 
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =

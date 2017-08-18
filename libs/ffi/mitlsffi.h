@@ -43,7 +43,7 @@ typedef struct {
   char secret[64]; // Max possible size, flat allocation
 } mitls_secret;
 
-typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(const char *sni, const mitls_ticket *ticket);
+typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(void *cb_state, const char *sni, const mitls_ticket *ticket);
 
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success
@@ -67,7 +67,7 @@ extern int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitl
 extern int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng);
 extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl);
 extern int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, int enable_early_data);
-extern int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(mitls_state *state, pfn_FFI_ticket_cb ticket_cb);
+extern int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb);
 
 // Close a miTLS session - either after configure or connect
 extern void MITLS_CALLCONV FFI_mitls_close(/* in */ mitls_state *state);
@@ -172,6 +172,8 @@ typedef struct {
   const char *host_name; // Client only, sent in SNI. Can pass NULL for server
   const char *ca_file; // Client only, used to validate server certificate
   const quic_ticket *server_ticket; // May be NULL
+
+  void *callback_state; // Passed back as the first argument of callbacks, may be NULL
   pfn_FFI_ticket_cb ticket_callback; // May be NULL
 
   // only used by the server
