@@ -313,14 +313,13 @@ let logged_iv (#i:id{authId i}) (#l:plainlen) (#rw:rw) (s:state i rw) (iv:iv i)
 #set-options "--lax"
 
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
-  : ST (cipher:cipher i l)
+  : StackInline (cipher:cipher i l)
   (requires (fun h ->
     st_inv w h /\
     (authId i ==> (Flag.prf i /\ fresh_iv #i w iv h)) /\
     FStar.UInt.size (length ad) 32 /\ FStar.UInt.size l 32))
   (ensures (fun h0 cipher h1 -> modifies_one (log_region w) h0 h1))
   =
-  push_frame();
   let cipher =
     match w with
     | OpenSSL st _ -> OAEAD.encrypt st iv ad plain
@@ -345,7 +344,6 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
       to_bytes l cipher
   in
-  pop_frame ();
   cipher
 
   (*
