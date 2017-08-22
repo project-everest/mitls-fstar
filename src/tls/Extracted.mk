@@ -117,22 +117,24 @@ CEXE_PATH=LD_LIBRARY_PATH=./
 endif
 endif
 
-KRML_FILES = TLSError.fst Parse.fst Hashing.Spec.fst TLSConstants.fst MonotoneMap.fst Nonce.fst \
-RSAKey.fst Curve25519.fst ECGroup.fst DHGroup.fst CommonDH.fst PMS.fst PSK.fst \
-Extensions.fst Cert.fst TLSInfo.fst AEADOpenssl.fst Crypto.Indexing.fst AEADProvider.fst \
-Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StreamAE.fst StatefulPlain.fst \
-LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst StAE.fst HandshakeMessages.fst Hashing.OpenSSL.fst \
-Hashing.fst Signature.fst Ticket.fst Negotiation.fst HMAC.fst HKDF.fst HMAC.UFCMA.fst \
-TLSPRF.fst KeySchedule.fst Epochs.fst Hashing.CRF.fst HandshakeLog.fst \
-Handshake.fst Transport.fst Record.fst Connection.fst StreamDeltas.fst \
-TLS.fst FFI.fst # QUIC.fst
+KRML_FILES = $(wildcard *.fst)
+# TLSError.fst Parse.fst Hashing.Spec.fst TLSConstants.fst MonotoneMap.fst Nonce.fst \
+# RSAKey.fst Curve25519.fst ECGroup.fst DHGroup.fst CommonDH.fst PMS.fst PSK.fst \
+# Extensions.fst Cert.fst TLSInfo.fst AEADOpenssl.fst Crypto.Indexing.fst AEADProvider.fst \
+# Range.fst DataStream.fst Alert.fst Content.fst StreamPlain.fst StreamAE.fst StatefulPlain.fst \
+# LHAEPlain.fst AEAD_GCM.fst StatefulLHAE.fst StAE.fst HandshakeMessages.fst Hashing.OpenSSL.fst \
+# Hashing.fst Signature.fst Ticket.fst Negotiation.fst HMAC.fst HKDF.fst HMAC.UFCMA.fst \
+# TLSPRF.fst KeySchedule.fst Epochs.fst Hashing.CRF.fst HandshakeLog.fst \
+# Handshake.fst Transport.fst Record.fst Connection.fst StreamDeltas.fst \
+# TLS.fst FFI.fst # QUIC.fst
 
 #$(wildcard *.fst) # Flags.fst TLSError.fst TLSConstants.fst
 C_DRIVER = $(KRML_DIR)/main.c
 HACKS_HEADER = '"hacks.h"'
 
 kremlin:
-	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(KRML_FILES) $(C_DRIVER) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions -tmpdir $(KRML_DIR) -warn-error +9+11
+	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(KRML_FILES) $(C_DRIVER) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions -tmpdir $(KRML_DIR) \
+		   -warn-error +9+11-7 -derror-summary
 
 test: test.out mitls.exe cmitls.exe
 	# Unit tests from test/test_main.ml
