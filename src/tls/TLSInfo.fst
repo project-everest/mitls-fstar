@@ -380,8 +380,8 @@ type hashed_log (li:logInfo) =
 
 type binderLabel =
   | ExtBinder
-  | ResBinder
 
+[@Gc]
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
@@ -429,6 +429,7 @@ and pre_keyId =
 and pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
 
+(*
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
 val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
 val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
@@ -478,10 +479,10 @@ and keyId_hash = function
   | KeyID #li i -> expandId_hash #li i
 
 and finishedId_hash = function
-  | FinishedID #li i -> expandId_hash #li i
+  | FinishedID #li i -> expandId_hash #li i *)
 
 // For 0-RTT
-let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
+(* let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
   match i with
   | ApplicationPSK #h #ae _ -> ae
   | ResumptionPSK #li _ -> logInfo_ae li
@@ -621,10 +622,12 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID12 pv _ _ _ _ _ _ -> pv
 
 // Returns the local nonce
-let nonce_of_id = function
+(* RESTORE @jroesch *)
+assume val nonce_of_id : id -> random
+(* let nonce_of_id = function
   | PlaintextID r -> r
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
-  | ID13 (KeyID #li _) -> logInfo_nonce li
+  | ID13 (KeyID #li _) -> logInfo_nonce li *)
 
 val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
@@ -710,3 +713,4 @@ let safe_implies_auth (i:id)
           (ensures (authId i))
 	  [SMTPat (authId i)]
   = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg
+*)

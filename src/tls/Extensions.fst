@@ -1216,7 +1216,7 @@ vector is permitted.
 
 *)
 #set-options "--lax"
-val prepareExtensions:
+assume val prepareExtensions:
   protocolVersion ->
   protocolVersion ->
   k:valid_cipher_suites{List.Tot.length k < 256} ->
@@ -1236,7 +1236,7 @@ val prepareExtensions:
 (* SI: implement this using prep combinators, of type exts->data->exts, per ext group.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
-let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs namedGroups ri ks psks =
+(* let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs namedGroups ri ks psks =
     let res = [] in
     (* Always send supported extensions.
        The configuration options will influence how strict the tests will be *)
@@ -1316,7 +1316,7 @@ let prepareExtensions minpv pv cs host alps qp ems sren edi ticket sigAlgs named
     let res = List.Tot.rev res in
     assume (List.Tot.length res < 256);  // JK: Specs in type config in TLSInfo unsufficient
     res
-#reset-options
+#reset-options *)
 
 (*
 // TODO the code above is too restrictive, should support further extensions
@@ -1482,7 +1482,7 @@ let negotiateClientExtensions pv cfg cExtL sExtL cs ri resuming =
     Error(AD_internal_error, perror __SOURCE_FILE__ __LINE__ "negotiation failed: missing extensions in TLS ClientHello (shouldn't happen)")
 #reset-options
 
-private val clientToServerExtension: protocolVersion
+private assume val clientToServerExtension: protocolVersion
   -> config
   -> cipherSuite
   -> option (cVerifyData * sVerifyData)
@@ -1491,7 +1491,7 @@ private val clientToServerExtension: protocolVersion
   -> bool
   -> extension
   -> option extension
-let clientToServerExtension pv cfg cs ri pski ks resuming cext =
+(* let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   match cext with
   | E_key_share _ ->
     if pv = TLS_1p3 then Option.map E_key_share ks // ks should be in one of client's groups
@@ -1540,7 +1540,7 @@ let clientToServerExtension pv cfg cs ri pski ks resuming cext =
   | E_session_ticket b ->
      if pv = TLS_1p3 || not cfg.enable_tickets then None
      else Some (E_session_ticket empty_bytes) // TODO we may not always want to refresh the ticket
-  | _ -> None
+  | _ -> None *)
 
 (* SI: API. Called by Handshake. *)
 val negotiateServerExtensions: protocolVersion
