@@ -18,16 +18,21 @@ module Plain = Crypto.Plain
 module AE = Crypto.AEAD.Main
 module CB = Crypto.Symmetric.Bytes
 
+let discard (b:bool) : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) = ()
+let print (s:string) : ST unit (requires fun _ -> True) (ensures (fun h0 _ h1 -> h0 == h1)) =
+  discard (IO.debug_print_string ("AEP| "^s^"\n"))
+unfold let dbg : string -> ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) =
+  if Flags.debug_AEP then print else (fun _ -> ())
+
 type provider =
   | OpenSSLProvider
   | LowProvider
   | LowCProvider
 
-let use_provider () : Tot provider =
-  OpenSSLProvider
-let debug = false
+inline_for_extraction let use_provider () : Tot provider =
+  LowCProvider
 
-let prov() =
+let prov () =
   match use_provider() with
   | OpenSSLProvider -> "OpenSSLProvider"
   | LowCProvider -> "LowCProvider"
@@ -270,11 +275,8 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
       let st = AE.coerce i r (from_bytes k) in
       LowLevel st s
     in
-  let r =
-    if debug then
-      IO.debug_print_string ((prov())^": COERCE(K="^(hex_of_bytes k)^")\n")
-    else false in
-  if r then w else w
+  dbg ((prov())^": COERCE(K="^(hex_of_bytes k)^")");
+  w
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *) type plain (i:id) (l:plainlen) = b:lbytes l

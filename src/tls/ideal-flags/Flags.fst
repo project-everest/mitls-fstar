@@ -12,6 +12,7 @@ assume val debug_NGO : bool
 assume val debug_QUIC : bool 
 assume val debug_Record : bool 
 assume val debug_TLS : bool
+assume val debug_AEP : bool
 
 assume val ideal_KEF : bool
 assume val ideal_Nonce : bool 

@@ -12,6 +12,7 @@ inline_for_extraction let debug_KS = debug
 inline_for_extraction let debug_NGO = debug
 inline_for_extraction let debug_Record = debug
 inline_for_extraction let debug_TLS = debug
+inline_for_extraction let debug_AEP = debug
 
 inline_for_extraction let ideal_KEF = false
 inline_for_extraction let ideal_Nonce = false  
