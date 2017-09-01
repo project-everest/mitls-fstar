@@ -572,7 +572,6 @@ static int FFI_mitls_accept_connected_caml(struct _FFI_mitls_callbacks *callback
 int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
-
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -608,7 +607,6 @@ static int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, 
 int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
-
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -640,7 +638,6 @@ static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size
 void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     void *p;
-
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -690,6 +687,8 @@ static int ocaml_get_exporter(
 int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
 {
   int ret;
+  *errmsg = NULL;
+
   caml_acquire_runtime_system();
   ret = ocaml_get_exporter(state, early, secret, errmsg);
   caml_release_runtime_system();
@@ -717,7 +716,6 @@ static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ siz
 void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     void *p;
-
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -1097,9 +1095,10 @@ int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
   /* out */ char **errmsg)
 {
     int ret;
+    *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_peer_parameters_caml(state, qp,errmsg);
+    ret = FFI_mitls_quic_get_peer_parameters_caml(state, qp, errmsg);
     caml_release_runtime_system();
 
     return ret;
