@@ -384,15 +384,11 @@ type binderLabel =
 [@Gc]
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
-  | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
+  | ResumptionPSK: i:pre_rmsId' -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
 
-and pre_binderId =
-  | Binder: pre_esId -> binderLabel -> pre_binderId
-
-and pre_hsId =
-  | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
-  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
+and pre_rmsId' =
+  | RMSID: #li:logInfo{~(LogInfo_CH? li)} -> pre_asId -> hashed_log li -> pre_rmsId'
 
 and pre_asId =
   | ASID: pre_saltId -> pre_asId
@@ -405,14 +401,17 @@ and pre_secretId =
   | HandshakeSecretID: pre_hsId -> pre_secretId
   | ApplicationSecretID: pre_asId -> pre_secretId
 
-and pre_rmsId (li:logInfo) =
-  | RMSID: pre_asId -> hashed_log li -> pre_rmsId li
+and pre_hsId =
+  | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
+  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
 
-and pre_exportId (li:logInfo) =
+type pre_rmsId (li:logInfo) = x:pre_rmsId'{RMSID?.li x == li}
+
+type pre_exportId (li:logInfo) =
   | EarlyExportID: pre_esId -> hashed_log li -> pre_exportId li
   | ExportID: pre_asId -> hashed_log li -> pre_exportId li
 
-and expandTag =
+type expandTag =
   | ClientEarlyTrafficSecret
   | ClientHandshakeTrafficSecret
   | ServerHandshakeTrafficSecret
@@ -420,14 +419,17 @@ and expandTag =
   | ServerApplicationTrafficSecret
   | ApplicationTrafficSecret // Re-keying
 
-and pre_expandId (li:logInfo) =
+type pre_expandId (li:logInfo) =
   | ExpandedSecret: pre_secretId -> expandTag -> hashed_log li -> pre_expandId li
 
-and pre_keyId =
+type pre_keyId =
   | KeyID: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_expandId li -> pre_keyId
 
-and pre_finishedId =
+type pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
+
+type pre_binderId =
+  | Binder: pre_esId -> binderLabel -> pre_binderId
 
 (*
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
