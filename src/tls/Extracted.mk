@@ -140,16 +140,44 @@ test: test.out mitls.exe cmitls.exe
 # FFI support - calling from C into miTLS. TODO: remove duplication somehow
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
-
 $(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
 	$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/CoreCrypto.cmxa \
 	$(LCDIR)/lowc_stub.o $(LCDIR)/libllcrypto.a $(LCDIR)/LowCProvider.cmx \
 	$(FFI_HOME)/FFICallbacks.cmxa \
 	-linkall -output-obj -g mitls.cmxa -o $(LIBMITLS)
+
+ifneq ($(VS140COMNTOOLS),)
+  VS_BIN_DOSPATH=$(VS140COMNTOOLS)/../../VC/bin
+else ifneq ($(VS120COMNTOOLS),)
+  VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
+else ifneq ($(VS120COMNTOOLS),)
+  VS_BIN_DOSPATH=$(VS120COMNTOOLS)/../../VC/bin
+else ifneq ($(VS110COMNTOOLS),)
+  VS_BIN_DOSPATH=$(VS110COMNTOOLS)/../../VC/bin
+else
+  VS_BIN_DOSPATH=
+endif
+VS_BIN = $(shell cygpath -u "$(VS_BIN_DOSPATH)")
+ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+LIB_MACHINE=x64
+else
+LIB_MACHINE=x86
+endif
+
+ifeq ($(VS_BIN),)
+LIBMITLS_LIB=
+else
+LIBMITLS_LIB=libmitls.lib
+$(LIBMITLS_LIB): $(LIBMITLS)
+	"$(VS_BIN)/dumpbin.exe" /nologo /exports $(LIBMITLS) |  awk -F " " 'BEGIN {print "LIBRARY libmitls"; print "EXPORTS";} $$4 ~/FFI_mitls/{print $$4}' > libmitls.def
+	"$(VS_BIN)/lib.exe" /nologo /def:libmitls.def /out:$(LIBMITLS_LIB) /machine:$(LIB_MACHINE)
+endif
+
 else
 UNAME_S = $(shell uname -s)
 LIBMITLS=libmitls.so
+LIBMITLS_LIB=
 ifeq ($(UNAME_S),Darwin)
 $(LIBMITLS): mitls.cmxa
 	$(OCAMLOPT) $(OCAMLOPTS) $(OCAML_INCLUDE_PATHS) \
@@ -177,7 +205,7 @@ $(LIBMITLS): mitls.cmxa
 endif
 endif
 
-tls-ffi: $(LIBMITLS)
+tls-ffi: $(LIBMITLS) $(LIBMITLS_LIB)
 
 # ask OCaml about the name of the native C compiler.  This will be mingw on Windows.
 NATIVE_C_COMPILER=$(shell ocamlfind opt -config | grep native_c_compiler | sed -e "s/native_c_compiler: //")
