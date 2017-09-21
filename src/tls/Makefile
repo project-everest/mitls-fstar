@@ -211,7 +211,7 @@ cmitls.exe: cmitls.o
 	echo $(MAKECMDGOALS)
 	$(MAKE) -f Extracted.mk $(MAKECMDGOALS)
 
-kremlin: .fstarlib
+kremlin:
 	$(MAKE) -f Extracted.mk kremlin
 test:
 	$(MAKE) -f Extracted.mk test

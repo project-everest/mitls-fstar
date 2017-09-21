@@ -126,7 +126,7 @@ HACKS_HEADER = '"hacks.h"'
 kremlin:
 	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(KRML_FILES) $(C_DRIVER) \
 	           $(DROP_MODULES) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions \
-			   -tmpdir $(KRML_DIR) $(KRML_OPTS) -warn-error +9+11-7-6 -derror-summary -skip-compilation
+			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error +9+11-7-6 -skip-compilation
 
 test: test.out mitls.exe cmitls.exe
 	# Unit tests from test/test_main.ml

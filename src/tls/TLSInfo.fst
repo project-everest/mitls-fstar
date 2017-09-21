@@ -380,15 +380,19 @@ type hashed_log (li:logInfo) =
 
 type binderLabel =
   | ExtBinder
+  | ResBinder
 
-[@Gc]
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
-  | ResumptionPSK: i:pre_rmsId' -> pre_esId
+  | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
   | NoPSK: ha:hash_alg -> pre_esId
 
-and pre_rmsId' =
-  | RMSID: #li:logInfo{~(LogInfo_CH? li)} -> pre_asId -> hashed_log li -> pre_rmsId'
+and pre_binderId =
+  | Binder: pre_esId -> binderLabel -> pre_binderId
+
+and pre_hsId =
+  | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
+  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
 
 and pre_asId =
   | ASID: pre_saltId -> pre_asId
@@ -401,17 +405,14 @@ and pre_secretId =
   | HandshakeSecretID: pre_hsId -> pre_secretId
   | ApplicationSecretID: pre_asId -> pre_secretId
 
-and pre_hsId =
-  | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
-  | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
+and pre_rmsId (li:logInfo) =
+  | RMSID: pre_asId -> hashed_log li -> pre_rmsId li
 
-type pre_rmsId (li:logInfo) = x:pre_rmsId'{RMSID?.li x == li}
-
-type pre_exportId (li:logInfo) =
+and pre_exportId (li:logInfo) =
   | EarlyExportID: pre_esId -> hashed_log li -> pre_exportId li
   | ExportID: pre_asId -> hashed_log li -> pre_exportId li
 
-type expandTag =
+and expandTag =
   | ClientEarlyTrafficSecret
   | ClientHandshakeTrafficSecret
   | ServerHandshakeTrafficSecret
@@ -419,19 +420,15 @@ type expandTag =
   | ServerApplicationTrafficSecret
   | ApplicationTrafficSecret // Re-keying
 
-type pre_expandId (li:logInfo) =
+and pre_expandId (li:logInfo) =
   | ExpandedSecret: pre_secretId -> expandTag -> hashed_log li -> pre_expandId li
 
-type pre_keyId =
+and pre_keyId =
   | KeyID: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_expandId li -> pre_keyId
 
-type pre_finishedId =
+and pre_finishedId =
   | FinishedID: #li:logInfo -> pre_expandId li -> pre_finishedId
 
-type pre_binderId =
-  | Binder: pre_esId -> binderLabel -> pre_binderId
-
-(*
 val esId_hash: i:pre_esId -> Tot hash_alg (decreases i)
 val binderId_hash: i:pre_binderId -> Tot hash_alg (decreases i)
 val hsId_hash: i:pre_hsId -> Tot hash_alg (decreases i)
@@ -481,10 +478,10 @@ and keyId_hash = function
   | KeyID #li i -> expandId_hash #li i
 
 and finishedId_hash = function
-  | FinishedID #li i -> expandId_hash #li i *)
+  | FinishedID #li i -> expandId_hash #li i
 
 // For 0-RTT
-(* let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
+let esId_ae (i:pre_esId{ApplicationPSK? i \/ ResumptionPSK? i}) =
   match i with
   | ApplicationPSK #h #ae _ -> ae
   | ResumptionPSK #li _ -> logInfo_ae li
@@ -602,13 +599,16 @@ let peerLabel = function
   | ServerApplicationTrafficSecret -> ClientApplicationTrafficSecret
   | ApplicationTrafficSecret -> ApplicationTrafficSecret
 
+(* Seems related to https://github.com/FStarLang/kremlin/issues/59 *)
 let peerId = function
   | PlaintextID r -> PlaintextID r
   | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
-  | ID13 (KeyID #li (ExpandedSecret s t log)) ->
-      let kid = KeyID #li (ExpandedSecret s (peerLabel t) log) in
-      assume(valid (I_KEY kid)); // Annoying: registration of keys as pairs
-      ID13 kid
+  | ID13 keyid -> (match keyid with
+      | (KeyID #li es) -> (match es with
+        | (ExpandedSecret s t log) ->
+          let kid = KeyID #li (ExpandedSecret s (peerLabel t) log) in
+          assume(valid (I_KEY kid)); // Annoying: registration of keys as pairs
+          ID13 kid))
 
 val siId: si:sessionInfo{
   Some? (prfMacAlg_of_ciphersuite_aux (si.cipher_suite)) /\
@@ -624,12 +624,11 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID12 pv _ _ _ _ _ _ -> pv
 
 // Returns the local nonce
-(* RESTORE @jroesch *)
-assume val nonce_of_id : id -> random
-(* let nonce_of_id = function
+inline_for_extraction let nonce_of_id (i : id) : random =
+  match i with
   | PlaintextID r -> r
   | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
-  | ID13 (KeyID #li _) -> logInfo_nonce li *)
+  | ID13 (KeyID #li _) -> logInfo_nonce li
 
 val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
@@ -715,4 +714,3 @@ let safe_implies_auth (i:id)
           (ensures (authId i))
 	  [SMTPat (authId i)]
   = admit()	   //TODO: need to prove that strongAEAlg implies strongAuthAlg
-*)
