@@ -599,7 +599,7 @@ let peerLabel = function
   | ServerApplicationTrafficSecret -> ClientApplicationTrafficSecret
   | ApplicationTrafficSecret -> ApplicationTrafficSecret
 
-(* Seems related to https://github.com/FStarLang/kremlin/issues/59 *)
+(* Seems related to https://github.com/FStarLang/kremlin/issues/59 @jroesch *)
 let peerId = function
   | PlaintextID r -> PlaintextID r
   | ID12 pv msid kdf ae cr sr rw -> ID12 pv msid kdf ae cr sr (dualRole rw)
