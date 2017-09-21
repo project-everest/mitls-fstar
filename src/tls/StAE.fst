@@ -102,7 +102,10 @@ let tolerate_decrypt_failure (#i:id) (r:reader i)
   | StLHAE _ _ -> false
   | Stream _ st ->
     let ctr = MR.m_read (StreamAE.ctr st.StreamAE.counter) in
-    let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in
+    // let ID13 (KeyID #li (ExpandedSecret _ t _)) = i in (@jroesch) should be #58 again
+    let ID13 id = i in
+    let KeyID #li es = id in
+    let ExpandedSecret _ t _ = es in
     0 = ctr && ClientHandshakeTrafficSecret? t
 
 // our view to AE's ideal log (when idealized, ignoring ciphers) and counter

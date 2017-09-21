@@ -117,7 +117,7 @@ CEXE_PATH=LD_LIBRARY_PATH=./
 endif
 endif
 
-KRML_FILES = TLSInfo.fst # $(wildcard *.fst)
+KRML_FILES = $(wildcard *.fst)
 # We should add back support for Platform.Bytes when we get the chance.
 DROP_MODULES = $(addprefix -drop ,MonotoneMap Platform.Bytes Curve25519)
 C_DRIVER = $(KRML_DIR)/main.c
