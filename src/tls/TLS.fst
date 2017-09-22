@@ -390,6 +390,7 @@ private let check_incrementable (#c:connection) (#i:id) (wopt:option (cwriter i 
 ////////////////////////////////////////////////////////////////////////////////
 // Sending fragments on a given writer (not necessarily the current one)
 ////////////////////////////////////////////////////////////////////////////////
+noextract
 let opt_writer_regions (#i:id) (#c:connection) (wopt:option (cwriter i c)) : Tot (set HH.rid) =
   match wopt with
   | None -> Set.empty
