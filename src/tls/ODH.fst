@@ -1,13 +1,9 @@
-<<<<<<< d38102c3e059e797e260cd04fe0a0081d9764e5b
-////////////////////////////////////////////////////////////////////////////////
-
 module KEF
 
 type kefalg
 val keflen: a:kefalg -> Tot nat
 
 type kef_type =
-  // PSK extraction, zero salt
   | PSK: pski:PSK.pskid -> ikm
   // DH extraction, constant salt
   | DH: g:DH.group -> ishare:DH.share g -> ikm

@@ -382,6 +382,12 @@ type binderLabel =
   | ExtBinder
   | ResBinder
 
+/// we define indexes in 3 stages:
+/// 1. functionality specific datatypes, documenting key provenance
+/// 2. unified pre-index, as domain of the global honesty table
+/// 3. its valid refinement, ensuring registration and its consistency (parents are also registered and at least as honest)
+
+/// early secrets (range of 1st extraction)
 type pre_esId : Type0 =
   | ApplicationPSK: #ha:hash_alg -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
@@ -390,16 +396,19 @@ type pre_esId : Type0 =
 and pre_binderId =
   | Binder: pre_esId -> binderLabel -> pre_binderId
 
+/// handshake secrets (2nd extraction)
 and pre_hsId =
   | HSID_PSK: pre_saltId -> pre_hsId // KEF_PRF idealized
   | HSID_DHE: pre_saltId -> g:CommonDH.group -> si:CommonDH.share g -> sr:CommonDH.share g -> pre_hsId // KEF_PRF_ODH idealized
 
+/// useless, 3rd extraction
 and pre_asId =
   | ASID: pre_saltId -> pre_asId
 
 and pre_saltId =
   | Salt: pre_secretId -> pre_saltId
 
+/// bundling all extracts together (not used?)
 and pre_secretId =
   | EarlySecretID: pre_esId -> pre_secretId
   | HandshakeSecretID: pre_hsId -> pre_secretId
@@ -506,12 +515,13 @@ type honest_index (i:pre_index) = bool
 
 let safe_region:rgn = new_region tls_tables_region
 private type i_safety_log = MM.t safe_region pre_index honest_index (fun _ -> True)
-private type s_table = (if Flags.ideal_KEF then i_safety_log else unit)
+private let s_table = 
+  if Flags.ideal_KEF then i_safety_log else unit
 
-let safety_table : s_table =
-  (if Flags.ideal_KEF then
+let safety_table: s_table =
+  if Flags.ideal_KEF then
     MM.alloc #safe_region #pre_index #honest_index #(fun _ -> True)
-  else ())
+  else ()
 
 type registered (i:pre_index) =
   (if Flags.ideal_KEF then
@@ -589,15 +599,24 @@ type finishedId = i:pre_finishedId{valid (I_FINISHED i)}
 type id =
 | PlaintextID: our_rand:random -> id // For IdNonce
 | ID13: keyId:keyId -> id
-| ID12: pv:protocolVersion{pv <> TLS_1p3} -> msId:msId -> kdfAlg:kdfAlg_t -> aeAlg: aeAlg -> cr:crand -> sr:srand -> writer:role -> id
+| ID12: 
+    pv:protocolVersion{pv <> TLS_1p3} -> 
+    msId:msId -> 
+    kdfAlg:kdfAlg_t -> 
+    aeAlg: aeAlg -> 
+    cr:crand -> 
+    sr:srand -> 
+    writer:role -> id
 
 let peerLabel = function
+  // these two are the same at both ends
   | ClientEarlyTrafficSecret -> ClientEarlyTrafficSecret
+  | ApplicationTrafficSecret -> ApplicationTrafficSecret
+
   | ClientHandshakeTrafficSecret -> ServerHandshakeTrafficSecret
   | ServerHandshakeTrafficSecret -> ClientHandshakeTrafficSecret
   | ClientApplicationTrafficSecret -> ServerApplicationTrafficSecret
   | ServerApplicationTrafficSecret -> ClientApplicationTrafficSecret
-  | ApplicationTrafficSecret -> ApplicationTrafficSecret
 
 let peerId = function
   | PlaintextID r -> PlaintextID r

@@ -7,6 +7,8 @@ of the cyclic dependency.
 *)
 module KDF.Common
 
+/// 17-09-20 This file is an early experiment---not currently used.
+/// 
 open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack

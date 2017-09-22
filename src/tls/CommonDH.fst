@@ -259,23 +259,23 @@ let rec keygen g =
    else gx in
   gx
 
-let dh_initiator #g gx gy =
-  dbg ("DH initiator on " ^ (string_of_group g));
+let dh_initiator #g x gy =
+  dbg ("DH initiator on "^string_of_group g);
   match g with
   | FFDH g ->
-    let KS_FF _ gx = gx in
+    let KS_FF _ x = x in
     let S_FF _ gy = gy in
-    DHGroup.dh_initiator #g gx gy
+    DHGroup.dh_initiator #g x gy
   | ECDH g ->
-    let KS_EC _ gx = gx in
+    let KS_EC _ x = x in
     let S_EC _ gy = gy in
-    ECGroup.dh_initiator #g gx gy
+    ECGroup.dh_initiator #g x gy
 
 let dh_responder #g gx =
-  dbg ("DH responder on " ^ (string_of_group g));
-  let gy = keygen g in
-  let gxy = dh_initiator #g gy gx in
-  (pubshare #g gy, gxy)
+  dbg ("DH responder on "^string_of_group g);
+  let y = keygen g in
+  let gxy = dh_initiator #g y gx in
+  (pubshare #g y, gxy)
 
 #set-options "--z3rlimit 100"
 let register #g gx =

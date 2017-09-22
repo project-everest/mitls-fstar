@@ -1,3 +1,11 @@
+(**
+An abstract interface for Diffie-Hellman operations
+
+When the key extraction stack is idealized (ideal_KEF), this module
+records the honesty of shares using two layers of types: pre_share
+is for syntactically valid shares (used in parsing modules) while
+share is for registered shares (for which is_honest is defined).
+*)
 module CommonDH
 
 open FStar.HyperStack
@@ -7,6 +15,12 @@ open Parse
 open TLSError
 open FStar.HyperStack.ST
 
+/// Public key shares and private exponents are indexed by an
+/// abstract groups covering both fields and elliptic curves for
+/// cryptographic agility.
+///
+/// DHGroup and ECGroup provide their concrete implementations.
+
 val group: t:Type0{hasEq t}
 val is_ec: group -> Tot bool
 val string_of_group: group -> Tot string
@@ -14,12 +28,16 @@ val string_of_group: group -> Tot string
 val pre_keyshare (g:group) : Tot (t:Type0{hasEq t})
 val pre_share (g:group) : Tot (t:Type0{hasEq t})
 
-// DH secret
 type secret (g:group) = bytes
 
 val namedGroup_of_group: g:group -> Tot (option namedGroup)
 val group_of_namedGroup: ng:namedGroup -> Tot (option group)
 val default_group: group
+
+/// We index ODH instances using public shares.  This enables us to
+/// retrieve (conditionally idealized, stateful) instances after
+/// parsing their wire format. This requires checking for collisions
+/// between honestly-generated shares.
 
 type id = g:group & s:pre_share g
 val dh_region : rgn
@@ -29,6 +47,9 @@ val dishonest_share: id -> GTot Type0
 
 val pre_pubshare: #g:group -> pre_keyshare g -> Tot (pre_share g)
 type share (g:group) = s:pre_share g{registered (|g, s|)}
+
+/// private keys (hiding the ephemeral secret exponent)
+/// 
 type keyshare (g:group) = s:pre_keyshare g{registered (|g, pre_pubshare s|)}
 val pubshare: #g:group -> keyshare g -> Tot (share g)
 
@@ -40,6 +61,17 @@ val is_honest: i:id -> ST bool
       (b ==> honest_share i) /\ (not b ==> dishonest_share i)
     else b = false)))
 
+
+/// Correct Ephemeral Diffie-Hellman exchanges go as follows:
+///
+///       initiator           responder
+/// --------------------------------------------
+///   x, gx <- keygen g
+///              ----g, gx---->
+///                         gy, gx^y <- dh_responder gx
+///              <----gy------- 
+///   gy^x <- dh_initiator x gy
+/// 
 val keygen: g:group -> ST (keyshare g)
   (requires (fun h0 -> True))
   (ensures (fun h0 s h1 ->
@@ -70,10 +102,13 @@ val register: #g:group -> gx:pre_share g -> ST (share g)
      else
       modifies_none h0 h1)))
 
+
+/// Parsing and formatting
+/// 
 val parse: g:group -> bytes -> Tot (option (pre_share g))
 val parse_partial: bool -> bytes -> Tot (result ((g:group & pre_share g) * bytes))
 val serialize: #g:group -> pre_share g -> Tot bytes
-val serialize_raw: #g:group -> pre_share g -> Tot bytes
+val serialize_raw: #g:group -> pre_share g -> Tot bytes // used for printing
 
 // TODO: replace "bytes" by either DH or ECDH parameters
 // should that go elsewhere? YES.
@@ -95,6 +130,8 @@ noeq type keyShare =
   | ClientKeyShare of clientKeyShare
   | ServerKeyShare of serverKeyShare
   | HRRKeyShare of namedGroup
+/// 3 cases, depending on the enclosing message.
+/// Do we ever benefit from bundling them?
 
 // the parsing/formatting moves to the private part of Extensions
 (** Serializing function for a KeyShareEntry *)
@@ -102,7 +139,7 @@ val keyShareEntryBytes: keyShareEntry -> Tot (b:bytes{4 <= length b})
 val parseKeyShareEntry: pinverse_t keyShareEntryBytes
 val keyShareEntriesBytes: list keyShareEntry -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 val parseKeyShareEntries: pinverse_t keyShareEntriesBytes
-val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{ 2 <= length b /\ length b < 65538 })
+val clientKeyShareBytes: clientKeyShare -> Tot (b:bytes{2 <= length b /\ length b < 65538})
 val parseClientKeyShare: b:bytes{2 <= length b /\ length b < 65538} -> Tot (result clientKeyShare)
 val serverKeyShareBytes: serverKeyShare -> Tot (b:bytes{ 4 <= length b })
 val parseServerKeyShare: pinverse_t serverKeyShareBytes

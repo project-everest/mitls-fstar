@@ -16,41 +16,56 @@ module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-// *** PSK ***
+/// Pre-shared key materials for TLS 1.3 handshake  
+///
+/// The constraints for PSK indexes are:
+///  - must be public (as psk index appears in hsId, msId and derived keys)
+///  - must support application-provided PSK as well as RMS-based PSK
+///  - must support dynamic compromise; we want to prove KI of 1RT keys in PSK_DHE
+///    even for leaked PSK (but not PSK-based auth obivously)
+/// 
+///    17-09-20 we can dynamically compromise the Binder key but not the PSK itself.
+///
+///    17-09-20 we support resumption only by coercing across indexes. TODO
+///   
+/// Implementation style:
+///  - pskid is the TLS PSK identifier, an internal index to the PSK table
+///  - for tickets, the encrypted serialized state is the PSK identifier
+///  - we store in the table the PSK context and compromise status
 
-// The constraints for PSK indexes are:
-//  - must be public (as psk index appears in hsId, msId and derived keys)
-//  - must support application-provided PSK as well as RMS-based PSK
-//  - must support dynamic compromise; we want to prove KI of 1RT keys in PSK_DHE
-//    even for leaked PSK (but not PSK-based auth obivously)
-// Implementation style:
-//  - pskid is the TLS PSK identifier, an internal index to the PSK table
-//  - for tickets, the encrypted serialized state is the PSK identifier
-//  - we store in the table the PSK context and compromise status
-
+/// Information recorded in the table.
+///
+/// NB for now we use the same table as real & local, and ideal & shared.
+/// we considered using two levels instead. 
 type pskInfo = {
   ticket_nonce: option bytes;
   time_created: int;
-  allow_early_data: bool;      // New draft 13 flag
-  allow_dhe_resumption: bool;  // New draft 13 flag
-  allow_psk_resumption: bool;  // New draft 13 flag
+  allow_early_data: bool; 
+  allow_dhe_resumption: bool;
+  allow_psk_resumption: bool;
   early_ae: aeadAlg;
   early_hash: Hashing.Spec.alg;  //CF could be more specific and use Hashing.alg
   identities: bytes * bytes;
 }
-
 let pskInfo_hash pi = pi.early_hash
 let pskInfo_ae pi = pi.early_ae
 
 type psk_identifier = identifier:bytes{length identifier < 65536}
 
-// We rule out all PSK that do not have at least one non-null byte
-// thus avoiding possible confusion with non-PSK for all possible hash algs
-type app_psk (i:psk_identifier) =
-  b:bytes{exists i.{:pattern index b i} index b i <> 0z}
+/// Real key materials for application PSKs.
+///
+/// Since the first extraction takes "PSK or 0" as key materials, and
+/// to avoid confusion for all possible HKDF hash algs, we require
+/// that any PSK have at least one non-null byte.
+/// 
+type app_psk (i:psk_identifier) = b:bytes{exists i.{:pattern index b i} index b i <> 0z}
+type app_psk_entry (i:psk_identifier) = 
+  | Entry: 
+       keybytes: app_psk i -> 
+       info: pskInfo -> 
+       honest: bool ->  (* only for the global table! *)
+       app_psk_entry i
 
-type app_psk_entry (i:psk_identifier) =
-  (app_psk i) * pskInfo * bool
 
 // Global invariant on the PSK idealization table
 // No longer necessary now that MonotoneMap uses eqtype
@@ -61,6 +76,8 @@ type app_psk_entry (i:psk_identifier) =
 //                  | _ -> True)
 type psk_table_invariant (m:MM.map' psk_identifier app_psk_entry) = True
 
+/// Ideal table for application PSKs
+/// 
 private let psk_region:rgn = new_region tls_tables_region
 private let app_psk_table : MM.t psk_region psk_identifier app_psk_entry psk_table_invariant =
   MM.alloc #psk_region #psk_identifier #app_psk_entry #psk_table_invariant
@@ -70,7 +87,7 @@ type registered_psk (i:psk_identifier) =
 
 let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
   match MM.sel (MR.m_sel h app_psk_table) i with
-  | Some (_, c, _) -> b2t (c = ctx)
+  | Some e -> b2t (e.info = ctx)
   | _ -> False
 
 type pskid = i:psk_identifier{registered_psk i}
@@ -82,16 +99,16 @@ let psk_value (i:pskid) : ST (app_psk i)
   MR.m_recall app_psk_table;
   MR.testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
-  | Some (psk, _, _) -> psk
+  | Some e -> e.keybytes
 
-let psk_info (i:pskid) : ST (pskInfo)
+let psk_info (i:pskid) : ST pskInfo
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   MR.m_recall app_psk_table;
   MR.testify (MM.defined app_psk_table i);
   match MM.lookup app_psk_table i with
-  | Some (_, ctx, _) -> ctx
+  | Some e -> e.info
 
 let psk_lookup (i:psk_identifier) : ST (option pskInfo)
   (requires (fun h0 -> True))
@@ -101,19 +118,20 @@ let psk_lookup (i:psk_identifier) : ST (option pskInfo)
   =
   MR.m_recall app_psk_table;
   match MM.lookup app_psk_table i with
-  | Some (_, ctx, _) ->
+  | Some e ->
     assume(MR.stable_on_t app_psk_table (MM.defined app_psk_table i));
     MR.witness app_psk_table (MM.defined app_psk_table i);
-    Some ctx
+    Some e.info
   | None -> None
 
 type honest_st (i:pskid) (h:mem) =
-  (MM.defined app_psk_table i h /\
-  (let (_,_,b) = MM.value app_psk_table i h in b = true))
+  MM.defined app_psk_table i h /\
+  (let Entry _ _ b = MM.value app_psk_table i h in b2t b)
 
 type honest_psk (i:pskid) = MR.witnessed (honest_st i)
 
-// Generates a fresh PSK identity
+/// Generates a fresh PSK identifier
+/// TODO: does this require idealization?
 val fresh_psk_id: unit -> ST psk_identifier
   (requires (fun h -> True))
   (ensures (fun h0 i h1 ->
@@ -125,8 +143,8 @@ let rec fresh_psk_id () =
   | None -> id
   | Some _ -> fresh_psk_id ()
 
-// "Application PSK" generator (enforces empty session context)
-// Usual caveat of random producing pairwise distinct keys (TODO)
+/// "Application PSK" generator (enforces empty session context)
+/// TODO: usual caveat of random producing pairwise distinct keys
 let gen_psk (i:psk_identifier) (ctx:pskInfo)
   : ST unit
   (requires (fun h -> MM.fresh app_psk_table i h))
@@ -136,9 +154,9 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
     honest_psk i))
   =
   MR.m_recall app_psk_table;
-  let psk = (abyte 1z) @| CoreCrypto.random 32 in
-  assume(index psk 0 = 1z);
-  let add : app_psk_entry i = (psk, ctx, true) in
+  let psk = abyte 1z @| CoreCrypto.random 32 in
+  assert(index psk 0 = 1z);
+  let add = Entry psk ctx true in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
   let h = get () in
@@ -155,7 +173,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
     ~(honest_psk i)))
   =
   MR.m_recall app_psk_table;
-  let add : app_psk_entry i = (k, ctx, false) in
+  let add: app_psk_entry i = Entry k ctx false in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
   let h = get () in
@@ -164,15 +182,15 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
 
 let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MM.value app_psk_table i h in
+  (let Entry _ ctx _ = MM.value app_psk_table i h in
   ha = pskInfo_hash ctx /\ ae = pskInfo_ae ctx))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
   MR.witnessed (compatible_hash_ae_st i h a)
 
 let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
-  (MM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MM.value app_psk_table i h in c = ctx))
+  MM.defined app_psk_table i h /\
+  (MM.value app_psk_table i h).info = c
 
 let compatible_info (i:pskid) (c:pskInfo) =
   MR.witnessed (compatible_info_st i c)
@@ -189,8 +207,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     let h = get() in
     cut(MM.contains app_psk_table i x h);
     cut(MM.value app_psk_table i h = x);
-    let (_, ctx, _) = x in
-    if pskInfo_hash ctx = ha && pskInfo_ae ctx = ae then
+    if pskInfo_hash x.info = ha && pskInfo_ae x.info = ae then
      begin
       cut(compatible_hash_ae_st i ha ae h);
       assume(MR.stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
