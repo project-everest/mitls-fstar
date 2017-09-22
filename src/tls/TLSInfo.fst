@@ -628,7 +628,7 @@ let nonce_of_id (i : id) : random =
   match i with
   | PlaintextID r -> r
   | ID13 (KeyID #li _) -> logInfo_nonce li
-  | ID12 _ _ _ _ cr sr rw ->  bbif rw = Client then cr else sr
+  | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
 
 val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
