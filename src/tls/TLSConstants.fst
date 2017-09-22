@@ -1163,7 +1163,7 @@ let cipherSuite_of_name =
   | TLS_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256    -> CipherSuite Kex_PSK_ECDHE None (AEAD CHACHA20_POLY1305 SHA256)
   | TLS_DHE_PSK_WITH_CHACHA20_POLY1305_SHA256      -> CipherSuite Kex_PSK_DHE None (AEAD CHACHA20_POLY1305 SHA256)
 
-(** Remove This after port, just trying to see if we can push it through Kremlin - @JROESCH *)
+(** Remove This after port, just trying to see if we can push it through Kremlin - JROESCH *)
 let rec tot_map_cipherSuiteName (f : cipherSuiteName -> Tot valid_cipher_suite) (xs : list cipherSuiteName) : valid_cipher_suites =
 match xs with
 | [] -> []
@@ -1413,7 +1413,7 @@ let rec parseDistinguishedNameList data res =
 	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
 
-(* REMOVE @jroesch *)
+(* REMOVE jroesch *)
 val mem_cipherSuite: cipherSuite -> list cipherSuite -> Tot bool
 let rec mem_cipherSuite x = function
 | [] -> false

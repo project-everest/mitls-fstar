@@ -624,11 +624,11 @@ let pv_of_id (i:id{~(PlaintextID? i)}) = match i with
   | ID12 pv _ _ _ _ _ _ -> pv
 
 // Returns the local nonce
-inline_for_extraction let nonce_of_id (i : id) : random =
+let nonce_of_id (i : id) : random =
   match i with
   | PlaintextID r -> r
-  | ID12 _ _ _ _ cr sr rw -> if rw = Client then cr else sr
   | ID13 (KeyID #li _) -> logInfo_nonce li
+  | ID12 _ _ _ _ cr sr rw ->  bbif rw = Client then cr else sr
 
 val kdfAlg_of_id: i:id { ID12? i } -> Tot kdfAlg_t
 let kdfAlg_of_id = function
