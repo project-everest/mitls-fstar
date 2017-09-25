@@ -23,12 +23,14 @@ type chain13 = l:list certes // { ... }
 
 // we may use these types to keep track of un-extended chains,
 // e.g. to prove that their formatting is injective
+let is_classic_chain_aux ces = List.Tot.isEmpty (snd ces)
 let is_classic_chain (l:chain13): bool =
-  List.Tot.for_all #certes (fun ces -> List.Tot.isEmpty (snd ces)) l
+  List.Tot.for_all #certes is_classic_chain_aux l
 type chain12 = l:chain13 {is_classic_chain l}
 
 // todo: prove it is a chain12
-let chain_up (l:chain): chain13= List.Tot.map #cert #certes (fun c -> c,[]) l
+let chain_up_aux c = c, []
+let chain_up (l:chain): chain13= List.Tot.map #cert #certes chain_up_aux l
 let chain_down (l:chain13): chain = List.Tot.map #certes #cert fst l
 
 (* ------------------------------------------------------------------------ *)
@@ -155,13 +157,14 @@ let rec lemma_parseCertificateList_length b =
 (* ------------------------------------------------------------------------ *)
 private let rec chain13_to_chain (c:chain13) : Tot chain = List.Tot.map fst c
 
+private let validate_chain_aux (x:cert) : bytes = x
 val validate_chain: chain -> bool -> option string -> string -> Tot bool
 let validate_chain c for_signing host cafile =
-  CoreCrypto.validate_chain (List.Tot.map #cert #bytes (fun x -> x) c) for_signing host cafile
+  CoreCrypto.validate_chain (List.Tot.map #cert #bytes validate_chain_aux c) for_signing host cafile
 
 val validate_chain13: chain13 -> bool -> option string -> string -> Tot bool
 let validate_chain13 c for_signing host cafile =
-  CoreCrypto.validate_chain (List.Tot.map #(cert * _) #bytes (fun (x,es) -> x) c) for_signing host cafile
+  CoreCrypto.validate_chain (List.Tot.map #(cert * _) #bytes fst c) for_signing host cafile
 
 private val check_length: list bytes -> chain -> option chain
 let rec check_length cs acc =

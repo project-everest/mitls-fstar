@@ -596,6 +596,9 @@ val sign: #region:rgn -> #role:TLSConstants.role -> t region role -> bytes ->
   ST (option HandshakeMessages.signature)
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> True))
+private
+let const_true _ = true
+
 let sign #region #role ns tbs =
   let mode = getMode ns in
   match signatureScheme_of_mode mode ns.cfg.signature_algorithms with
@@ -603,7 +606,7 @@ let sign #region #role ns tbs =
   | Some scheme ->
     begin
     let sa, ha = sigHashAlg_of_signatureScheme scheme in
-    let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
+    let a = Signature.(Use const_true sa [ha] false false) in
     match getSigningKey #a ns with
     | None ->
       (trace "*WARNING* couldn't load signing key";
@@ -624,7 +627,7 @@ val verify: signatureScheme -> list Cert.cert -> bytes -> bytes ->
 let verify scheme chain tbs sigv =
   let (sa,ha) = sigHashAlg_of_signatureScheme scheme in
   trace ("Verifying signature using " ^ (string_of_signatureScheme scheme));
-  let a = Signature.(Use (fun _ -> true) sa [ha] false false) in
+  let a = Signature.(Use const_true sa [ha] false false) in
   match Signature.get_chain_public_key #a chain with
   | None -> (trace "WARNING: couldn't get public key from chain"; false)
   | Some pk -> Signature.verify #a ha pk tbs sigv

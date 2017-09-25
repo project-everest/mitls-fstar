@@ -429,6 +429,7 @@ let lookup_key #a keyfile =
 #reset-options
 #set-options "--initial_fuel 2 --max_fuel 2"
 
+noextract
 val test: bytes -> bytes -> All unit
   (requires (fun h -> m_contains rkeys h))
   (ensures  (fun h0 _ h1 -> modifies_one keyRegion h0 h1))

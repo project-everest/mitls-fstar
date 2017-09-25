@@ -11,3 +11,9 @@ all:
 	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(KRML_FILES) $(C_DRIVER) \
 	           $(DROP_MODULES) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions \
 			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error +9+11-7-6 -skip-compilation
+
+
+test.krml:
+	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) test.fst $(C_DRIVER) \
+	           $(DROP_MODULES) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions \
+			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error +9+11-7-6 -skip-compilation

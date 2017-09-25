@@ -292,6 +292,14 @@ val ks_client_init: ks:ks -> ogl: option (list valid_namedGroup)
     modifies (Set.singleton rid) h0 h1 /\
     modifies_rref rid (Set.singleton (Heap.addr_of (as_ref st))) (HS.HS?.h h0) (HS.HS?.h h1))
 
+
+private
+let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
+    let (| g, gx |) = gx in
+    match CommonDH.namedGroup_of_group g with
+      | None -> None // Impossible
+      | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx))
+
 let ks_client_init ks ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
   let KS #rid st = ks in
@@ -303,11 +311,6 @@ let ks_client_init ks ogl =
   | Some gl -> // TLS 1.3
     let groups = List.Tot.map group_of_valid_namedGroup gl in
     let gs = map_ST keygen groups in
-    let serialize_share (gx:(g:CommonDH.group & CommonDH.keyshare g)) =
-      let (| g, gx |) = gx in
-      match CommonDH.namedGroup_of_group g with
-      | None -> None // Impossible
-      | Some ng -> Some (CommonDH.Share g (CommonDH.pubshare #g gx)) in
     let gxl = List.Tot.choose serialize_share gs in
     st := C (C_13_wait_SH cr [] gs);
     Some gxl

@@ -49,9 +49,12 @@ let pskiBytes (i,ot) =
   lemma_repr_bytes_values (UInt32.v ot);
   (vlbytes2 i @| bytes_of_int 4 (UInt32.v ot))
 
+private 
+let pskiListBytes_aux acc pski = acc @| pskiBytes pski
+
 val pskiListBytes: list pskIdentity -> bytes
 let pskiListBytes ids =
-  List.Tot.fold_left (fun acc pski -> acc @| pskiBytes pski) empty_bytes ids
+  List.Tot.fold_left pskiListBytes_aux empty_bytes ids
 
 noeq type psk =
   // this is the truncated PSK extension, without the list of binder tags.
@@ -489,9 +492,11 @@ type protocol_versions =
 
 #set-options "--lax"
 // SI: dead code?
+private let protocol_versions_bytes_aux acc v = acc @| TLSConstants.versionBytes v
+
 val protocol_versions_bytes: protocol_versions -> b:bytes {length b <= 255}
 let protocol_versions_bytes vs =
-  vlbytes 1 (List.Tot.fold_left (fun acc v -> acc @| TLSConstants.versionBytes v) empty_bytes vs)
+  vlbytes 1 (List.Tot.fold_left protocol_versions_bytes_aux empty_bytes vs)
   // todo length bound; do we need an ad hoc variant of fold?
 #reset-options
 
@@ -749,6 +754,7 @@ let sameExt_equal_extensionHeaderBytes
 // Missing refinements in `extension` type constructors to be able to prove the length bound
 #set-options "--lax"
 (** Serializes an extension payload *)
+private let extensionPayloadBytes_aux acc v = acc @| versionBytes_draft v
 val extensionPayloadBytes: extension -> b:bytes { length b < 65536 - 4 }
 let rec extensionPayloadBytes = function
   | E_server_name []           -> vlbytes 2 empty_bytes // ServerHello, EncryptedExtensions
@@ -766,7 +772,7 @@ let rec extensionPayloadBytes = function
     // Sending TLS 1.3 draft versions, as other implementations are doing
     vlbytes 2
       (vlbytes 1
-        (List.Tot.fold_left (fun acc v -> acc @| versionBytes_draft v) empty_bytes vv))
+        (List.Tot.fold_left extensionPayloadBytes_aux empty_bytes vv))
   | E_cookie c                 -> (lemma_repr_bytes_values (length c); vlbytes 2 (vlbytes 2 c))
   | E_psk_key_exchange_modes kex -> vlbytes 2 (client_psk_kexes_bytes kex)
   | E_extended_ms              -> vlbytes 2 empty_bytes
@@ -831,9 +837,10 @@ let extensionBytes_is_injective
   | _ ->
     assume (ext1 == ext2 /\ s1 == s2)
 
+private let extensionListBytes_aux l s = l @| extensionBytes s
 val extensionListBytes: exts: list extension -> bytes
 let extensionListBytes exts =
-  List.Tot.fold_left (fun l s -> l @| extensionBytes s) empty_bytes exts
+  List.Tot.fold_left extensionListBytes_aux empty_bytes exts
 
 private let rec extensionListBytes_eq exts accu :
   Lemma (List.Tot.fold_left (fun l s -> l @| extensionBytes s) accu exts ==
