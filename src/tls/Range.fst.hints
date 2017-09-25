@@ -48,10 +48,9 @@
       ],
       0
     ],
-    [ "Range.ivSize", 1, 0, 1, [ "@query" ], 0 ],
     [
       "Range.ivSize",
-      2,
+      1,
       0,
       1,
       [
@@ -60,7 +59,7 @@
         "disc_equation_TLSConstants.MACOnly",
         "disc_equation_TLSConstants.MtE",
         "disc_equation_TLSConstants.Stream", "equation_CoreCrypto.blockSize",
-        "equation_TLSConstants.blockCipher",
+        "equation_TLSConstants.blockCipher", "equation_TLSInfo.aeAlg_of_id",
         "fuel_guarded_inversion_CoreCrypto.block_cipher",
         "fuel_guarded_inversion_TLSConstants.aeAlg",
         "fuel_guarded_inversion_TLSConstants.encAlg",

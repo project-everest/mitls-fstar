@@ -1732,10 +1732,9 @@
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
       0
     ],
-    [ "StAE.genPost", 1, 0, 1, [ "@query" ], 0 ],
     [
       "StAE.genPost",
-      2,
+      1,
       3,
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
@@ -1743,15 +1742,15 @@
     ],
     [
       "StAE.genPost",
+      2,
       3,
-      0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
       0
     ],
     [
       "StAE.genPost",
-      4,
+      3,
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],

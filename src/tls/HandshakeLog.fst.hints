@@ -19,7 +19,6 @@
       ],
       0
     ],
-    [ "HandshakeLog.valid_transcript", 1, 0, 1, [ "@query" ], 0 ],
     [
       "HandshakeLog.append_transcript",
       1,
@@ -755,10 +754,9 @@
       ],
       0
     ],
-    [ "HandshakeLog.init", 1, 0, 1, [ "@query" ], 0 ],
     [
       "HandshakeLog.init",
-      2,
+      1,
       0,
       1,
       [
@@ -775,7 +773,7 @@
     ],
     [
       "HandshakeLog.init",
-      3,
+      2,
       0,
       1,
       [
@@ -792,7 +790,7 @@
     ],
     [
       "HandshakeLog.init",
-      4,
+      3,
       0,
       1,
       [
@@ -806,7 +804,7 @@
     ],
     [
       "HandshakeLog.init",
-      5,
+      4,
       0,
       1,
       [
@@ -818,7 +816,7 @@
     ],
     [
       "HandshakeLog.init",
-      6,
+      5,
       0,
       1,
       [

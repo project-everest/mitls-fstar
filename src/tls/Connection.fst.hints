@@ -151,30 +151,6 @@
       0
     ],
     [
-      "Connection.frame_epochs",
-      3,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_FStar.Monotonic.HyperStack.is_above",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_Parse.rgn",
-        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "typing_Connection.__proj__C__item__hs",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_region",
-        "typing_Handshake.region_of"
-      ],
-      0
-    ],
-    [
       "Connection.equal_on_disjoint",
       1,
       0,

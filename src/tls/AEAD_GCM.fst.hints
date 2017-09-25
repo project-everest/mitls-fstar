@@ -79,14 +79,6 @@
       0
     ],
     [
-      "AEAD_GCM.max_ctr",
-      4,
-      0,
-      1,
-      [ "@query", "assumption_Prims.HasEq_int" ],
-      0
-    ],
-    [
       "AEAD_GCM.dplain",
       1,
       0,
@@ -1335,14 +1327,6 @@
       0
     ],
     [
-      "AEAD_GCM.lemma_12",
-      3,
-      0,
-      1,
-      [ "@query", "assumption_TLSConstants.protocolVersion__haseq" ],
-      0
-    ],
-    [
       "AEAD_GCM.concrete_encrypt",
       1,
       0,
@@ -1524,38 +1508,6 @@
     [
       "AEAD_GCM.concrete_encrypt",
       8,
-      0,
-      1,
-      [
-        "@query", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.PlaintextID",
-        "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      "AEAD_GCM.concrete_encrypt",
-      9,
-      0,
-      1,
-      [
-        "@query", "disc_equation_TLSInfo.ID12",
-        "disc_equation_TLSInfo.PlaintextID",
-        "projection_inverse_BoxBool_proj_0"
-      ],
-      0
-    ],
-    [
-      "AEAD_GCM.concrete_encrypt",
-      10,
-      0,
-      1,
-      [ "@query", "assumption_Prims.HasEq_int" ],
-      0
-    ],
-    [
-      "AEAD_GCM.concrete_encrypt",
-      11,
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
