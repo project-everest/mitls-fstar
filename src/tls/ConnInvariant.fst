@@ -16,7 +16,7 @@ module N  = Nonce
 module I  = IdNonce
 module AE = StreamAE
 
-//17-04-13 this file verified by is not yet used.
+//17-04-13 this file is verified but not yet used.
 //17-04-13 it should probably depend on StAE instead of StreamAE.
 
 ////////////////////////////////////////////////////////////////////////////////
