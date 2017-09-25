@@ -116,7 +116,7 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
       cut(h0 == h1);
       let key =
         if PRF?.honest_prf prf then random (Hashing.Spec.tagLen ha)
-        else HKDF.hkdf_expand ha (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
+        else HKDF.expand ha (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
       let h2 = get() in
       assume(h2 == h1);
       cut((PRF?.pre prf) input (PRF?.log prf) h2);
@@ -133,5 +133,5 @@ let expand (#it:Type0) (#i:it) (prf:prf #it i) (input:PRF?.domain prf)
       MM.extend log input output;
       output
   else
-    let k = HKDF.hkdf_expand ha (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
+    let k = HKDF.expand ha (PRF?.key prf) ((PRF?.format prf) input) (Hashing.Spec.tagLen ha) in
     (PRF?.coerce prf) input k
