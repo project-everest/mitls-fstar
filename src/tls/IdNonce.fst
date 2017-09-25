@@ -29,19 +29,19 @@ val insert: n:random -> i:n_id n -> ST unit
       (HS.modifies (Set.singleton tls_tables_region) h0 h1 /\
        HS.modifies_ref tls_tables_region (Set.singleton (Heap.addr_of (HH.as_ref (HS.MkRef?.ref nonce_id_table_as_hsref)))) h0 h1 /\
        id_of_nonce n i)))
-let insert n i = 
+let insert n i =
   MR.m_recall nonce_id_table;
-  MM.extend nonce_id_table n i 
+  MM.extend nonce_id_table n i
 
 val lookup: n:random -> ST (option (n_id n))
   (requires (fun h -> True))
-  (ensures (fun h0 idopt h1 -> 
+  (ensures (fun h0 idopt h1 ->
     h0==h1 /\
     idopt == MM.sel (MR.m_sel h0 nonce_id_table) n /\
-    (match idopt with 
+    (match idopt with
      | None -> True
      | Some i -> id_of_nonce n i)))
-let lookup n = MM.lookup nonce_id_table n     
+let lookup n = MM.lookup nonce_id_table n
 
 val injectivity : n:random -> m:random -> i:n_id n -> j:n_id m ->  ST unit
   (requires (fun h -> i=!=j /\ id_of_nonce n i /\ id_of_nonce m j))
@@ -49,4 +49,3 @@ val injectivity : n:random -> m:random -> i:n_id n -> j:n_id m ->  ST unit
 let injectivity n m i j =
   MR.testify (MM.contains nonce_id_table n i);
   MR.testify (MM.contains nonce_id_table m j)
-  
