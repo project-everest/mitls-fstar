@@ -254,6 +254,11 @@ let clientHello offer = // pure; shared by Client and Server
 type btag (binderKey: i:binderId & bk:KeySchedule.binderKey i) =
   HMAC.UFCMA.tag (HMAC.UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
+val map_ST2: 'c -> ('c -> 'a -> KeySchedule.ST0 'b) -> list 'a -> KeySchedule.ST0 (list 'b)
+let rec map_ST2 env f x = match x with
+  | [] -> []
+  | a::tl -> f env a :: map_ST2 env f tl
+
 let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag bkey)
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1)  // we'll need a complete spec to determine the transcript
@@ -276,9 +281,9 @@ let client_Binders hs offer =
   match Nego.find_clientPske offer with
   | None -> () // No PSK, no binders
   | Some (pskl, tlen) -> // Nego may filter the PSKs
-    let pskl = List.Tot.map (fun (id, _) -> id) pskl in
+    let pskl = List.Tot.map fst pskl in
     let binderKeys = KeySchedule.ks_client_13_get_binder_keys hs.ks pskl in
-    let binders = KeySchedule.map_ST (compute_binder hs) binderKeys in
+    let binders = map_ST2 hs compute_binder binderKeys in
     HandshakeLog.send hs.log (Binders binders);
 
     // Nego ensures that EDI is not sent in a 2nd ClientHello
@@ -663,6 +668,7 @@ let server_ServerHelloDone hs =
       end
 
 // the ServerHello message is a simple function of the mode.
+let not_encryptedExtension e = not (Extensions.encryptedExtension e)
 let serverHello (m:Nego.mode) =
   let open Nego in
   let pv = m.n_protocol_version in
@@ -671,11 +677,11 @@ let serverHello (m:Nego.mode) =
     sh_server_random = m.n_server_random;
     sh_sessionID = m.n_sessionID;
     sh_cipher_suite = m.n_cipher_suite;
-    sh_compression = if pv = TLS_1p3 then None else Some NullCompression;
+    sh_compression = if is_pv_13 pv then None else Some NullCompression;
     sh_extensions =
       match pv, m.n_server_extensions with
       | TLS_1p3, Some exts ->
-        Some (List.Tot.filter (fun e -> not (Extensions.encryptedExtension e)) exts)
+        Some (List.Tot.filter not_encryptedExtension exts)
       | _ -> m.n_server_extensions
    })
 

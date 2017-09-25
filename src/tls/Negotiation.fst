@@ -292,11 +292,11 @@ let find_server_quic_parameters m =
   | _ -> None
 
 let is_resumption12 m =
-  m.n_protocol_version <> TLS_1p3  &&
+  not (is_pv_13 m.n_protocol_version)  &&
   m.n_sessionID = Some (m.n_offer.ch_sessionID)
 
 let is_cacheable12 m =
-  m.n_protocol_version <> TLS_1p3  &&
+  not (is_pv_13 m.n_protocol_version)  &&
   ( let Some sid = m.n_sessionID in
     sid <> m.n_offer.ch_sessionID &&
     sid <> empty_bytes)
@@ -449,7 +449,7 @@ let hashAlg m =
 
 val kexAlg: mode -> TLSConstants.kexAlg
 let kexAlg m =
-  if m.n_protocol_version = TLS_1p3 then
+  if is_pv_13 m.n_protocol_version then
     (match m.n_pski with
     | None -> Kex_ECDHE
     | Some _ ->
@@ -467,7 +467,7 @@ let aeAlg m =
 
 val emsFlag: mode -> bool
 let emsFlag mode =
-  if mode.n_protocol_version = TLS_1p3 then
+  if is_pv_13 mode.n_protocol_version then
     true
   else
     match mode.n_offer.ch_extensions with
@@ -505,7 +505,7 @@ let sendticket_12 mode =
 
 val resume_12: mode -> bool
 let resume_12 mode =
-  mode.n_protocol_version <> TLS_1p3 &&
+  is_pv_13 mode.n_protocol_version &&
   Some? (find_sessionTicket mode.n_offer) &&
   length mode.n_offer.ch_sessionID > 0 &&
   Some? mode.n_sessionID &&
@@ -558,6 +558,12 @@ let version #region #role ns =
   | S_Complete mode _ -> mode.n_protocol_version
 
 // Signature agility, depending on the CS and an optional client extension
+let is_hs13_supported_algs supported_algs alg =
+  is_handshake13_signatureScheme alg && List.Tot.mem alg supported_algs
+
+let is_supported_alg supported_algs alg =
+  List.Tot.mem alg supported_algs
+
 let signatureScheme_of_mode mode supported_algs =
   let ha0 = sessionHashAlg mode.n_protocol_version mode.n_cipher_suite in
   match mode.n_protocol_version with
@@ -566,8 +572,7 @@ let signatureScheme_of_mode mode supported_algs =
     match find_signature_algorithms mode.n_offer with
     | None -> None
     | Some algs ->
-      List.Tot.find
-        (fun alg -> is_handshake13_signatureScheme alg && List.Tot.mem alg supported_algs) algs
+      TLSConstants.find_aux supported_algs is_hs13_supported_algs algs
     end
    | TLS_1p2 ->
      begin
@@ -579,7 +584,7 @@ let signatureScheme_of_mode mode supported_algs =
        // TODO: check that this is correct
        // The RFC (https://tools.ietf.org/html/rfc5246#section-7.4.1.4.10)
        // says that one should always use SHA1
-     | Some algs -> List.Tot.find (fun alg -> List.Tot.mem alg supported_algs) algs
+     | Some algs -> TLSConstants.find_aux supported_algs is_supported_alg algs
      end
    | _ ->
      let sa = sigAlg_of_ciphersuite mode.n_cipher_suite in
@@ -641,6 +646,8 @@ let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
 
+let i_psk_info i = (i, PSK.psk_info i)
+
 val client_ClientHello: #region:rgn -> t region Client
   -> option CommonDH.clientKeyShare
   -> St offer
@@ -651,7 +658,7 @@ let client_ClientHello #region ns oks =
     | Some ks -> Some (CommonDH.ClientKeyShare ks)
     | None -> None in
   let _, pskid = ns.resume in
-  let pskinfo = map_ST (fun i -> (i, PSK.psk_info i)) pskid in
+  let pskinfo = map_ST i_psk_info pskid in
   match MR.m_read ns.state with
   | C_Init _ ->
       trace(if
@@ -730,7 +737,7 @@ let offered_versions min_pv (o: offer): result (l: list protocolVersion {l <> []
 
 let is_client13 (o:offer) =
   match offered_versions TLS_1p3 o with
-  | Correct vs -> List.Tot.existsb (fun v -> v = TLS_1p3) vs
+  | Correct vs -> List.Tot.existsb is_pv_13 vs
   | Error _ -> false
 
 let negotiate_version cfg offer =
@@ -748,8 +755,8 @@ let negotiate_version cfg offer =
   one and is a valid ciphersuite, or [None]
 *)
 val negotiate:l1:list valid_cipher_suite -> list valid_cipher_suite -> Tot (option (c:valid_cipher_suite{CipherSuite? c && List.Tot.mem c l1}))
-let negotiate l1 l2 =
-  List.Tot.find #valid_cipher_suite (fun s -> CipherSuite? s && List.Tot.mem s l1) l2
+let is_cs_in_l l s = CipherSuite? s && List.Tot.mem s l
+let negotiate l1 l2 = TLSConstants.find_aux l1 is_cs_in_l l2
 
 (**
   For use in ensuring the result from negotiate is a Correct
@@ -854,8 +861,11 @@ let acceptableVersion cfg pv sr =
  of valid cipher suites in the client config
 *)
 val acceptableCipherSuite: config -> protocolVersion -> valid_cipher_suite -> Tot bool
+let is_cs (cs:valid_cipher_suite) x = x = cs
 let acceptableCipherSuite cfg spv cs =
-  List.Tot.existsb (fun x -> x = cs) cfg.cipher_suites
+  TLSConstants.exists_b_aux cs is_cs cfg.cipher_suites
+
+let is_share_eq (g:CommonDH.group) share = CommonDH.Share?.g share = g
 
 let matching_share
   (cext:option (ce:list extension{List.Tot.length ce < 256})) (g:CommonDH.group) :
@@ -866,7 +876,7 @@ let matching_share
     match List.Tot.find Extensions.E_key_share? cext with
     | Some (E_key_share (CommonDH.ClientKeyShare shares)) ->
       begin
-      match List.Tot.find (fun share -> CommonDH.Share?.g share = g) shares with
+      match TLSConstants.find_aux g is_share_eq shares with
       | Some (CommonDH.Share g gx) -> Some (|g, gx|)
       | _ -> None
       end
@@ -1133,11 +1143,15 @@ val compute_cs13:
   psks: list (PSK.pskid * PSK.pskInfo) ->
   shares: list share (* pre-registered *) ->
   result (list (cs13 o) * option (namedGroup * cs:cipherSuite))
+private let is_cs13_in_cfg cfg cs = CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites
+private let is_in_cfg_named_groups cfg g = List.Tot.mem g cfg.named_groups
+private let group_of_named_group (x:_{Some? (CommonDH.group_of_namedGroup x)}) = Some?.v (CommonDH.group_of_namedGroup x)
+private let share_in_named_group gl (x :share) =
+        let (| g, _ |) = x in
+        List.Tot.mem g gl
 let compute_cs13 cfg o psks shares =
   // pick acceptable record ciphersuites
-  let ncs = List.Tot.filter
-    (fun cs -> CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites)
-    o.ch_cipher_suites in
+  let ncs = TLSConstants.filter_aux cfg  is_cs13_in_cfg o.ch_cipher_suites in
 
   // pick the (potential) group to use for DHE/ECDHE
   // also remember if there is a supported group with no share provided
@@ -1146,12 +1160,12 @@ let compute_cs13 cfg o psks shares =
     match find_supported_groups o with
     | None -> None, None // No offered group, only PSK
     | Some gs ->
-      match List.Tot.filter (fun g -> List.Tot.mem g cfg.named_groups) gs with
+      match TLSConstants.filter_aux cfg is_in_cfg_named_groups gs with
       | [] -> None, None // No common group, only PSK
       | gl ->
         let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
-        let gl' = List.Tot.map (fun x -> Some?.v (CommonDH.group_of_namedGroup x)) gl in
-        let s = List.Tot.find (fun ((| g, _ |) : share) -> List.Tot.mem g gl') shares in
+        let gl' = List.Tot.map group_of_named_group gl in
+        let s = TLSConstants.find_aux gl' share_in_named_group shares in
         s, csg
     in
 

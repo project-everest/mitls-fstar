@@ -31,6 +31,32 @@ module HS = FStar.HyperStack
 
 include Parse // carving out basic formatting code to break a dependency.
 
+(* Some basic utility functions for closure converting arguments
+   to the higher-order combinators in the list library ...
+   for use with KreMLin extraction *)
+let rec filter_aux (#a: Type)
+                   (#b:Type) 
+                   (env:b)
+                   (f:(b -> a -> Tot bool)) 
+                   (l: list a) 
+     : Tot (m:list a { forall u . FStar.List.Tot.mem_filter_spec (f env) m u } ) =
+  match l with
+  | [] -> []
+  | hd::tl -> if f env hd then hd::filter_aux env f tl else filter_aux env f tl
+
+let rec find_aux (#a:Type)
+                 (#b:Type)
+                 (env:b)
+                 (f:(b -> a -> Tot bool))
+                 (l:list a)
+       : (option (x:a{f env x})) =
+  match l with
+  | [] -> None #(x:a{f env x}) //These type annotations are only present because it makes bootstrapping go much faster
+  | hd::tl -> if f env hd then Some #(x:a{f env x}) hd else find_aux env f tl
+
+let exists_b_aux (#a:Type) (#b:Type) (env:b) (f:b -> a -> Tot bool) (l:list a) =
+  Some? (find_aux env f l)
+
 (** Polarity for reading and writing *)
 type rw =
   | Reader
@@ -56,6 +82,10 @@ type protocolVersion' =
   | UnknownVersion: a:byte -> b:byte{a <> 3z \/ (b <> 0z /\ b <> 1z /\ b <> 2z /\ b <> 3z /\ b <> 4z)} -> protocolVersion'
 
 type protocolVersion = pv:protocolVersion'{~(UnknownVersion? pv)}
+
+let is_pv_13 = function
+  | TLS_1p3 -> true
+  | _ -> false
 
 (* Key exchange algorithms *)
 type kexAlg =

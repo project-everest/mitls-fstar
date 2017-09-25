@@ -739,7 +739,7 @@ let rec writeHandshake h_init c new_writer =
           ( match next_keys with
             | Some b -> c.state := (str, (if b.HandshakeLog.out_appdata then Open else Ctrl))
             | None -> () );
-          if complete || new_writer = Some true || (None? om && not send_ccs)
+          if complete || (match new_writer with Some b -> b | _ -> false) || (None? om && not send_ccs)
           then WrittenHS new_writer complete // done, either to writable/completion or because there is nothing left to do
           else if Some? new_writer //splitting cases just to narrow in on the assertion failure that prompted the assume
           then (
