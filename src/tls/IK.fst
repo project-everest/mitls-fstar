@@ -20,7 +20,7 @@ type lbytes (len:UInt32.t)
 /// with "safe ==> honest" as a pointwise lemma.
 /// When do we need to access one vs the other? Each instance can cache "safe". 
 noeq type ipkg = | Idx: 
-  t: Type -> 
+  t: Type0 -> 
   honest: (t -> bool) ->  
   ipkg
 
@@ -28,7 +28,7 @@ noeq type ipkg = | Idx:
 /// indexes, but concrete on their key randomness; instances may have
 /// any number of other functions (such a leak, for instance).
 noeq type pkg (ip:ipkg) = | Pkg:
-  key: (Idx?.t ip -> Type) -> 
+  key: (Idx?.t ip -> Type0) -> 
   len: (Idx?.t ip -> UInt32.t) ->
   create: (i:Idx?.t ip -> key i) -> 
   coerce: (i:Idx?.t ip {~(Idx?.honest ip i)} -> lbytes (len i) -> key i) ->
@@ -231,34 +231,34 @@ let u_traffic: usage = function
   | "ClientKey" | "ServerKey" -> mp
   | _ -> rp 
 
-let rec u_early_secret (n:nat): usage = 
-  function 
-  | "traffic" -> pp u_traffic 
-  | "salt" -> saltp1 (
-    function 
-      | "traffic" -> pp u_traffic
-      | "salt" -> saltp2 (
-        function
-          | "traffic" -> pp u_traffic 
-          | "resumption" -> if n > 0 then pp (u_early_secret (n-1)) else rp 
-          | _ ->rp ) 
-      | _ -> rp )
-  | _ -> rp
+// let rec u_early_secret (n:nat): usage = 
+//   function 
+//   | "traffic" -> pp u_traffic 
+//   | "salt" -> saltp1 (
+//     function 
+//       | "traffic" -> pp u_traffic
+//       | "salt" -> saltp2 (
+//         function
+//           | "traffic" -> pp u_traffic 
+//           | "resumption" -> if n > 0 then pp (u_early_secret (n-1)) else rp 
+//           | _ ->rp ) 
+//       | _ -> rp )
+//   | _ -> rp
+// #set-options "--print_universes --print_implicits"
 
-(* can't get the universes right
-let rec u_master_secret (n:nat ): usage u#0 u#1= function 
+(* can't get the universes right *)
+let rec u_master_secret (n:nat ): Tot usage (decreases (%[n; 0])) = function 
   | "traffic" -> pp u_traffic 
   | "resumption" -> if n > 0 then pp (u_early_secret (n-1)) else rp 
   | _ -> rp
-and u_handshake_secret (n:nat): usage u#0 u#1 = function 
+and u_handshake_secret (n:nat): Tot usage (decreases (%[n; 1])) = function 
   | "traffic" -> pp u_traffic 
   | "salt" -> saltp2 (u_master_secret n) 
   | _ -> rp
-and u_early_secret (n:nat): usage u#0 u#1 = function
+and u_early_secret (n:nat): Tot usage (decreases (%[n;2])) = function
   | "traffic" -> pp u_traffic
   | "salt" -> saltp1 (u_handshake_secret n) 
   | _ -> rp 
-*)
 
 /// Tot required... can we live with this integer indexing?
 /// One cheap trick is to store a PSK only when it enables resumption.
@@ -280,9 +280,9 @@ let k0 = derive early_traffic "ClientKey"
 let cipher  = encrypt k0 42
 
 // this is not actually working
-//val salt1:  salt _ ii (Derived i0 "salt")
-
+val salt1:  salt (u_handshake_secret depth) ii (Derived i0 "salt")
 let salt1  = derive early_secret "salt"
+
 let hs_secret = extract1 salt1 42 
 // let handshake_traffic = derive hs_secret "traffic"
 
