@@ -36,8 +36,10 @@ type dplain (i:id) (ad:adata i) (c:cipher i) =
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
 
-let region = AEAD_GCM.State?.region
+(* Why did this fix it? *)
+let region #r #i (st:state i r) = AEAD_GCM.State?.region st
 
+noextract
 let log_region = AEAD_GCM.State?.log_region
 
 let log = AEAD_GCM.State?.log

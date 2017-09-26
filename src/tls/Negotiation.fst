@@ -291,10 +291,16 @@ let find_server_quic_parameters m =
   | Some (Extensions.E_quic_parameters qp) -> Some qp
   | _ -> None
 
+(* this equality check is not compiled currently - jroesch*)
+private let mode_sessionID_eq_ch_sessionID (m : mode) : bool =
+match m.n_sessionID, m.n_offer.ch_sessionID with
+| None, _ -> false
+| (Some id1), id2 -> id1 = id2
+
 let is_resumption12 m =
   not (is_pv_13 m.n_protocol_version)  &&
-  m.n_sessionID = Some (m.n_offer.ch_sessionID)
-
+  mode_sessionID_eq_ch_sessionID m
+ 
 let is_cacheable12 m =
   not (is_pv_13 m.n_protocol_version)  &&
   ( let Some sid = m.n_sessionID in
@@ -1468,17 +1474,17 @@ let server_ServerShare #region ns ks =
   | S_ClientHello mode ->
     let cexts = mode.n_offer.ch_extensions in
     trace ("processing client extensions " ^ string_of_option_extensions cexts);
-    match Extensions.negotiateServerExtensions
-      mode.n_protocol_version
-      cexts
-      mode.n_offer.ch_cipher_suites
-      ns.cfg
-      mode.n_cipher_suite
-      None  // option (TI.cVerifyData*TI.sVerifyData)
-      mode.n_pski
-      (Option.map CommonDH.ServerKeyShare ks)
-      (mode.n_sessionID = Some mode.n_offer.ch_sessionID)
-    with
+    let scrut = Extensions.negotiateServerExtensions
+        mode.n_protocol_version
+        cexts
+        mode.n_offer.ch_cipher_suites
+        ns.cfg
+        mode.n_cipher_suite
+        None  // option (TI.cVerifyData*TI.sVerifyData)
+        mode.n_pski
+        (Option.map CommonDH.ServerKeyShare ks)
+        (mode_sessionID_eq_ch_sessionID mode) in
+    match scrut with
     | Error z -> Error z
     | Correct sexts ->
       begin

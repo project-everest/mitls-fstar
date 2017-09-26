@@ -13,24 +13,26 @@ open TLSInfo
 
 module CC = CoreCrypto
 module AE = AEADOpenssl
-module MM = MonotoneMap
+module MM = MonotoneMapNonDep
+
 #set-options "--lax"
 
-type hostname = string
-type tlabel (h:hostname) = t:bytes * tls13:bool
+let hostname = string
+let tlabel = t:bytes * tls13:bool
+
 private let region:rgn = new_region tls_tables_region
 private let tickets : MM.t region hostname tlabel (fun _ -> True) =
   MM.alloc #region #hostname #tlabel #(fun _ -> True)
 
 let lookup (h:hostname) = MM.lookup tickets h
-let extend (h:hostname) (t:tlabel h) = MM.extend tickets h t
+let extend (h:hostname) (t:tlabel) = MM.extend tickets h t
 
-type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * msId * ms:bytes
+type session12 = protocolVersion * cipherSuite * ems:bool * msId * ms:bytes
 private let sessions12 : MM.t region bytes session12 (fun _ -> True) =
   MM.alloc #region #bytes #session12 #(fun _ -> True)
 
 let s12_lookup (tid:bytes) = MM.lookup sessions12 tid
-let s12_extend (tid:bytes) (s:session12 tid) = MM.extend sessions12 tid s
+let s12_extend (tid:bytes) (s:session12) = MM.extend sessions12 tid s
 
 let ticketid (a:aeadAlg) : St (AE.id) =
   assume false;
