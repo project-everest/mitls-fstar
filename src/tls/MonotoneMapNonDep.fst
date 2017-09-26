@@ -12,7 +12,7 @@ module HS = FStar.HyperStack
 module MR = FStar.Monotonic.RRef
 
 (* Partial, non-dependent maps *)
-type map' (a:Type) (b:Type) =
+abstract type map' (a:Type) (b:Type) =
   f:(x:a -> Tot (option b))
 
 (* let reveal (#a:Type) (#b:a -> Type) (m:map' a b) : GTot (x:a -> Tot (option (b x))) = m
@@ -107,7 +107,7 @@ let extend (#r:rid) (#a:eqtype) (#b:Type) (#inv:(map' a b -> Type0)) (m:t r a b 
     witness m (defined m x);
     witness m (contains m x y)
 
-let lookup #r #a #b #inv (m:t r a b inv) (x:a)
+abstract let lookup #r #a #b #inv (m:t r a b inv) (x:a)
   : ST (option b)
        (requires (fun h -> True))
        (ensures (fun h0 y h1 ->
