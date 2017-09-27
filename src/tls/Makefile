@@ -154,7 +154,8 @@ QUIC
 	@echo $(OPTIONS) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
-	--verify_module $(basename $(notdir $@))
+	--verify_module $(basename $(notdir $@)) \
+	--cache_checked_modules
 
 %.fsti-in:
 	@echo $(OPTIONS) $(VERFLAGS) \

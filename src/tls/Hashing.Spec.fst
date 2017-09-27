@@ -47,7 +47,7 @@ let emptyHash : a:alg -> Tot (tag a) =
 
 // A "placeholder" hash whose bytes are all 0 (used in KS)
 let zeroHash (a:alg) : Tot (tag a) =
-  createBytes (tagLen a) (FStar.Char.char_of_int 0)
+  create_ (tagLen a) 0z
 
 let maxTagLen = 64
 type anyTag = lbytes maxTagLen
@@ -74,7 +74,7 @@ val hash2: #a:alg -> acc a -> b:bytes { length b % blockLen a = 0 } -> Tot (acc 
 let rec hash2 #a v b =
   if length b = 0 then v
   else
-    let c,b = split b (blockLen a) in
+    let c,b = split_ b (blockLen a) in
     hash2 (compress v c) b
 
 // for convenience, we treat inputs as sequences of bytes, not bits.
@@ -107,10 +107,8 @@ type hkey (a:alg) = tag a
 
 val hmac: a:alg -> k:hkey a -> message:bytes -> Tot (tag a)
 
-private let xor #l a b = xor l a b
-
 let hmac a key message =
-  let xkey = key @| createBytes (blockLen a - tagLen a) 0x0z  in
-  let outer_key_pad = xor xkey (createBytes (blockLen a) 0x5cz) in
-  let inner_key_pad = xor xkey (createBytes (blockLen a) 0x36z) in
+  let xkey = key @| create_ (blockLen a - tagLen a) 0x0z  in
+  let outer_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x5cz) in
+  let inner_key_pad = xor_ #(blockLen a) xkey (create_ (blockLen a) 0x36z) in
   hash a (outer_key_pad @| hash a (inner_key_pad @| message))

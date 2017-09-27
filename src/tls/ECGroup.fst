@@ -120,9 +120,9 @@ let dh_initiator #g gx gy =
 val parse_curve: bytes -> Tot (option group)
 let parse_curve b =
   if length b = 3 then
-    let (ty, id) = split b 1 in
-    if cbyte ty = 3z then
-      match cbyte2 id with
+    let (ty, id) = split b 1ul in
+    if ty.[0ul] = 3z then
+      match Parse.cbyte2 id with
       | (0z, 23z) -> Some (ECC_P256)
       | (0z, 24z) -> Some (ECC_P384)
       | (0z, 25z) -> Some (ECC_P521)
@@ -134,7 +134,7 @@ let parse_curve b =
 
 val curve_id: group -> Tot (lbytes 2)
 let curve_id g =
-  abyte2 (match g with
+  twobytes (match g with
   | ECC_P256 -> (0z, 23z)
   | ECC_P384 -> (0z, 24z)
   | ECC_P521 -> (0z, 25z)
@@ -153,10 +153,10 @@ let parse_point g b =
   | _ ->
     let clen = ec_bytelen g in
     if length b = (op_Multiply 2 clen) + 1 then
-      let (et, ecxy) = split b 1 in
-      match cbyte et with
+      let (et, ecxy) = split b 1ul in
+      match et.[0ul] with
       | 4z ->
-        let (x,y) = split ecxy clen in
+        let (x,y) = split_ ecxy clen in
         let e = {ecx = x; ecy = y;} in
         if CoreCrypto.ec_is_on_curve (params_of_group g false) e then
           Some (S_CC e)
@@ -167,7 +167,7 @@ let parse_point g b =
 val parse_partial: bytes -> Tot (result ((g:group & share g) * bytes))
 let parse_partial payload =
     if length payload >= 7 then
-      let (curve, point) = split payload 3 in
+      let (curve, point) = split payload 3ul in
       match parse_curve curve with
       | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Unsupported curve")
       | Some(ecp) ->
@@ -216,7 +216,7 @@ let getParams (c : ec_curve) : ec_params =
             ecp_gx = "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296";
             ecp_gy = "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5";
             ecp_bytelen = 32;
-            ecp_id = abyte2 (0z, 23z);
+            ecp_id = twobytes (0z, 23z);
         }
     | ECC_P384 ->
         {
@@ -227,7 +227,7 @@ let getParams (c : ec_curve) : ec_params =
             ecp_gx = "aa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7";
             ecp_gy = "3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f";
             ecp_bytelen = 48;
-            ecp_id = abyte2 (0z, 24z);
+            ecp_id = twobytes (0z, 24z);
         }
     | ECC_P521 ->
         {
@@ -238,7 +238,7 @@ let getParams (c : ec_curve) : ec_params =
             ecp_gx = "0c6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d3dbaa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66";
             ecp_gy = "11839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650";
             ecp_bytelen = 66;
-            ecp_id = abyte2 (0z, 25z);
+            ecp_id = twobytes (0z, 25z);
         }
     in { curve = EC_PRIME rawcurve; point_compression = false; }
 *)

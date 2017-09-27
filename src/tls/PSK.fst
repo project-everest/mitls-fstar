@@ -47,7 +47,7 @@ type psk_identifier = identifier:bytes{length identifier < 65536}
 // We rule out all PSK that do not have at least one non-null byte
 // thus avoiding possible confusion with non-PSK for all possible hash algs
 type app_psk (i:psk_identifier) =
-  b:bytes{exists i.{:pattern index b i} index b i <> 0z}
+  b:bytes{exists i.{:pattern b.[i]} b.[i] <> 0z}
 
 type app_psk_entry (i:psk_identifier) =
   (app_psk i) * pskInfo * bool
@@ -136,8 +136,9 @@ let gen_psk (i:psk_identifier) (ctx:pskInfo)
     honest_psk i))
   =
   MR.m_recall app_psk_table;
-  let psk = (abyte 1z) @| CoreCrypto.random 32 in
-  assume(index psk 0 = 1z);
+  let rand = CoreCrypto.random 32 in
+  let psk = (abyte 1z) @| rand in
+  assume(psk.[0ul] = 1z);
   let add : app_psk_entry i = (psk, ctx, true) in
   MM.extend app_psk_table i add;
   MM.contains_stable app_psk_table i add;
