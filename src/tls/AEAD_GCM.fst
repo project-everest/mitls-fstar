@@ -6,7 +6,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open CoreCrypto
 
 open TLSConstants
@@ -337,7 +337,7 @@ let decrypt #i d ad c =
       else
 	begin
 	m_write ctr (j + 1);
-	assert (Range.within (Platform.Bytes.length text) r);
+	assert (Range.within (FStar.Bytes.length text) r);
 	let plain = mk_plain i ad r text in
         Some plain
 	end

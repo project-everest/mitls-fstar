@@ -6,7 +6,7 @@ open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
 open Platform.Error
-open Platform.Bytes
+open FStar.Bytes
 open TLSError
 open TLSInfo
 open TLSConstants

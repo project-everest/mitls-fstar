@@ -1,6 +1,6 @@
 ﻿module HMAC
 
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open Hashing.Spec // for the algorithm names, instead of CoreCrypto
 

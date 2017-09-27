@@ -13,7 +13,7 @@ open FStar.HyperStack
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 open Platform.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSError
 open TLSInfo

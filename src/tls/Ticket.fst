@@ -4,7 +4,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants

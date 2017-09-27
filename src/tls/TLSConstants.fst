@@ -16,12 +16,12 @@ include FStar.HyperStack.All
 let type_of (#a : Type) (x : a) : Type = a
 
 (* Start Hacks *)
-// assume val empty_bytes : Platform.Bytes.lbytes 0
+// assume val empty_bytes : FStar.Bytes.lbytes 0
 (* End Hacks *)
 
 open FStar.Seq
 open Platform.Date
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 //open CoreCrypto // avoid?!
@@ -1376,7 +1376,7 @@ val parseCertificateTypeList: data:bytes -> Tot (list certType) (decreases (leng
 let rec parseCertificateTypeList data =
   if length data = 0 then []
   else
-    let (thisByte,data) = Platform.Bytes.split data 1 in
+    let (thisByte,data) = FStar.Bytes.split data 1 in
     match parseCertType thisByte with
     | Error z -> // we skip this one
       parseCertificateTypeList data

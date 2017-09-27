@@ -9,7 +9,7 @@ module TLSInfo
    its implementation is typechecked.
 *)
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Date
 open TLSConstants
 //open PMS

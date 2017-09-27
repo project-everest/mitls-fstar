@@ -5,7 +5,7 @@ open FStar.HyperStack
 open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
-open Platform.Bytes
+open FStar.Bytes
 open CoreCrypto
 open Hashing.Spec // masking CoreCrypto's hashAlg
 

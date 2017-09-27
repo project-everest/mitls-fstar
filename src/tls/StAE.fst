@@ -7,7 +7,7 @@ module StAE
 
 open FStar.HyperHeap
 open FStar.HyperStack
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSConstants
 open TLSInfo
@@ -312,10 +312,10 @@ val coerce: parent:rgn -> i:stae_id{~(authId i)} -> keyBytes i -> ST (writer i)
 #set-options "--z3rlimit 100"
 let coerce parent i kiv =
   if is_stream i then
-    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
+    let kv,iv = FStar.Bytes.split kiv (CoreCrypto.aeadKeySize (Stream.alg i)) in
     Stream () (Stream.coerce parent i kv iv)
   else
-    let kv,iv = Platform.Bytes.split kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
+    let kv,iv = FStar.Bytes.split kiv (CoreCrypto.aeadKeySize (StLHAE.alg i)) in
     StLHAE () (StLHAE.coerce parent i kv iv)
 
 #reset-options "--initial_fuel 0 --max_fuel 0 --initial_ifuel 2 --max_ifuel 2"

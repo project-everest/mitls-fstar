@@ -10,7 +10,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 
 open TLSError
@@ -201,7 +201,7 @@ let split ki r0 r1 f =
   let (l1,_) = r1 in
   let len = length f in
   let n = if h0 < (len - l1) then h0 else len - l1 in
-  let (sb0,sb1) = Platform.Bytes.split f n in
+  let (sb0,sb1) = FStar.Bytes.split f n in
   (sb0,sb1)
 *)
 

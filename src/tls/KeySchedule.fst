@@ -6,7 +6,7 @@ open FStar.HyperStack
 open FStar.Seq
 open FStar.Set
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
@@ -41,7 +41,7 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let kb = CommonDH.serialize_raw #g s in
-  let kh = Platform.Bytes.hex_of_bytes kb in
+  let kh = FStar.Bytes.hex_of_bytes kb in
   dbg ("Share: "^kh)
 
 (********************************************

@@ -45,7 +45,7 @@ record_fstar_version:
 STDLIB_REALIZED=Pervasives Pervasives.Native Mul Float Char UInt Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast Int.Cast.Full BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack HyperStack.ST HyperStack.All ST All Monotonic.RRef Monotonic.Seq Monotonic.HyperHeap Monotonic.HyperStack Seq.Base Seq.Properties BitVector Math.Lib
 CODEGEN_LIBS=Platform
 # CoreCrypto LowCProvider Platform Classical Seq HyperHeap HyperStack FFICallbacks
-PLATFORM_REALIZED=$(addprefix Platform.,Bytes Date Error Tcp)
+PLATFORM_REALIZED=$(addprefix Platform., Date Error Tcp)
 PDIR=$(FSTAR_HOME)/ucontrib/Platform/fst/
 CDIR=$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/
 LLDIR=$(HACL_HOME)/secure_api

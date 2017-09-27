@@ -10,7 +10,7 @@ module FFI
 // TODO: guarantee (by typing) that we don't do stdio, and don't throw
 //       exceptions, notably for incomplete pattern matching
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 
 open TLSConstants

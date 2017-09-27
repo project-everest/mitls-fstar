@@ -6,7 +6,7 @@ open FStar.HyperStack
 open FStar.Seq
 open FStar.HyperStack.ST
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 
 module X = Spec.Curve25519
@@ -25,10 +25,10 @@ let rand: ref (n:nat -> ST (lbytes n) (requires fun h->True) (ensures fun h0 _ h
 // FIXME: Convert between Platform bytes (Seq.seq Char.char) and Hacl.Spec.Lib.bytes (Seq.seq UInt8.t)
 let bytes2hacl (b:bytes) : Tot (s:Seq.seq UInt8.t{Seq.length s = Seq.length b}) =
   Seq.init (length b) (fun i ->
-    UInt8.uint_to_t (FStar.Char.int_of_char (Platform.Bytes.index b i)))
+    UInt8.uint_to_t (FStar.Char.int_of_char (FStar.Bytes.index b i)))
 
 let hacl2bytes (s:Seq.seq UInt8.t) : Tot (b:bytes{length b = Seq.length s}) =
-  Platform.Bytes.initBytes (Seq.length s) (fun i ->
+  FStar.Bytes.initBytes (Seq.length s) (fun i ->
     FStar.Char.char_of_int (UInt8.v (Seq.index s i)))
 
 let point_of_scalar (s:scalar) : Tot point =

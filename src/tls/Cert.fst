@@ -1,7 +1,7 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module Cert
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants

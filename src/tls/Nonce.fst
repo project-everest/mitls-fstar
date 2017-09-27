@@ -1,6 +1,6 @@
 ﻿module Nonce
 open TLSConstants
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open FStar.HyperStack.ST
 

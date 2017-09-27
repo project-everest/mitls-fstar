@@ -1,7 +1,7 @@
 ﻿(** hash algorithms and providers *)
 module Hashing.Spec
 
-open Platform.Bytes
+open FStar.Bytes
 
 type alg = // CoreCrypto.hash_alg
   | MD5

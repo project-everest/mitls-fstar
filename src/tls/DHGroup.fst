@@ -1,7 +1,7 @@
 ﻿module DHGroup
 
 open FStar.HyperStack
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError

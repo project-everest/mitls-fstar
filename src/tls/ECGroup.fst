@@ -1,7 +1,7 @@
 module ECGroup
 
 open FStar.HyperStack
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open CoreCrypto
 open TLSError
@@ -175,7 +175,7 @@ let parse_partial payload =
         | Error(z) -> Error(z)
         | Correct(rawpoint, rem) ->
            match parse_point ecp rawpoint with
-           | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Invalid EC point received:"^(Platform.Bytes.print_bytes rawpoint)))
+           | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ ("Invalid EC point received:"^(FStar.Bytes.print_bytes rawpoint)))
            | Some p -> Correct ((| ecp, p |),rem)
     else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 

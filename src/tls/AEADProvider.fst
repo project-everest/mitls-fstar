@@ -4,7 +4,7 @@ open FStar.Heap
 open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSConstants
 open TLSInfo
@@ -36,7 +36,7 @@ let prov() =
 type u32 = FStar.UInt32.t
 
 (**
-Functions to go back and forth between Platform.Bytes Buffers
+Functions to go back and forth between FStar.Bytes Buffers
 **)
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val to_bytes: l:nat -> buf:CB.lbuffer l -> STL (b:bytes{length b = l})
@@ -57,7 +57,7 @@ val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{len
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
 let rec store_bytes len buf i s =
   if i < len then
-    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (Platform.Bytes.index s i))) in
+    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (FStar.Bytes.index s i))) in
     store_bytes len buf (i + 1) s
 
 val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))

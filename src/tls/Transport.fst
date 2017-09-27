@@ -5,7 +5,7 @@ module Transport
 open FStar.HyperStack.All
 
 open Platform.Tcp 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 

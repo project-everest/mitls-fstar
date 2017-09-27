@@ -1,5 +1,5 @@
 module StreamDeltas
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 
 open FStar.HyperHeap

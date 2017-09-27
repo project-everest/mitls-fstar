@@ -3,7 +3,7 @@ module Parse
 open FStar.HyperStack.All
 
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 
@@ -63,17 +63,19 @@ unfold type lemma_inverse_g_f (#a:Type) (#b:Type) ($f:a -> Tot b) ($g:b -> Tot (
 unfold type lemma_pinverse_f_g (#a:Type) (#b:Type) (r:b -> b -> Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (y:b) =
   Correct? (g y) ==> r (f (Correct?._0 (g y))) y
 
-
-(** Transforms a sequence of natural numbers into bytes *)
+(** Transforms a sequence number into bytes *)
 val bytes_of_seq: n:nat{ repr_bytes n <= 8 } -> Tot (b:bytes{length b <= 8})
-let bytes_of_seq sn = bytes_of_int 8 sn
+let bytes_of_seq n = bytes_of_int 8 n
 
 (** Transforms bytes into a sequence of natural numbers *)
 val seq_of_bytes: b:bytes{ length b <= 8 } -> Tot nat
 let seq_of_bytes b = int_of_bytes b
 
 (** Transform and concatenate a natural number to bytes *)
-val vlbytes: lSize:nat -> b:bytes{repr_bytes (length b) <= lSize} -> Tot (r:bytes{length r = lSize + length b})
+val vlbytes: 
+    lSize:nat 
+  -> b:bytes{repr_bytes (length b) <= lSize /\ UInt.size (lSize + length b) FStar.UInt32.n}
+  -> Tot (r:bytes{length r = lSize + length b})
 let vlbytes lSize b = bytes_of_int lSize (length b) @| b
 
 // avoiding explicit applications of the representation lemmas
@@ -81,7 +83,7 @@ let vlbytes1 (b:bytes {length b < pow2 8}) = lemma_repr_bytes_values (length b);
 let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b); vlbytes 2 b
 
 val vlbytes_trunc: lSize:nat -> b:bytes ->
-  extra:nat{repr_bytes (length b + extra) <= lSize} ->
+  extra:nat{repr_bytes (length b + extra) <= lSize /\ UInt.size (lSize + length b) FStar.UInt32.n} ->
   r:bytes{length r == lSize + length b}
 let vlbytes_trunc lSize b extra =
   bytes_of_int lSize (length b + extra) @| b
@@ -95,7 +97,7 @@ let vlbytes_trunc_injective
   (extra2: nat { repr_bytes (length b2 + extra2) <= lSize } )
   (s2: bytes)
 : Lemma
-  (requires (Seq.equal (vlbytes_trunc lSize b1 extra1 @| s1) (vlbytes_trunc lSize b2 extra2 @| s2)))
+  (requires ((vlbytes_trunc lSize b1 extra1 @| s1) == (vlbytes_trunc lSize b2 extra2 @| s2)))
   (ensures (length b1 + extra1 == length b2 + extra2 /\ b1 @| s1 == b2 @| s2))
 = let l1 = bytes_of_int lSize (length b1 + extra1) in
   let l2 = bytes_of_int lSize (length b2 + extra2) in
@@ -155,10 +157,10 @@ val vlsplit: lSize:nat{lSize <= 4}
                     repr_bytes (length (fst b)) <= lSize
                   /\ Seq.equal vlb (vlbytes lSize (fst b) @| (snd b))}))
 let vlsplit lSize vlb =
-  let (vl,b) = Platform.Bytes.split vlb lSize in
+  let (vl,b) = FStar.Bytes.split vlb lSize in
   let l = int_of_bytes vl in
   if l <= length b
-  then Correct(Platform.Bytes.split b l)
+  then Correct(FStar.Bytes.split b l)
   else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
 
 
@@ -272,7 +274,7 @@ let namedGroupBytes ng =
     end
   | NG_UNKNOWN u	-> abyte2 u
 
-(* TODO: move to Platform.Bytes *)
+(* TODO: move to FStar.Bytes *)
 let abyte2_inj x1 x2 : Lemma
   (abyte2 x1 == abyte2 x2 ==> x1 == x2)
   [SMTPat (abyte2 x1); SMTPat (abyte2 x2)]

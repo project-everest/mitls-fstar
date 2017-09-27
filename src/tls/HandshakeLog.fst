@@ -7,7 +7,7 @@ open FStar.Seq
  // for e.g. found
 open FStar.Set
 open Platform.Error
-open Platform.Bytes
+open FStar.Bytes
 open TLSError
 open TLSConstants
 open TLSInfo
@@ -432,7 +432,7 @@ let rec parseMessages pvo kexo buf =
   | Correct (Some (| rem, hstype, pl, to_log |)) ->
     ( // trace ("parsing " ^
       //   (if pvo = Some TLS_1p3 then "(1.3) " else if pvo = Some TLS_1p2 then  "(1.2) " else "(?) ") ^
-      //   Platform.Bytes.print_bytes pl);
+      //   FStar.Bytes.print_bytes pl);
       if hstype = HT_client_hello
       then (
         match parseClientHello pl with // ad hoc case: we parse into one or two messages

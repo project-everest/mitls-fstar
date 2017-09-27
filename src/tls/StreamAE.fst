@@ -13,7 +13,7 @@ open FStar.Monotonic.RRef
 open FStar.Monotonic.Seq
 
 open Platform.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSError
 open TLSConstants
@@ -304,7 +304,7 @@ let decrypt #i d l c =
    | None -> None
    | Some pr ->
      begin
-       assert (Platform.Bytes.length pr == l);
+       assert (FStar.Bytes.length pr == l);
        let p = strip_refinement (mk_plain i l pr) in
        if Some? p then m_write ctr (j + 1);
        p

@@ -4,7 +4,7 @@
 
 open FStar.HyperStack.All
 
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open CoreCrypto
 

@@ -11,7 +11,7 @@ module Encode
 
 open FStar.Seq
 open Platform
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants

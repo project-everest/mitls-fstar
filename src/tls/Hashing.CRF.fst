@@ -6,7 +6,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
-open Platform.Bytes
+open FStar.Bytes
 open Hashing.Spec
 
 assume val crf: alg -> Tot bool  // to be moved elsewhere, set to false for real extraction

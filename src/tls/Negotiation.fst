@@ -1,7 +1,7 @@
 module Negotiation
 
 open Platform.Error
-open Platform.Bytes
+open FStar.Bytes
 
 open TLSError
 open TLSInfo
@@ -1185,7 +1185,7 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    let id = utf8 (iutf8 id) in // FIXME Platform.Bytes
+    let id = utf8 (iutf8 id) in // FIXME FStar.Bytes
     match Ticket.check_ticket13 id with
     | Some info -> (id, info) :: (filter_psk t)
     | None ->

@@ -9,7 +9,7 @@ share is for registered shares (for which is_honest is defined).
 ﻿module CommonDH
 
 open FStar.HyperStack
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open CoreCrypto
 open Parse

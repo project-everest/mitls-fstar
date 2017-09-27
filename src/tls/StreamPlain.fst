@@ -1,7 +1,7 @@
 module StreamPlain
 
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 
 open TLSError
@@ -73,7 +73,7 @@ unfold let min (a:nat) (b:nat): nat = if a < b then a else b
 // AE-decrypted plaintext truncated to max_TLSPlaintext_fragment_length + 1.
 val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   j:nat { j < length bs
-	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (Platform.Bytes.index bs k)} Platform.Bytes.index bs k = 0z) } ->
+	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (FStar.Bytes.index bs k)} FStar.Bytes.index bs k = 0z) } ->
   Tot (let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
        let bs' = fst (split bs len) in
        result (p:plain i len{ bs' == ghost_repr #i #len p }))
@@ -81,7 +81,7 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
 let rec scan i bs j =
   let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
   let bs' = fst (split bs len) in
-  match Platform.Bytes.index bs j with
+  match FStar.Bytes.index bs j with
   | 0z ->
     if j > 0 then scan i bs (j - 1)
     else Error (AD_decode_error, "No ContentType byte")
@@ -198,7 +198,7 @@ let mk_plain i l pr =
 (* OLD VERSION, breaking abstraction:
 let mk_plain i l pr =
   let len = (length pr) - 1 in
-  let (p,ctb) = Platform.Bytes.split pr len in
+  let (p,ctb) = FStar.Bytes.split pr len in
   match Content.parseCT ctb with
   | Correct ct -> Some (Content.mk_fragment i ct (0,len) p)
   | Error z -> None

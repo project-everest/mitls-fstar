@@ -9,7 +9,7 @@ open FStar.HyperHeap
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
-open Platform.Bytes
+open FStar.Bytes
 open Hashing.Spec
 
 

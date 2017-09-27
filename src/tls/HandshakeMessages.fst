@@ -4,7 +4,7 @@ Handshake protocol messages
 *)
 module HandshakeMessages
 open FStar.Seq
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSError
 open TLSConstants
@@ -428,7 +428,7 @@ let clientHelloBytes ch =
   let binders_len = bindersLen_of_ch ch in
   lemma_repr_bytes_values (length data + binders_len);
   let b = messageBytes_extra HT_client_hello data binders_len in
-  assume (Platform.Bytes.length b >= 41 /\ hs_msg_bytes HT_client_hello b); // TODO: FIXME
+  assume (FStar.Bytes.length b >= 41 /\ hs_msg_bytes HT_client_hello b); // TODO: FIXME
   b
 
 val versionBytes_is_injective: pv1:protocolVersion -> pv2:protocolVersion ->
@@ -1100,7 +1100,7 @@ let lemma_distinguishedNameListBytes_def (n:list dn{Cons? n /\ repr_bytes (lengt
 
 let lemma_distinguishedNameListBytes_def2 (n:list dn{Nil? n}) : Lemma (distinguishedNameListBytes n = empty_bytes) = ()
 
-(* TODO: port to Platform.Bytes *)
+(* TODO: port to FStar.Bytes *)
 assume val utf8_is_injective: s:string -> s':string ->
   Lemma (requires True)
   (ensures (Seq.equal (utf8 s) (utf8 s') ==> s = s'))

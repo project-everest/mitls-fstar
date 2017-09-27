@@ -3,7 +3,7 @@ TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algori
 *)
 module HKDF
 
-open Platform.Bytes
+open FStar.Bytes
 open TLSConstants
 open Hashing.Spec
 

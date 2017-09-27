@@ -4,7 +4,7 @@ module TLSPRF
 
 (* Low-level (bytes -> byte) PRF implementations for TLS *)
 
-open Platform.Bytes
+open FStar.Bytes
 open Hashing.Spec
 open TLSConstants
 open TLSInfo

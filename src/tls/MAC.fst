@@ -9,7 +9,7 @@ open FStar.HyperStack
 open FStar.Seq
  // for e.g. found
 
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 //open CoreCrypto 
 

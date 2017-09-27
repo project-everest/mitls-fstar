@@ -1,7 +1,7 @@
 (* This module maintains a injective monotonic map from nonces to ids *)
 module IdNonce
 open TLSConstants
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open TLSInfo
 
