@@ -70,7 +70,7 @@ private let errno description txt : ML int =
     | None    -> "(None)" in (
   trace ("returning error: "^txt0^" "^txt^"\n"); (
   match description with
-  | Some ad -> Char.int_of_char (snd (cbyte2 (Alert.alertBytes ad)))
+  | Some ad -> FStar.UInt8.v (snd (cbyte2 (Alert.alertBytes ad)))
   | None    -> -1 ))
 
 

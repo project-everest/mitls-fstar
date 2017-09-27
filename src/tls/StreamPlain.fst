@@ -158,10 +158,10 @@ let rec scan_pad_correct i payload ct len j =
   let bs = pad payload ct len in
   if j = length payload then
     begin
-    cut (abyte (Seq.index bs j) = ctBytes ct);
+    cut (abyte (Platform.Bytes.index bs j) = ctBytes ct);
     lemma_split bs j;
     lemma_eq_intro payload (fst (split bs j));
-    match Seq.index bs j with
+    match Platform.Bytes.index bs j with
     | 20z -> cut (j = 1)
     | 21z -> cut (j = 2)
     | 22z -> ()

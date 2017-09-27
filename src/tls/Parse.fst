@@ -10,7 +10,7 @@ open TLSError
 module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
-
+module U8 = FStar.UInt8
 
 (** This file should be split in 3 different modules:
   - Regions: for global table regions
@@ -227,13 +227,12 @@ type ffdhe =
   | FFDHE6144
   | FFDHE8192
 
-
-type unknownNG =
-  u:(byte*byte){(let (b1,b2) = u in
-    (b1 = 0x00z ==> b2 <> 0x17z /\ b2 <> 0x18z /\ b2 <> 0x19z
-                 /\ b2 <> 0x1dz /\ b2 <> 0x1ez) /\
-    (b1 = 0x01z ==> b2 <> 0x00z /\ b2 <> 0x01z /\ b2 <> 0x02z
-                 /\ b2 <> 0x03z /\ b2 <> 0x04z))}
+type unknownNG = u:(U8.t * U8.t){
+ (let (b1,b2) = (U8.v (fst u), U8.v (snd u)) in
+    (b1 = 0 ==> b2 <> 0x17 /\ b2 <> 0x18 /\ b2 <> 0x19
+                 /\ b2 <> 0x1d /\ b2 <> 0x1e) /\
+    (b1 = 1 ==> b2 <> 0x00 /\ b2 <> 0x01 /\ b2 <> 0x02
+                 /\ b2 <> 0x03 /\ b2 <> 0x04))}
 
 (** TLS 1.3 named groups for (EC)DHE key exchanges *)
 type namedGroup =
@@ -274,7 +273,7 @@ let namedGroupBytes ng =
 
 (* TODO: move to Platform.Bytes *)
 let abyte2_inj x1 x2 : Lemma
-  (abyte2 x1 == abyte2 x2 ==> x1 == x2)
+  (abyte2 x1 == abyte2 x2 ==> U8.v (fst x1) = U8.v (fst x2) /\ U8.v (snd x1) = U8.v (snd x2))
   [SMTPat (abyte2 x1); SMTPat (abyte2 x2)]
 = let s1 = abyte2 x1 in
   let s2 = abyte2 x2 in
@@ -303,7 +302,7 @@ let parseNamedGroup b =
   | (0x01z, 0x02z) -> Correct (FFDHE FFDHE4096)
   | (0x01z, 0x03z) -> Correct (FFDHE FFDHE6144)
   | (0x01z, 0x04z) -> Correct (FFDHE FFDHE8192)
-  | u -> Correct (NG_UNKNOWN u)
+  | (a, b) -> Correct (NG_UNKNOWN (a,b))
 
 (** Lemmas for named groups parsing/serializing inversions *)
 #set-options "--max_ifuel 10 --max_fuel 10"

@@ -966,7 +966,7 @@ val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> 
 let to_be_signed pv role csr tbs =
   match pv, csr with
   | TLS_1p3, None ->
-      let pad = abytes (String.make 64 (Char.char_of_int 32)) in
+      let pad = abytes (String.make 64 32ul) in
       let ctx =
         match role with
         | Server -> "TLS 1.3, server CertificateVerify"
