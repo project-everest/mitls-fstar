@@ -13,4 +13,4 @@ typedef int FStar_Char;
 /* FStar_UInt32_t FStar_UInt32_uint_to_t(Prims_nat x); */
 FStar_Char FStar_Char_char_of_int(krml_checked_int_t);
 
-void Curve25519_pubshare(int K___FStar_Bytes_bytes_FStar_Bytes_bytes);
+extern void* FStar_HyperStack_ST_new_colored_region(Prims_int i, Prims_int j);

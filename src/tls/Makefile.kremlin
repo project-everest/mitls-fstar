@@ -7,15 +7,13 @@ DROP_MODULES = $(addprefix -drop , Spec.* MonotoneMapNonDep MonotoneMap IdNonce 
 C_DRIVER = $(KRML_DIR)/main.c
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"')
 
-all: krml_output/out.krml
-	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(C_DRIVER) \
-	           $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
-			   -tmpdir $(KRML_DIR) $(K-OPTS) -skip-linking -warn-error -9+11-7-6 krml_output/out.krml
+KRML_COMMAND= FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions -tmpdir $(KRML_DIR) $(K-OPTS) -warn-error -9+11-7-6 -ccopt -Wno-unused-function
 
-krml_output/out.krml: $(KRML_FILES)	
-	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(KRML_FILES) $(C_DRIVER) \
-	           $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
-			   -tmpdir $(KRML_DIR) $(KOPTS) -skip-linking -warn-error -9+11-7-6 
+all: krml_output/out.krml
+	$(KRML_COMMAND) krml_output/out.krml -skip-linking
+
+krml_output/out.krml: $(KRML_FILES)
+	$(KRML_COMMAND) $(KRML_FILES) -skip-translation
 
 
 test.krml:

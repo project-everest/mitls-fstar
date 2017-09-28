@@ -35,10 +35,10 @@ include Parse // carving out basic formatting code to break a dependency.
    to the higher-order combinators in the list library ...
    for use with KreMLin extraction *)
 let rec filter_aux (#a: Type)
-                   (#b:Type) 
+                   (#b:Type)
                    (env:b)
-                   (f:(b -> a -> Tot bool)) 
-                   (l: list a) 
+                   (f:(b -> a -> Tot bool))
+                   (l: list a)
      : Tot (m:list a { forall u . FStar.List.Tot.mem_filter_spec (f env) m u } ) =
   match l with
   | [] -> []
@@ -546,7 +546,14 @@ let minPV (a:protocolVersion) (b:protocolVersion) =
   | TLS_1p2, _  | _, TLS_1p2 -> TLS_1p2
   | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
 
-let geqPV a b = (b = minPV a b)
+let geqPV a b =
+match b, minPV a b with
+| SSL_3p0, SSL_3p0
+| TLS_1p0, TLS_1p1
+| TLS_1p2, TLS_1p2
+| TLS_1p3, TLS_1p3 -> true
+| UnknownVersion b1 b2, UnknownVersion b1' b2' ->
+  b1 = b2 && b2 = b2'
 
 let string_of_pv = function
   | SSL_3p0 -> "SSL3"
@@ -805,7 +812,7 @@ val inverse_cipherSuite: x:cipherSuite -> Lemma
   // parse (bytes (Unknown 0 0)) = NullCiphersuite
   // must exclude this case...
   (ensures (let y = cipherSuiteBytesOpt x in
-	(Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
+  (Some? y ==> parseCipherSuiteAux (Some?.v y) = Correct x)))
   [SMTPat (parseCipherSuiteAux (Some?.v (cipherSuiteBytesOpt x)))]
 let inverse_cipherSuite x = ()
 
@@ -813,7 +820,7 @@ let inverse_cipherSuite x = ()
 val pinverse_cipherSuite : x:lbytes 2 -> Lemma
   (requires True)
   (ensures (let y = parseCipherSuiteAux x in
-	    (Correct? y ==>
+      (Correct? y ==>
               (if UnknownCipherSuite? (Correct?._0 y) then true
               else Some? (cipherSuiteBytesOpt (Correct?._0 y))
                /\ Bytes.equal x (Some?.v (cipherSuiteBytesOpt (Correct?._0 y)))))))
@@ -841,9 +848,9 @@ let rec parseCipherSuites b =
     let (b0,b1) = split b 2ul in
     match parseCipherSuites b1 with
       | Correct(css) ->
-	(match parseCipherSuite b0 with
-	 | Error z ->	Correct css
-	 | Correct cs -> Correct (cs::css))
+  (match parseCipherSuite b0 with
+   | Error z ->	Correct css
+   | Correct cs -> Correct (cs::css))
       | Error z -> Error z
   else
   if length b = 0 then Correct []
@@ -1307,7 +1314,7 @@ let rec names_of_cipherSuites css =
     | Error(x,y) -> Error(x,y)
     | Correct n  ->
       begin
-	match names_of_cipherSuites t with
+  match names_of_cipherSuites t with
         | Error(x,y)  -> Error(x,y)
         | Correct rem -> Correct (n::rem)
       end
@@ -1435,20 +1442,22 @@ let rec parseDistinguishedNameList data res =
       | Error z -> Error z
       | Correct (nameBytes,data) ->
         begin
-	match iutf8_opt nameBytes with
+  match iutf8_opt nameBytes with
         | None -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         | Some name ->
-	  if length (utf8_encode name) < 256 then
+    if length (utf8_encode name) < 256 then
           let res = name :: res in
           parseDistinguishedNameList data res
-	  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
+    else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
         end
 
 (* REMOVE jroesch *)
+assume val cipherSuite_eq : cipherSuite -> cipherSuite -> bool
+
 val mem_cipherSuite: cipherSuite -> list cipherSuite -> Tot bool
 let rec mem_cipherSuite x = function
 | [] -> false
-| hd::tl -> if hd = x then true else mem_cipherSuite x tl
+| hd::tl -> if cipherSuite_eq x hd then true else mem_cipherSuite x tl
 
 (** Determine if a ciphersuite list contains the SCSV ciphersuite *)
 let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
@@ -1459,9 +1468,6 @@ let contains_TLS_EMPTY_RENEGOTIATION_INFO_SCSV (css: list cipherSuite) =
 //
 // TODO: all occurrences of [pinverse] from there on have been replaced by calls
 // to [pinverse_t]; we should write corresponding inversion lemmas.
-
-
-
 
 (** Definition of the configuration identifier *)
 type configurationId = b:bytes{0 < length b /\ length b < 65536}
@@ -1602,15 +1608,15 @@ let parseConfigurationExtensions b =
     fun b exts ->
     if length b > 0 then
       if length b >= 4 then
-	let typ, len_data = split b 2ul in
+  let typ, len_data = split b 2ul in
         let len, data = split len_data 2ul in
-	let len = int_of_bytes len in
-	if length b >= 4 + len then
-	  let ext, bytes = split_ b len in
-	  match parseConfigurationExtension ext with
-	  | Correct(ext') -> aux bytes (ext'::exts)
-	  | Error(z) -> Error(z)
-	else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
+  let len = int_of_bytes len in
+  if length b >= 4 + len then
+    let ext, bytes = split_ b len in
+    match parseConfigurationExtension ext with
+    | Correct(ext') -> aux bytes (ext'::exts)
+    | Error(z) -> Error(z)
+  else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse configuration extension length")
       else Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Configuration extension length should be at least 4")
     else Correct(exts) in
   if length b >= 2 then
