@@ -33,9 +33,9 @@ let recv tcp len = tcp.rcv len
 
 val test: t -> bytes -> ML unit
 let test (tcp:t) (data:bytes) = 
-  let h0 = get() in 
+  let h0 = FStar.HyperStack.ST.get() in 
   let _ = tcp.snd data in
-  let h1 = get() in 
+  let h1 = FStar.HyperStack.ST.get() in 
   assert (h0==h1)
   
 
