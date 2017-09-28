@@ -393,7 +393,7 @@ let keyShareEntryBytes = function
 (** Parsing function for a KeyShareEntry *)
 let parseKeyShareEntry b =
   assume false; // TODO registration
-  let ng, key_exchange = split b 2 in
+  let ng, key_exchange = split b 2ul in
   match parseNamedGroup ng with
   | Correct ng ->
     begin
@@ -457,7 +457,7 @@ let parseKeyShareEntries b =
   let rec (aux: b:bytes -> list keyShareEntry -> Tot (result (list keyShareEntry)) (decreases (length b))) = fun b entries ->
     if length b > 0 then
       if length b >= 4 then
-	let ng, data = split b 2 in
+	let ng, data = split b 2ul in
 	match vlsplit 2 data with
 	| Correct(kex, bytes) ->
 	  begin
