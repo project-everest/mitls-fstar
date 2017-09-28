@@ -1,16 +1,21 @@
 include Makefile
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
-KRML_FILES = $(wildcard *.fst)
+KRML_FILES = Hashiing.Spec.fst # $(wildcard *.fst)
 # We should add back support for Platform.Bytes when we get the chance.
-DROP_MODULES = $(addprefix -drop ,MonotoneMapNonDep MonotoneMap IdNonce Platform.Bytes Curve25519)
+DROP_MODULES = $(addprefix -drop ,MonotoneMapNonDep MonotoneMap IdNonce FStar.Bytes Platform.Bytes Curve25519)
 C_DRIVER = $(KRML_DIR)/main.c
-HACKS_HEADER = '"hacks.h"'
+HEADERS = $(addprefix -add-include ,'"hacks.h"' '"bytes.h"' '"tcp.h"')
 
-all:
+all: krml_output/out.krml
+	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(C_DRIVER) \
+	           $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
+			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error -9+11-7-6 krml_output/out.krml
+
+krml_output/out.krml: $(KRML_FILES)	
 	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(KRML_FILES) $(C_DRIVER) \
-	           $(DROP_MODULES) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions \
-			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error -9+11-7-6 -skip-compilation
+	           $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions \
+			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error -9+11-7-6 
 
 
 test.krml:
