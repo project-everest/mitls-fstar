@@ -395,7 +395,7 @@ let computeOffer r cfg resume nonce ks pskinfo =
     | (Some t, _), true, _ ->
       // FIXME Cannot compute hash in Tot
       //let sid = Hashing.compute Hashing.Spec.SHA256 t
-      let sid = if length t <= 32 then t else fst (split t 32) in
+      let sid = if length t <= 32 then t else fst (split t 32ul) in
       Some t, sid
     | (None, _), true, _ -> Some (empty_bytes), empty_bytes
     | _ -> None, empty_bytes in
@@ -515,7 +515,7 @@ let resume_12 mode =
   Some? (find_sessionTicket mode.n_offer) &&
   length mode.n_offer.ch_sessionID > 0 &&
   Some? mode.n_sessionID &&
-  equalBytes (Some?.v mode.n_sessionID) mode.n_offer.ch_sessionID
+  Some?.v mode.n_sessionID = mode.n_offer.ch_sessionID
 
 val local_config: #region:rgn -> #role:TLSConstants.role -> t region role -> config
 let local_config #region #role ns =
@@ -841,8 +841,8 @@ let rec negotiateGroupKeyShare cfg pv exts =
 *)
 val isSentinelRandomValue: protocolVersion -> protocolVersion -> TLSInfo.random -> Tot bool
 let isSentinelRandomValue c_pv s_pv s_random =
-  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && equalBytes (abytes "DOWNGRD\x01") s_random ||
-  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && equalBytes (abytes "DOWNGRD\x00") s_random
+  geqPV c_pv TLS_1p3 && geqPV TLS_1p2 s_pv && bytes_of_string "DOWNGRD\x01" = s_random ||
+  geqPV c_pv TLS_1p2 && geqPV TLS_1p1 s_pv && bytes_of_string "DOWNGRD\x00" = s_random
 
 
 (** Confirms that the version negotiated by the server was:
@@ -985,12 +985,12 @@ val to_be_signed: pv:protocolVersion -> role -> csr:option bytes{None? csr <==> 
 let to_be_signed pv role csr tbs =
   match pv, csr with
   | TLS_1p3, None ->
-      let pad = abytes (String.make 64 (Char.char_of_int 32)) in
+      let pad = bytes_of_string (String.make 64 (Char.char_of_int 32)) in
       let ctx =
         match role with
         | Server -> "TLS 1.3, server CertificateVerify"
         | Client -> "TLS 1.3, client CertificateVerify"  in
-      pad @| abytes ctx @| abyte 0z @| tbs
+      pad @| bytes_of_string ctx @| abyte 0z @| tbs
   | TLS_1p2, Some csr -> csr @| tbs
   | _, Some csr -> csr @| tbs
 
@@ -1185,13 +1185,17 @@ let rec filter_psk (l:list Extensions.pskIdentity)
   match l with
   | [] -> []
   | (id, _) :: t ->
-    let id = utf8 (iutf8 id) in // FIXME FStar.Bytes
-    match Ticket.check_ticket13 id with
-    | Some info -> (id, info) :: (filter_psk t)
-    | None ->
-      match PSK.psk_lookup id with
-      | Some info -> (id, info) :: (filter_psk t)
-      | None -> (trace "WARNING: filtering a PSK"; filter_psk t)
+    let u_id = iutf8_opt id in
+    //TODO bytes ... audit ... NS 09/27
+    if None? u_id
+    then (trace "WARNING: filtering a PSK"; filter_psk t)
+    else let id = utf8_encode (Some?.v u_id) in // FIXME FStar.Bytes
+         match Ticket.check_ticket13 id with
+         | Some info -> (id, info) :: (filter_psk t)
+         | None ->
+           match PSK.psk_lookup id with
+           | Some info -> (id, info) :: (filter_psk t)
+           | None -> (trace "WARNING: filtering a PSK"; filter_psk t)
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share)
@@ -1410,7 +1414,7 @@ let server_ClientHello #region ns offer =
     let [Extensions.E_key_share (CommonDH.HRRKeyShare ng)] = hrr.hrr_extensions in
     if
       o1.ch_protocol_version = o2.ch_protocol_version &&
-      equalBytes o1.ch_client_random o2.ch_client_random &&
+      o1.ch_client_random = o2.ch_client_random &&
       o1.ch_sessionID = o2.ch_sessionID &&
       List.Tot.mem hrr.hrr_cipher_suite o2.ch_cipher_suites &&
       o1.ch_compressions = o2.ch_compressions &&

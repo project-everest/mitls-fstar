@@ -34,7 +34,7 @@ type plainRepr = b:bytes { plainLength (length b) }
 type plain (i:id) (len:plainLen) = f:fragment i { len = snd (Content.rg i f) + 1 }
 
 let pad payload ct (len:plainLen { length payload < len /\ length payload <= max_TLSPlaintext_fragment_length }): plainRepr =
-  payload @| ctBytes ct @| createBytes (len - length payload - 1) 0z
+  payload @| ctBytes ct @| create_ (len - length payload - 1) 0z
 
 (*
 val pad_zeros: payload:bytes
@@ -75,12 +75,12 @@ val scan: i:id { ~ (authId i) } -> bs:plainRepr ->
   j:nat { j < length bs
 	/\ (forall (k:nat {j < k /\ k < length bs}).{:pattern (FStar.Bytes.index bs k)} FStar.Bytes.index bs k = 0z) } ->
   Tot (let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
-       let bs' = fst (split bs len) in
+       let bs' = fst (split_ bs len) in
        result (p:plain i len{ bs' == ghost_repr #i #len p }))
 // TODO: remove assumes, it used to pass (SZ, 2017.05.10)
 let rec scan i bs j =
   let len = min (length bs) (max_TLSPlaintext_fragment_length + 1) in
-  let bs' = fst (split bs len) in
+  let bs' = fst (split_ bs len) in
   match FStar.Bytes.index bs j with
   | 0z ->
     if j > 0 then scan i bs (j - 1)
@@ -90,12 +90,12 @@ let rec scan i bs j =
     match j with
     | 0 -> Error (AD_decode_error, "Empty ChangeCipherSpec fragment")
     | 1 ->
-      let payload, _ = split bs j in
+      let payload, _ = split_ bs j in
       let rg = (1, len - 1) in
       if payload = ccsBytes then
 	begin
 	let f = CT_CCS #i rg in
-	assume (Seq.equal bs' (pad ccsBytes Change_cipher_spec len));
+	assume (Bytes.equal bs' (pad ccsBytes Change_cipher_spec len));
         Correct f
 	end
       else
@@ -108,13 +108,13 @@ let rec scan i bs j =
     | 0 -> Error (AD_decode_error, "Empty Alert fragment")
     | 1 -> Error (AD_decode_error, "Fragmented Alert")
     | 2 ->
-      let payload, _ = split bs j in
+      let payload, _ = split_ bs j in
       let rg = (2, len - 1) in
       begin
       match Alert.parse payload with
       | Correct ad ->
 	let f = CT_Alert #i rg ad in
-        assume (Seq.equal bs' (pad (Alert.alertBytes ad) Alert len));
+        assume (Bytes.equal bs' (pad (Alert.alertBytes ad) Alert len));
         Correct f
       | Error e -> Error e
       end
@@ -126,20 +126,20 @@ let rec scan i bs j =
       if j > max_TLSPlaintext_fragment_length then
 	Error (AD_record_overflow, "TLSPlaintext fragment exceeds maximum length")
       else
-	let payload, _ = split bs j in
+	let payload, _ = split_ bs j in
 	let rg = (1, len - 1) in
 	let f = CT_Handshake rg payload in
-	assume (Seq.equal bs' (pad payload Handshake len));
+	assume (Bytes.equal bs' (pad payload Handshake len));
         Correct f
   | 23z ->
     if j > max_TLSPlaintext_fragment_length then
       Error (AD_record_overflow, "TLSPlaintext fragment exceeds maximum length")
     else
-      let payload, _ = split bs j in
+      let payload, _ = split_ bs j in
       let rg = (0, len - 1) in
       let d = DataStream.mk_fragment #i rg payload in // REMARK: No-op
       let f = CT_Data rg d in
-      assume (Seq.equal bs' (pad payload Application_data len));
+      assume (Bytes.equal bs' (pad payload Application_data len));
       Correct f
   | _   -> Error (AD_decode_error, "Unknown ContentType")
 
@@ -158,10 +158,11 @@ let rec scan_pad_correct i payload ct len j =
   let bs = pad payload ct len in
   if j = length payload then
     begin
-    cut (abyte (Seq.index bs j) = ctBytes ct);
-    lemma_split bs j;
-    lemma_eq_intro payload (fst (split bs j));
-    match Seq.index bs j with
+    cut (abyte (Bytes.index bs j) = ctBytes ct);
+    //TODO bytes NS 09/27
+    // lemma_split bs j;
+    // lemma_eq_intro payload (fst (split_ bs j));
+    match Bytes.index bs j with
     | 20z -> cut (j = 1)
     | 21z -> cut (j = 2)
     | 22z -> ()
@@ -188,7 +189,7 @@ type goodrepr i = bs:plainRepr { Correct? (scan i bs (length bs - 1)) }
 
 val mk_plain: i:id{ ~(authId i) } -> l:plainLen -> pr:lbytes l
   -> Tot (let len = min l (max_TLSPlaintext_fragment_length + 1) in
-         let pr' = fst (split pr len) in
+         let pr' = fst (split_ pr len) in
          option (p:plain i len {pr' = ghost_repr #i #len p}))
 let mk_plain i l pr =
   match scan i pr (length pr - 1) with

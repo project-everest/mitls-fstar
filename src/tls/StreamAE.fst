@@ -220,7 +220,7 @@ let encrypt #i e l p =
   let h0 = get() in
   let ctr = ctr e.counter in
   m_recall ctr;
-  let text = if safeId i then createBytes l 0z else repr i l p in
+  let text = if safeId i then create_ l 0z else repr i l p in
   let n = m_read ctr in
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in

@@ -16,7 +16,7 @@ open TLSInfo
 
 val ssl_prf_int: bytes -> string -> bytes -> Tot bytes
 let ssl_prf_int secret label seed =
-  let allData = utf8 label @| secret @| seed in
+  let allData = utf8_encode label @| secret @| seed in
   let step1 = hash SHA1 allData in
   let allData = secret @| step1 in
   hash MD5 allData
@@ -78,7 +78,7 @@ let rec p_hash_int alg secret seed len it aPrev acc =
   if it = 1 then
     let hs = macSize alg in
     let r = len % hs in
-    let (pCur,_) = split pCur r in
+    let (pCur,_) = split_ pCur r in
     acc @| pCur
   else
     p_hash_int alg secret seed len (it-1) aCur (acc @| pCur)
@@ -93,16 +93,16 @@ val tls_prf: bytes -> bytes -> bytes -> int -> St bytes
 let tls_prf secret label seed len =
   let l_s = length secret in
   let l_s1 = (l_s+1)/2 in
-  let secret1,secret2 = split secret l_s1 in
+  let secret1,secret2 = split_ secret l_s1 in
   let newseed = label @| seed in
   let hmd5  = p_hash (HMac MD5) secret1 newseed len in
   let hsha1 = p_hash (HMac SHA1) secret2 newseed len in
-  xor len hmd5 hsha1
+  xor (UInt32.uint_to_t len) hmd5 hsha1
 
 val tls_finished_label: role -> Tot bytes
 let tls_finished_label =
-  let tls_client_label = utf8 "client finished" in
-  let tls_server_label = utf8 "server finished" in
+  let tls_client_label = utf8_encode "client finished" in
+  let tls_server_label = utf8_encode "server finished" in
   function
   | Client -> tls_client_label
   | Server -> tls_server_label

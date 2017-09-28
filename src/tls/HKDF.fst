@@ -92,10 +92,10 @@ val hkdf_expand: ha:hash_alg
 let hkdf_expand ha prk info len =
   lemma_repr_bytes_values len;
   let raw = hkdf_expand_int ha prk info len 0 0 empty_bytes in
-  fst(split raw len)  // possibly chopping off the end of the last hash
+  fst(split_ raw len)  // possibly chopping off the end of the last hash
 
 let tls13_prefix : lbytes 6 =
-  let s = abytes "tls13 " in
+  let s = bytes_of_string "tls13 " in
   assume(length s = 6); s
 
 (*-------------------------------------------------------------------*)
@@ -118,7 +118,7 @@ HKDF-Expand-Label(Secret, Label, Messages, Length) =
 
 val hkdf_expand_label: ha: hash_alg
   -> prk: hkey ha
-  -> label: string{length (abytes label) < 256 - 9}
+  -> label: string{length (bytes_of_string label) < 256 - 9}
   -> hv: bytes{length hv < 256}
   -> len: nat{len <= op_Multiply 255 (tagLen ha)}
   -> ST (lbytes len)
@@ -126,7 +126,7 @@ val hkdf_expand_label: ha: hash_alg
   (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
 let hkdf_expand_label ha prk label hv len =
-  let label_bytes = tls13_prefix @| abytes label in
+  let label_bytes = tls13_prefix @| bytes_of_string label in
   lemma_repr_bytes_values len;
   lemma_repr_bytes_values (length label_bytes);
   lemma_repr_bytes_values (length hv);
@@ -147,14 +147,14 @@ let hkdf_expand_label ha prk label hv len =
 val derive_secret:
   ha:hash_alg ->
   secret: hkey ha ->
-  label: string{length (abytes label) < 256-6} ->
+  label: string{length (bytes_of_string label) < 256-6} ->
   hs_hash: bytes{length hs_hash < 256} ->
   ST (lbytes (Hashing.Spec.tagLen ha))
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
 let derive_secret ha secret label hashed_log =
-  let lbl = tls13_prefix @| abytes label in
+  let lbl = tls13_prefix @| bytes_of_string label in
   cut(length lbl < 256);
   lemma_repr_bytes_values (Hashing.Spec.tagLen ha);
   lemma_repr_bytes_values (length lbl);

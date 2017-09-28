@@ -454,7 +454,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
           dbg ("Ticket RMS: "^(print_bytes rms));
           let i = ResumptionPSK #li rmsId in
           let CipherSuite13 _ h = cs in
-          let nonce, _ = split id 12 in
+          let nonce, _ = split id 12ul in
           let psk = HKDF.derive_secret h rms "resumption" nonce in
           (i, psk, h)
         | None ->
@@ -657,7 +657,7 @@ let ks_12_record_key ks =
     match !st with
     | C (C_12_has_MS csr alpha msId ms) -> Client, csr, alpha, msId, ms
     | S (S_12_has_MS csr alpha msId ms) -> Server, csr, alpha, msId, ms in
-  let cr, sr = split csr 32 in
+  let cr, sr = split csr 32ul in
   let (pv, cs, ems) = alpha in
   let kdf = kdfAlg pv cs in
   let ae = get_aeAlg cs in
@@ -667,9 +667,9 @@ let ks_12_record_key ks =
   let slen = AEADProvider.salt_length id in
   let expand = TLSPRF.kdf kdf ms (sr @| cr) (klen + klen + slen + slen) in
   dbg ("keystring (CK, CIV, SK, SIV) = "^(print_bytes expand));
-  let k1, expand = split expand klen in
-  let k2, expand = split expand klen in
-  let iv1, iv2 = split expand slen in
+  let k1, expand = split_ expand klen in
+  let k2, expand = split_ expand klen in
+  let iv1, iv2 = split_ expand slen in
   let wk, wiv, rk, riv =
     match role with
     | Client -> k1, iv1, k2, iv2
@@ -738,7 +738,7 @@ let ks_server_12_cke_dh ks gy hashed_log =
   let msId, ms =
     if ems then
       begin
-      let ms = TLSPRF.prf (pv,cs) pmsb (utf8 "extended master secret") hashed_log 48 in
+      let ms = TLSPRF.prf (pv,cs) pmsb (utf8_encode "extended master secret") hashed_log 48 in
       dbg ("extended master secret:"^(print_bytes ms));
       let msId = ExtendedMS pmsId hashed_log kef in
       msId, ms
@@ -1145,7 +1145,7 @@ let ks_client_12_set_session_hash ks log =
       let msId, ms =
         if ems then
           begin
-          let ms = TLSPRF.prf (pv,cs) pms (utf8 "extended master secret") log 48 in
+          let ms = TLSPRF.prf (pv,cs) pms (utf8_encode "extended master secret") log 48 in
           dbg ("extended master secret:"^(print_bytes ms));
           let msId = ExtendedMS pmsId log kef in
           msId, ms
