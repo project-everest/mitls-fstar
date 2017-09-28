@@ -56,8 +56,8 @@ val parseHeader: h5:header -> Tot (result (contentType
                                          * protocolVersion 
                                          * l:nat { l <= max_TLSCiphertext_fragment_length}))
 let parseHeader (h5:header) =
-    let (ct1,b4)   = FStar.Bytes.split h5 1 in
-    let (pv2,len2) = FStar.Bytes.split b4 2 in
+    let (ct1,b4)   = FStar.Bytes.split h5 1ul in
+    let (pv2,len2) = FStar.Bytes.split b4 2ul in
     match parseCT ct1 with
     | Error z -> Error z
     | Correct ct ->
