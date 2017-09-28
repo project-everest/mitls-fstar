@@ -189,10 +189,10 @@ let concrete_encrypt (#i:id) (e:writer i)
   =
   let h = get() in
   let l = fst rg in
-  let text = if safeId i then createBytes l 0z else repr i ad rg p in
+  let text = if safeId i then create_ l 0z else repr i ad rg p in
   lemma_repr_bytes_values n;
   let nb = bytes_of_int (AEAD.noncelen i) n in
-  let nonce_explicit, _ = split nb (AEAD.explicit_iv_length i) in
+  let nonce_explicit, _ = split_ nb (AEAD.explicit_iv_length i) in
   let iv = AEAD.create_nonce e.aead nb in
   assume(authId i ==> (Flag.prf i /\ AEAD.fresh_iv #i e.aead iv h)); // TODO
   lemma_repr_bytes_values (length text);
@@ -204,7 +204,8 @@ let concrete_encrypt (#i:id) (e:writer i)
   targetLength_converges i rg;
   cut (within (length text) (cipherRangeClass i tlen));
   targetLength_at_most_max_TLSCiphertext_fragment_length i (cipherRangeClass i tlen);
-  nonce_explicit @| AEAD.encrypt #i #l e.aead iv ad' text
+  let enc = AEAD.encrypt #i #l e.aead iv ad' text in
+  nonce_explicit @| enc
 
 // Encryption of plaintexts; safe instances are idealized
 // Returns (nonce_explicit @| cipher @| tag)
@@ -302,7 +303,7 @@ let decrypt #i d ad c =
   else // Concrete
     // We discard the explicit nonce and use the internal sequence number
     // (ChaCha20 doesn't use the explicit nonce)
-    let nb, c' = split c (AEAD.explicit_iv_length i) in
+    let nb, c' = split_ c (AEAD.explicit_iv_length i) in
     cut(length nb = AEAD.explicit_iv_length i);
     let j : counter (alg i) = m_read ctr in
     lemma_repr_bytes_values j;

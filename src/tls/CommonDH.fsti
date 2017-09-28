@@ -1,7 +1,7 @@
 module CommonDH
 
 open FStar.HyperStack
-open Platform.Bytes
+open FStar.Bytes
 open Platform.Error
 open Parse
 open TLSError

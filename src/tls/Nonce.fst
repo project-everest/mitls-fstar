@@ -88,7 +88,9 @@ val mkHelloRandom: cs:role -> r:ex_rid -> ST random
              role_nonce cs n r))) //and the triple are associated as well, for ever more
 let rec mkHelloRandom cs r =
   MR.m_recall nonce_rid_table;
-  let n : random = timestamp() @| CoreCrypto.random 28 in
+  let rand = CoreCrypto.random 28 in
+  let ts = timestamp() in
+  let n : random = ts @| rand in
   if ideal then
     match MM.lookup nonce_rid_table n with
       | None -> MM.extend nonce_rid_table n r; n

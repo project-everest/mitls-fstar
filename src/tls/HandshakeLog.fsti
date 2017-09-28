@@ -2,7 +2,7 @@ module HandshakeLog
 
 // NB still missing regions and modifies clauses.
 
-open Platform.Bytes
+open FStar.Bytes
 open FStar.Ghost // after HH so as not to shadow reveal :(
 
 open FStar.HyperStack

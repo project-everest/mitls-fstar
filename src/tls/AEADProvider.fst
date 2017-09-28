@@ -45,11 +45,12 @@ val to_bytes: l:nat -> buf:CB.lbuffer l -> STL (b:bytes{length b = l})
 let rec to_bytes l buf =
   if l = 0 then empty_bytes
   else
-    let b = UInt8.v (Buffer.index buf 0ul) in
-    let s = abyte (Char.char_of_int b) in
+    let b = Buffer.index buf 0ul in
+    let s = abyte b in
     let t = to_bytes (l - 1) (Buffer.sub buf 1ul (uint_to_t (l-1))) in
     let r = s @| t in
-    (lemma_len_append s t; r)
+    (//lemma_len_append s t; //TODO bytes NS 09/27 seems unnecessary
+     r)
 
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{length b = len} -> STL unit
@@ -57,7 +58,8 @@ val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{len
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
 let rec store_bytes len buf i s =
   if i < len then
-    let () = Buffer.upd buf (uint_to_t i) (UInt8.uint_to_t (Char.int_of_char (FStar.Bytes.index s i))) in
+    let i_ul = uint_to_t i in
+    let () = Buffer.upd buf i_ul s.[i_ul] in
     store_bytes len buf (i + 1) s
 
 val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))
@@ -136,15 +138,13 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i)
     | LowC _ _ s -> s in
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
-    xor (iv_length i) n salt
+    xor_ #(iv_length i) n salt
   | _ ->
     let r = salt @| n in
-    lemma_len_append salt n; r
+    //lemma_len_append salt n; //TODO bytes NS 09/27 seems unnecessary
+    r
 
 (* Necessary for injectivity of the nonce-to-IV construction in TLS 1.3 *)
-assume val lemma_xor_idempotent: n:nat -> b1:lbytes n -> b2:lbytes n ->
-  Lemma (xor n b2 (xor n b1 b2) = b1)
-
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   : Lemma (create_nonce st n1 = create_nonce st n2 ==> n1 = n2)
@@ -155,11 +155,11 @@ let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
     | LowC _ _ s -> s in
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, CC.CHACHA20_POLY1305) ->
-    lemma_xor_idempotent (iv_length i) n1 salt;
-    lemma_xor_idempotent (iv_length i) n2 salt
+    xor_idempotent (FStar.UInt32.uint_to_t (iv_length i)) n1 salt;
+    xor_idempotent (FStar.UInt32.uint_to_t (iv_length i)) n2 salt
   | _ ->
     if (salt @| n1) = (salt @| n2) then
-      lemma_append_inj salt n1 salt n2
+      () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
 
 type empty_log (#i:id) (#rw:rw) (st:state i rw) h =
   (match st with

@@ -50,7 +50,7 @@ let rec certificateListBytes13 = function
     vlbytes 3 crt @| extensionsBytes exts @| certificateListBytes13 rest
 
 val certificateListBytes_is_injective: c1:chain -> c2:chain ->
-  Lemma (Seq.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
+  Lemma (Bytes.equal (certificateListBytes c1) (certificateListBytes c2) ==> c1 == c2)
 let rec certificateListBytes_is_injective c1 c2 =
   match c1, c2 with
   | [], [] -> ()
@@ -58,13 +58,13 @@ let rec certificateListBytes_is_injective c1 c2 =
     if certificateListBytes c1 = certificateListBytes c2 then
       begin
       lemma_repr_bytes_values (length hd); lemma_repr_bytes_values (length hd');
-      cut(Seq.equal ((vlbytes 3 hd) @| (certificateListBytes tl)) ((vlbytes 3 hd') @| (certificateListBytes tl')));
+      cut(Bytes.equal ((vlbytes 3 hd) @| (certificateListBytes tl)) ((vlbytes 3 hd') @| (certificateListBytes tl')));
       lemma_repr_bytes_values (length hd);
       lemma_repr_bytes_values (length hd');
-      cut(Seq.equal (Seq.slice (vlbytes 3 hd) 0 3) (Seq.slice (certificateListBytes c1) 0 3));
-      cut(Seq.equal (Seq.slice (vlbytes 3 hd') 0 3) (Seq.slice (certificateListBytes c1) 0 3));
+      cut(Bytes.equal (Bytes.slice (vlbytes 3 hd) 0ul 3ul) (Bytes.slice (certificateListBytes c1) 0ul 3ul));
+      cut(Bytes.equal (Bytes.slice (vlbytes 3 hd') 0ul 3ul) (Bytes.slice (certificateListBytes c1) 0ul 3ul));
       vlbytes_length_lemma 3 hd hd';
-      lemma_append_inj (vlbytes 3 hd) (certificateListBytes tl) (vlbytes 3 hd') (certificateListBytes tl');
+      //lemma_append_inj (vlbytes 3 hd) (certificateListBytes tl) (vlbytes 3 hd') (certificateListBytes tl'); //TODO bytes NS 09/27
       lemma_vlbytes_inj 3 hd hd';
       certificateListBytes_is_injective tl tl'
       end
@@ -72,19 +72,19 @@ let rec certificateListBytes_is_injective c1 c2 =
     begin
     cut (length (certificateListBytes c1) = 0);
     lemma_repr_bytes_values (length hd);
-    cut (Seq.equal (certificateListBytes c2) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+    cut (Bytes.equal (certificateListBytes c2) ((vlbytes 3 hd) @| (certificateListBytes tl)));
     lemma_vlbytes_len 3 hd
     end
   | hd::tl, [] ->
     begin
     cut (length (certificateListBytes c2) = 0);
     lemma_repr_bytes_values (length hd);
-    cut (Seq.equal (certificateListBytes c1) ((vlbytes 3 hd) @| (certificateListBytes tl)));
+    cut (Bytes.equal (certificateListBytes c1) ((vlbytes 3 hd) @| (certificateListBytes tl)));
     lemma_vlbytes_len 3 hd
     end
 
 val certificateListBytes13_is_injective: c1:chain13 -> c2:chain13 ->
-  Lemma (Seq.equal (certificateListBytes13 c1) (certificateListBytes13 c2) ==> c1 == c2)
+  Lemma (Bytes.equal (certificateListBytes13 c1) (certificateListBytes13 c2) ==> c1 == c2)
 let rec certificateListBytes13_is_injective c1 c2 =
   // TODO: need injectivity lemmas for extensions
   admit()

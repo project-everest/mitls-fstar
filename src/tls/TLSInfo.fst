@@ -376,7 +376,7 @@ type injective (#a:Type) (#b:Type)
 // and folds the perfect hashing assumption and log projection
 type hashed_log (li:logInfo) =
   b:bytes{exists (f: bytes -> Tot logInfo).{:pattern (f b)}
-  injective #bytes #logInfo #equalBytes #eq_logInfo f /\ f b = li}
+  injective #bytes #logInfo #op_Equality #eq_logInfo f /\ f b = li}
 
 type binderLabel =
   | ExtBinder
@@ -616,7 +616,7 @@ val siId: si:sessionInfo{
   pvcs si.protocol_version si.cipher_suite } -> role -> Tot id
 
 let siId si r =
-  let cr, sr = split (csrands si) 32 in
+  let cr, sr = split (csrands si) 32ul in
   ID12 si.protocol_version (msid si) (kdfAlg si.protocol_version si.cipher_suite) (siAuthEncAlg si) cr sr r
 
 let pv_of_id (i:id{~(PlaintextID? i)}) = match i with

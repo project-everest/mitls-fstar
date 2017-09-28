@@ -82,7 +82,7 @@ let ctBytes = function
 
 val parseCT: pinverse_t ctBytes
 let parseCT b =
-  match cbyte b with
+  match b.[0ul] with
   | 20z -> Correct Change_cipher_spec
   | 21z -> Correct Alert
   | 22z -> Correct Handshake
@@ -97,7 +97,7 @@ let inverse_ct x = ()
 
 val pinverse_ct: x:_ -> Lemma
   (requires True)
-  (ensures (lemma_pinverse_f_g Seq.equal ctBytes parseCT x))
+  (ensures (lemma_pinverse_f_g Bytes.equal ctBytes parseCT x))
   [SMTPat (ctBytes (Correct?._0 (parseCT x)))]
 let pinverse_ct x = ()
 

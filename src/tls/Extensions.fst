@@ -797,7 +797,7 @@ let extensionBytes_is_injective
   (ext2: extension)
   (s2: bytes)
 : Lemma
-  (requires (Seq.equal (extensionBytes ext1 @| s1) (extensionBytes ext2 @| s2)))
+  (requires (Bytes.equal (extensionBytes ext1 @| s1) (extensionBytes ext2 @| s2)))
   (ensures (ext1 == ext2 /\ s1 == s2))
 = let head1 = extensionHeaderBytes ext1 in
   let payload1 = extensionPayloadBytes ext1 in
@@ -965,8 +965,8 @@ let rec extensionListBytes_same_bindersLen
     if E_pre_shared_key? x1
     then ()
     else begin
-      Seq.lemma_len_append ex1 eq1;
-      Seq.lemma_len_append ex2 eq2;
+      // Seq.lemma_len_append ex1 eq1; //TODO bytes NS 09/27 seems unnecessary
+      // Seq.lemma_len_append ex2 eq2; //TODO bytes NS 09/27 seems unnecessary
       extensionListBytes_same_bindersLen q1 s1 q2 s2
     end
   | _ -> ()
