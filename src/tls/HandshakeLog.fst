@@ -259,7 +259,7 @@ let setParams l pv ha kexo dho =
       let acc = Hashing.start ha in
       let acc = Hashing.extend #ha acc msgs in
       let _ : squash (Hashing.content acc == msgs) =
-        append_empty_bytes_l msgs
+        admit (* append_empty_bytes_l msgs //TODO bytes JR 09/27 *)
       in
       assume (tags ha (reveal_log st.transcript) st.parsed []); // TODO: FIXME: should this be part of OpenHash?
       let hs = FixedHash ha acc [] in

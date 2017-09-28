@@ -12,3 +12,5 @@ typedef int FStar_Char;
 /* FStar_UInt16_t FStar_UInt16_uint_to_t(Prims_nat x); */
 /* FStar_UInt32_t FStar_UInt32_uint_to_t(Prims_nat x); */
 FStar_Char FStar_Char_char_of_int(krml_checked_int_t);
+
+void Curve25519_pubshare(int K___FStar_Bytes_bytes_FStar_Bytes_bytes);
