@@ -35,41 +35,6 @@ let prov() =
 
 type u32 = FStar.UInt32.t
 
-(**
-Functions to go back and forth between FStar.Bytes Buffers
-**)
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
-val to_bytes: l:nat -> buf:CB.lbuffer l -> STL (b:bytes{length b = l})
-  (requires (fun h0 -> Buffer.live h0 buf))
-  (ensures (fun h0 s h1 -> h0 == h1 ))
-let rec to_bytes l buf =
-  if l = 0 then empty_bytes
-  else
-    let b = Buffer.index buf 0ul in
-    let s = abyte b in
-    let t = to_bytes (l - 1) (Buffer.sub buf 1ul (uint_to_t (l-1))) in
-    let r = s @| t in
-    (//lemma_len_append s t; //TODO bytes NS 09/27 seems unnecessary
-     r)
-
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
-val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{length b = len} -> STL unit
-  (requires (fun h0 -> Buffer.live h0 buf))
-  (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
-let rec store_bytes len buf i s =
-  if i < len then
-    let i_ul = uint_to_t i in
-    let () = Buffer.upd buf i_ul s.[i_ul] in
-    store_bytes len buf (i + 1) s
-
-val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))
-  (requires (fun h0 -> True))
-  (ensures (fun h0 r h1 -> Buffer.modifies_0 h0 h1 /\ Buffer.live h1 r ))
-let from_bytes b =
-  let buf = Buffer.create 0uy (uint_to_t (length b)) in
-  store_bytes (length b) buf 0 b;
-  buf
-
 (***********************************************************************)
 
 type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
@@ -231,7 +196,7 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
     assume (false);
     assume(~(Flag.prf i));
     let k = AE.leak #i st in
-    (to_bytes (key_length i) k, s)
+    (BufferBytes.to_bytes (key_length i) k, s)
 
 // ADL TODO
 // There is an issue connecting the stateful encryption in miTLS
@@ -267,7 +232,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
       let st = CAEAD.aead_create (alg i) CAEAD.ValeAES k in
       LowC st k s
     | LowProvider ->
-      let st = AE.coerce i r (from_bytes k) in
+      let st = AE.coerce i r (BufferBytes.from_bytes k) in
       LowLevel st s
     in
   let r =
@@ -328,11 +293,11 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       CAEAD.aead_encrypt st iv ad plain
     | LowLevel st _ ->
       let adlen = uint_to_t (length ad) in
-      let ad = from_bytes ad in
+      let ad = BufferBytes.from_bytes ad in
       let plainlen = uint_to_t l in
       let cipherlen = uint_to_t (cipherlen i l) in
       assume(AE.safelen i (v plainlen) = true); // TODO
-      let plainbuf = from_bytes plain in
+      let plainbuf = BufferBytes.from_bytes plain in
       let plainba = CB.load_bytes plainlen plainbuf in
       let plain = Plain.create i 0uy plainlen in
       if not (Flag.safeId i) then begin
@@ -342,7 +307,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
       let cipher = Buffer.create 0uy cipherlen in
       assume(v cipherlen = v plainlen + 12);
       AE.encrypt i st (uint128_of_iv iv) adlen ad plainlen plain cipher;
-      to_bytes l cipher
+      BufferBytes.to_bytes l cipher
   in
   cipher
 
@@ -375,14 +340,14 @@ let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:c
     | LowC st _ _ -> CAEAD.aead_decrypt st iv ad cipher
     | LowLevel st _->
       let ivlen = uint_to_t (iv_length i) in
-      let iv = CB.load_uint128 ivlen (from_bytes iv) in
+      let iv = CB.load_uint128 ivlen (BufferBytes.from_bytes iv) in
       let adlen = uint_to_t (length ad) in
-      let ad = from_bytes ad in
+      let ad = BufferBytes.from_bytes ad in
       let plainlen = uint_to_t l in
-      let cbuf = from_bytes cipher in
+      let cbuf = BufferBytes.from_bytes cipher in
       let plain = Plain.create i 0uy plainlen in
       if AE.decrypt i st iv adlen ad plainlen plain cbuf then
-        Some (to_bytes l (Plain.bufferRepr #i plain))
+        Some (BufferBytes.to_bytes l (Plain.bufferRepr #i plain))
       else None
     in
   plain

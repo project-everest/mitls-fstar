@@ -193,6 +193,11 @@ tls-lax: record_fstar_version
 	--include $(MITLS_HOME)/src/tls/concrete-flags \
 	TLS.fst
 
+Curve25519.ml: record_fstar_version
+	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax \
+	--include $(MITLS_HOME)/src/tls/concrete-flags \
+	Curve25519.fst --codegen OCaml
+
 wc:
 	wc -l *.fst *.fsti
 

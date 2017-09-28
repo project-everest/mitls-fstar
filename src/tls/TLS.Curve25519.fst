@@ -1,4 +1,4 @@
-module Curve25519
+module TLS.Curve25519
 
 open FStar.Heap
 open FStar.HyperHeap
@@ -9,7 +9,7 @@ open FStar.HyperStack.ST
 open FStar.Bytes
 open Platform.Error
 
-module X = Spec.Curve25519
+module X = Curve25519
 module CC = CoreCrypto
 module U32 = FStar.UInt32
 
@@ -46,7 +46,12 @@ let keygen () : ST keyshare
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let s : lbytes 32 = !rand 32 in
-  (point_of_scalar s, s)
+  let base_point = Seq.upd (Seq.create 32 0uy) 0 9uy in
+  let out = Buffer.create 0uy 32ul in
+  let scalar = BytesBuffer.from_bytes s in
+  let point = BytesBuffer.from_bytes base_point in
+  X.crypto_scalarmult out scalar point;
+  BufferBytes.to_bytes out, s
 
 let mul (k:scalar) (p:point) : Tot point =
   let p = X.scalarmult (bytes2hacl k) (bytes2hacl p) in
