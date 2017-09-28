@@ -1452,7 +1452,14 @@ let rec parseDistinguishedNameList data res =
         end
 
 (* REMOVE jroesch *)
-assume val cipherSuite_eq : cipherSuite -> cipherSuite -> bool
+let cipherSuite_eq (c1 c2:cipherSuite) : bool =
+match c1, c2 with
+| NullCipherSuite, NullCipherSuite -> false
+| CipherSuite ka osa aa, CipherSuite ka' osa' aa' -> false (* fixme *)
+| CipherSuite13 aa ha, CipherSuite13 aa' ha' -> false (* fixme *)
+| SCSV s, SCSV s' -> false
+| UnknownCipherSuite b1 b2, UnknownCipherSuite b1' b2' ->
+  b1 = b1' && b2 = b2'
 
 val mem_cipherSuite: cipherSuite -> list cipherSuite -> Tot bool
 let rec mem_cipherSuite x = function

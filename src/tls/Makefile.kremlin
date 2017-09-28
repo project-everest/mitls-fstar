@@ -1,9 +1,9 @@
 include Makefile
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
-KRML_FILES = TLSConstants.fst #$(wildcard *.fst)
+KRML_FILES = TLSInfo.fst #$(wildcard *.fst)
 # We should add back support for Platform.Bytes when we get the chance.
-DROP_MODULES = $(addprefix -drop , Spec.* MonotoneMapNonDep MonotoneMap IdNonce FStar.Bytes Platform.Bytes Curve25519)
+DROP_MODULES = $(addprefix -drop , Spec.* MonotoneMapNonDep MonotoneMap IdNonce FStar.Bytes Platform.Bytes)
 C_DRIVER = $(KRML_DIR)/main.c
 HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"')
 
