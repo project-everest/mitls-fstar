@@ -18,7 +18,7 @@ private type pre_keyshare g =
     Some? k.ec_priv /\ k.ec_params.curve = g /\
     length k.ec_point.ecx = ec_bytelen g /\
     length k.ec_point.ecy = ec_bytelen g }
-  | KS_X25519 of Curve25519.keyshare
+  | KS_X25519 of TLS.Curve25519.keyshare
   | KS_X448 of (pub:lbytes 56 * priv:lbytes 56)
 
 // ADL do not use untagged union here!
@@ -33,7 +33,7 @@ private type pre_share g =
   | S_CC of p:CC.ec_point{
      length p.ecx = ec_bytelen g /\
      length p.ecy = ec_bytelen g}
-  | S_X25519 of Curve25519.point
+  | S_X25519 of TLS.Curve25519.point
   | S_X448 of lbytes 56
 
 type share (g:group) =
@@ -57,7 +57,7 @@ val pubshare: #g:group -> keyshare g -> Tot (share g)
 let pubshare #g k =
   match g with
   | ECC_X25519 ->
-    let KS_X25519 ks = k in S_X25519 (Curve25519.pubshare ks)
+    let KS_X25519 ks = k in S_X25519 (TLS.Curve25519.pubshare ks)
   | ECC_X448 ->
     let KS_X448 (p,s) = k in S_X448 p
   | _ ->
@@ -68,7 +68,7 @@ val keygen: g:group -> ST (keyshare g)
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
 let keygen g =
   match g with
-  | ECC_X25519 -> KS_X25519 (Curve25519.keygen ())
+  | ECC_X25519 -> KS_X25519 (TLS.Curve25519.keygen ())
   | ECC_X448 ->
     let s = CoreCrypto.random 56 in
     let p = CoreCrypto.random 56 in
@@ -88,7 +88,7 @@ let dh_responder #g gx =
   | ECC_X25519 ->
     let S_X25519 gx = gx in
     let KS_X25519 (p,s) = gy in
-    let shared = Curve25519.mul s gx in
+    let shared = TLS.Curve25519.mul s gx in
     (gy, shared)
   | ECC_X448 ->
     let KS_X448 (p,s) = gy in
@@ -108,7 +108,7 @@ let dh_initiator #g gx gy =
   | ECC_X25519 ->
     let KS_X25519 (p,s) = gx in
     let S_X25519 gy = gy in
-    Curve25519.mul s gy
+    TLS.Curve25519.mul s gy
   | ECC_X448 ->
     let KS_X448 (p,s) = gx in
     s // TODO BEWARE
