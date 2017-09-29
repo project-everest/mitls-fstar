@@ -117,6 +117,33 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
     // Nothing to do.  The OCaml runtime has no graceful shutdown.
 }
 
+// Input:  msg - an error message string to log
+//         errmsg - in/out pointer to the current error log string, may
+//                  point to NULL
+// Return:
+//         nothing
+//         *errmsg updated by realloc and appending the exception text.
+//                 On out-of-memory, the new message is discarded and
+//                 the current error log string is returned unmodified.
+static void report_error(const char *msg, char **errmsg)
+{
+    if (msg == NULL) {
+        return;
+    }
+    if (*errmsg == NULL) {
+        *errmsg = strdup(msg);
+    } else {
+        char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
+        if (newerrmsg) {
+            strcpy(newerrmsg, *errmsg);
+            strcat(newerrmsg, "\n");
+            strcat(newerrmsg, msg);
+            free(*errmsg);
+            *errmsg = newerrmsg;
+        }
+    }
+}
+
 // Input:  v - an OCaml exception
 //         errmsg - in/out pointer to the current error log string, may
 //                  point to NULL
@@ -129,18 +156,8 @@ static void report_caml_exception(value v, char **errmsg)
 {
     if (errmsg) {
         char * msg = caml_format_exception(Extract_exception(v));
-        if (*errmsg == NULL) {
-            *errmsg = strdup(msg);
-        } else {
-            char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
-            if (newerrmsg) {
-                strcpy(newerrmsg, *errmsg);
-                strcat(newerrmsg, "\n");
-                strcat(newerrmsg, msg);
-                free(*errmsg);
-                *errmsg = newerrmsg;
-            }
-        }
+        report_error(msg, errmsg);
+        free(msg);
     }
 }
 
@@ -754,6 +771,7 @@ typedef struct quic_state {
    char* out_buffer;
    size_t out_buffer_size;
    size_t out_buffer_used;
+   char *errmsg;
 } quic_state;
 
  int QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
@@ -763,7 +781,11 @@ typedef struct quic_state {
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
 //   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
 //   fclose(fp);
-   if(!s->out_buffer) return -1;
+   if(!s->out_buffer)
+   {
+       report_error("QUIC_send():  out_buffer is NULL", &s->errmsg);
+       return -1;
+   }
 
    // ADL FIXME better error management
    if(buffer_size <= s->out_buffer_size - s->out_buffer_used)
@@ -773,6 +795,7 @@ typedef struct quic_state {
      return buffer_size;
    }
 
+   report_error("QUIC_send():  Insufficient space in out_buffer", &s->errmsg);
    return -1;
  }
 
@@ -784,7 +807,11 @@ typedef struct quic_state {
 //   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
 //   fclose(fp);
 
-   if(!s->in_buffer || buffer == NULL) return -1;
+   if(!s->in_buffer || buffer == NULL)
+   {
+       report_error("QUIC_recv():  in_buffer or buffer is NULL", &s->errmsg);
+       return -1;
+   }
 
    if(len > s->in_buffer_size - s->in_buffer_used)
      len = s->in_buffer_size - s->in_buffer_used; // may be 0
@@ -826,17 +853,12 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       *errmsg = strdup("failed to allocate QUIC state");
       CAMLreturnT(int, 0);
     }
+    memset(state, 0, sizeof(*state));
     *st = state;
 
     state->ffi_callbacks.send = QUIC_send;
     state->ffi_callbacks.recv = QUIC_recv;
     state->is_server = cfg->is_server;
-    state->in_buffer = NULL;
-    state->in_buffer_size = 0;
-    state->in_buffer_used = 0;
-    state->out_buffer = NULL;
-    state->out_buffer_size = 0;
-    state->out_buffer_used = 0;
 
     others = caml_alloc_string(cfg->qp.others_len);
     memcpy(String_val(others), cfg->qp.others, cfg->qp.others_len);
@@ -1022,11 +1044,12 @@ static quic_result FFI_mitls_quic_process_caml(
     state->out_buffer = outBuf;
     state->out_buffer_used = 0;
     state->out_buffer_size = *pOutBufLen;
+    state->errmsg = NULL;
 
     result = caml_callback_exn(*g_mitls_FFI_QuicProcess, state->fstar_state);
 
     if (Is_exception_result(result)) {
-        report_caml_exception(result, errmsg);
+        report_caml_exception(result, &state->errmsg);
         ret = TLS_error_other;
     } else {
         int rc = Int_val(Field(result, 0));
@@ -1041,6 +1064,8 @@ static quic_result FFI_mitls_quic_process_caml(
         *pOutBufLen = state->out_buffer_used;
     }
 
+    *errmsg = state->errmsg;
+    state->errmsg = NULL;
     CAMLreturnT(quic_result, ret);
 }
 
