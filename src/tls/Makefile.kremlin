@@ -9,12 +9,17 @@ HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"')
 
 KRML_COMMAND= FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions -tmpdir $(KRML_DIR) $(K-OPTS) -warn-error -9+11-7-6 -ccopt -Wno-unused-function
 
+# We can eventually unify these dependencies with the main Makefile
+.depend-KRML:
+	@-$(FSTAR) $(FSTAR_INCLUDE_PATHS) --dep make $(KRML_FILES) > .depend-KRML
+
+-include .depend-KRML
+
 all: krml_output/out.krml
 	$(KRML_COMMAND) krml_output/out.krml -skip-linking
 
 krml_output/out.krml: $(KRML_FILES)
 	$(KRML_COMMAND) $(KRML_FILES) -skip-translation
-
 
 test.krml:
 	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) test.fst $(C_DRIVER) \
