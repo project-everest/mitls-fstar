@@ -404,7 +404,7 @@ let rec parseQuicParameters_aux (b:bytes)
           | _ -> error "bad max_packet_size")
         | _ ->
           let pt = uint16_of_bytes pt in
-          if length pv < 252 && UInt16.v pt > 5 then
+          if length pv < 252 then
             Correct (Quic_custom_parameter (pt, pv))
           else error "invalid unrecognized QUIC transport parameter"
         in

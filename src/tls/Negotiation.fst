@@ -694,6 +694,11 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:share) =
           else Some e // TODO filter PSK
           ) (Some?.v offer.ch_extensions) in
 
+        // Echo the cookie for QUIC stateless retry
+        let ext' = match List.Tot.find Extensions.E_cookie? el with
+          | Some cookie -> cookie :: ext'
+          | None -> ext' in
+
         let offer' = {offer with ch_extensions = Some ext'} in
         let ri = (hrr, old_shares, old_psk) in
         MR.m_write ns.state (C_HRR offer' ri);
@@ -1399,6 +1404,7 @@ let server_ClientHello #region ns offer =
           | [CommonDH.Share g _] -> CommonDH.namedGroup_of_group g = Some ng
           | _ -> (IO.debug_print_string "Bad key_share\n") && false)
         | Extensions.E_early_data _ -> false // Forbidden
+        | Extensions.E_cookie c -> true // FIXME we will send cookie
         // If we add cookie support we need to treat this case separately
         // | Extensions.E_cookie c -> c = S_HRR?.cookie ns.state
         | e ->

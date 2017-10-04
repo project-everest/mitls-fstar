@@ -197,7 +197,13 @@ let ffi_parameters qpo =
       ( match (List.Tot.find Quic_idle_timeout? qp) with
         | Some (Quic_idle_timeout v) -> v
         | None -> failwith "no Quic_idle_timeout"),
-      Extensions.quicParametersBytes_aux (List.Tot.filter Quic_custom_parameter?  qp))
+      ( let nondefault = function
+        | Quic_initial_max_stream_data _
+        | Quic_initial_max_data _
+        | Quic_initial_max_stream_id _
+        | Quic_idle_timeout _ -> false
+        | _ -> true in
+      Extensions.quicParametersBytes_aux (List.Tot.filter nondefault qp)))
 
 let get_peer_parameters c =
   let r = TLSConstants.dualRole (Connection.c_role c) in
@@ -215,13 +221,12 @@ let ffiConfig
     match UInt32.v n with
     | 1 -> QuicVersion1
     | _ -> QuicCustomVersion n) versions in
+  if length others > 0 then trace ("Other QUIC transport parameters: "^(hex_of_bytes others));
   let others =
     match Extensions.parseQuicParameters_aux others
     with
     | Error z -> trace "WARNING: ill-formed custom parameters "; []
-    | Correct qpl ->
-      if not (List.Tot.for_all Quic_custom_parameter? qpl) then (trace "WARNING: not a custom parameter"; [])
-      else qpl
+    | Correct qpl -> qpl
     in
   { defaultConfig with
     min_version = TLS_1p3;

@@ -70,8 +70,8 @@ int main(int argc, char **argv)
       .max_data = 64000,
       .max_stream_id = 32,
       .idle_timeout = 120,
-      .others_len = 0,
-      .others = { 0 }
+      .others_len = 6,
+      .others = "\x00\x05\x00\x02\x0f\xe4"
     };
   quic_transport_parameters server_qp =
     {
