@@ -405,18 +405,18 @@ let namedGroupsBytes_is_injective
   namedGroupsBytes0_is_injective groups1 groups2
 
 private val parseNamedGroups0: b:B.bytes -> l:list namedGroup
-  -> Tot (result (groups:list namedGroup{List.Tot.length groups = List.Tot.length l + B.length b / 2}))
+  -> Pure (result (list namedGroup))
+  (requires (True))
+  (ensures (specCorrect (fun groups -> List.Tot.length groups == List.Tot.length l + B.length b / 2)))
   (decreases (B.length b))
 let rec parseNamedGroups0 b groups =
   if B.length b > 0 then
     if B.length b >= 2 then
       let (ng, bytes) = B.split b 2ul in
       //B.lemma_split b 2; //TODO
-      match parseNamedGroup ng with
-      |Correct ng ->
-        let groups' = ng :: groups in
-        parseNamedGroups0 bytes groups'
-      | Error z    -> Error z
+      ng <-- parseNamedGroup ng ;
+      let groups' = ng :: groups in
+      parseNamedGroups0 bytes groups'
     else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "")
   else
    let grev = List.Tot.rev groups in
@@ -428,8 +428,9 @@ val parseNamedGroups: b:B.bytes { 2 <= B.length b /\ B.length b < 65538 }
   -> Tot (result (groups:list namedGroup{List.Tot.length groups = (B.length b - 2) / 2}))
 
 let parseNamedGroups b =
-  match vlparse 2 b with
-  | Correct b' -> parseNamedGroups0 b' []
-  | _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
+  b' <-- vlparse 2 b ;
+  parseNamedGroups0 b' []
+
+  //| _ -> Error(AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Failed to parse named groups")
 
 (* End Module DHFormat *)

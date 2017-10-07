@@ -110,6 +110,18 @@ let string_of_error (a,s)= string_of_ad a^" ("^s^")"
 type result 'a = Platform.Error.optResult error 'a
 
 open Platform.Error
+
+unfold let bind (x:result 'a) (y:'a -> result 'b) : result 'b = 
+  match x with
+  | Correct a -> y a
+  | Error x -> Error x
+
+let specCorrect (f: 'a -> Type0) (x: result 'a) : Type0 =
+  match x with
+  | Correct x -> f x
+  | Error _ -> true
+
+
 let string_of_result f = function
   | Error z -> "Error: "^string_of_error z
   | Correct v -> f v

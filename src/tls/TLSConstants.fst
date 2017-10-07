@@ -532,10 +532,10 @@ let parseVersion_draft v =
       else Error(AD_decode_error, "Refused to parse unknown draft "^print_bytes v)
   | (3z, 4z) -> Error(AD_decode_error, "Refused to parse TLS 1.3 final version")
   | _ ->
-    match parseVersion v with
-    | Correct (UnknownVersion _ _) -> Error(AD_decode_error, "Parsed unknown version ")
-    | Correct pv -> Correct pv
-    | Error z -> Error z
+    pv <-- parseVersion v ;
+    (match pv with 
+     | UnknownVersion _ _ -> Error(AD_decode_error, "Parsed unknown version ")
+     | _ -> Correct pv)
 
 (** Determine the oldest protocol versions for TLS *)
 let minPV (a:protocolVersion) (b:protocolVersion) =
@@ -800,9 +800,7 @@ let parseCipherSuiteAux b =
 (** Parsing function for ciphersuites *)
 val parseCipherSuite: pinverse_t cipherSuiteBytes
 let parseCipherSuite b =
-  match parseCipherSuiteAux b with
-  | Correct c -> Correct c
-  | Error z -> Error z
+  parseCipherSuiteAux b
 
 #reset-options "--z3rlimit 60 --max_ifuel 6 --initial_ifuel 6 --max_fuel 1 --initial_fuel 1"
 
