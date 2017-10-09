@@ -60,6 +60,8 @@ type id =
 /// This form of indexing may be too global, e.g. extractions should
 /// not depend on expansion; in principle, we could clip "Extracted"
 /// to the extractor index.
+///
+/// MK: what is meant with "clip 'Extracted' to the extractor index"?
 
 let ii:ipkg = Idx id (fun _ -> true)
 
@@ -67,7 +69,9 @@ let ii:ipkg = Idx id (fun _ -> true)
 /// registration at creation/coercion time.
 ///
 /// Try out on examples: we'll need a stateful invariant of the form
-/// "I have used this secret to create exactly these keys". What out 
+/// "I have used this secret to create exactly these keys". What out
+///
+/// MK: how does this sentence end?
 
 
 /// --------------------------------------------------------------------------------------------------
@@ -83,6 +87,8 @@ assume new type secret (u:usage) (ip: ipkg) (i: ip.t)
  
 /// maybe reverse-inline sampling from low-level KeyGen?
 /// otherwise we have to argue it is what Create does.
+///
+/// MK: what does reverse-inline of low-level KeyGen mean?
 
 val create: 
   u: usage -> 
@@ -175,6 +181,7 @@ assume val coerce_salt:
   raw: lbytes 16ul ->
   salt expu ip i 
 
+/// MK: the following two functions are the same
 let saltp1 (expu:usage) (ip:ipkg): pkg ip = Pkg 
   (salt expu ip)
   (fun _ -> 16ul) 
@@ -205,6 +212,30 @@ assume val extract1:
   materials: id_dhe -> 
   secret expu ii (Extract1 i materials)
 
+assume type element
+
+/// Initiator computes DH keyshare
+assume val genDH:
+  g:element ->
+  iX:element
+
+/// Respoder computes DH secret material
+assume val extractR:
+  #expu: usage -> 
+  #i: id -> 
+  s: salt expu ii i ->
+  iX: element ->
+  rY:element * id_dhe
+
+/// Initiator computes DH secret material
+assume val extractI: 
+  #expu: usage -> 
+  #i: id -> 
+  s: salt expu ii i ->
+  iX: element ->
+  rY: element ->
+  id_dhe
+
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
 assume val extract2: 
   #expu: usage ->
@@ -216,9 +247,9 @@ assume val extract2:
 /// module Raw
 /// a default functionality (no idealization);
 /// for modelling, we could also provide a "leak" function
-type raw  (#ip: ipkg) (i: Idx?.t ip) = list nat 
+type raw  (#ip: ipkg) (i: Idx?.t ip) = list nat
 let create_raw (#ip: ipkg) (i: Idx?.t ip): raw  i  = [1;2;3] // should sample instead
-let coerce_raw (#ip: ipkg) (i: Idx?.t ip) _ : raw i  = [1;2;3] // should sample instead
+let coerce_raw (#ip: ipkg) (i: Idx?.t ip) _ : raw i  = [1;2;3] // should sample instead MK: should not sample
 let rp (ip:ipkg): pkg ip = Pkg raw (fun _ -> 16ul) create_raw coerce_raw
 
 
@@ -226,9 +257,9 @@ let rp (ip:ipkg): pkg ip = Pkg raw (fun _ -> 16ul) create_raw coerce_raw
 /// Some other sample functionality,
 /// with a different concrete key representation
 assume new type key (#ip: ipkg) (i: Idx?.t ip) // abstraction required for indexing
-assume val coerce_key: #ip: ipkg -> i: Idx?.t ip -> lbytes 20ul -> key i 
+assume val coerce_key: #ip: ipkg -> i: Idx?.t ip -> lbytes 20ul -> key i
 assume val dummy: lbytes 20ul
-let create_key (#ip: ipkg) (i: Idx?.t ip) : key i = coerce_key i dummy (* strange bug with coerce *)
+let create_key (#ip: ipkg) (i: Idx?.t ip) : key i = coerce_key i dummy (* strange bug with coerce, MK: how does one trigger the bug?  *)
 let mp (ip:ipkg): pkg ip = Pkg key (fun _ -> 20ul) create_key coerce_key
 
 val encrypt: #ip:ipkg -> #i:Idx?.t ip -> k: key i -> nat -> nat 
@@ -283,6 +314,10 @@ val salt1:  salt (u_handshake_secret depth) ii (Derived i0 "salt")
 let salt1  = derive early_secret "salt"
 
 let i1 = Extract1 (Derived i0 "salt") 42
+
+assume val g:element
+let iX = genDH g
+
 val hs_secret : secret (u_handshake_secret depth) ii i1
 let hs_secret = extract1 salt1 42 
 
