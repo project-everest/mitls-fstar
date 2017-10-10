@@ -35,10 +35,7 @@ verify:
 clean:
 	-rm -rf .depend* *.ml *.cm* *.o *.a *.exe *.lib *~ *.out $(ODIR) .fstarlib
 
-record_fstar_version:
-	$(FSTAR) --version | grep ^commit | sed 's/commit=\([^ ]*\).*/\1/' > $(MITLS_HOME)/.fstar_version
-
-.PHONY: all build verify init depend clean record_fstar_version test
+.PHONY: all build verify init depend clean test
 
 STDLIB_REALIZED=Pervasives Pervasives.Native Mul Float Char UInt Int8 UInt8 Int16 UInt16 Int32 UInt32 Int64 UInt64 UInt128 Int.Cast Int.Cast.Full BaseTypes IO Heap List.Tot.Base List Option String Set Buffer CommonST TSet Map HyperHeap HyperStack HyperStack.ST HyperStack.All ST All Monotonic.RRef Monotonic.Seq Monotonic.HyperHeap Monotonic.HyperStack Seq.Base Seq.Properties BitVector Math.Lib
 CODEGEN_LIBS=Platform
@@ -170,17 +167,17 @@ QUIC
 -include .depend-HS
 -include .depend-TLS
 
-all-ver: record_fstar_version $(addsuffix .fst-ver, $(VERIFY))
+all-ver: $(addsuffix .fst-ver, $(VERIFY))
 
 # Sanity check
-tls-sanity: record_fstar_version
+tls-sanity:
 	$(FSTAR) $(VERFLAGS) \
 	$(FSTAR_INCLUDE_PATHS) \
 	--include $(MITLS_HOME)/src/tls/ideal-flags \
         --verify_module False \
 	$(FSTS) test/False.fst 2>&1 | tail -n 1 | grep -c '1 error was reported (see above)'
 
-tls-lax: record_fstar_version
+tls-lax:
 	$(FSTAR) $(FSTAR_INCLUDE_PATHS) --lax \
 	--include $(MITLS_HOME)/src/tls/concrete-flags \
 	TLS.fst
