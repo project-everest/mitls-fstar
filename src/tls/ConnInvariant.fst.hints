@@ -1198,7 +1198,7 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
         "equality_tok_TLSConstants.Writer@tok",
         "equation_FStar.Monotonic.HyperStack.is_above",
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
@@ -1215,6 +1215,7 @@
         "refinement_interpretation_FStar.Monotonic.HyperHeap_Tm_refine_f0496eb03f3fb51b5e4ca0d53ea58c01",
         "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_FStar.Monotonic.HyperHeap.parent",
         "typing_StreamAE.__proj__State__item__region",
         "typing_tok_TLSConstants.Writer@tok"
@@ -1441,7 +1442,6 @@
         "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_de4d559d696c1959d3b60580b104f6b8",
         "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "typing_Connection.__proj__C__item__hs",
@@ -1818,6 +1818,7 @@
         "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "typing_Connection.__proj__C__item__hs",
+        "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_FStar.Monotonic.HyperStack.is_eternal_region",
         "typing_Handshake.region_of"
       ],
