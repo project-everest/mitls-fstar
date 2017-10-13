@@ -18,6 +18,7 @@
 
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
+  MITLS_FFI_ENTRY(GetTicket) \
   MITLS_FFI_ENTRY(SetTicketKey) \
   MITLS_FFI_ENTRY(SetCertChainFile) \
   MITLS_FFI_ENTRY(SetPrivateKeyFile) \
@@ -27,7 +28,6 @@
   MITLS_FFI_ENTRY(SetNamedGroups) \
   MITLS_FFI_ENTRY(SetALPN) \
   MITLS_FFI_ENTRY(SetEarlyData) \
-  MITLS_FFI_ENTRY(SetTicketCallback) \
   MITLS_FFI_ENTRY(Connect) \
   MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \
@@ -38,19 +38,19 @@
   MITLS_FFI_ENTRY(QuicCreateClient) \
   MITLS_FFI_ENTRY(QuicCreateServer) \
   MITLS_FFI_ENTRY(QuicProcess) \
-  MITLS_FFI_ENTRY(QuicGetPeerParameters) \
-  MITLS_FFI_ENTRY(TicketCallback)
+  MITLS_FFI_ENTRY(QuicGetPeerParameters)
 
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
 MITLS_FFI_LIST
 #undef MITLS_FFI_ENTRY
 
-// We store C pointers in garbage-collected int64, which
-// is guaranteed to hold 64 bits (unlike int which holds 63 at best)
-_Static_assert(sizeof(size_t) <= 8, "OCaml int64 cannot hold a C pointer on this platform");
-#define PtrToValue(p) caml_copy_int64((size_t)p)
-#define ValueToPtr(v) (void*)(Int64_val(v))
+// Pass a C pointer into F* and recover it back.  OCaml limits integers to 2^30/2^62
+// so shift right by 1 before conversion to OCaml.  The low bit must be 0 in order to
+// meet structure alignment rules, so this is not lossy.
+_Static_assert(sizeof(size_t) <= sizeof(value), "OCaml value isn't large enough to hold a C pointer");
+#define PtrToValue(p) Val_long(((size_t)p)>>1)
+#define ValueToPtr(v) ((void*)((Long_val(v)<<1)))
 
 #define Val_none Val_int(0)
 #define Some_val(v) Field(v,0)
@@ -117,33 +117,6 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
     // Nothing to do.  The OCaml runtime has no graceful shutdown.
 }
 
-// Input:  msg - an error message string to log
-//         errmsg - in/out pointer to the current error log string, may
-//                  point to NULL
-// Return:
-//         nothing
-//         *errmsg updated by realloc and appending the exception text.
-//                 On out-of-memory, the new message is discarded and
-//                 the current error log string is returned unmodified.
-static void report_error(const char *msg, char **errmsg)
-{
-    if (msg == NULL) {
-        return;
-    }
-    if (*errmsg == NULL) {
-        *errmsg = strdup(msg);
-    } else {
-        char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
-        if (newerrmsg) {
-            strcpy(newerrmsg, *errmsg);
-            strcat(newerrmsg, "\n");
-            strcat(newerrmsg, msg);
-            free(*errmsg);
-            *errmsg = newerrmsg;
-        }
-    }
-}
-
 // Input:  v - an OCaml exception
 //         errmsg - in/out pointer to the current error log string, may
 //                  point to NULL
@@ -156,8 +129,18 @@ static void report_caml_exception(value v, char **errmsg)
 {
     if (errmsg) {
         char * msg = caml_format_exception(Extract_exception(v));
-        report_error(msg, errmsg);
-        free(msg);
+        if (*errmsg == NULL) {
+            *errmsg = strdup(msg);
+        } else {
+            char *newerrmsg = malloc(strlen(*errmsg) + strlen(msg) + 2);
+            if (newerrmsg) {
+                strcpy(newerrmsg, *errmsg);
+                strcat(newerrmsg, "\n");
+                strcat(newerrmsg, msg);
+                free(*errmsg);
+                *errmsg = newerrmsg;
+            }
+        }
     }
 }
 
@@ -317,54 +300,6 @@ int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const c
     int ret;
     caml_acquire_runtime_system();
     ret = configure_common_caml(state, apl, g_mitls_FFI_SetALPN);
-    caml_release_runtime_system();
-    return ret;
-}
-
-// Called by Handshake when receiving a new ticket (1.3)
-// and a ticket callback was configured in the FFI
-CAMLprim value ocaml_ticket_cb(value st, value fp, value sni, value ticket, value session)
-{
-  CAMLparam5(st, fp, sni, ticket, session);
-  pfn_FFI_ticket_cb cb = (pfn_FFI_ticket_cb)ValueToPtr(fp);
-  mitls_ticket t;
-  t.ticket_len = caml_string_length(ticket);
-  t.session_len = caml_string_length(session);
-  t.ticket = String_val(ticket);
-  t.session = String_val(session);
-  cb((void*)ValueToPtr(st), String_val(sni), &t);
-  CAMLreturn(Val_unit);
-}
-
-static int ocaml_set_ticket_callback(/* in */ mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb)
-{
-    CAMLparam0();
-    CAMLlocal4(config, cb, cbs, ocb);
-    int ret = 0;
-
-    cb = PtrToValue(ticket_cb); // Address of the C callback
-    cbs = PtrToValue(cb_state); // Callback state
-
-    // This is a partial application of ocaml_ticket_cb, defined above
-    // ocb is a string -> string -> string -> unit function that represents calling ticket_cb from OCaml
-    ocb = caml_callback2_exn(*g_mitls_FFI_TicketCallback, cbs, cb);
-
-    if (!Is_exception_result(ocb)) {
-      config = caml_callback2_exn(*g_mitls_FFI_SetTicketCallback, state->fstar_state, ocb);
-      if (!Is_exception_result(config)) {
-        state->fstar_state = config;
-        ret = 1;
-      }
-    }
-
-    CAMLreturnT(int, ret);
-}
-
-int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb)
-{
-    int ret;
-    caml_acquire_runtime_system();
-    ret = ocaml_set_ticket_callback(state, cb_state, ticket_cb);
     caml_release_runtime_system();
     return ret;
 }
@@ -589,6 +524,7 @@ static int FFI_mitls_accept_connected_caml(struct _FFI_mitls_callbacks *callback
 int MITLS_CALLCONV FFI_mitls_accept_connected(struct _FFI_mitls_callbacks *callbacks, /* in */ mitls_state *state, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
+
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -624,6 +560,7 @@ static int FFI_mitls_send_caml(/* in */ mitls_state *state, const void* buffer, 
 int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const void* buffer, size_t buffer_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     int ret;
+
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -655,6 +592,7 @@ static void * FFI_mitls_receive_caml(/* in */ mitls_state *state, /* out */ size
 void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     void *p;
+
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -662,6 +600,60 @@ void * MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ s
     p = FFI_mitls_receive_caml(state, packet_size, outmsg, errmsg);
     caml_release_runtime_system();
     return p;
+}
+
+
+// The OCaml runtime system must be acquired before calling this
+static int ocaml_get_ticket(
+  /* in */ mitls_state *state,
+  /* out */ quic_ticket *ticket,
+  /* out */ char **errmsg)
+{
+    CAMLparam0();
+    CAMLlocal2(result, tmp);
+
+    result = caml_callback_exn(*g_mitls_FFI_GetTicket,
+                                state->fstar_state);
+
+    if (Is_exception_result(result)) {
+        report_caml_exception(result, errmsg);
+        CAMLreturnT(int, 0);
+    }
+
+    if(result == Val_none)
+    {
+      *errmsg = strdup("no ticket available");
+      CAMLreturnT(int, 0);
+    }
+
+    result = Some_val(result); // OCaml string
+    tmp = Field(result, 1); // encoded local session
+    size_t slen = caml_string_length(tmp);
+    result = Field(result, 0); // Server ticket
+    size_t tlen = caml_string_length(result);
+
+    // Ticket too large
+    if (tlen > MAX_TICKET_LEN || slen > MAX_SESSION_LEN)
+    {
+      *errmsg = strdup("the ticket is too large");
+      CAMLreturnT(int, 0);
+    }
+
+    ticket->ticket_len = tlen;
+    memcpy(ticket->ticket, String_val(result), tlen);
+    ticket->session_len = slen;
+    memcpy(ticket->session, String_val(tmp), slen);
+
+    CAMLreturnT(int, 1);
+}
+
+int MITLS_CALLCONV FFI_mitls_get_ticket(mitls_state *state, mitls_ticket *ticket, char **errmsg)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = ocaml_get_ticket(state, ticket, errmsg);
+    caml_release_runtime_system();
+    return ret;
 }
 
 // The OCaml runtime system must be acquired before calling this
@@ -704,8 +696,6 @@ static int ocaml_get_exporter(
 int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret, /* out */ char **errmsg)
 {
   int ret;
-  *errmsg = NULL;
-
   caml_acquire_runtime_system();
   ret = ocaml_get_exporter(state, early, secret, errmsg);
   caml_release_runtime_system();
@@ -733,6 +723,7 @@ static void * FFI_mitls_get_cert_caml(/* in */ mitls_state *state, /* out */ siz
 void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size, /* out */ char **outmsg, /* out */ char **errmsg)
 {
     void *p;
+
     *outmsg = NULL;
     *errmsg = NULL;
 
@@ -771,7 +762,6 @@ typedef struct quic_state {
    char* out_buffer;
    size_t out_buffer_size;
    size_t out_buffer_used;
-   char *errmsg;
 } quic_state;
 
  int QUIC_send(struct _FFI_mitls_callbacks *cb, const void *buffer, size_t buffer_size)
@@ -781,11 +771,7 @@ typedef struct quic_state {
    quic_state* s = CONTAINING_RECORD(cb, quic_state, ffi_callbacks);
 //   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
 //   fclose(fp);
-   if(!s->out_buffer)
-   {
-       report_error("QUIC_send():  out_buffer is NULL", &s->errmsg);
-       return -1;
-   }
+   if(!s->out_buffer) return -1;
 
    // ADL FIXME better error management
    if(buffer_size <= s->out_buffer_size - s->out_buffer_used)
@@ -795,7 +781,6 @@ typedef struct quic_state {
      return buffer_size;
    }
 
-   report_error("QUIC_send():  Insufficient space in out_buffer", &s->errmsg);
    return -1;
  }
 
@@ -807,11 +792,7 @@ typedef struct quic_state {
 //   fprintf(fp, "Current %s state: IN=%u/%u OUT=%u/%u\n", s->is_server ? "server" : "client", s->in_buffer_used, s->in_buffer_size, s->out_buffer_used, s->out_buffer_size);
 //   fclose(fp);
 
-   if(!s->in_buffer || buffer == NULL)
-   {
-       report_error("QUIC_recv():  in_buffer or buffer is NULL", &s->errmsg);
-       return -1;
-   }
+   if(!s->in_buffer || buffer == NULL) return -1;
 
    if(len > s->in_buffer_size - s->in_buffer_used)
      len = s->in_buffer_size - s->in_buffer_used; // may be 0
@@ -837,7 +818,7 @@ static value ocaml_alloc_version_list(const uint32_t *list, size_t len)
     result = r;
   }
 
-  return result;
+  CAMLreturn(result);
 }
 
 // The OCaml runtime system must be acquired before calling this
@@ -853,12 +834,17 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       *errmsg = strdup("failed to allocate QUIC state");
       CAMLreturnT(int, 0);
     }
-    memset(state, 0, sizeof(*state));
     *st = state;
 
     state->ffi_callbacks.send = QUIC_send;
     state->ffi_callbacks.recv = QUIC_recv;
     state->is_server = cfg->is_server;
+    state->in_buffer = NULL;
+    state->in_buffer_size = 0;
+    state->in_buffer_used = 0;
+    state->out_buffer = NULL;
+    state->out_buffer_size = 0;
+    state->out_buffer_used = 0;
 
     others = caml_alloc_string(cfg->qp.others_len);
     memcpy(String_val(others), cfg->qp.others, cfg->qp.others_len);
@@ -953,13 +939,6 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
          CAMLreturnT(int, 0);
        }
 
-    if(cfg->ticket_callback)
-      if(!ocaml_set_ticket_callback(&ms, cfg->callback_state, cfg->ticket_callback))
-      {
-        *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set ticket callback");
-        CAMLreturnT(int, 0);
-      }
-
     if(cfg->is_server)
       result = caml_callback2_exn(
                                   *g_mitls_FFI_QuicCreateServer,
@@ -968,11 +947,11 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     else {
 
       // Create ticket:option (t:bytes * si:bytes)
-      if(cfg->server_ticket && cfg->server_ticket->ticket_len > 0) {
-        tticket = caml_alloc_string(cfg->server_ticket->ticket_len);
-        memcpy(String_val(tticket), cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
-        session = caml_alloc_string(cfg->server_ticket->session_len);
-        memcpy(String_val(session), cfg->server_ticket->session, cfg->server_ticket->session_len);
+      if(cfg->server_ticket.ticket_len > 0) {
+        tticket = caml_alloc_string(cfg->server_ticket.ticket_len);
+        memcpy(String_val(tticket), cfg->server_ticket.ticket, cfg->server_ticket.ticket_len);
+        session = caml_alloc_string(cfg->server_ticket.session_len);
+        memcpy(String_val(session), cfg->server_ticket.session, cfg->server_ticket.session_len);
         result = caml_alloc_tuple(2);
         Store_field(result, 0, tticket);
         Store_field(result, 1, session);
@@ -1044,12 +1023,11 @@ static quic_result FFI_mitls_quic_process_caml(
     state->out_buffer = outBuf;
     state->out_buffer_used = 0;
     state->out_buffer_size = *pOutBufLen;
-    state->errmsg = NULL;
 
     result = caml_callback_exn(*g_mitls_FFI_QuicProcess, state->fstar_state);
 
     if (Is_exception_result(result)) {
-        report_caml_exception(result, &state->errmsg);
+        report_caml_exception(result, errmsg);
         ret = TLS_error_other;
     } else {
         int rc = Int_val(Field(result, 0));
@@ -1064,8 +1042,6 @@ static quic_result FFI_mitls_quic_process_caml(
         *pOutBufLen = state->out_buffer_used;
     }
 
-    *errmsg = state->errmsg;
-    state->errmsg = NULL;
     CAMLreturnT(quic_result, ret);
 }
 
@@ -1096,10 +1072,9 @@ static int FFI_mitls_quic_get_peer_parameters_caml(
   CAMLlocal2(result, tmp);
 
   result = caml_callback_exn(*g_mitls_FFI_QuicGetPeerParameters, state->fstar_state);
-
   if (Is_exception_result(result)) {
-      report_caml_exception(result, errmsg);
-      CAMLreturnT(int, 0);
+    report_caml_exception(result, errmsg);
+    CAMLreturnT(int, 0);
   }
 
   tmp = Field(result, 4);
@@ -1120,10 +1095,9 @@ int MITLS_CALLCONV FFI_mitls_quic_get_peer_parameters(
   /* out */ char **errmsg)
 {
     int ret;
-    *errmsg = NULL;
 
     caml_acquire_runtime_system();
-    ret = FFI_mitls_quic_get_peer_parameters_caml(state, qp, errmsg);
+    ret = FFI_mitls_quic_get_peer_parameters_caml(state, qp,errmsg);
     caml_release_runtime_system();
 
     return ret;
@@ -1141,6 +1115,22 @@ int MITLS_CALLCONV FFI_mitls_quic_get_exporter(
 
     caml_acquire_runtime_system();
     ret = ocaml_get_exporter(&tls_state, early, secret, errmsg);
+    caml_release_runtime_system();
+
+    return ret;
+}
+
+int MITLS_CALLCONV FFI_mitls_quic_get_ticket(
+  /* in */ quic_state *state,
+  quic_ticket *ticket,
+  /* out */ char **errmsg)
+{
+    int ret;
+    mitls_state tls_state = {.fstar_state = state->fstar_state};
+    *errmsg = NULL;
+
+    caml_acquire_runtime_system();
+    ret = ocaml_get_ticket(&tls_state, ticket, errmsg);
     caml_release_runtime_system();
 
     return ret;
