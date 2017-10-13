@@ -11,6 +11,7 @@ open Platform.Error
 
 module X = Spec.Curve25519
 module CC = CoreCrypto
+module U8 = FStar.UInt8
 
 type scalar = lbytes 32
 type point = lbytes 32
@@ -22,13 +23,17 @@ let pubshare (k:keyshare) : Tot point = fst k
 let rand: ref (n:nat -> ST (lbytes n) (requires fun h->True) (ensures fun h0 _ h1 -> modifies_none h0 h1)) =
   ralloc root CC.random
 
+let u8_of_byte b = U8.uint_to_t (int_of_bytes (abyte b))
+
 // FIXME: Convert between Platform bytes (Seq.seq Char.char) and Hacl.Spec.Lib.bytes (Seq.seq UInt8.t)
 // ADL(18/11): made progress: both are now the same (seq UInt8.t)
 let bytes2hacl (b:bytes) : Tot (s:Seq.seq UInt8.t{Seq.length s = Seq.length b}) =
-  Seq.init (length b) (fun i -> Platform.Bytes.index b i)
+  Seq.init (length b) (fun i -> u8_of_byte (Platform.Bytes.index b i))
+
+let byte_of_u8 b = byte_of_int (U8.v b)
 
 let hacl2bytes (s:Seq.seq UInt8.t) : Tot (b:bytes{length b = Seq.length s}) =
-  Platform.Bytes.initBytes (Seq.length s) (fun i -> Seq.index s i)
+  Platform.Bytes.initBytes (Seq.length s) (fun i -> byte_of_u8 (Seq.index s i))
 
 let point_of_scalar (s:scalar) : Tot point =
   let base_point = Seq.upd (Seq.create 32 0uy) 0 9uy in

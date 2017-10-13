@@ -133,7 +133,7 @@ type epoch_ctr (#a:Type0) (#p:(seq a -> Type)) (r:rid) (es:MS.i_seq r a p) =
 noeq type epochs (r:rgn) (n:random) = | MkEpochs:
   es: MS.i_seq r (epoch r n) (epochs_inv #r #n) ->
   read: epoch_ctr r es ->
-  write: epoch_ctr r es -> 
+  write: epoch_ctr r es ->
   exporter: MS.i_seq r KeySchedule.exportKey (fun s -> Seq.length s <= 2)  ->
   epochs r n
 
@@ -152,7 +152,7 @@ val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
       m_contains c2 h1 /\
       i_sel h1 is == Seq.createEmpty)))
 
-#set-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
+//#set-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Epochs --using_facts_from Parse"
 
 let alloc_log_and_ctrs #a #p r =
   let init = Seq.createEmpty in
@@ -189,7 +189,7 @@ val create: r:rgn -> n:random -> ST (epochs r n)
     (ensures (fun h0 x h1 -> modifies_one r h0 h1 /\ modifies_rref r Set.empty (HS.HS?.h h0) (HS.HS?.h h1)))
 let create (r:rgn) (n:random) =
   let (| esref, c1, c2 |) = alloc_log_and_ctrs #(epoch r n) #(epochs_inv #r #n) r in
-  let xkr = alloc_mref_iseq (fun s -> Seq.length s <= 2) r Seq.createEmpty in 
+  let xkr = alloc_mref_iseq (fun s -> Seq.length s <= 2) r Seq.createEmpty in
   assume False; //17-06-30 TODO restore framing with extra field
   MkEpochs esref c1 c2 xkr
 

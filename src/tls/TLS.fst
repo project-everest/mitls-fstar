@@ -566,7 +566,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       else frags1==frags0')))))
 
 #reset-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1"
-#set-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants"
+//#set-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants"
 
 private let sendHandshake
   (#c:connection)

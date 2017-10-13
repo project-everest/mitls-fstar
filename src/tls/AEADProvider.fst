@@ -17,6 +17,7 @@ module CAEAD = LowCProvider
 module Plain = Crypto.Plain
 module AE = Crypto.AEAD.Main
 module CB = Crypto.Symmetric.Bytes
+module U8 = FStar.UInt8
 
 let discard (b:bool) : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) = ()
 let print (s:string) : ST unit (requires fun _ -> True) (ensures (fun h0 _ h1 -> h0 == h1)) =
@@ -51,19 +52,21 @@ let rec to_bytes l buf =
   if l = 0 then empty_bytes
   else
     let b = Buffer.index buf 0ul in
-    let s = abyte b in
+    let s = abyte (byte_of_int (U8.v b)) in
     let t = to_bytes (l - 1) (Buffer.sub buf 1ul (uint_to_t (l-1))) in
     let r = s @| t in
     (lemma_len_append s t; r)
 
 #set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
-val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{length b = len} -> STL unit
+val store_bytes: len:nat -> buf:CB.lbuffer len -> i:nat{i <= len} -> b:bytes{length b + i = len} -> STL unit
   (requires (fun h0 -> Buffer.live h0 buf))
   (ensures (fun h0 r h1 -> Buffer.live h1 buf /\ Buffer.modifies_1 buf h0 h1))
 let rec store_bytes len buf i s =
   if i < len then
-    let () = Buffer.upd buf (uint_to_t i) (Platform.Bytes.index s i) in
-    store_bytes len buf (i + 1) s
+    let (s0, s') = split s 1 in
+    lemma_split s 1;
+    let () = Buffer.upd buf (uint_to_t i) (U8.uint_to_t (int_of_bytes s0)) in
+    store_bytes len buf (i + 1) s'
 
 val from_bytes: b:bytes{FStar.UInt.fits (length b) 32} -> StackInline (CB.lbuffer (length b))
   (requires (fun h0 -> True))

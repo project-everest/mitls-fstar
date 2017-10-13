@@ -47,7 +47,7 @@ let emptyHash : a:alg -> Tot (tag a) =
 
 // A "placeholder" hash whose bytes are all 0 (used in KS)
 let zeroHash (a:alg) : Tot (tag a) =
-  createBytes (tagLen a) 0uy
+  createBytes (tagLen a) 0z
 
 let maxTagLen = 64
 type anyTag = lbytes maxTagLen
