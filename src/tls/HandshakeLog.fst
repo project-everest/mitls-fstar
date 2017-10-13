@@ -128,7 +128,7 @@ let transcript_bytes l =
 let transcript_format_injective ms0 ms1 =
   let f ()
   : Lemma
-    (requires (Seq.equal (transcript_bytes ms0) (transcript_bytes ms1)))
+    (requires (FStar.Bytes.equal (transcript_bytes ms0) (transcript_bytes ms1)))
     (ensures (ms0 == ms1))
   = match ms0 with
     | [] -> ()

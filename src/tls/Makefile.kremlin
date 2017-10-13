@@ -1,13 +1,14 @@
 include Makefile
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
+EXTRACT_DIR=extract
+KRML_DIR=$(EXTRACT_DIR)/krml_output
 KRML_FILES = TLSConstants.fst #$(wildcard *.fst)
-# We should add back support for Platform.Bytes when we get the chance.
-DROP_MODULES = $(addprefix -drop , Spec.* MonotoneMapNonDep MonotoneMap IdNonce FStar.Bytes Platform.Bytes)
-C_DRIVER = $(KRML_DIR)/main.c
-HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"' '"krembytes.h"')
+DROP_MODULES = $(addprefix -drop , Spec.* MonotoneMapNonDep MonotoneMap IdNonce)
+C_DRIVER = $(EXTRACT_DIR)/src/main.c
+HEADERS = $(addprefix -add-include ,'"hacks.h"' '"tcp.h"') # '"krembytes.h"')
 
-KRML_COMMAND= FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions -tmpdir $(KRML_DIR) $(K-OPTS) -warn-error -9+11-7-6 -ccopt -Wno-unused-function
+KRML_COMMAND= FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) -I extract/include $(C_DRIVER) $(DROP_MODULES) -I concrete-flags $(HEADERS) -fnoanonymous-unions -tmpdir $(KRML_DIR) $(K-OPTS) -warn-error -9+11-7-6 -ccopt -Wno-unused-function
 
 # We can eventually unify these dependencies with the main Makefile
 .depend-KRML:
@@ -15,13 +16,11 @@ KRML_COMMAND= FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) $(C_DRIVER)
 
 -include .depend-KRML
 
-all: krml_output/out.krml
-	$(KRML_COMMAND) krml_output/out.krml -skip-linking
+all: extract/krml_output/out.krml
+	$(KRML_COMMAND) extract/krml_output/out.krml -skip-linking
 
-krml_output/out.krml: $(KRML_FILES)
+extract/krml_output/out.krml: $(KRML_FILES)
 	$(KRML_COMMAND) $(KRML_FILES) -skip-translation
 
-test.krml:
-	FSTAR_HOME=$(FSTAR_HOME) $(KRML) $(KRML_INCLUDE_PATHS) test.fst $(C_DRIVER) \
-	           $(DROP_MODULES) -I concrete-flags -add-include $(HACKS_HEADER) -fnoanonymous-unions \
-			   -tmpdir $(KRML_DIR) $(KOPTS) -warn-error +9+11-7-6 -skip-compilation
+clean:
+	rm $(KRML_DIR)/*.c $(KRML_DIR)/*.h $(KRML_DIR)/*.o $(KRML_DIR)/out.krml 
