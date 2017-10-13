@@ -56,10 +56,19 @@ let lemma_maxLen (a:alg): Lemma (tagLen a <= maxTagLen) = ()
 // internal hash state for incremental computation
 // with initial value and core algorithm, accumulating an extra block into the current state
 
-assume type acc (a:alg)
-assume val acc0: a:alg -> Tot (acc a)
-assume val compress: #a:alg -> acc a -> lbytes (blockLen a) -> Tot (acc a)
-assume val truncate: #a:alg -> acc a -> Tot (tag a) // just keeping the first tagLen bytes
+//NS, JR: A very dubious change here, replacing an assumed type and functions on it
+//        Otherwise, this doesn't compile at all
+abstract
+let acc (a:alg) = bytes
+
+abstract
+let acc0 (a:alg) : acc a = empty_bytes
+
+abstract
+let compress (#a:alg) (_:acc a) (l:lbytes (blockLen a)) = l //??
+
+abstract
+let truncate (#a:alg) (ac:acc a) = Bytes.slice ac (0ul) (FStar.UInt32.uint_to_t (tagLen a))  //?? just keeping the first tagLen bytes
 (*
 let acc0 = function
   | MD5 ->  [0x67452301; 0xefcdab89; 0x98badcfe; 0x10325476] // A, B, C, D
