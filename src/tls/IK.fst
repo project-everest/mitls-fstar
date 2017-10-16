@@ -115,9 +115,7 @@ let ii:ipkg = Idx id (fun _ -> true)
 /// registration at creation/coercion time.
 ///
 /// Try out on examples: we'll need a stateful invariant of the form
-/// "I have used this secret to create exactly these keys". What out
-///
-/// MK: how does this sentence end?
+/// "I have used this secret to create exactly these keys". 
 
 
 /// --------------------------------------------------------------------------------------------------
@@ -299,6 +297,7 @@ assume val extract1:
   materials: id_dhe -> 
   secret ii u (Extract1 i materials) a
 
+(*
 assume type element
 
 /// Initiator computes DH keyshare
@@ -322,6 +321,7 @@ assume val extractI:
   iX: element ->
   rY: element ->
   id_dhe
+*)
 
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
 assume val extract2: 
@@ -373,49 +373,50 @@ let i0 = Extract0 (Preshared 0)
 
 let a = { ha=SHA1; aea=AES_GCM256 }
 
-let psk0: psk #ii #u (Preshared 0) a = create_psk  (Preshared 0)
+let psk0: psk #ii #u (Preshared 0) a = create_psk (Preshared 0) a
 
-(* 
-let early_secret: secret u ii i0 = extract0 psk0
+let early_secret: secret ii u i0 a = extract0 psk0 
 
-val early_traffic: secret u_traffic ii (Derived i0 "traffic") 
-let early_traffic = derive early_secret "traffic"
+val early_traffic: secret ii u_traffic (Derived i0 "traffic") a
+let early_traffic = derive a early_secret "traffic"
 
-val k0: key #ii (Derived (Derived i0 "traffic") "ClientKey")
-let k0 = derive early_traffic "ClientKey" 
+val k0: key #ii (Derived (Derived i0 "traffic") "ClientKey") AES_GCM256
+let k0 = derive a early_traffic "ClientKey" 
 let cipher  = encrypt k0 10
 
-val salt1:  salt (u_handshake_secret depth) ii (Derived i0 "salt")
-let salt1  = derive early_secret "salt"
+val salt1:  salt ii (u_handshake_secret depth) (Derived i0 "salt") a
+let salt1  = derive a early_secret "salt"
 
 let i1 = Extract1 (Derived i0 "salt") 42
 
+(*
 assume val g:element
 let iX = genDH g
+*)
 
-val hs_secret : secret (u_handshake_secret depth) ii i1
+val hs_secret : secret ii (u_handshake_secret depth) i1 a
 let hs_secret = extract1 salt1 42 
 
-val hs_traffic: secret u_traffic ii (Derived i1 "traffic")
-let hs_traffic = derive hs_secret "traffic"
+val hs_traffic: secret ii u_traffic (Derived i1 "traffic") a
+let hs_traffic = derive a hs_secret "traffic"
 
-val k1: key #ii (Derived (Derived i1 "traffic") "ServerKey")
-let k1 = derive hs_traffic "ServerKey" 
+val k1: key #ii (Derived (Derived i1 "traffic") "ServerKey") AES_GCM256
+let k1 = derive a hs_traffic "ServerKey" 
 let cipher = encrypt k1 11
 
-val salt2:  salt (u_master_secret depth) ii (Derived i1 "salt")
-let salt2  = derive hs_secret "salt"
+val salt2:  salt ii (u_master_secret depth) (Derived i1 "salt") a
+let salt2  = derive a hs_secret "salt"
 
-let i2 = Extract2 (Derived i1 "salt")
-val master_secret: secret (u_master_secret depth) ii i2 
+let i2 = Extract2 (Derived i1 "salt")  
+val master_secret: secret ii (u_master_secret depth) i2 a
 let master_secret = extract2 salt2 
 
-val rsk: psk (u_early_secret (depth - 1)) ii (Derived i2 "resumption")  
+val rsk: psk #ii #(u_early_secret (depth - 1)) (Derived i2 "resumption") a
 
 let i3 = Extract0 (Derived i2 "resumption")
-let rsk = derive #(u_master_secret depth ) #i2 master_secret "resumption" 
-
-val next_early_secret: secret (u_early_secret (depth - 1)) ii i3 
+let rsk = derive a master_secret "resumption" 
+// #(u_master_secret depth ) #i2 
+val next_early_secret: secret ii (u_early_secret (depth - 1)) i3 a
 let next_early_secret = extract0 rsk
 
 /// Proof?  Typing against plain, multi-instance assumptions for each
@@ -449,6 +450,3 @@ let next_early_secret = extract0 rsk
 //
 // let k1' = derive k0 "secret" 
 // let k2' = derive #(u 22)  k1'  "aead"  // the type is not normalized; the key is not usable.
-
-
-TMP*)
