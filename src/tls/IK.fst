@@ -106,6 +106,8 @@ type id =
 /// This form of indexing may be too global, e.g. extractions should
 /// not depend on expansion; in principle, we could clip "Extracted"
 /// to the extractor index.
+///
+/// MK: what is meant with "clip 'Extracted' to the extractor index"?
 
 let ii:ipkg = Idx id (fun _ -> true)
 
@@ -113,7 +115,9 @@ let ii:ipkg = Idx id (fun _ -> true)
 /// registration at creation/coercion time.
 ///
 /// Try out on examples: we'll need a stateful invariant of the form
-/// "I have used this secret to create exactly these keys". What out 
+/// "I have used this secret to create exactly these keys". What out
+///
+/// MK: how does this sentence end?
 
 
 /// --------------------------------------------------------------------------------------------------
@@ -141,6 +145,8 @@ assume new type secret
  
 /// maybe reverse-inline sampling from low-level KeyGen?
 /// otherwise we have to argue it is what Create does.
+///
+/// MK: what does reverse-inline of low-level KeyGen mean?
 
 val coerce: 
   ip: ipkg ->
@@ -293,6 +299,30 @@ assume val extract1:
   materials: id_dhe -> 
   secret ii u (Extract1 i materials) a
 
+assume type element
+
+/// Initiator computes DH keyshare
+assume val genDH:
+  g:element ->
+  iX:element
+
+/// Respoder computes DH secret material
+assume val extractR:
+  #expu: usage -> 
+  #i: id -> 
+  s: salt expu ii i ->
+  iX: element ->
+  rY:element * id_dhe
+
+/// Initiator computes DH secret material
+assume val extractI: 
+  #expu: usage -> 
+  #i: id -> 
+  s: salt expu ii i ->
+  iX: element ->
+  rY: element ->
+  id_dhe
+
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
 assume val extract2: 
   #u: usage info ii ->
@@ -359,6 +389,10 @@ val salt1:  salt (u_handshake_secret depth) ii (Derived i0 "salt")
 let salt1  = derive early_secret "salt"
 
 let i1 = Extract1 (Derived i0 "salt") 42
+
+assume val g:element
+let iX = genDH g
+
 val hs_secret : secret (u_handshake_secret depth) ii i1
 let hs_secret = extract1 salt1 42 
 
