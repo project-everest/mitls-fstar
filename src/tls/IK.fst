@@ -402,7 +402,7 @@ let hs_traffic = derive a hs_secret "traffic"
 
 val k1: key #ii (Derived (Derived i1 "traffic") "ServerKey") AES_GCM256
 let k1 = derive a hs_traffic "ServerKey" 
-let cipher = encrypt k1 11
+let cipher' = encrypt k1 11
 
 val salt2:  salt ii (u_master_secret depth) (Derived i1 "salt") a
 let salt2  = derive a hs_secret "salt"
