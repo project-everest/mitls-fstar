@@ -9,13 +9,13 @@
       [
         "@MaxIFuel_assumption", "@query",
         "equation_FStar.Monotonic.Heap.equal_dom",
-        "equation_FStar.Monotonic.HyperHeap.test0",
         "equation_FStar.Monotonic.HyperStack.equal_stack_domains",
-        "equation_Prims._assert",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
-        "function_token_typing_FStar.Monotonic.HyperHeap.test0"
+        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557",
+        "unit_typing"
       ],
-      0
+      0,
+      "7a5acf9944aa90a5b3a0992638840d5e"
     ],
     [
       "KeySchedule.dbg",
@@ -29,9 +29,11 @@
         "equation_FStar.Monotonic.HyperStack.equal_stack_domains",
         "equation_Prims._assert",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
-        "function_token_typing_FStar.Monotonic.HyperHeap.test0"
+        "function_token_typing_FStar.Monotonic.HyperHeap.test0",
+        "refinement_interpretation_FStar.HyperStack.ST_Tm_refine_d52cae8b8e1ca91e1679b9bdc9938557"
       ],
-      0
+      0,
+      "c6f7da63338a8a2f77401c7663acccf7"
     ]
   ]
 ]

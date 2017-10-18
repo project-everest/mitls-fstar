@@ -14,7 +14,8 @@
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_e6e35ed3cabb588891553f28f60d9feb"
       ],
-      0
+      0,
+      "1321247d5d336a328c655d6ad182c58d"
     ],
     [
       "StatefulPlain.makeAD",
@@ -38,7 +39,8 @@
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "typing_Content.ctBytes", "typing_Platform.Bytes.length"
       ],
-      0
+      0,
+      "d4fbe8ab61cf6b63ea32fef8a48cbd14"
     ],
     [
       "StatefulPlain.lemma_12",
@@ -52,7 +54,8 @@
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "unit_typing"
       ],
-      0
+      0,
+      "8e1ef4e14c4e262c8c59909b05829984"
     ],
     [
       "StatefulPlain.parseAD",
@@ -146,7 +149,8 @@
         "typing_StatefulPlain.makeAD", "typing_TLSConstants.versionBytes",
         "unit_typing"
       ],
-      0
+      0,
+      "66b2821779a4ce7011dc51d10be5bea7"
     ],
     [
       "StatefulPlain.parseAD",
@@ -154,7 +158,8 @@
       0,
       1,
       [ "@query", "assumption_TLSConstants.protocolVersion__haseq" ],
-      0
+      0,
+      "1328b6329c08ade397d8db698beb6c25"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -162,7 +167,8 @@
       0,
       1,
       [ "@query", "assumption_Content.contentType_haseq" ],
-      0
+      0,
+      "a2c106675ab5af59a47cccdaaf18672a"
     ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
@@ -177,9 +183,18 @@
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_e6e35ed3cabb588891553f28f60d9feb"
       ],
-      0
+      0,
+      "bdd3db3da2a45041c3a09f8056b6656b"
     ],
-    [ "StatefulPlain.lemma_makeAD_parseAD", 3, 0, 1, [ "@query" ], 0 ],
+    [
+      "StatefulPlain.lemma_makeAD_parseAD",
+      3,
+      0,
+      1,
+      [ "@query" ],
+      0,
+      "fdfb3281e5e5c8448df4fcd835e34786"
+    ],
     [
       "StatefulPlain.lemma_makeAD_parseAD",
       4,
@@ -244,7 +259,8 @@
         "typing_TLSInfo.pv_of_id",
         "typing_tok_Content.Change_cipher_spec@tok", "unit_typing"
       ],
-      0
+      0,
+      "6428b0f59bcae2e2f1369a7a0de7bdf9"
     ],
     [
       "StatefulPlain.is_plain",
@@ -252,7 +268,8 @@
       0,
       0,
       [ "@query", "assumption_Content.contentType_haseq" ],
-      0
+      0,
+      "7dd93f9ca02eba8758122ec0def7eb44"
     ],
     [
       "StatefulPlain.assert_is_plain",
@@ -264,7 +281,8 @@
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_StatefulPlain_Tm_refine_dfb41679c4620ddf785a536323b5453d"
       ],
-      0
+      0,
+      "a58b7af1f13f082c13a75fc6377474a2"
     ],
     [
       "StatefulPlain.ghost_repr",
@@ -296,7 +314,8 @@
         "refinement_interpretation_TLSInfo_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
-      0
+      0,
+      "1849abaa53e300d124536c9c492b2b18"
     ],
     [
       "StatefulPlain.repr",
@@ -308,7 +327,8 @@
         "equation_Platform.Bytes.bytes",
         "haseqStatefulPlain_Tm_refine_eafff3c1026b7527be10dd24499fde69"
       ],
-      0
+      0,
+      "320cbfe80297717c88e6d8d2e7ff25f2"
     ],
     [
       "StatefulPlain.repr",
@@ -346,7 +366,8 @@
         "typing_Content.ghost_repr",
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
-      0
+      0,
+      "97805dadc9434caa9cbe781a653ceac2"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -354,7 +375,8 @@
       0,
       1,
       [ "@query", "projection_inverse_BoxInt_proj_0" ],
-      0
+      0,
+      "a6741ef155ce9fdc127f1c59f3f28a99"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -362,7 +384,8 @@
       0,
       1,
       [ "@query", "assumption_Content.contentType_haseq" ],
-      0
+      0,
+      "8497e3ce52dfad28f56491ea4e96aa99"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -370,16 +393,26 @@
       0,
       1,
       [ "@query", "assumption_Content.contentType_haseq" ],
-      0
+      0,
+      "b2b586df01cd67b621cccd651e9ac6a1"
     ],
-    [ "StatefulPlain.wf_payload_ad_rg", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "StatefulPlain.wf_payload_ad_rg",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0,
+      "e8d8e9b45f64c7c0db187a946fb587c2"
+    ],
     [
       "StatefulPlain.wf_payload_ad_rg",
       2,
       0,
       1,
       [ "@query", "assumption_Content.contentType_haseq" ],
-      0
+      0,
+      "28a6d467888ae55aa2e0761be1f08e07"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -387,7 +420,8 @@
       0,
       1,
       [ "@query", "assumption_Platform.Bytes.HasEq_bytes" ],
-      0
+      0,
+      "549916dec95bc5962f1727fe7bd039d1"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -395,7 +429,8 @@
       0,
       1,
       [ "@query", "assumption_Content.contentType_haseq" ],
-      0
+      0,
+      "350939e3372bff679ba28b2163fdedb3"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -403,7 +438,8 @@
       0,
       1,
       [ "@query", "assumption_Prims.HasEq_int" ],
-      0
+      0,
+      "6cddde7cbfc0058b2cc2c92347549402"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -415,7 +451,8 @@
         "equation_Platform.Bytes.bytes", "equation_Range.rbytes",
         "haseqRange_Tm_refine_0486d7c345fedcd664dfe7eac695bbd7"
       ],
-      0
+      0,
+      "30afb3aff340e806072fd25ae92780a4"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -481,7 +518,8 @@
         "true_interp", "typing_tok_Content.Change_cipher_spec@tok",
         "unit_typing"
       ],
-      0
+      0,
+      "daa16d67531b90330c30b1622aa0eb3f"
     ]
   ]
 ]

@@ -7,7 +7,8 @@
       0,
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "0a3e684203541d1be1314239684c83d2"
     ],
     [
       "ConnInvariant.epoch_regions_exist",
@@ -15,7 +16,8 @@
       0,
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "10c388205846c6252373ca930e3f2bb9"
     ],
     [
       "ConnInvariant.frame_epoch_writer",
@@ -38,7 +40,8 @@
         "refinement_interpretation_Prims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "bd231fca97d58a177b0106e0834b7ebc"
     ],
     [
       "ConnInvariant.frame_epoch_writer",
@@ -53,7 +56,8 @@
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "51971401f39cdb1ef6c6c583c5521a85"
     ],
     [
       "ConnInvariant.frame_epoch_writer",
@@ -61,16 +65,26 @@
       0,
       0,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "289ea1b0fea62dd72de25241aef3ba8d"
     ],
-    [ "ConnInvariant.frame_epoch_writer", 4, 0, 0, [ "@query" ], 0 ],
+    [
+      "ConnInvariant.frame_epoch_writer",
+      4,
+      0,
+      0,
+      [ "@query" ],
+      0,
+      "b8e8fd3c29b7144ff3eb6badd4838ac1"
+    ],
     [
       "ConnInvariant.frame_epoch_writer",
       5,
       0,
       0,
       [ "@query", "equation_FStar.Seq.Properties.indexable" ],
-      0
+      0,
+      "f82fd244d01c90115deb7e45e37e3d2a"
     ],
     [
       "ConnInvariant.frame_epoch_writer",
@@ -94,9 +108,18 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_region",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "1304f188e9666cbc302aed86886adede"
     ],
-    [ "ConnInvariant.frame_epoch_writer", 7, 0, 0, [ "@query" ], 0 ],
+    [
+      "ConnInvariant.frame_epoch_writer",
+      7,
+      0,
+      0,
+      [ "@query" ],
+      0,
+      "1d9dc6fee403e37e038cec6890ade03b"
+    ],
     [
       "ConnInvariant.frame_epoch_writer",
       8,
@@ -113,7 +136,8 @@
         "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "1234997550e538cd1d817553e5c35053"
     ],
     [
       "ConnInvariant.frame_epoch_writer",
@@ -121,9 +145,18 @@
       0,
       0,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "97643d12f84af8585f579dc03b1e27aa"
     ],
-    [ "ConnInvariant.frame_epoch_writer", 10, 0, 0, [ "@query" ], 0 ],
+    [
+      "ConnInvariant.frame_epoch_writer",
+      10,
+      0,
+      0,
+      [ "@query" ],
+      0,
+      "12e0fa844eb2c680a9fd08d584613f67"
+    ],
     [
       "ConnInvariant.frame_epoch_writer",
       11,
@@ -149,7 +182,8 @@
         "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "de6646c8b1fac33d998276cb27053724"
     ],
     [
       "ConnInvariant.frame_epoch_writer",
@@ -174,9 +208,18 @@
         "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "5683874dd50a00a99f7c6e6c1b846c8a"
     ],
-    [ "ConnInvariant.pairwise_disjoint", 1, 0, 1, [ "@query" ], 0 ],
+    [
+      "ConnInvariant.pairwise_disjoint",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0,
+      "66159d7e929bebac1dbc6c3c71e89758"
+    ],
     [
       "ConnInvariant.pairwise_disjoint",
       2,
@@ -188,7 +231,8 @@
         "equation_Platform.Bytes.lbytes", "equation_TLSInfo.random",
         "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
-      0
+      0,
+      "ce2b1a68c6b66b884264d17573e967aa"
     ],
     [
       "ConnInvariant.conn_tab_t",
@@ -203,7 +247,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "3e17ff023d2621f45e5bed3889236ea1"
     ],
     [
       "ConnInvariant.conn_tab",
@@ -229,7 +274,8 @@
         "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
         "token_correspondence_ConnInvariant.r_conn"
       ],
-      0
+      0,
+      "e40b42835478f7768541440e11652c66"
     ],
     [
       "ConnInvariant.registered",
@@ -253,7 +299,8 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_region",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "0be0849b2d0c97ccaea2134ff907e3b1"
     ],
     [
       "ConnInvariant.registered",
@@ -269,7 +316,8 @@
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "typing_Connection.__proj__C__item__hs", "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "f3bf536f11c3549ab878d9a95fe4ae2c"
     ],
     [
       "ConnInvariant.ms_conn_inv",
@@ -291,7 +339,8 @@
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_MasterSecret.writer", "typing_MonotoneMap.sel"
       ],
-      0
+      0,
+      "157e38d3075cd7f49f089e6b0f09c122"
     ],
     [
       "ConnInvariant.ms_conn_inv",
@@ -321,7 +370,8 @@
         "typing_StreamAE.__proj__State__item__region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "bfd2e83f5ed3b0b714826f2b281915d6"
     ],
     [
       "ConnInvariant.ms_conn_inv",
@@ -351,7 +401,8 @@
         "typing_StreamAE.__proj__State__item__region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "115d2a88bea1b4912fa32dc5a9e79424"
     ],
     [
       "ConnInvariant.ms_conn_inv",
@@ -359,7 +410,8 @@
       0,
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "2655e5fd11abca4caa6d67bd8c4217f2"
     ],
     [
       "ConnInvariant.ms_conn_inv",
@@ -368,29 +420,20 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_ConnInvariant.id", "equation_FStar.HyperStack.ref",
+        "equality_tok_TLSConstants.Writer@tok",
+        "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ref",
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
         "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_StreamAE.State_log_region",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Writer@tok"
+        "refinement_interpretation_ConnInvariant_Tm_refine_5e0e8a65f31073c07baab70152aca83f",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
       ],
-      0
+      0,
+      "46e6b33e89eb00697a3010d390ed5d39"
     ],
     [
       "ConnInvariant.ms_conn_inv",
@@ -399,86 +442,20 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_ConnInvariant.id", "equation_FStar.HyperStack.ref",
+        "equality_tok_TLSConstants.Writer@tok",
+        "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ref",
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
         "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_StreamAE.State_log_region",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_conn_inv",
-      7,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_ConnInvariant.id", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_conn_inv",
-      8,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
+        "refinement_interpretation_ConnInvariant_Tm_refine_5e0e8a65f31073c07baab70152aca83f",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
       ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_conn_inv",
-      9,
       0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
-      ],
-      0
+      "12db4e43b7d2c844afc6e0ad2867c341"
     ],
     [
       "ConnInvariant.handshake_regions_exists",
@@ -486,7 +463,8 @@
       0,
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "2215883310f8148e10ad221bdf9c9b8f"
     ],
     [
       "ConnInvariant.mc_inv",
@@ -501,7 +479,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "d6c690e649d5ec6054c86263de22a355"
     ],
     [
       "ConnInvariant.mc_inv",
@@ -516,7 +495,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "dab6dd7333ad8139e3a1bc3fe9a44527"
     ],
     [
       "ConnInvariant.mc_inv",
@@ -527,7 +507,8 @@
         "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
-      0
+      0,
+      "983e0be3d0d1a0bde31585bbed3d97ff"
     ],
     [
       "ConnInvariant.mc_inv",
@@ -535,19 +516,15 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "cec582d0b498510ac49f6fa0b4523446"
     ],
     [
       "ConnInvariant.mc_inv",
@@ -555,19 +532,15 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "883f4c58a3d2e64bd624b70c586fcfb1"
     ],
     [
       "ConnInvariant.mc_inv",
@@ -575,206 +548,6 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      7,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      8,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      9,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      10,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      11,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      12,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      13,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      14,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      15,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "proj_equation_FStar.Monotonic.HyperStack.MkRef_id",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      16,
-      0,
-      1,
-      [
         "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
         "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
@@ -782,37 +555,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      17,
       0,
-      1,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mc_inv",
-      18,
-      0,
-      1,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
+      "4efc1c9c4d2dba5075dc48472d8b6d75"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -827,7 +571,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "ae39b50e5bba7f18a0fca80d1c1ca5ce"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -842,7 +587,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "b3fc1cc378fa1b5eee3153935d6e59fa"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -857,7 +603,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "59ade9d4a7b51b7fe4ec221aad207da0"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -872,7 +619,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "cf0f53581be9b90c9c8b22897be073b3"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -880,7 +628,8 @@
       0,
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "9cc2abdf2e28e01e671970edf402d3df"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -888,7 +637,8 @@
       0,
       1,
       [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
+      0,
+      "f2d19900e065e41461532f3569de7db8"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -899,87 +649,12 @@
         "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
-      0
+      0,
+      "71fc4f970a65685d872a91efce712830"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
       8,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      9,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      10,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      11,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_StreamAE.id",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "refinement_interpretation_ConnInvariant_Tm_refine_906d3c4c0c9972718bc69201e3d941ac",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      12,
       0,
       1,
       [
@@ -988,7 +663,112 @@
         "haseqStreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "haseqTLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d"
       ],
-      0
+      0,
+      "c5bfd64867517180fbd73416599f2b8e"
+    ],
+    [
+      "ConnInvariant.ms_derive_is_ok",
+      9,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
+        "data_typing_intro_TLSConstants.Writer@tok",
+        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
+        "equation_FStar.Monotonic.HyperStack.is_above",
+        "equation_MasterSecret.writer", "equation_Parse.rgn",
+        "equation_StreamAE.id", "equation_StreamAE.writer",
+        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
+        "primitive_Prims.op_Equality",
+        "proj_equation_StreamAE.State_log_region",
+        "proj_equation_StreamAE.State_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
+        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
+        "typing_StreamAE.__proj__State__item__log_region",
+        "typing_StreamAE.__proj__State__item__region",
+        "typing_tok_TLSConstants.Writer@tok"
+      ],
+      0,
+      "2341e6a39305b5a5b68f510a13270e22"
+    ],
+    [
+      "ConnInvariant.ms_derive_is_ok",
+      10,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
+        "data_typing_intro_TLSConstants.Writer@tok",
+        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
+        "equation_FStar.Monotonic.HyperStack.is_above",
+        "equation_MasterSecret.writer", "equation_Parse.rgn",
+        "equation_StreamAE.id", "equation_StreamAE.writer",
+        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
+        "primitive_Prims.op_Equality",
+        "proj_equation_StreamAE.State_log_region",
+        "proj_equation_StreamAE.State_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
+        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
+        "typing_StreamAE.__proj__State__item__log_region",
+        "typing_StreamAE.__proj__State__item__region",
+        "typing_tok_TLSConstants.Writer@tok"
+      ],
+      0,
+      "b97c685d7776b3135d8a397dfb14cd80"
+    ],
+    [
+      "ConnInvariant.ms_derive_is_ok",
+      11,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equality_tok_TLSConstants.Writer@tok",
+        "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ref",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_FStar.Monotonic.HyperStack.mref",
+        "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_StreamAE.State_log_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_ConnInvariant_Tm_refine_5e0e8a65f31073c07baab70152aca83f",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
+      ],
+      0,
+      "a87f295725c51ba662b204a62188839d"
+    ],
+    [
+      "ConnInvariant.ms_derive_is_ok",
+      12,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equality_tok_TLSConstants.Writer@tok",
+        "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ref",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_FStar.Monotonic.HyperStack.mref",
+        "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_StreamAE.State_log_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_ConnInvariant_Tm_refine_5e0e8a65f31073c07baab70152aca83f",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
+      ],
+      0,
+      "b0ed1e11566301cc331956bc906883b5"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
@@ -1017,172 +797,8 @@
         "typing_StreamAE.__proj__State__item__region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      14,
       0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_FStar.Monotonic.HyperStack.is_above",
-        "equation_MasterSecret.writer", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
-        "primitive_Prims.op_Equality",
-        "proj_equation_StreamAE.State_log_region",
-        "proj_equation_StreamAE.State_region",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_StreamAE.__proj__State__item__region",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      15,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      16,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      17,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "data_typing_intro_TLSConstants.Writer@tok",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Writer@tok",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      18,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      19,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.ms_derive_is_ok",
-      20,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "equality_tok_TLSConstants.Writer@tok",
-        "equation_MasterSecret.writer", "equation_Parse.rgn",
-        "equation_StreamAE.writer", "proj_equation_StreamAE.State_region",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "typing_StreamAE.__proj__State__item__region",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
+      "84b106fb27d1fffd6bf7554853225bcb"
     ],
     [
       "ConnInvariant.invertOption",
@@ -1190,11 +806,12 @@
       0,
       1,
       [ "@query", "lemma_FStar.Pervasives.invertOption", "unit_typing" ],
-      0
+      0,
+      "d0d7c37fcace0253f66805961e850d16"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
-      21,
+      14,
       0,
       0,
       [
@@ -1220,11 +837,12 @@
         "typing_StreamAE.__proj__State__item__region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "b44f00d7c811e9c076be7e9aedc15ea7"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
-      22,
+      15,
       0,
       0,
       [
@@ -1235,11 +853,12 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "283582b932a7f5ea3eb954a264f2dcd7"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
-      23,
+      16,
       0,
       0,
       [
@@ -1250,11 +869,12 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "392db987f20ecb2fae81809b4d9dc2a1"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
-      24,
+      17,
       0,
       0,
       [
@@ -1263,11 +883,12 @@
         "haseqStreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "haseqTLSInfo_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d"
       ],
-      0
+      0,
+      "36bfadf0e7185dfbc1c17ee98101bd0a"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
-      25,
+      18,
       0,
       0,
       [
@@ -1278,11 +899,12 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "3e10891ae49b3bfb9b05535c38b4fec1"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
-      26,
+      19,
       0,
       0,
       [
@@ -1293,11 +915,12 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "58e8f88ef25441e6c76566a6fd440be6"
     ],
     [
       "ConnInvariant.ms_derive_is_ok",
-      27,
+      20,
       0,
       0,
       [
@@ -1310,7 +933,8 @@
         "refinement_interpretation_Parse_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
         "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e"
       ],
-      0
+      0,
+      "e5798586e08939e435797a5d9f05ef93"
     ],
     [
       "ConnInvariant.try_ms_derive",
@@ -1330,7 +954,8 @@
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9"
       ],
-      0
+      0,
+      "ec47fc47655a22761433f352d3d4e8ba"
     ],
     [
       "ConnInvariant.try_ms_derive",
@@ -1345,7 +970,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "d67fd3ea5a271a3f12e86bf5fbfa329b"
     ],
     [
       "ConnInvariant.try_ms_derive",
@@ -1360,7 +986,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "92434becddccc5674bc1c2d173598d33"
     ],
     [
       "ConnInvariant.try_ms_derive",
@@ -1379,7 +1006,8 @@
         "typing_StreamAE.__proj__State__item__log_region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "889344dbf9c8646f0ddbdf3e1aa7e62b"
     ],
     [
       "ConnInvariant.try_ms_derive",
@@ -1398,7 +1026,8 @@
         "typing_StreamAE.__proj__State__item__log_region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "13abcf944a76f777bddb216fffdd889e"
     ],
     [
       "ConnInvariant.all_epoch_writers_share_conn_nonce",
@@ -1406,23 +1035,28 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_FStar.Monotonic.HyperStack.is_above",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_Parse.rgn", "fuel_guarded_inversion_Connection.connection",
-        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "@MaxIFuel_assumption", "@query", "disc_equation_TLSInfo.ID13",
+        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
+        "equation_ConnInvariant.registered", "equation_Epochs.epoch_id",
+        "equation_Epochs.random", "equation_FStar.Monotonic.HyperHeap.test0",
+        "equation_Prims._assert", "equation_StAE.is_stream",
+        "equation_StreamAE.id", "equation_StreamAE.writer",
+        "equation_StreamPlain.id",
+        "fuel_guarded_inversion_Connection.connection",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "fuel_guarded_inversion_Prims.equals",
+        "fuel_guarded_inversion_StreamAE.state",
+        "function_token_typing_FStar.Monotonic.HyperHeap.test0",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Epochs_Tm_refine_0604c7b3ec563d16cdd7ce213c7f43ec",
+        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "typing_Connection.__proj__C__item__hs",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_region",
+        "typing_Epochs.__proj__Epoch__item__i", "typing_Handshake.random_of",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "23d61eee995313e2075e46ae893719d8"
     ],
     [
       "ConnInvariant.writer_registered_to_at_most_one_connection",
@@ -1430,25 +1064,30 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_ConnInvariant.r_conn",
-        "equation_FStar.Monotonic.HyperStack.is_above",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_Parse.rgn", "fuel_guarded_inversion_Connection.connection",
-        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "@MaxIFuel_assumption", "@query", "disc_equation_TLSInfo.ID13",
+        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
+        "equation_ConnInvariant.r_conn", "equation_ConnInvariant.registered",
+        "equation_Epochs.epoch_id",
+        "equation_FStar.Monotonic.HyperHeap.test0", "equation_Prims._assert",
+        "equation_StAE.is_stream", "equation_StreamAE.id",
+        "equation_StreamAE.writer", "equation_StreamPlain.id",
+        "fuel_guarded_inversion_Connection.connection",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mem",
+        "fuel_guarded_inversion_Prims.equals",
+        "fuel_guarded_inversion_StreamAE.state",
+        "function_token_typing_FStar.Monotonic.HyperHeap.test0",
         "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_ConnInvariant_Tm_refine_041be0e5818ed975930bf7d211ca23ee",
         "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
+        "refinement_interpretation_ConnInvariant_Tm_refine_de4d559d696c1959d3b60580b104f6b8",
         "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Epochs_Tm_refine_0604c7b3ec563d16cdd7ce213c7f43ec",
+        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "typing_Connection.__proj__C__item__hs",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_region",
-        "typing_Handshake.region_of"
+        "typing_Epochs.__proj__Epoch__item__i", "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "69460ec7c0c3c88b67576740983d8016"
     ],
     [
       "ConnInvariant.writer_registered_to_at_most_one_connection",
@@ -1461,7 +1100,8 @@
         "equation_Platform.Bytes.lbytes", "equation_TLSInfo.random",
         "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
-      0
+      0,
+      "037bebd38c3ffee9917fd7de6ada074a"
     ],
     [
       "ConnInvariant.writer_region_within_connection",
@@ -1512,7 +1152,8 @@
         "typing_StreamAE.__proj__State__item__region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "3cbc91cc68367d0671cedaba6470a351"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1527,7 +1168,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "ab77d51128aa875c25cfd1dc93c5d365"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1542,7 +1184,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "e53c6f9d5eec9ce2d8f65ac38c7907c8"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1561,7 +1204,8 @@
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "typing_Connection.__proj__C__item__hs", "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "2595e42f0a9f47993f57a1a000d941e8"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1580,7 +1224,8 @@
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "typing_Connection.__proj__C__item__hs", "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "1b61e85eef0f3e609b2958908986cda4"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1608,7 +1253,8 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_region",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "5bb8507af4060c3000adf3a56f72307a"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1627,7 +1273,8 @@
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
         "typing_Connection.__proj__C__item__hs", "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "2f4fbff1a9b921cd2bab4c4b0f717997"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1636,6 +1283,7 @@
       0,
       [
         "@MaxIFuel_assumption", "@query", "equation_ConnInvariant.r_conn",
+        "equation_FStar.Heap.trivial_preorder",
         "equation_FStar.HyperStack.ref",
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
@@ -1646,13 +1294,14 @@
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_ConnInvariant_Tm_refine_1481babb8ad7ac02244e81d72a7a5ca5",
         "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_b94abfaeeaa77c0ea16a3435ada64e43",
         "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
         "typing_Connection.__proj__C__item__hs"
       ],
-      0
+      0,
+      "9108a19800ad95f8d177bc452c801e5e"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1663,7 +1312,8 @@
         "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
         "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
-      0
+      0,
+      "b644b21a8ce94c2130780b0b0a577196"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1671,108 +1321,9 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query", "equation_ConnInvariant.r_conn",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_TLSInfo.nonce_of_id",
-        "fuel_guarded_inversion_Connection.connection",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_b94abfaeeaa77c0ea16a3435ada64e43",
-        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "typing_Connection.__proj__C__item__hs"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      10,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_ConnInvariant.r_conn",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_TLSInfo.nonce_of_id",
-        "fuel_guarded_inversion_Connection.connection",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_b94abfaeeaa77c0ea16a3435ada64e43",
-        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "typing_Connection.__proj__C__item__hs"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      11,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_ConnInvariant.r_conn",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_TLSInfo.nonce_of_id",
-        "fuel_guarded_inversion_Connection.connection",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_b94abfaeeaa77c0ea16a3435ada64e43",
-        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "typing_Connection.__proj__C__item__hs"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      12,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_ConnInvariant.r_conn",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_TLSInfo.nonce_of_id",
-        "fuel_guarded_inversion_Connection.connection",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_Connection.C_hs", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_b94abfaeeaa77c0ea16a3435ada64e43",
-        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "typing_Connection.__proj__C__item__hs"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      13,
-      0,
-      0,
-      [
         "@MaxIFuel_assumption", "@query", "disc_equation_TLSInfo.ID13",
         "equation_ConnInvariant.r_conn", "equation_Epochs.epoch_id",
+        "equation_FStar.Heap.trivial_preorder",
         "equation_FStar.HyperStack.ref",
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
@@ -1788,18 +1339,19 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391",
+        "refinement_interpretation_ConnInvariant_Tm_refine_1481babb8ad7ac02244e81d72a7a5ca5",
         "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_b94abfaeeaa77c0ea16a3435ada64e43",
         "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
         "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
         "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
         "typing_Connection.__proj__C__item__hs"
       ],
-      0
+      0,
+      "452a0e44ce4cf1045c0eb2738a7cdb82"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
-      14,
+      10,
       0,
       0,
       [
@@ -1822,7 +1374,72 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_region",
         "typing_Handshake.region_of"
       ],
-      0
+      0,
+      "e7da3a0bdde365b67c7877594b2beccb"
+    ],
+    [
+      "ConnInvariant.register_writer_in_epoch_ok",
+      11,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "b10657f73f861a603836cffef5847bbb"
+    ],
+    [
+      "ConnInvariant.register_writer_in_epoch_ok",
+      12,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "da4ecd9687029c8d91166e7312aa9fe7"
+    ],
+    [
+      "ConnInvariant.register_writer_in_epoch_ok",
+      13,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "cb74ffa3bd5677b02e36ec23d781027a"
+    ],
+    [
+      "ConnInvariant.register_writer_in_epoch_ok",
+      14,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "d8934b0eb47e06ecfd165c655a339661"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1830,14 +1447,30 @@
       0,
       0,
       [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
+        "@MaxIFuel_assumption", "@query",
+        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
+        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Reader@tok",
+        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
+        "equation_FStar.Monotonic.HyperStack.is_above",
+        "equation_MasterSecret.writer", "equation_Parse.rgn",
+        "equation_StreamAE.id", "equation_StreamAE.writer",
+        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
+        "primitive_Prims.op_Equality",
+        "proj_equation_StreamAE.State_log_region",
+        "proj_equation_StreamAE.State_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
+        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
+        "typing_StreamAE.__proj__State__item__log_region",
+        "typing_StreamAE.__proj__State__item__region",
+        "typing_tok_TLSConstants.Reader@tok",
+        "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "d0ba23be4e0cece92b80130841265612"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1845,29 +1478,39 @@
       0,
       0,
       [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
+        "@MaxIFuel_assumption", "@query",
+        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
+        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Reader@tok",
+        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
+        "equation_FStar.Monotonic.HyperStack.is_above",
+        "equation_MasterSecret.writer", "equation_Parse.rgn",
+        "equation_StreamAE.id", "equation_StreamAE.writer",
+        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
+        "primitive_Prims.op_Equality",
+        "proj_equation_StreamAE.State_log_region",
+        "proj_equation_StreamAE.State_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
+        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
+        "typing_StreamAE.__proj__State__item__log_region",
+        "typing_StreamAE.__proj__State__item__region",
+        "typing_tok_TLSConstants.Reader@tok",
+        "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "9b13b50cb0ab1c7e913927fd3e87bed7"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
       17,
       0,
       0,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
+      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
+      0,
+      "cdf390529226de4ba2260a274269010a"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1875,14 +1518,21 @@
       0,
       0,
       [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "@MaxIFuel_assumption", "@query",
+        "equality_tok_TLSConstants.Writer@tok",
+        "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ref",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
+        "equation_FStar.Monotonic.HyperStack.mref",
+        "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_StreamAE.State_log_region",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_ConnInvariant_Tm_refine_5e0e8a65f31073c07baab70152aca83f",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
       ],
-      0
+      0,
+      "907631b36704bd7c3668f9b8c4df0d65"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
@@ -1912,174 +1562,12 @@
         "typing_tok_TLSConstants.Reader@tok",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "7398d3ae02be6ad1984aa935177433b3"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
       20,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
-        "equation_FStar.Monotonic.HyperStack.is_above",
-        "equation_MasterSecret.writer", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
-        "primitive_Prims.op_Equality",
-        "proj_equation_StreamAE.State_log_region",
-        "proj_equation_StreamAE.State_region",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_StreamAE.__proj__State__item__region",
-        "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      21,
-      0,
-      0,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      22,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_StreamAE.State_log_region",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      23,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_StreamAE.State_log_region",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      24,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "disc_equation_TLSInfo.ID13", "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "equation_StreamPlain.id", "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_StreamAE.State_log_region",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      25,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      26,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.register_writer_in_epoch_ok",
-      27,
       0,
       0,
       [
@@ -2088,11 +1576,12 @@
         "equation_TLSInfo.random",
         "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
       ],
-      0
+      0,
+      "13ea096ba0521f4a40bb6b1c65bbf7f0"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
-      28,
+      21,
       0,
       0,
       [
@@ -2103,11 +1592,12 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "5b3d0c67b6316e1ea713ef704c466aac"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
-      29,
+      22,
       0,
       0,
       [
@@ -2118,11 +1608,12 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "2f5e2e98ef045c88e14d70cd719927b6"
     ],
     [
       "ConnInvariant.register_writer_in_epoch_ok",
-      30,
+      23,
       0,
       0,
       [
@@ -2135,7 +1626,8 @@
         "refinement_interpretation_Parse_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
         "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e"
       ],
-      0
+      0,
+      "f94856bf6798c67a33c484f3c54e7860"
     ],
     [
       "ConnInvariant.mutate_registered_writer_ok",
@@ -2150,7 +1642,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "21310e234adef69b2d1835664e226b98"
     ],
     [
       "ConnInvariant.mutate_registered_writer_ok",
@@ -2165,7 +1658,8 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "be499bafbd51aa713df61cf424ea04f4"
     ],
     [
       "ConnInvariant.mutate_registered_writer_ok",
@@ -2187,7 +1681,8 @@
         "typing_StreamAE.__proj__State__item__log_region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "2029ae31e1947f85541b792ec53f566b"
     ],
     [
       "ConnInvariant.mutate_registered_writer_ok",
@@ -2209,107 +1704,12 @@
         "typing_StreamAE.__proj__State__item__log_region",
         "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "022c55c97877ff37b3777847dccdc278"
     ],
     [
       "ConnInvariant.mutate_registered_writer_ok",
       5,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mutate_registered_writer_ok",
-      6,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mutate_registered_writer_ok",
-      7,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
-        "equality_tok_TLSConstants.Reader@tok",
-        "equality_tok_TLSConstants.Writer@tok",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
-        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
-        "equation_StreamAE.id", "equation_StreamAE.writer",
-        "fuel_guarded_inversion_StreamAE.state",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391",
-        "refinement_interpretation_ConnInvariant_Tm_refine_7fdeb1194f959575e92c958bed8afb45",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
-        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
-        "typing_StreamAE.__proj__State__item__log_region",
-        "typing_tok_TLSConstants.Reader@tok",
-        "typing_tok_TLSConstants.Writer@tok"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.mutate_registered_writer_ok",
-      8,
       0,
       0,
       [
@@ -2318,39 +1718,279 @@
         "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391",
         "refinement_interpretation_StreamAE_Tm_refine_f39bd1782581f69a042cf0a284ec6a88"
       ],
-      0
+      0,
+      "9e956ab214509ac268dfdb653e70cb77"
     ],
     [
       "ConnInvariant.mutate_registered_writer_ok",
-      9,
+      6,
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "data_elim_Epochs.Epoch", "equation_ConnInvariant.r_conn",
-        "equation_ConnInvariant.registered",
+        "@MaxIFuel_assumption", "@query",
+        "TLSConstants_pretyping_6f101dcc3b0227ea7e555725221d173c",
+        "bool_inversion", "data_typing_intro_TLSConstants.Writer@tok",
+        "equality_tok_TLSConstants.Writer@tok", "equation_ConnInvariant.id",
+        "equation_ConnInvariant.registered", "equation_Epochs.epoch_id",
         "equation_FStar.Monotonic.HyperStack.is_above",
         "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
-        "equation_Parse.rgn", "equation_TLSInfo.nonce_of_id",
-        "fuel_guarded_inversion_Epochs.epoch",
+        "equation_MasterSecret.writer", "equation_Parse.epoch_color",
+        "equation_Parse.is_epoch_rgn", "equation_Parse.rgn",
+        "equation_StreamAE.id", "equation_StreamAE.writer",
+        "fuel_guarded_inversion_Prims.equals",
         "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "proj_equation_Connection.C_hs", "proj_equation_Epochs.Epoch_i",
+        "proj_equation_StreamAE.State_log_region",
+        "proj_equation_StreamAE.State_region",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
+        "refinement_interpretation_AEADOpenssl_Tm_refine_49edabf22ed387b83e79e9af2d6a6391",
+        "refinement_interpretation_MasterSecret_Tm_refine_83009580e4bd188d3a4889a6a8d48af4",
         "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "typing_Connection.__proj__C__item__hs",
+        "refinement_interpretation_StreamAE_Tm_refine_57aef002bbbbe00d50b120665b72837b",
         "typing_FStar.Monotonic.HyperStack.is_eternal_region",
-        "typing_Handshake.region_of"
+        "typing_StreamAE.__proj__State__item__log_region",
+        "typing_StreamAE.__proj__State__item__region",
+        "typing_tok_TLSConstants.Writer@tok"
       ],
-      0
+      0,
+      "0880bd35c6e973cf928af9e031abdb50"
     ],
     [
       "ConnInvariant.mutate_registered_writer_ok",
+      7,
+      0,
+      1,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "9b487284c5a11b700700d8bf662ec2cb"
+    ],
+    [
+      "ConnInvariant.mutate_registered_writer_ok",
+      8,
+      0,
+      1,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "d689c7b91b5061b0c59166ca05d72a3c"
+    ],
+    [
+      "ConnInvariant.conn_hs_region_exists",
+      1,
+      0,
+      0,
+      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
+      0,
+      "6cdf3f3fb29262556bbc1fb98f82ec12"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      1,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "b36a823b31b695bd9465c19d6174b4c3"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      2,
+      0,
+      0,
+      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
+      0,
+      "e8c097b76f9b28b8a16b2b2e87ad5ff3"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      3,
+      0,
+      0,
+      [
+        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
+        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+      ],
+      0,
+      "f3061f6e8c26331e1a4e880378476197"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      4,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "df17249efe09e8b1027b5a4821acde99"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      5,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "d9911bd3a3a5151b3a1c5a8045a4899f"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      6,
+      0,
+      0,
+      [
+        "@query", "assumption_Platform.Bytes.HasEq_bytes",
+        "equation_Epochs.random", "equation_Platform.Bytes.bytes",
+        "equation_Platform.Bytes.lbytes", "equation_TLSInfo.random",
+        "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
+      ],
+      0,
+      "b924e6de22f199701a71abf5ba09876b"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      7,
+      0,
+      0,
+      [
+        "@query", "equation_Epochs.random",
+        "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.Preorder.preorder_rel", "equation_MonotoneMap.map",
+        "equation_TLSInfo.random",
+        "token_correspondence_FStar.Heap.trivial_preorder", "true_interp"
+      ],
+      0,
+      "c9f0bb7ad66c6ec198f21bfd239705be"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      8,
+      0,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "FStar.Map_interpretation_Tm_arrow_a73cdccc525c909463a87f74f473474b",
+        "Record_pretyping_9b28b5f0622c347b7045fc303d1ab0aa",
+        "assumption_FStar.Monotonic.HyperHeap.HasEq_rid", "b2t_def",
+        "bool_inversion", "data_elim_Connection.C",
+        "equation_ConnInvariant.conn_hs_region_exists",
+        "equation_ConnInvariant.i_conn", "equation_ConnInvariant.r_conn",
+        "equation_Connection.c_rgn", "equation_Epochs.random",
+        "equation_FStar.Heap.trivial_preorder",
+        "equation_FStar.HyperStack.ref",
+        "equation_FStar.Monotonic.HyperHeap.map_invariant",
+        "equation_FStar.Monotonic.HyperHeap.modifies",
+        "equation_FStar.Monotonic.HyperHeap.t",
+        "equation_FStar.Monotonic.HyperStack.downward_closed",
+        "equation_FStar.Monotonic.HyperStack.hh",
+        "equation_FStar.Monotonic.HyperStack.is_above",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_FStar.Monotonic.HyperStack.is_in",
+        "equation_FStar.Monotonic.HyperStack.is_stack_region",
+        "equation_FStar.Monotonic.HyperStack.mref",
+        "equation_FStar.Set.eqtype", "equation_FStar.Set.subset",
+        "equation_Parse.hs_color", "equation_Parse.is_hs_rgn",
+        "equation_Parse.is_tls_rgn", "equation_Parse.rgn",
+        "equation_Parse.tls_color", "equation_Parse.tls_rgn",
+        "equation_Prims.eqtype", "equation_Record.wait_header",
+        "equation_TLSInfo.nonce_of_id", "equation_TLSInfo.random",
+        "fuel_guarded_inversion_Connection.connection",
+        "function_token_typing_FStar.Map.concat",
+        "function_token_typing_FStar.Monotonic.Heap.heap",
+        "function_token_typing_FStar.Monotonic.HyperHeap.rid",
+        "function_token_typing_FStar.Monotonic.HyperHeap.root",
+        "function_token_typing_Parse.tls_tables_region",
+        "function_token_typing_Record.wait_header", "l_and-interp",
+        "lemma_FStar.Map.lemma_ContainsDom",
+        "lemma_FStar.Map.lemma_equal_elim",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_extends_includes",
+        "lemma_FStar.Monotonic.HyperHeap.lemma_root_has_color_zero",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Minus",
+        "proj_equation_Connection.C_hs", "proj_equation_Connection.C_region",
+        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_ConnInvariant_Tm_refine_13f3a94d5dd07c4b7902d1e290438c0e",
+        "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
+        "refinement_interpretation_Connection_Tm_refine_05aa8f85cf4d010e9c60bfd29e6ea1ae",
+        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
+        "refinement_interpretation_Connection_Tm_refine_44934f8bd27890ff606f09ae7f2f3c21",
+        "refinement_interpretation_FStar.Monotonic.HyperHeap_Tm_refine_2fbd657fe85bcb2423f9c7e5f9b3bcb5",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_38d52172626ad62ce3b0e4245dab71ed",
+        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
+        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
+        "refinement_interpretation_Parse_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
+        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
+        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "token_correspondence_ConnInvariant.r_conn",
+        "token_correspondence_FStar.Map.concat",
+        "typing_Connection.__proj__C__item__hs",
+        "typing_Connection.__proj__C__item__region",
+        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
+        "typing_FStar.Monotonic.HyperHeap.includes",
+        "typing_FStar.Monotonic.HyperHeap.mod_set",
+        "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h",
+        "typing_FStar.Monotonic.HyperStack.is_eternal_region",
+        "typing_FStar.Set.complement", "typing_FStar.Set.mem",
+        "typing_FStar.Set.singleton", "typing_Handshake.region_of"
+      ],
+      0,
+      "483377b03eb08306b04b5a1b3bf3a844"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
+      9,
+      0,
+      0,
+      [
+        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
+        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "3968129de217e98bef10c0ee106b7c6a"
+    ],
+    [
+      "ConnInvariant.add_connection_ok",
       10,
       0,
       1,
@@ -2362,10 +2002,11 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "cf10caa3259fe48b9467510becfe3638"
     ],
     [
-      "ConnInvariant.mutate_registered_writer_ok",
+      "ConnInvariant.add_connection_ok",
       11,
       0,
       1,
@@ -2377,320 +2018,12 @@
         "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0"
       ],
-      0
+      0,
+      "2b357fb3b42ecd91b672726972356f8c"
     ],
-    [
-      "ConnInvariant.conn_hs_region_exists",
-      1,
-      0,
-      0,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      1,
-      0,
-      0,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      2,
-      0,
-      0,
-      [ "@query", "assumption_FStar.Monotonic.HyperHeap.HasEq_rid" ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      3,
-      0,
-      0,
-      [
-        "@query", "assumption_Prims.HasEq_int", "equation_Prims.nat",
-        "haseqPrims_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      4,
-      0,
-      0,
-      [
-        "@query", "equation_Epochs.random",
-        "equation_FStar.Heap.trivial_preorder",
-        "equation_FStar.Preorder.preorder_rel", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "token_correspondence_FStar.Heap.trivial_preorder", "true_interp"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      5,
-      0,
-      0,
-      [
-        "@query", "equation_Epochs.random",
-        "equation_FStar.Heap.trivial_preorder",
-        "equation_FStar.Preorder.preorder_rel", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "token_correspondence_FStar.Heap.trivial_preorder", "true_interp"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      6,
-      0,
-      0,
-      [
-        "@query", "equation_Epochs.random",
-        "equation_FStar.Heap.trivial_preorder",
-        "equation_FStar.Preorder.preorder_rel", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "token_correspondence_FStar.Heap.trivial_preorder", "true_interp"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      7,
-      0,
-      0,
-      [
-        "@query", "equation_Epochs.random",
-        "equation_FStar.Heap.trivial_preorder",
-        "equation_FStar.Preorder.preorder_rel", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "token_correspondence_FStar.Heap.trivial_preorder", "true_interp"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      8,
-      0,
-      0,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      9,
-      0,
-      0,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      10,
-      0,
-      0,
-      [
-        "@query", "assumption_Platform.Bytes.HasEq_bytes",
-        "equation_Epochs.random", "equation_Platform.Bytes.bytes",
-        "equation_Platform.Bytes.lbytes", "equation_TLSInfo.random",
-        "haseqPlatform.Bytes_Tm_refine_3458b9f6f40fe62446cdc2c6d3755a94"
-      ],
-      0
-    ],
-    [ "ConnInvariant.add_connection_ok", 11, 0, 0, [ "@query" ], 0 ],
     [
       "ConnInvariant.add_connection_ok",
       12,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "Record_pretyping_9b28b5f0622c347b7045fc303d1ab0aa",
-        "assumption_FStar.Monotonic.HyperHeap.HasEq_rid", "b2t_def",
-        "bool_inversion", "data_elim_Connection.C",
-        "equation_ConnInvariant.conn_hs_region_exists",
-        "equation_ConnInvariant.i_conn", "equation_ConnInvariant.r_conn",
-        "equation_Connection.c_rgn", "equation_Epochs.random",
-        "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperHeap.map_invariant",
-        "equation_FStar.Monotonic.HyperHeap.t",
-        "equation_FStar.Monotonic.HyperStack.downward_closed",
-        "equation_FStar.Monotonic.HyperStack.hh",
-        "equation_FStar.Monotonic.HyperStack.is_above",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_in",
-        "equation_FStar.Monotonic.HyperStack.is_stack_region",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Set.eqtype", "equation_Parse.hs_color",
-        "equation_Parse.is_hs_rgn", "equation_Parse.is_tls_rgn",
-        "equation_Parse.rgn", "equation_Parse.tls_color",
-        "equation_Parse.tls_rgn", "equation_Prims.eqtype",
-        "equation_Record.wait_header", "equation_TLSInfo.nonce_of_id",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_Connection.connection",
-        "function_token_typing_FStar.Monotonic.Heap.heap",
-        "function_token_typing_FStar.Monotonic.HyperHeap.rid",
-        "function_token_typing_Parse.tls_tables_region",
-        "function_token_typing_Record.wait_header", "l_and-interp",
-        "lemma_FStar.Map.lemma_ContainsDom",
-        "lemma_FStar.Monotonic.HyperHeap.lemma_extends_includes",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Minus",
-        "proj_equation_Connection.C_hs", "proj_equation_Connection.C_region",
-        "proj_equation_FStar.Monotonic.HyperStack.HS_h",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_ConnInvariant_Tm_refine_5ebc7cd304c6d3761c6768ab73dedfd2",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_Connection_Tm_refine_39640fc697708de8c241a60e0f20e937",
-        "refinement_interpretation_Connection_Tm_refine_3bef0ea92e7a72ed06c3ed886f958b17",
-        "refinement_interpretation_Connection_Tm_refine_44934f8bd27890ff606f09ae7f2f3c21",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_38d52172626ad62ce3b0e4245dab71ed",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_Parse_Tm_refine_827021888216ac6a501be14cd4b812c9",
-        "refinement_interpretation_Parse_Tm_refine_b9611c68854b3e8b5fcc372285b2bc8d",
-        "refinement_interpretation_Parse_Tm_refine_d26422d9696ba619f4813a3f4ad1e26e",
-        "refinement_interpretation_Prims_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "token_correspondence_ConnInvariant.r_conn",
-        "typing_Connection.__proj__C__item__hs",
-        "typing_Connection.__proj__C__item__region",
-        "typing_FStar.Map.contains",
-        "typing_FStar.Monotonic.HyperHeap.includes",
-        "typing_FStar.Monotonic.HyperStack.__proj__HS__item__h",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_region",
-        "typing_Handshake.region_of"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      13,
-      0,
-      1,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      14,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      15,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      16,
-      0,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_FStar.Monotonic.HyperStack.MkRef",
-        "equation_Epochs.random", "equation_FStar.HyperStack.ref",
-        "equation_FStar.Monotonic.HyperStack.mref",
-        "equation_FStar.Preorder.preorder", "equation_MonotoneMap.map",
-        "equation_TLSInfo.random",
-        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference",
-        "refinement_interpretation_ConnInvariant_Tm_refine_dd2c7946b7e76fb6c0b00879d160e167",
-        "refinement_interpretation_FStar.Monotonic.HyperStack_Tm_refine_9e2d5594fe610865de2790d3def65020",
-        "refinement_interpretation_FStar.Preorder_Tm_refine_bd10f09297e0e7dc08314f7d9211801c"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      17,
-      0,
-      1,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      18,
-      0,
-      1,
-      [
-        "@query", "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_region",
-        "equation_Parse.is_tls_rgn", "equation_Parse.tls_color",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Minus", "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0"
-      ],
-      0
-    ],
-    [
-      "ConnInvariant.add_connection_ok",
-      19,
       0,
       1,
       [
@@ -2704,11 +2037,13 @@
         "function_token_typing_ConnInvariant.r_conn",
         "function_token_typing_Nonce.random",
         "lemma_FStar.Pervasives.invertOption",
+        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_MonotoneMap_Tm_refine_190971c40057bc3cbae086409b5117ed",
         "token_correspondence_ConnInvariant.r_conn",
         "typing_ConnInvariant.r_conn", "typing_MonotoneMap.sel"
       ],
-      0
+      0,
+      "7285f9a59cf3cf27f3dd7f72e631ca91"
     ]
   ]
 ]

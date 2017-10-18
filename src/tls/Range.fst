@@ -120,13 +120,13 @@ let minP (n:int) : Tot (m:int{m <= n /\ m <= max_TLSPlaintext_fragment_length}) 
   if n >= max_TLSPlaintext_fragment_length then max_TLSPlaintext_fragment_length
   else n
 
-#reset-options "--z3rlimit 30 --initial_fuel 1 --initial_ifuel 1 --max_fuel 4 --max_ifuel 4"
+#reset-options "--z3rlimit 50 --initial_fuel 1 --initial_ifuel 1 --max_fuel 4 --max_ifuel 4"
 //Is there a nice way to avoid writing implicit arguments for pairs and the superfluous refinement 0 <= max?
 (* cipherRangeClass: given a ciphertext length, how long can the plaintext be? *)
 val cipherRangeClass: i:id2 -> clen:nat -> Pure range
   (requires valid_clen i clen)
-  (ensures fun (r:range) ->
-    let min, max = match aeAlg_of_id i with
+  (ensures fun r ->
+    let (min, max) :range = match aeAlg_of_id i with
       | AEAD a _ ->
           let x = clen - AE.explicit_iv_length i - CoreCrypto.aeadTagSize a in (x,x)
       | MtE enc _ ->
