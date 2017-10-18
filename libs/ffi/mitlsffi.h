@@ -36,6 +36,8 @@ typedef enum {
   TLS_aead_CHACHA20_POLY1305 = 2
 } mitls_aead;
 
+typedef uint16_t mitls_signature_scheme;
+
 // Agile secret with static allocation
 typedef struct {
   mitls_hash hash;
@@ -44,6 +46,21 @@ typedef struct {
 } mitls_secret;
 
 typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(void *cb_state, const char *sni, const mitls_ticket *ticket);
+
+#define MAX_CHAIN_LEN 65536
+#define MAX_SIGNATURE_LEN 8192
+// Select a certificate based on the given SNI and list of signatures.
+// Signature algorithms are represented as 16-bit integers using the TLS 1.3 RFC code points
+typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
+// Write the certificate chain to buffer, returning the number of written bytes.
+// The chain should be written by prefixing each certificate by its length encoded over 3 bytes
+typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_format_cb)(void *cb_state, const void *cert_ptr, char buffer[MAX_CHAIN_LEN]);
+// Tries to sign and write the signature to sig, returning the signature size or 0 if signature failed
+typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_sign_cb)(void *cb_state, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig);
+// Verifies that the chain (given in the same format as above) is valid, and that sig is a valid signature
+// of tbs for sigalg using the public key stored in the leaf of the chain.
+// N.B. this function must validate the chain (including applcation checks such as hostname matching)
+typedef int (MITLS_CALLCONV *pfn_FFI_cert_verify_cb)(void *cb_state, const char* chain, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len);
 
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success

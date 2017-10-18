@@ -232,7 +232,6 @@ let ffiConfig
     min_version = TLS_1p3;
     max_version = TLS_1p3;
     peer_name = Some host;
-    check_peer_certificate = false;
     non_blocking_read = true;
     quic_parameters = Some (ver, [
       Quic_initial_max_stream_data max_stream_data;

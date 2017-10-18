@@ -74,8 +74,8 @@ let eT s rw (h:HyperStack.mem {iT s rw h >= 0}) =
 let readerT s h = eT s Reader h
 let writerT s h = eT s Writer h
 
-// returns the current exporter keys 
-val xkeys_of: s:hs -> ST (Seq.seq KeySchedule.exportKey) 
+// returns the current exporter keys
+val xkeys_of: s:hs -> ST (Seq.seq KeySchedule.exportKey)
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> h0 == h1 /\ Seq.length r <= 2)
 

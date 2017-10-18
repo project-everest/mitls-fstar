@@ -1525,7 +1525,6 @@ let signatureSchemeList =
 
 (** Serializing function for a SignatureScheme list *)
 
-private
 let rec signatureSchemeListBytes_aux
   (algs: signatureSchemeList)
   (b:bytes)
@@ -1746,14 +1745,39 @@ type pskInfo = {
   identities: bytes * bytes;
 }
 
-// FIXME(adl): we have to put strong framing on this callback as it may call into C
-// The framing has to be assumed in cross-runtime
-type ticket_cb =
-  (sni:string -> ticket:bytes -> pski:pskInfo -> psk:bytes -> ST unit
+type ticketInfo =
+  | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
+  | TicketInfo_13 of pskInfo
+
+type ticket_cb : Type0 =
+  (sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
     (requires fun _ -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1))
 
-noeq type config = {
+type cert_repr = b:bytes {length b < 16777216}
+type cert_type = FFICallbacks.callbacks
+
+noeq type cert_cb =
+  | CertCallbacks:
+      cert_select_cb:
+        (sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
+      cert_format_cb:
+        (cert_type -> ST (list cert_repr)
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
+      cert_sign_cb:
+        (cert_type -> signatureScheme -> tbs:bytes -> ST (option bytes)
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
+      cert_verify_cb:
+        (list cert_repr -> signatureScheme -> tbs:bytes -> sigv:bytes -> ST bool
+        (requires fun _ -> True)
+        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
+      cert_cb
+
+noeq type config : Type0 = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)
     min_version: protocolVersion;
     max_version: protocolVersion;
@@ -1769,8 +1793,6 @@ noeq type config = {
     (* Server side *)
     check_client_version_in_pms_for_old_tls: bool;
     request_client_certificate: bool; // TODO: generalize to CertificateRequest contents: a list of CAs.
-    cert_chain_file: string;     // TEMPORARY until the proper cert logic described above is implemented
-    private_key_file: string;    // TEMPORARY
 
     (* Common *)
     non_blocking_read: bool;
@@ -1779,13 +1801,11 @@ noeq type config = {
     extended_master_secret: bool; // turn on RFC 7627 extended master secret support
     enable_tickets: bool;         // Client: offer ticket support; server: emit and accept tickets
     ticket_callback: ticket_cb;   // Ticket callback, called when issuing or receiving a new ticket
+    cert_callbacks: cert_cb;      // Certificate callbacks, called on all PKI-related operations
 
     alpn: option alpn;   // ALPN offers (for client) or preferences (for server)
     peer_name: option string;     // The expected name to match against the peer certificate
-    check_peer_certificate: bool; // To disable certificate validation
-    ca_file: string;              // openssl certificate store (/etc/ssl/certs/ca-certificates.crt)
-                                  // on Cygwin /etc/ssl/certs/ca-bundle.crt
-    }
+  }
 
 
 type cVerifyData = b:bytes{length b <= 64} (* ClientFinished payload *)

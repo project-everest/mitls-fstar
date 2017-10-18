@@ -408,9 +408,10 @@ let client_ServerHello (s:hs) (sh:sh) (* digest:Hashing.anyTag *) : St incoming 
          begin // 1.2 resumption
           // Cannot fail if resume_12 is true
           let Some tid = Nego.find_sessionTicket mode.Nego.n_offer in
-          match Ticket.s12_lookup tid with
-          | Some (pv, cs, ems, msId, ms) ->
+          match PSK.s12_lookup tid with
+          | Some (pv, cs, ems, ms) ->
             trace "Server accepted our 1.2 ticket.";
+            let msId = Ticket.dummy_msId pv cs ems in
             let pv' = mode.Nego.n_protocol_version in
             let sr = mode.Nego.n_server_random in
             let cs' = mode.Nego.n_cipher_suite in
@@ -553,24 +554,20 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (os
   match ost, Nego.sendticket_12 mode with
   | Some {sticket_ticket = tid}, true ->
     let cfg = Nego.local_config hs.nego in
-    if Some? (cfg.peer_name) then // TODO refine
-     begin
-      PSK.extend (Some?.v cfg.peer_name) (tid, false);
-      let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
-      let pv = mode.Nego.n_protocol_version in
-      let cs = mode.Nego.n_cipher_suite in
-      Ticket.s12_extend tid (pv, cs, Nego.emsFlag mode, msId, ms)
-     end;
+    let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
+    let (msId, ms) = KeySchedule.ks_12_ms hs.ks in
+    let pv = mode.Nego.n_protocol_version in
+    let cs = mode.Nego.n_cipher_suite in
+    cfg.ticket_callback sni tid (TicketInfo_12 (pv, cs, Nego.emsFlag mode)) ms;
     InAck true false
   | None, false -> InAck true false
   | Some t, false -> InError (AD_unexpected_message, "unexpected NewSessionTicket message")
   | None, true -> InError (AD_unexpected_message, "missing expected NewSessionTicket message")
 
-
 // Process an incoming ticket (1.3)
 let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
   : St incoming =
-  let tid = utf8 (iutf8 st13.ticket13_ticket) in
+  let tid = st13.ticket13_ticket in
   trace ("Received ticket: "^(hex_of_bytes tid));
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
@@ -586,10 +583,9 @@ let client_NewSessionTicket_13 (hs:hs) (st13:sticket13)
     identities = (empty_bytes, empty_bytes); // TODO certs
   }) in
   let psk = KeySchedule.ks_client_13_rms_psk hs.ks st13.ticket13_nonce in
+  let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
-  let _ = match cfg.peer_name with
-    | Some sni -> cfg.ticket_callback sni tid pskInfo psk
-    | None -> () in
+  cfg.ticket_callback sni tid (TicketInfo_13 pskInfo) psk;
   InAck false false
 
 let client_ServerFinished hs f digestClientFinished =
@@ -633,7 +629,7 @@ val server_ServerHelloDone: hs -> St incoming // why do I need an explicit val?
 let server_ServerHelloDone hs =
   trace "Sending ...ServerHelloDone";
   let mode = Nego.getMode hs.nego in
-  let Some chain = mode.Nego.n_server_cert in // Server cert chosen in Nego.server_ClientHello
+  let Some (chain, sa) = mode.Nego.n_server_cert in // Server cert chosen in Nego.server_ClientHello
   match Nego.chosenGroup mode with
   | None ->
     InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
@@ -647,9 +643,8 @@ let server_ServerHelloDone hs =
       Nego.to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv
     in
     match Nego.sign hs.nego tbs with
-    | None ->
-      InError (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
-    | Some signature ->
+    | Error z -> InError z
+    | Correct signature ->
       begin
       let ske = {ske_kex_s = kex_s; ske_signed_params = signature} in
       HandshakeLog.send hs.log (Certificate ({crt_chain = Cert.chain_down chain}));
@@ -710,7 +705,7 @@ let server_ClientHello hs offer obinders =
       HandshakeLog.send hs.log (HelloRetryRequest hrr);
       // Note: no handshake state machine transition
       InAck false false
-    | Correct (Nego.ServerMode mode) ->
+    | Correct (Nego.ServerMode mode cert) ->
 
     let pv = mode.Nego.n_protocol_version in
     let cr = mode.Nego.n_offer.ch_client_random in
@@ -910,14 +905,12 @@ let server_ServerFinished_13 hs i =
       match kex with
       | Kex_ECDHE -> // [Certificate; CertificateVerify]
         HandshakeLog.send hs.log (EncryptedExtensions eexts);
-        let Some chain = mode.Nego.n_server_cert in
+        let Some (chain, sa) = mode.Nego.n_server_cert in
         let digestSig = HandshakeLog.send_tag #halg hs.log (Certificate13 ({crt_request_context = empty_bytes; crt_chain13 = chain})) in
         let tbs = Nego.to_be_signed pv Server None digestSig in
         (match Nego.sign hs.nego tbs with
-        | None ->
-          Error (AD_handshake_failure, perror __SOURCE_FILE__ __LINE__ "no compatible signature algorithm")
-        | Some signature ->
-          Correct (HandshakeLog.send_tag #halg hs.log (CertificateVerify (signature))))
+        | Error z -> Error z
+        | Correct signature -> Correct (HandshakeLog.send_tag #halg hs.log (CertificateVerify (signature))))
       | _ -> // PSK
         Correct (HandshakeLog.send_tag #halg hs.log (EncryptedExtensions eexts))
       in

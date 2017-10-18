@@ -96,7 +96,7 @@ val getCert: Connection.connection -> ML bytes // bytes of the first certificate
 let getCert c =
   let mode = TLS.get_mode c in
   match mode.Negotiation.n_server_cert with
-  | Some ((c,_)::_) -> c
+  | Some ((c,_)::_, _) -> c
   | _ -> empty_bytes
 
 let accept_connected send recv config_1 : ML (Connection.connection * int) =
@@ -220,28 +220,6 @@ let ffiConfig version host =
     min_version = TLS_1p2;
     max_version = v;
     peer_name = Some host;
-    check_peer_certificate = false;
-    cert_chain_file = "c:\\Repos\\mitls-fstar\\data\\test_chain.pem";
-    private_key_file = "c:\\Repos\\mitls-fstar\\data\\server.key";
-    ca_file = "c:\\Repos\\mitls-fstar\\data\\CAFile.pem";
-  }
-
-val ffiSetCertChainFile: cfg:config -> f:string -> ML config
-let ffiSetCertChainFile cfg f =
-  { cfg with
-  cert_chain_file = f;
-  }
-
-val ffiSetPrivateKeyFile: cfg:config -> f:string -> ML config
-let ffiSetPrivateKeyFile cfg f =
-  { cfg with
-  private_key_file = f;
-  }
-
-val ffiSetCAFile: cfg:config -> f:string -> ML config
-let ffiSetCAFile cfg f =
-  { cfg with
-  ca_file = f;
   }
 
 let rec findsetting f l =
@@ -352,6 +330,8 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
   match ticket with
   | Some (t, si) ->
     (match Ticket.parse si with
+    | Some (Ticket.Ticket12 pv cs ems msId ms) ->
+      PSK.s12_extend t (pv, cs, ems, ms); [t]
     | Some (Ticket.Ticket13 cs li rmsId rms) ->
       (match PSK.psk_lookup t with
       | Some _ ->
@@ -374,7 +354,7 @@ let install_ticket config ticket : ML (list PSK.psk_identifier) =
           identities = (empty_bytes, empty_bytes)
         }) rms);
       [t]
-    | _ -> failwith ("QUIC: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
+    | _ -> failwith ("FFI: Cannot use the input ticket, session info failed to decode: "^(print_bytes si)))
   | None -> []
 
 val ffiConnect: config -> callbacks -> option (bytes * bytes) -> ML (Connection.connection * int)
@@ -423,13 +403,6 @@ let ffiGetTicket c: ML (option (ticket:bytes * rms:bytes)) =
   | None -> None
 *)
 
-let ffiTicketCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (ticket:bytes) (ctx:pskInfo) (psk:bytes) =
-  let ae = ctx.early_ae in
-  let h = ctx.early_hash in
-  let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-  let si = Ticket.serialize (Ticket.Ticket13 (CipherSuite13 ae h) li rmsid psk) in
-  ocaml_ticket_cb cb_state cb sni ticket si
-
 val ffiGetCert: Connection.connection -> ML cbytes
 let ffiGetCert c =
   let cert = getCert c in
@@ -450,3 +423,44 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
     | false, ExportID _ _ -> Some (h, ae, b)
     | true, EarlyExportID _ _ -> Some (h, ae, b)
     | _ -> None
+
+
+//   (sni:string -> ticket:bytes -> info:ticketInfo -> rawkey:bytes -> ST unit
+let ffiTicketCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (ticket:bytes) (info:ticketInfo) (key:bytes) =
+  let si = match info with
+    | TicketInfo_13 ctx ->
+      let ae = ctx.early_ae in
+      let h = ctx.early_hash in
+      let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
+      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key
+    | TicketInfo_12 (pv, cs, ems) ->
+      Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
+    in
+  ocaml_ticket_cb cb_state cb sni ticket (Ticket.serialize si)
+
+let ffiCertSelectCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (sal:signatureSchemeList)
+  : ML (option (cert_type * signatureScheme)) =
+  match ocaml_cert_select_cb cb_state cb sni (signatureSchemeListBytes_aux sal empty_bytes []) with
+  | None -> None
+  | Some (cert_ptr, sa) ->
+    let b = bytes_of_int 2 (FStar.UInt16.v sa) in
+    let Correct sa = parseSignatureScheme b in
+    if List.Tot.mem sa sal then Some (cert_ptr, sa)
+    else failwith "Callback error: selected a signature scheme that was not offered."
+
+let ffiCertFormatCallback (cb_state:callbacks) (cb:callbacks) (cert:cert_type)
+  : ML (list cert_repr) =
+  let chain = ocaml_cert_format_cb cb_state cb cert in
+  match Cert.parseCertificateList chain with
+  | Error (_, msg) -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^msg)
+  | Correct chain -> chain
+
+let ffiCertSignCallback (cb_state:callbacks) (cb:callbacks) (cert:cert_type)
+  (sig:signatureScheme) (tbs:bytes) : ML (option bytes) =
+  let sa = UInt16.uint_to_t (int_of_bytes (signatureSchemeBytes sig)) in
+  ocaml_cert_sign_cb cb_state cb cert sa tbs
+
+let ffiCertVerifyCallback (cb_state:callbacks) (cb:callbacks) (cert:list cert_repr)
+  (sig:signatureScheme) (tbs:bytes) (sigv:bytes) : ML bool =
+  let sa = UInt16.uint_to_t (int_of_bytes (signatureSchemeBytes sig)) in
+  ocaml_cert_verify_cb cb_state cb (Cert.certificateListBytes cert) sa (tbs, sigv)

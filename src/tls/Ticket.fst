@@ -16,15 +16,7 @@ module AE = AEADOpenssl
 module MM = MonotoneMap
 #set-options "--lax"
 
-// TLS 1.2 session database
-// For TLS 1.3 the PSK database is used (see PSK.fst)
 private let region:rgn = new_region tls_tables_region
-type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * msId * ms:bytes
-private let sessions12 : MM.t region bytes session12 (fun _ -> True) =
-  MM.alloc #region #bytes #session12 #(fun _ -> True)
-
-let s12_lookup (tid:bytes) = MM.lookup sessions12 tid
-let s12_extend (tid:bytes) (s:session12 tid) = MM.extend sessions12 tid s
 
 let ticketid (a:aeadAlg) : St (AE.id) =
   assume false;

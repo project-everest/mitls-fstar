@@ -14,6 +14,7 @@
 #include <caml/memory.h>
 #include <caml/threads.h>
 #include <caml/printexc.h>
+#include <caml/fail.h>
 #include "mitlsffi.h"
 
 #define MITLS_FFI_LIST \
@@ -39,7 +40,11 @@
   MITLS_FFI_ENTRY(QuicCreateServer) \
   MITLS_FFI_ENTRY(QuicProcess) \
   MITLS_FFI_ENTRY(QuicGetPeerParameters) \
-  MITLS_FFI_ENTRY(TicketCallback)
+  MITLS_FFI_ENTRY(TicketCallback) \
+  MITLS_FFI_ENTRY(CertSelectCallback) \
+  MITLS_FFI_ENTRY(CertFormatCallback) \
+  MITLS_FFI_ENTRY(CertSignCallback) \
+  MITLS_FFI_ENTRY(CertVerifyCallback)
 
 // Pointers to ML code.  Initialized in FFI_mitls_init().  Invoke via caml_callback()
 #define MITLS_FFI_ENTRY(x) value* g_mitls_FFI_##x;
@@ -1155,4 +1160,47 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
         state->fstar_state = 0;
         free(state);
     }
+}
+
+// Certificate selection callback
+CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
+{
+  CAMLparam4(st, fp, sni, sal);
+  CAMLlocal1(ret);
+  pfn_FFI_cert_select_cb cb = (pfn_FFI_cert_select_cb)ValueToPtr(fp);
+
+  // We get the list of of offered signature schemes in network format
+  // We convert to an array of uint16_t before passing to the callback function
+  size_t i, n = caml_string_length(sal)>>1;
+  const char *b = String_val(sal);
+  uint16_t selected, sigalgs[n];
+  for(i=0; i<n; i++) sigalgs[i] = (b[i<<1]<<8) + b[(i<<1) + 1];
+
+  // The callback returns a unspecified pointer to the selected certificate
+  // and updates the selected signature algorithm (passed by reference)
+  void* cert = cb((void*)ValueToPtr(st), String_val(sni), caml_string_length(sni), sigalgs, n, &selected);
+  if(cert == NULL) CAMLreturn(Val_none);
+
+  ret = caml_alloc_small(2, 0);
+  Field(ret, 0) = PtrToValue(cert);
+  Field(ret, 1) = Val_int(selected); // UInt16.t is int in OCaml
+  CAMLreturn(ret);
+}
+
+// Certificate selection callback
+CAMLprim value ocaml_cert_format_cb(value st, value fp, value cert)
+{
+  CAMLparam3(st, fp, cert);
+  CAMLlocal1(ret);
+  pfn_FFI_cert_format_cb cb = (pfn_FFI_cert_format_cb)ValueToPtr(fp);
+
+  char *buffer = malloc(MAX_CHAIN_LEN);
+  if(buffer == NULL) caml_failwith("ocaml_cert_format_cb: failed to allocate certificate chain buffer");
+
+  size_t len = cb((void*)ValueToPtr(st), (void*)ValueToPtr(cert), buffer);
+  ret = caml_alloc_string(len);
+  memcpy(String_val(ret), buffer, len);
+  free(buffer);
+
+  CAMLreturn(ret);
 }

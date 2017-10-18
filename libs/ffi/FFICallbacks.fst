@@ -4,9 +4,23 @@ open Platform.Bytes
 
 type callbacks = UInt64.t
 
-assume val ocaml_send_tcp: callbacks -> cbytes -> Tot int
-assume val ocaml_recv_tcp: callbacks -> cbytes -> Tot int
-assume val ocaml_ticket_cb: callbacks -> callbacks -> string -> bytes -> bytes -> EXT unit
+type cb_state = callbacks
+type cb_fun_ptr = callbacks
+
+type sigalg = FStar.UInt16.t
+type cert_ptr = callbacks
+
+assume val ocaml_send_tcp: cb_state -> cbytes -> Tot int
+assume val ocaml_recv_tcp: cb_state -> cbytes -> Tot int
+
+// Ticket callback
+assume val ocaml_ticket_cb: cb_state -> cb_fun_ptr -> string -> bytes -> bytes -> EXT unit
+
+// Certificate callbacks
+assume val ocaml_cert_select_cb: cb_state -> cb_fun_ptr -> string -> sigalgs:bytes -> EXT (option (cert_ptr * sigalg))
+assume val ocaml_cert_format_cb: cb_state -> cb_fun_ptr -> cert_ptr -> EXT bytes
+assume val ocaml_cert_sign_cb: cb_state -> cb_fun_ptr -> cert_ptr -> sigalg -> tbs:bytes -> EXT (option bytes)
+assume val ocaml_cert_verify_cb: cb_state -> cb_fun_ptr -> bytes -> sigalg -> tbs:bytes * sigv:bytes -> EXT bool
 
 (* under the covers, recv invokes String.Substring, which may throw an exception
    due to invalid parameters.  But the recv codepath never does that.  However,

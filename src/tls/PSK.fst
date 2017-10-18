@@ -16,19 +16,28 @@ module HH = FStar.HyperHeap
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
-// Has been moved because it appears in config for
-// the ticket callback
+// Has been moved to TLSConstants as it appears in config for ticket callbacks
 type pskInfo = TLSConstants.pskInfo
 
-// SESSION TICKET DATABASE
+// SESSION TICKET DATABASE (TLS 1.3)
+// Note that the associated PSK are stored in the PSK table defined below in this file
 type hostname = string
-type tlabel (h:hostname) = t:bytes * tls13:bool
+type tlabel (h:hostname) = t:bytes
 private let tregion:rgn = new_region tls_tables_region
 private let tickets : MM.t tregion hostname tlabel (fun _ -> True) =
   MM.alloc #tregion #hostname #tlabel #(fun _ -> True)
 
 let lookup (h:hostname) = MM.lookup tickets h
 let extend (h:hostname) (t:tlabel h) = MM.extend tickets h t
+
+// SESSION TICKET DATABASE (TLS 1.2)
+// Note that this table also stores the master secret
+type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * ms:bytes
+private let sessions12 : MM.t tregion bytes session12 (fun _ -> True) =
+  MM.alloc #tregion #bytes #session12 #(fun _ -> True)
+
+let s12_lookup (tid:bytes) = MM.lookup sessions12 tid
+let s12_extend (tid:bytes) (s:session12 tid) = MM.extend sessions12 tid s
 
 // *** PSK ***
 

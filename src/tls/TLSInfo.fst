@@ -63,10 +63,21 @@ let default_groups : list valid_namedGroup = [
 // By default we use an in-memory ticket table
 // and the in-memory internal PSK database
 val defaultTicketCB: ticket_cb
-let defaultTicketCB sni ticket pskInfo psk =
+let defaultTicketCB sni ticket info psk =
   assume false; // FIXME(adl) have to assume modifies_none...
-  PSK.coerce_psk ticket pskInfo psk;
-  PSK.extend sni (ticket, true)
+  match info with
+  | TicketInfo_12 (pv, cs, ems) ->
+    PSK.s12_extend ticket (pv, cs, ems, psk)
+  | TicketInfo_13 pskInfo ->
+    PSK.coerce_psk ticket pskInfo psk;
+    PSK.extend sni ticket
+
+let defaultCertCB : cert_cb =
+  CertCallbacks
+    (fun _ _ -> None) // select
+    (fun _ -> []) // format
+    (fun _ _ _ -> None) // sign
+    (fun _ _ _ _ -> false) // verify
 
 val defaultConfig: config
 let defaultConfig =
@@ -87,8 +98,6 @@ let defaultConfig =
   // Server
   check_client_version_in_pms_for_old_tls = true;
   request_client_certificate = false;
-  cert_chain_file = "server.pem";
-  private_key_file = "server.key";
 
   // Common
   non_blocking_read = false;
@@ -96,12 +105,12 @@ let defaultConfig =
   safe_renegotiation = true;
   extended_master_secret = true;
   enable_tickets = true;
+
   ticket_callback = defaultTicketCB;
+  cert_callbacks = defaultCertCB;
 
   alpn = None;
   peer_name = None;
-  check_peer_certificate = true;
-  ca_file = "CAFile.pem";
   }
 
 // -------------------------------------------------------------------
@@ -167,9 +176,9 @@ type abbrInfo =
      abbr_session_hash: sessionHash;
      abbr_vd: option (cVerifyData * sVerifyData) }
 
-type resumeInfo (r:role) =
+type resumeInfo (r:role) : Type0 =
   //17-04-19  connect_time:lbytes 4  * // initial Nonce.timestamp() for the connection
-  o:option bytes {r=Server ==> o=None} * // 1.2 ticket
+  o:option bytes {r=Server ==> None? o} * // 1.2 ticket
   l:list PSK.pskid {r=Server ==> l = []} // assuming we do the PSK lookups locally
 
 // for sessionID. we treat empty bytes as the absence of identifier,
