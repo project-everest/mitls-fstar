@@ -36,15 +36,14 @@ type dplain (i:id) (ad:adata i) (c:cipher i) =
 type state (i:id) (rw:rw) =
   AEAD_GCM.state i rw
 
-(* Why did this fix it? *)
-let region #r #i (st:state i r) = AEAD_GCM.State?.region st
+let region #i #rw = AEAD_GCM.State?.region #i #rw
 
 noextract
-let log_region = AEAD_GCM.State?.log_region
+let log_region #i #rw = AEAD_GCM.State?.log_region #i #rw
 
-let log = AEAD_GCM.State?.log
+let log #i #rw = AEAD_GCM.State?.log #i #rw
 
-let counter = AEAD_GCM.State?.counter
+let counter #i #rw = AEAD_GCM.State?.counter #i #rw
 
 type reader i = state i Reader
 type writer i = state i Writer
