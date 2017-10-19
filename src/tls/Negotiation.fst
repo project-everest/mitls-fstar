@@ -451,6 +451,12 @@ let create region r cfg resume nonce =
     let state = MR.m_alloc region (S_Init nonce) in
     NS cfg resume nonce state
 
+// For QUIC: we need a different signal when returning HRR (special packet type)
+let is_server_hrr (#region:rgn) (#role:TLSConstants.role) (ns:t region role) =
+  match MR.m_read ns.state with
+  | S_HRR _ _ -> true
+  | _ -> false
+
 // a bit too restrictive: use a single Hash in any given offer
 val hashAlg: mode -> Hashing.Spec.alg
 let hashAlg m =
@@ -583,8 +589,7 @@ val sign: #region:rgn -> #role:TLSConstants.role -> t region role -> bytes ->
 let sign #region #role ns tbs =
   // TODO(adl) make the pattern below a static pre-condition
   let S_Mode mode (Some (cert, sa)) = MR.m_read ns.state in
-  let signer = CertCallbacks?.cert_sign_cb ns.cfg.cert_callbacks in
-  match signer cert sa tbs with
+  match ns.cfg.cert_callbacks.cert_sign_cb cert sa tbs with
   | None -> Error (AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
   | Some sigv ->
     let alg = if mode.n_protocol_version `geqPV` TLS_1p2 then Some sa else None in
@@ -594,8 +599,7 @@ val verify: cfg:config -> signatureScheme -> list cert_repr -> bytes -> bytes ->
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> True))
 let verify cfg scheme chain tbs sigv =
-  let verifier = CertCallbacks?.cert_verify_cb cfg.cert_callbacks in
-  verifier chain scheme tbs sigv
+  cfg.cert_callbacks.cert_verify_cb chain scheme tbs sigv
 
 
 (* CLIENT *)
@@ -985,7 +989,7 @@ let client_ServerKeyExchange #region ns crt ske ocr =
     | sa::_ ->
       let csr = ns.nonce @| mode.n_server_random in
       let tbs = to_be_signed mode.n_protocol_version Server (Some csr) ske_tbs in
-      let validator = CertCallbacks?.cert_verify_cb ns.cfg.cert_callbacks in
+      let validator = ns.cfg.cert_callbacks.cert_verify_cb in
       let valid = validator crt.crt_chain sa tbs ske.ske_signed_params.sig_signature in
       trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
       if not valid then
@@ -1025,7 +1029,7 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
         let Some sal = find_signature_algorithms mode.n_offer in
         let sa = Some?.v cv.sig_algorithm in
         let chain = Some (c, sa) in
-        let validator = CertCallbacks?.cert_verify_cb ns.cfg.cert_callbacks in
+        let validator = ns.cfg.cert_callbacks.cert_verify_cb in
         if List.Tot.mem sa sal then
           let tbs = to_be_signed mode.n_protocol_version Server None digest in
           validator (Cert.chain_down c) sa tbs cv.sig_signature, chain
@@ -1118,7 +1122,7 @@ let compute_cs13 cfg o psks shares server_cert =
         let csg = match ncs with | [] -> None | cs :: _ -> Some (List.Tot.hd gl, cs) in
         let gl' = List.Tot.map (fun x -> Some?.v (CommonDH.group_of_namedGroup x)) gl in
         let s = List.Tot.find (fun ((| g, _ |) : share) -> List.Tot.mem g gl') shares in
-        s, csg
+        s, (if server_cert then csg else None) // Can't do HRR without a certificate
     in
   let psk_kex =
     match find_client_extension Extensions.E_psk_key_exchange_modes? o with
@@ -1178,7 +1182,7 @@ let computeServerMode cfg co serverRandom =
     let scert =
       match find_signature_algorithms co with
       | None -> None
-      | Some sigalgs -> (CertCallbacks?.cert_select_cb cfg.cert_callbacks) (get_sni co) sigalgs
+      | Some sigalgs -> cfg.cert_callbacks.cert_select_cb (get_sni co) sigalgs
       in
     match compute_cs13 cfg co pske shares (Some? scert) with
     | Error z -> Error z
@@ -1209,7 +1213,7 @@ let computeServerMode cfg co serverRandom =
     | Correct ((JUST_EDH gx cs) :: _, _) ->
       (trace "Negotiated Pure EDH key exchange";
       let Some (cert, sa) = scert in
-      let schain = (CertCallbacks?.cert_format_cb cfg.cert_callbacks) cert in
+      let schain = cfg.cert_callbacks.cert_format_cb cert in
       trace ("Negotiated " ^ (string_of_signatureScheme sa));
       Correct
         (ServerMode
@@ -1261,10 +1265,10 @@ let computeServerMode cfg co serverRandom =
         | None -> cfg.signature_algorithms
         | Some sigalgs -> List.Tot.filter (fun x -> List.Tot.mem x cfg.signature_algorithms) sigalgs
         in
-      match (CertCallbacks?.cert_select_cb cfg.cert_callbacks) (get_sni co) salgs with
+      match cfg.cert_callbacks.cert_select_cb (get_sni co) salgs with
       | None -> Error(AD_no_certificate, perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
       | Some (cert, sa) ->
-        let schain = (CertCallbacks?.cert_format_cb cfg.cert_callbacks) cert in
+        let schain = cfg.cert_callbacks.cert_format_cb cert in
         let sig, _ = sigHashAlg_of_signatureScheme sa in
         match negotiateCipherSuite cfg pv co.ch_cipher_suites sig with
         | Error z -> Error z

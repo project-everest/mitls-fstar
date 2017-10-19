@@ -1,7 +1,6 @@
 #ifndef HEADER_MITLS_FFI_H
 #define HEADER_MITLS_FFI_H
 #include <stdint.h>
-#include <unistd.h>
 
 #if defined(_MSC_VER)  // Visual Studio - always use __cdecl keyword
   #define MITLS_CALLCONV __cdecl
@@ -51,7 +50,7 @@ typedef void (MITLS_CALLCONV *pfn_FFI_ticket_cb)(void *cb_state, const char *sni
 #define MAX_SIGNATURE_LEN 8192
 // Select a certificate based on the given SNI and list of signatures.
 // Signature algorithms are represented as 16-bit integers using the TLS 1.3 RFC code points
-typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const char *sni, size_t sni_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
+typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
 // Write the certificate chain to buffer, returning the number of written bytes.
 // The chain should be written by prefixing each certificate by its length encoded over 3 bytes
 typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_format_cb)(void *cb_state, const void *cert_ptr, char buffer[MAX_CHAIN_LEN]);
@@ -61,6 +60,13 @@ typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_sign_cb)(void *cb_state, const void
 // of tbs for sigalg using the public key stored in the leaf of the chain.
 // N.B. this function must validate the chain (including applcation checks such as hostname matching)
 typedef int (MITLS_CALLCONV *pfn_FFI_cert_verify_cb)(void *cb_state, const char* chain, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len);
+
+typedef struct {
+  pfn_FFI_cert_select_cb select;
+  pfn_FFI_cert_format_cb format;
+  pfn_FFI_cert_sign_cb sign;
+  pfn_FFI_cert_verify_cb verify;
+} mitls_cert_cb;
 
 // Functions exported from libmitls.dll
 //   Functions returning 'int' return 0 for failure, or nonzero for success
@@ -76,15 +82,13 @@ extern int MITLS_CALLCONV FFI_mitls_configure(/* out */ mitls_state **state, con
 extern int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *ticketkey, size_t klen);
 
 // Set configuration options ahead of connecting
-extern int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file);
-extern int MITLS_CALLCONV FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file);
-extern int MITLS_CALLCONV FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file);
 extern int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs);
 extern int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa);
 extern int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng);
 extern int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const char *apl);
 extern int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, int enable_early_data);
 extern int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb);
+extern int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb);
 
 // Close a miTLS session - either after configure or connect
 extern void MITLS_CALLCONV FFI_mitls_close(/* in */ mitls_state *state);
@@ -149,6 +153,7 @@ typedef enum {
   TLS_server_accept = 6,
   TLS_server_accept_with_early_data = 7,
   TLS_server_complete = 8,
+  TLS_server_stateless_retry = 9,
   TLS_error_other = 0xffff
 } quic_result;
 
@@ -173,7 +178,6 @@ typedef struct {
 } quic_transport_parameters;
 
 typedef struct {
-  // NULL terminated hostname (sent in SNI and used to validate certificate)
   int is_server;
   const uint32_t *supported_versions;
   size_t supported_versions_len;
@@ -187,15 +191,13 @@ typedef struct {
 
   // only used by the client
   const char *host_name; // Client only, sent in SNI. Can pass NULL for server
-  const char *ca_file; // Client only, used to validate server certificate
   const quic_ticket *server_ticket; // May be NULL
 
   void *callback_state; // Passed back as the first argument of callbacks, may be NULL
   pfn_FFI_ticket_cb ticket_callback; // May be NULL
+  mitls_cert_cb *cert_callbacks; // May be NULL
 
   // only used by the server
-  const char *certificate_chain_file; // Server only
-  const char *private_key_file; // Server only
   const char *ticket_enc_alg; // one of "AES128-GCM" "AES256-GCM" "CHACHA20-POLY1305", or NULL
   const char *ticket_key; // If NULL a random key will be sampled
   size_t ticket_key_len; // Should be 28 or 44, concatenation of key and static IV

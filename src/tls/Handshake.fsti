@@ -25,6 +25,9 @@ val resumeInfo_of: s:hs -> ST (TLSInfo.resumeInfo (role_of s))
 val get_mode: hs -> ST Negotiation.mode
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
+val is_server_hrr: hs -> ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
 
 // annoyingly, we will need specification-level variants too.
 

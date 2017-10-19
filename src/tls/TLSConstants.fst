@@ -1757,25 +1757,24 @@ type ticket_cb : Type0 =
 type cert_repr = b:bytes {length b < 16777216}
 type cert_type = FFICallbacks.callbacks
 
-noeq type cert_cb =
-  | CertCallbacks:
-      cert_select_cb:
-        (sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
-      cert_format_cb:
-        (cert_type -> ST (list cert_repr)
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
-      cert_sign_cb:
-        (cert_type -> signatureScheme -> tbs:bytes -> ST (option bytes)
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
-      cert_verify_cb:
-        (list cert_repr -> signatureScheme -> tbs:bytes -> sigv:bytes -> ST bool
-        (requires fun _ -> True)
-        (ensures fun h0 _ h1 -> modifies_none h0 h1)) ->
-      cert_cb
+noeq type cert_cb = {
+  cert_select_cb:
+    (sni:bytes -> sig:signatureSchemeList -> ST (option (cert_type * signatureScheme))
+    (requires fun _ -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1));
+  cert_format_cb:
+    (cert_type -> ST (list cert_repr)
+    (requires fun _ -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1));
+  cert_sign_cb:
+    (cert_type -> signatureScheme -> tbs:bytes -> ST (option bytes)
+    (requires fun _ -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1));
+  cert_verify_cb:
+    (list cert_repr -> signatureScheme -> tbs:bytes -> sigv:bytes -> ST bool
+    (requires fun _ -> True)
+    (ensures fun h0 _ h1 -> modifies_none h0 h1));
+}
 
 noeq type config : Type0 = {
     (* Supported versions, ciphersuites, groups, signature algorithms *)

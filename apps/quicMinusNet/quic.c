@@ -51,6 +51,12 @@ void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
   printf(" ########################################\n");
 }
 
+void* certificate_select(void *st, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
+{
+  printf(" @@@@@@@ CERT_SELECT <%s> @@@@@@\n", sni);
+  return NULL;
+}
+
 char *quic_result_string(quic_result r){
   static char *codes[10] = {
     "would_block", "error_local", "error_alert", "client_early_data",
@@ -73,6 +79,15 @@ int main(int argc, char **argv)
       .others_len = 6,
       .others = "\x00\x05\x00\x02\x0f\xe4"
     };
+
+  mitls_cert_cb cert_callbacks =
+    {
+      .select = certificate_select,
+      .format = NULL,
+      .sign = NULL,
+      .verify = NULL
+    };
+
   quic_transport_parameters server_qp =
     {
       .max_stream_data = 16000,
@@ -94,9 +109,7 @@ int main(int argc, char **argv)
     .server_ticket = NULL,
     .callback_state = "Hello world!",
     .ticket_callback = ticket_cb,
-    .certificate_chain_file = "../../data/server-ecdsa.crt",
-    .private_key_file = "../../data/server-ecdsa.key",
-    .ca_file = "../../data/CAFile.pem",
+    .cert_callbacks = &cert_callbacks,
     .cipher_suites = NULL, // Use defaults
     .signature_algorithms = "ECDSA+SHA256",
     .named_groups = "X25519",

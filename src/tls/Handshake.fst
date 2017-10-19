@@ -100,6 +100,7 @@ let config_of (s:hs) = Nego.local_config s.nego
 let version_of (s:hs) = Nego.version s.nego
 let resumeInfo_of (s:hs) = Nego.resume s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
+let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
 let epochs_of (s:hs) = s.epochs
 
 (* WIP on the handshake invariant

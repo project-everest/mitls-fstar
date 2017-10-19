@@ -94,6 +94,10 @@ type resultcode =
   // may have sent a resumption ticket (for future early data)
   | TLS_server_complete
 
+  // The server has sent a hello retry request.
+  // This message must be sent in a special QUIC packet
+  | TLS_server_stateless_retry
+
 type result = {
   code: resultcode;
   error: error; // we could keep more details
@@ -104,7 +108,10 @@ let rec recv c =
   let i = currentId c Reader in
   match read c i with
   | Update false     -> recv c // do not report intermediate, internal key changes
-  | ReadWouldBlock   -> {code=TLS_would_block; error=0us;}
+  | ReadWouldBlock   ->
+      if Handshake.is_server_hrr c.Connection.hs
+      then {code=TLS_server_stateless_retry; error=0us;}
+      else {code=TLS_would_block; error=0us;}
   | Update true -> (
        let keys = Handshake.xkeys_of c.Connection.hs in
        match Connection.c_role c, Seq.length keys with

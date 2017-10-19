@@ -20,15 +20,13 @@
 #define MITLS_FFI_LIST \
   MITLS_FFI_ENTRY(Config) \
   MITLS_FFI_ENTRY(SetTicketKey) \
-  MITLS_FFI_ENTRY(SetCertChainFile) \
-  MITLS_FFI_ENTRY(SetPrivateKeyFile) \
-  MITLS_FFI_ENTRY(SetCAFile) \
   MITLS_FFI_ENTRY(SetCipherSuites) \
   MITLS_FFI_ENTRY(SetSignatureAlgorithms) \
   MITLS_FFI_ENTRY(SetNamedGroups) \
   MITLS_FFI_ENTRY(SetALPN) \
   MITLS_FFI_ENTRY(SetEarlyData) \
   MITLS_FFI_ENTRY(SetTicketCallback) \
+  MITLS_FFI_ENTRY(SetCertCallbacks) \
   MITLS_FFI_ENTRY(Connect) \
   MITLS_FFI_ENTRY(AcceptConnected) \
   MITLS_FFI_ENTRY(Send) \
@@ -263,33 +261,6 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const char *tk, siz
     return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_cert_chain_file(/* in */ mitls_state *state, const char * file)
-{
-    int ret;
-    caml_acquire_runtime_system();
-    ret = configure_common_caml(state, file, g_mitls_FFI_SetCertChainFile);
-    caml_release_runtime_system();
-    return ret;
-}
-
-int MITLS_CALLCONV FFI_mitls_configure_private_key_file(/* in */ mitls_state *state, const char * file)
-{
-    int ret;
-    caml_acquire_runtime_system();
-    ret = configure_common_caml(state, file, g_mitls_FFI_SetPrivateKeyFile);
-    caml_release_runtime_system();
-    return ret;
-}
-
-int MITLS_CALLCONV FFI_mitls_configure_ca_file(/* in */ mitls_state *state, const char * file)
-{
-    int ret;
-    caml_acquire_runtime_system();
-    ret = configure_common_caml(state, file, g_mitls_FFI_SetCAFile);
-    caml_release_runtime_system();
-    return ret;
-}
-
 int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
 {
     int ret;
@@ -370,6 +341,45 @@ int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *sta
     int ret;
     caml_acquire_runtime_system();
     ret = ocaml_set_ticket_callback(state, cb_state, ticket_cb);
+    caml_release_runtime_system();
+    return ret;
+}
+
+static int ocaml_set_cert_callbacks(/* in */ mitls_state *state, void *cb_state, mitls_cert_cb *cb)
+{
+    CAMLparam0();
+    CAMLlocal3(config, cbs, ocb);
+    CAMLlocal4(select, format, sign, verify);
+    int ret = 0;
+
+    cbs = PtrToValue(cb_state);
+
+    // These are partial applications and won't raise an exception
+    select = caml_callback2(*g_mitls_FFI_CertSelectCallback, cbs, PtrToValue(cb->select));
+    format = caml_callback2(*g_mitls_FFI_CertFormatCallback, cbs, PtrToValue(cb->format));
+    sign = caml_callback2(*g_mitls_FFI_CertSignCallback, cbs, PtrToValue(cb->sign));
+    verify = caml_callback2(*g_mitls_FFI_CertVerifyCallback, cbs, PtrToValue(cb->verify));
+
+    ocb = caml_alloc_tuple(4);
+    Store_field(ocb, 0, select);
+    Store_field(ocb, 1, format);
+    Store_field(ocb, 2, sign);
+    Store_field(ocb, 3, verify);
+
+    config = caml_callback2_exn(*g_mitls_FFI_SetCertCallbacks, state->fstar_state, ocb);
+    if (!Is_exception_result(config)) {
+      state->fstar_state = config;
+      ret = 1;
+    }
+
+    CAMLreturnT(int, ret);
+}
+
+int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb)
+{
+    int ret;
+    caml_acquire_runtime_system();
+    ret = ocaml_set_cert_callbacks(state, cb_state, cert_cb);
     caml_release_runtime_system();
     return ret;
 }
@@ -894,28 +904,6 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
     caml_register_generational_global_root(&state->fstar_state);
     mitls_state ms = {.fstar_state = result};
 
-    // ADL: any of these calls may fail. Need better errors to figure out which
-    if(cfg->certificate_chain_file)
-      if(!configure_common_caml(&ms, cfg->certificate_chain_file, g_mitls_FFI_SetCertChainFile))
-      {
-        *errmsg = strdup("FFI_mitls_quic_create_caml: certificate chain file");
-        CAMLreturnT(int, 0);
-      }
-
-    if(cfg->private_key_file)
-       if(!configure_common_caml(&ms, cfg->private_key_file, g_mitls_FFI_SetPrivateKeyFile))
-       {
-         *errmsg = strdup("FFI_mitls_quic_create_caml: private key file");
-         CAMLreturnT(int, 0);
-       }
-
-    if(cfg->ca_file)
-       if(!configure_common_caml(&ms, cfg->ca_file, g_mitls_FFI_SetCAFile))
-       {
-         *errmsg = strdup("FFI_mitls_quic_create_caml: CA file");
-         CAMLreturnT(int, 0);
-       }
-
     if(cfg->cipher_suites)
        if(!configure_common_caml(&ms, cfg->cipher_suites, g_mitls_FFI_SetCipherSuites))
        {
@@ -962,6 +950,13 @@ static int FFI_mitls_quic_create_caml(quic_state **st, quic_config *cfg, char **
       if(!ocaml_set_ticket_callback(&ms, cfg->callback_state, cfg->ticket_callback))
       {
         *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set ticket callback");
+        CAMLreturnT(int, 0);
+      }
+
+    if(cfg->cert_callbacks)
+      if(!ocaml_set_cert_callbacks(&ms, cfg->callback_state, cfg->cert_callbacks))
+      {
+        *errmsg = strdup("FFI_mitls_quic_create_caml: failed to set certificate callbacks");
         CAMLreturnT(int, 0);
       }
 
@@ -1178,16 +1173,18 @@ CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
 
   // The callback returns a unspecified pointer to the selected certificate
   // and updates the selected signature algorithm (passed by reference)
-  void* cert = cb((void*)ValueToPtr(st), String_val(sni), caml_string_length(sni), sigalgs, n, &selected);
+  void* cert = cb((void*)ValueToPtr(st), String_val(sni), sigalgs, n, &selected);
   if(cert == NULL) CAMLreturn(Val_none);
 
   ret = caml_alloc_small(2, 0);
   Field(ret, 0) = PtrToValue(cert);
   Field(ret, 1) = Val_int(selected); // UInt16.t is int in OCaml
-  CAMLreturn(ret);
+
+  CAMLreturn(Val_some(ret));
 }
 
-// Certificate selection callback
+// Certificate formatting callback - this is assumed not to fail.
+// FIXME(adl) maybe option bytes would be better for error control?
 CAMLprim value ocaml_cert_format_cb(value st, value fp, value cert)
 {
   CAMLparam3(st, fp, cert);
@@ -1198,9 +1195,50 @@ CAMLprim value ocaml_cert_format_cb(value st, value fp, value cert)
   if(buffer == NULL) caml_failwith("ocaml_cert_format_cb: failed to allocate certificate chain buffer");
 
   size_t len = cb((void*)ValueToPtr(st), (void*)ValueToPtr(cert), buffer);
+  if(!len) caml_failwith("ocaml_cert_format_cb: certificate formatting callback returned an empty chain");
+
   ret = caml_alloc_string(len);
   memcpy(String_val(ret), buffer, len);
   free(buffer);
 
   CAMLreturn(ret);
+}
+
+// Signature callback, returns an option bytes
+CAMLprim value ocaml_cert_sign_cb(value st, value fp, value cert, value sigalg, value tbs)
+{
+  CAMLparam5(st, fp, cert, sigalg, tbs);
+  CAMLlocal1(ret);
+  pfn_FFI_cert_sign_cb cb = (pfn_FFI_cert_sign_cb)ValueToPtr(fp);
+
+  char *buffer = malloc(MAX_SIGNATURE_LEN);
+  if(buffer == NULL) CAMLreturn(Val_none);
+
+  size_t len = cb((void*)ValueToPtr(st), (void*)ValueToPtr(cert), (uint16_t)Int_val(sigalg), String_val(tbs), caml_string_length(tbs), buffer);
+  if(!len) CAMLreturn(Val_none);
+
+  ret = caml_alloc_string(len);
+  memcpy(String_val(ret), buffer, len);
+  free(buffer);
+
+  CAMLreturn(Val_some(ret));
+}
+
+// Signature callback, returns a bool
+// TODO(adl): do we need finer grained error control?
+// for now I assume that the application manages the details of validation errors
+CAMLprim value ocaml_cert_verify_cb(value st, value fp, value chain, value sigalg, value tbs_sig)
+{
+  CAMLparam5(st, fp, chain, sigalg, tbs_sig);
+  pfn_FFI_cert_verify_cb cb = (pfn_FFI_cert_verify_cb)ValueToPtr(fp);
+
+  // This is to work around the OCaml limitation of 5 arguments
+  value tbs = Field(tbs_sig, 0);
+  value sig = Field(tbs_sig, 1);
+
+  int success = cb((void*)ValueToPtr(st), String_val(chain), caml_string_length(chain),
+    (uint16_t)Int_val(sigalg),  String_val(tbs), caml_string_length(tbs),
+    String_val(sig), caml_string_length(sig));
+
+  CAMLreturn(success ? Val_true : Val_false);
 }

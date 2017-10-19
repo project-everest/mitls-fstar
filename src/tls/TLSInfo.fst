@@ -72,12 +72,12 @@ let defaultTicketCB sni ticket info psk =
     PSK.coerce_psk ticket pskInfo psk;
     PSK.extend sni ticket
 
-let defaultCertCB : cert_cb =
-  CertCallbacks
-    (fun _ _ -> None) // select
-    (fun _ -> []) // format
-    (fun _ _ _ -> None) // sign
-    (fun _ _ _ _ -> false) // verify
+let defaultCertCB : cert_cb = {
+  cert_select_cb = (fun _ _ -> None);
+  cert_format_cb = (fun _ -> []);
+  cert_sign_cb = (fun _ _ _ -> None);
+  cert_verify_cb = (fun _ _ _ _ -> false);
+}
 
 val defaultConfig: config
 let defaultConfig =

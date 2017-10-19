@@ -381,6 +381,10 @@ let ffiSetTicketCallback (cfg:config) (cb:ticket_cb) =
   trace "Setting a new ticket callback.";
   {cfg with ticket_callback = cb}
 
+let ffiSetCertCallbacks (cfg:config) (cb:cert_cb) =
+  trace "Setting up certificate callbacks.";
+  {cfg with cert_callbacks = cb}
+
 // ADL july 24: now returns both the ticket and the
 // entry in the PSK database to allow inter-process ticket reuse
 // Beware! this exports crypto materials!
