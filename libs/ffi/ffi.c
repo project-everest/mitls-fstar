@@ -1168,6 +1168,9 @@ CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
   // We convert to an array of uint16_t before passing to the callback function
   size_t i, n = caml_string_length(sal)>>1;
   const char *b = String_val(sal);
+  printf(" *** SAL: ");
+  for(int i = 0; i < caml_string_length(sal); i++) printf("%02x ", b[i]);
+  printf("\n");
   uint16_t selected, sigalgs[n];
   for(i=0; i<n; i++) sigalgs[i] = (b[i<<1]<<8) + b[(i<<1) + 1];
 

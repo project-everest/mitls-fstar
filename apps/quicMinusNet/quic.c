@@ -16,6 +16,8 @@
 #include "mitlsffi.h"
 // Crypto library
 #include "quic_provider.h"
+// PKI library
+#include "mipki.h"
 
 void dump(const unsigned char *buffer, size_t len)
 {
@@ -39,7 +41,7 @@ mitls_ticket *qt = NULL;
 
 void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
 {
-  printf("\n ##### New session ticket received! #####\n  Callback state: %s\n  Host: %s\n  Ticket:\n", (char*)st, sni);
+  printf("\n ##### New session ticket received! #####\n  Host: %s\n  Ticket:\n", sni);
   qt = malloc(sizeof(mitls_ticket));
   qt->ticket = malloc(ticket->ticket_len);
   qt->session = malloc(ticket->session_len);
@@ -53,9 +55,43 @@ void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
 
 void* certificate_select(void *st, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
-  printf(" @@@@@@@ CERT_SELECT <%s> @@@@@@\n", sni);
-  return NULL;
+  printf("%d algorithms offered\n", sigalgs_len);
+  void* r = mipki_select_certificate(sni, sigalgs, sigalgs_len, selected);
+  printf("Return: %p Selected = %04x\n", r, *selected);
+  return r;
 }
+
+size_t certificate_format(void *cb_state, const void *cert_ptr, char *buffer)
+{
+  size_t len = mipki_format_chain(cert_ptr, buffer, MAX_CHAIN_LEN);
+  printf("Formatting on %d bytes\n", len);
+  return 0;
+}
+
+size_t certificate_sign(void *cb_state, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig)
+{
+  size_t ret = MAX_SIGNATURE_LEN;
+  if(mipki_sign_verify(cert_ptr, sigalg, *tbs, tbs_len, sig, &ret, MIPKI_SIGN))
+    return ret;
+  return 0;
+}
+
+int certificate_verify(void *cb_state, const char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len)
+{
+  quic_config *config = (quic_config*)cb_state;
+  mipki_chain chain = mipki_parse_chain(chain_bytes, chain_len);
+  if(chain == NULL) return 0;
+  if(!mipki_validate_chain(chain, config->host_name))
+  {
+    printf("WARNING: chain validation failed for <%s>, ignoring.\n", config->host_name);
+  }
+
+  size_t slen = sig_len;
+  int r = mipki_sign_verify(chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY);
+  mipki_free_chain(chain);
+  return r;
+}
+
 
 char *quic_result_string(quic_result r){
   static char *codes[10] = {
@@ -68,6 +104,27 @@ char *quic_result_string(quic_result r){
 
 int main(int argc, char **argv)
 {
+  mipki_config_entry pki_config[1] = {
+    {
+      .cert_file = "../../data/server.crt",
+      .key_file = "../../data/server.key",
+      .is_universal = 0
+    }
+  };
+
+  int erridx;
+  if(!mipki_init(pki_config, 1, NULL, &erridx))
+  {
+    printf("Failed to initialize PKI library: errid=%d\n", erridx);
+    return 1;
+  }
+
+  if(!mipki_add_root_file_or_path("../../data/CAFile.pem"))
+  {
+    printf("Failed to add CAFile\n");
+    return 1;
+  }
+
   char *errmsg;
 
   quic_transport_parameters client_qp =
@@ -83,9 +140,9 @@ int main(int argc, char **argv)
   mitls_cert_cb cert_callbacks =
     {
       .select = certificate_select,
-      .format = NULL,
-      .sign = NULL,
-      .verify = NULL
+      .format = certificate_format,
+      .sign = certificate_sign,
+      .verify = certificate_verify
     };
 
   quic_transport_parameters server_qp =
@@ -107,7 +164,7 @@ int main(int argc, char **argv)
     .alpn = "hq-05",
     .qp = server_qp,
     .server_ticket = NULL,
-    .callback_state = "Hello world!",
+    .callback_state = NULL,
     .ticket_callback = ticket_cb,
     .cert_callbacks = &cert_callbacks,
     .cipher_suites = NULL, // Use defaults
@@ -118,6 +175,8 @@ int main(int argc, char **argv)
     .ticket_key_len = 0,
     .enable_0rtt = 1
   };
+
+  config.callback_state = &config;
 
   quic_result rc, rs;
   quic_state *server = NULL, *client = NULL;

@@ -6,16 +6,21 @@ MARCH?=x86_64
 ifeq ($(OS),Windows_NT)
 LIBMITLS=libmitls.dll
 LIBQC=libquiccrypto.dll
+LIBPKI=libmipki.dll
 CC=$(MARCH)-w64-mingw32-gcc
 else
 LIBMITLS=libmitls.so
 LIBQC=libquiccrypto.so
+LIBPKI=libmipki.so
 endif
 
 all: quic.exe
 
 clean:
 	rm -rf *.o *.exe *.dll *~
+
+../../src/pki/$(LIBPKI):
+	make -C ../../src/pki
 
 ../../src/tls/$(LIBMITLS):
 	make -C ../../src/tls tls-ffi
@@ -29,6 +34,9 @@ $(LIBMITLS): ../../src/tls/$(LIBMITLS)
 $(LIBQC): $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC)
 	cp $(HACL_HOME)/secure_api/QuicProvider/$(LIBQC) .
 
-quic.exe: quic.c $(LIBMITLS) $(LIBQC)
-	$(CC) -fPIC -I ../../libs/ffi -I $(HACL_HOME)/secure_api/QuicProvider -L. quic.c -lmitls -lquiccrypto -o quic.exe
+$(LIBPKI): ../../src/pki/$(LIBPKI)
+	cp ../../src/pki/$(LIBPKI) .
+
+quic.exe: quic.c $(LIBMITLS) $(LIBQC) $(LIBPKI)
+	$(CC) -fPIC -I ../../src/pki -I ../../libs/ffi -I $(HACL_HOME)/secure_api/QuicProvider -L. quic.c -lmitls -lquiccrypto -lmipki -o quic.exe
 
