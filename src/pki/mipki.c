@@ -208,9 +208,9 @@ int mipki_add_root_file_or_path(const char *ca_file)
   if(g_store == NULL) return 0;
   struct stat sb;
 
-  if(!stat(ca_file, &sb)){
-    #if DEBGUG
-    printf("mipki_add_root_file_or_path: stat failed\n");
+  if(stat(ca_file, &sb) != 0){
+    #if DEBUG
+    printf("mipki_add_root_file_or_path: stat<%s> failed [%d]\n", ca_file, errno);
     #endif
     return 0;
   }
@@ -537,9 +537,35 @@ mipki_chain mipki_parse_chain(const char *chain, size_t chain_len)
     return NULL;
 }
 
-int mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_len)
+size_t mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_len)
 {
+  config_entry *cfg = (config_entry*)chain;
+  assert(cfg != NULL);
 
+  char *cur = buffer;
+  char *end = buffer + buffer_len;
+  sk_X509_unshift(cfg->intermediates, cfg->endpoint);
+
+  for(int i = sk_X509_num(cfg->intermediates) - 1; i >= 0; i--)
+  {
+    unsigned char *buf = NULL;
+    int len = i2d_X509(sk_X509_value(cfg->intermediates, i), &buf);
+    if (len <= 0 || buf == NULL || cur + len + 3 > end)
+    {
+      sk_X509_shift(cfg->intermediates);
+      return 0;
+    }
+
+    *(cur++) = (len >> 16) & 0xFF;
+    *(cur++) = (len >> 8) & 0xFF;
+    *(cur++) = len & 0xFF;
+    memcpy(cur, buf, len);
+    cur += len;
+    OPENSSL_free(buf);
+  }
+
+  sk_X509_shift(cfg->intermediates);
+  return (cur - buffer);
 }
 
 int mipki_validate_chain(const mipki_chain chain, const char *host)

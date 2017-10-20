@@ -40,12 +40,17 @@ int main(int argc, char **argv)
   mipki_signature selected;
   mipki_signature offered[3] = {0x0403,0x0503,0x0401};
 
-  void* s = mipki_select_certificate("localhost", offered, 3, &selected);
+  mipki_chain s = mipki_select_certificate("localhost", offered, 3, &selected);
   printf("SELECTION RESULT: %s, selected=%04x\n", s==NULL?"FAIL":"OK", selected);
 
+  if(!mipki_validate_chain(s, "localhost"))
+  {
+    printf("Chain validation failed (expected, cert is self signed).\n");
+  }
+
   char *tbs = "Hello World!";
-  char *sig = malloc(4096);
-  size_t sig_len = 4096;
+  char *sig = malloc(8192);
+  size_t sig_len = 8192;
 
   if(mipki_sign_verify(s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_SIGN))
   {
@@ -58,11 +63,24 @@ int main(int argc, char **argv)
     else
     {
       printf("Failed to verify signature!\n");
+      return 1;
     }
   }
   else
   {
     printf("Failed to sign <%04x, %s>\n", selected, tbs);
+    return 1;
+  }
+
+  size_t len = mipki_format_chain(s, sig, 8192);
+  if(len > 0)
+  {
+    printf("Formatted chain:\n");
+    dump(sig, len);
+  }
+  else{
+    printf("ERROR: failed to format chain\n");
+    return 1;
   }
 
   free(sig);
