@@ -4,23 +4,34 @@ open FStar.HyperStack
 open FStar.HyperStack.ST
 
 /// a standalone experiment modelling key derivation parametrically in
-/// the use of the derived keys.
+/// the use of the derived keyed functionalities.
 ///
 /// * captures nested derivations via bounded-recursive instantiation.
-/// * applied to an extract/expand schedule (simplified from TLS 1.3)
+/// * applied to the full extract/expand key schedule of TLS 1.3
 /// * models partial key compromise, controlled by the adversary for each new key
 /// * features agility and ideal-only indexes.
 ///
-/// Not done yet: conditional idealization and erasure.
+/// Not done yet:
+///
+/// * key registration and discretionary compromise 
+/// * ensure all strongly-dependent types disappear before extraction.
+/// * deal with create/coerce stateful pre- and post-condition.
+///
+/// Note also that we support rather static agility and usages; we may
+/// enable more details to be bound as part of the derivation label.
+
+
+// temporary imports
 
 type bytes = Platform.Bytes.bytes
 let lbytes (len:UInt32.t) = Platform.Bytes.lbytes (UInt32.v len)
-assume val sample: len:UInt32.t -> lbytes len  // not pure!
 
-/// How to deal with agility etc? Key (i:id) (u:usage) where u is
-/// concrete, and usually bound to i---in which case it is Ok to
-/// select u at derivation-time.
-  
+let sample (len:UInt32.t): ST (lbytes len) 
+    (requires fun h0 -> True)
+    (ensures fun h0 r h1 -> True)
+  = CoreCrypto.random (UInt32.v len)
+
+
 /// --------------------------------------------------------------------------------------------------
 /// We embed first-class modules as datatype "packages"
 ///
@@ -86,9 +97,9 @@ let encrypt #ip #i #a k v = v + 1
 /// module Raw
 /// a default functionality (no idealization);
 /// for modelling, we could also provide a "leak" function
-///
+
 type raw  (#ip: ipkg) (i: Idx?.t ip) (len:keylen) = lbytes len
-let create_raw (#ip: ipkg) (i: ip.t) (len:keylen): raw  i len = sample len
+let create_raw (#ip: ipkg) (i: ip.t) (len:keylen): St (raw  i len) = sample len
 let coerce_raw (#ip: ipkg) (i: ip.t) (len:keylen) (r:lbytes len): raw i len = r
 let rp (ip:ipkg): pkg ip = Pkg keylen raw (fun n -> n) create_raw coerce_raw
 
@@ -379,12 +390,11 @@ assume val extract0:
 /// its interface provides create, coerce, leak, and extract
 /// its internal table memoizes it with *wide* domain gZ 
 
-/// Allocates a 
 /// Returns a narrow-indexed key, 
 /// 
 /// its internal state must ensure sharing
 ///
-val prf_extract1:
+assume val prf_extract1:
   #u: usage info ii -> 
   #i: id ->
   #a: info -> 
@@ -395,12 +405,17 @@ val prf_extract1:
   gZ: CommonDH.share g (* { dh gX gY gZ } *) ->
   secret u (Extract1 i (| g, gX, gY |)) a
 
-(*
+/// two flags; we will idealize ODH first
+/// 
+assume val flag_prf1: bool 
+assume val flag_odh: b:bool { flag_prf1 ==> b } 
+
+(* TBC, adding a narrow memoization table? 
 let prf_extract1 #u #i #a s g gX gY gZ = 
   let idh = (| g, gX, gY |) in
   let j = Extract1 i idh in
   let pkg = pp ii u in 
-  if ii.honest i & b1 
+  if flag_prf1 && ii.honest i 
   then 
     if b2 then 
     let 
@@ -415,20 +430,18 @@ let prf_extract1 #u #i #a s g gX gY gZ =
     pkg.narrow j k 
     // agreement on the algorithms follows from the salt.
   else 
-    let raw = HKDF.extract (prf_leak s) gZ (* wide, concrete *) in 
+    let raw = HKDF.extract (prf_leak s) gZ (* narrow, concrete *) in 
     pkg.coerce j a raw 
 *)
 
-val prf_leak:
+assume val prf_leak:
   #u: usage info ii -> 
   #i: id ->
   #a: info -> 
-  s: salt ii u i a -> bytes 
-// requires ~(honest i)
+  s: salt ii u i a {~(ii.honest i)} -> bytes 
 
 
-(*
-/// ODH
+/// ODH (precisely tracking the games, not yet code-complete
 /// --------------------------------------------------------------------------------------------------
 
 assume val honest_gX: 
@@ -449,7 +462,7 @@ val odh_init:
 
 let odh_init g = 
   let x = CommonDH.keygen g in 
-  let gX = CommonDH.pubshare y in  
+  let gX = CommonDH.pubshare x in  
   // check gX is fresh;
   // peer[gX] := []
   x // also return gX?
@@ -466,27 +479,31 @@ val odh_test:
   #a: info -> 
   s: salt ii u i a ->
   g: CommonDH.group ->
-  gX: CommonDH.share g { honest_gX gX } -> 
-  ( gY:CommonDH.share g &
-  secret ii u (Extract1 i (| g, gX, gY |)) a )
+  gX: CommonDH.share g {honest_gX gX} -> 
+  ST ( 
+    gY:CommonDH.share g &
+    secret u (Extract1 i (| g, gX, gY |)) a )
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> True)
+  
 // requires peer[gX] defined.
 // I and R may not share the same salt (i)
 
 let odh_test #u #i #a s g gX = 
   let y = CommonDH.keygen g in 
   let gY = CommonDH.pubshare y in  
-  peer[gX] += (i, gY);
+  // peer[gX] += (i, gY);
   let idh = (| g, gX, gY |) in
   let j = Extract1 i idh in 
   let k = 
-    if b0 
-    then kdf.create j a (* narrow *)
+    if flag_odh
+    then (*KDF.*) create u j a (* narrow *)
     else 
-      let gZ: commonDH.share g = admit() in 
-      let raw = HKDF.extract (prf_leak s) gZ (* wide, concrete *) in 
-      kdf.coerce j a raw 
+      let gZ: bytes (*CommonDH.share g*) = admit() in 
+      let raw = HKDF.extract #a.ha (prf_leak s) gZ (* wide, concrete *) in 
+      coerce u j a raw 
   in
-  gY, k (* TODO k is not registered yet *)
+  (| gY, k |) (* TODO k is not registered yet *)
 
 // the PRF-ODH oracle, computing with secret exponent x
 val odh_prf:
@@ -497,14 +514,17 @@ val odh_prf:
   g: CommonDH.group ->
   x: CommonDH.keyshare g { honest_gX (CommonDH.pubshare x) } -> 
   gY: CommonDH.share g -> 
-  secret ii u (Extract1 i (| g, CommonDH.pubshare x, gY |)) a 
+  ST (secret u (Extract1 i (| g, CommonDH.pubshare x, gY |)) a)
+    (requires fun h0 -> True)
+    (ensures fun h0 _ h1 -> True)
+  
 // requires peer[gX] is defined (witnessed in x) and does not contain (i,gY)
 // None? (find (i, gY) !peer[gX])
 
 let odh_prf #u #i #a s g x gY = 
   let gX = CommonDH.pubshare x in
   let gZ: CommonDH.share g = admit() in 
-  prf_extract1 s (| g, gX, gY |) gZ 
+  prf_extract1 s g gX gY gZ 
 
 /// --------------------------------------------------------------------------------------------------
 /// Diffie-Hellman shares
@@ -518,26 +538,27 @@ let odh_prf #u #i #a s g x gY =
 let initI (g:CommonDH.group) = odh_init g 
 
 /// Responder computes DH secret material
-assume val extractR:
+val extractR:
   #u: usage info ii -> 
   #i: id -> 
   #a: info -> 
   s: salt ii u i a ->
   g: CommonDH.group ->
   gX: CommonDH.share g ->
-  ( gY:CommonDH.share g &
-  secret ii u (Extract1 i (| g, gX, gY |)) a )
+  ST( gY:CommonDH.share g & secret u (Extract1 i (| g, gX, gY |)) a )
+    (requires fun h0 -> True)
+    (ensures fun h0 _ h1 -> True)
 
 let extractR #u #i #a s g gX = 
   if honest_gX gX 
-  then ODH_test gX i
+  then odh_test s g gX
   else
     // real computation: gY is dishonest
     let y = CommonDH.keygen g in 
     let gY = CommonDH.pubshare y in  
     let gZ: CommonDH.share g = admit() in // we could also use dh_responder
-    let k = extract1 s (| g, gX, gY |) gZ in
-    gY, k
+    let k = prf_extract1 s g gX gY gZ in
+    (| gY, k |)
 
 /// Initiator computes DH secret material
 assume val extractI: 
@@ -548,8 +569,7 @@ assume val extractI:
   g: CommonDH.group ->
   x: CommonDH.keyshare g ->
   gY: CommonDH.share g ->
-  secret ii u (Extract1 i (| g, CommonDH.pubshare x, gY |)) a
-*)
+  secret u (Extract1 i (| g, CommonDH.pubshare x, gY |)) a
 
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
 assume val extract2: 
@@ -630,7 +650,7 @@ let i1 = Extract1 (Derived i0 "salt") dhe_id
 
 val hs_secret : secret (u_handshake_secret depth) i1 a
 // let hs_secret = extract1 salt1 42 
-let hs_secret = admit() // extractI salt1 g x gY
+let hs_secret = extractI salt1 g x gY
 
 val hs_traffic: secret u_traffic (Derived i1 "traffic") a
 let hs_traffic = derive hs_secret "traffic"

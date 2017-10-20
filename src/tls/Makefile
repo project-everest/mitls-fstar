@@ -9,7 +9,7 @@ ODIR ?= output
 FSTARFLAGS = --fstar_home $(FSTAR_HOME) $(OTHERFLAGS)
 FSTAR = $(FSTAR_HOME)/bin/fstar.exe $(FSTARFLAGS)
 
-HINTS_ENABLED ?= --use_hints
+HINTS_ENABLED ?= --use_hints --record_hints
 VERFLAGS = --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 1 --z3rlimit 20 --__temp_no_proj Handshake --__temp_no_proj Connection $(HINTS_ENABLED)
 
 # These are all the known working targets in this file,
