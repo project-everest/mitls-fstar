@@ -96,7 +96,7 @@ let rp (ip:ipkg): pkg ip = Pkg keylen raw (fun n -> n) create_raw coerce_raw
 /// module Index
 
 /// We provide an instance of ipkg to track key derivation (here using constant labels)
-type label = bytes
+type label = string
 
 /// We expect this function to be fully applied at compile time,
 /// returning a package and a algorithm-derivation function to its
@@ -182,19 +182,8 @@ private type table
   (a: info) 
 = MonotoneMap.t there label (fun v -> derived_key u i v a) (fun _ -> True)
 
-let secret_len a = UInt32.uint_to_t (Hashing.Spec.tagLen (a.ha))
+let secret_len a: keylen = UInt32.uint_to_t (Hashing.Spec.tagLen (a.ha))
  
-let lookup   
-  (#u: usage info ii)
-  (#i: ii.t) 
-  (#a: info) 
-  (t: table u i a) = MonotoneMap.lookup t 
-let extend 
-  (#u: usage info ii)
-  (#i: ii.t) 
-  (#a: info) 
-  (t: table u i a) = MonotoneMap.extend t 
-
 // when to be parametric on ip? not for the KDF itself: we use ip's constructors.
 let secret 
   // (ip: ipkg) 
@@ -206,11 +195,16 @@ let secret
   then table u i a
   else lbytes (secret_len a)
 
+let secret_ideal
+  (#u: usage info ii)
+  (#i: ii.t) 
+  (#a: info)
+  (t: secret u i a{ii.honest i}): table u i a = t 
 let ideal_secret 
   (#u: usage info ii)
-  (#i: ii.t { ii.honest i})
+  (#i: ii.t)
   (#a: info)
-  (t: table u i a): secret u i a = t 
+  (t: table u i a{ii.honest i}): secret u i a = t 
 
 
 /// Real KDF schemes, parameterized by an algorithm computed from the
@@ -276,15 +270,18 @@ let derive  #u #i #a k v =
   let a' = derived_alg a in 
   if ii.honest (*safe*) i 
   then
-    match lookup k v with 
+    match MonotoneMap.lookup (secret_ideal k) v with 
     | Some dk -> dk
     | None -> 
       let dk = pkg.create (Derived i v) a' in 
-      extend #u #i #a k v dk; // why do I need explicit args?
+      //17-10-20 TODO framing across create
+      let h = HyperStack.ST.get() in 
+      assume(MonotoneMap.fresh (secret_ideal k) v h);
+      MonotoneMap.extend (secret_ideal k) v dk; // why do I need explicit args?
       dk
   else 
     let raw =
-      HKDF.expand #(a.ha) k v (UInt32.v (pkg.len a')) in 
+      HKDF.expand #(a.ha) k (Platform.Bytes.abytes v) (UInt32.v (pkg.len a')) in 
     pkg.coerce (Derived i v) a' raw
 
 
@@ -574,7 +571,6 @@ let some_keylen: keylen = 32ul
 inline_for_extraction
 let u_default:  p:pkg ii & (ctx:info -> p.use)  = (| rp ii, (fun (a:info) -> some_keylen) |)
 
-(*
 inline_for_extraction
 let u_traffic: usage info ii = function 
   | "ClientKey" | "ServerKey" -> (| mp ii , (fun (a:info) -> a.aea) |)
@@ -582,17 +578,18 @@ let u_traffic: usage info ii = function
 
 // #set-options "--print_universes --print_implicits"
 
+// 17-10-20 this causes a loop, as could be expected.
 inline_for_extraction
 let rec u_master_secret (n:nat ): Tot (usage info ii) (decreases (%[n; 0])) = function 
-  | "traffic" -> (| pp ii u_traffic, (fun a -> a) |)
+  | "traffic" -> (| pp u_traffic, (fun a -> a) |)
   | "resumption" -> if n > 0 then (| pskp ii (u_early_secret (n-1)), (fun (a:info) -> a)|) else (| rp ii, (fun (a:info) -> some_keylen) |)
   | _ -> u_default
 and u_handshake_secret (n:nat): Tot (usage info ii) (decreases (%[n; 1])) = function 
-  | "traffic" -> (| pp ii u_traffic , (fun (a:info) -> a) |)
+  | "traffic" -> (| pp u_traffic , (fun (a:info) -> a) |)
   | "salt" -> (| saltp2 ii (u_master_secret n), (fun (a:info) -> a) |)
   | _ -> u_default
 and u_early_secret (n:nat): Tot (usage info ii) (decreases (%[n;2])) = function
-  | "traffic" -> (| pp ii u_traffic, (fun (a:info) -> a) |)
+  | "traffic" -> (| pp u_traffic, (fun (a:info) -> a) |)
   | "salt" -> (| saltp1 ii (u_handshake_secret n), (fun (a:info) -> a) |)
   | _ -> u_default
 
@@ -606,60 +603,55 @@ let i0 = Extract0 (Preshared 0)
 
 /// Usability?
 
-let a = { ha=SHA1; aea=AES_GCM256 }
+let a = { ha=Hashing.Spec.SHA1; aea=AES_GCM256 }
 
 let psk0: psk #ii #u (Preshared 0) a = create_psk (Preshared 0) a
 
-let early_secret: secret ii u i0 a = extract0 psk0 
+let early_secret: secret u i0 a = extract0 psk0 
 
-val early_traffic: secret ii u_traffic (Derived i0 "traffic") a
-let early_traffic = derive a early_secret "traffic"
+val early_traffic: secret u_traffic (Derived i0 "traffic") a
+let early_traffic = derive early_secret "traffic"
 
 val k0: key #ii (Derived (Derived i0 "traffic") "ClientKey") AES_GCM256
-let k0 = derive a early_traffic "ClientKey" 
+let k0 = derive early_traffic "ClientKey" 
 let cipher  = encrypt k0 10
 
 val salt1:  salt ii (u_handshake_secret depth) (Derived i0 "salt") a
-let salt1  = derive a early_secret "salt"
+let salt1  = derive early_secret "salt"
 
 let g = CommonDH.default_group
-let x = initI g 
+//let x: CommonDH.sh = initI g 
+let x = CommonDH.keygen g 
 let gX = CommonDH.pubshare x
 let gY: CommonDH.share g = admit()
 let dhe_id: id_dhe = (| g, gX, gY |)
 
 let i1 = Extract1 (Derived i0 "salt") dhe_id
 
-
-(*
-assume val g:element
-let iX = genDH g
-*)
-
-val hs_secret : secret ii (u_handshake_secret depth) i1 a
+val hs_secret : secret (u_handshake_secret depth) i1 a
 // let hs_secret = extract1 salt1 42 
-let hs_secret = extractI salt1 g x gY
+let hs_secret = admit() // extractI salt1 g x gY
 
-val hs_traffic: secret ii u_traffic (Derived i1 "traffic") a
-let hs_traffic = derive a hs_secret "traffic"
+val hs_traffic: secret u_traffic (Derived i1 "traffic") a
+let hs_traffic = derive hs_secret "traffic"
 
 val k1: key #ii (Derived (Derived i1 "traffic") "ServerKey") AES_GCM256
-let k1 = derive a hs_traffic "ServerKey" 
+let k1 = derive hs_traffic "ServerKey" 
 let cipher' = encrypt k1 11
 
 val salt2:  salt ii (u_master_secret depth) (Derived i1 "salt") a
-let salt2  = derive a hs_secret "salt"
+let salt2  = derive hs_secret "salt"
 
 let i2 = Extract2 (Derived i1 "salt")  
-val master_secret: secret ii (u_master_secret depth) i2 a
+val master_secret: secret (u_master_secret depth) i2 a
 let master_secret = extract2 salt2 
 
 val rsk: psk #ii #(u_early_secret (depth - 1)) (Derived i2 "resumption") a
 
 let i3 = Extract0 (Derived i2 "resumption")
-let rsk = derive a master_secret "resumption" 
+let rsk = derive master_secret "resumption" 
 // #(u_master_secret depth ) #i2 
-val next_early_secret: secret ii (u_early_secret (depth - 1)) i3 a
+val next_early_secret: secret (u_early_secret (depth - 1)) i3 a
 let next_early_secret = extract0 rsk
 
 /// Proof?  Typing against plain, multi-instance assumptions for each
@@ -683,7 +675,7 @@ let next_early_secret = extract0 rsk
 /// - how to benefit from the create post-condition? explicit? 
 /// 
 
-
+ 
 // let k0 = create_psk 0 //: secret (u depth) ii (Secret 0) = create (u depth) ii (Secret 0)
 // let i1 = Derived (Preshared 0) "secret" (* this seems to help normalization *)
 // let k1: secret (u (depth-1)) ii i1  = derive k0 "secret" 
@@ -693,4 +685,3 @@ let next_early_secret = extract0 rsk
 //
 // let k1' = derive k0 "secret" 
 // let k2' = derive #(u 22)  k1'  "aead"  // the type is not normalized; the key is not usable.
-*)
