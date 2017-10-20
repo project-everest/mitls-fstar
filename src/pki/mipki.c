@@ -12,6 +12,28 @@
 #include <openssl/x509v3.h>
 
 #include "mipki.h"
+#define DEBUG 1
+
+/*
+ DESIGN NOTES
+
+ This file is meant to implement the certificate callbacks for TLS:
+
+ typedef void* (MITLS_CALLCONV *pfn_FFI_cert_select_cb)(void *cb_state, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected);
+ typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_format_cb)(void *cb_state, const void *cert_ptr, char buffer[MAX_CHAIN_LEN]);
+ typedef size_t (MITLS_CALLCONV *pfn_FFI_cert_sign_cb)(void *cb_state, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig);
+ typedef int (MITLS_CALLCONV *pfn_FFI_cert_verify_cb)(void *cb_state, const char* chain, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len);
+
+On the server side, we maintain a pre-declared certificate configuration.
+Chains and private keys are loaded when the library is initialized and stay in memory
+
+The certificates are configured in order of preference.
+Certificate selection first matches the SNI against the names in the certificates,
+then looks at the supported signature algorithms and tries to pick one compatible
+with the private key.
+
+*/
+
 
 // The parsed representation of chains and private keys
 typedef struct {
@@ -24,41 +46,28 @@ typedef struct {
 /********************** GLOBAL VARIABLES ***********************/
 // We cache the loading of certificate chains and private keys
 // They remain in memory until mipki_cleanup() is called
-X509_STORE *g_store;
-config_entry *g_config;
-size_t g_config_len;
+X509_STORE *g_store = NULL;
+config_entry *g_config = NULL;
+size_t g_config_len = 0;
 
 
-/*
-          rsa_pkcs1_sha1(0x0201),
-          rsa_pkcs1_sha256(0x0401),
-          rsa_pkcs1_sha384(0x0501),
-          rsa_pkcs1_sha512(0x0601),
-          ecdsa_sha1(0x0203),
+/* CODE POINTS FOR SIGNATURE ALGORITHMS
+  rsa_pkcs1_sha1(0x0201),
+  rsa_pkcs1_sha256(0x0401),
+  rsa_pkcs1_sha384(0x0501),
+  rsa_pkcs1_sha512(0x0601),
 
-          ecdsa_secp256r1_sha256(0x0403),
-          ecdsa_secp384r1_sha384(0x0503),
-          ecdsa_secp521r1_sha512(0x0603),
+  rsa_pss_sha256(0x0804),
+  rsa_pss_sha384(0x0805),
+  rsa_pss_sha512(0x0806),
 
-          rsa_pss_sha256(0x0804),
-          rsa_pss_sha384(0x0805),
-          rsa_pss_sha512(0x0806),
+  ecdsa_sha1(0x0203),
+  ecdsa_secp256r1_sha256(0x0403),
+  ecdsa_secp384r1_sha384(0x0503),
+  ecdsa_secp521r1_sha512(0x0603),
 
-          ed25519(0x0807),
-          ed448(0x0808),
-
-          obsolete_RESERVED(0x0000..0x0200),
-          dsa_sha1_RESERVED(0x0202),
-          obsolete_RESERVED(0x0204..0x0400),
-          dsa_sha256_RESERVED(0x0402),
-          obsolete_RESERVED(0x0404..0x0500),
-          dsa_sha384_RESERVED(0x0502),
-          obsolete_RESERVED(0x0504..0x0600),
-          dsa_sha512_RESERVED(0x0602),
-          obsolete_RESERVED(0x0604..0x06FF),
-          private_use(0xFE00..0xFFFF),
-          (0xFFFF)
-      } SignatureScheme;
+  ed25519(0x0807),
+  ed448(0x0808),
 */
 
 // Debugging function to inspect certificates loaded by the store
@@ -94,6 +103,12 @@ typedef struct {
 int password_cb(char *buf, int size, int rwflag, void *p)
 {
   pass_cb_state *s = (pass_cb_state*)p;
+  if(s == NULL || s->cb == NULL) return 0;
+
+  #if DEBUG
+  printf("Calling passwork callback for <%s>\n", (char*)s->info);
+  #endif
+
   return s->cb(buf, size, s->info);
 }
 
@@ -108,13 +123,20 @@ void mipki_cleanup()
   }
 
   free(g_config);
+  g_config = NULL;
+  g_config_len = 0;
+
   X509_STORE_free(g_store);
+  g_store = NULL;
+
   OPENSSL_thread_stop();
 }
 
 int mipki_init(const mipki_config_entry config[], size_t config_len, password_callback pcb, int *erridx)
 {
   *erridx = -1;
+
+  if(g_config != NULL) return 0;
   if(!OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL))
     return 0;
 
@@ -126,7 +148,6 @@ int mipki_init(const mipki_config_entry config[], size_t config_len, password_ca
 
   g_config = malloc(sizeof(config_entry) * config_len);
   if(!g_config) return 0;
-  g_config_len = 0;
 
   for(size_t i = 0; i < config_len; i++)
   {
@@ -173,7 +194,9 @@ int mipki_init(const mipki_config_entry config[], size_t config_len, password_ca
       }
     }
 
+    g_config_len++;
     cfg->intermediates = chain;
+    cfg->key = sk;
     cfg->is_universal = cur->is_universal;
   }
 
@@ -182,10 +205,15 @@ int mipki_init(const mipki_config_entry config[], size_t config_len, password_ca
 
 int mipki_add_root_file_or_path(const char *ca_file)
 {
+  if(g_store == NULL) return 0;
   struct stat sb;
 
-  if(!stat(ca_file, &sb))
+  if(!stat(ca_file, &sb)){
+    #if DEBGUG
+    printf("mipki_add_root_file_or_path: stat failed\n");
+    #endif
     return 0;
+  }
 
   if(S_ISDIR(sb.st_mode))
     return X509_STORE_load_locations(g_store, NULL, ca_file);
@@ -193,31 +221,76 @@ int mipki_add_root_file_or_path(const char *ca_file)
   return X509_STORE_load_locations(g_store, ca_file, NULL);
 }
 
-void* mipki_select_certificate(const char *sni, mipki_signature *algs, size_t algs_len, mipki_signature *selected)
+mipki_chain mipki_select_certificate(const char *sni, mipki_signature *algs, size_t algs_len, mipki_signature *selected)
 {
+  if(g_config == NULL)
+  {
+    #if DEBUG
+      printf("The library must be initialized first with mipki_init!\n");
+    #endif
+    return 0;
+  }
+
+  #if DEBUG
+    printf("Selecting certificate for <%s>, signatures=", sni);
+    for(size_t j = 0; j < algs_len; j++) printf("%04x ", algs[j]);
+    printf("\n");
+  #endif
+
   for(size_t i = 0; i < g_config_len; i++)
   {
     config_entry *cfg = g_config + i;
-    char *peername = NULL;
+
+    #if DEBUG
+      char buf[256];
+      char *peername = NULL;
+      char **peer = &peername;
+      X509_NAME_oneline(X509_get_subject_name(cfg->endpoint), buf, 256);
+      printf(" - Testing certificate: %s\n", buf);
+    #else
+      char **peer = NULL; // save memory
+    #endif
 
     // Server-side hostname validation to match wildcards, SAN, etc
-    if(cfg->is_universal || X509_check_host(cfg->endpoint, sni, strlen(sni), 0, &peername))
+    if(cfg->is_universal || X509_check_host(cfg->endpoint, sni, strlen(sni), 0, peer))
     {
-      if(peername) printf("Found matching entry in certificate names: %s\n", peername);
+      #if DEBUG
+      printf(" - Positive match for <%s>\n", peername);
+      OPENSSL_free(peername);
+      #endif
+
       int curve, kt = EVP_PKEY_base_id(cfg->key);
       *selected = 0;
 
+      #if DEBUG
+        switch(kt){
+          case EVP_PKEY_RSA:     printf(" - RSA key\n"); break;
+          case EVP_PKEY_EC:      printf(" - ECDSA key\n"); break;
+          case EVP_PKEY_ED25519: printf(" - EdDSA-25519 key\n"); break;
+        }
+      #endif
+
+      // TLS < 1.2
+      if(algs_len == 0 && kt == EVP_PKEY_RSA)
+        *selected = 0xFFFF; // MD5+SHA1 RSA
+      if(algs_len == 0 && kt == EVP_PKEY_EC)
+        *selected = 0x0203; // ECDSA+SHA1
+
       for(size_t j = 0; j < algs_len; j++)
       {
-        mipki_signature alg = algs[i];
+        mipki_signature alg = algs[j];
         uint8_t low = algs[j] & 0xFF;
         uint8_t high = algs[j] >> 8;
+
+        #if DEBUG
+        printf(" - Testing if <%02x,%02x> is suitable\n", high, low);
+        #endif
 
         switch(kt)
         {
           case EVP_PKEY_RSA:
-            if((high == 8 && (low == 4 || low == 5 || low == 6)) ||
-               (low == 1 && high >= 2 && high <= 6))
+            if((high == 8 && (low == 4 || low == 5 || low == 6)) || // RSA_PSS
+               (low == 1 && high >= 2 && high <= 6)) // RSA_PKCS1
               *selected = alg;
             break;
 
@@ -236,15 +309,23 @@ void* mipki_select_certificate(const char *sni, mipki_signature *algs, size_t al
             break;
         }
 
-        if(*selected) return (void*)cfg;
+        if(*selected)
+        {
+          #if DEBUG
+            printf(" + Certificate selected with alg=%04x\n", *selected);
+          #endif
+          break;
+        }
       }
+
+      if(*selected)
+        return (void*)cfg;
     }
   }
 
   *selected = 0;
   return NULL;
 }
-
 /*
 int EVP_DigestSignInit(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,
                        const EVP_MD *type, ENGINE *e, EVP_PKEY *pkey);
@@ -252,56 +333,257 @@ int EVP_DigestSignUpdate(EVP_MD_CTX *ctx, const void *d, size_t cnt);
 int EVP_DigestSignFinal(EVP_MD_CTX *ctx, unsigned char *sig, size_t *siglen);
 */
 
-static const EVP_MD *sha(int variant) {
+typedef const EVP_MD* DIGEST;
+
+static DIGEST sha(int variant) {
     switch (variant) {
-      case 0: return EVP_sha1();
-      case 1: return EVP_sha256();
-      case 2: return EVP_sha384();
-      case 3: return EVP_sha512();
+      case 0: return EVP_sha256();
+      case 1: return EVP_sha384();
+      case 2: return EVP_sha512();
     }
     return NULL;
 }
 
-size_t mipki_sign(const void *cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig)
+static int set_digest(mipki_signature sigalg, DIGEST* md)
 {
-  config_entry *cfg = (config_entry*)cert_ptr;
-  EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-  const EVP_MD *md;
-  EVP_PKEY_CTX* key_ctx = EVP_PKEY_CTX_new(cfg->key, NULL);
-  return 0;
-/*
-  if(EVP_DigestSignInit(md_ctx, key_ctx, md, NULL, cfg->key) != 1)
-
+  // N.B. ed25519 and ed448 expect NULL md
   switch(sigalg)
   {
     case 0x0804: // rsa_pss_sha256
     case 0x0805: // rsa_pss_sha384
     case 0x0806: // rsa_pss_sha512
-      md = sha(sigalg - 0x0803);
+      *md = sha(sigalg - 0x0804);
       break;
+
+    case 0x0401: // rsa_pkcs1_sha256
+    case 0x0501: // rsa_pkcs1_sha384
+    case 0x0601: // rsa_pkcs1_sha512
+    case 0x0403: // ecdsa_secp256r1_sha256
+    case 0x0503: // ecdsa_secp384r1_sha384
+    case 0x0603: // ecdsa_secp521r1_sha512
+      *md = sha((sigalg>>8) - 4);
+      break;
+
+    case 0x0203: // ecdsa_sha1
+    case 0x0201: // rsa_pkcs1_sha1
+      *md = EVP_sha1();
+      break;
+
+    case 0x0807: // ed25519
+    case 0x0808: // ed448
+      *md = NULL;
+      break;
+
+    default:
+      #if DEBUG
+        printf("set_md: unknown algorithm %04x\n", sigalg);
+      #endif
+      return 0; // unrecognized siganture alg
   }
 
-  if(pss == Val_true) {
+  return 1;
+}
 
-      caml_failwith("openssl_stub: EVP_PKEY_CTX_set_rsa_padding PSS");
-    if(EVP_PKEY_CTX_set_rsa_pss_saltlen(key_ctx, RSA_PSS_SALTLEN_DIGEST) != 1)
-      caml_failwith("openssl_stub: EVP_PKEY_CTX_set_rsa_pss_saltlen");
-  } else {
-    if (EVP_PKEY_CTX_set_rsa_padding(key_ctx, RSA_PKCS1_PADDING) != 1)
-      caml_failwith("openssl_stub: EVP_PKEY_CTX_set_rsa_padding PKCS1");
+int mipki_sign_verify(const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode)
+{
+  config_entry *cfg = (config_entry*)cert_ptr;
+  assert(cfg != NULL);
+  int ret = 0;
+
+  // Special case: MD5+SHA1 signature
+  // we use a different signing interface
+  if(sigalg == 0xffff)
+  {
+    RSA *rsa = EVP_PKEY_get0_RSA(cfg->key); // doesn't copy, no free
+    unsigned int slen = (unsigned int)*sig_len;
+    if(!rsa) return 0;
+
+    if(mode == MIPKI_SIGN)
+    {
+      if (RSA_sign(NID_md5_sha1, tbs, tbs_len, sig, &slen, rsa) != 1) {
+        #if DEBUG
+          unsigned long err = ERR_peek_last_error();
+          char* err_string = ERR_error_string(err, NULL);
+          printf("RSA MD5_SHA1 signing error: %s\n", err_string);
+          OPENSSL_free(err_string);
+        #endif
+        return 0;
+      }
+      *sig_len = slen;
+      return 1;
+    }
+    else
+    {
+      return RSA_verify(NID_md5_sha1, tbs, tbs_len, sig, slen, rsa);
+    }
   }
 
-  if(EVP_DigestSign(md_ctx, (uint8_t*)String_val(output), &olen,
-      (uint8_t*) String_val(data), caml_string_length(data)) != 1) {
-#ifdef DEBUG
-    printf("ocaml_rsa_sign: caml_string_length(data)=%zu, RSA_size(rsa)=%u\n",
-      caml_string_length(data), RSA_size(rsa));
-#endif
-    unsigned long err = ERR_peek_last_error();
-    char* err_string = ERR_error_string(err, NULL);
-    caml_failwith(err_string);
+  EVP_PKEY_CTX* key_ctx = NULL;
+  DIGEST md = NULL;
+  EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
+
+  int kt = EVP_PKEY_base_id(cfg->key);
+  if(!set_digest(sigalg, &md)) return 0;
+
+  if(EVP_DigestSignInit(md_ctx, &key_ctx, md, NULL, cfg->key) != 1)
+  {
+    #if DEBUG
+      printf("mipki_sign: failed to initialize DigestSign\n");
+    #endif
+    return 0;
   }
-  */
+
+  // for RSA: set padding
+  if(kt == EVP_PKEY_RSA)
+  {
+    if(sigalg >> 8 == 8) // PSS
+    {
+      if(EVP_PKEY_CTX_set_rsa_padding(key_ctx, RSA_PKCS1_PSS_PADDING) != 1)
+        return 0;
+      if(EVP_PKEY_CTX_set_rsa_pss_saltlen(key_ctx, RSA_PSS_SALTLEN_DIGEST) != 1)
+        return 0;
+    }
+    else // PKCS1
+    {
+      if (EVP_PKEY_CTX_set_rsa_padding(key_ctx, RSA_PKCS1_PADDING) != 1)
+        return 0;
+    }
+  }
+
+  if(mode == MIPKI_SIGN)
+  {
+    ret = EVP_DigestSign(md_ctx, sig, sig_len, tbs, tbs_len);
+    if(ret != 1)
+    {
+      #if DEBUG
+        unsigned long err = ERR_peek_last_error();
+        char* err_string = ERR_error_string(err, NULL);
+        printf("mipki_sign DigestSign error: %s\n", err_string);
+        OPENSSL_free(err_string);
+      #endif
+    }
+  }
+  else // MIPKI_VERIFY
+  {
+    ret = EVP_DigestVerify(md_ctx, sig, *sig_len, tbs, tbs_len);
+  }
+
+  EVP_MD_CTX_free(md_ctx);
+  return ret;
+}
+
+mipki_chain mipki_parse_chain(const char *chain, size_t chain_len)
+{
+  const char *cur = chain;
+  const char *end = cur + chain_len;
+
+  // We delay allocation of a long-lived heap version until the whole chain is parsed
+  config_entry c = {
+    .endpoint = NULL,
+    .intermediates = sk_X509_new_null(),
+    .key = NULL
+  };
+
+  do {
+    if(end - cur < 3)
+    {
+      #if DEBUG
+        printf("mipki_parse_chain: not enough bytes\n");
+      #endif
+      goto fail;
+    }
+
+    uint8_t *cur_u8 = (uint8_t*)cur;
+    size_t cert_len = (cur_u8[0]<<16) + (cur_u8[1]<<8) + cur_u8[2];
+    cur += 3;
+
+    if(cur + cert_len > end)
+    {
+      #if DEBUG
+        printf("mipki_parse_chain: certificate length overflows buffer size");
+      #endif
+      goto fail;
+    }
+
+    // The following call also does cur += cert_len
+    X509 *x509 = d2i_X509(NULL, (const unsigned char**)&cur, cert_len);
+    if(x509 == NULL)
+    {
+      #if DEBUG
+        printf("mipki_parse_chain: failed to parse certificate");
+      #endif
+      goto fail;
+    }
+
+    if(c.endpoint == NULL) {
+      c.endpoint = x509;
+    } else {
+      sk_X509_push(c.intermediates, x509);
+    }
+  } while(cur < end);
+
+  if(c.endpoint != NULL)
+  {
+    c.key = X509_get_pubkey(c.endpoint);
+    config_entry *res = malloc(sizeof(c));
+    *res = c;
+    return res;
+  }
+
+  // Ugly, but we really do not want memory leaks in this function
+  fail:
+    if(c.endpoint != NULL) X509_free(c.endpoint);
+    sk_X509_pop_free(c.intermediates, X509_free);
+    return NULL;
+}
+
+int mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_len)
+{
+
+}
+
+int mipki_validate_chain(const mipki_chain chain, const char *host)
+{
+  config_entry *cfg = (config_entry*)chain;
+  assert(cfg != NULL);
+  X509_STORE_CTX *ctx = X509_STORE_CTX_new();
+  X509_VERIFY_PARAM *param = X509_VERIFY_PARAM_new();
+  time_t current_time = time(NULL);
+
+  if(!ctx || !param)
+  {
+    #if DEBUG
+    printf("mipki_validate_chain: failed to initialize certificate validation context");
+    #endif
+    return 0;
+  }
+
+  X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_USE_CHECK_TIME | X509_V_FLAG_CRL_CHECK_ALL);
+  X509_VERIFY_PARAM_set_time(param, current_time);
+  X509_VERIFY_PARAM_set1_host(param, host, 0);
+  X509_STORE_set1_param(g_store, param);
+  X509_STORE_CTX_init(ctx, g_store, cfg->endpoint, cfg->intermediates);
+
+  int r = X509_verify_cert(ctx);
+  #if DEBUG
+    printf("mipki_validate_chain = %d [%s]\n", r, X509_verify_cert_error_string(X509_STORE_CTX_get_error(ctx)));
+  #endif
+
+  X509_STORE_CTX_free(ctx);
+  X509_VERIFY_PARAM_free(param);
+  return r;
+}
+
+void mipki_free_chain(mipki_chain chain)
+{
+  config_entry *cfg = (config_entry*)chain;
+  if(cfg == NULL) return;
+
+  X509_free(cfg->endpoint);
+  EVP_PKEY_free(cfg->key);
+  sk_X509_pop_free(cfg->intermediates, X509_free);
+
+  free(cfg);
 }
 
 /*
@@ -374,7 +656,7 @@ CAMLprim value ocaml_validate_chain(value chain, value for_signing, value hostna
       size_t len = caml_string_length(head);
       X509* x509;
       unsigned char *cert = (unsigned char*)String_val(head);
-      x509 = d2i_X509(NULL, (const unsigned char**) &cert, len);
+
 //      printf("ADDING CERT[%d]\n", (int)len);
       if(!top_cert) top_cert = x509; else sk_X509_push(sk, x509);
       chain = Field(chain, 1);

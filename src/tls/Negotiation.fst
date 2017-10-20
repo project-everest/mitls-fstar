@@ -1262,7 +1262,7 @@ let computeServerMode cfg co serverRandom =
       then Error(AD_illegal_parameter, "Compression is deprecated") else
       let salgs =
         match find_signature_algorithms co with
-        | None -> cfg.signature_algorithms
+        | None -> []
         | Some sigalgs -> List.Tot.filter (fun x -> List.Tot.mem x cfg.signature_algorithms) sigalgs
         in
       match cfg.cert_callbacks.cert_select_cb (get_sni co) salgs with
