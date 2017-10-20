@@ -270,24 +270,24 @@ val derive:
   ST (derived_key u i v a)
   (requires fun h0 -> True)
   (ensures fun h0 r h1 -> True)
- 
+
 let derive  #u #i #a k v = 
   let (| pkg, derived_alg |) = u v in 
   let a' = derived_alg a in 
   if ii.honest (*safe*) i 
   then
-    match MonotoneMap.lookup k v with 
+    match lookup k v with 
     | Some dk -> dk
     | None -> 
       let dk = pkg.create (Derived i v) a' in 
-      MonotoneMap.extend k v dk;
+      extend #u #i #a k v dk; // why do I need explicit args?
       dk
   else 
     let raw =
       HKDF.expand #(a.ha) k v (UInt32.v (pkg.len a')) in 
     pkg.coerce (Derived i v) a' raw
 
-(*
+
 /// Reconsider packaging: should create take external randomness?
 
 /// --------------------------------------------------------------------------------------------------
@@ -369,7 +369,7 @@ assume val extract0:
   #i: id ->
   #a: info ->
   k: psk #ii #u i a -> 
-  secret ii u (Extract0 i) a
+  secret u (Extract0 i) a
 
 
 /// HKDF.Extract(key=s, materials=dh_secret) idealized as 2-bit
@@ -395,8 +395,8 @@ val prf_extract1:
   g: CommonDH.group ->
   gX: CommonDH.share g -> 
   gY: CommonDH.share g ->
-  gZ: CommonDH.share.g (* { dh gX gY gZ } *) ->
-  secret ii u (Extract1 i (| g, gX, gY |)) a
+  gZ: CommonDH.share g (* { dh gX gY gZ } *) ->
+  secret u (Extract1 i (| g, gX, gY |)) a
 
 (*
 let prf_extract1 #u #i #a s g gX gY gZ = 
@@ -560,7 +560,7 @@ assume val extract2:
   #i: id ->
   #a: info ->
   s: salt ii u i a -> 
-  secret ii u (Extract2 i) a
+  secret u (Extract2 i) a
 
 
 /// module KeySchedule
@@ -574,6 +574,7 @@ let some_keylen: keylen = 32ul
 inline_for_extraction
 let u_default:  p:pkg ii & (ctx:info -> p.use)  = (| rp ii, (fun (a:info) -> some_keylen) |)
 
+(*
 inline_for_extraction
 let u_traffic: usage info ii = function 
   | "ClientKey" | "ServerKey" -> (| mp ii , (fun (a:info) -> a.aea) |)
