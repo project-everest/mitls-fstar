@@ -53,38 +53,39 @@ void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
   printf(" ########################################\n");
 }
 
-void* certificate_select(void *st, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
+void* certificate_select(void *cbs, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
-  printf("%d algorithms offered\n", sigalgs_len);
-  mipki_chain r = mipki_select_certificate(sni, sigalgs, sigalgs_len, selected);
-  printf("Return: %p Selected = %04x\n", r, *selected);
+  mipki_state *st = (mipki_state*)cbs;
+  mipki_chain r = mipki_select_certificate(st, sni, sigalgs, sigalgs_len, selected);
   return (void*)r;
 }
 
-size_t certificate_format(void *cb_state, const void *cert_ptr, char *buffer)
+size_t certificate_format(void *cbs, const void *cert_ptr, char *buffer)
 {
+  mipki_state *st = (mipki_state*)cbs;
   mipki_chain chain = (mipki_chain)cert_ptr;
-  return mipki_format_chain(cert_ptr, buffer, MAX_CHAIN_LEN);
+  return mipki_format_chain(st, cert_ptr, buffer, MAX_CHAIN_LEN);
 }
 
-size_t certificate_sign(void *cb_state, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig)
+size_t certificate_sign(void *cbs, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig)
 {
+  mipki_state *st = (mipki_state*)cbs;
   size_t ret = MAX_SIGNATURE_LEN;
 
   printf("======== TO BE SIGNED <%04x>: (%d octets) ========\n", sigalg, tbs_len);
   dump(tbs, tbs_len);
   printf("===================================================\n");
 
-  if(mipki_sign_verify(cert_ptr, sigalg, tbs, tbs_len, sig, &ret, MIPKI_SIGN))
+  if(mipki_sign_verify(st, cert_ptr, sigalg, tbs, tbs_len, sig, &ret, MIPKI_SIGN))
     return ret;
 
   return 0;
 }
 
-int certificate_verify(void *cb_state, const char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len)
+int certificate_verify(void *cbs, const char* chain_bytes, size_t chain_len, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig, size_t sig_len)
 {
-  quic_config *config = (quic_config*)cb_state;
-  mipki_chain chain = mipki_parse_chain(chain_bytes, chain_len);
+  mipki_state *st = (mipki_state*)cbs;
+  mipki_chain chain = mipki_parse_chain(st, chain_bytes, chain_len);
 
   if(chain == NULL)
   {
@@ -92,15 +93,16 @@ int certificate_verify(void *cb_state, const char* chain_bytes, size_t chain_len
     return 0;
   }
 
-  if(!mipki_validate_chain(chain, config->host_name))
+  // We don't validate hostname, but could with the callback state
+  if(!mipki_validate_chain(st, chain, ""))
   {
-    printf("WARNING: chain validation failed for <%s>, ignoring.\n", config->host_name);
+    printf("WARNING: chain validation failed, ignoring.\n");
     // return 0;
   }
 
   size_t slen = sig_len;
-  int r = mipki_sign_verify(chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY);
-  mipki_free_chain(chain);
+  int r = mipki_sign_verify(st, chain, sigalg, tbs, tbs_len, sig, &slen, MIPKI_VERIFY);
+  mipki_free_chain(st, chain);
   return r;
 }
 
@@ -115,28 +117,31 @@ char *quic_result_string(quic_result r){
 
 int main(int argc, char **argv)
 {
+  // Server PKI configuration: one ECDSA certificate
   mipki_config_entry pki_config[1] = {
     {
       .cert_file = "../../data/server-ecdsa.crt",
       .key_file = "../../data/server-ecdsa.key",
-      .is_universal = 1
+      .is_universal = 1 // ignore SNI
     }
   };
 
+  char *errmsg;
   int erridx;
-  if(!mipki_init(pki_config, 1, NULL, &erridx))
+
+  mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
+
+  if(!pki)
   {
     printf("Failed to initialize PKI library: errid=%d\n", erridx);
     return 1;
   }
 
-  if(!mipki_add_root_file_or_path("../../data/CAFile.pem"))
+  if(!mipki_add_root_file_or_path(pki, "../../data/CAFile.pem"))
   {
     printf("Failed to add CAFile\n");
     return 1;
   }
-
-  char *errmsg;
 
   quic_transport_parameters client_qp =
     {
@@ -175,7 +180,7 @@ int main(int argc, char **argv)
     .alpn = "hq-05",
     .qp = server_qp,
     .server_ticket = NULL,
-    .callback_state = NULL,
+    .callback_state = (void*)pki,
     .ticket_callback = ticket_cb,
     .cert_callbacks = &cert_callbacks,
     .cipher_suites = NULL, // Use defaults
@@ -186,8 +191,6 @@ int main(int argc, char **argv)
     .ticket_key_len = 0,
     .enable_0rtt = 1
   };
-
-  config.callback_state = &config;
 
   quic_result rc, rs;
   quic_state *server = NULL, *client = NULL;

@@ -23,15 +23,18 @@ int main(int argc, char **argv)
       .is_universal = 0
     }
   };
-  int erridx;
 
-  if(!mipki_init(config, 1, NULL, &erridx))
+  int erridx;
+  mipki_state *st = mipki_init(config, 1, NULL, &erridx);
+
+  if(!st)
   {
     printf("FAILURE: errid=%d\n", erridx);
     return 1;
   }
+
   printf("INIT OK\n");
-  if(!mipki_add_root_file_or_path("../../data/CAFile.pem"))
+  if(!mipki_add_root_file_or_path(st, "../../data/CAFile.pem"))
   {
     printf("Failed to add CAFile\n");
     return 1;
@@ -40,23 +43,30 @@ int main(int argc, char **argv)
   mipki_signature selected;
   mipki_signature offered[3] = {0x0403,0x0503,0x0401};
 
-  mipki_chain s = mipki_select_certificate("localhost", offered, 3, &selected);
-  printf("SELECTION RESULT: %s, selected=%04x\n", s==NULL?"FAIL":"OK", selected);
+  mipki_chain s = mipki_select_certificate(st, "localhost", offered, 3, &selected);
 
-  if(!mipki_validate_chain(s, "localhost"))
+  if(!s)
   {
-    printf("Chain validation failed (expected, cert is self signed).\n");
+    printf("Certificate selection failed.\n");
+    return 1;
   }
+
+  printf("Selected a certificate with signature=%04x\n", selected);
+
+  if(!mipki_validate_chain(st, s, "localhost"))
+    printf("Chain validation failed (expected, cert is self signed).\n");
+  else
+    printf("Chain validation OK.\n");
 
   char *tbs = "Hello World!";
   char *sig = malloc(8192);
   size_t sig_len = 8192;
 
-  if(mipki_sign_verify(s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_SIGN))
+  if(mipki_sign_verify(st, s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_SIGN))
   {
     printf("Signature success <%04x, %s> (%d bytes):\n", selected, tbs, sig_len);
     dump(sig, sig_len);
-    if(mipki_sign_verify(s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_VERIFY))
+    if(mipki_sign_verify(st, s, selected, tbs, strlen(tbs), sig, &sig_len, MIPKI_VERIFY))
     {
       printf("Signature verification suceeded.\n");
     }
@@ -72,7 +82,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  size_t len = mipki_format_chain(s, sig, 8192);
+  size_t len = mipki_format_chain(st, s, sig, 8192);
   if(len > 0)
   {
     printf("Formatted chain:\n");

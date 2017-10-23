@@ -12,7 +12,7 @@
 #include <openssl/x509v3.h>
 
 #include "mipki.h"
-#define DEBUG 0
+#define DEBUG 1
 
 /*
  DESIGN NOTES
@@ -43,13 +43,11 @@ typedef struct {
   int is_universal;
 } config_entry;
 
-/********************** GLOBAL VARIABLES ***********************/
-// We cache the loading of certificate chains and private keys
-// They remain in memory until mipki_cleanup() is called
-X509_STORE *g_store = NULL;
-config_entry *g_config = NULL;
-size_t g_config_len = 0;
-
+typedef struct mipki_state {
+  X509_STORE *store;
+  config_entry *config; // Flat array
+  size_t config_len;
+} mipki_state;
 
 /* CODE POINTS FOR SIGNATURE ALGORITHMS
   rsa_pkcs1_sha1(0x0201),
@@ -84,7 +82,7 @@ static void dump(const unsigned char *buffer, size_t len)
 // Debugging function to inspect certificates loaded by the store
 static int cert_verify_cb(int ok, X509_STORE_CTX *ctx)
 {
-#ifdef DEBUG
+#if DEBUG
     char buf[512];
     static int cb_index = 0;
 
@@ -123,47 +121,44 @@ int password_cb(char *buf, int size, int rwflag, void *p)
   return s->cb(buf, size, s->info);
 }
 
-void mipki_cleanup()
+void mipki_cleanup(mipki_state *st)
 {
-  for(size_t i=0; i<g_config_len; i++)
+  if(!st) return;
+
+  for(size_t i=0; i<st->config_len; i++)
   {
-    config_entry *cfg = g_config + i;
+    config_entry *cfg = st->config + i;
     X509_free(cfg->endpoint);
     EVP_PKEY_free(cfg->key);
     sk_X509_pop_free(cfg->intermediates, X509_free);
   }
 
-  free(g_config);
-  g_config = NULL;
-  g_config_len = 0;
-
-  X509_STORE_free(g_store);
-  g_store = NULL;
-
-  OPENSSL_thread_stop();
+  free(st->config);
+  X509_STORE_free(st->store);
+  free(st);
 }
 
-int mipki_init(const mipki_config_entry config[], size_t config_len, password_callback pcb, int *erridx)
+mipki_state *mipki_init(const mipki_config_entry config[], size_t config_len, password_callback pcb, int *erridx)
 {
   *erridx = -1;
+  X509_STORE *store = X509_STORE_new();
+  if(!store) return 0;
 
-  if(g_config != NULL) return 0;
-  if(!OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL))
-    return 0;
+  if(!X509_STORE_set_default_paths(store)) return 0;
+  X509_STORE_set_verify_cb_func(store, cert_verify_cb);
 
-  g_store = X509_STORE_new();
-  if(!g_store) return 0;
+  mipki_state *st = malloc(sizeof(mipki_state));
+  config_entry *c = malloc(sizeof(config_entry) * config_len);
+  if(!st || !c) return NULL;
 
-  if(!X509_STORE_set_default_paths(g_store)) return 0;
-  X509_STORE_set_verify_cb_func(g_store, cert_verify_cb);
-
-  g_config = malloc(sizeof(config_entry) * config_len);
-  if(!g_config) return 0;
+  st->store = store;
+  st->config = c;
+  st->config_len = 0;
 
   for(size_t i = 0; i < config_len; i++)
   {
     *erridx = i;
-    config_entry *cfg = g_config + i;
+    config_entry *cfg = c + i;
     const mipki_config_entry *cur = config + i;
     pass_cb_state cbs = {.cb = pcb, .info = cur->key_file};
 
@@ -205,18 +200,18 @@ int mipki_init(const mipki_config_entry config[], size_t config_len, password_ca
       }
     }
 
-    g_config_len++;
+    st->config_len++;
     cfg->intermediates = chain;
     cfg->key = sk;
     cfg->is_universal = cur->is_universal;
   }
 
-  return 1;
+  return st;
 }
 
-int mipki_add_root_file_or_path(const char *ca_file)
+int mipki_add_root_file_or_path(mipki_state *st, const char *ca_file)
 {
-  if(g_store == NULL) return 0;
+  assert(st != NULL);
   struct stat sb;
 
   if(stat(ca_file, &sb) != 0){
@@ -227,20 +222,14 @@ int mipki_add_root_file_or_path(const char *ca_file)
   }
 
   if(S_ISDIR(sb.st_mode))
-    return X509_STORE_load_locations(g_store, NULL, ca_file);
+    return X509_STORE_load_locations(st->store, NULL, ca_file);
 
-  return X509_STORE_load_locations(g_store, ca_file, NULL);
+  return X509_STORE_load_locations(st->store, ca_file, NULL);
 }
 
-mipki_chain mipki_select_certificate(const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
+mipki_chain mipki_select_certificate(mipki_state *st, const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
 {
-  if(g_config == NULL)
-  {
-    #if DEBUG
-      printf("The library must be initialized first with mipki_init!\n");
-    #endif
-    return 0;
-  }
+  assert(st != NULL);
 
   #if DEBUG
     printf("Selecting certificate for <%s>, signatures=", sni);
@@ -248,9 +237,9 @@ mipki_chain mipki_select_certificate(const char *sni, const mipki_signature *alg
     printf("\n");
   #endif
 
-  for(size_t i = 0; i < g_config_len; i++)
+  for(size_t i = 0; i < st->config_len; i++)
   {
-    config_entry *cfg = g_config + i;
+    config_entry *cfg = st->config + i;
 
     #if DEBUG
       char buf[256];
@@ -390,10 +379,10 @@ static int set_digest(mipki_signature sigalg, DIGEST* md)
   return 1;
 }
 
-int mipki_sign_verify(const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode)
+int mipki_sign_verify(mipki_state *st, const mipki_chain cert_ptr, const mipki_signature sigalg, const char *tbs, size_t tbs_len, char *sig, size_t *sig_len, mipki_mode mode)
 {
+  assert(st != NULL);
   config_entry *cfg = (config_entry*)cert_ptr;
-  assert(cfg != NULL);
   int ret = 0;
 
   #if DEBUG
@@ -401,7 +390,6 @@ int mipki_sign_verify(const mipki_chain cert_ptr, const mipki_signature sigalg, 
       printf("Signing %d bytes of data with %04x\n", tbs_len, sigalg);
     else
       printf("Verifying a %d bytes signature of %d bytes of data with %04x\n", *sig_len, tbs_len, sigalg);
-    fflush(stdout);
   #endif
 
   // Special case: MD5+SHA1 signature
@@ -490,7 +478,7 @@ int mipki_sign_verify(const mipki_chain cert_ptr, const mipki_signature sigalg, 
   return ret;
 }
 
-mipki_chain mipki_parse_chain(const char *chain, size_t chain_len)
+mipki_chain mipki_parse_chain(mipki_state *st, const char *chain, size_t chain_len)
 {
   const char *cur = chain;
   const char *end = cur + chain_len;
@@ -555,18 +543,17 @@ mipki_chain mipki_parse_chain(const char *chain, size_t chain_len)
     return NULL;
 }
 
-size_t mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_len)
+size_t mipki_format_chain(mipki_state *st, const mipki_chain chain, char *buffer, size_t buffer_len)
 {
+  assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
-  assert(cfg != NULL);
+  char *cur = buffer;
+  char *end = buffer + buffer_len;
+  sk_X509_unshift(cfg->intermediates, cfg->endpoint);
 
   #if DEBUG
     printf("Formatting the selected certificate chain.\n");
   #endif
-
-  char *cur = buffer;
-  char *end = buffer + buffer_len;
-  sk_X509_unshift(cfg->intermediates, cfg->endpoint);
 
   for(int i = sk_X509_num(cfg->intermediates) - 1; i >= 0; i--)
   {
@@ -605,10 +592,10 @@ size_t mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_l
   return (cur - buffer);
 }
 
-int mipki_validate_chain(const mipki_chain chain, const char *host)
+int mipki_validate_chain(mipki_state *st, const mipki_chain chain, const char *host)
 {
+  assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
-  assert(cfg != NULL);
   X509_STORE_CTX *ctx = X509_STORE_CTX_new();
   X509_VERIFY_PARAM *param = X509_VERIFY_PARAM_new();
   time_t current_time = time(NULL);
@@ -624,8 +611,8 @@ int mipki_validate_chain(const mipki_chain chain, const char *host)
   X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_USE_CHECK_TIME | X509_V_FLAG_CRL_CHECK_ALL);
   X509_VERIFY_PARAM_set_time(param, current_time);
   X509_VERIFY_PARAM_set1_host(param, host, 0);
-  X509_STORE_set1_param(g_store, param);
-  X509_STORE_CTX_init(ctx, g_store, cfg->endpoint, cfg->intermediates);
+  X509_STORE_set1_param(st->store, param);
+  X509_STORE_CTX_init(ctx, st->store, cfg->endpoint, cfg->intermediates);
 
   int r = X509_verify_cert(ctx);
   #if DEBUG
@@ -637,8 +624,9 @@ int mipki_validate_chain(const mipki_chain chain, const char *host)
   return r;
 }
 
-void mipki_free_chain(mipki_chain chain)
+void mipki_free_chain(mipki_state *st, mipki_chain chain)
 {
+  assert(st != NULL);
   config_entry *cfg = (config_entry*)chain;
   if(cfg == NULL) return;
 
@@ -648,208 +636,3 @@ void mipki_free_chain(mipki_chain chain)
 
   free(cfg);
 }
-
-/*
-static void* get_key(X509* x509, key_type *type)
-{
-  *type = key_unknown;
-  EVP_PKEY* pk = X509_get_pubkey(x509);
-  if(!pk) return NULL;
-
-  switch(EVP_PKEY_base_id(pk))
-  {
-    case EVP_PKEY_RSA:
-      RSA* rsa = EVP_PKEY_get1_RSA(pk);
-      *type = key_rsa;
-      return (void*)rsa;
-
-    case EVP_PKEY_DSA:
-      DSA* dsa = EVP_PKEY_get1_DSA(pk);
-      *type = key_dsa;
-      return (void*)dsa;
-      if (!dsa) CAMLreturn(Val_none);
-      (void) DSA_set_method(dsa, DSA_OpenSSL());
-      DSA_val(mldsa) = dsa;
-      mlkey = caml_alloc(1, 1); // CertDSA
-      Store_field(mlkey, 0, mldsa);
-      break;
-
-    case EVP_PKEY_EC:
-      mlec = caml_alloc_custom(&key_ops, sizeof(EC_KEY*), 0, 1);
-      EC_KEY* eck = EVP_PKEY_get1_EC_KEY(pk);
-      break;
-
-    default:
-      CAMLreturn(Val_none);
-  }
-}*/
-
-/*
-size_t ocaml_ecdsa_sign(EC_KEY *key, const char *data, size_t data_len, char *output)
-{
-  size_t olen;
-  if (ECDSA_sign(0, data, data_len, output, &olen, key) == 0) {
-    return 0;
-  }
-  return olen;
-}
-
-int ocaml_ecdsa_verify(EC_KEY *key, const char *data, size_t data_len, const char *sig, size_t sig_len)
-{
-  return ECDSA_verify(0, data, data_len, sig, sig_len, key) > 0;
-}
-*/
-
-/*
-CAMLprim value ocaml_validate_chain(value chain, value for_signing, value hostname, value cafile) {
-    CAMLparam4(chain, for_signing, hostname, cafile);
-
-    time_t current_time;
-    STACK_OF(X509) *sk;
-    sk = sk_X509_new_null();
-    X509* top_cert = NULL;
-    char *host;
-
-    if(chain == Val_emptylist) CAMLreturn(Val_false);
-    if(hostname == Val_none) host = NULL;
-    else host = String_val(Some_val(hostname));
-
-    do {
-      value head = Field(chain, 0);
-      size_t len = caml_string_length(head);
-      X509* x509;
-      unsigned char *cert = (unsigned char*)String_val(head);
-
-//      printf("ADDING CERT[%d]\n", (int)len);
-      if(!top_cert) top_cert = x509; else sk_X509_push(sk, x509);
-      chain = Field(chain, 1);
-    }
-    while(chain != Val_emptylist);
-
-    X509_STORE_CTX *ctx = NULL;
-    X509_STORE *store = NULL;
-    X509_VERIFY_PARAM *param = NULL;
-
-    current_time = time(NULL);
-    store = X509_STORE_new();
-    ctx = X509_STORE_CTX_new();
-    param = X509_VERIFY_PARAM_new();
-    if(!ctx || !store || !param) CAMLreturn(Val_false);
-
-    // Validation parameters
-    X509_VERIFY_PARAM_set_flags(param, X509_V_FLAG_USE_CHECK_TIME | X509_V_FLAG_CRL_CHECK_ALL);
-    X509_VERIFY_PARAM_set_time(param, current_time);
-    X509_VERIFY_PARAM_set1_host(param, host, 0);
-    X509_STORE_set1_param(store, param);
-
-    X509_STORE_CTX_init(ctx, store, top_cert, sk);
-
-    int r = X509_verify_cert(ctx);
-//    printf("X509_verify_cert() == %d [%s]\n", r, X509_verify_cert_error_string(ctx->error));
-
-    X509_STORE_free(store);
-    X509_STORE_CTX_free(ctx);
-    sk_X509_free(sk);
-    X509_VERIFY_PARAM_free(param);
-
-    CAMLreturn(r==1 ? Val_true : Val_false);
-}
-
-CAMLprim value ocaml_load_chain(value pem) {
-  CAMLparam1(pem);
-
-  char *pemfile = (char*)String_val(pem);
-  BIO *bio = BIO_new_file(pemfile, "r");
-  if(!bio) CAMLreturn(Val_none);
-
-  int c = 0;
-  unsigned long n = 0;
-  X509 *x509, *first = NULL;
-
-  CAMLlocal2(mlc, mlret);
-  mlret = Val_emptylist;
-
-  ERR_clear_error();
-
-  // Try to read all x509 structs in the file
-  do {
-    x509 = PEM_read_bio_X509_AUX(bio, NULL, NULL, NULL);
-
-    if(!c) first = x509;
-
-    if(!x509)
-    {
-      n = ERR_peek_last_error();
-      if(!c ||
-	 !(ERR_GET_LIB(n) == ERR_LIB_PEM
-	  && ERR_GET_REASON(n) == PEM_R_NO_START_LINE))
-	CAMLreturn(Val_none);
-      else break;
-    }
-
-    int len;
-    unsigned char *buf = NULL;
-    len = i2d_X509(x509, &buf);
-    if (len < 0) CAMLreturn(Val_none); // Yes there is a leak there
-
-    CAMLlocal1(der_cert);
-    der_cert = caml_alloc_string(len);
-    memcpy(String_val(der_cert), buf, len);
-
-    mlc = caml_alloc(2, 0);
-    Store_field(mlc, 0, der_cert);
-    Store_field(mlc, 1, mlret);
-    mlret = mlc;
-  }
-  while(++c);
-
-  CAMLreturn(Val_some(mlret));
-}
-
-CAMLprim value ocaml_load_key(value pem) {
-  CAMLparam1(pem);
-
-  char *pemfile = (char*)String_val(pem);
-  BIO *bio = BIO_new_file(pemfile, "r");
-  if(!bio) CAMLreturn(Val_none);
-
-
-  if(!sk) CAMLreturn(Val_none);
-  CAMLlocal4(mlkey, mlrsa, mldsa, mlec);
-
-  switch(EVP_PKEY_base_id(sk))
-  {
-    case EVP_PKEY_RSA:
-      mlrsa = caml_alloc_custom(&evp_rsa_ops, sizeof(RSA*), 0, 1);
-      RSA* rsa = EVP_PKEY_get1_RSA(sk);
-      if(!rsa) CAMLreturn(Val_none);
-      RSA_val(mlrsa) = rsa;
-      mlkey = caml_alloc(1, 0); // CertRSA
-      Store_field(mlkey, 0, mlrsa);
-      break;
-
-    case EVP_PKEY_DSA:
-      mldsa = caml_alloc_custom(&evp_dsa_ops, sizeof(DSA*), 0, 1);
-      DSA* dsa = EVP_PKEY_get1_DSA(sk);
-      if (!dsa) CAMLreturn(Val_none);
-      DSA_val(mldsa) = dsa;
-      mlkey = caml_alloc(1, 1); // CertDSA
-      Store_field(mlkey, 0, mldsa);
-      break;
-
-    case EVP_PKEY_EC:
-      mlec = caml_alloc_custom(&key_ops, sizeof(EC_KEY*), 0, 1);
-      EC_KEY* eck = EVP_PKEY_get1_EC_KEY(sk);
-      if(!eck) CAMLreturn(Val_none);
-      EC_KEY_val(mlec) = eck;
-      mlkey = caml_alloc(1, 2); // CertECDSA
-      Store_field(mlkey, 0, mlec);
-      break;
-
-    default:
-      CAMLreturn(Val_none);
-  }
-
-  CAMLreturn(Val_some(mlkey));
-}
-*/
