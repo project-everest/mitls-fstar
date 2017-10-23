@@ -512,33 +512,74 @@ assume val prf_leak:
 
 // Ideally, we maintain a monotonic map from every honestly-sampled
 // initiator share gX to its set of honestly-sampled responders shares
-// (i,gY). TODO 17-10-22 
+// (i,gY). 
+// The table exists when [Flags.ideal_KDF], a precondition for [flag_odh]
 
-type entry (g_gX: CommonDH.id) = 
-  peers: list (i:id & gY: CommonDH.share (dfst g_gX)) {CommonDH.honest_share g_gX}
-  // no need to record more, e.g. the existence of a client connection? 
-  
-type peer_table = MonotoneMap.t there CommonDH.id entry (fun _ -> True)
+// We need a variant of MonotoneMap that enables monotonic updates to
+// each entry. We used nested ones to re-use existing libraries, but
+// may instead invest is a custom library.
+//
+// how to share the u and a parameters? intuitively, u is statically
+// fixed for everyone, and a is determined by the index i.
+//
+// TBC; we should not assume given the whole info! 
+assume val ha_of_id: ii.t -> info
 
-//17-10-22 TODO I need a variant of MonotoneMap that enables monotonic updates to each entry.
+//17-10-23 unclear how to fix the usage a packaging-time. This should be entirely static. 
+assume val u_extract1: usage info ii 
 
+let peer_table (#g: CommonDH.group) (gX: CommonDH.share g): Type0 = 
+  MonotoneMap.t there 
+    (i:id * gY: CommonDH.share g)
+    (fun i_gY -> 
+      let (i, gY) = i_gY in 
+      let a = ha_of_id i in 
+      secret u_extract1 (Extract1 i (| g, gX, gY |)) a)
+    (fun _ -> True)
 
-let odh_table: (if flag_odh then peer_table else unit) =
-  if flag_odh 
-  then MonotoneMap.alloc #there #CommonDH.id #entry #(fun _ -> True)
+let odh_table = 
+  MonotoneMap.t there 
+  (g: CommonDH.group & gX: CommonDH.share g)
+  (fun (| g, gX |) -> _:peer_table gX{CommonDH.honest_share (|g, gX|)})
+  (fun _ -> True)
+
+let odh_state: (if Flags.ideal_KEF then odh_table else unit) = 
+  if Flags.ideal_KEF
+  then MonotoneMap.alloc 
+    #there
+    #(g: CommonDH.group & gX: CommonDH.share g)
+    #(fun (| g, gX |) -> _:peer_table gX{CommonDH.honest_share (|g, gX|)})
+    #(fun _ -> True)
   else ()
 
-val honest_gX: #g:CommonDH.group -> gX: CommonDH.share g -> Type0  // awkward
+val honest_gX: #g:CommonDH.group -> gX: CommonDH.share g -> Type0 
 let honest_gX #g gX = 
-  if flag_odh then 
-    let t: peer_table = odh_table in 
+  if Flags.ideal_KEF then 
+    let t: odh_table = odh_state in 
     Monotonic.RRef.witnessed (MonotoneMap.defined t (|g,gX|))
   else True
 //17-10-22 why can't I write flag_odh ==> ... ? {logic} error   
 //17-10-23 for now we could use that style only with an annotated let instead of val;let
 
-assume val peers_gX: #g:CommonDH.group -> gX: CommonDH.share g -> entry (|g,gX|)
-// add state-passing
+val test_honest_gX: #g:CommonDH.group -> gX: CommonDH.share g -> ST (b:bool)
+  (requires fun h0 -> Flags.ideal_KEF)
+  (ensures fun h0 b h1 -> 
+    h0 == h1 /\ 
+    Flags.ideal_KEF /\ 
+    (let t: odh_table = odh_state in 
+    ( b2t b == MonotoneMap.defined t (|g,gX|) h1) /\
+      (b ==> honest_gX gX)
+    ))
+let test_honest_gX #g gX = 
+  let t: odh_table = odh_state in
+  match MonotoneMap.lookup t (|g,gX|) with
+  | Some _ -> true
+  | None -> false
+
+// TODO add state-passing
+assume val peer_gX: #g:CommonDH.group -> i:id -> gX: CommonDH.share g -> gY: CommonDH.share g -> 
+  option (secret u_extract1 (Extract1 i (| g, gX, gY |)) (ha_of_id i))
+
 // let peers_gX #g gx = let t: peer_table = odh_table in MonotoneMap.lookup h0.[t] (|g,gX|)
 
 // ideal state 
@@ -556,16 +597,23 @@ val odh_init: g: CommonDH.group -> ST (CommonDH.keyshare g)
 
 let odh_init g = 
   let x = CommonDH.keygen g in 
-  if flag_odh then (
-    let t: peer_table = odh_table in 
-    let gX = CommonDH.pubshare x in  
-    let g_gX = (|g,gX|) in 
-    assert(CommonDH.honest_share g_gX);
+  if Flags.ideal_KEF then (
+    let t: odh_table = odh_state in 
+    let gX: CommonDH.share g = CommonDH.pubshare x in  
+    assert(CommonDH.honest_share (|g,gX|));
     // TODO 17-10-22 since gX is freshly registered, we statically
     // know it can't occur in the peers table; what's a better keygen
     // spec for that?
-    if None? (MonotoneMap.lookup t g_gX) then MonotoneMap.extend t g_gX []
-    //not needed? Monotonic.RRef.testify (MonotoneMap.defined t g_gX)
+    let peers = MonotoneMap.alloc 
+      #there 
+      #(i:id * gY: CommonDH.share g)
+      #(fun i_gY -> 
+        let (i, gY) = i_gY in 
+        let a = ha_of_id i in 
+        secret u_extract1 (Extract1 i (| g, gX, gY |)) a)
+      #(fun _ -> True) in
+    if None? (MonotoneMap.lookup t (|g,gX|)) then MonotoneMap.extend t (|g,gX|) peers;
+    assert(honest_gX gX)
     );
   x // could additionally return gX 
 // TODO crypto agility: do we record keygen as honest for a bad group? 
@@ -576,73 +624,87 @@ let odh_init g =
 /// - kdf is the child KDF package.
 /// - HKDF is the concrete algorithm
 ///
+/// We require that gX be the share of a honest initiator,
+/// but not that they agree on the salt index
 val odh_test:
-  #u: usage info ii -> 
+//#u: usage info ii -> 
   #i: id -> 
   #a: info -> 
-  s: salt ii u i a ->
+  s: salt ii u_extract1 i a ->
   g: CommonDH.group ->
   gX: CommonDH.share g -> 
   ST ( 
     gY:CommonDH.share g &
-    secret u (Extract1 i (| g, gX, gY |)) a )
+    secret u_extract1 (Extract1 i (| g, gX, gY |)) a )
   (requires fun h0 -> honest_gX gX)
   (ensures fun h0 r h1 -> 
-    let gY = dfst r in 
-    flag_odh ==> List.Tot.mem (|i,gY|) (peers_gX gX))
+    // todo, as sanity check
+    // let (|gY, s|) = dfst r in 
+    // flag_odh ==> s == peer_gX gY
+    True)
   
-// requires peer[gX] defined, i.e. gX was sampled by an honest client. 
-// I and R may not share the same salt (i)
-
-let odh_test #u #i #a s g gX = 
+let odh_test #i #a s g gX = 
+  let u = u_extract1 in 
   (* we get the same code as in the game by unfolding dh_responder, e.g.
   let y = CommonDH.keygen g in 
   let gY = CommonDH.pubshare y in  
   let gZ: bytes (*CommonDH.share g*) = ... in  // used only when (not flag_odh)
   *)
   let gY, gZ = CommonDH.dh_responder gX in 
-  //TODO table[gX] += (i, gY);
   let idh = (| g, gX, gY |) in
   let j = Extract1 i idh in 
-  let k = 
+  assume(a == ha_of_id i); //17-10-23 not great
+  let k: secret u_extract1 (Extract1 i (| g, gX, gY |)) a = 
     if flag_odh
     then (*KDF.*) create u j a (* narrow *)
     else 
       // we know the salt is dishonest because flag_kdf is off
       let raw = HKDF.extract #a.ha (prf_leak s) gZ (* wide, concrete *) in 
       //TODO deduce that j is dishonest too.
-      coerce u j a raw 
-  in
-  (| gY, k |) (* TODO k is not registered yet *)
+      assume(~(ii.honest j));
+      coerce u j a raw in
+  if Flags.ideal_KEF then (
+      let t: odh_table = odh_state in 
+      // guaranteed to succeed by honest_gX 
+      Monotonic.RRef.testify(MonotoneMap.defined t (|g,gX|));
+      let peers = Some?.v (MonotoneMap.lookup t (|g,gX|)) in 
+      if None? (MonotoneMap.lookup peers (i,gY)) then 
+      MonotoneMap.extend peers (i,gY) k
+      );
+  (| gY, k |) 
 
 // the PRF-ODH oracle, computing with secret exponent x
 val odh_prf:
-  #u: usage info ii -> 
+//#u: usage info ii -> 
   #i: id -> 
   #a: info -> 
-  s: salt ii u i a ->
+  s: salt ii u_extract1 i a ->
   g: CommonDH.group ->
   x: CommonDH.keyshare g -> 
   gY: CommonDH.share g -> 
-  ST (secret u (Extract1 i (| g, CommonDH.pubshare x, gY |)) a)
+  ST (secret u_extract1 (Extract1 i (| g, CommonDH.pubshare x, gY |)) a)
     (requires fun h0 -> 
       let gX = CommonDH.pubshare x in
-      honest_gX gX /\
-      (flag_odh ==> ~ (List.Tot.mem (|i,gY|) (peers_gX gX)))
-    )
+      honest_gX gX /\ (
+      Flags.ideal_KEF ==> (
+        let t: odh_table = odh_state in 
+        MonotoneMap.defined t (|g,gX|) h0 /\ (
+        let peers = MonotoneMap.value t (|g,gX|) h0 in 
+        ~ (MonotoneMap.defined peers (i,gY) h0)))))  // what a mouthful
     (ensures fun h0 _ h1 -> True)
   
 // requires peer[gX] is defined (witnessed in x) and does not contain (i,gY)
 // None? (find (i, gY) !peer[gX])
 
-let odh_prf #u #i #a s g x gY = 
+let odh_prf #i #a s g x gY = 
   let gX = CommonDH.pubshare x in 
   let gZ = CommonDH.dh_initiator x gY in
   prf_extract1 s g gX gY gZ 
 
+
 /// --------------------------------------------------------------------------------------------------
 /// Diffie-Hellman shares
-/// module Extract1 
+/// module Extract1, or KEF.ODH
 
 // TODO: instead of CommonDH.keyshare g, we need an abstract stateful
 // [abstract type private_keyshare g = mref bool ...] that enables
@@ -653,37 +715,66 @@ let initI (g:CommonDH.group) = odh_init g
 
 /// Responder computes DH secret material
 val extractR:
-  #u: usage info ii -> 
+//#u: usage info ii -> 
   #i: id -> 
   #a: info -> 
-  s: salt ii u i a ->
+  s: salt ii u_extract1 i a ->
   g: CommonDH.group ->
   gX: CommonDH.share g ->
-  ST( gY:CommonDH.share g & secret u (Extract1 i (| g, gX, gY |)) a )
+  ST( gY:CommonDH.share g & secret u_extract1 (Extract1 i (| g, gX, gY |)) a )
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> True)
 
-let extractR #u #i #a s g gX = 
-  if honest_gX gX 
+let extractR #i #a s g gX = 
+  let b = 
+    if Flags.ideal_KEF then test_honest_gX gX else false in
+  if b 
   then odh_test s g gX
   else
-    // real computation: gY is dishonest
-    let y = CommonDH.keygen g in 
-    let gY = CommonDH.pubshare y in  
-    let gZ: CommonDH.share g = admit() in // we could also use dh_responder
+    // real computation: gY is honestly-generated but the exchange is doomed
+    let gY, gZ = CommonDH.dh_responder gX in 
+    let idh = (| g, gX, gY |) in
+    let j = Extract1 i idh in 
     let k = prf_extract1 s g gX gY gZ in
     (| gY, k |)
 
 /// Initiator computes DH secret material
-assume val extractI: 
-  #u: usage info ii -> 
+val extractI: 
+//#u: usage info ii -> 
   #i: id -> 
   #a: info ->
-  s: salt ii u i a ->
+  s: salt ii u_extract1 i a ->
   g: CommonDH.group ->
   x: CommonDH.keyshare g ->
   gY: CommonDH.share g ->
-  secret u (Extract1 i (| g, CommonDH.pubshare x, gY |)) a
+  ST(secret u_extract1 (Extract1 i (| g, CommonDH.pubshare x, gY |)) a)
+  (requires fun h0 -> honest_gX (CommonDH.pubshare x))
+  (ensures fun h0 k h1 -> True)
+
+let extractI #i #a s g x gY = 
+  if Flags.ideal_KEF then 
+    let gX = CommonDH.pubshare x in
+    let t: odh_table = odh_state in 
+    assert(a == ha_of_id i);
+    Monotonic.RRef.testify(MonotoneMap.defined t (|g,gX|));
+    let peers = Some?.v (MonotoneMap.lookup t (|g,gX|)) in 
+    let o: option (secret u_extract1 (Extract1 i (| g, CommonDH.pubshare x, gY |)) a) = MonotoneMap.lookup peers (i,gY) in
+    match o with 
+    | Some k -> k
+    | None -> odh_prf s g x gY
+  else odh_prf s g x gY
+
+(*
+val extractP: 
+//#u:usage info ii ->
+  #i: id ->
+  #a: info -> 
+  s: salt ii u_extract1 i a ->
+  ST(secret u_extract1 (Extract1 i None a)
+let extractP #i #a s = 
+  prf_extract1
+  
+
 
 /// HKDF.Extract(key=s, materials=0) idealized as a single-use PRF.
 assume val extract2: 
@@ -819,3 +910,4 @@ let next_early_secret = extract0 rsk
 //
 // let k1' = derive k0 "secret" 
 // let k2' = derive #(u 22)  k1'  "aead"  // the type is not normalized; the key is not usable.
+*)
