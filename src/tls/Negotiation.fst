@@ -130,6 +130,8 @@ let string_of_signatureScheme = function
   | DSA_SHA512             -> "DSA_SHA512"
   | SIG_UNKNOWN codepoint  -> "UNKNOWN " ^ (print_bytes codepoint)
 
+let string_of_signatureSchemes sal =
+  List.Tot.fold_left (fun s sa -> s^(string_of_signatureScheme sa)^" ") "" sal
 
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
@@ -1262,7 +1264,7 @@ let computeServerMode cfg co serverRandom =
       then Error(AD_illegal_parameter, "Compression is deprecated") else
       let salgs =
         match find_signature_algorithms co with
-        | None -> []
+        | None -> [SIG_UNKNOWN (abyte2 (0xFFz, 0xFFz)); ECDSA_SHA1]
         | Some sigalgs -> List.Tot.filter (fun x -> List.Tot.mem x cfg.signature_algorithms) sigalgs
         in
       match cfg.cert_callbacks.cert_select_cb (get_sni co) salgs with

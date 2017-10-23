@@ -1013,17 +1013,6 @@ int MITLS_CALLCONV FFI_mitls_quic_create(/* out */ quic_state **state, quic_conf
     return ret;
 }
 
-/*
-NTSTATUS
-QuicTlsRecv(
-    _In_                            PQUIC_TLS   pTLS,
-    _In_reads_bytes_(inBufLen)      PUCHAR      inBuf,
-    _Inout_                         PUINT32     pInBufLen,
-    _Out_writes_bytes_(outBufLen)   PUCHAR      outBuf,
-    _Inout_                         PUINT32     pOutBufLen
-    );
-*/
-
 // The OCaml runtime system must be acquired before calling this
 static quic_result FFI_mitls_quic_process_caml(
   /* in */ quic_state *state,
@@ -1050,20 +1039,16 @@ static quic_result FFI_mitls_quic_process_caml(
 
     if (Is_exception_result(result)) {
         report_caml_exception(result, &state->errmsg);
-        ret = TLS_error_other;
     } else {
         int rc = Int_val(Field(result, 0));
         int errorcode = Int_val(Field(result, 1));
         if (rc <= TLS_server_complete) {
             ret = (quic_result) rc;
-        } else {
-            ret = TLS_error_other;
         }
-
-        *pInBufLen = state->in_buffer_used;
-        *pOutBufLen = state->out_buffer_used;
     }
 
+    *pInBufLen = state->in_buffer_used;
+    *pOutBufLen = state->out_buffer_used;
     *errmsg = state->errmsg;
     state->errmsg = NULL;
     CAMLreturnT(quic_result, ret);
@@ -1168,11 +1153,8 @@ CAMLprim value ocaml_cert_select_cb(value st, value fp, value sni, value sal)
   // We convert to an array of uint16_t before passing to the callback function
   size_t i, n = caml_string_length(sal)>>1;
   const char *b = String_val(sal);
-  printf(" *** SAL: ");
-  for(int i = 0; i < caml_string_length(sal); i++) printf("%02x ", b[i]);
-  printf("\n");
   uint16_t selected, sigalgs[n];
-  for(i=0; i<n; i++) sigalgs[i] = (b[i<<1]<<8) + b[(i<<1) + 1];
+  for(i=0; i<n; i++) sigalgs[i] = (b[2*i] << 8) + b[2*i+1];
 
   // The callback returns a unspecified pointer to the selected certificate
   // and updates the selected signature algorithm (passed by reference)

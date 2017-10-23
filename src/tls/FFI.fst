@@ -444,7 +444,9 @@ let ffiTicketCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (ticket:b
 
 let ffiCertSelectCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (sal:signatureSchemeList)
   : ML (option (cert_type * signatureScheme)) =
-  match ocaml_cert_select_cb cb_state cb sni (signatureSchemeListBytes_aux sal empty_bytes []) with
+  trace ("Certificate select callback: SNI=<"^sni^">, SA=<"^(Negotiation.string_of_signatureSchemes sal)^">");
+  let sab = signatureSchemeListBytes_aux [] empty_bytes sal in
+  match ocaml_cert_select_cb cb_state cb sni sab with
   | None -> None
   | Some (cert_ptr, sa) ->
     let b = bytes_of_int 2 (FStar.UInt16.v sa) in
@@ -454,6 +456,7 @@ let ffiCertSelectCallback (cb_state:callbacks) (cb:callbacks) (sni:string) (sal:
 
 let ffiCertFormatCallback (cb_state:callbacks) (cb:callbacks) (cert:cert_type)
   : ML (list cert_repr) =
+  trace ("Certificate format callback");
   let chain = ocaml_cert_format_cb cb_state cb cert in
   match Cert.parseCertificateList chain with
   | Error (_, msg) -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^msg)
@@ -461,10 +464,12 @@ let ffiCertFormatCallback (cb_state:callbacks) (cb:callbacks) (cert:cert_type)
 
 let ffiCertSignCallback (cb_state:callbacks) (cb:callbacks) (cert:cert_type)
   (sig:signatureScheme) (tbs:bytes) : ML (option bytes) =
+  trace ("Certificate sign callback for "^(Negotiation.string_of_signatureScheme sig));
   let sa = UInt16.uint_to_t (int_of_bytes (signatureSchemeBytes sig)) in
   ocaml_cert_sign_cb cb_state cb cert sa tbs
 
 let ffiCertVerifyCallback (cb_state:callbacks) (cb:callbacks) (cert:list cert_repr)
   (sig:signatureScheme) (tbs:bytes) (sigv:bytes) : ML bool =
+  trace ("Certificate verify callback for "^(Negotiation.string_of_signatureScheme sig));
   let sa = UInt16.uint_to_t (int_of_bytes (signatureSchemeBytes sig)) in
   ocaml_cert_verify_cb cb_state cb (Cert.certificateListBytes cert) sa (tbs, sigv)

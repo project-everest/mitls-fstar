@@ -12,7 +12,7 @@
 #include <openssl/x509v3.h>
 
 #include "mipki.h"
-#define DEBUG 1
+#define DEBUG 0
 
 /*
  DESIGN NOTES
@@ -69,6 +69,17 @@ size_t g_config_len = 0;
   ed25519(0x0807),
   ed448(0x0808),
 */
+
+#if DEBUG
+static void dump(const unsigned char *buffer, size_t len)
+{
+  int i;
+  for(i=0; i<len; i++) {
+    printf("%02x",buffer[i]);
+    if (i % 32 == 31 || i == len-1) printf("\n");
+  }
+}
+#endif
 
 // Debugging function to inspect certificates loaded by the store
 static int cert_verify_cb(int ok, X509_STORE_CTX *ctx)
@@ -221,7 +232,7 @@ int mipki_add_root_file_or_path(const char *ca_file)
   return X509_STORE_load_locations(g_store, ca_file, NULL);
 }
 
-mipki_chain mipki_select_certificate(const char *sni, mipki_signature *algs, size_t algs_len, mipki_signature *selected)
+mipki_chain mipki_select_certificate(const char *sni, const mipki_signature *algs, size_t algs_len, mipki_signature *selected)
 {
   if(g_config == NULL)
   {
@@ -270,12 +281,6 @@ mipki_chain mipki_select_certificate(const char *sni, mipki_signature *algs, siz
         }
       #endif
 
-      // TLS < 1.2
-      if(algs_len == 0 && kt == EVP_PKEY_RSA)
-        *selected = 0xFFFF; // MD5+SHA1 RSA
-      if(algs_len == 0 && kt == EVP_PKEY_EC)
-        *selected = 0x0203; // ECDSA+SHA1
-
       for(size_t j = 0; j < algs_len; j++)
       {
         mipki_signature alg = algs[j];
@@ -290,7 +295,8 @@ mipki_chain mipki_select_certificate(const char *sni, mipki_signature *algs, siz
         {
           case EVP_PKEY_RSA:
             if((high == 8 && (low == 4 || low == 5 || low == 6)) || // RSA_PSS
-               (low == 1 && high >= 2 && high <= 6)) // RSA_PKCS1
+               (low == 1 && high >= 2 && high <= 6) ||
+               (low == 0xFF && high == 0xFF)) // RSA_PKCS1
               *selected = alg;
             break;
 
@@ -390,6 +396,14 @@ int mipki_sign_verify(const mipki_chain cert_ptr, const mipki_signature sigalg, 
   assert(cfg != NULL);
   int ret = 0;
 
+  #if DEBUG
+    if(mode == MIPKI_SIGN)
+      printf("Signing %d bytes of data with %04x\n", tbs_len, sigalg);
+    else
+      printf("Verifying a %d bytes signature of %d bytes of data with %04x\n", *sig_len, tbs_len, sigalg);
+    fflush(stdout);
+  #endif
+
   // Special case: MD5+SHA1 signature
   // we use a different signing interface
   if(sigalg == 0xffff)
@@ -424,6 +438,10 @@ int mipki_sign_verify(const mipki_chain cert_ptr, const mipki_signature sigalg, 
 
   int kt = EVP_PKEY_base_id(cfg->key);
   if(!set_digest(sigalg, &md)) return 0;
+
+  #if DEBUG
+    printf("Using the message digest: %s\n", md ? OBJ_nid2sn(EVP_MD_type(md)) : "NULL");
+  #endif
 
   if(EVP_DigestSignInit(md_ctx, &key_ctx, md, NULL, cfg->key) != 1)
   {
@@ -542,6 +560,10 @@ size_t mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_l
   config_entry *cfg = (config_entry*)chain;
   assert(cfg != NULL);
 
+  #if DEBUG
+    printf("Formatting the selected certificate chain.\n");
+  #endif
+
   char *cur = buffer;
   char *end = buffer + buffer_len;
   sk_X509_unshift(cfg->intermediates, cfg->endpoint);
@@ -549,9 +571,20 @@ size_t mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_l
   for(int i = sk_X509_num(cfg->intermediates) - 1; i >= 0; i--)
   {
     unsigned char *buf = NULL;
-    int len = i2d_X509(sk_X509_value(cfg->intermediates, i), &buf);
+    X509 *x509 = sk_X509_value(cfg->intermediates, i);
+
+    #if DEBUG
+      char nb[256];
+      X509_NAME_oneline(X509_get_subject_name(x509), nb, 256);
+      printf(" - Adding: %s\n", nb);
+    #endif
+
+    int len = i2d_X509(x509, &buf);
     if (len <= 0 || buf == NULL || cur + len + 3 > end)
     {
+      #if DEBUG
+        printf("mipki_format_chain: i2d_X509 failed.\n");
+      #endif
       sk_X509_shift(cfg->intermediates);
       return 0;
     }
@@ -564,6 +597,10 @@ size_t mipki_format_chain(const mipki_chain chain, char *buffer, size_t buffer_l
     OPENSSL_free(buf);
   }
 
+  #if DEBUG
+    printf("Written %d bytes to chain buffer:\n", cur-buffer);
+    dump(buffer, cur - buffer);
+  #endif
   sk_X509_shift(cfg->intermediates);
   return (cur - buffer);
 }

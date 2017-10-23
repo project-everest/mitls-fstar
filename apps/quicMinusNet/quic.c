@@ -56,23 +56,28 @@ void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
 void* certificate_select(void *st, const char *sni, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
   printf("%d algorithms offered\n", sigalgs_len);
-  void* r = mipki_select_certificate(sni, sigalgs, sigalgs_len, selected);
+  mipki_chain r = mipki_select_certificate(sni, sigalgs, sigalgs_len, selected);
   printf("Return: %p Selected = %04x\n", r, *selected);
-  return r;
+  return (void*)r;
 }
 
 size_t certificate_format(void *cb_state, const void *cert_ptr, char *buffer)
 {
-  size_t len = mipki_format_chain(cert_ptr, buffer, MAX_CHAIN_LEN);
-  printf("Formatting on %d bytes\n", len);
-  return 0;
+  mipki_chain chain = (mipki_chain)cert_ptr;
+  return mipki_format_chain(cert_ptr, buffer, MAX_CHAIN_LEN);
 }
 
 size_t certificate_sign(void *cb_state, const void *cert_ptr, const mitls_signature_scheme sigalg, const char *tbs, size_t tbs_len, char *sig)
 {
   size_t ret = MAX_SIGNATURE_LEN;
-  if(mipki_sign_verify(cert_ptr, sigalg, *tbs, tbs_len, sig, &ret, MIPKI_SIGN))
+
+  printf("======== TO BE SIGNED <%04x>: (%d octets) ========\n", sigalg, tbs_len);
+  dump(tbs, tbs_len);
+  printf("===================================================\n");
+
+  if(mipki_sign_verify(cert_ptr, sigalg, tbs, tbs_len, sig, &ret, MIPKI_SIGN))
     return ret;
+
   return 0;
 }
 
@@ -80,10 +85,17 @@ int certificate_verify(void *cb_state, const char* chain_bytes, size_t chain_len
 {
   quic_config *config = (quic_config*)cb_state;
   mipki_chain chain = mipki_parse_chain(chain_bytes, chain_len);
-  if(chain == NULL) return 0;
+
+  if(chain == NULL)
+  {
+    printf("ERROR: failed to parse certificate chain");
+    return 0;
+  }
+
   if(!mipki_validate_chain(chain, config->host_name))
   {
     printf("WARNING: chain validation failed for <%s>, ignoring.\n", config->host_name);
+    // return 0;
   }
 
   size_t slen = sig_len;
@@ -91,7 +103,6 @@ int certificate_verify(void *cb_state, const char* chain_bytes, size_t chain_len
   mipki_free_chain(chain);
   return r;
 }
-
 
 char *quic_result_string(quic_result r){
   static char *codes[10] = {
@@ -106,9 +117,9 @@ int main(int argc, char **argv)
 {
   mipki_config_entry pki_config[1] = {
     {
-      .cert_file = "../../data/server.crt",
-      .key_file = "../../data/server.key",
-      .is_universal = 0
+      .cert_file = "../../data/server-ecdsa.crt",
+      .key_file = "../../data/server-ecdsa.key",
+      .is_universal = 1
     }
   };
 
