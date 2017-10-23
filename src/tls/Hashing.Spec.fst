@@ -99,7 +99,9 @@ let suffixLen (a:alg) (len:nat) : n:nat {(n + len) % blockLen a = 0} =
 
 // injective encoding for variable-length inputs
 // we add either 8 or 16 bytes of length and 1+ bytes of padding
-assume val suffix: a:alg -> len:nat -> Tot (c:lbytes (suffixLen a len))
+let suffix (a:alg) (len:nat): Tot (c:lbytes (suffixLen a len)) =
+  //TODO: Placeholder!
+  Bytes.create (FStar.UInt32.uint_to_t (suffixLen a len)) 0uy
 
 // computed in one step (specification)
 val hash: a:alg -> bytes -> Tot (lbytes (tagLen a))
